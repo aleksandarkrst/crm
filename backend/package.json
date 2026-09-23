@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src test",
     "test": "vitest run",
+    "test:integration": "npm run build && vitest run --config vitest.integration.config.mts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node dist/shared/database/migrate.js",
     "db:studio": "drizzle-kit studio"

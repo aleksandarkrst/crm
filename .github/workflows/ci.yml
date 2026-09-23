@@ -38,9 +38,108 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
+  # The API against a real PostgreSQL: RLS tenant isolation, composite FKs, roles, invitations.
+  integration:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: { POSTGRES_USER: app_admin, POSTGRES_PASSWORD: ci_admin_password, POSTGRES_DB: app }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U app_admin -d app" --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      # Same setup as production: migrations run as the owner, the API as the non-owner runtime role.
+      PGHOST: localhost
+      PGPASSWORD: ci_admin_password
+      POSTGRES_USER: app_admin
+      POSTGRES_DB: app
+      APP_DB_USER: app_runtime
+      APP_DB_PASSWORD: ci_runtime_password
+      MIGRATION_DATABASE_URL: postgres://app_admin:ci_admin_password@localhost:5432/app
+      DATABASE_URL: postgres://app_runtime:ci_runtime_password@localhost:5432/app
+      AUTH_MODE: dev
+      DEV_JWT_SECRET: ci-only-dev-secret-at-least-32-characters
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22, cache: npm, cache-dependency-path: backend/package-lock.json }
+      - name: Create the runtime role and pgboss schema (as the Postgres image's init would)
+        run: sh ../infra/postgres/init/01-roles.sh
+      - run: npm ci
+      - run: npm run build
+      - run: npm run db:migrate
+      - run: npm run test:integration
+
+  # The UI in a real browser against the API and PostgreSQL.
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: { POSTGRES_USER: app_admin, POSTGRES_PASSWORD: ci_admin_password, POSTGRES_DB: app }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U app_admin -d app" --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      PGHOST: localhost
+      PGPASSWORD: ci_admin_password
+      POSTGRES_USER: app_admin
+      POSTGRES_DB: app
+      APP_DB_USER: app_runtime
+      APP_DB_PASSWORD: ci_runtime_password
+      MIGRATION_DATABASE_URL: postgres://app_admin:ci_admin_password@localhost:5432/app
+      DATABASE_URL: postgres://app_runtime:ci_runtime_password@localhost:5432/app
+      AUTH_MODE: dev
+      DEV_JWT_SECRET: ci-only-dev-secret-at-least-32-characters
+      LOG_LEVEL: warn
+      PORT: 3000
+      VITE_API_PROXY: http://localhost:3000
+      E2E_BASE_URL: http://localhost:4173
+      E2E_ARTIFACTS_DIR: ${{ github.workspace }}/e2e/artifacts
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+            e2e/package-lock.json
+      - name: Create the runtime role and pgboss schema
+        run: sh infra/postgres/init/01-roles.sh
+      - name: Install
+        run: |
+          npm ci --prefix backend
+          npm ci --prefix frontend
+          npm ci --prefix e2e
+      - name: Build and migrate
+        run: |
+          npm run build --prefix backend
+          npm run db:migrate --prefix backend
+          npm run build --prefix frontend
+      - name: Start the API and the UI (vite preview, proxying /api to the API)
+        run: |
+          mkdir -p e2e/artifacts
+          (cd backend && nohup node dist/main.js > ../e2e/artifacts/api.log 2>&1 &)
+          (cd frontend && nohup npx vite preview --port 4173 --strictPort > ../e2e/artifacts/ui.log 2>&1 &)
+          for i in $(seq 60); do
+            curl -fsS http://localhost:4173/api/health/ready && curl -fsS -o /dev/null http://localhost:4173/ && exit 0
+            sleep 1
+          done
+          echo "API or UI did not start"; cat e2e/artifacts/api.log e2e/artifacts/ui.log; exit 1
+      - name: Run the browser tests
+        run: npm test --prefix e2e
+      - name: Upload screenshots and server logs
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with: { name: e2e-artifacts, path: e2e/artifacts, if-no-files-found: ignore }
+
   images:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: [backend, frontend]
+    needs: [backend, frontend, integration, e2e]
     runs-on: ubuntu-latest
     permissions: { contents: read, packages: write }
     steps:

@@ -1,0 +1,16 @@
+{
+  "name": "crm-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser end-to-end tests: the UI against a running API and database.",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 --test-reporter=spec \"tests/*.test.mjs\""
+  },
+  "devDependencies": {
+    "puppeteer": "^25.12.0"
+  }
+}

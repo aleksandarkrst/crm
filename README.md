@@ -7,6 +7,7 @@ domain; Projects, Workforce, Reporting and Finance come later as sibling modules
 ```
 frontend/   React + Vite UI (the "Mini CRM v2" design), served by nginx
 backend/    NestJS API + background worker (same image), Drizzle ORM, pg-boss job queue
+e2e/        browser end-to-end tests (Puppeteer + node:test)
 infra/      Postgres init (roles), backup container, server bootstrap
 scripts/    deploy.sh — run on the server by CI
 docs/       ARCHITECTURE.md, DEPLOYMENT.md
@@ -61,10 +62,53 @@ curl -s localhost:3000/api/tenants -H "authorization: Bearer $TOKEN" -H 'content
 |---|---|---|
 | backend | `npm run dev` / `npm run dev:worker` | API / worker with reload |
 | backend | `npm test` · `npm run lint` · `npm run typecheck` | checks (also run in CI) |
+| backend | `npm run test:integration` | API tests against the real database (see [Tests](#tests)) |
+| e2e | `npm test` | browser tests against a running UI + API (see [Tests](#tests)) |
 | backend | `npm run db:generate -- --name <change>` | new migration from schema changes |
 | backend | `npm run build && npm run db:migrate` | apply migrations |
 | backend | `npm run db:studio` | browse the database |
 | frontend | `npm run dev` · `npm run build` · `npm run lint` | UI |
+
+## Tests
+
+Three layers, all run in CI (`.github/workflows/ci.yml`):
+
+- **Unit tests** (`backend`, `npm test`): fast, no database.
+- **Integration tests** (`backend/test/integration`, `npm run test:integration`): build the API,
+  start `dist/main.js` on port 3101 (dev auth) and test it over HTTP against PostgreSQL:
+  tenant isolation through RLS (API and raw SQL as the runtime role), composite-FK rejection of
+  cross-tenant references, member/admin/owner rules and last-owner protection, invitations
+  (invited email only, single use, withdraw, replace) and deal-amount recalculation from lines.
+- **Browser tests** (`e2e/`, Puppeteer with its bundled Chrome, run by `node:test`): sign-in,
+  workspace, products, new deal, closing date, notes, drag between stages, reload, every screen
+  renders; deal lines and stage to-dos persist; CHAMP fit score; team invitations with two
+  browser contexts (invite, accept, roles, wrong account, withdraw, remove).
+
+Both suites create their own users and workspaces with unique emails, so they can run against
+the dev database without resetting it. The database must be migrated first.
+
+```bash
+# Integration tests (the dev database from docker-compose.dev.yml, migrated)
+cd backend
+npm run test:integration
+#   DATABASE_URL          runtime role, default postgres://app_runtime:dev_runtime_password@localhost:5432/app
+#                         (the suite refuses to run as a role that bypasses RLS)
+#   INTEGRATION_API_PORT  port for the API it starts, default 3101
+#   API_URL               test an already running API instead of starting one
+
+# Browser tests: start the API and the UI, then run the suite
+cd backend && npm run build && PORT=3101 node dist/main.js                    # terminal 1
+cd frontend && VITE_PORT=5174 VITE_API_PROXY=http://localhost:3101 npm run dev   # terminal 2
+cd e2e && npm ci && E2E_BASE_URL=http://localhost:5174 npm test                # terminal 3
+#   E2E_BASE_URL   where the UI runs (default http://localhost:5173); /api must reach the API
+#   E2E_HEADLESS   false to watch the browser; E2E_SLOW_MO=100 slows every action down
+#   E2E_TIMEOUT    per-action timeout in ms (default 10000)
+#   E2E_NO_SANDBOX 1 to launch Chrome with --no-sandbox (automatic when CI is set)
+#   PUPPETEER_EXECUTABLE_PATH  use another Chrome instead of the bundled one
+```
+
+A failing browser step saves full-page screenshots to `e2e/artifacts/` (uploaded by CI) and
+skips the rest of that journey.
 
 ## Connecting the tools (checklist)
 
