@@ -60,6 +60,11 @@ Any OIDC provider works. For example, in Auth0:
   logout URL `https://app.yourdomain.com`, web origin `https://app.yourdomain.com`.
   Its client ID goes in `OIDC_CLIENT_ID`.
 - `OIDC_ISSUER` is the tenant URL, e.g. `https://your-tenant.eu.auth0.com/` (trailing slash as the provider issues it).
+- **Put the user's email in the access token.** Accepting a team invitation matches the invited
+  address against the `email` claim of the access token (`backend/src/modules/identity/token.service.ts`).
+  Auth0 leaves it out by default: add a post-login Action that sets the claim from a verified
+  `event.user.email`. If your provider only allows namespaced custom claims, read that claim name in
+  `token.service.ts`. Test it once by inviting yourself on a second email.
 
 Set the same values as GitHub **variables** (`OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_AUDIENCE`),
 because the frontend image bakes them in at build time.

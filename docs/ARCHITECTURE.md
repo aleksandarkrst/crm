@@ -71,6 +71,22 @@ OpenID Connect provider (discovery → JWKS). Users are created on first request
 ("just-in-time"). Tenants and roles live in our database. `AUTH_MODE=dev` adds a passwordless
 `/api/auth/dev-login` for local work, and the app refuses to start with it when `NODE_ENV=production`.
 
+### Teams and invitations
+
+A tenant's members and their roles live in `memberships`. Admins invite people from
+**Settings → Team** (`POST /api/team/invitations`). The API returns a one-time token and stores
+only its SHA-256 hash; the UI shows the link `/invite/<token>` to copy and send. For now, sending
+it is up to you. Emailing it from the worker is the natural next step.
+
+- An invitation is for one email address, expires after 7 days, and works once. Re-inviting the
+  same address replaces the pending invitation.
+- Accepting (`POST /api/invitations/:token/accept`) requires a signed-in user with that email,
+  so a forwarded link is useless to anyone else.
+- Owners manage everyone. Admins invite, change roles and remove members, but can't touch owners
+  or grant the owner role. Every tenant keeps at least one owner. Anyone can leave.
+- `invitations`, like `memberships`, has no RLS because it decides access before tenant context
+  exists. `TeamService` filters by tenant explicitly.
+
 ## Background jobs
 
 pg-boss keeps its queue in PostgreSQL (schema `pgboss`), so there is no Redis to run. Pass the
@@ -106,6 +122,6 @@ them yet:
 - adding and removing funnel stages (blocked in the UI for now; editing existing stages is saved)
 - document templates and generation (worker + storage)
 - sales-bonus rules
-- team invitations
+- invitation emails (links are copied by hand for now)
 - custom fields
 - notification and integration settings

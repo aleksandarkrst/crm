@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
-import { FieldRow, GhostInput, GhostSelect, RemoveButton, Switch } from '../components/ui';
+import { FieldRow, GhostInput, GhostSelect, Modal, ModalHeader, RemoveButton, Switch } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { ACTIVITIES, CHANNEL_LABELS, CHANNELS, DOCS, TEAM_ROLES } from '../store/seed';
@@ -23,7 +24,8 @@ type Tab = (typeof TABS)[number]['k'];
 export function Settings() {
   const { tab = 'workspace' } = useParams();
   const navigate = useNavigate();
-  const { s, set } = useStore();
+  const { s, set, session, flash } = useStore();
+  const [inviteOpen, setInviteOpen] = useState(false);
   if (!TABS.some((t) => t.k === tab)) return <Navigate to={paths.settings()} replace />;
   const current = tab as Tab;
 
@@ -35,7 +37,7 @@ export function Settings() {
         : current === 'team'
           ? {
               label: 'Invite member',
-              onClick: () => set((x) => ({ team: [...x.team, { id: 't' + Date.now(), name: 'New teammate', email: 'name@cadence.rs', role: 'Sales', status: 'Invited' }] })),
+              onClick: () => (session.tenant.role === 'member' ? flash('Only owners and admins can invite people') : setInviteOpen(true)),
               meta: `${s.team.filter((m) => m.status === 'Active').length} active · ${s.team.filter((m) => m.status === 'Invited').length} invited`,
             }
           : null;
@@ -74,6 +76,7 @@ export function Settings() {
       {current === 'notifications' && <ToggleList kind="notifs" />}
       {current === 'integrations' && <IntegrationsTab />}
       {current === 'billing' && <BillingTab />}
+      {inviteOpen && <InviteModal onClose={() => setInviteOpen(false)} />}
     </Screen>
   );
 }
@@ -110,8 +113,10 @@ function WorkspaceTab() {
 }
 
 function TeamTab() {
-  const { s, set } = useStore();
+  const { s, session, setMemberRole, removeMember, revokeInvitation } = useStore();
   const cols = '1.4fr 1.4fr 0.9fr 0.7fr 40px';
+  const canManage = session.tenant.role !== 'member';
+  const isOwner = session.tenant.role === 'owner';
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
       <div className="table-head th" style={{ gridTemplateColumns: cols }}>
@@ -121,41 +126,72 @@ function TeamTab() {
         <span>Status</span>
         <span />
       </div>
-      {s.team.map((m) => (
-        <div key={m.id} className="table-row" style={{ gridTemplateColumns: cols, padding: '11px 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-            <span className="avatar" style={{ width: 26, height: 26, fontSize: 10 }}>
-              {initialsOf(m.name)}
+      {s.team.map((m) => {
+        const self = m.id === session.userId;
+        const invited = m.status === 'Invited';
+        // Owners manage everyone; admins can't touch owners or hand out the owner role.
+        const editable = !invited && canManage && (isOwner || m.role !== 'Owner');
+        const removable = invited ? canManage : self || (canManage && (isOwner || m.role !== 'Owner'));
+        return (
+          <div key={m.id} className="table-row" style={{ gridTemplateColumns: cols, padding: '11px 16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+              <span className="avatar" style={{ width: 26, height: 26, fontSize: 10 }}>
+                {invited ? '@' : initialsOf(m.name)}
+              </span>
+              <span style={{ fontWeight: 600 }}>
+                {invited ? 'Invitation sent' : m.name}
+                {self && <span style={{ fontWeight: 400, color: 'var(--muted)' }}> (you)</span>}
+              </span>
+            </div>
+            <span style={{ color: 'var(--text-2)' }}>{m.email}</span>
+            {editable ? (
+              <GhostSelect
+                className="ghost-sm"
+                value={m.role}
+                onChange={(e) => setMemberRole(m.id, e.target.value.toLowerCase() as 'owner' | 'admin' | 'member')}
+                options={isOwner ? [...TEAM_ROLES] : ['Admin', 'Member']}
+                style={{ padding: '5px 8px' }}
+              />
+            ) : (
+              <span style={{ color: 'var(--text-2)', padding: '5px 8px' }}>{m.role}</span>
+            )}
+            <span className={invited ? 'badge badge-warn' : 'badge badge-brand'} style={{ justifySelf: 'start' }}>
+              {m.status}
             </span>
-            <span style={{ fontWeight: 600 }}>{m.name}</span>
+            {removable ? (
+              <RemoveButton
+                title={invited ? 'Withdraw invitation' : self ? 'Leave workspace' : 'Remove from workspace'}
+                style={{ justifySelf: 'end' }}
+                onClick={() => {
+                  if (invited) return revokeInvitation(m.id);
+                  const question = self ? `Leave ${session.tenant.name}? You will need a new invitation to come back.` : `Remove ${m.name} from ${session.tenant.name}?`;
+                  if (window.confirm(question)) removeMember(m.id);
+                }}
+              />
+            ) : (
+              <span />
+            )}
           </div>
-          <span style={{ color: 'var(--text-2)' }}>{m.email}</span>
-          <GhostSelect
-            className="ghost-sm"
-            value={m.role}
-            onChange={(e) => {
-              const v = e.target.value;
-              set((x) => ({ team: x.team.map((y) => (y.id === m.id ? { ...y, role: v } : y)) }));
-            }}
-            options={TEAM_ROLES}
-            style={{ padding: '5px 8px' }}
-          />
-          <span className={m.status === 'Active' ? 'badge badge-brand' : 'badge badge-warn'} style={{ justifySelf: 'start' }}>
-            {m.status}
-          </span>
-          <RemoveButton style={{ justifySelf: 'end' }} onClick={() => set((x) => ({ team: x.team.filter((y) => y.id !== m.id) }))} />
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
+/** What each role may do. Enforced by the API; roles are fixed for now. */
+const ROLE_RULES: { label: string; roles: (typeof TEAM_ROLES)[number][] }[] = [
+  { label: 'View and edit deals, companies, contacts and products', roles: ['Owner', 'Admin', 'Member'] },
+  { label: 'Delete deals, companies, contacts and products', roles: ['Owner', 'Admin'] },
+  { label: 'Edit funnels and stages', roles: ['Owner', 'Admin'] },
+  { label: 'Invite members and change their roles', roles: ['Owner', 'Admin'] },
+  { label: 'Make someone an owner or remove an owner', roles: ['Owner'] },
+];
+
 function RolesTab() {
-  const { s, set } = useStore();
-  const cols = '1.8fr repeat(4, 90px)';
+  const cols = '1.8fr repeat(3, 90px)';
   return (
     <div className="card" style={{ overflowX: 'auto' }}>
-      <div style={{ minWidth: 640 }}>
+      <div style={{ minWidth: 560 }}>
         <div className="table-head th" style={{ gridTemplateColumns: cols }}>
           <span>Permission</span>
           {TEAM_ROLES.map((r) => (
@@ -164,26 +200,91 @@ function RolesTab() {
             </span>
           ))}
         </div>
-        {s.perms.map((p) => (
-          <div key={p.id} className="table-row" style={{ gridTemplateColumns: cols, padding: '11px 16px' }}>
+        {ROLE_RULES.map((p) => (
+          <div key={p.label} className="table-row" style={{ gridTemplateColumns: cols, padding: '11px 16px' }}>
             <span>{p.label}</span>
             {TEAM_ROLES.map((r) => {
-              const on = !!p.roles[r];
+              const on = p.roles.includes(r);
               return (
-                <button
+                <span
                   key={r}
-                  type="button"
-                  onClick={() => set((x) => ({ perms: x.perms.map((y) => (y.id === p.id ? { ...y, roles: { ...y.roles, [r]: !y.roles[r] } } : y)) }))}
-                  style={{ justifySelf: 'center', width: 20, height: 20, borderRadius: 5, cursor: 'pointer', border: `1.5px solid ${on ? '#14503C' : '#D0D5DD'}`, background: on ? '#14503C' : '#FFFFFF', color: '#F5F6F8', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                  style={{ justifySelf: 'center', width: 20, height: 20, borderRadius: 5, border: `1.5px solid ${on ? '#14503C' : '#D0D5DD'}`, background: on ? '#14503C' : '#FFFFFF', color: '#F5F6F8', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >
                   {on ? '✓' : ''}
-                </button>
+                </span>
               );
             })}
           </div>
         ))}
+        <div style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-2)' }}>Every workspace keeps at least one owner. Anyone can leave a workspace from the Team tab.</div>
       </div>
     </div>
+  );
+}
+
+/** Invite by email; the link is shown once to copy and send (email delivery comes later). */
+function InviteModal({ onClose }: { onClose: () => void }) {
+  const { session, inviteMember } = useStore();
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<'member' | 'admin'>('member');
+  const [link, setLink] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const send = async () => {
+    setBusy(true);
+    setLink(await inviteMember(email.trim(), role));
+    setBusy(false);
+  };
+  const copy = () =>
+    navigator.clipboard
+      .writeText(link!)
+      .then(() => setCopied(true))
+      .catch(() => setCopied(false));
+  return (
+    <Modal maxWidth={520}>
+      <ModalHeader title="Invite a teammate" sub={`They join ${session.tenant.name} and see the same pipeline. The link works once, for this email address, for 7 days.`} />
+      {!link ? (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px', gap: 12 }}>
+            <label className="form-label">
+              Email
+              <input className="form-input" type="email" autoFocus placeholder="name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </label>
+            <label className="form-label">
+              Role
+              <select className="form-input" value={role} onChange={(e) => setRole(e.target.value as 'member' | 'admin')}>
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </select>
+            </label>
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="button" className={email.includes('@') && !busy ? 'btn btn-primary' : 'btn btn-disabled'} disabled={!email.includes('@') || busy} onClick={() => void send()}>
+              {busy ? 'Creating…' : 'Create invite link'}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <label className="form-label">
+            Invite link for {email.trim()}
+            <input className="form-input" readOnly value={link} onFocus={(e) => e.target.select()} />
+          </label>
+          <div className="hint-box">Send this link to them yourself for now. It is shown only once; if it gets lost, invite them again.</div>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-secondary" onClick={() => void copy()}>
+              {copied ? 'Copied' : 'Copy link'}
+            </button>
+            <button type="button" className="btn btn-primary" onClick={onClose}>
+              Done
+            </button>
+          </div>
+        </>
+      )}
+    </Modal>
   );
 }
 

@@ -21,7 +21,7 @@ export const PARAM_SOURCES: Record<string, string> = { '{{company}}': 'Lead · c
 export const PRODUCT_TYPES = ['Service', 'Product'];
 export const BILLING_KINDS = ['One-off', 'Monthly', 'Yearly', 'Hourly'];
 export const SCHEDULE_TYPES = ['Full amount on one date', 'Custom milestones', 'Equal monthly instalments', 'Recurring subscription'];
-export const TEAM_ROLES = ['Admin', 'Manager', 'Sales', 'Viewer'];
+export const TEAM_ROLES = ['Owner', 'Admin', 'Member'] as const;
 
 /** Playbook rules (design props). */
 export const AUTO_GENERATE_DOCS = true;
@@ -152,21 +152,7 @@ export function initialState(): State {
       { id: 'rm4', title: 'Contact enrichment from email', status: 'progress' },
       { id: 'rm5', title: 'Two-funnel pipeline split', status: 'done' },
     ],
-    team: [
-      { id: 't1', name: 'Mila Jovanović', email: 'mila@cadence.rs', role: 'Admin', status: 'Active' },
-      { id: 't2', name: 'Stefan Popović', email: 'stefan@cadence.rs', role: 'Manager', status: 'Active' },
-      { id: 't3', name: 'Nina Đorđević', email: 'nina@cadence.rs', role: 'Sales', status: 'Active' },
-      { id: 't4', name: 'Vuk Ilić', email: 'vuk@cadence.rs', role: 'Sales', status: 'Invited' },
-    ],
-    perms: [
-      { id: 'p1', label: 'View pipeline and companies', roles: { Admin: true, Manager: true, Sales: true, Viewer: true } },
-      { id: 'p2', label: 'Create and edit deals', roles: { Admin: true, Manager: true, Sales: true, Viewer: false } },
-      { id: 'p3', label: 'Delete records', roles: { Admin: true, Manager: true, Sales: false, Viewer: false } },
-      { id: 'p4', label: 'Edit funnels and stages', roles: { Admin: true, Manager: true, Sales: false, Viewer: false } },
-      { id: 'p5', label: 'Manage document templates', roles: { Admin: true, Manager: true, Sales: false, Viewer: false } },
-      { id: 'p6', label: 'Invite and remove team members', roles: { Admin: true, Manager: false, Sales: false, Viewer: false } },
-      { id: 'p7', label: 'Manage billing', roles: { Admin: true, Manager: false, Sales: false, Viewer: false } },
-    ],
+    team: [], // loaded from the API
     notifs: [
       { id: 'n1', label: 'Stalled lead nudges', desc: 'Daily digest of leads with no contact for 4+ days', on: true },
       { id: 'n2', label: 'Task reminders', desc: 'Morning summary of tasks due today', on: true },

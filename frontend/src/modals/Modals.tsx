@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Modal, ModalHeader } from '../components/ui';
 import { paths } from '../lib/paths';
-import { BILLING_KINDS, BUYER_ROLES, CHANNEL_LABELS, CHANNELS, DOC_TYPES, FIELD_TYPES, OWNERS, PARAM_SOURCES, PRODUCT_TYPES } from '../store/seed';
-import { allPeople, companyRecords, leadById, stageOf, stagesFor, valueNum } from '../store/selectors';
+import { BILLING_KINDS, BUYER_ROLES, CHANNEL_LABELS, CHANNELS, DOC_TYPES, FIELD_TYPES, PARAM_SOURCES, PRODUCT_TYPES } from '../store/seed';
+import { allPeople, companyRecords, leadById, salesPeople, stageOf, stagesFor, valueNum } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Lead, SegKey } from '../store/types';
 import { ProposalDoc } from './ProposalDoc';
@@ -183,7 +183,7 @@ function NewTaskModal() {
         <label className="form-label" style={{ gridColumn: 'span 2' }}>
           Owner
           <select className="form-input">
-            {OWNERS.map((o) => (
+            {salesPeople(s).map((o) => (
               <option key={o}>{o}</option>
             ))}
           </select>

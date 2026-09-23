@@ -1,10 +1,31 @@
 import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { ApiError, type ApiMe, crmApi, getTenantId, setTenantId } from '../lib/api';
+import { ApiError, type ApiInvitePreview, type ApiMe, crmApi, getTenantId, setTenantId } from '../lib/api';
 import { authMode, devLogin, getAccessToken, signIn, signOut } from '../lib/auth';
 import { loadWorkspace, type WorkspaceData } from '../store/remote';
 import { type Session, StoreProvider } from '../store/store';
 
-type Phase = { kind: 'loading' } | { kind: 'signed-out' } | { kind: 'no-workspace'; me: ApiMe } | { kind: 'error'; message: string } | { kind: 'ready'; me: ApiMe; tenantId: string; data: WorkspaceData };
+type Phase =
+  | { kind: 'loading' }
+  | { kind: 'signed-out' }
+  | { kind: 'no-workspace'; me: ApiMe }
+  | { kind: 'invite'; me: ApiMe; token: string; preview: ApiInvitePreview | null; problem?: string }
+  | { kind: 'error'; message: string }
+  | { kind: 'ready'; me: ApiMe; tenantId: string; data: WorkspaceData };
+
+/**
+ * An invite link (/invite/<token>) is remembered for this tab, so it survives signing in first
+ * (including the redirect to an OIDC provider and back).
+ */
+const INVITE_KEY = 'crm.inviteToken';
+function pendingInvite(): string | null {
+  const m = /^\/invite\/([A-Za-z0-9_-]+)$/.exec(window.location.pathname);
+  if (m) {
+    sessionStorage.setItem(INVITE_KEY, m[1]!);
+    window.history.replaceState(null, '', '/');
+  }
+  return sessionStorage.getItem(INVITE_KEY);
+}
+const clearInvite = () => sessionStorage.removeItem(INVITE_KEY);
 
 /**
  * Everything before the app itself: sign-in, picking or creating a workspace (tenant) and loading
@@ -16,8 +37,18 @@ export function SessionGate({ children }: { children: ReactNode }) {
   const start = useCallback(async (preferTenant?: string) => {
     setPhase({ kind: 'loading' });
     try {
+      const invite = pendingInvite();
       if (!(await getAccessToken())) return setPhase({ kind: 'signed-out' });
       const me = await crmApi.me();
+      if (invite && !preferTenant) {
+        try {
+          return setPhase({ kind: 'invite', me, token: invite, preview: await crmApi.previewInvitation(invite) });
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 401) throw err;
+          clearInvite();
+          return setPhase({ kind: 'invite', me, token: invite, preview: null, problem: err instanceof Error ? err.message : String(err) });
+        }
+      }
       if (me.tenants.length === 0) return setPhase({ kind: 'no-workspace', me });
       const wanted = preferTenant ?? getTenantId();
       const tenant = me.tenants.find((t) => t.id === wanted) ?? me.tenants[0]!;
@@ -42,6 +73,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
     const tenant = me?.tenants.find((t) => t.id === tenantId);
     if (!me || !tenant) return null;
     return {
+      userId: me.user.id,
       userName: me.user.displayName || me.user.email || 'You',
       email: me.user.email || '',
       tenant,
@@ -57,7 +89,17 @@ export function SessionGate({ children }: { children: ReactNode }) {
         {children}
       </StoreProvider>
     );
-  if (phase.kind === 'signed-out') return <SignIn onDone={() => void start()} />;
+  if (phase.kind === 'signed-out') return <SignIn invited={!!sessionStorage.getItem(INVITE_KEY)} onDone={() => void start()} />;
+  if (phase.kind === 'invite')
+    return (
+      <AcceptInvite
+        phase={phase}
+        onDone={(tenantId) => {
+          clearInvite();
+          void start(tenantId);
+        }}
+      />
+    );
   if (phase.kind === 'no-workspace') return <CreateWorkspace me={phase.me} onDone={(id) => void start(id)} />;
   if (phase.kind === 'error')
     return (
@@ -85,7 +127,66 @@ function Centered({ title, sub, children }: { title: string; sub?: string; child
   );
 }
 
-function SignIn({ onDone }: { onDone: () => void }) {
+function AcceptInvite({ phase, onDone }: { phase: Extract<Phase, { kind: 'invite' }>; onDone: (tenantId?: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const { preview, me } = phase;
+  const signedInAs = me.user.email ?? me.user.displayName ?? 'you';
+  if (!preview)
+    return (
+      <Centered title="This invite link doesn't work" sub={`${phase.problem ?? 'It may have expired or already been used.'} Ask for a new invitation.`}>
+        <button type="button" className="btn btn-primary" onClick={() => onDone()}>
+          Continue
+        </button>
+      </Centered>
+    );
+  const wrongUser = !!me.user.email && me.user.email.toLowerCase() !== preview.email;
+  const accept = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const tenant = await crmApi.acceptInvitation(phase.token);
+      onDone(tenant.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setBusy(false);
+    }
+  };
+  return (
+    <Centered
+      title={`Join ${preview.tenantName}`}
+      sub={`${preview.invitedBy ?? 'A teammate'} invited ${preview.email} to join as ${preview.role === 'admin' ? 'an admin' : 'a member'}.`}
+    >
+      {wrongUser && (
+        <div style={{ fontSize: 12.5, color: '#B42318', lineHeight: 1.5 }}>
+          You are signed in as {signedInAs}. Sign out and sign in as {preview.email} to accept.
+        </div>
+      )}
+      {error && <div style={{ fontSize: 12.5, color: '#B42318' }}>{error}</div>}
+      <button type="button" className="btn btn-primary" disabled={busy || wrongUser} onClick={() => void accept()}>
+        {busy ? 'Joining…' : 'Accept and join'}
+      </button>
+      {wrongUser ? (
+        <button type="button" className="btn btn-secondary" onClick={() => void signOut().then(() => window.location.reload())}>
+          Sign out
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => {
+            clearInvite();
+            onDone();
+          }}
+        >
+          Not now
+        </button>
+      )}
+    </Centered>
+  );
+}
+
+function SignIn({ onDone, invited }: { onDone: () => void; invited: boolean }) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
@@ -93,7 +194,7 @@ function SignIn({ onDone }: { onDone: () => void }) {
 
   if (authMode === 'oidc')
     return (
-      <Centered title="Sign in to Cadence" sub="You'll continue with your company's sign-in provider.">
+      <Centered title="Sign in to Cadence" sub={invited ? 'Sign in to accept your invitation.' : "You'll continue with your company's sign-in provider."}>
         <button type="button" className="btn btn-primary" onClick={() => void signIn()}>
           Sign in
         </button>
@@ -113,7 +214,7 @@ function SignIn({ onDone }: { onDone: () => void }) {
     }
   };
   return (
-    <Centered title="Sign in to Cadence" sub="Development sign-in: no password. Any email creates a user.">
+    <Centered title="Sign in to Cadence" sub={invited ? 'Sign in with the email address the invitation was sent to.' : 'Development sign-in: no password. Any email creates a user.'}>
       <form onSubmit={(e) => void submit(e)} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <label className="form-label">
           Email

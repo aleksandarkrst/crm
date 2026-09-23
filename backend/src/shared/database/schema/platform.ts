@@ -50,3 +50,28 @@ export const auditLogs = pgTable(
   },
   (t) => [index('audit_logs_tenant_created_idx').on(t.tenantId, t.createdAt)],
 );
+
+export const INVITATION_ROLES = ['admin', 'member'] as const;
+
+/**
+ * An invitation to join a tenant, sent to an email address. Only a SHA-256 hash of the token is
+ * stored; the token itself travels in the invite link. Not tenant-scoped by RLS: accepting one
+ * means finding it before the user is a member (the service always filters by tenant otherwise).
+ */
+export const invitations = pgTable(
+  'invitations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(), // stored lower-case
+    role: text('role', { enum: INVITATION_ROLES }).notNull().default('member'),
+    tokenHash: text('token_hash').notNull().unique(),
+    invitedByUserId: uuid('invited_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    acceptedByUserId: uuid('accepted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('invitations_tenant_idx').on(t.tenantId)],
+);

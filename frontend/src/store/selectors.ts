@@ -1,5 +1,5 @@
 /** Pure derivations over the store state (ported from the design prototype's logic). */
-import { CHAMP, CHAMP_LEVELS, OWNERS, SCRIPTS } from './seed';
+import { CHAMP, CHAMP_LEVELS, SCRIPTS } from './seed';
 import type { CatalogItem, Champ, DealLine, Lead, LogEntry, Person, SegKey, Stage, State, TaskState } from './types';
 
 export const num = (v: unknown): number => Number(String(v ?? '').replace(/[^0-9.]/g, '')) || 0;
@@ -25,7 +25,7 @@ export const stageOf = (s: State, lead: Lead): Stage => {
   return stages.find((st) => st.id === lead.stage) ?? stages[0]!;
 };
 export const leadById = (s: State, id: string | null | undefined): Lead | undefined => s.leads.find((l) => l.id === id);
-export const ownerOf = (l: Lead): string => OWNERS[(Number(String(l.id).replace(/\D/g, '')) - 1 + OWNERS.length) % OWNERS.length]!;
+export const ownerOf = (l: Lead): string => l.owner || '—';
 export const bandOf = (v: string): string => {
   const n = valueNum(v);
   return n < 25000 ? 'Under €25k' : n <= 100000 ? '€25k–€100k' : 'Over €100k';
@@ -246,4 +246,5 @@ export const bonusOf = (lead: Lead, rule: { rate: number | string; floor: number
   const net = num(lead.value);
   return net >= num(rule.floor) ? (net * num(rule.rate)) / 100 : num(rule.fixed);
 };
-export const salesPeople = (s: State): string[] => s.team.filter((m) => m.role === 'Sales').map((m) => m.name);
+/** Everyone in the workspace who can own deals. */
+export const salesPeople = (s: State): string[] => s.team.filter((m) => m.status === 'Active').map((m) => m.name);

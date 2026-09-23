@@ -179,6 +179,28 @@ export interface ApiDealTask {
   note: string | null;
 }
 
+export interface ApiMember {
+  userId: string;
+  email: string | null;
+  displayName: string | null;
+  role: ApiRole;
+  joinedAt: string;
+}
+export interface ApiInvitation {
+  id: string;
+  email: string;
+  role: 'admin' | 'member';
+  expiresAt: string;
+  createdAt: string;
+}
+export interface ApiInvitePreview {
+  tenantName: string;
+  email: string;
+  role: 'admin' | 'member';
+  invitedBy: string | null;
+  expiresAt: string;
+}
+
 export type CompanyInput = Partial<Omit<ApiCompany, 'id'>> & { name?: string };
 export type ContactInput = Partial<Omit<ApiContact, 'id'>>;
 export type DealInput = Partial<Pick<ApiDeal, 'title' | 'companyId' | 'primaryContactId' | 'funnelId' | 'source' | 'closeDate' | 'amount'>> & { champ?: ApiChamp };
@@ -200,6 +222,14 @@ export type StageInput = Partial<Pick<ApiFunnelStage, 'name' | 'activity' | 'cha
 export const crmApi = {
   me: () => api<ApiMe>('/me'),
   createTenant: (name: string) => api<ApiTenant>('/tenants', { method: 'POST', json: { name } }),
+
+  team: () => api<{ members: ApiMember[]; invitations: ApiInvitation[] }>('/team'),
+  invite: (email: string, role: 'admin' | 'member') => api<{ invitation: ApiInvitation; token: string }>('/team/invitations', { method: 'POST', json: { email, role } }),
+  revokeInvitation: (id: string) => api(`/team/invitations/${id}`, { method: 'DELETE' }),
+  updateMember: (userId: string, role: ApiRole) => api(`/team/members/${userId}`, { method: 'PATCH', json: { role } }),
+  removeMember: (userId: string) => api(`/team/members/${userId}`, { method: 'DELETE' }),
+  previewInvitation: (token: string) => api<ApiInvitePreview>(`/invitations/${token}`),
+  acceptInvitation: (token: string) => api<ApiTenant>(`/invitations/${token}/accept`, { method: 'POST' }),
 
   funnels: () => api<ApiFunnel[]>('/crm/funnels'),
   updateStage: (funnelId: string, stageId: string, input: StageInput) => api(`/crm/funnels/${funnelId}/stages/${stageId}`, { method: 'PATCH', json: input }),

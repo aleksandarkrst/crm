@@ -4,16 +4,16 @@
  * plus companies without a deal, and people are primary contacts plus everyone else.
  */
 import { type ApiActivity, type ApiCompany, type ApiDealLine, type ApiContact, type ApiFunnel, crmApi } from '../lib/api';
-import { OWNERS } from './seed';
 import { initialsOf, money, taskKey } from './selectors';
-import type { CatalogItem, CompanyExtra, DealLine, Funnel, Lead, LogEntry, Person, SegKey, State } from './types';
+import type { CatalogItem, CompanyExtra, DealLine, Funnel, Lead, LogEntry, Person, SegKey, State, TeamMember } from './types';
 
 export type WorkspaceData = Pick<
   State,
-  'funnels' | 'leads' | 'extraCompanies' | 'extraPeople' | 'links' | 'catalog' | 'champ' | 'dealLines' | 'tasks' | 'extraTodos' | 'extraTodoIds'
+  'funnels' | 'leads' | 'extraCompanies' | 'extraPeople' | 'links' | 'catalog' | 'champ' | 'dealLines' | 'tasks' | 'extraTodos' | 'extraTodoIds' | 'team'
 >;
 
 const SEGMENTS: SegKey[] = ['smb', 'ent'];
+export const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member' } as const;
 const DAY = 86_400_000;
 
 function mapFunnel(f: ApiFunnel): Funnel {
@@ -51,7 +51,7 @@ export const mapLine = (l: ApiDealLine): DealLine => ({
 export const mapActivity = (a: ApiActivity): LogEntry => ({ date: dateLabel(a.occurredAt), channel: a.channel, title: a.title, detail: a.detail ?? '' });
 
 export async function loadWorkspace(): Promise<WorkspaceData> {
-  const [apiFunnels, companies, contacts, dealRows, products, apiLines, apiTasks] = await Promise.all([
+  const [apiFunnels, companies, contacts, dealRows, products, apiLines, apiTasks, apiTeam] = await Promise.all([
     crmApi.funnels(),
     crmApi.companies(),
     crmApi.contacts(),
@@ -59,7 +59,14 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     crmApi.products(),
     crmApi.dealLines(),
     crmApi.dealTasks(),
+    crmApi.team(),
   ]);
+
+  const team: TeamMember[] = [
+    ...apiTeam.members.map<TeamMember>((m) => ({ id: m.userId, name: m.displayName || m.email || 'Member', email: m.email ?? '', role: ROLE_LABEL[m.role], status: 'Active' })),
+    ...apiTeam.invitations.map<TeamMember>((i) => ({ id: i.id, name: i.email, email: i.email, role: ROLE_LABEL[i.role], status: 'Invited' })),
+  ];
+  const nameOf = (userId: string | null) => (userId ? apiTeam.members.find((m) => m.userId === userId) : undefined)?.displayName ?? undefined;
 
   const funnels = {} as State['funnels'];
   const segOfFunnel = new Map<string, SegKey>();
@@ -94,6 +101,7 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
       email: ct?.email ?? '—',
       phone: ct?.phone ?? '—',
       buyerRole: ct?.buyerRole,
+      owner: nameOf(deal.ownerUserId),
       segment,
       stage: deal.stageId,
       value: money(Number(deal.amount)),
@@ -122,7 +130,7 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     hq: c.hq ?? '',
     size: c.teamSize ?? '',
     source: c.source ?? '',
-    owner: OWNERS[0]!,
+    owner: nameOf(c.ownerUserId) ?? '—',
   }));
 
   // Everyone who isn't already shown as a lead's primary contact.
@@ -186,5 +194,5 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     };
   }
 
-  return { funnels, leads, extraCompanies, extraPeople, links, catalog, champ, dealLines, tasks, extraTodos, extraTodoIds };
+  return { funnels, leads, extraCompanies, extraPeople, links, catalog, champ, dealLines, tasks, extraTodos, extraTodoIds, team };
 }

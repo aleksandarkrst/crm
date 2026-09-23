@@ -41,6 +41,8 @@ export interface Lead {
   email: string;
   phone: string;
   buyerRole?: string;
+  /** Name of the deal owner (a workspace member). */
+  owner?: string;
   segment: SegKey;
   stage: string;
   value: string; // "€14,000"
@@ -140,17 +142,12 @@ export interface RoadmapItem {
 }
 
 export interface TeamMember {
+  /** user id for members, invitation id for pending invitations */
   id: string;
   name: string;
   email: string;
-  role: string;
+  role: 'Owner' | 'Admin' | 'Member';
   status: 'Active' | 'Invited';
-}
-
-export interface Permission {
-  id: string;
-  label: string;
-  roles: Record<string, boolean>;
 }
 
 export interface ToggleRow {
@@ -258,7 +255,6 @@ export interface State {
   log: Record<string, LogEntry[]>;
   roadmapItems: RoadmapItem[];
   team: TeamMember[];
-  perms: Permission[];
   notifs: ToggleRow[];
   integrations: ToggleRow[];
   fields: FieldDef[];

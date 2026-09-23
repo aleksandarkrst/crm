@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiTenant, type Channel, crmApi, type DealLineInput, type TaskInput } from '../lib/api';
+import { type ApiRole, type ApiTenant, type Channel, clearTenantId, crmApi, type DealLineInput, type TaskInput } from '../lib/api';
 import { paths } from '../lib/paths';
 import { loadWorkspace, mapActivity, mapLine, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
@@ -30,6 +30,7 @@ type Updater = Partial<State> | ((s: State) => Partial<State>);
 
 /** Who is signed in and which workspace (tenant) is open. */
 export interface Session {
+  userId: string;
   userName: string;
   email: string;
   tenant: ApiTenant;
@@ -646,6 +647,38 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         } catch (err) {
           flash('Not saved: ' + errText(err));
         }
+      },
+
+      // ---------------------------------------------------------- team
+      /** Creates an invitation and returns the link to share (shown once; only its hash is stored). */
+      inviteMember: async (email: string, role: 'admin' | 'member'): Promise<string | null> => {
+        try {
+          const { token } = await crmApi.invite(email, role);
+          await reload();
+          return `${window.location.origin}/invite/${token}`;
+        } catch (err) {
+          flash('Not invited: ' + errText(err));
+          return null;
+        }
+      },
+      revokeInvitation: (id: string) => {
+        set((x) => ({ team: x.team.filter((m) => m.id !== id) }));
+        void save(() => crmApi.revokeInvitation(id));
+      },
+      setMemberRole: (userId: string, role: ApiRole) => {
+        void save(() => crmApi.updateMember(userId, role), reload);
+      },
+      /** Removes a member; removing yourself leaves the workspace. */
+      removeMember: (userId: string) => {
+        const leaving = userId === session.userId;
+        void save(
+          () => crmApi.removeMember(userId),
+          () => {
+            if (!leaving) return reload();
+            clearTenantId();
+            window.location.assign('/');
+          },
+        );
       },
 
       // ---------------------------------------------------------- product catalog

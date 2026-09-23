@@ -37,11 +37,13 @@ npm run dev
 Open http://localhost:5173.
 
 Sign in with any email (dev mode, no password), create a workspace, and start adding deals.
+To try teamwork locally, invite a second email in **Settings → Team**, then open the invite link in
+a private window and sign in as that email.
 
 > **Current state of the UI:** deals (with their product lines, payment schedules, stage to-dos,
 > fit scores and activity history), companies, contacts, products and funnel stages are saved in
-> the database. Some design features have no backend yet and only last until you reload the page:
-> documents, team, permissions and the other settings tabs. See
+> the database, and so are the team and invitations. Some design features have no backend yet and
+> only last until you reload the page: documents and the remaining settings tabs. See
 > [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#frontend-store--api).
 
 Try the API directly (dev auth, no password):

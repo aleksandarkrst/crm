@@ -1,0 +1,195 @@
+import { BadRequestException, ConflictException, ForbiddenException, GoneException, Injectable, NotFoundException } from '@nestjs/common';
+import { and, asc, eq, gt, isNull, sql } from 'drizzle-orm';
+import { createHash, randomBytes } from 'node:crypto';
+import { z } from 'zod';
+import { AuditService } from '../../shared/audit/audit.service';
+import { type AuthUser, hasRole, type TenantContext } from '../../shared/authorization';
+import { DatabaseService, type Tx } from '../../shared/database/database.service';
+import { INVITATION_ROLES, invitations, MEMBERSHIP_ROLES, memberships, tenants, users } from '../../shared/database/schema';
+
+const INVITE_TTL_DAYS = 7;
+
+export const CreateInvitation = z.object({
+  email: z.email().transform((e) => e.trim().toLowerCase()),
+  role: z.enum(INVITATION_ROLES).default('member'),
+});
+export const UpdateMember = z.object({ role: z.enum(MEMBERSHIP_ROLES) });
+export type CreateInvitation = z.infer<typeof CreateInvitation>;
+export type UpdateMember = z.infer<typeof UpdateMember>;
+
+const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
+const pending = () => and(isNull(invitations.acceptedAt), isNull(invitations.revokedAt), gt(invitations.expiresAt, sql`now()`));
+
+/**
+ * Team management: members of a tenant and invitations to join it.
+ *
+ * Rules: admins invite and manage members; only an owner can grant or take away the owner role
+ * or remove an owner; a tenant always keeps at least one owner. An invitation can only be
+ * accepted by a signed-in user with the invited email address.
+ */
+@Injectable()
+export class TeamService {
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly audit: AuditService,
+  ) {}
+
+  async list(ctx: TenantContext) {
+    const members = await this.database.db
+      .select({ userId: users.id, email: users.email, displayName: users.displayName, role: memberships.role, joinedAt: memberships.createdAt })
+      .from(memberships)
+      .innerJoin(users, eq(users.id, memberships.userId))
+      .where(eq(memberships.tenantId, ctx.tenantId))
+      .orderBy(asc(memberships.createdAt));
+    const invites = await this.database.db
+      .select({ id: invitations.id, email: invitations.email, role: invitations.role, expiresAt: invitations.expiresAt, createdAt: invitations.createdAt })
+      .from(invitations)
+      .where(and(eq(invitations.tenantId, ctx.tenantId), pending()))
+      .orderBy(asc(invitations.createdAt));
+    return { members, invitations: invites };
+  }
+
+  /** Returns the one-time token; the frontend turns it into the invite link. */
+  invite(ctx: TenantContext, input: CreateInvitation) {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const [existing] = await tx
+        .select({ userId: users.id })
+        .from(memberships)
+        .innerJoin(users, eq(users.id, memberships.userId))
+        .where(and(eq(memberships.tenantId, ctx.tenantId), sql`lower(${users.email}) = ${input.email}`));
+      if (existing) throw new ConflictException(`${input.email} is already a member`);
+
+      // A new invitation replaces any pending one for the same address.
+      await tx
+        .update(invitations)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(invitations.tenantId, ctx.tenantId), eq(invitations.email, input.email), pending()));
+
+      const token = randomBytes(32).toString('base64url');
+      const [row] = await tx
+        .insert(invitations)
+        .values({
+          tenantId: ctx.tenantId,
+          email: input.email,
+          role: input.role,
+          tokenHash: hashToken(token),
+          invitedByUserId: ctx.userId,
+          expiresAt: new Date(Date.now() + INVITE_TTL_DAYS * 86_400_000),
+        })
+        .returning({ id: invitations.id, email: invitations.email, role: invitations.role, expiresAt: invitations.expiresAt, createdAt: invitations.createdAt });
+      await this.audit.record(tx, ctx, { action: 'invitation.created', entityType: 'invitation', entityId: row!.id, data: { email: input.email, role: input.role } });
+      return { invitation: row!, token };
+    });
+  }
+
+  revoke(ctx: TenantContext, id: string) {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const [row] = await tx
+        .update(invitations)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(invitations.id, id), eq(invitations.tenantId, ctx.tenantId), isNull(invitations.acceptedAt), isNull(invitations.revokedAt)))
+        .returning({ id: invitations.id });
+      if (!row) throw new NotFoundException('Invitation not found');
+      await this.audit.record(tx, ctx, { action: 'invitation.revoked', entityType: 'invitation', entityId: id });
+    });
+  }
+
+  updateMember(ctx: TenantContext, userId: string, input: UpdateMember) {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const target = await this.memberRole(tx, ctx.tenantId, userId);
+      if ((target === 'owner' || input.role === 'owner') && ctx.role !== 'owner') throw new ForbiddenException('Only an owner can change who is an owner');
+      if (target === 'owner' && input.role !== 'owner') await this.keepAnOwner(tx, ctx.tenantId);
+      await tx.update(memberships).set({ role: input.role }).where(and(eq(memberships.tenantId, ctx.tenantId), eq(memberships.userId, userId)));
+      await this.audit.record(tx, ctx, { action: 'member.role_changed', entityType: 'user', entityId: userId, data: { from: target, to: input.role } });
+      return { userId, role: input.role };
+    });
+  }
+
+  /** Admins remove members; anyone may remove themselves (leave). */
+  removeMember(ctx: TenantContext, userId: string) {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const self = userId === ctx.userId;
+      if (!self && !hasRole(ctx.role, 'admin')) throw new ForbiddenException('Requires admin role');
+      const target = await this.memberRole(tx, ctx.tenantId, userId);
+      if (target === 'owner') {
+        if (!self && ctx.role !== 'owner') throw new ForbiddenException('Only an owner can remove an owner');
+        await this.keepAnOwner(tx, ctx.tenantId);
+      }
+      await tx.delete(memberships).where(and(eq(memberships.tenantId, ctx.tenantId), eq(memberships.userId, userId)));
+      await this.audit.record(tx, ctx, { action: self ? 'member.left' : 'member.removed', entityType: 'user', entityId: userId });
+    });
+  }
+
+  /** What an invite link is for, shown before accepting it. */
+  async preview(token: string) {
+    const row = await this.findByToken(token);
+    const [inviter] = row.invitedByUserId
+      ? await this.database.db.select({ name: sql<string | null>`coalesce(${users.displayName}, ${users.email})` }).from(users).where(eq(users.id, row.invitedByUserId))
+      : [];
+    return { tenantName: row.tenantName, email: row.email, role: row.role, invitedBy: inviter?.name ?? null, expiresAt: row.expiresAt };
+  }
+
+  /** Joins the tenant. The signed-in user's email must be the invited one. */
+  async accept(user: AuthUser, token: string) {
+    const row = await this.findByToken(token);
+    if (!user.email) throw new BadRequestException('Your sign-in did not include an email address, so the invitation cannot be matched to you');
+    if (user.email.toLowerCase() !== row.email) throw new ForbiddenException(`This invitation is for ${row.email}. You are signed in as ${user.email}.`);
+
+    const ctx: TenantContext = { tenantId: row.tenantId, userId: user.id, role: row.role };
+    return this.database.withTenant(row.tenantId, async (tx) => {
+      const [claimed] = await tx
+        .update(invitations)
+        .set({ acceptedAt: new Date(), acceptedByUserId: user.id })
+        .where(and(eq(invitations.id, row.id), pending()))
+        .returning({ id: invitations.id });
+      if (!claimed) throw new GoneException('This invitation was already used or withdrawn');
+      // Someone who is already a member keeps their current role.
+      await tx.insert(memberships).values({ tenantId: row.tenantId, userId: user.id, role: row.role }).onConflictDoNothing();
+      const role = (await this.memberRole(tx, row.tenantId, user.id))!;
+      await this.audit.record(tx, ctx, { action: 'invitation.accepted', entityType: 'invitation', entityId: row.id });
+      return { id: row.tenantId, name: row.tenantName, slug: row.tenantSlug, role };
+    });
+  }
+
+  private async findByToken(token: string) {
+    const [row] = await this.database.db
+      .select({
+        id: invitations.id,
+        tenantId: invitations.tenantId,
+        tenantName: tenants.name,
+        tenantSlug: tenants.slug,
+        email: invitations.email,
+        role: invitations.role,
+        invitedByUserId: invitations.invitedByUserId,
+        expiresAt: invitations.expiresAt,
+        acceptedAt: invitations.acceptedAt,
+        revokedAt: invitations.revokedAt,
+      })
+      .from(invitations)
+      .innerJoin(tenants, eq(tenants.id, invitations.tenantId))
+      .where(eq(invitations.tokenHash, hashToken(token)));
+    if (!row) throw new NotFoundException('Invitation not found');
+    if (row.acceptedAt || row.revokedAt || row.expiresAt <= new Date()) throw new GoneException('This invitation has expired or was already used');
+    return row;
+  }
+
+  private async memberRole(tx: Tx, tenantId: string, userId: string) {
+    const [m] = await tx
+      .select({ role: memberships.role })
+      .from(memberships)
+      .where(and(eq(memberships.tenantId, tenantId), eq(memberships.userId, userId)));
+    if (!m) throw new NotFoundException('Member not found');
+    return m.role;
+  }
+
+  /** Throws if the tenant would be left without an owner after one owner is demoted or removed. */
+  private async keepAnOwner(tx: Tx, tenantId: string) {
+    // Lock the owner rows so two concurrent demotions can't both pass the check.
+    const owners = await tx
+      .select({ userId: memberships.userId })
+      .from(memberships)
+      .where(and(eq(memberships.tenantId, tenantId), eq(memberships.role, 'owner')))
+      .for('update');
+    if (owners.length <= 1) throw new ConflictException('A workspace needs at least one owner. Make someone else an owner first.');
+  }
+}
