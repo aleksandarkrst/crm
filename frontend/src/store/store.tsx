@@ -1,8 +1,8 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiTenant, type Channel, crmApi } from '../lib/api';
+import { type ApiTenant, type Channel, crmApi, type DealLineInput, type TaskInput } from '../lib/api';
 import { paths } from '../lib/paths';
-import { loadWorkspace, mapActivity, type WorkspaceData } from './remote';
+import { loadWorkspace, mapActivity, mapLine, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
 import {
   champFor,
@@ -12,7 +12,6 @@ import {
   initialsOf,
   itemById,
   leadById,
-  linesOf,
   money,
   netOf,
   num,
@@ -23,6 +22,7 @@ import {
   taskKey,
   taskOf,
   todayLabel,
+  todoItemsFor,
 } from './selectors';
 import type { Champ, DealLine, Lead, LogEntry, NewContactDraft, NewProductDraft, Person, SegKey, Stage, State, TaskState } from './types';
 
@@ -41,8 +41,8 @@ export interface Session {
 const ROADMAP_KEY = 'cadence.roadmapItems';
 
 /**
- * Business records (deals, companies, contacts, products, funnels, activity) come from the API.
- * Features the backend doesn't have yet (deal lines, stage to-dos, documents, team and settings)
+ * Business records (deals with their lines and to-dos, companies, contacts, products, funnels,
+ * activity) come from the API. Features the backend doesn't have yet (documents, team, settings)
  * still live only in this browser tab, seeded from the design.
  */
 function loadInitial(data: WorkspaceData, session: Session): State {
@@ -74,6 +74,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
   const genTimer = useRef<ReturnType<typeof setInterval>>(undefined);
   const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const logRequested = useRef(new Set<string>());
+  const pendingTasks = useRef(new Map<string, TaskInput>());
 
   const set = useCallback((u: Updater) => setState((prev) => ({ ...prev, ...(typeof u === 'function' ? u(prev) : u) })), []);
 
@@ -178,17 +179,42 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     };
 
     // ------------------------------------------------------------ deal lines
-    // Lines aren't stored by the backend yet; their net total is saved as the deal amount.
+    /** A line as the API takes it (the UI keeps numbers as typed strings while editing). */
+    const lineInput = (l: DealLine): DealLineInput => ({
+      productId: l.itemId || null,
+      quantity: num(l.qty),
+      unitPrice: num(l.price),
+      vatRate: Math.min(100, num(l.vat)),
+      schedule: l.schedule,
+      startDate: l.start || null,
+      months: Math.min(120, Math.max(1, Math.round(num(l.months)) || 1)),
+      milestones: (l.milestones || []).map((m) => ({ label: m.label, pct: Math.min(100, num(m.pct)), ...(m.date ? { date: m.date } : {}) })),
+    });
+
+    /**
+     * Applies a change to a deal's lines and saves what changed: edited lines are saved after a
+     * pause (one write per line), removed lines are deleted. The backend recalculates the amount.
+     */
     const updateLines = (leadId: string, fn: (lines: DealLine[]) => DealLine[]) => {
-      set((x) => {
-        const current = x.dealLines[leadId] || linesOf(x, leadById(x, leadId));
-        const next = fn(current.map((l) => ({ ...l })));
-        return {
-          dealLines: { ...x.dealLines, [leadId]: next },
-          leads: x.leads.map((l) => (l.id === leadId ? { ...l, value: money(netOf(next)) } : l)),
-        };
-      });
-      saveLater('amount:' + leadId, () => crmApi.updateDeal(leadId, { amount: netOf(cur().dealLines[leadId] || []).toFixed(2) }));
+      const x = cur();
+      const prev = x.dealLines[leadId] || [];
+      const next = fn(prev.map((l) => ({ ...l })));
+      set((y) => ({
+        dealLines: { ...y.dealLines, [leadId]: next },
+        leads: y.leads.map((l) => (l.id === leadId ? { ...l, value: money(netOf(next)) } : l)),
+      }));
+      const before = new Map(prev.map((l) => [l.id, JSON.stringify(l)]));
+      for (const l of next)
+        if (before.get(l.id) !== JSON.stringify(l))
+          saveLater('line:' + l.id, async () => {
+            const line = (cur().dealLines[leadId] || []).find((y) => y.id === l.id);
+            if (line) await crmApi.updateDealLine(line.id, lineInput(line));
+          });
+      for (const l of prev)
+        if (!next.some((y) => y.id === l.id)) {
+          clearTimeout(saveTimers.current.get('line:' + l.id));
+          void save(() => crmApi.deleteDealLine(l.id));
+        }
     };
 
     const patchLine = (leadId: string, lineId: string, key: keyof DealLine, v: string) => {
@@ -220,24 +246,23 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         flash('Add a product to the catalog first');
         return;
       }
-      updateLines(lead.id, (ls) =>
-        ls.concat([
-          {
-            id: 'dl' + Date.now(),
-            itemId: it.id,
-            qty: 1,
-            price: it.price,
-            vat: it.vat,
-            schedule: 'Full amount on one date',
-            start: defaultStart(lead),
-            months: 6,
-            milestones: [
-              { label: 'On signature', pct: 40 },
-              { label: 'On delivery', pct: 60 },
-            ],
-          },
-        ]),
-      );
+      const position = (cur().dealLines[lead.id] || []).length;
+      void save(async () => {
+        const row = await crmApi.createDealLine(lead.id, {
+          productId: it.id,
+          position,
+          quantity: 1,
+          unitPrice: num(it.price),
+          vatRate: num(it.vat),
+          schedule: 'Full amount on one date',
+          startDate: defaultStart(lead),
+          months: 6,
+        });
+        set((y) => {
+          const next = [...(y.dealLines[lead.id] || []), mapLine(row)];
+          return { dealLines: { ...y.dealLines, [lead.id]: next }, leads: y.leads.map((l) => (l.id === lead.id ? { ...l, value: money(netOf(next)) } : l)) };
+        });
+      });
     };
 
     const patchMilestone = (leadId: string, lineId: string, idx: number, key: 'label' | 'pct' | 'date', v: string) => {
@@ -327,12 +352,39 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       );
     };
 
-    // ------------------------------------------------------------ stage to-dos (this tab only)
-    const patchTask = (leadId: string, stageId: string, idx: number, patch: TaskState) =>
+    // ------------------------------------------------------------ stage to-dos
+    /**
+     * Saves a to-do's state. Playbook to-dos are upserted by deal + stage + label; off-playbook
+     * to-dos by id. Changes made within the pause (done, then a note) are merged into one write.
+     */
+    const persistTask = (leadId: string, stageId: string, idx: number, fields: TaskInput) => {
+      const x = cur();
+      const lead = leadById(x, leadId);
+      const item = lead ? todoItemsFor(x, lead, stageId)[idx] : undefined;
+      if (!item) return;
+      const key = taskKey(leadId, stageId, idx);
+      pendingTasks.current.set(key, { ...pendingTasks.current.get(key), ...fields });
+      const extraId = item.offPlaybook ? x.extraTodoIds[leadId + '::' + stageId]?.[item.extraIdx!] : undefined;
+      saveLater('task:' + key, async () => {
+        const body = pendingTasks.current.get(key) ?? {};
+        pendingTasks.current.delete(key);
+        if (!item.offPlaybook) await crmApi.upsertPlaybookTask(leadId, { stageId, label: item.label, ...body });
+        else if (extraId) await crmApi.updateTask(extraId, body);
+      });
+    };
+
+    const patchTask = (leadId: string, stageId: string, idx: number, patch: TaskState) => {
+      const full = patch.done && !patch.by ? { at: todayLabel(), by: session.userName.split(' ')[0], ...patch } : patch;
       set((x) => {
         const key = taskKey(leadId, stageId, idx);
-        return { tasks: { ...x.tasks, [key]: { ...x.tasks[key], ...patch } } };
+        return { tasks: { ...x.tasks, [key]: { ...x.tasks[key], ...full } } };
       });
+      const fields: TaskInput = {};
+      if (patch.done !== undefined) fields.done = patch.done;
+      if (patch.outcome !== undefined) fields.outcome = patch.outcome;
+      if (patch.note !== undefined) fields.note = patch.note;
+      if (Object.keys(fields).length) persistTask(leadId, stageId, idx, fields);
+    };
 
     const completeTask = (lead: Lead, stageId: string, idx: number, label: string) => {
       const existing = taskOf(cur(), lead.id, stageId, idx);
@@ -352,27 +404,51 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       flash('Marked done · added to the activity timeline');
     };
 
-    const addTodo = (leadId: string, stageId: string) =>
-      set((x) => {
-        const key = leadId + '::' + stageId;
-        return { extraTodos: { ...x.extraTodos, [key]: [...(x.extraTodos[key] || []), ''] } };
+    const addTodo = (leadId: string, stageId: string) => {
+      const key = leadId + '::' + stageId;
+      const position = (cur().extraTodos[key] || []).length;
+      void save(async () => {
+        const row = await crmApi.createTask(leadId, { stageId, label: '', position });
+        set((x) => ({
+          extraTodos: { ...x.extraTodos, [key]: [...(x.extraTodos[key] || []), ''] },
+          extraTodoIds: { ...x.extraTodoIds, [key]: [...(x.extraTodoIds[key] || []), row.id] },
+        }));
       });
-    const renameExtra = (leadId: string, stageId: string, extraIdx: number, val: string) =>
+    };
+    const renameExtra = (leadId: string, stageId: string, extraIdx: number, val: string) => {
+      const key = leadId + '::' + stageId;
+      const id = cur().extraTodoIds[key]?.[extraIdx];
       set((x) => {
-        const key = leadId + '::' + stageId;
         const list = [...(x.extraTodos[key] || [])];
         list[extraIdx] = val;
         return { extraTodos: { ...x.extraTodos, [key]: list } };
       });
-    const removeExtra = (leadId: string, stageId: string, extraIdx: number, taskIdx: number) =>
+      if (id) saveLater('todo-label:' + id, () => crmApi.updateTask(id, { label: val.trim() }));
+    };
+    const removeExtra = (leadId: string, stageId: string, extraIdx: number, taskIdx: number) => {
+      const key = leadId + '::' + stageId;
+      const id = cur().extraTodoIds[key]?.[extraIdx];
       set((x) => {
-        const key = leadId + '::' + stageId;
         const list = [...(x.extraTodos[key] || [])];
+        const ids = [...(x.extraTodoIds[key] || [])];
+        const count = list.length;
         list.splice(extraIdx, 1);
+        ids.splice(extraIdx, 1);
+        // The to-dos after the removed one move up by one position.
         const tasks = { ...x.tasks };
-        delete tasks[taskKey(leadId, stageId, taskIdx)];
-        return { extraTodos: { ...x.extraTodos, [key]: list }, tasks };
+        const first = taskIdx - extraIdx;
+        for (let i = taskIdx; i < first + count; i++) {
+          const nextState = tasks[taskKey(leadId, stageId, i + 1)];
+          if (nextState) tasks[taskKey(leadId, stageId, i)] = nextState;
+          else delete tasks[taskKey(leadId, stageId, i)];
+        }
+        return { extraTodos: { ...x.extraTodos, [key]: list }, extraTodoIds: { ...x.extraTodoIds, [key]: ids }, tasks };
       });
+      if (id) {
+        clearTimeout(saveTimers.current.get('todo-label:' + id));
+        void save(() => crmApi.deleteTask(id));
+      }
+    };
 
     const advanceStage = (leadId: string) => {
       const lead = leadById(cur(), leadId);

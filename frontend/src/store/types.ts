@@ -253,6 +253,8 @@ export interface State {
   champ: Record<string, Champ>;
   tasks: Record<string, TaskState>;
   extraTodos: Record<string, string[]>;
+  /** Backend ids of the off-playbook to-dos, parallel to extraTodos. */
+  extraTodoIds: Record<string, string[]>;
   log: Record<string, LogEntry[]>;
   roadmapItems: RoadmapItem[];
   team: TeamMember[];

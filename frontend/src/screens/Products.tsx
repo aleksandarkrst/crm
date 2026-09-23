@@ -71,6 +71,7 @@ export function Products() {
                   stroke={1.9}
                   style={{ justifySelf: 'end', borderRadius: 7 }}
                   onClick={() => {
+                    if (used.length) return flash(`${c.name} is on ${used.length === 1 ? '1 deal' : used.length + ' deals'}. Remove it there first.`);
                     removeProduct(c.id);
                     flash(c.name + ' removed from the catalog');
                   }}

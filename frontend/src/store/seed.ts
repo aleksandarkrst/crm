@@ -143,6 +143,7 @@ export function initialState(): State {
     champ: {},
     tasks: {},
     extraTodos: {},
+    extraTodoIds: {},
     log: {},
     roadmapItems: [
       { id: 'rm1', title: 'Automated proposal follow-up sequence', status: 'backlog' },

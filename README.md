@@ -38,10 +38,10 @@ Open http://localhost:5173.
 
 Sign in with any email (dev mode, no password), create a workspace, and start adding deals.
 
-> **Current state of the UI:** deals, companies, contacts, products, funnel stages, fit scores and
-> the activity history are saved in the database. Some design features have no backend yet and
-> only last until you reload the page: deal lines and payment schedules (their total *is* saved as
-> the deal amount), stage to-dos, documents, team, permissions and the other settings tabs. See
+> **Current state of the UI:** deals (with their product lines, payment schedules, stage to-dos,
+> fit scores and activity history), companies, contacts, products and funnel stages are saved in
+> the database. Some design features have no backend yet and only last until you reload the page:
+> documents, team, permissions and the other settings tabs. See
 > [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#frontend-store--api).
 
 Try the API directly (dev auth, no password):

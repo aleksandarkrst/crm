@@ -168,7 +168,7 @@ export function Todos({ lead }: { lead: Lead }) {
                           type="button"
                           className="btn btn-secondary"
                           onClick={() => {
-                            store.patchTask(lead.id, g.st.id, i, { done: true, at: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }), by: 'Mila', outcome: 'Skipped' });
+                            store.patchTask(lead.id, g.st.id, i, { done: true, outcome: 'Skipped' });
                             store.flash('Skipped · reason logged to the timeline');
                           }}
                         >

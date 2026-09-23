@@ -85,7 +85,8 @@ the store is the one place that talks to the backend.
 
 - `components/SessionGate.tsx`: sign-in (dev login or OIDC), picking or creating a workspace, and
   loading it. The store is created per workspace.
-- `store/remote.ts`: loads funnels, deals, companies, contacts and products (`lib/api.ts`) and maps
+- `store/remote.ts`: loads funnels, deals, deal lines, stage to-dos, companies, contacts and
+  products (`lib/api.ts`) and maps
   them onto the design's lead-centric model. A lead is a deal and shows its company and primary
   contact inline. People are primary contacts plus everyone else. Backend ids are kept on the UI
   records (`Lead.companyId`, `Person.contactId`, `Funnel.id`, …).
@@ -94,12 +95,15 @@ the store is the one place that talks to the backend.
   workspace so the screen matches the database. Changes that touch several records (new deal,
   moving a contact) reload after saving.
 - Activity history is loaded per deal when a deal, company or contact screen opens (`ensureLog`).
+- Deal lines: the backend recalculates the deal amount on every line change. A product that is
+  on a deal can't be deleted from the catalog.
+- Stage to-dos: a playbook to-do gets a row on first touch, keyed by deal + stage + checklist label
+  (renaming a checklist item in the funnel builder starts that to-do fresh). Off-playbook to-dos
+  are rows of their own.
 
 Still browser-only (seeded from `store/seed.ts`, lost on reload), because the backend doesn't have
 them yet:
-- deal lines with payment schedules (their net total is saved as the deal amount)
 - adding and removing funnel stages (blocked in the UI for now; editing existing stages is saved)
-- per-lead stage to-dos
 - document templates and generation (worker + storage)
 - sales-bonus rules
 - team invitations

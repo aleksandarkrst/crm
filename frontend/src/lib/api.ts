@@ -147,10 +147,54 @@ export interface ApiProduct {
   vatRate: string;
 }
 
+export interface ApiMilestone {
+  label: string;
+  pct: number;
+  date?: string;
+}
+export interface ApiDealLine {
+  id: string;
+  dealId: string;
+  productId: string | null;
+  position: number;
+  quantity: string;
+  unitPrice: string;
+  vatRate: string;
+  schedule: string;
+  startDate: string | null;
+  months: number;
+  milestones: ApiMilestone[];
+}
+export interface ApiDealTask {
+  id: string;
+  dealId: string;
+  stageId: string;
+  label: string;
+  offPlaybook: boolean;
+  position: number;
+  done: boolean;
+  doneAt: string | null;
+  doneByName: string | null;
+  outcome: string | null;
+  note: string | null;
+}
+
 export type CompanyInput = Partial<Omit<ApiCompany, 'id'>> & { name?: string };
 export type ContactInput = Partial<Omit<ApiContact, 'id'>>;
 export type DealInput = Partial<Pick<ApiDeal, 'title' | 'companyId' | 'primaryContactId' | 'funnelId' | 'source' | 'closeDate' | 'amount'>> & { champ?: ApiChamp };
 export type ProductInput = Partial<Omit<ApiProduct, 'id' | 'unitPrice' | 'vatRate'>> & { unitPrice?: number; vatRate?: number };
+export type DealLineInput = Partial<{
+  productId: string | null;
+  position: number;
+  quantity: number;
+  unitPrice: number;
+  vatRate: number;
+  schedule: string;
+  startDate: string | null;
+  months: number;
+  milestones: ApiMilestone[];
+}>;
+export type TaskInput = Partial<{ label: string; done: boolean; outcome: string | null; note: string | null }>;
 export type StageInput = Partial<Pick<ApiFunnelStage, 'name' | 'activity' | 'channel' | 'documentOnEntry' | 'winProbability' | 'checklist'>>;
 
 export const crmApi = {
@@ -177,6 +221,19 @@ export const crmApi = {
   activities: (dealId: string) => api<ApiActivity[]>(`/crm/deals/${dealId}/activities`),
   logActivity: (dealId: string, input: { channel: Channel; title: string; detail?: string | null }) =>
     api<ApiActivity>(`/crm/deals/${dealId}/activities`, { method: 'POST', json: input }),
+
+  dealLines: () => all<ApiDealLine>('/crm/deal-lines'),
+  createDealLine: (dealId: string, input: DealLineInput) => api<ApiDealLine>(`/crm/deals/${dealId}/lines`, { method: 'POST', json: input }),
+  updateDealLine: (id: string, input: DealLineInput) => api<ApiDealLine>(`/crm/deal-lines/${id}`, { method: 'PATCH', json: input }),
+  deleteDealLine: (id: string) => api(`/crm/deal-lines/${id}`, { method: 'DELETE' }),
+
+  dealTasks: () => all<ApiDealTask>('/crm/deal-tasks'),
+  upsertPlaybookTask: (dealId: string, input: TaskInput & { stageId: string; label: string }) =>
+    api<ApiDealTask>(`/crm/deals/${dealId}/tasks/playbook`, { method: 'PUT', json: input }),
+  createTask: (dealId: string, input: TaskInput & { stageId: string; label: string; position?: number }) =>
+    api<ApiDealTask>(`/crm/deals/${dealId}/tasks`, { method: 'POST', json: input }),
+  updateTask: (id: string, input: TaskInput) => api<ApiDealTask>(`/crm/deal-tasks/${id}`, { method: 'PATCH', json: input }),
+  deleteTask: (id: string) => api(`/crm/deal-tasks/${id}`, { method: 'DELETE' }),
 
   products: () => all<ApiProduct>('/crm/products'),
   createProduct: (input: ProductInput & { name: string }) => api<ApiProduct>('/crm/products', { method: 'POST', json: input }),

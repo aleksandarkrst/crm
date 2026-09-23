@@ -15,6 +15,20 @@
       "when": 1790183024653,
       "tag": "0001_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790195989955,
+      "tag": "0002_deal_lines_tasks",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790195993214,
+      "tag": "0003_deal_lines_tasks_rls",
+      "breakpoints": true
     }
   ]
 }

@@ -78,31 +78,9 @@ export const timelineFor = (s: State, leadId: string): LogEntry[] => s.log[leadI
 const NO_ITEM: CatalogItem = { id: '', name: 'No product', type: 'Service', kind: 'One-off', price: 0, vat: 0 };
 export const itemById = (s: State, id: string): CatalogItem => s.catalog.find((c) => c.id === id) || s.catalog[0] || NO_ITEM;
 
-/** Saved lines, or one line seeded from the lead's value (prototype behaviour). */
+/** The deal's lines (products, prices and payment schedules) as saved in the backend. */
 export function linesOf(s: State, lead: Lead | undefined): DealLine[] {
-  if (!lead) return [];
-  const saved = s.dealLines[lead.id];
-  if (saved) return saved;
-  const net = num(lead.value);
-  const items = s.catalog;
-  if (!net || !items.length) return [];
-  const seed = items[num(String(lead.id).replace(/[^0-9]/g, '').slice(-1)) % items.length] || items[0]!;
-  return [
-    {
-      id: 'dl-' + lead.id,
-      itemId: seed.id,
-      qty: 1,
-      price: net,
-      vat: seed.vat,
-      schedule: net > 40000 ? 'Custom milestones' : 'Full amount on one date',
-      start: defaultStart(lead),
-      months: 6,
-      milestones: [
-        { label: 'On signature', pct: 40 },
-        { label: 'On delivery', pct: 60 },
-      ],
-    },
-  ];
+  return lead ? s.dealLines[lead.id] || [] : [];
 }
 
 export const netOf = (lines: DealLine[]): number => lines.reduce((a, l) => a + num(l.qty) * num(l.price), 0);

@@ -13,6 +13,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { tenants, users } from './platform';
@@ -227,4 +228,76 @@ export const products = pgTable(
     ...timestamps,
   },
   (t) => [unique('products_tenant_id_uq').on(t.tenantId, t.id), index('products_tenant_name_idx').on(t.tenantId, t.name)],
+);
+
+// ---------------------------------------------------------------- deal lines & payment schedules
+
+export const PAYMENT_SCHEDULES = ['Full amount on one date', 'Equal monthly instalments', 'Recurring subscription', 'Custom milestones'] as const;
+
+export interface Milestone {
+  label: string;
+  pct: number; // share of the line's gross amount
+  date?: string; // ISO date; defaults to one month after the previous milestone
+}
+
+/**
+ * What a deal sells: a product at a quantity and price, and when it gets paid. The deal's amount
+ * is the sum of its lines' net values (DealLinesService keeps it in sync).
+ */
+export const dealLines = pgTable(
+  'deal_lines',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    dealId: uuid('deal_id').notNull(),
+    productId: uuid('product_id'),
+    position: integer('position').notNull().default(0),
+    quantity: numeric('quantity', { precision: 12, scale: 2 }).notNull().default('1'),
+    unitPrice: numeric('unit_price', { precision: 14, scale: 2 }).notNull().default('0'),
+    vatRate: numeric('vat_rate', { precision: 5, scale: 2 }).notNull().default('0'),
+    schedule: text('schedule', { enum: PAYMENT_SCHEDULES }).notNull().default('Full amount on one date'),
+    startDate: date('start_date'), // first (or only) payment
+    months: integer('months').notNull().default(6), // for monthly instalments
+    milestones: jsonb('milestones').$type<Milestone[]>().notNull().default([]),
+    ...timestamps,
+  },
+  (t) => [
+    unique('deal_lines_tenant_id_uq').on(t.tenantId, t.id),
+    index('deal_lines_tenant_deal_idx').on(t.tenantId, t.dealId),
+    foreignKey({ columns: [t.tenantId, t.dealId], foreignColumns: [deals.tenantId, deals.id], name: 'deal_lines_deal_fk' }).onDelete('cascade'),
+    // A product used on a deal can't be deleted from the catalog.
+    foreignKey({ columns: [t.tenantId, t.productId], foreignColumns: [products.tenantId, products.id], name: 'deal_lines_product_fk' }),
+    check('deal_lines_months_ck', sql`${t.months} between 1 and 120`),
+  ],
+);
+
+// ---------------------------------------------------------------- stage to-dos
+
+/**
+ * The to-dos of a deal in a stage. Playbook to-dos come from the stage's checklist and only get a
+ * row once someone touches them (keyed by label); off-playbook to-dos are added per deal.
+ */
+export const dealTasks = pgTable(
+  'deal_tasks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    dealId: uuid('deal_id').notNull(),
+    stageId: uuid('stage_id').notNull(),
+    label: text('label').notNull(),
+    offPlaybook: boolean('off_playbook').notNull().default(false),
+    position: integer('position').notNull().default(0),
+    done: boolean('done').notNull().default(false),
+    doneAt: timestamp('done_at', { withTimezone: true }),
+    doneByUserId: uuid('done_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    outcome: text('outcome'),
+    note: text('note'),
+    ...timestamps,
+  },
+  (t) => [
+    index('deal_tasks_tenant_deal_idx').on(t.tenantId, t.dealId),
+    uniqueIndex('deal_tasks_playbook_uq').on(t.dealId, t.stageId, t.label).where(sql`not ${t.offPlaybook}`),
+    foreignKey({ columns: [t.tenantId, t.dealId], foreignColumns: [deals.tenantId, deals.id], name: 'deal_tasks_deal_fk' }).onDelete('cascade'),
+    foreignKey({ columns: [t.tenantId, t.stageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deal_tasks_stage_fk' }).onDelete('cascade'),
+  ],
 );

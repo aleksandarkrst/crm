@@ -3,12 +3,15 @@
  * a lead (deal) shows its company and primary contact inline, companies are derived from leads
  * plus companies without a deal, and people are primary contacts plus everyone else.
  */
-import { type ApiActivity, type ApiCompany, type ApiContact, type ApiFunnel, crmApi } from '../lib/api';
+import { type ApiActivity, type ApiCompany, type ApiDealLine, type ApiContact, type ApiFunnel, crmApi } from '../lib/api';
 import { OWNERS } from './seed';
-import { initialsOf, money } from './selectors';
-import type { CatalogItem, CompanyExtra, Funnel, Lead, LogEntry, Person, SegKey, State } from './types';
+import { initialsOf, money, taskKey } from './selectors';
+import type { CatalogItem, CompanyExtra, DealLine, Funnel, Lead, LogEntry, Person, SegKey, State } from './types';
 
-export type WorkspaceData = Pick<State, 'funnels' | 'leads' | 'extraCompanies' | 'extraPeople' | 'links' | 'catalog' | 'champ'>;
+export type WorkspaceData = Pick<
+  State,
+  'funnels' | 'leads' | 'extraCompanies' | 'extraPeople' | 'links' | 'catalog' | 'champ' | 'dealLines' | 'tasks' | 'extraTodos' | 'extraTodoIds'
+>;
 
 const SEGMENTS: SegKey[] = ['smb', 'ent'];
 const DAY = 86_400_000;
@@ -33,15 +36,29 @@ function mapFunnel(f: ApiFunnel): Funnel {
 
 const dateLabel = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 
+export const mapLine = (l: ApiDealLine): DealLine => ({
+  id: l.id,
+  itemId: l.productId ?? '',
+  qty: Number(l.quantity),
+  price: Number(l.unitPrice),
+  vat: Number(l.vatRate),
+  schedule: l.schedule,
+  start: l.startDate ?? '',
+  months: l.months,
+  milestones: l.milestones,
+});
+
 export const mapActivity = (a: ApiActivity): LogEntry => ({ date: dateLabel(a.occurredAt), channel: a.channel, title: a.title, detail: a.detail ?? '' });
 
 export async function loadWorkspace(): Promise<WorkspaceData> {
-  const [apiFunnels, companies, contacts, dealRows, products] = await Promise.all([
+  const [apiFunnels, companies, contacts, dealRows, products, apiLines, apiTasks] = await Promise.all([
     crmApi.funnels(),
     crmApi.companies(),
     crmApi.contacts(),
     crmApi.deals(),
     crmApi.products(),
+    crmApi.dealLines(),
+    crmApi.dealTasks(),
   ]);
 
   const funnels = {} as State['funnels'];
@@ -138,5 +155,36 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
 
   const catalog: CatalogItem[] = products.map((p) => ({ id: p.id, name: p.name, type: p.type, kind: p.billingKind, price: Number(p.unitPrice), vat: Number(p.vatRate) }));
 
-  return { funnels, leads, extraCompanies, extraPeople, links, catalog, champ };
+  const dealLines: State['dealLines'] = {};
+  for (const l of apiLines) (dealLines[l.dealId] ||= []).push(mapLine(l));
+
+  // To-dos: playbook items are matched to the stage checklist by label (idx = checklist position);
+  // off-playbook items follow the checklist, in their saved order.
+  const stageById = new Map(SEGMENTS.flatMap((seg) => funnels[seg].stages.map((st) => [st.id, st] as const)));
+  const tasks: State['tasks'] = {};
+  const extraTodos: State['extraTodos'] = {};
+  const extraTodoIds: State['extraTodoIds'] = {};
+  for (const t of apiTasks) {
+    const stage = stageById.get(t.stageId);
+    if (!stage) continue;
+    let idx: number;
+    if (t.offPlaybook) {
+      const key = t.dealId + '::' + t.stageId;
+      (extraTodos[key] ||= []).push(t.label);
+      (extraTodoIds[key] ||= []).push(t.id);
+      idx = stage.checklist.length + extraTodos[key].length - 1;
+    } else {
+      idx = stage.checklist.indexOf(t.label);
+      if (idx < 0) continue; // the checklist item was renamed or removed since
+    }
+    tasks[taskKey(t.dealId, t.stageId, idx)] = {
+      done: t.done,
+      at: t.doneAt ? dateLabel(t.doneAt) : undefined,
+      by: t.doneByName?.split(' ')[0] ?? undefined,
+      outcome: t.outcome ?? undefined,
+      note: t.note ?? undefined,
+    };
+  }
+
+  return { funnels, leads, extraCompanies, extraPeople, links, catalog, champ, dealLines, tasks, extraTodos, extraTodoIds };
 }
