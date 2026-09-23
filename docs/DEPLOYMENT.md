@@ -11,7 +11,7 @@ then SSHes to the server and runs `scripts/deploy.sh <sha>`. That script:
 
 ## 1. Server (Hetzner Cloud)
 
-1. Create a server: **Ubuntu 24.04**, CX22 or larger, and add your SSH key.
+1. Create a server: **Ubuntu 26.04 LTS**, CX22 or larger, and add your SSH key.
 2. Create a **Cloud Firewall**: inbound **TCP 22 only** (optionally restricted to your IP), and attach it to the server.
    This is the outer layer, and Docker cannot bypass it.
 3. Copy and run the bootstrap script as root:

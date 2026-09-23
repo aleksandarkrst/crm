@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time hardening + Docker install for a fresh Hetzner Cloud server (Ubuntu 24.04 LTS).
+# One-time hardening + Docker install for a fresh Hetzner Cloud server (Ubuntu 26.04 LTS).
 # Copy it to the server and run as root:  bash bootstrap.sh
 # (Create the server with your SSH key in the Hetzner console; it is copied to the deploy user.)
 #
@@ -14,7 +14,7 @@ APP_DIR=/opt/crm
 echo "==> packages"
 apt-get update -y
 apt-get upgrade -y
-apt-get install -y ca-certificates curl git ufw fail2ban unattended-upgrades
+apt-get install -y ca-certificates curl git ufw fail2ban python3-systemd unattended-upgrades
 
 echo "==> docker"
 if ! command -v docker >/dev/null; then
@@ -49,6 +49,7 @@ KbdInteractiveAuthentication no
 PermitRootLogin no
 MaxAuthTries 3
 CONF
+sshd -t   # abort before reloading if the config is invalid (keeps you from locking yourself out)
 systemctl reload ssh || systemctl reload sshd
 
 echo "==> firewall (inbound: SSH only)"
@@ -62,7 +63,14 @@ ufw --force enable
 
 echo "==> automatic security updates"
 dpkg-reconfigure -f noninteractive unattended-upgrades
-systemctl enable --now fail2ban
+# Read SSH logins from the systemd journal; newer Ubuntu releases may not write /var/log/auth.log.
+cat >/etc/fail2ban/jail.d/sshd.local <<'CONF'
+[sshd]
+enabled = true
+backend = systemd
+CONF
+systemctl enable fail2ban
+systemctl restart fail2ban
 
 cat <<EOF
 

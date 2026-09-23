@@ -67,7 +67,7 @@ curl -s localhost:3000/api/tenants -H "authorization: Bearer $TOKEN" -H 'content
 Details and exact values are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 - [ ] **GitHub**: create a repository and push. CI runs lint/tests/build on every PR. On `main`, it also builds images to GHCR and deploys.
-- [ ] **Hetzner Cloud**: create an Ubuntu 24.04 server and a Cloud Firewall (allow TCP 22 only), then run `infra/server/bootstrap.sh`.
+- [ ] **Hetzner Cloud**: create an Ubuntu 26.04 LTS server and a Cloud Firewall (allow TCP 22 only), then run `infra/server/bootstrap.sh`.
 - [ ] **Cloudflare**: add the domain, create a Tunnel, route `app.yourdomain.com` → `http://frontend:80`, and copy the tunnel token into `.env`.
 - [ ] **Identity provider** (Auth0, Zitadel, Keycloak, Entra ID…): create an SPA app and an API/audience, and set the `OIDC_*` values.
 - [ ] **Off-site backups**: use Hetzner Object Storage or a Storage Box, fill in `infra/backup/rclone.conf`, and test a restore.
