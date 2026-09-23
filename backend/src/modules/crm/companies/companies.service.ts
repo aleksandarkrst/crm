@@ -1,12 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { asc, eq, ilike, or } from 'drizzle-orm';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { asc, count, eq, ilike, or } from 'drizzle-orm';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { companies } from '../../../shared/database/schema';
+import { companies, contacts, deals } from '../../../shared/database/schema';
 import { optionalText, type PaginationQuery } from '../../../shared/validation/common';
+import { assertOwnerIsMember } from '../owner';
 
 export const CreateCompany = z.object({
   name: z.string().trim().min(1).max(200),
@@ -59,6 +60,7 @@ export class CompaniesService {
   create(ctx: TenantContext, input: CreateCompany) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const [row] = await tx
           .insert(companies)
           .values({ ownerUserId: ctx.userId, ...input, tenantId: ctx.tenantId })
@@ -72,6 +74,7 @@ export class CompaniesService {
   update(ctx: TenantContext, id: string, input: UpdateCompany) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const [row] = await tx.update(companies).set(input).where(eq(companies.id, id)).returning();
         if (!row) throw new NotFoundException('Company not found');
         await this.audit.record(tx, ctx, { action: 'company.updated', entityType: 'company', entityId: id, data: input });
@@ -80,12 +83,23 @@ export class CompaniesService {
       .catch(mapDbError);
   }
 
+  /**
+   * A company with deals can't be deleted (409): the deals would lose their customer, so they
+   * have to be deleted or moved first. Its contacts are kept and no longer belong to a company.
+   */
   remove(ctx: TenantContext, id: string) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
-        const [row] = await tx.delete(companies).where(eq(companies.id, id)).returning({ id: companies.id });
-        if (!row) throw new NotFoundException('Company not found');
-        await this.audit.record(tx, ctx, { action: 'company.deleted', entityType: 'company', entityId: id });
+        const [company] = await tx.select({ name: companies.name }).from(companies).where(eq(companies.id, id));
+        if (!company) throw new NotFoundException('Company not found');
+        const [open] = await tx.select({ n: count() }).from(deals).where(eq(deals.companyId, id));
+        if (open && open.n > 0) {
+          const what = open.n === 1 ? '1 deal' : `${open.n} deals`;
+          throw new ConflictException(`${company.name} has ${what}. Delete them or move them to another company first.`);
+        }
+        const detached = await tx.update(contacts).set({ companyId: null }).where(eq(contacts.companyId, id)).returning({ id: contacts.id });
+        await tx.delete(companies).where(eq(companies.id, id));
+        await this.audit.record(tx, ctx, { action: 'company.deleted', entityType: 'company', entityId: id, data: { detachedContacts: detached.length } });
       })
       .catch(mapDbError);
   }

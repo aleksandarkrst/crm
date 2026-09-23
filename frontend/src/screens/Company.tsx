@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { FieldRow, GhostInput, GhostSelect, PersonChip, Picker, PickerRow, usePicker } from '../components/ui';
+import { Navigate, useParams } from 'react-router-dom';
+import { DangerButton, FieldRow, GhostInput, GhostSelect, PersonChip, Picker, PickerRow, usePicker } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { CHANNEL_LABELS, INDUSTRIES, SOURCES, TEAM_SIZES } from '../store/seed';
@@ -11,16 +11,15 @@ import type { Person } from '../store/types';
 export function Company() {
   const store = useStore();
   const { s } = store;
-  const { name = '' } = useParams();
+  const { id = '' } = useParams();
   const picker = usePicker();
-  const all = companyRecords(s);
-  const rec = all.find((c) => c.name === name) || all[0];
+  const rec = companyRecords(s).find((c) => c.id === id);
   const leadIds = (rec?.leads ?? []).map((l) => l.id).join(',');
   const { ensureLog } = store;
   useEffect(() => {
     if (leadIds) ensureLog(leadIds.split(','));
   }, [leadIds, ensureLog]);
-  if (!rec) return <Screen title="Company">No companies yet.</Screen>;
+  if (!rec) return <Navigate to={paths.companies} replace />;
 
   const people: Person[] = [];
   const seen = new Set<string>();
@@ -39,13 +38,28 @@ export function Company() {
   const target = rec.leads[0];
 
   const activities = rec.leads.flatMap((l) => timelineFor(s, l.id)).slice(0, 10);
-  const set = (key: 'name' | 'industry' | 'hq' | 'size' | 'source') => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => store.setCompanyField(rec.name, key, e.target.value);
+  const set = (key: 'name' | 'industry' | 'hq' | 'size' | 'source') => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => store.setCompanyField(rec.id, key, e.target.value);
+
+  /** Deals keep a company, so a company with deals can't be deleted; its contacts are kept. */
+  const onDelete = () => {
+    if (rec.leads.length) {
+      const what = rec.leads.length === 1 ? 'a deal' : rec.leads.length + ' deals';
+      window.alert(`${rec.name} has ${what}. Delete them or move them to another company first.`);
+      return;
+    }
+    const own = allPeople(s).filter((p) => p.companyId === rec.id).length;
+    const kept = own ? ` Its ${own === 1 ? 'contact is' : own + ' contacts are'} kept without a company.` : '';
+    if (window.confirm(`Delete ${rec.name}?${kept} This can't be undone.`)) void store.deleteCompany(rec.id);
+  };
 
   return (
     <Screen title={rec.name || 'Company'} crumb={{ label: 'Companies', to: paths.companies }}>
       <div style={{ maxWidth: 720, display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div className="card card-pad">
-          <input className="ghost" value={rec.name} onChange={set('name')} style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em', borderRadius: 8, padding: '5px 8px', marginLeft: -8 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <input className="ghost" value={rec.name} onChange={set('name')} style={{ flex: 1, minWidth: 0, fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em', borderRadius: 8, padding: '5px 8px', marginLeft: -8 }} />
+            {store.canDelete && <DangerButton onClick={onDelete}>Delete company</DangerButton>}
+          </div>
           <div style={{ fontSize: 12.5, color: 'var(--text-2)', marginTop: 2 }}>
             {rec.oppCount}
             {rec.oppCount === 1 ? ' opportunity · ' : ' opportunities · '}

@@ -43,6 +43,8 @@ export interface Lead {
   buyerRole?: string;
   /** Name of the deal owner (a workspace member). */
   owner?: string;
+  /** User id of the deal owner. */
+  ownerId?: string | null;
   segment: SegKey;
   stage: string;
   value: string; // "€14,000"

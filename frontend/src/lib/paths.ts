@@ -3,7 +3,7 @@ export const paths = {
   pipeline: '/pipeline',
   today: '/today',
   companies: '/companies',
-  company: (name: string) => '/companies/' + encodeURIComponent(name),
+  company: (id: string) => '/companies/' + encodeURIComponent(id),
   contacts: '/contacts',
   contact: (id: string) => '/contacts/' + encodeURIComponent(id),
   products: '/products',

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { FieldRow, GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
+import { Navigate, useParams } from 'react-router-dom';
+import { DangerButton, FieldRow, GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { BUYER_ROLES, CHANNEL_LABELS } from '../store/seed';
@@ -14,20 +14,29 @@ export function Contact() {
   const { s, set } = store;
   const { id = '' } = useParams();
   const picker = usePicker();
-  const p = personById(s, id) || allPeople(s)[0];
+  // A contact is addressed by its person id or its backend contact id; unknown ids go back to the list.
+  const p = personById(s, id) || allPeople(s).find((x) => x.contactId === id);
   const c = p ? leadById(s, p.leadId) : undefined;
   const leadId = c?.id;
   const { ensureLog } = store;
   useEffect(() => {
     if (leadId) ensureLog([leadId]);
   }, [leadId, ensureLog]);
-  if (!p) return <Screen title="Contact">No contacts yet.</Screen>;
+  if (!p) return <Navigate to={paths.contacts} replace />;
   const company = companyOfPerson(s, p);
 
   const setField = (key: keyof Person) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => store.patchPerson(p.id, { [key]: e.target.value });
   const q = picker.search.toLowerCase().trim();
   const companyOptions = s.leads.filter((l) => l.id !== p.leadId).filter((l) => !q || l.company.toLowerCase().includes(q));
   const docs = c?.docs || [];
+
+  const onDelete = () => {
+    const primaryOf = p.contactId ? s.leads.filter((l) => l.contactId === p.contactId) : [];
+    const note = primaryOf.length
+      ? ` ${primaryOf.length === 1 ? 'The deal' : primaryOf.length + ' deals'} where they are the primary contact (${primaryOf.map((l) => l.title || l.company).join(', ')}) will be kept without a primary contact.`
+      : '';
+    if (window.confirm(`Delete ${p.name}? They are removed from every deal.${note} This can't be undone.`)) void store.deleteContact(p.id);
+  };
 
   return (
     <Screen title={p.name || 'Contact'} onTitleChange={(v) => store.patchPerson(p.id, { name: v })} crumb={{ label: 'Contacts', to: paths.contacts }}>
@@ -39,6 +48,7 @@ export function Contact() {
                 {p.initials || initialsOf(p.name)}
               </div>
               <input className="ghost" value={p.name} onChange={setField('name')} style={{ flex: '1 1 200px', minWidth: 0, fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em', borderRadius: 8, padding: '5px 8px', marginLeft: -8, width: 'auto' }} />
+              {store.canDelete && p.contactId && <DangerButton onClick={onDelete}>Delete contact</DangerButton>}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--divider)' }}>
@@ -54,6 +64,7 @@ export function Contact() {
                       square
                       initials={initialsOf(l.company)}
                       title={l.company}
+                      subtitle={l.title && l.title !== l.company ? l.title : undefined}
                       onPick={() => {
                         store.movePerson(p.id, l.id);
                         picker.close();

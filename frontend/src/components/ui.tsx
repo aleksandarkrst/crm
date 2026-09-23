@@ -26,6 +26,20 @@ export function RemoveButton({ onClick, title = 'Remove', size = 15, stroke, box
   );
 }
 
+/** A destructive action (delete a record). Callers confirm before acting. */
+export function DangerButton({ children, onClick, title }: { children: ReactNode; onClick: () => void; title?: string }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      style={{ cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--danger)', fontSize: 12, padding: '6px 11px', borderRadius: 6, whiteSpace: 'nowrap' }}
+    >
+      {children}
+    </button>
+  );
+}
+
 // ---------------------------------------------------------------- layout primitives
 
 export function Card({ children, style, pad = true }: { children: ReactNode; style?: CSSProperties; pad?: boolean }) {
@@ -62,7 +76,7 @@ export function GhostInput({ className = '', ...props }: InputHTMLAttributes<HTM
   return <input className={`ghost ${className}`} {...props} />;
 }
 
-type Opt = string | { value: string; label: string };
+export type Opt = string | { value: string; label: string };
 const optValue = (o: Opt) => (typeof o === 'string' ? o : o.value);
 const optLabel = (o: Opt) => (typeof o === 'string' ? o : o.label);
 
@@ -195,7 +209,7 @@ export function PickerRow({ initials, title, subtitle, onPick, square, trailing,
 
 export interface BarChip {
   value: string;
-  options: string[];
+  options: Opt[];
   onChange: (v: string) => void;
   /** The first option is a placeholder ("Salesperson") and hidden in the list, unless keepFirst. */
   keepFirst?: boolean;
@@ -236,8 +250,8 @@ export function FilterBar({
           style={{ border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '9px 11px', fontSize: 13, color: 'var(--ink)' }}
         >
           {c.options.map((o, oi) => (
-            <option key={o} value={o} hidden={oi === 0 && !c.keepFirst}>
-              {o}
+            <option key={optValue(o)} value={optValue(o)} hidden={oi === 0 && !c.keepFirst}>
+              {optLabel(o)}
             </option>
           ))}
         </select>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Modal, ModalHeader } from '../components/ui';
 import { paths } from '../lib/paths';
 import { BILLING_KINDS, BUYER_ROLES, CHANNEL_LABELS, CHANNELS, DOC_TYPES, FIELD_TYPES, PARAM_SOURCES, PRODUCT_TYPES } from '../store/seed';
-import { allPeople, companyRecords, leadById, salesPeople, stageOf, stagesFor, valueNum } from '../store/selectors';
+import { allPeople, companyLabels, companyRecords, leadById, salesPeople, stageOf, stagesFor, valueNum } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Lead, SegKey } from '../store/types';
 import { ProposalDoc } from './ProposalDoc';
@@ -65,22 +65,25 @@ function NewDealModal() {
   const { s, set, createDeal } = useStore();
   const [busy, setBusy] = useState(false);
   const records = companyRecords(s);
-  const companies = records.map((c) => c.name);
-  const [company, setCompany] = useState(companies[0] || NEW_CO);
+  const labels = companyLabels(records);
+  const companies = records.map((c) => ({ value: c.id, label: labels.get(c.id) ?? c.name })).sort((a, b) => a.label.localeCompare(b.label));
+  // The selected company's id, or NEW_CO.
+  const [company, setCompany] = useState(companies[0]?.value || NEW_CO);
   const [companyName, setCompanyName] = useState('');
   const [contactPick, setContactPick] = useState<string | null>(null);
   const [contactName, setContactName] = useState('');
   const type = s.newLeadType;
 
   const companyIsNew = company === NEW_CO;
-  const companyId = records.find((c) => c.name === company)?.id;
+  const companyRec = records.find((c) => c.id === company);
+  const companyId = companyRec?.id;
   const people = companyIsNew ? [] : allPeople(s).filter((p) => p.contactId && p.companyId === companyId);
   const contactOptions = [...people.map((p) => p.name), NEW_CT];
   const contact = contactPick && contactOptions.includes(contactPick) ? contactPick : contactOptions[0]!;
   const funnel = s.funnels[type];
 
   const create = async () => {
-    const coName = companyIsNew ? companyName.trim() || 'New company' : company;
+    const coName = companyIsNew ? companyName.trim() || 'New company' : (companyRec?.name ?? '');
     const ctName = contact === NEW_CT ? contactName.trim() : contact;
     const person = people.find((p) => p.name === ctName);
     setBusy(true);
@@ -99,8 +102,10 @@ function NewDealModal() {
         <label className="form-label">
           Company
           <select className="form-input" value={company} onChange={(e) => { setCompany(e.target.value); setContactPick(null); }}>
-            {[...companies, NEW_CO].map((o) => (
-              <option key={o}>{o}</option>
+            {[...companies, { value: NEW_CO, label: NEW_CO }].map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
             ))}
           </select>
           {companyIsNew && <input className="form-input" placeholder="Company name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />}
@@ -224,7 +229,7 @@ function NewContactModal() {
   const create = async () => {
     if (!nc.name.trim()) return flash('Give the contact a name first');
     setBusy(true);
-    const lead = s.leads.find((x) => x.company === s.contactCompany) || s.leads[0];
+    const lead = leadById(s, s.contactCompany) || s.leads[0];
     await createContact({ ...nc, name: nc.name.trim() }, lead?.id);
     setBusy(false);
   };
@@ -256,8 +261,9 @@ function NewContactModal() {
           Linked lead
           <select className="form-input" value={s.contactCompany} onChange={(e) => set({ contactCompany: e.target.value })}>
             {s.leads.map((l) => (
-              <option key={l.id} value={l.company}>
-                {l.company} · {stageOf(s, l).name}
+              <option key={l.id} value={l.id}>
+                {l.company} · {l.title && l.title !== l.company ? l.title + ' · ' : ''}
+                {stageOf(s, l).name}
               </option>
             ))}
           </select>

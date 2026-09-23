@@ -5,8 +5,9 @@ import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { BUYER_ROLES, contacts } from '../../../shared/database/schema';
+import { BUYER_ROLES, contacts, deals } from '../../../shared/database/schema';
 import { optionalText, PaginationQuery } from '../../../shared/validation/common';
+import { assertOwnerIsMember } from '../owner';
 
 export const CreateContact = z.object({
   companyId: z.uuid().nullish(),
@@ -64,6 +65,7 @@ export class ContactsService {
   create(ctx: TenantContext, input: CreateContact) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const [row] = await tx
           .insert(contacts)
           .values({ ownerUserId: ctx.userId, ...input, tenantId: ctx.tenantId })
@@ -77,6 +79,7 @@ export class ContactsService {
   update(ctx: TenantContext, id: string, input: UpdateContact) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const [row] = await tx.update(contacts).set(input).where(eq(contacts.id, id)).returning();
         if (!row) throw new NotFoundException('Contact not found');
         await this.audit.record(tx, ctx, { action: 'contact.updated', entityType: 'contact', entityId: id, data: input });
@@ -85,12 +88,17 @@ export class ContactsService {
       .catch(mapDbError);
   }
 
+  /**
+   * Deals where this contact is the primary contact are kept and lose their primary contact;
+   * links to other deals are removed (FK cascade).
+   */
   remove(ctx: TenantContext, id: string) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        const cleared = await tx.update(deals).set({ primaryContactId: null }).where(eq(deals.primaryContactId, id)).returning({ id: deals.id });
         const [row] = await tx.delete(contacts).where(eq(contacts.id, id)).returning({ id: contacts.id });
         if (!row) throw new NotFoundException('Contact not found');
-        await this.audit.record(tx, ctx, { action: 'contact.deleted', entityType: 'contact', entityId: id });
+        await this.audit.record(tx, ctx, { action: 'contact.deleted', entityType: 'contact', entityId: id, data: { clearedPrimaryOnDeals: cleared.map((d) => d.id) } });
       })
       .catch(mapDbError);
   }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FilterBar, SortHeader, useSort } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { BUYER_ROLES } from '../store/seed';
-import { allPeople, companyOfPerson, companyRecords, leadById, ownerOf, salesPeople } from '../store/selectors';
+import { allPeople, companyIdOfPerson, companyLabels, companyOfPerson, companyRecords, leadById, ownerOf, salesPeople } from '../store/selectors';
 import { useStore } from '../store/store';
 
 const COLS = '1.2fr 1fr 1.2fr 1.4fr 1fr 1.1fr 1fr';
@@ -30,10 +30,10 @@ export function Contacts() {
   const rows = allPeople(s)
     .map((p) => {
       const l = leadById(s, p.leadId);
-      return { id: p.id, contact: p.name, role: p.role, company: companyOfPerson(s, p), email: p.email, phone: p.phone, decisionMaker: p.buyerRole || 'Influencer', owner: l ? ownerOf(l) : '—' };
+      return { id: p.id, contact: p.name, role: p.role, company: companyOfPerson(s, p), companyId: companyIdOfPerson(s, p), email: p.email, phone: p.phone, decisionMaker: p.buyerRole || 'Influencer', owner: l ? ownerOf(l) : '—' };
     })
     .filter((r) => !q || [r.contact, r.company, r.role, r.email].some((v) => String(v).toLowerCase().includes(q)))
-    .filter((r) => company === 'Company' || r.company === company)
+    .filter((r) => company === 'Company' || r.companyId === company)
     .filter((r) => owner === 'Salesperson' || r.owner === owner)
     .filter((r) => buyerRole === 'Buyer role' || r.decisionMaker === buyerRole)
     .sort((a, b) => String(a[sort.key]).localeCompare(String(b[sort.key])) * sort.dir);
@@ -43,7 +43,7 @@ export function Contacts() {
       <FilterBar
         search={{ value: query, onChange: setQuery, placeholder: 'Search contacts' }}
         chips={[
-          { value: company, options: ['Company', ...companyRecords(s).map((c) => c.name)], onChange: setCompany },
+          { value: company, options: ['Company', ...[...companyLabels(companyRecords(s))].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))], onChange: setCompany },
           { value: owner, options: ['Salesperson', ...salesPeople(s)], onChange: setOwner },
           { value: buyerRole, options: ['Buyer role', ...BUYER_ROLES], onChange: setBuyerRole },
         ]}

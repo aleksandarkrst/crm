@@ -89,6 +89,8 @@ export const grossOf = (l: DealLine): number => num(l.qty) * num(l.price) * (1 +
 
 /** Company name of a person: from their own company, else from the lead they are shown under. */
 export const companyOfPerson = (s: State, p: Person): string => p.company ?? leadById(s, p.leadId)?.company ?? '—';
+/** Company id of a person, resolved the same way as companyOfPerson. */
+export const companyIdOfPerson = (s: State, p: Person): string | null => (p.company !== undefined ? p.companyId : leadById(s, p.leadId)?.companyId) ?? null;
 
 /** Every dated payment a lead's lines produce (subscriptions: next 12 months). */
 export function paymentsFor(s: State, lead: Lead): { when: Date; amount: number }[] {
@@ -167,7 +169,8 @@ export function contactsForLead(s: State, leadId: string): Person[] {
 }
 
 export interface CompanyRecord {
-  id?: string;
+  /** Backend company id: companies are identified by id, never by name (names aren't unique). */
+  id: string;
   name: string;
   industry: string;
   hq: string;
@@ -183,18 +186,18 @@ export interface CompanyRecord {
   lastTouch: string;
 }
 
-/** Companies are derived from leads, plus companies added without a deal yet. */
+/**
+ * Companies (by id) with their leads, including companies without a deal yet. Leads without a
+ * company aren't grouped into a company record.
+ */
 export function companyRecords(s: State): CompanyRecord[] {
   const map = new Map<string, Omit<CompanyRecord, 'contactCount' | 'oppCount' | 'value' | 'valueLabel' | 'stageName' | 'lastTouch'>>();
   for (const l of s.leads) {
-    if (!map.has(l.company)) map.set(l.company, { id: l.companyId ?? undefined, name: l.company, industry: l.industry, hq: l.hq, size: l.size, source: l.source, owner: ownerOf(l), leads: [] });
-    map.get(l.company)!.leads.push(l);
+    if (!l.companyId) continue;
+    if (!map.has(l.companyId)) map.set(l.companyId, { id: l.companyId, name: l.company, industry: l.industry, hq: l.hq, size: l.size, source: l.source, owner: ownerOf(l), leads: [] });
+    map.get(l.companyId)!.leads.push(l);
   }
-  for (const c of s.extraCompanies) {
-    const known = map.get(c.name);
-    if (known) known.id ??= c.id;
-    else map.set(c.name, { ...c, leads: [] });
-  }
+  for (const c of s.extraCompanies) if (c.id && !map.has(c.id)) map.set(c.id, { ...c, id: c.id, leads: [] });
   return [...map.values()].map((r) => {
     const ids = new Set<string>();
     r.leads.forEach((l) => contactsForLead(s, l.id).forEach((p) => ids.add(p.id)));
@@ -211,6 +214,23 @@ export function companyRecords(s: State): CompanyRecord[] {
       lastTouch: stall === null ? '—' : stall === 0 ? 'Today' : stall + 'd ago',
     };
   });
+}
+
+/**
+ * Labels for picking a company: the name, plus the HQ (or a number) when several companies share
+ * that name, so they can be told apart.
+ */
+export function companyLabels(records: CompanyRecord[]): Map<string, string> {
+  const byName = new Map<string, CompanyRecord[]>();
+  for (const r of records) byName.set(r.name.trim().toLowerCase(), [...(byName.get(r.name.trim().toLowerCase()) || []), r]);
+  const out = new Map<string, string>();
+  const hqOf = (r: CompanyRecord) => (r.hq && r.hq !== '—' ? r.hq.trim() : '');
+  for (const group of byName.values()) {
+    const hqs = group.map(hqOf);
+    const byHq = hqs.every((h, i) => h && hqs.indexOf(h) === i);
+    group.forEach((r, i) => out.set(r.id, group.length === 1 ? r.name : r.name + ' · ' + (byHq ? hqOf(r) : '#' + (i + 1))));
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- stage to-dos

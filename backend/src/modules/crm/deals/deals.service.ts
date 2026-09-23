@@ -8,6 +8,7 @@ import { mapDbError } from '../../../shared/database/errors';
 import { activities, companies, contacts, dealContacts, deals, funnelStages } from '../../../shared/database/schema';
 import { JobsService } from '../../../shared/events/jobs.service';
 import { optionalText, PaginationQuery } from '../../../shared/validation/common';
+import { assertOwnerIsMember } from '../owner';
 
 const money = z.union([z.number(), z.string()]).transform((v) => String(v)).pipe(z.string().regex(/^\d{1,12}(\.\d{1,2})?$/, 'Invalid amount'));
 const champLevel = z.union([z.literal(0), z.literal(8), z.literal(17), z.literal(25)]);
@@ -108,6 +109,7 @@ export class DealsService {
           .orderBy(asc(funnelStages.position))
           .limit(1);
         if (!first) throw new BadRequestException('Funnel has no stages');
+        await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const [row] = await tx
           .insert(deals)
           .values({ ownerUserId: ctx.userId, ...input, tenantId: ctx.tenantId, stageId: first.id })
@@ -123,6 +125,7 @@ export class DealsService {
   update(ctx: TenantContext, id: string, input: UpdateDeal) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const patch: Partial<typeof deals.$inferInsert> = { ...input };
         if (input.champ) patch.fitScore = input.champ.C + input.champ.H + input.champ.M + input.champ.P;
         if (input.funnelId) {
@@ -195,6 +198,7 @@ export class DealsService {
       .then(() => undefined);
   }
 
+  /** Deleting a deal also deletes its lines, to-dos, activities and contact links (FK cascade). */
   remove(ctx: TenantContext, id: string) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {

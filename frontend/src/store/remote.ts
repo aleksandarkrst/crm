@@ -66,7 +66,8 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     ...apiTeam.members.map<TeamMember>((m) => ({ id: m.userId, name: m.displayName || m.email || 'Member', email: m.email ?? '', role: ROLE_LABEL[m.role], status: 'Active' })),
     ...apiTeam.invitations.map<TeamMember>((i) => ({ id: i.id, name: i.email, email: i.email, role: ROLE_LABEL[i.role], status: 'Invited' })),
   ];
-  const nameOf = (userId: string | null) => (userId ? apiTeam.members.find((m) => m.userId === userId) : undefined)?.displayName ?? undefined;
+  // Owners are shown by the same name as in the team list, so the Salesperson filters match.
+  const nameOf = (userId: string | null) => team.find((m) => m.status === 'Active' && m.id === userId)?.name;
 
   const funnels = {} as State['funnels'];
   const segOfFunnel = new Map<string, SegKey>();
@@ -102,6 +103,7 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
       phone: ct?.phone ?? '—',
       buyerRole: ct?.buyerRole,
       owner: nameOf(deal.ownerUserId),
+      ownerId: deal.ownerUserId,
       segment,
       stage: deal.stageId,
       value: money(Number(deal.amount)),

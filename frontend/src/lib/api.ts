@@ -203,7 +203,7 @@ export interface ApiInvitePreview {
 
 export type CompanyInput = Partial<Omit<ApiCompany, 'id'>> & { name?: string };
 export type ContactInput = Partial<Omit<ApiContact, 'id'>>;
-export type DealInput = Partial<Pick<ApiDeal, 'title' | 'companyId' | 'primaryContactId' | 'funnelId' | 'source' | 'closeDate' | 'amount'>> & { champ?: ApiChamp };
+export type DealInput = Partial<Pick<ApiDeal, 'title' | 'companyId' | 'primaryContactId' | 'funnelId' | 'ownerUserId' | 'source' | 'closeDate' | 'amount'>> & { champ?: ApiChamp };
 export type ProductInput = Partial<Omit<ApiProduct, 'id' | 'unitPrice' | 'vatRate'>> & { unitPrice?: number; vatRate?: number };
 export type DealLineInput = Partial<{
   productId: string | null;
@@ -237,14 +237,17 @@ export const crmApi = {
   companies: () => all<ApiCompany>('/crm/companies'),
   createCompany: (input: CompanyInput & { name: string }) => api<ApiCompany>('/crm/companies', { method: 'POST', json: input }),
   updateCompany: (id: string, input: CompanyInput) => api<ApiCompany>(`/crm/companies/${id}`, { method: 'PATCH', json: input }),
+  deleteCompany: (id: string) => api(`/crm/companies/${id}`, { method: 'DELETE' }),
 
   contacts: () => all<ApiContact>('/crm/contacts'),
   createContact: (input: ContactInput & { fullName: string }) => api<ApiContact>('/crm/contacts', { method: 'POST', json: input }),
   updateContact: (id: string, input: ContactInput) => api<ApiContact>(`/crm/contacts/${id}`, { method: 'PATCH', json: input }),
+  deleteContact: (id: string) => api(`/crm/contacts/${id}`, { method: 'DELETE' }),
 
   deals: () => all<ApiDealRow>('/crm/deals'),
   createDeal: (input: DealInput & { title: string; funnelId: string }) => api<ApiDeal>('/crm/deals', { method: 'POST', json: input }),
   updateDeal: (id: string, input: DealInput) => api<ApiDeal>(`/crm/deals/${id}`, { method: 'PATCH', json: input }),
+  deleteDeal: (id: string) => api(`/crm/deals/${id}`, { method: 'DELETE' }),
   moveDeal: (id: string, stageId: string) => api<ApiDeal>(`/crm/deals/${id}/move`, { method: 'POST', json: { stageId } }),
   linkContact: (dealId: string, contactId: string) => api(`/crm/deals/${dealId}/contacts/${contactId}`, { method: 'PUT' }),
   unlinkContact: (dealId: string, contactId: string) => api(`/crm/deals/${dealId}/contacts/${contactId}`, { method: 'DELETE' }),
