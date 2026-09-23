@@ -134,7 +134,7 @@ jobs:
         run: npm test --prefix e2e
       - name: Upload screenshots and server logs
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with: { name: e2e-artifacts, path: e2e/artifacts, if-no-files-found: ignore }
 
   images:

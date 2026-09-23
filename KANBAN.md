@@ -85,6 +85,9 @@ Last updated: 2026-09-23
 - [ ] `Bug` **Deleting a task leaves its "Task added" entry on the deal's timeline.**
 - [ ] `Bug` **Salesperson filters match by display name.** Two members with the same name are
   merged, and tasks or deals of a removed member lose their owner name.
+- [ ] `Bug` **An update request with no fields returns a server error (500).** For example
+  `PATCH /api/crm/deals/:id` with `{}`. It should return 400 or do nothing. The UI never sends
+  one.
 - [ ] `Bug` **Renaming a checklist item resets that to-do on existing deals.** Playbook to-dos
   are matched by their label.
 
@@ -92,13 +95,7 @@ Last updated: 2026-09-23
 
 ## In progress
 
-### High
-
-- [ ] `Task` **Put the browser tests in the repo and run them in CI.** Four end-to-end scripts
-  exist (sign-in and pipeline, deal lines and to-dos, fit score, team invitations), but only in a
-  temporary folder on the dev machine.
-- [ ] `Task` **Add backend integration tests to CI.** Test row-level security, services and
-  permissions against a real PostgreSQL. There are only 6 unit tests today.
+_Nothing right now._
 
 ---
 
@@ -111,8 +108,8 @@ Built, but not yet checked in the real environment.
 - [ ] `Task` **The production Docker stack on a real server.** Images, Compose, migrations,
   backups and nginx were tested with Docker Desktop, but never on Hetzner with the tunnel.
 - [ ] `Task` **The CI/CD pipeline on GitHub.** Checks and image builds should be green after the
-  Node 24 action upgrade, but I couldn't confirm it because the repo is private. The deploy job
-  has never run.
+  Node 24 action upgrade, but I couldn't confirm it because the repo is private. The new
+  integration and e2e jobs were only simulated locally. The deploy job has never run.
 
 ### High
 
@@ -136,6 +133,8 @@ Built, but not yet checked in the real environment.
 
 ### High
 
+- [x] `Task` Browser tests in the repo (`e2e/`, 45 checks) and backend integration tests against
+  PostgreSQL (41 checks: workspace isolation, roles, invitations, deal amounts), both run in CI
 - [x] `Task` Delete deals, companies and contacts from the UI (owners and admins; a company with
   deals can't be deleted; deleting a contact keeps their deals)
 - [x] `Task` Reassign a deal's owner (the server checks the owner is a workspace member, also on
