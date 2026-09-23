@@ -1,0 +1,19 @@
+node_modules/
+dist/
+coverage/
+*.log
+*.tsbuildinfo
+
+# secrets
+.env
+.env.*
+!.env.example
+infra/backup/rclone.conf
+
+# runtime data
+backend/storage/
+
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json

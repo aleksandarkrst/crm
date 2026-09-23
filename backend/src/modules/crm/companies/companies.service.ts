@@ -1,0 +1,92 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { asc, eq, ilike, or } from 'drizzle-orm';
+import { z } from 'zod';
+import { AuditService } from '../../../shared/audit/audit.service';
+import type { TenantContext } from '../../../shared/authorization';
+import { DatabaseService } from '../../../shared/database/database.service';
+import { mapDbError } from '../../../shared/database/errors';
+import { companies } from '../../../shared/database/schema';
+import { optionalText, type PaginationQuery } from '../../../shared/validation/common';
+
+export const CreateCompany = z.object({
+  name: z.string().trim().min(1).max(200),
+  industry: optionalText(100),
+  hq: optionalText(120),
+  teamSize: optionalText(40),
+  source: optionalText(80),
+  domain: optionalText(253),
+  ownerUserId: z.uuid().nullish(),
+  notes: optionalText(5000),
+});
+export const UpdateCompany = CreateCompany.partial();
+export type CreateCompany = z.infer<typeof CreateCompany>;
+export type UpdateCompany = z.infer<typeof UpdateCompany>;
+
+/**
+ * Reference pattern for a tenant-scoped CRUD service:
+ * - every query runs inside database.withTenant(), so RLS filters by tenant automatically;
+ * - inserts set tenantId explicitly (RLS WITH CHECK rejects a mismatch);
+ * - mutations write an audit entry in the same transaction.
+ */
+@Injectable()
+export class CompaniesService {
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly audit: AuditService,
+  ) {}
+
+  list(ctx: TenantContext, page: PaginationQuery) {
+    const like = page.q ? `%${page.q}%` : undefined;
+    return this.database.withTenant(ctx.tenantId, (tx) =>
+      tx
+        .select()
+        .from(companies)
+        .where(like ? or(ilike(companies.name, like), ilike(companies.industry, like), ilike(companies.hq, like)) : undefined)
+        .orderBy(asc(companies.name))
+        .limit(page.limit)
+        .offset(page.offset),
+    );
+  }
+
+  get(ctx: TenantContext, id: string) {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const [row] = await tx.select().from(companies).where(eq(companies.id, id));
+      if (!row) throw new NotFoundException('Company not found');
+      return row;
+    });
+  }
+
+  create(ctx: TenantContext, input: CreateCompany) {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        const [row] = await tx
+          .insert(companies)
+          .values({ ownerUserId: ctx.userId, ...input, tenantId: ctx.tenantId })
+          .returning();
+        await this.audit.record(tx, ctx, { action: 'company.created', entityType: 'company', entityId: row!.id });
+        return row!;
+      })
+      .catch(mapDbError);
+  }
+
+  update(ctx: TenantContext, id: string, input: UpdateCompany) {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        const [row] = await tx.update(companies).set(input).where(eq(companies.id, id)).returning();
+        if (!row) throw new NotFoundException('Company not found');
+        await this.audit.record(tx, ctx, { action: 'company.updated', entityType: 'company', entityId: id, data: input });
+        return row;
+      })
+      .catch(mapDbError);
+  }
+
+  remove(ctx: TenantContext, id: string) {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        const [row] = await tx.delete(companies).where(eq(companies.id, id)).returning({ id: companies.id });
+        if (!row) throw new NotFoundException('Company not found');
+        await this.audit.record(tx, ctx, { action: 'company.deleted', entityType: 'company', entityId: id });
+      })
+      .catch(mapDbError);
+  }
+}

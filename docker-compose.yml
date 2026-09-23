@@ -1,0 +1,142 @@
+# Production stack for the Hetzner server. Nothing is published on a host port: public traffic
+# arrives only through the Cloudflare Tunnel (cloudflared → frontend, which proxies /api).
+#
+#   docker compose up -d                 # start / update the stack
+#   docker compose run --rm migrate      # apply database migrations
+#   docker compose run --rm backup once  # take a backup now
+#
+# Deploys normally go through scripts/deploy.sh (called by GitHub Actions).
+
+x-backend-env: &backend-env
+  NODE_ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: postgres://${APP_DB_USER}:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+  AUTH_MODE: ${AUTH_MODE:-oidc}
+  OIDC_ISSUER: ${OIDC_ISSUER:-}
+  OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+  CORS_ORIGINS: ${CORS_ORIGINS:-}
+  STORAGE_DIR: /app/storage
+
+services:
+  frontend:
+    image: ${IMAGE_PREFIX:-crm}-frontend:${APP_VERSION:-latest}
+    build:
+      context: ./frontend
+      args:
+        VITE_AUTH_MODE: ${AUTH_MODE:-oidc}
+        VITE_OIDC_AUTHORITY: ${OIDC_ISSUER:-}
+        VITE_OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+        VITE_OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [edge]
+
+  api:
+    image: ${IMAGE_PREFIX:-crm}-backend:${APP_VERSION:-latest}
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      PORT: 3000
+    volumes:
+      - app_storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [edge, data]
+
+  worker:
+    image: ${IMAGE_PREFIX:-crm}-backend:${APP_VERSION:-latest}
+    command: ["node", "dist/worker.js"]
+    restart: unless-stopped
+    environment: *backend-env
+    volumes:
+      - app_storage:/app/storage
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # "edge" only for outbound internet (integrations, email). Nothing routes to the worker.
+    networks: [data, edge]
+
+  migrate:
+    image: ${IMAGE_PREFIX:-crm}-backend:${APP_VERSION:-latest}
+    command: ["node", "dist/shared/database/migrate.js"]
+    profiles: [tools]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${APP_DB_USER}:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MIGRATION_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      AUTH_MODE: oidc
+      OIDC_ISSUER: https://unused.invalid/
+      OIDC_AUDIENCE: unused
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [data]
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      APP_DB_USER: ${APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # Internal network only: never reachable from the internet or the tunnel.
+    networks: [data]
+
+  cloudflared:
+    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-2026.9.1}
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on: [frontend]
+    networks: [edge]
+
+  backup:
+    build: ./infra/backup
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      # Off-server copy via rclone (e.g. Hetzner Storage Box / Object Storage wrapped in an
+      # rclone "crypt" remote so copies are encrypted). Leave empty to keep local copies only.
+      BACKUP_RCLONE_REMOTE: ${BACKUP_RCLONE_REMOTE:-}
+    volumes:
+      - backups:/backups
+      - ./infra/backup/rclone.conf:/config/rclone/rclone.conf:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [data, edge]
+
+networks:
+  edge: {}
+  data:
+    internal: true
+
+volumes:
+  postgres_data:
+  app_storage:
+  backups:

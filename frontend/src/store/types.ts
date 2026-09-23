@@ -1,0 +1,281 @@
+export type SegKey = 'smb' | 'ent';
+export type ChannelCode = 'RS' | 'EM' | 'LI' | 'WA' | 'MT' | 'PH' | 'NT';
+
+export interface Stage {
+  id: string;
+  name: string;
+  activity: string;
+  channel: ChannelCode;
+  doc: string; // "None" | "Proposal" | ...
+  checklist: string[];
+  prob: number | '';
+}
+
+export interface Funnel {
+  label: string;
+  note: string;
+  stages: Stage[];
+}
+
+export interface LeadDoc {
+  name: string;
+  state: 'draft' | 'sent' | 'signed';
+  meta: string;
+}
+
+/** A lead is a deal: one company + primary contact moving through a funnel. */
+export interface Lead {
+  id: string;
+  title?: string;
+  company: string;
+  contact: string;
+  role: string;
+  initials: string;
+  email: string;
+  phone: string;
+  buyerRole?: string;
+  segment: SegKey;
+  stage: string;
+  value: string; // "€14,000"
+  score: number;
+  stall: number; // days since last contact
+  industry: string;
+  hq: string;
+  size: string;
+  source: string;
+  need: string;
+  constraint: string;
+  decisionMaker: string;
+  discoveryDate: string;
+  headline: string;
+  lines: [string, string][];
+  total: string;
+  docs?: LeadDoc[];
+  closeDate?: string;
+}
+
+export interface Person {
+  id: string;
+  leadId: string;
+  primary: boolean;
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+  linkedin?: string;
+  buyerRole?: string;
+  initials: string;
+}
+
+export interface CompanyExtra {
+  name: string;
+  industry: string;
+  hq: string;
+  size: string;
+  source: string;
+  owner: string;
+}
+
+export interface CatalogItem {
+  id: string;
+  name: string;
+  type: string;
+  kind: string; // One-off | Monthly | Yearly | Hourly
+  price: number | string;
+  vat: number | string;
+}
+
+export interface Milestone {
+  label: string;
+  pct: number | string;
+  date?: string;
+}
+
+export interface DealLine {
+  id: string;
+  itemId: string;
+  qty: number | string;
+  price: number | string;
+  vat: number | string;
+  schedule: string;
+  start: string;
+  months: number | string;
+  milestones: Milestone[];
+}
+
+export type Champ = Record<'C' | 'H' | 'M' | 'P', number>;
+
+export interface TaskState {
+  done?: boolean;
+  at?: string;
+  by?: string;
+  outcome?: string;
+  note?: string;
+}
+
+export interface LogEntry {
+  date: string;
+  channel: string;
+  title: string;
+  detail: string;
+}
+
+export interface RoadmapItem {
+  id: string;
+  title: string;
+  status: string;
+}
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: 'Active' | 'Invited';
+}
+
+export interface Permission {
+  id: string;
+  label: string;
+  roles: Record<string, boolean>;
+}
+
+export interface ToggleRow {
+  id: string;
+  name?: string;
+  label?: string;
+  desc: string;
+  on: boolean;
+}
+
+export interface FieldDef {
+  id: string;
+  label: string;
+  type: string;
+  entity: 'Leads' | 'Contacts';
+  required: boolean;
+  system: boolean;
+  visible: boolean;
+}
+
+export interface Workspace {
+  name: string;
+  currency: string;
+  timezone: string;
+  fiscal: string;
+  bonusTrigger?: string;
+}
+
+export interface Profile {
+  name?: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+  pwCurrent?: string;
+  pwNew?: string;
+  pwConfirm?: string;
+  language?: string;
+  dateFormat?: string;
+  startPage?: string;
+  defaultFunnel?: string;
+  digest?: boolean;
+}
+
+export interface BonusRule {
+  rate: number | string;
+  floor: number | string;
+  fixed: number | string;
+}
+
+export interface Filters {
+  audience: string;
+  owner: string;
+  dates: string;
+  source: string;
+  stage: string;
+  industry: string;
+  stalled: string;
+  band: string;
+}
+
+export interface Drill {
+  kicker: string;
+  title: string;
+  leadIds: string[];
+}
+
+export interface NewContactDraft {
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+  linkedin: string;
+  buyerRole: string;
+}
+
+export interface NewFieldDraft {
+  label: string;
+  type: string;
+  entity: 'Leads' | 'Contacts';
+  required: boolean;
+}
+
+export interface NewProductDraft {
+  name: string;
+  type: string;
+  kind: string;
+  price: string;
+  vat: string;
+}
+
+export interface State {
+  funnels: Record<SegKey, Funnel>;
+  segment: SegKey;
+  leads: Lead[];
+  extraCompanies: CompanyExtra[];
+  extraPeople: Person[];
+  links: Record<string, string[]>;
+  catalog: CatalogItem[];
+  dealLines: Record<string, DealLine[]>;
+  champ: Record<string, Champ>;
+  tasks: Record<string, TaskState>;
+  extraTodos: Record<string, string[]>;
+  log: Record<string, LogEntry[]>;
+  roadmapItems: RoadmapItem[];
+  team: TeamMember[];
+  perms: Permission[];
+  notifs: ToggleRow[];
+  integrations: ToggleRow[];
+  fields: FieldDef[];
+  workspace: Workspace;
+  profile: Profile;
+  bonusRules: Record<string, BonusRule>;
+  filters: Filters;
+  toast: string;
+
+  // modals
+  genOpen: boolean;
+  genLead: string | null;
+  genStep: number;
+  docOpen: boolean;
+  docLeadId: string | null;
+  showMerge: boolean;
+  sent: boolean;
+  newLeadOpen: boolean;
+  newLeadType: SegKey;
+  taskOpen: boolean;
+  taskCompany: string;
+  contactOpen: boolean;
+  contactCompany: string;
+  newContact: NewContactDraft;
+  personaOpen: boolean;
+  personaBase: string;
+  templateOpen: boolean;
+  templateType: string;
+  templateFile: string | null;
+  fieldOpen: boolean;
+  newField: NewFieldDraft;
+  productOpen: boolean;
+  newProduct: NewProductDraft;
+  drill: Drill | null;
+}

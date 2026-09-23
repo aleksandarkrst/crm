@@ -1,0 +1,31 @@
+# Local development: just PostgreSQL, published on localhost only.
+# The API and frontend run on your machine with `npm run dev` for fast reloads.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#   docker compose -f docker-compose.dev.yml down        # stop (data kept)
+#   docker compose -f docker-compose.dev.yml down -v     # stop and wipe the database
+
+name: crm-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: app_admin
+      POSTGRES_PASSWORD: dev_admin_password
+      APP_DB_USER: app_runtime
+      APP_DB_PASSWORD: dev_runtime_password
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_admin -d app"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  postgres_dev_data:

@@ -1,0 +1,20 @@
+# Copy to infra/backup/rclone.conf on the server (never commit the real file).
+# Backups are uploaded to "offsite-crypt:crm", which encrypts them before they leave the server.
+#
+# Generate the obscured crypt passwords with:  docker run --rm rclone/rclone obscure 'your-passphrase'
+# Keep the plain passphrases in your password manager — without them the backups cannot be read.
+
+# Hetzner Object Storage (S3-compatible). Or use a Hetzner Storage Box via type = sftp.
+[offsite]
+type = s3
+provider = Other
+endpoint = https://fsn1.your-objectstorage.com
+access_key_id = YOUR_ACCESS_KEY
+secret_access_key = YOUR_SECRET_KEY
+acl = private
+
+[offsite-crypt]
+type = crypt
+remote = offsite:your-backup-bucket
+password = OBSCURED_PASSWORD
+password2 = OBSCURED_SALT

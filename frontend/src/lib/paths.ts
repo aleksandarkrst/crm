@@ -1,0 +1,14 @@
+export const paths = {
+  overview: '/overview',
+  pipeline: '/pipeline',
+  today: '/today',
+  companies: '/companies',
+  company: (name: string) => '/companies/' + encodeURIComponent(name),
+  contacts: '/contacts',
+  contact: (id: string) => '/contacts/' + encodeURIComponent(id),
+  products: '/products',
+  roadmap: '/roadmap',
+  settings: (tab = 'workspace') => '/settings/' + tab,
+  profile: '/profile',
+  lead: (id: string) => '/deals/' + encodeURIComponent(id),
+};
