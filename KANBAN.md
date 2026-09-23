@@ -78,6 +78,13 @@ Last updated: 2026-09-23
 - [ ] `Task` **Later domains: Projects, Workforce, Reporting, Finance.** These are sibling
   modules to CRM, per the architecture plan. The `crm.deal-won` job is the hook for handing a
   won deal over to delivery.
+- [ ] `Task` **Edit a task after creating it.** Title, owner and due date can't be changed in
+  the UI (the API supports it).
+- [ ] `Task` **Offer Call and Note in the "New task" dialog.** It lists five of the seven
+  channels.
+- [ ] `Bug` **Deleting a task leaves its "Task added" entry on the deal's timeline.**
+- [ ] `Bug` **Salesperson filters match by display name.** Two members with the same name are
+  merged, and tasks or deals of a removed member lose their owner name.
 - [ ] `Bug` **Renaming a checklist item resets that to-do on existing deals.** Playbook to-dos
   are matched by their label.
 
@@ -92,15 +99,6 @@ Last updated: 2026-09-23
   temporary folder on the dev machine.
 - [ ] `Task` **Add backend integration tests to CI.** Test row-level security, services and
   permissions against a real PostgreSQL. There are only 6 unit tests today.
-- [ ] `Task` **Delete deals, companies and contacts from the UI.** The API supports it (admins
-  only), but no screen offers it.
-- [ ] `Task` **Reassign a deal's owner.** A deal is owned by whoever created it, and the UI can't
-  change that. The Salesperson filters and sales bonuses depend on the owner.
-- [ ] `Bug` **Companies with the same name are merged.** The UI matches companies by name (routes,
-  pickers, company records), so two companies called "Acme" show up as one.
-- [ ] `Bug` **The "New task" dialog doesn't save anything.** It only shows a confirmation message.
-  It needs a backend for tasks outside the playbook, with a due date and an owner, and then to
-  show them on the Today screen.
 
 ---
 
@@ -138,6 +136,13 @@ Built, but not yet checked in the real environment.
 
 ### High
 
+- [x] `Task` Delete deals, companies and contacts from the UI (owners and admins; a company with
+  deals can't be deleted; deleting a contact keeps their deals)
+- [x] `Task` Reassign a deal's owner (the server checks the owner is a workspace member, also on
+  companies and contacts)
+- [x] `Bug` Companies with the same name were merged: the UI now identifies companies by id
+- [x] `Bug` The "New task" dialog saved nothing: tasks now have a due date, owner and channel, and
+  show on Today and on the deal
 - [x] `Task` Deal lines and payment schedules saved in the database (the deal amount is
   recalculated on the server)
 - [x] `Task` Stage to-dos saved: playbook and off-playbook, done, outcome, note, and who
