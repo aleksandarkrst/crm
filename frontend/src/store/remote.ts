@@ -3,13 +3,13 @@
  * a lead (deal) shows its company and primary contact inline, companies are derived from leads
  * plus companies without a deal, and people are primary contacts plus everyone else.
  */
-import { type ApiActivity, type ApiCompany, type ApiDealLine, type ApiContact, type ApiFunnel, crmApi } from '../lib/api';
+import { type ApiActivity, type ApiCompany, type ApiDealLine, type ApiDealTask, type ApiContact, type ApiFunnel, crmApi } from '../lib/api';
 import { initialsOf, money, taskKey } from './selectors';
-import type { CatalogItem, CompanyExtra, DealLine, Funnel, Lead, LogEntry, Person, SegKey, State, TeamMember } from './types';
+import type { CatalogItem, CompanyExtra, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, SegKey, State, TeamMember } from './types';
 
 export type WorkspaceData = Pick<
   State,
-  'funnels' | 'leads' | 'extraCompanies' | 'extraPeople' | 'links' | 'catalog' | 'champ' | 'dealLines' | 'tasks' | 'extraTodos' | 'extraTodoIds' | 'team'
+  'funnels' | 'leads' | 'extraCompanies' | 'extraPeople' | 'links' | 'catalog' | 'champ' | 'dealLines' | 'tasks' | 'extraTodos' | 'extraTodoIds' | 'leadTasks' | 'team'
 >;
 
 const SEGMENTS: SegKey[] = ['smb', 'ent'];
@@ -49,6 +49,20 @@ export const mapLine = (l: ApiDealLine): DealLine => ({
 });
 
 export const mapActivity = (a: ApiActivity): LogEntry => ({ date: dateLabel(a.occurredAt), channel: a.channel, title: a.title, detail: a.detail ?? '' });
+
+export const mapLeadTask = (t: ApiDealTask): LeadTask => ({
+  id: t.id,
+  leadId: t.dealId,
+  stageId: t.stageId,
+  title: t.label,
+  channel: t.channel ?? 'RS',
+  due: t.dueDate ?? '',
+  ownerId: t.assigneeUserId ?? '',
+  note: t.note ?? '',
+  done: t.done,
+  at: t.doneAt ? dateLabel(t.doneAt) : undefined,
+  by: t.doneByName?.split(' ')[0] ?? undefined,
+});
 
 export async function loadWorkspace(): Promise<WorkspaceData> {
   const [apiFunnels, companies, contacts, dealRows, products, apiLines, apiTasks, apiTeam] = await Promise.all([
@@ -172,7 +186,12 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
   const tasks: State['tasks'] = {};
   const extraTodos: State['extraTodos'] = {};
   const extraTodoIds: State['extraTodoIds'] = {};
+  const leadTasks: LeadTask[] = [];
   for (const t of apiTasks) {
+    if (!t.blocksAdvance) {
+      leadTasks.push(mapLeadTask(t));
+      continue;
+    }
     const stage = stageById.get(t.stageId);
     if (!stage) continue;
     let idx: number;
@@ -194,5 +213,5 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     };
   }
 
-  return { funnels, leads, extraCompanies, extraPeople, links, catalog, champ, dealLines, tasks, extraTodos, extraTodoIds, team };
+  return { funnels, leads, extraCompanies, extraPeople, links, catalog, champ, dealLines, tasks, extraTodos, extraTodoIds, leadTasks, team };
 }

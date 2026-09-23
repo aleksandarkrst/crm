@@ -2,7 +2,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { useNavigate } from 'react-router-dom';
 import { type ApiRole, type ApiTenant, type Channel, clearTenantId, crmApi, type DealLineInput, type TaskInput } from '../lib/api';
 import { paths } from '../lib/paths';
-import { loadWorkspace, mapActivity, mapLine, type WorkspaceData } from './remote';
+import { loadWorkspace, mapActivity, mapLeadTask, mapLine, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
 import {
   champFor,
@@ -24,7 +24,7 @@ import {
   todayLabel,
   todoItemsFor,
 } from './selectors';
-import type { Champ, DealLine, Lead, LogEntry, NewContactDraft, NewProductDraft, Person, SegKey, Stage, State, TaskState } from './types';
+import type { Champ, ChannelCode, DealLine, Lead, LogEntry, NewContactDraft, NewProductDraft, Person, SegKey, Stage, State, TaskState } from './types';
 
 type Updater = Partial<State> | ((s: State) => Partial<State>);
 
@@ -451,6 +451,46 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }
     };
 
+    // ------------------------------------------------------------ tasks from the "New task" dialog
+    /** Saves a new task on a lead; resolves false (after showing why) when it wasn't saved. */
+    const addLeadTask = async (draft: { leadId: string; stageId: string; title: string; channel: ChannelCode; due: string; ownerId: string; note: string }): Promise<boolean> => {
+      try {
+        const row = await crmApi.createTask(draft.leadId, {
+          stageId: draft.stageId,
+          label: draft.title.trim(),
+          blocksAdvance: false,
+          channel: draft.channel,
+          dueDate: draft.due || null,
+          assigneeUserId: draft.ownerId || null,
+          note: draft.note.trim() || null,
+        });
+        set((x) => ({ leadTasks: [...x.leadTasks, mapLeadTask(row)] }));
+        // The backend logged "Task added" on the timeline; refresh it if it is loaded.
+        if (logRequested.current.has(draft.leadId)) void refreshLog(draft.leadId).catch(() => undefined);
+        return true;
+      } catch (err) {
+        flash('Not saved: ' + errText(err));
+        return false;
+      }
+    };
+    /** Ticks or unticks a task; ticking also logs it on the lead's timeline. */
+    const toggleLeadTask = (id: string) => {
+      const t = cur().leadTasks.find((x) => x.id === id);
+      if (!t) return;
+      const done = !t.done;
+      const date = todayLabel();
+      set((x) => ({ leadTasks: x.leadTasks.map((y) => (y.id === id ? { ...y, done, at: done ? date : undefined, by: done ? session.userName.split(' ')[0] : undefined } : y)) }));
+      void save(() => crmApi.updateTask(id, { done }));
+      if (done) {
+        pushLog(t.leadId, { date, channel: t.channel, title: t.title, detail: t.note || 'Task completed.' });
+        flash('Marked done · added to the activity timeline');
+      }
+    };
+    const removeLeadTask = (id: string) => {
+      set((x) => ({ leadTasks: x.leadTasks.filter((y) => y.id !== id) }));
+      void save(() => crmApi.deleteTask(id));
+    };
+
     const advanceStage = (leadId: string) => {
       const lead = leadById(cur(), leadId);
       if (!lead) return;
@@ -588,6 +628,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       renameExtra,
       removeExtra,
       advanceStage,
+      addLeadTask,
+      toggleLeadTask,
+      removeLeadTask,
       addStage: notYet,
       editStage: (idx: number, key: 'name' | 'activity' | 'channel' | 'doc', val: string) => editStage(idx, (st) => void ((st as unknown as Record<string, string>)[key] = val)),
       editProb: (idx: number, raw: string) => editStage(idx, (st) => void (st.prob = raw === '' ? '' : Math.max(0, Math.min(100, Math.round(Number(raw) || 0))))),

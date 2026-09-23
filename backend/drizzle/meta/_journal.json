@@ -36,6 +36,13 @@
       "when": 1790196713166,
       "tag": "0004_invitations",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790198181517,
+      "tag": "0005_deal_task_fields",
+      "breakpoints": true
     }
   ]
 }

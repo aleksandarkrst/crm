@@ -116,6 +116,12 @@ the store is the one place that talks to the backend.
 - Stage to-dos: a playbook to-do gets a row on first touch, keyed by deal + stage + checklist label
   (renaming a checklist item in the funnel builder starts that to-do fresh). Off-playbook to-dos
   are rows of their own.
+- Tasks from the **New task** dialog are `deal_tasks` rows too (off-playbook, `blocks_advance =
+  false`) with a due date, a channel and an owner (`assignee_user_id`, which must be a member of the
+  workspace). They show in Today (overdue / today / next up, with a done toggle) and on the lead's
+  To-Do list, but don't count towards finishing a stage. Creating one logs "Task added" on the
+  deal's timeline; ticking it off logs it like any completed to-do. The store keeps them in
+  `leadTasks`; the other to-dos (`blocks_advance = true`) gate "Advance".
 
 Still browser-only (seeded from `store/seed.ts`, lost on reload), because the backend doesn't have
 them yet:
