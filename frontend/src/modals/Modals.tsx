@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Modal, ModalHeader } from '../components/ui';
 import { paths } from '../lib/paths';
 import { BILLING_KINDS, BUYER_ROLES, CHANNEL_LABELS, CHANNELS, DOC_TYPES, FIELD_TYPES, PARAM_SOURCES, PRODUCT_TYPES } from '../store/seed';
-import { allPeople, companyRecords, leadById, salesPeople, stageOf, stagesFor, valueNum } from '../store/selectors';
+import { allPeople, companyRecords, leadById, stageOf, stagesFor, todayIso, valueNum } from '../store/selectors';
 import { useStore } from '../store/store';
-import type { Lead, SegKey } from '../store/types';
+import type { ChannelCode, Lead, SegKey } from '../store/types';
 import { ProposalDoc } from './ProposalDoc';
 
 /** Every overlay in the app; open/closed state lives in the store. */
@@ -140,21 +140,55 @@ function NewDealModal() {
 }
 
 function NewTaskModal() {
-  const { s, set, flash } = useStore();
-  const taskLead = s.leads.find((l) => l.company === s.taskCompany) || s.leads[0];
+  const { s, set, flash, addLeadTask, session } = useStore();
+  const initialLead = s.leads.find((l) => l.company === s.taskCompany) || s.leads[0];
+  const [leadId, setLeadId] = useState(initialLead?.id ?? '');
+  const lead = leadById(s, leadId);
+  const [stageId, setStageId] = useState(initialLead ? stageOf(s, initialLead).id : '');
+  const [title, setTitle] = useState('');
+  const [channel, setChannel] = useState<ChannelCode>(initialLead ? channelOrResearch(stageOf(s, initialLead).channel) : 'RS');
+  const [due, setDue] = useState(todayIso());
+  const members = s.team.filter((m) => m.status === 'Active');
+  const [ownerId, setOwnerId] = useState(members.some((m) => m.id === session.userId) ? session.userId : (members[0]?.id ?? ''));
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const pickLead = (id: string) => {
+    setLeadId(id);
+    const l = leadById(s, id);
+    if (l) {
+      setStageId(stageOf(s, l).id);
+      setChannel(channelOrResearch(stageOf(s, l).channel));
+    }
+  };
+  const submit = async () => {
+    if (!title.trim()) return setError('Give the task a title.');
+    if (!lead) return setError('Pick the company and deal this task belongs to.');
+    setError('');
+    setBusy(true);
+    const ok = await addLeadTask({ leadId: lead.id, stageId, title, channel, due, ownerId, note });
+    setBusy(false);
+    if (ok) {
+      set({ taskOpen: false, taskCompany: lead.company });
+      flash('Task added to ' + lead.company + ' · shows in Today');
+    }
+  };
+
   return (
     <Modal maxWidth={580}>
       <ModalHeader title="New task" sub="Tasks outside the playbook still belong to a company and a stage, so the timeline stays complete." />
       <label className="form-label">
         Task title
-        <input className="form-input" placeholder="e.g. Send revised scope to procurement" />
+        <input className="form-input" placeholder="e.g. Send revised scope to procurement" value={title} autoFocus onChange={(e) => setTitle(e.target.value)} />
       </label>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <label className="form-label">
           Company
-          <select className="form-input" value={s.taskCompany} onChange={(e) => set({ taskCompany: e.target.value })}>
+          <select className="form-input" value={leadId} onChange={(e) => pickLead(e.target.value)}>
+            {!lead && <option value="">No deals yet</option>}
             {s.leads.map((l) => (
-              <option key={l.id} value={l.company}>
+              <option key={l.id} value={l.id}>
                 {l.company} · {stageOf(s, l).name}
               </option>
             ))}
@@ -162,56 +196,59 @@ function NewTaskModal() {
         </label>
         <label className="form-label">
           Funnel stage
-          <select className="form-input">
-            {(taskLead ? stagesFor(s, taskLead.segment) : []).map((x) => (
-              <option key={x.id}>{x.name}</option>
+          <select className="form-input" value={stageId} onChange={(e) => setStageId(e.target.value)}>
+            {(lead ? stagesFor(s, lead.segment) : []).map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name}
+              </option>
             ))}
           </select>
         </label>
         <label className="form-label">
           Channel
-          <select className="form-input">
+          <select className="form-input" value={channel} onChange={(e) => setChannel(e.target.value as ChannelCode)}>
             {CHANNELS.map((c) => (
-              <option key={c}>{CHANNEL_LABELS[c]}</option>
+              <option key={c} value={c}>
+                {CHANNEL_LABELS[c]}
+              </option>
             ))}
           </select>
         </label>
         <label className="form-label">
           Due date
-          <input type="date" className="form-input" style={{ padding: '9px 10px' }} />
+          <input type="date" className="form-input" style={{ padding: '9px 10px' }} value={due} onChange={(e) => setDue(e.target.value)} />
         </label>
         <label className="form-label" style={{ gridColumn: 'span 2' }}>
           Owner
-          <select className="form-input">
-            {salesPeople(s).map((o) => (
-              <option key={o}>{o}</option>
+          <select className="form-input" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
             ))}
           </select>
         </label>
       </div>
       <label className="form-label">
         Notes
-        <textarea className="form-input" rows={3} placeholder="Context the next person needs" />
+        <textarea className="form-input" rows={3} placeholder="Context the next person needs" value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
-      <div className="hint-box">Off-playbook task on {s.taskCompany}. It appears in Today and on the lead timeline, and does not block stage advance.</div>
+      <div className="hint-box">Off-playbook task on {lead ? lead.company : 'a deal'}. It appears in Today and on the lead timeline, and does not block stage advance.</div>
+      {error && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{error}</div>}
       <div className="modal-actions">
         <button type="button" className="btn btn-secondary" onClick={() => set({ taskOpen: false })}>
           Cancel
         </button>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={() => {
-            set({ taskOpen: false });
-            flash('Task added to ' + s.taskCompany + ' · shows in Today');
-          }}
-        >
-          Add task
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void submit()}>
+          {busy ? 'Adding…' : 'Add task'}
         </button>
       </div>
     </Modal>
   );
 }
+
+/** The dialog offers the design's task channels; a stage on another channel defaults to a research task. */
+const channelOrResearch = (c: ChannelCode): ChannelCode => ((CHANNELS as readonly string[]).includes(c) ? c : 'RS');
 
 function NewContactModal() {
   const { s, set, flash, createContact } = useStore();

@@ -177,6 +177,11 @@ export interface ApiDealTask {
   doneByName: string | null;
   outcome: string | null;
   note: string | null;
+  /** false for tasks from the "New task" dialog (they don't gate stage advance). */
+  blocksAdvance: boolean;
+  dueDate: string | null;
+  assigneeUserId: string | null;
+  channel: Channel | null;
 }
 
 export interface ApiMember {
@@ -216,7 +221,15 @@ export type DealLineInput = Partial<{
   months: number;
   milestones: ApiMilestone[];
 }>;
-export type TaskInput = Partial<{ label: string; done: boolean; outcome: string | null; note: string | null }>;
+export type TaskInput = Partial<{
+  label: string;
+  done: boolean;
+  outcome: string | null;
+  note: string | null;
+  dueDate: string | null;
+  assigneeUserId: string | null;
+  channel: Channel | null;
+}>;
 export type StageInput = Partial<Pick<ApiFunnelStage, 'name' | 'activity' | 'channel' | 'documentOnEntry' | 'winProbability' | 'checklist'>>;
 
 export const crmApi = {
@@ -260,7 +273,7 @@ export const crmApi = {
   dealTasks: () => all<ApiDealTask>('/crm/deal-tasks'),
   upsertPlaybookTask: (dealId: string, input: TaskInput & { stageId: string; label: string }) =>
     api<ApiDealTask>(`/crm/deals/${dealId}/tasks/playbook`, { method: 'PUT', json: input }),
-  createTask: (dealId: string, input: TaskInput & { stageId: string; label: string; position?: number }) =>
+  createTask: (dealId: string, input: TaskInput & { stageId: string; label: string; position?: number; blocksAdvance?: boolean }) =>
     api<ApiDealTask>(`/crm/deals/${dealId}/tasks`, { method: 'POST', json: input }),
   updateTask: (id: string, input: TaskInput) => api<ApiDealTask>(`/crm/deal-tasks/${id}`, { method: 'PATCH', json: input }),
   deleteTask: (id: string) => api(`/crm/deal-tasks/${id}`, { method: 'DELETE' }),

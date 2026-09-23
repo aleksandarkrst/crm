@@ -15,6 +15,14 @@ export const initialsOf = (name: string | undefined): string =>
     .map((w) => w[0]!.toUpperCase())
     .join('');
 
+/** Today as a local ISO date (yyyy-mm-dd), for comparing with due dates. */
+export const todayIso = (): string => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+/** "2026-09-23" → "23 Sep". */
+export const isoLabel = (iso: string): string => (iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '—');
+
 export const todayLabel = (): string => new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 
 // ---------------------------------------------------------------- funnels & leads
@@ -246,5 +254,8 @@ export const bonusOf = (lead: Lead, rule: { rate: number | string; floor: number
   const net = num(lead.value);
   return net >= num(rule.floor) ? (net * num(rule.rate)) / 100 : num(rule.fixed);
 };
+/** Name of a workspace member by user id. */
+export const memberName = (s: State, userId: string): string => s.team.find((m) => m.id === userId && m.status === 'Active')?.name ?? '—';
+
 /** Everyone in the workspace who can own deals. */
 export const salesPeople = (s: State): string[] => s.team.filter((m) => m.status === 'Active').map((m) => m.name);

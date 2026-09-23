@@ -128,6 +128,26 @@ export interface TaskState {
   note?: string;
 }
 
+/**
+ * A task from the "New task" dialog: it belongs to a lead and a stage, has an owner and a due
+ * date, shows in Today and on the lead's To-Do list, and does not block stage advance.
+ */
+export interface LeadTask {
+  id: string;
+  leadId: string;
+  stageId: string;
+  title: string;
+  channel: ChannelCode;
+  /** ISO date (yyyy-mm-dd), '' when none. */
+  due: string;
+  /** User id of the owner (a workspace member), '' when none. */
+  ownerId: string;
+  note: string;
+  done: boolean;
+  at?: string;
+  by?: string;
+}
+
 export interface LogEntry {
   date: string;
   channel: string;
@@ -252,6 +272,8 @@ export interface State {
   extraTodos: Record<string, string[]>;
   /** Backend ids of the off-playbook to-dos, parallel to extraTodos. */
   extraTodoIds: Record<string, string[]>;
+  /** Tasks from the "New task" dialog (see LeadTask). */
+  leadTasks: LeadTask[];
   log: Record<string, LogEntry[]>;
   roadmapItems: RoadmapItem[];
   team: TeamMember[];

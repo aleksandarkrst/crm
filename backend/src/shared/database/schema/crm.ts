@@ -292,10 +292,19 @@ export const dealTasks = pgTable(
     doneByUserId: uuid('done_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     outcome: text('outcome'),
     note: text('note'),
+    /**
+     * Stage to-dos (playbook items and to-dos added on the lead) must be done before the deal can
+     * advance. Tasks created from the "New task" dialog don't block, and carry the fields below.
+     */
+    blocksAdvance: boolean('blocks_advance').notNull().default(true),
+    dueDate: date('due_date'),
+    assigneeUserId: uuid('assignee_user_id').references(() => users.id, { onDelete: 'set null' }),
+    channel: text('channel', { enum: CHANNELS }),
     ...timestamps,
   },
   (t) => [
     index('deal_tasks_tenant_deal_idx').on(t.tenantId, t.dealId),
+    index('deal_tasks_tenant_due_idx').on(t.tenantId, t.dueDate).where(sql`${t.dueDate} is not null`),
     uniqueIndex('deal_tasks_playbook_uq').on(t.dealId, t.stageId, t.label).where(sql`not ${t.offPlaybook}`),
     foreignKey({ columns: [t.tenantId, t.dealId], foreignColumns: [deals.tenantId, deals.id], name: 'deal_tasks_deal_fk' }).onDelete('cascade'),
     foreignKey({ columns: [t.tenantId, t.stageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deal_tasks_stage_fk' }).onDelete('cascade'),

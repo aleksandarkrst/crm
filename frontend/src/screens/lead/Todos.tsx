@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { CHAMP, CHAMP_LEVELS, CHANNEL_LABELS, GATE_STAGE_ADVANCE, SCRIPTS } from '../../store/seed';
-import { champFor, champTotal, script, stageDone, stageOf, stagesFor, taskOf, todoItemsFor } from '../../store/selectors';
+import { champFor, champTotal, isoLabel, memberName, script, stageDone, stageOf, stagesFor, taskOf, todayIso, todoItemsFor } from '../../store/selectors';
 import { useStore } from '../../store/store';
-import type { Lead } from '../../store/types';
+import type { Lead, LeadTask } from '../../store/types';
 
 const OUTCOMES = ['Sent', 'Replied', 'No answer', 'Rescheduled'];
 
@@ -27,7 +27,15 @@ export function Todos({ lead }: { lead: Lead }) {
       return { item, i, t };
     });
     const complete = items.every(({ t }) => t.done);
-    return { st, gi, isCurrent, complete, items };
+    // Tasks from "New task" show under their stage (a later stage's ones under the current stage).
+    // They don't count towards "completed" and never block advancing.
+    const shown = new Set(stages.slice(0, idx + 1).map((x) => x.id));
+    const extraTasks = s.leadTasks.filter((t) => t.leadId === lead.id && (t.stageId === st.id || (isCurrent && !shown.has(t.stageId))));
+    for (const t of extraTasks) {
+      if (t.done) done++;
+      else open++;
+    }
+    return { st, gi, isCurrent, complete, items, extraTasks };
   });
 
   const canAdvance = (!GATE_STAGE_ADVANCE || stageDone(s, lead, current.id)) && idx < stages.length - 1;
@@ -181,6 +189,10 @@ export function Todos({ lead }: { lead: Lead }) {
               );
             })}
 
+            {g.extraTasks.map((t) => (
+              <LeadTaskRow key={t.id} task={t} />
+            ))}
+
             {g.isCurrent && (
               <>
                 <button type="button" className="btn-dashed" style={{ alignSelf: 'flex-start' }} onClick={() => store.addTodo(lead.id, g.st.id)}>
@@ -197,6 +209,44 @@ export function Todos({ lead }: { lead: Lead }) {
             )}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/** A task added with "New task": its own owner, due date and channel; doesn't gate the stage. */
+function LeadTaskRow({ task: t }: { task: LeadTask }) {
+  const { s, toggleLeadTask, removeLeadTask } = useStore();
+  const overdue = !t.done && !!t.due && t.due < todayIso();
+  const meta = t.done
+    ? `Done ${t.at ?? ''}${t.by ? ' by ' + t.by : ''}`
+    : [t.due ? (overdue ? 'Overdue · due ' : 'Due ') + isoLabel(t.due) : 'No due date', memberName(s, t.ownerId), t.note].filter(Boolean).join(' · ');
+  return (
+    <div data-lead-task={t.id} style={{ border: '1px solid #EEF0F4', borderRadius: 9, background: '#FFFFFF' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px' }}>
+        <button
+          type="button"
+          title={t.done ? 'Reopen' : 'Mark done'}
+          onClick={() => toggleLeadTask(t.id)}
+          style={{ flex: '0 0 19px', width: 19, height: 19, borderRadius: 6, border: `1px solid ${t.done ? '#14503C' : '#D0D5DD'}`, background: t.done ? '#14503C' : '#FFFFFF', color: '#FFFFFF', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+        >
+          {t.done ? '✓' : ''}
+        </button>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <span style={{ fontSize: 13.5, color: t.done ? '#98A2B3' : '#101828', textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</span>
+          <span style={{ fontSize: 11.5, color: overdue ? 'var(--danger)' : 'var(--muted)' }}>{meta}</span>
+        </div>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+          <span className="tag" style={{ background: 'var(--chip)', color: 'var(--text-2)' }}>
+            task
+          </span>
+          <button type="button" className="pill-x" title="Delete this task" onClick={() => removeLeadTask(t.id)}>
+            ×
+          </button>
+        </span>
+        <span className="badge badge-neutral" style={{ padding: '4px 9px', borderRadius: 6 }}>
+          {CHANNEL_LABELS[t.channel] || t.channel}
+        </span>
       </div>
     </div>
   );

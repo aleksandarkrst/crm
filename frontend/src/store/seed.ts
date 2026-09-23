@@ -144,6 +144,7 @@ export function initialState(): State {
     tasks: {},
     extraTodos: {},
     extraTodoIds: {},
+    leadTasks: [],
     log: {},
     roadmapItems: [
       { id: 'rm1', title: 'Automated proposal follow-up sequence', status: 'backlog' },
