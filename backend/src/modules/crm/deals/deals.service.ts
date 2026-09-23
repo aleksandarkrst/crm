@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, desc, eq, ilike, or, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, or, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
@@ -22,11 +22,9 @@ export const CreateDeal = z.object({
   amount: money.optional(),
   closeDate: z.iso.date().nullish(),
 });
-export const UpdateDeal = CreateDeal.omit({ funnelId: true })
-  .partial()
-  .extend({
-    champ: z.object({ C: champLevel, H: champLevel, M: champLevel, P: champLevel }).optional(),
-  });
+export const UpdateDeal = CreateDeal.partial().extend({
+  champ: z.object({ C: champLevel, H: champLevel, M: champLevel, P: champLevel }).optional(),
+});
 export const MoveDeal = z.object({ stageId: z.uuid() });
 export const DealsQuery = PaginationQuery.extend({
   funnelId: z.uuid().optional(),
@@ -58,8 +56,8 @@ export class DealsService {
       const like = `%${query.q}%`;
       filters.push(or(ilike(deals.title, like), ilike(companies.name, like), ilike(contacts.fullName, like)));
     }
-    return this.database.withTenant(ctx.tenantId, (tx) =>
-      tx
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const rows = await tx
         .select({
           deal: deals,
           companyName: companies.name,
@@ -75,8 +73,15 @@ export class DealsService {
         .where(and(...filters))
         .orderBy(asc(funnelStages.position), desc(deals.updatedAt))
         .limit(query.limit)
-        .offset(query.offset),
-    );
+        .offset(query.offset);
+      if (rows.length === 0) return [];
+      // Other people linked to each deal (besides the primary contact), for the deal and company screens.
+      const links = await tx
+        .select({ dealId: dealContacts.dealId, contactId: dealContacts.contactId })
+        .from(dealContacts)
+        .where(inArray(dealContacts.dealId, rows.map((r) => r.deal.id)));
+      return rows.map((r) => ({ ...r, contactIds: links.filter((l) => l.dealId === r.deal.id).map((l) => l.contactId) }));
+    });
   }
 
   get(ctx: TenantContext, id: string) {
@@ -114,10 +119,27 @@ export class DealsService {
       .catch(mapDbError);
   }
 
+  /** Changing the funnel (a different target persona) restarts the deal at that funnel's first stage. */
   update(ctx: TenantContext, id: string, input: UpdateDeal) {
-    const patch = input.champ ? { ...input, fitScore: input.champ.C + input.champ.H + input.champ.M + input.champ.P } : input;
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        const patch: Partial<typeof deals.$inferInsert> = { ...input };
+        if (input.champ) patch.fitScore = input.champ.C + input.champ.H + input.champ.M + input.champ.P;
+        if (input.funnelId) {
+          const [current] = await tx.select({ funnelId: deals.funnelId }).from(deals).where(eq(deals.id, id));
+          if (!current) throw new NotFoundException('Deal not found');
+          if (current.funnelId === input.funnelId) delete patch.funnelId;
+          else {
+            const [first] = await tx
+              .select({ id: funnelStages.id })
+              .from(funnelStages)
+              .where(eq(funnelStages.funnelId, input.funnelId))
+              .orderBy(asc(funnelStages.position))
+              .limit(1);
+            if (!first) throw new BadRequestException('Funnel has no stages');
+            Object.assign(patch, { stageId: first.id, stageEnteredAt: new Date(), closedAt: null });
+          }
+        }
         const [row] = await tx.update(deals).set(patch).where(eq(deals.id, id)).returning();
         if (!row) throw new NotFoundException('Deal not found');
         await this.audit.record(tx, ctx, { action: 'deal.updated', entityType: 'deal', entityId: id, data: input });

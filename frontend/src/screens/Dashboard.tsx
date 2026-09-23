@@ -113,7 +113,7 @@ export function Dashboard() {
     const pendingIds: string[] = [];
     for (const l of mine) {
       const bonus = bonusOf(l, rule);
-      const won = stageOf(s, l).id === 'won';
+      const won = !!stageOf(s, l).won;
       const full = rule.trigger === 'When fully billed' ? billedShare(s, l) >= 0.999 : true;
       if (won && full) {
         earned += bonus;

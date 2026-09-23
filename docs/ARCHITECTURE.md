@@ -78,23 +78,27 @@ current transaction to `jobs.send(name, data, tx)` so the job exists only if the
 commits. `DealsService.moveToStage` does this for `crm.deal-won`. Add Redis later only for caching
 or very high job volume.
 
-## Frontend: demo store → API
+## Frontend: store → API
 
-The UI is a faithful port of the Claude Design "Mini CRM v2" prototype. Its state lives in
-`frontend/src/store` (`seed.ts` holds the design's sample data, `selectors.ts` the derived logic,
-and `store.tsx` the actions). Screens read from `useStore()` only, so the store is the single place to
-change.
+The UI is a port of the Claude Design "Mini CRM v2" prototype. Screens read from `useStore()` only;
+the store is the one place that talks to the backend.
 
-Suggested order for wiring it to the backend (`frontend/src/lib/api.ts` already has the client,
-tenant header and auth):
+- `components/SessionGate.tsx`: sign-in (dev login or OIDC), picking or creating a workspace, and
+  loading it. The store is created per workspace.
+- `store/remote.ts`: loads funnels, deals, companies, contacts and products (`lib/api.ts`) and maps
+  them onto the design's lead-centric model. A lead is a deal and shows its company and primary
+  contact inline. People are primary contacts plus everyone else. Backend ids are kept on the UI
+  records (`Lead.companyId`, `Person.contactId`, `Funnel.id`, …).
+- `store/store.tsx`: every action updates the screen immediately and then saves. Typing is
+  debounced (`saveLater`, one write per field). A failed save shows the error and reloads the
+  workspace so the screen matches the database. Changes that touch several records (new deal,
+  moving a contact) reload after saving.
+- Activity history is loaded per deal when a deal, company or contact screen opens (`ensureLog`).
 
-1. Sign-in + tenant picker: `/api/me`, `/api/tenants` (dev login or OIDC via `lib/auth.ts`).
-2. Funnels (`GET /api/crm/funnels`) and the Pipeline board (`GET /api/crm/deals?funnelId=`, `POST /api/crm/deals/:id/move`).
-3. Companies, Contacts, Products: plain CRUD endpoints that already exist.
-4. Deal screen: `PATCH /api/crm/deals/:id` (CHAMP → fit score), activities (`/api/crm/deals/:id/activities`).
-
-The design includes features the backend doesn't have yet, which are next in the CRM module:
-- deal lines with payment schedules
+Still browser-only (seeded from `store/seed.ts`, lost on reload), because the backend doesn't have
+them yet:
+- deal lines with payment schedules (their net total is saved as the deal amount)
+- adding and removing funnel stages (blocked in the UI for now; editing existing stages is saved)
 - per-lead stage to-dos
 - document templates and generation (worker + storage)
 - sales-bonus rules

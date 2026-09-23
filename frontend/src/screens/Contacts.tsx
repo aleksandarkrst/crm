@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FilterBar, SortHeader, useSort } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { BUYER_ROLES } from '../store/seed';
-import { allPeople, companyRecords, leadById, ownerOf, salesPeople } from '../store/selectors';
+import { allPeople, companyOfPerson, companyRecords, leadById, ownerOf, salesPeople } from '../store/selectors';
 import { useStore } from '../store/store';
 
 const COLS = '1.2fr 1fr 1.2fr 1.4fr 1fr 1.1fr 1fr';
@@ -29,8 +29,8 @@ export function Contacts() {
   const q = query.toLowerCase().trim();
   const rows = allPeople(s)
     .map((p) => {
-      const l = leadById(s, p.leadId) || s.leads[0]!;
-      return { id: p.id, contact: p.name, role: p.role, company: l.company, email: p.email, phone: p.phone, decisionMaker: p.buyerRole || 'Influencer', owner: ownerOf(l) };
+      const l = leadById(s, p.leadId);
+      return { id: p.id, contact: p.name, role: p.role, company: companyOfPerson(s, p), email: p.email, phone: p.phone, decisionMaker: p.buyerRole || 'Influencer', owner: l ? ownerOf(l) : '—' };
     })
     .filter((r) => !q || [r.contact, r.company, r.role, r.email].some((v) => String(v).toLowerCase().includes(q)))
     .filter((r) => company === 'Company' || r.company === company)

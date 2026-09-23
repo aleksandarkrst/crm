@@ -1,9 +1,10 @@
+import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { FieldRow, GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { BUYER_ROLES, CHANNEL_LABELS } from '../store/seed';
-import { allPeople, initialsOf, leadById, ownerOf, personById, timelineFor } from '../store/selectors';
+import { allPeople, companyOfPerson, initialsOf, leadById, ownerOf, personById, timelineFor } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Person } from '../store/types';
 import { docStateClass } from './lead/docs';
@@ -14,13 +15,19 @@ export function Contact() {
   const { id = '' } = useParams();
   const picker = usePicker();
   const p = personById(s, id) || allPeople(s)[0];
+  const c = p ? leadById(s, p.leadId) : undefined;
+  const leadId = c?.id;
+  const { ensureLog } = store;
+  useEffect(() => {
+    if (leadId) ensureLog([leadId]);
+  }, [leadId, ensureLog]);
   if (!p) return <Screen title="Contact">No contacts yet.</Screen>;
-  const c = leadById(s, p.leadId) || s.leads[0]!;
+  const company = companyOfPerson(s, p);
 
   const setField = (key: keyof Person) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => store.patchPerson(p.id, { [key]: e.target.value });
   const q = picker.search.toLowerCase().trim();
   const companyOptions = s.leads.filter((l) => l.id !== p.leadId).filter((l) => !q || l.company.toLowerCase().includes(q));
-  const docs = c.docs || [];
+  const docs = c?.docs || [];
 
   return (
     <Screen title={p.name || 'Contact'} onTitleChange={(v) => store.patchPerson(p.id, { name: v })} crumb={{ label: 'Contacts', to: paths.contacts }}>
@@ -54,7 +61,7 @@ export function Contact() {
                     />
                   ))}
                 >
-                  <span>{c.company}</span>
+                  <span>{company}</span>
                 </Picker>
               </FieldRow>
               <FieldRow label="Role in the decision">
@@ -67,10 +74,10 @@ export function Contact() {
                 <GhostInput value={p.phone} onChange={setField('phone')} />
               </FieldRow>
               <FieldRow label="Owner">
-                <span className="field-value">{ownerOf(c)}</span>
+                <span className="field-value">{c ? ownerOf(c) : '—'}</span>
               </FieldRow>
               <FieldRow label="Last touch">
-                <span className="field-value">{c.stall === 0 ? 'today' : c.stall + ' days ago'}</span>
+                <span className="field-value">{!c ? '—' : c.stall === 0 ? 'today' : c.stall + ' days ago'}</span>
               </FieldRow>
             </div>
           </div>
@@ -78,11 +85,11 @@ export function Contact() {
           <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 15, fontWeight: 600 }}>Activity with this contact</span>
-              <button type="button" className="btn-outline" onClick={() => set({ taskOpen: true, taskCompany: c.company })}>
+              <button type="button" className="btn-outline" onClick={() => set({ taskOpen: true, taskCompany: company })}>
                 Add task
               </button>
             </div>
-            {timelineFor(s, c.id).map((e, i) => (
+            {(c ? timelineFor(s, c.id) : []).map((e, i) => (
               <div key={i} style={{ display: 'flex', gap: 12, paddingTop: 13, borderTop: '1px solid var(--divider)', alignItems: 'flex-start' }}>
                 <span style={{ fontSize: 11.5, color: 'var(--muted)', minWidth: 48, paddingTop: 2 }}>{e.date}</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flex: 1 }}>
@@ -98,9 +105,9 @@ export function Contact() {
         <div style={{ flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
           <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <span className="caps-muted">Documents sent</span>
-            {docs.length === 0 && <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>Nothing sent yet. Documents generated for {c.company} will appear here.</span>}
+            {docs.length === 0 && <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>Nothing sent yet. Documents generated for {company} will appear here.</span>}
             {docs.map((d) => (
-              <button key={d.name} type="button" onClick={() => store.openDoc(c.id)} style={{ textAlign: 'left', cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 9, padding: '12px 13px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <button key={d.name} type="button" onClick={() => c && store.openDoc(c.id)} style={{ textAlign: 'left', cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 9, padding: '12px 13px', display: 'flex', flexDirection: 'column', gap: 5 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%' }}>
                   <span style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</span>
                   <span className={'badge ' + docStateClass(d.state)}>{d.state}</span>

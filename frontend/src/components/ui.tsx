@@ -67,8 +67,16 @@ const optValue = (o: Opt) => (typeof o === 'string' ? o : o.value);
 const optLabel = (o: Opt) => (typeof o === 'string' ? o : o.label);
 
 export function GhostSelect({ options, className = '', chevron = false, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { options: Opt[]; chevron?: boolean }) {
+  // An empty or unknown value (e.g. a field never filled in) shows as "—" instead of the first option.
+  const current = props.value === undefined ? undefined : String(props.value);
+  const unset = current !== undefined && !options.some((o) => optValue(o) === current);
   const select = (
     <select className={`ghost ${className}`} {...props}>
+      {unset && (
+        <option value={current} disabled>
+          {current && current !== '—' ? current : '—'}
+        </option>
+      )}
       {options.map((o) => (
         <option key={optValue(o)} value={optValue(o)}>
           {optLabel(o)}

@@ -1,9 +1,10 @@
+import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { FieldRow, GhostInput, GhostSelect, PersonChip, Picker, PickerRow, usePicker } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { CHANNEL_LABELS, INDUSTRIES, SOURCES, TEAM_SIZES } from '../store/seed';
-import { allPeople, closeIsoOf, companyRecords, contactsForLead, initialsOf, leadById, stageOf, timelineFor } from '../store/selectors';
+import { allPeople, closeIsoOf, companyOfPerson, companyRecords, contactsForLead, initialsOf, stageOf, timelineFor } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Person } from '../store/types';
 
@@ -14,6 +15,11 @@ export function Company() {
   const picker = usePicker();
   const all = companyRecords(s);
   const rec = all.find((c) => c.name === name) || all[0];
+  const leadIds = (rec?.leads ?? []).map((l) => l.id).join(',');
+  const { ensureLog } = store;
+  useEffect(() => {
+    if (leadIds) ensureLog(leadIds.split(','));
+  }, [leadIds, ensureLog]);
   if (!rec) return <Screen title="Company">No companies yet.</Screen>;
 
   const people: Person[] = [];
@@ -68,7 +74,7 @@ export function Company() {
                     key={p.id}
                     initials={p.initials || initialsOf(p.name)}
                     title={p.name}
-                    subtitle={leadById(s, p.leadId)?.company || ''}
+                    subtitle={companyOfPerson(s, p)}
                     onPick={() => {
                       if (target) {
                         store.linkPerson(target.id, p.id);

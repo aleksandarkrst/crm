@@ -9,9 +9,13 @@ export interface Stage {
   doc: string; // "None" | "Proposal" | ...
   checklist: string[];
   prob: number | '';
+  /** The terminal "won" stage. */
+  won?: boolean;
 }
 
 export interface Funnel {
+  /** Backend funnel id. */
+  id?: string;
   label: string;
   note: string;
   stages: Stage[];
@@ -26,6 +30,9 @@ export interface LeadDoc {
 /** A lead is a deal: one company + primary contact moving through a funnel. */
 export interface Lead {
   id: string;
+  /** Backend references (the UI shows the company and primary contact inline on the lead). */
+  companyId?: string | null;
+  contactId?: string | null;
   title?: string;
   company: string;
   contact: string;
@@ -56,7 +63,12 @@ export interface Lead {
 
 export interface Person {
   id: string;
+  /** The deal this person is shown under; '' when their company has no deal yet. */
   leadId: string;
+  /** Backend contact id (a primary contact's Person id is "<leadId>:p"). */
+  contactId?: string;
+  companyId?: string | null;
+  company?: string;
   primary: boolean;
   name: string;
   role: string;
@@ -68,6 +80,7 @@ export interface Person {
 }
 
 export interface CompanyExtra {
+  id?: string;
   name: string;
   industry: string;
   hq: string;

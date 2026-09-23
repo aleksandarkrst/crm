@@ -36,11 +36,13 @@ npm run dev
 
 Open http://localhost:5173.
 
-> **Current state of the UI:** every screen from the design is implemented, but it runs on an
-> in-browser demo store (`frontend/src/store`) seeded with the design's sample data, so nothing
-> is saved yet. The backend already has the matching API (companies, contacts, funnels, deals,
-> activities, products). Switching screens to the API is the next step; see
-> [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#frontend-demo-store--api).
+Sign in with any email (dev mode, no password), create a workspace, and start adding deals.
+
+> **Current state of the UI:** deals, companies, contacts, products, funnel stages, fit scores and
+> the activity history are saved in the database. Some design features have no backend yet and
+> only last until you reload the page: deal lines and payment schedules (their total *is* saved as
+> the deal amount), stage to-dos, documents, team, permissions and the other settings tabs. See
+> [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#frontend-store--api).
 
 Try the API directly (dev auth, no password):
 

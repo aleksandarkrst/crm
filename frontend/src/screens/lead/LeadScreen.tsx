@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { Screen } from '../../components/Layout';
 import { paths } from '../../lib/paths';
@@ -10,9 +11,12 @@ import { Todos } from './Todos';
 
 /** The deal ("lead") record: stage tracker, summary, next best action, to-dos and history. */
 export function LeadScreen() {
-  const { s, patchLead } = useStore();
+  const { s, patchLead, ensureLog } = useStore();
   const { id = '' } = useParams();
   const lead = leadById(s, id);
+  useEffect(() => {
+    if (id) ensureLog([id]);
+  }, [id, ensureLog]);
   if (!lead) return <Navigate to={paths.pipeline} replace />;
 
   const stages = stagesFor(s, lead.segment);

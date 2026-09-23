@@ -4,12 +4,11 @@ import { Screen } from '../components/Layout';
 import { BILLING_KINDS, PRODUCT_TYPES } from '../store/seed';
 import { linesOf } from '../store/selectors';
 import { useStore } from '../store/store';
-import type { CatalogItem } from '../store/types';
 
 const COLS = 'minmax(0,1.8fr) 1fr 1.1fr 1fr 0.7fr 1fr 40px';
 
 export function Products() {
-  const { s, set, flash } = useStore();
+  const { s, set, flash, patchProduct, removeProduct } = useStore();
   const [query, setQuery] = useState('');
   const [type, setType] = useState('Type');
   const [kind, setKind] = useState('Billing');
@@ -22,10 +21,7 @@ export function Products() {
     .filter((c) => type === 'Type' || c.type === type)
     .filter((c) => kind === 'Billing' || c.kind === kind);
 
-  const patch = (id: string, key: keyof CatalogItem) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const v = e.target.value;
-    set((x) => ({ catalog: x.catalog.map((c) => (c.id === id ? { ...c, [key]: v } : c)) }));
-  };
+  const patch = (id: string, key: 'name' | 'type' | 'kind' | 'price' | 'vat') => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => patchProduct(id, key, e.target.value);
 
   return (
     <Screen title="Products & services">
@@ -75,7 +71,7 @@ export function Products() {
                   stroke={1.9}
                   style={{ justifySelf: 'end', borderRadius: 7 }}
                   onClick={() => {
-                    set((x) => ({ catalog: x.catalog.filter((k) => k.id !== c.id) }));
+                    removeProduct(c.id);
                     flash(c.name + ' removed from the catalog');
                   }}
                 />

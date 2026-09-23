@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Modal, ModalHeader } from '../components/ui';
 import { paths } from '../lib/paths';
 import { BILLING_KINDS, BUYER_ROLES, CHANNEL_LABELS, CHANNELS, DOC_TYPES, FIELD_TYPES, OWNERS, PARAM_SOURCES, PRODUCT_TYPES } from '../store/seed';
-import { allPeople, companyRecords, initialsOf, leadById, num, stageOf, stagesFor, valueNum } from '../store/selectors';
+import { allPeople, companyRecords, leadById, stageOf, stagesFor, valueNum } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Lead, SegKey } from '../store/types';
 import { ProposalDoc } from './ProposalDoc';
@@ -62,8 +62,10 @@ const NEW_CO = '+ New company…';
 const NEW_CT = '+ New contact…';
 
 function NewDealModal() {
-  const { s, set, flash, navigate } = useStore();
-  const companies = companyRecords(s).map((c) => c.name);
+  const { s, set, createDeal } = useStore();
+  const [busy, setBusy] = useState(false);
+  const records = companyRecords(s);
+  const companies = records.map((c) => c.name);
   const [company, setCompany] = useState(companies[0] || NEW_CO);
   const [companyName, setCompanyName] = useState('');
   const [contactPick, setContactPick] = useState<string | null>(null);
@@ -71,46 +73,23 @@ function NewDealModal() {
   const type = s.newLeadType;
 
   const companyIsNew = company === NEW_CO;
-  const people = companyIsNew ? [] : allPeople(s).filter((p) => leadById(s, p.leadId)?.company === company);
+  const companyId = records.find((c) => c.name === company)?.id;
+  const people = companyIsNew ? [] : allPeople(s).filter((p) => p.contactId && p.companyId === companyId);
   const contactOptions = [...people.map((p) => p.name), NEW_CT];
   const contact = contactPick && contactOptions.includes(contactPick) ? contactPick : contactOptions[0]!;
   const funnel = s.funnels[type];
 
-  const create = () => {
+  const create = async () => {
     const coName = companyIsNew ? companyName.trim() || 'New company' : company;
-    const base = companyRecords(s).find((c) => c.name === coName);
-    const ctName = contact === NEW_CT ? contactName.trim() || 'New contact' : contact;
+    const ctName = contact === NEW_CT ? contactName.trim() : contact;
     const person = people.find((p) => p.name === ctName);
-    const id = 'l' + Date.now();
-    const lead: Lead = {
-      id,
-      company: coName,
-      contact: ctName,
-      role: person?.role || '—',
-      initials: initialsOf(ctName),
-      email: person?.email || '—',
-      phone: person?.phone || '—',
-      buyerRole: person?.buyerRole || 'Decision maker',
+    setBusy(true);
+    await createDeal({
+      company: { id: companyIsNew ? undefined : companyId, name: coName },
+      contact: person ? { contactId: person.contactId, name: person.name } : ctName ? { name: ctName } : null,
       segment: type,
-      stage: funnel.stages[0]!.id,
-      value: '€0',
-      score: 0,
-      stall: 0,
-      industry: base?.industry || 'Other',
-      hq: base?.hq || '—',
-      size: base?.size || '11–50 staff',
-      source: base?.source || 'Inbound web form',
-      need: 'scope still to be captured in discovery.',
-      constraint: 'not captured yet',
-      decisionMaker: ctName,
-      discoveryDate: '—',
-      headline: coName,
-      lines: [['Scope to be defined', '€0']],
-      total: '€0',
-    };
-    set((x) => ({ leads: [...x.leads, lead], newLeadOpen: false, segment: type }));
-    navigate(paths.lead(id));
-    flash(coName + ' added · funnel assigned · first task due today');
+    });
+    setBusy(false);
   };
 
   return (
@@ -152,8 +131,8 @@ function NewDealModal() {
         <button type="button" className="btn btn-secondary" onClick={() => set({ newLeadOpen: false })}>
           Cancel
         </button>
-        <button type="button" className="btn btn-primary" onClick={create}>
-          Create &amp; start funnel
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void create()}>
+          {busy ? 'Creating…' : <>Create &amp; start funnel</>}
         </button>
       </div>
     </Modal>
@@ -162,7 +141,7 @@ function NewDealModal() {
 
 function NewTaskModal() {
   const { s, set, flash } = useStore();
-  const taskLead = s.leads.find((l) => l.company === s.taskCompany) || s.leads[0]!;
+  const taskLead = s.leads.find((l) => l.company === s.taskCompany) || s.leads[0];
   return (
     <Modal maxWidth={580}>
       <ModalHeader title="New task" sub="Tasks outside the playbook still belong to a company and a stage, so the timeline stays complete." />
@@ -184,7 +163,7 @@ function NewTaskModal() {
         <label className="form-label">
           Funnel stage
           <select className="form-input">
-            {stagesFor(s, taskLead.segment).map((x) => (
+            {(taskLead ? stagesFor(s, taskLead.segment) : []).map((x) => (
               <option key={x.id}>{x.name}</option>
             ))}
           </select>
@@ -235,21 +214,19 @@ function NewTaskModal() {
 }
 
 function NewContactModal() {
-  const { s, set, flash } = useStore();
+  const { s, set, flash, createContact } = useStore();
+  const [busy, setBusy] = useState(false);
   const nc = s.newContact;
   const setNc = (k: keyof typeof nc) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const v = e.target.value;
     set((x) => ({ newContact: { ...x.newContact, [k]: v } }));
   };
-  const create = () => {
-    if (!nc.name) return;
-    const l = s.leads.find((x) => x.company === s.contactCompany) || s.leads[0]!;
-    set((x) => ({
-      extraPeople: [...x.extraPeople, { id: 'p' + Date.now(), leadId: l.id, primary: false, name: nc.name, role: nc.role, email: nc.email, phone: nc.phone, linkedin: nc.linkedin, buyerRole: nc.buyerRole, initials: initialsOf(nc.name) }],
-      contactOpen: false,
-      newContact: { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer' },
-    }));
-    flash(nc.name + ' added to ' + l.company);
+  const create = async () => {
+    if (!nc.name.trim()) return flash('Give the contact a name first');
+    setBusy(true);
+    const lead = s.leads.find((x) => x.company === s.contactCompany) || s.leads[0];
+    await createContact({ ...nc, name: nc.name.trim() }, lead?.id);
+    setBusy(false);
   };
   return (
     <Modal maxWidth={580}>
@@ -302,8 +279,8 @@ function NewContactModal() {
         <button type="button" className="btn btn-secondary" onClick={() => set({ contactOpen: false })}>
           Cancel
         </button>
-        <button type="button" className={nc.name ? 'btn btn-primary' : 'btn btn-disabled'} style={{ cursor: 'pointer' }} onClick={create}>
-          Add contact
+        <button type="button" className={nc.name && !busy ? 'btn btn-primary' : 'btn btn-disabled'} style={{ cursor: 'pointer' }} disabled={busy} onClick={() => void create()}>
+          {busy ? 'Adding…' : 'Add contact'}
         </button>
       </div>
     </Modal>
@@ -521,7 +498,7 @@ function DrillModal() {
 }
 
 function NewProductModal() {
-  const { s, set, flash } = useStore();
+  const { s, set, flash, addProduct } = useStore();
   const p = s.newProduct;
   const reset = { name: '', type: 'Service', kind: 'One-off', price: '', vat: '20' };
   const setP = (k: keyof typeof p) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -571,8 +548,11 @@ function NewProductModal() {
           onClick={() => {
             const name = p.name.trim();
             if (!name) return flash('Give the product a name first');
-            set((x) => ({ catalog: [...x.catalog, { id: 'c' + Date.now(), name, type: p.type, kind: p.kind, price: num(p.price), vat: num(p.vat) }], productOpen: false, newProduct: reset }));
-            flash(name + ' added to the catalog');
+            void addProduct({ ...p, name }).then((ok) => {
+              if (!ok) return;
+              set({ productOpen: false, newProduct: reset });
+              flash(name + ' added to the catalog');
+            });
           }}
         >
           Add to catalog

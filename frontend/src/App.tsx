@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
+import { SessionGate } from './components/SessionGate';
 import { completeSignIn } from './lib/auth';
 import { paths } from './lib/paths';
 import { Companies } from './screens/Companies';
@@ -38,6 +39,21 @@ export function App() {
   return (
     <Routes>
       <Route path="/auth/callback" element={<AuthCallback />} />
+      <Route
+        path="*"
+        element={
+          <SessionGate>
+            <AppRoutes />
+          </SessionGate>
+        }
+      />
+    </Routes>
+  );
+}
+
+function AppRoutes() {
+  return (
+    <Routes>
       <Route element={<Layout />}>
         <Route index element={<StartPage />} />
         <Route path="overview" element={<Dashboard />} />

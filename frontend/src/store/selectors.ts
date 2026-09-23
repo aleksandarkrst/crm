@@ -1,5 +1,5 @@
 /** Pure derivations over the store state (ported from the design prototype's logic). */
-import { CHAMP, CHAMP_LEVELS, DEFAULT_TIMELINE, OWNERS, SCRIPTS } from './seed';
+import { CHAMP, CHAMP_LEVELS, OWNERS, SCRIPTS } from './seed';
 import type { CatalogItem, Champ, DealLine, Lead, LogEntry, Person, SegKey, Stage, State, TaskState } from './types';
 
 export const num = (v: unknown): number => Number(String(v ?? '').replace(/[^0-9.]/g, '')) || 0;
@@ -70,11 +70,13 @@ export function script(activity: string, lead: Lead): string {
   return raw.split('{{company}}').join(lead.company).split('{{first}}').join(first).split('{{industry}}').join(lead.industry);
 }
 
-export const timelineFor = (s: State, leadId: string): LogEntry[] => (s.log[leadId] || []).concat(DEFAULT_TIMELINE);
+/** Activity history loaded from the API (see ensureLog in the store). */
+export const timelineFor = (s: State, leadId: string): LogEntry[] => s.log[leadId] || [];
 
 // ---------------------------------------------------------------- products, lines & payments
 
-export const itemById = (s: State, id: string): CatalogItem => s.catalog.find((c) => c.id === id) || s.catalog[0]!;
+const NO_ITEM: CatalogItem = { id: '', name: 'No product', type: 'Service', kind: 'One-off', price: 0, vat: 0 };
+export const itemById = (s: State, id: string): CatalogItem => s.catalog.find((c) => c.id === id) || s.catalog[0] || NO_ITEM;
 
 /** Saved lines, or one line seeded from the lead's value (prototype behaviour). */
 export function linesOf(s: State, lead: Lead | undefined): DealLine[] {
@@ -82,8 +84,8 @@ export function linesOf(s: State, lead: Lead | undefined): DealLine[] {
   const saved = s.dealLines[lead.id];
   if (saved) return saved;
   const net = num(lead.value);
-  if (!net) return [];
   const items = s.catalog;
+  if (!net || !items.length) return [];
   const seed = items[num(String(lead.id).replace(/[^0-9]/g, '').slice(-1)) % items.length] || items[0]!;
   return [
     {
@@ -106,6 +108,9 @@ export function linesOf(s: State, lead: Lead | undefined): DealLine[] {
 export const netOf = (lines: DealLine[]): number => lines.reduce((a, l) => a + num(l.qty) * num(l.price), 0);
 export const vatOf = (lines: DealLine[]): number => lines.reduce((a, l) => a + (num(l.qty) * num(l.price) * num(l.vat)) / 100, 0);
 export const grossOf = (l: DealLine): number => num(l.qty) * num(l.price) * (1 + num(l.vat) / 100);
+
+/** Company name of a person: from their own company, else from the lead they are shown under. */
+export const companyOfPerson = (s: State, p: Person): string => p.company ?? leadById(s, p.leadId)?.company ?? '—';
 
 /** Every dated payment a lead's lines produce (subscriptions: next 12 months). */
 export function paymentsFor(s: State, lead: Lead): { when: Date; amount: number }[] {
@@ -156,11 +161,17 @@ export const champTotal = (s: State, lead: Lead): number => {
 
 // ---------------------------------------------------------------- people & companies
 
+/** Primary contacts (shown inline on their leads) plus everyone else. */
 export function allPeople(s: State): Person[] {
+  const seen = new Set<string>();
   return s.leads
+    .filter((l) => l.contactId && !seen.has(l.contactId) && seen.add(l.contactId))
     .map<Person>((l) => ({
       id: l.id + ':p',
       leadId: l.id,
+      contactId: l.contactId ?? undefined,
+      companyId: l.companyId,
+      company: l.company,
       primary: true,
       name: l.contact,
       role: l.role,
@@ -178,6 +189,7 @@ export function contactsForLead(s: State, leadId: string): Person[] {
 }
 
 export interface CompanyRecord {
+  id?: string;
   name: string;
   industry: string;
   hq: string;
@@ -197,10 +209,14 @@ export interface CompanyRecord {
 export function companyRecords(s: State): CompanyRecord[] {
   const map = new Map<string, Omit<CompanyRecord, 'contactCount' | 'oppCount' | 'value' | 'valueLabel' | 'stageName' | 'lastTouch'>>();
   for (const l of s.leads) {
-    if (!map.has(l.company)) map.set(l.company, { name: l.company, industry: l.industry, hq: l.hq, size: l.size, source: l.source, owner: ownerOf(l), leads: [] });
+    if (!map.has(l.company)) map.set(l.company, { id: l.companyId ?? undefined, name: l.company, industry: l.industry, hq: l.hq, size: l.size, source: l.source, owner: ownerOf(l), leads: [] });
     map.get(l.company)!.leads.push(l);
   }
-  for (const c of s.extraCompanies) if (!map.has(c.name)) map.set(c.name, { ...c, leads: [] });
+  for (const c of s.extraCompanies) {
+    const known = map.get(c.name);
+    if (known) known.id ??= c.id;
+    else map.set(c.name, { ...c, leads: [] });
+  }
   return [...map.values()].map((r) => {
     const ids = new Set<string>();
     r.leads.forEach((l) => contactsForLead(s, l.id).forEach((p) => ids.add(p.id)));

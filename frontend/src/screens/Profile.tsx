@@ -7,7 +7,7 @@ import type { Profile as ProfileT } from '../store/types';
 const selectStyle = { width: '100%' } as const;
 
 export function Profile() {
-  const { s, set, flash } = useStore();
+  const { s, set, flash, session } = useStore();
   const p = s.profile;
   const name = p.name || 'Marko Jovanović';
   const title = p.title || 'Sales lead';
@@ -111,9 +111,25 @@ export function Profile() {
           <button type="button" className="btn btn-primary" onClick={() => flash('Profile saved')}>
             Save changes
           </button>
-          <button type="button" className="btn btn-secondary" onClick={() => flash('Signed out of all other devices')}>
-            Sign out of all devices
+          <button type="button" className="btn btn-secondary" onClick={session.signOut}>
+            Sign out
           </button>
+        </div>
+
+        <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Workspace</span>
+          <FieldRow label="Current">
+            {session.tenants.length > 1 ? (
+              <GhostSelect style={selectStyle} value={session.tenant.id} onChange={(e) => session.switchTenant(e.target.value)} options={session.tenants.map((t) => ({ value: t.id, label: t.name }))} />
+            ) : (
+              <span className="field-value">{session.tenant.name}</span>
+            )}
+          </FieldRow>
+          <FieldRow label="Your role">
+            <span className="field-value" style={{ textTransform: 'capitalize' }}>
+              {session.tenant.role}
+            </span>
+          </FieldRow>
         </div>
       </div>
     </Screen>

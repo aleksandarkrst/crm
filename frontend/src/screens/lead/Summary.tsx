@@ -1,6 +1,6 @@
 import { FieldRow, GhostInput, GhostSelect, PersonChip, Picker, PickerRow, usePicker } from '../../components/ui';
 import { INDUSTRIES, SOURCES, TEAM_SIZES } from '../../store/seed';
-import { allPeople, closeIsoOf, companyRecords, contactsForLead, initialsOf, leadById, linesOf, money, netOf, vatOf } from '../../store/selectors';
+import { allPeople, closeIsoOf, companyOfPerson, companyRecords, contactsForLead, initialsOf, linesOf, money, netOf, vatOf } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead, SegKey } from '../../store/types';
 
@@ -24,7 +24,7 @@ export function Summary({ lead }: { lead: Lead }) {
   const pq = contactPicker.search.toLowerCase().trim();
   const directory = allPeople(s)
     .filter((p) => !assigned.has(p.id))
-    .filter((p) => !pq || String(p.name || '').toLowerCase().includes(pq) || String(leadById(s, p.leadId)?.company || '').toLowerCase().includes(pq));
+    .filter((p) => !pq || String(p.name || '').toLowerCase().includes(pq) || companyOfPerson(s, p).toLowerCase().includes(pq));
 
   const patch = (key: keyof Lead) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => store.patchLead(lead.id, { [key]: e.target.value });
 
@@ -63,7 +63,7 @@ export function Summary({ lead }: { lead: Lead }) {
                 key={p.id}
                 initials={p.initials || initialsOf(p.name)}
                 title={p.name}
-                subtitle={leadById(s, p.leadId)?.company || ''}
+                subtitle={companyOfPerson(s, p)}
                 onPick={() => {
                   store.linkPerson(lead.id, p.id);
                   contactPicker.setSearch('');
