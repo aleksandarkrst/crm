@@ -128,10 +128,20 @@ export class DealTasksService {
       .catch(mapDbError);
   }
 
+  /**
+   * Deleting a task from the "New task" dialog logs "Task removed" on the deal's timeline rather
+   * than deleting its "Task added" entry: the timeline is the deal's history (who planned what,
+   * and when it was dropped), and activities have no link to the task to match on safely.
+   */
   remove(ctx: TenantContext, id: string) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
-      const [row] = await tx.delete(dealTasks).where(eq(dealTasks.id, id)).returning({ id: dealTasks.id });
+      const [row] = await tx
+        .delete(dealTasks)
+        .where(eq(dealTasks.id, id))
+        .returning({ dealId: dealTasks.dealId, label: dealTasks.label, offPlaybook: dealTasks.offPlaybook, blocksAdvance: dealTasks.blocksAdvance });
       if (!row) throw new NotFoundException('To-do not found');
+      if (row.offPlaybook && !row.blocksAdvance)
+        await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId: row.dealId, actorUserId: ctx.userId, channel: 'RS', title: 'Task removed: ' + row.label, detail: null });
     });
   }
 }

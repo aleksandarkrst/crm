@@ -486,9 +486,16 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         flash('Marked done · added to the activity timeline');
       }
     };
+    /** Deletes a task; the backend logs "Task removed" on the timeline, so refresh it if loaded. */
     const removeLeadTask = (id: string) => {
+      const t = cur().leadTasks.find((x) => x.id === id);
       set((x) => ({ leadTasks: x.leadTasks.filter((y) => y.id !== id) }));
-      void save(() => crmApi.deleteTask(id));
+      void save(
+        () => crmApi.deleteTask(id),
+        () => {
+          if (t && logRequested.current.has(t.leadId)) return refreshLog(t.leadId).catch(() => undefined);
+        },
+      );
     };
 
     const advanceStage = (leadId: string) => {
