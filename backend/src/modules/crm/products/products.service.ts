@@ -6,7 +6,7 @@ import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
 import { BILLING_KINDS, PRODUCT_TYPES, products } from '../../../shared/database/schema';
-import { PaginationQuery } from '../../../shared/validation/common';
+import { nonEmptyPatch, PaginationQuery } from '../../../shared/validation/common';
 
 const decimal = (max: number) =>
   z
@@ -22,7 +22,7 @@ export const CreateProduct = z.object({
   unitPrice: decimal(999_999_999).optional(),
   vatRate: decimal(100).optional(),
 });
-export const UpdateProduct = CreateProduct.partial();
+export const UpdateProduct = nonEmptyPatch(CreateProduct.partial());
 export const ProductsQuery = PaginationQuery.extend({
   type: z.enum(PRODUCT_TYPES).optional(),
   billingKind: z.enum(BILLING_KINDS).optional(),

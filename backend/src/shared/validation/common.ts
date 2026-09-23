@@ -17,3 +17,14 @@ export const optionalText = (max = 500) =>
     .max(max)
     .transform((v) => (v === '' ? null : v))
     .nullish();
+
+export const EMPTY_PATCH_MESSAGE = 'Nothing to update: send at least one field to change';
+
+/**
+ * Wraps the body schema of every PATCH endpoint: at least one field must be present after
+ * parsing (unknown keys are stripped, so `{}` and `{ typo: 1 }` both fail). An empty update is a
+ * client bug, so it gets a 400 with a clear message instead of reaching the database, where an
+ * empty `UPDATE … SET` fails with a 500.
+ */
+export const nonEmptyPatch = <T extends z.ZodType<object>>(schema: T) =>
+  schema.refine((value) => Object.values(value).some((v) => v !== undefined), { message: EMPTY_PATCH_MESSAGE });

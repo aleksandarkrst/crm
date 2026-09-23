@@ -6,7 +6,7 @@ import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
 import { dealLines, deals, PAYMENT_SCHEDULES } from '../../../shared/database/schema';
-import { PaginationQuery } from '../../../shared/validation/common';
+import { nonEmptyPatch, PaginationQuery } from '../../../shared/validation/common';
 
 const decimal = (max: number) =>
   z
@@ -32,7 +32,7 @@ export const CreateDealLine = z.object({
   months: z.coerce.number().int().min(1).max(120).optional(),
   milestones: z.array(Milestone).max(24).optional(),
 });
-export const UpdateDealLine = CreateDealLine;
+export const UpdateDealLine = nonEmptyPatch(CreateDealLine);
 export type CreateDealLine = z.infer<typeof CreateDealLine>;
 export type UpdateDealLine = z.infer<typeof UpdateDealLine>;
 

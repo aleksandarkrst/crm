@@ -5,7 +5,7 @@ import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
 import { activities, CHANNELS, dealTasks, memberships, users } from '../../../shared/database/schema';
-import { optionalText, PaginationQuery } from '../../../shared/validation/common';
+import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
 
 const label = z.string().trim().max(200);
 const TaskState = z.object({
@@ -31,7 +31,7 @@ export const CreateExtraTask = TaskState.extend({
   position: z.number().int().min(0).max(1000).optional(),
   blocksAdvance: z.boolean().optional(),
 });
-export const UpdateTask = TaskState.extend({ ...TaskPlanning.shape, label: label.optional() });
+export const UpdateTask = nonEmptyPatch(TaskState.extend({ ...TaskPlanning.shape, label: label.optional() }));
 export type UpsertPlaybookTask = z.infer<typeof UpsertPlaybookTask>;
 export type CreateExtraTask = z.infer<typeof CreateExtraTask>;
 export type UpdateTask = z.infer<typeof UpdateTask>;

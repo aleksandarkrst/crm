@@ -6,7 +6,7 @@ import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
 import { companies, contacts, deals } from '../../../shared/database/schema';
-import { optionalText, type PaginationQuery } from '../../../shared/validation/common';
+import { nonEmptyPatch, optionalText, type PaginationQuery } from '../../../shared/validation/common';
 import { assertOwnerIsMember } from '../owner';
 
 export const CreateCompany = z.object({
@@ -19,7 +19,7 @@ export const CreateCompany = z.object({
   ownerUserId: z.uuid().nullish(),
   notes: optionalText(5000),
 });
-export const UpdateCompany = CreateCompany.partial();
+export const UpdateCompany = nonEmptyPatch(CreateCompany.partial());
 export type CreateCompany = z.infer<typeof CreateCompany>;
 export type UpdateCompany = z.infer<typeof UpdateCompany>;
 

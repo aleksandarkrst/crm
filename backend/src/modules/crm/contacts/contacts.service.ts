@@ -6,7 +6,7 @@ import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
 import { BUYER_ROLES, contacts, deals } from '../../../shared/database/schema';
-import { optionalText, PaginationQuery } from '../../../shared/validation/common';
+import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
 import { assertOwnerIsMember } from '../owner';
 
 export const CreateContact = z.object({
@@ -19,7 +19,7 @@ export const CreateContact = z.object({
   buyerRole: z.enum(BUYER_ROLES).optional(),
   ownerUserId: z.uuid().nullish(),
 });
-export const UpdateContact = CreateContact.partial();
+export const UpdateContact = nonEmptyPatch(CreateContact.partial());
 export const ContactsQuery = PaginationQuery.extend({
   companyId: z.uuid().optional(),
   buyerRole: z.enum(BUYER_ROLES).optional(),

@@ -7,7 +7,7 @@ import { DatabaseService, type Tx } from '../../../shared/database/database.serv
 import { mapDbError } from '../../../shared/database/errors';
 import { activities, companies, contacts, dealContacts, deals, funnelStages } from '../../../shared/database/schema';
 import { JobsService } from '../../../shared/events/jobs.service';
-import { optionalText, PaginationQuery } from '../../../shared/validation/common';
+import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
 import { assertOwnerIsMember } from '../owner';
 
 const money = z.union([z.number(), z.string()]).transform((v) => String(v)).pipe(z.string().regex(/^\d{1,12}(\.\d{1,2})?$/, 'Invalid amount'));
@@ -23,9 +23,11 @@ export const CreateDeal = z.object({
   amount: money.optional(),
   closeDate: z.iso.date().nullish(),
 });
-export const UpdateDeal = CreateDeal.partial().extend({
-  champ: z.object({ C: champLevel, H: champLevel, M: champLevel, P: champLevel }).optional(),
-});
+export const UpdateDeal = nonEmptyPatch(
+  CreateDeal.partial().extend({
+    champ: z.object({ C: champLevel, H: champLevel, M: champLevel, P: champLevel }).optional(),
+  }),
+);
 export const MoveDeal = z.object({ stageId: z.uuid() });
 export const DealsQuery = PaginationQuery.extend({
   funnelId: z.uuid().optional(),
@@ -143,7 +145,10 @@ export class DealsService {
             Object.assign(patch, { stageId: first.id, stageEnteredAt: new Date(), closedAt: null });
           }
         }
-        const [row] = await tx.update(deals).set(patch).where(eq(deals.id, id)).returning();
+        // Re-sending the current funnel leaves nothing to write (and Drizzle rejects an empty SET).
+        const [row] = Object.keys(patch).length
+          ? await tx.update(deals).set(patch).where(eq(deals.id, id)).returning()
+          : await tx.select().from(deals).where(eq(deals.id, id));
         if (!row) throw new NotFoundException('Deal not found');
         await this.audit.record(tx, ctx, { action: 'deal.updated', entityType: 'deal', entityId: id, data: input });
         return row;
