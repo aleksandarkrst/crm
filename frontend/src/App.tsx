@@ -60,7 +60,7 @@ function AppRoutes() {
         <Route path="pipeline" element={<Pipeline />} />
         <Route path="today" element={<Today />} />
         <Route path="companies" element={<Companies />} />
-        <Route path="companies/:name" element={<Company />} />
+        <Route path="companies/:id" element={<Company />} />
         <Route path="contacts" element={<Contacts />} />
         <Route path="contacts/:id" element={<Contact />} />
         <Route path="deals/:id" element={<LeadScreen />} />

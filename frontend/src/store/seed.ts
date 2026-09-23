@@ -202,7 +202,7 @@ export function initialState(): State {
     newLeadOpen: false,
     newLeadType: 'smb',
     taskOpen: false,
-    taskCompany: 'Bellhaus Interiors',
+    taskLeadId: '',
     contactOpen: false,
     contactCompany: 'Bellhaus Interiors',
     newContact: { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer' },

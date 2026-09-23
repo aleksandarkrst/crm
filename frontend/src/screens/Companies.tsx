@@ -66,7 +66,7 @@ export function Companies() {
             ))}
           </div>
           {rows.map((c) => (
-            <div key={c.name} className="table-row clickable" style={{ gridTemplateColumns: COLS }} onClick={() => openCompany(c.name)}>
+            <div key={c.id} className="table-row clickable" style={{ gridTemplateColumns: COLS }} onClick={() => openCompany(c.id)}>
               <span style={{ fontWeight: 600 }}>{c.name}</span>
               <span style={{ color: 'var(--text-2)' }}>{c.industry}</span>
               <span style={{ color: 'var(--text-2)' }}>{c.hq}</span>

@@ -1,6 +1,6 @@
-import { FieldRow, GhostInput, GhostSelect, PersonChip, Picker, PickerRow, usePicker } from '../../components/ui';
+import { DangerButton, FieldRow, GhostInput, GhostSelect, PersonChip, Picker, PickerRow, usePicker } from '../../components/ui';
 import { INDUSTRIES, SOURCES, TEAM_SIZES } from '../../store/seed';
-import { allPeople, closeIsoOf, companyOfPerson, companyRecords, contactsForLead, initialsOf, linesOf, money, netOf, vatOf } from '../../store/selectors';
+import { allPeople, closeIsoOf, companyLabels, companyOfPerson, companyRecords, contactsForLead, initialsOf, linesOf, money, netOf, vatOf } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead, SegKey } from '../../store/types';
 
@@ -17,9 +17,18 @@ export function Summary({ lead }: { lead: Lead }) {
   const assigned = new Set(contacts.map((p) => p.id));
 
   const cq = companyPicker.search.toLowerCase().trim();
-  const companyOptions = companyRecords(s)
-    .filter((c) => c.name !== lead.company)
-    .filter((c) => !cq || c.name.toLowerCase().includes(cq));
+  const records = companyRecords(s);
+  const labels = companyLabels(records);
+  const companyOptions = records.filter((c) => c.id !== lead.companyId).filter((c) => !cq || c.name.toLowerCase().includes(cq));
+
+  // Deals are owned by active workspace members; the API rejects anyone else.
+  const members = s.team.filter((m) => m.status === 'Active');
+  const ownerValue = lead.ownerId && members.some((m) => m.id === lead.ownerId) ? lead.ownerId : '';
+
+  const onDelete = () => {
+    const name = lead.title || lead.company;
+    if (window.confirm(`Delete the deal "${name}"? Its products, to-dos and activity history are deleted too. The company and contacts are kept. This can't be undone.`)) void store.deleteDeal(lead.id);
+  };
 
   const pq = contactPicker.search.toLowerCase().trim();
   const directory = allPeople(s)
@@ -32,6 +41,7 @@ export function Summary({ lead }: { lead: Lead }) {
     <div className="card card-pad">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 15, fontWeight: 600 }}>Summary</span>
+        {store.canDelete && <DangerButton onClick={onDelete}>Delete deal</DangerButton>}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--divider)' }}>
         <FieldRow label="Company">
@@ -39,12 +49,13 @@ export function Summary({ lead }: { lead: Lead }) {
             picker={companyPicker}
             items={companyOptions.map((c) => (
               <PickerRow
-                key={c.name}
+                key={c.id}
                 square
                 initials={initialsOf(c.name)}
-                title={c.name}
+                title={labels.get(c.id) ?? c.name}
+                subtitle={c.oppCount ? c.oppCount + (c.oppCount === 1 ? ' deal' : ' deals') : 'No deals yet'}
                 onPick={() => {
-                  store.patchLead(lead.id, { company: c.name });
+                  store.patchLead(lead.id, { companyId: c.id });
                   companyPicker.close();
                 }}
               />
@@ -83,6 +94,10 @@ export function Summary({ lead }: { lead: Lead }) {
               />
             ))}
           </Picker>
+        </FieldRow>
+
+        <FieldRow label="Owner">
+          <GhostSelect chevron value={ownerValue} onChange={(e) => store.patchLead(lead.id, { ownerId: e.target.value })} options={members.map((m) => ({ value: m.id, label: m.name }))} />
         </FieldRow>
 
         <FieldRow label="Deal value">

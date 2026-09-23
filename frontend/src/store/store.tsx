@@ -50,8 +50,8 @@ function loadInitial(data: WorkspaceData, session: Session): State {
   const s: State = { ...initialState(), ...data };
   s.workspace = { ...s.workspace, name: session.tenant.name };
   s.profile = { name: session.userName, email: session.email };
-  s.taskCompany = data.leads[0]?.company ?? '';
-  s.contactCompany = data.leads[0]?.company ?? '';
+  s.taskLeadId = data.leads[0]?.id ?? '';
+  s.contactCompany = data.leads[0]?.id ?? '';
   try {
     const saved = localStorage.getItem(ROADMAP_KEY);
     const items: unknown = saved ? JSON.parse(saved) : null;
@@ -534,35 +534,91 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     const notYet = (..._args: unknown[]) => flash('Adding and removing stages is not supported yet. Edits to existing stages are saved.');
 
     // ------------------------------------------------------------ companies
-    const setCompanyField = (name: string, key: 'name' | 'industry' | 'hq' | 'size' | 'source', v: string) => {
-      const id = companyRecords(cur()).find((c) => c.name === name)?.id;
+    /** Companies are identified by id (names aren't unique), so renaming one keeps its route. */
+    const setCompanyField = (companyId: string, key: 'name' | 'industry' | 'hq' | 'size' | 'source', v: string) => {
       const field = key === 'size' ? 'teamSize' : key;
-      if (id && !(key === 'name' && !v.trim())) saveLater(`company:${id}:${field}`, () => crmApi.updateCompany(id, { [field]: v }));
+      if (!(key === 'name' && !v.trim())) saveLater(`company:${companyId}:${field}`, () => crmApi.updateCompany(companyId, { [field]: v }));
       set((x) => ({
-        leads: x.leads.map((l) => (l.company === name ? { ...l, ...(key === 'name' ? { company: v } : { [key]: v }) } : l)),
-        extraCompanies: x.extraCompanies.map((c) => (c.name === name ? { ...c, [key]: v } : c)),
-        extraPeople: key === 'name' ? x.extraPeople.map((p) => (p.company === name ? { ...p, company: v } : p)) : x.extraPeople,
+        leads: x.leads.map((l) => (l.companyId === companyId ? { ...l, ...(key === 'name' ? { company: v } : { [key]: v }) } : l)),
+        extraCompanies: x.extraCompanies.map((c) => (c.id === companyId ? { ...c, [key]: v } : c)),
+        extraPeople: key === 'name' ? x.extraPeople.map((p) => (p.companyId === companyId ? { ...p, company: v } : p)) : x.extraPeople,
       }));
-      if (key === 'name') navigate(paths.company(v), { replace: true });
     };
 
-    /** Deal fields save to the deal; industry, HQ and team size belong to the company. */
+    /**
+     * Deal fields save to the deal; industry, HQ and team size belong to the company. `companyId`
+     * moves the deal to another company, `ownerId` hands it to another workspace member.
+     */
     const patchLead = (id: string, patch: Partial<Lead>) => {
       const lead = leadById(cur(), id);
       if (!lead) return;
       const { industry, hq, size, ...dealPatch } = patch;
-      if (industry !== undefined) setCompanyField(lead.company, 'industry', industry);
-      if (hq !== undefined) setCompanyField(lead.company, 'hq', hq);
-      if (size !== undefined) setCompanyField(lead.company, 'size', size);
-      const { title, closeDate, source, company } = dealPatch;
+      const companyId = lead.companyId;
+      if ((industry ?? hq ?? size) !== undefined && !companyId) {
+        flash('Pick a company first');
+        return;
+      }
+      if (industry !== undefined && companyId) setCompanyField(companyId, 'industry', industry);
+      if (hq !== undefined && companyId) setCompanyField(companyId, 'hq', hq);
+      if (size !== undefined && companyId) setCompanyField(companyId, 'size', size);
+      const { title, closeDate, source, ownerId } = dealPatch;
       if (title !== undefined && title.trim()) saveLater('title:' + id, () => crmApi.updateDeal(id, { title: title.trim() }));
       if (closeDate !== undefined) saveLater('close:' + id, () => crmApi.updateDeal(id, { closeDate: closeDate || null }));
       if (source !== undefined) saveLater('source:' + id, () => crmApi.updateDeal(id, { source }));
-      if (company !== undefined) {
-        const companyId = companyRecords(cur()).find((c) => c.name === company)?.id;
-        if (companyId) void save(() => crmApi.updateDeal(id, { companyId }), reload);
+      if (dealPatch.companyId !== undefined && dealPatch.companyId !== companyId) {
+        const target = dealPatch.companyId;
+        const rec = target ? companyRecords(cur()).find((c) => c.id === target) : undefined;
+        if (target && !rec) return;
+        dealPatch.company = rec?.name ?? 'No company';
+        void save(() => crmApi.updateDeal(id, { companyId: target }), reload);
+      }
+      if (ownerId !== undefined && ownerId !== lead.ownerId) {
+        dealPatch.owner = cur().team.find((m) => m.status === 'Active' && m.id === ownerId)?.name;
+        void save(() => crmApi.updateDeal(id, { ownerUserId: ownerId }));
       }
       mapLead(id, (l) => ({ ...l, ...dealPatch }));
+    };
+
+    // ------------------------------------------------------------ deleting (owners and admins)
+    const canDelete = session.tenant.role === 'owner' || session.tenant.role === 'admin';
+    /** Drops pending debounced writes for a record that is about to be deleted. */
+    const cancelSaves = (...ids: string[]) => {
+      for (const [key, timer] of saveTimers.current)
+        if (ids.some((id) => key.includes(id))) {
+          clearTimeout(timer);
+          saveTimers.current.delete(key);
+        }
+    };
+    /** Deletes a record, then opens the list screen and reloads the workspace. */
+    const remove = async (write: () => Promise<unknown>, list: string, done: string) => {
+      try {
+        await write();
+      } catch (err) {
+        flash('Not deleted: ' + errText(err));
+        return;
+      }
+      navigate(list, { replace: true });
+      await reload();
+      flash(done);
+    };
+    const deleteDeal = async (id: string) => {
+      const lead = leadById(cur(), id);
+      if (!lead) return;
+      cancelSaves(id, ...(cur().dealLines[id] || []).map((l) => l.id));
+      await remove(() => crmApi.deleteDeal(id), paths.pipeline, (lead.title || lead.company) + ' deleted');
+    };
+    const deleteCompany = async (id: string) => {
+      const rec = companyRecords(cur()).find((c) => c.id === id);
+      if (!rec) return;
+      cancelSaves(id);
+      await remove(() => crmApi.deleteCompany(id), paths.companies, rec.name + ' deleted');
+    };
+    const deleteContact = async (personId: string) => {
+      const p = personById(cur(), personId);
+      const contactId = p?.contactId;
+      if (!p || !contactId) return;
+      cancelSaves(contactId);
+      await remove(() => crmApi.deleteContact(contactId), paths.contacts, p.name + ' deleted');
     };
 
     return {
@@ -584,7 +640,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       },
       openLead: (id: string) => navigate(paths.lead(id)),
       openContact: (id: string) => navigate(paths.contact(id)),
-      openCompany: (name: string) => navigate(paths.company(name)),
+      openCompany: (id: string) => navigate(paths.company(id)),
       openGenerated: () => {
         const x = cur();
         if (x.genStep < 4 || !x.genLead) return;
@@ -643,14 +699,16 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         const taken = new Set(companyRecords(cur()).map((c) => c.name));
         let name = 'New company';
         for (let i = 2; taken.has(name); i++) name = 'New company ' + i;
-        void save(
-          () => crmApi.createCompany({ name }),
-          async () => {
-            await reload();
-            navigate(paths.company(name));
-          },
-        );
+        void save(async () => {
+          const created = await crmApi.createCompany({ name });
+          await reload();
+          navigate(paths.company(created.id));
+        });
       },
+      canDelete,
+      deleteDeal,
+      deleteCompany,
+      deleteContact,
 
       // ---------------------------------------------------------- creating records
       /** New deal; creates the company and the primary contact first when they are new. */

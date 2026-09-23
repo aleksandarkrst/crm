@@ -110,6 +110,19 @@ the store is the one place that talks to the backend.
   debounced (`saveLater`, one write per field). A failed save shows the error and reloads the
   workspace so the screen matches the database. Changes that touch several records (new deal,
   moving a contact) reload after saving.
+- Companies are identified by their backend id, never by name (two companies can share a name):
+  routes are `/companies/:id`, and pickers and filters select by id. Where names collide, pickers
+  add the HQ (or a number) to tell them apart. Deals without a company aren't listed as a company.
+- Deal owners: the deal Summary lists active members. The API accepts an `ownerUserId` (deals,
+  companies, contacts) only if that user is a member of the tenant, and returns 400 otherwise.
+- Deleting (owners and admins only; the buttons are hidden for members and the API returns 403):
+  - a **deal** takes its lines, to-dos, activity and contact links with it (FK cascade);
+  - a **contact** is unlinked from every deal; deals where they were the primary contact are
+    kept without one;
+  - a **company** with deals is refused with 409 and a message ("… has 2 deals. Delete them or
+    move them to another company first."); its contacts are kept without a company.
+
+  After a delete the UI opens the list screen and reloads the workspace.
 - Activity history is loaded per deal when a deal, company or contact screen opens (`ensureLog`).
 - Deal lines: the backend recalculates the deal amount on every line change. A product that is
   on a deal can't be deleted from the catalog.
