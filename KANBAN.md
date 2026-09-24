@@ -52,7 +52,7 @@ Deals end as won or lost, the funnel can be shaped freely, and Overview measures
 - CD-24 Smaller frontend bundle
 - CD-75 Reliable browser tests (dev proxy fix)
 
-## 4 · Ready for a team (next, target 22 Nov)
+## 4 · Ready for a team (next)
 
 Several people working in one workspace.
 
@@ -61,13 +61,20 @@ Several people working in one workspace.
 - CD-68 First-run onboarding for a new workspace
 - CD-70 Works on tablets and phones
 - CD-7 Email invitation links
-- CD-16 Notification and integration settings
+- CD-16 Notification settings
 - CD-13 Documents: templates and generating proposals
 - CD-15 Custom fields
 - CD-17 Sales bonus rules
 - CD-76 Small bugs found while building milestones 2 and 3
 - CD-77 Currency: product prices and changing a deal's currency
 - CD-78 Cleanup: checklist label compatibility and missing tests
+
+## 5 · UX/UI improvements
+
+- CD-80 Global search and New button: remove the per-screen New buttons and search fields (and the
+  New button in Workspace settings); Ctrl/⌘+K opens a command palette to search and run any action
+- CD-81 Import & Export: move them from the list screens to Workspace settings, for managers, admins
+  and owners
 
 ## Go live (needs the server)
 
@@ -85,5 +92,8 @@ Starts once the server is bought, alongside the product milestones.
 
 ## Later (not planned yet)
 
+- CD-79 Integrations: prepare backend and frontend for Outlook & Calendar, Microsoft Nav, Gmail,
+  Google Calendar, Google Drive, WhatsApp Business, LinkedIn and Slack; unconnected channels show a
+  "connect your …" message on the deal
 - CD-21 Billing tab
 - CD-26 Later domains: Projects, Workforce, Reporting, Finance
