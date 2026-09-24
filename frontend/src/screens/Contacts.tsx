@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FilterBar, SortHeader, useSort } from '../components/ui';
+import { DataActions } from '../components/DataActions';
 import { Screen } from '../components/Layout';
 import { BUYER_ROLES } from '../store/seed';
 import { allPeople, companyIdOfPerson, companyLabels, companyOfPerson, companyRecords, memberName, salesPeople } from '../store/selectors';
@@ -52,6 +53,7 @@ export function Contacts() {
           setBuyerRole('Buyer role');
           setQuery('');
         }}
+        extra={<DataActions type="contacts" />}
         action={{ label: 'New contact', onClick: () => set({ contactOpen: true }) }}
       />
       <div className="card" style={{ overflowX: 'auto' }}>

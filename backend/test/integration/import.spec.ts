@@ -106,7 +106,7 @@ describe('preview', () => {
       csv: `Deal,Company,Stage,Value,Closing date,Funnel\nA,Acme,No such stage,100,2026-01-01,\nB,Acme,,lots,31.12.2026,\nC,Acme,,1.000,2026-13-45,\nD,,,,,\nE,Acme,,,,Nope\n`,
     });
     const messages = deals.rows.map((r: Json) => r.messages);
-    expect(messages[0]).toEqual([`Stage: "${funnels[0]!.label}" has no stage named "No such stage"`]);
+    expect(messages[0]).toEqual([`Stage: "${(funnels[0] as Json).label}" has no stage named "No such stage"`]);
     expect(messages[1]).toEqual(['Value: Invalid amount']);
     expect(messages[2]).toEqual([expect.stringMatching(/^Closing date: /)]);
     expect(messages[3]).toEqual(['Company is required']);
@@ -206,7 +206,7 @@ describe('importing deals', () => {
     const csv = [
       'Deal,Company,Funnel,Stage,Value,Closing date,Owner email,Contact,Contact email,Source',
       `${tag} one,${existingCo.toUpperCase()},,,"14,000.50",31.12.2026,${admin.email},,${contactEmail.toUpperCase()},Referral`,
-      `${tag} two,${newCo},${second.label.toUpperCase()},${stage.name.toLowerCase()},900,,,New Buyer,new-${contactEmail},`,
+      `${tag} two,${newCo},${(second as Json).label.toUpperCase()},${stage.name.toLowerCase()},900,,,New Buyer,new-${contactEmail},`,
       `${tag} three,${newCo},,${won.name},1000,2026-01-15,,,,`,
     ].join('\n');
     const res = await commit('deals', { csv, funnelId: first.id });
@@ -310,7 +310,7 @@ describe('CSV quoting', () => {
     const a = uniq('Quote; "Co", Ltd');
     const b = uniq('Plain');
     const cell = (v: string) => `"${v.replace(/"/g, '""')}"`;
-    const csv = `﻿Name;Notes;Industry\r\n${cell(a)};"Line one\r\nline two, with a comma";Retail\r\n${b};;"=SUM(A1)"\r\n`;
+    const csv = `\uFEFFName;Notes;Industry\r\n${cell(a)};"Line one\r\nline two, with a comma";Retail\r\n${b};;"=SUM(A1)"\r\n`;
     const res = await commit('companies', { csv });
     expect(res).toMatchObject({ created: 2, failed: 0 });
     expect((await companiesNamed(a))[0]).toMatchObject({ name: a, notes: 'Line one\nline two, with a comma', industry: 'Retail' });

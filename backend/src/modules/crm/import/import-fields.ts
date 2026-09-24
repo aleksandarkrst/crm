@@ -97,5 +97,5 @@ const cell = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` :
 /** Header row with the field labels plus one example row, UTF-8 with a BOM so Excel reads it right. */
 export function templateCsv(type: ImportType): string {
   const fields = IMPORT_FIELDS[type];
-  return '﻿' + [fields.map((f) => cell(f.label)).join(','), fields.map((f) => cell(f.example)).join(',')].join('\r\n') + '\r\n';
+  return '\uFEFF' + [fields.map((f) => cell(f.label)).join(','), fields.map((f) => cell(f.example)).join(',')].join('\r\n') + '\r\n';
 }

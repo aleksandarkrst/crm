@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { BadRequestException, HttpException, Injectable, PayloadTooLargeException } from '@nestjs/common';
 import { asc, eq, isNotNull } from 'drizzle-orm';
 import { z } from 'zod';
@@ -5,7 +6,7 @@ import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { activities, BUYER_ROLES, companies, contacts, deals, funnels, funnelStages, memberships, users } from '../../../shared/database/schema';
+import { activities, BUYER_ROLES, companies, contacts, dealStageHistory, deals, funnels, funnelStages, memberships, users } from '../../../shared/database/schema';
 import { CreateCompany } from '../companies/companies.service';
 import { CreateContact } from '../contacts/contacts.service';
 import { CreateDeal } from '../deals/deals.service';
@@ -110,8 +111,9 @@ function present<T extends Record<string, unknown>>(obj: T): Partial<T> {
 /**
  * CSV import of companies, contacts and deals (CD-64). No table of its own: `preview` parses and
  * validates the whole file and writes nothing, `commit` parses it again and saves the rows in
- * batches, each batch in one `withTenant` transaction and each row in a savepoint, so one bad row
- * fails alone. Rows are validated with the same zod schemas as the create endpoints.
+ * batches of 200, each in one `withTenant` transaction: rows are checked in memory, their writes
+ * queued and saved with multi-row inserts. If the database refuses a batch, it is redone row by row
+ * in savepoints, so one bad row fails alone. Rows are validated with the same zod schemas as the create endpoints.
  */
 @Injectable()
 export class ImportService {
@@ -173,26 +175,52 @@ export class ImportService {
 
     for (let start = 0; start < prep.rows.length; start += BATCH_SIZE) {
       const batch = prep.rows.slice(start, start + BATCH_SIZE);
-      const outcomes: { row: CsvRow; result: RowResult | { status: 'failed'; reason: string } }[] = [];
-      try {
-        await this.database.withTenant(ctx.tenantId, async (tx) => {
-          for (const row of batch) {
-            const values = this.valuesOf(prep, row);
-            try {
-              const result = await tx.transaction((sp) => this.handleRow(prep, values, lookups, funnel, req.duplicates, this.writer(sp, ctx)));
-              result.effects.forEach((apply) => apply());
-              outcomes.push({ row, result });
-            } catch (err) {
-              outcomes.push({ row, result: { status: 'failed', reason: reasonOf(err) } });
-            }
-          }
-          const n = (s: string) => outcomes.filter((o) => o.result.status === s).length;
-          await this.audit.record(tx, ctx, {
-            action: 'crm.imported',
-            entityType: type,
-            data: { firstLine: batch[0]!.line, lastLine: batch[batch.length - 1]!.line, created: n('create'), updated: n('update'), skipped: n('skip'), failed: n('invalid') + n('failed') },
-          });
+      let outcomes: Outcome[] = [];
+      const audit = (tx: Tx) => {
+        const n = (s: string) => outcomes.filter((o) => o.result.status === s).length;
+        return this.audit.record(tx, ctx, {
+          action: 'crm.imported',
+          entityType: type,
+          data: { firstLine: batch[0]!.line, lastLine: batch[batch.length - 1]!.line, created: n('create'), updated: n('update'), skipped: n('skip'), failed: n('invalid') + n('failed') },
         });
+      };
+      const snapshot = cloneLookups(lookups);
+      try {
+        // Fast path: rows are checked in memory and their writes queued (ids are made here), then
+        // the batch is saved with a few multi-row inserts.
+        await this.database.withTenant(ctx.tenantId, async (tx) => {
+          const queue = emptyQueue();
+          const w = this.queueWriter(queue, ctx);
+          for (const row of batch) {
+            const result = await this.handleRow(prep, this.valuesOf(prep, row), lookups, funnel, req.duplicates, w);
+            result.effects.forEach((apply) => apply());
+            outcomes.push({ row, result });
+          }
+          await this.flush(tx, queue);
+          await audit(tx);
+        });
+      } catch {
+        // Something in the batch was refused by the database (e.g. a row changed meanwhile).
+        // Redo the batch row by row, each in a savepoint, so only the bad rows fail.
+        restoreLookups(lookups, snapshot);
+        outcomes = [];
+      }
+      try {
+        if (outcomes.length === 0) {
+          await this.database.withTenant(ctx.tenantId, async (tx) => {
+            for (const row of batch) {
+              const values = this.valuesOf(prep, row);
+              try {
+                const result = await tx.transaction((sp) => this.handleRow(prep, values, lookups, funnel, req.duplicates, this.writer(sp, ctx)));
+                result.effects.forEach((apply) => apply());
+                outcomes.push({ row, result });
+              } catch (err) {
+                outcomes.push({ row, result: { status: 'failed', reason: reasonOf(err) } });
+              }
+            }
+            await audit(tx);
+          });
+        }
       } catch (err) {
         // The batch transaction itself failed: none of its rows were saved, and the lookups may
         // point at rows that don't exist, so stop here and report the rest as not imported.
@@ -464,6 +492,44 @@ export class ImportService {
     return id;
   }
 
+  /** Queues the writes of a batch; ids are generated here so later rows can refer to them. */
+  private queueWriter(q: Queue, ctx: TenantContext): Writer {
+    const tenantId = ctx.tenantId;
+    return {
+      createCompany: async (input) => {
+        const id = randomUUID();
+        q.companies.push({ ...input, id, ownerUserId: input.ownerUserId ?? ctx.userId, tenantId });
+        return id;
+      },
+      updateCompany: async (id, patch) => void q.updates.push((tx) => tx.update(companies).set(patch).where(eq(companies.id, id))),
+      createContact: async (input) => {
+        const id = randomUUID();
+        q.contacts.push({ ...input, id, ownerUserId: input.ownerUserId ?? ctx.userId, tenantId });
+        return id;
+      },
+      updateContact: async (id, patch) => void q.updates.push((tx) => tx.update(contacts).set(patch).where(eq(contacts.id, id))),
+      createDeal: async (input, stage, refs) => {
+        const id = randomUUID();
+        const now = new Date();
+        q.deals.push({ ...input, ...refs, id, ownerUserId: input.ownerUserId ?? ctx.userId, tenantId, stageId: stage.id, stageEnteredAt: now, closedAt: stage.isWon ? now : null, createdAt: now, updatedAt: now });
+        q.history.push({ tenantId, dealId: id, kind: 'created', fromStageId: null, toStageId: stage.id, outcome: stage.isWon ? 'won' : 'open', changedAt: now, changedByUserId: ctx.userId });
+        q.activities.push({ tenantId, dealId: id, actorUserId: ctx.userId, channel: 'RS', title: 'Deal created', detail: importedDetail(input.source) });
+        return id;
+      },
+    };
+  }
+
+  /** Saves a queued batch: parents before children, a few rows per statement. */
+  private async flush(tx: Tx, q: Queue): Promise<void> {
+    const chunks = <T>(rows: T[], size = 100) => Array.from({ length: Math.ceil(rows.length / size) }, (_, i) => rows.slice(i * size, i * size + size));
+    for (const c of chunks(q.companies)) await tx.insert(companies).values(c);
+    for (const update of q.updates) await update(tx);
+    for (const c of chunks(q.contacts)) await tx.insert(contacts).values(c);
+    for (const c of chunks(q.deals)) await tx.insert(deals).values(c);
+    for (const c of chunks(q.history)) await tx.insert(dealStageHistory).values(c);
+    for (const c of chunks(q.activities)) await tx.insert(activities).values(c);
+  }
+
   /** Real writes, inside the row's savepoint. Same defaults as the create endpoints (owner = you). */
   private writer(tx: Tx, ctx: TenantContext): Writer {
     const tenantId = ctx.tenantId;
@@ -490,11 +556,32 @@ export class ImportService {
           .returning({ id: deals.id, createdAt: deals.createdAt });
         const outcome = stage.isWon ? 'won' : 'open';
         await this.history.record(tx, ctx, { dealId: row!.id, kind: 'created', fromStageId: null, toStageId: stage.id, outcome }, row!.createdAt);
-        await tx.insert(activities).values({ tenantId, dealId: row!.id, actorUserId: ctx.userId, channel: 'RS', title: 'Deal created', detail: input.source ? `Imported from CSV · Source: ${input.source}` : 'Imported from CSV' });
+        await tx.insert(activities).values({ tenantId, dealId: row!.id, actorUserId: ctx.userId, channel: 'RS', title: 'Deal created', detail: importedDetail(input.source) });
         return row!.id;
       },
     };
   }
+}
+
+const importedDetail = (source: string | null | undefined) => (source ? `Imported from CSV · Source: ${source}` : 'Imported from CSV');
+
+type Outcome = { row: CsvRow; result: RowResult | { status: 'failed'; reason: string } };
+
+/** Writes of one batch, saved together by ImportService.flush. */
+interface Queue {
+  companies: (typeof companies.$inferInsert)[];
+  contacts: (typeof contacts.$inferInsert)[];
+  deals: (typeof deals.$inferInsert)[];
+  history: (typeof dealStageHistory.$inferInsert)[];
+  activities: (typeof activities.$inferInsert)[];
+  updates: ((tx: Tx) => Promise<unknown>)[];
+}
+const emptyQueue = (): Queue => ({ companies: [], contacts: [], deals: [], history: [], activities: [], updates: [] });
+
+const cloneLookups = (lk: Lookups) => ({ companiesByName: new Map(lk.companiesByName), contactsByEmail: new Map(lk.contactsByEmail) });
+function restoreLookups(lk: Lookups, saved: ReturnType<typeof cloneLookups>) {
+  lk.companiesByName = saved.companiesByName;
+  lk.contactsByEmail = saved.contactsByEmail;
 }
 
 /** A short reason for a row that failed to save. */

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FilterBar } from '../components/ui';
+import { DataActions } from '../components/DataActions';
 import { Screen } from '../components/Layout';
 import { DEFAULT_FILTERS, INDUSTRIES, LOST_VIEWS, VALUE_BANDS } from '../store/seed';
 import { bandOf, champTotal, salesPeople, stageOf, valueNum } from '../store/selectors';
@@ -56,6 +57,7 @@ export function Pipeline() {
         dirty={dirty}
         onClear={() => set((x) => ({ filters: { ...x.filters, ...DEFAULT_FILTERS } }))}
         meta={`${segLeads.length} leads · €${pipelineValue.toLocaleString('en-US')} open${lostHidden ? ` · ${lostHidden} lost hidden` : ''}`}
+        extra={<DataActions type="deals" />}
         action={{ label: 'New deal', onClick: () => set({ newLeadOpen: true }) }}
       />
 

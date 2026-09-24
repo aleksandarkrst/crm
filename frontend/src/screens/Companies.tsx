@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FilterBar, SortHeader, useSort } from '../components/ui';
+import { DataActions } from '../components/DataActions';
 import { Screen } from '../components/Layout';
 import { INDUSTRIES } from '../store/seed';
 import { type CompanyRecord, companyRecords, salesPeople } from '../store/selectors';
@@ -56,6 +57,7 @@ export function Companies() {
           setQuery('');
         }}
         meta={rows.length + (rows.length === 1 ? ' company' : ' companies')}
+        extra={<DataActions type="companies" />}
         action={{ label: 'Add company', onClick: addCompany }}
       />
       <div className="card" style={{ overflowX: 'auto' }}>

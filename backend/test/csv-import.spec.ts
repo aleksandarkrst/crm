@@ -39,7 +39,7 @@ describe('parseCsv', () => {
   });
 
   it('strips the BOM, skips blank lines, pads short rows and drops extra cells', () => {
-    const csv = parseCsv('﻿Name,Industry\n\nAcme\n , \nGlobex,Energy,extra\n');
+    const csv = parseCsv('\uFEFFName,Industry\n\nAcme\n , \nGlobex,Energy,extra\n');
     expect(csv.headers).toEqual(['Name', 'Industry']);
     expect(csv.rows).toEqual([
       { line: 3, cells: ['Acme', ''] },
@@ -92,7 +92,7 @@ describe('templates', () => {
       const mapping = guessMapping(type, csv.headers);
       expect(Object.values(mapping).every((v) => v !== null)).toBe(true);
     }
-    expect(templateCsv('deals').startsWith('﻿')).toBe(true);
+    expect(templateCsv('deals').startsWith('\uFEFF')).toBe(true);
   });
 });
 
