@@ -116,6 +116,11 @@ have to repeat those filters in SQL. Revisit this if the history outgrows a page
   Chose a competitor, No budget, No decision, Other) and an optional `lost_note`; a check constraint
   keeps them together. The deal keeps the stage it was lost in, so the history shows where deals
   drop out.
+- **The database keeps lost out of won** (CD-74): triggers (`drizzle/0010_deal_lost_not_won.sql`)
+  refuse a lost deal in a won stage, whichever way it would happen: marking a deal in the won stage
+  lost, moving a lost deal into the won stage, inserting one, or turning a stage that holds lost
+  deals into the won stage. They raise `check_violation` naming `deals_lost_not_won`, which
+  `mapDbError` turns into 409 with the trigger's message.
 - `POST /api/crm/deals/:id/lost` `{ reason, note? }` marks an open deal lost (409 for a lost or won
   deal, 400 for a reason outside the list). `POST /api/crm/deals/:id/reopen` makes a lost deal open
   again in the same stage (409 if it isn't lost). A lost deal can't be moved or switched to another
