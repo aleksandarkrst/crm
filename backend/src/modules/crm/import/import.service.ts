@@ -383,7 +383,8 @@ export class ImportService {
     if (existing && duplicates === 'skip') return { ...result, status: 'skip', messages: [`A contact with the email ${input.email} already exists`] };
     const companyId = company?.success ? await this.companyFor(company.data, lk, w, result) : undefined;
     if (existing) {
-      const patch = present({ ...input, companyId });
+      // The email is the match key; the existing contact keeps its spelling.
+      const patch = present({ ...input, email: undefined, companyId });
       await w.updateContact(existing, patch);
       return { ...result, status: 'update', notes: [...result.notes, `Updates the existing contact with the email ${input.email}`] };
     }
