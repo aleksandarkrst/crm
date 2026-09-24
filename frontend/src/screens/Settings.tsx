@@ -604,7 +604,7 @@ function FieldsTab() {
               </div>
               {canEditFields && (
                 <button type="button" className="btn-plain" onClick={() => set((x) => ({ fieldOpen: true, newField: { ...x.newField, entity: ent.k } }))}>
-                  Add field
+                  + New {ent.label.toLowerCase().replace(/ies$/, 'y').replace(/s$/, '')} field
                 </button>
               )}
             </div>

@@ -109,13 +109,16 @@ describe('honest UI', () => {
     assert.ok(!(await text(page)).includes('New pipeline'), 'no "New pipeline" placeholder');
   });
 
-  step('a custom field says it is only for this session', async () => {
+  step('a custom field is saved, and says so without a "session only" note (CD-15)', async () => {
     await page.goto(BASE_URL + '/settings/fields', { waitUntil: 'networkidle0' });
     await clickButton(page, 'New field');
     await page.type('input[placeholder="e.g. Contract end date"]', 'Renewal date');
     await clickButton(page, 'Add field');
     await page.waitForSelector('.toast');
-    assert.match(await page.$eval('.toast', (el) => el.textContent), /Renewal date added to leads for this session only; not saved yet/);
+    const toast = await page.$eval('.toast', (el) => el.textContent);
+    assert.match(toast, /Renewal date added to deals/);
+    assert.ok(!/session only|not saved/.test(toast), 'no "not saved" note');
+    assert.ok((await api(page, '/crm/custom-fields')).some((f) => f.label === 'Renewal date'), 'field saved');
     await waitForToastToClear(page);
   });
 
