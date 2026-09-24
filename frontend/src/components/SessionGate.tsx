@@ -79,6 +79,10 @@ export function SessionGate({ children }: { children: ReactNode }) {
       tenant,
       tenants: me.tenants,
       switchTenant: (id) => void start(id),
+      createTenant: async (name) => {
+        const created = await crmApi.createTenant(name);
+        await start(created.id);
+      },
       signOut: () => void signOut().then(() => setPhase({ kind: 'signed-out' })),
       // Saved renames update the session in place (the store for this workspace stays as it is).
       renameTenant: (name) =>

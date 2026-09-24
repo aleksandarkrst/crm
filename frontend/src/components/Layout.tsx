@@ -5,6 +5,7 @@ import { Modals } from '../modals/Modals';
 import { initialsOf } from '../store/selectors';
 import { useStore } from '../store/store';
 import { HeaderTools } from './HeaderTools';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 const NAV = [
   { to: paths.overview, label: 'Overview', icon: 'M4 19V5M4 19h16M8 16v-4M12 16V8M16 16v-6' },
@@ -47,8 +48,8 @@ function Sidebar() {
   // The profile name follows edits on the Profile screen; the session name is the signed-in user.
   const name = s.profile.name || session.userName;
   return (
-    <aside style={{ width: 96, flex: '0 0 96px', background: '#101828', color: '#F5F6F8', padding: '18px 8px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, position: 'sticky', top: 0, height: '100vh' }}>
-      <div style={{ width: 38, height: 38, borderRadius: 10, background: '#F5F6F8', color: '#101828', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, fontWeight: 700, letterSpacing: '-0.02em' }}>C</div>
+    <aside style={{ width: 96, flex: '0 0 96px', background: '#101828', color: '#F5F6F8', padding: '18px 8px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, position: 'sticky', top: 0, height: '100vh', zIndex: 10 }}>
+      <WorkspaceSwitcher />
       <nav style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: '100%' }}>
         {NAV.map((n) => (
           <NavItem key={n.to} {...n} />
