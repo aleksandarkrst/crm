@@ -3,7 +3,7 @@
  * a lead (deal) shows its company and primary contact inline, companies are derived from leads
  * plus companies without a deal, and people are primary contacts plus everyone else.
  */
-import { type ApiActivity, type ApiBonusRules, type ApiCompany, type ApiCustomField, type ApiDealLine, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiProduct, type ApiProfile, type ApiStageChange, type ApiWorkspace, ApiError, crmApi } from '../lib/api';
+import { type ApiActivity, type ApiBonusRules, type ApiCompany, type ApiCustomField, type ApiDealLine, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiInvitation, type ApiMember, type ApiProduct, type ApiProfile, type ApiStageChange, type ApiWorkspace, ApiError, crmApi } from '../lib/api';
 import { initialsOf, localeFor, momentLabel, money, taskKey } from './selectors';
 import type { BonusRule, CatalogItem, CompanyExtra, CustomFieldDef, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, Profile, SegKey, StageChange, State, TeamMember, Workspace } from './types';
 
@@ -92,7 +92,21 @@ export const mapProfile = (p: ApiProfile): Profile => ({
   startPage: p.startPage,
   defaultFunnelId: p.defaultFunnelId ?? '',
   digest: p.dailyDigest,
+  dealAssigned: p.notifyDealAssigned,
 });
+
+/** Members, then pending invitations with their email status. */
+export const mapTeam = (apiTeam: { members: ApiMember[]; invitations: ApiInvitation[] }): TeamMember[] => [
+  ...apiTeam.members.map<TeamMember>((m) => ({ id: m.userId, name: m.displayName || m.email || 'Member', email: m.email ?? '', role: ROLE_LABEL[m.role], status: 'Active' })),
+  ...apiTeam.invitations.map<TeamMember>((i) => ({
+    id: i.id,
+    name: i.email,
+    email: i.email,
+    role: ROLE_LABEL[i.role],
+    status: 'Invited',
+    invite: { emailStatus: i.emailStatus, emailSentAt: i.emailSentAt, emailError: i.emailError, hasLink: i.hasLink },
+  })),
+];
 
 export const mapActivity = (a: ApiActivity, tz?: string): LogEntry => ({ date: dateLabel(a.occurredAt, tz), channel: a.channel, title: a.title, detail: a.detail ?? '' });
 
@@ -136,10 +150,7 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     loadBonusRules(),
   ]);
 
-  const team: TeamMember[] = [
-    ...apiTeam.members.map<TeamMember>((m) => ({ id: m.userId, name: m.displayName || m.email || 'Member', email: m.email ?? '', role: ROLE_LABEL[m.role], status: 'Active' })),
-    ...apiTeam.invitations.map<TeamMember>((i) => ({ id: i.id, name: i.email, email: i.email, role: ROLE_LABEL[i.role], status: 'Invited' })),
-  ];
+  const team = mapTeam(apiTeam);
 
   // Every funnel, keyed by its id, in the workspace's order (CD-10).
   if (apiFunnels.length === 0) throw new Error('This workspace has no funnel.');

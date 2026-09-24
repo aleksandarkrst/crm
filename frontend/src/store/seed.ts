@@ -173,12 +173,6 @@ export function initialState(): State {
     leadTasks: [],
     log: {},
     team: [], // loaded from the API
-    notifs: [
-      { id: 'n1', label: 'Stalled lead nudges', desc: 'Daily digest of leads with no contact for 4+ days', on: true },
-      { id: 'n2', label: 'Task reminders', desc: 'Morning summary of tasks due today', on: true },
-      { id: 'n3', label: 'Document activity', desc: 'Alert when a proposal or contract is opened or signed', on: true },
-      { id: 'n4', label: 'Weekly pipeline report', desc: 'Monday email with stage conversion and open value', on: false },
-    ],
     integrations: [
       { id: 'i1', name: 'Gmail', desc: 'Sync email threads onto lead timelines', on: true },
       { id: 'i2', name: 'Google Calendar', desc: 'Push discovery calls and follow-ups', on: true },
@@ -192,7 +186,7 @@ export function initialState(): State {
     customValues: { deal: {}, company: {}, contact: {} },
     // Replaced by the saved settings when the workspace loads (store/remote.ts).
     workspace: { name: '', currency: 'EUR', timezone: 'Europe/Belgrade', fiscalMonth: 1 },
-    profile: { name: '', title: '', email: '', phone: '', language: 'en', dateFormat: 'DD.MM.YYYY', startPage: 'pipeline', defaultFunnelId: '', digest: true },
+    profile: { name: '', title: '', email: '', phone: '', language: 'en', dateFormat: 'DD.MM.YYYY', startPage: 'pipeline', defaultFunnelId: '', digest: true, dealAssigned: true },
     bonusRules: null,
     bonusTrigger: 'On contract signed',
     filters: { ...DEFAULT_FILTERS },

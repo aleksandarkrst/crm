@@ -17,7 +17,7 @@ describe('team and invitations', () => {
     await page.goto(BASE_URL + '/settings/team', { waitUntil: 'networkidle0' });
     await clickButton(page, 'Invite member');
     await page.type('input[placeholder="name@company.com"]', address);
-    await clickButton(page, 'Create invite link');
+    await clickButton(page, 'Send invitation');
     const input = await page.waitForSelector('input[readonly]');
     const link = await input.evaluate((el) => el.value);
     await clickButton(page, 'Done');

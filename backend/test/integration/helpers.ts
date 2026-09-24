@@ -94,6 +94,39 @@ export interface Funnel {
   stages: Stage[];
 }
 
+export interface Mail {
+  to: string;
+  from: string;
+  subject: string;
+  text: string;
+  html: string;
+  sentAt: string;
+}
+
+/** Emails the log mail driver "sent" to `to`, newest first (GET /api/dev/mail, dev auth only). */
+export async function mailTo(s: Session, to: string): Promise<Mail[]> {
+  return ok<Mail[]>('GET', `/dev/mail?to=${encodeURIComponent(to)}`, { token: s.token });
+}
+
+/** Polls until `check` returns a value (the worker works asynchronously). */
+export async function eventually<T>(check: () => Promise<T | null | undefined | false>, what: string, timeoutMs = 15_000): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = await check();
+    if (value) return value;
+    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+}
+
+/** Waits until at least `count` emails went to `to` and returns the newest. */
+export async function waitForMail(s: Session, to: string, count = 1): Promise<Mail> {
+  return eventually(async () => {
+    const mails = await mailTo(s, to);
+    return mails.length >= count ? mails[0] : null;
+  }, `email #${count} to ${to}`);
+}
+
 export async function firstFunnel(s: Session, tenant: string): Promise<Funnel> {
   const funnels = await ok<Funnel[]>('GET', '/crm/funnels', { token: s.token, tenant });
   expect(funnels.length).toBeGreaterThan(0);

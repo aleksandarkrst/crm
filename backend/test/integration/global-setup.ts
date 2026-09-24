@@ -1,6 +1,7 @@
 /**
  * Starts the built API (dist/main.js) and worker (dist/worker.js) once for all integration tests,
- * in dev auth mode, and hands the API's URL to the tests. Set API_URL to test an API that is
+ * in dev auth mode with the log mail driver, and hands the API's URL to the tests. GET /api/dev/mail
+ * reads the emails the worker "sent" from STORAGE_DIR. Set API_URL to test an API that is
  * already running instead (then its worker must be running too, and the tests that look at files
  * on disk need STORAGE_DIR set to that API's storage folder).
  *
@@ -58,6 +59,11 @@ export default async function setup(project: TestProject) {
     DEV_JWT_SECRET: process.env.DEV_JWT_SECRET || 'integration-tests-secret-at-least-32-characters',
     CORS_ORIGINS: '',
     STORAGE_DIR: storageDir,
+    APP_URL: 'http://app.example.test',
+    MAIL_DRIVER: 'log',
+    // Fast retries, so a failing send reaches "failed" within a test.
+    MAIL_RETRY_LIMIT: '1',
+    MAIL_RETRY_DELAY_SECONDS: '1',
   };
   let output = '';
   const start = (file: string, name: string) => {
@@ -70,7 +76,7 @@ export default async function setup(project: TestProject) {
     return child;
   };
   const child = start(main, 'api');
-  // The worker runs the document generation jobs (CD-13).
+  // The worker runs the document generation (CD-13) and email (CD-7, CD-16) jobs.
   const worker = start(workerMain, 'worker');
 
   const stop = async (proc: ChildProcess) => {

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealLineInput, type LostReason, type ProfileInput, type TaskInput } from '../lib/api';
 import { paths } from '../lib/paths';
 import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference } from './documents';
-import { loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, type WorkspaceData } from './remote';
+import { loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
 import {
   champFor,
@@ -107,6 +107,7 @@ const PROFILE_FIELDS: Partial<Record<keyof Profile, keyof ProfileInput>> = {
   startPage: 'startPage',
   defaultFunnelId: 'defaultFunnelId',
   digest: 'dailyDigest',
+  dealAssigned: 'notifyDealAssigned',
 };
 
 function useStoreImpl(data: WorkspaceData, session: Session) {
@@ -1195,7 +1196,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       },
 
       // ---------------------------------------------------------- team
-      /** Creates an invitation and returns the link to share (shown once; only its hash is stored). */
+      /** Creates an invitation, which the worker emails (CD-7), and returns its link to copy as a fallback. */
       inviteMember: async (email: string, role: 'admin' | 'member'): Promise<string | null> => {
         try {
           const { token } = await crmApi.invite(email, role);
@@ -1203,6 +1204,39 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           return `${window.location.origin}/invite/${token}`;
         } catch (err) {
           flash('Not invited: ' + errText(err));
+          return null;
+        }
+      },
+      /** Reloads only the team (the Team tab polls this while invitation emails are on their way). */
+      refreshTeam: async () => {
+        try {
+          set({ team: mapTeam(await crmApi.team()) });
+        } catch {
+          // the next poll or reload tries again
+        }
+      },
+      /** Emails a pending invitation again (same link, 7 more days). */
+      resendInvitation: async (id: string) => {
+        try {
+          const row = await crmApi.resendInvitation(id);
+          set((x) => ({ team: x.team.map((m) => (m.id === id ? { ...m, invite: { emailStatus: row.emailStatus, emailSentAt: row.emailSentAt, emailError: row.emailError, hasLink: row.hasLink } } : m)) }));
+          flash('Sending the invitation to ' + row.email + ' again');
+        } catch (err) {
+          flash('Not resent: ' + errText(err), 7000);
+        }
+      },
+      /** Copies a pending invitation's link to the clipboard, for when the email doesn't arrive. */
+      copyInvitationLink: async (id: string): Promise<string | null> => {
+        try {
+          const { token } = await crmApi.invitationLink(id);
+          const link = `${window.location.origin}/invite/${token}`;
+          await navigator.clipboard.writeText(link).then(
+            () => flash('Invite link copied. It works once, for the invited email address.'),
+            () => flash('Invite link: ' + link, 12000),
+          );
+          return link;
+        } catch (err) {
+          flash('No link: ' + errText(err), 7000);
           return null;
         }
       },

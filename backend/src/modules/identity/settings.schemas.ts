@@ -56,6 +56,7 @@ export const UpdateProfile = z
     // Settings for the current workspace only.
     defaultFunnelId: z.uuid().nullable(),
     dailyDigest: z.boolean(),
+    notifyDealAssigned: z.boolean(),
   })
   .partial()
   .refine(atLeastOne, 'Nothing to update');

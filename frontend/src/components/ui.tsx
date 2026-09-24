@@ -109,9 +109,9 @@ export function GhostSelect({ options, className = '', chevron = false, ...props
   );
 }
 
-export function Switch({ on, onClick }: { on: boolean; onClick: () => void }) {
+export function Switch({ on, onClick, label }: { on: boolean; onClick: () => void; label?: string }) {
   return (
-    <button type="button" className={on ? 'switch on' : 'switch'} onClick={onClick}>
+    <button type="button" className={on ? 'switch on' : 'switch'} onClick={onClick} role="switch" aria-checked={on} aria-label={label}>
       <span />
     </button>
   );

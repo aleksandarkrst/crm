@@ -156,6 +156,7 @@ export class DealsService {
         await this.history.record(tx, ctx, { dealId: row!.id, kind: 'created', fromStageId: null, toStageId: first.id, outcome: first.isWon ? 'won' : 'open' }, row!.createdAt);
         await this.log(tx, ctx, row!.id, 'RS', 'Deal created', input.source ? `Source: ${input.source}` : null);
         await this.audit.record(tx, ctx, { action: 'deal.created', entityType: 'deal', entityId: row!.id });
+        await this.notifyAssigned(tx, ctx, row!.id, null, row!.ownerUserId);
         return { ...row!, outcome: dealOutcome(row!, first.isWon) };
       })
       .catch(mapDbError);
@@ -169,6 +170,7 @@ export class DealsService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
+        const [before] = input.ownerUserId !== undefined ? await tx.select({ ownerUserId: deals.ownerUserId }).from(deals).where(eq(deals.id, id)) : [];
         const { customFields: cfInput, ...fields } = input;
         const patch: PgUpdateSetSource<typeof deals> = { ...fields };
         if (cfInput !== undefined) patch.customFields = this.customFields.merged(deals.customFields, await this.customFields.validate(tx, 'deal', cfInput));
@@ -198,10 +200,20 @@ export class DealsService {
           await this.history.record(tx, ctx, { dealId: id, kind: 'funnel_changed', fromStageId: from, toStageId: to.id, outcome: to.isWon ? 'won' : 'open' }, at);
           await this.log(tx, ctx, id, 'NT', `Moved to funnel ${funnel}`, `Restarted at ${to.name} · next activity: ${to.activity}`);
         }
+        if (before) await this.notifyAssigned(tx, ctx, id, before.ownerUserId, row.ownerUserId);
         await this.audit.record(tx, ctx, { action: 'deal.updated', entityType: 'deal', entityId: id, data: input });
         return this.present(tx, row);
       })
       .catch(mapDbError);
+  }
+
+  /**
+   * When a deal gets a new owner who isn't the person making the change, tells the notifications
+   * module (job "crm.deal-assigned", in this transaction), which emails them if they want that.
+   */
+  private async notifyAssigned(tx: Tx, ctx: TenantContext, dealId: string, from: string | null, to: string | null) {
+    if (!to || to === from || to === ctx.userId) return;
+    await this.jobs.send('crm.deal-assigned', { tenantId: ctx.tenantId, dealId, assigneeUserId: to, actorUserId: ctx.userId }, tx);
   }
 
   /**

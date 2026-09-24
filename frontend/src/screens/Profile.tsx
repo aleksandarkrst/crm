@@ -82,7 +82,7 @@ export function Profile() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '8px 0 2px', borderTop: '1px solid var(--divider)', marginTop: 8 }}>
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
               <span style={{ fontSize: 13.5, fontWeight: 600 }}>Daily digest email</span>
-              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>A summary of stalled leads and today's tasks in {session.tenant.name}. Emails aren't sent yet; your choice is saved for when they are.</span>
+              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Every morning: your overdue tasks, tasks due today and deals with no next step in {session.tenant.name}. More in Settings → Notifications.</span>
             </div>
             <Switch on={p.digest} onClick={() => patchProfile({ digest: !p.digest })} />
           </div>

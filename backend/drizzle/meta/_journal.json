@@ -120,6 +120,20 @@
       "when": 1790280521235,
       "tag": "0016_documents_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790280873338,
+      "tag": "0017_email_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790280886794,
+      "tag": "0018_daily_digests_rls",
+      "breakpoints": true
     }
   ]
 }

@@ -1,11 +1,15 @@
-import { BadRequestException, ConflictException, ForbiddenException, GoneException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, GoneException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, eq, gt, isNull, sql } from 'drizzle-orm';
 import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
+import { ENV, type Env } from '../../infrastructure/config/config.module';
+import type { SecretBox } from '../../infrastructure/crypto/secret-box';
 import { AuditService } from '../../shared/audit/audit.service';
 import { type AuthUser, hasRole, type TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { INVITATION_ROLES, invitations, MEMBERSHIP_ROLES, memberships, tenants, users } from '../../shared/database/schema';
+import { JobsService } from '../../shared/events/jobs.service';
+import { inviteLinkBox } from './invitation-email';
 
 const INVITE_TTL_DAYS = 7;
 
@@ -19,6 +23,22 @@ export type UpdateMember = z.infer<typeof UpdateMember>;
 
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 const pending = () => and(isNull(invitations.acceptedAt), isNull(invitations.revokedAt), gt(invitations.expiresAt, sql`now()`));
+const expiry = () => new Date(Date.now() + INVITE_TTL_DAYS * 86_400_000);
+const NO_STORED_LINK = 'This invitation was created before invite links were kept, so it can only be withdrawn. Withdraw it and invite them again.';
+
+/** What the Team tab shows about a pending invitation, including its email (CD-7). */
+const invitationColumns = {
+  id: invitations.id,
+  email: invitations.email,
+  role: invitations.role,
+  expiresAt: invitations.expiresAt,
+  createdAt: invitations.createdAt,
+  emailStatus: invitations.emailStatus,
+  emailSentAt: invitations.emailSentAt,
+  emailError: invitations.emailError,
+  /** False for invitations from before CD-7: no stored link to resend or copy. */
+  hasLink: sql<boolean>`${invitations.tokenSealed} is not null`,
+};
 
 /**
  * Team management: members of a tenant and invitations to join it.
@@ -29,10 +49,16 @@ const pending = () => and(isNull(invitations.acceptedAt), isNull(invitations.rev
  */
 @Injectable()
 export class TeamService {
+  private readonly box: SecretBox | null;
+
   constructor(
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
-  ) {}
+    private readonly jobs: JobsService,
+    @Inject(ENV) env: Env,
+  ) {
+    this.box = inviteLinkBox(env);
+  }
 
   async list(ctx: TenantContext) {
     const members = await this.database.db
@@ -42,14 +68,17 @@ export class TeamService {
       .where(eq(memberships.tenantId, ctx.tenantId))
       .orderBy(asc(memberships.createdAt));
     const invites = await this.database.db
-      .select({ id: invitations.id, email: invitations.email, role: invitations.role, expiresAt: invitations.expiresAt, createdAt: invitations.createdAt })
+      .select(invitationColumns)
       .from(invitations)
       .where(and(eq(invitations.tenantId, ctx.tenantId), pending()))
       .orderBy(asc(invitations.createdAt));
     return { members, invitations: invites };
   }
 
-  /** Returns the one-time token; the frontend turns it into the invite link. */
+  /**
+   * Returns the one-time token; the frontend turns it into the invite link. The worker emails the
+   * link too (job "identity.invitation-email", queued in this transaction).
+   */
   invite(ctx: TenantContext, input: CreateInvitation) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const [existing] = await tx
@@ -74,12 +103,50 @@ export class TeamService {
           role: input.role,
           tokenHash: hashToken(token),
           invitedByUserId: ctx.userId,
-          expiresAt: new Date(Date.now() + INVITE_TTL_DAYS * 86_400_000),
+          expiresAt: expiry(),
+          tokenSealed: this.box?.seal(token) ?? null,
+          emailStatus: this.box ? 'queued' : null,
         })
-        .returning({ id: invitations.id, email: invitations.email, role: invitations.role, expiresAt: invitations.expiresAt, createdAt: invitations.createdAt });
+        .returning(invitationColumns);
+      if (this.box) await this.jobs.send('identity.invitation-email', { tenantId: ctx.tenantId, invitationId: row!.id }, tx);
       await this.audit.record(tx, ctx, { action: 'invitation.created', entityType: 'invitation', entityId: row!.id, data: { email: input.email, role: input.role } });
       return { invitation: row!, token };
     });
+  }
+
+  /** Emails a pending invitation again, with the same link, and gives it another 7 days. */
+  resend(ctx: TenantContext, id: string) {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const found = await this.pendingInvitation(tx, ctx.tenantId, id);
+      if (!found.tokenSealed || !this.box?.open(found.tokenSealed)) throw new ConflictException(NO_STORED_LINK);
+      const [row] = await tx
+        .update(invitations)
+        .set({ emailStatus: 'queued', emailError: null, expiresAt: expiry() })
+        .where(and(eq(invitations.id, id), eq(invitations.tenantId, ctx.tenantId)))
+        .returning(invitationColumns);
+      await this.jobs.send('identity.invitation-email', { tenantId: ctx.tenantId, invitationId: id }, tx);
+      await this.audit.record(tx, ctx, { action: 'invitation.resent', entityType: 'invitation', entityId: id });
+      return row!;
+    });
+  }
+
+  /** The token of a pending invitation, for "Copy link" (the same link as in the email). */
+  link(ctx: TenantContext, id: string) {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const found = await this.pendingInvitation(tx, ctx.tenantId, id);
+      const token = found.tokenSealed ? this.box?.open(found.tokenSealed) : null;
+      if (!token) throw new ConflictException(NO_STORED_LINK);
+      return { token };
+    });
+  }
+
+  private async pendingInvitation(tx: Tx, tenantId: string, id: string) {
+    const [row] = await tx
+      .select({ id: invitations.id, tokenSealed: invitations.tokenSealed })
+      .from(invitations)
+      .where(and(eq(invitations.id, id), eq(invitations.tenantId, tenantId), pending()));
+    if (!row) throw new NotFoundException('Invitation not found. It may have been accepted, withdrawn or expired.');
+    return row;
   }
 
   revoke(ctx: TenantContext, id: string) {

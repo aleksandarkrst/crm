@@ -103,7 +103,7 @@ export type WorkspaceInput = Partial<Pick<ApiWorkspace, 'name' | 'currency' | 't
 export type ApiLanguage = 'en' | 'sr' | 'de';
 export type ApiDateFormat = 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
 export type ApiStartPage = 'pipeline' | 'overview' | 'today' | 'contacts';
-/** The signed-in user's profile (GET/PATCH /profile). The last two apply to the current workspace only. */
+/** The signed-in user's profile (GET/PATCH /profile). The last three apply to the current workspace only. */
 export interface ApiProfile {
   userId: string;
   email: string | null;
@@ -115,6 +115,8 @@ export interface ApiProfile {
   startPage: ApiStartPage;
   defaultFunnelId: string | null;
   dailyDigest: boolean;
+  /** Email me when someone else makes me the owner of a deal (CD-16). */
+  notifyDealAssigned: boolean;
 }
 export type ProfileInput = Partial<Omit<ApiProfile, 'userId' | 'email'>>;
 export interface ApiCompany {
@@ -302,6 +304,12 @@ export interface ApiInvitation {
   role: 'admin' | 'member';
   expiresAt: string;
   createdAt: string;
+  /** The invitation email (CD-7): queued (sending or retrying), sent, failed after retries; null for old invitations. */
+  emailStatus: 'queued' | 'sent' | 'failed' | null;
+  emailSentAt: string | null;
+  emailError: string | null;
+  /** False for invitations from before CD-7: their link can't be resent or copied. */
+  hasLink: boolean;
 }
 export interface ApiInvitePreview {
   tenantName: string;
@@ -353,6 +361,8 @@ export const crmApi = {
   team: () => api<{ members: ApiMember[]; invitations: ApiInvitation[] }>('/team'),
   invite: (email: string, role: 'admin' | 'member') => api<{ invitation: ApiInvitation; token: string }>('/team/invitations', { method: 'POST', json: { email, role } }),
   revokeInvitation: (id: string) => api(`/team/invitations/${id}`, { method: 'DELETE' }),
+  resendInvitation: (id: string) => api<ApiInvitation>(`/team/invitations/${id}/resend`, { method: 'POST' }),
+  invitationLink: (id: string) => api<{ token: string }>(`/team/invitations/${id}/link`),
   updateMember: (userId: string, role: ApiRole) => api(`/team/members/${userId}`, { method: 'PATCH', json: { role } }),
   removeMember: (userId: string) => api(`/team/members/${userId}`, { method: 'DELETE' }),
   previewInvitation: (token: string) => api<ApiInvitePreview>(`/invitations/${token}`),

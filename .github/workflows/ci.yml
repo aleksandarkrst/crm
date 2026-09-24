@@ -95,6 +95,7 @@ jobs:
       DEV_JWT_SECRET: ci-only-dev-secret-at-least-32-characters
       LOG_LEVEL: warn
       PORT: 3000
+      APP_URL: http://localhost:4173
       VITE_API_PROXY: http://127.0.0.1:3000
       E2E_BASE_URL: http://localhost:4173
       E2E_ARTIFACTS_DIR: ${{ github.workspace }}/e2e/artifacts
@@ -120,7 +121,7 @@ jobs:
           npm run build --prefix backend
           npm run db:migrate --prefix backend
           npm run build --prefix frontend
-      - name: Start the API, the worker and the UI (vite preview, proxying /api to the API)
+      - name: Start the API, the worker (documents, emails) and the UI (vite preview, proxying /api to the API)
         run: |
           mkdir -p e2e/artifacts
           (cd backend && nohup node dist/main.js > ../e2e/artifacts/api.log 2>&1 &)

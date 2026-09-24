@@ -16,6 +16,13 @@ x-backend-env: &backend-env
   OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
   CORS_ORIGINS: ${CORS_ORIGINS:-}
   STORAGE_DIR: /app/storage
+  APP_URL: ${APP_URL}
+  APP_SECRET: ${APP_SECRET}
+  MAIL_DRIVER: ${MAIL_DRIVER:-log}
+  SMTP_URL: ${SMTP_URL:-}
+  MAIL_FROM: ${MAIL_FROM:-Cadence <no-reply@localhost>}
+  MAIL_RETRY_LIMIT: ${MAIL_RETRY_LIMIT:-4}
+  MAIL_RETRY_DELAY_SECONDS: ${MAIL_RETRY_DELAY_SECONDS:-30}
 
 services:
   frontend:
@@ -73,6 +80,8 @@ services:
       AUTH_MODE: oidc
       OIDC_ISSUER: https://unused.invalid/
       OIDC_AUDIENCE: unused
+      APP_URL: https://unused.invalid
+      APP_SECRET: unused-by-migrations-but-required-in-production
     healthcheck:
       disable: true
     depends_on:
