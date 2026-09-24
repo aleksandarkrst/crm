@@ -47,13 +47,14 @@ describe('live updates, conflicts and change history', () => {
     await ana.waitForFunction((sel) => document.querySelector(sel)?.value === 'Harbor refit phase 2', { timeout: 10_000 }, TITLE);
     // A new deal shows up on the other person's pipeline too.
     const funnels = await api(olivia, '/crm/funnels');
-    await api(olivia, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Lighthouse lamps', funnelId: funnels[0].id }) });
+    const company = await api(olivia, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Lighthouse Lamps Ltd' }) });
+    await api(olivia, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Lighthouse lamps', funnelId: funnels[0].id, companyId: company.id }) });
     // In-app navigation (no reload), as a click in the sidebar does.
     await ana.evaluate(() => {
       history.pushState({}, '', '/pipeline');
       dispatchEvent(new PopStateEvent('popstate'));
     });
-    await ana.waitForFunction(() => document.body.innerText.includes('Lighthouse lamps'), { timeout: 10_000 });
+    await ana.waitForFunction(() => document.body.innerText.includes('Lighthouse Lamps Ltd'), { timeout: 10_000 });
     assert.equal(await ana.evaluate(() => window.__notReloaded), true, 'the page was not reloaded');
   });
 
