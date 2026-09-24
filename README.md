@@ -48,6 +48,12 @@ a private window and sign in as that email.
 > only last until you reload the page: documents and the remaining settings tabs. See
 > [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#frontend-store--api).
 
+**Import and export (owners and admins):** Companies, Contacts and Pipeline have **Import**, which
+takes a CSV of companies, contacts or deals (comma or semicolon separated, up to 5,000 rows and
+2 MB; the dialog has a template for each), and **Export**, which downloads the list as it is
+filtered on screen, as an Excel-friendly CSV. Details in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#csv-import-and-export).
+
 Try the API directly (dev auth, no password):
 
 ```bash
@@ -81,12 +87,15 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   cross-tenant references, member/admin/owner rules and last-owner protection, invitations
   (invited email only, single use, withdraw, replace), deal-amount recalculation from lines,
   deal stage history (a row per creation, move, funnel change, loss and reopening, isolated per
-  tenant) and lost deals (reason pick list, reopen, no moves while lost).
+  tenant) and lost deals (reason pick list, reopen, no moves while lost), and CSV import (roles,
+  per-row validation, duplicates skipped or updated, deal matching, size and row limits, tenant
+  isolation, quoting edge cases).
 - **Browser tests** (`e2e/`, Puppeteer with its bundled Chrome, run by `node:test`): sign-in,
   workspace, products, new deal, closing date, notes, drag between stages, reload, every screen
   renders; deal lines and stage to-dos persist; CHAMP fit score; team invitations with two
   browser contexts (invite, accept, roles, wrong account, withdraw, remove); marking a deal lost,
-  the Pipeline's lost view and reopening; stage conversion on Overview.
+  the Pipeline's lost view and reopening; stage conversion on Overview; importing companies and
+  deals through the import dialog, and the exported contacts CSV (downloaded to a temp folder).
 
 Both suites create their own users and workspaces with unique emails, so they can run against
 the dev database without resetting it. The database must be migrated first.

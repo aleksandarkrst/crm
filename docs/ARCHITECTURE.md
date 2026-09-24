@@ -128,6 +128,98 @@ have to repeat those filters in SQL. Revisit this if the history outgrows a page
   says "Include lost deals" or "Lost deals only". Overview leaves lost deals out of open and weighted
   pipeline, stalled deals, the funnel, payments due and bonuses.
 
+## CSV import and export
+
+### Import (CD-64)
+
+`backend/src/modules/crm/import/` imports companies, contacts and deals from a CSV. It has no table
+of its own, so nothing about an import is stored between requests: the browser keeps the file's
+text and sends it with each call as JSON (`{ csv, mapping?, duplicates?, funnelId? }`).
+
+- `POST /api/crm/import/:type/preview` (`companies`, `contacts`, `deals`) parses and validates the
+  whole file and writes nothing. Without a `mapping` it guesses one from the header names (field
+  label, key or an alias such as "Website" → domain, ignoring case and punctuation). It returns the
+  headers, the mapping, the field list, counts over every row (new, update, skip, errors, new
+  companies and contacts), the first 20 rows with their status and messages, and up to 100 rows with
+  errors.
+- `POST /api/crm/import/:type/commit` takes the same body and imports. It returns created, updated,
+  skipped and failed counts, and each failed row with its line, reason and original cells (the
+  dialog offers them as a CSV download).
+- `GET /api/crm/import/:type/template` is a CSV with the field labels and an example row.
+- All three are for owners and admins (`@RequireTenant('admin')`); members get 403.
+
+Rules:
+
+- **Parsing** (`csv.ts`, no dependency): UTF-8, header row, comma or semicolon (whichever the first
+  line has more of outside quotes), `"` quoting with `""` inside, line breaks inside quotes, CRLF or
+  LF, a BOM is dropped, blank lines are skipped. An unclosed quote rejects the file (400). Cells are
+  trimmed; a leading `'` before `= + - @` (the export's formula guard) is dropped.
+- **Validation**: each row goes through the create endpoints' zod schemas (`CreateCompany`,
+  `CreateContact`, `CreateDeal`), with messages that name the column's field, e.g.
+  "Email: Invalid email address". Values are normalised first: amounts like `14,000.50`,
+  `14.000,50` or `€ 14 000`, dates as `DD.MM.YYYY`, buyer roles in any case. An owner is matched
+  by the email of a member of this workspace; without one, the importer owns the row, as with the
+  normal create endpoints.
+- **Duplicates**: companies by name (trimmed, case-insensitive), contacts by email
+  (case-insensitive; contacts without an email are never duplicates). Rows earlier in the same file
+  count too. The dialog asks whether to **skip** them (default) or **update** them. An update only
+  sets the fields the row has a value for, so an empty cell never blanks existing data, and it
+  never renames (the name or email is the match key). When several companies share a name, the
+  oldest is used. Deals are never treated as duplicates.
+- **Deals**: the company is matched by name or created. The funnel is matched by label or key, and
+  rows without one use the funnel picked in the dialog (the Pipeline's funnel), or the first funnel.
+  The stage is matched by name or key within that funnel; empty means its first stage. An unknown
+  funnel or stage is an error, not a silent default. The contact is an existing contact with the
+  given email, or a new one when a name is given (linked to the deal's company). Each deal gets a
+  `created` stage-history row and a "Deal created · Imported from CSV" activity, like a deal made
+  in the app. Importing straight into the won stage does not send `crm.deal-won`, because imports
+  are history, not new wins.
+- **Limits**: 2 MB of UTF-8 text (413) and 5,000 data rows (400). `main.ts` gives
+  `/api/crm/import` a 3 MB JSON body limit (JSON escaping adds some overhead); every other route
+  keeps the 100 kB default.
+- **Writes**: the commit parses the file again (the server never trusts the preview) and loads the
+  lookups once (company names, contact emails, members, funnels) inside `withTenant`. Rows are then
+  saved in batches of 200, each batch in its own `withTenant` transaction: the rows are validated in
+  memory, their writes queued with ids generated up front, and the batch is written with a few
+  multi-row inserts. If the database refuses a batch, that batch is rolled back and redone row by
+  row, each row in a savepoint, so only the bad rows fail. 5,000 deals with new companies and
+  contacts take about 8 seconds locally. Batches that were saved stay saved if a later one fails.
+  Each batch writes one `crm.imported` audit entry with its line range and counts (not one per row).
+- **Tenant isolation**: every read and write runs in `withTenant`, so RLS limits matching to the
+  current workspace: an import can't find, update or link another workspace's companies, contacts
+  or funnels, and a `funnelId` from another workspace is "Unknown funnel" (400). Owners must be
+  members of the workspace.
+
+The dialog (`frontend/src/modals/ImportDialog.tsx`) opens from **Import** on Companies, Contacts and
+Pipeline, preset to that type: pick the type (and the funnel for deals) and a file, or download the
+template; check the column mapping; preview the rows with errors and duplicates and choose skip or
+update; import, and see the summary with the failed rows to download. After an import the store
+reloads the workspace. The API calls live in `store/importExport.ts`.
+
+### Export (CD-65)
+
+**Export** on Pipeline, Companies and Contacts downloads the list the screen shows, with its search
+and filters applied (Pipeline: the funnel on screen and the lost-deals view too), as
+`cadence-<list>-<date>.csv`. Owners and admins only; the buttons are hidden for members.
+
+The file is built in the browser (`store/exportCsv.ts`, `lib/csv.ts`), not on the server, because
+"what the screen shows" is defined by filters that exist only in the UI (stalled days, value bands,
+company industry on deals, the lost view, owner labels for former members). A server export would
+have to repeat them in SQL and could drift. Members can already read these rows through the list
+endpoints, so a server export would not protect any data; the owner/admin rule is a product rule,
+applied in the UI. Revisit this if exports need an audit trail or outgrow the data the browser has.
+
+Columns: deals have the deal and company ids, deal, company, contact and their email, funnel,
+stage, outcome, lost reason, value (a plain number), closing date, owner, source, fit score and days
+since contact. Companies have the id, name, industry, HQ, team size, source, owner, contacts,
+opportunities, open value, latest stage and last touch. Contacts have the contact and company ids,
+name, job title, company, email, phone, LinkedIn, buyer role and owner.
+
+The file is Excel-friendly: UTF-8 with a BOM, CRLF line ends, and fields quoted when they contain a
+comma, semicolon, quote or line break. To guard against CSV (formula) injection, text cells that
+start with `=`, `+`, `-`, `@`, a tab or a carriage return get a leading `'`; numbers are written as
+numbers. The import drops that `'` again, so an exported file imports back unchanged.
+
 ## Auth
 
 The app handles authorization, not authentication. `AUTH_MODE=oidc` verifies JWTs from any
