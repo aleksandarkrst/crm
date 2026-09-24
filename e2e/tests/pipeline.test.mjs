@@ -78,7 +78,7 @@ describe('pipeline journey', () => {
   step('logs a note from the composer', async () => {
     await waitForToastToClear(page);
     await clickButton(page, 'Note');
-    const textarea = await page.waitForSelector('textarea');
+    const textarea = await page.waitForSelector('textarea[placeholder^="Write a note"]');
     await textarea.type('Called, interested in a Q1 start.');
     await clickButton(page, 'Save note');
     const note = await eventually(async () =>

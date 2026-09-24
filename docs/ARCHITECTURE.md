@@ -101,8 +101,8 @@ the store is the one place that talks to the backend.
 
 - `components/SessionGate.tsx`: sign-in (dev login or OIDC), picking or creating a workspace, and
   loading it. The store is created per workspace.
-- `store/remote.ts`: loads funnels, deals, deal lines, stage to-dos, companies, contacts and
-  products (`lib/api.ts`) and maps
+- `store/remote.ts`: loads funnels, deals, deal lines, stage to-dos, companies, contacts,
+  products, the workspace settings and your profile (`lib/api.ts`) and maps
   them onto the design's lead-centric model. A lead is a deal and shows its company and primary
   contact inline. People are primary contacts plus everyone else. Backend ids are kept on the UI
   records (`Lead.companyId`, `Person.contactId`, `Funnel.id`, …).
@@ -136,11 +136,27 @@ the store is the one place that talks to the backend.
   deal's timeline; ticking it off logs it like any completed to-do. The store keeps them in
   `leadTasks`; the other to-dos (`blocks_advance = true`) gate "Advance".
 
+- Workspace settings (**Settings → Workspace**): name, currency (ISO 4217), time zone (IANA) and
+  fiscal-year start month are columns on `tenants` (`GET/PATCH /api/workspace`). Every member reads
+  them; only owners and admins change them (members see the fields disabled; the API returns 403).
+  A rename updates the session, so the workspace switcher shows the new name. Nothing else uses
+  the values yet (deal amounts keep their own currency).
+- Profile (**Profile settings**, `GET/PATCH /api/profile`, always the caller's own): name, job title,
+  phone, language, date format and start page live on `users` and apply in every workspace. The
+  default funnel and the daily-digest choice live on `memberships`, because funnels and the digest
+  belong to one workspace. A name set here wins over the name in the sign-in token
+  (`users.display_name_custom`). The start page and the default funnel take effect (the app opens
+  on them). Language, date format and the digest are only stored for now, and the UI says so.
+  Email and password belong to the sign-in provider and can't be changed here.
+- Discovery notes on a deal (headline, need, constraint, decision maker, discovery date) are
+  columns on `deals`. They are edited in the deal's **Discovery** card and merged into the proposal
+  view, which shows fields that are still empty as bracketed gaps.
+
 Still browser-only (seeded from `store/seed.ts`, lost on reload), because the backend doesn't have
 them yet:
 - adding and removing funnel stages (blocked in the UI for now; editing existing stages is saved)
 - document templates and generation (worker + storage)
-- sales-bonus rules
+- sales-bonus rules (including "Sales bonus earned" on the Workspace tab)
 - invitation emails (links are copied by hand for now)
 - custom fields
 - notification and integration settings

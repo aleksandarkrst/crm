@@ -136,7 +136,7 @@ export function setByLabel(page, label, value, tag = 'input') {
       const span = [...document.querySelectorAll('span')].find((el) => el.textContent.trim() === label);
       const el = span?.parentElement?.querySelector(tag);
       if (!el) return false;
-      const proto = tag === 'select' ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+      const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
       Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, value);
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
