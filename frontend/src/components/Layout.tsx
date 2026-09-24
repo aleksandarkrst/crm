@@ -43,7 +43,9 @@ function NavItem({ to, label, icon }: { to: string; label: string; icon: string 
 }
 
 function Sidebar() {
-  const { s } = useStore();
+  const { s, session } = useStore();
+  // The profile name follows edits on the Profile screen; the session name is the signed-in user.
+  const name = s.profile.name || session.userName;
   return (
     <aside style={{ width: 96, flex: '0 0 96px', background: '#101828', color: '#F5F6F8', padding: '18px 8px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, position: 'sticky', top: 0, height: '100vh' }}>
       <div style={{ width: 38, height: 38, borderRadius: 10, background: '#F5F6F8', color: '#101828', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, fontWeight: 700, letterSpacing: '-0.02em' }}>C</div>
@@ -56,10 +58,10 @@ function Sidebar() {
         {NAV_BOTTOM.map((n) => (
           <NavItem key={n.to} {...n} />
         ))}
-        <NavLink to={paths.profile} title="Profile settings" style={{ textDecoration: 'none' }}>
+        <NavLink to={paths.profile} title={`Profile settings · ${name}`} data-testid="sidebar-avatar" style={{ textDecoration: 'none' }}>
           {({ isActive }) => (
             <div style={{ width: 36, height: 36, borderRadius: '50%', background: isActive ? '#CBE3DA' : '#E7F2EE', color: '#14503C', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600 }}>
-              {initialsOf(s.profile.name || 'Marko Jovanović')}
+              {initialsOf(name)}
             </div>
           )}
         </NavLink>

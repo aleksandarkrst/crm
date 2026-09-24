@@ -331,7 +331,7 @@ function NewContactModal() {
 }
 
 function NewPersonaModal() {
-  const { s, set, flash, navigate } = useStore();
+  const { s, set } = useStore();
   const bases = [
     { k: 'smb', name: s.funnels.smb.label, desc: `Copy the ${s.funnels.smb.stages.length}-stage short funnel.` },
     { k: 'ent', name: s.funnels.ent.label, desc: `Copy the ${s.funnels.ent.stages.length}-stage committee funnel.` },
@@ -361,15 +361,10 @@ function NewPersonaModal() {
         <button type="button" className="btn btn-secondary" onClick={() => set({ personaOpen: false })}>
           Cancel
         </button>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={() => {
-            set({ personaOpen: false });
-            navigate(paths.settings('funnel'));
-            flash('Persona created · funnel copied, ready to edit');
-          }}
-        >
+        <span className="caps-muted" style={{ alignSelf: 'center' }}>
+          Coming soon
+        </span>
+        <button type="button" className="btn btn-disabled" disabled title="New pipelines are coming soon">
           Create persona
         </button>
       </div>
@@ -378,7 +373,7 @@ function NewPersonaModal() {
 }
 
 function NewTemplateModal() {
-  const { s, set, flash } = useStore();
+  const { s, set } = useStore();
   const file = s.templateFile;
   return (
     <Modal maxWidth={600}>
@@ -422,15 +417,10 @@ function NewTemplateModal() {
         <button type="button" className="btn btn-secondary" onClick={() => set({ templateOpen: false, templateFile: null })}>
           Cancel
         </button>
-        <button
-          type="button"
-          className={file ? 'btn btn-primary' : 'btn btn-disabled'}
-          onClick={() => {
-            if (!file) return;
-            set({ templateOpen: false, templateFile: null });
-            flash(s.templateType + ' template saved · available on matching stages');
-          }}
-        >
+        <span className="caps-muted" style={{ alignSelf: 'center' }}>
+          Coming soon
+        </span>
+        <button type="button" className="btn btn-disabled" disabled title="Saving your own templates is coming soon">
           Save template
         </button>
       </div>
@@ -482,7 +472,7 @@ function NewFieldModal() {
           onClick={() => {
             if (!nf.label) return;
             set((x) => ({ fields: [...x.fields, { id: 'f' + Date.now(), ...nf, system: false, visible: true }], fieldOpen: false, newField: reset }));
-            flash(nf.label + ' added to ' + nf.entity.toLowerCase());
+            flash(nf.label + ' added to ' + nf.entity.toLowerCase() + ' for this session only; not saved yet');
           }}
         >
           Add field

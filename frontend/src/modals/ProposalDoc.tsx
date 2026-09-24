@@ -56,14 +56,14 @@ export function ProposalDoc() {
         <div style={{ position: 'sticky', top: 0, background: '#101828', color: '#F5F6F8', padding: '14px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', zIndex: 2 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>Proposal — {lead.company}</span>
-            <span style={{ fontSize: 10.5, color: '#98A2B3' }}>Proposal v4 · generated from CRM record · {s.sent ? 'sent' : 'draft'}</span>
+            <span style={{ fontSize: 10.5, color: '#98A2B3' }}>Proposal v4 · generated from CRM record · {s.sent ? 'marked sent (this session only)' : 'draft, not saved'}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
             <button type="button" className="doc-btn" onClick={() => set((x) => ({ showMerge: !x.showMerge }))}>
               {s.showMerge ? 'Hide merge fields' : 'Show merge fields'}
             </button>
-            <button type="button" onClick={sendDoc} style={{ border: 0, background: '#F5F6F8', color: '#101828', cursor: 'pointer', fontSize: 12.5, fontWeight: 500, padding: '9px 14px', borderRadius: 7 }}>
-              {s.sent ? 'Sent ✓' : 'Send to ' + first}
+            <button type="button" onClick={sendDoc} title={`Emailing proposals to ${first || 'the contact'} is coming soon; this only marks it as sent here.`} style={{ border: 0, background: '#F5F6F8', color: '#101828', cursor: 'pointer', fontSize: 12.5, fontWeight: 500, padding: '9px 14px', borderRadius: 7 }}>
+              {s.sent ? 'Marked as sent ✓' : 'Mark as sent'}
             </button>
             <button type="button" className="doc-btn" onClick={() => set({ docOpen: false })}>
               Close
@@ -75,8 +75,7 @@ export function ProposalDoc() {
           <div style={{ background: '#FFFFFF', border: '1px solid #E4E7EC', padding: '56px 60px', display: 'flex', flexDirection: 'column', gap: 38 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontWeight: 700, letterSpacing: '-0.02em', fontSize: 20 }}>Kern &amp; Co.</span>
-                <span style={{ ...eyebrow, fontSize: 10 }}>brand · marketing · pr</span>
+                <span style={{ fontWeight: 700, letterSpacing: '-0.02em', fontSize: 20 }}>{s.workspace.name}</span>
               </div>
               <span style={{ fontSize: 10.5, color: '#475467' }}>PRO-{lead.id.toUpperCase()}-2026</span>
             </div>

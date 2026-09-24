@@ -50,6 +50,40 @@ export function defaultCloseDate(lead: Lead): string {
 /** "" means the user cleared it on purpose. */
 export const closeIsoOf = (lead: Lead): string => (lead.closeDate === '' ? '' : lead.closeDate || defaultCloseDate(lead));
 
+/**
+ * The closing-date window for an Overview date filter (see DATE_RANGES), as inclusive ISO dates.
+ * `null` means no filter. Quarters and years are calendar ones.
+ */
+export function closeRangeOf(label: string, today = new Date()): { from: string; to: string } | null {
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const y = today.getFullYear();
+  const m = today.getMonth();
+  const q = Math.floor(m / 3) * 3;
+  const day = (yy: number, mm: number, dd: number) => iso(new Date(yy, mm, dd));
+  switch (label) {
+    case 'Closing in 30 days':
+      return { from: iso(today), to: day(y, m, today.getDate() + 30) };
+    case 'Closing this month':
+      return { from: day(y, m, 1), to: day(y, m + 1, 0) };
+    case 'Closing this quarter':
+      return { from: day(y, q, 1), to: day(y, q + 3, 0) };
+    case 'Closing next quarter':
+      return { from: day(y, q + 3, 1), to: day(y, q + 6, 0) };
+    case 'Closing this year':
+      return { from: day(y, 0, 1), to: day(y, 11, 31) };
+    case 'Closing date passed':
+      return { from: '0000-01-01', to: day(y, m, today.getDate() - 1) };
+    default:
+      return null;
+  }
+}
+/** Whether a deal falls in an Overview date filter. Deals without a closing date only match "no filter". */
+export function inCloseRange(lead: Lead, range: { from: string; to: string } | null): boolean {
+  if (!range) return true;
+  const close = closeIsoOf(lead);
+  return !!close && close >= range.from && close <= range.to;
+}
+
 export function defaultStart(lead: Lead | undefined): string {
   const base = lead && lead.closeDate ? lead.closeDate : lead ? defaultCloseDate(lead) : '2026-10-01';
   const d = new Date(base);
