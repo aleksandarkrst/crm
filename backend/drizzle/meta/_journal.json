@@ -43,6 +43,13 @@
       "when": 1790198181517,
       "tag": "0005_deal_task_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790203293544,
+      "tag": "0006_workspace_profile_discovery",
+      "breakpoints": true
     }
   ]
 }

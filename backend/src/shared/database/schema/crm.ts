@@ -158,6 +158,12 @@ export const deals = pgTable(
     closeDate: date('close_date'),
     fitScore: integer('fit_score').notNull().default(0), // CHAMP total, 0–100
     champ: jsonb('champ').$type<ChampScores>(),
+    // Discovery notes, merged into the proposal ("What you told us").
+    headline: text('headline'),
+    need: text('discovery_need'),
+    constraint: text('discovery_constraint'),
+    decisionMaker: text('decision_maker'),
+    discoveryDate: date('discovery_date'),
     lastContactAt: timestamp('last_contact_at', { withTimezone: true }),
     stageEnteredAt: timestamp('stage_entered_at', { withTimezone: true }).notNull().defaultNow(),
     closedAt: timestamp('closed_at', { withTimezone: true }),

@@ -1,16 +1,29 @@
-import { index, jsonb, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { boolean, check, index, jsonb, pgTable, primaryKey, smallint, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 /**
  * Platform tables (owned by the identity module). These are NOT tenant-scoped by RLS:
  * they are how we figure out which tenants a user may access in the first place.
  */
 
-export const tenants = pgTable('tenants', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: text('name').notNull(),
-  slug: text('slug').notNull().unique(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const tenants = pgTable(
+  'tenants',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    slug: text('slug').notNull().unique(),
+    // Workspace settings (Settings → Workspace). Owners and admins change them.
+    currency: text('currency').notNull().default('EUR'), // ISO 4217 code
+    timezone: text('timezone').notNull().default('Europe/Belgrade'), // IANA time zone
+    fiscalYearStartMonth: smallint('fiscal_year_start_month').notNull().default(1), // 1 = January
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check('tenants_fiscal_month_ck', sql`${t.fiscalYearStartMonth} between 1 and 12`)],
+);
+
+export const PROFILE_LANGUAGES = ['en', 'sr', 'de'] as const;
+export const DATE_FORMATS = ['DD.MM.YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'] as const;
+export const START_PAGES = ['pipeline', 'overview', 'today', 'contacts'] as const;
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -18,6 +31,14 @@ export const users = pgTable('users', {
   authSubject: text('auth_subject').notNull().unique(),
   email: text('email'),
   displayName: text('display_name'),
+  // True once the user has set their name in the profile; sign-ins then stop overwriting it.
+  displayNameCustom: boolean('display_name_custom').notNull().default(false),
+  // Profile settings. They are the user's own and apply in every workspace.
+  jobTitle: text('job_title'),
+  phone: text('phone'),
+  language: text('language', { enum: PROFILE_LANGUAGES }).notNull().default('en'),
+  dateFormat: text('date_format', { enum: DATE_FORMATS }).notNull().default('DD.MM.YYYY'),
+  startPage: text('start_page', { enum: START_PAGES }).notNull().default('pipeline'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -30,6 +51,11 @@ export const memberships = pgTable(
     tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
     userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
     role: text('role', { enum: MEMBERSHIP_ROLES }).notNull().default('member'),
+    // Profile settings that belong to one workspace: its funnels, and a digest of its pipeline.
+    // No foreign key: funnels are RLS-protected CRM rows; ProfileService checks the id with the
+    // tenant set, and the UI ignores an id it doesn't know.
+    defaultFunnelId: uuid('default_funnel_id'),
+    dailyDigest: boolean('daily_digest').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.tenantId, t.userId] }), index('memberships_user_idx').on(t.userId)],
