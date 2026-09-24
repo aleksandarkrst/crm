@@ -651,7 +651,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       openDoc: (leadId: string) => set({ docOpen: true, docLeadId: leadId, sent: false }),
       sendDoc: () => {
         set({ sent: true });
-        flash('Proposal sent · walkthrough task created for tomorrow');
+        // Nothing is emailed and no follow-up task is created yet: say so instead of pretending.
+        flash('Marked as sent for this session only · nothing was emailed and no task was created');
       },
       updateLines,
       patchLine,

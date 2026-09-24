@@ -31,9 +31,9 @@ export function Settings() {
 
   const action =
     current === 'templates'
-      ? { label: 'New template', onClick: () => set({ templateOpen: true }), meta: 'Templates hold the fixed story; merge fields pull the rest from the lead record.' }
+      ? { label: 'New template', onClick: () => set({ templateOpen: true }), meta: 'Templates hold the fixed story; merge fields pull the rest from the lead record.', soon: true }
       : current === 'fields'
-        ? { label: 'New field', onClick: () => set({ fieldOpen: true }), meta: 'Standard fields can be made optional or hidden; custom fields can be removed.' }
+        ? { label: 'New field', onClick: () => set({ fieldOpen: true }), meta: 'Standard fields can be made optional or hidden; custom fields can be removed. Changes here last for this session only; not saved yet.' }
         : current === 'team'
           ? {
               label: 'Invite member',
@@ -60,9 +60,13 @@ export function Settings() {
         {action && (
           <>
             <span style={{ fontSize: 12.5, color: 'var(--text-2)', marginLeft: 'auto', maxWidth: 520, textAlign: 'right', lineHeight: 1.45 }}>{action.meta}</span>
-            <button type="button" className="btn btn-primary" style={{ flex: '0 0 auto' }} onClick={action.onClick}>
-              {action.label}
-            </button>
+            {'soon' in action && action.soon ? (
+              <ComingSoonButton label={action.label} />
+            ) : (
+              <button type="button" className="btn btn-primary" style={{ flex: '0 0 auto' }} onClick={action.onClick}>
+                {action.label}
+              </button>
+            )}
           </>
         )}
       </div>
@@ -78,6 +82,18 @@ export function Settings() {
       {current === 'billing' && <BillingTab />}
       {inviteOpen && <InviteModal onClose={() => setInviteOpen(false)} />}
     </Screen>
+  );
+}
+
+/** A primary action whose feature has no backend yet: shown, disabled, and labelled as such. */
+function ComingSoonButton({ label }: { label: string }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9, flex: '0 0 auto' }}>
+      <span className="caps-muted">Coming soon</span>
+      <button type="button" className="btn btn-disabled" disabled title={`${label}: coming soon`}>
+        {label}
+      </button>
+    </span>
   );
 }
 
@@ -306,9 +322,7 @@ function FunnelBuilder() {
           <option value="smb">{s.funnels.smb.label}</option>
           <option value="ent">{s.funnels.ent.label}</option>
         </select>
-        <button type="button" className="btn btn-primary" onClick={() => set({ personaOpen: true })}>
-          New pipeline
-        </button>
+        <ComingSoonButton label="New pipeline" />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -388,13 +402,14 @@ function FunnelBuilder() {
 }
 
 function TemplatesTab() {
-  const { s, flash, openDoc } = useStore();
+  const { s, openDoc } = useStore();
   const lead = s.leads[0];
-  const templates = [
-    { name: 'Proposal v4', meta: 'Used 38 times · owner: Mila', state: 'live', desc: "Eight sections. Scope, timeline and pricing are assembled from the lead's service lines.", fields: ['{{company}}', '{{need}}', '{{lines}}', '{{total}}'], cta: 'Preview with a lead', preview: () => lead && openDoc(lead.id) },
-    { name: 'Quote / estimate', meta: 'Used 12 times · owner: Mila', state: 'live', desc: 'Single-page rate card estimate for leads that ask for a number before a full proposal.', fields: ['{{lines}}', '{{validUntil}}'], cta: 'Preview', preview: () => flash('Quote template preview is not in this prototype yet.') },
-    { name: 'Services contract', meta: 'Draft · owner: legal', state: 'draft', desc: 'Standard terms with a phased payment schedule. Waiting on legal review before it goes live.', fields: ['{{company}}', '{{total}}', '{{startDate}}'], cta: 'Preview', preview: () => flash('Contract template is still in legal review.') },
-    { name: 'First invoice', meta: 'Not configured', state: 'setup', desc: 'Fires when a contract is signed. Needs the accounting connection before it can generate.', fields: ['{{total}}', '{{poNumber}}'], cta: 'Set up', preview: () => flash('Connect accounting to enable invoices.') },
+  // Only the proposal exists (generated in the browser, not saved). The others are shown as what's coming.
+  const templates: { name: string; meta: string; state: 'built-in' | 'coming soon'; desc: string; fields: string[]; cta: string; preview?: () => void }[] = [
+    { name: 'Proposal v4', meta: lead ? 'Built in · generated in the browser, not saved yet' : 'Built in · add a deal to preview it', state: 'built-in', desc: "Eight sections. Scope, timeline and pricing are assembled from the lead's service lines.", fields: ['{{company}}', '{{need}}', '{{lines}}', '{{total}}'], cta: 'Preview with a lead', preview: lead ? () => openDoc(lead.id) : undefined },
+    { name: 'Quote / estimate', meta: 'Not available yet', state: 'coming soon', desc: 'Single-page rate card estimate for leads that ask for a number before a full proposal.', fields: ['{{lines}}', '{{validUntil}}'], cta: 'Preview' },
+    { name: 'Services contract', meta: 'Not available yet', state: 'coming soon', desc: 'Standard terms with a phased payment schedule.', fields: ['{{company}}', '{{total}}', '{{startDate}}'], cta: 'Preview' },
+    { name: 'First invoice', meta: 'Not available yet', state: 'coming soon', desc: 'Meant to fire when a contract is signed. Needs an accounting connection, which is not built yet.', fields: ['{{total}}', '{{poNumber}}'], cta: 'Set up' },
   ];
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 14 }}>
@@ -405,7 +420,7 @@ function TemplatesTab() {
               <span style={{ fontSize: 15, fontWeight: 600 }}>{t.name}</span>
               <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{t.meta}</span>
             </div>
-            <span className="tag" style={{ padding: '4px 6px', background: t.state === 'live' ? '#E7F2EE' : t.state === 'draft' ? '#FDF0E4' : '#F1F3F6', color: t.state === 'live' ? '#14503C' : t.state === 'draft' ? '#B4531B' : '#475467' }}>
+            <span className="tag" style={{ padding: '4px 6px', background: t.state === 'built-in' ? '#E7F2EE' : '#F1F3F6', color: t.state === 'built-in' ? '#14503C' : '#475467' }}>
               {t.state}
             </span>
           </div>
@@ -417,9 +432,18 @@ function TemplatesTab() {
               </span>
             ))}
           </div>
-          <button type="button" className="btn-outline" style={{ alignSelf: 'flex-start' }} onClick={t.preview}>
-            {t.cta}
-          </button>
+          {t.preview ? (
+            <button type="button" className="btn-outline" style={{ alignSelf: 'flex-start' }} onClick={t.preview}>
+              {t.cta}
+            </button>
+          ) : (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9, alignSelf: 'flex-start' }}>
+              <button type="button" className="btn btn-disabled" disabled style={{ fontSize: 12.5, padding: '8px 13px', borderRadius: 7 }}>
+                {t.cta}
+              </button>
+              <span className="caps-muted">Coming soon</span>
+            </span>
+          )}
         </div>
       ))}
     </div>
@@ -458,7 +482,7 @@ function FieldsTab() {
                       type="button"
                       onClick={() => {
                         set((x) => ({ fields: x.fields.filter((y) => y.id !== fl.id) }));
-                        flash(fl.label + ' removed');
+                        flash(fl.label + ' removed for this session only; not saved yet');
                       }}
                       style={{ cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--danger)', fontSize: 12, padding: '6px 11px', borderRadius: 6 }}
                     >
