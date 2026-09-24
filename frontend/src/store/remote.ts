@@ -3,9 +3,9 @@
  * a lead (deal) shows its company and primary contact inline, companies are derived from leads
  * plus companies without a deal, and people are primary contacts plus everyone else.
  */
-import { type ApiActivity, type ApiCompany, type ApiDealLine, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiProfile, type ApiStageChange, type ApiWorkspace, crmApi } from '../lib/api';
+import { type ApiActivity, type ApiBonusRules, type ApiCompany, type ApiCustomField, type ApiDealLine, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiProduct, type ApiProfile, type ApiStageChange, type ApiWorkspace, ApiError, crmApi } from '../lib/api';
 import { initialsOf, localeFor, momentLabel, money, taskKey } from './selectors';
-import type { CatalogItem, CompanyExtra, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, Profile, SegKey, StageChange, State, TeamMember, Workspace } from './types';
+import type { BonusRule, CatalogItem, CompanyExtra, CustomFieldDef, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, Profile, SegKey, StageChange, State, TeamMember, Workspace } from './types';
 
 export type WorkspaceData = Pick<
   State,
@@ -24,6 +24,10 @@ export type WorkspaceData = Pick<
   | 'team'
   | 'workspace'
   | 'profile'
+  | 'customFields'
+  | 'customValues'
+  | 'bonusRules'
+  | 'bonusTrigger'
 >;
 
 export const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member' } as const;
@@ -64,7 +68,18 @@ export const mapLine = (l: ApiDealLine): DealLine => ({
   milestones: l.milestones,
 });
 
-/** Workspace settings; the browser-only bonus trigger is kept by the store. */
+export const mapCustomField = ({ position: _position, ...f }: ApiCustomField): CustomFieldDef => f;
+
+export const mapProduct = (p: ApiProduct): CatalogItem => ({ id: p.id, name: p.name, type: p.type, kind: p.billingKind, price: Number(p.unitPrice), vat: Number(p.vatRate), currency: p.currency });
+
+/** Bonus rules by user id (CD-17); numbers as the inputs show them. */
+export const mapBonusRules = (b: ApiBonusRules): Record<string, BonusRule> =>
+  Object.fromEntries(b.rules.map((r) => [r.userId, { rate: Number(r.rate), floor: Number(r.floor), fixed: Number(r.fixed) }]));
+
+/** The bonus rules, or null for members: the API answers them 403 (CD-17). */
+const loadBonusRules = () => crmApi.bonusRules().catch((err: unknown) => (err instanceof ApiError && err.status === 403 ? null : Promise.reject(err)));
+
+/** Workspace settings. */
 export const mapWorkspace = (w: ApiWorkspace): Workspace => ({ name: w.name, currency: w.currency, timezone: w.timezone, fiscalMonth: w.fiscalYearStartMonth });
 
 export const mapProfile = (p: ApiProfile): Profile => ({
@@ -106,7 +121,7 @@ export const mapLeadTask = (t: ApiDealTask, tz?: string): LeadTask => ({
 });
 
 export async function loadWorkspace(): Promise<WorkspaceData> {
-  const [apiFunnels, companies, contacts, dealRows, products, apiLines, apiTasks, apiTeam, apiWorkspace, apiProfile] = await Promise.all([
+  const [apiFunnels, companies, contacts, dealRows, products, apiLines, apiTasks, apiTeam, apiWorkspace, apiProfile, apiFields, apiBonus] = await Promise.all([
     crmApi.funnels(),
     crmApi.companies(),
     crmApi.contacts(),
@@ -117,6 +132,8 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     crmApi.team(),
     crmApi.workspace(),
     crmApi.profile(),
+    crmApi.customFields(),
+    loadBonusRules(),
   ]);
 
   const team: TeamMember[] = [
@@ -226,7 +243,12 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
   const links: State['links'] = {};
   for (const r of dealRows) if (r.contactIds.length) links[r.deal.id] = r.contactIds.map(personIdOf);
 
-  const catalog: CatalogItem[] = products.map((p) => ({ id: p.id, name: p.name, type: p.type, kind: p.billingKind, price: Number(p.unitPrice), vat: Number(p.vatRate) }));
+  const catalog: CatalogItem[] = products.map(mapProduct);
+  const customValues: State['customValues'] = {
+    deal: Object.fromEntries(dealRows.map((r) => [r.deal.id, r.deal.customFields ?? {}])),
+    company: Object.fromEntries(companies.map((c) => [c.id, c.customFields ?? {}])),
+    contact: Object.fromEntries(contacts.map((c) => [c.id, c.customFields ?? {}])),
+  };
 
   const dealLines: State['dealLines'] = {};
   for (const l of apiLines) (dealLines[l.dealId] ||= []).push(mapLine(l));
@@ -280,5 +302,9 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     team,
     workspace: mapWorkspace(apiWorkspace),
     profile: mapProfile(apiProfile),
+    customFields: apiFields.map(mapCustomField),
+    customValues,
+    bonusRules: apiBonus ? mapBonusRules(apiBonus) : null,
+    bonusTrigger: apiBonus?.trigger ?? 'On contract signed',
   };
 }

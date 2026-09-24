@@ -41,6 +41,45 @@ const tenantId = () =>
     .notNull()
     .references(() => tenants.id, { onDelete: 'cascade' });
 
+// ---------------------------------------------------------------- custom fields (CD-15)
+
+/** Values of a record's custom fields, by field id. Validated against the definitions on write. */
+export type CustomFieldValues = Record<string, string | number | boolean>;
+export const CUSTOM_FIELD_ENTITIES = ['deal', 'company', 'contact'] as const;
+export type CustomFieldEntity = (typeof CUSTOM_FIELD_ENTITIES)[number];
+export const CUSTOM_FIELD_TYPES = ['text', 'number', 'date', 'select', 'checkbox', 'url'] as const;
+export type CustomFieldType = (typeof CUSTOM_FIELD_TYPES)[number];
+/** An option of a single-select field; values store the id, so renaming an option keeps them. */
+export interface CustomFieldOption {
+  id: string;
+  label: string;
+}
+
+/**
+ * A custom field of deals, companies or contacts, defined by owners and admins. Deleting one sets
+ * deleted_at: the field is hidden and its values stay in the records (they are not shown).
+ */
+export const customFieldDefs = pgTable(
+  'custom_field_defs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    entity: text('entity', { enum: CUSTOM_FIELD_ENTITIES }).notNull(),
+    label: text('label').notNull(),
+    type: text('type', { enum: CUSTOM_FIELD_TYPES }).notNull(),
+    options: jsonb('options').$type<CustomFieldOption[]>().notNull().default([]),
+    required: boolean('required').notNull().default(false),
+    position: integer('position').notNull().default(0),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    unique('custom_field_defs_tenant_id_uq').on(t.tenantId, t.id),
+    index('custom_field_defs_tenant_entity_idx').on(t.tenantId, t.entity, t.position),
+    uniqueIndex('custom_field_defs_label_uq').on(t.tenantId, t.entity, sql`lower(${t.label})`).where(sql`${t.deletedAt} is null`),
+  ],
+);
+
 // ---------------------------------------------------------------- companies & contacts
 
 export const companies = pgTable(
@@ -56,6 +95,8 @@ export const companies = pgTable(
     domain: text('domain'),
     ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
     notes: text('notes'),
+    /** Custom field values (CD-15), keyed by custom_field_defs.id; see CustomFieldsService. */
+    customFields: jsonb('custom_fields').$type<CustomFieldValues>().notNull().default({}),
     ...timestamps,
   },
   (t) => [unique('companies_tenant_id_uq').on(t.tenantId, t.id), index('companies_tenant_name_idx').on(t.tenantId, t.name)],
@@ -77,6 +118,8 @@ export const contacts = pgTable(
     linkedin: text('linkedin'),
     buyerRole: text('buyer_role', { enum: BUYER_ROLES }).notNull().default('Influencer'),
     ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Custom field values (CD-15), keyed by custom_field_defs.id. */
+    customFields: jsonb('custom_fields').$type<CustomFieldValues>().notNull().default({}),
     ...timestamps,
   },
   (t) => [
@@ -199,6 +242,8 @@ export const deals = pgTable(
     lostAt: timestamp('lost_at', { withTimezone: true }),
     lostReason: text('lost_reason', { enum: LOST_REASONS }),
     lostNote: text('lost_note'),
+    /** Custom field values (CD-15), keyed by custom_field_defs.id. */
+    customFields: jsonb('custom_fields').$type<CustomFieldValues>().notNull().default({}),
     ...timestamps,
   },
   (t) => [
@@ -264,6 +309,11 @@ export const products = pgTable(
     billingKind: text('billing_kind', { enum: BILLING_KINDS }).notNull().default('One-off'),
     unitPrice: numeric('unit_price', { precision: 14, scale: 2 }).notNull().default('0'),
     vatRate: numeric('vat_rate', { precision: 5, scale: 2 }).notNull().default('20'),
+    /**
+     * ISO 4217 code of the price (CD-77). New products get the workspace currency. A deal line
+     * can only use a product in the deal's currency (there are no exchange rates).
+     */
+    currency: text('currency').notNull().default('EUR'),
     ...timestamps,
   },
   (t) => [unique('products_tenant_id_uq').on(t.tenantId, t.id), index('products_tenant_name_idx').on(t.tenantId, t.name)],
@@ -390,4 +440,38 @@ export const dealStageHistory = pgTable(
     foreignKey({ columns: [t.tenantId, t.fromStageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deal_stage_history_from_stage_fk' }),
     foreignKey({ columns: [t.tenantId, t.toStageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deal_stage_history_to_stage_fk' }),
   ],
+);
+
+// ---------------------------------------------------------------- sales bonuses (CD-17)
+
+/** When a bonus counts as earned: the deal is won, or it is won and fully billed. */
+export const BONUS_TRIGGERS = ['On contract signed', 'When fully billed'] as const;
+
+/** The workspace's bonus settings (one row per tenant; owners and admins only). */
+export const salesBonusSettings = pgTable('sales_bonus_settings', {
+  tenantId: uuid('tenant_id')
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  trigger: text('trigger', { enum: BONUS_TRIGGERS }).notNull().default('On contract signed'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+/**
+ * A salesperson's bonus rule: `rate` % of a won deal's net value, or the flat `fixed` amount on
+ * deals under `floor`. The amounts are in the workspace currency. Owners and admins only.
+ */
+export const salesBonusRules = pgTable(
+  'sales_bonus_rules',
+  {
+    tenantId: tenantId(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    rate: numeric('rate', { precision: 5, scale: 2 }).notNull().default('0'),
+    floor: numeric('floor', { precision: 14, scale: 2 }).notNull().default('0'),
+    fixed: numeric('fixed', { precision: 14, scale: 2 }).notNull().default('0'),
+    updatedByUserId: uuid('updated_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.userId] }), check('sales_bonus_rules_rate_ck', sql`${t.rate} between 0 and 100`)],
 );

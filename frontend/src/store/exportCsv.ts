@@ -2,9 +2,25 @@
  * List export (CD-65): the rows a list screen shows, with its filters applied, as a CSV built in the
  * browser (see lib/csv.ts for the Excel and formula-injection rules). Owners and admins only.
  */
-import { toCsv } from '../lib/csv';
-import { type CompanyRecord, memberName, ownerOf, personById, valueNum } from './selectors';
+import type { CustomFieldEntity } from '../lib/api';
+import { type CsvColumn, toCsv } from '../lib/csv';
+import { type CompanyRecord, customFieldsOf, customValueText, memberName, ownerOf, personById, valueNum } from './selectors';
 import type { Funnel, Lead, State } from './types';
+
+/**
+ * One column per custom field of the record type (CD-15), after the standard ones: option labels,
+ * Yes/No for checkboxes, numbers as numbers. Deleted fields aren't exported.
+ */
+function customColumns<T>(s: State, entity: CustomFieldEntity, idOf: (row: T) => string | null | undefined): CsvColumn<T>[] {
+  return customFieldsOf(s, entity).map((f) => ({
+    header: f.label,
+    value: (row: T) => {
+      const id = idOf(row);
+      const v = id ? s.customValues[entity][id]?.[f.id] : undefined;
+      return f.type === 'number' && typeof v === 'number' ? v : customValueText(f, v);
+    },
+  }));
+}
 
 /** Placeholders ("—") are empty cells in the file. */
 const clean = (v: string | null | undefined) => (!v || v === '—' ? '' : v);
@@ -31,11 +47,12 @@ export function dealsCsv(s: State, leads: Lead[]): string {
     { header: 'Source', value: (l) => clean(l.source) },
     { header: 'Fit score', value: (l) => l.score },
     { header: 'Days since contact', value: (l) => l.stall },
+    ...customColumns<Lead>(s, 'deal', (l) => l.id),
   ]);
 }
 
 /** Companies as the Companies screen lists them. */
-export function companiesCsv(records: CompanyRecord[]): string {
+export function companiesCsv(s: State, records: CompanyRecord[]): string {
   return toCsv(records, [
     { header: 'Company ID', value: (c) => c.id },
     { header: 'Name', value: (c) => c.name },
@@ -49,6 +66,7 @@ export function companiesCsv(records: CompanyRecord[]): string {
     { header: 'Open value', value: (c) => c.value },
     { header: 'Latest stage', value: (c) => clean(c.stageName) },
     { header: 'Last touch', value: (c) => clean(c.lastTouch) },
+    ...customColumns<CompanyRecord>(s, 'company', (c) => c.id),
   ]);
 }
 
@@ -66,5 +84,6 @@ export function contactsCsv(s: State, rows: { id: string; company: string; compa
     { header: 'LinkedIn', value: ({ p }) => clean(p!.linkedin) },
     { header: 'Buyer role', value: ({ p }) => p!.buyerRole || 'Influencer' },
     { header: 'Owner', value: ({ p }) => clean(memberName(s, p!.ownerId, p!.ownerName)) },
+    ...customColumns<(typeof people)[number]>(s, 'contact', ({ p }) => p!.contactId),
   ]);
 }

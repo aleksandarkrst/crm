@@ -1,4 +1,4 @@
-import type { ApiDateFormat, ApiLanguage, ApiStageChange, ApiStartPage, DealOutcome, LostReason } from '../lib/api';
+import type { ApiCustomField, ApiDateFormat, ApiLanguage, ApiStageChange, ApiStartPage, CustomFieldEntity, CustomFieldValues, DealOutcome, LostReason } from '../lib/api';
 
 /** A funnel's backend id (CD-10: any number of funnels, not just the two personas). */
 export type SegKey = string;
@@ -123,6 +123,8 @@ export interface CatalogItem {
   kind: string; // One-off | Monthly | Yearly | Hourly
   price: number | string;
   vat: number | string;
+  /** ISO 4217 code of the price (CD-77); the workspace currency when unset. */
+  currency?: string;
 }
 
 export interface Milestone {
@@ -202,15 +204,8 @@ export interface ToggleRow {
   on: boolean;
 }
 
-export interface FieldDef {
-  id: string;
-  label: string;
-  type: string;
-  entity: 'Leads' | 'Contacts';
-  required: boolean;
-  system: boolean;
-  visible: boolean;
-}
+/** A custom field of deals, companies or contacts (CD-15), as the API returns it. */
+export type CustomFieldDef = Omit<ApiCustomField, 'position'>;
 
 /** Workspace settings, saved per tenant (see ApiWorkspace). */
 export interface Workspace {
@@ -221,8 +216,6 @@ export interface Workspace {
   timezone: string;
   /** Month the fiscal year starts, 1 = January. */
   fiscalMonth: number;
-  /** Sales-bonus rules are still browser-only. */
-  bonusTrigger?: string;
 }
 
 /** The signed-in user's profile (see ApiProfile). */
@@ -278,9 +271,11 @@ export interface NewContactDraft {
 
 export interface NewFieldDraft {
   label: string;
-  type: string;
-  entity: 'Leads' | 'Contacts';
+  type: ApiCustomField['type'];
+  entity: CustomFieldEntity;
   required: boolean;
+  /** Single-select options, one per line. */
+  options: string;
 }
 
 export interface NewProductDraft {
@@ -289,6 +284,8 @@ export interface NewProductDraft {
   kind: string;
   price: string;
   vat: string;
+  /** ISO 4217; '' means the workspace currency. */
+  currency?: string;
 }
 
 export interface State {
@@ -315,10 +312,19 @@ export interface State {
   team: TeamMember[];
   notifs: ToggleRow[];
   integrations: ToggleRow[];
-  fields: FieldDef[];
+  /** Custom field definitions (CD-15), in their order. */
+  customFields: CustomFieldDef[];
+  /** Custom field values by record type and record id (deal, company or contact id). */
+  customValues: Record<CustomFieldEntity, Record<string, CustomFieldValues>>;
   workspace: Workspace;
   profile: Profile;
-  bonusRules: Record<string, BonusRule>;
+  /**
+   * Sales bonus rules by user id (CD-17), saved in the workspace. null for members: the API
+   * doesn't show them the rules, and the UI hides the bonus tab and the Overview card.
+   */
+  bonusRules: Record<string, BonusRule> | null;
+  /** When a bonus counts as earned ("On contract signed" or "When fully billed"). */
+  bonusTrigger: string;
   filters: Filters;
   toast: string;
 

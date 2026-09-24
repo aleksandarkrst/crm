@@ -3,8 +3,10 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { FieldRow, GhostInput, GhostSelect, Modal, ModalHeader, RemoveButton, Switch } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
-import { ACTIVITIES, CHANNEL_LABELS, CHANNELS, DOCS, TEAM_ROLES } from '../store/seed';
-import { funnelOptions, initialsOf } from '../store/selectors';
+import { ACTIVITIES, CHANNEL_LABELS, CHANNELS, CURRENCIES, DOCS, FIELD_TYPES, TEAM_ROLES } from '../store/seed';
+import { currencySymbol, curOf, customFieldsOf, funnelOptions, initialsOf, salesPeople } from '../store/selectors';
+import type { CustomFieldDef } from '../store/types';
+import type { CustomFieldEntity } from '../lib/api';
 import { useStore } from '../store/store';
 
 const TABS = [
@@ -14,6 +16,7 @@ const TABS = [
   { k: 'funnel', label: 'Funnel builder' },
   { k: 'templates', label: 'Document templates' },
   { k: 'fields', label: 'Customize Fields' },
+  { k: 'bonuses', label: 'Sales bonuses' },
   { k: 'notifications', label: 'Notifications' },
   { k: 'integrations', label: 'Integrations' },
   { k: 'billing', label: 'Billing' },
@@ -23,16 +26,20 @@ type Tab = (typeof TABS)[number]['k'];
 export function Settings() {
   const { tab = 'workspace' } = useParams();
   const navigate = useNavigate();
-  const { s, set, session, flash } = useStore();
+  const { s, set, session, flash, canEditFields, canSeeBonuses } = useStore();
   const [inviteOpen, setInviteOpen] = useState(false);
-  if (!TABS.some((t) => t.k === tab)) return <Navigate to={paths.settings()} replace />;
+  // Members don't see the sales bonus rules (CD-17): no tab, and its route goes back to Settings.
+  const tabs = TABS.filter((t) => t.k !== 'bonuses' || canSeeBonuses);
+  if (!tabs.some((t) => t.k === tab)) return <Navigate to={paths.settings()} replace />;
   const current = tab as Tab;
 
   const action =
     current === 'templates'
       ? { label: 'New template', onClick: () => set({ templateOpen: true }), meta: 'Templates hold the fixed story; merge fields pull the rest from the lead record.', soon: true }
       : current === 'fields'
-        ? { label: 'New field', onClick: () => set({ fieldOpen: true }), meta: 'Standard fields can be made optional or hidden; custom fields can be removed. Changes here last for this session only; not saved yet.' }
+        ? canEditFields
+          ? { label: 'New field', onClick: () => set({ fieldOpen: true }), meta: 'Custom fields show on deals, companies and contacts, in their create forms and in CSV exports. Everyone can fill them in.' }
+          : null
         : current === 'team'
           ? {
               label: 'Invite member',
@@ -45,7 +52,7 @@ export function Settings() {
     <Screen title="Settings">
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 14 }}>
         <div style={{ display: 'flex', gap: 6, background: 'var(--segment)', padding: 4, borderRadius: 9, width: 'fit-content', flexWrap: 'wrap' }}>
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button
               key={t.k}
               type="button"
@@ -76,6 +83,7 @@ export function Settings() {
       {current === 'funnel' && <FunnelBuilder />}
       {current === 'templates' && <TemplatesTab />}
       {current === 'fields' && <FieldsTab />}
+      {current === 'bonuses' && <BonusesTab />}
       {current === 'notifications' && <ToggleList kind="notifs" />}
       {current === 'integrations' && <IntegrationsTab />}
       {current === 'billing' && <BillingTab />}
@@ -96,13 +104,6 @@ function ComingSoonButton({ label }: { label: string }) {
   );
 }
 
-const CURRENCIES = [
-  { value: 'EUR', label: 'EUR (€)' },
-  { value: 'RSD', label: 'RSD (дин)' },
-  { value: 'USD', label: 'USD ($)' },
-  { value: 'GBP', label: 'GBP (£)' },
-  { value: 'CHF', label: 'CHF (Fr.)' },
-];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((label, i) => ({ value: String(i + 1), label }));
 /** Every IANA time zone the browser knows. */
 const TIME_ZONES = (() => {
@@ -112,7 +113,7 @@ const TIME_ZONES = (() => {
 
 /** Saved per workspace. Owners and admins edit; members see the values read-only. */
 function WorkspaceTab() {
-  const { s, set, setWorkspace, canEditWorkspace } = useStore();
+  const { s, setWorkspace, canEditWorkspace } = useStore();
   const w = s.workspace;
   const ro = !canEditWorkspace;
   return (
@@ -132,11 +133,8 @@ function WorkspaceTab() {
       <FieldRow label="Fiscal year starts">
         <GhostSelect value={String(w.fiscalMonth)} disabled={ro} onChange={(e) => setWorkspace({ fiscalMonth: Number(e.target.value) })} options={MONTHS} />
       </FieldRow>
-      <FieldRow label="Sales bonus earned">
-        <GhostSelect value={w.bonusTrigger || 'On contract signed'} onChange={(e) => set((x) => ({ workspace: { ...x.workspace, bonusTrigger: e.target.value } }))} options={['On contract signed', 'When fully billed']} />
-      </FieldRow>
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 8 }}>
-        {ro ? 'Only owners and admins can change the workspace settings.' : 'Changes are saved as you make them.'} The sales bonus setting isn't saved yet.
+        {ro ? 'Only owners and admins can change the workspace settings.' : 'Changes are saved as you make them.'}
       </span>
     </div>
   );
@@ -213,6 +211,8 @@ const ROLE_RULES: { label: string; roles: (typeof TEAM_ROLES)[number][] }[] = [
   { label: 'View and edit deals, companies, contacts and products', roles: ['Owner', 'Admin', 'Member'] },
   { label: 'Delete deals, companies, contacts and products', roles: ['Owner', 'Admin'] },
   { label: 'Edit funnels and stages', roles: ['Owner', 'Admin'] },
+  { label: 'Define custom fields (everyone fills them in)', roles: ['Owner', 'Admin'] },
+  { label: 'See and set sales bonus rules and bonus figures', roles: ['Owner', 'Admin'] },
   { label: 'Invite members and change their roles', roles: ['Owner', 'Admin'] },
   { label: 'Make someone an owner or remove an owner', roles: ['Owner'] },
 ];
@@ -573,50 +573,173 @@ function TemplatesTab() {
   );
 }
 
+/** The built-in fields of each record type, listed next to the custom ones. */
+const STANDARD_FIELDS: Record<CustomFieldEntity, string> = {
+  deal: 'Company, Contacts, Owner, Deal value, Currency, Closing date, Funnel, Source, discovery notes',
+  company: 'Name, Industry, HQ, Team size, Source, Owner',
+  contact: 'Full name, Role, Company, Role in the decision, Email, Phone, LinkedIn, Owner',
+};
+const ENTITIES: { k: CustomFieldEntity; label: string; desc: string }[] = [
+  { k: 'deal', label: 'Deals', desc: 'Shown on the deal record and in the New deal form.' },
+  { k: 'company', label: 'Companies', desc: 'Shown on the company record.' },
+  { k: 'contact', label: 'Contacts', desc: 'Shown on the contact record and in the New contact form.' },
+];
+const TYPE_LABEL = Object.fromEntries(FIELD_TYPES.map((t) => [t.value, t.label])) as Record<string, string>;
+
+/** Custom fields per record type (CD-15). Owners and admins change them; members see the list. */
 function FieldsTab() {
-  const { s, set, flash } = useStore();
-  const toggle = (id: string, key: 'required' | 'visible') => set((x) => ({ fields: x.fields.map((y) => (y.id === id ? { ...y, [key]: !y[key] } : y)) }));
+  const { s, set, canEditFields } = useStore();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {(['Leads', 'Contacts'] as const).map((ent) => (
-        <div key={ent} className="card" style={{ overflow: 'hidden' }}>
-          <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--divider)', display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <span style={{ fontSize: 15, fontWeight: 600 }}>{ent}</span>
-            <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{ent === 'Leads' ? 'Shown on the lead record and in the new lead form.' : 'Shown on the contact record and in the new contact form.'}</span>
-          </div>
-          {s.fields
-            .filter((fl) => fl.entity === ent)
-            .map((fl) => (
-              <div key={fl.id} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '13px 18px', borderBottom: '1px solid var(--divider-2)' }}>
-                <span style={{ fontSize: 13.5, fontWeight: 600, minWidth: 150 }}>{fl.label}</span>
-                <span style={{ fontSize: 12.5, color: 'var(--text-2)', minWidth: 80 }}>{fl.type}</span>
-                <span className={fl.system ? 'badge badge-neutral' : 'badge badge-warn'} style={{ padding: '4px 9px' }}>
-                  {fl.system ? 'Standard' : 'Custom'}
-                </span>
-                <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
-                  <button type="button" onClick={() => toggle(fl.id, 'required')} style={{ cursor: 'pointer', border: `1px solid ${fl.required ? '#14503C' : '#E4E7EC'}`, background: fl.required ? '#E7F2EE' : '#FFFFFF', color: fl.required ? '#14503C' : '#475467', fontSize: 12, padding: '6px 11px', borderRadius: 6 }}>
-                    {fl.required ? 'Required' : 'Optional'}
-                  </button>
-                  <button type="button" onClick={() => toggle(fl.id, 'visible')} style={{ cursor: 'pointer', border: `1px solid ${fl.visible ? '#101828' : '#E4E7EC'}`, background: fl.visible ? '#101828' : '#FFFFFF', color: fl.visible ? '#F5F6F8' : '#475467', fontSize: 12, padding: '6px 11px', borderRadius: 6 }}>
-                    {fl.visible ? 'Visible' : 'Hidden'}
-                  </button>
-                  {!fl.system && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        set((x) => ({ fields: x.fields.filter((y) => y.id !== fl.id) }));
-                        flash(fl.label + ' removed for this session only; not saved yet');
-                      }}
-                      style={{ cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--danger)', fontSize: 12, padding: '6px 11px', borderRadius: 6 }}
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
+      {!canEditFields && <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>Only owners and admins can add or change custom fields. You can fill them in on each record.</span>}
+      {ENTITIES.map((ent) => {
+        const fields = customFieldsOf(s, ent.k);
+        return (
+          <div key={ent.k} className="card" data-testid={'fields-' + ent.k} style={{ overflow: 'hidden' }}>
+            <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--divider)', display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 220 }}>
+                <span style={{ fontSize: 15, fontWeight: 600 }}>{ent.label}</span>
+                <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{ent.desc}</span>
+                <span style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.45 }}>Standard fields: {STANDARD_FIELDS[ent.k]}</span>
               </div>
+              {canEditFields && (
+                <button type="button" className="btn-plain" onClick={() => set((x) => ({ fieldOpen: true, newField: { ...x.newField, entity: ent.k } }))}>
+                  + New {ent.label.toLowerCase().replace(/ies$/, 'y').replace(/s$/, '')} field
+                </button>
+              )}
+            </div>
+            {fields.length === 0 && <div style={{ padding: '13px 18px', fontSize: 12.5, color: 'var(--muted)' }}>No custom fields yet.</div>}
+            {fields.map((fl, i) => (
+              <FieldDefRow key={fl.id} field={fl} first={i === 0} last={i === fields.length - 1} />
             ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function FieldDefRow({ field: fl, first, last }: { field: CustomFieldDef; first: boolean; last: boolean }) {
+  const { canEditFields, updateCustomField, moveCustomField, deleteCustomField } = useStore();
+  const [editing, setEditing] = useState<{ id?: string; label: string }[] | null>(null);
+  const pill = (on: boolean) => ({ cursor: canEditFields ? 'pointer' : 'default', border: `1px solid ${on ? '#14503C' : '#E4E7EC'}`, background: on ? '#E7F2EE' : '#FFFFFF', color: on ? '#14503C' : '#475467', fontSize: 12, padding: '6px 11px', borderRadius: 6 });
+  const entityLabel = { deal: 'deal', company: 'company', contact: 'contact' }[fl.entity];
+  const onDelete = () => {
+    const question = `Delete the field "${fl.label}"? It disappears from every ${entityLabel}, from the ${entityLabel} forms and from CSV exports. Values already entered are kept in the records but no longer shown, and the field can't be brought back from here.`;
+    if (window.confirm(question)) deleteCustomField(fl.id);
+  };
+  const saveOptions = () => {
+    const options = (editing ?? []).map((o) => ({ ...o, label: o.label.trim() })).filter((o) => o.label);
+    if (!options.length) return;
+    updateCustomField(fl.id, { options });
+    setEditing(null);
+  };
+  return (
+    <div data-testid="custom-field" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '11px 18px', borderBottom: '1px solid var(--divider-2)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        {canEditFields ? (
+          <GhostInput aria-label="Field name" value={fl.label} onChange={(e) => updateCustomField(fl.id, { label: e.target.value })} style={{ fontSize: 13.5, fontWeight: 600, width: 200 }} />
+        ) : (
+          <span style={{ fontSize: 13.5, fontWeight: 600, minWidth: 150 }}>{fl.label}</span>
+        )}
+        <span style={{ fontSize: 12.5, color: 'var(--text-2)', minWidth: 80 }}>{TYPE_LABEL[fl.type] ?? fl.type}</span>
+        {fl.type === 'select' && !editing && <span style={{ fontSize: 12, color: 'var(--muted)' }}>{fl.options.map((o) => o.label).join(' · ')}</span>}
+        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button type="button" disabled={!canEditFields} onClick={() => updateCustomField(fl.id, { required: !fl.required })} style={pill(fl.required)}>
+            {fl.required ? 'Required' : 'Optional'}
+          </button>
+          {canEditFields && (
+            <>
+              {fl.type === 'select' && !editing && (
+                <button type="button" className="btn-plain" style={{ fontSize: 12 }} onClick={() => setEditing(fl.options.map((o) => ({ ...o })))}>
+                  Edit options
+                </button>
+              )}
+              <button type="button" title="Move up" disabled={first} onClick={() => moveCustomField(fl.id, -1)} style={{ ...pill(false), opacity: first ? 0.4 : 1 }}>
+                ↑
+              </button>
+              <button type="button" title="Move down" disabled={last} onClick={() => moveCustomField(fl.id, 1)} style={{ ...pill(false), opacity: last ? 0.4 : 1 }}>
+                ↓
+              </button>
+              <button type="button" onClick={onDelete} style={{ cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--danger)', fontSize: 12, padding: '6px 11px', borderRadius: 6 }}>
+                Delete
+              </button>
+            </>
+          )}
         </div>
-      ))}
+      </div>
+      {editing && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 4 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Renaming an option keeps it on every record. An option in use can't be removed.</span>
+          {editing.map((o, i) => (
+            <div key={o.id ?? 'new' + i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <GhostInput className="ghost-sm" aria-label="Option" value={o.label} onChange={(e) => setEditing(editing.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} style={{ width: 220 }} />
+              <RemoveButton title="Remove option" onClick={() => setEditing(editing.filter((_, j) => j !== i))} />
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" className="btn-plain" style={{ fontSize: 12 }} onClick={() => setEditing([...editing, { label: '' }])}>
+              + Add option
+            </button>
+            <button type="button" className="btn btn-primary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={saveOptions}>
+              Save options
+            </button>
+            <button type="button" className="btn btn-secondary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => setEditing(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const BONUS_COLS = 'minmax(0,1.6fr) 110px 150px 150px';
+
+/**
+ * Sales bonus rules (CD-17), saved in the workspace. Only owners and admins see this tab; the
+ * API returns 403 to members. Overview computes each salesperson's bonuses from these rules.
+ */
+function BonusesTab() {
+  const { s, setBonusTrigger, setBonusRule } = useStore();
+  const symbol = currencySymbol(curOf(s));
+  const rules = s.bonusRules ?? {};
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div className="card-title" style={{ marginBottom: 8 }}>
+          Sales bonuses
+        </div>
+        <FieldRow label="Bonus earned">
+          <GhostSelect value={s.bonusTrigger} onChange={(e) => setBonusTrigger(e.target.value)} options={['On contract signed', 'When fully billed']} />
+        </FieldRow>
+        <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 8 }}>
+          Only owners and admins can see these rules and the bonus figures on Overview. A won deal earns the rate on its net value; a deal under the minimum earns the flat amount instead. The minimum and the flat amount are in {s.workspace.currency}; deals in another currency earn the rate only. Changes are saved as you make them.
+        </span>
+      </div>
+      <div className="card" style={{ overflowX: 'auto' }}>
+        <div style={{ minWidth: 560 }}>
+          <div className="table-head th" style={{ gridTemplateColumns: BONUS_COLS }}>
+            <span>Salesperson</span>
+            <span>Rate %</span>
+            <span>Min deal ({symbol})</span>
+            <span>Flat under min ({symbol})</span>
+          </div>
+          {salesPeople(s)
+            .filter((p) => s.team.some((m) => m.status === 'Active' && m.id === p.value))
+            .map((p) => {
+              const r = rules[p.value];
+              return (
+                <div key={p.value} data-testid="bonus-rule" className="table-row" style={{ gridTemplateColumns: BONUS_COLS, padding: '8px 16px' }}>
+                  <span style={{ fontWeight: 600 }}>{p.label}</span>
+                  <GhostInput className="ghost-sm" aria-label={'Rate for ' + p.label} inputMode="decimal" placeholder="0" value={r?.rate ?? ''} onChange={(e) => setBonusRule(p.value, 'rate', e.target.value)} />
+                  <GhostInput className="ghost-sm" aria-label={'Minimum for ' + p.label} inputMode="decimal" placeholder="0" value={r?.floor ?? ''} onChange={(e) => setBonusRule(p.value, 'floor', e.target.value)} />
+                  <GhostInput className="ghost-sm" aria-label={'Flat amount for ' + p.label} inputMode="decimal" placeholder="0" value={r?.fixed ?? ''} onChange={(e) => setBonusRule(p.value, 'fixed', e.target.value)} />
+                </div>
+              );
+            })}
+        </div>
+      </div>
     </div>
   );
 }

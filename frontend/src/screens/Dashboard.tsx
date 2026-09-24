@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { FilterBar, GhostInput } from '../components/ui';
+import { Link } from 'react-router-dom';
+import { FilterBar } from '../components/ui';
 import { Screen } from '../components/Layout';
+import { paths } from '../lib/paths';
 import { DATE_RANGES, dateRangeLabel, DEFAULT_FILTERS, SOURCES } from '../store/seed';
 import { billedShare, bonusOf, bonusRule, closeIsoOf, closeRangeOf, curOf, currencySymbol, funnelOptions, inCloseRange, linePayments, linesOf, moneyTotal, num, salesPeople, stageOf, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
 import { conversionMetrics, daysLabel, MIN_MOVED_DEALS } from '../store/metrics';
@@ -24,7 +26,7 @@ const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? o
 const pct = (r: number | null) => (r === null ? '—' : Math.round(r * 100) + '%');
 
 export function Dashboard() {
-  const { s, set, refreshHistory } = useStore();
+  const { s, set, refreshHistory, canSeeBonuses } = useStore();
   const [dashSeg, setDashSeg] = useState<SegKey>(s.segment);
   // The stage history is loaded each time Overview opens, so it includes the latest moves.
   useEffect(() => {
@@ -102,10 +104,11 @@ export function Dashboard() {
     };
   });
 
-  const trigger = s.workspace.bonusTrigger || 'On contract signed';
+  // Sales bonuses (CD-17): owners and admins only, from the rules saved in Settings → Sales bonuses.
+  const trigger = s.bonusTrigger || 'On contract signed';
   const totalEarned: { currency?: string; amount: number }[] = [];
   const totalPending: { currency?: string; amount: number }[] = [];
-  const bonusRows = salesPeople(s)
+  const bonusRows = (canSeeBonuses ? salesPeople(s) : [])
     .filter(({ value: ownerId }) => f.owner === 'Salesperson' || ownerId === f.owner)
     .map(({ value: ownerId, label: owner }) => {
     const rule = bonusRule(s, ownerId);
@@ -115,7 +118,7 @@ export function Dashboard() {
     const earnedIds: string[] = [];
     const pendingIds: string[] = [];
     for (const l of mine) {
-      const bonus = bonusOf(l, rule);
+      const bonus = bonusOf(l, rule, s.workspace.currency);
       const won = l.outcome === 'won';
       const full = rule.trigger === 'When fully billed' ? billedShare(s, l) >= 0.999 : true;
       if (won && full) {
@@ -130,13 +133,7 @@ export function Dashboard() {
     totalPending.push(...pending);
     return { ownerId, owner, rule, earned, pending, earnedIds, pendingIds };
   });
-  const setRule = (owner: string, key: 'rate' | 'floor' | 'fixed') => (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = e.target.value;
-    set((x) => {
-      const { rate, floor, fixed } = bonusRule(x, owner);
-      return { bonusRules: { ...x.bonusRules, [owner]: { rate, floor, fixed, [key]: v } } };
-    });
-  };
+  const ruleText = (v: number | string, suffix = '') => (v === '' ? '—' : String(v) + suffix);
 
   return (
     <Screen title="Overview">
@@ -205,11 +202,17 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="card" style={{ padding: 18 }}>
+        {canSeeBonuses && (
+        <div className="card" data-testid="bonus-card" style={{ padding: 18 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 16 }}>
             <div>
               <div className="card-title" style={{ marginBottom: 4 }}>Sales bonuses</div>
-              <div className="card-sub">Rate per salesperson, with a flat amount on deals under the minimum · earned {trigger.toLowerCase()}</div>
+              <div className="card-sub">
+                Rate per salesperson, with a flat amount on deals under the minimum · earned {trigger.toLowerCase()} · only owners and admins see this ·{' '}
+                <Link to={paths.settings('bonuses')} style={{ color: 'var(--brand)' }}>
+                  Edit the rules
+                </Link>
+              </div>
             </div>
             <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
               {moneyTotal(s, totalEarned)} earned · {moneyTotal(s, totalPending)} pending
@@ -227,9 +230,9 @@ export function Dashboard() {
               {bonusRows.map((r) => (
                 <div key={r.ownerId} style={{ display: 'grid', gridTemplateColumns: BONUS_COLS, gap: 12, padding: '7px 0', borderBottom: '1px solid var(--divider)', alignItems: 'center' }}>
                   <span style={{ fontSize: 13, fontWeight: 600 }}>{r.owner}</span>
-                  <GhostInput className="ghost-sm" value={r.rule.rate} onChange={setRule(r.ownerId, 'rate')} />
-                  <GhostInput className="ghost-sm" value={r.rule.floor} onChange={setRule(r.ownerId, 'floor')} />
-                  <GhostInput className="ghost-sm" value={r.rule.fixed} onChange={setRule(r.ownerId, 'fixed')} />
+                  <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{ruleText(r.rule.rate, '%')}</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{ruleText(r.rule.floor)}</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{ruleText(r.rule.fixed)}</span>
                   <span className="hover-underline" onClick={() => r.earnedIds.length && drill('Bonus earned · ' + r.owner, r.rule.trigger, r.earnedIds)} style={{ fontSize: 13, fontWeight: 600, color: 'var(--brand)', cursor: r.earnedIds.length ? 'pointer' : 'default' }}>
                     {moneyTotal(s, r.earned)}
                   </span>
@@ -241,6 +244,7 @@ export function Dashboard() {
             </div>
           </div>
         </div>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 14 }}>
           <StageConversion leads={dashLeads} initialSeg={dashSeg} />

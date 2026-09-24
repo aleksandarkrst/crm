@@ -127,6 +127,8 @@ export interface ApiCompany {
   domain: string | null;
   ownerUserId: string | null;
   notes: string | null;
+  /** Custom field values by field id (CD-15). */
+  customFields: CustomFieldValues;
   /** Current name of the owner, also after they left the workspace (lists only). */
   ownerName?: string | null;
 }
@@ -140,6 +142,8 @@ export interface ApiContact {
   linkedin: string | null;
   buyerRole: string;
   ownerUserId: string | null;
+  /** Custom field values by field id (CD-15). */
+  customFields: CustomFieldValues;
   /** Current name of the owner, also after they left the workspace (lists only). */
   ownerName?: string | null;
 }
@@ -180,6 +184,8 @@ export interface ApiDeal {
   lostAt: string | null;
   lostReason: LostReason | null;
   lostNote: string | null;
+  /** Custom field values by field id (CD-15). */
+  customFields: CustomFieldValues;
   createdAt: string;
   updatedAt: string;
 }
@@ -217,6 +223,29 @@ export interface ApiProduct {
   billingKind: 'One-off' | 'Monthly' | 'Yearly' | 'Hourly';
   unitPrice: string;
   vatRate: string;
+  /** ISO 4217 code of the price (CD-77); only deals in this currency can use the product. */
+  currency: string;
+}
+
+/** A value of a custom field: text, URL, ISO date and option id are strings (CD-15). */
+export type CustomValue = string | number | boolean;
+export type CustomFieldValues = Record<string, CustomValue>;
+export type CustomFieldEntity = 'deal' | 'company' | 'contact';
+export type CustomFieldType = 'text' | 'number' | 'date' | 'select' | 'checkbox' | 'url';
+export interface ApiCustomField {
+  id: string;
+  entity: CustomFieldEntity;
+  label: string;
+  type: CustomFieldType;
+  /** Single-select options; values store the option id. */
+  options: { id: string; label: string }[];
+  required: boolean;
+  position: number;
+}
+/** Sales bonus rules (CD-17): owners and admins only; members get 403. Amounts in the workspace currency. */
+export interface ApiBonusRules {
+  trigger: string;
+  rules: { userId: string; rate: string; floor: string; fixed: string }[];
 }
 
 export interface ApiMilestone {
@@ -282,11 +311,13 @@ export interface ApiInvitePreview {
   expiresAt: string;
 }
 
-export type CompanyInput = Partial<Omit<ApiCompany, 'id'>> & { name?: string };
-export type ContactInput = Partial<Omit<ApiContact, 'id' | 'ownerName'>>;
+/** Custom field values to write: null or '' clears a field. */
+export type CustomFieldPatch = Record<string, CustomValue | null>;
+export type CompanyInput = Partial<Omit<ApiCompany, 'id' | 'customFields'>> & { name?: string; customFields?: CustomFieldPatch };
+export type ContactInput = Partial<Omit<ApiContact, 'id' | 'ownerName' | 'customFields'>> & { customFields?: CustomFieldPatch };
 export type DealInput = Partial<
-  Pick<ApiDeal, 'title' | 'companyId' | 'primaryContactId' | 'funnelId' | 'ownerUserId' | 'source' | 'closeDate' | 'amount' | 'headline' | 'need' | 'constraint' | 'decisionMaker' | 'discoveryDate'>
-> & { champ?: ApiChamp };
+  Pick<ApiDeal, 'title' | 'companyId' | 'primaryContactId' | 'funnelId' | 'ownerUserId' | 'source' | 'closeDate' | 'amount' | 'currency' | 'headline' | 'need' | 'constraint' | 'decisionMaker' | 'discoveryDate'>
+> & { champ?: ApiChamp; customFields?: CustomFieldPatch };
 export type ProductInput = Partial<Omit<ApiProduct, 'id' | 'unitPrice' | 'vatRate'>> & { unitPrice?: number; vatRate?: number };
 export type DealLineInput = Partial<{
   productId: string | null;
@@ -379,4 +410,15 @@ export const crmApi = {
   createProduct: (input: ProductInput & { name: string }) => api<ApiProduct>('/crm/products', { method: 'POST', json: input }),
   updateProduct: (id: string, input: ProductInput) => api<ApiProduct>(`/crm/products/${id}`, { method: 'PATCH', json: input }),
   deleteProduct: (id: string) => api(`/crm/products/${id}`, { method: 'DELETE' }),
+
+  customFields: () => api<ApiCustomField[]>('/crm/custom-fields'),
+  createCustomField: (input: { entity: CustomFieldEntity; label: string; type: CustomFieldType; options?: { label: string }[]; required?: boolean }) =>
+    api<ApiCustomField>('/crm/custom-fields', { method: 'POST', json: input }),
+  updateCustomField: (id: string, input: { label?: string; options?: { id?: string; label: string }[]; required?: boolean }) => api<ApiCustomField>(`/crm/custom-fields/${id}`, { method: 'PATCH', json: input }),
+  reorderCustomFields: (entity: CustomFieldEntity, fieldIds: string[]) => api<ApiCustomField[]>('/crm/custom-fields/order', { method: 'PUT', json: { entity, fieldIds } }),
+  deleteCustomField: (id: string) => api(`/crm/custom-fields/${id}`, { method: 'DELETE' }),
+
+  bonusRules: () => api<ApiBonusRules>('/crm/bonus-rules'),
+  updateBonusSettings: (trigger: string) => api<ApiBonusRules>('/crm/bonus-rules', { method: 'PATCH', json: { trigger } }),
+  putBonusRule: (userId: string, rule: { rate: number; floor: number; fixed: number }) => api<ApiBonusRules>(`/crm/bonus-rules/${userId}`, { method: 'PUT', json: rule }),
 };
