@@ -58,6 +58,7 @@ export const mapLeadTask = (t: ApiDealTask): LeadTask => ({
   channel: t.channel ?? 'RS',
   due: t.dueDate ?? '',
   ownerId: t.assigneeUserId ?? '',
+  ownerName: t.assigneeName ?? undefined,
   note: t.note ?? '',
   done: t.done,
   at: t.doneAt ? dateLabel(t.doneAt) : undefined,
@@ -80,8 +81,6 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     ...apiTeam.members.map<TeamMember>((m) => ({ id: m.userId, name: m.displayName || m.email || 'Member', email: m.email ?? '', role: ROLE_LABEL[m.role], status: 'Active' })),
     ...apiTeam.invitations.map<TeamMember>((i) => ({ id: i.id, name: i.email, email: i.email, role: ROLE_LABEL[i.role], status: 'Invited' })),
   ];
-  // Owners are shown by the same name as in the team list, so the Salesperson filters match.
-  const nameOf = (userId: string | null) => team.find((m) => m.status === 'Active' && m.id === userId)?.name;
 
   const funnels = {} as State['funnels'];
   const segOfFunnel = new Map<string, SegKey>();
@@ -98,7 +97,7 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
 
   const leads: Lead[] = [];
   const champ: State['champ'] = {};
-  for (const { deal } of dealRows) {
+  for (const { deal, ownerName } of dealRows) {
     const segment = segOfFunnel.get(deal.funnelId);
     if (!segment) continue; // funnels beyond the two personas aren't shown by this UI yet
     const co = deal.companyId ? companyById.get(deal.companyId) : undefined;
@@ -116,7 +115,7 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
       email: ct?.email ?? '—',
       phone: ct?.phone ?? '—',
       buyerRole: ct?.buyerRole,
-      owner: nameOf(deal.ownerUserId),
+      owner: ownerName ?? undefined,
       ownerId: deal.ownerUserId,
       segment,
       stage: deal.stageId,
@@ -146,7 +145,8 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     hq: c.hq ?? '',
     size: c.teamSize ?? '',
     source: c.source ?? '',
-    owner: nameOf(c.ownerUserId) ?? '—',
+    owner: c.ownerName ?? '',
+    ownerId: c.ownerUserId,
   }));
 
   // Everyone who isn't already shown as a lead's primary contact.

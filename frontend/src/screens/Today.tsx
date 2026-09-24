@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FilterBar } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { CHANNEL_LABELS } from '../store/seed';
-import { isoLabel, leadById, memberName, ownerOf, salesPeople, stageOf, stagesFor, todayIso, todayLabel } from '../store/selectors';
+import { isoLabel, leadById, memberName, salesPeople, stageOf, stagesFor, todayIso, todayLabel } from '../store/selectors';
 import { useStore } from '../store/store';
 
 interface TodayTask {
@@ -28,7 +28,7 @@ export function Today() {
   const today = todayIso();
   const doneToday = todayLabel();
   const funnelTasks = s.leads
-    .filter((l) => owner === 'Salesperson' || ownerOf(l) === owner)
+    .filter((l) => owner === 'Salesperson' || l.ownerId === owner)
     .map<TodayTask>((l) => {
       const st = stageOf(s, l);
       return {
@@ -45,7 +45,7 @@ export function Today() {
   // Hand-added tasks: open ones, plus those finished today (so ticking one doesn't make it vanish).
   const handTasks = s.leadTasks
     .filter((t) => !t.done || t.at === doneToday || (t.due && t.due >= today))
-    .filter((t) => owner === 'Salesperson' || memberName(s, t.ownerId) === owner)
+    .filter((t) => owner === 'Salesperson' || t.ownerId === owner)
     .sort((a, b) => (a.due || today).localeCompare(b.due || today))
     .flatMap<TodayTask>((t) => {
       const lead = leadById(s, t.leadId);
@@ -61,7 +61,7 @@ export function Today() {
           channelLabel: CHANNEL_LABELS[t.channel] || t.channel,
           due: dueIso < today ? isoLabel(dueIso) : dueIso === today ? 'today' : isoLabel(dueIso),
           bucket: dueIso < today ? 0 : dueIso === today ? 1 : 2,
-          task: { done: t.done, owner: memberName(s, t.ownerId), dueIso },
+          task: { done: t.done, owner: memberName(s, t.ownerId, t.ownerName), dueIso },
         },
       ];
     });

@@ -8,7 +8,7 @@ import { mapDbError } from '../../../shared/database/errors';
 import { activities, companies, contacts, dealContacts, deals, funnelStages } from '../../../shared/database/schema';
 import { JobsService } from '../../../shared/events/jobs.service';
 import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
-import { assertOwnerIsMember } from '../owner';
+import { assertOwnerIsMember, userNameOf } from '../owner';
 
 const money = z.union([z.number(), z.string()]).transform((v) => String(v)).pipe(z.string().regex(/^\d{1,12}(\.\d{1,2})?$/, 'Invalid amount'));
 const champLevel = z.union([z.literal(0), z.literal(8), z.literal(17), z.literal(25)]);
@@ -68,6 +68,7 @@ export class DealsService {
           contactJobTitle: contacts.jobTitle,
           stageName: funnelStages.name,
           stageActivity: funnelStages.activity,
+          ownerName: userNameOf(deals.ownerUserId),
         })
         .from(deals)
         .innerJoin(funnelStages, eq(funnelStages.id, deals.stageId))

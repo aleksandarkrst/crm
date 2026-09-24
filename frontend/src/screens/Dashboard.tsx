@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FilterBar, GhostInput } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { DATE_RANGES, DEFAULT_FILTERS, SOURCES } from '../store/seed';
-import { billedShare, bonusOf, bonusRule, grossOf, linesOf, money, num, ownerOf, salesPeople, shiftIso, stageOf, valueNum } from '../store/selectors';
+import { billedShare, bonusOf, bonusRule, grossOf, linesOf, money, num, salesPeople, shiftIso, stageOf, valueNum } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { SegKey } from '../store/types';
 
@@ -39,7 +39,7 @@ export function Dashboard() {
   const audLabel = (seg: SegKey) => s.funnels[seg].label;
   const dashLeads = s.leads
     .filter((l) => f.audience === 'Audience' || audLabel(l.segment) === f.audience)
-    .filter((l) => f.owner === 'Salesperson' || ownerOf(l) === f.owner)
+    .filter((l) => f.owner === 'Salesperson' || l.ownerId === f.owner)
     .filter((l) => f.source === 'Source' || l.source === f.source);
   const dashValue = dashLeads.reduce((a, l) => a + valueNum(l.value), 0);
   const setFilter = (k: keyof typeof f) => (v: string) => set((x) => ({ filters: { ...x.filters, [k]: v } }));
@@ -104,9 +104,9 @@ export function Dashboard() {
   const trigger = s.workspace.bonusTrigger || 'On contract signed';
   let totalEarned = 0;
   let totalPending = 0;
-  const bonusRows = salesPeople(s).map((owner) => {
-    const rule = bonusRule(s, owner);
-    const mine = s.leads.filter((l) => ownerOf(l) === owner);
+  const bonusRows = salesPeople(s).map(({ value: ownerId, label: owner }) => {
+    const rule = bonusRule(s, ownerId);
+    const mine = s.leads.filter((l) => l.ownerId === ownerId);
     let earned = 0;
     let pending = 0;
     const earnedIds: string[] = [];
@@ -125,7 +125,7 @@ export function Dashboard() {
     }
     totalEarned += earned;
     totalPending += pending;
-    return { owner, rule, earned, pending, earnedIds, pendingIds };
+    return { ownerId, owner, rule, earned, pending, earnedIds, pendingIds };
   });
   const setRule = (owner: string, key: 'rate' | 'floor' | 'fixed') => (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
@@ -218,11 +218,11 @@ export function Dashboard() {
                 ))}
               </div>
               {bonusRows.map((r) => (
-                <div key={r.owner} style={{ display: 'grid', gridTemplateColumns: BONUS_COLS, gap: 12, padding: '7px 0', borderBottom: '1px solid var(--divider)', alignItems: 'center' }}>
+                <div key={r.ownerId} style={{ display: 'grid', gridTemplateColumns: BONUS_COLS, gap: 12, padding: '7px 0', borderBottom: '1px solid var(--divider)', alignItems: 'center' }}>
                   <span style={{ fontSize: 13, fontWeight: 600 }}>{r.owner}</span>
-                  <GhostInput className="ghost-sm" value={r.rule.rate} onChange={setRule(r.owner, 'rate')} />
-                  <GhostInput className="ghost-sm" value={r.rule.floor} onChange={setRule(r.owner, 'floor')} />
-                  <GhostInput className="ghost-sm" value={r.rule.fixed} onChange={setRule(r.owner, 'fixed')} />
+                  <GhostInput className="ghost-sm" value={r.rule.rate} onChange={setRule(r.ownerId, 'rate')} />
+                  <GhostInput className="ghost-sm" value={r.rule.floor} onChange={setRule(r.ownerId, 'floor')} />
+                  <GhostInput className="ghost-sm" value={r.rule.fixed} onChange={setRule(r.ownerId, 'fixed')} />
                   <span className="hover-underline" onClick={() => r.earnedIds.length && drill('Bonus earned · ' + r.owner, r.rule.trigger, r.earnedIds)} style={{ fontSize: 13, fontWeight: 600, color: 'var(--brand)', cursor: r.earnedIds.length ? 'pointer' : 'default' }}>
                     {money(r.earned)}
                   </span>

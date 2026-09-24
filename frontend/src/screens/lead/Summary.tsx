@@ -1,6 +1,6 @@
 import { DangerButton, FieldRow, GhostInput, GhostSelect, PersonChip, Picker, PickerRow, usePicker } from '../../components/ui';
 import { INDUSTRIES, SOURCES, TEAM_SIZES } from '../../store/seed';
-import { allPeople, closeIsoOf, companyLabels, companyOfPerson, companyRecords, contactsForLead, initialsOf, linesOf, money, netOf, vatOf } from '../../store/selectors';
+import { allPeople, closeIsoOf, companyLabels, companyOfPerson, companyRecords, contactsForLead, initialsOf, linesOf, memberLabels, memberName, money, netOf, vatOf } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead, SegKey } from '../../store/types';
 
@@ -22,8 +22,10 @@ export function Summary({ lead }: { lead: Lead }) {
   const companyOptions = records.filter((c) => c.id !== lead.companyId).filter((c) => !cq || c.name.toLowerCase().includes(cq));
 
   // Deals are owned by active workspace members; the API rejects anyone else.
-  const members = s.team.filter((m) => m.status === 'Active');
-  const ownerValue = lead.ownerId && members.some((m) => m.id === lead.ownerId) ? lead.ownerId : '';
+  // A former member keeps their deals until they are handed over; they show as such.
+  const ownerOptions = [...memberLabels(s)].map(([value, label]) => ({ value, label }));
+  if (lead.ownerId && !ownerOptions.some((o) => o.value === lead.ownerId)) ownerOptions.push({ value: lead.ownerId, label: memberName(s, lead.ownerId, lead.owner) });
+  const ownerValue = lead.ownerId ?? '';
 
   const onDelete = () => {
     const name = lead.title || lead.company;
@@ -97,7 +99,7 @@ export function Summary({ lead }: { lead: Lead }) {
         </FieldRow>
 
         <FieldRow label="Owner">
-          <GhostSelect chevron value={ownerValue} onChange={(e) => store.patchLead(lead.id, { ownerId: e.target.value })} options={members.map((m) => ({ value: m.id, label: m.name }))} />
+          <GhostSelect chevron value={ownerValue} onChange={(e) => store.patchLead(lead.id, { ownerId: e.target.value })} options={ownerOptions} />
         </FieldRow>
 
         <FieldRow label="Deal value">

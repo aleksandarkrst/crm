@@ -41,7 +41,7 @@ export interface Lead {
   email: string;
   phone: string;
   buyerRole?: string;
-  /** Name of the deal owner (a workspace member). */
+  /** Last known name of the deal owner, from the API. Show it with ownerOf(), match by ownerId. */
   owner?: string;
   /** User id of the deal owner. */
   ownerId?: string | null;
@@ -90,7 +90,9 @@ export interface CompanyExtra {
   hq: string;
   size: string;
   source: string;
+  /** Last known name of the owner, from the API (see memberName). */
   owner: string;
+  ownerId?: string | null;
 }
 
 export interface CatalogItem {
@@ -144,6 +146,8 @@ export interface LeadTask {
   due: string;
   /** User id of the owner (a workspace member), '' when none. */
   ownerId: string;
+  /** Last known name of the owner, from the API. */
+  ownerName?: string;
   note: string;
   done: boolean;
   at?: string;

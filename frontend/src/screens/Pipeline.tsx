@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FilterBar } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { DEFAULT_FILTERS, INDUSTRIES, VALUE_BANDS } from '../store/seed';
-import { bandOf, champTotal, ownerOf, salesPeople, stageOf, valueNum } from '../store/selectors';
+import { bandOf, champTotal, salesPeople, stageOf, valueNum } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { SegKey } from '../store/types';
 
@@ -20,7 +20,7 @@ export function Pipeline() {
   const segLeads = s.leads
     .filter((l) => l.segment === seg)
     .filter((l) => !q || l.company.toLowerCase().includes(q) || String(l.contact).toLowerCase().includes(q))
-    .filter((l) => f.owner === 'Salesperson' || ownerOf(l) === f.owner)
+    .filter((l) => f.owner === 'Salesperson' || l.ownerId === f.owner)
     .filter((l) => f.stalled === 'Status' || (f.stalled === 'Stalled only' ? l.stall >= 3 : l.stall < 3))
     .filter((l) => !f.industry || f.industry === 'Industry' || l.industry === f.industry)
     .filter((l) => f.band === 'Value' || bandOf(l.value) === f.band);

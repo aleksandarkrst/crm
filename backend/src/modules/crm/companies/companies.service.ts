@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { asc, count, eq, ilike, or } from 'drizzle-orm';
+import { asc, count, eq, getTableColumns, ilike, or } from 'drizzle-orm';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
@@ -7,7 +7,7 @@ import { DatabaseService } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
 import { companies, contacts, deals } from '../../../shared/database/schema';
 import { nonEmptyPatch, optionalText, type PaginationQuery } from '../../../shared/validation/common';
-import { assertOwnerIsMember } from '../owner';
+import { assertOwnerIsMember, userNameOf } from '../owner';
 
 export const CreateCompany = z.object({
   name: z.string().trim().min(1).max(200),
@@ -40,7 +40,7 @@ export class CompaniesService {
     const like = page.q ? `%${page.q}%` : undefined;
     return this.database.withTenant(ctx.tenantId, (tx) =>
       tx
-        .select()
+        .select({ ...getTableColumns(companies), ownerName: userNameOf(companies.ownerUserId) })
         .from(companies)
         .where(like ? or(ilike(companies.name, like), ilike(companies.industry, like), ilike(companies.hq, like)) : undefined)
         .orderBy(asc(companies.name))

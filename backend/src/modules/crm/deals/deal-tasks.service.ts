@@ -6,6 +6,7 @@ import { DatabaseService, type Tx } from '../../../shared/database/database.serv
 import { mapDbError } from '../../../shared/database/errors';
 import { activities, CHANNELS, dealTasks, memberships, users } from '../../../shared/database/schema';
 import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
+import { userNameOf } from '../owner';
 
 const label = z.string().trim().max(200);
 const TaskState = z.object({
@@ -61,7 +62,11 @@ export class DealTasksService {
   list(ctx: TenantContext, page: PaginationQuery) {
     return this.database.withTenant(ctx.tenantId, (tx) =>
       tx
-        .select({ ...getTableColumns(dealTasks), doneByName: sql<string | null>`coalesce(${users.displayName}, ${users.email})` })
+        .select({
+          ...getTableColumns(dealTasks),
+          doneByName: sql<string | null>`coalesce(${users.displayName}, ${users.email})`,
+          assigneeName: userNameOf(dealTasks.assigneeUserId),
+        })
         .from(dealTasks)
         .leftJoin(users, eq(users.id, dealTasks.doneByUserId))
         .orderBy(asc(dealTasks.dealId), asc(dealTasks.position), asc(dealTasks.createdAt))

@@ -107,14 +107,21 @@ the store is the one place that talks to the backend.
   contact inline. People are primary contacts plus everyone else. Backend ids are kept on the UI
   records (`Lead.companyId`, `Person.contactId`, `Funnel.id`, …).
 - `store/store.tsx`: every action updates the screen immediately and then saves. Typing is
-  debounced (`saveLater`, one write per field). A failed save shows the error and reloads the
-  workspace so the screen matches the database. Changes that touch several records (new deal,
+  debounced (`saveLater`, one write per field). A failed save names the change that failed and why, then
+  reloads the workspace so the screen matches the database. That reload first sends the debounced
+  edits still waiting and waits for writes in flight, so it never throws away other unsaved typing;
+  only the failed change goes back to its saved value. Changes that touch several records (new deal,
   moving a contact) reload after saving.
 - Companies are identified by their backend id, never by name (two companies can share a name):
   routes are `/companies/:id`, and pickers and filters select by id. Where names collide, pickers
   add the HQ (or a number) to tell them apart. Deals without a company aren't listed as a company.
-- Deal owners: the deal Summary lists active members. The API accepts an `ownerUserId` (deals,
+- Deal owners: the deal Summary lists active members. Owners are matched by user id everywhere
+  (Salesperson filters, bonus rows); labels come from the team list, with the email added when two
+  members share a name. The deal, company and task lists also return the owner's name, so a deal
+  whose owner left the workspace shows "<name> (former member)" and can still be filtered. The API accepts an `ownerUserId` (deals,
   companies, contacts) only if that user is a member of the tenant, and returns 400 otherwise.
+- Updates: every PATCH body goes through `nonEmptyPatch` (`shared/validation/common.ts`), so an
+  update with no fields gets 400 "Nothing to update" instead of reaching the database.
 - Deleting (owners and admins only; the buttons are hidden for members and the API returns 403):
   - a **deal** takes its lines, to-dos, activity and contact links with it (FK cascade);
   - a **contact** is unlinked from every deal; deals where they were the primary contact are
@@ -133,7 +140,8 @@ the store is the one place that talks to the backend.
   false`) with a due date, a channel and an owner (`assignee_user_id`, which must be a member of the
   workspace). They show in Today (overdue / today / next up, with a done toggle) and on the lead's
   To-Do list, but don't count towards finishing a stage. Creating one logs "Task added" on the
-  deal's timeline; ticking it off logs it like any completed to-do. The store keeps them in
+  deal's timeline and deleting one logs "Task removed" (the timeline is history, so the first entry
+  stays); ticking it off logs it like any completed to-do. The store keeps them in
   `leadTasks`; the other to-dos (`blocks_advance = true`) gate "Advance".
 
 Still browser-only (seeded from `store/seed.ts`, lost on reload), because the backend doesn't have

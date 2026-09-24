@@ -33,7 +33,8 @@ export const stageOf = (s: State, lead: Lead): Stage => {
   return stages.find((st) => st.id === lead.stage) ?? stages[0]!;
 };
 export const leadById = (s: State, id: string | null | undefined): Lead | undefined => s.leads.find((l) => l.id === id);
-export const ownerOf = (l: Lead): string => l.owner || '—';
+/** The deal owner's label (see memberName). */
+export const ownerOf = (s: State, l: Lead): string => memberName(s, l.ownerId, l.owner);
 export const bandOf = (v: string): string => {
   const n = valueNum(v);
   return n < 25000 ? 'Under €25k' : n <= 100000 ? '€25k–€100k' : 'Over €100k';
@@ -184,7 +185,9 @@ export interface CompanyRecord {
   hq: string;
   size: string;
   source: string;
+  /** Owner label, and user id for filtering (labels aren't unique). */
   owner: string;
+  ownerId: string | null;
   leads: Lead[];
   contactCount: number;
   oppCount: number;
@@ -202,10 +205,10 @@ export function companyRecords(s: State): CompanyRecord[] {
   const map = new Map<string, Omit<CompanyRecord, 'contactCount' | 'oppCount' | 'value' | 'valueLabel' | 'stageName' | 'lastTouch'>>();
   for (const l of s.leads) {
     if (!l.companyId) continue;
-    if (!map.has(l.companyId)) map.set(l.companyId, { id: l.companyId, name: l.company, industry: l.industry, hq: l.hq, size: l.size, source: l.source, owner: ownerOf(l), leads: [] });
+    if (!map.has(l.companyId)) map.set(l.companyId, { id: l.companyId, name: l.company, industry: l.industry, hq: l.hq, size: l.size, source: l.source, owner: ownerOf(s, l), ownerId: l.ownerId ?? null, leads: [] });
     map.get(l.companyId)!.leads.push(l);
   }
-  for (const c of s.extraCompanies) if (c.id && !map.has(c.id)) map.set(c.id, { ...c, id: c.id, leads: [] });
+  for (const c of s.extraCompanies) if (c.id && !map.has(c.id)) map.set(c.id, { ...c, id: c.id, owner: memberName(s, c.ownerId, c.owner), ownerId: c.ownerId ?? null, leads: [] });
   return [...map.values()].map((r) => {
     const ids = new Set<string>();
     r.leads.forEach((l) => contactsForLead(s, l.id).forEach((p) => ids.add(p.id)));
@@ -265,17 +268,53 @@ export const stageDone = (s: State, lead: Lead, stageId: string): boolean =>
 
 // ---------------------------------------------------------------- sales bonuses
 
-export function bonusRule(s: State, owner: string) {
+/** Bonus rule of a salesperson; rules are kept per user id (browser-only for now). */
+export function bonusRule(s: State, ownerId: string) {
   const trigger = s.workspace.bonusTrigger || 'On contract signed';
-  const saved = s.bonusRules[owner];
+  const saved = s.bonusRules[ownerId];
   return { rate: saved?.rate ?? 3, floor: saved?.floor ?? 10000, fixed: saved?.fixed ?? 250, trigger };
 }
 export const bonusOf = (lead: Lead, rule: { rate: number | string; floor: number | string; fixed: number | string }): number => {
   const net = num(lead.value);
   return net >= num(rule.floor) ? (net * num(rule.rate)) / 100 : num(rule.fixed);
 };
-/** Name of a workspace member by user id. */
-export const memberName = (s: State, userId: string): string => s.team.find((m) => m.id === userId && m.status === 'Active')?.name ?? '—';
+// ---------------------------------------------------------------- people who own deals
+// Owners are matched and grouped by user id, never by name: two members can share a name, and
+// someone who left the workspace still owns their deals until they are handed over.
 
-/** Everyone in the workspace who can own deals. */
-export const salesPeople = (s: State): string[] => s.team.filter((m) => m.status === 'Active').map((m) => m.name);
+export const FORMER_MEMBER = 'Former member';
+
+/** Active members by user id. Members who share a name get their email added to tell them apart. */
+export function memberLabels(s: State): Map<string, string> {
+  const active = s.team.filter((m) => m.status === 'Active');
+  const key = (name: string) => name.trim().toLowerCase();
+  const seen = new Map<string, number>();
+  for (const m of active) seen.set(key(m.name), (seen.get(key(m.name)) ?? 0) + 1);
+  return new Map(active.map((m) => [m.id, seen.get(key(m.name))! > 1 && m.email && m.email !== m.name ? m.name + ' · ' + m.email : m.name]));
+}
+
+/**
+ * Label of a user by id: the member's name, or for someone who is no longer in the workspace
+ * their last known name (from the API) marked as former, or just "Former member".
+ */
+export function memberName(s: State, userId: string | null | undefined, lastKnown?: string | null): string {
+  if (!userId) return '—';
+  const label = memberLabels(s).get(userId);
+  if (label) return label;
+  return lastKnown ? lastKnown + ' (former member)' : FORMER_MEMBER;
+}
+
+/**
+ * Options for the Salesperson filters, by user id: active members, then former members who
+ * still own deals or tasks (so their work can still be found).
+ */
+export function salesPeople(s: State): { value: string; label: string }[] {
+  const labels = memberLabels(s);
+  const former = new Map<string, string>();
+  const addFormer = (id: string | null | undefined, lastKnown?: string | null) => {
+    if (id && !labels.has(id) && !former.has(id)) former.set(id, memberName(s, id, lastKnown));
+  };
+  s.leads.forEach((l) => addFormer(l.ownerId, l.owner));
+  s.leadTasks.forEach((t) => addFormer(t.ownerId, t.ownerName));
+  return [...labels, ...former].map(([value, label]) => ({ value, label }));
+}
