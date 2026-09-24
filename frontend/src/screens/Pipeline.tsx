@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FilterBar } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { DEFAULT_FILTERS, INDUSTRIES, LOST_VIEWS, VALUE_BANDS } from '../store/seed';
-import { bandOf, champTotal, salesPeople, stageOf, valueNum } from '../store/selectors';
+import { bandOf, champTotal, needsNextStep, salesPeople, stageOf, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { SegKey } from '../store/types';
 
@@ -29,7 +29,7 @@ export function Pipeline() {
   const lostHidden = f.lost === LOST_VIEWS[0] ? inView.filter((l) => l.outcome === 'lost').length : 0;
   const visible = f.stage === 'Stage' || !stages.some((x) => x.name === f.stage) ? stages : stages.filter((x) => x.name === f.stage);
 
-  const pipelineValue = segLeads.filter((l) => l.outcome !== 'lost').reduce((a, l) => a + valueNum(l.value), 0);
+  const pipelineValue = valueTotal(s, segLeads.filter((l) => l.outcome !== 'lost'));
   const labels = { smb: s.funnels.smb.label, ent: s.funnels.ent.label };
   const setFilter = (k: keyof typeof f) => (v: string) => set((x) => ({ filters: { ...x.filters, [k]: v } }));
   const dirty = (['owner', 'industry', 'band', 'lost'] as const).some((k) => f[k] !== DEFAULT_FILTERS[k]);
@@ -55,7 +55,7 @@ export function Pipeline() {
         ]}
         dirty={dirty}
         onClear={() => set((x) => ({ filters: { ...x.filters, ...DEFAULT_FILTERS } }))}
-        meta={`${segLeads.length} leads · €${pipelineValue.toLocaleString('en-US')} open${lostHidden ? ` · ${lostHidden} lost hidden` : ''}`}
+        meta={`${segLeads.length} ${segLeads.length === 1 ? 'lead' : 'leads'} · ${pipelineValue} open${lostHidden ? ` · ${lostHidden} lost hidden` : ''}`}
         action={{ label: 'New deal', onClick: () => set({ newLeadOpen: true }) }}
       />
 
@@ -63,8 +63,7 @@ export function Pipeline() {
         <div style={{ display: 'flex', gap: 14, overflowX: 'auto', alignItems: 'stretch', flex: 1, minHeight: 520 }}>
           {visible.map((st, ci) => {
             const cards = segLeads.filter((l) => l.stage === st.id);
-            const total = cards.filter((l) => l.outcome !== 'lost').reduce((a, l) => a + valueNum(l.value), 0);
-            const short = total >= 1000 ? '€' + (total / 1000).toFixed(total % 1000 === 0 ? 0 : 1) + 'k' : '€' + total;
+            const short = valueTotal(s, cards.filter((l) => l.outcome !== 'lost'), true);
             const active = dragOver === st.id;
             const first = ci === 0;
             const last = ci === visible.length - 1;
@@ -158,7 +157,16 @@ export function Pipeline() {
                             <span className="badge badge-danger">Lost · {l.lostReason}</span>
                           </div>
                         ) : (
-                          <div style={{ fontSize: 11.5, color: 'var(--text-2)', borderTop: '1px dashed var(--border)', paddingTop: 7, lineHeight: 1.35 }}>Next: {stageOf(s, l).activity}</div>
+                          <div style={{ fontSize: 11.5, color: 'var(--text-2)', borderTop: '1px dashed var(--border)', paddingTop: 7, lineHeight: 1.35 }}>
+                            Next: {stageOf(s, l).activity}
+                            {needsNextStep(s, l) && (
+                              <div style={{ marginTop: 6 }}>
+                                <span className="badge badge-warn" data-testid="no-next-step" title="No open task on this deal">
+                                  No next step
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     );

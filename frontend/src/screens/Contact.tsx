@@ -88,7 +88,7 @@ export function Contact() {
                 <span className="field-value">{memberName(s, p.ownerId, p.ownerName)}</span>
               </FieldRow>
               <FieldRow label="Last touch">
-                <span className="field-value">{!c ? '—' : c.stall === 0 ? 'today' : c.stall + ' days ago'}</span>
+                <span className="field-value">{!c ? '—' : c.stall === 0 ? 'today' : c.stall === 1 ? '1 day ago' : c.stall + ' days ago'}</span>
               </FieldRow>
             </div>
           </div>
