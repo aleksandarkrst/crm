@@ -48,6 +48,8 @@ export interface Lead {
   email: string;
   phone: string;
   buyerRole?: string;
+  /** Notes on the primary contact (from the New contact dialog or the contact screen). */
+  contactNotes?: string;
   /** Owner of the primary contact (user id, and last known name from the API). */
   contactOwnerId?: string | null;
   contactOwner?: string;
@@ -98,6 +100,7 @@ export interface Person {
   phone: string;
   linkedin?: string;
   buyerRole?: string;
+  notes?: string;
   initials: string;
   /** Owner of the contact (user id); ownerName is their last known name, from the API. */
   ownerId?: string | null;

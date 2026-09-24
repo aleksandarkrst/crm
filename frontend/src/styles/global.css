@@ -215,4 +215,5 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 }
 .empty-state { padding: 34px 18px; text-align: center; color: var(--text-2); font-size: 13px; }
 .empty-state button { border: 0; background: transparent; color: var(--brand); font-weight: 600; cursor: pointer; }
+.contact-field { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
 .contact-action { padding: 7px 9px; border-radius: 7px; background: var(--brand-soft); font-size: 12px; font-weight: 600; white-space: nowrap; }

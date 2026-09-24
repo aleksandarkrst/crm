@@ -53,9 +53,11 @@ export const memberships = pgTable(
     role: text('role', { enum: MEMBERSHIP_ROLES }).notNull().default('member'),
     // Profile settings that belong to one workspace: its funnels, and a digest of its pipeline.
     // No foreign key: funnels are RLS-protected CRM rows; ProfileService checks the id with the
-    // tenant set, and the UI ignores an id it doesn't know.
+    // tenant set, a trigger clears it when the funnel is deleted (0013), and the UI falls back to
+    // the first funnel for an id it doesn't know.
     defaultFunnelId: uuid('default_funnel_id'),
     dailyDigest: boolean('daily_digest').notNull().default(true),
+    /** The getting-started checklist (CD-68) is dismissed per user, so each admin decides for themselves. */
     onboardingDismissedAt: timestamp('onboarding_dismissed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

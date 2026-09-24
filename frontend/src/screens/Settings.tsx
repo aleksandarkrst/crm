@@ -361,6 +361,11 @@ function FunnelBuilder() {
           How they buy
           <input className="form-input" value={funnel.note} disabled={!editable} placeholder="Who decides, how long it takes, what slows it down" onChange={(e) => store.patchFunnel(funnel.id, { note: e.target.value })} />
         </label>
+        {!editable && (
+          <div data-testid="funnels-read-only" style={{ gridColumn: '1 / -1', fontSize: 12, color: 'var(--text-2)' }}>
+            Only owners and admins can change funnels, stages and their to-dos.
+          </div>
+        )}
         {editable && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, gridColumn: '1 / -1', fontSize: 12, color: 'var(--text-2)' }}>
             <span>

@@ -409,13 +409,14 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       void save(() => crmApi.unlinkContact(leadId, contactId), undefined, 'unlinking ' + p.name);
     };
 
-    const CONTACT_FIELDS: Partial<Record<keyof Person, 'fullName' | 'jobTitle' | 'email' | 'phone' | 'linkedin' | 'buyerRole'>> = {
+    const CONTACT_FIELDS: Partial<Record<keyof Person, 'fullName' | 'jobTitle' | 'email' | 'phone' | 'linkedin' | 'buyerRole' | 'notes'>> = {
       name: 'fullName',
       role: 'jobTitle',
       email: 'email',
       phone: 'phone',
       linkedin: 'linkedin',
       buyerRole: 'buyerRole',
+      notes: 'notes',
     };
     const patchPerson = (id: string, patch: Partial<Person>) => {
       const p = personById(cur(), id);
@@ -428,7 +429,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }
       const withInitials = patch.name !== undefined ? { ...patch, initials: initialsOf(patch.name) } : patch;
       if (p.primary) {
-        const map: Record<string, string> = { name: 'contact', role: 'role', email: 'email', phone: 'phone', buyerRole: 'buyerRole', initials: 'initials' };
+        const map: Record<string, string> = { name: 'contact', role: 'role', email: 'email', phone: 'phone', buyerRole: 'buyerRole', notes: 'contactNotes', initials: 'initials' };
         const lp: Record<string, unknown> = {};
         Object.entries(withInitials).forEach(([k, v]) => (lp[map[k] || k] = v));
         set((x) => ({ leads: x.leads.map((l) => (l.contactId === contactId ? { ...l, ...lp } : l)) }));
@@ -684,6 +685,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
      * saved at once and the workspace is reloaded; renames keep their item id and just save.
      */
     const editStage = (idx: number, fn: (stage: Stage) => void, structural = false) => {
+      if (!canEditFunnels) return; // members see the playbook read-only; the API refuses them (403)
       const x = cur();
       const funnels = JSON.parse(JSON.stringify(x.funnels)) as State['funnels'];
       const funnel = funnels[x.segment];
