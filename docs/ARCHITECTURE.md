@@ -274,9 +274,24 @@ OpenID Connect provider (discovery → JWKS). Users are created on first request
 ### Teams and invitations
 
 A tenant's members and their roles live in `memberships`. Admins invite people from
-**Settings → Team** (`POST /api/team/invitations`). The API returns a one-time token and stores
-only its SHA-256 hash; the UI shows the link `/invite/<token>` to copy and send. For now, sending
-it is up to you. Emailing it from the worker is the natural next step.
+**Settings → Team** (`POST /api/team/invitations`). The API returns a one-time token, which the
+invite dialog shows as the link `/invite/<token>` to copy, and the worker emails the same link
+(CD-7, see "Email" below). The token is found by its SHA-256 hash (`token_hash`); it is also
+kept encrypted with `APP_SECRET` (`token_sealed`, AES-256-GCM), so the worker can build the email
+and admins can resend or copy it later.
+
+- **Email status**: `invitations.email_status` is `queued` (waiting for the worker, or retrying
+  after a failed send, with `email_error` set), `sent` (`email_sent_at`) or `failed` (every retry
+  failed; `email_error` says why). The Team tab shows it under the address ("Email sent 24 Sep",
+  "Sending email…", "Email not delivered: …") and polls every 3 s while one is on its way.
+- **Resend** (`POST /api/team/invitations/:id/resend`, admins) queues the email again with the same
+  link and gives the invitation another 7 days. **Copy link** (`GET /api/team/invitations/:id/link`,
+  admins) returns the token, for when the email doesn't arrive. Both answer 404 for an invitation
+  that was accepted, withdrawn or expired (or belongs to another workspace), and 409 for one from
+  before CD-7 (no stored link: withdraw it and invite again) or when `APP_SECRET` changed since.
+- The email names the workspace, who invited them and the role, and links to
+  `APP_URL/invite/<token>`. `APP_URL` is configured, never taken from the request, so a spoofed
+  Host header can't redirect invite links.
 
 - An invitation is for one email address, expires after 7 days, and works once. Re-inviting the
   same address replaces the pending invitation.
@@ -293,6 +308,93 @@ pg-boss keeps its queue in PostgreSQL (schema `pgboss`), so there is no Redis to
 current transaction to `jobs.send(name, data, tx)` so the job exists only if the business change
 commits. `DealsService.moveToStage` does this for `crm.deal-won`. Add Redis later only for caching
 or very high job volume.
+
+The worker fetches up to 10 jobs of a queue at a time (and again straight away while batches come
+back full) and settles each job on its own, so one failing email doesn't retry the others. A
+handler gets `{ retryCount, retryLimit, lastAttempt }` to tell a final failure from one that will
+be retried. Modules register their own handlers through a worker module exported from their
+`index.ts` (`IdentityWorkerModule`, `NotificationsWorkerModule`).
+
+| Job | Sent by | Handled by |
+|---|---|---|
+| `crm.deal-won` | CRM, deal enters the won stage | worker placeholder (future projects handover) |
+| `crm.deal-assigned` | CRM, someone else becomes a deal's owner (create or change) | notifications: "deal assigned to you" email |
+| `identity.invitation-email` | identity, invitation created or resent | identity: the invitation email |
+| `notifications.digest-tick` | cron, every 15 minutes | notifications: queues the digests that are due |
+| `notifications.daily-digest` | the tick (or `POST /api/dev/digest`) | notifications: one member's digest |
+| `reporting.nightly` | cron, 02:00 UTC | placeholder |
+
+## Email (CD-7, CD-16)
+
+Only the worker sends email, through `Mailer` (`infrastructure/mail/`), whose driver `MAIL_DRIVER`
+picks:
+
+- `log` (the default; development and tests): writes each email to the log (recipient and subject
+  at info, the text at debug) and keeps the last ones in memory. Outside production it also
+  appends them to `$STORAGE_DIR/dev-mail/outbox.jsonl`, which `GET /api/dev/mail?to=<address>`
+  returns newest first (only with `AUTH_MODE=dev`; the API and worker are separate processes, so
+  the file is what they share). Addresses at the reserved `.invalid` domain fail, so failed sends
+  and their retries can be tried without a provider.
+- `smtp`: nodemailer with `SMTP_URL` (e.g. `smtps://USER:PASSWORD@smtp.postmarkapp.com:465`) and
+  `MAIL_FROM`; any provider with SMTP works (Postmark, Resend, SES, Mailgun).
+
+Mail jobs (`MAIL_JOBS` in `job-types.ts`) are retried `MAIL_RETRY_LIMIT` times (default 4) with
+exponential backoff from `MAIL_RETRY_DELAY_SECONDS` (default 30). Emails are plain text plus a
+simple HTML version with inline styles (`infrastructure/mail/html.ts` escapes everything).
+Links use `APP_URL`.
+
+| Variable | Default | |
+|---|---|---|
+| `APP_URL` | `http://localhost:5173` | public address for links; required in production |
+| `APP_SECRET` | `DEV_JWT_SECRET` outside production | ≥ 32 characters; encrypts invite links; required in production |
+| `MAIL_DRIVER` | `log` | `log` or `smtp` |
+| `SMTP_URL` | | required with `smtp` |
+| `MAIL_FROM` | `Cadence <no-reply@localhost>` | sender |
+| `MAIL_RETRY_LIMIT`, `MAIL_RETRY_DELAY_SECONDS` | `4`, `30` | retries of a failed send |
+
+Production values are listed in `docs/DEPLOYMENT.md` and the root `.env.example`.
+
+### Notification settings
+
+**Settings → Notifications** shows your own settings for the current workspace. They are columns
+on your membership, read and saved through `GET/PATCH /api/profile` like the rest of the profile
+(so they are per user and per workspace, and nobody else can change them):
+
+- **Daily digest email** (`memberships.daily_digest`, the setting the profile already had since
+  CD-12; the Profile screen shows the same switch).
+- **Deal assigned to you** (`memberships.notify_deal_assigned`, on by default).
+- "Document activity" and "Weekly pipeline report" are listed as **Coming soon**: nothing sends
+  them yet. The old browser-only "Stalled lead nudges" and "Task reminders" became the digest.
+
+### Daily digest
+
+Every 15 minutes `notifications.digest-tick` looks at each workspace's clock (its time zone,
+CD-73). Between 8:00 and 11:59 local time it queues `notifications.daily-digest` for each member
+with the digest on and an email address, unless `daily_digests` already has a row for them and
+that local date. The window lets a worker that was down at 8:00 catch up, without sending a
+"morning" email in the afternoon. The digest job claims the day (a new row, or a failed one being
+retried), loads the digest inside `withTenant` and:
+
+- sends it when it has something: the member's tasks that aren't done and are due before today
+  (overdue) or today, by the workspace's date, on deals that aren't lost; and their open deals
+  (not won, not lost) with no open task from the "New task" dialog, i.e. the Pipeline's "No next
+  step" flag. Each section lists up to 20 items linking to `/deals/<id>`;
+- records `skipped` without sending when all three are empty;
+- records `failed` with the error when the send throws; pg-boss retries it.
+
+`daily_digests` (tenant-scoped, RLS in `drizzle/0014_daily_digests_rls.sql`) holds one row per
+workspace, member and local date with its status (`sending`, `sent`, `skipped`, `failed`), item
+count and error. `GET /api/notifications/digest` returns what your digest for this workspace
+contains right now; with `AUTH_MODE=dev`, `POST /api/dev/digest` sends yours now, whatever the time.
+The content and the email are pure functions in `modules/notifications/digest-content.ts`.
+
+### Deal assigned to you
+
+`DealsService` queues `crm.deal-assigned` in the same transaction when a deal gets an owner who
+isn't the person making the change: a new deal created for someone else, or an owner change.
+Saving the same owner again or taking a deal yourself sends nothing, and neither does the CSV
+import. The worker checks the assignee's setting when it sends (so switching it off stops emails
+still in the queue), and skips deals that were deleted or given to someone else again meanwhile.
 
 ## Frontend: store → API
 
@@ -391,10 +493,11 @@ the store is the one place that talks to the backend.
     stays the same.
 - Profile (**Profile settings**, `GET/PATCH /api/profile`, always the caller's own): name, job title,
   phone, language, date format and start page live on `users` and apply in every workspace. The
-  default funnel and the daily-digest choice live on `memberships`, because funnels and the digest
-  belong to one workspace. A name set here wins over the name in the sign-in token
+  default funnel and the notification settings (daily digest, deal assigned) live on
+  `memberships`, because funnels and notifications belong to one workspace. A name set here wins over the name in the sign-in token
   (`users.display_name_custom`). The start page and the default funnel take effect (the app opens
-  on them). Language, date format and the digest are only stored for now, and the UI says so.
+  on them). Language and date format are only stored for now, and the UI says so; the digest is
+  sent (see "Email").
   Email and password belong to the sign-in provider and can't be changed here.
 - Discovery notes on a deal (headline, need, constraint, decision maker, discovery date) are
   columns on `deals`. They are edited in the deal's **Discovery** card and merged into the proposal
@@ -405,6 +508,5 @@ them yet:
 - document templates and generation (worker + storage)
 - sales-bonus rules (including "Sales bonus earned" on the Workspace tab); they start empty
   (no made-up rate, minimum or flat amount)
-- invitation emails (links are copied by hand for now)
 - custom fields
-- notification and integration settings
+- integration settings (CD-79)

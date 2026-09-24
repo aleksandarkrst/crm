@@ -27,7 +27,7 @@ cp .env.example .env
 npm install
 npm run build && npm run db:migrate
 npm run dev                 # API with reload
-npm run dev:worker          # (second terminal) background worker
+npm run dev:worker          # (second terminal) background worker: emails, digests, other jobs
 
 # 3. Frontend — UI on :5173 (proxies /api to 127.0.0.1:3000; VITE_PORT and VITE_API_PROXY override)
 cd frontend
@@ -39,12 +39,14 @@ Open http://localhost:5173.
 
 Sign in with any email (dev mode, no password), create a workspace, and start adding deals.
 To try teamwork locally, invite a second email in **Settings → Team**, then open the invite link in
-a private window and sign in as that email.
+a private window and sign in as that email. Emails aren't delivered in development (`MAIL_DRIVER=log`):
+the worker logs them, and `GET /api/dev/mail?to=<address>` shows what it "sent". Email settings are
+described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#email-cd-7-cd-16).
 
 > **Current state of the UI:** deals (with their product lines, payment schedules, stage to-dos,
 > fit scores, discovery notes, activity and stage history, and whether they were won or lost),
-> companies, contacts, products, funnels (any number) and their stages are saved in the database, and so are the team, invitations, workspace settings and your
-> profile. Some design features have no backend yet and
+> companies, contacts, products, funnels (any number) and their stages are saved in the database, and so are the team, invitations, workspace settings, your
+> profile and your notification settings. The worker emails invitations, a morning digest and "deal assigned to you" notices. Some design features have no backend yet and
 > only last until you reload the page: documents and the remaining settings tabs. See
 > [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#frontend-store--api).
 
@@ -82,7 +84,8 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
 
 - **Unit tests** (`backend`, `npm test`): fast, no database.
 - **Integration tests** (`backend/test/integration`, `npm run test:integration`): build the API,
-  start `dist/main.js` on port 3101 (dev auth) and test it over HTTP against PostgreSQL:
+  start `dist/main.js` on port 3101 (dev auth) and the worker (`dist/worker.js`, log mail driver,
+  fast retries) and test them over HTTP against PostgreSQL:
   tenant isolation through RLS (API and raw SQL as the runtime role), composite-FK rejection of
   cross-tenant references, member/admin/owner rules and last-owner protection, invitations
   (invited email only, single use, withdraw, replace), deal-amount recalculation from lines,
@@ -90,9 +93,12 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   tenant) and lost deals (reason pick list, reopen, no moves while lost); funnels and stages
   (create, copy, rename, delete; add, reorder and delete stages with their deals moved and the
   moves in the history; roles and isolation), checklist items keeping to-dos across renames, the
-  database guards (no lost deal in a won stage, no deal in a deleted stage), and CSV import (roles,
+  database guards (no lost deal in a won stage, no deal in a deleted stage), CSV import (roles,
   per-row validation, duplicates skipped or updated, deal matching, size and row limits, tenant
-  isolation, quoting edge cases).
+  isolation, quoting edge cases), and email: invitation emails (sent, resent, copy link, roles,
+  failed after retries), notification settings per user and workspace, the daily digest's content
+  by the workspace's date (and skipped when empty), and "deal assigned to you" only when someone
+  else assigns it.
 - **Browser tests** (`e2e/`, Puppeteer with its bundled Chrome, run by `node:test`): sign-in,
   workspace, products, new deal, closing date, notes, drag between stages, reload, every screen
   renders; deal lines and stage to-dos persist; CHAMP fit score; team invitations with two
@@ -101,7 +107,8 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   in it, adding and removing stages; renaming a checklist item without losing the tick; importing
   companies and deals through the import dialog, and the exported contacts CSV (downloaded to a
   temp folder); the header search (Ctrl+K, keyboard navigation), the New menu and the sidebar
-  workspace switcher.
+  workspace switcher; the Team tab's invitation email status, Resend and Copy link, and the
+  Notifications tab's settings surviving a reload (these need the worker running).
 
 Both suites create their own users and workspaces with unique emails, so they can run against
 the dev database without resetting it. The database must be migrated first.
@@ -113,10 +120,11 @@ npm run test:integration
 #   DATABASE_URL          runtime role, default postgres://app_runtime:dev_runtime_password@localhost:5432/app
 #                         (the suite refuses to run as a role that bypasses RLS)
 #   INTEGRATION_API_PORT  port for the API it starts, default 3101
-#   API_URL               test an already running API instead of starting one
+#   API_URL               test an already running API (and worker, sharing its STORAGE_DIR) instead
 
 # Browser tests: start the API and the UI, then run the suite
 cd backend && npm run build && PORT=3101 node dist/main.js                    # terminal 1
+cd backend && node dist/worker.js                                             # terminal 1b (emails)
 cd frontend && VITE_PORT=5174 VITE_API_PROXY=http://127.0.0.1:3101 npm run dev   # terminal 2
 cd e2e && npm ci && E2E_BASE_URL=http://localhost:5174 npm test                # terminal 3
 #   E2E_BASE_URL   where the UI runs (default http://localhost:5173); /api must reach the API
