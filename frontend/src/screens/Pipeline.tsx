@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { FilterBar } from '../components/ui';
 import { DataActions } from '../components/DataActions';
 import { Screen } from '../components/Layout';
+import { dealsCsv } from '../store/exportCsv';
 import { DEFAULT_FILTERS, INDUSTRIES, LOST_VIEWS, VALUE_BANDS } from '../store/seed';
 import { bandOf, champTotal, salesPeople, stageOf, valueNum } from '../store/selectors';
 import { useStore } from '../store/store';
@@ -57,7 +58,7 @@ export function Pipeline() {
         dirty={dirty}
         onClear={() => set((x) => ({ filters: { ...x.filters, ...DEFAULT_FILTERS } }))}
         meta={`${segLeads.length} leads · €${pipelineValue.toLocaleString('en-US')} open${lostHidden ? ` · ${lostHidden} lost hidden` : ''}`}
-        extra={<DataActions type="deals" />}
+        extra={<DataActions type="deals" count={segLeads.length} exportCsv={() => dealsCsv(s, segLeads)} />}
         action={{ label: 'New deal', onClick: () => set({ newLeadOpen: true }) }}
       />
 

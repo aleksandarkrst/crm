@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { FilterBar, SortHeader, useSort } from '../components/ui';
 import { DataActions } from '../components/DataActions';
 import { Screen } from '../components/Layout';
+import { companiesCsv } from '../store/exportCsv';
 import { INDUSTRIES } from '../store/seed';
 import { type CompanyRecord, companyRecords, salesPeople } from '../store/selectors';
 import { useStore } from '../store/store';
@@ -57,7 +58,7 @@ export function Companies() {
           setQuery('');
         }}
         meta={rows.length + (rows.length === 1 ? ' company' : ' companies')}
-        extra={<DataActions type="companies" />}
+        extra={<DataActions type="companies" count={rows.length} exportCsv={() => companiesCsv(rows)} />}
         action={{ label: 'Add company', onClick: addCompany }}
       />
       <div className="card" style={{ overflowX: 'auto' }}>
