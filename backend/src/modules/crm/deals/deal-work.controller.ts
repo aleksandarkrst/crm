@@ -4,17 +4,19 @@ import { PaginationQuery, UuidParam } from '../../../shared/validation/common';
 import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
 import { CreateDealLine, DealLinesService, UpdateDealLine } from './deal-lines.service';
 import { CreateExtraTask, DealTasksService, UpdateTask, UpsertPlaybookTask } from './deal-tasks.service';
+import { StageHistoryQuery, StageHistoryService } from './stage-history.service';
 
 const Id = new ZodPipe(UuidParam);
 const Page = new ZodPipe(PaginationQuery);
 
-/** Deal lines (products & payment schedules) and stage to-dos. */
+/** Deal lines (products & payment schedules), stage to-dos and stage history. */
 @Controller('crm')
 @RequireTenant('member')
 export class DealWorkController {
   constructor(
     private readonly lines: DealLinesService,
     private readonly tasks: DealTasksService,
+    private readonly history: StageHistoryService,
   ) {}
 
   // ------------------------------------------------------------ deal lines
@@ -66,5 +68,12 @@ export class DealWorkController {
   @HttpCode(204)
   removeTask(@Tenant() ctx: TenantContext, @Param('taskId', Id) id: string) {
     return this.tasks.remove(ctx, id);
+  }
+
+  // ------------------------------------------------------------ stage history
+  /** Every stage and outcome change, oldest first (Overview computes conversion metrics from it). */
+  @Get('deal-stage-history')
+  listStageHistory(@Tenant() ctx: TenantContext, @Query(new ZodPipe(StageHistoryQuery)) query: StageHistoryQuery) {
+    return this.history.list(ctx, query);
   }
 }

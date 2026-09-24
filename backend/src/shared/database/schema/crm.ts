@@ -316,3 +316,41 @@ export const dealTasks = pgTable(
     foreignKey({ columns: [t.tenantId, t.stageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deal_tasks_stage_fk' }).onDelete('cascade'),
   ],
 );
+
+// ---------------------------------------------------------------- stage history
+
+/**
+ * Why a deal's stage or outcome changed. "created" is the first stage of a new deal (and the
+ * backfilled row of deals that existed before this table); "funnel_changed" restarts the deal at
+ * the new funnel's first stage; "lost" and "reopened" keep the stage and change the outcome.
+ */
+export const STAGE_CHANGE_KINDS = ['created', 'moved', 'funnel_changed', 'lost', 'reopened'] as const;
+export type StageChangeKind = (typeof STAGE_CHANGE_KINDS)[number];
+export const DEAL_OUTCOMES = ['open', 'won', 'lost'] as const;
+export type DealOutcome = (typeof DEAL_OUTCOMES)[number];
+
+/**
+ * One row per stage or outcome change of a deal, written in the same transaction as the change.
+ * The conversion metrics on Overview are computed from it.
+ */
+export const dealStageHistory = pgTable(
+  'deal_stage_history',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    dealId: uuid('deal_id').notNull(),
+    kind: text('kind', { enum: STAGE_CHANGE_KINDS }).notNull(),
+    fromStageId: uuid('from_stage_id'), // null when the deal was created
+    toStageId: uuid('to_stage_id').notNull(),
+    outcome: text('outcome', { enum: DEAL_OUTCOMES }).notNull(), // the deal's outcome after the change
+    changedAt: timestamp('changed_at', { withTimezone: true }).notNull().defaultNow(),
+    changedByUserId: uuid('changed_by_user_id').references(() => users.id, { onDelete: 'set null' }), // null for backfilled rows
+  },
+  (t) => [
+    unique('deal_stage_history_tenant_id_uq').on(t.tenantId, t.id),
+    index('deal_stage_history_tenant_deal_idx').on(t.tenantId, t.dealId, t.changedAt),
+    foreignKey({ columns: [t.tenantId, t.dealId], foreignColumns: [deals.tenantId, deals.id], name: 'deal_stage_history_deal_fk' }).onDelete('cascade'),
+    foreignKey({ columns: [t.tenantId, t.fromStageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deal_stage_history_from_stage_fk' }),
+    foreignKey({ columns: [t.tenantId, t.toStageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deal_stage_history_to_stage_fk' }),
+  ],
+);

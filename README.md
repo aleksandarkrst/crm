@@ -79,7 +79,8 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   start `dist/main.js` on port 3101 (dev auth) and test it over HTTP against PostgreSQL:
   tenant isolation through RLS (API and raw SQL as the runtime role), composite-FK rejection of
   cross-tenant references, member/admin/owner rules and last-owner protection, invitations
-  (invited email only, single use, withdraw, replace) and deal-amount recalculation from lines.
+  (invited email only, single use, withdraw, replace), deal-amount recalculation from lines and
+  deal stage history (a row per creation, move and funnel change, isolated per tenant).
 - **Browser tests** (`e2e/`, Puppeteer with its bundled Chrome, run by `node:test`): sign-in,
   workspace, products, new deal, closing date, notes, drag between stages, reload, every screen
   renders; deal lines and stage to-dos persist; CHAMP fit score; team invitations with two

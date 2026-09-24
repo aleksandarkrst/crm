@@ -64,6 +64,23 @@ tenant's rows, cross-tenant inserts are rejected, and a non-member gets 403.
 3. `npx drizzle-kit generate --custom --name <change>_rls` creates an empty migration. Add the three RLS statements (copy them from `0001_rls.sql`).
 4. Access the table only inside `database.withTenant(ctx.tenantId, …)`.
 
+## Deal stage history
+
+`deal_stage_history` has one row per stage or outcome change of a deal: the deal, `from_stage_id`
+(null on creation), `to_stage_id`, the deal's `outcome` after the change, `changed_at` and
+`changed_by_user_id`. `kind` says what happened: `created` (the first stage), `moved` (drag and
+drop, "Advance", including into the won stage), `funnel_changed` (restarts at the new funnel's first
+stage), `lost` and `reopened` (the stage stays the same). `DealsService` writes the row in the same
+transaction as the change, through `StageHistoryService.record`, so the history can't disagree with
+the deal. Moving a deal to the stage it is already in writes nothing.
+
+- Deals that existed before the table got one `created` row each (their current stage at their
+  creation time, no user) in `drizzle/0008_deal_stage_history_rls.sql`.
+- The stage references are composite FKs without cascade: a stage that has history can't be deleted
+  (the app can't delete stages yet). Deleting a deal deletes its history.
+- `GET /api/crm/deal-stage-history` lists the workspace's history oldest first, paged like the other
+  lists (`limit` ≤ 200, `offset`; `dealId` narrows it to one deal).
+
 ## Auth
 
 The app handles authorization, not authentication. `AUTH_MODE=oidc` verifies JWTs from any
