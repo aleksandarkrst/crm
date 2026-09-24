@@ -192,6 +192,8 @@ export interface TeamMember {
   email: string;
   role: 'Owner' | 'Admin' | 'Member';
   status: 'Active' | 'Invited';
+  /** Pending invitations only: where their email is (CD-7). */
+  invite?: { emailStatus: 'queued' | 'sent' | 'failed' | null; emailSentAt: string | null; emailError: string | null; hasLink: boolean };
 }
 
 export interface ToggleRow {
@@ -237,8 +239,9 @@ export interface Profile {
   startPage: ApiStartPage;
   /** Backend funnel id; '' for none. Applies to this workspace only. */
   defaultFunnelId: string;
-  /** Applies to this workspace only. */
+  /** Notification settings (Settings → Notifications, CD-16). Apply to this workspace only. */
   digest: boolean;
+  dealAssigned: boolean;
 }
 
 export interface BonusRule {
@@ -313,7 +316,6 @@ export interface State {
   /** Stage history of every deal, oldest first; null until Overview loads it (see refreshHistory). */
   stageHistory: StageChange[] | null;
   team: TeamMember[];
-  notifs: ToggleRow[];
   integrations: ToggleRow[];
   fields: FieldDef[];
   workspace: Workspace;

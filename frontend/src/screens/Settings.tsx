@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { FieldRow, GhostInput, GhostSelect, Modal, ModalHeader, RemoveButton, Switch } from '../components/ui';
 import { Screen } from '../components/Layout';
@@ -6,6 +6,7 @@ import { paths } from '../lib/paths';
 import { ACTIVITIES, CHANNEL_LABELS, CHANNELS, DOCS, TEAM_ROLES } from '../store/seed';
 import { funnelOptions, initialsOf } from '../store/selectors';
 import { useStore } from '../store/store';
+import type { TeamMember } from '../store/types';
 
 const TABS = [
   { k: 'workspace', label: 'Workspace' },
@@ -76,7 +77,7 @@ export function Settings() {
       {current === 'funnel' && <FunnelBuilder />}
       {current === 'templates' && <TemplatesTab />}
       {current === 'fields' && <FieldsTab />}
-      {current === 'notifications' && <ToggleList kind="notifs" />}
+      {current === 'notifications' && <NotificationsTab />}
       {current === 'integrations' && <IntegrationsTab />}
       {current === 'billing' && <BillingTab />}
       {inviteOpen && <InviteModal onClose={() => setInviteOpen(false)} />}
@@ -142,11 +143,33 @@ function WorkspaceTab() {
   );
 }
 
+/** A small text button (Resend, Copy link) under an invitation. */
+const linkButton = { border: 0, background: 'none', padding: 0, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: 'var(--brand)' } as const;
+
+/** How an invitation's email is doing (CD-7), as a short line under its address. */
+function inviteEmailLine(invite: NonNullable<TeamMember['invite']>): { text: string; danger: boolean } {
+  if (invite.emailStatus === 'sent') return { text: 'Email sent' + (invite.emailSentAt ? ' ' + new Date(invite.emailSentAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''), danger: false };
+  if (invite.emailStatus === 'queued') return invite.emailError ? { text: 'Sending failed, trying again…', danger: true } : { text: 'Sending email…', danger: false };
+  if (invite.emailStatus === 'failed') return { text: 'Email not delivered' + (invite.emailError ? ': ' + invite.emailError : ''), danger: true };
+  return { text: 'Not emailed', danger: false };
+}
+
 function TeamTab() {
-  const { s, session, setMemberRole, removeMember, revokeInvitation } = useStore();
+  const { s, session, setMemberRole, removeMember, revokeInvitation, resendInvitation, copyInvitationLink, refreshTeam } = useStore();
   const cols = '1.4fr 1.4fr 0.9fr 0.7fr 40px';
   const canManage = session.tenant.role !== 'member';
   const isOwner = session.tenant.role === 'owner';
+  // While an invitation email is on its way, check back every few seconds (for up to 2 minutes).
+  const sending = s.team.some((m) => m.invite?.emailStatus === 'queued');
+  useEffect(() => {
+    if (!sending) return;
+    const started = Date.now();
+    const timer = setInterval(() => {
+      if (Date.now() - started > 120_000) clearInterval(timer);
+      else void refreshTeam();
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [sending, refreshTeam]);
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
       <div className="table-head th" style={{ gridTemplateColumns: cols }}>
@@ -173,7 +196,26 @@ function TeamTab() {
                 {self && <span style={{ fontWeight: 400, color: 'var(--muted)' }}> (you)</span>}
               </span>
             </div>
-            <span style={{ color: 'var(--text-2)' }}>{m.email}</span>
+            {invited && m.invite ? (
+              <div data-invite-email={m.email} style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+                <span style={{ color: 'var(--text-2)' }}>{m.email}</span>
+                <span className="invite-email-status" style={{ fontSize: 12, color: inviteEmailLine(m.invite).danger ? 'var(--danger)' : 'var(--muted)' }}>
+                  {inviteEmailLine(m.invite).text}
+                </span>
+                {canManage && m.invite.hasLink && (
+                  <span style={{ display: 'flex', gap: 12 }}>
+                    <button type="button" style={linkButton} disabled={m.invite.emailStatus === 'queued' && !m.invite.emailError} onClick={() => void resendInvitation(m.id)}>
+                      Resend
+                    </button>
+                    <button type="button" style={linkButton} onClick={() => void copyInvitationLink(m.id)}>
+                      Copy link
+                    </button>
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span style={{ color: 'var(--text-2)' }}>{m.email}</span>
+            )}
             {editable ? (
               <GhostSelect
                 className="ghost-sm"
@@ -252,7 +294,7 @@ function RolesTab() {
   );
 }
 
-/** Invite by email; the link is shown once to copy and send (email delivery comes later). */
+/** Invite by email: the worker emails the link (CD-7); the link is also shown to copy as a fallback. */
 function InviteModal({ onClose }: { onClose: () => void }) {
   const { session, inviteMember } = useStore();
   const [email, setEmail] = useState('');
@@ -293,17 +335,17 @@ function InviteModal({ onClose }: { onClose: () => void }) {
               Cancel
             </button>
             <button type="button" className={email.includes('@') && !busy ? 'btn btn-primary' : 'btn btn-disabled'} disabled={!email.includes('@') || busy} onClick={() => void send()}>
-              {busy ? 'Creating…' : 'Create invite link'}
+              {busy ? 'Inviting…' : 'Send invitation'}
             </button>
           </div>
         </>
       ) : (
         <>
+          <div className="hint-box">We are emailing an invitation to {email.trim()}. The Team list shows when it has been sent, and you can resend it or copy the link from there.</div>
           <label className="form-label">
-            Invite link for {email.trim()}
+            Or send them the link yourself
             <input className="form-input" readOnly value={link} onFocus={(e) => e.target.select()} />
           </label>
-          <div className="hint-box">Send this link to them yourself for now. It is shown only once; if it gets lost, invite them again.</div>
           <div className="modal-actions">
             <button type="button" className="btn btn-secondary" onClick={() => void copy()}>
               {copied ? 'Copied' : 'Copy link'}
@@ -621,19 +663,51 @@ function FieldsTab() {
   );
 }
 
-function ToggleList({ kind }: { kind: 'notifs' }) {
-  const { s, set } = useStore();
+/**
+ * Your own notification settings for this workspace (CD-16), saved on your membership. Only what
+ * the worker can deliver can be switched; the rest is marked "Coming soon".
+ */
+function NotificationsTab() {
+  const { s, session, patchProfile } = useStore();
+  const p = s.profile;
+  const rows = [
+    {
+      id: 'digest',
+      label: 'Daily digest email',
+      desc: `Every morning at 8:00 (${s.workspace.timezone}): your overdue tasks, tasks due today and your open deals with no next step. Not sent when there is nothing to report.`,
+      on: p.digest,
+      toggle: () => patchProfile({ digest: !p.digest }),
+    },
+    { id: 'assigned', label: 'Deal assigned to you', desc: 'An email when someone else makes you the owner of a deal.', on: p.dealAssigned, toggle: () => patchProfile({ dealAssigned: !p.dealAssigned }) },
+  ];
+  const soon = [
+    { id: 'documents', label: 'Document activity', desc: 'Alert when a proposal or contract is opened or signed' },
+    { id: 'weekly', label: 'Weekly pipeline report', desc: 'Monday email with stage conversion and open value' },
+  ];
+  const row = { display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--divider)' } as const;
   return (
     <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column' }}>
-      {s[kind].map((n) => (
-        <div key={n.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--divider)' }}>
+      {rows.map((n) => (
+        <div key={n.id} data-notification={n.id} style={row}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
             <span style={{ fontSize: 13.5, fontWeight: 600 }}>{n.label}</span>
             <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{n.desc}</span>
           </div>
-          <Switch on={n.on} onClick={() => set((x) => ({ [kind]: x[kind].map((y) => (y.id === n.id ? { ...y, on: !y.on } : y)) }))} />
+          <Switch on={n.on} onClick={n.toggle} label={n.label} />
         </div>
       ))}
+      {soon.map((n) => (
+        <div key={n.id} data-notification={n.id} style={row}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-2)' }}>{n.label}</span>
+            <span style={{ fontSize: 12, color: 'var(--muted)' }}>{n.desc}</span>
+          </div>
+          <span className="caps-muted">Coming soon</span>
+        </div>
+      ))}
+      <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 12 }}>
+        Emails go to {p.email || 'your sign-in address'}. These settings are yours and apply to {session.tenant.name} only; changes are saved as you make them.
+      </span>
     </div>
   );
 }
