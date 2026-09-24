@@ -48,6 +48,11 @@ a private window and sign in as that email.
 > only last until you reload the page: documents and the remaining settings tabs. See
 > [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#frontend-store--api).
 
+**Working together:** changes made by others appear without a reload; editing a field someone
+else just changed tells you plainly that your change wasn't saved and shows theirs; deals,
+companies and contacts show who changed which field (**History → Changes** on a deal). Details in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#working-together-live-updates-conflicts-change-history).
+
 **Import and export (owners and admins):** Companies, Contacts and Pipeline have **Import**, which
 takes a CSV of companies, contacts or deals (comma or semicolon separated, up to 5,000 rows and
 2 MB; the dialog has a template for each), and **Export**, which downloads the list as it is
@@ -92,7 +97,9 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   moves in the history; roles and isolation), checklist items keeping to-dos across renames, the
   database guards (no lost deal in a won stage, no deal in a deleted stage), and CSV import (roles,
   per-row validation, duplicates skipped or updated, deal matching, size and row limits, tenant
-  isolation, quoting edge cases).
+  isolation, quoting edge cases); the live event stream (a member gets their workspace's changes,
+  never another's), conflicting updates (409 per field, merges, same tab, no If-Match) and the
+  change history (who, what, old → new, former members, paging, isolation).
 - **Browser tests** (`e2e/`, Puppeteer with its bundled Chrome, run by `node:test`): sign-in,
   workspace, products, new deal, closing date, notes, drag between stages, reload, every screen
   renders; deal lines and stage to-dos persist; CHAMP fit score; team invitations with two
@@ -101,7 +108,9 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   in it, adding and removing stages; renaming a checklist item without losing the tick; importing
   companies and deals through the import dialog, and the exported contacts CSV (downloaded to a
   temp folder); the header search (Ctrl+K, keyboard navigation), the New menu and the sidebar
-  workspace switcher.
+  workspace switcher; two members in two browsers: a change appears for the other without a
+  reload, editing the same field at once explains the refused change, and the deal's change
+  history (CD-20, CD-69).
 
 Both suites create their own users and workspaces with unique emails, so they can run against
 the dev database without resetting it. The database must be migrated first.
