@@ -30,9 +30,9 @@ export function LeadScreen() {
     <Screen title={lead.title || lead.company || 'Lead'} onTitleChange={(v) => patchLead(lead.id, { title: v })} crumb={{ label: 'Pipeline', to: paths.pipeline }}>
       <div key={lead.id} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div className="card" style={{ padding: '20px 22px' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+          <div className="stage-steps" style={{ display: 'flex', alignItems: 'flex-start' }}>
             {stages.map((st, i) => (
-              <div key={st.id} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+              <div key={st.id} className={i === idx ? 'stage-step current' : 'stage-step'} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', width: '100%', height: 14 }}>
                   <span style={{ flex: 1, height: 2, background: i === 0 ? 'transparent' : i <= idx ? '#14503C' : '#E4E7EC' }} />
                   <span
@@ -48,7 +48,7 @@ export function LeadScreen() {
                   />
                   <span style={{ flex: 1, height: 2, background: i === stages.length - 1 ? 'transparent' : i < idx ? '#14503C' : '#E4E7EC' }} />
                 </div>
-                <span style={{ fontSize: 11.5, fontWeight: i === idx ? 600 : 500, color: i === idx ? '#101828' : '#475467', textAlign: 'center', lineHeight: 1.3 }}>{st.name}</span>
+                <span className="stage-step-label" style={{ fontSize: 11.5, fontWeight: i === idx ? 600 : 500, color: i === idx ? '#101828' : '#475467', textAlign: 'center', lineHeight: 1.3 }}>{st.name}</span>
               </div>
             ))}
           </div>
@@ -89,7 +89,7 @@ export function LeadScreen() {
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
-          <div style={{ flex: '1 1 400px', maxWidth: 540, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+          <div className="lead-side" style={{ flex: '1 1 400px', maxWidth: 540, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
             <Summary lead={lead} />
             <Discovery lead={lead} />
             <div className="card" style={{ padding: 18 }}>
@@ -103,7 +103,7 @@ export function LeadScreen() {
             </div>
           </div>
 
-          <div style={{ flex: '999 1 480px', display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+          <div className="lead-main" style={{ flex: '999 1 480px', display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
             <Composer lead={lead} />
             <Todos lead={lead} />
             <History lead={lead} />

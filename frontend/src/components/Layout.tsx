@@ -1,19 +1,20 @@
 import { type ReactNode, useState } from 'react';
-import { Link, NavLink, Outlet } from 'react-router-dom';
-import { crmApi } from '../lib/api';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { paths } from '../lib/paths';
 import { Modals } from '../modals/Modals';
 import { initialsOf, overdueTasks } from '../store/selectors';
 import { useStore } from '../store/store';
+import { GettingStarted } from './GettingStarted';
 import { HeaderTools } from './HeaderTools';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 const NAV = [
+  // `phone`: in the bottom bar on phones; the others are under "More" there (CD-70).
   { to: paths.overview, label: 'Overview', icon: 'M4 19V5M4 19h16M8 16v-4M12 16V8M16 16v-6' },
-  { to: paths.pipeline, label: 'Pipeline', icon: 'M4 5h5v14H4zM15 5h5v9h-5z' },
-  { to: paths.today, label: 'Today', icon: 'M5 5h14v14H5zM9 12l2 2 4-4' },
-  { to: paths.companies, label: 'Companies', icon: 'M4 20V6.5L11 4v16M11 20h9V10h-9M14.5 13h2M14.5 16.5h2M7 8.5h1M7 12h1M7 15.5h1' },
-  { to: paths.contacts, label: 'Contacts', icon: 'M12 11a3.3 3.3 0 1 0 0-6.6 3.3 3.3 0 0 0 0 6.6ZM5 20c1.2-3.1 4-4.7 7-4.7s5.8 1.6 7 4.7' },
+  { to: paths.pipeline, label: 'Pipeline', icon: 'M4 5h5v14H4zM15 5h5v9h-5z', phone: true },
+  { to: paths.today, label: 'Today', icon: 'M5 5h14v14H5zM9 12l2 2 4-4', phone: true },
+  { to: paths.companies, label: 'Companies', icon: 'M4 20V6.5L11 4v16M11 20h9V10h-9M14.5 13h2M14.5 16.5h2M7 8.5h1M7 12h1M7 15.5h1', phone: true },
+  { to: paths.contacts, label: 'Contacts', icon: 'M12 11a3.3 3.3 0 1 0 0-6.6 3.3 3.3 0 0 0 0 6.6ZM5 20c1.2-3.1 4-4.7 7-4.7s5.8 1.6 7 4.7', phone: true },
   { to: paths.products, label: 'Products', icon: 'M20 8.5 12 4 4 8.5v7L12 20l8-4.5v-7ZM4 8.5 12 13m0 0 8-4.5M12 13v7' },
 ];
 const NAV_BOTTOM = [
@@ -25,14 +26,14 @@ const NAV_BOTTOM = [
 ];
 
 /** `badge`: a count on the icon (overdue tasks on Today). */
-function NavItem({ to, label, icon, badge }: { to: string; label: string; icon: string; badge?: number }) {
+function NavItem({ to, label, icon, badge, phone }: { to: string; label: string; icon: string; badge?: number; phone?: boolean }) {
   return (
-    <NavLink to={to} style={{ textDecoration: 'none', width: '100%' }}>
+    <NavLink to={to} className={phone ? 'nav-item' : 'nav-item nav-desktop'} style={{ textDecoration: 'none', width: '100%' }}>
       {({ isActive }) => {
         const fg = isActive ? '#F5F6F8' : '#98A2B3';
         return (
-          <span style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, width: '100%', padding: '2px 0 4px', color: fg }}>
-            <span style={{ width: 46, height: 42, borderRadius: 11, background: isActive ? '#14503C' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span className="nav-item-inner" style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, width: '100%', padding: '2px 0 4px', color: fg }}>
+            <span className="nav-icon" style={{ width: 46, height: 42, borderRadius: 11, background: isActive ? '#14503C' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke={fg} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                 <path d={icon} />
               </svg>
@@ -42,7 +43,7 @@ function NavItem({ to, label, icon, badge }: { to: string; label: string; icon: 
                 </span>
               )}
             </span>
-            <span style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1.2, textAlign: 'center' }}>{label}</span>
+            <span className="nav-label" style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1.2, textAlign: 'center' }}>{label}</span>
           </span>
         );
       }}
@@ -57,13 +58,16 @@ function Sidebar() {
   const overdue = overdueTasks(s).length;
   return (
     <aside className="app-sidebar" style={{ width: 96, flex: '0 0 96px', background: '#101828', color: '#F5F6F8', padding: '18px 8px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, position: 'sticky', top: 0, height: '100vh', zIndex: 10 }}>
-      <WorkspaceSwitcher />
+      <div className="nav-desktop">
+        <WorkspaceSwitcher />
+      </div>
       <nav style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: '100%' }}>
         {NAV.map((n) => (
           <NavItem key={n.to} {...n} badge={n.to === paths.today ? overdue : undefined} />
         ))}
+        <MoreMenu name={name} />
       </nav>
-      <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, width: '100%' }}>
+      <div className="nav-desktop" style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, width: '100%' }}>
         {NAV_BOTTOM.map((n) => (
           <NavItem key={n.to} {...n} />
         ))}
@@ -79,31 +83,51 @@ function Sidebar() {
   );
 }
 
-function GettingStarted() {
-  const { s, set, session } = useStore();
-  const [busy, setBusy] = useState(false);
-  if (session.tenant.role === 'member' || s.profile.onboardingDismissed) return null;
-  const customisedFunnel = Object.values(s.funnels).some((f) => f.stages.length > 0);
-  const items = [
-    { done: customisedFunnel, label: 'Set up your funnel', to: paths.settings('funnels') },
-    { done: s.catalog.length > 0, label: 'Add products', to: paths.products },
-    { done: s.leads.length > 0, label: 'Import or add your first deals', to: paths.pipeline },
-    { done: s.team.length > 1, label: 'Invite a colleague', to: paths.settings('team') },
-  ];
-  if (items.every((x) => x.done)) return null;
-  const dismiss = async () => {
-    setBusy(true);
-    await crmApi.dismissOnboarding();
-    set((x) => ({ profile: { ...x.profile, onboardingDismissed: true } }));
-  };
+/**
+ * Phones only (CD-70): the bottom bar holds the four everyday screens; "More" opens a sheet with
+ * the rest, the profile and the workspace switch. Hidden on wider screens by CSS.
+ */
+function MoreMenu({ name }: { name: string }) {
+  const { session } = useStore();
+  const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
+  const more = [...NAV.filter((n) => !n.phone), ...NAV_BOTTOM, { to: paths.profile, label: `Profile · ${name}`, icon: 'M12 11a3.3 3.3 0 1 0 0-6.6 3.3 3.3 0 0 0 0 6.6ZM5 20c1.2-3.1 4-4.7 7-4.7s5.8 1.6 7 4.7' }];
+  const active = more.some((n) => pathname.startsWith(n.to));
+  const fg = active || open ? '#F5F6F8' : '#98A2B3';
+  const others = session.tenants.filter((t) => t.id !== session.tenant.id);
   return (
-    <section className="getting-started" aria-label="Getting started">
-      <div><strong>Get started with Cadence</strong><span>{items.filter((x) => x.done).length} of 4 complete</span></div>
-      <div className="getting-started-items">
-        {items.map((item) => <Link key={item.label} to={item.to} className={item.done ? 'done' : ''}><span>{item.done ? '✓' : '○'}</span>{item.label}</Link>)}
-      </div>
-      <button type="button" disabled={busy} onClick={() => void dismiss()}>Dismiss</button>
-    </section>
+    <>
+      <button type="button" className="nav-more" aria-expanded={open} aria-label="More" data-testid="nav-more" onClick={() => setOpen(!open)} style={{ color: fg }}>
+        <span className="nav-icon" style={{ background: active ? '#14503C' : 'transparent' }}>
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke={fg} strokeWidth="1.7" strokeLinecap="round">
+            <path d="M5 12h.01M12 12h.01M19 12h.01" strokeWidth="3" />
+          </svg>
+        </span>
+        <span className="nav-label">More</span>
+      </button>
+      {open && (
+        <>
+          <div className="more-backdrop" onClick={() => setOpen(false)} />
+          <div className="more-sheet" role="menu" data-testid="more-sheet">
+            {more.map((n) => (
+              <NavLink key={n.to} to={n.to} className="menu-item" role="menuitem" onClick={() => setOpen(false)}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <path d={n.icon} />
+                </svg>
+                <span className="menu-item-title">{n.label}</span>
+              </NavLink>
+            ))}
+            <div className="menu-divider" />
+            <div className="caps-muted menu-label">Workspace · {session.tenant.name}</div>
+            {others.map((t) => (
+              <button key={t.id} type="button" className="menu-item" role="menuitem" onClick={() => session.switchTenant(t.id)}>
+                <span className="menu-item-title">Switch to {t.name}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </>
   );
 }
 

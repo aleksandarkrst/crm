@@ -234,9 +234,9 @@ export function FilterBar({
   extra?: ReactNode;
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+    <div className="filter-bar" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
       {search && (
-        <div style={{ display: 'flex', alignItems: 'center', background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 11px', width: 230 }}>
+        <div className="filter-search" style={{ display: 'flex', alignItems: 'center', background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 11px', width: 230 }}>
           <input
             value={search.value}
             onChange={(e) => search.onChange(e.target.value)}
@@ -264,7 +264,7 @@ export function FilterBar({
           Clear filters
         </button>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
+      <div className="filter-actions" style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
         {meta && <span style={{ fontSize: 12.5, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{meta}</span>}
         {extra}
         {action && (
