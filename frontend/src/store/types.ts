@@ -12,6 +12,8 @@ export interface Stage {
   channel: ChannelCode;
   doc: string; // "None" | "Proposal" | ...
   checklist: string[];
+  /** Ids of the checklist items, parallel to `checklist` (CD-32): to-dos are matched by id. */
+  checklistIds: string[];
   prob: number | '';
   /** The terminal "won" stage. */
   won?: boolean;

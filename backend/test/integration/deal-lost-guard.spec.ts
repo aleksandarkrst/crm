@@ -9,7 +9,7 @@ import { call, createTenant, type Funnel, ok, type Session, signIn } from './hel
 
 let owner: Session;
 let tenant: string;
-let smb: Funnel & { stages: { id: string; isWon: boolean }[] };
+let smb: Funnel;
 let db: Client;
 const as = () => ({ token: owner.token, tenant });
 const wonStage = () => smb.stages.find((s) => s.isWon)!;

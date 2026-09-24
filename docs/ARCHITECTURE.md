@@ -207,9 +207,19 @@ the store is the one place that talks to the backend.
 - No made-up dates: a deal without a closing date has none (it only matches "Any closing date" on
   Overview), and a deal line without a start date is left out of "Funnel by payment due date"
   (the card says how many lines were left out).
-- Stage to-dos: a playbook to-do gets a row on first touch, keyed by deal + stage + checklist label
-  (renaming a checklist item in the funnel builder starts that to-do fresh). Off-playbook to-dos
-  are rows of their own.
+- Stage to-dos: a playbook to-do gets a row on first touch, keyed by deal + stage + checklist item
+  id (CD-32). A stage's checklist is `funnel_stages.checklist_items` (`[{ id, label }]`); renaming
+  an item in the funnel builder keeps its id, so every deal keeps its tick, note and outcome, and
+  the to-do rows take the new label (`deal_tasks.label` stays unique per deal and stage, so a
+  swap goes through a temporary label). Labels must differ within a stage. Removing an item hides
+  its to-dos; they aren't deleted. Off-playbook to-dos are rows of their own.
+  - `checklist` (labels only) is kept in sync with `checklist_items` by a trigger
+    (`drizzle/0011_checklist_item_ids.sql`), and a playbook to-do written by label is linked to
+    the item with that label, so code that still uses labels keeps working. The migration gave
+    every existing label an id and linked the existing to-dos by label.
+  - `PATCH /api/crm/funnels/:id/stages/:stageId` takes `checklistItems` (keep `id` to rename,
+    leave it out for a new item) or, as before, `checklist`. `PUT /api/crm/deals/:id/tasks/playbook`
+    takes `checklistItemId` (or, as before, `label`).
 - Tasks from the **New task** dialog are `deal_tasks` rows too (off-playbook, `blocks_advance =
   false`) with a due date, a channel and an owner (`assignee_user_id`, which must be a member of the
   workspace). They show in Today (overdue / today / next up, with a done toggle) and on the lead's

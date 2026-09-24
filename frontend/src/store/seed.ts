@@ -73,7 +73,7 @@ export const CHAMP_LEVELS = [{ label: 'None', v: 0 }, { label: 'Weak', v: 8 }, {
 
 const DEFAULT_PROB: Record<string, number> = { new: 10, touch: 15, qualify: 20, discovery: 30, stakeholders: 40, proposal: 50, review: 65, negotiation: 75, won: 100 };
 export function mkStage(id: string, name: string, activity: string, channel: Stage['channel'], doc: string, checklist: string[]): Stage {
-  return { id, name, activity, channel, doc, checklist, prob: DEFAULT_PROB[id] ?? 25, won: id === 'won' };
+  return { id, name, activity, channel, doc, checklist, checklistIds: checklist.map((_, i) => `${id}-${i}`), prob: DEFAULT_PROB[id] ?? 25, won: id === 'won' };
 }
 
 export const BASE_FUNNELS: Record<SegKey, Funnel> = {

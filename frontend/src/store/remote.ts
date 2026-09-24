@@ -42,7 +42,8 @@ function mapFunnel(f: ApiFunnel): Funnel {
       activity: st.activity,
       channel: st.channel,
       doc: st.documentOnEntry ?? 'None',
-      checklist: st.checklist,
+      checklist: st.checklistItems.map((i) => i.label),
+      checklistIds: st.checklistItems.map((i) => i.id),
       prob: st.winProbability,
       won: st.isWon,
     })),
@@ -231,8 +232,8 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
   const dealLines: State['dealLines'] = {};
   for (const l of apiLines) (dealLines[l.dealId] ||= []).push(mapLine(l));
 
-  // To-dos: playbook items are matched to the stage checklist by label (idx = checklist position);
-  // off-playbook items follow the checklist, in their saved order.
+  // To-dos: playbook items are matched to the stage checklist by item id (idx = checklist position),
+  // so renaming an item keeps them; off-playbook items follow the checklist, in their saved order.
   const stageById = new Map(SEGMENTS.flatMap((seg) => funnels[seg].stages.map((st) => [st.id, st] as const)));
   const tasks: State['tasks'] = {};
   const extraTodos: State['extraTodos'] = {};
@@ -252,8 +253,8 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
       (extraTodoIds[key] ||= []).push(t.id);
       idx = stage.checklist.length + extraTodos[key].length - 1;
     } else {
-      idx = stage.checklist.indexOf(t.label);
-      if (idx < 0) continue; // the checklist item was renamed or removed since
+      idx = t.checklistItemId ? stage.checklistIds.indexOf(t.checklistItemId) : -1;
+      if (idx < 0) continue; // the checklist item was removed since
     }
     tasks[taskKey(t.dealId, t.stageId, idx)] = {
       done: t.done,

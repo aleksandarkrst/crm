@@ -78,6 +78,13 @@
       "when": 1790229801089,
       "tag": "0010_deal_lost_not_won",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790229987542,
+      "tag": "0011_checklist_item_ids",
+      "breakpoints": true
     }
   ]
 }

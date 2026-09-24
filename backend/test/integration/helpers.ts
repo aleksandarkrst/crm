@@ -76,10 +76,22 @@ export async function addMember(admin: Session, tenant: string, invitee: Session
   await ok('POST', `/invitations/${token}/accept`, { token: invitee.token }, 200);
 }
 
+export interface Stage {
+  id: string;
+  key: string;
+  name: string;
+  position: number;
+  isWon: boolean;
+  checklist: string[];
+  checklistItems: { id: string; label: string }[];
+}
+
 export interface Funnel {
   id: string;
   key: string;
-  stages: { id: string; name: string; checklist: string[] }[];
+  label: string;
+  note: string | null;
+  stages: Stage[];
 }
 
 export async function firstFunnel(s: Session, tenant: string): Promise<Funnel> {

@@ -392,7 +392,7 @@ function FunnelBuilder() {
                 <span className="caps">To-Do</span>
                 <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
                   {st.checklist.map((c, gi) => (
-                    <span key={gi} className="gate-chip">
+                    <span key={st.checklistIds[gi] ?? gi} className="gate-chip">
                       <input value={c} onChange={(e) => store.renameGate(idx, gi, e.target.value)} style={{ border: 0, outline: 0, background: 'transparent', fontSize: 12, color: 'var(--ink)', width: Math.max(9, Math.min(34, c.length + 1)) + 'ch' }} />
                       <button type="button" className="pill-x" title="Delete to-do" onClick={() => store.removeGate(idx, gi)}>
                         ×

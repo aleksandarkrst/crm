@@ -458,7 +458,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
 
     // ------------------------------------------------------------ stage to-dos
     /**
-     * Saves a to-do's state. Playbook to-dos are upserted by deal + stage + label; off-playbook
+     * Saves a to-do's state. Playbook to-dos are upserted by deal + stage + checklist item; off-playbook
      * to-dos by id. Changes made within the pause (done, then a note) are merged into one write.
      */
     const persistTask = (leadId: string, stageId: string, idx: number, fields: TaskInput) => {
@@ -469,10 +469,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const key = taskKey(leadId, stageId, idx);
       pendingTasks.current.set(key, { ...pendingTasks.current.get(key), ...fields });
       const extraId = item.offPlaybook ? x.extraTodoIds[leadId + '::' + stageId]?.[item.extraIdx!] : undefined;
+      const itemId = item.offPlaybook ? undefined : stagesFor(x, lead!.segment).find((st) => st.id === stageId)?.checklistIds[idx];
       saveLater('task:' + key, async () => {
         const body = pendingTasks.current.get(key) ?? {};
         pendingTasks.current.delete(key);
-        if (!item.offPlaybook) await crmApi.upsertPlaybookTask(leadId, { stageId, label: item.label, ...body });
+        if (itemId) await crmApi.upsertPlaybookTask(leadId, { stageId, checklistItemId: itemId, ...body });
         else if (extraId) await crmApi.updateTask(extraId, body);
       }, `the to-do "${item.label || 'New to-do'}"`);
     };
@@ -649,8 +650,12 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     };
 
     // ------------------------------------------------------------ funnel builder
-    /** Edits one stage of the open funnel and saves it (editing funnels is an admin action). */
-    const editStage = (idx: number, fn: (stage: Stage) => void) => {
+    /**
+     * Edits one stage of the open funnel and saves it (editing funnels is an admin action).
+     * `structural` changes (adding or removing a to-do) shift the to-dos after it, so they are
+     * saved at once and the workspace is reloaded; renames keep their item id and just save.
+     */
+    const editStage = (idx: number, fn: (stage: Stage) => void, structural = false) => {
       const x = cur();
       const funnels = JSON.parse(JSON.stringify(x.funnels)) as State['funnels'];
       const funnel = funnels[x.segment];
@@ -660,16 +665,22 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       set({ funnels });
       const funnelId = funnel.id;
       if (!funnelId) return;
-      saveLater('stage:' + st.id, () =>
+      const write = () =>
         crmApi.updateStage(funnelId, st.id, {
           name: st.name.trim() || 'Stage',
           activity: st.activity,
           channel: channelOf(st.channel),
           documentOnEntry: st.doc === 'None' ? null : st.doc,
           winProbability: st.prob === '' ? 0 : st.prob,
-          checklist: st.checklist.map((c) => c.trim()).filter(Boolean),
-        }),
-      );
+          // Items keep their id, so renaming one keeps the deals' ticks on it (CD-32).
+          checklistItems: st.checklist.map((label, i) => ({ id: st.checklistIds[i]!, label: label.trim() })),
+        });
+      // A to-do whose name is cleared while typing isn't saved (that would remove the item and
+      // its ticks); the stage saves again once it has a name, or when it is removed.
+      if (st.checklist.some((c) => !c.trim())) return;
+      if (!structural) return saveLater('stage:' + st.id, write, 'the stage ' + (st.name.trim() || 'Stage'));
+      dropSave('stage:' + st.id);
+      void save(write, reload, 'the to-dos of ' + (st.name.trim() || 'Stage'));
     };
     const notYet = (..._args: unknown[]) => flash('Adding and removing stages is not supported yet. Edits to existing stages are saved.');
 
@@ -841,9 +852,27 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       editStage: (idx: number, key: 'name' | 'activity' | 'channel' | 'doc', val: string) => editStage(idx, (st) => void ((st as unknown as Record<string, string>)[key] = val)),
       editProb: (idx: number, raw: string) => editStage(idx, (st) => void (st.prob = raw === '' ? '' : Math.max(0, Math.min(100, Math.round(Number(raw) || 0))))),
       removeStage: notYet,
-      addGate: (idx: number) => editStage(idx, (st) => void st.checklist.push('New to-do')),
+      addGate: (idx: number) =>
+        editStage(
+          idx,
+          (st) => {
+            let label = 'New to-do';
+            for (let i = 2; st.checklist.includes(label); i++) label = 'New to-do ' + i;
+            st.checklist.push(label);
+            st.checklistIds.push(crypto.randomUUID());
+          },
+          true,
+        ),
       renameGate: (idx: number, gi: number, val: string) => editStage(idx, (st) => void (st.checklist[gi] = val)),
-      removeGate: (idx: number, gi: number) => editStage(idx, (st) => void st.checklist.splice(gi, 1)),
+      removeGate: (idx: number, gi: number) =>
+        editStage(
+          idx,
+          (st) => {
+            st.checklist.splice(gi, 1);
+            st.checklistIds.splice(gi, 1);
+          },
+          true,
+        ),
       setCompanyField,
       addCompany: () => {
         const taken = new Set(companyRecords(cur()).map((c) => c.name));
