@@ -1,0 +1,74 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { and, asc, eq, isNotNull, isNull, lte, notInArray, sql } from 'drizzle-orm';
+import { DatabaseService } from '../../shared/database/database.service';
+import { companies, deals, dealTasks, funnelStages, memberships, tenants, users } from '../../shared/database/schema';
+import { buildDigest, type Digest, zonedNow } from './digest-content';
+
+/**
+ * Loads a member's daily digest from the CRM tables (read only), inside withTenant so RLS applies:
+ * - tasks assigned to them, not done, due today or earlier (the "New task" tasks; playbook to-dos
+ *   have no due date), on deals that aren't lost;
+ * - their open deals (not won, not lost) without an open task: the "No next step" flag.
+ * "Today" is the workspace's date (its time zone), as on the Today screen.
+ */
+@Injectable()
+export class DigestService {
+  constructor(private readonly database: DatabaseService) {}
+
+  /** The workspace's name and time zone, and the member's email and name (null if not a member). */
+  async recipient(tenantId: string, userId: string) {
+    const [row] = await this.database.db
+      .select({
+        email: users.email,
+        name: users.displayName,
+        dailyDigest: memberships.dailyDigest,
+        workspaceName: tenants.name,
+        timezone: tenants.timezone,
+      })
+      .from(memberships)
+      .innerJoin(users, eq(users.id, memberships.userId))
+      .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
+      .where(and(eq(memberships.tenantId, tenantId), eq(memberships.userId, userId)));
+    return row ?? null;
+  }
+
+  /** Today's digest for a member, in the workspace time zone (the preview endpoint). */
+  async today(tenantId: string, userId: string): Promise<Digest> {
+    const who = await this.recipient(tenantId, userId);
+    if (!who) throw new NotFoundException('Not a member of this workspace');
+    return this.load(tenantId, userId, zonedNow(who.timezone).date);
+  }
+
+  load(tenantId: string, userId: string, today: string): Promise<Digest> {
+    return this.database.withTenant(tenantId, async (tx) => {
+      const tasks = await tx
+        .select({
+          id: dealTasks.id,
+          title: dealTasks.label,
+          dueDate: sql<string>`${dealTasks.dueDate}::text`,
+          dealId: deals.id,
+          dealTitle: deals.title,
+          company: companies.name,
+        })
+        .from(dealTasks)
+        .innerJoin(deals, eq(deals.id, dealTasks.dealId))
+        .leftJoin(companies, eq(companies.id, deals.companyId))
+        .where(and(eq(dealTasks.assigneeUserId, userId), eq(dealTasks.done, false), isNotNull(dealTasks.dueDate), lte(dealTasks.dueDate, today), isNull(deals.lostAt)))
+        .orderBy(asc(dealTasks.dueDate));
+
+      // A next step is an open task from the "New task" dialog (not a stage to-do), as on the Pipeline card.
+      const withNextStep = tx
+        .select({ dealId: dealTasks.dealId })
+        .from(dealTasks)
+        .where(and(eq(dealTasks.blocksAdvance, false), eq(dealTasks.done, false)));
+      const stalled = await tx
+        .select({ id: deals.id, title: deals.title, company: companies.name, stage: funnelStages.name })
+        .from(deals)
+        .innerJoin(funnelStages, eq(funnelStages.id, deals.stageId))
+        .leftJoin(companies, eq(companies.id, deals.companyId))
+        .where(and(eq(deals.ownerUserId, userId), isNull(deals.lostAt), eq(funnelStages.isWon, false), notInArray(deals.id, withNextStep)));
+
+      return buildDigest(today, tasks, stalled);
+    });
+  }
+}

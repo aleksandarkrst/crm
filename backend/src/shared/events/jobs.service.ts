@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
-import { fromDrizzle, PgBoss } from 'pg-boss';
+import { fromDrizzle, type JobResult, PgBoss } from 'pg-boss';
 import { ENV, type Env } from '../../infrastructure/config/config.module';
 import type { Tx } from '../database/database.service';
 import { JOB_NAMES, type JobName, type JobPayloads, MAIL_JOBS } from './job-types';
@@ -16,7 +16,7 @@ export interface JobAttempt {
 }
 
 export interface SendOptions {
-  /** While a job with this key is queued or running, another send with the same key is dropped. */
+  /** Passed to pg-boss, which drops duplicates where the queue's policy allows; handlers stay idempotent anyway. */
   singletonKey?: string;
 }
 
@@ -79,11 +79,26 @@ export class JobsService implements OnModuleInit, OnApplicationShutdown {
     await this.boss.send(name, data, { ...retry, ...options, ...(tx ? { db: fromDrizzle(tx, sql) } : {}) });
   }
 
+  /**
+   * Runs `handler` for each job of the queue. Jobs are fetched up to 10 at a time and fetched
+   * again straight away while batches come back full; each job succeeds or fails on its own, so
+   * one failing email doesn't fail (and retry) the others in its batch.
+   */
   async work<N extends JobName>(name: N, handler: (data: JobPayloads[N], attempt: JobAttempt) => Promise<void>): Promise<void> {
-    await this.boss.work<JobPayloads[N], unknown, { includeMetadata: true }>(name, { includeMetadata: true }, async (jobs) => {
+    const options = { includeMetadata: true, perJobResults: true, batchSize: 10, burstWhenBatchFull: true } as const;
+    await this.boss.work<JobPayloads[N], unknown, typeof options>(name, options, async (jobs) => {
+      const results: JobResult[] = [];
       for (const job of jobs) {
-        await handler(job.data, { id: job.id, retryCount: job.retryCount, retryLimit: job.retryLimit, lastAttempt: job.retryCount >= job.retryLimit });
+        try {
+          await handler(job.data, { id: job.id, retryCount: job.retryCount, retryLimit: job.retryLimit, lastAttempt: job.retryCount >= job.retryLimit });
+          results.push({ id: job.id, status: 'completed' });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger.warn(`Job ${name} ${job.id} failed (attempt ${job.retryCount + 1} of ${job.retryLimit + 1}): ${message}`);
+          results.push({ id: job.id, status: 'failed', output: { message } });
+        }
       }
+      return results;
     });
   }
 
