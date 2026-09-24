@@ -124,7 +124,7 @@ export function Company() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: 13.5, fontWeight: 600 }}>{l.title || l.company}</span>
                 <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                  {l.segment === 'smb' ? 'SMB funnel' : 'Enterprise funnel'} · {closeIsoOf(l) ? 'closes ' + closeIsoOf(l) : 'no closing date'}
+                  {s.funnels[l.segment]?.label ?? 'Funnel'} · {closeIsoOf(l) ? 'closes ' + closeIsoOf(l) : 'no closing date'}
                 </span>
               </div>
               <span style={{ fontSize: 12.5, color: 'var(--brand)', whiteSpace: 'nowrap' }}>{l.value}</span>

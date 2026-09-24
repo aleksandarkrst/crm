@@ -5,7 +5,7 @@ import { paths } from '../lib/paths';
 import { BILLING_KINDS, BUYER_ROLES, CHANNEL_LABELS, CHANNELS, DOC_TYPES, FIELD_TYPES, PARAM_SOURCES, PRODUCT_TYPES } from '../store/seed';
 import { allPeople, companyLabels, companyRecords, leadById, stageOf, stagesFor, todayIso, valueNum } from '../store/selectors';
 import { useStore } from '../store/store';
-import type { ChannelCode, Lead, SegKey } from '../store/types';
+import type { ChannelCode, Lead } from '../store/types';
 import { ProposalDoc } from './ProposalDoc';
 
 /** Every overlay in the app; open/closed state lives in the store. */
@@ -74,7 +74,7 @@ function NewDealModal() {
   const [companyName, setCompanyName] = useState('');
   const [contactPick, setContactPick] = useState<string | null>(null);
   const [contactName, setContactName] = useState('');
-  const type = s.newLeadType;
+  const type = s.funnels[s.newLeadType] ? s.newLeadType : Object.keys(s.funnels)[0]!;
 
   const companyIsNew = company === NEW_CO;
   const companyRec = records.find((c) => c.id === company);
@@ -124,10 +124,10 @@ function NewDealModal() {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         <span className="caps">Target customer type</span>
-        {(['smb', 'ent'] as SegKey[]).map((k) => (
-          <button key={k} type="button" className={k === type ? 'choice on' : 'choice'} onClick={() => set({ newLeadType: k })}>
-            <span style={{ fontSize: 13.5, fontWeight: 600 }}>{s.funnels[k].label}</span>
-            <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45 }}>{s.funnels[k].note}</span>
+        {Object.values(s.funnels).map((f) => (
+          <button key={f.id} type="button" className={f.id === type ? 'choice on' : 'choice'} onClick={() => set({ newLeadType: f.id })}>
+            <span style={{ fontSize: 13.5, fontWeight: 600 }}>{f.label}</span>
+            <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45 }}>{f.note}</span>
           </button>
         ))}
       </div>
@@ -332,23 +332,32 @@ function NewContactModal() {
   );
 }
 
+/** New funnel (CD-10): a target persona's playbook, copied from another funnel or a small default set. */
 function NewPersonaModal() {
-  const { s, set } = useStore();
+  const { s, set, createFunnel } = useStore();
+  const [label, setLabel] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
   const bases = [
-    { k: 'smb', name: s.funnels.smb.label, desc: `Copy the ${s.funnels.smb.stages.length}-stage short funnel.` },
-    { k: 'ent', name: s.funnels.ent.label, desc: `Copy the ${s.funnels.ent.stages.length}-stage committee funnel.` },
-    { k: 'blank', name: 'Blank funnel', desc: 'Start with one stage and build it yourself.' },
+    ...Object.values(s.funnels).map((f) => ({ k: f.id, name: f.label, desc: `Copy its ${f.stages.length} stages, with their activities and to-dos. Deals stay where they are.` })),
+    { k: 'blank', name: 'Default stages', desc: 'Start from New deal, Discovery, Proposal and Won, and build it yourself.' },
   ];
+  const create = async () => {
+    if (!label.trim() || busy) return;
+    setBusy(true);
+    await createFunnel({ label, note, copyFrom: s.funnels[s.personaBase] || s.personaBase === 'blank' ? s.personaBase : 'blank' });
+    setBusy(false);
+  };
   return (
     <Modal maxWidth={560}>
-      <ModalHeader title="New target persona" sub="A persona is a funnel. Name who buys, then edit the stages, activities and documents." />
+      <ModalHeader title="New funnel" sub="A funnel is the playbook for one target persona. Name who buys, then edit the stages, activities and documents." />
       <label className="form-label">
-        Persona name
-        <input className="form-input" placeholder="e.g. Mid-market — marketing lead decides" />
+        Funnel name
+        <input className="form-input" placeholder="e.g. Mid-market — marketing lead decides" value={label} onChange={(e) => setLabel(e.target.value)} />
       </label>
       <label className="form-label">
         How they buy
-        <textarea className="form-input" rows={3} placeholder="Who decides, how long it takes, what slows it down" />
+        <textarea className="form-input" rows={3} placeholder="Who decides, how long it takes, what slows it down" value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         <span className="caps">Start from</span>
@@ -363,11 +372,8 @@ function NewPersonaModal() {
         <button type="button" className="btn btn-secondary" onClick={() => set({ personaOpen: false })}>
           Cancel
         </button>
-        <span className="caps-muted" style={{ alignSelf: 'center' }}>
-          Coming soon
-        </span>
-        <button type="button" className="btn btn-disabled" disabled title="New pipelines are coming soon">
-          Create persona
+        <button type="button" className={label.trim() && !busy ? 'btn btn-primary' : 'btn btn-disabled'} disabled={!label.trim() || busy} onClick={() => void create()}>
+          {busy ? 'Creating…' : 'Create funnel'}
         </button>
       </div>
     </Modal>

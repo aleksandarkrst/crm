@@ -78,6 +78,7 @@ export function mkStage(id: string, name: string, activity: string, channel: Sta
 
 export const BASE_FUNNELS: Record<SegKey, Funnel> = {
   smb: {
+    id: 'smb',
     label: 'SMB — CEO decides',
     note: 'One decision maker. Short funnel, no procurement loop, proposal goes out right after the discovery call.',
     stages: [
@@ -90,6 +91,7 @@ export const BASE_FUNNELS: Record<SegKey, Funnel> = {
     ],
   },
   ent: {
+    id: 'ent',
     label: 'Enterprise — buying committee',
     note: 'Multiple approvers. Extra stages for stakeholder mapping and procurement review; the proposal is written for people who were not in the room.',
     stages: [

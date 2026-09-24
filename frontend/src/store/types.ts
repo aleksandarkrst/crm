@@ -1,6 +1,7 @@
 import type { ApiDateFormat, ApiLanguage, ApiStageChange, ApiStartPage, DealOutcome, LostReason } from '../lib/api';
 
-export type SegKey = 'smb' | 'ent';
+/** A funnel's backend id (CD-10: any number of funnels, not just the two personas). */
+export type SegKey = string;
 export type ChannelCode = 'RS' | 'EM' | 'LI' | 'WA' | 'MT' | 'PH' | 'NT';
 
 export interface Stage {
@@ -20,8 +21,8 @@ export interface Stage {
 }
 
 export interface Funnel {
-  /** Backend funnel id. */
-  id?: string;
+  /** Backend funnel id (the key of State.funnels). */
+  id: string;
   label: string;
   note: string;
   stages: Stage[];
@@ -245,6 +246,7 @@ export interface BonusRule {
 }
 
 export interface Filters {
+  /** Overview audience: a funnel id, or 'Audience' for every funnel. */
   audience: string;
   owner: string;
   dates: string;
@@ -288,7 +290,9 @@ export interface NewProductDraft {
 }
 
 export interface State {
+  /** Every funnel by id, in the workspace's order. */
   funnels: Record<SegKey, Funnel>;
+  /** The funnel open on the Pipeline and in the funnel builder. */
   segment: SegKey;
   leads: Lead[];
   extraCompanies: CompanyExtra[];
@@ -333,6 +337,7 @@ export interface State {
   contactCompany: string;
   newContact: NewContactDraft;
   personaOpen: boolean;
+  /** Funnel id the "New funnel" dialog copies, or 'blank'. */
   personaBase: string;
   templateOpen: boolean;
   templateType: string;

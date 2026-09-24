@@ -1,8 +1,8 @@
 import { DangerButton, FieldRow, GhostInput, GhostSelect, PersonChip, Picker, PickerRow, usePicker } from '../../components/ui';
 import { INDUSTRIES, SOURCES, TEAM_SIZES } from '../../store/seed';
-import { allPeople, closeIsoOf, companyLabels, companyOfPerson, companyRecords, contactsForLead, initialsOf, linesOf, memberLabels, memberName, money, netOf, vatOf } from '../../store/selectors';
+import { allPeople, closeIsoOf, companyLabels, companyOfPerson, companyRecords, contactsForLead, funnelOptions, initialsOf, linesOf, memberLabels, memberName, money, netOf, vatOf } from '../../store/selectors';
 import { useStore } from '../../store/store';
-import type { Lead, SegKey } from '../../store/types';
+import type { Lead } from '../../store/types';
 
 export function Summary({ lead }: { lead: Lead }) {
   const store = useStore();
@@ -126,11 +126,8 @@ export function Summary({ lead }: { lead: Lead }) {
           <GhostSelect
             chevron
             value={lead.segment}
-            onChange={(e) => store.patchLeadSegment(lead.id, e.target.value as SegKey)}
-            options={[
-              { value: 'smb', label: s.funnels.smb.label },
-              { value: 'ent', label: s.funnels.ent.label },
-            ]}
+            onChange={(e) => store.patchLeadSegment(lead.id, e.target.value)}
+            options={funnelOptions(s)}
           />
         </FieldRow>
         <FieldRow label="Source">

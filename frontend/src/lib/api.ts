@@ -328,7 +328,15 @@ export const crmApi = {
   acceptInvitation: (token: string) => api<ApiTenant>(`/invitations/${token}/accept`, { method: 'POST' }),
 
   funnels: () => api<ApiFunnel[]>('/crm/funnels'),
+  createFunnel: (input: { label: string; note?: string | null; copyFromFunnelId?: string }) => api<ApiFunnel>('/crm/funnels', { method: 'POST', json: input }),
+  updateFunnel: (id: string, input: { label?: string; note?: string | null }) => api<ApiFunnel>(`/crm/funnels/${id}`, { method: 'PATCH', json: input }),
+  deleteFunnel: (id: string) => api(`/crm/funnels/${id}`, { method: 'DELETE' }),
   updateStage: (funnelId: string, stageId: string, input: StageInput) => api(`/crm/funnels/${funnelId}/stages/${stageId}`, { method: 'PATCH', json: input }),
+  createStage: (funnelId: string, input: StageInput & { name: string; position?: number }) => api<ApiFunnel>(`/crm/funnels/${funnelId}/stages`, { method: 'POST', json: input }),
+  reorderStages: (funnelId: string, stageIds: string[]) => api<ApiFunnel>(`/crm/funnels/${funnelId}/stages/order`, { method: 'PUT', json: { stageIds } }),
+  /** Deals in the stage move to `moveDealsTo` (required when it has any). */
+  deleteStage: (funnelId: string, stageId: string, moveDealsTo?: string) =>
+    api<ApiFunnel>(`/crm/funnels/${funnelId}/stages/${stageId}${moveDealsTo ? '?moveDealsTo=' + moveDealsTo : ''}`, { method: 'DELETE' }),
 
   companies: () => all<ApiCompany>('/crm/companies'),
   createCompany: (input: CompanyInput & { name: string }) => api<ApiCompany>('/crm/companies', { method: 'POST', json: input }),

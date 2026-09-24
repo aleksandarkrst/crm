@@ -50,6 +50,10 @@ const CHANGES_STAGE = new Set<StageChange['kind']>(['created', 'moved', 'funnel_
 /**
  * `leads` are the deals in view in this funnel (lost ones included: they count as not moving on).
  * `history` is the workspace's stage history, oldest first.
+ *
+ * Stages deleted from the funnel (CD-9) aren't in `stages`, but the history still names them. A
+ * visit to a deleted stage counts nowhere (its time isn't added to another stage), and a deal
+ * that passed through it counts as having skipped it.
  */
 export function conversionMetrics(stages: Stage[], leads: Lead[], history: StageChange[], now = Date.now()): ConversionMetrics {
   const position = new Map(stages.map((st, i) => [st.id, i]));
@@ -72,10 +76,12 @@ export function conversionMetrics(stages: Stage[], leads: Lead[], history: Stage
 
   for (const lead of leads) {
     const rows = byDeal.get(lead.id) ?? [];
-    // Only the deal's path through this funnel: from the last time it entered it.
+    // Only the deal's path through this funnel: from the last time it entered it. The deal is in
+    // this funnel, so that is its last "created" or "funnel_changed" row (which may name a stage
+    // deleted since).
     let start = -1;
     for (let i = rows.length - 1; i >= 0; i--)
-      if ((rows[i]!.kind === 'created' || rows[i]!.kind === 'funnel_changed') && position.has(rows[i]!.toStageId)) {
+      if (rows[i]!.kind === 'created' || rows[i]!.kind === 'funnel_changed') {
         start = i;
         break;
       }
@@ -95,8 +101,13 @@ export function conversionMetrics(stages: Stage[], leads: Lead[], history: Stage
     for (const r of path) {
       if (CHANGES_STAGE.has(r.kind)) {
         const pos = position.get(r.toStageId);
-        if (pos === undefined) break; // left this funnel (shouldn't happen after `start`)
         stop(r.at);
+        if (pos === undefined) {
+          // A stage deleted since: not tracked, and its time isn't counted anywhere.
+          current = -1;
+          running = null;
+          continue;
+        }
         current = pos;
         visits[pos]!++;
         entries.push({ pos, at: r.at });
@@ -115,7 +126,7 @@ export function conversionMetrics(stages: Stage[], leads: Lead[], history: Stage
     }
     const proposalEntry = first.get(proposalAt);
     if (proposalAt > 0 && proposalEntry !== undefined) {
-      toProposalSum += (entries[proposalEntry]!.at - entries[0]!.at) / DAY;
+      toProposalSum += (entries[proposalEntry]!.at - path[0]!.at) / DAY; // from entering the funnel
       toProposalDeals++;
     }
   }

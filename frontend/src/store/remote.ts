@@ -26,7 +26,6 @@ export type WorkspaceData = Pick<
   | 'profile'
 >;
 
-const SEGMENTS: SegKey[] = ['smb', 'ent'];
 export const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member' } as const;
 const DAY = 86_400_000;
 
@@ -124,14 +123,10 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     ...apiTeam.invitations.map<TeamMember>((i) => ({ id: i.id, name: i.email, email: i.email, role: ROLE_LABEL[i.role], status: 'Invited' })),
   ];
 
-  const funnels = {} as State['funnels'];
-  const segOfFunnel = new Map<string, SegKey>();
-  for (const seg of SEGMENTS) {
-    const f = apiFunnels.find((x) => x.key === seg);
-    if (!f) throw new Error(`This workspace has no "${seg}" funnel.`);
-    funnels[seg] = mapFunnel(f);
-    segOfFunnel.set(f.id, seg);
-  }
+  // Every funnel, keyed by its id, in the workspace's order (CD-10).
+  if (apiFunnels.length === 0) throw new Error('This workspace has no funnel.');
+  const funnels: State['funnels'] = {};
+  for (const f of apiFunnels) funnels[f.id] = mapFunnel(f);
 
   const companyById = new Map<string, ApiCompany>(companies.map((c) => [c.id, c]));
   const contactById = new Map<string, ApiContact>(contacts.map((c) => [c.id, c]));
@@ -140,8 +135,8 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
   const leads: Lead[] = [];
   const champ: State['champ'] = {};
   for (const { deal, ownerName } of dealRows) {
-    const segment = segOfFunnel.get(deal.funnelId);
-    if (!segment) continue; // funnels beyond the two personas aren't shown by this UI yet
+    const segment: SegKey = deal.funnelId;
+    if (!funnels[segment]) continue; // a funnel created after the funnels were read; the next load has it
     const co = deal.companyId ? companyById.get(deal.companyId) : undefined;
     const ct = deal.primaryContactId ? contactById.get(deal.primaryContactId) : undefined;
     const lastTouch = Date.parse(deal.lastContactAt ?? deal.createdAt);
@@ -234,7 +229,7 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
 
   // To-dos: playbook items are matched to the stage checklist by item id (idx = checklist position),
   // so renaming an item keeps them; off-playbook items follow the checklist, in their saved order.
-  const stageById = new Map(SEGMENTS.flatMap((seg) => funnels[seg].stages.map((st) => [st.id, st] as const)));
+  const stageById = new Map(Object.values(funnels).flatMap((f) => f.stages.map((st) => [st.id, st] as const)));
   const tasks: State['tasks'] = {};
   const extraTodos: State['extraTodos'] = {};
   const extraTodoIds: State['extraTodoIds'] = {};

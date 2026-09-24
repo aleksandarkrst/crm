@@ -102,9 +102,11 @@ describe('honest UI', () => {
     assert.ok(/coming soon/i.test(body), 'coming soon hint');
     assert.ok(!body.includes('Used 38 times') && !body.includes('owner: Mila'), 'no made-up template usage');
 
+    // Funnels can be created now (CD-10): the builder offers "New funnel" instead of a disabled "New pipeline".
     await page.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });
-    const newPipeline = await page.waitForSelector('button::-p-text(New pipeline)');
-    assert.ok(await newPipeline.evaluate((el) => el.disabled), 'New pipeline is disabled');
+    const newFunnel = await page.waitForSelector('button::-p-text(New funnel)');
+    assert.ok(!(await newFunnel.evaluate((el) => el.disabled)), 'New funnel is enabled for the owner');
+    assert.ok(!(await text(page)).includes('New pipeline'), 'no "New pipeline" placeholder');
   });
 
   step('a custom field says it is only for this session', async () => {

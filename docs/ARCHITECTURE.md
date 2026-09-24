@@ -76,8 +76,9 @@ the deal. Moving a deal to the stage it is already in writes nothing.
 
 - Deals that existed before the table got one `created` row each (their current stage at their
   creation time, no user) in `drizzle/0008_deal_stage_history_rls.sql`.
-- The stage references are composite FKs without cascade: a stage that has history can't be deleted
-  (the app can't delete stages yet). Deleting a deal deletes its history.
+- The stage references are composite FKs without cascade. Deleting a stage (CD-9) therefore keeps
+  its row, marked `deleted_at` (see below), so the history is never nulled or rewritten. Deleting a
+  deal deletes its history.
 - `GET /api/crm/deal-stage-history` lists the workspace's history oldest first, paged like the other
   lists (`limit` ≤ 200, `offset`; `dealId` narrows it to one deal).
 
@@ -105,6 +106,43 @@ have to repeat those filters in SQL. Revisit this if the history outgrows a page
   position, so renaming or reordering stages doesn't change it.
 - With fewer than 5 deals in view that moved between stages, the card says so instead of
   showing rates.
+- A stage deleted since (CD-9) isn't in the funnel any more: a visit to it counts nowhere, and a
+  deal that went through it counts as having skipped it. The path still starts at the deal's last
+  `created` / `funnel_changed` row, even when that row names a deleted stage.
+
+## Funnels and stages
+
+A workspace has any number of funnels (CD-10); new workspaces get two (`default-funnels.ts`).
+Everyone reads them (`GET /api/crm/funnels`, deleted stages left out); owners and admins change
+them (members get 403). The frontend keys funnels by id everywhere (`State.funnels`, `Lead.segment`,
+the Overview audience filter).
+
+- `POST /api/crm/funnels` `{ label, note?, copyFromFunnelId? }` creates a funnel after the others:
+  a copy of another funnel's stages (new stage and checklist item ids, no deals) or a small default
+  set (New deal, Discovery, Proposal, Won). `PATCH /api/crm/funnels/:id` renames it or changes the
+  note; the key (a slug) stays. In the UI: **Settings → Funnel builder → New funnel**, and the name
+  and "How they buy" fields above the stages.
+- `DELETE /api/crm/funnels/:id` only deletes a funnel that never had deals: none in it, and no
+  stage history row pointing at its stages (a deal moved to another funnel still does). The last
+  funnel stays. A profile whose default funnel was deleted falls back to the first funnel.
+- `POST /api/crm/funnels/:id/stages` `{ name, position?, … }` adds a stage (by default just before
+  the won stage); `PUT /api/crm/funnels/:id/stages/order` `{ stageIds }` takes every stage once, in
+  the new order. The builder has "+ Add stage" and ↑/↓ per stage.
+- `DELETE /api/crm/funnels/:id/stages/:stageId?moveDealsTo=<stageId>` deletes a stage. If it holds
+  deals (lost ones included), `moveDealsTo` is required and must be another stage of the funnel;
+  each deal gets a `moved` stage history row by the caller and a timeline entry ("Moved to X · The
+  stage Y was deleted."). Moving into the won stage wins them (as a drag would, including
+  `crm.deal-won`); lost deals can't go there (409). The funnel's last stage and its only won stage
+  can't be deleted (409). Playbook and stage to-dos of the stage go with it; tasks from the
+  "New task" dialog move to the target stage (or the stage before). The builder's **Remove** asks
+  where the deals go.
+- **Deleted stages are soft-deleted** (`funnel_stages.deleted_at`, key suffixed with `~<id>` so it
+  can be reused). Why not `ON DELETE SET NULL` on the history FKs: `to_stage_id` is NOT NULL, and a
+  nulled stage would erase where deals were and for how long, which the conversion metrics read.
+  Keeping the row keeps every history row valid and meaningful. Triggers
+  (`drizzle/0012_stage_soft_delete.sql`) keep deals out of deleted stages and refuse to delete a
+  stage that still holds deals, whatever code writes the rows. Code that reads `funnel_stages`
+  directly must filter `deleted_at is null` (FunnelsService and DealsService do).
 
 ## Deal outcome: open, won, lost
 
@@ -246,7 +284,6 @@ the store is the one place that talks to the backend.
 
 Still browser-only (seeded from `store/seed.ts`, lost on reload), because the backend doesn't have
 them yet:
-- adding and removing funnel stages (blocked in the UI for now; editing existing stages is saved)
 - document templates and generation (worker + storage)
 - sales-bonus rules (including "Sales bonus earned" on the Workspace tab); they start empty
   (no made-up rate, minimum or flat amount)
