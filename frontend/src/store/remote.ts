@@ -3,9 +3,9 @@
  * a lead (deal) shows its company and primary contact inline, companies are derived from leads
  * plus companies without a deal, and people are primary contacts plus everyone else.
  */
-import { type ApiActivity, type ApiCompany, type ApiDealLine, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiProfile, type ApiWorkspace, crmApi } from '../lib/api';
+import { type ApiActivity, type ApiCompany, type ApiDealLine, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiProfile, type ApiStageChange, type ApiWorkspace, crmApi } from '../lib/api';
 import { initialsOf, money, taskKey } from './selectors';
-import type { CatalogItem, CompanyExtra, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, Profile, SegKey, State, TeamMember, Workspace } from './types';
+import type { CatalogItem, CompanyExtra, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, Profile, SegKey, StageChange, State, TeamMember, Workspace } from './types';
 
 export type WorkspaceData = Pick<
   State,
@@ -37,6 +37,7 @@ function mapFunnel(f: ApiFunnel): Funnel {
     note: f.note ?? '',
     stages: f.stages.map((st) => ({
       id: st.id,
+      key: st.key,
       name: st.name,
       activity: st.activity,
       channel: st.channel,
@@ -78,6 +79,15 @@ export const mapProfile = (p: ApiProfile): Profile => ({
 });
 
 export const mapActivity = (a: ApiActivity): LogEntry => ({ date: dateLabel(a.occurredAt), channel: a.channel, title: a.title, detail: a.detail ?? '' });
+
+export const mapStageChange = (c: ApiStageChange): StageChange => ({
+  dealId: c.dealId,
+  kind: c.kind,
+  fromStageId: c.fromStageId,
+  toStageId: c.toStageId,
+  outcome: c.outcome,
+  at: Date.parse(c.changedAt),
+});
 
 export const mapLeadTask = (t: ApiDealTask): LeadTask => ({
   id: t.id,

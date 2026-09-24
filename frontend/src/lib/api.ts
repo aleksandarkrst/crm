@@ -173,6 +173,19 @@ export interface ApiDeal {
   createdAt: string;
   updatedAt: string;
 }
+/** One stage or outcome change of a deal (GET /crm/deal-stage-history, oldest first). */
+export interface ApiStageChange {
+  id: string;
+  dealId: string;
+  kind: 'created' | 'moved' | 'funnel_changed' | 'lost' | 'reopened';
+  /** null when the deal was created. */
+  fromStageId: string | null;
+  toStageId: string;
+  /** The deal's outcome after the change. */
+  outcome: DealOutcome;
+  changedAt: string;
+  changedByUserId: string | null;
+}
 export interface ApiDealRow {
   deal: ApiDeal;
   contactIds: string[];
@@ -322,6 +335,7 @@ export const crmApi = {
   moveDeal: (id: string, stageId: string) => api<ApiDeal>(`/crm/deals/${id}/move`, { method: 'POST', json: { stageId } }),
   markLost: (id: string, reason: LostReason, note: string | null) => api<ApiDeal>(`/crm/deals/${id}/lost`, { method: 'POST', json: { reason, note } }),
   reopenDeal: (id: string) => api<ApiDeal>(`/crm/deals/${id}/reopen`, { method: 'POST' }),
+  stageHistory: () => all<ApiStageChange>('/crm/deal-stage-history'),
   linkContact: (dealId: string, contactId: string) => api(`/crm/deals/${dealId}/contacts/${contactId}`, { method: 'PUT' }),
   unlinkContact: (dealId: string, contactId: string) => api(`/crm/deals/${dealId}/contacts/${contactId}`, { method: 'DELETE' }),
   activities: (dealId: string) => api<ApiActivity[]>(`/crm/deals/${dealId}/activities`),

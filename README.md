@@ -86,7 +86,7 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   workspace, products, new deal, closing date, notes, drag between stages, reload, every screen
   renders; deal lines and stage to-dos persist; CHAMP fit score; team invitations with two
   browser contexts (invite, accept, roles, wrong account, withdraw, remove); marking a deal lost,
-  the Pipeline's lost view and reopening.
+  the Pipeline's lost view and reopening; stage conversion on Overview.
 
 Both suites create their own users and workspaces with unique emails, so they can run against
 the dev database without resetting it. The database must be migrated first.

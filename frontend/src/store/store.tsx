@@ -2,7 +2,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { useNavigate } from 'react-router-dom';
 import { type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, crmApi, type DealInput, type DealLineInput, type LostReason, type ProfileInput, type TaskInput } from '../lib/api';
 import { paths } from '../lib/paths';
-import { loadWorkspace, mapActivity, mapLeadTask, mapLine, type WorkspaceData } from './remote';
+import { loadWorkspace, mapActivity, mapLeadTask, mapLine, mapStageChange, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
 import {
   champFor,
@@ -244,6 +244,19 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         if (logRequested.current.has(id)) continue;
         logRequested.current.add(id);
         refreshLog(id).catch(() => logRequested.current.delete(id));
+      }
+    };
+
+    /**
+     * Loads the stage history of every deal (CD-61) for the conversion metrics. Overview calls it
+     * each time it opens, so moves made since are included.
+     */
+    const refreshHistory = async () => {
+      try {
+        const rows = await crmApi.stageHistory();
+        set({ stageHistory: rows.map(mapStageChange) });
+      } catch (err) {
+        flash('Could not load the stage history: ' + errText(err));
       }
     };
 
@@ -767,6 +780,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       navigate,
       reload,
       ensureLog,
+      refreshHistory,
       moveLead,
       startGeneration,
       pushLog,

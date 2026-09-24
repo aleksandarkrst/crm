@@ -1,10 +1,12 @@
-import type { ApiDateFormat, ApiLanguage, ApiStartPage, DealOutcome, LostReason } from '../lib/api';
+import type { ApiDateFormat, ApiLanguage, ApiStageChange, ApiStartPage, DealOutcome, LostReason } from '../lib/api';
 
 export type SegKey = 'smb' | 'ent';
 export type ChannelCode = 'RS' | 'EM' | 'LI' | 'WA' | 'MT' | 'PH' | 'NT';
 
 export interface Stage {
   id: string;
+  /** Stable slug from the funnel template ("proposal", "won", ...). */
+  key?: string;
   name: string;
   activity: string;
   channel: ChannelCode;
@@ -162,6 +164,9 @@ export interface LeadTask {
   by?: string;
 }
 
+/** A stage or outcome change from the stage history; `at` is epoch ms. */
+export type StageChange = Pick<ApiStageChange, 'dealId' | 'kind' | 'fromStageId' | 'toStageId' | 'outcome'> & { at: number };
+
 export interface LogEntry {
   date: string;
   channel: string;
@@ -297,6 +302,8 @@ export interface State {
   /** Tasks from the "New task" dialog (see LeadTask). */
   leadTasks: LeadTask[];
   log: Record<string, LogEntry[]>;
+  /** Stage history of every deal, oldest first; null until Overview loads it (see refreshHistory). */
+  stageHistory: StageChange[] | null;
   roadmapItems: RoadmapItem[];
   team: TeamMember[];
   notifs: ToggleRow[];

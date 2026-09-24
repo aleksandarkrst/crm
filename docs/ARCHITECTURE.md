@@ -81,6 +81,31 @@ the deal. Moving a deal to the stage it is already in writes nothing.
 - `GET /api/crm/deal-stage-history` lists the workspace's history oldest first, paged like the other
   lists (`limit` ≤ 200, `offset`; `dealId` narrows it to one deal).
 
+### Conversion metrics (Overview)
+
+The **Stage conversion** card is computed in the browser (`store/metrics.ts`) from the stage history,
+which Overview loads each time it opens (`refreshHistory`). The frontend already has every deal
+and applies the Overview filters (audience/funnel, salesperson by user id, source, closing-date
+range) to them, so the card uses exactly the deals the other panels use. A backend aggregate would
+have to repeat those filters in SQL. Revisit this if the history outgrows a page load.
+
+- Only a deal's path through the funnel it's in counts: from its last `created` or
+  `funnel_changed` row.
+- **Stage-to-stage conversion** for stage N: of the deals that entered N, the share that later
+  entered any later stage. Skipping a stage counts as moving on from the stages before it, not as
+  having reached the skipped one. Lost deals and deals still sitting in N count as not moved on,
+  so this is conversion so far.
+- **Win rate** = won / (won + lost) among the deals in view, from their current outcome.
+- **Average time in stage**: per visit to the stage; a visit that is still going counts up to now,
+  and the clock stops while a deal is lost.
+- **Time to proposal**: from entering the funnel to first entering the proposal stage, averaged over
+  the deals that got there. The proposal stage is the first stage whose entry document is
+  "Proposal" (`documentOnEntry`, the same field that starts the proposal when a deal enters it),
+  and otherwise the stage with the template key `proposal`. Neither depends on the stage's name or
+  position, so renaming or reordering stages doesn't change it.
+- With fewer than 5 deals in view that moved between stages, the card says so instead of
+  showing rates.
+
 ## Deal outcome: open, won, lost
 
 - **Won is the won stage.** A deal is won while it is in its funnel's won stage

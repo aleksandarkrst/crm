@@ -227,5 +227,6 @@ export function initialState(): State {
     newProduct: { name: '', type: 'Service', kind: 'One-off', price: '', vat: '20' },
     drill: null,
     lostLeadId: null,
+    stageHistory: null,
   };
 }
