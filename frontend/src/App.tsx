@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { SessionGate } from './components/SessionGate';
+import type { ApiStartPage } from './lib/api';
 import { completeSignIn } from './lib/auth';
 import { paths } from './lib/paths';
 import { Companies } from './screens/Companies';
@@ -18,11 +19,11 @@ import { Settings } from './screens/Settings';
 import { Today } from './screens/Today';
 import { useStore } from './store/store';
 
-const START_PAGES: Record<string, string> = { Pipeline: paths.pipeline, Overview: paths.overview, Today: paths.today, Contacts: paths.contacts };
+const START_PAGES: Record<ApiStartPage, string> = { pipeline: paths.pipeline, overview: paths.overview, today: paths.today, contacts: paths.contacts };
 
 function StartPage() {
   const { s } = useStore();
-  return <Navigate to={START_PAGES[s.profile.startPage || 'Pipeline'] || paths.pipeline} replace />;
+  return <Navigate to={START_PAGES[s.profile.startPage] ?? paths.pipeline} replace />;
 }
 
 function AuthCallback() {

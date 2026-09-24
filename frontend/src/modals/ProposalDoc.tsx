@@ -50,6 +50,14 @@ export function ProposalDoc() {
 
   const eyebrow = { fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: '#475467' };
 
+  // Discovery notes saved on the deal. Anything not captured yet shows as a bracketed gap to fill in.
+  const gap = (what: string) => `[${what} — add it under Discovery on the deal]`;
+  const headline = lead.headline || lead.title || lead.company;
+  const callDate = lead.discoveryDate ? new Date(lead.discoveryDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : gap('call date');
+  const need = lead.need.trim() ? lead.need.trim().replace(/([^.!?])$/, '$1.') : gap('need') + '.';
+  const constraint = lead.constraint ? lead.constraint.replace(/[\s.]+$/, '') : gap('constraint');
+  const decisionMaker = lead.decisionMaker ? lead.decisionMaker.replace(/[\s.]+$/, '') : gap('decision maker');
+
   return (
     <div className="overlay" style={{ zIndex: 50, alignItems: 'stretch', overflowY: 'auto', padding: 0 }}>
       <div style={{ background: 'var(--bg-soft)', width: '100%', maxWidth: 1080, minHeight: '100vh', animation: 'dcFade .25s ease-out both', margin: '0 auto' }}>
@@ -83,7 +91,7 @@ export function ProposalDoc() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, borderBottom: '1px solid #E4E7EC', paddingBottom: 34 }}>
               <span style={{ ...eyebrow, color: '#B4531B' }}>Proposal</span>
-              <span style={{ fontWeight: 600, letterSpacing: '-0.028em', fontSize: 44, lineHeight: 1.1 }}>{lead.headline}</span>
+              <span style={{ fontWeight: 600, letterSpacing: '-0.028em', fontSize: 44, lineHeight: 1.1 }}>{headline}</span>
               <span style={{ fontSize: 15, color: '#475467', lineHeight: 1.6, maxWidth: 640 }}>
                 Prepared for <span style={{ color: '#101828', ...merge }}>{lead.contact}</span>, <span style={{ color: '#101828', ...merge }}>{lead.role}</span> at <span style={{ color: '#101828', ...merge }}>{lead.company}</span>.{' '}
                 {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} · valid 30 days
@@ -93,7 +101,7 @@ export function ProposalDoc() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <span style={eyebrow}>01 — What you told us</span>
               <p style={{ margin: 0, fontSize: 16, lineHeight: 1.7, maxWidth: 680 }}>
-                In our discovery call on <span style={merge}>{lead.discoveryDate}</span> you described <span style={merge}>{lead.need}</span> The constraint is <span style={merge}>{lead.constraint}</span> and the decision sits with <span style={merge}>{lead.decisionMaker}</span>.
+                In our discovery call on <span style={merge}>{callDate}</span> you described <span style={merge}>{need}</span> The constraint is <span style={merge}>{constraint}</span> and the decision sits with <span style={merge}>{decisionMaker}</span>.
               </p>
             </div>
 

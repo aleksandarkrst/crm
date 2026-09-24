@@ -80,6 +80,10 @@ export function SessionGate({ children }: { children: ReactNode }) {
       tenants: me.tenants,
       switchTenant: (id) => void start(id),
       signOut: () => void signOut().then(() => setPhase({ kind: 'signed-out' })),
+      // Saved renames update the session in place (the store for this workspace stays as it is).
+      renameTenant: (name) =>
+        setPhase((p) => (p.kind === 'ready' ? { ...p, me: { ...p.me, tenants: p.me.tenants.map((t) => (t.id === p.tenantId ? { ...t, name } : t)) } } : p)),
+      renameUser: (name) => setPhase((p) => (p.kind === 'ready' ? { ...p, me: { ...p.me, user: { ...p.me.user, displayName: name } } } : p)),
     };
   }, [me, tenantId, start]);
 

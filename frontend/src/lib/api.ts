@@ -80,6 +80,36 @@ export interface ApiMe {
   user: { id: string; email: string | null; displayName: string | null };
   tenants: ApiTenant[];
 }
+/** Settings of the current workspace (GET/PATCH /workspace; owners and admins change them). */
+export interface ApiWorkspace {
+  id: string;
+  name: string;
+  slug: string;
+  /** ISO 4217 code, e.g. "EUR". */
+  currency: string;
+  /** IANA time zone, e.g. "Europe/Belgrade". */
+  timezone: string;
+  /** 1 = January. */
+  fiscalYearStartMonth: number;
+}
+export type WorkspaceInput = Partial<Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth'>>;
+export type ApiLanguage = 'en' | 'sr' | 'de';
+export type ApiDateFormat = 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
+export type ApiStartPage = 'pipeline' | 'overview' | 'today' | 'contacts';
+/** The signed-in user's profile (GET/PATCH /profile). The last two apply to the current workspace only. */
+export interface ApiProfile {
+  userId: string;
+  email: string | null;
+  displayName: string | null;
+  jobTitle: string | null;
+  phone: string | null;
+  language: ApiLanguage;
+  dateFormat: ApiDateFormat;
+  startPage: ApiStartPage;
+  defaultFunnelId: string | null;
+  dailyDigest: boolean;
+}
+export type ProfileInput = Partial<Omit<ApiProfile, 'userId' | 'email'>>;
 export interface ApiCompany {
   id: string;
   name: string;
@@ -121,6 +151,12 @@ export interface ApiDeal {
   closeDate: string | null;
   fitScore: number;
   champ: ApiChamp | null;
+  /** Discovery notes, merged into the proposal. */
+  headline: string | null;
+  need: string | null;
+  constraint: string | null;
+  decisionMaker: string | null;
+  discoveryDate: string | null;
   lastContactAt: string | null;
   stageEnteredAt: string;
   createdAt: string;
@@ -208,7 +244,9 @@ export interface ApiInvitePreview {
 
 export type CompanyInput = Partial<Omit<ApiCompany, 'id'>> & { name?: string };
 export type ContactInput = Partial<Omit<ApiContact, 'id'>>;
-export type DealInput = Partial<Pick<ApiDeal, 'title' | 'companyId' | 'primaryContactId' | 'funnelId' | 'ownerUserId' | 'source' | 'closeDate' | 'amount'>> & { champ?: ApiChamp };
+export type DealInput = Partial<
+  Pick<ApiDeal, 'title' | 'companyId' | 'primaryContactId' | 'funnelId' | 'ownerUserId' | 'source' | 'closeDate' | 'amount' | 'headline' | 'need' | 'constraint' | 'decisionMaker' | 'discoveryDate'>
+> & { champ?: ApiChamp };
 export type ProductInput = Partial<Omit<ApiProduct, 'id' | 'unitPrice' | 'vatRate'>> & { unitPrice?: number; vatRate?: number };
 export type DealLineInput = Partial<{
   productId: string | null;
@@ -235,6 +273,11 @@ export type StageInput = Partial<Pick<ApiFunnelStage, 'name' | 'activity' | 'cha
 export const crmApi = {
   me: () => api<ApiMe>('/me'),
   createTenant: (name: string) => api<ApiTenant>('/tenants', { method: 'POST', json: { name } }),
+
+  workspace: () => api<ApiWorkspace>('/workspace'),
+  updateWorkspace: (input: WorkspaceInput) => api<ApiWorkspace>('/workspace', { method: 'PATCH', json: input }),
+  profile: () => api<ApiProfile>('/profile'),
+  updateProfile: (input: ProfileInput) => api<ApiProfile>('/profile', { method: 'PATCH', json: input }),
 
   team: () => api<{ members: ApiMember[]; invitations: ApiInvitation[] }>('/team'),
   invite: (email: string, role: 'admin' | 'member') => api<{ invitation: ApiInvitation; token: string }>('/team/invitations', { method: 'POST', json: { email, role } }),

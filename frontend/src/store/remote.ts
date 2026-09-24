@@ -3,13 +3,27 @@
  * a lead (deal) shows its company and primary contact inline, companies are derived from leads
  * plus companies without a deal, and people are primary contacts plus everyone else.
  */
-import { type ApiActivity, type ApiCompany, type ApiDealLine, type ApiDealTask, type ApiContact, type ApiFunnel, crmApi } from '../lib/api';
+import { type ApiActivity, type ApiCompany, type ApiDealLine, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiProfile, type ApiWorkspace, crmApi } from '../lib/api';
 import { initialsOf, money, taskKey } from './selectors';
-import type { CatalogItem, CompanyExtra, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, SegKey, State, TeamMember } from './types';
+import type { CatalogItem, CompanyExtra, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, Profile, SegKey, State, TeamMember, Workspace } from './types';
 
 export type WorkspaceData = Pick<
   State,
-  'funnels' | 'leads' | 'extraCompanies' | 'extraPeople' | 'links' | 'catalog' | 'champ' | 'dealLines' | 'tasks' | 'extraTodos' | 'extraTodoIds' | 'leadTasks' | 'team'
+  | 'funnels'
+  | 'leads'
+  | 'extraCompanies'
+  | 'extraPeople'
+  | 'links'
+  | 'catalog'
+  | 'champ'
+  | 'dealLines'
+  | 'tasks'
+  | 'extraTodos'
+  | 'extraTodoIds'
+  | 'leadTasks'
+  | 'team'
+  | 'workspace'
+  | 'profile'
 >;
 
 const SEGMENTS: SegKey[] = ['smb', 'ent'];
@@ -48,6 +62,21 @@ export const mapLine = (l: ApiDealLine): DealLine => ({
   milestones: l.milestones,
 });
 
+/** Workspace settings; the browser-only bonus trigger is kept by the store. */
+export const mapWorkspace = (w: ApiWorkspace): Workspace => ({ name: w.name, currency: w.currency, timezone: w.timezone, fiscalMonth: w.fiscalYearStartMonth });
+
+export const mapProfile = (p: ApiProfile): Profile => ({
+  name: p.displayName ?? p.email ?? '',
+  title: p.jobTitle ?? '',
+  email: p.email ?? '',
+  phone: p.phone ?? '',
+  language: p.language,
+  dateFormat: p.dateFormat,
+  startPage: p.startPage,
+  defaultFunnelId: p.defaultFunnelId ?? '',
+  digest: p.dailyDigest,
+});
+
 export const mapActivity = (a: ApiActivity): LogEntry => ({ date: dateLabel(a.occurredAt), channel: a.channel, title: a.title, detail: a.detail ?? '' });
 
 export const mapLeadTask = (t: ApiDealTask): LeadTask => ({
@@ -65,7 +94,7 @@ export const mapLeadTask = (t: ApiDealTask): LeadTask => ({
 });
 
 export async function loadWorkspace(): Promise<WorkspaceData> {
-  const [apiFunnels, companies, contacts, dealRows, products, apiLines, apiTasks, apiTeam] = await Promise.all([
+  const [apiFunnels, companies, contacts, dealRows, products, apiLines, apiTasks, apiTeam, apiWorkspace, apiProfile] = await Promise.all([
     crmApi.funnels(),
     crmApi.companies(),
     crmApi.contacts(),
@@ -74,6 +103,8 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     crmApi.dealLines(),
     crmApi.dealTasks(),
     crmApi.team(),
+    crmApi.workspace(),
+    crmApi.profile(),
   ]);
 
   const team: TeamMember[] = [
@@ -127,11 +158,11 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
       hq: co?.hq ?? '—',
       size: co?.teamSize ?? '—',
       source: deal.source ?? co?.source ?? '—',
-      need: 'scope still to be captured in discovery.',
-      constraint: 'not captured yet',
-      decisionMaker: ct?.fullName ?? '—',
-      discoveryDate: '—',
-      headline: deal.title,
+      need: deal.need ?? '',
+      constraint: deal.constraint ?? '',
+      decisionMaker: deal.decisionMaker ?? '',
+      discoveryDate: deal.discoveryDate ?? '',
+      headline: deal.headline ?? '',
       lines: [],
       total: money(Number(deal.amount)),
       closeDate: deal.closeDate ?? '',
@@ -215,5 +246,21 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     };
   }
 
-  return { funnels, leads, extraCompanies, extraPeople, links, catalog, champ, dealLines, tasks, extraTodos, extraTodoIds, leadTasks, team };
+  return {
+    funnels,
+    leads,
+    extraCompanies,
+    extraPeople,
+    links,
+    catalog,
+    champ,
+    dealLines,
+    tasks,
+    extraTodos,
+    extraTodoIds,
+    leadTasks,
+    team,
+    workspace: mapWorkspace(apiWorkspace),
+    profile: mapProfile(apiProfile),
+  };
 }

@@ -186,8 +186,9 @@ export function initialState(): State {
       { id: 'f15', label: 'Closing date', type: 'Date', entity: 'Leads', required: false, system: true },
       { id: 'f16', label: 'Funnel', type: 'Dropdown', entity: 'Leads', required: true, system: true },
     ].map((f) => ({ ...f, entity: f.entity as 'Leads' | 'Contacts', visible: true })),
-    workspace: { name: 'Cadence Studio', currency: 'EUR (€)', timezone: 'Europe/Belgrade', fiscal: 'January' },
-    profile: {},
+    // Replaced by the saved settings when the workspace loads (store/remote.ts).
+    workspace: { name: '', currency: 'EUR', timezone: 'Europe/Belgrade', fiscalMonth: 1 },
+    profile: { name: '', title: '', email: '', phone: '', language: 'en', dateFormat: 'DD.MM.YYYY', startPage: 'pipeline', defaultFunnelId: '', digest: true },
     bonusRules: {},
     filters: { ...DEFAULT_FILTERS },
     toast: '',

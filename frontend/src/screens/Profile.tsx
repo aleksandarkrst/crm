@@ -5,21 +5,31 @@ import { useStore } from '../store/store';
 import type { Profile as ProfileT } from '../store/types';
 
 const selectStyle = { width: '100%' } as const;
+const note = { fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 } as const;
 
+const LANGUAGES = [
+  { value: 'en', label: 'English' },
+  { value: 'sr', label: 'Srpski' },
+  { value: 'de', label: 'Deutsch' },
+];
+const DATE_FORMATS = ['DD.MM.YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'];
+const START_PAGES = [
+  { value: 'pipeline', label: 'Pipeline' },
+  { value: 'overview', label: 'Overview' },
+  { value: 'today', label: 'Today' },
+  { value: 'contacts', label: 'Contacts' },
+];
+
+/**
+ * Your own profile. Every change is saved as you make it; a failed save shows why. Name, job
+ * title, phone and the preferences are yours in every workspace; the default funnel and the
+ * digest apply to the current workspace. Passwords belong to the sign-in provider.
+ */
 export function Profile() {
-  const { s, set, flash, session } = useStore();
+  const { s, patchProfile, session } = useStore();
   const p = s.profile;
-  const name = p.name || 'Marko Jovanović';
-  const title = p.title || 'Sales lead';
-  const email = p.email || 'marko@cadence.rs';
-  const setP = (k: keyof ProfileT) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const v = e.target.value;
-    set((x) => ({ profile: { ...x.profile, [k]: v } }));
-  };
-  const pwNew = p.pwNew || '';
-  const pwReady = !!p.pwCurrent && pwNew.length >= 10 && pwNew === p.pwConfirm;
-  const pwHint = !pwNew ? 'At least 10 characters.' : pwNew.length < 10 ? 'New password is too short.' : pwNew !== p.pwConfirm ? 'Passwords do not match.' : 'Ready to update.';
-  const digest = p.digest !== false;
+  const setP = (k: keyof ProfileT) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => patchProfile({ [k]: e.target.value });
+  const funnels = [s.funnels.smb, s.funnels.ent].filter((f) => f.id).map((f) => ({ value: f.id!, label: f.label }));
 
   return (
     <Screen title="Profile settings">
@@ -27,59 +37,28 @@ export function Profile() {
         <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12 }}>
             <div className="avatar" style={{ width: 48, height: 48, fontSize: 15, fontWeight: 600 }}>
-              {initialsOf(name)}
+              {initialsOf(p.name || session.userName)}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 14, fontWeight: 600 }}>{name}</span>
-              <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
-                {title} · {email}
-              </span>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{p.name || session.userName}</span>
+              <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{[p.title, p.email].filter(Boolean).join(' · ')}</span>
             </div>
           </div>
           <FieldRow label="Full name">
-            <GhostInput value={name} onChange={setP('name')} />
+            <GhostInput value={p.name} onChange={setP('name')} placeholder="Your name" />
           </FieldRow>
           <FieldRow label="Job title">
-            <GhostInput value={title} onChange={setP('title')} />
+            <GhostInput value={p.title} onChange={setP('title')} placeholder="e.g. Sales lead" />
           </FieldRow>
           <FieldRow label="Email">
-            <GhostInput value={email} onChange={setP('email')} />
+            <span className="field-value" title="Your email comes from your sign-in and is changed there.">
+              {p.email || '—'}
+            </span>
           </FieldRow>
           <FieldRow label="Phone">
-            <GhostInput value={p.phone || '+381 62 114 208'} onChange={setP('phone')} />
+            <GhostInput value={p.phone} onChange={setP('phone')} placeholder="+381 …" />
           </FieldRow>
-        </div>
-
-        <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div className="card-title">Password</div>
-          <label className="form-label" style={{ gap: 5 }}>
-            Current password
-            <input type="password" className="form-input" style={{ padding: '9px 10px', fontSize: 13.5 }} placeholder="••••••••" value={p.pwCurrent || ''} onChange={setP('pwCurrent')} />
-          </label>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 10 }}>
-            <label className="form-label" style={{ gap: 5 }}>
-              New password
-              <input type="password" className="form-input" style={{ padding: '9px 10px', fontSize: 13.5 }} placeholder="At least 10 characters" value={pwNew} onChange={setP('pwNew')} />
-            </label>
-            <label className="form-label" style={{ gap: 5 }}>
-              Confirm new password
-              <input type="password" className="form-input" style={{ padding: '9px 10px', fontSize: 13.5 }} placeholder="Repeat new password" value={p.pwConfirm || ''} onChange={setP('pwConfirm')} />
-            </label>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => {
-                if (!pwReady) return flash('Check the password fields first');
-                set((x) => ({ profile: { ...x.profile, pwCurrent: '', pwNew: '', pwConfirm: '' } }));
-                flash('Password updated');
-              }}
-            >
-              Update password
-            </button>
-            <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{pwHint}</span>
-          </div>
+          <span style={{ ...note, marginTop: 8 }}>Changes are saved as you type. Your email and password are managed by your sign-in provider.</span>
         </div>
 
         <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -87,30 +66,29 @@ export function Profile() {
             Preferences
           </div>
           <FieldRow label="Language">
-            <GhostSelect style={selectStyle} value={p.language || 'English'} onChange={setP('language')} options={['English', 'Srpski', 'Deutsch']} />
+            <GhostSelect style={selectStyle} value={p.language} onChange={setP('language')} options={LANGUAGES} />
           </FieldRow>
           <FieldRow label="Date format">
-            <GhostSelect style={selectStyle} value={p.dateFormat || 'DD.MM.YYYY'} onChange={setP('dateFormat')} options={['DD.MM.YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD']} />
+            <GhostSelect style={selectStyle} value={p.dateFormat} onChange={setP('dateFormat')} options={DATE_FORMATS} />
           </FieldRow>
+          <span style={{ ...note, margin: '2px 0 6px' }}>Language and date format are saved for later: the app is in English with its own date style for now.</span>
           <FieldRow label="Start page">
-            <GhostSelect style={selectStyle} value={p.startPage || 'Pipeline'} onChange={setP('startPage')} options={['Pipeline', 'Overview', 'Today', 'Contacts']} />
+            <GhostSelect style={selectStyle} value={p.startPage} onChange={setP('startPage')} options={START_PAGES} />
           </FieldRow>
           <FieldRow label="Default funnel">
-            <GhostSelect style={selectStyle} value={p.defaultFunnel || s.funnels.smb.label} onChange={setP('defaultFunnel')} options={[s.funnels.smb.label, s.funnels.ent.label]} />
+            <GhostSelect style={selectStyle} value={p.defaultFunnelId} onChange={setP('defaultFunnelId')} options={funnels} />
           </FieldRow>
+          <span style={{ ...note, margin: '2px 0 0' }}>The pipeline opens on your default funnel in {session.tenant.name}.</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '8px 0 2px', borderTop: '1px solid var(--divider)', marginTop: 8 }}>
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
               <span style={{ fontSize: 13.5, fontWeight: 600 }}>Daily digest email</span>
-              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>One summary of stalled leads and today's tasks, sent at 8:00.</span>
+              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>A summary of stalled leads and today's tasks in {session.tenant.name}. Emails aren't sent yet; your choice is saved for when they are.</span>
             </div>
-            <Switch on={digest} onClick={() => set((x) => ({ profile: { ...x.profile, digest: !(x.profile.digest !== false) } }))} />
+            <Switch on={p.digest} onClick={() => patchProfile({ digest: !p.digest })} />
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button type="button" className="btn btn-primary" onClick={() => flash('Profile saved')}>
-            Save changes
-          </button>
           <button type="button" className="btn btn-secondary" onClick={session.signOut}>
             Sign out
           </button>

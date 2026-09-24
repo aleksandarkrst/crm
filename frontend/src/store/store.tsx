@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiRole, type ApiTenant, type Channel, clearTenantId, crmApi, type DealLineInput, type TaskInput } from '../lib/api';
+import { type ApiRole, type ApiTenant, type Channel, clearTenantId, crmApi, type DealInput, type DealLineInput, type ProfileInput, type TaskInput } from '../lib/api';
 import { paths } from '../lib/paths';
 import { loadWorkspace, mapActivity, mapLeadTask, mapLine, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
@@ -24,7 +24,7 @@ import {
   todayLabel,
   todoItemsFor,
 } from './selectors';
-import type { Champ, ChannelCode, DealLine, Lead, LogEntry, NewContactDraft, NewProductDraft, Person, SegKey, Stage, State, TaskState } from './types';
+import type { Champ, ChannelCode, DealLine, Lead, LogEntry, NewContactDraft, NewProductDraft, Person, Profile, SegKey, Stage, State, TaskState, Workspace } from './types';
 
 type Updater = Partial<State> | ((s: State) => Partial<State>);
 
@@ -37,19 +37,25 @@ export interface Session {
   tenants: ApiTenant[];
   switchTenant: (id: string) => void;
   signOut: () => void;
+  /** Updates the session after the workspace was renamed (switcher, headings). */
+  renameTenant: (name: string) => void;
+  /** Updates the session after the user changed their name in the profile. */
+  renameUser: (name: string) => void;
 }
 
 const ROADMAP_KEY = 'cadence.roadmapItems';
 
 /**
  * Business records (deals with their lines and to-dos, companies, contacts, products, funnels,
- * activity) come from the API. Features the backend doesn't have yet (documents, team, settings)
- * still live only in this browser tab, seeded from the design.
+ * activity), the workspace settings and your profile come from the API. Features the backend
+ * doesn't have yet (documents, some settings tabs) still live only in this browser tab, seeded
+ * from the design.
  */
-function loadInitial(data: WorkspaceData, session: Session): State {
+function loadInitial(data: WorkspaceData): State {
   const s: State = { ...initialState(), ...data };
-  s.workspace = { ...s.workspace, name: session.tenant.name };
-  s.profile = { name: session.userName, email: session.email };
+  // The pipeline opens on your default funnel for this workspace.
+  const preferred = (Object.keys(data.funnels) as SegKey[]).find((k) => data.funnels[k].id && data.funnels[k].id === data.profile.defaultFunnelId);
+  if (preferred) s.segment = s.newLeadType = preferred;
   s.taskLeadId = data.leads[0]?.id ?? '';
   s.contactCompany = data.leads[0]?.id ?? '';
   try {
@@ -65,9 +71,28 @@ function loadInitial(data: WorkspaceData, session: Session): State {
 const channelOf = (c: string): Channel => ((CHANNELS as readonly string[]).includes(c) ? (c as Channel) : 'NT');
 const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 const EMPTY_CONTACT: NewContactDraft = { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer' };
+const DISCOVERY_FIELDS = ['headline', 'need', 'constraint', 'decisionMaker', 'discoveryDate'] as const satisfies readonly (keyof Lead & keyof DealInput)[];
+/** Workspace settings as the API names them (the bonus trigger has no backend yet). */
+const WORKSPACE_FIELDS: Partial<Record<keyof Workspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth'>> = {
+  name: 'name',
+  currency: 'currency',
+  timezone: 'timezone',
+  fiscalMonth: 'fiscalYearStartMonth',
+};
+/** Profile fields as the API names them. */
+const PROFILE_FIELDS: Partial<Record<keyof Profile, keyof ProfileInput>> = {
+  name: 'displayName',
+  title: 'jobTitle',
+  phone: 'phone',
+  language: 'language',
+  dateFormat: 'dateFormat',
+  startPage: 'startPage',
+  defaultFunnelId: 'defaultFunnelId',
+  digest: 'dailyDigest',
+};
 
 function useStoreImpl(data: WorkspaceData, session: Session) {
-  const [s, setState] = useState<State>(() => loadInitial(data, session));
+  const [s, setState] = useState<State>(() => loadInitial(data));
   const ref = useRef(s);
   ref.current = s;
   const navigate = useNavigate();
@@ -565,6 +590,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       if (title !== undefined && title.trim()) saveLater('title:' + id, () => crmApi.updateDeal(id, { title: title.trim() }));
       if (closeDate !== undefined) saveLater('close:' + id, () => crmApi.updateDeal(id, { closeDate: closeDate || null }));
       if (source !== undefined) saveLater('source:' + id, () => crmApi.updateDeal(id, { source }));
+      // Discovery notes (merged into the proposal). Empty text clears the field.
+      for (const key of DISCOVERY_FIELDS) {
+        const v = dealPatch[key];
+        if (v !== undefined) saveLater(`${key}:${id}`, () => crmApi.updateDeal(id, { [key]: key === 'discoveryDate' ? v || null : v }));
+      }
       if (dealPatch.companyId !== undefined && dealPatch.companyId !== companyId) {
         const target = dealPatch.companyId;
         const rec = target ? companyRecords(cur()).find((c) => c.id === target) : undefined;
@@ -581,6 +611,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
 
     // ------------------------------------------------------------ deleting (owners and admins)
     const canDelete = session.tenant.role === 'owner' || session.tenant.role === 'admin';
+    const canEditWorkspace = canDelete;
     /** Drops pending debounced writes for a record that is about to be deleted. */
     const cancelSaves = (...ids: string[]) => {
       for (const [key, timer] of saveTimers.current)
@@ -645,7 +676,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         const x = cur();
         if (x.genStep < 4 || !x.genLead) return;
         const leadId = x.genLead;
-        mapLead(leadId, (l) => ({ ...l, docs: [{ name: 'Proposal — ' + l.headline, state: 'draft', meta: 'v1 · generated just now · not sent' }, ...(l.docs || [])] }));
+        mapLead(leadId, (l) => ({ ...l, docs: [{ name: 'Proposal — ' + (l.headline || l.title || l.company), state: 'draft', meta: 'v1 · generated just now · not sent' }, ...(l.docs || [])] }));
         set({ genOpen: false, docOpen: true, docLeadId: leadId, sent: false });
       },
       openDoc: (leadId: string) => set({ docOpen: true, docLeadId: leadId, sent: false }),
@@ -808,6 +839,41 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       removeProduct: (id: string) => {
         set((x) => ({ catalog: x.catalog.filter((k) => k.id !== id) }));
         void save(() => crmApi.deleteProduct(id));
+      },
+
+      // ---------------------------------------------------------- settings
+      /** Owners and admins change the workspace settings; members see them read-only. */
+      canEditWorkspace,
+      /** Edits workspace settings and saves them (one write per field after a pause). The bonus trigger is browser-only. */
+      setWorkspace: (patch: Partial<Workspace>) => {
+        set((x) => ({ workspace: { ...x.workspace, ...patch } }));
+        for (const [k, v] of Object.entries(patch)) {
+          const field = WORKSPACE_FIELDS[k as keyof Workspace];
+          if (!field || !canEditWorkspace) continue;
+          const value = typeof v === 'string' ? v.trim() : v;
+          if (field === 'name' && !value) continue;
+          saveLater('workspace:' + field, async () => {
+            const ws = await crmApi.updateWorkspace({ [field]: value });
+            if (field === 'name') session.renameTenant(ws.name);
+          });
+        }
+      },
+      /** Edits your own profile and saves it (one write per field after a pause). */
+      patchProfile: (patch: Partial<Profile>) => {
+        set((x) => ({
+          profile: { ...x.profile, ...patch },
+          team: patch.name?.trim() ? x.team.map((m) => (m.status === 'Active' && m.id === session.userId ? { ...m, name: patch.name!.trim() } : m)) : x.team,
+        }));
+        for (const [k, v] of Object.entries(patch)) {
+          const field = PROFILE_FIELDS[k as keyof Profile];
+          if (!field) continue;
+          const value = field === 'defaultFunnelId' ? v || null : typeof v === 'string' ? v.trim() : v;
+          if (field === 'displayName' && !value) continue;
+          saveLater('profile:' + field, async () => {
+            const p = await crmApi.updateProfile({ [field]: value });
+            if (field === 'displayName' && p.displayName) session.renameUser(p.displayName);
+          });
+        }
       },
     };
   }, [set, flash, navigate, session]);

@@ -1,3 +1,5 @@
+import type { ApiDateFormat, ApiLanguage, ApiStartPage } from '../lib/api';
+
 export type SegKey = 'smb' | 'ent';
 export type ChannelCode = 'RS' | 'EM' | 'LI' | 'WA' | 'MT' | 'PH' | 'NT';
 
@@ -190,27 +192,33 @@ export interface FieldDef {
   visible: boolean;
 }
 
+/** Workspace settings, saved per tenant (see ApiWorkspace). */
 export interface Workspace {
   name: string;
+  /** ISO 4217 code, e.g. "EUR". */
   currency: string;
+  /** IANA time zone. */
   timezone: string;
-  fiscal: string;
+  /** Month the fiscal year starts, 1 = January. */
+  fiscalMonth: number;
+  /** Sales-bonus rules are still browser-only. */
   bonusTrigger?: string;
 }
 
+/** The signed-in user's profile (see ApiProfile). */
 export interface Profile {
-  name?: string;
-  title?: string;
-  email?: string;
-  phone?: string;
-  pwCurrent?: string;
-  pwNew?: string;
-  pwConfirm?: string;
-  language?: string;
-  dateFormat?: string;
-  startPage?: string;
-  defaultFunnel?: string;
-  digest?: boolean;
+  name: string;
+  title: string;
+  /** From the sign-in provider; read-only here. */
+  email: string;
+  phone: string;
+  language: ApiLanguage;
+  dateFormat: ApiDateFormat;
+  startPage: ApiStartPage;
+  /** Backend funnel id; '' for none. Applies to this workspace only. */
+  defaultFunnelId: string;
+  /** Applies to this workspace only. */
+  digest: boolean;
 }
 
 export interface BonusRule {
