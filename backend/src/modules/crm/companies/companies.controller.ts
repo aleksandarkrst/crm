@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { RequireTenant, Tenant, type TenantContext } from '../../../shared/authorization';
 import { PaginationQuery, UuidParam } from '../../../shared/validation/common';
 import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
+import { parseVersion } from '../history/record-history.service';
 import { CompaniesService, CreateCompany, UpdateCompany } from './companies.service';
 
 @Controller('crm/companies')
@@ -24,9 +25,15 @@ export class CompaniesController {
     return this.companies.create(ctx, body);
   }
 
+  /** `If-Match: <updatedAt>` makes the update fail with 409 if someone changed these fields since (CD-20). */
   @Patch(':id')
-  update(@Tenant() ctx: TenantContext, @Param('id', new ZodPipe(UuidParam)) id: string, @Body(new ZodPipe(UpdateCompany)) body: UpdateCompany) {
-    return this.companies.update(ctx, id, body);
+  update(
+    @Tenant() ctx: TenantContext,
+    @Param('id', new ZodPipe(UuidParam)) id: string,
+    @Body(new ZodPipe(UpdateCompany)) body: UpdateCompany,
+    @Headers('if-match') ifMatch?: string,
+  ) {
+    return this.companies.update(ctx, id, body, parseVersion(ifMatch));
   }
 
   @Delete(':id')

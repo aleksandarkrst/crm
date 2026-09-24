@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { RequireTenant, Tenant, type TenantContext } from '../../../shared/authorization';
 import { UuidParam } from '../../../shared/validation/common';
 import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
+import { parseVersion } from '../history/record-history.service';
 import { ContactsQuery, ContactsService, CreateContact, UpdateContact } from './contacts.service';
 
 @Controller('crm/contacts')
@@ -24,9 +25,15 @@ export class ContactsController {
     return this.contacts.create(ctx, body);
   }
 
+  /** `If-Match: <updatedAt>` makes the update fail with 409 if someone changed these fields since (CD-20). */
   @Patch(':id')
-  update(@Tenant() ctx: TenantContext, @Param('id', new ZodPipe(UuidParam)) id: string, @Body(new ZodPipe(UpdateContact)) body: UpdateContact) {
-    return this.contacts.update(ctx, id, body);
+  update(
+    @Tenant() ctx: TenantContext,
+    @Param('id', new ZodPipe(UuidParam)) id: string,
+    @Body(new ZodPipe(UpdateContact)) body: UpdateContact,
+    @Headers('if-match') ifMatch?: string,
+  ) {
+    return this.contacts.update(ctx, id, body, parseVersion(ifMatch));
   }
 
   @Delete(':id')

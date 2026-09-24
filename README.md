@@ -58,6 +58,11 @@ deal, the **Documents** tab generates a document from a template; the worker fil
 deal's company, contact, discovery notes, lines and amounts in the deal currency, and it is listed on
 the deal to download. Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#documents-templates-and-generation-cd-13).
 
+**Working together:** changes made by others appear without a reload; editing a field someone
+else just changed tells you plainly that your change wasn't saved and shows theirs; deals,
+companies and contacts show who changed which field (**History → Changes** on a deal). Details in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#working-together-live-updates-conflicts-change-history).
+
 **Import and export (owners and admins):** Companies, Contacts and Pipeline have **Import**, which
 takes a CSV of companies, contacts or deals (comma or semicolon separated, up to 5,000 rows and
 2 MB; the dialog has a template for each), and **Export**, which downloads the list as it is
@@ -110,7 +115,10 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   workspace getting 404, files removed with their template, document or deal), and email: invitation emails (sent,
   resent, copy link, roles, failed after retries), notification settings per user and workspace,
   the daily digest's content by the workspace's date (and skipped when empty), and "deal assigned
-  to you" only when someone else assigns it.
+  to you" only when someone else assigns it;
+  the live event stream (a member gets their workspace's changes, never another's), conflicting
+  updates (409 per field, merges, same tab, no If-Match) and the change history (who, what,
+  old → new, former members, paging, isolation).
 - **Browser tests** (`e2e/`, Puppeteer with its bundled Chrome, run by `node:test`): sign-in,
   workspace, products, new deal, closing date, notes, drag between stages, reload, every screen
   renders; deal lines and stage to-dos persist; CHAMP fit score; team invitations with two
@@ -123,8 +131,9 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   member too, and deleted); the sales bonus tab and Overview card hidden from members; changing a
   deal's currency and the product currency rule; downloading the starter template, uploading it as
   a template, generating a proposal on a deal and downloading it; the Team tab's invitation email
-  status, Resend and Copy link, and the Notifications tab's settings surviving a reload (the worker
-  must be running).
+  status, Resend and Copy link, and the Notifications tab's settings surviving a reload (the worker must be
+  running); two members in two browsers: a change appears for the other without a reload,
+  editing the same field at once explains the refused change, and the deal's change history.
 
 Both suites create their own users and workspaces with unique emails, so they can run against
 the dev database without resetting it. The database must be migrated first.

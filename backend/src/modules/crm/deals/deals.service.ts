@@ -13,6 +13,7 @@ import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/va
 import { currencyCode } from '../currency';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
 import { assertOwnerIsMember, userNameOf } from '../owner';
+import { RecordHistoryService } from '../history/record-history.service';
 import { StageHistoryService } from './stage-history.service';
 
 const money = z.union([z.number(), z.string()]).transform((v) => String(v)).pipe(z.string().regex(/^\d{1,12}(\.\d{1,2})?$/, 'Invalid amount'));
@@ -75,6 +76,7 @@ export class DealsService {
     private readonly history: StageHistoryService,
     private readonly customFields: CustomFieldsService,
     private readonly storage: StorageService,
+    private readonly changes: RecordHistoryService,
   ) {}
 
   /** Board/list view: deals with company, primary contact and stage names joined in. */
@@ -164,11 +166,17 @@ export class DealsService {
 
   /**
    * Changing the funnel (a different target persona) restarts the deal at that funnel's first
-   * stage, and says so on the timeline ("Moved to funnel …").
+   * stage, and says so on the timeline ("Moved to funnel …"). With a `version` (If-Match), a field
+   * someone else changed since that version is a 409 conflict (RecordHistoryService).
    */
-  update(ctx: TenantContext, id: string, input: UpdateDeal) {
+  update(ctx: TenantContext, id: string, input: UpdateDeal, version?: Date) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        if (version) {
+          const [locked] = await tx.select().from(deals).where(eq(deals.id, id)).for('update');
+          if (!locked) throw new NotFoundException('Deal not found');
+          await this.changes.assertNoConflict(tx, ctx, 'deal', locked, input, version);
+        }
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const [before] = input.ownerUserId !== undefined ? await tx.select({ ownerUserId: deals.ownerUserId }).from(deals).where(eq(deals.id, id)) : [];
         const { customFields: cfInput, ...fields } = input;

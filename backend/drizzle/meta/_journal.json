@@ -134,6 +134,20 @@
       "when": 1790280886794,
       "tag": "0018_daily_digests_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790281601789,
+      "tag": "0019_record_changes",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790281605622,
+      "tag": "0020_record_changes_rls",
+      "breakpoints": true
     }
   ]
 }

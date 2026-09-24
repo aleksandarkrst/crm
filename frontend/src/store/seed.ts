@@ -172,6 +172,8 @@ export function initialState(): State {
     extraTodoIds: {},
     leadTasks: [],
     log: {},
+    versions: {},
+    changedAt: {},
     team: [], // loaded from the API
     integrations: [
       { id: 'i1', name: 'Gmail', desc: 'Sync email threads onto lead timelines', on: true },

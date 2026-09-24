@@ -3,7 +3,7 @@ import { tenants, users } from './platform';
 
 /**
  * Notification tables (owned by the notifications module). Tenant-scoped, protected by RLS
- * (drizzle/0014_daily_digests_rls.sql).
+ * (drizzle/0018_daily_digests_rls.sql).
  */
 
 export const DIGEST_STATUSES = ['sending', 'sent', 'skipped', 'failed'] as const;

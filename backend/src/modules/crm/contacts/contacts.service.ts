@@ -9,6 +9,7 @@ import { mapDbError } from '../../../shared/database/errors';
 import { BUYER_ROLES, contacts, deals } from '../../../shared/database/schema';
 import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
+import { RecordHistoryService } from '../history/record-history.service';
 import { assertOwnerIsMember, userNameOf } from '../owner';
 
 export const CreateContact = z.object({
@@ -38,6 +39,7 @@ export class ContactsService {
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
     private readonly customFields: CustomFieldsService,
+    private readonly changes: RecordHistoryService,
   ) {}
 
   list(ctx: TenantContext, query: ContactsQuery) {
@@ -85,9 +87,15 @@ export class ContactsService {
       .catch(mapDbError);
   }
 
-  update(ctx: TenantContext, id: string, input: UpdateContact) {
+  /** With a `version` (If-Match), a field someone else changed since then is a 409 conflict (CD-20). */
+  update(ctx: TenantContext, id: string, input: UpdateContact, version?: Date) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        if (version) {
+          const [locked] = await tx.select().from(contacts).where(eq(contacts.id, id)).for('update');
+          if (!locked) throw new NotFoundException('Contact not found');
+          await this.changes.assertNoConflict(tx, ctx, 'contact', locked, input, version);
+        }
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const { customFields: cfInput, ...fields } = input;
         const patch: PgUpdateSetSource<typeof contacts> = { ...fields };

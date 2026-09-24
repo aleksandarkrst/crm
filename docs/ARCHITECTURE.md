@@ -29,12 +29,14 @@ backend/src/
   worker.ts, worker.module.ts   worker entry; worker/job-handlers.ts registers handlers + cron
   modules/                      business domains — each owns its tables, services, controllers
     identity/                   users, tenants, memberships, auth guard
+    realtime/                   GET /api/events: live change hints (LISTEN/NOTIFY → SSE)
     crm/                        companies, contacts, funnels, deals (+activities), products, documents
     health/
   shared/                       cross-cutting, domain-free
     database/                   schema/, DatabaseService.withTenant(), migrate.ts, errors
     authorization/              TenantContext, @RequireTenant(role), @Tenant(), @CurrentUser()
     audit/                      AuditService.record(tx, ctx, …)
+    database/request-context.ts who acts (user, browser tab), handed to PostgreSQL by withTenant
     events/                     job types, JobsService (pg-boss), tenant provisioning hooks
     validation/                 ZodPipe, shared zod helpers
   infrastructure/               config (env validation), logging (pino), storage (files)
@@ -270,7 +272,7 @@ numbers. The import drops that `'` again, so an exported file imports back uncha
 `backend/src/modules/crm/documents/`. Owners and admins upload Word (.docx) templates with merge
 fields; anyone in the workspace generates a document on a deal from one and downloads it.
 
-- **Tables** (`drizzle/0013_documents.sql`, RLS in `0014_documents_rls.sql`):
+- **Tables** (`drizzle/0015_documents.sql`, RLS in `0016_documents_rls.sql`):
   `document_templates` (name, document type from the design's list, original file name, size, the
   merge fields found at upload, storage key, uploader) and `deal_documents` (deal, template id and
   a copy of its name and type, document name, `status` queued → running → ready | failed, error,
@@ -454,7 +456,7 @@ retried), loads the digest inside `withTenant` and:
 - records `skipped` without sending when all three are empty;
 - records `failed` with the error when the send throws; pg-boss retries it.
 
-`daily_digests` (tenant-scoped, RLS in `drizzle/0014_daily_digests_rls.sql`) holds one row per
+`daily_digests` (tenant-scoped, RLS in `drizzle/0018_daily_digests_rls.sql`) holds one row per
 workspace, member and local date with its status (`sending`, `sent`, `skipped`, `failed`), item
 count and error. `GET /api/notifications/digest` returns what your digest for this workspace
 contains right now; with `AUTH_MODE=dev`, `POST /api/dev/digest` sends yours now, whatever the time.
@@ -467,6 +469,96 @@ isn't the person making the change: a new deal created for someone else, or an o
 Saving the same owner again or taking a deal yourself sends nothing, and neither does the CSV
 import. The worker checks the assignee's setting when it sends (so switching it off stops emails
 still in the queue), and skips deals that were deleted or given to someone else again meanwhile.
+
+## Working together: live updates, conflicts, change history
+
+### Change history (CD-69)
+
+`record_changes` has one row per changed field of a deal, company or contact: `entity_type`,
+`entity_id`, `action` (`created`, `updated`, `deleted`, and for deals `line_added`, `line_changed`,
+`line_removed`), `field` (the API's name: `title`, `stageId`, `ownerUserId`, `lostReason`, …),
+`old_value` / `new_value` (jsonb), a `label` (the record's name on created/deleted, the product's
+name on a line), `actor_user_id`, `client_id` (the browser tab) and `changed_at`.
+
+- **Written by triggers** (`drizzle/0020_record_changes_rls.sql`), not by services, so every write
+  path is covered: the API, CSV import (one `created` row per imported record) and worker jobs.
+  Stage changes, owner changes, lost/reopen (`lostReason` set / cleared, with `lostNote`), the
+  amount following the lines, and line changes (only the fields that changed) are all rows.
+  Lines deleted together with their deal aren't recorded; the deal's `deleted` row says it.
+- **Who**: `DatabaseService.withTenant` sets `app.user_id` and `app.client_id` next to
+  `app.tenant_id`, from the request (`RequestActorInterceptor`, an AsyncLocalStorage store: the
+  signed-in user and the `X-Client-Id` header). Outside a request (jobs) they are empty: "System".
+- **Why not `audit_logs`**: the audit log has one row per action with the request body as `data`,
+  no old value, and misses writes that don't go through those service calls (line changes'
+  effect on the amount, imports, stage deletes moving deals). A field history needs old → new per
+  field, written wherever the row changes, and indexed per record; the audit log stays what it is
+  (a coarse record of business actions).
+- **RLS**: tenant isolation as everywhere, and append-only: the policies allow SELECT and INSERT
+  only, so the app can't rewrite history.
+- `GET /api/crm/history?entityType=deal|company|contact&entityId=…&limit=50&offset=0` (any member),
+  newest first, `{ entries, more }` (limit ≤ 200). Ids come with names (`oldLabel` / `newLabel`:
+  stage, funnel, company, contact, owner); people are named only while they are members of the
+  workspace, otherwise "Former member". History starts with this migration; older changes aren't
+  known.
+- UI (`components/ChangeHistory.tsx`): the deal's **History** card has **Activity | Changes**; the
+  company and contact screens have a **Changes** card. Values are readable (stage names, amounts
+  in the deal's currency, dates, "empty"), 30 at a time with **Show older changes**, and the list
+  re-reads when the record changes.
+
+### Optimistic concurrency (CD-20)
+
+`PATCH` of a deal, company or contact takes `If-Match: "<updatedAt>"`, the version the client
+edited. The database sets `updated_at` (`crm_touch_version` trigger): whole milliseconds, strictly
+increasing per row, and the same moment as the history rows of that change.
+
+- If the row is newer than the version, the update locks the row and looks in `record_changes` for
+  changes after that version **to the fields this update sends**. A field someone changed since,
+  to a value other than the one sent, is a conflict: 409 with `message` ("Ana changed this deal
+  while you were editing. Your change to the title wasn't saved."), `conflicts` (field, current
+  value and its name, who, when) and `current` (the record).
+- Changes to other fields are merged (two people editing different fields don't conflict).
+  Changes made earlier by the same browser tab (`X-Client-Id`) never conflict, so quick typing
+  whose saves overlap is fine; another tab of the same user is told "You changed this deal in
+  another window…".
+- No `If-Match` (or `*`) keeps last-write-wins for API clients from before; a malformed one is 400.
+- Field-level rather than "any change → 409", because the deal row changes all the time without
+  anyone touching the fields being edited (a line changes the amount, logging a call sets
+  `last_contact_at`, a move sets the stage), which would make most edits fail.
+- The store keeps each record's version (`State.versions`) from its last load and sends it with
+  every deal, company and contact edit. On a 409 the toast shows the message and the current
+  value ("It now says “…”") and the workspace is reloaded, so the field shows it.
+
+### Live updates (CD-20)
+
+- **Database**: statement-level triggers on deals, companies, contacts, deal contacts, deal lines,
+  deal tasks (tasks and to-dos), activities, products, funnels and stages send `pg_notify` on
+  channel `crm_changes` when the transaction commits: `{ t: tenant, type, op, ids, dealIds,
+  client }`, one per statement and tenant, ids only (null when more than 50 rows changed, e.g. an
+  import: "re-read the list"). A rolled-back change sends nothing.
+- **API**: each API process holds one extra connection that LISTENs (`modules/realtime`) and hands
+  each notification to the streams of that tenant only. `GET /api/events` (any member) is a
+  Server-Sent Events stream: `ready`, then `change` events, a comment every 20 s (nginx closes
+  idle proxied connections after 60 s, Cloudflare after 100 s) and `X-Accel-Buffering: no`. It
+  ends when the token expires and when the user is no longer a member (checked every 30 s). If the
+  LISTEN connection drops, it reconnects with backoff and sends `resync` to every stream. It works
+  with several API processes because every process listens to the database, not to each other.
+- **Authentication**: the browser reads the stream with `fetch`, not `EventSource`, so it sends
+  the same `Authorization`, `X-Tenant-Id` and `X-Client-Id` headers as every other call. With
+  EventSource the token would have to go in the URL (kept in proxy and access logs) or a
+  short-lived stream token would need its own endpoint and expiry handling; fetch needs neither,
+  and each reconnect picks up a refreshed OIDC token.
+- **Browser**: the stream runs in a dedicated worker (`store/live.worker.ts`, `liveStream.ts`); the
+  page answers its requests for headers. Off the page, the long-lived request doesn't keep the
+  page "busy" for tools that wait for network idle (the e2e tests). It reconnects with backoff
+  (1 s doubling to 30 s, with jitter) and shows nothing when the stream drops; after a reconnect,
+  and when the window gets focus (at most every 10 s), it re-reads everything.
+- **Merging** (`store.tsx`, live updates): a hint is skipped if this tab made the change; others
+  are gathered for 300 ms, then only the lists they affect are re-read (`loadWorkspace(parts)`
+  re-reads those and reuses the rest of the last load), and loaded timelines of the deals
+  involved. Like the reload after a failed save, it waits until this tab's own edits are saved
+  (debounced typing is not sent early) and discards its result if an edit started while it loaded,
+  so it never overwrites what someone is typing. An edit based on an older version is caught by
+  the API (409 above).
 
 ## Frontend: store → API
 

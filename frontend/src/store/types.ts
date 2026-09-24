@@ -311,6 +311,14 @@ export interface State {
   /** Tasks from the "New task" dialog (see LeadTask). */
   leadTasks: LeadTask[];
   log: Record<string, LogEntry[]>;
+  /**
+   * The version (updatedAt) of each deal, company and contact the screen shows, keyed
+   * "deal:<id>" etc. Edits send it as If-Match, so the API can say when someone else changed the
+   * same field meanwhile (CD-20). Updated when the workspace is (re)loaded.
+   */
+  versions: Record<string, string>;
+  /** When a live update last touched a record (by id), so open views (history) re-read it. */
+  changedAt: Record<string, number>;
   /** Stage history of every deal, oldest first; null until Overview loads it (see refreshHistory). */
   stageHistory: StageChange[] | null;
   team: TeamMember[];

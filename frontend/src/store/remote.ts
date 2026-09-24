@@ -28,6 +28,7 @@ export type WorkspaceData = Pick<
   | 'customValues'
   | 'bonusRules'
   | 'bonusTrigger'
+  | 'versions'
 >;
 
 export const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member' } as const;
@@ -134,21 +135,38 @@ export const mapLeadTask = (t: ApiDealTask, tz?: string): LeadTask => ({
   by: t.doneByName?.split(' ')[0] ?? undefined,
 });
 
-export async function loadWorkspace(): Promise<WorkspaceData> {
-  const [apiFunnels, companies, contacts, dealRows, products, apiLines, apiTasks, apiTeam, apiWorkspace, apiProfile, apiFields, apiBonus] = await Promise.all([
-    crmApi.funnels(),
-    crmApi.companies(),
-    crmApi.contacts(),
-    crmApi.deals(),
-    crmApi.products(),
-    crmApi.dealLines(),
-    crmApi.dealTasks(),
-    crmApi.team(),
-    crmApi.workspace(),
-    crmApi.profile(),
-    crmApi.customFields(),
-    loadBonusRules(),
-  ]);
+/** What the workspace is built from, one API list each. */
+const PARTS = {
+  funnels: () => crmApi.funnels(),
+  companies: () => crmApi.companies(),
+  contacts: () => crmApi.contacts(),
+  deals: () => crmApi.deals(),
+  products: () => crmApi.products(),
+  lines: () => crmApi.dealLines(),
+  tasks: () => crmApi.dealTasks(),
+  team: () => crmApi.team(),
+  workspace: () => crmApi.workspace(),
+  profile: () => crmApi.profile(),
+  customFields: () => crmApi.customFields(),
+  bonus: () => loadBonusRules(),
+};
+export type Part = keyof typeof PARTS;
+type Raw = { [K in Part]: Awaited<ReturnType<(typeof PARTS)[K]>> };
+/** The lists the last load read, so a live update (CD-20) re-reads only the ones that changed. */
+let lastRaw: Raw | null = null;
+
+/**
+ * Loads the workspace. With `only`, just those lists are read again and the others are taken
+ * from the previous load (live updates); without it, everything is read.
+ */
+export async function loadWorkspace(only?: ReadonlySet<Part>): Promise<WorkspaceData> {
+  const prev = only ? lastRaw : null;
+  const keys = (Object.keys(PARTS) as Part[]).filter((k) => !prev || only!.has(k));
+  const fetched = await Promise.all(keys.map((k) => PARTS[k]()));
+  const raw = { ...prev } as Record<Part, unknown>;
+  keys.forEach((k, i) => (raw[k] = fetched[i]));
+  lastRaw = raw as Raw;
+  const { funnels: apiFunnels, companies, contacts, deals: dealRows, products, lines: apiLines, tasks: apiTasks, team: apiTeam, workspace: apiWorkspace, profile: apiProfile, customFields: apiFields, bonus: apiBonus } = lastRaw;
 
   const team = mapTeam(apiTeam);
 
@@ -297,7 +315,14 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     };
   }
 
+  // The version of each deal, company and contact as loaded: sent as If-Match when editing (CD-20).
+  const versions: State['versions'] = {};
+  for (const { deal } of dealRows) versions['deal:' + deal.id] = deal.updatedAt;
+  for (const c of companies) versions['company:' + c.id] = c.updatedAt;
+  for (const c of contacts) versions['contact:' + c.id] = c.updatedAt;
+
   return {
+    versions,
     funnels,
     leads,
     extraCompanies,

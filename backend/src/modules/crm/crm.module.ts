@@ -18,6 +18,8 @@ import { DocumentsController } from './documents/documents.controller';
 import { DocumentsService } from './documents/documents.service';
 import { StageHistoryService } from './deals/stage-history.service';
 import { FunnelsController } from './funnels/funnels.controller';
+import { HistoryController } from './history/history.controller';
+import { RecordHistoryService } from './history/record-history.service';
 import { FunnelsService } from './funnels/funnels.service';
 import { ImportController } from './import/import.controller';
 import { ImportService } from './import/import.service';
@@ -33,8 +35,8 @@ import { ProductsService } from './products/products.service';
  * bonus rules (CD-17) in bonuses/.
  */
 @Module({
-  controllers: [CompaniesController, ContactsController, FunnelsController, DealsController, DealWorkController, ProductsController, ImportController, CustomFieldsController, BonusRulesController, DocumentsController],
-  providers: [CompaniesService, ContactsService, FunnelsService, DealsService, ActivitiesService, DealLinesService, DealTasksService, StageHistoryService, ProductsService, ImportService, CustomFieldsService, BonusRulesService, DocumentsService, DocumentGenerator],
+  controllers: [CompaniesController, ContactsController, FunnelsController, DealsController, DealWorkController, ProductsController, ImportController, CustomFieldsController, BonusRulesController, DocumentsController, HistoryController],
+  providers: [CompaniesService, ContactsService, FunnelsService, DealsService, ActivitiesService, DealLinesService, DealTasksService, StageHistoryService, ProductsService, ImportService, CustomFieldsService, BonusRulesService, DocumentsService, DocumentGenerator, RecordHistoryService],
   exports: [DealsService],
 })
 export class CrmModule {}
