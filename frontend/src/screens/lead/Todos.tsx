@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CHAMP, CHAMP_LEVELS, CHANNEL_LABELS, GATE_STAGE_ADVANCE, SCRIPTS } from '../../store/seed';
-import { champFor, champTotal, isoLabel, memberName, script, stageDone, stageOf, stagesFor, taskOf, todayIso, todoItemsFor } from '../../store/selectors';
+import { champFor, champTotal, isoLabel, isOverdue, memberName, script, stageDone, stageOf, stagesFor, taskOf, todayIso, todoItemsFor } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead, LeadTask } from '../../store/types';
 
@@ -216,13 +216,13 @@ export function Todos({ lead }: { lead: Lead }) {
 
 /** A task added with "New task": its own owner, due date and channel; doesn't gate the stage. */
 function LeadTaskRow({ task: t }: { task: LeadTask }) {
-  const { s, toggleLeadTask, removeLeadTask } = useStore();
-  const overdue = !t.done && !!t.due && t.due < todayIso();
+  const { s, set, toggleLeadTask, removeLeadTask } = useStore();
+  const overdue = isOverdue(t, todayIso(s.workspace.timezone));
   const meta = t.done
     ? `Done ${t.at ?? ''}${t.by ? ' by ' + t.by : ''}`
     : [t.due ? (overdue ? 'Overdue · due ' : 'Due ') + isoLabel(t.due) : 'No due date', memberName(s, t.ownerId, t.ownerName), t.note].filter(Boolean).join(' · ');
   return (
-    <div data-lead-task={t.id} style={{ border: '1px solid #EEF0F4', borderRadius: 9, background: '#FFFFFF' }}>
+    <div data-lead-task={t.id} data-overdue={overdue || undefined} style={{ border: `1px solid ${overdue ? '#F3C5C0' : '#EEF0F4'}`, borderRadius: 9, background: overdue ? '#FEF6F5' : '#FFFFFF' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px' }}>
         <button
           type="button"
@@ -240,6 +240,9 @@ function LeadTaskRow({ task: t }: { task: LeadTask }) {
           <span className="tag" style={{ background: 'var(--chip)', color: 'var(--text-2)' }}>
             task
           </span>
+          <button type="button" className="pill-x" title="Edit this task" onClick={() => set({ taskOpen: true, taskEditId: t.id })}>
+            ✎
+          </button>
           <button type="button" className="pill-x" title="Delete this task" onClick={() => removeLeadTask(t.id)}>
             ×
           </button>

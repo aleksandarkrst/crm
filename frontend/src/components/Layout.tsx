@@ -2,7 +2,7 @@ import { type ReactNode, useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { paths } from '../lib/paths';
 import { Modals } from '../modals/Modals';
-import { initialsOf } from '../store/selectors';
+import { initialsOf, overdueTasks } from '../store/selectors';
 import { useStore } from '../store/store';
 
 const NAV = [
@@ -21,7 +21,8 @@ const NAV_BOTTOM = [
   },
 ];
 
-function NavItem({ to, label, icon }: { to: string; label: string; icon: string }) {
+/** `badge`: a count on the icon (overdue tasks on Today). */
+function NavItem({ to, label, icon, badge }: { to: string; label: string; icon: string; badge?: number }) {
   return (
     <NavLink to={to} style={{ textDecoration: 'none', width: '100%' }}>
       {({ isActive }) => {
@@ -32,6 +33,11 @@ function NavItem({ to, label, icon }: { to: string; label: string; icon: string 
               <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke={fg} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                 <path d={icon} />
               </svg>
+              {!!badge && (
+                <span data-testid="nav-badge" title={`${badge} overdue`} style={{ position: 'absolute', top: 0, right: 14, minWidth: 17, height: 17, padding: '0 5px', borderRadius: 9, background: '#B42318', color: '#FFFFFF', fontSize: 10.5, fontWeight: 600, lineHeight: '17px', textAlign: 'center' }}>
+                  {badge}
+                </span>
+              )}
             </span>
             <span style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: '0.01em', lineHeight: 1.2, textAlign: 'center' }}>{label}</span>
           </span>
@@ -45,12 +51,13 @@ function Sidebar() {
   const { s, session } = useStore();
   // The profile name follows edits on the Profile screen; the session name is the signed-in user.
   const name = s.profile.name || session.userName;
+  const overdue = overdueTasks(s).length;
   return (
     <aside style={{ width: 96, flex: '0 0 96px', background: '#101828', color: '#F5F6F8', padding: '18px 8px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, position: 'sticky', top: 0, height: '100vh' }}>
       <div style={{ width: 38, height: 38, borderRadius: 10, background: '#F5F6F8', color: '#101828', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, fontWeight: 700, letterSpacing: '-0.02em' }}>C</div>
       <nav style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: '100%' }}>
         {NAV.map((n) => (
-          <NavItem key={n.to} {...n} />
+          <NavItem key={n.to} {...n} badge={n.to === paths.today ? overdue : undefined} />
         ))}
       </nav>
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, width: '100%' }}>
