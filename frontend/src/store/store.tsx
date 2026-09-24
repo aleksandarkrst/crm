@@ -175,7 +175,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           for (let attempt = 0; attempt < 5; attempt++) {
             await whenIdle();
             const seq = writeSeq.current;
-            const data = await loadWorkspace();
+            const data = await loadWorkspace(session.tenant.role !== 'member');
             if (seq === writeSeq.current && isIdle()) {
               // A funnel that was deleted can't stay open.
               set((x) => {
@@ -1057,6 +1057,37 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           flash(draft.name + (lead ? ' added to ' + lead.company : ' added'));
         } catch (err) {
           flash('Not saved: ' + errText(err));
+        }
+      },
+
+      // ---------------------------------------------------------- getting started (CD-68)
+      /** Hides the checklist for you (or shows it again); other admins decide for themselves. */
+      setOnboardingDismissed: async (dismissed: boolean) => {
+        try {
+          const onboarding = await crmApi.setOnboardingDismissed(dismissed);
+          set({ onboarding });
+        } catch (err) {
+          flash('Not saved: ' + errText(err));
+        }
+      },
+      loadSampleData: async () => {
+        try {
+          await crmApi.loadSampleData();
+          await reload();
+          flash('Sample data loaded · remove it in one click when you are done');
+        } catch (err) {
+          flash('Sample data not loaded: ' + errText(err), 7000);
+        }
+      },
+      removeSampleData: async () => {
+        try {
+          const { removed, kept } = await crmApi.removeSampleData();
+          await reload();
+          const n = removed.company + removed.contact + removed.product + removed.deal;
+          const k = kept.company + kept.contact + kept.product + kept.deal;
+          flash(`Sample data removed (${n} record${n === 1 ? '' : 's'})` + (k ? ` · ${k} kept because your own records use ${k === 1 ? 'it' : 'them'}` : ''), 7000);
+        } catch (err) {
+          flash('Sample data not removed: ' + errText(err), 7000);
         }
       },
 

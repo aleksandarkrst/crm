@@ -113,7 +113,21 @@ export interface ApiProfile {
   startPage: ApiStartPage;
   defaultFunnelId: string | null;
   dailyDigest: boolean;
-  onboardingDismissedAt: string | null;
+}
+/** Getting started (CD-68): the checklist's steps, derived from the workspace's records. */
+export type ApiOnboardingStep = 'funnel' | 'products' | 'deals' | 'invite';
+export type ApiSampleKind = 'company' | 'contact' | 'product' | 'deal';
+export interface ApiOnboarding {
+  steps: { key: ApiOnboardingStep; done: boolean }[];
+  complete: boolean;
+  dismissed: boolean;
+  sampleData: { loaded: boolean; counts: Record<ApiSampleKind, number> };
+}
+export interface ApiSampleRemoval {
+  removed: Record<ApiSampleKind, number>;
+  /** Sample records kept because real records use them (they become ordinary records). */
+  kept: Record<ApiSampleKind, number>;
+  state: ApiOnboarding;
 }
 export type ProfileInput = Partial<Omit<ApiProfile, 'userId' | 'email'>>;
 export interface ApiCompany {
@@ -318,7 +332,10 @@ export const crmApi = {
   updateWorkspace: (input: WorkspaceInput) => api<ApiWorkspace>('/workspace', { method: 'PATCH', json: input }),
   profile: () => api<ApiProfile>('/profile'),
   updateProfile: (input: ProfileInput) => api<ApiProfile>('/profile', { method: 'PATCH', json: input }),
-  dismissOnboarding: () => api<{ dismissed: boolean }>('/onboarding/dismiss', { method: 'POST' }),
+  onboarding: () => api<ApiOnboarding>('/onboarding'),
+  setOnboardingDismissed: (dismissed: boolean) => api<ApiOnboarding>('/onboarding/dismissed', { method: 'PUT', json: { dismissed } }),
+  loadSampleData: () => api<ApiOnboarding>('/onboarding/sample-data', { method: 'POST' }),
+  removeSampleData: () => api<ApiSampleRemoval>('/onboarding/sample-data', { method: 'DELETE' }),
 
   team: () => api<{ members: ApiMember[]; invitations: ApiInvitation[] }>('/team'),
   invite: (email: string, role: 'admin' | 'member') => api<{ invitation: ApiInvitation; token: string }>('/team/invitations', { method: 'POST', json: { email, role } }),

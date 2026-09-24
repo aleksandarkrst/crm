@@ -71,6 +71,7 @@ export function Settings() {
       </div>
 
       {current === 'workspace' && <WorkspaceTab />}
+      {current === 'workspace' && <GettingStartedCard />}
       {current === 'team' && <TeamTab />}
       {current === 'roles' && <RolesTab />}
       {current === 'funnel' && <FunnelBuilder />}
@@ -138,6 +139,45 @@ function WorkspaceTab() {
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 8 }}>
         {ro ? 'Only owners and admins can change the workspace settings.' : 'Changes are saved as you make them.'} The sales bonus setting isn't saved yet.
       </span>
+    </div>
+  );
+}
+
+/** Getting started (CD-68) for owners and admins: show the checklist again, load or remove sample data. */
+function GettingStartedCard() {
+  const { s, setOnboardingDismissed, loadSampleData, removeSampleData } = useStore();
+  const [busy, setBusy] = useState(false);
+  const ob = s.onboarding;
+  if (!ob) return null;
+  const run = (fn: () => Promise<void>) => () => {
+    setBusy(true);
+    void fn().finally(() => setBusy(false));
+  };
+  const c = ob.sampleData.counts;
+  return (
+    <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 18 }} data-testid="sample-data-card">
+      <div className="card-title">Getting started and sample data</div>
+      <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>
+        {ob.sampleData.loaded
+          ? `Sample data is loaded: ${c.company} companies, ${c.contact} contacts, ${c.product} products and ${c.deal} deals. Removing it deletes exactly those records; your own stay.`
+          : 'Sample data adds a few companies, contacts, products and deals (with tasks) to look around with. It is marked, so you can remove exactly those records again in one click.'}
+      </span>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {ob.sampleData.loaded ? (
+          <button type="button" className="btn-outline" disabled={busy} onClick={run(removeSampleData)}>
+            Remove sample data
+          </button>
+        ) : (
+          <button type="button" className="btn-outline" disabled={busy} onClick={run(loadSampleData)}>
+            Load sample data
+          </button>
+        )}
+        {ob.dismissed && !ob.complete && (
+          <button type="button" className="btn-outline" disabled={busy} onClick={run(() => setOnboardingDismissed(false))}>
+            Show the getting-started checklist
+          </button>
+        )}
+      </div>
     </div>
   );
 }

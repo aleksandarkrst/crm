@@ -36,6 +36,9 @@ type Counts = Record<SampleKind, number>;
 const zeroCounts = (): Counts => ({ company: 0, contact: 0, product: 0, deal: 0 });
 const DAY = 86_400_000;
 
+/** The calendar date `days` from now in the workspace's time zone (what "due today" means there). */
+const dateIn = (timeZone: string, days: number) => new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date(Date.now() + days * DAY));
+
 /**
  * First-run onboarding (CD-68), for owners and admins: the getting-started checklist, whose steps
  * are derived from the workspace's own records (sample records don't count), its dismissal, and
@@ -117,8 +120,9 @@ export class OnboardingService {
         const open = stages.filter((s) => !s.isWon);
         const won = stages.find((s) => s.isWon);
         if (open.length === 0) throw new ConflictException('The first funnel has no open stages to put the sample deals in.');
-        const [workspace] = await tx.select({ currency: tenants.currency }).from(tenants).where(eq(tenants.id, ctx.tenantId));
+        const [workspace] = await tx.select({ currency: tenants.currency, timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId));
         const currency = workspace?.currency ?? 'EUR';
+        const timezone = workspace?.timezone ?? 'UTC';
         const marks: { kind: SampleKind; recordId: string }[] = [];
 
         const productIds = new Map<string, { id: string; unitPrice: string; vatRate: string }>();
@@ -147,7 +151,7 @@ export class OnboardingService {
         }
         for (const d of SAMPLE_DEALS) {
           const stage = d.stage === 'won' ? (won ?? open[open.length - 1]!) : open[Math.min(d.stage.open, open.length - 1)]!;
-          const dealId = await this.sampleDeal(tx, ctx, d, { funnelId: funnel.id, first: stages[0]!, stage, currency, companyIds, contactIds, productIds });
+          const dealId = await this.sampleDeal(tx, ctx, d, { funnelId: funnel.id, first: stages[0]!, stage, currency, timezone, companyIds, contactIds, productIds });
           marks.push({ kind: 'deal', recordId: dealId });
         }
         await tx.insert(sampleRecords).values(marks.map((m) => ({ ...m, tenantId: ctx.tenantId })));
@@ -220,6 +224,7 @@ export class OnboardingService {
       first: typeof funnelStages.$inferSelect;
       stage: typeof funnelStages.$inferSelect;
       currency: string;
+      timezone: string;
       companyIds: Map<string, string>;
       contactIds: Map<string, string>;
       productIds: Map<string, { id: string; unitPrice: string; vatRate: string }>;
@@ -244,7 +249,7 @@ export class OnboardingService {
         source: SAMPLE_SOURCE,
         amount: amount.toFixed(2),
         currency: refs.currency,
-        closeDate: new Date(now + d.closeInDays * DAY).toISOString().slice(0, 10),
+        closeDate: dateIn(refs.timezone, d.closeInDays),
         headline: d.headline ?? null,
         need: d.need ?? null,
         lastContactAt: at(d.lastContactDays),
@@ -272,7 +277,7 @@ export class OnboardingService {
         quantity: line.quantity.toFixed(2),
         unitPrice: p.unitPrice,
         vatRate: p.vatRate,
-        startDate: new Date(now + Math.max(d.closeInDays, 0) * DAY).toISOString().slice(0, 10),
+        startDate: dateIn(refs.timezone, Math.max(d.closeInDays, 0)),
         milestones: [
           { label: 'On signature', pct: 40 },
           { label: 'On delivery', pct: 60 },
@@ -288,7 +293,7 @@ export class OnboardingService {
     if (d.activity) await log(d.activity.channel, d.activity.title, d.activity.detail, at(d.activity.daysAgo));
     if (d.lost) await log('NT', `Marked as lost: ${d.lost.reason}`, d.lost.note, at(d.lastContactDays));
     if (d.task) {
-      const dueDate = new Date(now + d.task.dueInDays * DAY).toISOString().slice(0, 10);
+      const dueDate = dateIn(refs.timezone, d.task.dueInDays);
       await tx.insert(dealTasks).values({
         tenantId: ctx.tenantId,
         dealId,

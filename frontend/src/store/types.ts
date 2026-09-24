@@ -1,4 +1,4 @@
-import type { ApiDateFormat, ApiLanguage, ApiStageChange, ApiStartPage, DealOutcome, LostReason } from '../lib/api';
+import type { ApiDateFormat, ApiLanguage, ApiOnboarding, ApiStageChange, ApiStartPage, DealOutcome, LostReason } from '../lib/api';
 
 /** A funnel's backend id (CD-10: any number of funnels, not just the two personas). */
 export type SegKey = string;
@@ -242,7 +242,6 @@ export interface Profile {
   defaultFunnelId: string;
   /** Applies to this workspace only. */
   digest: boolean;
-  onboardingDismissed: boolean;
 }
 
 export interface BonusRule {
@@ -323,6 +322,8 @@ export interface State {
   fields: FieldDef[];
   workspace: Workspace;
   profile: Profile;
+  /** Getting started (CD-68), for owners and admins; null for members. */
+  onboarding: ApiOnboarding | null;
   bonusRules: Record<string, BonusRule>;
   filters: Filters;
   toast: string;

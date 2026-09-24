@@ -191,7 +191,8 @@ export function initialState(): State {
     ].map((f) => ({ ...f, entity: f.entity as 'Leads' | 'Contacts', visible: true })),
     // Replaced by the saved settings when the workspace loads (store/remote.ts).
     workspace: { name: '', currency: 'EUR', timezone: 'Europe/Belgrade', fiscalMonth: 1 },
-    profile: { name: '', title: '', email: '', phone: '', language: 'en', dateFormat: 'DD.MM.YYYY', startPage: 'pipeline', defaultFunnelId: '', digest: true, onboardingDismissed: false },
+    profile: { name: '', title: '', email: '', phone: '', language: 'en', dateFormat: 'DD.MM.YYYY', startPage: 'pipeline', defaultFunnelId: '', digest: true },
+    onboarding: null,
     bonusRules: {},
     filters: { ...DEFAULT_FILTERS },
     toast: '',
