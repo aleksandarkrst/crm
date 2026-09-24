@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, eq, ilike, or, type SQL } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns, ilike, or, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
@@ -7,7 +7,7 @@ import { DatabaseService } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
 import { BUYER_ROLES, contacts, deals } from '../../../shared/database/schema';
 import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
-import { assertOwnerIsMember } from '../owner';
+import { assertOwnerIsMember, userNameOf } from '../owner';
 
 export const CreateContact = z.object({
   companyId: z.uuid().nullish(),
@@ -43,9 +43,10 @@ export class ContactsService {
       const like = `%${query.q}%`;
       filters.push(or(ilike(contacts.fullName, like), ilike(contacts.email, like), ilike(contacts.jobTitle, like)));
     }
+    // Like deals and companies, the list names the owner (also after they left the workspace).
     return this.database.withTenant(ctx.tenantId, (tx) =>
       tx
-        .select()
+        .select({ ...getTableColumns(contacts), ownerName: userNameOf(contacts.ownerUserId) })
         .from(contacts)
         .where(and(...filters))
         .orderBy(asc(contacts.fullName))

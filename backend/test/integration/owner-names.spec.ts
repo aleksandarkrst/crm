@@ -15,9 +15,12 @@ beforeAll(async () => {
 });
 
 describe('owner names in lists', () => {
-  it('deals, companies and tasks name their owner, also once they were removed from the team', async () => {
+  it('deals, companies, contacts and tasks name their owner, also once they were removed from the team', async () => {
     const funnel = await firstFunnel(owner, tenant);
     const company = await ok('POST', '/crm/companies', { ...as(), body: { name: 'Owned Co', ownerUserId: seller.userId } });
+    const contact = await ok('POST', '/crm/contacts', { ...as(), body: { fullName: 'Owned Person', companyId: company.id, ownerUserId: seller.userId } });
+    // A contact owned by someone else than the deal owner shows their own owner, not the deal's.
+    const ownContact = await ok('POST', '/crm/contacts', { ...as(), body: { fullName: 'Owner Person', companyId: company.id } });
     const deal = await ok('POST', '/crm/deals', { ...as(), body: { title: 'Owned deal', funnelId: funnel.id, companyId: company.id, ownerUserId: seller.userId } });
     const task = await ok('POST', `/crm/deals/${deal.id}/tasks`, {
       ...as(),
@@ -30,6 +33,9 @@ describe('owner names in lists', () => {
       expect(d.deal.ownerUserId).toBe(seller.userId);
       const c = (await ok('GET', '/crm/companies', as())).find((r: { id: string }) => r.id === company.id);
       expect(c.ownerName).toBe(seller.name);
+      const people = await ok('GET', '/crm/contacts', as());
+      expect(people.find((r: { id: string }) => r.id === contact.id)).toMatchObject({ ownerUserId: seller.userId, ownerName: seller.name });
+      expect(people.find((r: { id: string }) => r.id === ownContact.id)).toMatchObject({ ownerUserId: owner.userId, ownerName: owner.name });
       const t = (await ok('GET', '/crm/deal-tasks', as())).find((r: { id: string }) => r.id === task.id);
       expect(t.assigneeName).toBe(seller.name);
     };

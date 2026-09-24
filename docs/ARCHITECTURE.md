@@ -181,8 +181,10 @@ the store is the one place that talks to the backend.
   add the HQ (or a number) to tell them apart. Deals without a company aren't listed as a company.
 - Deal owners: the deal Summary lists active members. Owners are matched by user id everywhere
   (Salesperson filters, bonus rows); labels come from the team list, with the email added when two
-  members share a name. The deal, company and task lists also return the owner's name, so a deal
-  whose owner left the workspace shows "<name> (former member)" and can still be filtered. The API accepts an `ownerUserId` (deals,
+  members share a name. The deal, company, contact and task lists also return the owner's name, so
+  a deal whose owner left the workspace shows "<name> (former member)" and can still be filtered.
+  The Contacts list and a contact's screen show the contact's own owner, not the owner of a deal
+  they are on. The API accepts an `ownerUserId` (deals,
   companies, contacts) only if that user is a member of the tenant, and returns 400 otherwise.
 - Updates: every PATCH body goes through `nonEmptyPatch` (`shared/validation/common.ts`), so an
   update with no fields gets 400 "Nothing to update" instead of reaching the database.
@@ -197,6 +199,9 @@ the store is the one place that talks to the backend.
 - Activity history is loaded per deal when a deal, company or contact screen opens (`ensureLog`).
 - Deal lines: the backend recalculates the deal amount on every line change. A product that is
   on a deal can't be deleted from the catalog.
+- No made-up dates: a deal without a closing date has none (it only matches "Any closing date" on
+  Overview), and a deal line without a start date is left out of "Funnel by payment due date"
+  (the card says how many lines were left out).
 - Stage to-dos: a playbook to-do gets a row on first touch, keyed by deal + stage + checklist label
   (renaming a checklist item in the funnel builder starts that to-do fresh). Off-playbook to-dos
   are rows of their own.
@@ -228,7 +233,8 @@ Still browser-only (seeded from `store/seed.ts`, lost on reload), because the ba
 them yet:
 - adding and removing funnel stages (blocked in the UI for now; editing existing stages is saved)
 - document templates and generation (worker + storage)
-- sales-bonus rules (including "Sales bonus earned" on the Workspace tab)
+- sales-bonus rules (including "Sales bonus earned" on the Workspace tab); they start empty
+  (no made-up rate, minimum or flat amount)
 - invitation emails (links are copied by hand for now)
 - custom fields
 - notification and integration settings

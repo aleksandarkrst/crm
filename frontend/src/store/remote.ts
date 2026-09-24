@@ -156,6 +156,8 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
       email: ct?.email ?? '—',
       phone: ct?.phone ?? '—',
       buyerRole: ct?.buyerRole,
+      contactOwnerId: ct?.ownerUserId,
+      contactOwner: ct?.ownerName ?? undefined,
       owner: ownerName ?? undefined,
       ownerId: deal.ownerUserId,
       segment,
@@ -216,6 +218,8 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
       linkedin: c.linkedin ?? undefined,
       buyerRole: c.buyerRole,
       initials: initialsOf(c.fullName),
+      ownerId: c.ownerUserId,
+      ownerName: c.ownerName ?? undefined,
     }));
 
   const personIdOf = (contactId: string) => (primaryOf.has(contactId) ? primaryOf.get(contactId)! + ':p' : contactId);

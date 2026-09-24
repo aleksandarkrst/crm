@@ -45,6 +45,9 @@ export interface Lead {
   email: string;
   phone: string;
   buyerRole?: string;
+  /** Owner of the primary contact (user id, and last known name from the API). */
+  contactOwnerId?: string | null;
+  contactOwner?: string;
   /** Last known name of the deal owner, from the API. Show it with ownerOf(), match by ownerId. */
   owner?: string;
   /** User id of the deal owner. */
@@ -91,6 +94,9 @@ export interface Person {
   linkedin?: string;
   buyerRole?: string;
   initials: string;
+  /** Owner of the contact (user id); ownerName is their last known name, from the API. */
+  ownerId?: string | null;
+  ownerName?: string;
 }
 
 export interface CompanyExtra {

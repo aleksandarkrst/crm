@@ -70,9 +70,11 @@ describe('honest UI', () => {
   step('Overview shows no made-up numbers', async () => {
     await page.goto(BASE_URL + '/overview', { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.body.innerText.includes('in the current filter'));
+    // The conversion card waits for the stage history (CD-62).
+    await page.waitForFunction(() => document.body.innerText.includes('so far)'));
     const body = await text(page);
     for (const fake of ['41%', 'Proposal → won', 'Days to proposal', 'Docs generated', 'Up from 24%', '57h saved', 'nudge sent automatically']) assert.ok(!body.includes(fake), `no "${fake}"`);
-    assert.ok(body.includes('Conversion rates appear once deals start moving through stages'), 'conversion empty state');
+    assert.ok(body.includes('Conversion rates appear once at least 5 deals in view have moved between stages (0 so far)'), 'conversion empty state');
     assert.ok(body.includes('Document counts appear once'), 'documents empty state');
     assert.match(body, /2 open deals in the current filter/);
     assert.match(await metaText(page), /^2 deals in view · any closing date$/);

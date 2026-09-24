@@ -132,6 +132,9 @@ export interface ApiContact {
   phone: string | null;
   linkedin: string | null;
   buyerRole: string;
+  ownerUserId: string | null;
+  /** Current name of the owner, also after they left the workspace (lists only). */
+  ownerName?: string | null;
 }
 export interface ApiChamp {
   C: number;
@@ -271,7 +274,7 @@ export interface ApiInvitePreview {
 }
 
 export type CompanyInput = Partial<Omit<ApiCompany, 'id'>> & { name?: string };
-export type ContactInput = Partial<Omit<ApiContact, 'id'>>;
+export type ContactInput = Partial<Omit<ApiContact, 'id' | 'ownerName'>>;
 export type DealInput = Partial<
   Pick<ApiDeal, 'title' | 'companyId' | 'primaryContactId' | 'funnelId' | 'ownerUserId' | 'source' | 'closeDate' | 'amount' | 'headline' | 'need' | 'constraint' | 'decisionMaker' | 'discoveryDate'>
 > & { champ?: ApiChamp };

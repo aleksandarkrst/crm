@@ -78,10 +78,16 @@ export function Dashboard() {
 
   const today = new Date();
   const payments: { leadId: string; when: Date; amount: number }[] = [];
+  // A line without a start date has no due dates to place, so it is left out (and counted below).
+  let undatedLines = 0;
   for (const l of liveLeads)
     for (const ln of linesOf(s, l)) {
       const gross = grossOf(ln);
-      const start = ln.start || '2026-10-01';
+      const start = ln.start;
+      if (!start) {
+        undatedLines++;
+        continue;
+      }
       const push = (iso: string, amount: number) => {
         const d = new Date(iso);
         if (!isNaN(d.getTime())) payments.push({ leadId: l.id, when: d, amount });
@@ -194,7 +200,10 @@ export function Dashboard() {
 
           <div className="card" style={{ padding: 18 }}>
             <div className="card-title" style={{ marginBottom: 4 }}>Funnel by payment due date</div>
-            <div className="card-sub" style={{ marginBottom: 16 }}>Product and service payments falling due inside each horizon, incl. VAT</div>
+            <div className="card-sub" style={{ marginBottom: 16 }}>
+              Product and service payments falling due inside each horizon, incl. VAT
+              {undatedLines ? ` · ${plural(undatedLines, 'line')} without a start date left out` : ''}
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
               {timeFunnel.map((b) => (
                 <div key={b.label} onClick={() => drill('Payments due', b.label, b.ids)} style={{ width: b.width, background: b.bg, clipPath: clip, padding: '11px 26px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
