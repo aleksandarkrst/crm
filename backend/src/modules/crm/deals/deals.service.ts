@@ -5,7 +5,7 @@ import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, type DealOutcome, deals, funnelStages, LOST_REASONS } from '../../../shared/database/schema';
+import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, type DealOutcome, deals, funnels, funnelStages, LOST_REASONS } from '../../../shared/database/schema';
 import { JobsService } from '../../../shared/events/jobs.service';
 import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
 import { assertOwnerIsMember, userNameOf } from '../owner';
@@ -145,14 +145,17 @@ export class DealsService {
       .catch(mapDbError);
   }
 
-  /** Changing the funnel (a different target persona) restarts the deal at that funnel's first stage. */
+  /**
+   * Changing the funnel (a different target persona) restarts the deal at that funnel's first
+   * stage, and says so on the timeline ("Moved to funnel …").
+   */
   update(ctx: TenantContext, id: string, input: UpdateDeal) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const patch: Partial<typeof deals.$inferInsert> = { ...input };
         if (input.champ) patch.fitScore = input.champ.C + input.champ.H + input.champ.M + input.champ.P;
-        let funnelChange: { from: string; to: typeof funnelStages.$inferSelect; at: Date } | null = null;
+        let funnelChange: { from: string; to: typeof funnelStages.$inferSelect; funnel: string; at: Date } | null = null;
         if (input.funnelId) {
           const [current] = await tx.select({ funnelId: deals.funnelId, stageId: deals.stageId, lostAt: deals.lostAt }).from(deals).where(eq(deals.id, id));
           if (!current) throw new NotFoundException('Deal not found');
@@ -160,9 +163,10 @@ export class DealsService {
           else {
             if (current.lostAt) throw new ConflictException('This deal is lost. Reopen it before changing its funnel.');
             const first = await this.firstStage(tx, input.funnelId);
+            const [funnel] = await tx.select({ label: funnels.label }).from(funnels).where(eq(funnels.id, input.funnelId));
             const now = new Date();
             Object.assign(patch, { stageId: first.id, stageEnteredAt: now, closedAt: first.isWon ? now : null });
-            funnelChange = { from: current.stageId, to: first, at: now };
+            funnelChange = { from: current.stageId, to: first, funnel: funnel?.label ?? 'another funnel', at: now };
           }
         }
         // Re-sending the current funnel leaves nothing to write (and Drizzle rejects an empty SET).
@@ -171,8 +175,9 @@ export class DealsService {
           : await tx.select().from(deals).where(eq(deals.id, id));
         if (!row) throw new NotFoundException('Deal not found');
         if (funnelChange) {
-          const { from, to, at } = funnelChange;
+          const { from, to, funnel, at } = funnelChange;
           await this.history.record(tx, ctx, { dealId: id, kind: 'funnel_changed', fromStageId: from, toStageId: to.id, outcome: to.isWon ? 'won' : 'open' }, at);
+          await this.log(tx, ctx, id, 'NT', `Moved to funnel ${funnel}`, `Restarted at ${to.name} · next activity: ${to.activity}`);
         }
         await this.audit.record(tx, ctx, { action: 'deal.updated', entityType: 'deal', entityId: id, data: input });
         return this.present(tx, row);
