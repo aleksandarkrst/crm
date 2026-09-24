@@ -1,4 +1,5 @@
 import type { ApiDateFormat, ApiLanguage, ApiStageChange, ApiStartPage, DealOutcome, LostReason } from '../lib/api';
+import type { DealDoc, DocTemplate } from './documents';
 
 /** A funnel's backend id (CD-10: any number of funnels, not just the two personas). */
 export type SegKey = string;
@@ -321,11 +322,16 @@ export interface State {
   bonusRules: Record<string, BonusRule>;
   filters: Filters;
   toast: string;
+  /** Document templates (CD-13); null until loaded (see loadTemplates). */
+  templates: DocTemplate[] | null;
+  /** Generated documents per deal id, loaded when a deal opens (see ensureDocs). */
+  dealDocs: Record<string, DealDoc[]>;
 
   // modals
   genOpen: boolean;
   genLead: string | null;
-  genStep: number;
+  /** The document the generation dialog follows (CD-13); null until it is generated. */
+  genDocId: string | null;
   docOpen: boolean;
   docLeadId: string | null;
   showMerge: boolean;
@@ -345,7 +351,6 @@ export interface State {
   personaBase: string;
   templateOpen: boolean;
   templateType: string;
-  templateFile: string | null;
   fieldOpen: boolean;
   newField: NewFieldDraft;
   productOpen: boolean;

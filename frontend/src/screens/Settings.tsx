@@ -3,9 +3,11 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { FieldRow, GhostInput, GhostSelect, Modal, ModalHeader, RemoveButton, Switch } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
+import { canManageTemplates } from '../store/documents';
 import { ACTIVITIES, CHANNEL_LABELS, CHANNELS, DOCS, TEAM_ROLES } from '../store/seed';
 import { funnelOptions, initialsOf } from '../store/selectors';
 import { useStore } from '../store/store';
+import { TemplatesTab } from './DocumentTemplates';
 
 const TABS = [
   { k: 'workspace', label: 'Workspace' },
@@ -30,7 +32,7 @@ export function Settings() {
 
   const action =
     current === 'templates'
-      ? { label: 'New template', onClick: () => set({ templateOpen: true }), meta: 'Templates hold the fixed story; merge fields pull the rest from the lead record.', soon: true }
+      ? { label: 'New template', onClick: () => (canManageTemplates(session.tenant.role) ? set({ templateOpen: true }) : flash('Only owners and admins can add templates')), meta: 'Templates hold the fixed story; merge fields pull the rest from the deal when someone generates a document.' }
       : current === 'fields'
         ? { label: 'New field', onClick: () => set({ fieldOpen: true }), meta: 'Standard fields can be made optional or hidden; custom fields can be removed. Changes here last for this session only; not saved yet.' }
         : current === 'team'
@@ -521,55 +523,6 @@ function RemoveStageModal({ idx, onClose }: { idx: number; onClose: () => void }
         </button>
       </div>
     </Modal>
-  );
-}
-
-function TemplatesTab() {
-  const { s, openDoc } = useStore();
-  const lead = s.leads[0];
-  // Only the proposal exists (generated in the browser, not saved). The others are shown as what's coming.
-  const templates: { name: string; meta: string; state: 'built-in' | 'coming soon'; desc: string; fields: string[]; cta: string; preview?: () => void }[] = [
-    { name: 'Proposal v4', meta: lead ? 'Built in · generated in the browser, not saved yet' : 'Built in · add a deal to preview it', state: 'built-in', desc: "Eight sections. Scope, timeline and pricing are assembled from the lead's service lines.", fields: ['{{company}}', '{{need}}', '{{lines}}', '{{total}}'], cta: 'Preview with a lead', preview: lead ? () => openDoc(lead.id) : undefined },
-    { name: 'Quote / estimate', meta: 'Not available yet', state: 'coming soon', desc: 'Single-page rate card estimate for leads that ask for a number before a full proposal.', fields: ['{{lines}}', '{{validUntil}}'], cta: 'Preview' },
-    { name: 'Services contract', meta: 'Not available yet', state: 'coming soon', desc: 'Standard terms with a phased payment schedule.', fields: ['{{company}}', '{{total}}', '{{startDate}}'], cta: 'Preview' },
-    { name: 'First invoice', meta: 'Not available yet', state: 'coming soon', desc: 'Meant to fire when a contract is signed. Needs an accounting connection, which is not built yet.', fields: ['{{total}}', '{{poNumber}}'], cta: 'Set up' },
-  ];
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 14 }}>
-      {templates.map((t) => (
-        <div key={t.name} className="card" style={{ padding: 17, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: 15, fontWeight: 600 }}>{t.name}</span>
-              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{t.meta}</span>
-            </div>
-            <span className="tag" style={{ padding: '4px 6px', background: t.state === 'built-in' ? '#E7F2EE' : '#F1F3F6', color: t.state === 'built-in' ? '#14503C' : '#475467' }}>
-              {t.state}
-            </span>
-          </div>
-          <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>{t.desc}</div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {t.fields.map((f) => (
-              <span key={f} className="merge-tag">
-                {f}
-              </span>
-            ))}
-          </div>
-          {t.preview ? (
-            <button type="button" className="btn-outline" style={{ alignSelf: 'flex-start' }} onClick={t.preview}>
-              {t.cta}
-            </button>
-          ) : (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9, alignSelf: 'flex-start' }}>
-              <button type="button" className="btn btn-disabled" disabled style={{ fontSize: 12.5, padding: '8px 13px', borderRadius: 7 }}>
-                {t.cta}
-              </button>
-              <span className="caps-muted">Coming soon</span>
-            </span>
-          )}
-        </div>
-      ))}
-    </div>
   );
 }
 

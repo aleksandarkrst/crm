@@ -9,7 +9,6 @@ export const CHANNELS = ['RS', 'EM', 'LI', 'WA', 'MT'] as const;
 export const CHANNEL_LABELS: Record<string, string> = { RS: 'Research task', EM: 'Email', LI: 'LinkedIn message', WA: 'WhatsApp message', MT: 'Meeting', PH: 'Call', NT: 'Note' };
 export const DOCS = ['None', 'Proposal', 'Quote', 'Contract', 'Invoice'];
 export const OWNERS = ['Mila Jovanović', 'Stefan Popović', 'Nina Đorđević'];
-export const DOC_TYPES = ['Proposal', 'Quote', 'Contract', 'NDA', 'Onboarding brief', 'Invoice'];
 export const BUYER_ROLES = ['Decision maker', 'Economic buyer', 'Champion', 'Influencer', 'Gatekeeper', 'End user'];
 export const FIELD_TYPES = ['Text', 'Number', 'Currency', 'Date', 'Dropdown', 'Checkbox'];
 export const SOURCES = ['Inbound web form', 'Referral', 'Outbound LinkedIn', 'Conference', 'Instagram DM', 'Trade fair'];
@@ -28,7 +27,6 @@ export const dateRangeLabel = (value: string, fiscalMonth: number): string =>
 export const VALUE_BANDS = ['Value', 'Under €25k', '€25k–€100k', 'Over €100k'];
 /** How a value band reads in the workspace currency ("Under $25k"); the values above stay the filter keys. */
 export const valueBandLabel = (value: string, symbol: string): string => value.split('€').join(symbol);
-export const PARAM_SOURCES: Record<string, string> = { '{{company}}': 'Lead · company', '{{contact_name}}': 'Lead · primary contact', '{{price}}': 'Lead · deal value' };
 export const PRODUCT_TYPES = ['Service', 'Product'];
 export const BILLING_KINDS = ['One-off', 'Monthly', 'Yearly', 'Hourly'];
 export const SCHEDULE_TYPES = ['Full amount on one date', 'Custom milestones', 'Equal monthly instalments', 'Recurring subscription'];
@@ -195,10 +193,12 @@ export function initialState(): State {
     bonusRules: {},
     filters: { ...DEFAULT_FILTERS },
     toast: '',
+    templates: null,
+    dealDocs: {},
 
     genOpen: false,
     genLead: null,
-    genStep: 0,
+    genDocId: null,
     docOpen: false,
     docLeadId: null,
     showMerge: true,
@@ -215,7 +215,7 @@ export function initialState(): State {
     personaBase: 'smb',
     templateOpen: false,
     templateType: 'Proposal',
-    templateFile: null,
+
     fieldOpen: false,
     newField: { label: '', type: 'Text', entity: 'Leads', required: false },
     productOpen: false,
