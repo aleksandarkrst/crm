@@ -29,7 +29,7 @@ npm run build && npm run db:migrate
 npm run dev                 # API with reload
 npm run dev:worker          # (second terminal) background worker
 
-# 3. Frontend — UI on :5173 (proxies /api to :3000)
+# 3. Frontend — UI on :5173 (proxies /api to 127.0.0.1:3000; VITE_PORT and VITE_API_PROXY override)
 cd frontend
 npm install
 npm run dev
@@ -86,7 +86,8 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   workspace, products, new deal, closing date, notes, drag between stages, reload, every screen
   renders; deal lines and stage to-dos persist; CHAMP fit score; team invitations with two
   browser contexts (invite, accept, roles, wrong account, withdraw, remove); marking a deal lost,
-  the Pipeline's lost view and reopening; stage conversion on Overview.
+  the Pipeline's lost view and reopening; stage conversion on Overview; the header search
+  (Ctrl+K, keyboard navigation), the New menu and the sidebar workspace switcher.
 
 Both suites create their own users and workspaces with unique emails, so they can run against
 the dev database without resetting it. The database must be migrated first.
@@ -102,7 +103,7 @@ npm run test:integration
 
 # Browser tests: start the API and the UI, then run the suite
 cd backend && npm run build && PORT=3101 node dist/main.js                    # terminal 1
-cd frontend && VITE_PORT=5174 VITE_API_PROXY=http://localhost:3101 npm run dev   # terminal 2
+cd frontend && VITE_PORT=5174 VITE_API_PROXY=http://127.0.0.1:3101 npm run dev   # terminal 2
 cd e2e && npm ci && E2E_BASE_URL=http://localhost:5174 npm test                # terminal 3
 #   E2E_BASE_URL   where the UI runs (default http://localhost:5173); /api must reach the API
 #   E2E_HEADLESS   false to watch the browser; E2E_SLOW_MO=100 slows every action down
@@ -113,6 +114,12 @@ cd e2e && npm ci && E2E_BASE_URL=http://localhost:5174 npm test                #
 
 A failing browser step saves full-page screenshots to `e2e/artifacts/` (uploaded by CI) and
 skips the rest of that journey.
+
+The `/api` proxy (`vite` and `vite preview`, `frontend/vite.config.ts`) keeps connections to the
+API open and reuses them, and targets `127.0.0.1` even when `VITE_API_PROXY` says `localhost`
+(the API listens on IPv4 only). Before this, every proxied request opened and closed its own
+connection; on Windows a full e2e run now and then hit a port still in TIME_WAIT and got a 502
+(`AggregateError [ECONNREFUSED]`, with `EADDRINUSE` for 127.0.0.1 inside) (CD-75).
 
 ## Connecting the tools (checklist)
 

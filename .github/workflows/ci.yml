@@ -95,7 +95,7 @@ jobs:
       DEV_JWT_SECRET: ci-only-dev-secret-at-least-32-characters
       LOG_LEVEL: warn
       PORT: 3000
-      VITE_API_PROXY: http://localhost:3000
+      VITE_API_PROXY: http://127.0.0.1:3000
       E2E_BASE_URL: http://localhost:4173
       E2E_ARTIFACTS_DIR: ${{ github.workspace }}/e2e/artifacts
     steps:
