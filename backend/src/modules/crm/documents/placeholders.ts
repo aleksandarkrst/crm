@@ -240,14 +240,17 @@ export function buildTemplateData(src: DocumentSource): TemplateData {
 
 /** Labels of the fields a template uses that had no value for this deal (for the document list). */
 export function missingFields(usedTags: Iterable<string>, data: TemplateData): string[] {
-  const out: string[] = [];
+  const out = new Set<string>();
   for (const tag of new Set(usedTags)) {
     if (tag === LINES_LOOP) {
-      if (data.lines.length === 0) out.push(LABELS.get(LINES_LOOP)!);
+      if (data.lines.length === 0) out.add(LINES_LOOP);
       continue;
     }
     if (tag.startsWith('line.')) continue; // per line; an empty cell in one row isn't worth a warning
-    if (data[tag] === '') out.push(LABELS.get(tag) ?? tag);
+    if (data[tag] === '') out.add(ALIASES[tag] ?? tag);
   }
-  return out;
+  // In the order of the reference, so the list reads the same for every document.
+  return ORDER.filter((tag) => out.has(tag)).map((tag) => LABELS.get(tag)!);
 }
+
+const ORDER = [...PLACEHOLDERS.map((p) => p.tag), LINES_LOOP];
