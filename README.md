@@ -42,8 +42,9 @@ To try teamwork locally, invite a second email in **Settings → Team**, then op
 a private window and sign in as that email.
 
 > **Current state of the UI:** deals (with their product lines, payment schedules, stage to-dos,
-> fit scores and activity history), companies, contacts, products and funnel stages are saved in
-> the database, and so are the team and invitations. Some design features have no backend yet and
+> fit scores, discovery notes and activity history), companies, contacts, products and funnel
+> stages are saved in the database, and so are the team, invitations, workspace settings and your
+> profile. Some design features have no backend yet and
 > only last until you reload the page: documents and the remaining settings tabs. See
 > [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#frontend-store--api).
 

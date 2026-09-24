@@ -30,7 +30,8 @@ export class IdentityService {
         target: users.authSubject,
         set: {
           email: sql`coalesce(excluded.email, ${users.email})`,
-          displayName: sql`coalesce(excluded.display_name, ${users.displayName})`,
+          // A name the user set in their profile wins over the one in the token.
+          displayName: sql`case when ${users.displayNameCustom} then ${users.displayName} else coalesce(excluded.display_name, ${users.displayName}) end`,
         },
       })
       .returning();
@@ -38,6 +39,11 @@ export class IdentityService {
     const user: AuthUser = { id: row!.id, authSubject: row!.authSubject, email: row!.email, displayName: row!.displayName };
     this.userCache.set(identity.subject, { user, expires: Date.now() + USER_CACHE_TTL_MS });
     return user;
+  }
+
+  /** Drops a cached user after their profile changed (the next request re-reads it). */
+  forgetUser(authSubject: string) {
+    this.userCache.delete(authSubject);
   }
 
   async getRole(userId: string, tenantId: string): Promise<MembershipRole | null> {

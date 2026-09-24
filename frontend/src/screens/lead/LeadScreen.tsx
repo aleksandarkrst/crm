@@ -5,6 +5,7 @@ import { paths } from '../../lib/paths';
 import { champTotal, leadById, stageOf, stagesFor } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import { Composer } from './Composer';
+import { Discovery } from './Discovery';
 import { History } from './History';
 import { Summary } from './Summary';
 import { Todos } from './Todos';
@@ -55,6 +56,7 @@ export function LeadScreen() {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
           <div style={{ flex: '1 1 400px', maxWidth: 540, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
             <Summary lead={lead} />
+            <Discovery lead={lead} />
             <div className="card" style={{ padding: 18 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
                 <div className="card-title">Fit score</div>

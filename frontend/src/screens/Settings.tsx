@@ -6,7 +6,7 @@ import { paths } from '../lib/paths';
 import { ACTIVITIES, CHANNEL_LABELS, CHANNELS, DOCS, TEAM_ROLES } from '../store/seed';
 import { initialsOf } from '../store/selectors';
 import { useStore } from '../store/store';
-import type { SegKey, Workspace as WorkspaceT } from '../store/types';
+import type { SegKey } from '../store/types';
 
 const TABS = [
   { k: 'workspace', label: 'Workspace' },
@@ -97,33 +97,48 @@ function ComingSoonButton({ label }: { label: string }) {
   );
 }
 
+const CURRENCIES = [
+  { value: 'EUR', label: 'EUR (€)' },
+  { value: 'RSD', label: 'RSD (дин)' },
+  { value: 'USD', label: 'USD ($)' },
+  { value: 'GBP', label: 'GBP (£)' },
+  { value: 'CHF', label: 'CHF (Fr.)' },
+];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((label, i) => ({ value: String(i + 1), label }));
+/** Every IANA time zone the browser knows. */
+const TIME_ZONES = (() => {
+  const zones = Intl.supportedValuesOf('timeZone');
+  return zones.includes('UTC') ? zones : ['UTC', ...zones];
+})();
+
+/** Saved per workspace. Owners and admins edit; members see the values read-only. */
 function WorkspaceTab() {
-  const { s, set } = useStore();
+  const { s, set, setWorkspace, canEditWorkspace } = useStore();
   const w = s.workspace;
-  const setW = (k: keyof WorkspaceT) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const v = e.target.value;
-    set((x) => ({ workspace: { ...x.workspace, [k]: v } }));
-  };
+  const ro = !canEditWorkspace;
   return (
     <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div className="card-title" style={{ marginBottom: 8 }}>
         Workspace
       </div>
       <FieldRow label="Name">
-        <GhostInput value={w.name} onChange={setW('name')} />
+        <GhostInput value={w.name} disabled={ro} onChange={(e) => setWorkspace({ name: e.target.value })} />
       </FieldRow>
       <FieldRow label="Currency">
-        <GhostSelect value={w.currency} onChange={setW('currency')} options={['EUR (€)', 'RSD (дин)', 'USD ($)', 'GBP (£)']} />
+        <GhostSelect value={w.currency} disabled={ro} onChange={(e) => setWorkspace({ currency: e.target.value })} options={CURRENCIES} />
       </FieldRow>
       <FieldRow label="Time zone">
-        <GhostSelect value={w.timezone} onChange={setW('timezone')} options={['Europe/Belgrade', 'Europe/Berlin', 'Europe/London', 'UTC']} />
+        <GhostSelect value={w.timezone} disabled={ro} onChange={(e) => setWorkspace({ timezone: e.target.value })} options={TIME_ZONES} />
       </FieldRow>
       <FieldRow label="Fiscal year starts">
-        <GhostSelect value={w.fiscal} onChange={setW('fiscal')} options={['January', 'April', 'July', 'October']} />
+        <GhostSelect value={String(w.fiscalMonth)} disabled={ro} onChange={(e) => setWorkspace({ fiscalMonth: Number(e.target.value) })} options={MONTHS} />
       </FieldRow>
       <FieldRow label="Sales bonus earned">
-        <GhostSelect value={w.bonusTrigger || 'On contract signed'} onChange={setW('bonusTrigger')} options={['On contract signed', 'When fully billed']} />
+        <GhostSelect value={w.bonusTrigger || 'On contract signed'} onChange={(e) => set((x) => ({ workspace: { ...x.workspace, bonusTrigger: e.target.value } }))} options={['On contract signed', 'When fully billed']} />
       </FieldRow>
+      <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 8 }}>
+        {ro ? 'Only owners and admins can change the workspace settings.' : 'Changes are saved as you make them.'} The sales bonus setting isn't saved yet.
+      </span>
     </div>
   );
 }
