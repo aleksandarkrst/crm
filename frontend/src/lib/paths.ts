@@ -7,7 +7,6 @@ export const paths = {
   contacts: '/contacts',
   contact: (id: string) => '/contacts/' + encodeURIComponent(id),
   products: '/products',
-  roadmap: '/roadmap',
   settings: (tab = 'workspace') => '/settings/' + tab,
   profile: '/profile',
   lead: (id: string) => '/deals/' + encodeURIComponent(id),

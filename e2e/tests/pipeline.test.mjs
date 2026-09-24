@@ -119,7 +119,7 @@ describe('pipeline journey', () => {
     await page.waitForFunction(() => document.body.innerText.includes('Ana Marković'));
   });
 
-  const screens = ['/overview', '/today', '/pipeline', '/companies', '/contacts', '/products', '/roadmap', '/settings/workspace', '/settings/funnels', '/settings/templates', '/settings/team', '/profile'];
+  const screens = ['/overview', '/today', '/pipeline', '/companies', '/contacts', '/products', '/settings/workspace', '/settings/funnels', '/settings/templates', '/settings/team', '/profile'];
   for (const path of [...screens, '/deals/:id']) {
     step(`renders ${path}`, async () => {
       await page.goto(BASE_URL + path.replace(':id', dealId), { waitUntil: 'networkidle0' });

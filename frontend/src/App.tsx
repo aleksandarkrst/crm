@@ -14,7 +14,6 @@ import { LeadScreen } from './screens/lead/LeadScreen';
 import { Pipeline } from './screens/Pipeline';
 import { Products } from './screens/Products';
 import { Profile } from './screens/Profile';
-import { Roadmap } from './screens/Roadmap';
 import { Settings } from './screens/Settings';
 import { Today } from './screens/Today';
 import { useStore } from './store/store';
@@ -66,7 +65,6 @@ function AppRoutes() {
         <Route path="contacts/:id" element={<Contact />} />
         <Route path="deals/:id" element={<LeadScreen />} />
         <Route path="products" element={<Products />} />
-        <Route path="roadmap" element={<Roadmap />} />
         <Route path="settings" element={<Navigate to={paths.settings()} replace />} />
         <Route path="settings/:tab" element={<Settings />} />
         <Route path="profile" element={<Profile />} />

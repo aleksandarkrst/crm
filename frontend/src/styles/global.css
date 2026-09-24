@@ -176,8 +176,6 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 .gate-chip { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 20px; padding: 5px 6px 5px 11px; }
 .gate-chip:focus-within { border-color: var(--brand); }
 
-.roadmap-add { display: flex; align-items: center; gap: 7px; border: 0; background: transparent; cursor: pointer; color: var(--muted-2); font-size: 12.5px; padding: 6px 4px; border-radius: 7px; text-align: left; }
-.roadmap-add:hover { background: var(--hover-col); color: var(--ink); }
 
 .crumb-link { color: var(--text-2); font-size: 12.5px; }
 .crumb-link:hover { color: var(--brand); text-decoration: none; }

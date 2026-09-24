@@ -180,12 +180,6 @@ export interface LogEntry {
   detail: string;
 }
 
-export interface RoadmapItem {
-  id: string;
-  title: string;
-  status: string;
-}
-
 export interface TeamMember {
   /** user id for members, invitation id for pending invitations */
   id: string;
@@ -310,7 +304,6 @@ export interface State {
   log: Record<string, LogEntry[]>;
   /** Stage history of every deal, oldest first; null until Overview loads it (see refreshHistory). */
   stageHistory: StageChange[] | null;
-  roadmapItems: RoadmapItem[];
   team: TeamMember[];
   notifs: ToggleRow[];
   integrations: ToggleRow[];

@@ -14,7 +14,6 @@ const NAV = [
   { to: paths.products, label: 'Products', icon: 'M20 8.5 12 4 4 8.5v7L12 20l8-4.5v-7ZM4 8.5 12 13m0 0 8-4.5M12 13v7' },
 ];
 const NAV_BOTTOM = [
-  { to: paths.roadmap, label: 'Roadmap', icon: 'M6 4v16M6 5h8.5l-1.2 2.6L14.5 10H6' },
   {
     to: '/settings',
     label: 'Settings',

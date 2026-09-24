@@ -126,13 +126,6 @@ export const DEFAULT_TIMELINE: LogEntry[] = [
   { date: '09 Sep', channel: 'RS', title: 'Lead created', detail: 'Inbound web form. Fit score 77 — funnel assigned automatically.' },
 ];
 
-export const ROADMAP_STATUSES = [
-  { id: 'backlog', name: 'Backlog' },
-  { id: 'planned', name: 'Planned' },
-  { id: 'progress', name: 'In progress' },
-  { id: 'done', name: 'Done' },
-];
-
 /** Pipeline board views: lost deals are hidden by default. */
 export const LOST_VIEWS = ['Open & won deals', 'Include lost deals', 'Lost deals only'] as const;
 export const DEFAULT_FILTERS: Filters = { audience: 'Audience', owner: 'Salesperson', dates: 'Any closing date', source: 'Source', stage: 'Stage', industry: 'Industry', stalled: 'Status', band: 'Value', lost: LOST_VIEWS[0] };
@@ -155,13 +148,6 @@ export function initialState(): State {
     extraTodoIds: {},
     leadTasks: [],
     log: {},
-    roadmapItems: [
-      { id: 'rm1', title: 'Automated proposal follow-up sequence', status: 'backlog' },
-      { id: 'rm2', title: 'Client reporting templates', status: 'backlog' },
-      { id: 'rm3', title: 'Retainer renewal reminders', status: 'planned' },
-      { id: 'rm4', title: 'Contact enrichment from email', status: 'progress' },
-      { id: 'rm5', title: 'Two-funnel pipeline split', status: 'done' },
-    ],
     team: [], // loaded from the API
     notifs: [
       { id: 'n1', label: 'Stalled lead nudges', desc: 'Daily digest of leads with no contact for 4+ days', on: true },

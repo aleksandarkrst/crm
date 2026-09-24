@@ -43,8 +43,6 @@ export interface Session {
   renameUser: (name: string) => void;
 }
 
-const ROADMAP_KEY = 'cadence.roadmapItems';
-
 /**
  * Business records (deals with their lines and to-dos, companies, contacts, products, funnels,
  * activity), the workspace settings and your profile come from the API. Features the backend
@@ -59,11 +57,10 @@ function loadInitial(data: WorkspaceData): State {
   s.taskLeadId = data.leads[0]?.id ?? '';
   s.contactCompany = data.leads[0]?.id ?? '';
   try {
-    const saved = localStorage.getItem(ROADMAP_KEY);
-    const items: unknown = saved ? JSON.parse(saved) : null;
-    if (Array.isArray(items)) s.roadmapItems = items as State['roadmapItems'];
+    // The Roadmap page was removed (CD-71); drop what it kept in this browser.
+    localStorage.removeItem('cadence.roadmapItems');
   } catch {
-    // ignore unreadable storage
+    // ignore unavailable storage
   }
   return s;
 }
@@ -114,14 +111,6 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
   const pendingTasks = useRef(new Map<string, TaskInput>());
 
   const set = useCallback((u: Updater) => setState((prev) => ({ ...prev, ...(typeof u === 'function' ? u(prev) : u) })), []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(ROADMAP_KEY, JSON.stringify(s.roadmapItems));
-    } catch {
-      // ignore
-    }
-  }, [s.roadmapItems]);
 
   useEffect(() => {
     const timers = saveTimers.current;
