@@ -379,8 +379,7 @@ the store is the one place that talks to the backend.
     `en-US` for USD, `en-GB` for GBP, …; `en-US` otherwise), so a euro workspace still reads
     "€14,000" and a CAD one writes USD as "US$". Totals are summed per currency and listed side by
     side, workspace currency first ("$14,000 + €2,500"), never added together (`moneyTotal`). There
-    are no exchange rates. Products have no currency of their own; their prices are in the workspace
-    currency.
+    are no exchange rates. Products have a currency of their own (CD-77, see below).
   - **Time zone**: "today" (Today, overdue, a new task's default due date, the closing-date
     filters) and the dates of timeline entries and completed to-dos use the workspace time zone,
     not the browser's (`todayIso(tz)`, `momentLabel`). Due dates and closing dates are calendar
@@ -403,8 +402,89 @@ the store is the one place that talks to the backend.
 Still browser-only (seeded from `store/seed.ts`, lost on reload), because the backend doesn't have
 them yet:
 - document templates and generation (worker + storage)
-- sales-bonus rules (including "Sales bonus earned" on the Workspace tab); they start empty
-  (no made-up rate, minimum or flat amount)
 - invitation emails (links are copied by hand for now)
-- custom fields
 - notification and integration settings
+
+## Custom fields (CD-15)
+
+Owners and admins define extra fields for deals, companies and contacts in **Settings → Customize
+Fields**; everyone fills them in. Definitions live in `custom_field_defs` (tenant-scoped, RLS in
+`drizzle/0014_custom_fields_bonus_rls.sql`): record type (`deal`, `company`, `contact`), label, type
+(`text`, `number`, `date`, `select`, `checkbox`, `url`), options (select only, `[{ id, label }]`),
+`required` and `position`. Labels are unique per record type among live fields (case-insensitive).
+
+- **Values** are a `custom_fields jsonb` column on `deals`, `companies` and `contacts`, keyed by
+  field id (`{ "<field id>": "PO-7", "<other id>": 12.5 }`). Why a column rather than a values table:
+  a record and its values are read and written together (lists, record screens, exports), so they
+  come with the row at no extra query or join, and a PATCH merges into the column in one statement
+  (`custom_fields || new - cleared`). A values table would pay off for querying and indexing by
+  value (filters, reports on custom fields), which nothing does yet; a GIN index on the column or a
+  move to a table is the path if that comes.
+- **Validation** (`CustomFieldsService.validate`): every create or update that sends `customFields`
+  is checked against the live definitions: unknown or deleted field ids are 400; text ≤ 2,000
+  characters, numbers finite, dates `YYYY-MM-DD`, checkboxes true/false, URLs http(s) with a host
+  (a missing `https://` is added), select values an option id (an option label is accepted and
+  stored as its id). `null` or `''` clears a value. The PATCH merges: fields not sent are kept.
+- **Required**: a required field can't be cleared once it has a value (400). A create that sends
+  `customFields` (the New deal and New contact forms do) must fill every required field of that
+  record type; creates that don't send any (quick "Add company", the New deal dialog's inline new
+  company, the CSV import, other API clients) still work and leave the field empty, and the record
+  shows the field marked with `*`. Enforcing it everywhere would make every record source
+  (import, quick add) know every field first.
+- **Renaming** a field or an option keeps the values (they are stored by id). An option still used
+  by a record can't be removed (409, with the count); the type of a field can't change.
+- **Deleting** is soft (`deleted_at`): the field disappears from the screens, forms and exports, its
+  name can be reused, and writes to it are refused (400). The values stay in the records, unseen.
+  The UI asks first and says exactly that.
+- Endpoints: `GET /api/crm/custom-fields[?entity=]` (members too), `POST /api/crm/custom-fields`,
+  `PATCH /api/crm/custom-fields/:id` (label, options, required), `PUT /api/crm/custom-fields/order`
+  (`{ entity, fieldIds }`, every live field once), `DELETE /api/crm/custom-fields/:id`; all but the
+  GET are owners and admins only (403 for members). At most 50 live fields per record type.
+- UI: the fields show under the standard ones on the deal Summary, the company screen and the
+  contact screen (saved as you type, `setCustomValue`), and in the New deal and New contact
+  dialogs. Companies have no create dialog, so company fields are filled on the company screen.
+  CSV **export** adds one column per live field (option labels, Yes/No, numbers as numbers).
+  CSV **import** doesn't map columns to custom fields yet (a follow-up: the import field list is
+  static and the row writers would need the definitions and a merge on update).
+
+## Sales bonus rules (CD-17)
+
+"Add the sales bonus rules in the workspace settings, so admin can only set it up or the manager
+for their team. We don't want users to view it." There is no manager role yet, so owners and admins
+only; a manager scoped to their team is a follow-up (it needs teams first).
+
+- `sales_bonus_rules` (tenant, user, `rate` %, `floor` = minimum deal, `fixed` = flat amount under
+  the minimum) and `sales_bonus_settings` (one row per tenant: `trigger`, "On contract signed" or
+  "When fully billed"), both with RLS. Amounts are in the workspace currency.
+- `GET /api/crm/bonus-rules` → `{ trigger, rules }`, `PATCH /api/crm/bonus-rules` `{ trigger }`,
+  `PUT /api/crm/bonus-rules/:userId` `{ rate, floor, fixed }` (the user must be a member),
+  `DELETE /api/crm/bonus-rules/:userId`. The whole controller requires the admin role, reading
+  included, so members get 403 and never receive a rule. Nothing about bonuses is on
+  `GET /api/workspace` (which members read).
+- UI: **Settings → Sales bonuses** (owners and admins; the tab and its route don't exist for
+  members) holds the trigger and a rate / minimum / flat amount per active member, saved as you
+  type. Overview's **Sales bonuses** card is shown to owners and admins only, read-only, with a link
+  to the tab; it computes earned and pending bonuses in the browser from the stored rules, grouped
+  by the deal's `ownerId` (CD-30). The store doesn't even ask for the rules as a member
+  (`remote.ts` treats the 403 as "no rules").
+- A deal in another currency than the workspace's gets the rate only: the minimum and the flat
+  amount are in the workspace currency and there are no exchange rates.
+- Members can still read deals and their owners (as before), so a determined member could apply a
+  rate they know; what is protected is the rules and the bonus figures.
+
+## Product and deal currency (CD-77)
+
+- `products.currency` (ISO 4217). A new product takes the workspace currency unless the request
+  names one; existing products got their workspace's currency in `drizzle/0014`. The Products
+  screen has a Currency column and the New product dialog a Currency field.
+- **A line is in its deal's currency.** There are no exchange rates, so adding a product priced in
+  another currency to a deal, or switching a line to one, is refused (409: "Design USD is priced in
+  USD, but this deal is in EUR. Pick a product priced in EUR, or change the deal's currency
+  first."). The deal's line picker shows other currencies but greys them out, and "Add line" picks
+  the first product in the deal's currency (or says there is none).
+- **Changing a deal's currency** (`PATCH /api/crm/deals/:id { currency }`; the deal Summary has a
+  Currency field) is refused while a line uses a product priced in another currency than the new
+  one (409, naming the products); lines without a product don't block it. Without lines the amount
+  keeps its number and is read in the new currency. The UI checks the same rule first and says why.
+- A product's currency can't change while it is on deals in another currency (409, naming the deal).
+- The CSV import and export already carried the deal currency; nothing else lists products.

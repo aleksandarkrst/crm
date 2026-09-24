@@ -43,9 +43,9 @@ a private window and sign in as that email.
 
 > **Current state of the UI:** deals (with their product lines, payment schedules, stage to-dos,
 > fit scores, discovery notes, activity and stage history, and whether they were won or lost),
-> companies, contacts, products, funnels (any number) and their stages are saved in the database, and so are the team, invitations, workspace settings and your
+> companies, contacts, products (with their currency), funnels (any number) and their stages are saved in the database, and so are custom fields, sales bonus rules (owners and admins only), the team, invitations, workspace settings and your
 > profile. Some design features have no backend yet and
-> only last until you reload the page: documents and the remaining settings tabs. See
+> only last until you reload the page: documents and the notification and integration settings. See
 > [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#frontend-store--api).
 
 **Import and export (owners and admins):** Companies, Contacts and Pipeline have **Import**, which
@@ -90,9 +90,11 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   tenant) and lost deals (reason pick list, reopen, no moves while lost); funnels and stages
   (create, copy, rename, delete; add, reorder and delete stages with their deals moved and the
   moves in the history; roles and isolation), checklist items keeping to-dos across renames, the
-  database guards (no lost deal in a won stage, no deal in a deleted stage), and CSV import (roles,
+  database guards (no lost deal in a won stage, no deal in a deleted stage), CSV import (roles,
   per-row validation, duplicates skipped or updated, deal matching, size and row limits, tenant
-  isolation, quoting edge cases).
+  isolation, quoting edge cases), custom fields (definitions and roles, value validation per type,
+  required, option renames, soft delete, isolation), sales bonus rules (members get 403) and
+  product / deal currency rules.
 - **Browser tests** (`e2e/`, Puppeteer with its bundled Chrome, run by `node:test`): sign-in,
   workspace, products, new deal, closing date, notes, drag between stages, reload, every screen
   renders; deal lines and stage to-dos persist; CHAMP fit score; team invitations with two
@@ -101,7 +103,9 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   in it, adding and removing stages; renaming a checklist item without losing the tick; importing
   companies and deals through the import dialog, and the exported contacts CSV (downloaded to a
   temp folder); the header search (Ctrl+K, keyboard navigation), the New menu and the sidebar
-  workspace switcher.
+  workspace switcher; a custom field added in Settings and filled on a deal (after a reload, by a
+  member too, and deleted); the sales bonus tab and Overview card hidden from members; changing a
+  deal's currency and the product currency rule.
 
 Both suites create their own users and workspaces with unique emails, so they can run against
 the dev database without resetting it. The database must be migrated first.
