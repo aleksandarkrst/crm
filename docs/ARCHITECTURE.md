@@ -72,7 +72,8 @@ tenant's rows, cross-tenant inserts are rejected, and a non-member gets 403.
 drop, "Advance", including into the won stage), `funnel_changed` (restarts at the new funnel's first
 stage), `lost` and `reopened` (the stage stays the same). `DealsService` writes the row in the same
 transaction as the change, through `StageHistoryService.record`, so the history can't disagree with
-the deal. Moving a deal to the stage it is already in writes nothing.
+the deal. Moving a deal to the stage it is already in writes nothing. A funnel change also writes
+"Moved to funnel <label>" on the deal's timeline, with the stage it restarts at.
 
 - Deals that existed before the table got one `created` row each (their current stage at their
   creation time, no user) in `drizzle/0008_deal_stage_history_rls.sql`.
@@ -200,8 +201,9 @@ the store is the one place that talks to the backend.
 - Deal lines: the backend recalculates the deal amount on every line change. A product that is
   on a deal can't be deleted from the catalog.
 - No made-up dates: a deal without a closing date has none (it only matches "Any closing date" on
-  Overview), and a deal line without a start date is left out of "Funnel by payment due date"
-  (the card says how many lines were left out).
+  Overview), and a payment without a date is left out of "Funnel by payment due date" (the card
+  says how many lines were left out). Payments are dated from the line's start date, but a
+  milestone with its own date counts even when its line has no start date.
 - Stage to-dos: a playbook to-do gets a row on first touch, keyed by deal + stage + checklist label
   (renaming a checklist item in the funnel builder starts that to-do fresh). Off-playbook to-dos
   are rows of their own.
@@ -212,12 +214,36 @@ the store is the one place that talks to the backend.
   deal's timeline and deleting one logs "Task removed" (the timeline is history, so the first entry
   stays); ticking it off logs it like any completed to-do. The store keeps them in
   `leadTasks`; the other to-dos (`blocks_advance = true`) gate "Advance".
+  - A task can take any of the seven channels (`CHANNELS`), labelled as on the timeline. Its
+    title, owner, due date, channel and note can be edited (the same dialog, in edit mode, from
+    Today or the deal screen; `PATCH /api/crm/deal-tasks/:id`); its deal and stage can't.
+  - **Overdue**: not done and due before the workspace's today. Today lists them first, the
+    sidebar's Today icon shows how many, and the deal screen highlights them. The funnel's own
+    tasks (each deal's stage activity) have no due date, so they are never overdue.
+  - **No next step**: an open deal with no open task gets that flag on its Pipeline card and deal
+    screen (the flag opens the New task dialog).
 
 - Workspace settings (**Settings → Workspace**): name, currency (ISO 4217), time zone (IANA) and
   fiscal-year start month are columns on `tenants` (`GET/PATCH /api/workspace`). Every member reads
   them; only owners and admins change them (members see the fields disabled; the API returns 403).
-  A rename updates the session, so the workspace switcher shows the new name. Nothing else uses
-  the values yet (deal amounts keep their own currency).
+  A rename updates the session, so the workspace switcher shows the new name.
+  - **Currency**: a new deal takes the workspace currency unless `POST /api/crm/deals` names one
+    (`deals.currency`); existing deals keep theirs when the workspace currency changes. The UI
+    writes amounts with `Intl.NumberFormat` in the deal's currency (`money`, `curOf` in
+    `store/selectors.ts`), in an English locale that fits the workspace currency (`en-IE` for EUR,
+    `en-US` for USD, `en-GB` for GBP, …; `en-US` otherwise), so a euro workspace still reads
+    "€14,000" and a CAD one writes USD as "US$". Totals are summed per currency and listed side by
+    side, workspace currency first ("$14,000 + €2,500"), never added together (`moneyTotal`). There
+    are no exchange rates. Products have no currency of their own; their prices are in the workspace
+    currency.
+  - **Time zone**: "today" (Today, overdue, a new task's default due date, the closing-date
+    filters) and the dates of timeline entries and completed to-dos use the workspace time zone,
+    not the browser's (`todayIso(tz)`, `momentLabel`). Due dates and closing dates are calendar
+    dates and aren't converted.
+  - **Fiscal year**: Overview's "this quarter", "next quarter" and "this year" closing-date filters
+    count from the fiscal-year start month (`closeRangeOf`). When it isn't January they read
+    "Closing this fiscal quarter" / "… fiscal year" (`dateRangeLabel`); the stored filter value
+    stays the same.
 - Profile (**Profile settings**, `GET/PATCH /api/profile`, always the caller's own): name, job title,
   phone, language, date format and start page live on `users` and apply in every workspace. The
   default funnel and the daily-digest choice live on `memberships`, because funnels and the digest
