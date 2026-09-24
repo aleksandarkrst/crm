@@ -220,7 +220,7 @@ function LeadTaskRow({ task: t }: { task: LeadTask }) {
   const overdue = !t.done && !!t.due && t.due < todayIso();
   const meta = t.done
     ? `Done ${t.at ?? ''}${t.by ? ' by ' + t.by : ''}`
-    : [t.due ? (overdue ? 'Overdue · due ' : 'Due ') + isoLabel(t.due) : 'No due date', memberName(s, t.ownerId), t.note].filter(Boolean).join(' · ');
+    : [t.due ? (overdue ? 'Overdue · due ' : 'Due ') + isoLabel(t.due) : 'No due date', memberName(s, t.ownerId, t.ownerName), t.note].filter(Boolean).join(' · ');
   return (
     <div data-lead-task={t.id} style={{ border: '1px solid #EEF0F4', borderRadius: 9, background: '#FFFFFF' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px' }}>

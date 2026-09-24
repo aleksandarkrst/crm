@@ -5,7 +5,8 @@ import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
 import { activities, CHANNELS, dealTasks, memberships, users } from '../../../shared/database/schema';
-import { optionalText, PaginationQuery } from '../../../shared/validation/common';
+import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
+import { userNameOf } from '../owner';
 
 const label = z.string().trim().max(200);
 const TaskState = z.object({
@@ -31,7 +32,7 @@ export const CreateExtraTask = TaskState.extend({
   position: z.number().int().min(0).max(1000).optional(),
   blocksAdvance: z.boolean().optional(),
 });
-export const UpdateTask = TaskState.extend({ ...TaskPlanning.shape, label: label.optional() });
+export const UpdateTask = nonEmptyPatch(TaskState.extend({ ...TaskPlanning.shape, label: label.optional() }));
 export type UpsertPlaybookTask = z.infer<typeof UpsertPlaybookTask>;
 export type CreateExtraTask = z.infer<typeof CreateExtraTask>;
 export type UpdateTask = z.infer<typeof UpdateTask>;
@@ -61,7 +62,11 @@ export class DealTasksService {
   list(ctx: TenantContext, page: PaginationQuery) {
     return this.database.withTenant(ctx.tenantId, (tx) =>
       tx
-        .select({ ...getTableColumns(dealTasks), doneByName: sql<string | null>`coalesce(${users.displayName}, ${users.email})` })
+        .select({
+          ...getTableColumns(dealTasks),
+          doneByName: sql<string | null>`coalesce(${users.displayName}, ${users.email})`,
+          assigneeName: userNameOf(dealTasks.assigneeUserId),
+        })
         .from(dealTasks)
         .leftJoin(users, eq(users.id, dealTasks.doneByUserId))
         .orderBy(asc(dealTasks.dealId), asc(dealTasks.position), asc(dealTasks.createdAt))
@@ -128,10 +133,20 @@ export class DealTasksService {
       .catch(mapDbError);
   }
 
+  /**
+   * Deleting a task from the "New task" dialog logs "Task removed" on the deal's timeline rather
+   * than deleting its "Task added" entry: the timeline is the deal's history (who planned what,
+   * and when it was dropped), and activities have no link to the task to match on safely.
+   */
   remove(ctx: TenantContext, id: string) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
-      const [row] = await tx.delete(dealTasks).where(eq(dealTasks.id, id)).returning({ id: dealTasks.id });
+      const [row] = await tx
+        .delete(dealTasks)
+        .where(eq(dealTasks.id, id))
+        .returning({ dealId: dealTasks.dealId, label: dealTasks.label, offPlaybook: dealTasks.offPlaybook, blocksAdvance: dealTasks.blocksAdvance });
       if (!row) throw new NotFoundException('To-do not found');
+      if (row.offPlaybook && !row.blocksAdvance)
+        await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId: row.dealId, actorUserId: ctx.userId, channel: 'RS', title: 'Task removed: ' + row.label, detail: null });
     });
   }
 }

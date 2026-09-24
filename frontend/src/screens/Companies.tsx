@@ -34,7 +34,7 @@ export function Companies() {
   const rows = companyRecords(s)
     .filter((c) => !q || c.name.toLowerCase().includes(q) || String(c.industry || '').toLowerCase().includes(q) || String(c.hq || '').toLowerCase().includes(q))
     .filter((c) => industry === 'Industry' || c.industry === industry)
-    .filter((c) => owner === 'Owner' || c.owner === owner)
+    .filter((c) => owner === 'Owner' || c.ownerId === owner)
     .sort((a, b) => {
       const av = sortVal(a);
       const bv = sortVal(b);

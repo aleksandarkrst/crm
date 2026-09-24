@@ -30,11 +30,11 @@ export function Contacts() {
   const rows = allPeople(s)
     .map((p) => {
       const l = leadById(s, p.leadId);
-      return { id: p.id, contact: p.name, role: p.role, company: companyOfPerson(s, p), companyId: companyIdOfPerson(s, p), email: p.email, phone: p.phone, decisionMaker: p.buyerRole || 'Influencer', owner: l ? ownerOf(l) : '—' };
+      return { id: p.id, contact: p.name, role: p.role, company: companyOfPerson(s, p), companyId: companyIdOfPerson(s, p), email: p.email, phone: p.phone, decisionMaker: p.buyerRole || 'Influencer', owner: l ? ownerOf(s, l) : '—', ownerId: l?.ownerId ?? null };
     })
     .filter((r) => !q || [r.contact, r.company, r.role, r.email].some((v) => String(v).toLowerCase().includes(q)))
     .filter((r) => company === 'Company' || r.companyId === company)
-    .filter((r) => owner === 'Salesperson' || r.owner === owner)
+    .filter((r) => owner === 'Salesperson' || r.ownerId === owner)
     .filter((r) => buyerRole === 'Buyer role' || r.decisionMaker === buyerRole)
     .sort((a, b) => String(a[sort.key]).localeCompare(String(b[sort.key])) * sort.dir);
 

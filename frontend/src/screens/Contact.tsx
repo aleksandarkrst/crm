@@ -85,7 +85,7 @@ export function Contact() {
                 <GhostInput value={p.phone} onChange={setField('phone')} />
               </FieldRow>
               <FieldRow label="Owner">
-                <span className="field-value">{c ? ownerOf(c) : '—'}</span>
+                <span className="field-value">{c ? ownerOf(s, c) : '—'}</span>
               </FieldRow>
               <FieldRow label="Last touch">
                 <span className="field-value">{!c ? '—' : c.stall === 0 ? 'today' : c.stall + ' days ago'}</span>

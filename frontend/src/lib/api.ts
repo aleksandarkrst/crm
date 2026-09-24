@@ -120,6 +120,8 @@ export interface ApiCompany {
   domain: string | null;
   ownerUserId: string | null;
   notes: string | null;
+  /** Current name of the owner, also after they left the workspace (lists only). */
+  ownerName?: string | null;
 }
 export interface ApiContact {
   id: string;
@@ -165,6 +167,8 @@ export interface ApiDeal {
 export interface ApiDealRow {
   deal: ApiDeal;
   contactIds: string[];
+  /** Current name of the owner, also after they left the workspace. */
+  ownerName?: string | null;
 }
 export interface ApiActivity {
   id: string;
@@ -218,6 +222,8 @@ export interface ApiDealTask {
   dueDate: string | null;
   assigneeUserId: string | null;
   channel: Channel | null;
+  /** Current name of the assignee, also after they left the workspace (lists only). */
+  assigneeName?: string | null;
 }
 
 export interface ApiMember {

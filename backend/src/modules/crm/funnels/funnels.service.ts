@@ -7,16 +7,19 @@ import { DatabaseService, type Tx } from '../../../shared/database/database.serv
 import { mapDbError } from '../../../shared/database/errors';
 import { CHANNELS, funnels, funnelStages } from '../../../shared/database/schema';
 import { type TenantProvisioner, TenantProvisioning } from '../../../shared/events/tenant-provisioning';
+import { nonEmptyPatch } from '../../../shared/validation/common';
 import { DEFAULT_FUNNELS } from './default-funnels';
 
-export const UpdateStage = z.object({
-  name: z.string().trim().min(1).max(100).optional(),
-  activity: z.string().trim().min(1).max(200).optional(),
-  channel: z.enum(CHANNELS).optional(),
-  documentOnEntry: z.string().trim().max(60).nullish(),
-  winProbability: z.number().int().min(0).max(100).optional(),
-  checklist: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
-});
+export const UpdateStage = nonEmptyPatch(
+  z.object({
+    name: z.string().trim().min(1).max(100).optional(),
+    activity: z.string().trim().min(1).max(200).optional(),
+    channel: z.enum(CHANNELS).optional(),
+    documentOnEntry: z.string().trim().max(60).nullish(),
+    winProbability: z.number().int().min(0).max(100).optional(),
+    checklist: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
+  }),
+);
 export type UpdateStage = z.infer<typeof UpdateStage>;
 
 /** Funnels are the per-persona playbooks: ordered stages with activity, channel and to-dos. */

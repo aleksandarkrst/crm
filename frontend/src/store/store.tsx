@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiRole, type ApiTenant, type Channel, clearTenantId, crmApi, type DealInput, type DealLineInput, type ProfileInput, type TaskInput } from '../lib/api';
+import { ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, crmApi, type DealInput, type DealLineInput, type ProfileInput, type TaskInput } from '../lib/api';
 import { paths } from '../lib/paths';
 import { loadWorkspace, mapActivity, mapLeadTask, mapLine, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
@@ -69,7 +69,12 @@ function loadInitial(data: WorkspaceData): State {
 }
 
 const channelOf = (c: string): Channel => ((CHANNELS as readonly string[]).includes(c) ? (c as Channel) : 'NT');
-const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
+/** The API's message, plus the first field problem when validation failed. */
+const errText = (err: unknown) => {
+  if (!(err instanceof Error)) return String(err);
+  const issue = err instanceof ApiError ? (err.body as { issues?: { path?: string; message?: string }[] } | null)?.issues?.[0] : undefined;
+  return issue?.message ? `${err.message}: ${issue.path ? issue.path + ' ' : ''}${issue.message}` : err.message;
+};
 const EMPTY_CONTACT: NewContactDraft = { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer' };
 const DISCOVERY_FIELDS = ['headline', 'need', 'constraint', 'decisionMaker', 'discoveryDate'] as const satisfies readonly (keyof Lead & keyof DealInput)[];
 /** Workspace settings as the API names them (the bonus trigger has no backend yet). */
@@ -98,7 +103,13 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
   const navigate = useNavigate();
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const genTimer = useRef<ReturnType<typeof setInterval>>(undefined);
-  const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  /** Debounced writes that haven't been sent yet, by field key (see saveLater). */
+  const saveTimers = useRef(new Map<string, { timer: ReturnType<typeof setTimeout>; run: () => void }>());
+  /** Writes sent but not answered yet; `writeSeq` counts every write started. */
+  const inFlight = useRef(0);
+  const writeSeq = useRef(0);
+  const idleWaiters = useRef<(() => void)[]>([]);
+  const reloading = useRef<Promise<void> | null>(null);
   const logRequested = useRef(new Set<string>());
   const pendingTasks = useRef(new Map<string, TaskInput>());
 
@@ -117,15 +128,15 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     return () => {
       clearTimeout(toastTimer.current);
       clearInterval(genTimer.current);
-      timers.forEach((t) => clearTimeout(t));
+      timers.forEach((t) => clearTimeout(t.timer));
     };
   }, []);
 
   const flash = useCallback(
-    (msg: string) => {
+    (msg: string, ms = 2600) => {
       clearTimeout(toastTimer.current);
       set({ toast: msg });
-      toastTimer.current = setTimeout(() => set({ toast: '' }), 2600);
+      toastTimer.current = setTimeout(() => set({ toast: '' }), ms);
     },
     [set],
   );
@@ -135,32 +146,93 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     const mapLead = (id: string, fn: (l: Lead) => Lead) => set((x) => ({ leads: x.leads.map((l) => (l.id === id ? fn(l) : l)) }));
 
     // ------------------------------------------------------------ persistence
-    /** Re-reads the workspace from the API (after changes that touch several records). */
-    const reload = async () => {
-      try {
-        set(await loadWorkspace());
-      } catch (err) {
-        flash('Could not refresh: ' + errText(err));
+    /*
+     * A failed save must not throw away other unsaved typing (CD-19). Reloading replaces the
+     * workspace with what the database has, so it only happens once every other edit is stored:
+     * `reload` first sends the debounced writes still waiting (flush), waits until no write is in
+     * flight, and discards its result (and tries again) if a new write started while it loaded.
+     * The failed change itself is then shown as stored (reverted), and the toast names it, so
+     * the screen never silently shows a value the database doesn't have.
+     */
+    const isIdle = () => inFlight.current === 0 && saveTimers.current.size === 0;
+    const whenIdle = () => (isIdle() ? Promise.resolve() : new Promise<void>((resolve) => idleWaiters.current.push(resolve)));
+    const notifyIfIdle = () => {
+      if (!isIdle()) return;
+      const waiters = idleWaiters.current.splice(0);
+      waiters.forEach((resolve) => resolve());
+    };
+    /** Sends every debounced write now instead of after the typing pause. */
+    const flushSaves = () => {
+      for (const { timer, run } of [...saveTimers.current.values()]) {
+        clearTimeout(timer);
+        run();
       }
     };
-    /** Runs an API write; on failure shows why and reloads so the screen matches the database. */
-    const save = (write: () => Promise<unknown>, then?: () => unknown) =>
-      write()
-        .then(() => then?.())
-        .catch((err: unknown) => {
-          flash('Not saved: ' + errText(err));
-          void reload();
-        });
+    /** Drops a debounced write that hasn't been sent (its record is being deleted). */
+    const dropSave = (key: string) => {
+      const pending = saveTimers.current.get(key);
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      saveTimers.current.delete(key);
+      notifyIfIdle();
+    };
+    /** Re-reads the workspace from the API once all pending edits are saved (see above). */
+    const reload = (): Promise<void> => {
+      reloading.current ??= (async () => {
+        try {
+          flushSaves();
+          for (let attempt = 0; attempt < 5; attempt++) {
+            await whenIdle();
+            const seq = writeSeq.current;
+            const data = await loadWorkspace();
+            if (seq === writeSeq.current && isIdle()) {
+              set(data);
+              return;
+            }
+          }
+        } catch (err) {
+          flash('Could not refresh: ' + errText(err));
+        } finally {
+          reloading.current = null;
+        }
+      })();
+      return reloading.current;
+    };
+    /**
+     * Runs an API write, then `then` on success. On failure it names what wasn't saved and why,
+     * and reloads (after the other pending edits are saved) so the screen matches the database.
+     */
+    const save = async (write: () => Promise<unknown>, then?: () => unknown, what = 'your change') => {
+      inFlight.current++;
+      writeSeq.current++;
+      let failed: unknown = null;
+      try {
+        await write();
+      } catch (err) {
+        failed = err ?? new Error('Unknown error');
+      } finally {
+        inFlight.current--;
+        notifyIfIdle();
+      }
+      if (failed) {
+        flash(`Not saved: ${what} (${errText(failed)}). It was reset to the saved value.`, 7000);
+        await reload();
+        return;
+      }
+      try {
+        await then?.();
+      } catch (err) {
+        flash('Saved, but could not refresh: ' + errText(err));
+      }
+    };
     /** Coalesces typing into one write per field (inputs call their action on every keystroke). */
-    const saveLater = (key: string, write: () => Promise<unknown>) => {
-      clearTimeout(saveTimers.current.get(key));
-      saveTimers.current.set(
-        key,
-        setTimeout(() => {
-          saveTimers.current.delete(key);
-          void save(write);
-        }, 600),
-      );
+    const saveLater = (key: string, write: () => Promise<unknown>, what?: string) => {
+      clearTimeout(saveTimers.current.get(key)?.timer);
+      const run = () => {
+        saveTimers.current.delete(key);
+        void save(write, undefined, what);
+      };
+      saveTimers.current.set(key, { timer: setTimeout(run, 600), run });
     };
     const refreshLog = async (leadId: string) => {
       const rows = await crmApi.activities(leadId);
@@ -194,14 +266,14 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       if (!lead || lead.stage === stageId) return;
       const stage = stagesFor(cur(), lead.segment).find((st) => st.id === stageId);
       mapLead(leadId, (l) => ({ ...l, stage: stageId, stall: 0 }));
-      void save(() => crmApi.moveDeal(leadId, stageId), () => refreshLog(leadId));
+      void save(() => crmApi.moveDeal(leadId, stageId), () => refreshLog(leadId), 'the stage move');
       if (stage && stage.doc === 'Proposal' && AUTO_GENERATE_DOCS) startGeneration(leadId);
       else if (stage) flash('Moved to ' + stage.name + ' · next activity: ' + stage.activity);
     };
 
     const pushLog = (leadId: string, entry: LogEntry) => {
       set((x) => ({ log: { ...x.log, [leadId]: [entry, ...(x.log[leadId] || [])] } }));
-      void save(() => crmApi.logActivity(leadId, { channel: channelOf(entry.channel), title: entry.title, detail: entry.detail || null }));
+      void save(() => crmApi.logActivity(leadId, { channel: channelOf(entry.channel), title: entry.title, detail: entry.detail || null }), undefined, 'the timeline entry');
     };
 
     // ------------------------------------------------------------ deal lines
@@ -235,11 +307,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           saveLater('line:' + l.id, async () => {
             const line = (cur().dealLines[leadId] || []).find((y) => y.id === l.id);
             if (line) await crmApi.updateDealLine(line.id, lineInput(line));
-          });
+          }, 'a product line');
       for (const l of prev)
         if (!next.some((y) => y.id === l.id)) {
-          clearTimeout(saveTimers.current.get('line:' + l.id));
-          void save(() => crmApi.deleteDealLine(l.id));
+          dropSave('line:' + l.id);
+          void save(() => crmApi.deleteDealLine(l.id), undefined, 'removing a product line');
         }
     };
 
@@ -309,7 +381,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const contactId = p?.contactId;
       if (!p || !contactId) return;
       set((x) => ({ links: { ...x.links, [leadId]: [...(x.links[leadId] || []), personId] } }));
-      void save(() => crmApi.linkContact(leadId, contactId));
+      void save(() => crmApi.linkContact(leadId, contactId), undefined, 'linking ' + p.name);
       flash(p.name + ' linked to this lead');
     };
     const unlinkPerson = (leadId: string, personId: string) => {
@@ -321,7 +393,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         return;
       }
       set((x) => ({ links: { ...x.links, [leadId]: (x.links[leadId] || []).filter((i) => i !== personId) } }));
-      void save(() => crmApi.unlinkContact(leadId, contactId));
+      void save(() => crmApi.unlinkContact(leadId, contactId), undefined, 'unlinking ' + p.name);
     };
 
     const CONTACT_FIELDS: Partial<Record<keyof Person, 'fullName' | 'jobTitle' | 'email' | 'phone' | 'linkedin' | 'buyerRole'>> = {
@@ -339,7 +411,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       for (const [k, v] of Object.entries(patch)) {
         const field = CONTACT_FIELDS[k as keyof Person];
         const value = String(v ?? '');
-        if (field && !(field === 'fullName' && !value.trim())) saveLater(`contact:${contactId}:${field}`, () => crmApi.updateContact(contactId, { [field]: value }));
+        if (field && !(field === 'fullName' && !value.trim())) saveLater(`contact:${contactId}:${field}`, () => crmApi.updateContact(contactId, { [field]: value }), `${p.name}'s ${k === 'role' ? 'job title' : k === 'buyerRole' ? 'buyer role' : k}`);
       }
       const withInitials = patch.name !== undefined ? { ...patch, initials: initialsOf(patch.name) } : patch;
       if (p.primary) {
@@ -396,7 +468,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         pendingTasks.current.delete(key);
         if (!item.offPlaybook) await crmApi.upsertPlaybookTask(leadId, { stageId, label: item.label, ...body });
         else if (extraId) await crmApi.updateTask(extraId, body);
-      });
+      }, `the to-do "${item.label || 'New to-do'}"`);
     };
 
     const patchTask = (leadId: string, stageId: string, idx: number, patch: TaskState) => {
@@ -449,7 +521,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         list[extraIdx] = val;
         return { extraTodos: { ...x.extraTodos, [key]: list } };
       });
-      if (id) saveLater('todo-label:' + id, () => crmApi.updateTask(id, { label: val.trim() }));
+      if (id) saveLater('todo-label:' + id, () => crmApi.updateTask(id, { label: val.trim() }), 'the to-do name');
     };
     const removeExtra = (leadId: string, stageId: string, extraIdx: number, taskIdx: number) => {
       const key = leadId + '::' + stageId;
@@ -471,8 +543,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         return { extraTodos: { ...x.extraTodos, [key]: list }, extraTodoIds: { ...x.extraTodoIds, [key]: ids }, tasks };
       });
       if (id) {
-        clearTimeout(saveTimers.current.get('todo-label:' + id));
-        void save(() => crmApi.deleteTask(id));
+        dropSave('todo-label:' + id);
+        void save(() => crmApi.deleteTask(id), undefined, 'removing the to-do');
       }
     };
 
@@ -505,15 +577,22 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const done = !t.done;
       const date = todayLabel();
       set((x) => ({ leadTasks: x.leadTasks.map((y) => (y.id === id ? { ...y, done, at: done ? date : undefined, by: done ? session.userName.split(' ')[0] : undefined } : y)) }));
-      void save(() => crmApi.updateTask(id, { done }));
+      void save(() => crmApi.updateTask(id, { done }), undefined, `the task "${t.title}"`);
       if (done) {
         pushLog(t.leadId, { date, channel: t.channel, title: t.title, detail: t.note || 'Task completed.' });
         flash('Marked done · added to the activity timeline');
       }
     };
+    /** Deletes a task; the backend logs "Task removed" on the timeline, so refresh it if loaded. */
     const removeLeadTask = (id: string) => {
+      const t = cur().leadTasks.find((x) => x.id === id);
       set((x) => ({ leadTasks: x.leadTasks.filter((y) => y.id !== id) }));
-      void save(() => crmApi.deleteTask(id));
+      void save(
+        () => crmApi.deleteTask(id),
+        () => {
+          if (t && logRequested.current.has(t.leadId)) return refreshLog(t.leadId).catch(() => undefined);
+        },
+      );
     };
 
     const advanceStage = (leadId: string) => {
@@ -562,7 +641,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     /** Companies are identified by id (names aren't unique), so renaming one keeps its route. */
     const setCompanyField = (companyId: string, key: 'name' | 'industry' | 'hq' | 'size' | 'source', v: string) => {
       const field = key === 'size' ? 'teamSize' : key;
-      if (!(key === 'name' && !v.trim())) saveLater(`company:${companyId}:${field}`, () => crmApi.updateCompany(companyId, { [field]: v }));
+      if (!(key === 'name' && !v.trim())) saveLater(`company:${companyId}:${field}`, () => crmApi.updateCompany(companyId, { [field]: v }), `the company ${key === 'hq' ? 'HQ' : key === 'size' ? 'team size' : key}`);
       set((x) => ({
         leads: x.leads.map((l) => (l.companyId === companyId ? { ...l, ...(key === 'name' ? { company: v } : { [key]: v }) } : l)),
         extraCompanies: x.extraCompanies.map((c) => (c.id === companyId ? { ...c, [key]: v } : c)),
@@ -587,24 +666,24 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       if (hq !== undefined && companyId) setCompanyField(companyId, 'hq', hq);
       if (size !== undefined && companyId) setCompanyField(companyId, 'size', size);
       const { title, closeDate, source, ownerId } = dealPatch;
-      if (title !== undefined && title.trim()) saveLater('title:' + id, () => crmApi.updateDeal(id, { title: title.trim() }));
-      if (closeDate !== undefined) saveLater('close:' + id, () => crmApi.updateDeal(id, { closeDate: closeDate || null }));
-      if (source !== undefined) saveLater('source:' + id, () => crmApi.updateDeal(id, { source }));
+      if (title !== undefined && title.trim()) saveLater('title:' + id, () => crmApi.updateDeal(id, { title: title.trim() }), 'the deal title');
+      if (closeDate !== undefined) saveLater('close:' + id, () => crmApi.updateDeal(id, { closeDate: closeDate || null }), 'the closing date');
+      if (source !== undefined) saveLater('source:' + id, () => crmApi.updateDeal(id, { source }), 'the deal source');
       // Discovery notes (merged into the proposal). Empty text clears the field.
       for (const key of DISCOVERY_FIELDS) {
         const v = dealPatch[key];
-        if (v !== undefined) saveLater(`${key}:${id}`, () => crmApi.updateDeal(id, { [key]: key === 'discoveryDate' ? v || null : v }));
+        if (v !== undefined) saveLater(`${key}:${id}`, () => crmApi.updateDeal(id, { [key]: key === 'discoveryDate' ? v || null : v }), 'the discovery notes');
       }
       if (dealPatch.companyId !== undefined && dealPatch.companyId !== companyId) {
         const target = dealPatch.companyId;
         const rec = target ? companyRecords(cur()).find((c) => c.id === target) : undefined;
         if (target && !rec) return;
         dealPatch.company = rec?.name ?? 'No company';
-        void save(() => crmApi.updateDeal(id, { companyId: target }), reload);
+        void save(() => crmApi.updateDeal(id, { companyId: target }), reload, 'the company of this deal');
       }
       if (ownerId !== undefined && ownerId !== lead.ownerId) {
         dealPatch.owner = cur().team.find((m) => m.status === 'Active' && m.id === ownerId)?.name;
-        void save(() => crmApi.updateDeal(id, { ownerUserId: ownerId }));
+        void save(() => crmApi.updateDeal(id, { ownerUserId: ownerId }), undefined, 'the deal owner');
       }
       mapLead(id, (l) => ({ ...l, ...dealPatch }));
     };
@@ -614,11 +693,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     const canEditWorkspace = canDelete;
     /** Drops pending debounced writes for a record that is about to be deleted. */
     const cancelSaves = (...ids: string[]) => {
-      for (const [key, timer] of saveTimers.current)
-        if (ids.some((id) => key.includes(id))) {
-          clearTimeout(timer);
-          saveTimers.current.delete(key);
-        }
+      for (const key of [...saveTimers.current.keys()]) if (ids.some((id) => key.includes(id))) dropSave(key);
     };
     /** Deletes a record, then opens the list screen and reloads the workspace. */
     const remove = async (write: () => Promise<unknown>, list: string, done: string) => {
@@ -666,7 +741,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         const funnelId = cur().funnels[seg].id;
         if (!funnelId) return;
         mapLead(id, (l) => ({ ...l, segment: seg, stage: stagesFor(cur(), seg)[0]!.id }));
-        void save(() => crmApi.updateDeal(id, { funnelId }), () => refreshLog(id));
+        void save(() => crmApi.updateDeal(id, { funnelId }), () => refreshLog(id), 'the funnel');
         flash('Funnel reassigned · lead moved to the first stage');
       },
       openLead: (id: string) => navigate(paths.lead(id)),
@@ -704,7 +779,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         saveLater('champ:' + leadId, async () => {
           const champ = cur().champ[leadId];
           if (champ) await crmApi.updateDeal(leadId, { champ });
-        });
+        }, 'the fit score');
       },
       linkPerson,
       unlinkPerson,
@@ -731,11 +806,16 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         const taken = new Set(companyRecords(cur()).map((c) => c.name));
         let name = 'New company';
         for (let i = 2; taken.has(name); i++) name = 'New company ' + i;
-        void save(async () => {
-          const created = await crmApi.createCompany({ name });
-          await reload();
-          navigate(paths.company(created.id));
-        });
+        let created: { id: string } | undefined;
+        // Reload after the write (in `then`): reload waits for writes in flight, this one included.
+        void save(
+          async () => void (created = await crmApi.createCompany({ name })),
+          async () => {
+            await reload();
+            if (created) navigate(paths.company(created.id));
+          },
+          'the new company',
+        );
       },
       canDelete,
       deleteDeal,
@@ -796,10 +876,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       },
       revokeInvitation: (id: string) => {
         set((x) => ({ team: x.team.filter((m) => m.id !== id) }));
-        void save(() => crmApi.revokeInvitation(id));
+        void save(() => crmApi.revokeInvitation(id), undefined, 'withdrawing the invitation');
       },
       setMemberRole: (userId: string, role: ApiRole) => {
-        void save(() => crmApi.updateMember(userId, role), reload);
+        void save(() => crmApi.updateMember(userId, role), reload, 'the role');
       },
       /** Removes a member; removing yourself leaves the workspace. */
       removeMember: (userId: string) => {
@@ -835,11 +915,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         set((x) => ({ catalog: x.catalog.map((c) => (c.id === id ? { ...c, [key]: v } : c)) }));
         const field = ({ name: 'name', type: 'type', kind: 'billingKind', price: 'unitPrice', vat: 'vatRate' } as const)[key];
         if (key === 'name' && !v.trim()) return;
-        saveLater(`product:${id}:${field}`, () => crmApi.updateProduct(id, { [field]: key === 'price' || key === 'vat' ? num(v) : v }));
+        saveLater(`product:${id}:${field}`, () => crmApi.updateProduct(id, { [field]: key === 'price' || key === 'vat' ? num(v) : v }), `the product ${key === 'kind' ? 'billing' : key === 'vat' ? 'VAT' : key}`);
       },
       removeProduct: (id: string) => {
         set((x) => ({ catalog: x.catalog.filter((k) => k.id !== id) }));
-        void save(() => crmApi.deleteProduct(id));
+        void save(() => crmApi.deleteProduct(id), undefined, 'removing the product');
       },
 
       // ---------------------------------------------------------- settings

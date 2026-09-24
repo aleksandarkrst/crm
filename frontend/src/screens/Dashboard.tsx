@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FilterBar, GhostInput } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { DATE_RANGES, DEFAULT_FILTERS, SOURCES } from '../store/seed';
-import { billedShare, bonusOf, bonusRule, closeIsoOf, closeRangeOf, grossOf, inCloseRange, linesOf, money, num, ownerOf, salesPeople, shiftIso, stageOf, valueNum } from '../store/selectors';
+import { billedShare, bonusOf, bonusRule, closeIsoOf, closeRangeOf, grossOf, inCloseRange, linesOf, money, num, salesPeople, shiftIso, stageOf, valueNum } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { SegKey } from '../store/types';
 
@@ -31,7 +31,7 @@ export function Dashboard() {
   // Every panel below works on these deals, so the filter chips (including the closing-date range) apply everywhere.
   const beforeDates = s.leads
     .filter((l) => f.audience === 'Audience' || audLabel(l.segment) === f.audience)
-    .filter((l) => f.owner === 'Salesperson' || ownerOf(l) === f.owner)
+    .filter((l) => f.owner === 'Salesperson' || l.ownerId === f.owner)
     .filter((l) => f.source === 'Source' || l.source === f.source);
   const dashLeads = beforeDates.filter((l) => inCloseRange(l, range));
   const undatedHidden = range ? beforeDates.filter((l) => !closeIsoOf(l)).length : 0;
@@ -104,30 +104,30 @@ export function Dashboard() {
   let totalEarned = 0;
   let totalPending = 0;
   const bonusRows = salesPeople(s)
-    .filter((owner) => f.owner === 'Salesperson' || owner === f.owner)
-    .map((owner) => {
-      const rule = bonusRule(s, owner);
-      const mine = dashLeads.filter((l) => ownerOf(l) === owner);
-      let earned = 0;
-      let pending = 0;
-      const earnedIds: string[] = [];
-      const pendingIds: string[] = [];
-      for (const l of mine) {
-        const bonus = bonusOf(l, rule);
-        const won = !!stageOf(s, l).won;
-        const full = rule.trigger === 'When fully billed' ? billedShare(s, l) >= 0.999 : true;
-        if (won && full) {
-          earned += bonus;
-          earnedIds.push(l.id);
-        } else {
-          pending += bonus;
-          pendingIds.push(l.id);
-        }
+    .filter(({ value: ownerId }) => f.owner === 'Salesperson' || ownerId === f.owner)
+    .map(({ value: ownerId, label: owner }) => {
+    const rule = bonusRule(s, ownerId);
+    const mine = dashLeads.filter((l) => l.ownerId === ownerId);
+    let earned = 0;
+    let pending = 0;
+    const earnedIds: string[] = [];
+    const pendingIds: string[] = [];
+    for (const l of mine) {
+      const bonus = bonusOf(l, rule);
+      const won = !!stageOf(s, l).won;
+      const full = rule.trigger === 'When fully billed' ? billedShare(s, l) >= 0.999 : true;
+      if (won && full) {
+        earned += bonus;
+        earnedIds.push(l.id);
+      } else {
+        pending += bonus;
+        pendingIds.push(l.id);
       }
-      totalEarned += earned;
-      totalPending += pending;
-      return { owner, rule, earned, pending, earnedIds, pendingIds };
-    });
+    }
+    totalEarned += earned;
+    totalPending += pending;
+    return { ownerId, owner, rule, earned, pending, earnedIds, pendingIds };
+  });
   const setRule = (owner: string, key: 'rate' | 'floor' | 'fixed') => (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
     set((x) => {
@@ -217,11 +217,11 @@ export function Dashboard() {
                 ))}
               </div>
               {bonusRows.map((r) => (
-                <div key={r.owner} style={{ display: 'grid', gridTemplateColumns: BONUS_COLS, gap: 12, padding: '7px 0', borderBottom: '1px solid var(--divider)', alignItems: 'center' }}>
+                <div key={r.ownerId} style={{ display: 'grid', gridTemplateColumns: BONUS_COLS, gap: 12, padding: '7px 0', borderBottom: '1px solid var(--divider)', alignItems: 'center' }}>
                   <span style={{ fontSize: 13, fontWeight: 600 }}>{r.owner}</span>
-                  <GhostInput className="ghost-sm" value={r.rule.rate} onChange={setRule(r.owner, 'rate')} />
-                  <GhostInput className="ghost-sm" value={r.rule.floor} onChange={setRule(r.owner, 'floor')} />
-                  <GhostInput className="ghost-sm" value={r.rule.fixed} onChange={setRule(r.owner, 'fixed')} />
+                  <GhostInput className="ghost-sm" value={r.rule.rate} onChange={setRule(r.ownerId, 'rate')} />
+                  <GhostInput className="ghost-sm" value={r.rule.floor} onChange={setRule(r.ownerId, 'floor')} />
+                  <GhostInput className="ghost-sm" value={r.rule.fixed} onChange={setRule(r.ownerId, 'fixed')} />
                   <span className="hover-underline" onClick={() => r.earnedIds.length && drill('Bonus earned · ' + r.owner, r.rule.trigger, r.earnedIds)} style={{ fontSize: 13, fontWeight: 600, color: 'var(--brand)', cursor: r.earnedIds.length ? 'pointer' : 'default' }}>
                     {money(r.earned)}
                   </span>
