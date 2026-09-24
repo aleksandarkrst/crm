@@ -2,23 +2,10 @@ import { useState } from 'react';
 import { FilterBar, GhostInput } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { DATE_RANGES, DEFAULT_FILTERS, SOURCES } from '../store/seed';
-import { billedShare, bonusOf, bonusRule, grossOf, linesOf, money, num, ownerOf, salesPeople, shiftIso, stageOf, valueNum } from '../store/selectors';
+import { billedShare, bonusOf, bonusRule, closeIsoOf, closeRangeOf, grossOf, inCloseRange, linesOf, money, num, ownerOf, salesPeople, shiftIso, stageOf, valueNum } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { SegKey } from '../store/types';
 
-const CONVERSION = [
-  { name: 'New lead → first touch', pct: 86 },
-  { name: 'First touch → discovery', pct: 61 },
-  { name: 'Discovery → proposal', pct: 73 },
-  { name: 'Proposal → negotiation', pct: 58 },
-  { name: 'Negotiation → won', pct: 41 },
-];
-const DOC_STATS = [
-  { tag: 'PRO', name: 'Proposals', count: 38, saved: '57h saved' },
-  { tag: 'QTE', name: 'Quotes', count: 12, saved: '9h saved' },
-  { tag: 'CON', name: 'Contracts', count: 9, saved: '22h saved' },
-  { tag: 'INV', name: 'First invoices', count: 5, saved: '8h saved' },
-];
 const STAGE_SHADES = ['#E7F2EE', '#CBE3DA', '#A3CFC0', '#2F7A5E', '#1B6148', '#14503C', '#0C3226'];
 const TIME_SHADES = ['#F1F3F6', '#E0E3E9', '#C6CBD4', '#8A919F', '#5B6272', '#343B49'];
 const TIME_BUCKETS = [
@@ -31,36 +18,48 @@ const TIME_BUCKETS = [
 ] as const;
 const BONUS_COLS = 'minmax(0,1.6fr) 90px 120px 120px 120px 120px';
 const clip = 'polygon(0 0, 100% 0, calc(100% - 14px) 100%, 14px 100%)';
+/** "€184k" for the metric cards; exact below €1,000. */
+const compact = (n: number): string => (Math.abs(n) < 1000 ? money(n) : '€' + Math.round(n / 1000).toLocaleString('en-US') + 'k');
+const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 
 export function Dashboard() {
   const { s, set } = useStore();
   const [dashSeg, setDashSeg] = useState<SegKey>(s.segment);
   const f = s.filters;
   const audLabel = (seg: SegKey) => s.funnels[seg].label;
-  const dashLeads = s.leads
+  const range = closeRangeOf(f.dates);
+  // Every panel below works on these deals, so the filter chips (including the closing-date range) apply everywhere.
+  const beforeDates = s.leads
     .filter((l) => f.audience === 'Audience' || audLabel(l.segment) === f.audience)
     .filter((l) => f.owner === 'Salesperson' || ownerOf(l) === f.owner)
     .filter((l) => f.source === 'Source' || l.source === f.source);
-  const dashValue = dashLeads.reduce((a, l) => a + valueNum(l.value), 0);
+  const dashLeads = beforeDates.filter((l) => inCloseRange(l, range));
+  const undatedHidden = range ? beforeDates.filter((l) => !closeIsoOf(l)).length : 0;
   const setFilter = (k: keyof typeof f) => (v: string) => set((x) => ({ filters: { ...x.filters, [k]: v } }));
   const dirty = (['audience', 'owner', 'dates', 'source'] as const).some((k) => f[k] !== DEFAULT_FILTERS[k]);
   const drill = (kicker: string, title: string, leadIds: string[]) => set({ drill: { kicker, title, leadIds } });
 
+  const openLeads = dashLeads.filter((l) => !stageOf(s, l).won);
+  const wonLeads = dashLeads.filter((l) => !!stageOf(s, l).won);
+  const openValue = openLeads.reduce((a, l) => a + valueNum(l.value), 0);
+  const wonValue = wonLeads.reduce((a, l) => a + valueNum(l.value), 0);
+  const weighted = openLeads.reduce((a, l) => a + (valueNum(l.value) * num(stageOf(s, l).prob)) / 100, 0);
+  const stalled = openLeads.filter((l) => l.stall >= 3);
   const metrics = [
-    { label: 'Open pipeline', value: '€' + Math.round(dashValue / 1000) + 'k', note: dashLeads.length + ' active leads in the current filter' },
-    { label: 'Proposal → won', value: '41%', note: 'Up from 24% before the playbook' },
-    { label: 'Days to proposal', value: '3.1', note: 'Was 11 when proposals were written by hand' },
-    { label: 'Docs generated', value: '64', note: '≈ 96 hours of authoring avoided' },
+    { label: 'Open pipeline', value: compact(openValue), note: plural(openLeads.length, 'open deal') + ' in the current filter' },
+    { label: 'Weighted pipeline', value: compact(weighted), note: "Open value × each stage's win probability" },
+    { label: 'Won', value: compact(wonValue), note: plural(wonLeads.length, 'deal') + ' in the won stage' },
+    { label: 'Stalled', value: String(stalled.length), note: 'Open deals with no contact for 3+ days' },
   ];
 
   const stages = s.funnels[dashSeg].stages;
   const stageFunnel = stages.map((x, i) => {
-    const rows = s.leads.filter((l) => l.segment === dashSeg && l.stage === x.id);
+    const rows = dashLeads.filter((l) => l.segment === dashSeg && l.stage === x.id);
     const val = rows.reduce((a, l) => a + valueNum(l.value), 0);
     return {
       name: x.name,
       ids: rows.map((l) => l.id),
-      meta: rows.length + (rows.length === 1 ? ' lead · €' : ' leads · €') + val.toLocaleString('en-US'),
+      meta: plural(rows.length, 'deal') + ' · ' + money(val),
       width: 100 - i * (58 / Math.max(1, stages.length - 1)) + '%',
       bg: STAGE_SHADES[Math.min(i, STAGE_SHADES.length - 1)],
       fg: i >= 3 ? '#F5F6F8' : '#101828',
@@ -70,7 +69,7 @@ export function Dashboard() {
 
   const today = new Date();
   const payments: { leadId: string; when: Date; amount: number }[] = [];
-  for (const l of s.leads)
+  for (const l of dashLeads)
     for (const ln of linesOf(s, l)) {
       const gross = grossOf(ln);
       const start = ln.start || '2026-10-01';
@@ -104,29 +103,31 @@ export function Dashboard() {
   const trigger = s.workspace.bonusTrigger || 'On contract signed';
   let totalEarned = 0;
   let totalPending = 0;
-  const bonusRows = salesPeople(s).map((owner) => {
-    const rule = bonusRule(s, owner);
-    const mine = s.leads.filter((l) => ownerOf(l) === owner);
-    let earned = 0;
-    let pending = 0;
-    const earnedIds: string[] = [];
-    const pendingIds: string[] = [];
-    for (const l of mine) {
-      const bonus = bonusOf(l, rule);
-      const won = !!stageOf(s, l).won;
-      const full = rule.trigger === 'When fully billed' ? billedShare(s, l) >= 0.999 : true;
-      if (won && full) {
-        earned += bonus;
-        earnedIds.push(l.id);
-      } else {
-        pending += bonus;
-        pendingIds.push(l.id);
+  const bonusRows = salesPeople(s)
+    .filter((owner) => f.owner === 'Salesperson' || owner === f.owner)
+    .map((owner) => {
+      const rule = bonusRule(s, owner);
+      const mine = dashLeads.filter((l) => ownerOf(l) === owner);
+      let earned = 0;
+      let pending = 0;
+      const earnedIds: string[] = [];
+      const pendingIds: string[] = [];
+      for (const l of mine) {
+        const bonus = bonusOf(l, rule);
+        const won = !!stageOf(s, l).won;
+        const full = rule.trigger === 'When fully billed' ? billedShare(s, l) >= 0.999 : true;
+        if (won && full) {
+          earned += bonus;
+          earnedIds.push(l.id);
+        } else {
+          pending += bonus;
+          pendingIds.push(l.id);
+        }
       }
-    }
-    totalEarned += earned;
-    totalPending += pending;
-    return { owner, rule, earned, pending, earnedIds, pendingIds };
-  });
+      totalEarned += earned;
+      totalPending += pending;
+      return { owner, rule, earned, pending, earnedIds, pendingIds };
+    });
   const setRule = (owner: string, key: 'rate' | 'floor' | 'fixed') => (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
     set((x) => {
@@ -135,20 +136,18 @@ export function Dashboard() {
     });
   };
 
-  const stalled = dashLeads.filter((l) => l.stall >= 3);
-
   return (
     <Screen title="Overview">
       <FilterBar
         chips={[
           { value: f.audience, options: ['Audience', s.funnels.smb.label, s.funnels.ent.label], onChange: setFilter('audience') },
           { value: f.owner, options: ['Salesperson', ...salesPeople(s)], onChange: setFilter('owner') },
-          { value: f.dates, options: DATE_RANGES, onChange: setFilter('dates') },
+          { value: f.dates, options: DATE_RANGES, onChange: setFilter('dates'), keepFirst: true },
           { value: f.source, options: ['Source', ...SOURCES], onChange: setFilter('source') },
         ]}
         dirty={dirty}
         onClear={() => set((x) => ({ filters: { ...x.filters, ...DEFAULT_FILTERS } }))}
-        meta={`${dashLeads.length} leads in view · ${f.dates.toLowerCase()}`}
+        meta={`${plural(dashLeads.length, 'deal')} in view · ${range ? f.dates.toLowerCase() : 'any closing date'}${undatedHidden ? ` · ${undatedHidden} without a closing date hidden` : ''}`}
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
@@ -167,7 +166,7 @@ export function Dashboard() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <span className="card-title">Pipeline funnel</span>
-                <span className="card-sub">Open value by stage</span>
+                <span className="card-sub">Deals and value by stage</span>
               </div>
               <select value={dashSeg} onChange={(e) => setDashSeg(e.target.value as SegKey)} style={{ border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '8px 11px', fontSize: 12.5, color: 'var(--ink)' }}>
                 <option value="smb">{s.funnels.smb.label}</option>
@@ -238,38 +237,14 @@ export function Dashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 14 }}>
           <div className="card" style={{ padding: 18 }}>
             <div className="card-title" style={{ marginBottom: 4 }}>Stage conversion</div>
-            <div className="card-sub" style={{ marginBottom: 16 }}>Last 90 days, both funnels</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {CONVERSION.map((row) => (
-                <div key={row.name} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
-                    <span>{row.name}</span>
-                    <span style={{ color: 'var(--text-2)' }}>{row.pct}%</span>
-                  </div>
-                  <div style={{ height: 7, background: 'var(--segment)', borderRadius: 4, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', background: 'var(--brand)', borderRadius: 4, transformOrigin: 'left', animation: 'dcBar .6s ease-out both', width: row.pct + '%' }} />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <div className="card-sub" style={{ marginBottom: 16 }}>Share of deals that move on from each stage</div>
+            <div className="empty-dashed">Conversion rates appear once deals start moving through stages.</div>
           </div>
 
           <div className="card" style={{ padding: 18 }}>
             <div className="card-title" style={{ marginBottom: 4 }}>Documents generated</div>
-            <div className="card-sub" style={{ marginBottom: 16 }}>Time saved versus manual authoring</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-              {DOC_STATS.map((d) => (
-                <div key={d.tag} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottom: '1px solid var(--divider)', paddingBottom: 9 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                    <span style={{ fontSize: 9.5, background: 'var(--warn-soft)', color: 'var(--warn)', padding: '3px 5px', borderRadius: 4 }}>{d.tag}</span>
-                    <span style={{ fontSize: 13 }}>{d.name}</span>
-                  </div>
-                  <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                    {d.count} · {d.saved}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <div className="card-sub" style={{ marginBottom: 16 }}>Proposals, quotes, contracts and invoices</div>
+            <div className="empty-dashed">Document counts appear once generated documents are saved to the workspace.</div>
           </div>
         </div>
 
@@ -283,8 +258,9 @@ function StalledLeads({ rows }: { rows: { id: string; company: string; stageName
   const { openLead } = useStore();
   return (
     <div className="card" style={{ padding: 18 }}>
-      <div className="card-title" style={{ marginBottom: 14 }}>Stalled leads — nudge sent automatically</div>
+      <div className="card-title" style={{ marginBottom: 14 }}>Stalled deals — no contact for 3+ days</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {rows.length === 0 && <div className="empty-dashed">No stalled deals in the current filter.</div>}
         {rows.map((r) => (
           <div key={r.id} onClick={() => openLead(r.id)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, cursor: 'pointer', border: '1px solid var(--divider)', borderRadius: 8, padding: '11px 13px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>

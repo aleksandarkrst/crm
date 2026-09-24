@@ -15,7 +15,12 @@ export const FIELD_TYPES = ['Text', 'Number', 'Currency', 'Date', 'Dropdown', 'C
 export const SOURCES = ['Inbound web form', 'Referral', 'Outbound LinkedIn', 'Conference', 'Instagram DM', 'Trade fair'];
 export const INDUSTRIES = ['Architecture', 'Banking', 'Food & beverage', 'Freight & logistics', 'Furniture retail', 'Hospitality', 'Pharmaceuticals', 'Renewable energy', 'Wine', 'Other'];
 export const TEAM_SIZES = ['1–10 staff', '11–50 staff', '51–200 staff', '201–1,000 staff', '1,000+ staff'];
-export const DATE_RANGES = ['Last 30 days', 'Last 7 days', 'This quarter', 'Year to date', 'All time'];
+/**
+ * Overview date filter: ranges over each deal's closing date (calendar months, quarters and
+ * years). The first entry means "no date filter" and is the only one that includes deals without
+ * a closing date.
+ */
+export const DATE_RANGES = ['Any closing date', 'Closing in 30 days', 'Closing this month', 'Closing this quarter', 'Closing next quarter', 'Closing this year', 'Closing date passed'];
 export const VALUE_BANDS = ['Value', 'Under €25k', '€25k–€100k', 'Over €100k'];
 export const PARAM_SOURCES: Record<string, string> = { '{{company}}': 'Lead · company', '{{contact_name}}': 'Lead · primary contact', '{{price}}': 'Lead · deal value' };
 export const PRODUCT_TYPES = ['Service', 'Product'];
@@ -126,7 +131,7 @@ export const ROADMAP_STATUSES = [
   { id: 'done', name: 'Done' },
 ];
 
-export const DEFAULT_FILTERS: Filters = { audience: 'Audience', owner: 'Salesperson', dates: 'Last 30 days', source: 'Source', stage: 'Stage', industry: 'Industry', stalled: 'Status', band: 'Value' };
+export const DEFAULT_FILTERS: Filters = { audience: 'Audience', owner: 'Salesperson', dates: 'Any closing date', source: 'Source', stage: 'Stage', industry: 'Industry', stalled: 'Status', band: 'Value' };
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
