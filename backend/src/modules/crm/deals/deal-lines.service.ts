@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { asc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
@@ -105,7 +105,7 @@ export class DealLinesService {
     const [deal] = await tx.select({ currency: deals.currency }).from(deals).where(eq(deals.id, dealId));
     if (!deal) throw new NotFoundException('Deal not found');
     const [product] = await tx.select({ name: products.name, currency: products.currency }).from(products).where(eq(products.id, productId));
-    if (!product) throw new BadRequestException('Product not found');
+    if (!product) throw new NotFoundException('Product not found');
     if (product.currency !== deal.currency)
       throw new ConflictException(`${product.name} is priced in ${product.currency}, but this deal is in ${deal.currency}. Pick a product priced in ${deal.currency}, or change the deal's currency first.`);
   }
