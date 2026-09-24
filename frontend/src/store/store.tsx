@@ -37,6 +37,8 @@ export interface Session {
   tenant: ApiTenant;
   tenants: ApiTenant[];
   switchTenant: (id: string) => void;
+  /** Creates a workspace (you become its owner) and opens it. */
+  createTenant: (name: string) => Promise<void>;
   signOut: () => void;
   /** Updates the session after the workspace was renamed (switcher, headings). */
   renameTenant: (name: string) => void;

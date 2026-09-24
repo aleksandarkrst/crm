@@ -4,6 +4,8 @@ import { paths } from '../lib/paths';
 import { Modals } from '../modals/Modals';
 import { initialsOf, overdueTasks } from '../store/selectors';
 import { useStore } from '../store/store';
+import { HeaderTools } from './HeaderTools';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 const NAV = [
   { to: paths.overview, label: 'Overview', icon: 'M4 19V5M4 19h16M8 16v-4M12 16V8M16 16v-6' },
@@ -53,8 +55,8 @@ function Sidebar() {
   const name = s.profile.name || session.userName;
   const overdue = overdueTasks(s).length;
   return (
-    <aside style={{ width: 96, flex: '0 0 96px', background: '#101828', color: '#F5F6F8', padding: '18px 8px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, position: 'sticky', top: 0, height: '100vh' }}>
-      <div style={{ width: 38, height: 38, borderRadius: 10, background: '#F5F6F8', color: '#101828', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, fontWeight: 700, letterSpacing: '-0.02em' }}>C</div>
+    <aside style={{ width: 96, flex: '0 0 96px', background: '#101828', color: '#F5F6F8', padding: '18px 8px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, position: 'sticky', top: 0, height: '100vh', zIndex: 10 }}>
+      <WorkspaceSwitcher />
       <nav style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: '100%' }}>
         {NAV.map((n) => (
           <NavItem key={n.to} {...n} badge={n.to === paths.today ? overdue : undefined} />
@@ -114,7 +116,7 @@ export function Screen({ title, onTitleChange, crumb, children }: { title: strin
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.15 }}>{title}</h1>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }} />
+        <HeaderTools />
       </header>
       <div style={{ padding: '18px 30px 44px', flex: 1, background: 'var(--white)' }}>
         {crumb && (
