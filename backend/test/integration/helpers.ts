@@ -15,6 +15,7 @@ export interface Call {
   token?: string;
   tenant?: string;
   body?: unknown;
+  headers?: Record<string, string>;
 }
 
 // Response bodies are loosely typed on purpose: the tests assert on their shape.
@@ -28,7 +29,7 @@ export interface Reply<T = Json> {
 
 /** One HTTP call to the API. Never throws on 4xx/5xx; assert on `status`. */
 export async function call<T = Json>(method: string, path: string, opts: Call = {}): Promise<Reply<T>> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...opts.headers };
   if (opts.token) headers.authorization = `Bearer ${opts.token}`;
   if (opts.tenant) headers['x-tenant-id'] = opts.tenant;
   if (opts.body !== undefined) headers['content-type'] = 'application/json';

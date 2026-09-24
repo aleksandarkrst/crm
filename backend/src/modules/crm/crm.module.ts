@@ -11,6 +11,8 @@ import { DealsController } from './deals/deals.controller';
 import { DealsService } from './deals/deals.service';
 import { StageHistoryService } from './deals/stage-history.service';
 import { FunnelsController } from './funnels/funnels.controller';
+import { HistoryController } from './history/history.controller';
+import { RecordHistoryService } from './history/record-history.service';
 import { FunnelsService } from './funnels/funnels.service';
 import { ImportController } from './import/import.controller';
 import { ImportService } from './import/import.service';
@@ -24,8 +26,8 @@ import { ProductsService } from './products/products.service';
  * CSV import of companies, contacts and deals lives in import/ (CD-64).
  */
 @Module({
-  controllers: [CompaniesController, ContactsController, FunnelsController, DealsController, DealWorkController, ProductsController, ImportController],
-  providers: [CompaniesService, ContactsService, FunnelsService, DealsService, ActivitiesService, DealLinesService, DealTasksService, StageHistoryService, ProductsService, ImportService],
+  controllers: [CompaniesController, ContactsController, FunnelsController, DealsController, DealWorkController, ProductsController, ImportController, HistoryController],
+  providers: [CompaniesService, ContactsService, FunnelsService, DealsService, ActivitiesService, DealLinesService, DealTasksService, StageHistoryService, ProductsService, ImportService, RecordHistoryService],
   exports: [DealsService],
 })
 export class CrmModule {}

@@ -9,6 +9,7 @@ import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, type Deal
 import { JobsService } from '../../../shared/events/jobs.service';
 import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
 import { assertOwnerIsMember, userNameOf } from '../owner';
+import { RecordHistoryService } from '../history/record-history.service';
 import { StageHistoryService } from './stage-history.service';
 
 const money = z.union([z.number(), z.string()]).transform((v) => String(v)).pipe(z.string().regex(/^\d{1,12}(\.\d{1,2})?$/, 'Invalid amount'));
@@ -72,6 +73,7 @@ export class DealsService {
     private readonly audit: AuditService,
     private readonly jobs: JobsService,
     private readonly history: StageHistoryService,
+    private readonly changes: RecordHistoryService,
   ) {}
 
   /** Board/list view: deals with company, primary contact and stage names joined in. */
@@ -157,11 +159,17 @@ export class DealsService {
 
   /**
    * Changing the funnel (a different target persona) restarts the deal at that funnel's first
-   * stage, and says so on the timeline ("Moved to funnel …").
+   * stage, and says so on the timeline ("Moved to funnel …"). With a `version` (If-Match), a field
+   * someone else changed since that version is a 409 conflict (RecordHistoryService).
    */
-  update(ctx: TenantContext, id: string, input: UpdateDeal) {
+  update(ctx: TenantContext, id: string, input: UpdateDeal, version?: Date) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        if (version) {
+          const [locked] = await tx.select().from(deals).where(eq(deals.id, id)).for('update');
+          if (!locked) throw new NotFoundException('Deal not found');
+          await this.changes.assertNoConflict(tx, ctx, 'deal', locked, input, version);
+        }
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const patch: Partial<typeof deals.$inferInsert> = { ...input };
         if (input.champ) patch.fitScore = input.champ.C + input.champ.H + input.champ.M + input.champ.P;

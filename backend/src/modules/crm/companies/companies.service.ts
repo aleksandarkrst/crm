@@ -7,6 +7,7 @@ import { DatabaseService } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
 import { companies, contacts, deals } from '../../../shared/database/schema';
 import { nonEmptyPatch, optionalText, type PaginationQuery } from '../../../shared/validation/common';
+import { RecordHistoryService } from '../history/record-history.service';
 import { assertOwnerIsMember, userNameOf } from '../owner';
 
 export const CreateCompany = z.object({
@@ -34,6 +35,7 @@ export class CompaniesService {
   constructor(
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
+    private readonly changes: RecordHistoryService,
   ) {}
 
   list(ctx: TenantContext, page: PaginationQuery) {
@@ -71,9 +73,15 @@ export class CompaniesService {
       .catch(mapDbError);
   }
 
-  update(ctx: TenantContext, id: string, input: UpdateCompany) {
+  /** With a `version` (If-Match), a field someone else changed since then is a 409 conflict (CD-20). */
+  update(ctx: TenantContext, id: string, input: UpdateCompany, version?: Date) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        if (version) {
+          const [locked] = await tx.select().from(companies).where(eq(companies.id, id)).for('update');
+          if (!locked) throw new NotFoundException('Company not found');
+          await this.changes.assertNoConflict(tx, ctx, 'company', locked, input, version);
+        }
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const [row] = await tx.update(companies).set(input).where(eq(companies.id, id)).returning();
         if (!row) throw new NotFoundException('Company not found');

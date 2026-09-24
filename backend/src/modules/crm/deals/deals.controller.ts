@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { RequireTenant, Tenant, type TenantContext } from '../../../shared/authorization';
 import { UuidParam } from '../../../shared/validation/common';
 import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
+import { parseVersion } from '../history/record-history.service';
 import { ActivitiesService, CreateActivity } from './activities.service';
 import { CreateDeal, DealsQuery, DealsService, MarkLost, MoveDeal, UpdateDeal } from './deals.service';
 
@@ -30,9 +31,10 @@ export class DealsController {
     return this.deals.create(ctx, body);
   }
 
+  /** `If-Match: <updatedAt>` makes the update fail with 409 if someone changed these fields since (CD-20). */
   @Patch(':id')
-  update(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(UpdateDeal)) body: UpdateDeal) {
-    return this.deals.update(ctx, id, body);
+  update(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(UpdateDeal)) body: UpdateDeal, @Headers('if-match') ifMatch?: string) {
+    return this.deals.update(ctx, id, body, parseVersion(ifMatch));
   }
 
   /** Pipeline drag & drop and "Advance to <stage>". */
