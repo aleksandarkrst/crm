@@ -1283,8 +1283,16 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
   }, [set, flash, navigate, session]);
 
   // Live updates (CD-20): the workspace's change stream, and a refresh when the window gets focus.
+  // Connected once per workspace: `actions` is rebuilt on navigation (useNavigate changes), so the
+  // handlers are reached through a ref instead of reconnecting (and dropping queued refreshes).
+  const liveRef = useRef(actions.live);
+  liveRef.current = actions.live;
   useEffect(() => {
-    const { live } = actions;
+    const live = {
+      onEvent: (e: LiveEvent) => liveRef.current.onEvent(e),
+      refreshAll: () => liveRef.current.refreshAll(),
+      onFocus: () => liveRef.current.onFocus(),
+    };
     const pending = livePending.current;
     const mounted = Date.now();
     const stop = connectLive({
@@ -1292,6 +1300,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       // After a drop, hints may be missing: read everything. The first connect only needs that if
       // the workspace was loaded a while before the stream was up.
       onOpen: (first) => {
+        // Says the stream is up (the e2e tests wait for it; handy when debugging).
+        document.documentElement.dataset.live = 'on';
         if (!first || Date.now() - mounted > 3000) live.refreshAll();
       },
     });
@@ -1302,11 +1312,12 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       stop();
+      delete document.documentElement.dataset.live;
       clearTimeout(pending.timer);
       window.removeEventListener('focus', live.onFocus);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [actions]);
+  }, []);
 
   return { s, ...actions };
 }
