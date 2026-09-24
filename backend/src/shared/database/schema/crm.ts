@@ -136,6 +136,12 @@ export const funnelStages = pgTable(
     checklist: jsonb('checklist').$type<string[]>().notNull().default([]),
     checklistItems: jsonb('checklist_items').$type<ChecklistItem[]>().notNull().default([]),
     isWon: boolean('is_won').notNull().default(false), // the terminal "won" stage
+    /**
+     * Deleted stages (CD-9) are kept, so the stage history of deals that passed through them stays
+     * complete. They hold no deals (a trigger enforces it), are left out of the funnel, and their
+     * key gets a "~<id>" suffix so a new stage can reuse it.
+     */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
     ...timestamps,
   },
   (t) => [

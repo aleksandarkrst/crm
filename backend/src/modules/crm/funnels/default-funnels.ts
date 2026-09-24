@@ -58,3 +58,11 @@ export const DEFAULT_FUNNELS: FunnelTemplate[] = [
     ],
   },
 ];
+
+/** A new funnel that doesn't copy another one starts with these (CD-10). */
+export const BLANK_FUNNEL_STAGES: StageTemplate[] = [
+  stage('new', 'New deal', 'Qualify & research', 'RS', null, 10, ['Fit score entered']),
+  stage('discovery', 'Discovery', 'Discovery call', 'MT', null, 30, ['Needs captured']),
+  stage('proposal', 'Proposal', 'Send proposal + walkthrough', 'EM', 'Proposal', 50, ['Proposal sent']),
+  stage('won', 'Won', 'Kickoff scheduling', 'MT', null, 100, ['Kickoff booked']),
+];

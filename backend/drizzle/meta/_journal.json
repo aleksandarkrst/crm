@@ -85,6 +85,13 @@
       "when": 1790229987542,
       "tag": "0011_checklist_item_ids",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790243107622,
+      "tag": "0012_stage_soft_delete",
+      "breakpoints": true
     }
   ]
 }
