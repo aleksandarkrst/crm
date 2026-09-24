@@ -2,7 +2,9 @@
  * CSV import (CD-64): roles, per-row validation, duplicates (skip / update), deals with company,
  * funnel, stage, owner and contact matching, size and row limits, tenant isolation and CSV quoting.
  */
+import { Client } from 'pg';
 import { beforeAll, describe, expect, inject, it } from 'vitest';
+import { DEFAULT_MIGRATION_DATABASE_URL } from './env';
 import { addMember, call, createTenant, type Funnel, type Json, ok, type Session, signIn } from './helpers';
 
 let owner: Session;
@@ -166,6 +168,35 @@ describe('importing companies', () => {
     expect(res).toMatchObject({ created: 0, updated: 1, skipped: 1, failed: 0 });
     const [c] = await companiesNamed(name);
     expect(c).toMatchObject({ name, industry: 'New', hq: 'Belgrade', domain: 'new.example' });
+  });
+});
+
+describe('a batch the database refuses (CD-78)', () => {
+  it('is redone row by row: only the refused row fails, the others are saved once', async () => {
+    // A trigger (added as the table owner, for this test only) refuses one company by name, which
+    // the in-memory checks can't foresee, so the batch's multi-row insert fails.
+    const refused = uniq('Refused by trigger');
+    const [a, b] = [uniq('Retry A'), uniq('Retry B')];
+    const admin = new Client({ connectionString: process.env.MIGRATION_DATABASE_URL || DEFAULT_MIGRATION_DATABASE_URL });
+    await admin.connect();
+    const fn = `test_refuse_${Date.now().toString(36)}`;
+    try {
+      await admin.query(`CREATE FUNCTION ${fn}() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN IF NEW.name = '${refused}' THEN RAISE EXCEPTION 'Refused by the test trigger'; END IF; RETURN NEW; END $$`);
+      await admin.query(`CREATE TRIGGER ${fn} BEFORE INSERT ON companies FOR EACH ROW EXECUTE FUNCTION ${fn}()`);
+
+      const res = await commit('companies', { csv: `Name,Industry\n${a},Retail\n${refused},Energy\n${b},Media\n` });
+      expect(res).toMatchObject({ created: 2, failed: 1, skipped: 0, updated: 0 });
+      expect(res.failures).toHaveLength(1);
+      expect(res.failures[0]).toMatchObject({ line: 3, cells: [refused, 'Energy'] });
+      expect(await companiesNamed(a)).toHaveLength(1);
+      expect(await companiesNamed(b)).toHaveLength(1);
+      expect(await companiesNamed(refused)).toHaveLength(0);
+    } finally {
+      await admin.query(`DROP TRIGGER IF EXISTS ${fn} ON companies`);
+      await admin.query(`DROP FUNCTION IF EXISTS ${fn}()`);
+      await admin.end();
+    }
   });
 });
 

@@ -28,7 +28,7 @@ beforeAll(async () => {
   ).id;
   a.line = (await ok('POST', `/crm/deals/${a.deal}/lines`, { ...as, body: { productId: a.product, quantity: 2, unitPrice: 100 } })).id;
   const stage = funnelA.stages[0]!;
-  a.playbookTask = (await ok('PUT', `/crm/deals/${a.deal}/tasks/playbook`, { ...as, body: { stageId: stage.id, label: stage.checklist[0] ?? 'Check', done: true } })).id;
+  a.playbookTask = (await ok('PUT', `/crm/deals/${a.deal}/tasks/playbook`, { ...as, body: { stageId: stage.id, checklistItemId: stage.checklistItems[0]!.id, done: true } })).id;
   a.extraTask = (await ok('POST', `/crm/deals/${a.deal}/tasks`, { ...as, body: { stageId: stage.id, label: 'Alpha private to-do' } })).id;
 });
 
@@ -106,7 +106,7 @@ describe('through the API', () => {
       ['POST', `/crm/deals/${own.id}/lines`, { productId: a.product, quantity: 1, unitPrice: 1 }],
       ['POST', `/crm/deals/${a.deal}/lines`, { quantity: 1, unitPrice: 1 }],
       ['POST', `/crm/deals/${a.deal}/tasks`, { stageId: funnelB.stages[0]!.id, label: 'Sneaky' }],
-      ['PUT', `/crm/deals/${a.deal}/tasks/playbook`, { stageId: funnelB.stages[0]!.id, label: 'Sneaky' }],
+      ['PUT', `/crm/deals/${a.deal}/tasks/playbook`, { stageId: funnelB.stages[0]!.id, checklistItemId: funnelB.stages[0]!.checklistItems[0]!.id }],
     ];
     for (const [method, path, body] of attempts) {
       const res = await call(method, path, { ...asB(), body });

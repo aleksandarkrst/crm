@@ -60,8 +60,6 @@ export interface ApiFunnelStage {
   channel: Channel;
   documentOnEntry: string | null;
   winProbability: number;
-  /** The labels of checklistItems, in order. */
-  checklist: string[];
   /** Stage to-dos with stable ids (CD-32): renaming one keeps the deals' progress on it. */
   checklistItems: ApiChecklistItem[];
   isWon: boolean;

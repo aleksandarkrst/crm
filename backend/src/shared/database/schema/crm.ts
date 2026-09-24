@@ -129,11 +129,7 @@ export const funnelStages = pgTable(
     channel: text('channel', { enum: CHANNELS }).notNull().default('EM'),
     documentOnEntry: text('document_on_entry'), // "Proposal", "Quote", ... or null
     winProbability: integer('win_probability').notNull().default(25),
-    /**
-     * The stage to-dos (gates). checklist_items is the source of truth; checklist keeps the labels
-     * only, in the same order, for code that still reads or writes it. A trigger keeps the two in
-     * sync (drizzle/0011_checklist_item_ids.sql).
-     */
+    /** The stage to-dos (gates), with stable ids (CD-32). */
     checklistItems: jsonb('checklist_items').$type<ChecklistItem[]>().notNull().default([]),
     isWon: boolean('is_won').notNull().default(false), // the terminal "won" stage
     /**

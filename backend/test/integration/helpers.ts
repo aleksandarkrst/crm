@@ -82,7 +82,6 @@ export interface Stage {
   name: string;
   position: number;
   isWon: boolean;
-  checklist: string[];
   checklistItems: { id: string; label: string }[];
 }
 
