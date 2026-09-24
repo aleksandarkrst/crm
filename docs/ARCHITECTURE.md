@@ -64,6 +64,70 @@ tenant's rows, cross-tenant inserts are rejected, and a non-member gets 403.
 3. `npx drizzle-kit generate --custom --name <change>_rls` creates an empty migration. Add the three RLS statements (copy them from `0001_rls.sql`).
 4. Access the table only inside `database.withTenant(ctx.tenantId, …)`.
 
+## Deal stage history
+
+`deal_stage_history` has one row per stage or outcome change of a deal: the deal, `from_stage_id`
+(null on creation), `to_stage_id`, the deal's `outcome` after the change, `changed_at` and
+`changed_by_user_id`. `kind` says what happened: `created` (the first stage), `moved` (drag and
+drop, "Advance", including into the won stage), `funnel_changed` (restarts at the new funnel's first
+stage), `lost` and `reopened` (the stage stays the same). `DealsService` writes the row in the same
+transaction as the change, through `StageHistoryService.record`, so the history can't disagree with
+the deal. Moving a deal to the stage it is already in writes nothing.
+
+- Deals that existed before the table got one `created` row each (their current stage at their
+  creation time, no user) in `drizzle/0008_deal_stage_history_rls.sql`.
+- The stage references are composite FKs without cascade: a stage that has history can't be deleted
+  (the app can't delete stages yet). Deleting a deal deletes its history.
+- `GET /api/crm/deal-stage-history` lists the workspace's history oldest first, paged like the other
+  lists (`limit` ≤ 200, `offset`; `dealId` narrows it to one deal).
+
+### Conversion metrics (Overview)
+
+The **Stage conversion** card is computed in the browser (`store/metrics.ts`) from the stage history,
+which Overview loads each time it opens (`refreshHistory`). The frontend already has every deal
+and applies the Overview filters (audience/funnel, salesperson by user id, source, closing-date
+range) to them, so the card uses exactly the deals the other panels use. A backend aggregate would
+have to repeat those filters in SQL. Revisit this if the history outgrows a page load.
+
+- Only a deal's path through the funnel it's in counts: from its last `created` or
+  `funnel_changed` row.
+- **Stage-to-stage conversion** for stage N: of the deals that entered N, the share that later
+  entered any later stage. Skipping a stage counts as moving on from the stages before it, not as
+  having reached the skipped one. Lost deals and deals still sitting in N count as not moved on,
+  so this is conversion so far.
+- **Win rate** = won / (won + lost) among the deals in view, from their current outcome.
+- **Average time in stage**: per visit to the stage; a visit that is still going counts up to now,
+  and the clock stops while a deal is lost.
+- **Time to proposal**: from entering the funnel to first entering the proposal stage, averaged over
+  the deals that got there. The proposal stage is the first stage whose entry document is
+  "Proposal" (`documentOnEntry`, the same field that starts the proposal when a deal enters it),
+  and otherwise the stage with the template key `proposal`. Neither depends on the stage's name or
+  position, so renaming or reordering stages doesn't change it.
+- With fewer than 5 deals in view that moved between stages, the card says so instead of
+  showing rates.
+
+## Deal outcome: open, won, lost
+
+- **Won is the won stage.** A deal is won while it is in its funnel's won stage
+  (`funnel_stages.is_won`). This isn't stored a second time, so the board, the stage tracker and the
+  outcome can't disagree: moving a deal into the won stage wins it (and sends `crm.deal-won`), and
+  moving it back out makes it open again.
+- **Lost is stored** on the deal: `lost_at`, `lost_reason` (a fixed pick list: Price, Timing,
+  Chose a competitor, No budget, No decision, Other) and an optional `lost_note`; a check constraint
+  keeps them together. The deal keeps the stage it was lost in, so the history shows where deals
+  drop out.
+- `POST /api/crm/deals/:id/lost` `{ reason, note? }` marks an open deal lost (409 for a lost or won
+  deal, 400 for a reason outside the list). `POST /api/crm/deals/:id/reopen` makes a lost deal open
+  again in the same stage (409 if it isn't lost). A lost deal can't be moved or switched to another
+  funnel (409) until it is reopened; other fields can still be edited. Both write a timeline entry
+  ("Marked as lost: <reason>" with the note, "Reopened") and a stage history row.
+- Every deal response carries `outcome` (`open` / `won` / `lost`), and `GET /api/crm/deals` takes
+  `?outcome=`.
+- In the UI, the deal screen has **Mark as lost** (a dialog with the reason and a note) and shows
+  "Lost · <reason>" with **Reopen**. The Pipeline board hides lost deals unless its last filter chip
+  says "Include lost deals" or "Lost deals only". Overview leaves lost deals out of open and weighted
+  pipeline, stalled deals, the funnel, payments due and bonuses.
+
 ## Auth
 
 The app handles authorization, not authentication. `AUTH_MODE=oidc` verifies JWTs from any
@@ -117,8 +181,10 @@ the store is the one place that talks to the backend.
   add the HQ (or a number) to tell them apart. Deals without a company aren't listed as a company.
 - Deal owners: the deal Summary lists active members. Owners are matched by user id everywhere
   (Salesperson filters, bonus rows); labels come from the team list, with the email added when two
-  members share a name. The deal, company and task lists also return the owner's name, so a deal
-  whose owner left the workspace shows "<name> (former member)" and can still be filtered. The API accepts an `ownerUserId` (deals,
+  members share a name. The deal, company, contact and task lists also return the owner's name, so
+  a deal whose owner left the workspace shows "<name> (former member)" and can still be filtered.
+  The Contacts list and a contact's screen show the contact's own owner, not the owner of a deal
+  they are on. The API accepts an `ownerUserId` (deals,
   companies, contacts) only if that user is a member of the tenant, and returns 400 otherwise.
 - Updates: every PATCH body goes through `nonEmptyPatch` (`shared/validation/common.ts`), so an
   update with no fields gets 400 "Nothing to update" instead of reaching the database.
@@ -133,6 +199,9 @@ the store is the one place that talks to the backend.
 - Activity history is loaded per deal when a deal, company or contact screen opens (`ensureLog`).
 - Deal lines: the backend recalculates the deal amount on every line change. A product that is
   on a deal can't be deleted from the catalog.
+- No made-up dates: a deal without a closing date has none (it only matches "Any closing date" on
+  Overview), and a deal line without a start date is left out of "Funnel by payment due date"
+  (the card says how many lines were left out).
 - Stage to-dos: a playbook to-do gets a row on first touch, keyed by deal + stage + checklist label
   (renaming a checklist item in the funnel builder starts that to-do fresh). Off-playbook to-dos
   are rows of their own.
@@ -164,7 +233,8 @@ Still browser-only (seeded from `store/seed.ts`, lost on reload), because the ba
 them yet:
 - adding and removing funnel stages (blocked in the UI for now; editing existing stages is saved)
 - document templates and generation (worker + storage)
-- sales-bonus rules (including "Sales bonus earned" on the Workspace tab)
+- sales-bonus rules (including "Sales bonus earned" on the Workspace tab); they start empty
+  (no made-up rate, minimum or flat amount)
 - invitation emails (links are copied by hand for now)
 - custom fields
 - notification and integration settings

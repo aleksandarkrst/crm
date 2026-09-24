@@ -42,8 +42,8 @@ To try teamwork locally, invite a second email in **Settings → Team**, then op
 a private window and sign in as that email.
 
 > **Current state of the UI:** deals (with their product lines, payment schedules, stage to-dos,
-> fit scores, discovery notes and activity history), companies, contacts, products and funnel
-> stages are saved in the database, and so are the team, invitations, workspace settings and your
+> fit scores, discovery notes, activity and stage history, and whether they were won or lost),
+> companies, contacts, products and funnel stages are saved in the database, and so are the team, invitations, workspace settings and your
 > profile. Some design features have no backend yet and
 > only last until you reload the page: documents and the remaining settings tabs. See
 > [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#frontend-store--api).
@@ -79,11 +79,14 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   start `dist/main.js` on port 3101 (dev auth) and test it over HTTP against PostgreSQL:
   tenant isolation through RLS (API and raw SQL as the runtime role), composite-FK rejection of
   cross-tenant references, member/admin/owner rules and last-owner protection, invitations
-  (invited email only, single use, withdraw, replace) and deal-amount recalculation from lines.
+  (invited email only, single use, withdraw, replace), deal-amount recalculation from lines,
+  deal stage history (a row per creation, move, funnel change, loss and reopening, isolated per
+  tenant) and lost deals (reason pick list, reopen, no moves while lost).
 - **Browser tests** (`e2e/`, Puppeteer with its bundled Chrome, run by `node:test`): sign-in,
   workspace, products, new deal, closing date, notes, drag between stages, reload, every screen
   renders; deal lines and stage to-dos persist; CHAMP fit score; team invitations with two
-  browser contexts (invite, accept, roles, wrong account, withdraw, remove).
+  browser contexts (invite, accept, roles, wrong account, withdraw, remove); marking a deal lost,
+  the Pipeline's lost view and reopening; stage conversion on Overview.
 
 Both suites create their own users and workspaces with unique emails, so they can run against
 the dev database without resetting it. The database must be migrated first.

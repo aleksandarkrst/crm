@@ -1,10 +1,12 @@
-import type { ApiDateFormat, ApiLanguage, ApiStartPage } from '../lib/api';
+import type { ApiDateFormat, ApiLanguage, ApiStageChange, ApiStartPage, DealOutcome, LostReason } from '../lib/api';
 
 export type SegKey = 'smb' | 'ent';
 export type ChannelCode = 'RS' | 'EM' | 'LI' | 'WA' | 'MT' | 'PH' | 'NT';
 
 export interface Stage {
   id: string;
+  /** Stable slug from the funnel template ("proposal", "won", ...). */
+  key?: string;
   name: string;
   activity: string;
   channel: ChannelCode;
@@ -43,6 +45,9 @@ export interface Lead {
   email: string;
   phone: string;
   buyerRole?: string;
+  /** Owner of the primary contact (user id, and last known name from the API). */
+  contactOwnerId?: string | null;
+  contactOwner?: string;
   /** Last known name of the deal owner, from the API. Show it with ownerOf(), match by ownerId. */
   owner?: string;
   /** User id of the deal owner. */
@@ -65,6 +70,12 @@ export interface Lead {
   total: string;
   docs?: LeadDoc[];
   closeDate?: string;
+  /** Won while in the won stage; lost deals keep the stage they were lost in. */
+  outcome: DealOutcome;
+  lostReason?: LostReason;
+  lostNote?: string;
+  /** ISO date-time the deal was marked lost. */
+  lostAt?: string;
 }
 
 export interface Person {
@@ -83,6 +94,9 @@ export interface Person {
   linkedin?: string;
   buyerRole?: string;
   initials: string;
+  /** Owner of the contact (user id); ownerName is their last known name, from the API. */
+  ownerId?: string | null;
+  ownerName?: string;
 }
 
 export interface CompanyExtra {
@@ -155,6 +169,9 @@ export interface LeadTask {
   at?: string;
   by?: string;
 }
+
+/** A stage or outcome change from the stage history; `at` is epoch ms. */
+export type StageChange = Pick<ApiStageChange, 'dealId' | 'kind' | 'fromStageId' | 'toStageId' | 'outcome'> & { at: number };
 
 export interface LogEntry {
   date: string;
@@ -240,6 +257,8 @@ export interface Filters {
   industry: string;
   stalled: string;
   band: string;
+  /** Pipeline board: lost deals are hidden unless this says otherwise (see LOST_VIEWS). */
+  lost: string;
 }
 
 export interface Drill {
@@ -289,6 +308,8 @@ export interface State {
   /** Tasks from the "New task" dialog (see LeadTask). */
   leadTasks: LeadTask[];
   log: Record<string, LogEntry[]>;
+  /** Stage history of every deal, oldest first; null until Overview loads it (see refreshHistory). */
+  stageHistory: StageChange[] | null;
   roadmapItems: RoadmapItem[];
   team: TeamMember[];
   notifs: ToggleRow[];
@@ -326,4 +347,6 @@ export interface State {
   productOpen: boolean;
   newProduct: NewProductDraft;
   drill: Drill | null;
+  /** Deal the "Mark as lost" dialog is open for. */
+  lostLeadId: string | null;
 }

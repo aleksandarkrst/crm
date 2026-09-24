@@ -50,6 +50,27 @@
       "when": 1790203293544,
       "tag": "0006_workspace_profile_discovery",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790226383270,
+      "tag": "0007_deal_stage_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790226390494,
+      "tag": "0008_deal_stage_history_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790226629460,
+      "tag": "0009_deal_lost",
+      "breakpoints": true
     }
   ]
 }

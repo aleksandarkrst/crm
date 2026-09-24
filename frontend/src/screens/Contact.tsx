@@ -4,7 +4,7 @@ import { DangerButton, FieldRow, GhostInput, GhostSelect, Picker, PickerRow, use
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { BUYER_ROLES, CHANNEL_LABELS } from '../store/seed';
-import { allPeople, companyOfPerson, initialsOf, leadById, ownerOf, personById, timelineFor } from '../store/selectors';
+import { allPeople, companyOfPerson, initialsOf, leadById, memberName, personById, timelineFor } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Person } from '../store/types';
 import { docStateClass } from './lead/docs';
@@ -85,7 +85,7 @@ export function Contact() {
                 <GhostInput value={p.phone} onChange={setField('phone')} />
               </FieldRow>
               <FieldRow label="Owner">
-                <span className="field-value">{c ? ownerOf(s, c) : '—'}</span>
+                <span className="field-value">{memberName(s, p.ownerId, p.ownerName)}</span>
               </FieldRow>
               <FieldRow label="Last touch">
                 <span className="field-value">{!c ? '—' : c.stall === 0 ? 'today' : c.stall + ' days ago'}</span>

@@ -1,14 +1,15 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, desc, eq, ilike, inArray, or, type SQL } from 'drizzle-orm';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, not, or, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { activities, companies, contacts, dealContacts, deals, funnelStages } from '../../../shared/database/schema';
+import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, type DealOutcome, deals, funnelStages, LOST_REASONS } from '../../../shared/database/schema';
 import { JobsService } from '../../../shared/events/jobs.service';
 import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
 import { assertOwnerIsMember, userNameOf } from '../owner';
+import { StageHistoryService } from './stage-history.service';
 
 const money = z.union([z.number(), z.string()]).transform((v) => String(v)).pipe(z.string().regex(/^\d{1,12}(\.\d{1,2})?$/, 'Invalid amount'));
 const champLevel = z.union([z.literal(0), z.literal(8), z.literal(17), z.literal(25)]);
@@ -35,16 +36,26 @@ export const UpdateDeal = nonEmptyPatch(
   }),
 );
 export const MoveDeal = z.object({ stageId: z.uuid() });
+export const MarkLost = z.object({ reason: z.enum(LOST_REASONS), note: optionalText(1000) });
 export const DealsQuery = PaginationQuery.extend({
   funnelId: z.uuid().optional(),
   stageId: z.uuid().optional(),
   companyId: z.uuid().optional(),
   ownerUserId: z.uuid().optional(),
+  outcome: z.enum(DEAL_OUTCOMES).optional(),
 });
 export type CreateDeal = z.infer<typeof CreateDeal>;
 export type UpdateDeal = z.infer<typeof UpdateDeal>;
 export type DealsQuery = z.infer<typeof DealsQuery>;
 export type MoveDeal = z.infer<typeof MoveDeal>;
+export type MarkLost = z.infer<typeof MarkLost>;
+
+/**
+ * A deal's outcome. Lost is stored (lost_at, with the reason); won is not: a deal is won while it
+ * is in its funnel's won stage, so the stage and the outcome can never disagree. A lost deal keeps
+ * the stage it was lost in, and can't be moved until it is reopened.
+ */
+export const dealOutcome = (deal: { lostAt: Date | null }, stageIsWon: boolean): DealOutcome => (deal.lostAt ? 'lost' : stageIsWon ? 'won' : 'open');
 
 @Injectable()
 export class DealsService {
@@ -52,6 +63,7 @@ export class DealsService {
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
     private readonly jobs: JobsService,
+    private readonly history: StageHistoryService,
   ) {}
 
   /** Board/list view: deals with company, primary contact and stage names joined in. */
@@ -61,6 +73,8 @@ export class DealsService {
     if (query.stageId) filters.push(eq(deals.stageId, query.stageId));
     if (query.companyId) filters.push(eq(deals.companyId, query.companyId));
     if (query.ownerUserId) filters.push(eq(deals.ownerUserId, query.ownerUserId));
+    if (query.outcome === 'lost') filters.push(isNotNull(deals.lostAt));
+    else if (query.outcome) filters.push(isNull(deals.lostAt), query.outcome === 'won' ? eq(funnelStages.isWon, true) : not(funnelStages.isWon));
     if (query.q) {
       const like = `%${query.q}%`;
       filters.push(or(ilike(deals.title, like), ilike(companies.name, like), ilike(contacts.fullName, like)));
@@ -74,6 +88,7 @@ export class DealsService {
           contactJobTitle: contacts.jobTitle,
           stageName: funnelStages.name,
           stageActivity: funnelStages.activity,
+          stageIsWon: funnelStages.isWon,
           ownerName: userNameOf(deals.ownerUserId),
         })
         .from(deals)
@@ -90,14 +105,19 @@ export class DealsService {
         .select({ dealId: dealContacts.dealId, contactId: dealContacts.contactId })
         .from(dealContacts)
         .where(inArray(dealContacts.dealId, rows.map((r) => r.deal.id)));
-      return rows.map((r) => ({ ...r, contactIds: links.filter((l) => l.dealId === r.deal.id).map((l) => l.contactId) }));
+      return rows.map(({ stageIsWon, ...r }) => ({
+        ...r,
+        deal: { ...r.deal, outcome: dealOutcome(r.deal, stageIsWon) },
+        contactIds: links.filter((l) => l.dealId === r.deal.id).map((l) => l.contactId),
+      }));
     });
   }
 
   get(ctx: TenantContext, id: string) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
-      const [row] = await tx.select().from(deals).where(eq(deals.id, id));
-      if (!row) throw new NotFoundException('Deal not found');
+      const [found] = await tx.select().from(deals).where(eq(deals.id, id));
+      if (!found) throw new NotFoundException('Deal not found');
+      const row = await this.present(tx, found);
       const linked = await tx
         .select({ contact: contacts })
         .from(dealContacts)
@@ -111,21 +131,16 @@ export class DealsService {
   create(ctx: TenantContext, input: CreateDeal) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
-        const [first] = await tx
-          .select({ id: funnelStages.id })
-          .from(funnelStages)
-          .where(eq(funnelStages.funnelId, input.funnelId))
-          .orderBy(asc(funnelStages.position))
-          .limit(1);
-        if (!first) throw new BadRequestException('Funnel has no stages');
+        const first = await this.firstStage(tx, input.funnelId);
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const [row] = await tx
           .insert(deals)
-          .values({ ownerUserId: ctx.userId, ...input, tenantId: ctx.tenantId, stageId: first.id })
+          .values({ ownerUserId: ctx.userId, ...input, tenantId: ctx.tenantId, stageId: first.id, closedAt: first.isWon ? new Date() : null })
           .returning();
+        await this.history.record(tx, ctx, { dealId: row!.id, kind: 'created', fromStageId: null, toStageId: first.id, outcome: first.isWon ? 'won' : 'open' }, row!.createdAt);
         await this.log(tx, ctx, row!.id, 'RS', 'Deal created', input.source ? `Source: ${input.source}` : null);
         await this.audit.record(tx, ctx, { action: 'deal.created', entityType: 'deal', entityId: row!.id });
-        return row!;
+        return { ...row!, outcome: dealOutcome(row!, first.isWon) };
       })
       .catch(mapDbError);
   }
@@ -137,19 +152,17 @@ export class DealsService {
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const patch: Partial<typeof deals.$inferInsert> = { ...input };
         if (input.champ) patch.fitScore = input.champ.C + input.champ.H + input.champ.M + input.champ.P;
+        let funnelChange: { from: string; to: typeof funnelStages.$inferSelect; at: Date } | null = null;
         if (input.funnelId) {
-          const [current] = await tx.select({ funnelId: deals.funnelId }).from(deals).where(eq(deals.id, id));
+          const [current] = await tx.select({ funnelId: deals.funnelId, stageId: deals.stageId, lostAt: deals.lostAt }).from(deals).where(eq(deals.id, id));
           if (!current) throw new NotFoundException('Deal not found');
           if (current.funnelId === input.funnelId) delete patch.funnelId;
           else {
-            const [first] = await tx
-              .select({ id: funnelStages.id })
-              .from(funnelStages)
-              .where(eq(funnelStages.funnelId, input.funnelId))
-              .orderBy(asc(funnelStages.position))
-              .limit(1);
-            if (!first) throw new BadRequestException('Funnel has no stages');
-            Object.assign(patch, { stageId: first.id, stageEnteredAt: new Date(), closedAt: null });
+            if (current.lostAt) throw new ConflictException('This deal is lost. Reopen it before changing its funnel.');
+            const first = await this.firstStage(tx, input.funnelId);
+            const now = new Date();
+            Object.assign(patch, { stageId: first.id, stageEnteredAt: now, closedAt: first.isWon ? now : null });
+            funnelChange = { from: current.stageId, to: first, at: now };
           }
         }
         // Re-sending the current funnel leaves nothing to write (and Drizzle rejects an empty SET).
@@ -157,8 +170,12 @@ export class DealsService {
           ? await tx.update(deals).set(patch).where(eq(deals.id, id)).returning()
           : await tx.select().from(deals).where(eq(deals.id, id));
         if (!row) throw new NotFoundException('Deal not found');
+        if (funnelChange) {
+          const { from, to, at } = funnelChange;
+          await this.history.record(tx, ctx, { dealId: id, kind: 'funnel_changed', fromStageId: from, toStageId: to.id, outcome: to.isWon ? 'won' : 'open' }, at);
+        }
         await this.audit.record(tx, ctx, { action: 'deal.updated', entityType: 'deal', entityId: id, data: input });
-        return row;
+        return this.present(tx, row);
       })
       .catch(mapDbError);
   }
@@ -177,7 +194,8 @@ export class DealsService {
           .from(funnelStages)
           .where(and(eq(funnelStages.id, stageId), eq(funnelStages.funnelId, deal.funnelId)));
         if (!stage) throw new BadRequestException("Stage does not belong to this deal's funnel");
-        if (stage.id === deal.stageId) return deal;
+        if (deal.lostAt) throw new ConflictException('This deal is lost. Reopen it before moving it to another stage.');
+        if (stage.id === deal.stageId) return { ...deal, outcome: dealOutcome(deal, stage.isWon) };
 
         const now = new Date();
         const [row] = await tx
@@ -185,10 +203,66 @@ export class DealsService {
           .set({ stageId: stage.id, stageEnteredAt: now, closedAt: stage.isWon ? now : null })
           .where(eq(deals.id, id))
           .returning();
+        await this.history.record(tx, ctx, { dealId: id, kind: 'moved', fromStageId: deal.stageId, toStageId: stage.id, outcome: stage.isWon ? 'won' : 'open' }, now);
         await this.log(tx, ctx, id, stage.channel, `Moved to ${stage.name}`, `Next activity: ${stage.activity}`);
         await this.audit.record(tx, ctx, { action: 'deal.stage_changed', entityType: 'deal', entityId: id, data: { from: deal.stageId, to: stage.id } });
         if (stage.isWon) await this.jobs.send('crm.deal-won', { tenantId: ctx.tenantId, dealId: id, actorUserId: ctx.userId }, tx);
-        return row!;
+        return { ...row!, outcome: dealOutcome(row!, stage.isWon) };
+      })
+      .catch(mapDbError);
+  }
+
+  /**
+   * Marks an open deal as lost, with a reason from the pick list and an optional note. The deal
+   * keeps its stage (where it was lost). A won deal has to leave the won stage first.
+   */
+  markLost(ctx: TenantContext, id: string, input: MarkLost) {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        const [current] = await tx
+          .select({ deal: deals, stageIsWon: funnelStages.isWon })
+          .from(deals)
+          .innerJoin(funnelStages, eq(funnelStages.id, deals.stageId))
+          .where(eq(deals.id, id));
+        if (!current) throw new NotFoundException('Deal not found');
+        const { deal, stageIsWon } = current;
+        if (deal.lostAt) throw new ConflictException('This deal is already marked as lost.');
+        if (stageIsWon) throw new ConflictException("A won deal can't be marked as lost. Move it out of the won stage first.");
+
+        const now = new Date();
+        const [row] = await tx
+          .update(deals)
+          .set({ lostAt: now, lostReason: input.reason, lostNote: input.note ?? null })
+          .where(eq(deals.id, id))
+          .returning();
+        await this.history.record(tx, ctx, { dealId: id, kind: 'lost', fromStageId: deal.stageId, toStageId: deal.stageId, outcome: 'lost' }, now);
+        await this.log(tx, ctx, id, 'NT', `Marked as lost: ${input.reason}`, input.note ?? null);
+        await this.audit.record(tx, ctx, { action: 'deal.lost', entityType: 'deal', entityId: id, data: input });
+        return { ...row!, outcome: dealOutcome(row!, false) };
+      })
+      .catch(mapDbError);
+  }
+
+  /** Reopens a lost deal in the stage it was lost in; the reason and note are cleared. */
+  reopen(ctx: TenantContext, id: string) {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        const [current] = await tx
+          .select({ deal: deals, stage: funnelStages })
+          .from(deals)
+          .innerJoin(funnelStages, eq(funnelStages.id, deals.stageId))
+          .where(eq(deals.id, id));
+        if (!current) throw new NotFoundException('Deal not found');
+        const { deal, stage } = current;
+        if (!deal.lostAt) throw new ConflictException('Only lost deals can be reopened.');
+
+        const now = new Date();
+        const [row] = await tx.update(deals).set({ lostAt: null, lostReason: null, lostNote: null }).where(eq(deals.id, id)).returning();
+        const outcome = dealOutcome(row!, stage.isWon);
+        await this.history.record(tx, ctx, { dealId: id, kind: 'reopened', fromStageId: deal.stageId, toStageId: deal.stageId, outcome }, now);
+        await this.log(tx, ctx, id, 'NT', 'Reopened', `Back in ${stage.name} (was lost: ${deal.lostReason})`);
+        await this.audit.record(tx, ctx, { action: 'deal.reopened', entityType: 'deal', entityId: id });
+        return { ...row!, outcome };
       })
       .catch(mapDbError);
   }
@@ -219,6 +293,19 @@ export class DealsService {
         await this.audit.record(tx, ctx, { action: 'deal.deleted', entityType: 'deal', entityId: id });
       })
       .catch(mapDbError);
+  }
+
+  /** A deal row with its outcome (see dealOutcome). */
+  private async present(tx: Tx, deal: typeof deals.$inferSelect) {
+    const [stage] = await tx.select({ isWon: funnelStages.isWon }).from(funnelStages).where(eq(funnelStages.id, deal.stageId));
+    return { ...deal, outcome: dealOutcome(deal, !!stage?.isWon) };
+  }
+
+  /** The first stage of a funnel: where new deals start, and where a funnel change restarts one. */
+  private async firstStage(tx: Tx, funnelId: string) {
+    const [first] = await tx.select().from(funnelStages).where(eq(funnelStages.funnelId, funnelId)).orderBy(asc(funnelStages.position)).limit(1);
+    if (!first) throw new BadRequestException('Funnel has no stages');
+    return first;
   }
 
   private async log(tx: Tx, ctx: TenantContext, dealId: string, channel: (typeof activities.$inferInsert)['channel'], title: string, detail: string | null) {

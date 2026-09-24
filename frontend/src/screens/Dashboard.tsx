@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FilterBar, GhostInput } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { DATE_RANGES, DEFAULT_FILTERS, SOURCES } from '../store/seed';
 import { billedShare, bonusOf, bonusRule, closeIsoOf, closeRangeOf, grossOf, inCloseRange, linesOf, money, num, salesPeople, shiftIso, stageOf, valueNum } from '../store/selectors';
+import { conversionMetrics, daysLabel, MIN_MOVED_DEALS } from '../store/metrics';
 import { useStore } from '../store/store';
-import type { SegKey } from '../store/types';
+import type { Lead, SegKey } from '../store/types';
 
 const STAGE_SHADES = ['#E7F2EE', '#CBE3DA', '#A3CFC0', '#2F7A5E', '#1B6148', '#14503C', '#0C3226'];
 const TIME_SHADES = ['#F1F3F6', '#E0E3E9', '#C6CBD4', '#8A919F', '#5B6272', '#343B49'];
@@ -17,14 +18,20 @@ const TIME_BUCKETS = [
   { label: 'Now', range: [-999, 0.5] },
 ] as const;
 const BONUS_COLS = 'minmax(0,1.6fr) 90px 120px 120px 120px 120px';
+const CONV_COLS = 'minmax(0,1.3fr) minmax(0,1fr) 44px 64px 84px';
 const clip = 'polygon(0 0, 100% 0, calc(100% - 14px) 100%, 14px 100%)';
 /** "€184k" for the metric cards; exact below €1,000. */
 const compact = (n: number): string => (Math.abs(n) < 1000 ? money(n) : '€' + Math.round(n / 1000).toLocaleString('en-US') + 'k');
 const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`;
+const pct = (r: number | null) => (r === null ? '—' : Math.round(r * 100) + '%');
 
 export function Dashboard() {
-  const { s, set } = useStore();
+  const { s, set, refreshHistory } = useStore();
   const [dashSeg, setDashSeg] = useState<SegKey>(s.segment);
+  // The stage history is loaded each time Overview opens, so it includes the latest moves.
+  useEffect(() => {
+    void refreshHistory();
+  }, [refreshHistory]);
   const f = s.filters;
   const audLabel = (seg: SegKey) => s.funnels[seg].label;
   const range = closeRangeOf(f.dates);
@@ -39,8 +46,10 @@ export function Dashboard() {
   const dirty = (['audience', 'owner', 'dates', 'source'] as const).some((k) => f[k] !== DEFAULT_FILTERS[k]);
   const drill = (kicker: string, title: string, leadIds: string[]) => set({ drill: { kicker, title, leadIds } });
 
-  const openLeads = dashLeads.filter((l) => !stageOf(s, l).won);
-  const wonLeads = dashLeads.filter((l) => !!stageOf(s, l).won);
+  // Lost deals (CD-60) count nowhere in the pipeline: not open, not weighted, not stalled.
+  const liveLeads = dashLeads.filter((l) => l.outcome !== 'lost');
+  const openLeads = dashLeads.filter((l) => l.outcome === 'open');
+  const wonLeads = dashLeads.filter((l) => l.outcome === 'won');
   const openValue = openLeads.reduce((a, l) => a + valueNum(l.value), 0);
   const wonValue = wonLeads.reduce((a, l) => a + valueNum(l.value), 0);
   const weighted = openLeads.reduce((a, l) => a + (valueNum(l.value) * num(stageOf(s, l).prob)) / 100, 0);
@@ -54,7 +63,7 @@ export function Dashboard() {
 
   const stages = s.funnels[dashSeg].stages;
   const stageFunnel = stages.map((x, i) => {
-    const rows = dashLeads.filter((l) => l.segment === dashSeg && l.stage === x.id);
+    const rows = liveLeads.filter((l) => l.segment === dashSeg && l.stage === x.id);
     const val = rows.reduce((a, l) => a + valueNum(l.value), 0);
     return {
       name: x.name,
@@ -69,10 +78,16 @@ export function Dashboard() {
 
   const today = new Date();
   const payments: { leadId: string; when: Date; amount: number }[] = [];
-  for (const l of dashLeads)
+  // A line without a start date has no due dates to place, so it is left out (and counted below).
+  let undatedLines = 0;
+  for (const l of liveLeads)
     for (const ln of linesOf(s, l)) {
       const gross = grossOf(ln);
-      const start = ln.start || '2026-10-01';
+      const start = ln.start;
+      if (!start) {
+        undatedLines++;
+        continue;
+      }
       const push = (iso: string, amount: number) => {
         const d = new Date(iso);
         if (!isNaN(d.getTime())) payments.push({ leadId: l.id, when: d, amount });
@@ -107,14 +122,14 @@ export function Dashboard() {
     .filter(({ value: ownerId }) => f.owner === 'Salesperson' || ownerId === f.owner)
     .map(({ value: ownerId, label: owner }) => {
     const rule = bonusRule(s, ownerId);
-    const mine = dashLeads.filter((l) => l.ownerId === ownerId);
+    const mine = liveLeads.filter((l) => l.ownerId === ownerId);
     let earned = 0;
     let pending = 0;
     const earnedIds: string[] = [];
     const pendingIds: string[] = [];
     for (const l of mine) {
       const bonus = bonusOf(l, rule);
-      const won = !!stageOf(s, l).won;
+      const won = l.outcome === 'won';
       const full = rule.trigger === 'When fully billed' ? billedShare(s, l) >= 0.999 : true;
       if (won && full) {
         earned += bonus;
@@ -185,7 +200,10 @@ export function Dashboard() {
 
           <div className="card" style={{ padding: 18 }}>
             <div className="card-title" style={{ marginBottom: 4 }}>Funnel by payment due date</div>
-            <div className="card-sub" style={{ marginBottom: 16 }}>Product and service payments falling due inside each horizon, incl. VAT</div>
+            <div className="card-sub" style={{ marginBottom: 16 }}>
+              Product and service payments falling due inside each horizon, incl. VAT
+              {undatedLines ? ` · ${plural(undatedLines, 'line')} without a start date left out` : ''}
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
               {timeFunnel.map((b) => (
                 <div key={b.label} onClick={() => drill('Payments due', b.label, b.ids)} style={{ width: b.width, background: b.bg, clipPath: clip, padding: '11px 26px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
@@ -235,11 +253,7 @@ export function Dashboard() {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 14 }}>
-          <div className="card" style={{ padding: 18 }}>
-            <div className="card-title" style={{ marginBottom: 4 }}>Stage conversion</div>
-            <div className="card-sub" style={{ marginBottom: 16 }}>Share of deals that move on from each stage</div>
-            <div className="empty-dashed">Conversion rates appear once deals start moving through stages.</div>
-          </div>
+          <StageConversion leads={dashLeads} initialSeg={dashSeg} />
 
           <div className="card" style={{ padding: 18 }}>
             <div className="card-title" style={{ marginBottom: 4 }}>Documents generated</div>
@@ -251,6 +265,89 @@ export function Dashboard() {
         <StalledLeads rows={stalled.map((l) => ({ id: l.id, company: l.company, stageName: stageOf(s, l).name, next: stageOf(s, l).activity, stall: l.stall }))} />
       </div>
     </Screen>
+  );
+}
+
+/**
+ * Stage-to-stage conversion, win rate, time in stage and time to proposal (CD-62), computed in the
+ * browser from the stage history of the deals in view, so the Overview filters apply as elsewhere.
+ */
+function StageConversion({ leads, initialSeg }: { leads: Lead[]; initialSeg: SegKey }) {
+  const { s, set } = useStore();
+  const [seg, setSeg] = useState<SegKey>(initialSeg);
+  const stages = s.funnels[seg].stages;
+  const inFunnel = leads.filter((l) => l.segment === seg);
+  const m = s.stageHistory ? conversionMetrics(stages, inFunnel, s.stageHistory) : null;
+  const drill = (title: string, leadIds: string[]) => leadIds.length && set({ drill: { kicker: 'Stage conversion', title, leadIds } });
+  const stats = m && [
+    { label: 'Win rate', value: pct(m.winRate), note: m.won + m.lost ? `${m.won} won · ${m.lost} lost` : 'No won or lost deals yet' },
+    {
+      label: m.proposal ? `To ${m.proposal.name.toLowerCase()}` : 'To proposal',
+      value: daysLabel(m.toProposalDays),
+      note: !m.proposal ? 'This funnel has no proposal stage' : m.toProposalDeals ? `Average from ${stages[0]!.name.toLowerCase()}, ${plural(m.toProposalDeals, 'deal')}` : 'No deal has reached it yet',
+    },
+    { label: 'Deals that moved', value: String(m.moved), note: `of ${plural(inFunnel.length, 'deal')} in view` },
+  ];
+
+  return (
+    <div className="card" style={{ padding: 18 }} data-testid="stage-conversion">
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span className="card-title">Stage conversion</span>
+          <span className="card-sub">Share of deals that reached a stage and moved on to a later one</span>
+        </div>
+        <select value={seg} onChange={(e) => setSeg(e.target.value as SegKey)} style={{ border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '8px 11px', fontSize: 12.5, color: 'var(--ink)' }}>
+          <option value="smb">{s.funnels.smb.label}</option>
+          <option value="ent">{s.funnels.ent.label}</option>
+        </select>
+      </div>
+      {!m ? (
+        <div className="empty-dashed">Loading the stage history…</div>
+      ) : m.moved < MIN_MOVED_DEALS ? (
+        <div className="empty-dashed">
+          Conversion rates appear once at least {MIN_MOVED_DEALS} deals in view have moved between stages ({m.moved} so far).
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10 }}>
+            {stats!.map((x) => (
+              <div key={x.label} style={{ border: '1px solid var(--divider)', borderRadius: 8, padding: '11px 12px', display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
+                <span className="caps">{x.label}</span>
+                <span style={{ fontWeight: 600, letterSpacing: '-0.02em', fontSize: 22, lineHeight: 1 }}>{x.value}</span>
+                <span style={{ fontSize: 11.5, color: 'var(--text-2)', lineHeight: 1.35 }}>{x.note}</span>
+              </div>
+            ))}
+          </div>
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: CONV_COLS, gap: 10, padding: '0 0 8px', borderBottom: '1px solid var(--border)' }}>
+              {['Stage', 'Moved on', '', 'Deals', 'Avg in stage'].map((h, i) => (
+                <span key={i} className="th" style={{ textAlign: i >= 2 ? 'right' : undefined }}>
+                  {h}
+                </span>
+              ))}
+            </div>
+            {m.stages.map((r) => (
+              <div
+                key={r.stage.id}
+                data-stage={r.stage.name}
+                onClick={() => drill(`Reached ${r.stage.name}`, r.reached)}
+                style={{ display: 'grid', gridTemplateColumns: CONV_COLS, gap: 10, padding: '8px 0', borderBottom: '1px solid var(--divider)', alignItems: 'center', cursor: r.reached.length ? 'pointer' : 'default' }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.stage.name}</span>
+                <span style={{ height: 6, borderRadius: 3, background: 'var(--chip)', overflow: 'hidden' }}>
+                  <span style={{ display: 'block', height: '100%', width: (r.rate ?? 0) * 100 + '%', background: 'var(--brand)' }} />
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 600, textAlign: 'right' }}>{pct(r.rate)}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-2)', textAlign: 'right' }}>
+                  {r.advanced.length}/{r.reached.length}
+                </span>
+                <span style={{ fontSize: 12, color: 'var(--text-2)', textAlign: 'right' }}>{daysLabel(r.avgDays)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

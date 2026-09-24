@@ -3,9 +3,9 @@
  * a lead (deal) shows its company and primary contact inline, companies are derived from leads
  * plus companies without a deal, and people are primary contacts plus everyone else.
  */
-import { type ApiActivity, type ApiCompany, type ApiDealLine, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiProfile, type ApiWorkspace, crmApi } from '../lib/api';
+import { type ApiActivity, type ApiCompany, type ApiDealLine, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiProfile, type ApiStageChange, type ApiWorkspace, crmApi } from '../lib/api';
 import { initialsOf, money, taskKey } from './selectors';
-import type { CatalogItem, CompanyExtra, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, Profile, SegKey, State, TeamMember, Workspace } from './types';
+import type { CatalogItem, CompanyExtra, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, Profile, SegKey, StageChange, State, TeamMember, Workspace } from './types';
 
 export type WorkspaceData = Pick<
   State,
@@ -37,6 +37,7 @@ function mapFunnel(f: ApiFunnel): Funnel {
     note: f.note ?? '',
     stages: f.stages.map((st) => ({
       id: st.id,
+      key: st.key,
       name: st.name,
       activity: st.activity,
       channel: st.channel,
@@ -78,6 +79,15 @@ export const mapProfile = (p: ApiProfile): Profile => ({
 });
 
 export const mapActivity = (a: ApiActivity): LogEntry => ({ date: dateLabel(a.occurredAt), channel: a.channel, title: a.title, detail: a.detail ?? '' });
+
+export const mapStageChange = (c: ApiStageChange): StageChange => ({
+  dealId: c.dealId,
+  kind: c.kind,
+  fromStageId: c.fromStageId,
+  toStageId: c.toStageId,
+  outcome: c.outcome,
+  at: Date.parse(c.changedAt),
+});
 
 export const mapLeadTask = (t: ApiDealTask): LeadTask => ({
   id: t.id,
@@ -146,6 +156,8 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
       email: ct?.email ?? '—',
       phone: ct?.phone ?? '—',
       buyerRole: ct?.buyerRole,
+      contactOwnerId: ct?.ownerUserId,
+      contactOwner: ct?.ownerName ?? undefined,
       owner: ownerName ?? undefined,
       ownerId: deal.ownerUserId,
       segment,
@@ -165,6 +177,10 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
       lines: [],
       total: money(Number(deal.amount)),
       closeDate: deal.closeDate ?? '',
+      outcome: deal.outcome,
+      lostReason: deal.lostReason ?? undefined,
+      lostNote: deal.lostNote ?? undefined,
+      lostAt: deal.lostAt ?? undefined,
     });
     if (deal.champ) champ[deal.id] = deal.champ as State['champ'][string];
   }
@@ -202,6 +218,8 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
       linkedin: c.linkedin ?? undefined,
       buyerRole: c.buyerRole,
       initials: initialsOf(c.fullName),
+      ownerId: c.ownerUserId,
+      ownerName: c.ownerName ?? undefined,
     }));
 
   const personIdOf = (contactId: string) => (primaryOf.has(contactId) ? primaryOf.get(contactId)! + ':p' : contactId);

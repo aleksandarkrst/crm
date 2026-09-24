@@ -40,16 +40,8 @@ export const bandOf = (v: string): string => {
   return n < 25000 ? 'Under €25k' : n <= 100000 ? '€25k–€100k' : 'Over €100k';
 };
 
-export function defaultCloseDate(lead: Lead): string {
-  const seed = String(lead.id)
-    .split('')
-    .reduce((a, c) => a + c.charCodeAt(0), 0);
-  const d = new Date();
-  d.setDate(d.getDate() + 5 + (seed % 330));
-  return d.toISOString().slice(0, 10);
-}
-/** "" means the user cleared it on purpose. */
-export const closeIsoOf = (lead: Lead): string => (lead.closeDate === '' ? '' : lead.closeDate || defaultCloseDate(lead));
+/** The deal's closing date (ISO), or '' when it has none: no date is never made up. */
+export const closeIsoOf = (lead: Lead): string => lead.closeDate || '';
 
 /**
  * The closing-date window for an Overview date filter (see DATE_RANGES), as inclusive ISO dates.
@@ -85,8 +77,10 @@ export function inCloseRange(lead: Lead, range: { from: string; to: string } | n
   return !!close && close >= range.from && close <= range.to;
 }
 
+/** First payment date for a new line: the day after the closing date ('' without one). */
 export function defaultStart(lead: Lead | undefined): string {
-  const base = lead && lead.closeDate ? lead.closeDate : lead ? defaultCloseDate(lead) : '2026-10-01';
+  const base = lead?.closeDate;
+  if (!base) return '';
   const d = new Date(base);
   if (isNaN(d.getTime())) return base;
   d.setDate(d.getDate() + 1);
@@ -94,15 +88,18 @@ export function defaultStart(lead: Lead | undefined): string {
 }
 
 export function monthLabel(start: string | undefined, add: number): string {
-  const d = new Date(start || '2026-10-01');
+  if (!start) return 'No start date';
+  const d = new Date(start);
   if (isNaN(d.getTime())) return '—';
   d.setMonth(d.getMonth() + add);
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+/** `start` moved by `add` months; '' without a start date. */
 export function shiftIso(start: string | undefined, add: number): string {
-  const d = new Date(start || '2026-10-01');
-  if (isNaN(d.getTime())) return start || '';
+  if (!start) return '';
+  const d = new Date(start);
+  if (isNaN(d.getTime())) return start;
   d.setMonth(d.getMonth() + add);
   return d.toISOString().slice(0, 10);
 }
@@ -135,7 +132,10 @@ export const companyOfPerson = (s: State, p: Person): string => p.company ?? lea
 /** Company id of a person, resolved the same way as companyOfPerson. */
 export const companyIdOfPerson = (s: State, p: Person): string | null => (p.company !== undefined ? p.companyId : leadById(s, p.leadId)?.companyId) ?? null;
 
-/** Every dated payment a lead's lines produce (subscriptions: next 12 months). */
+/**
+ * Every dated payment a lead's lines produce (subscriptions: next 12 months). Lines without a start
+ * date are left out, as on Overview.
+ */
 export function paymentsFor(s: State, lead: Lead): { when: Date; amount: number }[] {
   const out: { when: Date; amount: number }[] = [];
   const push = (iso: string, amount: number) => {
@@ -144,7 +144,8 @@ export function paymentsFor(s: State, lead: Lead): { when: Date; amount: number 
   };
   for (const ln of linesOf(s, lead)) {
     const gross = grossOf(ln);
-    const startIso = ln.start || '2026-10-01';
+    const startIso = ln.start;
+    if (!startIso) continue;
     if (ln.schedule === 'Custom milestones') (ln.milestones || []).forEach((m, i) => push(m.date || shiftIso(startIso, i), (gross * num(m.pct)) / 100));
     else if (ln.schedule === 'Equal monthly instalments') {
       const n = Math.max(1, Math.round(num(ln.months)) || 1);
@@ -202,6 +203,8 @@ export function allPeople(s: State): Person[] {
       phone: l.phone,
       initials: l.initials,
       buyerRole: l.buyerRole || (/founder|ceo|owner|managing/i.test(l.role) ? 'Decision maker' : 'Influencer'),
+      ownerId: l.contactOwnerId,
+      ownerName: l.contactOwner,
     }))
     .concat(s.extraPeople);
 }
@@ -302,11 +305,11 @@ export const stageDone = (s: State, lead: Lead, stageId: string): boolean =>
 
 // ---------------------------------------------------------------- sales bonuses
 
-/** Bonus rule of a salesperson; rules are kept per user id (browser-only for now). */
+/** Bonus rule of a salesperson; rules are kept per user id (browser-only for now) and start empty. */
 export function bonusRule(s: State, ownerId: string) {
   const trigger = s.workspace.bonusTrigger || 'On contract signed';
   const saved = s.bonusRules[ownerId];
-  return { rate: saved?.rate ?? 3, floor: saved?.floor ?? 10000, fixed: saved?.fixed ?? 250, trigger };
+  return { rate: saved?.rate ?? '', floor: saved?.floor ?? '', fixed: saved?.fixed ?? '', trigger };
 }
 export const bonusOf = (lead: Lead, rule: { rate: number | string; floor: number | string; fixed: number | string }): number => {
   const net = num(lead.value);
@@ -349,6 +352,8 @@ export function salesPeople(s: State): { value: string; label: string }[] {
     if (id && !labels.has(id) && !former.has(id)) former.set(id, memberName(s, id, lastKnown));
   };
   s.leads.forEach((l) => addFormer(l.ownerId, l.owner));
+  s.leads.forEach((l) => addFormer(l.contactOwnerId, l.contactOwner));
+  s.extraPeople.forEach((p) => addFormer(p.ownerId, p.ownerName));
   s.leadTasks.forEach((t) => addFormer(t.ownerId, t.ownerName));
   return [...labels, ...former].map(([value, label]) => ({ value, label }));
 }

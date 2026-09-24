@@ -132,6 +132,9 @@ export interface ApiContact {
   phone: string | null;
   linkedin: string | null;
   buyerRole: string;
+  ownerUserId: string | null;
+  /** Current name of the owner, also after they left the workspace (lists only). */
+  ownerName?: string | null;
 }
 export interface ApiChamp {
   C: number;
@@ -139,6 +142,11 @@ export interface ApiChamp {
   M: number;
   P: number;
 }
+/** Why a deal was lost (the backend's fixed pick list). */
+export const LOST_REASONS = ['Price', 'Timing', 'Chose a competitor', 'No budget', 'No decision', 'Other'] as const;
+export type LostReason = (typeof LOST_REASONS)[number];
+/** Lost is stored on the deal; won means the deal is in its funnel's won stage. */
+export type DealOutcome = 'open' | 'won' | 'lost';
 export interface ApiDeal {
   id: string;
   companyId: string | null;
@@ -161,8 +169,25 @@ export interface ApiDeal {
   discoveryDate: string | null;
   lastContactAt: string | null;
   stageEnteredAt: string;
+  outcome: DealOutcome;
+  lostAt: string | null;
+  lostReason: LostReason | null;
+  lostNote: string | null;
   createdAt: string;
   updatedAt: string;
+}
+/** One stage or outcome change of a deal (GET /crm/deal-stage-history, oldest first). */
+export interface ApiStageChange {
+  id: string;
+  dealId: string;
+  kind: 'created' | 'moved' | 'funnel_changed' | 'lost' | 'reopened';
+  /** null when the deal was created. */
+  fromStageId: string | null;
+  toStageId: string;
+  /** The deal's outcome after the change. */
+  outcome: DealOutcome;
+  changedAt: string;
+  changedByUserId: string | null;
 }
 export interface ApiDealRow {
   deal: ApiDeal;
@@ -249,7 +274,7 @@ export interface ApiInvitePreview {
 }
 
 export type CompanyInput = Partial<Omit<ApiCompany, 'id'>> & { name?: string };
-export type ContactInput = Partial<Omit<ApiContact, 'id'>>;
+export type ContactInput = Partial<Omit<ApiContact, 'id' | 'ownerName'>>;
 export type DealInput = Partial<
   Pick<ApiDeal, 'title' | 'companyId' | 'primaryContactId' | 'funnelId' | 'ownerUserId' | 'source' | 'closeDate' | 'amount' | 'headline' | 'need' | 'constraint' | 'decisionMaker' | 'discoveryDate'>
 > & { champ?: ApiChamp };
@@ -311,6 +336,9 @@ export const crmApi = {
   updateDeal: (id: string, input: DealInput) => api<ApiDeal>(`/crm/deals/${id}`, { method: 'PATCH', json: input }),
   deleteDeal: (id: string) => api(`/crm/deals/${id}`, { method: 'DELETE' }),
   moveDeal: (id: string, stageId: string) => api<ApiDeal>(`/crm/deals/${id}/move`, { method: 'POST', json: { stageId } }),
+  markLost: (id: string, reason: LostReason, note: string | null) => api<ApiDeal>(`/crm/deals/${id}/lost`, { method: 'POST', json: { reason, note } }),
+  reopenDeal: (id: string) => api<ApiDeal>(`/crm/deals/${id}/reopen`, { method: 'POST' }),
+  stageHistory: () => all<ApiStageChange>('/crm/deal-stage-history'),
   linkContact: (dealId: string, contactId: string) => api(`/crm/deals/${dealId}/contacts/${contactId}`, { method: 'PUT' }),
   unlinkContact: (dealId: string, contactId: string) => api(`/crm/deals/${dealId}/contacts/${contactId}`, { method: 'DELETE' }),
   activities: (dealId: string) => api<ApiActivity[]>(`/crm/deals/${dealId}/activities`),
