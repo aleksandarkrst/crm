@@ -72,6 +72,10 @@ because the frontend image bakes them in at build time.
 ## 5. Backups
 
 - The `backup` container runs `pg_dump` every `BACKUP_INTERVAL_HOURS` into the `backups` volume and keeps `BACKUP_RETENTION_DAYS` days.
+- Each run also archives the file storage (the `app_storage` volume, mounted at `/storage`: uploaded
+  document templates and generated documents) as `<db>-files-<timestamp>.tar.gz` next to the dump,
+  right after it, and copies it off-server the same way. The database rows point at these files, so
+  keep and restore the two together.
 - Off-server copies:
   1. Create a Hetzner Object Storage bucket (or a Storage Box).
   2. Fill in `infra/backup/rclone.conf`. The `offsite-crypt` remote encrypts every file before upload.
@@ -87,6 +91,8 @@ docker compose stop api worker
 docker compose run --rm --entrypoint ls backup -lh /backups        # pick a file
 # or fetch an off-site copy:  docker compose run --rm --entrypoint rclone backup copy offsite-crypt:crm/<file> /backups/
 docker compose run --rm --entrypoint restore.sh backup /backups/app-<timestamp>.dump
+# the files from the same run (replaces everything in the app_storage volume):
+docker compose run --rm --entrypoint restore.sh backup /backups/app-files-<timestamp>.tar.gz
 docker compose start api worker
 ```
 
