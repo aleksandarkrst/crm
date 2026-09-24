@@ -16,11 +16,15 @@ export const SOURCES = ['Inbound web form', 'Referral', 'Outbound LinkedIn', 'Co
 export const INDUSTRIES = ['Architecture', 'Banking', 'Food & beverage', 'Freight & logistics', 'Furniture retail', 'Hospitality', 'Pharmaceuticals', 'Renewable energy', 'Wine', 'Other'];
 export const TEAM_SIZES = ['1–10 staff', '11–50 staff', '51–200 staff', '201–1,000 staff', '1,000+ staff'];
 /**
- * Overview date filter: ranges over each deal's closing date (calendar months, quarters and
- * years). The first entry means "no date filter" and is the only one that includes deals without
- * a closing date.
+ * Overview date filter: ranges over each deal's closing date (calendar months; quarters and years
+ * of the workspace's fiscal year, see closeRangeOf). The first entry means "no date filter" and is
+ * the only one that includes deals without a closing date. These are the filter values; see
+ * dateRangeLabel for how they read.
  */
 export const DATE_RANGES = ['Any closing date', 'Closing in 30 days', 'Closing this month', 'Closing this quarter', 'Closing next quarter', 'Closing this year', 'Closing date passed'];
+/** How a date filter reads: "Closing this fiscal quarter" when the fiscal year doesn't start in January. */
+export const dateRangeLabel = (value: string, fiscalMonth: number): string =>
+  fiscalMonth === 1 ? value : value.replace(/ (quarter|year)$/, ' fiscal $1');
 export const VALUE_BANDS = ['Value', 'Under €25k', '€25k–€100k', 'Over €100k'];
 export const PARAM_SOURCES: Record<string, string> = { '{{company}}': 'Lead · company', '{{contact_name}}': 'Lead · primary contact', '{{price}}': 'Lead · deal value' };
 export const PRODUCT_TYPES = ['Service', 'Product'];
@@ -199,6 +203,7 @@ export function initialState(): State {
     newLeadType: 'smb',
     taskOpen: false,
     taskLeadId: '',
+    taskEditId: null,
     contactOpen: false,
     contactCompany: 'Bellhaus Interiors',
     newContact: { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer' },

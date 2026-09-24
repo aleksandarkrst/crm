@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CHANNEL_LABELS, OBJECTIONS } from '../../store/seed';
-import { initialsOf, script, stageOf, todayLabel } from '../../store/selectors';
+import { initialsOf, script, stageOf, todayIso, todayLabel } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
 import { DealProducts } from './DealProducts';
@@ -41,11 +41,10 @@ export function Composer({ lead }: { lead: Lead }) {
   const isMessage = tab === 'email' || tab === 'whatsapp' || tab === 'linkedin';
   const playbookScript = tdef.ch === stage.channel ? script(stage.activity, lead) : '';
   const body = get('body', playbookScript || (isMessage ? `Hi ${first},\n\n` : ''));
-  const now = new Date();
-  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const today = todayIso(s.workspace.timezone);
   const subject = get('subject', `${stage.activity} · ${lead.company}`);
   const mTitle = get('title', (stage.channel === 'MT' ? stage.activity : 'Meeting') + ' · ' + lead.company);
-  const mDate = get('date', todayIso);
+  const mDate = get('date', today);
   const mTime = get('time', '10:00');
   const mDur = get('dur', '30 min');
   const mWhere = get('where', 'Google Meet');
@@ -61,7 +60,7 @@ export function Composer({ lead }: { lead: Lead }) {
     }[tab as 'email' | 'whatsapp' | 'linkedin' | 'meeting' | 'note'];
     if (!entry) return;
     if ((tab === 'note' || isMessage) && !short) return store.flash('Write something first.');
-    store.pushLog(lead.id, { date: todayLabel(), ...entry });
+    store.pushLog(lead.id, { date: todayLabel(s.workspace.timezone), ...entry });
     setDrafts((d) => Object.fromEntries(Object.entries(d).filter(([k]) => !k.startsWith(tab + '.'))));
     store.flash(entry.title + ' · added to history');
   };

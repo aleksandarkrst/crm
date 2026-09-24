@@ -1,7 +1,7 @@
 import { RemoveButton } from '../../components/ui';
 import { Chevron } from '../../components/ui';
 import { SCHEDULE_TYPES } from '../../store/seed';
-import { closeIsoOf, grossOf, itemById, linesOf, money, monthLabel, netOf, num, shiftIso, vatOf } from '../../store/selectors';
+import { closeIsoOf, curOf, grossOf, itemById, linesOf, money, monthLabel, netOf, num, shiftIso, vatOf } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { DealLine, Lead } from '../../store/types';
 
@@ -16,6 +16,7 @@ export function DealProducts({ lead }: { lead: Lead }) {
   const net = netOf(lines);
   const vat = vatOf(lines);
   const closeIso = closeIsoOf(lead);
+  const c = curOf(s, lead);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', overflowX: 'auto' }}>
@@ -23,7 +24,7 @@ export function DealProducts({ lead }: { lead: Lead }) {
         <div>
           <div className="card-title">Products &amp; services</div>
           <div className="card-sub" style={{ marginTop: 3 }}>
-            {lines.length === 0 ? 'Nothing priced yet' : `${lines.length}${lines.length === 1 ? ' line · ' : ' lines · '}${money(net)} net`}
+            {lines.length === 0 ? 'Nothing priced yet' : `${lines.length}${lines.length === 1 ? ' line · ' : ' lines · '}${money(net, c)} net`}
           </div>
         </div>
         {!!closeIso && (
@@ -49,9 +50,9 @@ export function DealProducts({ lead }: { lead: Lead }) {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 26, marginTop: 16, flexWrap: 'wrap' }}>
-        <Total label="Deal amount, net" value={money(net)} />
-        <Total label="VAT" value={money(vat)} color="var(--text-2)" />
-        <Total label="Total incl. VAT" value={money(net + vat)} color="var(--brand)" />
+        <Total label="Deal amount, net" value={money(net, c)} />
+        <Total label="VAT" value={money(vat, c)} color="var(--text-2)" />
+        <Total label="Total incl. VAT" value={money(net + vat, c)} color="var(--brand)" />
       </div>
     </div>
   );
@@ -76,6 +77,7 @@ function Line({ lead, line: ln, minDate }: { lead: Lead; line: DealLine; minDate
   const priceLabel = it.kind === 'Hourly' ? 'Rate / h' : it.kind === 'Monthly' ? 'Per month' : it.kind === 'Yearly' ? 'Per year' : 'Unit price';
   const set = (key: keyof DealLine) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => store.patchLine(lead.id, ln.id, key, e.target.value);
   const gross = grossOf(ln);
+  const c = curOf(s, lead);
 
   return (
     <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
@@ -97,7 +99,7 @@ function Line({ lead, line: ln, minDate }: { lead: Lead; line: DealLine; minDate
         <LineInput label="VAT %" value={ln.vat} onChange={set('vat')} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end', minWidth: 0 }}>
           <span className="mini-caps">Line total</span>
-          <span style={{ fontSize: 13, fontWeight: 600, padding: '6px 0' }}>{money(gross)}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, padding: '6px 0' }}>{money(gross, c)}</span>
         </div>
         <RemoveButton title="Remove line" box={28} size={14} stroke={1.9} style={{ justifySelf: 'end', borderRadius: 7 }} onClick={() => store.removeDealLine(lead.id, ln.id)} />
       </div>
@@ -148,6 +150,7 @@ function LineInput({ label, value, onChange }: { label: string; value: string | 
 
 function Payments({ lead, line: ln, gross, minDate }: { lead: Lead; line: DealLine; gross: number; minDate: string }) {
   const store = useStore();
+  const c = curOf(store.s, lead);
   const row = (key: string | number, cells: React.ReactNode) => (
     <div key={key} style={{ display: 'grid', gridTemplateColumns: PAY_COLS, gap: 10, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--divider)' }}>
       {cells}
@@ -174,7 +177,7 @@ function Payments({ lead, line: ln, gross, minDate }: { lead: Lead; line: DealLi
               <input className="ghost ghost-sm" value={m.label} onChange={(e) => store.patchMilestone(lead.id, ln.id, i, 'label', e.target.value)} />
               <input className="ghost ghost-sm" value={m.pct} onChange={(e) => store.patchMilestone(lead.id, ln.id, i, 'pct', e.target.value)} />
               <input type="date" className="ghost" min={minDate} value={m.date || shiftIso(ln.start, i)} onChange={(e) => store.patchMilestone(lead.id, ln.id, i, 'date', e.target.value)} style={{ padding: '5px 7px', fontSize: 12.5, color: 'var(--text-2)' }} />
-              <span style={{ fontSize: 12.5, fontWeight: 600, textAlign: 'right' }}>{money((gross * num(m.pct)) / 100)}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 600, textAlign: 'right' }}>{money((gross * num(m.pct)) / 100, c)}</span>
             </>,
           ),
         )}
@@ -183,8 +186,8 @@ function Payments({ lead, line: ln, gross, minDate }: { lead: Lead; line: DealLi
   }
   if (ln.schedule === 'Equal monthly instalments') {
     const n = Math.max(1, Math.round(num(ln.months)) || 1);
-    return <>{Array.from({ length: n }, (_, i) => readonly(`Instalment ${i + 1} of ${n}`, Math.round(100 / n) + '%', monthLabel(ln.start, i), money(gross / n)))}</>;
+    return <>{Array.from({ length: n }, (_, i) => readonly(`Instalment ${i + 1} of ${n}`, Math.round(100 / n) + '%', monthLabel(ln.start, i), money(gross / n, c)))}</>;
   }
-  if (ln.schedule === 'Recurring subscription') return readonly('Every month, no end date', '—', 'from ' + monthLabel(ln.start, 0), money(gross) + ' / mo');
-  return readonly('Full amount', '100%', monthLabel(ln.start, 0), money(gross));
+  if (ln.schedule === 'Recurring subscription') return readonly('Every month, no end date', '—', 'from ' + monthLabel(ln.start, 0), money(gross, c) + ' / mo');
+  return readonly('Full amount', '100%', monthLabel(ln.start, 0), money(gross, c));
 }

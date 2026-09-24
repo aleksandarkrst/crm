@@ -8,6 +8,7 @@ import {
   champFor,
   closeIsoOf,
   companyRecords,
+  curOf,
   defaultStart,
   initialsOf,
   itemById,
@@ -24,7 +25,7 @@ import {
   todayLabel,
   todoItemsFor,
 } from './selectors';
-import type { Champ, ChannelCode, DealLine, Lead, LogEntry, NewContactDraft, NewProductDraft, Person, Profile, SegKey, Stage, State, TaskState, Workspace } from './types';
+import type { Champ, ChannelCode, DealLine, Lead, LeadTask, LogEntry, NewContactDraft, NewProductDraft, Person, Profile, SegKey, Stage, State, TaskState, Workspace } from './types';
 
 type Updater = Partial<State> | ((s: State) => Partial<State>);
 
@@ -225,7 +226,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     };
     const refreshLog = async (leadId: string) => {
       const rows = await crmApi.activities(leadId);
-      set((x) => ({ log: { ...x.log, [leadId]: rows.map(mapActivity) } }));
+      set((x) => ({ log: { ...x.log, [leadId]: rows.map((a) => mapActivity(a, x.workspace.timezone)) } }));
     };
     /** Loads the activity history of these leads once (screens call it when they open). */
     const ensureLog = (leadIds: string[]) => {
@@ -305,7 +306,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const next = fn(prev.map((l) => ({ ...l })));
       set((y) => ({
         dealLines: { ...y.dealLines, [leadId]: next },
-        leads: y.leads.map((l) => (l.id === leadId ? { ...l, value: money(netOf(next)) } : l)),
+        leads: y.leads.map((l) => (l.id === leadId ? { ...l, value: money(netOf(next), curOf(y, l)) } : l)),
       }));
       const before = new Map(prev.map((l) => [l.id, JSON.stringify(l)]));
       for (const l of next)
@@ -364,7 +365,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         });
         set((y) => {
           const next = [...(y.dealLines[lead.id] || []), mapLine(row)];
-          return { dealLines: { ...y.dealLines, [lead.id]: next }, leads: y.leads.map((l) => (l.id === lead.id ? { ...l, value: money(netOf(next)) } : l)) };
+          return { dealLines: { ...y.dealLines, [lead.id]: next }, leads: y.leads.map((l) => (l.id === lead.id ? { ...l, value: money(netOf(next), curOf(y, l)) } : l)) };
         });
       });
     };
@@ -478,7 +479,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     };
 
     const patchTask = (leadId: string, stageId: string, idx: number, patch: TaskState) => {
-      const full = patch.done && !patch.by ? { at: todayLabel(), by: session.userName.split(' ')[0], ...patch } : patch;
+      const full = patch.done && !patch.by ? { at: todayLabel(cur().workspace.timezone), by: session.userName.split(' ')[0], ...patch } : patch;
       set((x) => {
         const key = taskKey(leadId, stageId, idx);
         return { tasks: { ...x.tasks, [key]: { ...x.tasks[key], ...full } } };
@@ -496,7 +497,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         patchTask(lead.id, stageId, idx, { done: false });
         return;
       }
-      const date = todayLabel();
+      const date = todayLabel(cur().workspace.timezone);
       patchTask(lead.id, stageId, idx, { done: true, at: date, by: session.userName.split(' ')[0] });
       const stage = stagesFor(cur(), lead.segment).find((x) => x.id === stageId);
       pushLog(lead.id, {
@@ -567,7 +568,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           assigneeUserId: draft.ownerId || null,
           note: draft.note.trim() || null,
         });
-        set((x) => ({ leadTasks: [...x.leadTasks, mapLeadTask(row)] }));
+        set((x) => ({ leadTasks: [...x.leadTasks, mapLeadTask(row, x.workspace.timezone)] }));
         // The backend logged "Task added" on the timeline; refresh it if it is loaded.
         if (logRequested.current.has(draft.leadId)) void refreshLog(draft.leadId).catch(() => undefined);
         return true;
@@ -576,12 +577,33 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         return false;
       }
     };
+    /**
+     * Changes a task's title, owner, due date, channel or note (CD-27). The screen updates at once;
+     * a failed save says why and puts the saved values back (see save).
+     */
+    const updateLeadTask = (id: string, patch: Partial<Pick<LeadTask, 'title' | 'ownerId' | 'due' | 'channel' | 'note'>>) => {
+      const t = cur().leadTasks.find((x) => x.id === id);
+      if (!t) return;
+      const title = patch.title?.trim() || t.title;
+      const note = patch.note?.trim() ?? t.note;
+      const body: TaskInput = {};
+      if (title !== t.title) body.label = title;
+      if (note !== t.note) body.note = note || null;
+      if (patch.due !== undefined && patch.due !== t.due) body.dueDate = patch.due || null;
+      if (patch.ownerId !== undefined && patch.ownerId !== t.ownerId) body.assigneeUserId = patch.ownerId || null;
+      if (patch.channel !== undefined && patch.channel !== t.channel) body.channel = patch.channel;
+      if (!Object.keys(body).length) return;
+      const ownerId = patch.ownerId ?? t.ownerId;
+      const ownerName = cur().team.find((m) => m.status === 'Active' && m.id === ownerId)?.name ?? t.ownerName;
+      set((x) => ({ leadTasks: x.leadTasks.map((y) => (y.id === id ? { ...y, title, note, due: patch.due ?? t.due, channel: patch.channel ?? t.channel, ownerId, ownerName } : y)) }));
+      void save(() => crmApi.updateTask(id, body), undefined, `the task "${t.title}"`);
+    };
     /** Ticks or unticks a task; ticking also logs it on the lead's timeline. */
     const toggleLeadTask = (id: string) => {
       const t = cur().leadTasks.find((x) => x.id === id);
       if (!t) return;
       const done = !t.done;
-      const date = todayLabel();
+      const date = todayLabel(cur().workspace.timezone);
       set((x) => ({ leadTasks: x.leadTasks.map((y) => (y.id === id ? { ...y, done, at: done ? date : undefined, by: done ? session.userName.split(' ')[0] : undefined } : y)) }));
       void save(() => crmApi.updateTask(id, { done }), undefined, `the task "${t.title}"`);
       if (done) {
@@ -835,6 +857,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       markLost,
       reopenLead,
       addLeadTask,
+      updateLeadTask,
       toggleLeadTask,
       removeLeadTask,
       addStage: notYet,

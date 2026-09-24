@@ -55,6 +55,8 @@ export interface Lead {
   segment: SegKey;
   stage: string;
   value: string; // "€14,000"
+  /** ISO 4217 code of the deal amount; the workspace currency when unset. */
+  currency?: string;
   score: number;
   stall: number; // days since last contact
   industry: string;
@@ -327,6 +329,8 @@ export interface State {
   taskOpen: boolean;
   /** Deal the "New task" dialog opens on. */
   taskLeadId: string;
+  /** Task the dialog edits (CD-27); null when it adds a new one. */
+  taskEditId: string | null;
   contactOpen: boolean;
   contactCompany: string;
   newContact: NewContactDraft;
