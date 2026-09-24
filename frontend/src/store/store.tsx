@@ -1,8 +1,9 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, crmApi, type DealInput, type DealLineInput, type LostReason, type ProfileInput, type TaskInput } from '../lib/api';
+import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, crmApi, type DealInput, type DealLineInput, type HistoryEntity, type LostReason, type ProfileInput, type TaskInput } from '../lib/api';
 import { paths } from '../lib/paths';
-import { loadWorkspace, mapActivity, mapLeadTask, mapLine, mapStageChange, type WorkspaceData } from './remote';
+import { connectLive, type LiveEvent } from './live';
+import { loadWorkspace, mapActivity, mapLeadTask, mapLine, mapStageChange, type Part, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
 import {
   champFor,
@@ -74,6 +75,34 @@ const errText = (err: unknown) => {
   const issue = err instanceof ApiError ? (err.body as { issues?: { path?: string; message?: string }[] } | null)?.issues?.[0] : undefined;
   return issue?.message ? `${err.message}: ${issue.path ? issue.path + ' ' : ''}${issue.message}` : err.message;
 };
+/**
+ * A 409 from an edit that someone else's change got to first (CD-20): the API's message ("Ana
+ * changed this deal while you were editing. Your change to the title wasn't saved.") and the
+ * value the record has now.
+ */
+const conflictText = (err: unknown): string | null => {
+  const body = err instanceof ApiError && err.status === 409 ? (err.body as Partial<ApiConflict> | null) : null;
+  if (!body?.conflicts?.length || !body.message) return null;
+  const shown = (c: ApiConflict['conflicts'][number]) => {
+    const v = c.label ?? (c.value === null || c.value === undefined || c.value === '' ? 'empty' : String(c.value));
+    return v === 'empty' ? 'empty' : `“${v}”`;
+  };
+  const now = body.conflicts.length === 1 ? `It now says ${shown(body.conflicts[0]!)}.` : `It now says ${body.conflicts.map(shown).join(', ')}.`;
+  return `${body.message} ${now}`;
+};
+/** Which lists a live change hint means re-reading (see loadWorkspace). */
+const PARTS_OF: Record<string, Part[]> = {
+  deal: ['deals'],
+  deal_contact: ['deals'],
+  deal_line: ['lines', 'deals'],
+  task: ['tasks'],
+  company: ['companies'],
+  contact: ['contacts'],
+  product: ['products'],
+  funnel: ['funnels'],
+  activity: [],
+};
+const ALL_PARTS: Part[] = ['funnels', 'companies', 'contacts', 'deals', 'products', 'lines', 'tasks', 'team'];
 const EMPTY_CONTACT: NewContactDraft = { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer' };
 const DISCOVERY_FIELDS = ['headline', 'need', 'constraint', 'decisionMaker', 'discoveryDate'] as const satisfies readonly (keyof Lead & keyof DealInput)[];
 /** Workspace settings as the API names them (the bonus trigger has no backend yet). */
@@ -111,6 +140,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
   const reloading = useRef<Promise<void> | null>(null);
   const logRequested = useRef(new Set<string>());
   const pendingTasks = useRef(new Map<string, TaskInput>());
+  /** Live updates (CD-20): lists to re-read and deals whose timeline to re-read, gathered over a short pause. */
+  const livePending = useRef({ parts: new Set<Part>(), logs: new Set<string>(), touched: new Set<string>(), timer: undefined as ReturnType<typeof setTimeout> | undefined, running: false, lastFull: 0 });
 
   const set = useCallback((u: Updater) => setState((prev) => ({ ...prev, ...(typeof u === 'function' ? u(prev) : u) })), []);
 
@@ -167,6 +198,26 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       saveTimers.current.delete(key);
       notifyIfIdle();
     };
+    /** Shows a freshly loaded workspace; a funnel that was deleted can't stay open. */
+    const applyData = (data: WorkspaceData, touched: Iterable<string> = []) =>
+      set((x) => {
+        const first = Object.keys(data.funnels)[0]!;
+        const valid = (id: string) => (data.funnels[id] ? id : first);
+        // Generated documents only live in this tab so far: keep them on their deal.
+        const docs = new Map(x.leads.filter((l) => l.docs?.length).map((l) => [l.id, l.docs]));
+        const leads = docs.size ? data.leads.map((l) => (docs.has(l.id) ? { ...l, docs: docs.get(l.id) } : l)) : data.leads;
+        const now = Date.now();
+        const changedAt = { ...x.changedAt };
+        for (const id of touched) changedAt[id] = now;
+        return {
+          ...data,
+          leads,
+          changedAt,
+          segment: valid(x.segment),
+          newLeadType: valid(x.newLeadType),
+          filters: x.filters.audience === 'Audience' || data.funnels[x.filters.audience] ? x.filters : { ...x.filters, audience: 'Audience' },
+        };
+      });
     /** Re-reads the workspace from the API once all pending edits are saved (see above). */
     const reload = (): Promise<void> => {
       reloading.current ??= (async () => {
@@ -177,12 +228,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             const seq = writeSeq.current;
             const data = await loadWorkspace();
             if (seq === writeSeq.current && isIdle()) {
-              // A funnel that was deleted can't stay open.
-              set((x) => {
-                const first = Object.keys(data.funnels)[0]!;
-                const valid = (id: string) => (data.funnels[id] ? id : first);
-                return { ...data, segment: valid(x.segment), newLeadType: valid(x.newLeadType), filters: x.filters.audience === 'Audience' || data.funnels[x.filters.audience] ? x.filters : { ...x.filters, audience: 'Audience' } };
-              });
+              applyData(data);
               return;
             }
           }
@@ -211,7 +257,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         notifyIfIdle();
       }
       if (failed) {
-        flash(`Not saved: ${what} (${errText(failed)}). It was reset to the saved value.`, 7000);
+        flash(conflictText(failed) ?? `Not saved: ${what} (${errText(failed)}). It was reset to the saved value.`, conflictText(failed) ? 10_000 : 7000);
         await reload();
         return;
       }
@@ -234,6 +280,84 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const rows = await crmApi.activities(leadId);
       set((x) => ({ log: { ...x.log, [leadId]: rows.map((a) => mapActivity(a, x.workspace.timezone)) } }));
     };
+    /** The version this tab shows of a record: its edits say they are based on it (If-Match, CD-20). */
+    const ver = (kind: HistoryEntity, id: string): string | undefined => cur().versions[`${kind}:${id}`];
+
+    // ------------------------------------------------------------ live updates (CD-20)
+    /*
+     * A change hint from another tab or person names what changed. After a short pause (hints come
+     * in bursts) the lists it affects are read again and shown. Like `reload`, it never overwrites
+     * what this tab is editing: it waits until this tab's own edits are saved (without sending
+     * typing early), and throws its result away if an edit started while it loaded. An edit made
+     * on top of an older version is caught by the API instead (409, see conflictText). Timelines of
+     * deals this tab has loaded are re-read too. Errors stay quiet: the next hint or focus retries.
+     */
+    const queueRefresh = (parts: Iterable<Part>, logs: Iterable<string> = [], touched: Iterable<string> = [], delay = 300) => {
+      const p = livePending.current;
+      for (const x of parts) p.parts.add(x);
+      for (const x of logs) p.logs.add(x);
+      for (const x of touched) p.touched.add(x);
+      clearTimeout(p.timer);
+      p.timer = setTimeout(() => void runRefresh(), delay);
+    };
+    const runRefresh = async () => {
+      const p = livePending.current;
+      if (p.running) return; // the running refresh picks the new hints up when it is done
+      p.running = true;
+      let retryLater = false;
+      try {
+        while (p.parts.size || p.logs.size) {
+          const parts = new Set(p.parts);
+          const logs = [...p.logs];
+          const touched = [...p.touched];
+          p.parts.clear();
+          p.logs.clear();
+          p.touched.clear();
+          for (const id of logs) if (logRequested.current.has(id)) await refreshLog(id).catch(() => undefined);
+          if (parts.size === 0) continue;
+          let applied = false;
+          for (let attempt = 0; attempt < 5 && !applied; attempt++) {
+            await whenIdle();
+            if (reloading.current) await reloading.current;
+            const seq = writeSeq.current;
+            const data = await loadWorkspace(parts);
+            if (seq === writeSeq.current && isIdle()) {
+              applyData(data, touched);
+              applied = true;
+            }
+          }
+          if (!applied) {
+            parts.forEach((x) => p.parts.add(x));
+            touched.forEach((x) => p.touched.add(x));
+            retryLater = true;
+            break;
+          }
+        }
+      } catch {
+        retryLater = true;
+      } finally {
+        p.running = false;
+        if (p.parts.size || p.logs.size) queueRefresh([], [], [], retryLater ? 3000 : 300);
+      }
+    };
+    /** Everything this tab shows, after the stream was down (hints may be missing) or on focus. */
+    const refreshAll = () => {
+      livePending.current.lastFull = Date.now();
+      queueRefresh(ALL_PARTS, logRequested.current);
+    };
+    const onLiveEvent = (e: LiveEvent) => {
+      if (e.type === 'resync') return refreshAll();
+      if (e.client === CLIENT_ID) return; // this tab's own change: the screen has it already
+      const parts = PARTS_OF[e.type] ?? ALL_PARTS;
+      const dealIds = [...(e.dealIds ?? []), ...(e.type === 'deal' ? (e.ids ?? []) : [])];
+      const logs = e.dealIds === null ? [...logRequested.current] : dealIds.filter((id) => logRequested.current.has(id));
+      queueRefresh(parts, logs, e.type === 'activity' ? [] : [...(e.ids ?? []), ...(e.dealIds ?? [])]);
+    };
+    /** Fallback when hints were missed (a sleeping laptop, a proxy that dropped the stream). */
+    const onFocus = () => {
+      if (Date.now() - livePending.current.lastFull > 10_000) refreshAll();
+    };
+
     /** Loads the activity history of these leads once (screens call it when they open). */
     const ensureLog = (leadIds: string[]) => {
       for (const id of leadIds) {
@@ -424,7 +548,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       for (const [k, v] of Object.entries(patch)) {
         const field = CONTACT_FIELDS[k as keyof Person];
         const value = String(v ?? '');
-        if (field && !(field === 'fullName' && !value.trim())) saveLater(`contact:${contactId}:${field}`, () => crmApi.updateContact(contactId, { [field]: value }), `${p.name}'s ${k === 'role' ? 'job title' : k === 'buyerRole' ? 'buyer role' : k}`);
+        if (field && !(field === 'fullName' && !value.trim())) saveLater(`contact:${contactId}:${field}`, () => crmApi.updateContact(contactId, { [field]: value }, ver('contact', contactId)), `${p.name}'s ${k === 'role' ? 'job title' : k === 'buyerRole' ? 'buyer role' : k}`);
       }
       const withInitials = patch.name !== undefined ? { ...patch, initials: initialsOf(patch.name) } : patch;
       if (p.primary) {
@@ -805,7 +929,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     /** Companies are identified by id (names aren't unique), so renaming one keeps its route. */
     const setCompanyField = (companyId: string, key: 'name' | 'industry' | 'hq' | 'size' | 'source', v: string) => {
       const field = key === 'size' ? 'teamSize' : key;
-      if (!(key === 'name' && !v.trim())) saveLater(`company:${companyId}:${field}`, () => crmApi.updateCompany(companyId, { [field]: v }), `the company ${key === 'hq' ? 'HQ' : key === 'size' ? 'team size' : key}`);
+      if (!(key === 'name' && !v.trim())) saveLater(`company:${companyId}:${field}`, () => crmApi.updateCompany(companyId, { [field]: v }, ver('company', companyId)), `the company ${key === 'hq' ? 'HQ' : key === 'size' ? 'team size' : key}`);
       set((x) => ({
         leads: x.leads.map((l) => (l.companyId === companyId ? { ...l, ...(key === 'name' ? { company: v } : { [key]: v }) } : l)),
         extraCompanies: x.extraCompanies.map((c) => (c.id === companyId ? { ...c, [key]: v } : c)),
@@ -830,24 +954,24 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       if (hq !== undefined && companyId) setCompanyField(companyId, 'hq', hq);
       if (size !== undefined && companyId) setCompanyField(companyId, 'size', size);
       const { title, closeDate, source, ownerId } = dealPatch;
-      if (title !== undefined && title.trim()) saveLater('title:' + id, () => crmApi.updateDeal(id, { title: title.trim() }), 'the deal title');
-      if (closeDate !== undefined) saveLater('close:' + id, () => crmApi.updateDeal(id, { closeDate: closeDate || null }), 'the closing date');
-      if (source !== undefined) saveLater('source:' + id, () => crmApi.updateDeal(id, { source }), 'the deal source');
+      if (title !== undefined && title.trim()) saveLater('title:' + id, () => crmApi.updateDeal(id, { title: title.trim() }, ver('deal', id)), 'the deal title');
+      if (closeDate !== undefined) saveLater('close:' + id, () => crmApi.updateDeal(id, { closeDate: closeDate || null }, ver('deal', id)), 'the closing date');
+      if (source !== undefined) saveLater('source:' + id, () => crmApi.updateDeal(id, { source }, ver('deal', id)), 'the deal source');
       // Discovery notes (merged into the proposal). Empty text clears the field.
       for (const key of DISCOVERY_FIELDS) {
         const v = dealPatch[key];
-        if (v !== undefined) saveLater(`${key}:${id}`, () => crmApi.updateDeal(id, { [key]: key === 'discoveryDate' ? v || null : v }), 'the discovery notes');
+        if (v !== undefined) saveLater(`${key}:${id}`, () => crmApi.updateDeal(id, { [key]: key === 'discoveryDate' ? v || null : v }, ver('deal', id)), 'the discovery notes');
       }
       if (dealPatch.companyId !== undefined && dealPatch.companyId !== companyId) {
         const target = dealPatch.companyId;
         const rec = target ? companyRecords(cur()).find((c) => c.id === target) : undefined;
         if (target && !rec) return;
         dealPatch.company = rec?.name ?? 'No company';
-        void save(() => crmApi.updateDeal(id, { companyId: target }), reload, 'the company of this deal');
+        void save(() => crmApi.updateDeal(id, { companyId: target }, ver('deal', id)), reload, 'the company of this deal');
       }
       if (ownerId !== undefined && ownerId !== lead.ownerId) {
         dealPatch.owner = cur().team.find((m) => m.status === 'Active' && m.id === ownerId)?.name;
-        void save(() => crmApi.updateDeal(id, { ownerUserId: ownerId }), undefined, 'the deal owner');
+        void save(() => crmApi.updateDeal(id, { ownerUserId: ownerId }, ver('deal', id)), undefined, 'the deal owner');
       }
       mapLead(id, (l) => ({ ...l, ...dealPatch }));
     };
@@ -896,6 +1020,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       flash,
       navigate,
       reload,
+      /** Live updates (CD-20), wired up below. */
+      live: { onEvent: onLiveEvent, refreshAll, onFocus },
+      /** A page of the change history of a deal, company or contact (CD-69), newest first. */
+      loadChanges: (entity: HistoryEntity, id: string, offset = 0) => crmApi.history(entity, id, offset),
       ensureLog,
       refreshHistory,
       moveLead,
@@ -910,7 +1038,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           return;
         }
         mapLead(id, (l) => ({ ...l, segment: seg, stage: stagesFor(cur(), seg)[0]!.id }));
-        void save(() => crmApi.updateDeal(id, { funnelId }), () => refreshLog(id), 'the funnel');
+        void save(() => crmApi.updateDeal(id, { funnelId }, ver('deal', id)), () => refreshLog(id), 'the funnel');
         flash('Funnel reassigned · lead moved to the first stage');
       },
       openLead: (id: string) => navigate(paths.lead(id)),
@@ -947,7 +1075,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         // Quick clicks across the four criteria become one write of the final scores.
         saveLater('champ:' + leadId, async () => {
           const champ = cur().champ[leadId];
-          if (champ) await crmApi.updateDeal(leadId, { champ });
+          if (champ) await crmApi.updateDeal(leadId, { champ }, ver('deal', leadId));
         }, 'the fit score');
       },
       linkPerson,
@@ -1153,6 +1281,32 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       },
     };
   }, [set, flash, navigate, session]);
+
+  // Live updates (CD-20): the workspace's change stream, and a refresh when the window gets focus.
+  useEffect(() => {
+    const { live } = actions;
+    const pending = livePending.current;
+    const mounted = Date.now();
+    const stop = connectLive({
+      onEvent: live.onEvent,
+      // After a drop, hints may be missing: read everything. The first connect only needs that if
+      // the workspace was loaded a while before the stream was up.
+      onOpen: (first) => {
+        if (!first || Date.now() - mounted > 3000) live.refreshAll();
+      },
+    });
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') live.onFocus();
+    };
+    window.addEventListener('focus', live.onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      stop();
+      clearTimeout(pending.timer);
+      window.removeEventListener('focus', live.onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [actions]);
 
   return { s, ...actions };
 }

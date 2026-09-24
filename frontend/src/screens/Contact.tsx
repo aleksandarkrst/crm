@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { DangerButton, FieldRow, GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
+import { ChangeHistory } from '../components/ChangeHistory';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { BUYER_ROLES, CHANNEL_LABELS } from '../store/seed';
-import { allPeople, companyOfPerson, initialsOf, leadById, memberName, personById, timelineFor } from '../store/selectors';
+import { allPeople, companyOfPerson, curOf, initialsOf, leadById, memberName, personById, timelineFor } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Person } from '../store/types';
 import { docStateClass } from './lead/docs';
@@ -111,6 +112,14 @@ export function Contact() {
               </div>
             ))}
           </div>
+
+          {/* Who changed which field of the contact (CD-69). */}
+          {p.contactId && (
+            <div className="card card-pad">
+              <span style={{ fontSize: 15, fontWeight: 600 }}>Changes</span>
+              <ChangeHistory entity="contact" id={p.contactId} cur={curOf(s)} rev={JSON.stringify(p)} />
+            </div>
+          )}
         </div>
 
         <div style={{ flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>

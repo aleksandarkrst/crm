@@ -156,6 +156,8 @@ export function initialState(): State {
     extraTodoIds: {},
     leadTasks: [],
     log: {},
+    versions: {},
+    changedAt: {},
     team: [], // loaded from the API
     notifs: [
       { id: 'n1', label: 'Stalled lead nudges', desc: 'Daily digest of leads with no contact for 4+ days', on: true },

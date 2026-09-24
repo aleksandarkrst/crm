@@ -22,12 +22,28 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
-  const headers = new Headers(init.headers);
+/**
+ * This browser tab (CD-20). The API records it with every change, so the live-update stream can
+ * tell a tab which changes are its own echo, and a tab's own quick edits never conflict.
+ */
+export const CLIENT_ID = crypto.randomUUID();
+
+/** The headers every API call carries: the token, the workspace and this tab. */
+export async function apiHeaders(init?: HeadersInit): Promise<Headers> {
+  const headers = new Headers(init);
   const token = await getAccessToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
   const tenant = getTenantId();
   if (tenant) headers.set('X-Tenant-Id', tenant);
+  headers.set('X-Client-Id', CLIENT_ID);
+  return headers;
+}
+
+/** `If-Match` with the version (updatedAt) an edit was based on; none means last-write-wins. */
+const ifMatch = (version?: string): HeadersInit | undefined => (version ? { 'If-Match': `"${version}"` } : undefined);
+
+export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
+  const headers = await apiHeaders(init.headers);
   if (init.json !== undefined) headers.set('Content-Type', 'application/json');
 
   const res = await fetch(`/api${path}`, { ...init, headers, body: init.json !== undefined ? JSON.stringify(init.json) : init.body });
@@ -129,6 +145,8 @@ export interface ApiCompany {
   notes: string | null;
   /** Current name of the owner, also after they left the workspace (lists only). */
   ownerName?: string | null;
+  /** The version: send it back as If-Match when changing the company (CD-20). */
+  updatedAt: string;
 }
 export interface ApiContact {
   id: string;
@@ -142,6 +160,8 @@ export interface ApiContact {
   ownerUserId: string | null;
   /** Current name of the owner, also after they left the workspace (lists only). */
   ownerName?: string | null;
+  /** The version: send it back as If-Match when changing the contact (CD-20). */
+  updatedAt: string;
 }
 export interface ApiChamp {
   C: number;
@@ -282,8 +302,32 @@ export interface ApiInvitePreview {
   expiresAt: string;
 }
 
-export type CompanyInput = Partial<Omit<ApiCompany, 'id'>> & { name?: string };
-export type ContactInput = Partial<Omit<ApiContact, 'id' | 'ownerName'>>;
+/** One change of a deal, company or contact (CD-69), newest first from GET /crm/history. */
+export interface ApiHistoryEntry {
+  id: string;
+  action: 'created' | 'updated' | 'deleted' | 'line_added' | 'line_changed' | 'line_removed';
+  /** The API's field name (title, ownerUserId, stageId, …); "line" for deal lines. */
+  field: string | null;
+  oldValue: unknown;
+  newValue: unknown;
+  /** Names for ids (stage, funnel, company, contact, owner). */
+  oldLabel: string | null;
+  newLabel: string | null;
+  /** The record's name (created, deleted) or a line's product. */
+  label: string | null;
+  /** null: the system. A member who left is "Former member" (userId null). */
+  actor: { userId: string | null; name: string } | null;
+  changedAt: string;
+}
+export type HistoryEntity = 'deal' | 'company' | 'contact';
+/** The body of a 409 from an update with If-Match: someone changed these fields meanwhile. */
+export interface ApiConflict {
+  message: string;
+  conflicts: { field: string; value: unknown; label: string | null; changedBy: string | null; changedAt: string }[];
+}
+
+export type CompanyInput = Partial<Omit<ApiCompany, 'id' | 'updatedAt'>> & { name?: string };
+export type ContactInput = Partial<Omit<ApiContact, 'id' | 'ownerName' | 'updatedAt'>>;
 export type DealInput = Partial<
   Pick<ApiDeal, 'title' | 'companyId' | 'primaryContactId' | 'funnelId' | 'ownerUserId' | 'source' | 'closeDate' | 'amount' | 'headline' | 'need' | 'constraint' | 'decisionMaker' | 'discoveryDate'>
 > & { champ?: ApiChamp };
@@ -340,17 +384,17 @@ export const crmApi = {
 
   companies: () => all<ApiCompany>('/crm/companies'),
   createCompany: (input: CompanyInput & { name: string }) => api<ApiCompany>('/crm/companies', { method: 'POST', json: input }),
-  updateCompany: (id: string, input: CompanyInput) => api<ApiCompany>(`/crm/companies/${id}`, { method: 'PATCH', json: input }),
+  updateCompany: (id: string, input: CompanyInput, version?: string) => api<ApiCompany>(`/crm/companies/${id}`, { method: 'PATCH', json: input, headers: ifMatch(version) }),
   deleteCompany: (id: string) => api(`/crm/companies/${id}`, { method: 'DELETE' }),
 
   contacts: () => all<ApiContact>('/crm/contacts'),
   createContact: (input: ContactInput & { fullName: string }) => api<ApiContact>('/crm/contacts', { method: 'POST', json: input }),
-  updateContact: (id: string, input: ContactInput) => api<ApiContact>(`/crm/contacts/${id}`, { method: 'PATCH', json: input }),
+  updateContact: (id: string, input: ContactInput, version?: string) => api<ApiContact>(`/crm/contacts/${id}`, { method: 'PATCH', json: input, headers: ifMatch(version) }),
   deleteContact: (id: string) => api(`/crm/contacts/${id}`, { method: 'DELETE' }),
 
   deals: () => all<ApiDealRow>('/crm/deals'),
   createDeal: (input: DealInput & { title: string; funnelId: string }) => api<ApiDeal>('/crm/deals', { method: 'POST', json: input }),
-  updateDeal: (id: string, input: DealInput) => api<ApiDeal>(`/crm/deals/${id}`, { method: 'PATCH', json: input }),
+  updateDeal: (id: string, input: DealInput, version?: string) => api<ApiDeal>(`/crm/deals/${id}`, { method: 'PATCH', json: input, headers: ifMatch(version) }),
   deleteDeal: (id: string) => api(`/crm/deals/${id}`, { method: 'DELETE' }),
   moveDeal: (id: string, stageId: string) => api<ApiDeal>(`/crm/deals/${id}/move`, { method: 'POST', json: { stageId } }),
   markLost: (id: string, reason: LostReason, note: string | null) => api<ApiDeal>(`/crm/deals/${id}/lost`, { method: 'POST', json: { reason, note } }),
@@ -379,4 +423,7 @@ export const crmApi = {
   createProduct: (input: ProductInput & { name: string }) => api<ApiProduct>('/crm/products', { method: 'POST', json: input }),
   updateProduct: (id: string, input: ProductInput) => api<ApiProduct>(`/crm/products/${id}`, { method: 'PATCH', json: input }),
   deleteProduct: (id: string) => api(`/crm/products/${id}`, { method: 'DELETE' }),
+
+  history: (entityType: HistoryEntity, entityId: string, offset = 0, limit = 30) =>
+    api<{ entries: ApiHistoryEntry[]; more: boolean }>(`/crm/history?entityType=${entityType}&entityId=${entityId}&limit=${limit}&offset=${offset}`),
 };

@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { DangerButton, FieldRow, GhostInput, GhostSelect, PersonChip, Picker, PickerRow, usePicker } from '../components/ui';
+import { ChangeHistory } from '../components/ChangeHistory';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { CHANNEL_LABELS, INDUSTRIES, SOURCES, TEAM_SIZES } from '../store/seed';
-import { allPeople, closeIsoOf, companyOfPerson, companyRecords, contactsForLead, initialsOf, stageOf, timelineFor } from '../store/selectors';
+import { allPeople, closeIsoOf, companyOfPerson, companyRecords, contactsForLead, curOf, initialsOf, stageOf, timelineFor } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Person } from '../store/types';
 
@@ -147,6 +148,14 @@ export function Company() {
               <span className="badge badge-neutral">{CHANNEL_LABELS[e.channel] || e.channel}</span>
             </div>
           ))}
+        </div>
+
+        {/* Who changed which field of the company (CD-69). */}
+        <div className="card card-pad">
+          <div className="card-title" style={{ marginBottom: 8 }}>
+            Changes
+          </div>
+          <ChangeHistory entity="company" id={rec.id} cur={curOf(s)} rev={JSON.stringify([rec.name, rec.industry, rec.hq, rec.size, rec.source, rec.owner])} />
         </div>
       </div>
     </Screen>
