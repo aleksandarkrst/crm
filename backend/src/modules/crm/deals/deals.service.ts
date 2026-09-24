@@ -5,7 +5,7 @@ import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, type DealOutcome, deals, funnels, funnelStages, LOST_REASONS } from '../../../shared/database/schema';
+import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, type DealOutcome, deals, funnels, funnelStages, LOST_REASONS, tenants } from '../../../shared/database/schema';
 import { JobsService } from '../../../shared/events/jobs.service';
 import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
 import { assertOwnerIsMember, userNameOf } from '../owner';
@@ -13,6 +13,12 @@ import { StageHistoryService } from './stage-history.service';
 
 const money = z.union([z.number(), z.string()]).transform((v) => String(v)).pipe(z.string().regex(/^\d{1,12}(\.\d{1,2})?$/, 'Invalid amount'));
 const champLevel = z.union([z.literal(0), z.literal(8), z.literal(17), z.literal(25)]);
+const CURRENCIES = new Set(Intl.supportedValuesOf('currency'));
+const currency = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .refine((c) => /^[A-Z]{3}$/.test(c) && CURRENCIES.has(c), 'Must be an ISO 4217 currency code, e.g. EUR');
 
 export const CreateDeal = z.object({
   title: z.string().trim().min(1).max(200),
@@ -22,6 +28,8 @@ export const CreateDeal = z.object({
   ownerUserId: z.uuid().nullish(),
   source: optionalText(80),
   amount: money.optional(),
+  /** ISO 4217. A new deal without one gets the workspace currency. */
+  currency: currency.optional(),
   closeDate: z.iso.date().nullish(),
   // Discovery notes (proposal "What you told us"). Empty text clears a field.
   headline: optionalText(200),
@@ -127,15 +135,17 @@ export class DealsService {
     });
   }
 
-  /** New deals start in the first stage of their funnel. */
+  /** New deals start in the first stage of their funnel, in the workspace currency unless given one. */
   create(ctx: TenantContext, input: CreateDeal) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const first = await this.firstStage(tx, input.funnelId);
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
+        // tenants is a platform table without RLS, so filter by the caller's tenant explicitly.
+        const [workspace] = await tx.select({ currency: tenants.currency }).from(tenants).where(eq(tenants.id, ctx.tenantId));
         const [row] = await tx
           .insert(deals)
-          .values({ ownerUserId: ctx.userId, ...input, tenantId: ctx.tenantId, stageId: first.id, closedAt: first.isWon ? new Date() : null })
+          .values({ ownerUserId: ctx.userId, currency: workspace?.currency, ...input, tenantId: ctx.tenantId, stageId: first.id, closedAt: first.isWon ? new Date() : null })
           .returning();
         await this.history.record(tx, ctx, { dealId: row!.id, kind: 'created', fromStageId: null, toStageId: first.id, outcome: first.isWon ? 'won' : 'open' }, row!.createdAt);
         await this.log(tx, ctx, row!.id, 'RS', 'Deal created', input.source ? `Source: ${input.source}` : null);
