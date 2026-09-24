@@ -4,6 +4,7 @@ import { paths } from '../lib/paths';
 import { Modals } from '../modals/Modals';
 import { initialsOf } from '../store/selectors';
 import { useStore } from '../store/store';
+import { HeaderTools } from './HeaderTools';
 
 const NAV = [
   { to: paths.overview, label: 'Overview', icon: 'M4 19V5M4 19h16M8 16v-4M12 16V8M16 16v-6' },
@@ -107,7 +108,7 @@ export function Screen({ title, onTitleChange, crumb, children }: { title: strin
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.15 }}>{title}</h1>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }} />
+        <HeaderTools />
       </header>
       <div style={{ padding: '18px 30px 44px', flex: 1, background: 'var(--white)' }}>
         {crumb && (
