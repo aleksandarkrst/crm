@@ -30,4 +30,18 @@ export default defineConfig({
     proxy,
   },
   preview: { proxy },
+  build: {
+    rolldownOptions: {
+      output: {
+        // Vendor code in its own chunks (CD-24): it changes less often than the app, so browsers
+        // keep it cached across deploys. Screens are split by the lazy routes in App.tsx.
+        codeSplitting: {
+          groups: [
+            { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+            { name: 'router', test: /node_modules[\\/](react-router|react-router-dom|cookie|set-cookie-parser)[\\/]/ },
+          ],
+        },
+      },
+    },
+  },
 });

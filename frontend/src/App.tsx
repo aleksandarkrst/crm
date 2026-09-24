@@ -1,28 +1,51 @@
-import { useEffect } from 'react';
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { Navigate, Outlet, Route, Routes, useNavigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { SessionGate } from './components/SessionGate';
 import type { ApiStartPage } from './lib/api';
 import { completeSignIn } from './lib/auth';
 import { paths } from './lib/paths';
-import { Companies } from './screens/Companies';
-import { Company } from './screens/Company';
-import { Contact } from './screens/Contact';
-import { Contacts } from './screens/Contacts';
-import { Dashboard } from './screens/Dashboard';
-import { LeadScreen } from './screens/lead/LeadScreen';
-import { Pipeline } from './screens/Pipeline';
-import { Products } from './screens/Products';
-import { Profile } from './screens/Profile';
-import { Settings } from './screens/Settings';
-import { Today } from './screens/Today';
 import { useStore } from './store/store';
+
+// Screens load on first visit (CD-24), so the first page doesn't wait for all of them.
+const Companies = lazy(() => import('./screens/Companies').then((m) => ({ default: m.Companies })));
+const Company = lazy(() => import('./screens/Company').then((m) => ({ default: m.Company })));
+const Contact = lazy(() => import('./screens/Contact').then((m) => ({ default: m.Contact })));
+const Contacts = lazy(() => import('./screens/Contacts').then((m) => ({ default: m.Contacts })));
+const Dashboard = lazy(() => import('./screens/Dashboard').then((m) => ({ default: m.Dashboard })));
+const LeadScreen = lazy(() => import('./screens/lead/LeadScreen').then((m) => ({ default: m.LeadScreen })));
+const Pipeline = lazy(() => import('./screens/Pipeline').then((m) => ({ default: m.Pipeline })));
+const Products = lazy(() => import('./screens/Products').then((m) => ({ default: m.Products })));
+const Profile = lazy(() => import('./screens/Profile').then((m) => ({ default: m.Profile })));
+const Settings = lazy(() => import('./screens/Settings').then((m) => ({ default: m.Settings })));
+const Today = lazy(() => import('./screens/Today').then((m) => ({ default: m.Today })));
 
 const START_PAGES: Record<ApiStartPage, string> = { pipeline: paths.pipeline, overview: paths.overview, today: paths.today, contacts: paths.contacts };
 
 function StartPage() {
   const { s } = useStore();
   return <Navigate to={START_PAGES[s.profile.startPage] ?? paths.pipeline} replace />;
+}
+
+/**
+ * While a screen's code loads, the sidebar stays and the content area stays blank; a small spinner
+ * fades in only if it takes more than a moment. Navigations run in a transition, so moving between
+ * screens keeps the current screen up until the next one is ready: this shows on a first load.
+ */
+function ScreenLoading() {
+  return (
+    <div aria-busy="true" aria-label="Loading" style={{ flex: 1, minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--white)' }}>
+      <span style={{ width: 18, height: 18, borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--brand)', opacity: 0, animation: 'dcFade .2s ease-out .4s forwards, dcSpin .8s linear infinite' }} />
+    </div>
+  );
+}
+
+function LazyScreens() {
+  return (
+    <Suspense fallback={<ScreenLoading />}>
+      <Outlet />
+    </Suspense>
+  );
 }
 
 function AuthCallback() {
@@ -55,20 +78,22 @@ function AppRoutes() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<StartPage />} />
-        <Route path="overview" element={<Dashboard />} />
-        <Route path="pipeline" element={<Pipeline />} />
-        <Route path="today" element={<Today />} />
-        <Route path="companies" element={<Companies />} />
-        <Route path="companies/:id" element={<Company />} />
-        <Route path="contacts" element={<Contacts />} />
-        <Route path="contacts/:id" element={<Contact />} />
-        <Route path="deals/:id" element={<LeadScreen />} />
-        <Route path="products" element={<Products />} />
-        <Route path="settings" element={<Navigate to={paths.settings()} replace />} />
-        <Route path="settings/:tab" element={<Settings />} />
-        <Route path="profile" element={<Profile />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route element={<LazyScreens />}>
+          <Route index element={<StartPage />} />
+          <Route path="overview" element={<Dashboard />} />
+          <Route path="pipeline" element={<Pipeline />} />
+          <Route path="today" element={<Today />} />
+          <Route path="companies" element={<Companies />} />
+          <Route path="companies/:id" element={<Company />} />
+          <Route path="contacts" element={<Contacts />} />
+          <Route path="contacts/:id" element={<Contact />} />
+          <Route path="deals/:id" element={<LeadScreen />} />
+          <Route path="products" element={<Products />} />
+          <Route path="settings" element={<Navigate to={paths.settings()} replace />} />
+          <Route path="settings/:tab" element={<Settings />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
       </Route>
     </Routes>
   );
