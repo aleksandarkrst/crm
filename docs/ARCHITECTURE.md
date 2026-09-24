@@ -81,6 +81,28 @@ the deal. Moving a deal to the stage it is already in writes nothing.
 - `GET /api/crm/deal-stage-history` lists the workspace's history oldest first, paged like the other
   lists (`limit` ≤ 200, `offset`; `dealId` narrows it to one deal).
 
+## Deal outcome: open, won, lost
+
+- **Won is the won stage.** A deal is won while it is in its funnel's won stage
+  (`funnel_stages.is_won`). This isn't stored a second time, so the board, the stage tracker and the
+  outcome can't disagree: moving a deal into the won stage wins it (and sends `crm.deal-won`), and
+  moving it back out makes it open again.
+- **Lost is stored** on the deal: `lost_at`, `lost_reason` (a fixed pick list: Price, Timing,
+  Chose a competitor, No budget, No decision, Other) and an optional `lost_note`; a check constraint
+  keeps them together. The deal keeps the stage it was lost in, so the history shows where deals
+  drop out.
+- `POST /api/crm/deals/:id/lost` `{ reason, note? }` marks an open deal lost (409 for a lost or won
+  deal, 400 for a reason outside the list). `POST /api/crm/deals/:id/reopen` makes a lost deal open
+  again in the same stage (409 if it isn't lost). A lost deal can't be moved or switched to another
+  funnel (409) until it is reopened; other fields can still be edited. Both write a timeline entry
+  ("Marked as lost: <reason>" with the note, "Reopened") and a stage history row.
+- Every deal response carries `outcome` (`open` / `won` / `lost`), and `GET /api/crm/deals` takes
+  `?outcome=`.
+- In the UI, the deal screen has **Mark as lost** (a dialog with the reason and a note) and shows
+  "Lost · <reason>" with **Reopen**. The Pipeline board hides lost deals unless its last filter chip
+  says "Include lost deals" or "Lost deals only". Overview leaves lost deals out of open and weighted
+  pipeline, stalled deals, the funnel, payments due and bonuses.
+
 ## Auth
 
 The app handles authorization, not authentication. `AUTH_MODE=oidc` verifies JWTs from any

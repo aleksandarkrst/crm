@@ -39,8 +39,10 @@ export function Dashboard() {
   const dirty = (['audience', 'owner', 'dates', 'source'] as const).some((k) => f[k] !== DEFAULT_FILTERS[k]);
   const drill = (kicker: string, title: string, leadIds: string[]) => set({ drill: { kicker, title, leadIds } });
 
-  const openLeads = dashLeads.filter((l) => !stageOf(s, l).won);
-  const wonLeads = dashLeads.filter((l) => !!stageOf(s, l).won);
+  // Lost deals (CD-60) count nowhere in the pipeline: not open, not weighted, not stalled.
+  const liveLeads = dashLeads.filter((l) => l.outcome !== 'lost');
+  const openLeads = dashLeads.filter((l) => l.outcome === 'open');
+  const wonLeads = dashLeads.filter((l) => l.outcome === 'won');
   const openValue = openLeads.reduce((a, l) => a + valueNum(l.value), 0);
   const wonValue = wonLeads.reduce((a, l) => a + valueNum(l.value), 0);
   const weighted = openLeads.reduce((a, l) => a + (valueNum(l.value) * num(stageOf(s, l).prob)) / 100, 0);
@@ -54,7 +56,7 @@ export function Dashboard() {
 
   const stages = s.funnels[dashSeg].stages;
   const stageFunnel = stages.map((x, i) => {
-    const rows = dashLeads.filter((l) => l.segment === dashSeg && l.stage === x.id);
+    const rows = liveLeads.filter((l) => l.segment === dashSeg && l.stage === x.id);
     const val = rows.reduce((a, l) => a + valueNum(l.value), 0);
     return {
       name: x.name,
@@ -69,7 +71,7 @@ export function Dashboard() {
 
   const today = new Date();
   const payments: { leadId: string; when: Date; amount: number }[] = [];
-  for (const l of dashLeads)
+  for (const l of liveLeads)
     for (const ln of linesOf(s, l)) {
       const gross = grossOf(ln);
       const start = ln.start || '2026-10-01';
@@ -107,14 +109,14 @@ export function Dashboard() {
     .filter(({ value: ownerId }) => f.owner === 'Salesperson' || ownerId === f.owner)
     .map(({ value: ownerId, label: owner }) => {
     const rule = bonusRule(s, ownerId);
-    const mine = dashLeads.filter((l) => l.ownerId === ownerId);
+    const mine = liveLeads.filter((l) => l.ownerId === ownerId);
     let earned = 0;
     let pending = 0;
     const earnedIds: string[] = [];
     const pendingIds: string[] = [];
     for (const l of mine) {
       const bonus = bonusOf(l, rule);
-      const won = !!stageOf(s, l).won;
+      const won = l.outcome === 'won';
       const full = rule.trigger === 'When fully billed' ? billedShare(s, l) >= 0.999 : true;
       if (won && full) {
         earned += bonus;

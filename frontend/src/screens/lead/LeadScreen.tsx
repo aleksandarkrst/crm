@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { Screen } from '../../components/Layout';
 import { paths } from '../../lib/paths';
-import { champTotal, leadById, stageOf, stagesFor } from '../../store/selectors';
+import { champTotal, isoLabel, leadById, stageOf, stagesFor } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import { Composer } from './Composer';
 import { Discovery } from './Discovery';
@@ -12,7 +12,7 @@ import { Todos } from './Todos';
 
 /** The deal ("lead") record: stage tracker, summary, next best action, to-dos and history. */
 export function LeadScreen() {
-  const { s, patchLead, ensureLog } = useStore();
+  const { s, set, patchLead, ensureLog, reopenLead } = useStore();
   const { id = '' } = useParams();
   const lead = leadById(s, id);
   useEffect(() => {
@@ -24,6 +24,7 @@ export function LeadScreen() {
   const idx = stages.indexOf(stageOf(s, lead));
   const total = champTotal(s, lead);
   const totalFg = total >= 80 ? '#14503C' : total >= 55 ? '#B4531B' : '#B42318';
+  const lost = lead.outcome === 'lost';
 
   return (
     <Screen title={lead.title || lead.company || 'Lead'} onTitleChange={(v) => patchLead(lead.id, { title: v })} crumb={{ label: 'Pipeline', to: paths.pipeline }}>
@@ -50,6 +51,33 @@ export function LeadScreen() {
                 <span style={{ fontSize: 11.5, fontWeight: i === idx ? 600 : 500, color: i === idx ? '#101828' : '#475467', textAlign: 'center', lineHeight: 1.3 }}>{st.name}</span>
               </div>
             ))}
+          </div>
+          {/* Outcome: won is the won stage; lost keeps the stage it was lost in. */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--divider)' }}>
+            {lost ? (
+              <div data-testid="lost-state" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', minWidth: 0 }}>
+                <span className="badge badge-danger" style={{ fontSize: 12 }}>
+                  Lost · {lead.lostReason}
+                </span>
+                <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
+                  {lead.lostAt ? 'on ' + isoLabel(lead.lostAt.slice(0, 10)) + ' · ' : ''}in {stageOf(s, lead).name}
+                  {lead.lostNote ? ' · ' + lead.lostNote : ''}
+                </span>
+              </div>
+            ) : (
+              <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{lead.outcome === 'won' ? 'Won · in the won stage' : 'Open · ' + stageOf(s, lead).name}</span>
+            )}
+            {lost ? (
+              <button type="button" className="btn-plain" onClick={() => reopenLead(lead.id)}>
+                Reopen
+              </button>
+            ) : (
+              lead.outcome === 'open' && (
+                <button type="button" className="btn-plain" onClick={() => set({ lostLeadId: lead.id })}>
+                  Mark as lost
+                </button>
+              )
+            )}
           </div>
         </div>
 

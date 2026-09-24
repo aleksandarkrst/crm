@@ -140,6 +140,10 @@ export interface ChampScores {
   P: number; // Prioritisation
 }
 
+/** Why a deal was lost (a fixed pick list, plus an optional note on the deal). */
+export const LOST_REASONS = ['Price', 'Timing', 'Chose a competitor', 'No budget', 'No decision', 'Other'] as const;
+export type LostReason = (typeof LOST_REASONS)[number];
+
 export const deals = pgTable(
   'deals',
   {
@@ -166,11 +170,19 @@ export const deals = pgTable(
     discoveryDate: date('discovery_date'),
     lastContactAt: timestamp('last_contact_at', { withTimezone: true }),
     stageEnteredAt: timestamp('stage_entered_at', { withTimezone: true }).notNull().defaultNow(),
-    closedAt: timestamp('closed_at', { withTimezone: true }),
+    closedAt: timestamp('closed_at', { withTimezone: true }), // when the deal entered the won stage
+    /**
+     * Lost deals (CD-60). A deal is lost when lost_at is set; it keeps the stage it was lost in.
+     * "Won" is not stored: a deal is won while it is in its funnel's won stage (see dealOutcome).
+     */
+    lostAt: timestamp('lost_at', { withTimezone: true }),
+    lostReason: text('lost_reason', { enum: LOST_REASONS }),
+    lostNote: text('lost_note'),
     ...timestamps,
   },
   (t) => [
     unique('deals_tenant_id_uq').on(t.tenantId, t.id),
+    check('deals_lost_ck', sql`(${t.lostAt} is null) = (${t.lostReason} is null) and (${t.lostNote} is null or ${t.lostAt} is not null)`),
     index('deals_tenant_funnel_stage_idx').on(t.tenantId, t.funnelId, t.stageId),
     foreignKey({ columns: [t.tenantId, t.companyId], foreignColumns: [companies.tenantId, companies.id], name: 'deals_company_fk' }),
     foreignKey({ columns: [t.tenantId, t.primaryContactId], foreignColumns: [contacts.tenantId, contacts.id], name: 'deals_contact_fk' }),

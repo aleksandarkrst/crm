@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, crmApi, type DealInput, type DealLineInput, type ProfileInput, type TaskInput } from '../lib/api';
+import { type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, crmApi, type DealInput, type DealLineInput, type LostReason, type ProfileInput, type TaskInput } from '../lib/api';
 import { paths } from '../lib/paths';
 import { loadWorkspace, mapActivity, mapLeadTask, mapLine, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
@@ -264,6 +264,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     const moveLead = (leadId: string, stageId: string) => {
       const lead = leadById(cur(), leadId);
       if (!lead || lead.stage === stageId) return;
+      if (lead.outcome === 'lost') {
+        flash('This deal is lost. Reopen it before moving it to another stage.');
+        return;
+      }
       const stage = stagesFor(cur(), lead.segment).find((st) => st.id === stageId);
       mapLead(leadId, (l) => ({ ...l, stage: stageId, stall: 0 }));
       void save(() => crmApi.moveDeal(leadId, stageId), () => refreshLog(leadId), 'the stage move');
@@ -612,6 +616,36 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       moveLead(lead.id, stages[i + 1]!.id);
     };
 
+    // ------------------------------------------------------------ lost deals
+    /** The lost state of a deal as the API returned it. */
+    const outcomeOf = (d: ApiDeal): Partial<Lead> => ({ outcome: d.outcome, lostReason: d.lostReason ?? undefined, lostNote: d.lostNote ?? undefined, lostAt: d.lostAt ?? undefined });
+    /** Marks a deal lost with a reason (and an optional note); resolves false (after saying why) when it wasn't saved. */
+    const markLost = async (leadId: string, reason: LostReason, note: string): Promise<boolean> => {
+      try {
+        const deal = await crmApi.markLost(leadId, reason, note.trim() || null);
+        mapLead(leadId, (l) => ({ ...l, ...outcomeOf(deal) }));
+        // The backend logged "Marked as lost: <reason>" on the timeline.
+        void refreshLog(leadId).catch(() => undefined);
+        return true;
+      } catch (err) {
+        flash('Not saved: ' + errText(err));
+        return false;
+      }
+    };
+    /** Reopens a lost deal in the stage it was lost in. */
+    const reopenLead = (leadId: string) => {
+      mapLead(leadId, (l) => ({ ...l, outcome: 'open', lostReason: undefined, lostNote: undefined, lostAt: undefined }));
+      void save(
+        async () => {
+          const deal = await crmApi.reopenDeal(leadId);
+          mapLead(leadId, (l) => ({ ...l, ...outcomeOf(deal) }));
+        },
+        () => refreshLog(leadId),
+        'reopening the deal',
+      );
+      flash('Deal reopened');
+    };
+
     // ------------------------------------------------------------ funnel builder
     /** Edits one stage of the open funnel and saves it (editing funnels is an admin action). */
     const editStage = (idx: number, fn: (stage: Stage) => void) => {
@@ -740,6 +774,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       patchLeadSegment: (id: string, seg: SegKey) => {
         const funnelId = cur().funnels[seg].id;
         if (!funnelId) return;
+        if (leadById(cur(), id)?.outcome === 'lost') {
+          flash('This deal is lost. Reopen it before changing its funnel.');
+          return;
+        }
         mapLead(id, (l) => ({ ...l, segment: seg, stage: stagesFor(cur(), seg)[0]!.id }));
         void save(() => crmApi.updateDeal(id, { funnelId }), () => refreshLog(id), 'the funnel');
         flash('Funnel reassigned · lead moved to the first stage');
@@ -791,6 +829,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       renameExtra,
       removeExtra,
       advanceStage,
+      markLost,
+      reopenLead,
       addLeadTask,
       toggleLeadTask,
       removeLeadTask,

@@ -165,6 +165,10 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
       lines: [],
       total: money(Number(deal.amount)),
       closeDate: deal.closeDate ?? '',
+      outcome: deal.outcome,
+      lostReason: deal.lostReason ?? undefined,
+      lostNote: deal.lostNote ?? undefined,
+      lostAt: deal.lostAt ?? undefined,
     });
     if (deal.champ) champ[deal.id] = deal.champ as State['champ'][string];
   }

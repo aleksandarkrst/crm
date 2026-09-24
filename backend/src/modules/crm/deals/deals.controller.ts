@@ -3,7 +3,7 @@ import { RequireTenant, Tenant, type TenantContext } from '../../../shared/autho
 import { UuidParam } from '../../../shared/validation/common';
 import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
 import { ActivitiesService, CreateActivity } from './activities.service';
-import { CreateDeal, DealsQuery, DealsService, MoveDeal, UpdateDeal } from './deals.service';
+import { CreateDeal, DealsQuery, DealsService, MarkLost, MoveDeal, UpdateDeal } from './deals.service';
 
 const Id = new ZodPipe(UuidParam);
 
@@ -40,6 +40,20 @@ export class DealsController {
   @HttpCode(200)
   move(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(MoveDeal)) body: MoveDeal) {
     return this.deals.moveToStage(ctx, id, body.stageId);
+  }
+
+  /** "Mark as lost" on the deal screen: a reason from the pick list and an optional note. */
+  @Post(':id/lost')
+  @HttpCode(200)
+  markLost(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(MarkLost)) body: MarkLost) {
+    return this.deals.markLost(ctx, id, body);
+  }
+
+  /** "Reopen" on a lost deal: back to open, in the stage it was lost in. */
+  @Post(':id/reopen')
+  @HttpCode(200)
+  reopen(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.deals.reopen(ctx, id);
   }
 
   @Put(':id/contacts/:contactId')

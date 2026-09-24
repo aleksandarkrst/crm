@@ -116,6 +116,7 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 .badge-neutral { background: var(--chip); color: var(--text-2); }
 .badge-brand { background: var(--brand-soft); color: var(--brand); }
 .badge-warn { background: var(--warn-soft); color: var(--warn); }
+.badge-danger { background: var(--danger-soft); color: var(--danger); }
 .tag { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 6px; border-radius: 4px; }
 .merge-tag { font-size: 10.5px; background: var(--warn-soft); color: var(--warn); border-radius: 4px; padding: 4px 6px; }
 

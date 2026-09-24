@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Modal, ModalHeader } from '../components/ui';
+import { LOST_REASONS, type LostReason } from '../lib/api';
 import { paths } from '../lib/paths';
 import { BILLING_KINDS, BUYER_ROLES, CHANNEL_LABELS, CHANNELS, DOC_TYPES, FIELD_TYPES, PARAM_SOURCES, PRODUCT_TYPES } from '../store/seed';
 import { allPeople, companyLabels, companyRecords, leadById, stageOf, stagesFor, todayIso, valueNum } from '../store/selectors';
@@ -22,6 +23,7 @@ export function Modals() {
       {s.fieldOpen && <NewFieldModal />}
       {s.drill && <DrillModal />}
       {s.productOpen && <NewProductModal />}
+      {s.lostLeadId && <MarkLostModal />}
     </>
   );
 }
@@ -589,6 +591,60 @@ function NewProductModal() {
           }}
         >
           Add to catalog
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/** "Mark as lost": a reason from the pick list and an optional note (CD-60). */
+function MarkLostModal() {
+  const { s, set, flash, markLost } = useStore();
+  const lead = leadById(s, s.lostLeadId);
+  const [reason, setReason] = useState<LostReason | ''>('');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const close = () => set({ lostLeadId: null });
+  if (!lead) return null;
+  const submit = async () => {
+    if (!reason) return setError('Pick the reason the deal was lost.');
+    setError('');
+    setBusy(true);
+    const ok = await markLost(lead.id, reason, note);
+    setBusy(false);
+    if (ok) {
+      close();
+      flash((lead.title || lead.company) + ' marked as lost · hidden from the pipeline board');
+    }
+  };
+  return (
+    <Modal maxWidth={500} onBackdrop={close}>
+      <ModalHeader title="Mark as lost" sub={`${lead.title || lead.company} leaves the pipeline board and stops counting towards open pipeline. You can reopen it later.`} />
+      <label className="form-label">
+        Reason
+        <select className="form-input" value={reason} autoFocus onChange={(e) => setReason(e.target.value as LostReason)}>
+          <option value="" disabled>
+            Pick a reason
+          </option>
+          {LOST_REASONS.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="form-label">
+        Note (optional)
+        <textarea className="form-input" rows={3} maxLength={1000} placeholder="e.g. Went with a cheaper studio, revisit in Q3" value={note} onChange={(e) => setNote(e.target.value)} />
+      </label>
+      {error && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{error}</div>}
+      <div className="modal-actions">
+        <button type="button" className="btn btn-secondary" onClick={close}>
+          Cancel
+        </button>
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void submit()}>
+          {busy ? 'Saving…' : 'Mark as lost'}
         </button>
       </div>
     </Modal>

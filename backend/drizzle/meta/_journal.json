@@ -64,6 +64,13 @@
       "when": 1790226390494,
       "tag": "0008_deal_stage_history_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790226629460,
+      "tag": "0009_deal_lost",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import type { ApiDateFormat, ApiLanguage, ApiStartPage } from '../lib/api';
+import type { ApiDateFormat, ApiLanguage, ApiStartPage, DealOutcome, LostReason } from '../lib/api';
 
 export type SegKey = 'smb' | 'ent';
 export type ChannelCode = 'RS' | 'EM' | 'LI' | 'WA' | 'MT' | 'PH' | 'NT';
@@ -65,6 +65,12 @@ export interface Lead {
   total: string;
   docs?: LeadDoc[];
   closeDate?: string;
+  /** Won while in the won stage; lost deals keep the stage they were lost in. */
+  outcome: DealOutcome;
+  lostReason?: LostReason;
+  lostNote?: string;
+  /** ISO date-time the deal was marked lost. */
+  lostAt?: string;
 }
 
 export interface Person {
@@ -240,6 +246,8 @@ export interface Filters {
   industry: string;
   stalled: string;
   band: string;
+  /** Pipeline board: lost deals are hidden unless this says otherwise (see LOST_VIEWS). */
+  lost: string;
 }
 
 export interface Drill {
@@ -326,4 +334,6 @@ export interface State {
   productOpen: boolean;
   newProduct: NewProductDraft;
   drill: Drill | null;
+  /** Deal the "Mark as lost" dialog is open for. */
+  lostLeadId: string | null;
 }
