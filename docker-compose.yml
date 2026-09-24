@@ -125,6 +125,9 @@ services:
       BACKUP_RCLONE_REMOTE: ${BACKUP_RCLONE_REMOTE:-}
     volumes:
       - backups:/backups
+      # Uploaded templates and generated documents (CD-13), archived next to each dump. Writable
+      # so restore.sh can put a files archive back.
+      - app_storage:/storage
       - ./infra/backup/rclone.conf:/config/rclone/rclone.conf:ro
     depends_on:
       postgres:

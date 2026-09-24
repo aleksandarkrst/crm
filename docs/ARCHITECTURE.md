@@ -16,7 +16,8 @@ Users → Cloudflare (DNS, WAF) → Cloudflare Tunnel → cloudflared ─┐   (
 - **worker**: the same image, started as `dist/worker.js`. It processes background jobs and cron schedules.
 - **migrate**: the same image as a one-off container (`docker compose run --rm migrate`).
 - **postgres**: PostgreSQL 17, only on the internal network.
-- **backup**: `pg_dump` on a schedule. Copies go off-server with rclone.
+- **backup**: `pg_dump` and a tar.gz of the file storage (`app_storage`: templates and generated
+  documents) on a schedule. Copies go off-server with rclone.
 
 One hostname serves both UI and API (`app.yourdomain.com` and `app.yourdomain.com/api`), so there is no CORS and cookies stay simple.
 
@@ -28,7 +29,7 @@ backend/src/
   worker.ts, worker.module.ts   worker entry; worker/job-handlers.ts registers handlers + cron
   modules/                      business domains — each owns its tables, services, controllers
     identity/                   users, tenants, memberships, auth guard
-    crm/                        companies, contacts, funnels, deals (+activities), products
+    crm/                        companies, contacts, funnels, deals (+activities), products, documents
     health/
   shared/                       cross-cutting, domain-free
     database/                   schema/, DatabaseService.withTenant(), migrate.ts, errors
@@ -264,6 +265,76 @@ comma, semicolon, quote or line break. To guard against CSV (formula) injection,
 start with `=`, `+`, `-`, `@`, a tab or a carriage return get a leading `'`; numbers are written as
 numbers. The import drops that `'` again, so an exported file imports back unchanged.
 
+## Documents: templates and generation (CD-13)
+
+`backend/src/modules/crm/documents/`. Owners and admins upload Word (.docx) templates with merge
+fields; anyone in the workspace generates a document on a deal from one and downloads it.
+
+- **Tables** (`drizzle/0013_documents.sql`, RLS in `0014_documents_rls.sql`):
+  `document_templates` (name, document type from the design's list, original file name, size, the
+  merge fields found at upload, storage key, uploader) and `deal_documents` (deal, template id and
+  a copy of its name and type, document name, `status` queued → running → ready | failed, error,
+  storage key, size, `missing_fields`, who and when). `deal_documents.template_id` is a composite FK
+  with `ON DELETE SET NULL (template_id)` (PostgreSQL 15+; written in the custom migration because
+  Drizzle can't express the column list), so deleting a template keeps the documents made from it.
+  Deleting a deal deletes its documents (FK cascade).
+- **Merge fields** (`placeholders.ts`, the single source for the API, the upload scan and the
+  reference in Settings): double braces, as the design's template dialog says, e.g.
+  `{{company.name}}`, `{{contact.first_name}}`, `{{deal.headline}}`, `{{deal.amount}}` (net),
+  `{{deal.vat}}`, `{{deal.total}}`, `{{deal.closing_date}}`, `{{discovery.need}}` and the other
+  discovery notes (CD-14), `{{owner.name}}`, `{{workspace.name}}`, `{{today}}`. Deal lines repeat
+  with `{{#lines}} … {{/lines}}` (`{{line.product}}`, `{{line.quantity}}`, `{{line.unit_price}}`,
+  `{{line.total}}`, …); with the opening tag in a table row's first cell and the closing tag in its
+  last, the row repeats. The design's short forms (`{{company}}`, `{{contact_name}}`, `{{price}}`,
+  `{{total}}`, `{{need}}`) work too. `GET /api/crm/document-templates/placeholders` lists them all.
+- **Formatting**: amounts in the deal's currency, written in the locale of the workspace currency
+  like the UI (`€14,000`, `US$2,500` in a euro workspace), whole amounts without decimals; calendar
+  dates as "31 October 2026" (not shifted by time zones); `{{today}}` in the workspace time zone.
+  A known field without a value becomes empty (never "null") and is listed in `missing_fields`
+  ("Left empty: Constraint") on the document and its timeline entry. An unknown field
+  (`{{deal.amoutn}}`) stays in the document as written, so a typo is visible, and the upload
+  dialog flags it as "not recognised" before saving.
+- **Library**: [docxtemplater](https://docxtemplater.com/) (free core, MIT) and PizZip (MIT). No
+  paid modules: the parser is our own (flat dotted keys, see `docx.ts`), and the starter template is
+  generated in code (`starterTemplate()`), so it always matches the fields.
+- **Upload** (`POST /api/crm/document-templates`, multipart `file`, `name`, `docType`; owners and
+  admins): `.docx` only, at most 5 MB (multer's limit answers 413), not empty, a real Word zip that
+  unpacks to at most 60 MB, and a template docxtemplater can compile (an unclosed loop is a 400 with
+  the reason). `POST …/scan` runs the same checks and returns the fields without saving (the
+  dialog's "Parameters found"). `GET …/starter` is the starter template; `GET …/:id/file`
+  downloads a template; `DELETE …/:id` deletes it and its file.
+- **Generate** (`POST /api/crm/deals/:id/documents` `{ templateId, name? }`, any member): inserts a
+  `queued` document and sends `crm.generate-document` in the same transaction (202). The worker
+  (`DocumentGenerator`) marks it `running`, reads the deal, company, primary contact, owner, lines and
+  workspace with `withTenant`, fills the template, stores the file, marks it `ready` and writes
+  "Document generated · <name>" on the deal's timeline (from the template, by whom, what was left
+  empty). A broken or missing template marks it `failed` with a readable reason; it isn't retried.
+  The UI polls `GET /api/crm/deal-documents/:id` until it is ready or failed.
+  `GET /api/crm/deal-documents?dealId=` lists a deal's documents, `…/:id/file` downloads one, and
+  `DELETE …/:id` (owners, admins and whoever generated it) deletes it with its file and writes
+  "Document deleted" on the timeline.
+- **Files** (`infrastructure/storage/storage.service.ts`): on disk under `STORAGE_DIR`, one folder
+  per tenant: `<tenant>/templates/<id>.docx` and `<tenant>/documents/<id>.docx`, written to a
+  temporary name and renamed. There is no static route: a file is only streamed after its row was
+  found with `withTenant`, so it needs a signed-in member (401/403 otherwise) and another workspace
+  gets 404. Deleting a template, a document or a deal removes the files after the transaction
+  commits. In production `STORAGE_DIR` is the `app_storage` volume, shared by api and worker, and
+  the backup container archives it next to each database dump (see
+  [DEPLOYMENT.md](DEPLOYMENT.md#5-backups)).
+- **UI**: Settings → Document templates lists the uploaded templates (fields, uploader, Download,
+  Delete for owners/admins), keeps the built-in "Proposal v4" browser preview, and has the merge
+  field reference with **Download starter template**. **New template** (owners/admins) takes the
+  type, name and file, scans it and shows the fields before **Save template**. On a deal, the
+  composer's **Documents** tab picks a template (the stage's document type first), generates, and
+  lists the documents with their state, template, who, when and what was left empty, with Download
+  and Delete. Entering a stage whose entry document is a Proposal opens the generation dialog, which
+  follows the real job (queued, filling in, saved) and offers the download; with no templates it
+  offers the built-in preview and, for admins, the way to upload one. A contact's screen lists the
+  documents of their deal.
+- **Not done yet**: PDF output (it needs LibreOffice or a conversion service in the worker; a
+  follow-up), emailing a document, and "sent/signed" states (the built-in preview's "Mark as sent"
+  is still session-only).
+
 ## Auth
 
 The app handles authorization, not authentication. `AUTH_MODE=oidc` verifies JWTs from any
@@ -291,7 +362,8 @@ it is up to you. Emailing it from the worker is the natural next step.
 
 pg-boss keeps its queue in PostgreSQL (schema `pgboss`), so there is no Redis to run. Pass the
 current transaction to `jobs.send(name, data, tx)` so the job exists only if the business change
-commits. `DealsService.moveToStage` does this for `crm.deal-won`. Add Redis later only for caching
+commits. `DealsService.moveToStage` does this for `crm.deal-won`, and `DocumentsService.generate`
+for `crm.generate-document` (the worker fills the template, see "Documents" above). Add Redis later only for caching
 or very high job volume.
 
 ## Frontend: store → API
@@ -401,7 +473,6 @@ the store is the one place that talks to the backend.
 
 Still browser-only (seeded from `store/seed.ts`, lost on reload), because the backend doesn't have
 them yet:
-- document templates and generation (worker + storage)
 - invitation emails (links are copied by hand for now)
 - notification and integration settings
 

@@ -94,13 +94,15 @@ describe('honest UI', () => {
     await page.waitForFunction(() => document.body.innerText.includes('2 deals in view'));
   });
 
-  step('features without a backend are disabled and say so', async () => {
+  step('templates and funnels can be created, and nothing is made up', async () => {
+    // Templates are real now (CD-13): the owner can add one, and no made-up templates are listed.
     await page.goto(BASE_URL + '/settings/templates', { waitUntil: 'networkidle0' });
     const newTemplate = await page.waitForSelector('button::-p-text(New template)');
-    assert.ok(await newTemplate.evaluate((el) => el.disabled), 'New template is disabled');
+    assert.ok(!(await newTemplate.evaluate((el) => el.disabled)), 'New template is enabled for the owner');
+    await page.waitForFunction(() => document.body.innerText.includes('No templates uploaded yet'));
     const body = await text(page);
-    assert.ok(/coming soon/i.test(body), 'coming soon hint');
     assert.ok(!body.includes('Used 38 times') && !body.includes('owner: Mila'), 'no made-up template usage');
+    assert.ok(!body.includes('Services contract') && !body.includes('First invoice'), 'no placeholder templates');
 
     // Funnels can be created now (CD-10): the builder offers "New funnel" instead of a disabled "New pipeline".
     await page.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });

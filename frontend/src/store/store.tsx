@@ -2,6 +2,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { useNavigate } from 'react-router-dom';
 import { type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealLineInput, type LostReason, type ProfileInput, type TaskInput } from '../lib/api';
 import { paths } from '../lib/paths';
+import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference } from './documents';
 import { loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
 import {
@@ -51,7 +52,7 @@ export interface Session {
 /**
  * Business records (deals with their lines and to-dos, companies, contacts, products, funnels,
  * activity), the workspace settings and your profile come from the API. Features the backend
- * doesn't have yet (documents, some settings tabs) still live only in this browser tab, seeded
+ * doesn't have yet (some settings tabs) still live only in this browser tab, seeded
  * from the design.
  */
 function loadInitial(data: WorkspaceData): State {
@@ -114,7 +115,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
   ref.current = s;
   const navigate = useNavigate();
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const genTimer = useRef<ReturnType<typeof setInterval>>(undefined);
+  /** Documents being generated that the store follows (CD-13), by id; and deals whose documents were loaded. */
+  const docPolls = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const docsRequested = useRef(new Set<string>());
+  const placeholderRef = useRef<Promise<PlaceholderReference> | null>(null);
   /** Debounced writes that haven't been sent yet, by field key (see saveLater). */
   const saveTimers = useRef(new Map<string, { timer: ReturnType<typeof setTimeout>; run: () => void }>());
   /** Writes sent but not answered yet; `writeSeq` counts every write started. */
@@ -129,9 +133,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
 
   useEffect(() => {
     const timers = saveTimers.current;
+    const polls = docPolls.current;
     return () => {
       clearTimeout(toastTimer.current);
-      clearInterval(genTimer.current);
+      polls.forEach((t) => clearTimeout(t));
       timers.forEach((t) => clearTimeout(t.timer));
     };
   }, []);
@@ -269,18 +274,82 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }
     };
 
-    const startGeneration = (leadId: string) => {
-      clearInterval(genTimer.current);
-      set({ genOpen: true, genLead: leadId, genStep: 0, sent: false });
-      genTimer.current = setInterval(() => {
-        set((x) => {
-          if (x.genStep >= 4) {
-            clearInterval(genTimer.current);
-            return {};
+    // ------------------------------------------------------------ documents (CD-13)
+    /** Loads the workspace's document templates (Settings, the deal's Documents tab, generation). */
+    const loadTemplates = async () => {
+      try {
+        set({ templates: await docsApi.templates() });
+      } catch (err) {
+        flash('Could not load the document templates: ' + errText(err));
+      }
+    };
+    const putDoc = (doc: DealDoc) =>
+      set((x) => {
+        const list = x.dealDocs[doc.dealId] || [];
+        const next = list.some((d) => d.id === doc.id) ? list.map((d) => (d.id === doc.id ? doc : d)) : [doc, ...list];
+        return { dealDocs: { ...x.dealDocs, [doc.dealId]: next } };
+      });
+    /** Follows a document the worker is generating until it is ready or failed. */
+    const pollDoc = (doc: DealDoc) => {
+      if (docPolls.current.has(doc.id)) return;
+      const started = Date.now();
+      const tick = async () => {
+        try {
+          const latest = await docsApi.document(doc.id);
+          putDoc(latest);
+          if (!docBusy(latest)) {
+            docPolls.current.delete(doc.id);
+            if (latest.status === 'ready') flash(`${latest.name} is ready`);
+            else flash(`Could not generate ${latest.name}: ${latest.error ?? 'unknown error'}`, 7000);
+            void refreshLog(latest.dealId).catch(() => undefined);
+            return;
           }
-          return { genStep: x.genStep + 1 };
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 404) {
+            docPolls.current.delete(doc.id);
+            return;
+          }
+        }
+        // The worker normally takes a second or two; keep asking for a few minutes, slowing down.
+        if (Date.now() - started > 5 * 60_000) {
+          docPolls.current.delete(doc.id);
+          return;
+        }
+        docPolls.current.set(doc.id, setTimeout(tick, Date.now() - started < 20_000 ? 700 : 3000));
+      };
+      docPolls.current.set(doc.id, setTimeout(tick, 400));
+    };
+    /** Loads a deal's documents once per session (and follows any still being generated). */
+    const ensureDocs = (leadId: string) => {
+      if (docsRequested.current.has(leadId)) return;
+      docsRequested.current.add(leadId);
+      docsApi
+        .documents(leadId)
+        .then((docs) => {
+          set((x) => ({ dealDocs: { ...x.dealDocs, [leadId]: docs } }));
+          docs.filter(docBusy).forEach(pollDoc);
+        })
+        .catch((err) => {
+          docsRequested.current.delete(leadId);
+          flash('Could not load the documents: ' + errText(err));
         });
-      }, 620);
+    };
+    /** Queues a document for the worker; returns it (queued) or null when that failed. */
+    const generateDoc = async (leadId: string, templateId: string): Promise<DealDoc | null> => {
+      try {
+        const doc = await docsApi.generate(leadId, templateId);
+        putDoc(doc);
+        pollDoc(doc);
+        return doc;
+      } catch (err) {
+        flash('Could not generate the document: ' + errText(err), 7000);
+        return null;
+      }
+    };
+    /** Opens the generation dialog for a deal (on entering a Proposal stage, or from its Documents tab). */
+    const startGeneration = (leadId: string) => {
+      set({ genOpen: true, genLead: leadId, genDocId: null });
+      void loadTemplates();
     };
 
     const moveLead = (leadId: string, stageId: string) => {
@@ -944,12 +1013,51 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       openLead: (id: string) => navigate(paths.lead(id)),
       openContact: (id: string) => navigate(paths.contact(id)),
       openCompany: (id: string) => navigate(paths.company(id)),
-      openGenerated: () => {
-        const x = cur();
-        if (x.genStep < 4 || !x.genLead) return;
-        const leadId = x.genLead;
-        mapLead(leadId, (l) => ({ ...l, docs: [{ name: 'Proposal — ' + (l.headline || l.title || l.company), state: 'draft', meta: 'v1 · generated just now · not sent' }, ...(l.docs || [])] }));
-        set({ genOpen: false, docOpen: true, docLeadId: leadId, sent: false });
+      loadTemplates,
+      ensureDocs,
+      generateDoc,
+      /** Generates from the dialog and keeps the dialog on that document. */
+      generateInDialog: async (templateId: string) => {
+        const leadId = cur().genLead;
+        if (!leadId) return;
+        const doc = await generateDoc(leadId, templateId);
+        if (doc) set({ genDocId: doc.id });
+      },
+      downloadDoc: (doc: DealDoc) => docsApi.downloadDocument(doc).catch((err) => flash('Could not download: ' + errText(err), 7000)),
+      deleteDoc: async (doc: DealDoc) => {
+        try {
+          await docsApi.deleteDocument(doc.id);
+          set((x) => ({ dealDocs: { ...x.dealDocs, [doc.dealId]: (x.dealDocs[doc.dealId] || []).filter((d) => d.id !== doc.id) } }));
+          flash(doc.name + ' deleted');
+          void refreshLog(doc.dealId).catch(() => undefined);
+        } catch (err) {
+          flash('Could not delete the document: ' + errText(err), 7000);
+        }
+      },
+      scanTemplate: (file: File) => docsApi.scan(file),
+      /** The merge field reference (fetched once per session). */
+      loadPlaceholders: () =>
+        (placeholderRef.current ??= docsApi.placeholders().catch((err) => {
+          placeholderRef.current = null;
+          throw err;
+        })),
+      downloadTemplate: (t: DocTemplate) => docsApi.downloadTemplate(t).catch((err) => flash('Could not download: ' + errText(err), 7000)),
+      downloadStarter: () => docsApi.downloadStarter().catch((err) => flash('Could not download: ' + errText(err), 7000)),
+      /** Uploads a template (owners and admins); returns it, or throws with the API's reason. */
+      uploadTemplate: async (file: File, name: string, docType: DocType) => {
+        const t = await docsApi.createTemplate(file, name, docType);
+        set((x) => ({ templates: [t, ...(x.templates || []).filter((y) => y.id !== t.id)] }));
+        flash(`${t.name} saved`);
+        return t;
+      },
+      deleteTemplate: async (t: DocTemplate) => {
+        try {
+          await docsApi.deleteTemplate(t.id);
+          set((x) => ({ templates: (x.templates || []).filter((y) => y.id !== t.id) }));
+          flash(`${t.name} deleted · documents made from it are kept`);
+        } catch (err) {
+          flash('Could not delete the template: ' + errText(err), 7000);
+        }
       },
       openDoc: (leadId: string) => set({ docOpen: true, docLeadId: leadId, sent: false }),
       sendDoc: () => {

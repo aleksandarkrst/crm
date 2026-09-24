@@ -3,10 +3,11 @@ import { CustomFieldInputs, customFieldsForCreate } from '../components/CustomFi
 import { Modal, ModalHeader } from '../components/ui';
 import { type CustomFieldPatch, type CustomFieldType, LOST_REASONS, type LostReason } from '../lib/api';
 import { paths } from '../lib/paths';
-import { BILLING_KINDS, BUYER_ROLES, CHANNEL_LABELS, currencyOptions, DOC_TYPES, FIELD_TYPES, PARAM_SOURCES, PRODUCT_TYPES } from '../store/seed';
+import { BILLING_KINDS, BUYER_ROLES, CHANNEL_LABELS, currencyOptions, FIELD_TYPES, PRODUCT_TYPES } from '../store/seed';
 import { allPeople, companyLabels, companyRecords, currencySymbol, customFieldsOf, leadById, localeFor, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { ChannelCode, Lead } from '../store/types';
+import { GenerationModal, NewTemplateModal } from './DocumentModals';
 import { ProposalDoc } from './ProposalDoc';
 
 /** Every overlay in the app; open/closed state lives in the store. */
@@ -26,38 +27,6 @@ export function Modals() {
       {s.productOpen && <NewProductModal />}
       {s.lostLeadId && <MarkLostModal />}
     </>
-  );
-}
-
-const GEN_STEPS = ['Reading the company record', 'Merging 14 fields from this lead', 'Applying Proposal template v4', 'Pricing from the service rate card', 'Ready for review'];
-
-function GenerationModal() {
-  const { s, openGenerated } = useStore();
-  const lead = leadById(s, s.genLead) || s.leads[0]!;
-  const ready = s.genStep >= 4;
-  return (
-    <div className="overlay" style={{ zIndex: 40 }}>
-      <div style={{ background: 'var(--white)', borderRadius: 14, width: '100%', maxWidth: 520, padding: 28, animation: 'dcFade .25s ease-out both' }}>
-        <div className="caps">Stage rule fired</div>
-        <div style={{ fontWeight: 600, letterSpacing: '-0.02em', fontSize: 24, lineHeight: 1.15, margin: '7px 0 6px' }}>Building the proposal for {lead.company}</div>
-        <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5 }}>Template: Proposal v4 · 8 sections · 14 merge fields</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 11, marginTop: 20 }}>
-          {GEN_STEPS.map((label, i) => {
-            const done = i < s.genStep;
-            const current = i === s.genStep;
-            return (
-              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-                <span style={{ flex: '0 0 18px', width: 18, height: 18, borderRadius: '50%', border: `1.5px solid ${done ? '#14503C' : current ? '#B4531B' : '#D0D5DD'}`, background: done ? '#14503C' : 'transparent', color: '#FFFFFF', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{done ? '✓' : ''}</span>
-                <span style={{ fontSize: 13.5, color: done || current ? '#101828' : '#98A2B3' }}>{label}</span>
-              </div>
-            );
-          })}
-        </div>
-        <button type="button" onClick={openGenerated} style={{ width: '100%', marginTop: 22, border: 0, cursor: ready ? 'pointer' : 'wait', background: ready ? '#14503C' : '#F1F3F6', color: ready ? '#F5F6F8' : '#98A2B3', fontSize: 13.5, fontWeight: 500, padding: 12, borderRadius: 8 }}>
-          {ready ? 'Review proposal' : 'Generating…'}
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -396,62 +365,6 @@ function NewPersonaModal() {
         </button>
         <button type="button" className={label.trim() && !busy ? 'btn btn-primary' : 'btn btn-disabled'} disabled={!label.trim() || busy} onClick={() => void create()}>
           {busy ? 'Creating…' : 'Create funnel'}
-        </button>
-      </div>
-    </Modal>
-  );
-}
-
-function NewTemplateModal() {
-  const { s, set } = useStore();
-  const file = s.templateFile;
-  return (
-    <Modal maxWidth={600}>
-      <ModalHeader title="New template" sub="Upload the document you already use. Every parameter it contains becomes a merge field the CRM fills from the lead record." />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-        <span className="caps">Document type</span>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {DOC_TYPES.map((d) => (
-            <button key={d} type="button" className={s.templateType === d ? 'choice-pill on' : 'choice-pill'} onClick={() => set({ templateType: d })}>
-              {d}
-            </button>
-          ))}
-        </div>
-      </div>
-      <label className="form-label">
-        Template name
-        <input className="form-input" placeholder="e.g. Proposal — brand programme v1" />
-      </label>
-      <button
-        type="button"
-        onClick={() => set({ templateFile: s.templateType.toLowerCase().replace(/ /g, '-') + '.docx' })}
-        style={{ cursor: 'pointer', textAlign: 'left', border: `1px dashed ${file ? '#14503C' : '#D0D5DD'}`, background: file ? '#E7F2EE' : '#F5F6F8', borderRadius: 10, padding: 20, display: 'flex', flexDirection: 'column', gap: 5 }}
-      >
-        <span style={{ fontSize: 13.5, fontWeight: 600 }}>{file || 'Upload a .docx or .pdf'}</span>
-        <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45 }}>{file ? 'Scanned · 3 parameters recognised' : 'Choose the document you already send. Parameters written in double braces are detected automatically.'}</span>
-      </button>
-      {file && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 9, background: 'var(--bg-soft)', borderRadius: 10, padding: 14 }}>
-          <span className="caps">Parameters found</span>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-            {Object.entries(PARAM_SOURCES).map(([token, source]) => (
-              <span key={token} style={{ fontSize: 12, background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 9px', color: 'var(--ink)' }}>
-                {token} <span style={{ color: 'var(--muted)' }}>→ {source}</span>
-              </span>
-            ))}
-          </div>
-          <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>These fill automatically each time the template runs. Anything not recognised stays as plain text.</span>
-        </div>
-      )}
-      <div className="modal-actions">
-        <button type="button" className="btn btn-secondary" onClick={() => set({ templateOpen: false, templateFile: null })}>
-          Cancel
-        </button>
-        <span className="caps-muted" style={{ alignSelf: 'center' }}>
-          Coming soon
-        </span>
-        <button type="button" className="btn btn-disabled" disabled title="Saving your own templates is coming soon">
-          Save template
         </button>
       </div>
     </Modal>

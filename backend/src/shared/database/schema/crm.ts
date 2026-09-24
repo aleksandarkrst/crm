@@ -475,3 +475,66 @@ export const salesBonusRules = pgTable(
   },
   (t) => [primaryKey({ columns: [t.tenantId, t.userId] }), check('sales_bonus_rules_rate_ck', sql`${t.rate} between 0 and 100`)],
 );
+
+// ---------------------------------------------------------------- documents (CD-13)
+
+/** What a template is for (Settings → Document templates, "Document type"). */
+export const DOCUMENT_TYPES = ['Proposal', 'Quote', 'Contract', 'NDA', 'Onboarding brief', 'Invoice'] as const;
+export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+
+/**
+ * A .docx template uploaded by an owner or admin. The file lives in storage under
+ * `<tenant>/templates/<id>.docx`; `placeholders` are the merge fields found in it at upload.
+ */
+export const documentTemplates = pgTable(
+  'document_templates',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    name: text('name').notNull(),
+    docType: text('doc_type', { enum: DOCUMENT_TYPES }).notNull().default('Proposal'),
+    fileName: text('file_name').notNull(), // as uploaded
+    sizeBytes: integer('size_bytes').notNull(),
+    storageKey: text('storage_key').notNull(),
+    placeholders: jsonb('placeholders').$type<string[]>().notNull().default([]),
+    uploadedByUserId: uuid('uploaded_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (t) => [unique('document_templates_tenant_id_uq').on(t.tenantId, t.id), index('document_templates_tenant_idx').on(t.tenantId, t.createdAt)],
+);
+
+export const DOCUMENT_STATUSES = ['queued', 'running', 'ready', 'failed'] as const;
+export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
+
+/**
+ * A document generated for a deal from a template by the worker (job `crm.generate-document`).
+ * The file lives under `<tenant>/documents/<id>.docx` once `status` is "ready". The template may be
+ * deleted later: `template_id` is then nulled (the FK is in the documents RLS migration, because it
+ * sets only that column to null) and `template_name` keeps saying where the document came from.
+ */
+export const dealDocuments = pgTable(
+  'deal_documents',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    dealId: uuid('deal_id').notNull(),
+    templateId: uuid('template_id'),
+    templateName: text('template_name').notNull(),
+    docType: text('doc_type', { enum: DOCUMENT_TYPES }).notNull(),
+    name: text('name').notNull(),
+    status: text('status', { enum: DOCUMENT_STATUSES }).notNull().default('queued'),
+    error: text('error'),
+    storageKey: text('storage_key'),
+    sizeBytes: integer('size_bytes'),
+    /** Merge fields the template uses that the deal had no value for (they were left empty). */
+    missingFields: jsonb('missing_fields').$type<string[]>().notNull().default([]),
+    createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    unique('deal_documents_tenant_id_uq').on(t.tenantId, t.id),
+    index('deal_documents_tenant_deal_idx').on(t.tenantId, t.dealId, t.createdAt),
+    foreignKey({ columns: [t.tenantId, t.dealId], foreignColumns: [deals.tenantId, deals.id], name: 'deal_documents_deal_fk' }).onDelete('cascade'),
+  ],
+);

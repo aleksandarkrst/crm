@@ -44,9 +44,16 @@ a private window and sign in as that email.
 > **Current state of the UI:** deals (with their product lines, payment schedules, stage to-dos,
 > fit scores, discovery notes, activity and stage history, and whether they were won or lost),
 > companies, contacts, products (with their currency), funnels (any number) and their stages are saved in the database, and so are custom fields, sales bonus rules (owners and admins only), the team, invitations, workspace settings and your
-> profile. Some design features have no backend yet and
-> only last until you reload the page: documents and the notification and integration settings. See
+> profile. Document templates and the documents generated from them on a deal are saved too (the
+> files under `STORAGE_DIR`; generating needs the worker running). Some design features have no
+> backend yet and only last until you reload the page: the remaining settings tabs. See
 > [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#frontend-store--api).
+
+**Documents:** owners and admins upload Word (.docx) templates with `{{merge fields}}` in
+**Settings → Document templates** (there is a starter template and a field reference there). On a
+deal, the **Documents** tab generates a document from a template; the worker fills it in with the
+deal's company, contact, discovery notes, lines and amounts in the deal currency, and it is listed on
+the deal to download. Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#documents-templates-and-generation-cd-13).
 
 **Import and export (owners and admins):** Companies, Contacts and Pipeline have **Import**, which
 takes a CSV of companies, contacts or deals (comma or semicolon separated, up to 5,000 rows and
@@ -82,7 +89,8 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
 
 - **Unit tests** (`backend`, `npm test`): fast, no database.
 - **Integration tests** (`backend/test/integration`, `npm run test:integration`): build the API,
-  start `dist/main.js` on port 3101 (dev auth) and test it over HTTP against PostgreSQL:
+  start `dist/main.js` on port 3101 (dev auth) and the worker (`dist/worker.js`), and test it over
+  HTTP against PostgreSQL:
   tenant isolation through RLS (API and raw SQL as the runtime role), composite-FK rejection of
   cross-tenant references, member/admin/owner rules and last-owner protection, invitations
   (invited email only, single use, withdraw, replace), deal-amount recalculation from lines,
@@ -93,8 +101,10 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   database guards (no lost deal in a won stage, no deal in a deleted stage), CSV import (roles,
   per-row validation, duplicates skipped or updated, deal matching, size and row limits, tenant
   isolation, quoting edge cases), custom fields (definitions and roles, value validation per type,
-  required, option renames, soft delete, isolation), sales bonus rules (members get 403) and
-  product / deal currency rules.
+  required, option renames, soft delete, isolation), sales bonus rules (members get 403),
+  product / deal currency rules, and documents (template upload limits and roles, generation by
+  the worker with the deal's values checked in the .docx, downloads behind auth with another
+  workspace getting 404, files removed with their template, document or deal).
 - **Browser tests** (`e2e/`, Puppeteer with its bundled Chrome, run by `node:test`): sign-in,
   workspace, products, new deal, closing date, notes, drag between stages, reload, every screen
   renders; deal lines and stage to-dos persist; CHAMP fit score; team invitations with two
@@ -105,7 +115,8 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   temp folder); the header search (Ctrl+K, keyboard navigation), the New menu and the sidebar
   workspace switcher; a custom field added in Settings and filled on a deal (after a reload, by a
   member too, and deleted); the sales bonus tab and Overview card hidden from members; changing a
-  deal's currency and the product currency rule.
+  deal's currency and the product currency rule; downloading the starter template, uploading it as
+  a template, generating a proposal on a deal and downloading it (needs the worker).
 
 Both suites create their own users and workspaces with unique emails, so they can run against
 the dev database without resetting it. The database must be migrated first.
@@ -117,10 +128,14 @@ npm run test:integration
 #   DATABASE_URL          runtime role, default postgres://app_runtime:dev_runtime_password@localhost:5432/app
 #                         (the suite refuses to run as a role that bypasses RLS)
 #   INTEGRATION_API_PORT  port for the API it starts, default 3101
-#   API_URL               test an already running API instead of starting one
+#   API_URL               test an already running API instead of starting one (run its worker too;
+#                         set STORAGE_DIR to its storage folder for the file checks)
+#   Files go to STORAGE_DIR (or the one in backend/.env, else backend/storage), the folder a dev
+#   worker from this checkout uses too, in case it picks up a generation job first.
 
-# Browser tests: start the API and the UI, then run the suite
+# Browser tests: start the API, the worker and the UI, then run the suite
 cd backend && npm run build && PORT=3101 node dist/main.js                    # terminal 1
+cd backend && node dist/worker.js                                             # terminal 1b
 cd frontend && VITE_PORT=5174 VITE_API_PROXY=http://127.0.0.1:3101 npm run dev   # terminal 2
 cd e2e && npm ci && E2E_BASE_URL=http://localhost:5174 npm test                # terminal 3
 #   E2E_BASE_URL   where the UI runs (default http://localhost:5173); /api must reach the API

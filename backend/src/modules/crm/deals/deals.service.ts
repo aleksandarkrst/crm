@@ -2,11 +2,12 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, not, or, type SQL } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
+import { StorageService } from '../../../infrastructure/storage/storage.service';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, dealLines, type DealOutcome, deals, funnels, funnelStages, LOST_REASONS, products, tenants } from '../../../shared/database/schema';
+import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, dealDocuments, dealLines, type DealOutcome, deals, funnels, funnelStages, LOST_REASONS, products, tenants } from '../../../shared/database/schema';
 import { JobsService } from '../../../shared/events/jobs.service';
 import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
 import { currencyCode } from '../currency';
@@ -73,6 +74,7 @@ export class DealsService {
     private readonly jobs: JobsService,
     private readonly history: StageHistoryService,
     private readonly customFields: CustomFieldsService,
+    private readonly storage: StorageService,
   ) {}
 
   /** Board/list view: deals with company, primary contact and stage names joined in. */
@@ -306,15 +308,21 @@ export class DealsService {
       .then(() => undefined);
   }
 
-  /** Deleting a deal also deletes its lines, to-dos, activities and contact links (FK cascade). */
-  remove(ctx: TenantContext, id: string) {
-    return this.database
+  /**
+   * Deleting a deal also deletes its lines, to-dos, activities, contact links and generated
+   * documents (FK cascade); the documents' files are removed once that has committed.
+   */
+  async remove(ctx: TenantContext, id: string) {
+    const files = await this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        const docs = await tx.select({ key: dealDocuments.storageKey }).from(dealDocuments).where(eq(dealDocuments.dealId, id));
         const [row] = await tx.delete(deals).where(eq(deals.id, id)).returning({ id: deals.id });
         if (!row) throw new NotFoundException('Deal not found');
         await this.audit.record(tx, ctx, { action: 'deal.deleted', entityType: 'deal', entityId: id });
+        return docs.flatMap((d) => (d.key ? [d.key] : []));
       })
       .catch(mapDbError);
+    for (const key of files) await this.storage.delete(ctx.tenantId, key);
   }
 
   /**
