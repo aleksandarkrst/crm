@@ -104,7 +104,9 @@ export const todayLabel = (tz?: string): string => isoLabel(todayIso(tz));
 
 // ---------------------------------------------------------------- funnels & leads
 
-export const stagesFor = (s: State, seg: SegKey): Stage[] => s.funnels[seg].stages;
+export const stagesFor = (s: State, seg: SegKey): Stage[] => s.funnels[seg]?.stages ?? [];
+/** Every funnel, in the workspace's order, as options for a select (value = funnel id). */
+export const funnelOptions = (s: State): { value: SegKey; label: string }[] => Object.values(s.funnels).map((f) => ({ value: f.id, label: f.label }));
 export const stageOf = (s: State, lead: Lead): Stage => {
   const stages = stagesFor(s, lead.segment);
   return stages.find((st) => st.id === lead.stage) ?? stages[0]!;

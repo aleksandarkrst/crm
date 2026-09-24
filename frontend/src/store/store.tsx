@@ -52,9 +52,8 @@ export interface Session {
  */
 function loadInitial(data: WorkspaceData): State {
   const s: State = { ...initialState(), ...data };
-  // The pipeline opens on your default funnel for this workspace.
-  const preferred = (Object.keys(data.funnels) as SegKey[]).find((k) => data.funnels[k].id && data.funnels[k].id === data.profile.defaultFunnelId);
-  if (preferred) s.segment = s.newLeadType = preferred;
+  // The pipeline opens on your default funnel for this workspace, else the first one.
+  s.segment = s.newLeadType = data.funnels[data.profile.defaultFunnelId] ? data.profile.defaultFunnelId : Object.keys(data.funnels)[0]!;
   s.taskLeadId = data.leads[0]?.id ?? '';
   s.contactCompany = data.leads[0]?.id ?? '';
   try {
@@ -176,7 +175,12 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             const seq = writeSeq.current;
             const data = await loadWorkspace();
             if (seq === writeSeq.current && isIdle()) {
-              set(data);
+              // A funnel that was deleted can't stay open.
+              set((x) => {
+                const first = Object.keys(data.funnels)[0]!;
+                const valid = (id: string) => (data.funnels[id] ? id : first);
+                return { ...data, segment: valid(x.segment), newLeadType: valid(x.newLeadType), filters: x.filters.audience === 'Audience' || data.funnels[x.filters.audience] ? x.filters : { ...x.filters, audience: 'Audience' } };
+              });
               return;
             }
           }
@@ -459,7 +463,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
 
     // ------------------------------------------------------------ stage to-dos
     /**
-     * Saves a to-do's state. Playbook to-dos are upserted by deal + stage + label; off-playbook
+     * Saves a to-do's state. Playbook to-dos are upserted by deal + stage + checklist item; off-playbook
      * to-dos by id. Changes made within the pause (done, then a note) are merged into one write.
      */
     const persistTask = (leadId: string, stageId: string, idx: number, fields: TaskInput) => {
@@ -470,10 +474,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const key = taskKey(leadId, stageId, idx);
       pendingTasks.current.set(key, { ...pendingTasks.current.get(key), ...fields });
       const extraId = item.offPlaybook ? x.extraTodoIds[leadId + '::' + stageId]?.[item.extraIdx!] : undefined;
+      const itemId = item.offPlaybook ? undefined : stagesFor(x, lead!.segment).find((st) => st.id === stageId)?.checklistIds[idx];
       saveLater('task:' + key, async () => {
         const body = pendingTasks.current.get(key) ?? {};
         pendingTasks.current.delete(key);
-        if (!item.offPlaybook) await crmApi.upsertPlaybookTask(leadId, { stageId, label: item.label, ...body });
+        if (itemId) await crmApi.upsertPlaybookTask(leadId, { stageId, checklistItemId: itemId, ...body });
         else if (extraId) await crmApi.updateTask(extraId, body);
       }, `the to-do "${item.label || 'New to-do'}"`);
     };
@@ -671,8 +676,12 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     };
 
     // ------------------------------------------------------------ funnel builder
-    /** Edits one stage of the open funnel and saves it (editing funnels is an admin action). */
-    const editStage = (idx: number, fn: (stage: Stage) => void) => {
+    /**
+     * Edits one stage of the open funnel and saves it (editing funnels is an admin action).
+     * `structural` changes (adding or removing a to-do) shift the to-dos after it, so they are
+     * saved at once and the workspace is reloaded; renames keep their item id and just save.
+     */
+    const editStage = (idx: number, fn: (stage: Stage) => void, structural = false) => {
       const x = cur();
       const funnels = JSON.parse(JSON.stringify(x.funnels)) as State['funnels'];
       const funnel = funnels[x.segment];
@@ -682,18 +691,113 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       set({ funnels });
       const funnelId = funnel.id;
       if (!funnelId) return;
-      saveLater('stage:' + st.id, () =>
+      const write = () =>
         crmApi.updateStage(funnelId, st.id, {
           name: st.name.trim() || 'Stage',
           activity: st.activity,
           channel: channelOf(st.channel),
           documentOnEntry: st.doc === 'None' ? null : st.doc,
           winProbability: st.prob === '' ? 0 : st.prob,
-          checklist: st.checklist.map((c) => c.trim()).filter(Boolean),
-        }),
+          // Items keep their id, so renaming one keeps the deals' ticks on it (CD-32).
+          checklistItems: st.checklist.map((label, i) => ({ id: st.checklistIds[i]!, label: label.trim() })),
+        });
+      // A to-do whose name is cleared while typing isn't saved (that would remove the item and
+      // its ticks); the stage saves again once it has a name, or when it is removed.
+      if (st.checklist.some((c) => !c.trim())) return;
+      if (!structural) return saveLater('stage:' + st.id, write, 'the stage ' + (st.name.trim() || 'Stage'));
+      dropSave('stage:' + st.id);
+      void save(write, reload, 'the to-dos of ' + (st.name.trim() || 'Stage'));
+    };
+
+    // ------------------------------------------------------------ funnels and stages (CD-9, CD-10)
+    /** Owners and admins edit the playbook: funnels, stages and to-dos. */
+    const canEditFunnels = session.tenant.role === 'owner' || session.tenant.role === 'admin';
+    /** Saves the pending edits of the open funnel first, then runs a change that reshapes it, then reloads. */
+    const reshape = (write: () => Promise<unknown>, what: string, then?: () => unknown) => {
+      flushSaves();
+      void save(
+        async () => {
+          await whenIdleExcept();
+          await write();
+        },
+        async () => {
+          await reload();
+          await then?.();
+        },
+        what,
       );
     };
-    const notYet = (..._args: unknown[]) => flash('Adding and removing stages is not supported yet. Edits to existing stages are saved.');
+    /** Waits for the writes already sent (this one isn't counted yet when it starts). */
+    const whenIdleExcept = () => new Promise<void>((resolve) => {
+      const check = () => (inFlight.current <= 1 && saveTimers.current.size === 0 ? resolve() : setTimeout(check, 50));
+      check();
+    });
+    const openFunnel = () => cur().funnels[cur().segment];
+    /** Adds a stage to the open funnel, just before its won stage. */
+    const addStage = () => {
+      const funnel = openFunnel();
+      if (!funnel) return;
+      let name = 'New stage';
+      for (let i = 2; funnel.stages.some((st) => st.name === name); i++) name = 'New stage ' + i;
+      reshape(() => crmApi.createStage(funnel.id, { name }), 'the new stage', () => flash(name + ' added · rename it and set its activity'));
+    };
+    /** Moves a stage of the open funnel one place up (-1) or down (+1). */
+    const moveStage = (idx: number, dir: -1 | 1) => {
+      const funnel = openFunnel();
+      const to = idx + dir;
+      if (!funnel || to < 0 || to >= funnel.stages.length) return;
+      const stages = [...funnel.stages];
+      [stages[idx], stages[to]] = [stages[to]!, stages[idx]!];
+      set((x) => ({ funnels: { ...x.funnels, [funnel.id]: { ...funnel, stages } } }));
+      reshape(() => crmApi.reorderStages(funnel.id, stages.map((st) => st.id)), 'the stage order');
+    };
+    /** Deletes a stage of the open funnel; its deals (if any) move to `moveTo`. */
+    const removeStage = (idx: number, moveTo?: string) => {
+      const funnel = openFunnel();
+      const st = funnel?.stages[idx];
+      if (!funnel || !st) return;
+      dropSave('stage:' + st.id);
+      const moved = cur().leads.filter((l) => l.stage === st.id).length;
+      const target = funnel.stages.find((x) => x.id === moveTo);
+      reshape(() => crmApi.deleteStage(funnel.id, st.id, moveTo), 'removing ' + st.name, () =>
+        flash(st.name + ' removed' + (moved && target ? ` · ${moved} deal${moved === 1 ? '' : 's'} moved to ${target.name}` : '')),
+      );
+    };
+    /** New funnel from a copy of another one's stages (or a small default set); opens it. */
+    const createFunnel = async (input: { label: string; note: string; copyFrom: string }): Promise<boolean> => {
+      try {
+        const f = await crmApi.createFunnel({ label: input.label.trim(), note: input.note.trim() || null, ...(input.copyFrom !== 'blank' ? { copyFromFunnelId: input.copyFrom } : {}) });
+        await reload();
+        set((x) => ({ segment: f.id, personaOpen: false, filters: { ...x.filters, audience: f.id } }));
+        flash(f.label + ' created · edit its stages below');
+        return true;
+      } catch (err) {
+        flash('Not saved: ' + errText(err));
+        return false;
+      }
+    };
+    /** Renames the open funnel or changes its note (one write per field after a pause). */
+    const patchFunnel = (id: string, patch: { label?: string; note?: string }) => {
+      const funnel = cur().funnels[id];
+      if (!funnel) return;
+      set((x) => ({ funnels: { ...x.funnels, [id]: { ...funnel, ...patch } } }));
+      if (patch.label !== undefined && patch.label.trim()) saveLater('funnel-label:' + id, () => crmApi.updateFunnel(id, { label: patch.label!.trim() }), 'the funnel name');
+      if (patch.note !== undefined) saveLater('funnel-note:' + id, () => crmApi.updateFunnel(id, { note: patch.note!.trim() || null }), 'the funnel description');
+    };
+    /** Deletes a funnel that never had deals (the API refuses others with a reason). */
+    const deleteFunnel = async (id: string) => {
+      const funnel = cur().funnels[id];
+      if (!funnel) return;
+      cancelSaves(id, ...funnel.stages.map((st) => st.id));
+      try {
+        await crmApi.deleteFunnel(id);
+      } catch (err) {
+        flash('Not deleted: ' + errText(err), 7000);
+        return;
+      }
+      await reload();
+      flash(funnel.label + ' deleted');
+    };
 
     // ------------------------------------------------------------ companies
     /** Companies are identified by id (names aren't unique), so renaming one keeps its route. */
@@ -747,7 +851,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     };
 
     // ------------------------------------------------------------ deleting (owners and admins)
-    const canDelete = session.tenant.role === 'owner' || session.tenant.role === 'admin';
+    const canDelete = canEditFunnels;
     const canEditWorkspace = canDelete;
     /** Drops pending debounced writes for a record that is about to be deleted. */
     const cancelSaves = (...ids: string[]) => {
@@ -797,7 +901,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       pushLog,
       patchLead,
       patchLeadSegment: (id: string, seg: SegKey) => {
-        const funnelId = cur().funnels[seg].id;
+        const funnelId = cur().funnels[seg]?.id;
         if (!funnelId) return;
         if (leadById(cur(), id)?.outcome === 'lost') {
           flash('This deal is lost. Reopen it before changing its funnel.');
@@ -860,13 +964,36 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       updateLeadTask,
       toggleLeadTask,
       removeLeadTask,
-      addStage: notYet,
+      canEditFunnels,
+      addStage,
+      moveStage,
+      createFunnel,
+      patchFunnel,
+      deleteFunnel,
       editStage: (idx: number, key: 'name' | 'activity' | 'channel' | 'doc', val: string) => editStage(idx, (st) => void ((st as unknown as Record<string, string>)[key] = val)),
       editProb: (idx: number, raw: string) => editStage(idx, (st) => void (st.prob = raw === '' ? '' : Math.max(0, Math.min(100, Math.round(Number(raw) || 0))))),
-      removeStage: notYet,
-      addGate: (idx: number) => editStage(idx, (st) => void st.checklist.push('New to-do')),
+      removeStage,
+      addGate: (idx: number) =>
+        editStage(
+          idx,
+          (st) => {
+            let label = 'New to-do';
+            for (let i = 2; st.checklist.includes(label); i++) label = 'New to-do ' + i;
+            st.checklist.push(label);
+            st.checklistIds.push(crypto.randomUUID());
+          },
+          true,
+        ),
       renameGate: (idx: number, gi: number, val: string) => editStage(idx, (st) => void (st.checklist[gi] = val)),
-      removeGate: (idx: number, gi: number) => editStage(idx, (st) => void st.checklist.splice(gi, 1)),
+      removeGate: (idx: number, gi: number) =>
+        editStage(
+          idx,
+          (st) => {
+            st.checklist.splice(gi, 1);
+            st.checklistIds.splice(gi, 1);
+          },
+          true,
+        ),
       setCompanyField,
       addCompany: () => {
         const taken = new Set(companyRecords(cur()).map((c) => c.name));
@@ -891,7 +1018,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       // ---------------------------------------------------------- creating records
       /** New deal; creates the company and the primary contact first when they are new. */
       createDeal: async (input: { company: { id?: string; name: string }; contact: { contactId?: string; name: string } | null; segment: SegKey }) => {
-        const funnelId = cur().funnels[input.segment].id;
+        const funnelId = cur().funnels[input.segment]?.id;
         if (!funnelId) return;
         try {
           const companyId = input.company.id ?? (await crmApi.createCompany({ name: input.company.name })).id;

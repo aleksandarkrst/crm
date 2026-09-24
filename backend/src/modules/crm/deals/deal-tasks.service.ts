@@ -1,10 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns, not, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { activities, CHANNELS, dealTasks, memberships, users } from '../../../shared/database/schema';
+import { activities, CHANNELS, dealTasks, funnelStages, memberships, users } from '../../../shared/database/schema';
 import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
 import { userNameOf } from '../owner';
 
@@ -22,8 +22,14 @@ const TaskPlanning = z.object({
   channel: z.enum(CHANNELS).nullish(),
 });
 
-/** Playbook to-dos are identified by deal + stage + checklist label. */
-export const UpsertPlaybookTask = TaskState.extend({ stageId: z.uuid(), label: label.min(1) });
+/**
+ * Playbook to-dos are identified by deal + stage + checklist item (CD-32). Clients from before
+ * CD-32 send the item's label instead, which works while the item has that label.
+ */
+export const UpsertPlaybookTask = TaskState.extend({ stageId: z.uuid(), checklistItemId: z.uuid().optional(), label: label.min(1).optional() }).refine(
+  (v) => v.checklistItemId || v.label,
+  { message: 'checklistItemId is required', path: ['checklistItemId'] },
+);
 /** Off-playbook to-dos are added per deal (label may start empty while the user types it). */
 export const CreateExtraTask = TaskState.extend({
   ...TaskPlanning.shape,
@@ -75,18 +81,36 @@ export class DealTasksService {
     );
   }
 
+  /**
+   * Ticks or annotates a playbook to-do; its row is created on first touch. By item id, the row
+   * follows the item through renames; the label stored with it is the item's current label.
+   */
   upsertPlaybook(ctx: TenantContext, dealId: string, input: UpsertPlaybookTask) {
-    const { done, ...rest } = input;
-    const state = { ...rest, ...doneFields(ctx, done) };
+    const { done, stageId, checklistItemId, label, ...rest } = input;
+    const state = { ...rest, ...doneFields(ctx, done), updatedAt: new Date() };
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        let itemLabel = label!;
+        if (checklistItemId) {
+          const [stage] = await tx.select({ items: funnelStages.checklistItems }).from(funnelStages).where(eq(funnelStages.id, stageId));
+          const item = stage?.items.find((i) => i.id === checklistItemId);
+          if (!item) throw new BadRequestException("This to-do is not on the stage's checklist any more");
+          itemLabel = item.label;
+          const [row] = await tx
+            .update(dealTasks)
+            .set(state)
+            .where(and(eq(dealTasks.dealId, dealId), eq(dealTasks.stageId, stageId), eq(dealTasks.checklistItemId, checklistItemId), not(dealTasks.offPlaybook)))
+            .returning();
+          if (row) return row;
+        }
         const [row] = await tx
           .insert(dealTasks)
-          .values({ ...state, tenantId: ctx.tenantId, dealId, offPlaybook: false })
+          .values({ ...state, tenantId: ctx.tenantId, dealId, stageId, label: itemLabel, checklistItemId: checklistItemId ?? null, offPlaybook: false })
           .onConflictDoUpdate({
             target: [dealTasks.dealId, dealTasks.stageId, dealTasks.label],
             targetWhere: sql`not ${dealTasks.offPlaybook}`,
-            set: { ...state, updatedAt: new Date() },
+            // An unlinked to-do with this label (its item was removed) is taken over by the item.
+            set: checklistItemId ? { ...state, checklistItemId } : state,
           })
           .returning();
         return row!;

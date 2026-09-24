@@ -4,9 +4,8 @@ import { DataActions } from '../components/DataActions';
 import { Screen } from '../components/Layout';
 import { dealsCsv } from '../store/exportCsv';
 import { DEFAULT_FILTERS, INDUSTRIES, LOST_VIEWS, VALUE_BANDS, valueBandLabel } from '../store/seed';
-import { bandOf, champTotal, currencySymbol, curOf, needsNextStep, salesPeople, stageOf, valueTotal } from '../store/selectors';
+import { bandOf, champTotal, curOf, currencySymbol, funnelOptions, needsNextStep, salesPeople, stageOf, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
-import type { SegKey } from '../store/types';
 
 export function Pipeline() {
   const store = useStore();
@@ -32,7 +31,6 @@ export function Pipeline() {
   const visible = f.stage === 'Stage' || !stages.some((x) => x.name === f.stage) ? stages : stages.filter((x) => x.name === f.stage);
 
   const pipelineValue = valueTotal(s, segLeads.filter((l) => l.outcome !== 'lost'));
-  const labels = { smb: s.funnels.smb.label, ent: s.funnels.ent.label };
   const setFilter = (k: keyof typeof f) => (v: string) => set((x) => ({ filters: { ...x.filters, [k]: v } }));
   const dirty = (['owner', 'industry', 'band', 'lost'] as const).some((k) => f[k] !== DEFAULT_FILTERS[k]);
 
@@ -43,12 +41,9 @@ export function Pipeline() {
         chips={[
           {
             keepFirst: true,
-            value: labels[seg],
-            options: [labels.smb, labels.ent],
-            onChange: (v) => {
-              const k: SegKey = v === labels.smb ? 'smb' : 'ent';
-              set((x) => ({ segment: k, filters: { ...x.filters, audience: x.funnels[k].label } }));
-            },
+            value: seg,
+            options: funnelOptions(s),
+            onChange: (k) => set((x) => ({ segment: k, filters: { ...x.filters, audience: k } })),
           },
           { value: f.owner, options: ['Salesperson', ...salesPeople(s)], onChange: setFilter('owner') },
           { value: f.industry, options: ['Industry', ...INDUSTRIES], onChange: setFilter('industry') },

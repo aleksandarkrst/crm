@@ -207,7 +207,7 @@ export class DealsService {
         const [stage] = await tx
           .select()
           .from(funnelStages)
-          .where(and(eq(funnelStages.id, stageId), eq(funnelStages.funnelId, deal.funnelId)));
+          .where(and(eq(funnelStages.id, stageId), eq(funnelStages.funnelId, deal.funnelId), isNull(funnelStages.deletedAt)));
         if (!stage) throw new BadRequestException("Stage does not belong to this deal's funnel");
         if (deal.lostAt) throw new ConflictException('This deal is lost. Reopen it before moving it to another stage.');
         if (stage.id === deal.stageId) return { ...deal, outcome: dealOutcome(deal, stage.isWon) };
@@ -318,7 +318,7 @@ export class DealsService {
 
   /** The first stage of a funnel: where new deals start, and where a funnel change restarts one. */
   private async firstStage(tx: Tx, funnelId: string) {
-    const [first] = await tx.select().from(funnelStages).where(eq(funnelStages.funnelId, funnelId)).orderBy(asc(funnelStages.position)).limit(1);
+    const [first] = await tx.select().from(funnelStages).where(and(eq(funnelStages.funnelId, funnelId), isNull(funnelStages.deletedAt))).orderBy(asc(funnelStages.position)).limit(1);
     if (!first) throw new BadRequestException('Funnel has no stages');
     return first;
   }

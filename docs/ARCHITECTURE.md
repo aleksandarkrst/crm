@@ -77,8 +77,9 @@ the deal. Moving a deal to the stage it is already in writes nothing. A funnel c
 
 - Deals that existed before the table got one `created` row each (their current stage at their
   creation time, no user) in `drizzle/0008_deal_stage_history_rls.sql`.
-- The stage references are composite FKs without cascade: a stage that has history can't be deleted
-  (the app can't delete stages yet). Deleting a deal deletes its history.
+- The stage references are composite FKs without cascade. Deleting a stage (CD-9) therefore keeps
+  its row, marked `deleted_at` (see below), so the history is never nulled or rewritten. Deleting a
+  deal deletes its history.
 - `GET /api/crm/deal-stage-history` lists the workspace's history oldest first, paged like the other
   lists (`limit` ≤ 200, `offset`; `dealId` narrows it to one deal).
 
@@ -106,6 +107,43 @@ have to repeat those filters in SQL. Revisit this if the history outgrows a page
   position, so renaming or reordering stages doesn't change it.
 - With fewer than 5 deals in view that moved between stages, the card says so instead of
   showing rates.
+- A stage deleted since (CD-9) isn't in the funnel any more: a visit to it counts nowhere, and a
+  deal that went through it counts as having skipped it. The path still starts at the deal's last
+  `created` / `funnel_changed` row, even when that row names a deleted stage.
+
+## Funnels and stages
+
+A workspace has any number of funnels (CD-10); new workspaces get two (`default-funnels.ts`).
+Everyone reads them (`GET /api/crm/funnels`, deleted stages left out); owners and admins change
+them (members get 403). The frontend keys funnels by id everywhere (`State.funnels`, `Lead.segment`,
+the Overview audience filter).
+
+- `POST /api/crm/funnels` `{ label, note?, copyFromFunnelId? }` creates a funnel after the others:
+  a copy of another funnel's stages (new stage and checklist item ids, no deals) or a small default
+  set (New deal, Discovery, Proposal, Won). `PATCH /api/crm/funnels/:id` renames it or changes the
+  note; the key (a slug) stays. In the UI: **Settings → Funnel builder → New funnel**, and the name
+  and "How they buy" fields above the stages.
+- `DELETE /api/crm/funnels/:id` only deletes a funnel that never had deals: none in it, and no
+  stage history row pointing at its stages (a deal moved to another funnel still does). The last
+  funnel stays. A profile whose default funnel was deleted falls back to the first funnel.
+- `POST /api/crm/funnels/:id/stages` `{ name, position?, … }` adds a stage (by default just before
+  the won stage); `PUT /api/crm/funnels/:id/stages/order` `{ stageIds }` takes every stage once, in
+  the new order. The builder has "+ Add stage" and ↑/↓ per stage.
+- `DELETE /api/crm/funnels/:id/stages/:stageId?moveDealsTo=<stageId>` deletes a stage. If it holds
+  deals (lost ones included), `moveDealsTo` is required and must be another stage of the funnel;
+  each deal gets a `moved` stage history row by the caller and a timeline entry ("Moved to X · The
+  stage Y was deleted."). Moving into the won stage wins them (as a drag would, including
+  `crm.deal-won`); lost deals can't go there (409). The funnel's last stage and its only won stage
+  can't be deleted (409). Playbook and stage to-dos of the stage go with it; tasks from the
+  "New task" dialog move to the target stage (or the stage before). The builder's **Remove** asks
+  where the deals go.
+- **Deleted stages are soft-deleted** (`funnel_stages.deleted_at`, key suffixed with `~<id>` so it
+  can be reused). Why not `ON DELETE SET NULL` on the history FKs: `to_stage_id` is NOT NULL, and a
+  nulled stage would erase where deals were and for how long, which the conversion metrics read.
+  Keeping the row keeps every history row valid and meaningful. Triggers
+  (`drizzle/0012_stage_soft_delete.sql`) keep deals out of deleted stages and refuse to delete a
+  stage that still holds deals, whatever code writes the rows. Code that reads `funnel_stages`
+  directly must filter `deleted_at is null` (FunnelsService and DealsService do).
 
 ## Deal outcome: open, won, lost
 
@@ -117,6 +155,11 @@ have to repeat those filters in SQL. Revisit this if the history outgrows a page
   Chose a competitor, No budget, No decision, Other) and an optional `lost_note`; a check constraint
   keeps them together. The deal keeps the stage it was lost in, so the history shows where deals
   drop out.
+- **The database keeps lost out of won** (CD-74): triggers (`drizzle/0010_deal_lost_not_won.sql`)
+  refuse a lost deal in a won stage, whichever way it would happen: marking a deal in the won stage
+  lost, moving a lost deal into the won stage, inserting one, or turning a stage that holds lost
+  deals into the won stage. They raise `check_violation` naming `deals_lost_not_won`, which
+  `mapDbError` turns into 409 with the trigger's message.
 - `POST /api/crm/deals/:id/lost` `{ reason, note? }` marks an open deal lost (409 for a lost or won
   deal, 400 for a reason outside the list). `POST /api/crm/deals/:id/reopen` makes a lost deal open
   again in the same stage (409 if it isn't lost). A lost deal can't be moved or switched to another
@@ -296,9 +339,19 @@ the store is the one place that talks to the backend.
   Overview), and a payment without a date is left out of "Funnel by payment due date" (the card
   says how many lines were left out). Payments are dated from the line's start date, but a
   milestone with its own date counts even when its line has no start date.
-- Stage to-dos: a playbook to-do gets a row on first touch, keyed by deal + stage + checklist label
-  (renaming a checklist item in the funnel builder starts that to-do fresh). Off-playbook to-dos
-  are rows of their own.
+- Stage to-dos: a playbook to-do gets a row on first touch, keyed by deal + stage + checklist item
+  id (CD-32). A stage's checklist is `funnel_stages.checklist_items` (`[{ id, label }]`); renaming
+  an item in the funnel builder keeps its id, so every deal keeps its tick, note and outcome, and
+  the to-do rows take the new label (`deal_tasks.label` stays unique per deal and stage, so a
+  swap goes through a temporary label). Labels must differ within a stage. Removing an item hides
+  its to-dos; they aren't deleted. Off-playbook to-dos are rows of their own.
+  - `checklist` (labels only) is kept in sync with `checklist_items` by a trigger
+    (`drizzle/0011_checklist_item_ids.sql`), and a playbook to-do written by label is linked to
+    the item with that label, so code that still uses labels keeps working. The migration gave
+    every existing label an id and linked the existing to-dos by label.
+  - `PATCH /api/crm/funnels/:id/stages/:stageId` takes `checklistItems` (keep `id` to rename,
+    leave it out for a new item) or, as before, `checklist`. `PUT /api/crm/deals/:id/tasks/playbook`
+    takes `checklistItemId` (or, as before, `label`).
 - Tasks from the **New task** dialog are `deal_tasks` rows too (off-playbook, `blocks_advance =
   false`) with a due date, a channel and an owner (`assignee_user_id`, which must be a member of the
   workspace). They show in Today (overdue / today / next up, with a done toggle) and on the lead's
@@ -349,7 +402,6 @@ the store is the one place that talks to the backend.
 
 Still browser-only (seeded from `store/seed.ts`, lost on reload), because the backend doesn't have
 them yet:
-- adding and removing funnel stages (blocked in the UI for now; editing existing stages is saved)
 - document templates and generation (worker + storage)
 - sales-bonus rules (including "Sales bonus earned" on the Workspace tab); they start empty
   (no made-up rate, minimum or flat amount)

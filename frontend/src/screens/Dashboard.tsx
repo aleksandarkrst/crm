@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { FilterBar, GhostInput } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { DATE_RANGES, dateRangeLabel, DEFAULT_FILTERS, SOURCES } from '../store/seed';
-import { billedShare, bonusOf, bonusRule, closeIsoOf, closeRangeOf, currencySymbol, curOf, inCloseRange, linePayments, linesOf, moneyTotal, num, salesPeople, stageOf, todayIso, valueNum, valueTotal } from '../store/selectors';
+import { billedShare, bonusOf, bonusRule, closeIsoOf, closeRangeOf, curOf, currencySymbol, funnelOptions, inCloseRange, linePayments, linesOf, moneyTotal, num, salesPeople, stageOf, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
 import { conversionMetrics, daysLabel, MIN_MOVED_DEALS } from '../store/metrics';
 import { useStore } from '../store/store';
 import type { Lead, SegKey } from '../store/types';
@@ -31,13 +31,12 @@ export function Dashboard() {
     void refreshHistory();
   }, [refreshHistory]);
   const f = s.filters;
-  const audLabel = (seg: SegKey) => s.funnels[seg].label;
   // "This quarter" and "this year" are fiscal ones, and "today" is the workspace's (CD-73).
   const range = closeRangeOf(f.dates, todayIso(s.workspace.timezone), s.workspace.fiscalMonth);
   const rangeLabel = (v: string) => dateRangeLabel(v, s.workspace.fiscalMonth);
   // Every panel below works on these deals, so the filter chips (including the closing-date range) apply everywhere.
   const beforeDates = s.leads
-    .filter((l) => f.audience === 'Audience' || audLabel(l.segment) === f.audience)
+    .filter((l) => f.audience === 'Audience' || l.segment === f.audience)
     .filter((l) => f.owner === 'Salesperson' || l.ownerId === f.owner)
     .filter((l) => f.source === 'Source' || l.source === f.source);
   const dashLeads = beforeDates.filter((l) => inCloseRange(l, range));
@@ -62,7 +61,7 @@ export function Dashboard() {
     { label: 'Stalled', value: String(stalled.length), note: 'Open deals with no contact for 3+ days' },
   ];
 
-  const stages = s.funnels[dashSeg].stages;
+  const stages = stagesFor(s, dashSeg);
   const stageFunnel = stages.map((x, i) => {
     const rows = liveLeads.filter((l) => l.segment === dashSeg && l.stage === x.id);
     return {
@@ -143,7 +142,7 @@ export function Dashboard() {
     <Screen title="Overview">
       <FilterBar
         chips={[
-          { value: f.audience, options: ['Audience', s.funnels.smb.label, s.funnels.ent.label], onChange: setFilter('audience') },
+          { value: f.audience, options: [{ value: 'Audience', label: 'Audience' }, ...funnelOptions(s)], onChange: setFilter('audience') },
           { value: f.owner, options: ['Salesperson', ...salesPeople(s)], onChange: setFilter('owner') },
           { value: f.dates, options: DATE_RANGES.map((v) => ({ value: v, label: rangeLabel(v) })), onChange: setFilter('dates'), keepFirst: true },
           { value: f.source, options: ['Source', ...SOURCES], onChange: setFilter('source') },
@@ -171,9 +170,12 @@ export function Dashboard() {
                 <span className="card-title">Pipeline funnel</span>
                 <span className="card-sub">Deals and value by stage</span>
               </div>
-              <select value={dashSeg} onChange={(e) => setDashSeg(e.target.value as SegKey)} style={{ border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '8px 11px', fontSize: 12.5, color: 'var(--ink)' }}>
-                <option value="smb">{s.funnels.smb.label}</option>
-                <option value="ent">{s.funnels.ent.label}</option>
+              <select value={dashSeg} onChange={(e) => setDashSeg(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '8px 11px', fontSize: 12.5, color: 'var(--ink)' }}>
+                {funnelOptions(s).map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
               </select>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
@@ -263,7 +265,7 @@ export function Dashboard() {
 function StageConversion({ leads, initialSeg }: { leads: Lead[]; initialSeg: SegKey }) {
   const { s, set } = useStore();
   const [seg, setSeg] = useState<SegKey>(initialSeg);
-  const stages = s.funnels[seg].stages;
+  const stages = stagesFor(s, seg);
   const inFunnel = leads.filter((l) => l.segment === seg);
   const m = s.stageHistory ? conversionMetrics(stages, inFunnel, s.stageHistory) : null;
   const drill = (title: string, leadIds: string[]) => leadIds.length && set({ drill: { kicker: 'Stage conversion', title, leadIds } });
@@ -284,9 +286,12 @@ function StageConversion({ leads, initialSeg }: { leads: Lead[]; initialSeg: Seg
           <span className="card-title">Stage conversion</span>
           <span className="card-sub">Share of deals that reached a stage and moved on to a later one</span>
         </div>
-        <select value={seg} onChange={(e) => setSeg(e.target.value as SegKey)} style={{ flex: '0 1 auto', minWidth: 0, maxWidth: '55%', border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '8px 11px', fontSize: 12.5, color: 'var(--ink)' }}>
-          <option value="smb">{s.funnels.smb.label}</option>
-          <option value="ent">{s.funnels.ent.label}</option>
+        <select value={seg} onChange={(e) => setSeg(e.target.value)} style={{ flex: '0 1 auto', minWidth: 0, maxWidth: '55%', border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '8px 11px', fontSize: 12.5, color: 'var(--ink)' }}>
+          {funnelOptions(s).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
         </select>
       </div>
       {!m ? (

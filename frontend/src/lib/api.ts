@@ -60,8 +60,15 @@ export interface ApiFunnelStage {
   channel: Channel;
   documentOnEntry: string | null;
   winProbability: number;
+  /** The labels of checklistItems, in order. */
   checklist: string[];
+  /** Stage to-dos with stable ids (CD-32): renaming one keeps the deals' progress on it. */
+  checklistItems: ApiChecklistItem[];
   isWon: boolean;
+}
+export interface ApiChecklistItem {
+  id: string;
+  label: string;
 }
 export interface ApiFunnel {
   id: string;
@@ -235,6 +242,8 @@ export interface ApiDealTask {
   dealId: string;
   stageId: string;
   label: string;
+  /** The checklist item of a playbook to-do (CD-32). */
+  checklistItemId: string | null;
   offPlaybook: boolean;
   position: number;
   done: boolean;
@@ -299,7 +308,7 @@ export type TaskInput = Partial<{
   assigneeUserId: string | null;
   channel: Channel | null;
 }>;
-export type StageInput = Partial<Pick<ApiFunnelStage, 'name' | 'activity' | 'channel' | 'documentOnEntry' | 'winProbability' | 'checklist'>>;
+export type StageInput = Partial<Pick<ApiFunnelStage, 'name' | 'activity' | 'channel' | 'documentOnEntry' | 'winProbability' | 'checklistItems'>>;
 
 export const crmApi = {
   me: () => api<ApiMe>('/me'),
@@ -319,7 +328,15 @@ export const crmApi = {
   acceptInvitation: (token: string) => api<ApiTenant>(`/invitations/${token}/accept`, { method: 'POST' }),
 
   funnels: () => api<ApiFunnel[]>('/crm/funnels'),
+  createFunnel: (input: { label: string; note?: string | null; copyFromFunnelId?: string }) => api<ApiFunnel>('/crm/funnels', { method: 'POST', json: input }),
+  updateFunnel: (id: string, input: { label?: string; note?: string | null }) => api<ApiFunnel>(`/crm/funnels/${id}`, { method: 'PATCH', json: input }),
+  deleteFunnel: (id: string) => api(`/crm/funnels/${id}`, { method: 'DELETE' }),
   updateStage: (funnelId: string, stageId: string, input: StageInput) => api(`/crm/funnels/${funnelId}/stages/${stageId}`, { method: 'PATCH', json: input }),
+  createStage: (funnelId: string, input: StageInput & { name: string; position?: number }) => api<ApiFunnel>(`/crm/funnels/${funnelId}/stages`, { method: 'POST', json: input }),
+  reorderStages: (funnelId: string, stageIds: string[]) => api<ApiFunnel>(`/crm/funnels/${funnelId}/stages/order`, { method: 'PUT', json: { stageIds } }),
+  /** Deals in the stage move to `moveDealsTo` (required when it has any). */
+  deleteStage: (funnelId: string, stageId: string, moveDealsTo?: string) =>
+    api<ApiFunnel>(`/crm/funnels/${funnelId}/stages/${stageId}${moveDealsTo ? '?moveDealsTo=' + moveDealsTo : ''}`, { method: 'DELETE' }),
 
   companies: () => all<ApiCompany>('/crm/companies'),
   createCompany: (input: CompanyInput & { name: string }) => api<ApiCompany>('/crm/companies', { method: 'POST', json: input }),
@@ -351,7 +368,7 @@ export const crmApi = {
   deleteDealLine: (id: string) => api(`/crm/deal-lines/${id}`, { method: 'DELETE' }),
 
   dealTasks: () => all<ApiDealTask>('/crm/deal-tasks'),
-  upsertPlaybookTask: (dealId: string, input: TaskInput & { stageId: string; label: string }) =>
+  upsertPlaybookTask: (dealId: string, input: TaskInput & { stageId: string; checklistItemId: string }) =>
     api<ApiDealTask>(`/crm/deals/${dealId}/tasks/playbook`, { method: 'PUT', json: input }),
   createTask: (dealId: string, input: TaskInput & { stageId: string; label: string; position?: number; blocksAdvance?: boolean }) =>
     api<ApiDealTask>(`/crm/deals/${dealId}/tasks`, { method: 'POST', json: input }),

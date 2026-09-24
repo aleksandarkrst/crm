@@ -1,6 +1,6 @@
 import { FieldRow, GhostInput, GhostSelect, Switch } from '../components/ui';
 import { Screen } from '../components/Layout';
-import { initialsOf } from '../store/selectors';
+import { funnelOptions, initialsOf } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Profile as ProfileT } from '../store/types';
 
@@ -29,7 +29,7 @@ export function Profile() {
   const { s, patchProfile, session } = useStore();
   const p = s.profile;
   const setP = (k: keyof ProfileT) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => patchProfile({ [k]: e.target.value });
-  const funnels = [s.funnels.smb, s.funnels.ent].filter((f) => f.id).map((f) => ({ value: f.id!, label: f.label }));
+  const funnels = funnelOptions(s);
 
   return (
     <Screen title="Profile settings">

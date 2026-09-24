@@ -43,7 +43,7 @@ a private window and sign in as that email.
 
 > **Current state of the UI:** deals (with their product lines, payment schedules, stage to-dos,
 > fit scores, discovery notes, activity and stage history, and whether they were won or lost),
-> companies, contacts, products and funnel stages are saved in the database, and so are the team, invitations, workspace settings and your
+> companies, contacts, products, funnels (any number) and their stages are saved in the database, and so are the team, invitations, workspace settings and your
 > profile. Some design features have no backend yet and
 > only last until you reload the page: documents and the remaining settings tabs. See
 > [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#frontend-store--api).
@@ -87,15 +87,20 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   cross-tenant references, member/admin/owner rules and last-owner protection, invitations
   (invited email only, single use, withdraw, replace), deal-amount recalculation from lines,
   deal stage history (a row per creation, move, funnel change, loss and reopening, isolated per
-  tenant) and lost deals (reason pick list, reopen, no moves while lost), and CSV import (roles,
+  tenant) and lost deals (reason pick list, reopen, no moves while lost); funnels and stages
+  (create, copy, rename, delete; add, reorder and delete stages with their deals moved and the
+  moves in the history; roles and isolation), checklist items keeping to-dos across renames, the
+  database guards (no lost deal in a won stage, no deal in a deleted stage), and CSV import (roles,
   per-row validation, duplicates skipped or updated, deal matching, size and row limits, tenant
   isolation, quoting edge cases).
 - **Browser tests** (`e2e/`, Puppeteer with its bundled Chrome, run by `node:test`): sign-in,
   workspace, products, new deal, closing date, notes, drag between stages, reload, every screen
   renders; deal lines and stage to-dos persist; CHAMP fit score; team invitations with two
   browser contexts (invite, accept, roles, wrong account, withdraw, remove); marking a deal lost,
-  the Pipeline's lost view and reopening; stage conversion on Overview; importing companies and
-  deals through the import dialog, and the exported contacts CSV (downloaded to a temp folder).
+  the Pipeline's lost view and reopening; stage conversion on Overview; a third funnel with a deal
+  in it, adding and removing stages; renaming a checklist item without losing the tick; importing
+  companies and deals through the import dialog, and the exported contacts CSV (downloaded to a
+  temp folder).
 
 Both suites create their own users and workspaces with unique emails, so they can run against
 the dev database without resetting it. The database must be migrated first.

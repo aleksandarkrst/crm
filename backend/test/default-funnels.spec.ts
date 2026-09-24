@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_FUNNELS } from '../src/modules/crm/funnels/default-funnels';
+import { BLANK_FUNNEL_STAGES, DEFAULT_FUNNELS } from '../src/modules/crm/funnels/default-funnels';
 
 describe('DEFAULT_FUNNELS', () => {
-  it.each(DEFAULT_FUNNELS.map((f) => [f.key, f] as const))('%s: unique stage keys, rising probability, ends in won', (_key, funnel) => {
+  it.each([...DEFAULT_FUNNELS, { key: 'blank', label: '', note: '', stages: BLANK_FUNNEL_STAGES }].map((f) => [f.key, f] as const))('%s: unique stage keys, rising probability, ends in won', (_key, funnel) => {
     const keys = funnel.stages.map((s) => s.key);
     expect(new Set(keys).size).toBe(keys.length);
     expect(keys.at(-1)).toBe('won');

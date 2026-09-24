@@ -240,6 +240,17 @@ describe('importing deals', () => {
     expect(row.deal.currency).toBe('USD');
   });
 
+  it("doesn't match a removed stage", async () => {
+    const f = await ok<Json>('POST', '/crm/funnels', { ...as(), body: { label: uniq('Import removed stage') } });
+    const gone = uniq('Gone stage');
+    const withStage = await ok<Json>('POST', `/crm/funnels/${f.id}/stages`, { ...as(), body: { name: gone } });
+    const stage = withStage.stages.find((st: Json) => st.name === gone);
+    await ok('DELETE', `/crm/funnels/${f.id}/stages/${stage.id}`, as(), 200);
+    const tag = uniq('GoneRow').replace(/\W/g, '');
+    const res = await commit('deals', { csv: `Deal,Company,Stage\n${tag},${uniq('Gone Co')},${gone}`, funnelId: f.id });
+    expect(res).toMatchObject({ created: 0, failed: 1 });
+  });
+
   it('fails a row whose contact email is unknown and no name is given', async () => {
     const res = await commit('deals', { csv: `Deal,Company,Contact email\nX,${uniq('Nobody Co')},nobody-${Date.now()}@example.test\n` });
     expect(res).toMatchObject({ created: 0, failed: 1, newCompanies: 0 });

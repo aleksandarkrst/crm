@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, HttpException, Injectable, PayloadTooLargeException } from '@nestjs/common';
-import { asc, eq, isNotNull } from 'drizzle-orm';
+import { asc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
@@ -314,6 +314,7 @@ export class ImportService {
       const stages = await tx
         .select({ id: funnelStages.id, funnelId: funnelStages.funnelId, key: funnelStages.key, name: funnelStages.name, isWon: funnelStages.isWon })
         .from(funnelStages)
+        .where(isNull(funnelStages.deletedAt)) // removed stages stay only for the history
         .orderBy(asc(funnelStages.position));
       fs = list.map((f) => ({ ...f, stages: stages.filter((s) => s.funnelId === f.id) }));
     }

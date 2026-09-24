@@ -4,9 +4,8 @@ import { FieldRow, GhostInput, GhostSelect, Modal, ModalHeader, RemoveButton, Sw
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { ACTIVITIES, CHANNEL_LABELS, CHANNELS, DOCS, TEAM_ROLES } from '../store/seed';
-import { initialsOf } from '../store/selectors';
+import { funnelOptions, initialsOf } from '../store/selectors';
 import { useStore } from '../store/store';
-import type { SegKey } from '../store/types';
 
 const TABS = [
   { k: 'workspace', label: 'Workspace' },
@@ -322,22 +321,58 @@ function InviteModal({ onClose }: { onClose: () => void }) {
 function FunnelBuilder() {
   const store = useStore();
   const { s, set } = store;
-  const stages = s.funnels[s.segment].stages;
+  const funnel = s.funnels[s.segment] ?? Object.values(s.funnels)[0]!;
+  const stages = funnel.stages;
+  const [removing, setRemoving] = useState<number | null>(null);
+  const editable = store.canEditFunnels;
+  const dealCount = s.leads.filter((l) => l.segment === funnel.id).length;
+  const wonCount = stages.filter((st) => st.won).length;
+  const smallBtn = { border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--text-2)', cursor: 'pointer', fontSize: 11.5, padding: '6px 10px', borderRadius: 6 } as const;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <select
-          value={s.segment}
+          value={funnel.id}
           onChange={(e) => {
-            const v = e.target.value as SegKey;
-            set((x) => ({ segment: v, filters: { ...x.filters, audience: x.funnels[v].label } }));
+            const v = e.target.value;
+            set((x) => ({ segment: v, filters: { ...x.filters, audience: v } }));
           }}
           style={{ border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '9px 11px', fontSize: 13, color: 'var(--ink)' }}
         >
-          <option value="smb">{s.funnels.smb.label}</option>
-          <option value="ent">{s.funnels.ent.label}</option>
+          {funnelOptions(s).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
         </select>
-        <ComingSoonButton label="New pipeline" />
+        {editable && (
+          <button type="button" className="btn btn-primary" style={{ flex: '0 0 auto' }} onClick={() => set({ personaOpen: true, personaBase: funnel.id })}>
+            New funnel
+          </button>
+        )}
+      </div>
+
+      <div className="card" style={{ padding: '16px 17px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 12 }}>
+        <label className="form-label">
+          Funnel name
+          <input className="form-input" value={funnel.label} disabled={!editable} onChange={(e) => store.patchFunnel(funnel.id, { label: e.target.value })} />
+        </label>
+        <label className="form-label">
+          How they buy
+          <input className="form-input" value={funnel.note} disabled={!editable} placeholder="Who decides, how long it takes, what slows it down" onChange={(e) => store.patchFunnel(funnel.id, { note: e.target.value })} />
+        </label>
+        {editable && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, gridColumn: '1 / -1', fontSize: 12, color: 'var(--text-2)' }}>
+            <span>
+              {dealCount} deal{dealCount === 1 ? '' : 's'} in this funnel · {stages.length} stage{stages.length === 1 ? '' : 's'}
+            </span>
+            {dealCount === 0 && Object.keys(s.funnels).length > 1 && (
+              <button type="button" style={{ ...smallBtn, marginLeft: 'auto' }} onClick={() => void store.deleteFunnel(funnel.id)}>
+                Delete funnel
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -347,9 +382,27 @@ function FunnelBuilder() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 13, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <input className="ghost" value={st.name} onChange={(e) => store.editStage(idx, 'name', e.target.value)} style={{ fontSize: 15, fontWeight: 600, padding: '3px 7px', marginLeft: -7, minWidth: 180, width: 'auto' }} />
-                <button type="button" onClick={() => store.removeStage(idx)} style={{ border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--text-2)', cursor: 'pointer', fontSize: 11.5, padding: '6px 10px', borderRadius: 6 }}>
-                  Remove
-                </button>
+                {editable && (
+                  <span style={{ display: 'inline-flex', gap: 6 }}>
+                    <button type="button" title="Move up" disabled={idx === 0} onClick={() => store.moveStage(idx, -1)} style={{ ...smallBtn, opacity: idx === 0 ? 0.4 : 1 }}>
+                      ↑
+                    </button>
+                    <button type="button" title="Move down" disabled={idx === stages.length - 1} onClick={() => store.moveStage(idx, 1)} style={{ ...smallBtn, opacity: idx === stages.length - 1 ? 0.4 : 1 }}>
+                      ↓
+                    </button>
+                    {st.won && wonCount === 1 ? (
+                      <span className="caps-muted" style={{ alignSelf: 'center' }} title="Deals are won by reaching this stage">
+                        Won stage
+                      </span>
+                    ) : (
+                      stages.length > 1 && (
+                        <button type="button" onClick={() => setRemoving(idx)} style={smallBtn}>
+                          Remove
+                        </button>
+                      )
+                    )}
+                  </span>
+                )}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
@@ -392,7 +445,7 @@ function FunnelBuilder() {
                 <span className="caps">To-Do</span>
                 <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
                   {st.checklist.map((c, gi) => (
-                    <span key={gi} className="gate-chip">
+                    <span key={st.checklistIds[gi] ?? gi} className="gate-chip">
                       <input value={c} onChange={(e) => store.renameGate(idx, gi, e.target.value)} style={{ border: 0, outline: 0, background: 'transparent', fontSize: 12, color: 'var(--ink)', width: Math.max(9, Math.min(34, c.length + 1)) + 'ch' }} />
                       <button type="button" className="pill-x" title="Delete to-do" onClick={() => store.removeGate(idx, gi)}>
                         ×
@@ -409,10 +462,65 @@ function FunnelBuilder() {
         ))}
       </div>
 
-      <button type="button" onClick={store.addStage} style={{ alignSelf: 'flex-start', border: '1px dashed var(--dashed)', background: 'transparent', color: 'var(--brand)', cursor: 'pointer', fontSize: 13, fontWeight: 500, padding: '12px 18px', borderRadius: 9 }}>
-        + Add stage to this funnel
-      </button>
+      {editable && (
+        <button type="button" onClick={store.addStage} style={{ alignSelf: 'flex-start', border: '1px dashed var(--dashed)', background: 'transparent', color: 'var(--brand)', cursor: 'pointer', fontSize: 13, fontWeight: 500, padding: '12px 18px', borderRadius: 9 }}>
+          + Add stage to this funnel
+        </button>
+      )}
+      {removing !== null && stages[removing] && <RemoveStageModal idx={removing} onClose={() => setRemoving(null)} />}
     </div>
+  );
+}
+
+/**
+ * Removing a stage (CD-9). Its deals, lost ones included, move to the stage picked here; the
+ * move shows in each deal's history. Lost deals can't go to the won stage.
+ */
+function RemoveStageModal({ idx, onClose }: { idx: number; onClose: () => void }) {
+  const store = useStore();
+  const { s } = store;
+  const stages = s.funnels[s.segment]!.stages;
+  const st = stages[idx]!;
+  const deals = s.leads.filter((l) => l.stage === st.id);
+  const hasLost = deals.some((l) => l.outcome === 'lost');
+  const targets = stages.filter((x) => x.id !== st.id && !(hasLost && x.won));
+  const [target, setTarget] = useState(stages[idx - 1]?.id && targets.some((x) => x.id === stages[idx - 1]!.id) ? stages[idx - 1]!.id : (targets[0]?.id ?? ''));
+  const blocked = deals.length > 0 && !target;
+  return (
+    <Modal maxWidth={480} onBackdrop={onClose}>
+      <ModalHeader title={`Remove ${st.name}?`} sub="The stage leaves this funnel. Deals keep their stage history, including the time they spent here." />
+      {deals.length > 0 ? (
+        <label className="form-label">
+          Move its {deals.length} deal{deals.length === 1 ? '' : 's'} to
+          <select className="form-input" value={target} onChange={(e) => setTarget(e.target.value)}>
+            {targets.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <div className="hint-box">No deals are in this stage.</div>
+      )}
+      {hasLost && <div className="hint-box">Lost deals can't go to the won stage, so it isn't offered.</div>}
+      <div className="modal-actions">
+        <button type="button" className="btn btn-secondary" onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className={blocked ? 'btn btn-disabled' : 'btn btn-primary'}
+          disabled={blocked}
+          onClick={() => {
+            store.removeStage(idx, deals.length ? target : undefined);
+            onClose();
+          }}
+        >
+          Remove stage
+        </button>
+      </div>
+    </Modal>
   );
 }
 
