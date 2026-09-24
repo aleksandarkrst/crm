@@ -26,6 +26,8 @@ export const DATE_RANGES = ['Any closing date', 'Closing in 30 days', 'Closing t
 export const dateRangeLabel = (value: string, fiscalMonth: number): string =>
   fiscalMonth === 1 ? value : value.replace(/ (quarter|year)$/, ' fiscal $1');
 export const VALUE_BANDS = ['Value', 'Under €25k', '€25k–€100k', 'Over €100k'];
+/** How a value band reads in the workspace currency ("Under $25k"); the values above stay the filter keys. */
+export const valueBandLabel = (value: string, symbol: string): string => value.split('€').join(symbol);
 export const PARAM_SOURCES: Record<string, string> = { '{{company}}': 'Lead · company', '{{contact_name}}': 'Lead · primary contact', '{{price}}': 'Lead · deal value' };
 export const PRODUCT_TYPES = ['Service', 'Product'];
 export const BILLING_KINDS = ['One-off', 'Monthly', 'Yearly', 'Hourly'];

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { FilterBar } from '../components/ui';
 import { Screen } from '../components/Layout';
-import { DEFAULT_FILTERS, INDUSTRIES, LOST_VIEWS, VALUE_BANDS } from '../store/seed';
-import { bandOf, champTotal, needsNextStep, salesPeople, stageOf, valueTotal } from '../store/selectors';
+import { DEFAULT_FILTERS, INDUSTRIES, LOST_VIEWS, VALUE_BANDS, valueBandLabel } from '../store/seed';
+import { bandOf, champTotal, currencySymbol, curOf, needsNextStep, salesPeople, stageOf, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { SegKey } from '../store/types';
 
@@ -50,7 +50,7 @@ export function Pipeline() {
           },
           { value: f.owner, options: ['Salesperson', ...salesPeople(s)], onChange: setFilter('owner') },
           { value: f.industry, options: ['Industry', ...INDUSTRIES], onChange: setFilter('industry') },
-          { value: f.band, options: VALUE_BANDS, onChange: setFilter('band') },
+          { value: f.band, options: VALUE_BANDS.map((v) => ({ value: v, label: valueBandLabel(v, currencySymbol(curOf(s))) })), onChange: setFilter('band') },
           { value: f.lost, options: [...LOST_VIEWS], onChange: setFilter('lost'), keepFirst: true },
         ]}
         dirty={dirty}
