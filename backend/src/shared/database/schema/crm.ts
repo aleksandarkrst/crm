@@ -77,6 +77,7 @@ export const contacts = pgTable(
     linkedin: text('linkedin'),
     buyerRole: text('buyer_role', { enum: BUYER_ROLES }).notNull().default('Influencer'),
     ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
+    notes: text('notes'),
     ...timestamps,
   },
   (t) => [
@@ -133,7 +134,6 @@ export const funnelStages = pgTable(
      * only, in the same order, for code that still reads or writes it. A trigger keeps the two in
      * sync (drizzle/0011_checklist_item_ids.sql).
      */
-    checklist: jsonb('checklist').$type<string[]>().notNull().default([]),
     checklistItems: jsonb('checklist_items').$type<ChecklistItem[]>().notNull().default([]),
     isWon: boolean('is_won').notNull().default(false), // the terminal "won" stage
     /**
@@ -347,7 +347,6 @@ export const dealTasks = pgTable(
   (t) => [
     index('deal_tasks_tenant_deal_idx').on(t.tenantId, t.dealId),
     index('deal_tasks_tenant_due_idx').on(t.tenantId, t.dueDate).where(sql`${t.dueDate} is not null`),
-    uniqueIndex('deal_tasks_playbook_uq').on(t.dealId, t.stageId, t.label).where(sql`not ${t.offPlaybook}`),
     uniqueIndex('deal_tasks_playbook_item_uq').on(t.dealId, t.stageId, t.checklistItemId).where(sql`not ${t.offPlaybook} and ${t.checklistItemId} is not null`),
     foreignKey({ columns: [t.tenantId, t.dealId], foreignColumns: [deals.tenantId, deals.id], name: 'deal_tasks_deal_fk' }).onDelete('cascade'),
     foreignKey({ columns: [t.tenantId, t.stageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deal_tasks_stage_fk' }).onDelete('cascade'),

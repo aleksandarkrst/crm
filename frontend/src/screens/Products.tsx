@@ -48,6 +48,7 @@ export function Products() {
               </span>
             ))}
           </div>
+          {rows.length === 0 && <div className="empty-state">No products or services yet. <button type="button" onClick={() => set({ productOpen: true })}>Add your first product</button></div>}
           {rows.map((c) => {
             const used = usage[c.id] || [];
             return (

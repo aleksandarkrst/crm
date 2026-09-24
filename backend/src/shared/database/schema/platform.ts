@@ -56,6 +56,7 @@ export const memberships = pgTable(
     // tenant set, and the UI ignores an id it doesn't know.
     defaultFunnelId: uuid('default_funnel_id'),
     dailyDigest: boolean('daily_digest').notNull().default(true),
+    onboardingDismissedAt: timestamp('onboarding_dismissed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.tenantId, t.userId] }), index('memberships_user_idx').on(t.userId)],

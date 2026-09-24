@@ -381,7 +381,7 @@ function FunnelBuilder() {
             <div style={{ fontSize: 12, color: 'var(--muted)', paddingTop: 4 }}>{String(idx + 1).padStart(2, '0')}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 13, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                <input className="ghost" value={st.name} onChange={(e) => store.editStage(idx, 'name', e.target.value)} style={{ fontSize: 15, fontWeight: 600, padding: '3px 7px', marginLeft: -7, minWidth: 180, width: 'auto' }} />
+                <input className="ghost" value={st.name} disabled={!editable} onChange={(e) => store.editStage(idx, 'name', e.target.value)} style={{ fontSize: 15, fontWeight: 600, padding: '3px 7px', marginLeft: -7, minWidth: 180, width: 'auto' }} />
                 {editable && (
                   <span style={{ display: 'inline-flex', gap: 6 }}>
                     <button type="button" title="Move up" disabled={idx === 0} onClick={() => store.moveStage(idx, -1)} style={{ ...smallBtn, opacity: idx === 0 ? 0.4 : 1 }}>
@@ -408,7 +408,7 @@ function FunnelBuilder() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
                 <label className="form-label">
                   Activity
-                  <select className="form-input" style={{ padding: '9px 10px' }} value={st.activity} onChange={(e) => store.editStage(idx, 'activity', e.target.value)}>
+                  <select className="form-input" disabled={!editable} style={{ padding: '9px 10px' }} value={st.activity} onChange={(e) => store.editStage(idx, 'activity', e.target.value)}>
                     {ACTIVITIES.map((o) => (
                       <option key={o}>{o}</option>
                     ))}
@@ -416,7 +416,7 @@ function FunnelBuilder() {
                 </label>
                 <label className="form-label">
                   Channel
-                  <select className="form-input" style={{ padding: '9px 10px' }} value={st.channel} onChange={(e) => store.editStage(idx, 'channel', e.target.value)}>
+                  <select className="form-input" disabled={!editable} style={{ padding: '9px 10px' }} value={st.channel} onChange={(e) => store.editStage(idx, 'channel', e.target.value)}>
                     {CHANNELS.map((c) => (
                       <option key={c} value={c}>
                         {CHANNEL_LABELS[c]}
@@ -426,7 +426,7 @@ function FunnelBuilder() {
                 </label>
                 <label className="form-label">
                   Document on entry
-                  <select className="form-input" style={{ padding: '9px 10px' }} value={st.doc} onChange={(e) => store.editStage(idx, 'doc', e.target.value)}>
+                  <select className="form-input" disabled={!editable} style={{ padding: '9px 10px' }} value={st.doc} onChange={(e) => store.editStage(idx, 'doc', e.target.value)}>
                     {DOCS.map((o) => (
                       <option key={o}>{o}</option>
                     ))}
@@ -435,7 +435,7 @@ function FunnelBuilder() {
                 <label className="form-label">
                   Win probability
                   <span style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--white)', padding: '0 10px 0 0' }}>
-                    <input type="number" min={0} max={100} step={5} value={st.prob} onChange={(e) => store.editProb(idx, e.target.value)} style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', padding: '9px 4px 9px 10px', fontSize: 13, color: 'var(--ink)', textTransform: 'none', letterSpacing: 0 }} />
+                    <input type="number" disabled={!editable} min={0} max={100} step={5} value={st.prob} onChange={(e) => store.editProb(idx, e.target.value)} style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', padding: '9px 4px 9px 10px', fontSize: 13, color: 'var(--ink)', textTransform: 'none', letterSpacing: 0 }} />
                     <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-2)', letterSpacing: 0 }}>%</span>
                   </span>
                 </label>
@@ -446,15 +446,15 @@ function FunnelBuilder() {
                 <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
                   {st.checklist.map((c, gi) => (
                     <span key={st.checklistIds[gi] ?? gi} className="gate-chip">
-                      <input value={c} onChange={(e) => store.renameGate(idx, gi, e.target.value)} style={{ border: 0, outline: 0, background: 'transparent', fontSize: 12, color: 'var(--ink)', width: Math.max(9, Math.min(34, c.length + 1)) + 'ch' }} />
-                      <button type="button" className="pill-x" title="Delete to-do" onClick={() => store.removeGate(idx, gi)}>
+                      <input value={c} disabled={!editable} onChange={(e) => store.renameGate(idx, gi, e.target.value)} style={{ border: 0, outline: 0, background: 'transparent', fontSize: 12, color: 'var(--ink)', width: Math.max(9, Math.min(34, c.length + 1)) + 'ch' }} />
+                      {editable && <button type="button" className="pill-x" title="Delete to-do" onClick={() => store.removeGate(idx, gi)}>
                         ×
-                      </button>
+                      </button>}
                     </span>
                   ))}
-                  <button type="button" onClick={() => store.addGate(idx)} style={{ fontSize: 12, border: '1px dashed var(--dashed)', background: 'transparent', color: 'var(--text-2)', cursor: 'pointer', borderRadius: 20, padding: '6px 11px' }}>
+                  {editable && <button type="button" onClick={() => store.addGate(idx)} style={{ fontSize: 12, border: '1px dashed var(--dashed)', background: 'transparent', color: 'var(--text-2)', cursor: 'pointer', borderRadius: 20, padding: '6px 11px' }}>
                     + to-do
-                  </button>
+                  </button>}
                 </div>
               </div>
             </div>

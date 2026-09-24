@@ -79,10 +79,10 @@ export function Contact() {
                 <GhostSelect value={p.buyerRole || 'Influencer'} onChange={setField('buyerRole')} options={BUYER_ROLES} />
               </FieldRow>
               <FieldRow label="Email">
-                <GhostInput value={p.email} onChange={setField('email')} />
+                <span style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}><GhostInput value={p.email} onChange={setField('email')} />{p.email && <a className="contact-action" href={`mailto:${p.email}`} aria-label={`Email ${p.name}`}>Email</a>}</span>
               </FieldRow>
               <FieldRow label="Phone">
-                <GhostInput value={p.phone} onChange={setField('phone')} />
+                <span style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}><GhostInput value={p.phone} onChange={setField('phone')} />{p.phone && <a className="contact-action" href={`tel:${p.phone}`} aria-label={`Call ${p.name}`}>Call</a>}</span>
               </FieldRow>
               <FieldRow label="Owner">
                 <span className="field-value">{memberName(s, p.ownerId, p.ownerName)}</span>

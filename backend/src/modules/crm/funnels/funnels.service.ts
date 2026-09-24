@@ -37,12 +37,7 @@ const StageFields = z.object({
   checklistItems: ChecklistItems,
 });
 
-export const UpdateStage = nonEmptyPatch(
-  StageFields.partial().extend({
-    /** Labels only (before CD-32): items are matched by label, so a renamed label is a new item. */
-    checklist: z.array(checklistLabel).max(20).optional(),
-  }),
-).refine((v) => !(v.checklist && v.checklistItems), 'Send checklistItems or checklist, not both');
+export const UpdateStage = nonEmptyPatch(StageFields.partial());
 export type UpdateStage = z.infer<typeof UpdateStage>;
 
 /** A new stage (CD-9); `position` is where it goes (0 = first), by default just before the won stage. */

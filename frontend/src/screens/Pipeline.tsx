@@ -159,7 +159,7 @@ export function Pipeline() {
                             Next: {stageOf(s, l).activity}
                             {needsNextStep(s, l) && (
                               <div style={{ marginTop: 6 }}>
-                                <span className="badge badge-warn" data-testid="no-next-step" title="No open task on this deal">
+                                <span className="badge badge-warn" data-testid="no-next-step" title="No dated open task on this deal. Stage to-dos are not scheduled next steps.">
                                   No next step
                                 </span>
                               </div>

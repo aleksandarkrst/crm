@@ -77,6 +77,7 @@ export const mapProfile = (p: ApiProfile): Profile => ({
   startPage: p.startPage,
   defaultFunnelId: p.defaultFunnelId ?? '',
   digest: p.dailyDigest,
+  onboardingDismissed: Boolean(p.onboardingDismissedAt),
 });
 
 export const mapActivity = (a: ApiActivity, tz?: string): LogEntry => ({ date: dateLabel(a.occurredAt, tz), channel: a.channel, title: a.title, detail: a.detail ?? '' });

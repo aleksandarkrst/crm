@@ -38,6 +38,9 @@ npm run dev
 Open http://localhost:5173.
 
 Sign in with any email (dev mode, no password), create a workspace, and start adding deals.
+New workspace owners and admins get a dismissible getting-started checklist and actionable empty
+states. The interface also adapts to tablet and phone widths, including bottom navigation and
+tap-to-call/email contact actions.
 To try teamwork locally, invite a second email in **Settings → Team**, then open the invite link in
 a private window and sign in as that email.
 

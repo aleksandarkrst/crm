@@ -74,7 +74,7 @@ const errText = (err: unknown) => {
   const issue = err instanceof ApiError ? (err.body as { issues?: { path?: string; message?: string }[] } | null)?.issues?.[0] : undefined;
   return issue?.message ? `${err.message}: ${issue.path ? issue.path + ' ' : ''}${issue.message}` : err.message;
 };
-const EMPTY_CONTACT: NewContactDraft = { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer' };
+const EMPTY_CONTACT: NewContactDraft = { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer', notes: '' };
 const DISCOVERY_FIELDS = ['headline', 'need', 'constraint', 'decisionMaker', 'discoveryDate'] as const satisfies readonly (keyof Lead & keyof DealInput)[];
 /** Workspace settings as the API names them (the bonus trigger has no backend yet). */
 const WORKSPACE_FIELDS: Partial<Record<keyof Workspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth'>> = {
@@ -1046,6 +1046,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             phone: draft.phone,
             linkedin: draft.linkedin,
             buyerRole: draft.buyerRole,
+            notes: draft.notes,
             companyId: lead?.companyId ?? null,
           });
           if (lead) await crmApi.linkContact(lead.id, c.id);

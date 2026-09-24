@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
+import { crmApi } from '../lib/api';
 import { paths } from '../lib/paths';
 import { Modals } from '../modals/Modals';
 import { initialsOf, overdueTasks } from '../store/selectors';
@@ -55,7 +56,7 @@ function Sidebar() {
   const name = s.profile.name || session.userName;
   const overdue = overdueTasks(s).length;
   return (
-    <aside style={{ width: 96, flex: '0 0 96px', background: '#101828', color: '#F5F6F8', padding: '18px 8px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, position: 'sticky', top: 0, height: '100vh', zIndex: 10 }}>
+    <aside className="app-sidebar" style={{ width: 96, flex: '0 0 96px', background: '#101828', color: '#F5F6F8', padding: '18px 8px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, position: 'sticky', top: 0, height: '100vh', zIndex: 10 }}>
       <WorkspaceSwitcher />
       <nav style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: '100%' }}>
         {NAV.map((n) => (
@@ -78,12 +79,41 @@ function Sidebar() {
   );
 }
 
+function GettingStarted() {
+  const { s, set, session } = useStore();
+  const [busy, setBusy] = useState(false);
+  if (session.tenant.role === 'member' || s.profile.onboardingDismissed) return null;
+  const customisedFunnel = Object.values(s.funnels).some((f) => f.stages.length > 0);
+  const items = [
+    { done: customisedFunnel, label: 'Set up your funnel', to: paths.settings('funnels') },
+    { done: s.catalog.length > 0, label: 'Add products', to: paths.products },
+    { done: s.leads.length > 0, label: 'Import or add your first deals', to: paths.pipeline },
+    { done: s.team.length > 1, label: 'Invite a colleague', to: paths.settings('team') },
+  ];
+  if (items.every((x) => x.done)) return null;
+  const dismiss = async () => {
+    setBusy(true);
+    await crmApi.dismissOnboarding();
+    set((x) => ({ profile: { ...x.profile, onboardingDismissed: true } }));
+  };
+  return (
+    <section className="getting-started" aria-label="Getting started">
+      <div><strong>Get started with Cadence</strong><span>{items.filter((x) => x.done).length} of 4 complete</span></div>
+      <div className="getting-started-items">
+        {items.map((item) => <Link key={item.label} to={item.to} className={item.done ? 'done' : ''}><span>{item.done ? '✓' : '○'}</span>{item.label}</Link>)}
+      </div>
+      <button type="button" disabled={busy} onClick={() => void dismiss()}>Dismiss</button>
+    </section>
+  );
+}
+
 export function Layout() {
   const { s } = useStore();
   return (
     <div style={{ display: 'flex', minHeight: '100vh', color: 'var(--ink)', background: 'var(--white)' }}>
       <Sidebar />
-      <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      <main className="app-main" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        <GettingStarted />
         <Outlet />
       </main>
       <Modals />
@@ -100,7 +130,7 @@ export function Screen({ title, onTitleChange, crumb, children }: { title: strin
   const [hover, setHover] = useState(false);
   return (
     <>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', padding: '11px 24px', background: 'var(--white)', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 5 }}>
+      <header className="screen-header" style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', padding: '11px 24px', background: 'var(--white)', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 5 }}>
         <div>
           {onTitleChange ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
@@ -118,7 +148,7 @@ export function Screen({ title, onTitleChange, crumb, children }: { title: strin
         </div>
         <HeaderTools />
       </header>
-      <div style={{ padding: '18px 30px 44px', flex: 1, background: 'var(--white)' }}>
+      <div className="screen-content" style={{ padding: '18px 30px 44px', flex: 1, background: 'var(--white)' }}>
         {crumb && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--muted)', marginBottom: 14 }}>
             <Link to={crumb.to} className="crumb-link">

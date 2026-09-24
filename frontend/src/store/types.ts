@@ -239,6 +239,7 @@ export interface Profile {
   defaultFunnelId: string;
   /** Applies to this workspace only. */
   digest: boolean;
+  onboardingDismissed: boolean;
 }
 
 export interface BonusRule {
@@ -274,6 +275,7 @@ export interface NewContactDraft {
   phone: string;
   linkedin: string;
   buyerRole: string;
+  notes: string;
 }
 
 export interface NewFieldDraft {

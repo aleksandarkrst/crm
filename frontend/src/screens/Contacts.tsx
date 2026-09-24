@@ -64,6 +64,7 @@ export function Contacts() {
               <SortHeader key={h.key} label={h.label} active={sort.key === h.key} dir={sort.dir} onClick={() => toggle(h.key)} />
             ))}
           </div>
+          {rows.length === 0 && <div className="empty-state">No contacts yet. <button type="button" onClick={() => set({ contactOpen: true })}>Add your first contact</button></div>}
           {rows.map((r) => (
             <div key={r.id} className="table-row clickable" style={{ gridTemplateColumns: COLS }} onClick={() => openContact(r.id)}>
               <span style={{ fontWeight: 600 }}>{r.contact}</span>

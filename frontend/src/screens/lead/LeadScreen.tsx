@@ -68,7 +68,7 @@ export function LeadScreen() {
               <span style={{ fontSize: 12.5, color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 {lead.outcome === 'won' ? 'Won · in the won stage' : 'Open · ' + stageOf(s, lead).name}
                 {needsNextStep(s, lead) && (
-                  <button type="button" className="badge badge-warn" data-testid="no-next-step" title="No open task on this deal. Add one to plan what happens next." onClick={() => set({ taskOpen: true, taskLeadId: lead.id, taskEditId: null })} style={{ border: 0, cursor: 'pointer' }}>
+                  <button type="button" className="badge badge-warn" data-testid="no-next-step" title="No dated open task on this deal. Stage to-dos are not scheduled next steps." onClick={() => set({ taskOpen: true, taskLeadId: lead.id, taskEditId: null })} style={{ border: 0, cursor: 'pointer' }}>
                     No next step
                   </button>
                 )}

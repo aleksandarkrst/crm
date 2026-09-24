@@ -59,6 +59,7 @@ export class SettingsService {
         startPage: users.startPage,
         defaultFunnelId: memberships.defaultFunnelId,
         dailyDigest: memberships.dailyDigest,
+        onboardingDismissedAt: memberships.onboardingDismissedAt,
       })
       .from(users)
       .innerJoin(memberships, and(eq(memberships.userId, users.id), eq(memberships.tenantId, ctx.tenantId)))
@@ -92,5 +93,14 @@ export class SettingsService {
     // The cached user (name) must not outlive the change.
     this.identity.forgetUser(user.authSubject);
     return this.getProfile(ctx);
+  }
+
+  /** Dismissal is per user: another admin still gets their own getting-started guide. */
+  async dismissOnboarding(ctx: TenantContext) {
+    await this.database.db
+      .update(memberships)
+      .set({ onboardingDismissedAt: new Date() })
+      .where(and(eq(memberships.tenantId, ctx.tenantId), eq(memberships.userId, ctx.userId)));
+    return { dismissed: true };
   }
 }

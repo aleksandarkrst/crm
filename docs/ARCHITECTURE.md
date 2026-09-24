@@ -408,3 +408,18 @@ them yet:
 - invitation emails (links are copied by hand for now)
 - custom fields
 - notification and integration settings
+
+## First-run onboarding and small-screen UI
+
+Owners and admins see a compact checklist until its data-derived steps are complete or they
+dismiss it. Dismissal is stored on the membership, rather than the tenant, so each administrator
+can finish or dismiss their own guide without hiding it for colleagues. Product, deal, funnel and
+team progress comes from the same records used by the screens. Main list screens include a direct
+empty-state action. At phone widths the desktop sidebar becomes a fixed bottom navigation bar,
+tables and the pipeline retain explicit horizontal scrolling, and dialogs become full-width
+bottom sheets. Contact email and phone values also expose `mailto:` and `tel:` actions.
+
+Checklist compatibility by label was removed in migration 0013: `checklist_items` and
+`deal_tasks.checklist_item_id` are now the sole path. The same migration clears a membership's
+default funnel in a database trigger before that funnel is deleted, adds persisted contact notes,
+and adds per-membership onboarding dismissal.

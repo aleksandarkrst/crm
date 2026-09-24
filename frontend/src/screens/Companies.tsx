@@ -68,6 +68,7 @@ export function Companies() {
               <SortHeader key={h.key} label={h.label} active={sort.key === h.key} dir={sort.dir} onClick={() => toggle(h.key)} />
             ))}
           </div>
+          {rows.length === 0 && <div className="empty-state">No companies yet. <button type="button" onClick={() => addCompany()}>Add your first deal and company</button></div>}
           {rows.map((c) => (
             <div key={c.id} className="table-row clickable" style={{ gridTemplateColumns: COLS }} onClick={() => openCompany(c.id)}>
               <span style={{ fontWeight: 600 }}>{c.name}</span>

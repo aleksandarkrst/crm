@@ -115,6 +115,7 @@ export interface ApiProfile {
   startPage: ApiStartPage;
   defaultFunnelId: string | null;
   dailyDigest: boolean;
+  onboardingDismissedAt: string | null;
 }
 export type ProfileInput = Partial<Omit<ApiProfile, 'userId' | 'email'>>;
 export interface ApiCompany {
@@ -140,6 +141,7 @@ export interface ApiContact {
   linkedin: string | null;
   buyerRole: string;
   ownerUserId: string | null;
+  notes: string | null;
   /** Current name of the owner, also after they left the workspace (lists only). */
   ownerName?: string | null;
 }
@@ -318,6 +320,7 @@ export const crmApi = {
   updateWorkspace: (input: WorkspaceInput) => api<ApiWorkspace>('/workspace', { method: 'PATCH', json: input }),
   profile: () => api<ApiProfile>('/profile'),
   updateProfile: (input: ProfileInput) => api<ApiProfile>('/profile', { method: 'PATCH', json: input }),
+  dismissOnboarding: () => api<{ dismissed: boolean }>('/onboarding/dismiss', { method: 'POST' }),
 
   team: () => api<{ members: ApiMember[]; invitations: ApiInvitation[] }>('/team'),
   invite: (email: string, role: 'admin' | 'member') => api<{ invitation: ApiInvitation; token: string }>('/team/invitations', { method: 'POST', json: { email, role } }),
