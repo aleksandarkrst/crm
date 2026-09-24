@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { FilterBar, GhostInput, GhostSelect, RemoveButton } from '../components/ui';
 import { Screen } from '../components/Layout';
-import { BILLING_KINDS, PRODUCT_TYPES } from '../store/seed';
-import { currencySymbol, curOf, linesOf } from '../store/selectors';
+import { BILLING_KINDS, currencyOptions, PRODUCT_TYPES } from '../store/seed';
+import { itemCurrency, linesOf } from '../store/selectors';
 import { useStore } from '../store/store';
 
-const COLS = 'minmax(0,1.8fr) 1fr 1.1fr 1fr 0.7fr 1fr 40px';
+const COLS = 'minmax(0,1.8fr) 1fr 1.1fr 1fr 0.9fr 0.7fr 1fr 40px';
 
 export function Products() {
   const { s, set, flash, patchProduct, removeProduct } = useStore();
@@ -21,7 +21,7 @@ export function Products() {
     .filter((c) => type === 'Type' || c.type === type)
     .filter((c) => kind === 'Billing' || c.kind === kind);
 
-  const patch = (id: string, key: 'name' | 'type' | 'kind' | 'price' | 'vat') => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => patchProduct(id, key, e.target.value);
+  const patch = (id: string, key: 'name' | 'type' | 'kind' | 'price' | 'vat' | 'currency') => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => patchProduct(id, key, e.target.value);
 
   return (
     <Screen title="Products & services">
@@ -40,9 +40,9 @@ export function Products() {
         action={{ label: 'New product', onClick: () => set({ productOpen: true }) }}
       />
       <div className="card" style={{ overflowX: 'auto' }}>
-        <div style={{ minWidth: 940 }}>
+        <div style={{ minWidth: 1020 }}>
           <div className="table-head" style={{ gridTemplateColumns: COLS }}>
-            {['Name', 'Type', 'Billing', `Unit price (${currencySymbol(curOf(s))})`, 'VAT %', 'On deals', ''].map((h, i) => (
+            {['Name', 'Type', 'Billing', 'Unit price', 'Currency', 'VAT %', 'On deals', ''].map((h, i) => (
               <span key={i} className="th">
                 {h}
               </span>
@@ -56,6 +56,8 @@ export function Products() {
                 <GhostSelect className="ghost-sm" value={c.type} onChange={patch(c.id, 'type')} options={PRODUCT_TYPES} style={{ color: 'var(--text-2)' }} />
                 <GhostSelect className="ghost-sm" value={c.kind} onChange={patch(c.id, 'kind')} options={BILLING_KINDS} style={{ color: 'var(--text-2)' }} />
                 <GhostInput className="ghost-sm" value={c.price} onChange={patch(c.id, 'price')} />
+                {/* CD-77: only deals in this currency can use the product. */}
+                <GhostSelect className="ghost-sm" aria-label={'Currency of ' + c.name} value={itemCurrency(s, c)} onChange={patch(c.id, 'currency')} options={currencyOptions(itemCurrency(s, c))} style={{ color: 'var(--text-2)' }} />
                 <GhostInput className="ghost-sm" value={c.vat} onChange={patch(c.id, 'vat')} />
                 <span
                   className="hover-underline"

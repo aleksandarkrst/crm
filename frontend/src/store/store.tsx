@@ -1,8 +1,8 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, crmApi, type DealInput, type DealLineInput, type LostReason, type ProfileInput, type TaskInput } from '../lib/api';
+import { type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealLineInput, type LostReason, type ProfileInput, type TaskInput } from '../lib/api';
 import { paths } from '../lib/paths';
-import { loadWorkspace, mapActivity, mapLeadTask, mapLine, mapStageChange, type WorkspaceData } from './remote';
+import { loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
 import {
   champFor,
@@ -10,8 +10,10 @@ import {
   companyRecords,
   curOf,
   defaultStart,
+  customFieldsOf,
   initialsOf,
   itemById,
+  itemCurrency,
   leadById,
   money,
   netOf,
@@ -25,7 +27,7 @@ import {
   todayLabel,
   todoItemsFor,
 } from './selectors';
-import type { Champ, ChannelCode, DealLine, Lead, LeadTask, LogEntry, NewContactDraft, NewProductDraft, Person, Profile, SegKey, Stage, State, TaskState, Workspace } from './types';
+import type { BonusRule, Champ, ChannelCode, CustomFieldDef, DealLine, Lead, LeadTask, LogEntry, NewContactDraft, NewProductDraft, Person, Profile, SegKey, Stage, State, TaskState, Workspace } from './types';
 
 type Updater = Partial<State> | ((s: State) => Partial<State>);
 
@@ -74,9 +76,20 @@ const errText = (err: unknown) => {
   const issue = err instanceof ApiError ? (err.body as { issues?: { path?: string; message?: string }[] } | null)?.issues?.[0] : undefined;
   return issue?.message ? `${err.message}: ${issue.path ? issue.path + ' ' : ''}${issue.message}` : err.message;
 };
+/** A typed value as the API takes it: numbers as numbers, '' as null (clears the field). */
+function customValueForApi(type: CustomFieldType, v: CustomValue | null): CustomValue | null {
+  if (v === null || v === '') return null;
+  if (type === 'number' && typeof v === 'string') {
+    const n = Number(v.trim().replace(',', '.'));
+    return v.trim() === '' ? null : Number.isFinite(n) ? n : v;
+  }
+  return v;
+}
+/** A lead's amount as a number (its value is kept formatted). */
+const valueNumOf = (l: Lead) => Number(String(l.value).replace(/[^0-9.-]/g, '')) || 0;
 const EMPTY_CONTACT: NewContactDraft = { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer' };
 const DISCOVERY_FIELDS = ['headline', 'need', 'constraint', 'decisionMaker', 'discoveryDate'] as const satisfies readonly (keyof Lead & keyof DealInput)[];
-/** Workspace settings as the API names them (the bonus trigger has no backend yet). */
+/** Workspace settings as the API names them. */
 const WORKSPACE_FIELDS: Partial<Record<keyof Workspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth'>> = {
   name: 'name',
   currency: 'currency',
@@ -335,6 +348,15 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         flash('Payments must fall after the closing date');
         return;
       }
+      if (key === 'itemId' && lead) {
+        // CD-77: a product in another currency can't go on the deal (no exchange rates).
+        const it = cur().catalog.find((c) => c.id === v);
+        const dealCur = curOf(cur(), lead).currency;
+        if (it && itemCurrency(cur(), it) !== dealCur) {
+          flash(`${it.name} is priced in ${itemCurrency(cur(), it)}, but this deal is in ${dealCur}. Pick a product priced in ${dealCur}, or change the deal's currency first.`, 6000);
+          return;
+        }
+      }
       updateLines(leadId, (ls) =>
         ls.map((l) => {
           if (l.id !== lineId) return l;
@@ -352,9 +374,15 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         flash('Set the closing date first');
         return;
       }
-      const it = cur().catalog[0];
-      if (!it) {
+      if (!cur().catalog.length) {
         flash('Add a product to the catalog first');
+        return;
+      }
+      // CD-77: lines are priced in the deal's currency, so only products in that currency fit.
+      const dealCur = curOf(cur(), lead).currency;
+      const it = cur().catalog.find((c) => itemCurrency(cur(), c) === dealCur);
+      if (!it) {
+        flash(`No product is priced in ${dealCur}. Add one to the catalog, or change the deal's currency.`, 6000);
         return;
       }
       const position = (cur().dealLines[lead.id] || []).length;
@@ -1019,14 +1047,14 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
 
       // ---------------------------------------------------------- creating records
       /** New deal; creates the company and the primary contact first when they are new. */
-      createDeal: async (input: { company: { id?: string; name: string }; contact: { contactId?: string; name: string } | null; segment: SegKey }) => {
+      createDeal: async (input: { company: { id?: string; name: string }; contact: { contactId?: string; name: string } | null; segment: SegKey; customFields?: CustomFieldPatch }) => {
         const funnelId = cur().funnels[input.segment]?.id;
         if (!funnelId) return;
         try {
           const companyId = input.company.id ?? (await crmApi.createCompany({ name: input.company.name })).id;
           let primaryContactId = input.contact?.contactId;
           if (input.contact && !primaryContactId) primaryContactId = (await crmApi.createContact({ fullName: input.contact.name, companyId, buyerRole: 'Decision maker' })).id;
-          const deal = await crmApi.createDeal({ title: input.company.name, funnelId, companyId, primaryContactId: primaryContactId ?? null });
+          const deal = await crmApi.createDeal({ title: input.company.name, funnelId, companyId, primaryContactId: primaryContactId ?? null, ...(input.customFields ? { customFields: input.customFields } : {}) });
           await reload();
           set({ newLeadOpen: false, segment: input.segment });
           navigate(paths.lead(deal.id));
@@ -1036,7 +1064,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         }
       },
       /** New contact at the company of the chosen lead, linked to that lead. */
-      createContact: async (draft: NewContactDraft, leadId: string | undefined) => {
+      createContact: async (draft: NewContactDraft, leadId: string | undefined, customFields?: CustomFieldPatch) => {
         const lead = leadById(cur(), leadId);
         try {
           const c = await crmApi.createContact({
@@ -1047,6 +1075,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             linkedin: draft.linkedin,
             buyerRole: draft.buyerRole,
             companyId: lead?.companyId ?? null,
+            ...(customFields ? { customFields } : {}),
           });
           if (lead) await crmApi.linkContact(lead.id, c.id);
           await reload();
@@ -1098,16 +1127,19 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             billingKind: draft.kind as 'One-off' | 'Monthly' | 'Yearly' | 'Hourly',
             unitPrice: num(draft.price),
             vatRate: num(draft.vat),
+            ...(draft.currency ? { currency: draft.currency } : {}),
           });
-          set((x) => ({ catalog: [...x.catalog, { id: p.id, name: p.name, type: p.type, kind: p.billingKind, price: Number(p.unitPrice), vat: Number(p.vatRate) }] }));
+          set((x) => ({ catalog: [...x.catalog, mapProduct(p)] }));
           return true;
         } catch (err) {
           flash('Not saved: ' + errText(err));
           return false;
         }
       },
-      patchProduct: (id: string, key: 'name' | 'type' | 'kind' | 'price' | 'vat', v: string) => {
+      patchProduct: (id: string, key: 'name' | 'type' | 'kind' | 'price' | 'vat' | 'currency', v: string) => {
         set((x) => ({ catalog: x.catalog.map((c) => (c.id === id ? { ...c, [key]: v } : c)) }));
+        // A product on deals in another currency can't switch (the API names the deal); the failed save puts it back.
+        if (key === 'currency') return void save(() => crmApi.updateProduct(id, { currency: v }), undefined, 'the product currency');
         const field = ({ name: 'name', type: 'type', kind: 'billingKind', price: 'unitPrice', vat: 'vatRate' } as const)[key];
         if (key === 'name' && !v.trim()) return;
         saveLater(`product:${id}:${field}`, () => crmApi.updateProduct(id, { [field]: key === 'price' || key === 'vat' ? num(v) : v }), `the product ${key === 'kind' ? 'billing' : key === 'vat' ? 'VAT' : key}`);
@@ -1115,6 +1147,117 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       removeProduct: (id: string) => {
         set((x) => ({ catalog: x.catalog.filter((k) => k.id !== id) }));
         void save(() => crmApi.deleteProduct(id), undefined, 'removing the product');
+      },
+
+      // ---------------------------------------------------------- deal currency (CD-77)
+      /**
+       * Changes a deal's currency. Its lines are priced in it and there are no exchange rates, so
+       * the change is refused while a line uses a product priced in another currency.
+       */
+      setDealCurrency: (leadId: string, currency: string) => {
+        const lead = leadById(cur(), leadId);
+        if (!lead || curOf(cur(), lead).currency === currency) return;
+        const clashing = (cur().dealLines[leadId] || []).map((l) => cur().catalog.find((c) => c.id === l.itemId)).filter((c) => !!c && itemCurrency(cur(), c) !== currency);
+        if (clashing.length) {
+          const names = [...new Set(clashing.map((c) => `${c!.name} (${itemCurrency(cur(), c)})`))].join(', ');
+          flash(`Can't change the currency to ${currency}: ${clashing.length === 1 ? '1 product line is' : clashing.length + ' product lines are'} priced in another currency (${names}). Remove those lines or replace them with products in ${currency} first.`, 8000);
+          return;
+        }
+        mapLead(leadId, (l) => ({ ...l, currency, value: money(valueNumOf(l), { currency, locale: curOf(cur()).locale }) }));
+        void save(() => crmApi.updateDeal(leadId, { currency }), reload, 'the deal currency');
+        flash('Deal currency changed to ' + currency);
+      },
+
+      // ---------------------------------------------------------- custom fields (CD-15)
+      /** Owners and admins define custom fields; everyone fills them in. */
+      canEditFields: canEditFunnels,
+      /** Sets a custom field value on a deal, company or contact; saved after a pause (one write per field). */
+      setCustomValue: (entity: CustomFieldEntity, recordId: string, field: CustomFieldDef, value: CustomValue | null) => {
+        set((x) => {
+          const values = { ...(x.customValues[entity][recordId] || {}) };
+          if (value === null || value === '') delete values[field.id];
+          else values[field.id] = value;
+          return { customValues: { ...x.customValues, [entity]: { ...x.customValues[entity], [recordId]: values } } };
+        });
+        const body = { customFields: { [field.id]: customValueForApi(field.type, value) } };
+        const write = entity === 'deal' ? () => crmApi.updateDeal(recordId, body) : entity === 'company' ? () => crmApi.updateCompany(recordId, body) : () => crmApi.updateContact(recordId, body);
+        saveLater(`custom:${recordId}:${field.id}`, write, field.label);
+      },
+      createCustomField: async (draft: { entity: CustomFieldEntity; label: string; type: CustomFieldType; required: boolean; options: string[] }): Promise<boolean> => {
+        try {
+          const f = await crmApi.createCustomField({ entity: draft.entity, label: draft.label.trim(), type: draft.type, required: draft.required, ...(draft.type === 'select' ? { options: draft.options.map((label) => ({ label })) } : {}) });
+          set((x) => ({ customFields: [...x.customFields, mapCustomField(f)] }));
+          return true;
+        } catch (err) {
+          flash('Not saved: ' + errText(err));
+          return false;
+        }
+      },
+      /** Renames a field (after a pause), or changes its options or whether it is required. */
+      updateCustomField: (id: string, patch: { label?: string; required?: boolean; options?: { id?: string; label: string }[] }) => {
+        const f = cur().customFields.find((x) => x.id === id);
+        if (!f) return;
+        set((x) => ({ customFields: x.customFields.map((y) => (y.id === id ? { ...y, ...(patch.label !== undefined ? { label: patch.label } : {}), ...(patch.required !== undefined ? { required: patch.required } : {}) } : y)) }));
+        if (patch.label !== undefined) {
+          if (patch.label.trim()) saveLater('field-label:' + id, () => crmApi.updateCustomField(id, { label: patch.label!.trim() }), 'the field name');
+          return;
+        }
+        void save(
+          async () => {
+            const row = await crmApi.updateCustomField(id, { ...(patch.required !== undefined ? { required: patch.required } : {}), ...(patch.options ? { options: patch.options } : {}) });
+            set((x) => ({ customFields: x.customFields.map((y) => (y.id === id ? { ...mapCustomField(row), label: y.label } : y)) }));
+          },
+          undefined,
+          patch.options ? 'the options of ' + f.label : f.label,
+        );
+      },
+      /** Moves a field one place up (-1) or down (+1) among the fields of its record type. */
+      moveCustomField: (id: string, dir: -1 | 1) => {
+        const f = cur().customFields.find((x) => x.id === id);
+        if (!f) return;
+        const list = customFieldsOf(cur(), f.entity);
+        const i = list.findIndex((x) => x.id === id);
+        const j = i + dir;
+        if (j < 0 || j >= list.length) return;
+        [list[i], list[j]] = [list[j]!, list[i]!];
+        set((x) => ({ customFields: [...x.customFields.filter((y) => y.entity !== f.entity), ...list] }));
+        void save(() => crmApi.reorderCustomFields(f.entity, list.map((x) => x.id)), undefined, 'the field order');
+      },
+      /** Hides a field everywhere (its values are kept in the records, unseen). */
+      deleteCustomField: (id: string) => {
+        const f = cur().customFields.find((x) => x.id === id);
+        if (!f) return;
+        cancelSaves(id);
+        set((x) => ({ customFields: x.customFields.filter((y) => y.id !== id) }));
+        void save(() => crmApi.deleteCustomField(id), undefined, 'deleting ' + f.label);
+        flash(f.label + ' deleted');
+      },
+
+      // ---------------------------------------------------------- sales bonuses (CD-17)
+      /** Only owners and admins see and set the bonus rules; the API returns 403 to members. */
+      canSeeBonuses: canEditFunnels,
+      setBonusTrigger: (trigger: string) => {
+        set({ bonusTrigger: trigger });
+        void save(() => crmApi.updateBonusSettings(trigger), undefined, 'when bonuses are earned');
+      },
+      /** Edits one number of a salesperson's rule; the whole rule is saved after a pause. */
+      setBonusRule: (userId: string, key: keyof BonusRule, v: string) => {
+        set((x) => {
+          const saved = x.bonusRules?.[userId] ?? { rate: '', floor: '', fixed: '' };
+          return { bonusRules: { ...(x.bonusRules ?? {}), [userId]: { ...saved, [key]: v } } };
+        });
+        saveLater(
+          'bonus:' + userId,
+          async () => {
+            const r = cur().bonusRules?.[userId];
+            if (!r) return;
+            const saved = await crmApi.putBonusRule(userId, { rate: Math.min(100, num(r.rate)), floor: num(r.floor), fixed: num(r.fixed) });
+            // Keep what is still being typed for this person; take the stored rules for everyone else.
+            const stored = mapBonusRules(saved);
+            set((x) => ({ bonusRules: { ...stored, [userId]: x.bonusRules?.[userId] ?? stored[userId]! } }));
+          },
+          'the bonus rule',
+        );
       },
 
       // ---------------------------------------------------------- settings

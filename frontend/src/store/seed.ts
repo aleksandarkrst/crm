@@ -11,7 +11,25 @@ export const DOCS = ['None', 'Proposal', 'Quote', 'Contract', 'Invoice'];
 export const OWNERS = ['Mila Jovanović', 'Stefan Popović', 'Nina Đorđević'];
 export const DOC_TYPES = ['Proposal', 'Quote', 'Contract', 'NDA', 'Onboarding brief', 'Invoice'];
 export const BUYER_ROLES = ['Decision maker', 'Economic buyer', 'Champion', 'Influencer', 'Gatekeeper', 'End user'];
-export const FIELD_TYPES = ['Text', 'Number', 'Currency', 'Date', 'Dropdown', 'Checkbox'];
+/** Custom field types (CD-15) and how they are labelled. */
+export const FIELD_TYPES = [
+  { value: 'text', label: 'Text' },
+  { value: 'number', label: 'Number' },
+  { value: 'date', label: 'Date' },
+  { value: 'select', label: 'Single select' },
+  { value: 'checkbox', label: 'Checkbox' },
+  { value: 'url', label: 'URL' },
+] as const;
+/** Currencies offered for the workspace, deals and products (ISO 4217). */
+export const CURRENCIES = [
+  { value: 'EUR', label: 'EUR (€)' },
+  { value: 'RSD', label: 'RSD (дин)' },
+  { value: 'USD', label: 'USD ($)' },
+  { value: 'GBP', label: 'GBP (£)' },
+  { value: 'CHF', label: 'CHF (Fr.)' },
+];
+/** The currency options, plus `current` when it isn't one of them (set through the API). */
+export const currencyOptions = (current?: string) => (current && !CURRENCIES.some((c) => c.value === current) ? [...CURRENCIES, { value: current, label: current }] : CURRENCIES);
 export const SOURCES = ['Inbound web form', 'Referral', 'Outbound LinkedIn', 'Conference', 'Instagram DM', 'Trade fair'];
 export const INDUSTRIES = ['Architecture', 'Banking', 'Food & beverage', 'Freight & logistics', 'Furniture retail', 'Hospitality', 'Pharmaceuticals', 'Renewable energy', 'Wine', 'Other'];
 export const TEAM_SIZES = ['1–10 staff', '11–50 staff', '51–200 staff', '201–1,000 staff', '1,000+ staff'];
@@ -171,28 +189,14 @@ export function initialState(): State {
       { id: 'i5', name: 'Slack', desc: 'Post won deals to #sales', on: true },
       { id: 'i6', name: 'Google Drive', desc: 'Store generated documents', on: true },
     ],
-    fields: [
-      { id: 'f1', label: 'Industry', type: 'Text', entity: 'Leads', required: true, system: true },
-      { id: 'f2', label: 'HQ', type: 'Text', entity: 'Leads', required: false, system: true },
-      { id: 'f3', label: 'Team size', type: 'Number', entity: 'Leads', required: false, system: true },
-      { id: 'f4', label: 'Deal value', type: 'Currency', entity: 'Leads', required: true, system: true },
-      { id: 'f5', label: 'Source', type: 'Dropdown', entity: 'Leads', required: true, system: true },
-      { id: 'f6', label: 'Renewal date', type: 'Date', entity: 'Leads', required: false, system: false },
-      { id: 'f7', label: 'Role', type: 'Text', entity: 'Contacts', required: true, system: true },
-      { id: 'f8', label: 'Email', type: 'Text', entity: 'Contacts', required: true, system: true },
-      { id: 'f9', label: 'Phone', type: 'Text', entity: 'Contacts', required: false, system: true },
-      { id: 'f10', label: 'LinkedIn', type: 'Text', entity: 'Contacts', required: false, system: true },
-      { id: 'f11', label: 'Role in the decision', type: 'Dropdown', entity: 'Contacts', required: true, system: true },
-      { id: 'f12', label: 'Company', type: 'Dropdown', entity: 'Contacts', required: true, system: true },
-      { id: 'f13', label: 'Company', type: 'Dropdown', entity: 'Leads', required: true, system: true },
-      { id: 'f14', label: 'Contacts', type: 'Dropdown', entity: 'Leads', required: true, system: true },
-      { id: 'f15', label: 'Closing date', type: 'Date', entity: 'Leads', required: false, system: true },
-      { id: 'f16', label: 'Funnel', type: 'Dropdown', entity: 'Leads', required: true, system: true },
-    ].map((f) => ({ ...f, entity: f.entity as 'Leads' | 'Contacts', visible: true })),
+    // Replaced by the saved custom fields and values when the workspace loads (store/remote.ts).
+    customFields: [],
+    customValues: { deal: {}, company: {}, contact: {} },
     // Replaced by the saved settings when the workspace loads (store/remote.ts).
     workspace: { name: '', currency: 'EUR', timezone: 'Europe/Belgrade', fiscalMonth: 1 },
     profile: { name: '', title: '', email: '', phone: '', language: 'en', dateFormat: 'DD.MM.YYYY', startPage: 'pipeline', defaultFunnelId: '', digest: true },
-    bonusRules: {},
+    bonusRules: null,
+    bonusTrigger: 'On contract signed',
     filters: { ...DEFAULT_FILTERS },
     toast: '',
 
@@ -217,7 +221,7 @@ export function initialState(): State {
     templateType: 'Proposal',
     templateFile: null,
     fieldOpen: false,
-    newField: { label: '', type: 'Text', entity: 'Leads', required: false },
+    newField: { label: '', type: 'text', entity: 'deal', required: false, options: '' },
     productOpen: false,
     newProduct: { name: '', type: 'Service', kind: 'One-off', price: '', vat: '20' },
     drill: null,

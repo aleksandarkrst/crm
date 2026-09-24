@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { CustomFieldInputs, customFieldsForCreate } from '../components/CustomFields';
 import { Modal, ModalHeader } from '../components/ui';
-import { LOST_REASONS, type LostReason } from '../lib/api';
+import { type CustomFieldPatch, type CustomFieldType, LOST_REASONS, type LostReason } from '../lib/api';
 import { paths } from '../lib/paths';
-import { BILLING_KINDS, BUYER_ROLES, CHANNEL_LABELS, DOC_TYPES, FIELD_TYPES, PARAM_SOURCES, PRODUCT_TYPES } from '../store/seed';
-import { allPeople, companyLabels, companyRecords, currencySymbol, curOf, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
+import { BILLING_KINDS, BUYER_ROLES, CHANNEL_LABELS, currencyOptions, DOC_TYPES, FIELD_TYPES, PARAM_SOURCES, PRODUCT_TYPES } from '../store/seed';
+import { allPeople, companyLabels, companyRecords, currencySymbol, customFieldsOf, leadById, localeFor, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { ChannelCode, Lead } from '../store/types';
 import { ProposalDoc } from './ProposalDoc';
@@ -64,7 +65,7 @@ const NEW_CO = '+ New company…';
 const NEW_CT = '+ New contact…';
 
 function NewDealModal() {
-  const { s, set, createDeal } = useStore();
+  const { s, set, flash, createDeal } = useStore();
   const [busy, setBusy] = useState(false);
   const records = companyRecords(s);
   const labels = companyLabels(records);
@@ -83,8 +84,11 @@ function NewDealModal() {
   const contactOptions = [...people.map((p) => p.name), NEW_CT];
   const contact = contactPick && contactOptions.includes(contactPick) ? contactPick : contactOptions[0]!;
   const funnel = s.funnels[type];
+  const [custom, setCustom] = useState<CustomFieldPatch>({});
 
   const create = async () => {
+    const fields = customFieldsForCreate(customFieldsOf(s, 'deal'), custom);
+    if ('missing' in fields) return flash(`Fill in ${fields.missing} first`);
     const coName = companyIsNew ? companyName.trim() || 'New company' : (companyRec?.name ?? '');
     const ctName = contact === NEW_CT ? contactName.trim() : contact;
     const person = people.find((p) => p.name === ctName);
@@ -93,6 +97,7 @@ function NewDealModal() {
       company: { id: companyIsNew ? undefined : companyId, name: coName },
       contact: person ? { contactId: person.contactId, name: person.name } : ctName ? { name: ctName } : null,
       segment: type,
+      ...(customFieldsOf(s, 'deal').length ? { customFields: fields.values } : {}),
     });
     setBusy(false);
   };
@@ -131,6 +136,7 @@ function NewDealModal() {
           </button>
         ))}
       </div>
+      <CustomFieldInputs entity="deal" values={custom} onChange={setCustom} />
       <div className="hint-box">
         Assigns the {funnel.stages.length}-stage funnel. First task: {funnel.stages[0]?.activity}.
       </div>
@@ -273,15 +279,18 @@ function NewContactModal() {
   const { s, set, flash, createContact } = useStore();
   const [busy, setBusy] = useState(false);
   const nc = s.newContact;
+  const [custom, setCustom] = useState<CustomFieldPatch>({});
   const setNc = (k: keyof typeof nc) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const v = e.target.value;
     set((x) => ({ newContact: { ...x.newContact, [k]: v } }));
   };
   const create = async () => {
     if (!nc.name.trim()) return flash('Give the contact a name first');
+    const fields = customFieldsForCreate(customFieldsOf(s, 'contact'), custom);
+    if ('missing' in fields) return flash(`Fill in ${fields.missing} first`);
     setBusy(true);
     const lead = leadById(s, s.contactCompany) || s.leads[0];
-    await createContact({ ...nc, name: nc.name.trim() }, lead?.id);
+    await createContact({ ...nc, name: nc.name.trim() }, lead?.id, customFieldsOf(s, 'contact').length ? fields.values : undefined);
     setBusy(false);
   };
   return (
@@ -328,6 +337,7 @@ function NewContactModal() {
           ))}
         </select>
       </label>
+      <CustomFieldInputs entity="contact" values={custom} onChange={setCustom} />
       <label className="form-label">
         Notes
         <textarea className="form-input" rows={3} placeholder="How they influence the deal" />
@@ -448,54 +458,68 @@ function NewTemplateModal() {
   );
 }
 
+/** New custom field (CD-15) for deals, companies or contacts; owners and admins only. */
 function NewFieldModal() {
-  const { s, set, flash } = useStore();
+  const { s, set, flash, createCustomField } = useStore();
   const nf = s.newField;
-  const reset = { label: '', type: 'Text', entity: 'Leads' as const, required: false };
+  const [busy, setBusy] = useState(false);
+  const reset = { label: '', type: 'text' as CustomFieldType, entity: nf.entity, required: false, options: '' };
+  const patch = (p: Partial<typeof nf>) => set((x) => ({ newField: { ...x.newField, ...p } }));
+  const options = nf.options.split('\n').map((o) => o.trim()).filter(Boolean);
+  const entityLabel = { deal: 'deals', company: 'companies', contact: 'contacts' }[nf.entity];
+  const add = async () => {
+    if (!nf.label.trim() || busy) return;
+    if (nf.type === 'select' && options.length === 0) return flash('Add at least one option, one per line');
+    setBusy(true);
+    const ok = await createCustomField({ entity: nf.entity, label: nf.label, type: nf.type, required: nf.required, options });
+    setBusy(false);
+    if (!ok) return;
+    flash(nf.label.trim() + ' added to ' + entityLabel);
+    set({ fieldOpen: false, newField: reset });
+  };
   return (
     <Modal maxWidth={520}>
-      <ModalHeader title="New field" sub="Custom fields appear on the record and in the create form, and can be merged into documents." />
+      <ModalHeader title="New field" sub="Custom fields show on the record and in its create form, and are included in CSV exports." />
       <label className="form-label">
         Field name
-        <input className="form-input" placeholder="e.g. Contract end date" value={nf.label} onChange={(e) => set((x) => ({ newField: { ...x.newField, label: e.target.value } }))} />
+        <input className="form-input" placeholder="e.g. Contract end date" value={nf.label} onChange={(e) => patch({ label: e.target.value })} />
       </label>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         <span className="caps">Applies to</span>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {(['Leads', 'Contacts'] as const).map((en) => (
-            <button key={en} type="button" className={nf.entity === en ? 'choice-pill on' : 'choice-pill'} onClick={() => set((x) => ({ newField: { ...x.newField, entity: en } }))}>
-              {en}
+          {(['deal', 'company', 'contact'] as const).map((en) => (
+            <button key={en} type="button" className={nf.entity === en ? 'choice-pill on' : 'choice-pill'} onClick={() => patch({ entity: en })}>
+              {{ deal: 'Deals', company: 'Companies', contact: 'Contacts' }[en]}
             </button>
           ))}
         </div>
       </div>
       <label className="form-label">
         Type
-        <select className="form-input" value={nf.type} onChange={(e) => set((x) => ({ newField: { ...x.newField, type: e.target.value } }))}>
+        <select className="form-input" value={nf.type} onChange={(e) => patch({ type: e.target.value as CustomFieldType })}>
           {FIELD_TYPES.map((ft) => (
-            <option key={ft}>{ft}</option>
+            <option key={ft.value} value={ft.value}>
+              {ft.label}
+            </option>
           ))}
         </select>
       </label>
-      <button type="button" onClick={() => set((x) => ({ newField: { ...x.newField, required: !x.newField.required } }))} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', textAlign: 'left', border: 0, background: 'transparent', padding: 0 }}>
+      {nf.type === 'select' && (
+        <label className="form-label">
+          Options, one per line
+          <textarea className="form-input" rows={4} placeholder={'e.g.\nGold\nSilver\nBronze'} value={nf.options} onChange={(e) => patch({ options: e.target.value })} />
+        </label>
+      )}
+      <button type="button" onClick={() => patch({ required: !nf.required })} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', textAlign: 'left', border: 0, background: 'transparent', padding: 0 }}>
         <span style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${nf.required ? '#14503C' : '#D0D5DD'}`, background: nf.required ? '#14503C' : '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', fontSize: 11 }}>{nf.required ? '✓' : ''}</span>
-        <span style={{ fontSize: 13, color: 'var(--ink)' }}>Required before a lead can advance a stage</span>
+        <span style={{ fontSize: 13, color: 'var(--ink)' }}>Required: must be filled in when the record is created in its form, and can't be cleared</span>
       </button>
       <div className="modal-actions">
         <button type="button" className="btn btn-secondary" onClick={() => set({ fieldOpen: false, newField: reset })}>
           Cancel
         </button>
-        <button
-          type="button"
-          className={nf.label ? 'btn btn-primary' : 'btn btn-disabled'}
-          style={{ cursor: 'pointer' }}
-          onClick={() => {
-            if (!nf.label) return;
-            set((x) => ({ fields: [...x.fields, { id: 'f' + Date.now(), ...nf, system: false, visible: true }], fieldOpen: false, newField: reset }));
-            flash(nf.label + ' added to ' + nf.entity.toLowerCase() + ' for this session only; not saved yet');
-          }}
-        >
-          Add field
+        <button type="button" className={nf.label.trim() && !busy ? 'btn btn-primary' : 'btn btn-disabled'} style={{ cursor: 'pointer' }} disabled={busy} onClick={() => void add()}>
+          {busy ? 'Adding…' : 'Add field'}
         </button>
       </div>
     </Modal>
@@ -553,7 +577,9 @@ function DrillModal() {
 function NewProductModal() {
   const { s, set, flash, addProduct } = useStore();
   const p = s.newProduct;
-  const reset = { name: '', type: 'Service', kind: 'One-off', price: '', vat: '20' };
+  const reset = { name: '', type: 'Service', kind: 'One-off', price: '', vat: '20', currency: '' };
+  // CD-77: the price is in this currency; only deals in it can use the product.
+  const currency = p.currency || s.workspace.currency;
   const setP = (k: keyof typeof p) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const v = e.target.value;
     set((x) => ({ newProduct: { ...x.newProduct, [k]: v } }));
@@ -583,8 +609,18 @@ function NewProductModal() {
           </select>
         </label>
         <label className="form-label">
-          Unit price ({currencySymbol(curOf(s))})
+          Unit price ({currencySymbol({ currency, locale: localeFor(s.workspace.currency) })})
           <input className="form-input" placeholder="6500" value={p.price} onChange={setP('price')} />
+        </label>
+        <label className="form-label">
+          Currency
+          <select className="form-input" value={currency} onChange={setP('currency')}>
+            {currencyOptions(currency).map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="form-label">
           VAT %
@@ -601,7 +637,7 @@ function NewProductModal() {
           onClick={() => {
             const name = p.name.trim();
             if (!name) return flash('Give the product a name first');
-            void addProduct({ ...p, name }).then((ok) => {
+            void addProduct({ ...p, name, currency }).then((ok) => {
               if (!ok) return;
               set({ productOpen: false, newProduct: reset });
               flash(name + ' added to the catalog');

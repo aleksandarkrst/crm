@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
+import { CustomFieldRows } from '../components/CustomFields';
 import { DangerButton, FieldRow, GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
@@ -84,6 +85,7 @@ export function Contact() {
               <FieldRow label="Phone">
                 <GhostInput value={p.phone} onChange={setField('phone')} />
               </FieldRow>
+              <CustomFieldRows entity="contact" recordId={p.contactId} />
               <FieldRow label="Owner">
                 <span className="field-value">{memberName(s, p.ownerId, p.ownerName)}</span>
               </FieldRow>
