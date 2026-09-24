@@ -3,7 +3,22 @@ import { sql } from 'drizzle-orm';
 import { fromDrizzle, PgBoss } from 'pg-boss';
 import { ENV, type Env } from '../../infrastructure/config/config.module';
 import type { Tx } from '../database/database.service';
-import { JOB_NAMES, type JobName, type JobPayloads } from './job-types';
+import { JOB_NAMES, type JobName, type JobPayloads, MAIL_JOBS } from './job-types';
+
+/** What a handler learns about the attempt it runs in. */
+export interface JobAttempt {
+  id: string;
+  /** 0 on the first attempt. */
+  retryCount: number;
+  retryLimit: number;
+  /** True when a failure now is final: pg-boss won't retry it. */
+  lastAttempt: boolean;
+}
+
+export interface SendOptions {
+  /** While a job with this key is queued or running, another send with the same key is dropped. */
+  singletonKey?: string;
+}
 
 export const JOBS_ROLE = Symbol('JOBS_ROLE');
 /** "api" only sends jobs; "worker" also processes them and runs pg-boss maintenance and cron. */
@@ -19,7 +34,7 @@ export class JobsService implements OnModuleInit, OnApplicationShutdown {
   private readonly boss: PgBoss;
 
   constructor(
-    @Inject(ENV) env: Env,
+    @Inject(ENV) private readonly env: Env,
     @Inject(JOBS_ROLE) private readonly role: JobsRole,
   ) {
     const isWorker = role === 'worker';
@@ -59,13 +74,16 @@ export class JobsService implements OnModuleInit, OnApplicationShutdown {
    * Enqueues a job. Pass the current transaction so the job only exists if the business change
    * commits (no "deal marked won but handover job lost" failure mode).
    */
-  async send<N extends JobName>(name: N, data: JobPayloads[N], tx?: Tx): Promise<void> {
-    await this.boss.send(name, data, tx ? { db: fromDrizzle(tx, sql) } : undefined);
+  async send<N extends JobName>(name: N, data: JobPayloads[N], tx?: Tx, options: SendOptions = {}): Promise<void> {
+    const retry = MAIL_JOBS.has(name) ? { retryLimit: this.env.MAIL_RETRY_LIMIT, retryDelay: this.env.MAIL_RETRY_DELAY_SECONDS, retryBackoff: true } : {};
+    await this.boss.send(name, data, { ...retry, ...options, ...(tx ? { db: fromDrizzle(tx, sql) } : {}) });
   }
 
-  async work<N extends JobName>(name: N, handler: (data: JobPayloads[N], jobId: string) => Promise<void>): Promise<void> {
-    await this.boss.work<JobPayloads[N]>(name, async (jobs) => {
-      for (const job of jobs) await handler(job.data, job.id);
+  async work<N extends JobName>(name: N, handler: (data: JobPayloads[N], attempt: JobAttempt) => Promise<void>): Promise<void> {
+    await this.boss.work<JobPayloads[N], unknown, { includeMetadata: true }>(name, { includeMetadata: true }, async (jobs) => {
+      for (const job of jobs) {
+        await handler(job.data, { id: job.id, retryCount: job.retryCount, retryLimit: job.retryLimit, lastAttempt: job.retryCount >= job.retryLimit });
+      }
     });
   }
 

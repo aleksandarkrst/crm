@@ -25,6 +25,21 @@ export class TeamController {
     return this.team.invite(ctx, body);
   }
 
+  /** Emails the invitation again (same link, 7 more days). */
+  @Post('team/invitations/:id/resend')
+  @RequireTenant('admin')
+  @HttpCode(200)
+  resend(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.team.resend(ctx, id);
+  }
+
+  /** The invitation's token, for "Copy link" when the email doesn't arrive. */
+  @Get('team/invitations/:id/link')
+  @RequireTenant('admin')
+  link(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.team.link(ctx, id);
+  }
+
   @Delete('team/invitations/:id')
   @RequireTenant('admin')
   @HttpCode(204)

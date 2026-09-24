@@ -23,6 +23,22 @@ const EnvSchema = z
     CORS_ORIGINS: z.string().default(''),
 
     STORAGE_DIR: z.string().default('./storage'),
+
+    // Public address of the web app, for links in emails (invitations, digests). Never taken
+    // from the request. Required in production.
+    APP_URL: z.url().default('http://localhost:5173'),
+    // Encrypts invite links at rest so they can be emailed again (CD-7). At least 32 characters;
+    // required in production. Development falls back to DEV_JWT_SECRET.
+    APP_SECRET: z.string().min(32).optional(),
+
+    // Email (CD-7, CD-16). "log" writes messages to the log (and, outside production, to an outbox
+    // file the dev-only /api/dev/mail endpoint reads). "smtp" sends through any SMTP provider.
+    MAIL_DRIVER: z.enum(['log', 'smtp']).default('log'),
+    SMTP_URL: z.string().optional(), // e.g. smtps://user:password@smtp.postmarkapp.com:465
+    MAIL_FROM: z.string().default('Cadence <no-reply@localhost>'),
+    // pg-boss retries of a failed send, with exponential backoff from the delay.
+    MAIL_RETRY_LIMIT: z.coerce.number().int().min(0).max(20).default(4),
+    MAIL_RETRY_DELAY_SECONDS: z.coerce.number().int().min(1).default(30),
   })
   .superRefine((env, ctx) => {
     if (env.AUTH_MODE === 'dev' && env.NODE_ENV === 'production') {
@@ -30,6 +46,15 @@ const EnvSchema = z
     }
     if (env.AUTH_MODE === 'dev' && !env.DEV_JWT_SECRET) {
       ctx.addIssue({ code: 'custom', path: ['DEV_JWT_SECRET'], message: 'required when AUTH_MODE=dev' });
+    }
+    if (env.NODE_ENV === 'production' && !env.APP_SECRET) {
+      ctx.addIssue({ code: 'custom', path: ['APP_SECRET'], message: 'required in production (openssl rand -hex 32)' });
+    }
+    if (env.NODE_ENV === 'production' && !process.env.APP_URL) {
+      ctx.addIssue({ code: 'custom', path: ['APP_URL'], message: 'required in production (e.g. https://app.yourdomain.com)' });
+    }
+    if (env.MAIL_DRIVER === 'smtp' && !env.SMTP_URL) {
+      ctx.addIssue({ code: 'custom', path: ['SMTP_URL'], message: 'required when MAIL_DRIVER=smtp' });
     }
     if (env.AUTH_MODE === 'oidc' && (!env.OIDC_ISSUER || !env.OIDC_AUDIENCE)) {
       ctx.addIssue({ code: 'custom', path: ['OIDC_ISSUER'], message: 'OIDC_ISSUER and OIDC_AUDIENCE are required when AUTH_MODE=oidc' });
