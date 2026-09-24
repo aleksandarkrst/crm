@@ -222,6 +222,7 @@ export function FilterBar({
   onClear,
   meta,
   action,
+  extra,
 }: {
   search?: { value: string; onChange: (v: string) => void; placeholder: string };
   chips: BarChip[];
@@ -229,6 +230,8 @@ export function FilterBar({
   onClear?: () => void;
   meta?: string;
   action?: { label: string; onClick: () => void };
+  /** More buttons before the action (e.g. Import / Export). */
+  extra?: ReactNode;
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -263,6 +266,7 @@ export function FilterBar({
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
         {meta && <span style={{ fontSize: 12.5, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{meta}</span>}
+        {extra}
         {action && (
           <button type="button" className="btn btn-primary" onClick={action.onClick}>
             {action.label}
