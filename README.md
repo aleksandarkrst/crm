@@ -38,9 +38,10 @@ npm run dev
 Open http://localhost:5173.
 
 Sign in with any email (dev mode, no password), create a workspace, and start adding deals.
-New workspace owners and admins get a dismissible getting-started checklist and actionable empty
-states. The interface also adapts to tablet and phone widths, including bottom navigation and
-tap-to-call/email contact actions.
+A new workspace opens with a getting-started checklist (for owners and admins) and empty screens
+that say what fills them. To look around first, click **Load sample data**; **Remove sample data**
+deletes exactly those records again. The app also works on tablets and phones (bottom bar,
+one-tap call and email on contacts).
 To try teamwork locally, invite a second email in **Settings → Team**, then open the invite link in
 a private window and sign in as that email.
 

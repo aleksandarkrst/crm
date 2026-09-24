@@ -102,6 +102,9 @@ describe('sample data', () => {
     const tasks = (await list('/crm/deal-tasks', owner, t)).filter((x) => x.dueDate);
     expect(tasks).toHaveLength(4);
     expect(tasks.every((x) => x.assigneeUserId === owner.userId && !x.blocksAdvance)).toBe(true);
+    // "Due today" is today in the workspace's time zone (Europe/Belgrade by default), not in UTC.
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Belgrade' }).format(new Date());
+    expect(tasks.find((x) => x.label === 'Call Nikola about the pilot scope')?.dueDate).toBe(today);
     const history = await list('/crm/deal-stage-history', owner, t);
     expect(new Set(history.map((h) => h.dealId)).size).toBe(6);
     expect(await list('/crm/companies', owner, t)).toHaveLength(4);

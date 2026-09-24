@@ -217,7 +217,6 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 }
 
 @media (max-width: 700px) {
-  html, body { overflow-x: hidden; }
   .app-main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 
   /* The sidebar becomes a bottom bar: the four everyday screens and "More". */
@@ -273,6 +272,7 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
   .stage-step:not(.current) .stage-step-label { visibility: hidden; }
   .stage-step.current .stage-step-label { white-space: nowrap; }
   .lead-main { order: -1; }
+  .lead-main button[title="Mark done"] { flex-basis: 26px !important; width: 26px !important; height: 26px !important; }
 
   /* Dialogs become sheets that fit the screen, with their buttons always in reach. */
   .overlay { padding: 0; align-items: flex-end; }
@@ -281,7 +281,6 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
   .modal-actions { position: sticky; bottom: -18px; background: var(--white); padding: 10px 0 4px; flex-wrap: wrap; }
   .form-label { min-width: 0; }
   .toast { bottom: calc(76px + env(safe-area-inset-bottom)); max-width: calc(100vw - 24px); width: max-content; }
-}
 }
 .empty-state { padding: 34px 18px; text-align: center; color: var(--text-2); font-size: 13px; }
 .empty-state button { border: 0; background: transparent; color: var(--brand); font-weight: 600; cursor: pointer; }

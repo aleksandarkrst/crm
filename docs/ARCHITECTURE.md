@@ -342,16 +342,14 @@ the store is the one place that talks to the backend.
 - Stage to-dos: a playbook to-do gets a row on first touch, keyed by deal + stage + checklist item
   id (CD-32). A stage's checklist is `funnel_stages.checklist_items` (`[{ id, label }]`); renaming
   an item in the funnel builder keeps its id, so every deal keeps its tick, note and outcome, and
-  the to-do rows take the new label (`deal_tasks.label` stays unique per deal and stage, so a
-  swap goes through a temporary label). Labels must differ within a stage. Removing an item hides
+  the to-do rows take the new label. Labels must differ within a stage. Removing an item hides
   its to-dos; they aren't deleted. Off-playbook to-dos are rows of their own.
-  - `checklist` (labels only) is kept in sync with `checklist_items` by a trigger
-    (`drizzle/0011_checklist_item_ids.sql`), and a playbook to-do written by label is linked to
-    the item with that label, so code that still uses labels keeps working. The migration gave
-    every existing label an id and linked the existing to-dos by label.
+  - Item ids are the only key (CD-78): the labels-only `funnel_stages.checklist` column, the
+    triggers that kept it in sync and the unique index on `deal_tasks (deal_id, stage_id, label)`
+    were dropped in `drizzle/0013_onboarding_cleanup.sql`.
   - `PATCH /api/crm/funnels/:id/stages/:stageId` takes `checklistItems` (keep `id` to rename,
-    leave it out for a new item) or, as before, `checklist`. `PUT /api/crm/deals/:id/tasks/playbook`
-    takes `checklistItemId` (or, as before, `label`).
+    leave it out for a new item). `PUT /api/crm/deals/:id/tasks/playbook` takes `checklistItemId`;
+    a label alone is refused (400).
 - Tasks from the **New task** dialog are `deal_tasks` rows too (off-playbook, `blocks_advance =
   false`) with a due date, a channel and an owner (`assignee_user_id`, which must be a member of the
   workspace). They show in Today (overdue / today / next up, with a done toggle) and on the lead's
@@ -365,8 +363,9 @@ the store is the one place that talks to the backend.
   - **Overdue**: not done and due before the workspace's today. Today lists them first, the
     sidebar's Today icon shows how many, and the deal screen highlights them. The funnel's own
     tasks (each deal's stage activity) have no due date, so they are never overdue.
-  - **No next step**: an open deal with no open task gets that flag on its Pipeline card and deal
-    screen (the flag opens the New task dialog).
+  - **No next step**: an open deal with no open dated task gets that flag on its Pipeline card and
+    deal screen (the flag opens the New task dialog). Stage to-dos don't count: a next step is a
+    scheduled action, and the flag's tooltip says so (CD-76).
 
 - Workspace settings (**Settings → Workspace**): name, currency (ISO 4217), time zone (IANA) and
   fiscal-year start month are columns on `tenants` (`GET/PATCH /api/workspace`). Every member reads
@@ -395,6 +394,9 @@ the store is the one place that talks to the backend.
   belong to one workspace. A name set here wins over the name in the sign-in token
   (`users.display_name_custom`). The start page and the default funnel take effect (the app opens
   on them). Language, date format and the digest are only stored for now, and the UI says so.
+  `memberships.default_funnel_id` has no foreign key (memberships has no RLS), so a trigger clears
+  it when its funnel is deleted (0013), and the Profile screen shows "First funnel (…)" when there
+  is none.
   Email and password belong to the sign-in provider and can't be changed here.
 - Discovery notes on a deal (headline, need, constraint, decision maker, discovery date) are
   columns on `deals`. They are edited in the deal's **Discovery** card and merged into the proposal
@@ -409,17 +411,44 @@ them yet:
 - custom fields
 - notification and integration settings
 
-## First-run onboarding and small-screen UI
+## First-run onboarding (CD-68)
 
-Owners and admins see a compact checklist until its data-derived steps are complete or they
-dismiss it. Dismissal is stored on the membership, rather than the tenant, so each administrator
-can finish or dismiss their own guide without hiding it for colleagues. Product, deal, funnel and
-team progress comes from the same records used by the screens. Main list screens include a direct
-empty-state action. At phone widths the desktop sidebar becomes a fixed bottom navigation bar,
-tables and the pipeline retain explicit horizontal scrolling, and dialogs become full-width
-bottom sheets. Contact email and phone values also expose `mailto:` and `tel:` actions.
+Owners and admins of a workspace see a getting-started checklist above the main screens
+(`components/GettingStarted.tsx`), backed by `OnboardingService` in the CRM module
+(`modules/crm/onboarding/`). All routes are `@RequireTenant('admin')`:
 
-Checklist compatibility by label was removed in migration 0013: `checklist_items` and
-`deal_tasks.checklist_item_id` are now the sole path. The same migration clears a membership's
-default funnel in a database trigger before that funnel is deleted, adds persisted contact notes,
-and adds per-membership onboarding dismissal.
+- `GET /api/onboarding` returns four steps, each derived from the workspace's own records, never
+  stored: **funnel** (any `funnel.*` action in `audit_logs`, i.e. someone changed the playbook),
+  **products** and **deals** (at least one that isn't sample data), **invite** (another member, or
+  an invitation that isn't revoked). It also returns `dismissed` and the sample-data counts.
+- `PUT /api/onboarding/dismissed` `{ dismissed }` hides or shows the checklist. Dismissal is stored
+  per user (`memberships.onboarding_dismissed_at`), not per workspace: each owner or admin finishes
+  or hides their own checklist without hiding it for the others. It also disappears once every
+  step is done. Settings → Workspace can show it again.
+- `POST /api/onboarding/sample-data` creates, in one transaction, 4 companies, 5 contacts,
+  3 products and 6 deals (with lines, an extra contact, stage history, timeline entries and 4
+  dated tasks: one overdue, one today, two ahead) in the first funnel, owned by the caller
+  (`sample-data.ts`). Amounts come from the lines; there are no figures of its own, so Overview
+  measures them like any deals. Dates follow the workspace time zone. Loading twice is refused (409).
+- `DELETE /api/onboarding/sample-data` deletes exactly those records. Each one is listed in
+  `sample_records (tenant_id, kind, record_id)`, an RLS table, so the CRM tables need no flag.
+  Deals go first (their lines, tasks, activities and history cascade); a sample company, contact
+  or product that a real record now uses is kept and becomes an ordinary record (the response
+  counts `removed` and `kept`). A per-workspace advisory lock serializes load and remove.
+
+Each main screen (Pipeline, which is also the deals list, Companies, Contacts, Products, Today,
+Overview) shows an empty state with the one action that fills it (`components/EmptyState.tsx`),
+plus "Or load sample data" for owners and admins. A filter that matches nothing says so in the
+table instead.
+
+## Phones and tablets (CD-70)
+
+Media queries at the end of `styles/global.css` (≤1024px and ≤700px) adapt the desktop styles;
+the desktop layout is unchanged. On phones the sidebar becomes a bottom bar with Pipeline, Today,
+Companies, Contacts and **More** (a sheet with Overview, Products, Settings, Profile and the
+workspace switch). The header puts the title on its own row and keeps search and "New…" full
+width. Filter bars wrap two per row; tables scroll sideways inside their card; the pipeline board
+scrolls with snapping columns; dialogs are bottom sheets with their buttons always visible. On a
+deal, the composer and to-dos come before the details, and the stage line names only the current
+stage. Contacts have one-tap `mailto:` and `tel:` links (only for a real address or number). The
+page itself never scrolls sideways at 390px or 768px (`e2e/tests/phone.test.mjs`).
