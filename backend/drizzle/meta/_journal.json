@@ -92,6 +92,20 @@
       "when": 1790243107622,
       "tag": "0012_stage_soft_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790261071674,
+      "tag": "0013_record_changes",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790261075984,
+      "tag": "0014_record_changes_rls",
+      "breakpoints": true
     }
   ]
 }

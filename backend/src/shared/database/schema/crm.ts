@@ -391,3 +391,38 @@ export const dealStageHistory = pgTable(
     foreignKey({ columns: [t.tenantId, t.toStageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deal_stage_history_to_stage_fk' }),
   ],
 );
+
+// ---------------------------------------------------------------- change history (CD-69)
+
+export const HISTORY_ENTITY_TYPES = ['deal', 'company', 'contact'] as const;
+export type HistoryEntityType = (typeof HISTORY_ENTITY_TYPES)[number];
+export const RECORD_CHANGE_ACTIONS = ['created', 'updated', 'deleted', 'line_added', 'line_changed', 'line_removed'] as const;
+export type RecordChangeAction = (typeof RECORD_CHANGE_ACTIONS)[number];
+
+/**
+ * Who changed which field of a deal, company or contact, and when (old → new). Written by
+ * database triggers (drizzle/0014_record_changes_rls.sql), so every write path is covered: the API,
+ * CSV import and worker jobs. The actor is the user set by DatabaseService.withTenant
+ * (app.user_id); null means the system. No foreign key to the record: the history outlives it.
+ * `field` uses the API's field names (title, ownerUserId, …); labels keep names that were true at
+ * the time (product names on deal lines).
+ */
+export const recordChanges = pgTable(
+  'record_changes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    entityType: text('entity_type', { enum: HISTORY_ENTITY_TYPES }).notNull(),
+    entityId: uuid('entity_id').notNull(),
+    action: text('action', { enum: RECORD_CHANGE_ACTIONS }).notNull(),
+    field: text('field'),
+    oldValue: jsonb('old_value'),
+    newValue: jsonb('new_value'),
+    label: text('label'),
+    actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** The browser tab that made the change (X-Client-Id), so a tab's own edits never conflict with each other. */
+    clientId: text('client_id'),
+    changedAt: timestamp('changed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('record_changes_entity_idx').on(t.tenantId, t.entityType, t.entityId, t.changedAt)],
+);

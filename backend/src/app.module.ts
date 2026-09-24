@@ -5,6 +5,7 @@ import { StorageModule } from './infrastructure/storage/storage.module';
 import { HealthController } from './modules/health/health.controller';
 import { CrmModule } from './modules/crm';
 import { IdentityModule } from './modules/identity';
+import { RealtimeModule } from './modules/realtime';
 import { AuditModule } from './shared/audit/audit.module';
 import { DatabaseModule } from './shared/database/database.module';
 import { EventsModule } from './shared/events/events.module';
@@ -23,6 +24,7 @@ import { EventsModule } from './shared/events/events.module';
     EventsModule.forRole('api'),
     IdentityModule,
     CrmModule,
+    RealtimeModule,
   ],
   controllers: [HealthController],
 })
