@@ -386,3 +386,24 @@ export const dealStageHistory = pgTable(
     foreignKey({ columns: [t.tenantId, t.toStageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deal_stage_history_to_stage_fk' }),
   ],
 );
+
+// ---------------------------------------------------------------- sample data
+
+export const SAMPLE_KINDS = ['company', 'contact', 'product', 'deal'] as const;
+export type SampleKind = (typeof SAMPLE_KINDS)[number];
+
+/**
+ * The records "Load sample data" created (CD-68), so "Remove sample data" deletes exactly those.
+ * A table of ids rather than a flag on each table: the CRM tables stay as they are, and the
+ * marks go away with the records. Deal tasks, lines, activities and history cascade with deals.
+ */
+export const sampleRecords = pgTable(
+  'sample_records',
+  {
+    tenantId: tenantId(),
+    kind: text('kind', { enum: SAMPLE_KINDS }).notNull(),
+    recordId: uuid('record_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.kind, t.recordId] })],
+);

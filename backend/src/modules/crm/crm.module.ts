@@ -14,6 +14,8 @@ import { FunnelsController } from './funnels/funnels.controller';
 import { FunnelsService } from './funnels/funnels.service';
 import { ImportController } from './import/import.controller';
 import { ImportService } from './import/import.service';
+import { OnboardingController } from './onboarding/onboarding.controller';
+import { OnboardingService } from './onboarding/onboarding.service';
 import { ProductsController } from './products/products.controller';
 import { ProductsService } from './products/products.service';
 
@@ -21,11 +23,12 @@ import { ProductsService } from './products/products.service';
  * CRM domain: companies, contacts, funnels (playbooks), deals with their lines (products and
  * payment schedules), stage to-dos, stage history and activity history, and the product catalog. Next in this
  * module per the design: document templates/generation, commissions (sales bonuses).
- * CSV import of companies, contacts and deals lives in import/ (CD-64).
+ * CSV import of companies, contacts and deals lives in import/ (CD-64); the getting-started
+ * checklist and sample data in onboarding/ (CD-68).
  */
 @Module({
-  controllers: [CompaniesController, ContactsController, FunnelsController, DealsController, DealWorkController, ProductsController, ImportController],
-  providers: [CompaniesService, ContactsService, FunnelsService, DealsService, ActivitiesService, DealLinesService, DealTasksService, StageHistoryService, ProductsService, ImportService],
+  controllers: [CompaniesController, ContactsController, FunnelsController, DealsController, DealWorkController, ProductsController, ImportController, OnboardingController],
+  providers: [CompaniesService, ContactsService, FunnelsService, DealsService, ActivitiesService, DealLinesService, DealTasksService, StageHistoryService, ProductsService, ImportService, OnboardingService],
   exports: [DealsService],
 })
 export class CrmModule {}
