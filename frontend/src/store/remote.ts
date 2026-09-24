@@ -4,7 +4,7 @@
  * plus companies without a deal, and people are primary contacts plus everyone else.
  */
 import { type ApiActivity, type ApiCompany, type ApiDealLine, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiProfile, type ApiStageChange, type ApiWorkspace, crmApi } from '../lib/api';
-import { initialsOf, money, taskKey } from './selectors';
+import { initialsOf, localeFor, momentLabel, money, taskKey } from './selectors';
 import type { CatalogItem, CompanyExtra, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, Profile, SegKey, StageChange, State, TeamMember, Workspace } from './types';
 
 export type WorkspaceData = Pick<
@@ -49,7 +49,8 @@ function mapFunnel(f: ApiFunnel): Funnel {
   };
 }
 
-const dateLabel = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+/** A moment as "23 Sep" on the workspace calendar (its time zone, `tz`). */
+const dateLabel = (iso: string, tz?: string) => momentLabel(iso, tz);
 
 export const mapLine = (l: ApiDealLine): DealLine => ({
   id: l.id,
@@ -78,7 +79,7 @@ export const mapProfile = (p: ApiProfile): Profile => ({
   digest: p.dailyDigest,
 });
 
-export const mapActivity = (a: ApiActivity): LogEntry => ({ date: dateLabel(a.occurredAt), channel: a.channel, title: a.title, detail: a.detail ?? '' });
+export const mapActivity = (a: ApiActivity, tz?: string): LogEntry => ({ date: dateLabel(a.occurredAt, tz), channel: a.channel, title: a.title, detail: a.detail ?? '' });
 
 export const mapStageChange = (c: ApiStageChange): StageChange => ({
   dealId: c.dealId,
@@ -89,7 +90,7 @@ export const mapStageChange = (c: ApiStageChange): StageChange => ({
   at: Date.parse(c.changedAt),
 });
 
-export const mapLeadTask = (t: ApiDealTask): LeadTask => ({
+export const mapLeadTask = (t: ApiDealTask, tz?: string): LeadTask => ({
   id: t.id,
   leadId: t.dealId,
   stageId: t.stageId,
@@ -100,7 +101,7 @@ export const mapLeadTask = (t: ApiDealTask): LeadTask => ({
   ownerName: t.assigneeName ?? undefined,
   note: t.note ?? '',
   done: t.done,
-  at: t.doneAt ? dateLabel(t.doneAt) : undefined,
+  at: t.doneAt ? dateLabel(t.doneAt, tz) : undefined,
   by: t.doneByName?.split(' ')[0] ?? undefined,
 });
 
@@ -132,6 +133,8 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     segOfFunnel.set(f.id, seg);
   }
 
+  const tz = apiWorkspace.timezone;
+  const locale = localeFor(apiWorkspace.currency);
   const companyById = new Map<string, ApiCompany>(companies.map((c) => [c.id, c]));
   const contactById = new Map<string, ApiContact>(contacts.map((c) => [c.id, c]));
   const now = Date.now();
@@ -162,7 +165,8 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
       ownerId: deal.ownerUserId,
       segment,
       stage: deal.stageId,
-      value: money(Number(deal.amount)),
+      value: money(Number(deal.amount), { currency: deal.currency, locale }),
+      currency: deal.currency,
       score: deal.fitScore,
       stall: Math.max(0, Math.floor((now - lastTouch) / DAY)),
       industry: co?.industry ?? '—',
@@ -175,7 +179,7 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
       discoveryDate: deal.discoveryDate ?? '',
       headline: deal.headline ?? '',
       lines: [],
-      total: money(Number(deal.amount)),
+      total: money(Number(deal.amount), { currency: deal.currency, locale }),
       closeDate: deal.closeDate ?? '',
       outcome: deal.outcome,
       lostReason: deal.lostReason ?? undefined,
@@ -240,7 +244,7 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
   const leadTasks: LeadTask[] = [];
   for (const t of apiTasks) {
     if (!t.blocksAdvance) {
-      leadTasks.push(mapLeadTask(t));
+      leadTasks.push(mapLeadTask(t, tz));
       continue;
     }
     const stage = stageById.get(t.stageId);
@@ -257,7 +261,7 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     }
     tasks[taskKey(t.dealId, t.stageId, idx)] = {
       done: t.done,
-      at: t.doneAt ? dateLabel(t.doneAt) : undefined,
+      at: t.doneAt ? dateLabel(t.doneAt, tz) : undefined,
       by: t.doneByName?.split(' ')[0] ?? undefined,
       outcome: t.outcome ?? undefined,
       note: t.note ?? undefined,

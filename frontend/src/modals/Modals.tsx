@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Modal, ModalHeader } from '../components/ui';
 import { LOST_REASONS, type LostReason } from '../lib/api';
 import { paths } from '../lib/paths';
-import { BILLING_KINDS, BUYER_ROLES, CHANNEL_LABELS, CHANNELS, DOC_TYPES, FIELD_TYPES, PARAM_SOURCES, PRODUCT_TYPES } from '../store/seed';
-import { allPeople, companyLabels, companyRecords, leadById, stageOf, stagesFor, todayIso, valueNum } from '../store/selectors';
+import { BILLING_KINDS, BUYER_ROLES, CHANNEL_LABELS, DOC_TYPES, FIELD_TYPES, PARAM_SOURCES, PRODUCT_TYPES } from '../store/seed';
+import { allPeople, companyLabels, companyRecords, currencySymbol, curOf, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { ChannelCode, Lead, SegKey } from '../store/types';
 import { ProposalDoc } from './ProposalDoc';
@@ -146,18 +146,24 @@ function NewDealModal() {
   );
 }
 
+/**
+ * "New task", or the same dialog editing a task (CD-27: `taskEditId`). An edited task keeps its deal
+ * and stage; its title, owner, due date, channel and note can change.
+ */
 function NewTaskModal() {
-  const { s, set, flash, addLeadTask, session } = useStore();
-  const initialLead = s.leads.find((l) => l.id === s.taskLeadId) || s.leads[0];
+  const { s, set, flash, addLeadTask, updateLeadTask, session } = useStore();
+  const editing = s.leadTasks.find((t) => t.id === s.taskEditId);
+  const initialLead = leadById(s, editing?.leadId) || s.leads.find((l) => l.id === s.taskLeadId) || s.leads[0];
   const [leadId, setLeadId] = useState(initialLead?.id ?? '');
   const lead = leadById(s, leadId);
-  const [stageId, setStageId] = useState(initialLead ? stageOf(s, initialLead).id : '');
-  const [title, setTitle] = useState('');
-  const [channel, setChannel] = useState<ChannelCode>(initialLead ? channelOrResearch(stageOf(s, initialLead).channel) : 'RS');
-  const [due, setDue] = useState(todayIso());
+  const [stageId, setStageId] = useState(editing?.stageId ?? (initialLead ? stageOf(s, initialLead).id : ''));
+  const [title, setTitle] = useState(editing?.title ?? '');
+  const [channel, setChannel] = useState<ChannelCode>(editing?.channel ?? (initialLead ? stageOf(s, initialLead).channel : 'RS'));
+  const [due, setDue] = useState(editing ? editing.due : todayIso(s.workspace.timezone));
   const members = s.team.filter((m) => m.status === 'Active');
-  const [ownerId, setOwnerId] = useState(members.some((m) => m.id === session.userId) ? session.userId : (members[0]?.id ?? ''));
-  const [note, setNote] = useState('');
+  const [ownerId, setOwnerId] = useState(editing ? editing.ownerId : members.some((m) => m.id === session.userId) ? session.userId : (members[0]?.id ?? ''));
+  const [note, setNote] = useState(editing?.note ?? '');
+  const close = () => set({ taskOpen: false, taskEditId: null });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -166,13 +172,18 @@ function NewTaskModal() {
     const l = leadById(s, id);
     if (l) {
       setStageId(stageOf(s, l).id);
-      setChannel(channelOrResearch(stageOf(s, l).channel));
+      setChannel(stageOf(s, l).channel);
     }
   };
   const submit = async () => {
     if (!title.trim()) return setError('Give the task a title.');
     if (!lead) return setError('Pick the company and deal this task belongs to.');
     setError('');
+    if (editing) {
+      updateLeadTask(editing.id, { title, channel, due, ownerId, note });
+      close();
+      return;
+    }
     setBusy(true);
     const ok = await addLeadTask({ leadId: lead.id, stageId, title, channel, due, ownerId, note });
     setBusy(false);
@@ -184,7 +195,7 @@ function NewTaskModal() {
 
   return (
     <Modal maxWidth={580}>
-      <ModalHeader title="New task" sub="Tasks outside the playbook still belong to a company and a stage, so the timeline stays complete." />
+      <ModalHeader title={editing ? 'Edit task' : 'New task'} sub="Tasks outside the playbook still belong to a company and a stage, so the timeline stays complete." />
       <label className="form-label">
         Task title
         <input className="form-input" placeholder="e.g. Send revised scope to procurement" value={title} autoFocus onChange={(e) => setTitle(e.target.value)} />
@@ -192,7 +203,7 @@ function NewTaskModal() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <label className="form-label">
           Company
-          <select className="form-input" value={leadId} onChange={(e) => pickLead(e.target.value)}>
+          <select className="form-input" value={leadId} disabled={!!editing} onChange={(e) => pickLead(e.target.value)}>
             {!lead && <option value="">No deals yet</option>}
             {s.leads.map((l) => (
               <option key={l.id} value={l.id}>
@@ -203,7 +214,7 @@ function NewTaskModal() {
         </label>
         <label className="form-label">
           Funnel stage
-          <select className="form-input" value={stageId} onChange={(e) => setStageId(e.target.value)}>
+          <select className="form-input" value={stageId} disabled={!!editing} onChange={(e) => setStageId(e.target.value)}>
             {(lead ? stagesFor(s, lead.segment) : []).map((x) => (
               <option key={x.id} value={x.id}>
                 {x.name}
@@ -214,7 +225,7 @@ function NewTaskModal() {
         <label className="form-label">
           Channel
           <select className="form-input" value={channel} onChange={(e) => setChannel(e.target.value as ChannelCode)}>
-            {CHANNELS.map((c) => (
+            {TASK_CHANNELS.map((c) => (
               <option key={c} value={c}>
                 {CHANNEL_LABELS[c]}
               </option>
@@ -228,6 +239,7 @@ function NewTaskModal() {
         <label className="form-label" style={{ gridColumn: 'span 2' }}>
           Owner
           <select className="form-input" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
+            {!members.some((m) => m.id === ownerId) && <option value={ownerId}>{ownerId ? (editing?.ownerName ?? 'Former member') + ' (former member)' : 'No owner'}</option>}
             {members.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
@@ -243,19 +255,19 @@ function NewTaskModal() {
       <div className="hint-box">Off-playbook task on {lead ? lead.company : 'a deal'}. It appears in Today and on the lead timeline, and does not block stage advance.</div>
       {error && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{error}</div>}
       <div className="modal-actions">
-        <button type="button" className="btn btn-secondary" onClick={() => set({ taskOpen: false })}>
+        <button type="button" className="btn btn-secondary" onClick={close}>
           Cancel
         </button>
         <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void submit()}>
-          {busy ? 'Adding…' : 'Add task'}
+          {editing ? 'Save task' : busy ? 'Adding…' : 'Add task'}
         </button>
       </div>
     </Modal>
   );
 }
 
-/** The dialog offers the design's task channels; a stage on another channel defaults to a research task. */
-const channelOrResearch = (c: ChannelCode): ChannelCode => ((CHANNELS as readonly string[]).includes(c) ? c : 'RS');
+/** Every channel a task can have (CD-28), labelled as on the timeline. */
+const TASK_CHANNELS = Object.keys(CHANNEL_LABELS) as ChannelCode[];
 
 function NewContactModal() {
   const { s, set, flash, createContact } = useStore();
@@ -488,7 +500,7 @@ function DrillModal() {
   const { s, set, navigate } = useStore();
   const d = s.drill!;
   const rows = d.leadIds.map((id) => leadById(s, id)).filter((l): l is Lead => !!l);
-  const total = rows.reduce((a, l) => a + valueNum(l.value), 0);
+  const total = valueTotal(s, rows);
   const close = () => set({ drill: null });
   return (
     <Modal maxWidth={560} z={46} onBackdrop={close}>
@@ -498,8 +510,8 @@ function DrillModal() {
           <span style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em' }}>{d.title}</span>
           <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
             {rows.length}
-            {rows.length === 1 ? ' lead · €' : ' leads · €'}
-            {total.toLocaleString('en-US')} open
+            {rows.length === 1 ? ' lead · ' : ' leads · '}
+            {total} open
           </span>
         </div>
         <button type="button" onClick={close} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--muted)', fontSize: 18, lineHeight: 1, padding: '2px 4px' }}>
@@ -565,7 +577,7 @@ function NewProductModal() {
           </select>
         </label>
         <label className="form-label">
-          Unit price (€)
+          Unit price ({currencySymbol(curOf(s))})
           <input className="form-input" placeholder="6500" value={p.price} onChange={setP('price')} />
         </label>
         <label className="form-label">

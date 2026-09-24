@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { Screen } from '../../components/Layout';
 import { paths } from '../../lib/paths';
-import { champTotal, isoLabel, leadById, stageOf, stagesFor } from '../../store/selectors';
+import { champTotal, leadById, momentLabel, needsNextStep, stageOf, stagesFor } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import { Composer } from './Composer';
 import { Discovery } from './Discovery';
@@ -60,12 +60,19 @@ export function LeadScreen() {
                   Lost · {lead.lostReason}
                 </span>
                 <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
-                  {lead.lostAt ? 'on ' + isoLabel(lead.lostAt.slice(0, 10)) + ' · ' : ''}in {stageOf(s, lead).name}
+                  {lead.lostAt ? 'on ' + momentLabel(lead.lostAt, s.workspace.timezone) + ' · ' : ''}in {stageOf(s, lead).name}
                   {lead.lostNote ? ' · ' + lead.lostNote : ''}
                 </span>
               </div>
             ) : (
-              <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{lead.outcome === 'won' ? 'Won · in the won stage' : 'Open · ' + stageOf(s, lead).name}</span>
+              <span style={{ fontSize: 12.5, color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                {lead.outcome === 'won' ? 'Won · in the won stage' : 'Open · ' + stageOf(s, lead).name}
+                {needsNextStep(s, lead) && (
+                  <button type="button" className="badge badge-warn" data-testid="no-next-step" title="No open task on this deal. Add one to plan what happens next." onClick={() => set({ taskOpen: true, taskLeadId: lead.id, taskEditId: null })} style={{ border: 0, cursor: 'pointer' }}>
+                    No next step
+                  </button>
+                )}
+              </span>
             )}
             {lost ? (
               <button type="button" className="btn-plain" onClick={() => reopenLead(lead.id)}>

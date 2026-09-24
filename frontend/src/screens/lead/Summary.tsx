@@ -1,6 +1,6 @@
 import { DangerButton, FieldRow, GhostInput, GhostSelect, PersonChip, Picker, PickerRow, usePicker } from '../../components/ui';
 import { INDUSTRIES, SOURCES, TEAM_SIZES } from '../../store/seed';
-import { allPeople, closeIsoOf, companyLabels, companyOfPerson, companyRecords, contactsForLead, initialsOf, linesOf, memberLabels, memberName, money, netOf, vatOf } from '../../store/selectors';
+import { allPeople, closeIsoOf, companyLabels, companyOfPerson, companyRecords, contactsForLead, curOf, initialsOf, linesOf, memberLabels, memberName, money, netOf, vatOf } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead, SegKey } from '../../store/types';
 
@@ -104,9 +104,9 @@ export function Summary({ lead }: { lead: Lead }) {
 
         <FieldRow label="Deal value">
           <span style={{ fontSize: 13.5, padding: '6px 9px', display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
-            {money(net)}
+            {money(net, curOf(s, lead))}
             <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>
-              net · {money(net + vat)} incl. VAT {money(vat)}
+              net · {money(net + vat, curOf(s, lead))} incl. VAT {money(vat, curOf(s, lead))}
             </span>
           </span>
         </FieldRow>

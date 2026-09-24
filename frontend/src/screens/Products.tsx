@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FilterBar, GhostInput, GhostSelect, RemoveButton } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { BILLING_KINDS, PRODUCT_TYPES } from '../store/seed';
-import { linesOf } from '../store/selectors';
+import { currencySymbol, curOf, linesOf } from '../store/selectors';
 import { useStore } from '../store/store';
 
 const COLS = 'minmax(0,1.8fr) 1fr 1.1fr 1fr 0.7fr 1fr 40px';
@@ -42,7 +42,7 @@ export function Products() {
       <div className="card" style={{ overflowX: 'auto' }}>
         <div style={{ minWidth: 940 }}>
           <div className="table-head" style={{ gridTemplateColumns: COLS }}>
-            {['Name', 'Type', 'Billing', 'Unit price (€)', 'VAT %', 'On deals', ''].map((h, i) => (
+            {['Name', 'Type', 'Billing', `Unit price (${currencySymbol(curOf(s))})`, 'VAT %', 'On deals', ''].map((h, i) => (
               <span key={i} className="th">
                 {h}
               </span>

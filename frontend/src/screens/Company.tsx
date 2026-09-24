@@ -63,7 +63,7 @@ export function Company() {
           <div style={{ fontSize: 12.5, color: 'var(--text-2)', marginTop: 2 }}>
             {rec.oppCount}
             {rec.oppCount === 1 ? ' opportunity · ' : ' opportunities · '}
-            {rec.valueLabel || '€0'} open
+            {rec.valueLabel} open
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--divider)' }}>

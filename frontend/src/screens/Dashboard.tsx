@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { FilterBar, GhostInput } from '../components/ui';
 import { Screen } from '../components/Layout';
-import { DATE_RANGES, DEFAULT_FILTERS, SOURCES } from '../store/seed';
-import { billedShare, bonusOf, bonusRule, closeIsoOf, closeRangeOf, grossOf, inCloseRange, linesOf, money, num, salesPeople, shiftIso, stageOf, valueNum } from '../store/selectors';
+import { DATE_RANGES, dateRangeLabel, DEFAULT_FILTERS, SOURCES } from '../store/seed';
+import { billedShare, bonusOf, bonusRule, closeIsoOf, closeRangeOf, currencySymbol, curOf, inCloseRange, linePayments, linesOf, moneyTotal, num, salesPeople, stageOf, todayIso, valueNum, valueTotal } from '../store/selectors';
 import { conversionMetrics, daysLabel, MIN_MOVED_DEALS } from '../store/metrics';
 import { useStore } from '../store/store';
 import type { Lead, SegKey } from '../store/types';
@@ -20,8 +20,6 @@ const TIME_BUCKETS = [
 const BONUS_COLS = 'minmax(0,1.6fr) 90px 120px 120px 120px 120px';
 const CONV_COLS = 'minmax(0,1.3fr) minmax(0,1fr) 44px 64px 84px';
 const clip = 'polygon(0 0, 100% 0, calc(100% - 14px) 100%, 14px 100%)';
-/** "€184k" for the metric cards; exact below €1,000. */
-const compact = (n: number): string => (Math.abs(n) < 1000 ? money(n) : '€' + Math.round(n / 1000).toLocaleString('en-US') + 'k');
 const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 const pct = (r: number | null) => (r === null ? '—' : Math.round(r * 100) + '%');
 
@@ -34,7 +32,9 @@ export function Dashboard() {
   }, [refreshHistory]);
   const f = s.filters;
   const audLabel = (seg: SegKey) => s.funnels[seg].label;
-  const range = closeRangeOf(f.dates);
+  // "This quarter" and "this year" are fiscal ones, and "today" is the workspace's (CD-73).
+  const range = closeRangeOf(f.dates, todayIso(s.workspace.timezone), s.workspace.fiscalMonth);
+  const rangeLabel = (v: string) => dateRangeLabel(v, s.workspace.fiscalMonth);
   // Every panel below works on these deals, so the filter chips (including the closing-date range) apply everywhere.
   const beforeDates = s.leads
     .filter((l) => f.audience === 'Audience' || audLabel(l.segment) === f.audience)
@@ -50,25 +50,25 @@ export function Dashboard() {
   const liveLeads = dashLeads.filter((l) => l.outcome !== 'lost');
   const openLeads = dashLeads.filter((l) => l.outcome === 'open');
   const wonLeads = dashLeads.filter((l) => l.outcome === 'won');
-  const openValue = openLeads.reduce((a, l) => a + valueNum(l.value), 0);
-  const wonValue = wonLeads.reduce((a, l) => a + valueNum(l.value), 0);
-  const weighted = openLeads.reduce((a, l) => a + (valueNum(l.value) * num(stageOf(s, l).prob)) / 100, 0);
+  // Sums are per currency: a deal in another currency than the workspace's is listed next to it, not added in.
+  const openValue = valueTotal(s, openLeads, true);
+  const wonValue = valueTotal(s, wonLeads, true);
+  const weighted = moneyTotal(s, openLeads.map((l) => ({ currency: l.currency, amount: (valueNum(l.value) * num(stageOf(s, l).prob)) / 100 })), true);
   const stalled = openLeads.filter((l) => l.stall >= 3);
   const metrics = [
-    { label: 'Open pipeline', value: compact(openValue), note: plural(openLeads.length, 'open deal') + ' in the current filter' },
-    { label: 'Weighted pipeline', value: compact(weighted), note: "Open value × each stage's win probability" },
-    { label: 'Won', value: compact(wonValue), note: plural(wonLeads.length, 'deal') + ' in the won stage' },
+    { label: 'Open pipeline', value: openValue, note: plural(openLeads.length, 'open deal') + ' in the current filter' },
+    { label: 'Weighted pipeline', value: weighted, note: "Open value × each stage's win probability" },
+    { label: 'Won', value: wonValue, note: plural(wonLeads.length, 'deal') + ' in the won stage' },
     { label: 'Stalled', value: String(stalled.length), note: 'Open deals with no contact for 3+ days' },
   ];
 
   const stages = s.funnels[dashSeg].stages;
   const stageFunnel = stages.map((x, i) => {
     const rows = liveLeads.filter((l) => l.segment === dashSeg && l.stage === x.id);
-    const val = rows.reduce((a, l) => a + valueNum(l.value), 0);
     return {
       name: x.name,
       ids: rows.map((l) => l.id),
-      meta: plural(rows.length, 'deal') + ' · ' + money(val),
+      meta: plural(rows.length, 'deal') + ' · ' + valueTotal(s, rows),
       width: 100 - i * (58 / Math.max(1, stages.length - 1)) + '%',
       bg: STAGE_SHADES[Math.min(i, STAGE_SHADES.length - 1)],
       fg: i >= 3 ? '#F5F6F8' : '#101828',
@@ -77,27 +77,15 @@ export function Dashboard() {
   });
 
   const today = new Date();
-  const payments: { leadId: string; when: Date; amount: number }[] = [];
-  // A line without a start date has no due dates to place, so it is left out (and counted below).
+  const payments: { leadId: string; currency?: string; when: Date; amount: number }[] = [];
+  // Payments without a date (no start date, and no date of their own on a milestone) can't be
+  // placed, so they are left out and their lines counted below.
   let undatedLines = 0;
   for (const l of liveLeads)
     for (const ln of linesOf(s, l)) {
-      const gross = grossOf(ln);
-      const start = ln.start;
-      if (!start) {
-        undatedLines++;
-        continue;
-      }
-      const push = (iso: string, amount: number) => {
-        const d = new Date(iso);
-        if (!isNaN(d.getTime())) payments.push({ leadId: l.id, when: d, amount });
-      };
-      if (ln.schedule === 'Custom milestones') (ln.milestones || []).forEach((m, i) => push(m.date || shiftIso(start, i), (gross * num(m.pct)) / 100));
-      else if (ln.schedule === 'Equal monthly instalments') {
-        const n = Math.max(1, Math.round(num(ln.months)) || 1);
-        for (let i = 0; i < n; i++) push(shiftIso(start, i), gross / n);
-      } else if (ln.schedule === 'Recurring subscription') for (let i = 0; i < 12; i++) push(shiftIso(start, i), gross);
-      else push(start, gross);
+      const { payments: dated, undated } = linePayments(ln);
+      if (undated) undatedLines++;
+      for (const p of dated) payments.push({ leadId: l.id, currency: l.currency, ...p });
     }
   const timeFunnel = TIME_BUCKETS.map((b, i) => {
     const due = payments.filter((p) => {
@@ -107,7 +95,7 @@ export function Dashboard() {
     return {
       label: b.label,
       ids: [...new Set(due.map((p) => p.leadId))],
-      value: money(due.reduce((a, p) => a + p.amount, 0)),
+      value: moneyTotal(s, due),
       width: 100 - i * 11 + '%',
       bg: TIME_SHADES[i],
       fg: i >= 3 ? '#F5F6F8' : '#101828',
@@ -116,15 +104,15 @@ export function Dashboard() {
   });
 
   const trigger = s.workspace.bonusTrigger || 'On contract signed';
-  let totalEarned = 0;
-  let totalPending = 0;
+  const totalEarned: { currency?: string; amount: number }[] = [];
+  const totalPending: { currency?: string; amount: number }[] = [];
   const bonusRows = salesPeople(s)
     .filter(({ value: ownerId }) => f.owner === 'Salesperson' || ownerId === f.owner)
     .map(({ value: ownerId, label: owner }) => {
     const rule = bonusRule(s, ownerId);
     const mine = liveLeads.filter((l) => l.ownerId === ownerId);
-    let earned = 0;
-    let pending = 0;
+    const earned: { currency?: string; amount: number }[] = [];
+    const pending: { currency?: string; amount: number }[] = [];
     const earnedIds: string[] = [];
     const pendingIds: string[] = [];
     for (const l of mine) {
@@ -132,15 +120,15 @@ export function Dashboard() {
       const won = l.outcome === 'won';
       const full = rule.trigger === 'When fully billed' ? billedShare(s, l) >= 0.999 : true;
       if (won && full) {
-        earned += bonus;
+        earned.push({ currency: l.currency, amount: bonus });
         earnedIds.push(l.id);
       } else {
-        pending += bonus;
+        pending.push({ currency: l.currency, amount: bonus });
         pendingIds.push(l.id);
       }
     }
-    totalEarned += earned;
-    totalPending += pending;
+    totalEarned.push(...earned);
+    totalPending.push(...pending);
     return { ownerId, owner, rule, earned, pending, earnedIds, pendingIds };
   });
   const setRule = (owner: string, key: 'rate' | 'floor' | 'fixed') => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -157,12 +145,12 @@ export function Dashboard() {
         chips={[
           { value: f.audience, options: ['Audience', s.funnels.smb.label, s.funnels.ent.label], onChange: setFilter('audience') },
           { value: f.owner, options: ['Salesperson', ...salesPeople(s)], onChange: setFilter('owner') },
-          { value: f.dates, options: DATE_RANGES, onChange: setFilter('dates'), keepFirst: true },
+          { value: f.dates, options: DATE_RANGES.map((v) => ({ value: v, label: rangeLabel(v) })), onChange: setFilter('dates'), keepFirst: true },
           { value: f.source, options: ['Source', ...SOURCES], onChange: setFilter('source') },
         ]}
         dirty={dirty}
         onClear={() => set((x) => ({ filters: { ...x.filters, ...DEFAULT_FILTERS } }))}
-        meta={`${plural(dashLeads.length, 'deal')} in view · ${range ? f.dates.toLowerCase() : 'any closing date'}${undatedHidden ? ` · ${undatedHidden} without a closing date hidden` : ''}`}
+        meta={`${plural(dashLeads.length, 'deal')} in view · ${range ? rangeLabel(f.dates).toLowerCase() : 'any closing date'}${undatedHidden ? ` · ${undatedHidden} without a closing date hidden` : ''}`}
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
@@ -202,7 +190,7 @@ export function Dashboard() {
             <div className="card-title" style={{ marginBottom: 4 }}>Funnel by payment due date</div>
             <div className="card-sub" style={{ marginBottom: 16 }}>
               Product and service payments falling due inside each horizon, incl. VAT
-              {undatedLines ? ` · ${plural(undatedLines, 'line')} without a start date left out` : ''}
+              {undatedLines ? ` · ${plural(undatedLines, 'line')} without payment dates left out` : ''}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
               {timeFunnel.map((b) => (
@@ -222,13 +210,13 @@ export function Dashboard() {
               <div className="card-sub">Rate per salesperson, with a flat amount on deals under the minimum · earned {trigger.toLowerCase()}</div>
             </div>
             <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
-              {money(totalEarned)} earned · {money(totalPending)} pending
+              {moneyTotal(s, totalEarned)} earned · {moneyTotal(s, totalPending)} pending
             </span>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <div style={{ minWidth: 640 }}>
               <div style={{ display: 'grid', gridTemplateColumns: BONUS_COLS, gap: 12, padding: '9px 0', borderBottom: '1px solid var(--border)' }}>
-                {['Salesperson', 'Rate %', 'Min deal (€)', 'Flat under min', 'Earned', 'Pending'].map((h) => (
+                {['Salesperson', 'Rate %', `Min deal (${currencySymbol(curOf(s))})`, 'Flat under min', 'Earned', 'Pending'].map((h) => (
                   <span key={h} className="th">
                     {h}
                   </span>
@@ -241,10 +229,10 @@ export function Dashboard() {
                   <GhostInput className="ghost-sm" value={r.rule.floor} onChange={setRule(r.ownerId, 'floor')} />
                   <GhostInput className="ghost-sm" value={r.rule.fixed} onChange={setRule(r.ownerId, 'fixed')} />
                   <span className="hover-underline" onClick={() => r.earnedIds.length && drill('Bonus earned · ' + r.owner, r.rule.trigger, r.earnedIds)} style={{ fontSize: 13, fontWeight: 600, color: 'var(--brand)', cursor: r.earnedIds.length ? 'pointer' : 'default' }}>
-                    {money(r.earned)}
+                    {moneyTotal(s, r.earned)}
                   </span>
                   <span className="hover-underline" onClick={() => r.pendingIds.length && drill('Bonus pending · ' + r.owner, r.rule.trigger, r.pendingIds)} style={{ fontSize: 13, color: 'var(--text-2)', cursor: r.pendingIds.length ? 'pointer' : 'default' }}>
-                    {money(r.pending)}
+                    {moneyTotal(s, r.pending)}
                   </span>
                 </div>
               ))}
@@ -291,12 +279,12 @@ function StageConversion({ leads, initialSeg }: { leads: Lead[]; initialSeg: Seg
 
   return (
     <div className="card" style={{ padding: 18 }} data-testid="stage-conversion">
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 auto', minWidth: 0 }}>
           <span className="card-title">Stage conversion</span>
           <span className="card-sub">Share of deals that reached a stage and moved on to a later one</span>
         </div>
-        <select value={seg} onChange={(e) => setSeg(e.target.value as SegKey)} style={{ border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '8px 11px', fontSize: 12.5, color: 'var(--ink)' }}>
+        <select value={seg} onChange={(e) => setSeg(e.target.value as SegKey)} style={{ flex: '0 1 auto', minWidth: 0, maxWidth: '55%', border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '8px 11px', fontSize: 12.5, color: 'var(--ink)' }}>
           <option value="smb">{s.funnels.smb.label}</option>
           <option value="ent">{s.funnels.ent.label}</option>
         </select>

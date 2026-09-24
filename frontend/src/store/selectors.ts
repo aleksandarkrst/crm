@@ -1,10 +1,73 @@
 /** Pure derivations over the store state (ported from the design prototype's logic). */
 import { CHAMP, CHAMP_LEVELS, SCRIPTS } from './seed';
-import type { CatalogItem, Champ, DealLine, Lead, LogEntry, Person, SegKey, Stage, State, TaskState } from './types';
+import type { CatalogItem, Champ, DealLine, Lead, LeadTask, LogEntry, Person, SegKey, Stage, State, TaskState } from './types';
 
 export const num = (v: unknown): number => Number(String(v ?? '').replace(/[^0-9.]/g, '')) || 0;
-export const money = (n: number): string => '€' + Math.round(n).toLocaleString('en-US');
-/** "€14,000" → 14000 (digits only, like the prototype). */
+
+// ---------------------------------------------------------------- money (CD-73)
+// Amounts are written with Intl.NumberFormat in the workspace currency. A deal keeps its own
+// currency (deals created before the workspace currency changed), and totals never add different
+// currencies together: they list one amount per currency ("$14,000 + €2,500").
+
+/** A currency and the locale amounts are written in. */
+export interface Cur {
+  currency: string;
+  locale: string;
+}
+/** English locales that write a currency the way its home market does; others use en-US. */
+const LOCALES: Record<string, string> = { EUR: 'en-IE', USD: 'en-US', GBP: 'en-GB', CHF: 'en-CH', AUD: 'en-AU', CAD: 'en-CA', NZD: 'en-NZ', INR: 'en-IN', SGD: 'en-SG', HKD: 'en-HK', ZAR: 'en-ZA', IEP: 'en-IE' };
+export const localeFor = (currency: string): string => LOCALES[currency] ?? 'en-US';
+const EUR: Cur = { currency: 'EUR', locale: 'en-IE' };
+/**
+ * The currency to write a deal's amounts in (its own), or the workspace currency without a deal.
+ * The locale always follows the workspace, so one screen writes every currency the same way
+ * (a USD workspace shows "$" for its own deals and "€" for a euro deal; a CAD one "US$" for USD).
+ */
+export const curOf = (s: State, lead?: Lead): Cur => {
+  const ws = s.workspace.currency || 'EUR';
+  return { currency: lead?.currency || ws, locale: localeFor(ws) };
+};
+const formatters = new Map<string, Intl.NumberFormat>();
+function formatter(c: Cur, short: boolean): Intl.NumberFormat {
+  const key = `${c.currency}|${c.locale}|${short}`;
+  let f = formatters.get(key);
+  if (!f) {
+    const opts: Intl.NumberFormatOptions = { style: 'currency', minimumFractionDigits: 0, maximumFractionDigits: short ? 1 : 0, ...(short ? { notation: 'compact' } : {}) };
+    try {
+      f = new Intl.NumberFormat(c.locale, { ...opts, currency: c.currency });
+    } catch {
+      f = new Intl.NumberFormat('en-US', { ...opts, currency: 'EUR' }); // not an ISO 4217 code
+    }
+    formatters.set(key, f);
+  }
+  return f;
+}
+/** "€14,000": whole units in the given currency (the design's format for EUR). */
+export const money = (n: number, c: Cur = EUR): string => formatter(c, false).format(Math.round(n));
+/** "€184.4k" for cards and column headers; exact below 1,000. */
+export const moneyShort = (n: number, c: Cur = EUR): string =>
+  Math.abs(n) < 1000
+    ? money(n, c)
+    : formatter(c, true)
+        .formatToParts(n)
+        .map((p) => (p.type === 'compact' ? p.value.toLowerCase() : p.value))
+        .join('');
+/** The symbol of a currency as amounts show it ("€", "$", "RSD"). */
+export const currencySymbol = (c: Cur): string => formatter(c, false).formatToParts(0).find((p) => p.type === 'currency')?.value ?? c.currency;
+/**
+ * A sum of amounts that may be in different currencies: one amount per currency, the workspace
+ * currency first ("$14,000", "$14,000 + €2,500"). Amounts without a currency are in the workspace one.
+ */
+export function moneyTotal(s: State, items: { currency?: string; amount: number }[], short = false): string {
+  const ws = curOf(s);
+  const by = new Map<string, number>([[ws.currency, 0]]);
+  for (const it of items) by.set(it.currency || ws.currency, (by.get(it.currency || ws.currency) ?? 0) + it.amount);
+  const shown = [...by].filter(([, n]) => n !== 0);
+  return (shown.length ? shown : [[ws.currency, 0] as const]).map(([currency, n]) => (short ? moneyShort : money)(n, { ...ws, currency })).join(' + ');
+}
+/** The summed value of these deals, per currency (see moneyTotal). */
+export const valueTotal = (s: State, leads: Lead[], short = false): string => moneyTotal(s, leads.map((l) => ({ currency: l.currency, amount: valueNum(l.value) })), short);
+/** "€14,000" → 14000 (digits only, like the prototype; amounts are written without decimals). */
 export const valueNum = (v: unknown): number => Number(String(v).replace(/[^0-9]/g, '')) || 0;
 
 export const initialsOf = (name: string | undefined): string =>
@@ -15,15 +78,29 @@ export const initialsOf = (name: string | undefined): string =>
     .map((w) => w[0]!.toUpperCase())
     .join('');
 
-/** Today as a local ISO date (yyyy-mm-dd), for comparing with due dates. */
-export const todayIso = (): string => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
+// ---------------------------------------------------------------- dates in the workspace time zone (CD-73)
+// "Today", overdue and the dates of timeline entries follow the workspace time zone (an IANA name,
+// `s.workspace.timezone`), not the browser's. Date-only values (due dates, closing dates) are
+// calendar dates and are compared as ISO strings.
+
+/** A moment as an ISO date (yyyy-mm-dd) in a time zone; the browser's when none or an unknown one is given. */
+export function isoInZone(d: Date, tz?: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz || undefined, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d);
+    const part = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+    return `${part('year')}-${part('month')}-${part('day')}`;
+  } catch {
+    return tz ? isoInZone(d) : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+}
+/** Today as an ISO date (yyyy-mm-dd) in the time zone (pass the workspace's), for comparing with due dates. */
+export const todayIso = (tz?: string): string => isoInZone(new Date(), tz);
 /** "2026-09-23" → "23 Sep". */
 export const isoLabel = (iso: string): string => (iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '—');
+/** A moment (ISO date-time) as "23 Sep" on the calendar of the time zone. */
+export const momentLabel = (at: string, tz?: string): string => isoLabel(isoInZone(new Date(at), tz));
 
-export const todayLabel = (): string => new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+export const todayLabel = (tz?: string): string => isoLabel(todayIso(tz));
 
 // ---------------------------------------------------------------- funnels & leads
 
@@ -45,17 +122,21 @@ export const closeIsoOf = (lead: Lead): string => lead.closeDate || '';
 
 /**
  * The closing-date window for an Overview date filter (see DATE_RANGES), as inclusive ISO dates.
- * `null` means no filter. Quarters and years are calendar ones.
+ * `null` means no filter. `today` is an ISO date (the workspace's today). Quarters and years are
+ * fiscal ones: the year starts in `fiscalMonth` (1 = January, a calendar year).
  */
-export function closeRangeOf(label: string, today = new Date()): { from: string; to: string } | null {
+export function closeRangeOf(label: string, today = todayIso(), fiscalMonth = 1): { from: string; to: string } | null {
   const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const y = today.getFullYear();
-  const m = today.getMonth();
-  const q = Math.floor(m / 3) * 3;
+  const [y = 0, month = 1, date = 1] = today.split('-').map(Number);
+  const m = month - 1;
+  // Months since the fiscal year started; the fiscal year and its quarters are counted from there.
+  const intoYear = (m - (fiscalMonth - 1) + 12) % 12;
+  const fy = m - intoYear; // first month of this fiscal year (may be in the previous calendar year)
+  const q = m - (intoYear % 3);
   const day = (yy: number, mm: number, dd: number) => iso(new Date(yy, mm, dd));
   switch (label) {
     case 'Closing in 30 days':
-      return { from: iso(today), to: day(y, m, today.getDate() + 30) };
+      return { from: today, to: day(y, m, date + 30) };
     case 'Closing this month':
       return { from: day(y, m, 1), to: day(y, m + 1, 0) };
     case 'Closing this quarter':
@@ -63,9 +144,9 @@ export function closeRangeOf(label: string, today = new Date()): { from: string;
     case 'Closing next quarter':
       return { from: day(y, q + 3, 1), to: day(y, q + 6, 0) };
     case 'Closing this year':
-      return { from: day(y, 0, 1), to: day(y, 11, 31) };
+      return { from: day(y, fy, 1), to: day(y, fy + 12, 0) };
     case 'Closing date passed':
-      return { from: '0000-01-01', to: day(y, m, today.getDate() - 1) };
+      return { from: '0000-01-01', to: day(y, m, date - 1) };
     default:
       return null;
   }
@@ -133,27 +214,33 @@ export const companyOfPerson = (s: State, p: Person): string => p.company ?? lea
 export const companyIdOfPerson = (s: State, p: Person): string | null => (p.company !== undefined ? p.companyId : leadById(s, p.leadId)?.companyId) ?? null;
 
 /**
- * Every dated payment a lead's lines produce (subscriptions: next 12 months). Lines without a start
- * date are left out, as on Overview.
+ * The dated payments of one line, incl. VAT (subscriptions: the next 12 months). Payments are dated
+ * from the line's start date; a milestone can carry its own date, so milestones with a date count
+ * even when the line has no start date (CD-74). `undated` says a payment was left out for lack of a date.
  */
-export function paymentsFor(s: State, lead: Lead): { when: Date; amount: number }[] {
-  const out: { when: Date; amount: number }[] = [];
+export function linePayments(ln: DealLine): { payments: { when: Date; amount: number }[]; undated: boolean } {
+  const payments: { when: Date; amount: number }[] = [];
+  let undated = false;
   const push = (iso: string, amount: number) => {
-    const d = new Date(iso);
-    if (!isNaN(d.getTime())) out.push({ when: d, amount });
+    const d = iso ? new Date(iso) : null;
+    if (d && !isNaN(d.getTime())) payments.push({ when: d, amount });
+    else undated = true;
   };
-  for (const ln of linesOf(s, lead)) {
-    const gross = grossOf(ln);
-    const startIso = ln.start;
-    if (!startIso) continue;
-    if (ln.schedule === 'Custom milestones') (ln.milestones || []).forEach((m, i) => push(m.date || shiftIso(startIso, i), (gross * num(m.pct)) / 100));
-    else if (ln.schedule === 'Equal monthly instalments') {
-      const n = Math.max(1, Math.round(num(ln.months)) || 1);
-      for (let i = 0; i < n; i++) push(shiftIso(startIso, i), gross / n);
-    } else if (ln.schedule === 'Recurring subscription') for (let i = 0; i < 12; i++) push(shiftIso(startIso, i), gross);
-    else push(startIso, gross);
-  }
-  return out;
+  const gross = grossOf(ln);
+  const start = ln.start;
+  if (ln.schedule === 'Custom milestones') (ln.milestones || []).forEach((m, i) => push(m.date || shiftIso(start, i), (gross * num(m.pct)) / 100));
+  else if (!start) undated = true;
+  else if (ln.schedule === 'Equal monthly instalments') {
+    const n = Math.max(1, Math.round(num(ln.months)) || 1);
+    for (let i = 0; i < n; i++) push(shiftIso(start, i), gross / n);
+  } else if (ln.schedule === 'Recurring subscription') for (let i = 0; i < 12; i++) push(shiftIso(start, i), gross);
+  else push(start, gross);
+  return { payments, undated };
+}
+
+/** Every dated payment a lead's lines produce (see linePayments), as on Overview. */
+export function paymentsFor(s: State, lead: Lead): { when: Date; amount: number }[] {
+  return linesOf(s, lead).flatMap((ln) => linePayments(ln).payments);
 }
 
 export function billedShare(s: State, lead: Lead): number {
@@ -257,7 +344,7 @@ export function companyRecords(s: State): CompanyRecord[] {
       contactCount: ids.size,
       oppCount: r.leads.length,
       value,
-      valueLabel: '€' + value.toLocaleString('en-US'),
+      valueLabel: valueTotal(s, r.leads),
       stageName: last ? stageOf(s, last).name : '—',
       lastTouch: stall === null ? '—' : stall === 0 ? 'Today' : stall + 'd ago',
     };
@@ -302,6 +389,18 @@ export function todoItemsFor(s: State, lead: Lead, stageId: string): TodoItem[] 
 
 export const stageDone = (s: State, lead: Lead, stageId: string): boolean =>
   todoItemsFor(s, lead, stageId).every((_it, idx) => taskOf(s, lead.id, stageId, idx).done);
+
+// ---------------------------------------------------------------- tasks: overdue and next steps (CD-67)
+
+/** A task from "New task" that isn't done and was due before `today` (the workspace's ISO date). */
+export const isOverdue = (t: LeadTask, today: string): boolean => !t.done && !!t.due && t.due < today;
+/** Overdue tasks on deals in this workspace, by the workspace's today. */
+export const overdueTasks = (s: State): LeadTask[] => {
+  const today = todayIso(s.workspace.timezone);
+  return s.leadTasks.filter((t) => isOverdue(t, today) && s.leads.some((l) => l.id === t.leadId));
+};
+/** An open deal with no open task from "New task": nobody has planned what happens next. */
+export const needsNextStep = (s: State, lead: Lead): boolean => lead.outcome === 'open' && !s.leadTasks.some((t) => t.leadId === lead.id && !t.done);
 
 // ---------------------------------------------------------------- sales bonuses
 
