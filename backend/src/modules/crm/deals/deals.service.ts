@@ -22,6 +22,12 @@ export const CreateDeal = z.object({
   source: optionalText(80),
   amount: money.optional(),
   closeDate: z.iso.date().nullish(),
+  // Discovery notes (proposal "What you told us"). Empty text clears a field.
+  headline: optionalText(200),
+  need: optionalText(1000),
+  constraint: optionalText(500),
+  decisionMaker: optionalText(200),
+  discoveryDate: z.iso.date().nullish(),
 });
 export const UpdateDeal = CreateDeal.partial().extend({
   champ: z.object({ C: champLevel, H: champLevel, M: champLevel, P: champLevel }).optional(),
