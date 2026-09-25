@@ -64,7 +64,7 @@ describe('header search, New menu and workspace switcher', () => {
     assert.ok(!rows.some((r) => r.title === 'Bluefin Labs'), 'other deals are not listed');
     await page.keyboard.press('Enter');
     await page.waitForFunction((id) => location.pathname === '/deals/' + id, {}, northwindId);
-    await page.waitForSelector('button::-p-text(Mark as lost)');
+    await page.waitForSelector('[data-testid=mark-lost]');
   });
 
   step('finds a contact by part of the name (without accents) and opens it with the arrow keys', async () => {

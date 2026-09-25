@@ -127,14 +127,15 @@ export function setValue(page, selector, value) {
 }
 
 /**
- * Sets the input/select that sits next to a label (a <span> with exactly `label` as its text).
- * Returns false if there is no such field.
+ * Sets the input/select that sits next to a label (a <span> with exactly `label` as its text, or
+ * the icon of a deal summary row named `label`). Returns false if there is no such field.
  */
 export function setByLabel(page, label, value, tag = 'input') {
   return page.evaluate(
     (label, value, tag) => {
-      const span = [...document.querySelectorAll('span')].find((el) => el.textContent.trim() === label);
-      const el = span?.parentElement?.querySelector(tag);
+      const row = [...document.querySelectorAll('.icon-row')].find((el) => el.dataset.label === label);
+      const span = row ? null : [...document.querySelectorAll('span')].find((el) => el.textContent.trim() === label);
+      const el = (row ?? span?.parentElement)?.querySelector(tag);
       if (!el) return false;
       const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
       Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, value);
@@ -189,18 +190,19 @@ export async function signIn(page, address, name) {
 }
 
 /** Creates the first workspace of a newly signed-in user and waits for the pipeline. */
-export async function createWorkspace(page, name) {
+export async function createWorkspace(page, name, currency) {
   await page.waitForSelector('input[placeholder="e.g. Cadence Studio"]');
   await page.type('input[placeholder="e.g. Cadence Studio"]', name);
+  if (currency) await setValue(page, 'select[aria-label="Main currency"]', currency);
   await click(page, 'button[type=submit]');
   await page.waitForSelector('button::-p-text(New deal)');
 }
 
 /** Opens the app, signs in as a new user and creates a workspace. */
-export async function newUserWithWorkspace(page, { label, name, workspace }) {
+export async function newUserWithWorkspace(page, { label, name, workspace, currency }) {
   await page.goto(BASE_URL, { waitUntil: 'networkidle0' });
   await signIn(page, email(label), name);
-  await createWorkspace(page, workspace);
+  await createWorkspace(page, workspace, currency);
 }
 
 /** "New deal" on the pipeline with a new company and contact; returns the new deal id. */

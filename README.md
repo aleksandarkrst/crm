@@ -47,9 +47,9 @@ a private window and sign in as that email. Emails aren't delivered in developme
 the worker logs them, and `GET /api/dev/mail?to=<address>` shows what it "sent". Email settings are
 described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#email-cd-7-cd-16).
 
-> **Current state of the UI:** deals (with their product lines, payment schedules, stage to-dos,
+> **Current state of the UI:** deals (with their products, billing, discounts and installments, stage to-dos,
 > fit scores, discovery notes, activity and stage history, and whether they were won or lost),
-> companies, contacts, products (with their currency), funnels (any number) and their stages are saved in the database, and so are custom fields, sales bonus rules (owners and admins only), the team, invitations, workspace settings, your
+> companies, contacts, products (with their billing frequency), funnels (any number) and their stages are saved in the database, and so are custom fields, sales bonus rules (owners and admins only), the team, invitations, workspace settings, your
 > profile and your notification settings. Document templates and the documents generated from them
 > on a deal are saved too (the files under `STORAGE_DIR`). The worker generates documents and emails
 > invitations, a morning digest and "deal assigned to you" notices. Some design features have no
@@ -114,7 +114,7 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   per-row validation, duplicates skipped or updated, deal matching, size and row limits, tenant
   isolation, quoting edge cases), custom fields (definitions and roles, value validation per type,
   required, option renames, soft delete, isolation), sales bonus rules (members get 403),
-  product / deal currency rules, documents (template upload limits and roles, generation by
+  deal products (billing, tax modes, discounts, installments, currency), documents (template upload limits and roles, generation by
   the worker with the deal's values checked in the .docx, downloads behind auth with another
   workspace getting 404, files removed with their template, document or deal), and email: invitation emails (sent,
   resent, copy link, roles, failed after retries), notification settings per user and workspace,
@@ -133,7 +133,7 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   temp folder); the header search (Ctrl+K, keyboard navigation), the New menu and the sidebar
   workspace switcher; a custom field added in Settings and filled on a deal (after a reload, by a
   member too, and deleted); the sales bonus tab and Overview card hidden from members; changing a
-  deal's currency and the product currency rule; downloading the starter template, uploading it as
+  the deal currency in the products dialog; products, deal discounts and installments; downloading the starter template, uploading it as
   a template, generating a proposal on a deal and downloading it; the Team tab's invitation email
   status, Resend and Copy link, and the Notifications tab's settings surviving a reload (the worker must be
   running); two members in two browsers: a change appears for the other without a reload,

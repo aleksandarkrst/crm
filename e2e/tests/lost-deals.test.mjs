@@ -31,11 +31,11 @@ describe('lost deals', () => {
     const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Keeper Ltd' }) });
     await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Keeper Ltd', funnelId: funnels[0].id, companyId: company.id }) });
     await page.reload({ waitUntil: 'networkidle0' });
-    await page.waitForSelector('::-p-text(Mark as lost)');
+    await page.waitForSelector('[data-testid=mark-lost]');
   });
 
   step('marks the deal as lost with a reason and a note', async () => {
-    await clickButton(page, 'Mark as lost');
+    await page.click('[data-testid=mark-lost]');
     await page.waitForSelector('.modal select');
     // The reason is required.
     await click(page, '.modal-actions .btn-primary');
@@ -60,7 +60,7 @@ describe('lost deals', () => {
     assert.match(state, /Lost · Chose a competitor/);
     assert.match(state, /Picked a bigger agency/);
     await page.waitForFunction(() => document.body.innerText.includes('Marked as lost: Chose a competitor'));
-    assert.ok(!(await text(page)).includes('Mark as lost'), 'no "Mark as lost" on a lost deal');
+    assert.equal(await page.$('[data-testid=mark-lost]'), null, 'no "Lost" button on a lost deal');
     // Still there after a reload.
     await page.reload({ waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=lost-state]');
@@ -90,7 +90,7 @@ describe('lost deals', () => {
   step('reopens the deal', async () => {
     await page.goto(BASE_URL + '/deals/' + dealId, { waitUntil: 'networkidle0' });
     await clickButton(page, 'Reopen');
-    await page.waitForFunction(() => document.body.innerText.includes('Mark as lost'));
+    await page.waitForSelector('[data-testid=mark-lost]');
     const deal = await eventually(async () => {
       const d = await api(page, '/crm/deals/' + dealId);
       return d.outcome === 'open' && d;

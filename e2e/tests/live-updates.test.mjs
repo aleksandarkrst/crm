@@ -12,7 +12,7 @@ describe('live updates, conflicts and change history', () => {
   let olivia;
   let ana;
   let dealId;
-  const TITLE = 'header input.ghost';
+  const TITLE = '[data-testid=deal-title]';
 
   /** Opens the deal and waits until the page's live-update stream is connected. */
   async function openDeal(page) {

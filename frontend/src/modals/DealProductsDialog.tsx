@@ -193,7 +193,7 @@ export function DealProductsDialog() {
                 );
               })}
               <div style={{ padding: '10px 16px' }}>
-                <button type="button" className="btn-plain" onClick={addLine}>
+                <button type="button" className="btn-plain" data-testid="add-line" onClick={addLine}>
                   + Product
                 </button>
               </div>

@@ -119,8 +119,13 @@ function DealHeader({ lead }: { lead: Lead }) {
           </label>
           {lost ? (
             <>
-              <span className="badge badge-danger" data-testid="lost-state" style={{ fontSize: 12 }} title={[lead.lostAt ? 'on ' + momentLabel(lead.lostAt, s.workspace.timezone) : '', lead.lostNote].filter(Boolean).join(' · ')}>
-                Lost · {lead.lostReason}
+              <span data-testid="lost-state" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+                <span className="badge badge-danger" style={{ fontSize: 12 }}>
+                  Lost · {lead.lostReason}
+                </span>
+                <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
+                  {[lead.lostAt ? 'on ' + momentLabel(lead.lostAt, s.workspace.timezone) : '', lead.lostNote].filter(Boolean).join(' · ')}
+                </span>
               </span>
               <button type="button" className="btn btn-secondary" onClick={() => reopenLead(lead.id)}>
                 Reopen
@@ -133,11 +138,11 @@ function DealHeader({ lead }: { lead: Lead }) {
           ) : (
             <>
               {wonStage && (
-                <button type="button" className="btn btn-won" onClick={() => moveLead(lead.id, wonStage.id)}>
+                <button type="button" className="btn btn-won" data-testid="mark-won" onClick={() => moveLead(lead.id, wonStage.id)}>
                   Won
                 </button>
               )}
-              <button type="button" className="btn btn-lost" onClick={() => set({ lostLeadId: lead.id })}>
+              <button type="button" className="btn btn-lost" data-testid="mark-lost" onClick={() => set({ lostLeadId: lead.id })}>
                 Lost
               </button>
             </>
