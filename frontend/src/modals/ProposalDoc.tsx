@@ -1,27 +1,26 @@
-import { type Cur, curOf, itemById, leadById, linesOf, money, monthLabel, netOf, num, shiftIso, vatOf } from '../store/selectors';
+import { billingDates, billingText, dealTotals } from '../store/dealMath';
+import { type Cur, curOf, isoLabel, itemById, leadById, linesOf, money, num } from '../store/selectors';
 import { useStore } from '../store/store';
-import type { DealLine, State } from '../store/types';
+import type { Lead, State } from '../store/types';
 
-const UNIT: Record<string, string> = { Hourly: 'h', Monthly: 'mo', Yearly: 'yr' };
-
-/** Billing rows for the proposal: every payment each line produces, sorted by date. */
-function billingRows(s: State, lines: DealLine[], c: Cur) {
+/** Billing rows for the proposal (CD-83): the installments, or each product's billings, by date. */
+function billingRows(s: State, lead: Lead, c: Cur) {
   const rows: { sort: number; when: string; label: string; amount: string }[] = [];
-  for (const ln of lines) {
-    const it = itemById(s, ln.itemId);
-    const gross = num(ln.qty) * num(ln.price) * (1 + num(ln.vat) / 100);
-    const add = (iso: string, when: string, label: string, amount: string) => rows.push({ sort: new Date(iso || '2100-01-01').getTime() || 0, when, label: it.name + ' · ' + label, amount });
-    if (ln.schedule === 'Custom milestones')
-      (ln.milestones || []).forEach((m, i) => {
-        const iso = m.date || shiftIso(ln.start, i);
-        add(iso, m.date ? monthLabel(m.date, 0) : monthLabel(ln.start, i), m.label, money((gross * num(m.pct)) / 100, c));
-      });
-    else if (ln.schedule === 'Equal monthly instalments') {
-      const n = Math.max(1, Math.round(num(ln.months)) || 1);
-      for (let i = 0; i < n; i++) add(ln.start, monthLabel(ln.start, i), `Instalment ${i + 1} of ${n}`, money(gross / n, c));
-    } else if (ln.schedule === 'Recurring subscription') add(ln.start, 'from ' + monthLabel(ln.start, 0), 'Every month, no end date', money(gross, c) + ' / mo');
-    else add(ln.start, monthLabel(ln.start, 0), 'Full amount', money(gross, c));
+  const add = (iso: string, when: string, label: string, amount: string) => rows.push({ sort: new Date(iso || '2100-01-01').getTime() || 0, when, label, amount });
+  if (lead.installments.length) {
+    lead.installments.forEach((x, i) => add(x.date, x.date ? isoLabel(x.date) : 'No date', x.description || `Installment ${i + 1} of ${lead.installments.length}`, money(num(x.amount), c)));
+    return rows.sort((a, b) => a.sort - b.sort);
   }
+  const lines = linesOf(s, lead);
+  const totals = dealTotals(lines, lead.taxMode, lead.discounts);
+  lines.forEach((ln, i) => {
+    const it = itemById(s, ln.itemId);
+    const t = totals.lines[i]!;
+    const each = money(t.tcv / t.cycles, c);
+    const dates = billingDates(ln);
+    if (ln.frequency === 'one_time') add(ln.start, ln.start ? isoLabel(ln.start) : 'No date', it.name + ' · Full amount', each);
+    else add(ln.start, ln.start ? 'from ' + isoLabel(ln.start) + (dates.length > 1 && ln.cycles ? ' to ' + isoLabel(dates.at(-1)!) : '') : 'No date', it.name + ' · ' + billingText(ln.frequency, ln.cycles), each + ' each');
+  });
   return rows.sort((a, b) => a.sort - b.sort);
 }
 
@@ -31,20 +30,21 @@ export function ProposalDoc() {
   const lead = leadById(s, s.docLeadId) || s.leads[0]!;
   const merge = { background: s.showMerge ? '#FDF0E4' : 'transparent', padding: '1px 3px' };
   const lines = linesOf(s, lead);
-  const net = netOf(lines);
-  const vat = vatOf(lines);
+  const totals = dealTotals(lines, lead.taxMode, lead.discounts);
+  const net = totals.subtotal;
+  const vat = totals.tax;
   const c = curOf(s, lead);
-  const billing = billingRows(s, lines, c);
+  const billing = billingRows(s, lead, c);
   const first = (lead.contact || '').split(' ')[0];
   const docLines = lines.length
-    ? lines.map((ln) => {
+    ? lines.map((ln, i) => {
         const it = itemById(s, ln.itemId);
         const q = num(ln.qty);
-        const unit = UNIT[it.kind];
+        const unit = it.unit;
         return {
           item: it.name,
-          detail: `${q}${unit ? ' ' + unit : ' ×'} · ${money(num(ln.price), c)}${unit ? ' / ' + unit : ' each'} · ${ln.schedule.toLowerCase()}`,
-          amount: money(q * num(ln.price), c),
+          detail: `${q}${unit ? ' ' + unit : ' ×'} · ${money(num(ln.price), c)}${unit ? ' / ' + unit : ' each'} · ${billingText(ln.frequency, ln.cycles).toLowerCase()}`,
+          amount: money(totals.lines[i]!.tcv, c),
         };
       })
     : lead.lines.map(([item, amount]) => ({ item, amount, detail: '' }));
@@ -147,7 +147,7 @@ export function ProposalDoc() {
                   </div>
                 ))}
                 <DocTotal label="Net" value={lines.length ? money(net, c) : lead.total} pad="13px 0 0" />
-                <DocTotal label="VAT" value={lines.length ? money(vat, c) : '—'} pad="6px 0 0" />
+                <DocTotal label="Tax" value={lines.length ? money(vat, c) : '—'} pad="6px 0 0" />
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 18, padding: '14px 0 0' }}>
                   <span style={{ fontSize: 15, fontWeight: 600 }}>Total incl. VAT</span>
                   <span style={{ fontWeight: 600, letterSpacing: '-0.02em', fontSize: 28, color: '#14503C' }}>{lines.length ? money(net + vat, c) : lead.total}</span>

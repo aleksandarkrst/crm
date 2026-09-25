@@ -63,6 +63,12 @@ export interface Lead {
   value: string; // "€14,000"
   /** ISO 4217 code of the deal amount; the workspace currency when unset. */
   currency?: string;
+  /** How the deal's prices treat tax, its discounts and installments (CD-83). */
+  taxMode: TaxMode;
+  discounts: DealDiscount[];
+  installments: Installment[];
+  /** ISO date-time the deal entered its current stage. */
+  stageSince?: string;
   score: number;
   stall: number; // days since last contact
   industry: string;
@@ -120,33 +126,60 @@ export interface CompanyExtra {
   ownerId?: string | null;
 }
 
+/** How often a product is billed (CD-83). */
+export type BillingFrequency = 'one_time' | 'weekly' | 'monthly' | 'quarterly' | 'annually';
+/** Whether the prices of a deal exclude tax, include it, or have none. */
+export type TaxMode = 'exclusive' | 'inclusive' | 'none';
+export type DiscountKind = 'percent' | 'amount';
+
+/** A product or service of the catalog (CD-83). Products have no currency: the deal has one. */
 export interface CatalogItem {
   id: string;
   name: string;
-  type: string;
-  kind: string; // One-off | Monthly | Yearly | Hourly
-  price: number | string;
-  vat: number | string;
-  /** ISO 4217 code of the price (CD-77); the workspace currency when unset. */
-  currency?: string;
+  description: string;
+  /** What one unit is ("hour", "seat"); '' when not set. */
+  unit: string;
+  /** Unit price. */
+  price: number;
+  /** Default quantity; the product's price is unit price × quantity. */
+  qty: number;
+  vat: number;
+  frequency: BillingFrequency;
+  /** Recurring only: how many times it is billed; null renews until canceled. */
+  cycles: number | null;
 }
 
-export interface Milestone {
-  label: string;
-  pct: number | string;
-  date?: string;
-}
-
+/** A product on a deal. Numbers stay as typed while the products dialog edits them. */
 export interface DealLine {
   id: string;
   itemId: string;
+  description: string;
   qty: number | string;
   price: number | string;
+  discountKind: DiscountKind;
+  discount: number | string;
   vat: number | string;
-  schedule: string;
+  frequency: BillingFrequency;
+  cycles: number | null;
+  /** Billing start date (ISO), '' when not set. */
   start: string;
-  months: number | string;
-  milestones: Milestone[];
+}
+
+/** A discount on the whole deal: it lowers the one-time products only. */
+export interface DealDiscount {
+  id: string;
+  label: string;
+  kind: DiscountKind;
+  value: number | string;
+}
+
+/** A dated part payment of the one-time products of a deal. */
+export interface Installment {
+  id: string;
+  description: string;
+  /** ISO date, '' when not set. */
+  date: string;
+  amount: number | string;
 }
 
 export type Champ = Record<'C' | 'H' | 'M' | 'P', number>;
@@ -286,16 +319,6 @@ export interface NewFieldDraft {
   options: string;
 }
 
-export interface NewProductDraft {
-  name: string;
-  type: string;
-  kind: string;
-  price: string;
-  vat: string;
-  /** ISO 4217; '' means the workspace currency. */
-  currency?: string;
-}
-
 export interface State {
   /** Every funnel by id, in the workspace's order. */
   funnels: Record<SegKey, Funnel>;
@@ -375,8 +398,11 @@ export interface State {
   templateType: string;
   fieldOpen: boolean;
   newField: NewFieldDraft;
+  /** The product dialog (CD-83): open, and the product it edits (null for a new one). */
   productOpen: boolean;
-  newProduct: NewProductDraft;
+  productEditId: string | null;
+  /** Deal the "Products" dialog is open for. */
+  dealProductsId: string | null;
   drill: Drill | null;
   /** Deal the "Mark as lost" dialog is open for. */
   lostLeadId: string | null;

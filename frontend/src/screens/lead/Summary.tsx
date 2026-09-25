@@ -1,37 +1,23 @@
 import { CustomFieldRows } from '../../components/CustomFields';
-import { DangerButton, FieldRow, GhostInput, GhostSelect, PersonChip, Picker, PickerRow, usePicker } from '../../components/ui';
-import { currencyOptions, INDUSTRIES, SOURCES, TEAM_SIZES } from '../../store/seed';
-import { allPeople, closeIsoOf, companyLabels, companyOfPerson, companyRecords, contactsForLead, curOf, funnelOptions, initialsOf, linesOf, memberLabels, memberName, money, netOf, vatOf } from '../../store/selectors';
+import { IconRow } from '../../components/icons';
+import { GhostInput, GhostSelect, PersonChip, Picker, PickerRow, usePicker } from '../../components/ui';
+import { SOURCES } from '../../store/seed';
+import { allPeople, closeIsoOf, companyOfPerson, contactsForLead, curOf, funnelOptions, initialsOf, linesOf, moneyExact, totalsOf, valueNum } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
 
+/** The deal's key facts (CD-83): icons instead of labels, the deal value first. */
 export function Summary({ lead }: { lead: Lead }) {
   const store = useStore();
   const { s } = store;
-  const companyPicker = usePicker();
   const contactPicker = usePicker();
 
   const lines = linesOf(s, lead);
-  const net = netOf(lines);
-  const vat = vatOf(lines);
+  const totals = totalsOf(s, lead);
+  const cur = curOf(s, lead);
+  const value = lines.length ? totals.subtotal : valueNum(lead.value);
   const contacts = contactsForLead(s, lead.id);
   const assigned = new Set(contacts.map((p) => p.id));
-
-  const cq = companyPicker.search.toLowerCase().trim();
-  const records = companyRecords(s);
-  const labels = companyLabels(records);
-  const companyOptions = records.filter((c) => c.id !== lead.companyId).filter((c) => !cq || c.name.toLowerCase().includes(cq));
-
-  // Deals are owned by active workspace members; the API rejects anyone else.
-  // A former member keeps their deals until they are handed over; they show as such.
-  const ownerOptions = [...memberLabels(s)].map(([value, label]) => ({ value, label }));
-  if (lead.ownerId && !ownerOptions.some((o) => o.value === lead.ownerId)) ownerOptions.push({ value: lead.ownerId, label: memberName(s, lead.ownerId, lead.owner) });
-  const ownerValue = lead.ownerId ?? '';
-
-  const onDelete = () => {
-    const name = lead.title || lead.company;
-    if (window.confirm(`Delete the deal "${name}"? Its products, to-dos and activity history are deleted too. The company and contacts are kept. This can't be undone.`)) void store.deleteDeal(lead.id);
-  };
 
   const pq = contactPicker.search.toLowerCase().trim();
   const directory = allPeople(s)
@@ -42,33 +28,27 @@ export function Summary({ lead }: { lead: Lead }) {
 
   return (
     <div className="card card-pad">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 15, fontWeight: 600 }}>Summary</span>
-        {store.canDelete && <DangerButton onClick={onDelete}>Delete deal</DangerButton>}
-      </div>
+      <span style={{ fontSize: 15, fontWeight: 600 }}>Summary</span>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--divider)' }}>
-        <FieldRow label="Company">
-          <Picker
-            picker={companyPicker}
-            items={companyOptions.map((c) => (
-              <PickerRow
-                key={c.id}
-                square
-                initials={initialsOf(c.name)}
-                title={labels.get(c.id) ?? c.name}
-                subtitle={c.oppCount ? c.oppCount + (c.oppCount === 1 ? ' deal' : ' deals') : 'No deals yet'}
-                onPick={() => {
-                  store.patchLead(lead.id, { companyId: c.id });
-                  companyPicker.close();
-                }}
-              />
-            ))}
-          >
-            <span style={{ whiteSpace: 'nowrap' }}>{lead.company}</span>
-          </Picker>
-        </FieldRow>
+        <IconRow icon="value" label="Deal value">
+          <span style={{ padding: '6px 9px', display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+            <span style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+              <span data-testid="deal-value" style={{ fontSize: 16, fontWeight: 600 }}>
+                {moneyExact(value, cur)}
+              </span>
+              <button type="button" className="btn-link" data-testid="open-products" onClick={() => store.openDealProducts(lead.id)} style={{ border: 0, background: 'transparent', padding: 0, cursor: 'pointer', color: 'var(--brand)', fontSize: 12.5 }}>
+                {lines.length ? `${lines.length} ${lines.length === 1 ? 'product' : 'products'}` : '+ Products'}
+              </button>
+            </span>
+            {lines.length > 0 && (
+              <span data-testid="deal-recurring" style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+                ACV {moneyExact(totals.acv, cur)} · ARR {moneyExact(totals.arr, cur)} · MRR {moneyExact(totals.mrr, cur)}
+              </span>
+            )}
+          </span>
+        </IconRow>
 
-        <FieldRow label="Contacts">
+        <IconRow icon="contacts" label="Contacts">
           <Picker
             picker={contactPicker}
             placeholder={contacts.length ? 'Search contacts…' : 'Search or assign a contact…'}
@@ -97,46 +77,16 @@ export function Summary({ lead }: { lead: Lead }) {
               />
             ))}
           </Picker>
-        </FieldRow>
-
-        <FieldRow label="Owner">
-          <GhostSelect chevron value={ownerValue} onChange={(e) => store.patchLead(lead.id, { ownerId: e.target.value })} options={ownerOptions} />
-        </FieldRow>
-
-        <FieldRow label="Deal value">
-          <span style={{ fontSize: 13.5, padding: '6px 9px', display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
-            {money(net, curOf(s, lead))}
-            <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>
-              net · {money(net + vat, curOf(s, lead))} incl. VAT {money(vat, curOf(s, lead))}
-            </span>
-          </span>
-        </FieldRow>
-        <FieldRow label="Currency">
-          <GhostSelect chevron value={curOf(s, lead).currency} onChange={(e) => store.setDealCurrency(lead.id, e.target.value)} options={currencyOptions(curOf(s, lead).currency)} />
-        </FieldRow>
-        <FieldRow label="Closing date">
-          <GhostInput type="date" value={closeIsoOf(lead)} onChange={patch('closeDate')} />
-        </FieldRow>
-        <FieldRow label="Industry">
-          <GhostSelect chevron value={lead.industry} onChange={patch('industry')} options={INDUSTRIES} />
-        </FieldRow>
-        <FieldRow label="HQ">
-          <GhostInput value={lead.hq} onChange={patch('hq')} />
-        </FieldRow>
-        <FieldRow label="Team size">
-          <GhostSelect chevron value={lead.size} onChange={patch('size')} options={TEAM_SIZES} />
-        </FieldRow>
-        <FieldRow label="Funnel">
-          <GhostSelect
-            chevron
-            value={lead.segment}
-            onChange={(e) => store.patchLeadSegment(lead.id, e.target.value)}
-            options={funnelOptions(s)}
-          />
-        </FieldRow>
-        <FieldRow label="Source">
-          <GhostSelect chevron value={lead.source} onChange={patch('source')} options={SOURCES} />
-        </FieldRow>
+        </IconRow>
+        <IconRow icon="calendar" label="Closing date">
+          <GhostInput type="date" aria-label="Closing date" value={closeIsoOf(lead)} onChange={patch('closeDate')} />
+        </IconRow>
+        <IconRow icon="funnel" label="Funnel">
+          <GhostSelect chevron aria-label="Funnel" value={lead.segment} onChange={(e) => store.patchLeadSegment(lead.id, e.target.value)} options={funnelOptions(s)} />
+        </IconRow>
+        <IconRow icon="source" label="Source">
+          <GhostSelect chevron aria-label="Source" value={lead.source} onChange={patch('source')} options={SOURCES} />
+        </IconRow>
         <CustomFieldRows entity="deal" recordId={lead.id} />
       </div>
     </div>

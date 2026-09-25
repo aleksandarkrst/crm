@@ -3,11 +3,13 @@ import { CustomFieldInputs, customFieldsForCreate } from '../components/CustomFi
 import { Modal, ModalHeader } from '../components/ui';
 import { type CustomFieldPatch, type CustomFieldType, LOST_REASONS, type LostReason } from '../lib/api';
 import { paths } from '../lib/paths';
-import { BILLING_KINDS, BUYER_ROLES, CHANNEL_LABELS, currencyOptions, FIELD_TYPES, PRODUCT_TYPES } from '../store/seed';
-import { allPeople, companyLabels, companyRecords, currencySymbol, customFieldsOf, leadById, localeFor, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
+import { BUYER_ROLES, CHANNEL_LABELS, FIELD_TYPES } from '../store/seed';
+import { allPeople, companyLabels, companyRecords, customFieldsOf, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { ChannelCode, Lead } from '../store/types';
 import { GenerationModal, NewTemplateModal } from './DocumentModals';
+import { DealProductsDialog } from './DealProductsDialog';
+import { ProductModal } from './ProductModal';
 import { ProposalDoc } from './ProposalDoc';
 
 /** Every overlay in the app; open/closed state lives in the store. */
@@ -24,7 +26,8 @@ export function Modals() {
       {s.templateOpen && <NewTemplateModal />}
       {s.fieldOpen && <NewFieldModal />}
       {s.drill && <DrillModal />}
-      {s.productOpen && <NewProductModal />}
+      {s.productOpen && <ProductModal />}
+      {s.dealProductsId && <DealProductsDialog />}
       {s.lostLeadId && <MarkLostModal />}
     </>
   );
@@ -482,83 +485,6 @@ function DrillModal() {
             <span style={{ fontSize: 12.5, color: 'var(--brand)', whiteSpace: 'nowrap' }}>{l.value}</span>
           </button>
         ))}
-      </div>
-    </Modal>
-  );
-}
-
-function NewProductModal() {
-  const { s, set, flash, addProduct } = useStore();
-  const p = s.newProduct;
-  const reset = { name: '', type: 'Service', kind: 'One-off', price: '', vat: '20', currency: '' };
-  // CD-77: the price is in this currency; only deals in it can use the product.
-  const currency = p.currency || s.workspace.currency;
-  const setP = (k: keyof typeof p) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const v = e.target.value;
-    set((x) => ({ newProduct: { ...x.newProduct, [k]: v } }));
-  };
-  return (
-    <Modal maxWidth={520} z={46} gap={18}>
-      <ModalHeader title="New product or service" sub="It becomes pickable on every deal, with this price and VAT as the starting point." />
-      <label className="form-label">
-        Name
-        <input className="form-input" placeholder="e.g. Brand identity sprint" value={p.name} onChange={setP('name')} />
-      </label>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <label className="form-label">
-          Type
-          <select className="form-input" value={p.type} onChange={setP('type')}>
-            {PRODUCT_TYPES.map((o) => (
-              <option key={o}>{o}</option>
-            ))}
-          </select>
-        </label>
-        <label className="form-label">
-          Billing
-          <select className="form-input" value={p.kind} onChange={setP('kind')}>
-            {BILLING_KINDS.map((o) => (
-              <option key={o}>{o}</option>
-            ))}
-          </select>
-        </label>
-        <label className="form-label">
-          Unit price ({currencySymbol({ currency, locale: localeFor(s.workspace.currency) })})
-          <input className="form-input" placeholder="6500" value={p.price} onChange={setP('price')} />
-        </label>
-        <label className="form-label">
-          Currency
-          <select className="form-input" value={currency} onChange={setP('currency')}>
-            {currencyOptions(currency).map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="form-label">
-          VAT %
-          <input className="form-input" placeholder="20" value={p.vat} onChange={setP('vat')} />
-        </label>
-      </div>
-      <div className="modal-actions" style={{ gap: 10 }}>
-        <button type="button" className="btn btn-secondary" onClick={() => set({ productOpen: false, newProduct: reset })}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={() => {
-            const name = p.name.trim();
-            if (!name) return flash('Give the product a name first');
-            void addProduct({ ...p, name, currency }).then((ok) => {
-              if (!ok) return;
-              set({ productOpen: false, newProduct: reset });
-              flash(name + ' added to the catalog');
-            });
-          }}
-        >
-          Add to catalog
-        </button>
       </div>
     </Modal>
   );

@@ -45,9 +45,6 @@ export const dateRangeLabel = (value: string, fiscalMonth: number): string =>
 export const VALUE_BANDS = ['Value', 'Under €25k', '€25k–€100k', 'Over €100k'];
 /** How a value band reads in the workspace currency ("Under $25k"); the values above stay the filter keys. */
 export const valueBandLabel = (value: string, symbol: string): string => value.split('€').join(symbol);
-export const PRODUCT_TYPES = ['Service', 'Product'];
-export const BILLING_KINDS = ['One-off', 'Monthly', 'Yearly', 'Hourly'];
-export const SCHEDULE_TYPES = ['Full amount on one date', 'Custom milestones', 'Equal monthly instalments', 'Recurring subscription'];
 export const TEAM_ROLES = ['Owner', 'Admin', 'Member'] as const;
 
 /** Playbook rules (design props). */
@@ -75,14 +72,14 @@ export const OBJECTIONS = [
 ];
 
 export const CATALOG: CatalogItem[] = [
-  { id: 'c1', name: 'Brand identity sprint', type: 'Service', kind: 'One-off', price: 6500, vat: 20 },
-  { id: 'c2', name: 'Website design & build', type: 'Service', kind: 'One-off', price: 14000, vat: 20 },
-  { id: 'c3', name: 'Content retainer', type: 'Service', kind: 'Monthly', price: 1800, vat: 20 },
-  { id: 'c4', name: 'Campaign management', type: 'Service', kind: 'Monthly', price: 2400, vat: 20 },
-  { id: 'c5', name: 'Senior consulting', type: 'Service', kind: 'Hourly', price: 95, vat: 20 },
-  { id: 'c6', name: 'Cadence CRM licence', type: 'Product', kind: 'Yearly', price: 1200, vat: 20 },
-  { id: 'c7', name: 'Analytics dashboard', type: 'Product', kind: 'One-off', price: 3200, vat: 20 },
-  { id: 'c8', name: 'Training workshop', type: 'Service', kind: 'Hourly', price: 120, vat: 20 },
+  { id: 'c1', name: 'Brand identity sprint', description: '', unit: '', price: 6500, qty: 1, vat: 20, frequency: 'one_time', cycles: null },
+  { id: 'c2', name: 'Website design & build', description: '', unit: '', price: 14000, qty: 1, vat: 20, frequency: 'one_time', cycles: null },
+  { id: 'c3', name: 'Content retainer', description: '', unit: '', price: 1800, qty: 1, vat: 20, frequency: 'monthly', cycles: null },
+  { id: 'c4', name: 'Campaign management', description: '', unit: '', price: 2400, qty: 1, vat: 20, frequency: 'monthly', cycles: 6 },
+  { id: 'c5', name: 'Senior consulting', description: '', unit: 'hour', price: 95, qty: 10, vat: 20, frequency: 'one_time', cycles: null },
+  { id: 'c6', name: 'Cadence CRM licence', description: '', unit: 'seat', price: 1200, qty: 1, vat: 20, frequency: 'annually', cycles: null },
+  { id: 'c7', name: 'Analytics dashboard', description: '', unit: '', price: 3200, qty: 1, vat: 20, frequency: 'one_time', cycles: null },
+  { id: 'c8', name: 'Training workshop', description: '', unit: 'hour', price: 120, qty: 8, vat: 20, frequency: 'one_time', cycles: null },
 ];
 
 export const CHAMP = [
@@ -130,7 +127,7 @@ export const BASE_FUNNELS: Record<SegKey, Funnel> = {
 };
 
 /** Design demo deals (the API replaces them on load). */
-const DEMO_LEADS: Omit<Lead, 'outcome'>[] = [
+const DEMO_LEADS: Omit<Lead, 'outcome' | 'taxMode' | 'discounts' | 'installments'>[] = [
   { id: 'l1', company: 'Bellhaus Interiors', contact: 'Ana Marković', role: 'Founder & CEO', initials: 'AM', email: 'ana@bellhaus.rs', phone: '+381 63 118 204', segment: 'smb', stage: 'touch', value: '€14,000', score: 82, stall: 1, industry: 'Furniture retail', hq: 'Novi Sad', size: '11–50 staff', source: 'Inbound web form', need: 'a brand refresh before the spring showroom launch, plus a PR push in design press.', constraint: 'the showroom opens in 14 weeks', decisionMaker: 'you as founder', discoveryDate: '12 Sep', headline: 'A brand that carries the new showroom', lines: [['Brand refresh & guidelines', '€8,000'], ['Launch PR programme', '€4,500'], ['Photography direction', '€1,500']], total: '€14,000' },
   { id: 'l2', company: 'Nordvik Logistics', contact: 'Petar Ilić', role: 'Marketing Director', initials: 'PI', email: 'p.ilic@nordvik.com', phone: '+381 11 402 771', segment: 'ent', stage: 'discovery', value: '€62,000', score: 74, stall: 6, industry: 'Freight & logistics', hq: 'Belgrade', size: '1,000+ staff', source: 'Referral', need: 'a repositioning across six markets with one message the sales team can actually use.', constraint: 'procurement requires three approvals', decisionMaker: 'the CMO with CFO sign-off', discoveryDate: '03 Sep', headline: 'One story across six markets', lines: [['Positioning & messaging', '€24,000'], ['Market rollout toolkit', '€21,000'], ['Sales enablement programme', '€17,000']], total: '€62,000' },
   { id: 'l3', company: 'Ferma Organik', contact: 'Jelena Pavlović', role: 'Owner', initials: 'JP', email: 'jelena@fermaorganik.rs', phone: '+381 64 255 190', segment: 'smb', stage: 'discovery', value: '€9,500', score: 68, stall: 2, industry: 'Food & beverage', hq: 'Šabac', size: '11–50 staff', source: 'Instagram DM', need: 'packaging that survives the shelf next to imported brands, and a retail PR story.', constraint: 'listing deadline with two chains in November', decisionMaker: 'you as owner', discoveryDate: '15 Sep', headline: 'Packaging that wins the shelf', lines: [['Packaging system', '€6,000'], ['Retail launch PR', '€3,500']], total: '€9,500' },
@@ -141,7 +138,7 @@ const DEMO_LEADS: Omit<Lead, 'outcome'>[] = [
   { id: 'l8', company: 'Hotel Sava', contact: 'Dragan Kostić', role: 'General Manager', initials: 'DK', email: 'gm@hotelsava.rs', phone: '+381 11 260 400', segment: 'smb', stage: 'proposal', value: '€22,000', score: 77, stall: 4, industry: 'Hospitality', hq: 'Belgrade', size: '51–200 staff', source: 'Inbound web form', need: 'direct bookings over OTA dependence, and a repositioning for the renovated wing.', constraint: 'renovation reopens in June', decisionMaker: 'you with the owner group', discoveryDate: '09 Sep', headline: 'Direct bookings, better guests', lines: [['Repositioning', '€11,000'], ['Direct booking campaign', '€8,000'], ['PR for reopening', '€3,000']], total: '€22,000', docs: [{ name: 'Proposal — direct bookings', state: 'draft', meta: 'v1 · generated 18 Sep · not sent' }] },
   { id: 'l9', company: 'Kalemi Wines', contact: 'Teodora Vuković', role: 'Export Manager', initials: 'TV', email: 'teodora@kalemi.rs', phone: '+381 63 900 712', segment: 'smb', stage: 'won', value: '€18,500', score: 88, stall: 0, industry: 'Wine', hq: 'Vršac', size: '11–50 staff', source: 'Trade fair', need: 'an export-ready brand story for German and Austrian distributors.', constraint: 'distributor meetings in February', decisionMaker: 'you and the owner', discoveryDate: '18 Aug', headline: 'Export-ready, distributor-first', lines: [['Export brand story', '€11,500'], ['Trade materials', '€7,000']], total: '€18,500', docs: [{ name: 'Proposal — export brand', state: 'signed', meta: 'v1 · generated 26 Aug · signed 08 Sep' }] },
 ];
-export const LEADS: Lead[] = DEMO_LEADS.map((l) => ({ ...l, outcome: l.stage === 'won' ? 'won' : 'open' }));
+export const LEADS: Lead[] = DEMO_LEADS.map((l) => ({ ...l, outcome: l.stage === 'won' ? 'won' : 'open', taxMode: 'exclusive', discounts: [], installments: [] }));
 
 export const DEFAULT_TIMELINE: LogEntry[] = [
   { date: '18 Sep', channel: 'EM', title: 'Proposal sent', detail: 'Generated from Proposal template v4, 14 fields merged from this record.' },
@@ -220,7 +217,8 @@ export function initialState(): State {
     fieldOpen: false,
     newField: { label: '', type: 'text', entity: 'deal', required: false, options: '' },
     productOpen: false,
-    newProduct: { name: '', type: 'Service', kind: 'One-off', price: '', vat: '20' },
+    productEditId: null,
+    dealProductsId: null,
     drill: null,
     lostLeadId: null,
     stageHistory: null,

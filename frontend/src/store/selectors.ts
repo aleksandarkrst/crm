@@ -1,6 +1,7 @@
 /** Pure derivations over the store state (ported from the design prototype's logic). */
 import { CHAMP, CHAMP_LEVELS, SCRIPTS } from './seed';
 import type { CustomFieldEntity, CustomValue } from '../lib/api';
+import { billingDates, type DealTotals, dealTotals } from './dealMath';
 import type { CatalogItem, Champ, CustomFieldDef, DealLine, Lead, LeadTask, LogEntry, Person, SegKey, Stage, State, TaskState } from './types';
 
 export const num = (v: unknown): number => Number(String(v ?? '').replace(/[^0-9.]/g, '')) || 0;
@@ -45,6 +46,16 @@ function formatter(c: Cur, short: boolean): Intl.NumberFormat {
 }
 /** "€14,000": whole units in the given currency (the design's format for EUR). */
 export const money = (n: number, c: Cur = EUR): string => formatter(c, false).format(Math.round(n));
+/** "€1,500.50": an exact amount with cents, for prices and line totals (CD-83). */
+export const moneyExact = (n: number, c: Cur = EUR): string => {
+  try {
+    return new Intl.NumberFormat(c.locale, { style: 'currency', currency: c.currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+  } catch {
+    return plainAmount(n, c.locale);
+  }
+};
+/** "1,500.50": an amount without a currency (products have none; the deal gives it). */
+export const plainAmount = (n: number, locale = 'en-US'): string => new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 /** "€184.4k" for cards and column headers; exact below 1,000. */
 export const moneyShort = (n: number, c: Cur = EUR): string =>
   Math.abs(n) < 1000
@@ -199,9 +210,7 @@ export const timelineFor = (s: State, leadId: string): LogEntry[] => s.log[leadI
 
 // ---------------------------------------------------------------- products, lines & payments
 
-const NO_ITEM: CatalogItem = { id: '', name: 'No product', type: 'Service', kind: 'One-off', price: 0, vat: 0 };
-/** The currency a product is priced in (CD-77). */
-export const itemCurrency = (s: State, item: CatalogItem | undefined): string => item?.currency || s.workspace.currency;
+const NO_ITEM: CatalogItem = { id: '', name: 'No product', description: '', unit: '', price: 0, qty: 1, vat: 0, frequency: 'one_time', cycles: null };
 /** Live custom fields of a record type, in order (CD-15). */
 export const customFieldsOf = (s: State, entity: CustomFieldEntity): CustomFieldDef[] => s.customFields.filter((f) => f.entity === entity);
 /** A custom field value as text, for lists and exports: option labels, Yes/No, plain numbers. */
@@ -213,14 +222,13 @@ export function customValueText(f: CustomFieldDef, v: CustomValue | undefined): 
 }
 export const itemById = (s: State, id: string): CatalogItem => s.catalog.find((c) => c.id === id) || s.catalog[0] || NO_ITEM;
 
-/** The deal's lines (products, prices and payment schedules) as saved in the backend. */
+/** The deal's products as saved in the backend (CD-83). */
 export function linesOf(s: State, lead: Lead | undefined): DealLine[] {
   return lead ? s.dealLines[lead.id] || [] : [];
 }
 
-export const netOf = (lines: DealLine[]): number => lines.reduce((a, l) => a + num(l.qty) * num(l.price), 0);
-export const vatOf = (lines: DealLine[]): number => lines.reduce((a, l) => a + (num(l.qty) * num(l.price) * num(l.vat)) / 100, 0);
-export const grossOf = (l: DealLine): number => num(l.qty) * num(l.price) * (1 + num(l.vat) / 100);
+/** A deal's totals from its products, tax mode and discounts (see dealMath). */
+export const totalsOf = (s: State, lead: Lead): DealTotals => dealTotals(linesOf(s, lead), lead.taxMode, lead.discounts);
 
 /** Company name of a person: from their own company, else from the lead they are shown under. */
 export const companyOfPerson = (s: State, p: Person): string => p.company ?? leadById(s, p.leadId)?.company ?? '—';
@@ -228,11 +236,11 @@ export const companyOfPerson = (s: State, p: Person): string => p.company ?? lea
 export const companyIdOfPerson = (s: State, p: Person): string | null => (p.company !== undefined ? p.companyId : leadById(s, p.leadId)?.companyId) ?? null;
 
 /**
- * The dated payments of one line, incl. VAT (subscriptions: the next 12 months). Payments are dated
- * from the line's start date; a milestone can carry its own date, so milestones with a date count
- * even when the line has no start date (CD-74). `undated` says a payment was left out for lack of a date.
+ * The dated payments of a deal, with tax (CD-83): its installments when it has them, otherwise
+ * every billing of every product from its billing start date ("until canceled": the first year).
+ * `undated` says a payment was left out for lack of a date.
  */
-export function linePayments(ln: DealLine): { payments: { when: Date; amount: number }[]; undated: boolean } {
+export function dealPayments(s: State, lead: Lead): { payments: { when: Date; amount: number }[]; undated: boolean } {
   const payments: { when: Date; amount: number }[] = [];
   let undated = false;
   const push = (iso: string, amount: number) => {
@@ -240,21 +248,25 @@ export function linePayments(ln: DealLine): { payments: { when: Date; amount: nu
     if (d && !isNaN(d.getTime())) payments.push({ when: d, amount });
     else undated = true;
   };
-  const gross = grossOf(ln);
-  const start = ln.start;
-  if (ln.schedule === 'Custom milestones') (ln.milestones || []).forEach((m, i) => push(m.date || shiftIso(start, i), (gross * num(m.pct)) / 100));
-  else if (!start) undated = true;
-  else if (ln.schedule === 'Equal monthly instalments') {
-    const n = Math.max(1, Math.round(num(ln.months)) || 1);
-    for (let i = 0; i < n; i++) push(shiftIso(start, i), gross / n);
-  } else if (ln.schedule === 'Recurring subscription') for (let i = 0; i < 12; i++) push(shiftIso(start, i), gross);
-  else push(start, gross);
+  if (lead.installments.length) {
+    for (const i of lead.installments) push(i.date, num(i.amount));
+    return { payments, undated };
+  }
+  const lines = linesOf(s, lead);
+  const totals = dealTotals(lines, lead.taxMode, lead.discounts);
+  lines.forEach((ln, i) => {
+    const t = totals.lines[i]!;
+    const each = t.tcv / t.cycles;
+    const dates = billingDates(ln);
+    if (!dates.length) undated = true;
+    for (const d of dates) push(d, each);
+  });
   return { payments, undated };
 }
 
-/** Every dated payment a lead's lines produce (see linePayments), as on Overview. */
+/** Every dated payment of a deal (see dealPayments), as on Overview. */
 export function paymentsFor(s: State, lead: Lead): { when: Date; amount: number }[] {
-  return linesOf(s, lead).flatMap((ln) => linePayments(ln).payments);
+  return dealPayments(s, lead).payments;
 }
 
 export function billedShare(s: State, lead: Lead): number {

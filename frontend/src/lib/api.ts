@@ -205,6 +205,10 @@ export interface ApiDeal {
   source: string | null;
   amount: string;
   currency: string;
+  /** How the prices of its products treat tax, its discounts and installments (CD-83). */
+  taxMode: ApiTaxMode;
+  discounts: ApiDealDiscount[];
+  installments: ApiInstallment[];
   closeDate: string | null;
   fitScore: number;
   champ: ApiChamp | null;
@@ -252,15 +256,34 @@ export interface ApiActivity {
   detail: string | null;
   occurredAt: string;
 }
+export type ApiBillingFrequency = 'one_time' | 'weekly' | 'monthly' | 'quarterly' | 'annually';
+export type ApiTaxMode = 'exclusive' | 'inclusive' | 'none';
+export type ApiDiscountKind = 'percent' | 'amount';
+/** A product of the catalog (CD-83): no currency, deals have one. */
 export interface ApiProduct {
   id: string;
   name: string;
-  type: 'Service' | 'Product';
-  billingKind: 'One-off' | 'Monthly' | 'Yearly' | 'Hourly';
+  description: string | null;
+  unit: string | null;
   unitPrice: string;
+  /** Default quantity: the product's price is unit price × quantity. */
+  quantity: string;
   vatRate: string;
-  /** ISO 4217 code of the price (CD-77); only deals in this currency can use the product. */
-  currency: string;
+  billingFrequency: ApiBillingFrequency;
+  /** Recurring only; null renews until canceled. */
+  billingCycles: number | null;
+}
+export interface ApiDealDiscount {
+  id: string;
+  label: string;
+  kind: ApiDiscountKind;
+  value: number;
+}
+export interface ApiInstallment {
+  id: string;
+  description: string;
+  date: string | null;
+  amount: number;
 }
 
 /** A value of a custom field: text, URL, ISO date and option id are strings (CD-15). */
@@ -284,23 +307,21 @@ export interface ApiBonusRules {
   rules: { userId: string; rate: string; floor: string; fixed: string }[];
 }
 
-export interface ApiMilestone {
-  label: string;
-  pct: number;
-  date?: string;
-}
 export interface ApiDealLine {
   id: string;
   dealId: string;
   productId: string | null;
   position: number;
+  description: string | null;
   quantity: string;
   unitPrice: string;
+  discountKind: ApiDiscountKind;
+  discountValue: string;
   vatRate: string;
-  schedule: string;
+  billingFrequency: ApiBillingFrequency;
+  billingCycles: number | null;
+  /** Billing start date. */
   startDate: string | null;
-  months: number;
-  milestones: ApiMilestone[];
 }
 export interface ApiDealTask {
   id: string;
@@ -384,18 +405,36 @@ export type ContactInput = Partial<Omit<ApiContact, 'id' | 'ownerName' | 'custom
 export type DealInput = Partial<
   Pick<ApiDeal, 'title' | 'companyId' | 'primaryContactId' | 'funnelId' | 'ownerUserId' | 'source' | 'closeDate' | 'amount' | 'currency' | 'headline' | 'need' | 'constraint' | 'decisionMaker' | 'discoveryDate'>
 > & { champ?: ApiChamp; customFields?: CustomFieldPatch };
-export type ProductInput = Partial<Omit<ApiProduct, 'id' | 'unitPrice' | 'vatRate'>> & { unitPrice?: number; vatRate?: number };
-export type DealLineInput = Partial<{
-  productId: string | null;
-  position: number;
-  quantity: number;
+export type ProductInput = Partial<{
+  name: string;
+  description: string | null;
+  unit: string | null;
   unitPrice: number;
+  quantity: number;
   vatRate: number;
-  schedule: string;
-  startDate: string | null;
-  months: number;
-  milestones: ApiMilestone[];
+  billingFrequency: ApiBillingFrequency;
+  billingCycles: number | null;
 }>;
+/** Everything the deal's "Products" dialog saves at once (PUT /crm/deals/:id/products). */
+export interface DealProductsInput {
+  currency?: string;
+  taxMode: ApiTaxMode;
+  lines: {
+    id?: string;
+    productId: string;
+    description: string | null;
+    startDate: string | null;
+    quantity: number;
+    unitPrice: number;
+    discountKind: ApiDiscountKind;
+    discountValue: number;
+    vatRate: number;
+    billingFrequency: ApiBillingFrequency;
+    billingCycles: number | null;
+  }[];
+  discounts: { id?: string; label: string; kind: ApiDiscountKind; value: number }[];
+  installments: { id?: string; description: string; date: string | null; amount: number }[];
+}
 export type TaskInput = Partial<{
   label: string;
   done: boolean;
@@ -409,7 +448,7 @@ export type StageInput = Partial<Pick<ApiFunnelStage, 'name' | 'activity' | 'cha
 
 export const crmApi = {
   me: () => api<ApiMe>('/me'),
-  createTenant: (name: string) => api<ApiTenant>('/tenants', { method: 'POST', json: { name } }),
+  createTenant: (name: string, currency?: string) => api<ApiTenant>('/tenants', { method: 'POST', json: { name, ...(currency ? { currency } : {}) } }),
 
   workspace: () => api<ApiWorkspace>('/workspace'),
   updateWorkspace: (input: WorkspaceInput) => api<ApiWorkspace>('/workspace', { method: 'PATCH', json: input }),
@@ -466,9 +505,7 @@ export const crmApi = {
     api<ApiActivity>(`/crm/deals/${dealId}/activities`, { method: 'POST', json: input }),
 
   dealLines: () => all<ApiDealLine>('/crm/deal-lines'),
-  createDealLine: (dealId: string, input: DealLineInput) => api<ApiDealLine>(`/crm/deals/${dealId}/lines`, { method: 'POST', json: input }),
-  updateDealLine: (id: string, input: DealLineInput) => api<ApiDealLine>(`/crm/deal-lines/${id}`, { method: 'PATCH', json: input }),
-  deleteDealLine: (id: string) => api(`/crm/deal-lines/${id}`, { method: 'DELETE' }),
+  saveDealProducts: (dealId: string, input: DealProductsInput) => api<{ lines: ApiDealLine[] }>(`/crm/deals/${dealId}/products`, { method: 'PUT', json: input }),
 
   dealTasks: () => all<ApiDealTask>('/crm/deal-tasks'),
   upsertPlaybookTask: (dealId: string, input: TaskInput & { stageId: string; checklistItemId: string }) =>

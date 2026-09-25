@@ -1,18 +1,24 @@
-import { useEffect } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, Navigate, useParams } from 'react-router-dom';
+import { Icon } from '../../components/icons';
 import { Screen } from '../../components/Layout';
 import { paths } from '../../lib/paths';
-import { champTotal, leadById, momentLabel, needsNextStep, stageOf, stagesFor } from '../../store/selectors';
+import { champTotal, leadById, memberLabels, memberName, momentLabel, stageOf, stagesFor } from '../../store/selectors';
 import { useStore } from '../../store/store';
+import type { Lead } from '../../store/types';
+import { CompanySection } from './CompanySection';
 import { Composer } from './Composer';
+import { DealProducts } from './DealProducts';
 import { Discovery } from './Discovery';
 import { History } from './History';
 import { Summary } from './Summary';
 import { Todos } from './Todos';
 
-/** The deal ("lead") record: stage tracker, summary, next best action, to-dos and history. */
+const DAY = 86_400_000;
+
+/** The deal ("lead") record: header with stage bar, summary and sections, next best action, to-dos and history. */
 export function LeadScreen() {
-  const { s, set, patchLead, ensureLog, reopenLead } = useStore();
+  const { s, ensureLog } = useStore();
   const { id = '' } = useParams();
   const lead = leadById(s, id);
   useEffect(() => {
@@ -20,77 +26,19 @@ export function LeadScreen() {
   }, [id, ensureLog]);
   if (!lead) return <Navigate to={paths.pipeline} replace />;
 
-  const stages = stagesFor(s, lead.segment);
-  const idx = stages.indexOf(stageOf(s, lead));
   const total = champTotal(s, lead);
   const totalFg = total >= 80 ? '#14503C' : total >= 55 ? '#B4531B' : '#B42318';
-  const lost = lead.outcome === 'lost';
 
   return (
-    <Screen title={lead.title || lead.company || 'Lead'} onTitleChange={(v) => patchLead(lead.id, { title: v })} crumb={{ label: 'Pipeline', to: paths.pipeline }}>
+    <Screen title="Deal">
       <div key={lead.id} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <div className="card" style={{ padding: '20px 22px' }}>
-          <div className="stage-steps" style={{ display: 'flex', alignItems: 'flex-start' }}>
-            {stages.map((st, i) => (
-              <div key={st.id} className={i === idx ? 'stage-step current' : 'stage-step'} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', width: '100%', height: 14 }}>
-                  <span style={{ flex: 1, height: 2, background: i === 0 ? 'transparent' : i <= idx ? '#14503C' : '#E4E7EC' }} />
-                  <span
-                    style={{
-                      width: i === idx ? 14 : 10,
-                      height: i === idx ? 14 : 10,
-                      borderRadius: '50%',
-                      background: i < idx ? '#14503C' : i === idx ? '#101828' : '#FFFFFF',
-                      border: `1.5px solid ${i <= idx ? 'transparent' : '#D0D5DD'}`,
-                      boxShadow: i === idx ? '0 0 0 4px #E7F2EE' : 'none',
-                      flex: '0 0 auto',
-                    }}
-                  />
-                  <span style={{ flex: 1, height: 2, background: i === stages.length - 1 ? 'transparent' : i < idx ? '#14503C' : '#E4E7EC' }} />
-                </div>
-                <span className="stage-step-label" style={{ fontSize: 11.5, fontWeight: i === idx ? 600 : 500, color: i === idx ? '#101828' : '#475467', textAlign: 'center', lineHeight: 1.3 }}>{st.name}</span>
-              </div>
-            ))}
-          </div>
-          {/* Outcome: won is the won stage; lost keeps the stage it was lost in. */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--divider)' }}>
-            {lost ? (
-              <div data-testid="lost-state" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', minWidth: 0 }}>
-                <span className="badge badge-danger" style={{ fontSize: 12 }}>
-                  Lost · {lead.lostReason}
-                </span>
-                <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
-                  {lead.lostAt ? 'on ' + momentLabel(lead.lostAt, s.workspace.timezone) + ' · ' : ''}in {stageOf(s, lead).name}
-                  {lead.lostNote ? ' · ' + lead.lostNote : ''}
-                </span>
-              </div>
-            ) : (
-              <span style={{ fontSize: 12.5, color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                {lead.outcome === 'won' ? 'Won · in the won stage' : 'Open · ' + stageOf(s, lead).name}
-                {needsNextStep(s, lead) && (
-                  <button type="button" className="badge badge-warn" data-testid="no-next-step" title="No dated open task on this deal. Stage to-dos are not scheduled next steps." onClick={() => set({ taskOpen: true, taskLeadId: lead.id, taskEditId: null })} style={{ border: 0, cursor: 'pointer' }}>
-                    No next step
-                  </button>
-                )}
-              </span>
-            )}
-            {lost ? (
-              <button type="button" className="btn-plain" onClick={() => reopenLead(lead.id)}>
-                Reopen
-              </button>
-            ) : (
-              lead.outcome === 'open' && (
-                <button type="button" className="btn-plain" onClick={() => set({ lostLeadId: lead.id })}>
-                  Mark as lost
-                </button>
-              )
-            )}
-          </div>
-        </div>
+        <DealHeader lead={lead} />
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
           <div className="lead-side" style={{ flex: '1 1 400px', maxWidth: 540, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
             <Summary lead={lead} />
+            <CompanySection lead={lead} />
+            <DealProducts lead={lead} />
             <Discovery lead={lead} />
             <div className="card" style={{ padding: 18 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
@@ -111,5 +59,124 @@ export function LeadScreen() {
         </div>
       </div>
     </Screen>
+  );
+}
+
+/**
+ * The deal's name, owner, Won and Lost, and the stage bar (CD-83). Won moves the deal to its
+ * funnel's won stage; a stage of the bar moves it there.
+ */
+function DealHeader({ lead }: { lead: Lead }) {
+  const { s, set, patchLead, moveLead, reopenLead, canDelete, deleteDeal } = useStore();
+  const [menu, setMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const off = (e: MouseEvent) => !menuRef.current?.contains(e.target as Node) && setMenu(false);
+    document.addEventListener('mousedown', off);
+    return () => document.removeEventListener('mousedown', off);
+  }, [menu]);
+
+  const stages = stagesFor(s, lead.segment);
+  const stage = stageOf(s, lead);
+  const idx = stages.indexOf(stage);
+  const wonStage = stages.find((st) => st.won);
+  const lost = lead.outcome === 'lost';
+  const days = lead.stageSince ? Math.max(0, Math.floor((Date.now() - Date.parse(lead.stageSince)) / DAY)) : null;
+  const funnel = s.funnels[lead.segment];
+
+  const ownerOptions = [...memberLabels(s)].map(([value, label]) => ({ value, label }));
+  if (lead.ownerId && !ownerOptions.some((o) => o.value === lead.ownerId)) ownerOptions.push({ value: lead.ownerId, label: memberName(s, lead.ownerId, lead.owner) });
+
+  const onDelete = () => {
+    setMenu(false);
+    const name = lead.title || lead.company;
+    if (window.confirm(`Delete the deal "${name}"? Its products, to-dos and activity history are deleted too. The company and contacts are kept. This can't be undone.`)) void deleteDeal(lead.id);
+  };
+
+  return (
+    <div className="card deal-header" style={{ padding: '16px 20px' }}>
+      <div className="deal-crumb" data-testid="deal-crumb">
+        <Link to={paths.pipeline} className="crumb-link">
+          {funnel?.label ?? 'Pipeline'}
+        </Link>
+        <span aria-hidden>→</span>
+        <span style={{ color: 'var(--ink)' }}>{stage.name}</span>
+      </div>
+      <div className="deal-header-top">
+        <input className="ghost deal-title" aria-label="Deal name" data-testid="deal-title" value={lead.title ?? ''} placeholder={lead.company} onChange={(e) => patchLead(lead.id, { title: e.target.value })} />
+        <div className="deal-actions">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-2)' }} title="Owner">
+            <Icon name="owner" title="Owner" />
+            <select className="form-input" aria-label="Owner" value={lead.ownerId ?? ''} onChange={(e) => patchLead(lead.id, { ownerId: e.target.value })} style={{ padding: '7px 9px' }}>
+              {!lead.ownerId && <option value="">No owner</option>}
+              {ownerOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {lost ? (
+            <>
+              <span className="badge badge-danger" data-testid="lost-state" style={{ fontSize: 12 }} title={[lead.lostAt ? 'on ' + momentLabel(lead.lostAt, s.workspace.timezone) : '', lead.lostNote].filter(Boolean).join(' · ')}>
+                Lost · {lead.lostReason}
+              </span>
+              <button type="button" className="btn btn-secondary" onClick={() => reopenLead(lead.id)}>
+                Reopen
+              </button>
+            </>
+          ) : lead.outcome === 'won' ? (
+            <span className="badge badge-brand" data-testid="won-state" style={{ fontSize: 12 }}>
+              Won
+            </span>
+          ) : (
+            <>
+              {wonStage && (
+                <button type="button" className="btn btn-won" onClick={() => moveLead(lead.id, wonStage.id)}>
+                  Won
+                </button>
+              )}
+              <button type="button" className="btn btn-lost" onClick={() => set({ lostLeadId: lead.id })}>
+                Lost
+              </button>
+            </>
+          )}
+          {canDelete && (
+            <div ref={menuRef} style={{ position: 'relative' }}>
+              <button type="button" className="btn btn-secondary" aria-label="More actions" aria-expanded={menu} onClick={() => setMenu((m) => !m)} style={{ padding: '10px 12px' }}>
+                ⋯
+              </button>
+              {menu && (
+                <div className="deal-menu" role="menu">
+                  <button type="button" role="menuitem" onClick={onDelete}>
+                    Delete deal
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="stage-bar" data-testid="stage-bar">
+        {stages.map((st, i) => {
+          const current = i === idx;
+          const label = current && days !== null ? `${days} ${days === 1 ? 'day' : 'days'} · ${st.name}` : st.name;
+          return (
+            <button
+              key={st.id}
+              type="button"
+              className={'stage-chev' + (current ? ' current' : i < idx ? ' done' : '') + (lost ? ' lost' : '')}
+              title={current ? `${label} (current stage)` : `Move to ${st.name}`}
+              aria-current={current ? 'step' : undefined}
+              disabled={current || lost}
+              onClick={() => moveLead(lead.id, st.id)}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

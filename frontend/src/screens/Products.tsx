@@ -1,53 +1,51 @@
 import { useState } from 'react';
-import { FilterBar, GhostInput, GhostSelect, RemoveButton } from '../components/ui';
+import { FilterBar } from '../components/ui';
 import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Layout';
-import { BILLING_KINDS, currencyOptions, PRODUCT_TYPES } from '../store/seed';
-import { itemCurrency, linesOf } from '../store/selectors';
+import { billingText, FREQUENCIES } from '../store/dealMath';
+import { linesOf, localeFor, plainAmount } from '../store/selectors';
 import { useStore } from '../store/store';
 
-const COLS = 'minmax(0,1.8fr) 1fr 1.1fr 1fr 0.9fr 0.7fr 1fr 40px';
+const COLS = 'minmax(0,2fr) 0.9fr 0.7fr 0.9fr 0.6fr 1.1fr 0.7fr';
+const ANY = 'Billing frequency';
 
+/** The catalog (CD-83): a row opens the product in a dialog. */
 export function Products() {
-  const { s, set, flash, patchProduct, removeProduct } = useStore();
+  const { s, set, openProduct } = useStore();
   const [query, setQuery] = useState('');
-  const [type, setType] = useState('Type');
-  const [kind, setKind] = useState('Billing');
+  const [frequency, setFrequency] = useState(ANY);
 
   const usage: Record<string, string[]> = {};
   s.leads.forEach((l) => linesOf(s, l).forEach((ln) => (usage[ln.itemId] ||= []).push(l.id)));
   const q = query.toLowerCase().trim();
-  const rows = s.catalog
-    .filter((c) => !q || c.name.toLowerCase().includes(q))
-    .filter((c) => type === 'Type' || c.type === type)
-    .filter((c) => kind === 'Billing' || c.kind === kind);
-
-  const patch = (id: string, key: 'name' | 'type' | 'kind' | 'price' | 'vat' | 'currency') => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => patchProduct(id, key, e.target.value);
+  const wanted = FREQUENCIES.find((f) => f.label === frequency)?.value;
+  const rows = s.catalog.filter((c) => !q || c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q)).filter((c) => !wanted || c.frequency === wanted);
+  const locale = localeFor(s.workspace.currency);
 
   return (
     <Screen title="Products & services">
       <FilterBar
         search={{ value: query, onChange: setQuery, placeholder: 'Search catalog' }}
-        chips={[
-          { value: type, options: ['Type', ...PRODUCT_TYPES], onChange: setType },
-          { value: kind, options: ['Billing', ...BILLING_KINDS], onChange: setKind },
-        ]}
-        dirty={type !== 'Type' || kind !== 'Billing'}
+        chips={[{ value: frequency, options: [ANY, ...FREQUENCIES.map((f) => f.label)], onChange: setFrequency }]}
+        dirty={frequency !== ANY}
         onClear={() => {
-          setType('Type');
-          setKind('Billing');
+          setFrequency(ANY);
           setQuery('');
         }}
-        action={{ label: 'New product', onClick: () => set({ productOpen: true }) }}
+        action={{ label: 'New product', onClick: () => openProduct(null) }}
       />
       {s.catalog.length === 0 ? (
-        <EmptyState title="No products or services yet" text="Your catalog is what you put on deals: services and products with their prices and VAT. Deals add up their lines." action={{ label: 'New product', onClick: () => set({ productOpen: true }) }} />
+        <EmptyState
+          title="No products or services yet"
+          text="Your catalog is what you put on deals: products and services with their prices, tax and billing. A deal gives them its currency."
+          action={{ label: 'New product', onClick: () => openProduct(null) }}
+        />
       ) : (
         <div className="card" style={{ overflowX: 'auto' }}>
-          <div style={{ minWidth: 1020 }}>
+          <div style={{ minWidth: 900 }}>
             <div className="table-head" style={{ gridTemplateColumns: COLS }}>
-              {['Name', 'Type', 'Billing', 'Unit price', 'Currency', 'VAT %', 'On deals', ''].map((h, i) => (
-                <span key={i} className="th">
+              {['Name', 'Unit price', 'Unit', 'Price', 'Tax', 'Billing frequency', 'On deals'].map((h) => (
+                <span key={h} className="th">
                   {h}
                 </span>
               ))}
@@ -56,33 +54,39 @@ export function Products() {
             {rows.map((c) => {
               const used = usage[c.id] || [];
               return (
-                <div key={c.id} className="table-row" style={{ gridTemplateColumns: COLS, padding: '9px 16px' }}>
-                  <GhostInput className="ghost-sm" value={c.name} onChange={patch(c.id, 'name')} style={{ fontWeight: 600 }} />
-                  <GhostSelect className="ghost-sm" value={c.type} onChange={patch(c.id, 'type')} options={PRODUCT_TYPES} style={{ color: 'var(--text-2)' }} />
-                  <GhostSelect className="ghost-sm" value={c.kind} onChange={patch(c.id, 'kind')} options={BILLING_KINDS} style={{ color: 'var(--text-2)' }} />
-                  <GhostInput className="ghost-sm" value={c.price} onChange={patch(c.id, 'price')} />
-                  {/* CD-77: only deals in this currency can use the product. */}
-                  <GhostSelect className="ghost-sm" aria-label={'Currency of ' + c.name} value={itemCurrency(s, c)} onChange={patch(c.id, 'currency')} options={currencyOptions(itemCurrency(s, c))} style={{ color: 'var(--text-2)' }} />
-                  <GhostInput className="ghost-sm" value={c.vat} onChange={patch(c.id, 'vat')} />
+                <div
+                  key={c.id}
+                  role="button"
+                  tabIndex={0}
+                  data-testid="product-row"
+                  className="table-row clickable"
+                  style={{ gridTemplateColumns: COLS, alignItems: 'center' }}
+                  onClick={() => openProduct(c.id)}
+                  onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), openProduct(c.id))}
+                >
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600 }}>{c.name}</span>
+                    {c.description && <span style={{ display: 'block', fontSize: 12, color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.description}</span>}
+                  </span>
+                  <span style={{ fontSize: 13 }}>{plainAmount(c.price, locale)}</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{c.unit || '—'}</span>
+                  <span style={{ fontSize: 13 }} title={c.qty !== 1 ? `${c.qty} × ${plainAmount(c.price, locale)}` : undefined}>
+                    {plainAmount(c.price * c.qty, locale)}
+                  </span>
+                  <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{c.vat}%</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{billingText(c.frequency, c.cycles)}</span>
                   <span
                     className="hover-underline"
                     title="Show the deals using this"
-                    onClick={() => used.length && set({ drill: { kicker: 'Used on', title: c.name, leadIds: used } })}
+                    onClick={(e) => {
+                      if (!used.length) return;
+                      e.stopPropagation();
+                      set({ drill: { kicker: 'Used on', title: c.name, leadIds: used } });
+                    }}
                     style={{ fontSize: 12.5, color: used.length ? 'var(--brand)' : 'var(--muted)', cursor: used.length ? 'pointer' : 'default' }}
                   >
                     {used.length === 0 ? '—' : used.length === 1 ? '1 deal' : used.length + ' deals'}
                   </span>
-                  <RemoveButton
-                    box={28}
-                    size={14}
-                    stroke={1.9}
-                    style={{ justifySelf: 'end', borderRadius: 7 }}
-                    onClick={() => {
-                      if (used.length) return flash(`${c.name} is on ${used.length === 1 ? '1 deal' : used.length + ' deals'}. Remove it there first.`);
-                      removeProduct(c.id);
-                      flash(c.name + ' removed from the catalog');
-                    }}
-                  />
                 </div>
               );
             })}
