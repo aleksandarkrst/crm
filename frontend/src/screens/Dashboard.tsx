@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FilterBar } from '../components/ui';
+import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { DATE_RANGES, dateRangeLabel, DEFAULT_FILTERS, SOURCES } from '../store/seed';
@@ -150,6 +151,9 @@ export function Dashboard() {
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+        {s.leads.length === 0 && (
+          <EmptyState title="Nothing to measure yet" text="Overview measures your deals: open and weighted pipeline, wins, conversion and time in each stage. It fills in as deals move." action={{ label: 'New deal', onClick: () => set({ newLeadOpen: true }) }} />
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14 }}>
           {metrics.map((m) => (
             <div key={m.label} className="card" style={{ padding: '16px 17px', display: 'flex', flexDirection: 'column', gap: 7 }}>

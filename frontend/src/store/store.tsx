@@ -106,18 +106,19 @@ const conflictText = (err: unknown): string | null => {
 };
 /** Which lists a live change hint means re-reading (see loadWorkspace). */
 const PARTS_OF: Record<string, Part[]> = {
-  deal: ['deals'],
+  // The getting-started checklist (CD-68) ticks itself from deals, products and funnels.
+  deal: ['deals', 'onboarding'],
   deal_contact: ['deals'],
   deal_line: ['lines', 'deals'],
   task: ['tasks'],
   company: ['companies'],
   contact: ['contacts'],
-  product: ['products'],
-  funnel: ['funnels'],
+  product: ['products', 'onboarding'],
+  funnel: ['funnels', 'onboarding'],
   activity: [],
 };
-const ALL_PARTS: Part[] = ['funnels', 'companies', 'contacts', 'deals', 'products', 'lines', 'tasks', 'team', 'customFields', 'bonus'];
-const EMPTY_CONTACT: NewContactDraft = { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer' };
+const ALL_PARTS: Part[] = ['funnels', 'companies', 'contacts', 'deals', 'products', 'lines', 'tasks', 'team', 'customFields', 'bonus', 'onboarding'];
+const EMPTY_CONTACT: NewContactDraft = { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer', notes: '' };
 const DISCOVERY_FIELDS = ['headline', 'need', 'constraint', 'decisionMaker', 'discoveryDate'] as const satisfies readonly (keyof Lead & keyof DealInput)[];
 /** Workspace settings as the API names them. */
 const WORKSPACE_FIELDS: Partial<Record<keyof Workspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth'>> = {
@@ -631,13 +632,14 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       void save(() => crmApi.unlinkContact(leadId, contactId), undefined, 'unlinking ' + p.name);
     };
 
-    const CONTACT_FIELDS: Partial<Record<keyof Person, 'fullName' | 'jobTitle' | 'email' | 'phone' | 'linkedin' | 'buyerRole'>> = {
+    const CONTACT_FIELDS: Partial<Record<keyof Person, 'fullName' | 'jobTitle' | 'email' | 'phone' | 'linkedin' | 'buyerRole' | 'notes'>> = {
       name: 'fullName',
       role: 'jobTitle',
       email: 'email',
       phone: 'phone',
       linkedin: 'linkedin',
       buyerRole: 'buyerRole',
+      notes: 'notes',
     };
     const patchPerson = (id: string, patch: Partial<Person>) => {
       const p = personById(cur(), id);
@@ -650,7 +652,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }
       const withInitials = patch.name !== undefined ? { ...patch, initials: initialsOf(patch.name) } : patch;
       if (p.primary) {
-        const map: Record<string, string> = { name: 'contact', role: 'role', email: 'email', phone: 'phone', buyerRole: 'buyerRole', initials: 'initials' };
+        const map: Record<string, string> = { name: 'contact', role: 'role', email: 'email', phone: 'phone', buyerRole: 'buyerRole', notes: 'contactNotes', initials: 'initials' };
         const lp: Record<string, unknown> = {};
         Object.entries(withInitials).forEach(([k, v]) => (lp[map[k] || k] = v));
         set((x) => ({ leads: x.leads.map((l) => (l.contactId === contactId ? { ...l, ...lp } : l)) }));
@@ -906,6 +908,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
      * saved at once and the workspace is reloaded; renames keep their item id and just save.
      */
     const editStage = (idx: number, fn: (stage: Stage) => void, structural = false) => {
+      if (!canEditFunnels) return; // members see the playbook read-only; the API refuses them (403)
       const x = cur();
       const funnels = JSON.parse(JSON.stringify(x.funnels)) as State['funnels'];
       const funnel = funnels[x.segment];
@@ -1311,6 +1314,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             phone: draft.phone,
             linkedin: draft.linkedin,
             buyerRole: draft.buyerRole,
+            notes: draft.notes,
             companyId: lead?.companyId ?? null,
             ...(customFields ? { customFields } : {}),
           });
@@ -1320,6 +1324,37 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           flash(draft.name + (lead ? ' added to ' + lead.company : ' added'));
         } catch (err) {
           flash('Not saved: ' + errText(err));
+        }
+      },
+
+      // ---------------------------------------------------------- getting started (CD-68)
+      /** Hides the checklist for you (or shows it again); other admins decide for themselves. */
+      setOnboardingDismissed: async (dismissed: boolean) => {
+        try {
+          const onboarding = await crmApi.setOnboardingDismissed(dismissed);
+          set({ onboarding });
+        } catch (err) {
+          flash('Not saved: ' + errText(err));
+        }
+      },
+      loadSampleData: async () => {
+        try {
+          await crmApi.loadSampleData();
+          await reload();
+          flash('Sample data loaded · remove it in one click when you are done');
+        } catch (err) {
+          flash('Sample data not loaded: ' + errText(err), 7000);
+        }
+      },
+      removeSampleData: async () => {
+        try {
+          const { removed, kept } = await crmApi.removeSampleData();
+          await reload();
+          const n = removed.company + removed.contact + removed.product + removed.deal;
+          const k = kept.company + kept.contact + kept.product + kept.deal;
+          flash(`Sample data removed (${n} record${n === 1 ? '' : 's'})` + (k ? ` · ${k} kept because your own records use ${k === 1 ? 'it' : 'them'}` : ''), 7000);
+        } catch (err) {
+          flash('Sample data not removed: ' + errText(err), 7000);
         }
       },
 

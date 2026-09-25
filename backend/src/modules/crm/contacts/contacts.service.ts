@@ -23,6 +23,7 @@ export const CreateContact = z.object({
   ownerUserId: z.uuid().nullish(),
   /** Custom field values by field id (CD-15); null or '' clears one. */
   customFields: CustomFieldValuesInput,
+  notes: optionalText(2000),
 });
 export const UpdateContact = nonEmptyPatch(CreateContact.partial());
 export const ContactsQuery = PaginationQuery.extend({

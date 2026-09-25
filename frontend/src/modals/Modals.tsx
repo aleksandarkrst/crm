@@ -309,7 +309,7 @@ function NewContactModal() {
       <CustomFieldInputs entity="contact" values={custom} onChange={setCustom} />
       <label className="form-label">
         Notes
-        <textarea className="form-input" rows={3} placeholder="How they influence the deal" />
+        <textarea className="form-input" rows={3} placeholder="How they influence the deal" value={nc.notes} onChange={(e) => set((x) => ({ newContact: { ...x.newContact, notes: e.target.value } }))} />
       </label>
       <div className="modal-actions">
         <button type="button" className="btn btn-secondary" onClick={() => set({ contactOpen: false })}>

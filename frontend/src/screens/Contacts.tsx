@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FilterBar, SortHeader, useSort } from '../components/ui';
 import { DataActions } from '../components/DataActions';
+import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Layout';
 import { contactsCsv } from '../store/exportCsv';
 import { BUYER_ROLES } from '../store/seed';
@@ -57,28 +58,33 @@ export function Contacts() {
         extra={<DataActions type="contacts" count={rows.length} exportCsv={() => contactsCsv(s, rows)} />}
         action={{ label: 'New contact', onClick: () => set({ contactOpen: true }) }}
       />
-      <div className="card" style={{ overflowX: 'auto' }}>
-        <div style={{ minWidth: 1140 }}>
-          <div className="table-head" style={{ gridTemplateColumns: COLS }}>
-            {HEADERS.map((h) => (
-              <SortHeader key={h.key} label={h.label} active={sort.key === h.key} dir={sort.dir} onClick={() => toggle(h.key)} />
+      {allPeople(s).length === 0 ? (
+        <EmptyState title="No contacts yet" text="Contacts are the people you talk to at your companies: who decides, who pays, who champions you." action={{ label: 'New contact', onClick: () => set({ contactOpen: true }) }} />
+      ) : (
+        <div className="card" style={{ overflowX: 'auto' }}>
+          <div style={{ minWidth: 1140 }}>
+            <div className="table-head" style={{ gridTemplateColumns: COLS }}>
+              {HEADERS.map((h) => (
+                <SortHeader key={h.key} label={h.label} active={sort.key === h.key} dir={sort.dir} onClick={() => toggle(h.key)} />
+              ))}
+            </div>
+            {rows.length === 0 && <div className="empty-state">No contacts match these filters.</div>}
+            {rows.map((r) => (
+              <div key={r.id} className="table-row clickable" style={{ gridTemplateColumns: COLS }} onClick={() => openContact(r.id)}>
+                <span style={{ fontWeight: 600 }}>{r.contact}</span>
+                <span style={{ color: 'var(--text-2)' }}>{r.role}</span>
+                <span>{r.company}</span>
+                <span style={{ color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.email}</span>
+                <span style={{ color: 'var(--text-2)' }}>{r.phone}</span>
+                <span className={isSenior(r.decisionMaker) ? 'badge badge-brand' : 'badge badge-neutral'} style={{ justifySelf: 'start' }}>
+                  {r.decisionMaker}
+                </span>
+                <span style={{ color: 'var(--text-2)' }}>{r.owner}</span>
+              </div>
             ))}
           </div>
-          {rows.map((r) => (
-            <div key={r.id} className="table-row clickable" style={{ gridTemplateColumns: COLS }} onClick={() => openContact(r.id)}>
-              <span style={{ fontWeight: 600 }}>{r.contact}</span>
-              <span style={{ color: 'var(--text-2)' }}>{r.role}</span>
-              <span>{r.company}</span>
-              <span style={{ color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.email}</span>
-              <span style={{ color: 'var(--text-2)' }}>{r.phone}</span>
-              <span className={isSenior(r.decisionMaker) ? 'badge badge-brand' : 'badge badge-neutral'} style={{ justifySelf: 'start' }}>
-                {r.decisionMaker}
-              </span>
-              <span style={{ color: 'var(--text-2)' }}>{r.owner}</span>
-            </div>
-          ))}
         </div>
-      </div>
+      )}
     </Screen>
   );
 }

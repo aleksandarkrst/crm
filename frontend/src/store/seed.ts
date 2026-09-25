@@ -189,6 +189,7 @@ export function initialState(): State {
     // Replaced by the saved settings when the workspace loads (store/remote.ts).
     workspace: { name: '', currency: 'EUR', timezone: 'Europe/Belgrade', fiscalMonth: 1 },
     profile: { name: '', title: '', email: '', phone: '', language: 'en', dateFormat: 'DD.MM.YYYY', startPage: 'pipeline', defaultFunnelId: '', digest: true, dealAssigned: true },
+    onboarding: null,
     bonusRules: null,
     bonusTrigger: 'On contract signed',
     filters: { ...DEFAULT_FILTERS },
@@ -210,7 +211,7 @@ export function initialState(): State {
     taskEditId: null,
     contactOpen: false,
     contactCompany: 'Bellhaus Interiors',
-    newContact: { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer' },
+    newContact: { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer', notes: '' },
     personaOpen: false,
     personaBase: 'smb',
     templateOpen: false,

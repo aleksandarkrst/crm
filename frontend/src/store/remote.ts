@@ -29,6 +29,7 @@ export type WorkspaceData = Pick<
   | 'bonusRules'
   | 'bonusTrigger'
   | 'versions'
+  | 'onboarding'
 >;
 
 export const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member' } as const;
@@ -79,6 +80,9 @@ export const mapBonusRules = (b: ApiBonusRules): Record<string, BonusRule> =>
 
 /** The bonus rules, or null for members: the API answers them 403 (CD-17). */
 const loadBonusRules = () => crmApi.bonusRules().catch((err: unknown) => (err instanceof ApiError && err.status === 403 ? null : Promise.reject(err)));
+
+/** Getting started (CD-68), or null for members: the API answers them 403. */
+const loadOnboarding = () => crmApi.onboarding().catch((err: unknown) => (err instanceof ApiError && err.status === 403 ? null : Promise.reject(err)));
 
 /** Workspace settings. */
 export const mapWorkspace = (w: ApiWorkspace): Workspace => ({ name: w.name, currency: w.currency, timezone: w.timezone, fiscalMonth: w.fiscalYearStartMonth });
@@ -149,6 +153,7 @@ const PARTS = {
   profile: () => crmApi.profile(),
   customFields: () => crmApi.customFields(),
   bonus: () => loadBonusRules(),
+  onboarding: () => loadOnboarding(),
 };
 export type Part = keyof typeof PARTS;
 type Raw = { [K in Part]: Awaited<ReturnType<(typeof PARTS)[K]>> };
@@ -166,7 +171,7 @@ export async function loadWorkspace(only?: ReadonlySet<Part>): Promise<Workspace
   const raw = { ...prev } as Record<Part, unknown>;
   keys.forEach((k, i) => (raw[k] = fetched[i]));
   lastRaw = raw as Raw;
-  const { funnels: apiFunnels, companies, contacts, deals: dealRows, products, lines: apiLines, tasks: apiTasks, team: apiTeam, workspace: apiWorkspace, profile: apiProfile, customFields: apiFields, bonus: apiBonus } = lastRaw;
+  const { funnels: apiFunnels, companies, contacts, deals: dealRows, products, lines: apiLines, tasks: apiTasks, team: apiTeam, workspace: apiWorkspace, profile: apiProfile, customFields: apiFields, bonus: apiBonus, onboarding } = lastRaw;
 
   const team = mapTeam(apiTeam);
 
@@ -201,6 +206,7 @@ export async function loadWorkspace(only?: ReadonlySet<Part>): Promise<Workspace
       email: ct?.email ?? '—',
       phone: ct?.phone ?? '—',
       buyerRole: ct?.buyerRole,
+      contactNotes: ct?.notes ?? '',
       contactOwnerId: ct?.ownerUserId,
       contactOwner: ct?.ownerName ?? undefined,
       owner: ownerName ?? undefined,
@@ -263,6 +269,7 @@ export async function loadWorkspace(only?: ReadonlySet<Part>): Promise<Workspace
       phone: c.phone ?? '',
       linkedin: c.linkedin ?? undefined,
       buyerRole: c.buyerRole,
+      notes: c.notes ?? '',
       initials: initialsOf(c.fullName),
       ownerId: c.ownerUserId,
       ownerName: c.ownerName ?? undefined,
@@ -342,5 +349,6 @@ export async function loadWorkspace(only?: ReadonlySet<Part>): Promise<Workspace
     customValues,
     bonusRules: apiBonus ? mapBonusRules(apiBonus) : null,
     bonusTrigger: apiBonus?.trigger ?? 'On contract signed',
+    onboarding,
   };
 }

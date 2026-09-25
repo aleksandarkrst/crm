@@ -23,6 +23,8 @@ import { RecordHistoryService } from './history/record-history.service';
 import { FunnelsService } from './funnels/funnels.service';
 import { ImportController } from './import/import.controller';
 import { ImportService } from './import/import.service';
+import { OnboardingController } from './onboarding/onboarding.controller';
+import { OnboardingService } from './onboarding/onboarding.service';
 import { ProductsController } from './products/products.controller';
 import { ProductsService } from './products/products.service';
 
@@ -32,11 +34,12 @@ import { ProductsService } from './products/products.service';
  * module per the design: commissions (sales bonuses).
  * CSV import of companies, contacts and deals lives in import/ (CD-64); document templates and
  * generated documents in documents/ (CD-13). Custom fields (CD-15) are in custom-fields/, sales
- * bonus rules (CD-17) in bonuses/.
+ * bonus rules (CD-17) in bonuses/, and the getting-started checklist and sample data in
+ * onboarding/ (CD-68).
  */
 @Module({
-  controllers: [CompaniesController, ContactsController, FunnelsController, DealsController, DealWorkController, ProductsController, ImportController, CustomFieldsController, BonusRulesController, DocumentsController, HistoryController],
-  providers: [CompaniesService, ContactsService, FunnelsService, DealsService, ActivitiesService, DealLinesService, DealTasksService, StageHistoryService, ProductsService, ImportService, CustomFieldsService, BonusRulesService, DocumentsService, DocumentGenerator, RecordHistoryService],
+  controllers: [CompaniesController, ContactsController, FunnelsController, DealsController, DealWorkController, ProductsController, ImportController, CustomFieldsController, BonusRulesController, DocumentsController, HistoryController, OnboardingController],
+  providers: [CompaniesService, ContactsService, FunnelsService, DealsService, ActivitiesService, DealLinesService, DealTasksService, StageHistoryService, ProductsService, ImportService, CustomFieldsService, BonusRulesService, DocumentsService, DocumentGenerator, RecordHistoryService, OnboardingService],
   exports: [DealsService],
 })
 export class CrmModule {}

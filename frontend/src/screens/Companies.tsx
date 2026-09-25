@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FilterBar, SortHeader, useSort } from '../components/ui';
 import { DataActions } from '../components/DataActions';
+import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Layout';
 import { companiesCsv } from '../store/exportCsv';
 import { INDUSTRIES } from '../store/seed';
@@ -61,30 +62,35 @@ export function Companies() {
         extra={<DataActions type="companies" count={rows.length} exportCsv={() => companiesCsv(s, rows)} />}
         action={{ label: 'Add company', onClick: addCompany }}
       />
-      <div className="card" style={{ overflowX: 'auto' }}>
-        <div style={{ minWidth: 1180 }}>
-          <div className="table-head" style={{ gridTemplateColumns: COLS }}>
-            {HEADERS.map((h) => (
-              <SortHeader key={h.key} label={h.label} active={sort.key === h.key} dir={sort.dir} onClick={() => toggle(h.key)} />
+      {companyRecords(s).length === 0 ? (
+        <EmptyState title="No companies yet" text="Companies are the organisations you sell to. Add one, or import a list from a CSV file." action={{ label: 'Add company', onClick: addCompany }} />
+      ) : (
+        <div className="card" style={{ overflowX: 'auto' }}>
+          <div style={{ minWidth: 1180 }}>
+            <div className="table-head" style={{ gridTemplateColumns: COLS }}>
+              {HEADERS.map((h) => (
+                <SortHeader key={h.key} label={h.label} active={sort.key === h.key} dir={sort.dir} onClick={() => toggle(h.key)} />
+              ))}
+            </div>
+            {rows.length === 0 && <div className="empty-state">No companies match these filters.</div>}
+            {rows.map((c) => (
+              <div key={c.id} className="table-row clickable" style={{ gridTemplateColumns: COLS }} onClick={() => openCompany(c.id)}>
+                <span style={{ fontWeight: 600 }}>{c.name}</span>
+                <span style={{ color: 'var(--text-2)' }}>{c.industry}</span>
+                <span style={{ color: 'var(--text-2)' }}>{c.hq}</span>
+                <span style={{ color: 'var(--text-2)' }}>{c.size}</span>
+                <span style={{ color: 'var(--text-2)' }}>{c.contactCount}</span>
+                <span style={{ color: 'var(--text-2)' }}>{c.oppCount}</span>
+                <span style={{ color: 'var(--brand)' }}>{c.valueLabel}</span>
+                <span style={{ fontSize: 12.5 }}>{c.stageName}</span>
+                <span style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{c.owner}</span>
+                <span style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{c.lastTouch}</span>
+                <span style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{c.source}</span>
+              </div>
             ))}
           </div>
-          {rows.map((c) => (
-            <div key={c.id} className="table-row clickable" style={{ gridTemplateColumns: COLS }} onClick={() => openCompany(c.id)}>
-              <span style={{ fontWeight: 600 }}>{c.name}</span>
-              <span style={{ color: 'var(--text-2)' }}>{c.industry}</span>
-              <span style={{ color: 'var(--text-2)' }}>{c.hq}</span>
-              <span style={{ color: 'var(--text-2)' }}>{c.size}</span>
-              <span style={{ color: 'var(--text-2)' }}>{c.contactCount}</span>
-              <span style={{ color: 'var(--text-2)' }}>{c.oppCount}</span>
-              <span style={{ color: 'var(--brand)' }}>{c.valueLabel}</span>
-              <span style={{ fontSize: 12.5 }}>{c.stageName}</span>
-              <span style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{c.owner}</span>
-              <span style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{c.lastTouch}</span>
-              <span style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{c.source}</span>
-            </div>
-          ))}
         </div>
-      </div>
+      )}
     </Screen>
   );
 }

@@ -148,6 +148,13 @@
       "when": 1790281605622,
       "tag": "0020_record_changes_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790314764025,
+      "tag": "0021_onboarding_cleanup",
+      "breakpoints": true
     }
   ]
 }

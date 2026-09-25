@@ -1,4 +1,4 @@
-import type { ApiCustomField, ApiDateFormat, ApiLanguage, ApiStageChange, ApiStartPage, CustomFieldEntity, CustomFieldValues, DealOutcome, LostReason } from '../lib/api';
+import type { ApiCustomField, ApiDateFormat, ApiLanguage, ApiOnboarding, ApiStageChange, ApiStartPage, CustomFieldEntity, CustomFieldValues, DealOutcome, LostReason } from '../lib/api';
 import type { DealDoc, DocTemplate } from './documents';
 
 /** A funnel's backend id (CD-10: any number of funnels, not just the two personas). */
@@ -49,6 +49,8 @@ export interface Lead {
   email: string;
   phone: string;
   buyerRole?: string;
+  /** Notes on the primary contact (from the New contact dialog or the contact screen). */
+  contactNotes?: string;
   /** Owner of the primary contact (user id, and last known name from the API). */
   contactOwnerId?: string | null;
   contactOwner?: string;
@@ -99,6 +101,7 @@ export interface Person {
   phone: string;
   linkedin?: string;
   buyerRole?: string;
+  notes?: string;
   initials: string;
   /** Owner of the contact (user id); ownerName is their last known name, from the API. */
   ownerId?: string | null;
@@ -271,6 +274,7 @@ export interface NewContactDraft {
   phone: string;
   linkedin: string;
   buyerRole: string;
+  notes: string;
 }
 
 export interface NewFieldDraft {
@@ -329,6 +333,8 @@ export interface State {
   customValues: Record<CustomFieldEntity, Record<string, CustomFieldValues>>;
   workspace: Workspace;
   profile: Profile;
+  /** Getting started (CD-68), for owners and admins; null for members. */
+  onboarding: ApiOnboarding | null;
   /**
    * Sales bonus rules by user id (CD-17), saved in the workspace. null for members: the API
    * doesn't show them the rules, and the UI hides the bonus tab and the Overview card.

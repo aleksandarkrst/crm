@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FilterBar } from '../components/ui';
 import { DataActions } from '../components/DataActions';
+import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Layout';
 import { dealsCsv } from '../store/exportCsv';
 import { DEFAULT_FILTERS, INDUSTRIES, LOST_VIEWS, VALUE_BANDS, valueBandLabel } from '../store/seed';
@@ -57,8 +58,13 @@ export function Pipeline() {
         action={{ label: 'New deal', onClick: () => set({ newLeadOpen: true }) }}
       />
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '0 -30px -44px', padding: '0 30px', minHeight: 'calc(100vh - 118px)' }}>
-        <div style={{ display: 'flex', gap: 14, overflowX: 'auto', alignItems: 'stretch', flex: 1, minHeight: 520 }}>
+      {s.leads.length === 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <EmptyState title="No deals yet" text="Deals move through your funnel's stages, left to right. Add your first one, or import deals from a CSV file." action={{ label: 'New deal', onClick: () => set({ newLeadOpen: true }) }} />
+        </div>
+      )}
+      <div className="pipeline-board" style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '0 -30px -44px', padding: '0 30px', minHeight: 'calc(100vh - 118px)' }}>
+        <div className="pipeline-columns" style={{ display: 'flex', gap: 14, overflowX: 'auto', alignItems: 'stretch', flex: 1, minHeight: s.leads.length ? 520 : 260 }}>
           {visible.map((st, ci) => {
             const cards = segLeads.filter((l) => l.stage === st.id);
             const short = valueTotal(s, cards.filter((l) => l.outcome !== 'lost'), true);
@@ -159,7 +165,7 @@ export function Pipeline() {
                             Next: {stageOf(s, l).activity}
                             {needsNextStep(s, l) && (
                               <div style={{ marginTop: 6 }}>
-                                <span className="badge badge-warn" data-testid="no-next-step" title="No open task on this deal">
+                                <span className="badge badge-warn" data-testid="no-next-step" title="No dated open task on this deal. Stage to-dos are not scheduled next steps.">
                                   No next step
                                 </span>
                               </div>

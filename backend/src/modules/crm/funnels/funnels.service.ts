@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
-import { and, asc, count, eq, inArray, isNull, not, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, not, or, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
@@ -37,12 +37,7 @@ const StageFields = z.object({
   checklistItems: ChecklistItems,
 });
 
-export const UpdateStage = nonEmptyPatch(
-  StageFields.partial().extend({
-    /** Labels only (before CD-32): items are matched by label, so a renamed label is a new item. */
-    checklist: z.array(checklistLabel).max(20).optional(),
-  }),
-).refine((v) => !(v.checklist && v.checklistItems), 'Send checklistItems or checklist, not both');
+export const UpdateStage = nonEmptyPatch(StageFields.partial());
 export type UpdateStage = z.infer<typeof UpdateStage>;
 
 /** A new stage (CD-9); `position` is where it goes (0 = first), by default just before the won stage. */
@@ -347,28 +342,11 @@ export class FunnelsService implements TenantProvisioner, OnModuleInit {
       .catch(mapDbError);
   }
 
-  /**
-   * Playbook to-dos carry their item's label too (unique per deal and stage), so renamed items
-   * rename their to-dos. Unlinked to-dos (their item was removed, or renamed before CD-32) holding
-   * a label an item is renamed to are dropped first; they were invisible already. The rename goes
-   * through a temporary label so swapping two names can't collide.
-   */
+  /** Playbook to-dos carry their item's label too, so renamed items rename their to-dos. */
   private async followRenamedItems(tx: Tx, stageId: string, before: ChecklistItem[], after: ChecklistItem[]) {
     const oldLabel = new Map(before.map((i) => [i.id, i.label]));
     const renamed = after.filter((i) => oldLabel.has(i.id) && oldLabel.get(i.id) !== i.label);
-    if (renamed.length === 0) return;
     const playbook = and(eq(dealTasks.stageId, stageId), not(dealTasks.offPlaybook));
-    await tx.delete(dealTasks).where(
-      and(
-        playbook,
-        inArray(dealTasks.label, renamed.map((i) => i.label)),
-        or(isNull(dealTasks.checklistItemId), notInArray(dealTasks.checklistItemId, after.map((i) => i.id))),
-      ),
-    );
-    await tx
-      .update(dealTasks)
-      .set({ label: sql`'~' || ${dealTasks.id}::text` })
-      .where(and(playbook, inArray(dealTasks.checklistItemId, renamed.map((i) => i.id))));
     for (const item of renamed) await tx.update(dealTasks).set({ label: item.label }).where(and(playbook, eq(dealTasks.checklistItemId, item.id)));
   }
 }
