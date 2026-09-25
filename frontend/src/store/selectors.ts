@@ -182,23 +182,6 @@ export function defaultStart(lead: Lead | undefined): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function monthLabel(start: string | undefined, add: number): string {
-  if (!start) return 'No start date';
-  const d = new Date(start);
-  if (isNaN(d.getTime())) return '—';
-  d.setMonth(d.getMonth() + add);
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-/** `start` moved by `add` months; '' without a start date. */
-export function shiftIso(start: string | undefined, add: number): string {
-  if (!start) return '';
-  const d = new Date(start);
-  if (isNaN(d.getTime())) return start;
-  d.setMonth(d.getMonth() + add);
-  return d.toISOString().slice(0, 10);
-}
-
 export function script(activity: string, lead: Lead): string {
   const raw = SCRIPTS[activity] || 'No script yet for this activity. Add one in the funnel builder.';
   const first = (lead.contact || '').split(' ')[0] ?? '';
