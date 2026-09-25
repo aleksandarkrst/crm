@@ -3,7 +3,7 @@
  * to what; readable names; members can read it; isolated per tenant.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, type Funnel, firstFunnel, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, type Funnel, firstFunnel, ok, productLine, saveProducts, type Session, signIn } from './helpers';
 
 let owner: Session;
 let seller: Session;
@@ -45,9 +45,9 @@ describe('deal history', () => {
     await ok('PATCH', `/crm/deals/${deal.id}`, { ...asSeller(), body: { title: 'History deal v2', closeDate: '2026-11-30' } });
     await ok('PATCH', `/crm/deals/${deal.id}`, { ...asOwner(), body: { ownerUserId: seller.userId } });
     await ok('POST', `/crm/deals/${deal.id}/move`, { ...asSeller(), body: { stageId: funnel.stages[1]!.id } }, 200);
-    const line = await ok('POST', `/crm/deals/${deal.id}/lines`, { ...asSeller(), body: { productId: product.id, quantity: 2, unitPrice: 1200 } });
-    await ok('PATCH', `/crm/deal-lines/${line.id}`, { ...asSeller(), body: { quantity: 3 } });
-    await ok('DELETE', `/crm/deal-lines/${line.id}`, asSeller());
+    const saved = await saveProducts(seller, tenant, deal.id, [productLine(product.id, { quantity: 2, unitPrice: 1200 })]);
+    await saveProducts(seller, tenant, deal.id, [productLine(product.id, { id: saved.lines[0].id, quantity: 3, unitPrice: 1200 })]);
+    await saveProducts(seller, tenant, deal.id, []);
     await ok('POST', `/crm/deals/${deal.id}/lost`, { ...asSeller(), body: { reason: 'Timing', note: 'Next year' } }, 200);
     await ok('POST', `/crm/deals/${deal.id}/reopen`, asOwner(), 200);
 

@@ -7,7 +7,7 @@ import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, dealDocuments, dealLines, type DealOutcome, deals, funnels, funnelStages, LOST_REASONS, products, tenants } from '../../../shared/database/schema';
+import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, dealDocuments, type DealOutcome, deals, funnels, funnelStages, LOST_REASONS, tenants } from '../../../shared/database/schema';
 import { JobsService } from '../../../shared/events/jobs.service';
 import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
 import { currencyCode } from '../currency';
@@ -182,7 +182,6 @@ export class DealsService {
         const { customFields: cfInput, ...fields } = input;
         const patch: PgUpdateSetSource<typeof deals> = { ...fields };
         if (cfInput !== undefined) patch.customFields = this.customFields.merged(deals.customFields, await this.customFields.validate(tx, 'deal', cfInput));
-        if (input.currency) await this.assertCurrencyFitsLines(tx, id, input.currency);
         if (input.champ) patch.fitScore = input.champ.C + input.champ.H + input.champ.M + input.champ.P;
         let funnelChange: { from: string; to: typeof funnelStages.$inferSelect; funnel: string; at: Date } | null = null;
         if (input.funnelId) {
@@ -343,25 +342,6 @@ export class DealsService {
       })
       .catch(mapDbError);
     for (const key of files) await this.storage.delete(ctx.tenantId, key);
-  }
-
-  /**
-   * CD-77: a deal's lines are priced in its currency, and there are no exchange rates. So the
-   * currency can only change while no line uses a product priced in another currency (409).
-   * Lines without a product, or with products in the new currency, don't stand in the way.
-   */
-  private async assertCurrencyFitsLines(tx: Tx, dealId: string, currency: string) {
-    const [deal] = await tx.select({ currency: deals.currency }).from(deals).where(eq(deals.id, dealId));
-    if (!deal || deal.currency === currency) return;
-    const clashing = await tx
-      .select({ name: products.name, currency: products.currency })
-      .from(dealLines)
-      .innerJoin(products, eq(products.id, dealLines.productId))
-      .where(and(eq(dealLines.dealId, dealId), not(eq(products.currency, currency))));
-    if (clashing.length === 0) return;
-    const names = [...new Set(clashing.map((c) => `${c.name} (${c.currency})`))].join(', ');
-    const lines = clashing.length === 1 ? '1 product line is' : `${clashing.length} product lines are`;
-    throw new ConflictException(`Can't change the currency to ${currency}: ${lines} priced in another currency (${names}). Remove those lines or replace them with products in ${currency} first.`);
   }
 
   /** A deal row with its outcome (see dealOutcome). */

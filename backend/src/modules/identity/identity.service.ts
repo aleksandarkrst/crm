@@ -67,9 +67,9 @@ export class IdentityService {
    * Creates a tenant (a customer organisation) with the caller as its owner, then lets other
    * modules seed their defaults (e.g. CRM funnels) in the same transaction.
    */
-  async createTenant(userId: string, name: string) {
+  async createTenant(userId: string, name: string, currency?: string) {
     return this.database.db.transaction(async (tx) => {
-      const [tenant] = await tx.insert(tenants).values({ name, slug: slugify(name) }).returning();
+      const [tenant] = await tx.insert(tenants).values({ name, slug: slugify(name), ...(currency ? { currency } : {}) }).returning();
       await tx.insert(memberships).values({ tenantId: tenant!.id, userId, role: 'owner' });
       await tx.execute(sql`select set_config('app.tenant_id', ${tenant!.id}, true)`);
       await this.provisioning.run(tx, tenant!.id);

@@ -8,9 +8,9 @@ import type { BuyerRole, Channel, LostReason } from '../../../shared/database/sc
 export const SAMPLE_SOURCE = 'Sample data';
 
 export const SAMPLE_PRODUCTS = [
-  { key: 'workshop', name: 'Onboarding workshop', type: 'Service', billingKind: 'One-off', unitPrice: '1200.00', vatRate: '20' },
-  { key: 'licence', name: 'Annual licence', type: 'Product', billingKind: 'Yearly', unitPrice: '4800.00', vatRate: '20' },
-  { key: 'support', name: 'Support hours', type: 'Service', billingKind: 'Hourly', unitPrice: '90.00', vatRate: '20' },
+  { key: 'workshop', name: 'Onboarding workshop', description: 'A day on site to set up the team', unit: 'day', unitPrice: '1200.00', quantity: '1.00', vatRate: '20', billingFrequency: 'one_time', billingCycles: null },
+  { key: 'licence', name: 'Annual licence', description: 'One seat for a year', unit: 'seat', unitPrice: '4800.00', quantity: '1.00', vatRate: '20', billingFrequency: 'annually', billingCycles: 1 },
+  { key: 'support', name: 'Support hours', description: 'Help after go-live', unit: 'hour', unitPrice: '90.00', quantity: '10.00', vatRate: '20', billingFrequency: 'one_time', billingCycles: null },
 ] as const;
 export type SampleProductKey = (typeof SAMPLE_PRODUCTS)[number]['key'];
 

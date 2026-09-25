@@ -19,9 +19,8 @@ beforeAll(async () => {
   const contact = await ok('POST', '/crm/contacts', { ...as(), body: { fullName: 'Ann Buyer', companyId: company.id } });
   const product = await ok('POST', '/crm/products', { ...as(), body: { name: 'Audit', unitPrice: 100 } });
   const deal = await ok('POST', '/crm/deals', { ...as(), body: { title: 'Deal', funnelId: funnel.id, companyId: company.id } });
-  const line = await ok('POST', `/crm/deals/${deal.id}/lines`, { ...as(), body: { productId: product.id, quantity: 1, unitPrice: 100 } });
   const task = await ok('POST', `/crm/deals/${deal.id}/tasks`, { ...as(), body: { stageId: funnel.stages[0]!.id, label: 'Call back' } });
-  Object.assign(ids, { company: company.id, contact: contact.id, product: product.id, deal: deal.id, line: line.id, task: task.id });
+  Object.assign(ids, { company: company.id, contact: contact.id, product: product.id, deal: deal.id, task: task.id });
 });
 
 const endpoints = () => [
@@ -29,7 +28,6 @@ const endpoints = () => [
   ['company', `/crm/companies/${ids.company}`],
   ['contact', `/crm/contacts/${ids.contact}`],
   ['product', `/crm/products/${ids.product}`],
-  ['deal line', `/crm/deal-lines/${ids.line}`],
   ['deal task', `/crm/deal-tasks/${ids.task}`],
   ['funnel stage', `/crm/funnels/${funnel.id}/stages/${funnel.stages[0]!.id}`],
 ];

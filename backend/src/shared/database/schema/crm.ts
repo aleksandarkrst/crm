@@ -200,6 +200,28 @@ export interface ChampScores {
   P: number; // Prioritisation
 }
 
+/** How a deal's line prices are meant (CD-83). */
+export const TAX_MODES = ['exclusive', 'inclusive', 'none'] as const;
+export type TaxMode = (typeof TAX_MODES)[number];
+export const DISCOUNT_KINDS = ['percent', 'amount'] as const;
+export type DiscountKind = (typeof DISCOUNT_KINDS)[number];
+
+/** A discount on the whole deal: a percentage of, or an amount off, its one-time products. */
+export interface DealDiscount {
+  id: string;
+  label: string;
+  kind: DiscountKind;
+  value: number;
+}
+
+/** One part of an installment plan: what it is for, when it is billed, how much (incl. tax). */
+export interface Installment {
+  id: string;
+  description: string;
+  date: string | null; // ISO date
+  amount: number;
+}
+
 /** Why a deal was lost (a fixed pick list, plus an optional note on the deal). */
 export const LOST_REASONS = ['Price', 'Timing', 'Chose a competitor', 'No budget', 'No decision', 'Other'] as const;
 export type LostReason = (typeof LOST_REASONS)[number];
@@ -238,6 +260,12 @@ export const deals = pgTable(
     lostAt: timestamp('lost_at', { withTimezone: true }),
     lostReason: text('lost_reason', { enum: LOST_REASONS }),
     lostNote: text('lost_note'),
+    /** How the line prices are meant (CD-83): tax on top, tax included, or no tax. */
+    taxMode: text('tax_mode', { enum: TAX_MODES }).notNull().default('exclusive'),
+    /** Discounts on the whole deal; they apply to one-time products only (CD-83). */
+    discounts: jsonb('discounts').$type<DealDiscount[]>().notNull().default([]),
+    /** When a deal with only one-time products is paid, in parts (CD-83). Empty: on each line's date. */
+    installments: jsonb('installments').$type<Installment[]>().notNull().default([]),
     /** Custom field values (CD-15), keyed by custom_field_defs.id. */
     customFields: jsonb('custom_fields').$type<CustomFieldValues>().notNull().default({}),
     ...timestamps,
@@ -292,42 +320,44 @@ export const activities = pgTable(
 
 // ---------------------------------------------------------------- products & services
 
-export const PRODUCT_TYPES = ['Service', 'Product'] as const;
-export const BILLING_KINDS = ['One-off', 'Monthly', 'Yearly', 'Hourly'] as const;
+/** How often a product is billed (CD-83). Recurring products bill every period, for their cycles. */
+export const BILLING_FREQUENCIES = ['one_time', 'weekly', 'monthly', 'quarterly', 'annually'] as const;
+export type BillingFrequency = (typeof BILLING_FREQUENCIES)[number];
 
+/**
+ * The catalog (CD-83). A product is priced per unit (`unit`, e.g. "hour") and comes with a default
+ * `quantity`: its price is unit price × quantity. It has no currency: a deal line takes the number
+ * in the deal's currency. `billing_cycles` null means a recurring product renews until canceled.
+ */
 export const products = pgTable(
   'products',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     tenantId: tenantId(),
     name: text('name').notNull(),
-    type: text('type', { enum: PRODUCT_TYPES }).notNull().default('Service'),
-    billingKind: text('billing_kind', { enum: BILLING_KINDS }).notNull().default('One-off'),
+    description: text('description'),
+    unit: text('unit'),
     unitPrice: numeric('unit_price', { precision: 14, scale: 2 }).notNull().default('0'),
+    quantity: numeric('quantity', { precision: 12, scale: 2 }).notNull().default('1'),
     vatRate: numeric('vat_rate', { precision: 5, scale: 2 }).notNull().default('20'),
-    /**
-     * ISO 4217 code of the price (CD-77). New products get the workspace currency. A deal line
-     * can only use a product in the deal's currency (there are no exchange rates).
-     */
-    currency: text('currency').notNull().default('EUR'),
+    billingFrequency: text('billing_frequency', { enum: BILLING_FREQUENCIES }).notNull().default('one_time'),
+    billingCycles: integer('billing_cycles'),
     ...timestamps,
   },
-  (t) => [unique('products_tenant_id_uq').on(t.tenantId, t.id), index('products_tenant_name_idx').on(t.tenantId, t.name)],
+  (t) => [
+    unique('products_tenant_id_uq').on(t.tenantId, t.id),
+    index('products_tenant_name_idx').on(t.tenantId, t.name),
+    check('products_billing_cycles_ck', sql`${t.billingCycles} is null or ${t.billingCycles} between 1 and 1000`),
+  ],
 );
 
 // ---------------------------------------------------------------- deal lines & payment schedules
 
-export const PAYMENT_SCHEDULES = ['Full amount on one date', 'Equal monthly instalments', 'Recurring subscription', 'Custom milestones'] as const;
-
-export interface Milestone {
-  label: string;
-  pct: number; // share of the line's gross amount
-  date?: string; // ISO date; defaults to one month after the previous milestone
-}
-
 /**
- * What a deal sells: a product at a quantity and price, and when it gets paid. The deal's amount
- * is the sum of its lines' net values (DealLinesService keeps it in sync).
+ * What a deal sells (CD-83): a product at a quantity and price, with a discount and tax, billed
+ * from `start_date` once or every period for its cycles. Prices are in the deal's currency and read
+ * with the deal's tax mode. The deal's amount is its value (see deals/deal-value.ts), kept in sync
+ * by DealLinesService.
  */
 export const dealLines = pgTable(
   'deal_lines',
@@ -340,10 +370,12 @@ export const dealLines = pgTable(
     quantity: numeric('quantity', { precision: 12, scale: 2 }).notNull().default('1'),
     unitPrice: numeric('unit_price', { precision: 14, scale: 2 }).notNull().default('0'),
     vatRate: numeric('vat_rate', { precision: 5, scale: 2 }).notNull().default('0'),
-    schedule: text('schedule', { enum: PAYMENT_SCHEDULES }).notNull().default('Full amount on one date'),
-    startDate: date('start_date'), // first (or only) payment
-    months: integer('months').notNull().default(6), // for monthly instalments
-    milestones: jsonb('milestones').$type<Milestone[]>().notNull().default([]),
+    discountKind: text('discount_kind', { enum: DISCOUNT_KINDS }).notNull().default('percent'),
+    discountValue: numeric('discount_value', { precision: 14, scale: 2 }).notNull().default('0'),
+    billingFrequency: text('billing_frequency', { enum: BILLING_FREQUENCIES }).notNull().default('one_time'),
+    billingCycles: integer('billing_cycles'), // null: renews until canceled (recurring only)
+    startDate: date('start_date'), // billing start date
+    description: text('description'),
     ...timestamps,
   },
   (t) => [
@@ -352,7 +384,7 @@ export const dealLines = pgTable(
     foreignKey({ columns: [t.tenantId, t.dealId], foreignColumns: [deals.tenantId, deals.id], name: 'deal_lines_deal_fk' }).onDelete('cascade'),
     // A product used on a deal can't be deleted from the catalog.
     foreignKey({ columns: [t.tenantId, t.productId], foreignColumns: [products.tenantId, products.id], name: 'deal_lines_product_fk' }),
-    check('deal_lines_months_ck', sql`${t.months} between 1 and 120`),
+    check('deal_lines_billing_cycles_ck', sql`${t.billingCycles} is null or ${t.billingCycles} between 1 and 1000`),
   ],
 );
 
