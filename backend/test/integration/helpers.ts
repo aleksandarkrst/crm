@@ -132,3 +132,22 @@ export async function firstFunnel(s: Session, tenant: string): Promise<Funnel> {
   expect(funnels.length).toBeGreaterThan(0);
   return funnels[0]!;
 }
+
+/** A deal line as `PUT /crm/deals/:id/products` takes it (CD-83); every field has a default. */
+export const productLine = (productId: string, over: Record<string, unknown> = {}) => ({
+  productId,
+  quantity: 1,
+  unitPrice: 100,
+  vatRate: 20,
+  discountKind: 'percent',
+  discountValue: 0,
+  billingFrequency: 'one_time',
+  billingCycles: null,
+  startDate: null,
+  ...over,
+});
+
+/** Saves a deal's products (CD-83) and returns `{ lines, totals }`. */
+export async function saveProducts(s: Session, tenant: string, dealId: string, lines: unknown[], extra: Record<string, unknown> = {}): Promise<Json> {
+  return ok('PUT', `/crm/deals/${dealId}/products`, { token: s.token, tenant, body: { taxMode: 'exclusive', lines, ...extra } }, 200);
+}

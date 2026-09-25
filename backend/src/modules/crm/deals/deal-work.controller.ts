@@ -2,14 +2,14 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query
 import { RequireTenant, Tenant, type TenantContext } from '../../../shared/authorization';
 import { PaginationQuery, UuidParam } from '../../../shared/validation/common';
 import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
-import { CreateDealLine, DealLinesService, UpdateDealLine } from './deal-lines.service';
+import { DealLinesService, SaveDealProducts } from './deal-lines.service';
 import { CreateExtraTask, DealTasksService, UpdateTask, UpsertPlaybookTask } from './deal-tasks.service';
 import { StageHistoryQuery, StageHistoryService } from './stage-history.service';
 
 const Id = new ZodPipe(UuidParam);
 const Page = new ZodPipe(PaginationQuery);
 
-/** Deal lines (products & payment schedules), stage to-dos and stage history. */
+/** Deal products (lines), stage to-dos and stage history. */
 @Controller('crm')
 @RequireTenant('member')
 export class DealWorkController {
@@ -25,20 +25,10 @@ export class DealWorkController {
     return this.lines.list(ctx, page);
   }
 
-  @Post('deals/:id/lines')
-  createLine(@Tenant() ctx: TenantContext, @Param('id', Id) dealId: string, @Body(new ZodPipe(CreateDealLine)) body: CreateDealLine) {
-    return this.lines.create(ctx, dealId, body);
-  }
-
-  @Patch('deal-lines/:lineId')
-  updateLine(@Tenant() ctx: TenantContext, @Param('lineId', Id) id: string, @Body(new ZodPipe(UpdateDealLine)) body: UpdateDealLine) {
-    return this.lines.update(ctx, id, body);
-  }
-
-  @Delete('deal-lines/:lineId')
-  @HttpCode(204)
-  removeLine(@Tenant() ctx: TenantContext, @Param('lineId', Id) id: string) {
-    return this.lines.remove(ctx, id);
+  /** Saves a deal's products, currency, tax mode, discounts and installments together (CD-83). */
+  @Put('deals/:id/products')
+  saveProducts(@Tenant() ctx: TenantContext, @Param('id', Id) dealId: string, @Body(new ZodPipe(SaveDealProducts)) body: SaveDealProducts) {
+    return this.lines.save(ctx, dealId, body);
   }
 
   // ------------------------------------------------------------ stage to-dos

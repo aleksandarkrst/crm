@@ -4,7 +4,7 @@
  */
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { call, createTenant, firstFunnel, type Funnel, ok, type Session, signIn } from './helpers';
+import { call, createTenant, firstFunnel, type Funnel, ok, productLine, saveProducts, type Session, signIn } from './helpers';
 
 let alice: Session;
 let bob: Session;
@@ -26,7 +26,7 @@ beforeAll(async () => {
   a.deal = (
     await ok('POST', '/crm/deals', { ...as, body: { title: 'Alpha Deal', funnelId: funnelA.id, companyId: a.company, primaryContactId: a.contact, amount: 1000 } })
   ).id;
-  a.line = (await ok('POST', `/crm/deals/${a.deal}/lines`, { ...as, body: { productId: a.product, quantity: 2, unitPrice: 100 } })).id;
+  a.line = (await saveProducts(alice, tenantA, a.deal, [productLine(a.product, { quantity: 2, unitPrice: 100 })])).lines[0].id;
   const stage = funnelA.stages[0]!;
   a.playbookTask = (await ok('PUT', `/crm/deals/${a.deal}/tasks/playbook`, { ...as, body: { stageId: stage.id, checklistItemId: stage.checklistItems[0]!.id, done: true } })).id;
   a.extraTask = (await ok('POST', `/crm/deals/${a.deal}/tasks`, { ...as, body: { stageId: stage.id, label: 'Alpha private to-do' } })).id;
@@ -70,7 +70,7 @@ describe('through the API', () => {
       ['PATCH', `/crm/companies/${a.company}`, { name: 'Hijacked' }],
       ['PATCH', `/crm/contacts/${a.contact}`, { fullName: 'Hijacked' }],
       ['PATCH', `/crm/products/${a.product}`, { name: 'Hijacked' }],
-      ['PATCH', `/crm/deal-lines/${a.line}`, { quantity: 99 }],
+      ['PUT', `/crm/deals/${a.deal}/products`, { taxMode: 'exclusive', lines: [] }],
       ['PATCH', `/crm/deal-tasks/${a.playbookTask}`, { done: false }],
       ['PATCH', `/crm/deal-tasks/${a.extraTask}`, { label: 'Hijacked' }],
     ];
@@ -83,7 +83,6 @@ describe('through the API', () => {
   it("tenant B can't delete tenant A's rows", async () => {
     // Bob is the owner of B, so the role check passes and only RLS stands in the way.
     for (const path of [
-      `/crm/deal-lines/${a.line}`,
       `/crm/deal-tasks/${a.extraTask}`,
       `/crm/deals/${a.deal}`,
       `/crm/companies/${a.company}`,
@@ -103,8 +102,7 @@ describe('through the API', () => {
       ['PATCH', `/crm/deals/${own.id}`, { companyId: a.company }],
       ['POST', '/crm/contacts', { fullName: 'Bravo Person', companyId: a.company }],
       ['PUT', `/crm/deals/${own.id}/contacts/${a.contact}`, undefined],
-      ['POST', `/crm/deals/${own.id}/lines`, { productId: a.product, quantity: 1, unitPrice: 1 }],
-      ['POST', `/crm/deals/${a.deal}/lines`, { quantity: 1, unitPrice: 1 }],
+      ['PUT', `/crm/deals/${own.id}/products`, { taxMode: 'exclusive', lines: [productLine(a.product)] }],
       ['POST', `/crm/deals/${a.deal}/tasks`, { stageId: funnelB.stages[0]!.id, label: 'Sneaky' }],
       ['PUT', `/crm/deals/${a.deal}/tasks/playbook`, { stageId: funnelB.stages[0]!.id, checklistItemId: funnelB.stages[0]!.checklistItems[0]!.id }],
     ];

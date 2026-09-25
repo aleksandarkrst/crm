@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealLineInput, type HistoryEntity, type LostReason, type ProfileInput, type TaskInput } from '../lib/api';
+import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput } from '../lib/api';
 import { paths } from '../lib/paths';
 import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference } from './documents';
 import { connectLive, type LiveEvent } from './live';
@@ -8,17 +8,12 @@ import { loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask,
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
 import {
   champFor,
-  closeIsoOf,
   companyRecords,
   curOf,
-  defaultStart,
   customFieldsOf,
   initialsOf,
-  itemById,
-  itemCurrency,
   leadById,
   money,
-  netOf,
   num,
   personById,
   stageDone,
@@ -29,7 +24,28 @@ import {
   todayLabel,
   todoItemsFor,
 } from './selectors';
-import type { BonusRule, Champ, ChannelCode, CustomFieldDef, DealLine, Lead, LeadTask, LogEntry, NewContactDraft, NewProductDraft, Person, Profile, SegKey, Stage, State, TaskState, Workspace } from './types';
+import { dealTotals } from './dealMath';
+import type { BillingFrequency, BonusRule, Champ, ChannelCode, CustomFieldDef, DealDiscount, DealLine, Installment, Lead, LeadTask, LogEntry, NewContactDraft, Person, Profile, SegKey, Stage, State, TaskState, TaxMode, Workspace } from './types';
+
+/** What the product dialog edits (CD-83); numbers as typed. */
+export interface ProductDraft {
+  name: string;
+  description: string;
+  unit: string;
+  price: string;
+  qty: string;
+  vat: string;
+  frequency: BillingFrequency;
+  cycles: number | null;
+}
+/** What the deal's "Products" dialog saves at once (CD-83). */
+export interface DealProductsDraft {
+  currency: string;
+  taxMode: TaxMode;
+  lines: DealLine[];
+  discounts: DealDiscount[];
+  installments: Installment[];
+}
 
 type Updater = Partial<State> | ((s: State) => Partial<State>);
 
@@ -87,8 +103,6 @@ function customValueForApi(type: CustomFieldType, v: CustomValue | null): Custom
   }
   return v;
 }
-/** A lead's amount as a number (its value is kept formatted). */
-const valueNumOf = (l: Lead) => Number(String(l.value).replace(/[^0-9.-]/g, '')) || 0;
 /**
  * A 409 from an edit that someone else's change got to first (CD-20): the API's message ("Ana
  * changed this deal while you were editing. Your change to the title wasn't saved.") and the
@@ -486,7 +500,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         return;
       }
       const stage = stagesFor(cur(), lead.segment).find((st) => st.id === stageId);
-      mapLead(leadId, (l) => ({ ...l, stage: stageId, stall: 0 }));
+      mapLead(leadId, (l) => ({ ...l, stage: stageId, stall: 0, outcome: stage?.won ? 'won' : 'open', stageSince: new Date().toISOString() }));
       void save(() => crmApi.moveDeal(leadId, stageId), () => refreshLog(leadId), 'the stage move');
       if (stage && stage.doc === 'Proposal' && AUTO_GENERATE_DOCS) startGeneration(leadId);
       else if (stage) flash('Moved to ' + stage.name + ' · next activity: ' + stage.activity);
@@ -497,118 +511,55 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       void save(() => crmApi.logActivity(leadId, { channel: channelOf(entry.channel), title: entry.title, detail: entry.detail || null }), undefined, 'the timeline entry');
     };
 
-    // ------------------------------------------------------------ deal lines
-    /** A line as the API takes it (the UI keeps numbers as typed strings while editing). */
-    const lineInput = (l: DealLine): DealLineInput => ({
-      productId: l.itemId || null,
-      quantity: num(l.qty),
-      unitPrice: num(l.price),
-      vatRate: Math.min(100, num(l.vat)),
-      schedule: l.schedule,
-      startDate: l.start || null,
-      months: Math.min(120, Math.max(1, Math.round(num(l.months)) || 1)),
-      milestones: (l.milestones || []).map((m) => ({ label: m.label, pct: Math.min(100, num(m.pct)), ...(m.date ? { date: m.date } : {}) })),
-    });
-
+    // ------------------------------------------------------------ deal products (CD-83)
     /**
-     * Applies a change to a deal's lines and saves what changed: edited lines are saved after a
-     * pause (one write per line), removed lines are deleted. The backend recalculates the amount.
+     * Saves what the deal's "Products" dialog shows, all at once: currency, tax mode, lines,
+     * discounts and installments. New lines, discounts and installments have ids starting with
+     * "new-" and are sent without one. The API recalculates the deal value.
      */
-    const updateLines = (leadId: string, fn: (lines: DealLine[]) => DealLine[]) => {
-      const x = cur();
-      const prev = x.dealLines[leadId] || [];
-      const next = fn(prev.map((l) => ({ ...l })));
-      set((y) => ({
-        dealLines: { ...y.dealLines, [leadId]: next },
-        leads: y.leads.map((l) => (l.id === leadId ? { ...l, value: money(netOf(next), curOf(y, l)) } : l)),
-      }));
-      const before = new Map(prev.map((l) => [l.id, JSON.stringify(l)]));
-      for (const l of next)
-        if (before.get(l.id) !== JSON.stringify(l))
-          saveLater('line:' + l.id, async () => {
-            const line = (cur().dealLines[leadId] || []).find((y) => y.id === l.id);
-            if (line) await crmApi.updateDealLine(line.id, lineInput(line));
-          }, 'a product line');
-      for (const l of prev)
-        if (!next.some((y) => y.id === l.id)) {
-          dropSave('line:' + l.id);
-          void save(() => crmApi.deleteDealLine(l.id), undefined, 'removing a product line');
-        }
-    };
-
-    const patchLine = (leadId: string, lineId: string, key: keyof DealLine, v: string) => {
-      const lead = leadById(cur(), leadId);
-      const minIso = lead ? closeIsoOf(lead) : '';
-      if (key === 'start' && minIso && v && v < minIso) {
-        flash('Payments must fall after the closing date');
-        return;
+    const saveDealProducts = async (leadId: string, draft: DealProductsDraft): Promise<boolean> => {
+      const keep = (id: string) => (id.startsWith('new-') ? {} : { id });
+      const input: DealProductsInput = {
+        currency: draft.currency,
+        taxMode: draft.taxMode,
+        lines: draft.lines.map((l) => ({
+          ...keep(l.id),
+          productId: l.itemId,
+          description: l.description.trim() || null,
+          startDate: l.start || null,
+          quantity: num(l.qty),
+          unitPrice: num(l.price),
+          discountKind: l.discountKind,
+          discountValue: num(l.discount),
+          vatRate: Math.min(100, num(l.vat)),
+          billingFrequency: l.frequency,
+          billingCycles: l.frequency === 'one_time' ? null : l.cycles,
+        })),
+        discounts: draft.discounts.map((d) => ({ ...keep(d.id), label: d.label.trim(), kind: d.kind, value: num(d.value) })),
+        installments: draft.installments.map((x) => ({ ...keep(x.id), description: x.description.trim(), date: x.date || null, amount: num(x.amount) })),
+      };
+      inFlight.current++;
+      writeSeq.current++;
+      try {
+        const res = await crmApi.saveDealProducts(leadId, input);
+        const lines = res.lines.map(mapLine);
+        set((y) => ({
+          dealLines: { ...y.dealLines, [leadId]: lines },
+          leads: y.leads.map((l) => {
+            if (l.id !== leadId) return l;
+            const next = { ...l, currency: draft.currency, taxMode: draft.taxMode, discounts: draft.discounts, installments: draft.installments };
+            return { ...next, value: money(dealTotals(lines, next.taxMode, next.discounts).subtotal, curOf(y, next)) };
+          }),
+        }));
+      } catch (err) {
+        flash('Not saved: the deal products (' + errText(err) + ')', 7000);
+        return false;
+      } finally {
+        inFlight.current--;
+        notifyIfIdle();
       }
-      if (key === 'itemId' && lead) {
-        // CD-77: a product in another currency can't go on the deal (no exchange rates).
-        const it = cur().catalog.find((c) => c.id === v);
-        const dealCur = curOf(cur(), lead).currency;
-        if (it && itemCurrency(cur(), it) !== dealCur) {
-          flash(`${it.name} is priced in ${itemCurrency(cur(), it)}, but this deal is in ${dealCur}. Pick a product priced in ${dealCur}, or change the deal's currency first.`, 6000);
-          return;
-        }
-      }
-      updateLines(leadId, (ls) =>
-        ls.map((l) => {
-          if (l.id !== lineId) return l;
-          if (key === 'itemId') {
-            const it = itemById(cur(), v);
-            return { ...l, itemId: v, price: it.price, vat: it.vat };
-          }
-          return { ...l, [key]: v };
-        }),
-      );
-    };
-
-    const addDealLine = (lead: Lead) => {
-      if (!closeIsoOf(lead)) {
-        flash('Set the closing date first');
-        return;
-      }
-      if (!cur().catalog.length) {
-        flash('Add a product to the catalog first');
-        return;
-      }
-      // CD-77: lines are priced in the deal's currency, so only products in that currency fit.
-      const dealCur = curOf(cur(), lead).currency;
-      const it = cur().catalog.find((c) => itemCurrency(cur(), c) === dealCur);
-      if (!it) {
-        flash(`No product is priced in ${dealCur}. Add one to the catalog, or change the deal's currency.`, 6000);
-        return;
-      }
-      const position = (cur().dealLines[lead.id] || []).length;
-      void save(async () => {
-        const row = await crmApi.createDealLine(lead.id, {
-          productId: it.id,
-          position,
-          quantity: 1,
-          unitPrice: num(it.price),
-          vatRate: num(it.vat),
-          schedule: 'Full amount on one date',
-          startDate: defaultStart(lead),
-          months: 6,
-        });
-        set((y) => {
-          const next = [...(y.dealLines[lead.id] || []), mapLine(row)];
-          return { dealLines: { ...y.dealLines, [lead.id]: next }, leads: y.leads.map((l) => (l.id === lead.id ? { ...l, value: money(netOf(next), curOf(y, l)) } : l)) };
-        });
-      });
-    };
-
-    const patchMilestone = (leadId: string, lineId: string, idx: number, key: 'label' | 'pct' | 'date', v: string) => {
-      const lead = leadById(cur(), leadId);
-      const minIso = lead ? closeIsoOf(lead) : '';
-      if (key === 'date' && minIso && v && v < minIso) {
-        flash('Milestones must fall after the closing date');
-        return;
-      }
-      updateLines(leadId, (ls) =>
-        ls.map((l) => (l.id === lineId ? { ...l, milestones: (l.milestones || []).map((m, i) => (i === idx ? { ...m, [key]: v } : m)) } : l)),
-      );
+      void reload();
+      return true;
     };
 
     // ------------------------------------------------------------ people
@@ -1099,7 +1050,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     const deleteDeal = async (id: string) => {
       const lead = leadById(cur(), id);
       if (!lead) return;
-      cancelSaves(id, ...(cur().dealLines[id] || []).map((l) => l.id));
+      cancelSaves(id);
       await remove(() => crmApi.deleteDeal(id), paths.pipeline, (lead.title || lead.company) + ' deleted');
     };
     const deleteCompany = async (id: string) => {
@@ -1197,13 +1148,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         // Nothing is emailed and no follow-up task is created yet: say so instead of pretending.
         flash('Marked as sent for this session only · nothing was emailed and no task was created');
       },
-      updateLines,
-      patchLine,
-      addDealLine,
-      removeDealLine: (leadId: string, lineId: string) => updateLines(leadId, (ls) => ls.filter((l) => l.id !== lineId)),
-      addMilestone: (leadId: string, lineId: string) =>
-        updateLines(leadId, (ls) => ls.map((l) => (l.id === lineId ? { ...l, milestones: [...(l.milestones || []), { label: 'New milestone', pct: 0 }] } : l))),
-      patchMilestone,
+      saveDealProducts,
+      openDealProducts: (leadId: string) => set({ dealProductsId: leadId }),
       setChamp: (leadId: string, key: keyof Champ, v: number) => {
         set((y) => {
           const lead = leadById(y, leadId);
@@ -1424,54 +1370,32 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       },
 
       // ---------------------------------------------------------- product catalog
-      addProduct: async (draft: NewProductDraft): Promise<boolean> => {
+      /** Creates a product (id null) or saves one from the product dialog (CD-83). */
+      saveProduct: async (id: string | null, draft: ProductDraft): Promise<boolean> => {
+        const input: ProductInput = {
+          name: draft.name.trim(),
+          description: draft.description.trim() || null,
+          unit: draft.unit.trim() || null,
+          unitPrice: num(draft.price),
+          quantity: num(draft.qty) || 1,
+          vatRate: Math.min(100, num(draft.vat)),
+          billingFrequency: draft.frequency,
+          billingCycles: draft.frequency === 'one_time' ? null : draft.cycles,
+        };
         try {
-          const p = await crmApi.createProduct({
-            name: draft.name,
-            type: draft.type as 'Service' | 'Product',
-            billingKind: draft.kind as 'One-off' | 'Monthly' | 'Yearly' | 'Hourly',
-            unitPrice: num(draft.price),
-            vatRate: num(draft.vat),
-            ...(draft.currency ? { currency: draft.currency } : {}),
-          });
-          set((x) => ({ catalog: [...x.catalog, mapProduct(p)] }));
+          const p = mapProduct(id ? await crmApi.updateProduct(id, input) : await crmApi.createProduct({ ...input, name: input.name! }));
+          set((x) => ({ catalog: id ? x.catalog.map((c) => (c.id === id ? p : c)) : [...x.catalog, p] }));
           return true;
         } catch (err) {
           flash('Not saved: ' + errText(err));
           return false;
         }
       },
-      patchProduct: (id: string, key: 'name' | 'type' | 'kind' | 'price' | 'vat' | 'currency', v: string) => {
-        set((x) => ({ catalog: x.catalog.map((c) => (c.id === id ? { ...c, [key]: v } : c)) }));
-        // A product on deals in another currency can't switch (the API names the deal); the failed save puts it back.
-        if (key === 'currency') return void save(() => crmApi.updateProduct(id, { currency: v }), undefined, 'the product currency');
-        const field = ({ name: 'name', type: 'type', kind: 'billingKind', price: 'unitPrice', vat: 'vatRate' } as const)[key];
-        if (key === 'name' && !v.trim()) return;
-        saveLater(`product:${id}:${field}`, () => crmApi.updateProduct(id, { [field]: key === 'price' || key === 'vat' ? num(v) : v }), `the product ${key === 'kind' ? 'billing' : key === 'vat' ? 'VAT' : key}`);
-      },
       removeProduct: (id: string) => {
         set((x) => ({ catalog: x.catalog.filter((k) => k.id !== id) }));
         void save(() => crmApi.deleteProduct(id), undefined, 'removing the product');
       },
-
-      // ---------------------------------------------------------- deal currency (CD-77)
-      /**
-       * Changes a deal's currency. Its lines are priced in it and there are no exchange rates, so
-       * the change is refused while a line uses a product priced in another currency.
-       */
-      setDealCurrency: (leadId: string, currency: string) => {
-        const lead = leadById(cur(), leadId);
-        if (!lead || curOf(cur(), lead).currency === currency) return;
-        const clashing = (cur().dealLines[leadId] || []).map((l) => cur().catalog.find((c) => c.id === l.itemId)).filter((c) => !!c && itemCurrency(cur(), c) !== currency);
-        if (clashing.length) {
-          const names = [...new Set(clashing.map((c) => `${c!.name} (${itemCurrency(cur(), c)})`))].join(', ');
-          flash(`Can't change the currency to ${currency}: ${clashing.length === 1 ? '1 product line is' : clashing.length + ' product lines are'} priced in another currency (${names}). Remove those lines or replace them with products in ${currency} first.`, 8000);
-          return;
-        }
-        mapLead(leadId, (l) => ({ ...l, currency, value: money(valueNumOf(l), { currency, locale: curOf(cur()).locale }) }));
-        void save(() => crmApi.updateDeal(leadId, { currency }), reload, 'the deal currency');
-        flash('Deal currency changed to ' + currency);
-      },
+      openProduct: (id: string | null) => set({ productOpen: true, productEditId: id }),
 
       // ---------------------------------------------------------- custom fields (CD-15)
       /** Owners and admins define custom fields; everyone fills them in. */

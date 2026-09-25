@@ -5,7 +5,7 @@ import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { DATE_RANGES, dateRangeLabel, DEFAULT_FILTERS, SOURCES } from '../store/seed';
-import { billedShare, bonusOf, bonusRule, closeIsoOf, closeRangeOf, curOf, currencySymbol, funnelOptions, inCloseRange, linePayments, linesOf, moneyTotal, num, salesPeople, stageOf, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
+import { billedShare, bonusOf, bonusRule, closeIsoOf, closeRangeOf, curOf, currencySymbol, funnelOptions, inCloseRange, dealPayments, moneyTotal, num, salesPeople, stageOf, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
 import { conversionMetrics, daysLabel, MIN_MOVED_DEALS } from '../store/metrics';
 import { useStore } from '../store/store';
 import type { Lead, SegKey } from '../store/types';
@@ -80,15 +80,14 @@ export function Dashboard() {
 
   const today = new Date();
   const payments: { leadId: string; currency?: string; when: Date; amount: number }[] = [];
-  // Payments without a date (no start date, and no date of their own on a milestone) can't be
-  // placed, so they are left out and their lines counted below.
-  let undatedLines = 0;
-  for (const l of liveLeads)
-    for (const ln of linesOf(s, l)) {
-      const { payments: dated, undated } = linePayments(ln);
-      if (undated) undatedLines++;
-      for (const p of dated) payments.push({ leadId: l.id, currency: l.currency, ...p });
-    }
+  // Payments without a date (a product without a billing start date, an installment without a
+  // date) can't be placed, so they are left out and their deals counted below.
+  let undatedDeals = 0;
+  for (const l of liveLeads) {
+    const { payments: dated, undated } = dealPayments(s, l);
+    if (undated) undatedDeals++;
+    for (const p of dated) payments.push({ leadId: l.id, currency: l.currency, ...p });
+  }
   const timeFunnel = TIME_BUCKETS.map((b, i) => {
     const due = payments.filter((p) => {
       const diff = (p.when.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30.4);
@@ -193,7 +192,7 @@ export function Dashboard() {
             <div className="card-title" style={{ marginBottom: 4 }}>Funnel by payment due date</div>
             <div className="card-sub" style={{ marginBottom: 16 }}>
               Product and service payments falling due inside each horizon, incl. VAT
-              {undatedLines ? ` · ${plural(undatedLines, 'line')} without payment dates left out` : ''}
+              {undatedDeals ? ` · ${plural(undatedDeals, 'deal')} without billing dates left out` : ''}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
               {timeFunnel.map((b) => (

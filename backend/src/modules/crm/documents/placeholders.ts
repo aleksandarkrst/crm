@@ -8,6 +8,9 @@
  * `{{#lines}} {{line.product}} … {{line.total}} {{/lines}}`.
  */
 
+import type { BillingFrequency, DealDiscount, DiscountKind, TaxMode } from '../../../shared/database/schema';
+import { dealTotals, splitTax } from '../deals/deal-value';
+
 export interface PlaceholderDef {
   tag: string;
   label: string;
@@ -30,9 +33,10 @@ export const PLACEHOLDERS: readonly PlaceholderDef[] = [
   P('Contact', 'contact.phone', 'Contact phone', '+381 21 660 118'),
   P('Deal', 'deal.title', 'Deal title', 'ESG communications'),
   P('Deal', 'deal.headline', 'Proposal headline (the deal title when empty)', 'An ESG story investors can verify'),
-  P('Deal', 'deal.amount', 'Net amount, in the deal currency', '€78,000'),
-  P('Deal', 'deal.vat', 'VAT on the deal lines', '€15,600'),
-  P('Deal', 'deal.total', 'Total incl. VAT', '€93,600'),
+  P('Deal', 'deal.amount', 'Deal value without tax, in the deal currency', '€78,000'),
+  P('Deal', 'deal.vat', 'Tax on the deal', '€15,600'),
+  P('Deal', 'deal.total', 'Total with tax', '€93,600'),
+  P('Deal', 'deal.discount', 'Deal discount on one-time products', '€2,000'),
   P('Deal', 'deal.currency', 'Currency code', 'EUR'),
   P('Deal', 'deal.closing_date', 'Closing date', '31 October 2026'),
   P('Deal', 'deal.stage', 'Stage', 'Proposal'),
@@ -53,15 +57,17 @@ export const PLACEHOLDERS: readonly PlaceholderDef[] = [
 /** Fields inside `{{#lines}} … {{/lines}}`, one repetition per deal line. */
 export const LINE_PLACEHOLDERS: readonly PlaceholderDef[] = [
   P('Deal lines', 'line.product', 'Product or service', 'Communications strategy'),
+  P('Deal lines', 'line.description', 'Line description', 'Strategy, messaging and launch plan'),
   P('Deal lines', 'line.quantity', 'Quantity', '12'),
-  P('Deal lines', 'line.unit', 'Unit (h, mo, yr, or empty)', 'mo'),
+  P('Deal lines', 'line.unit', 'Unit of the product', 'hour'),
   P('Deal lines', 'line.unit_price', 'Unit price', '€2,400'),
-  P('Deal lines', 'line.vat_rate', 'VAT rate', '20%'),
-  P('Deal lines', 'line.net', 'Line net (quantity × price)', '€28,800'),
-  P('Deal lines', 'line.vat', 'Line VAT', '€5,760'),
-  P('Deal lines', 'line.total', 'Line total incl. VAT', '€34,560'),
-  P('Deal lines', 'line.schedule', 'Payment schedule', 'Equal monthly instalments'),
-  P('Deal lines', 'line.start_date', 'First payment', '1 November 2026'),
+  P('Deal lines', 'line.discount', 'Line discount', '10%'),
+  P('Deal lines', 'line.vat_rate', 'Tax rate', '20%'),
+  P('Deal lines', 'line.net', 'Line value without tax (all billing cycles)', '€28,800'),
+  P('Deal lines', 'line.vat', 'Line tax', '€5,760'),
+  P('Deal lines', 'line.total', 'Line total with tax', '€34,560'),
+  P('Deal lines', 'line.schedule', 'Billing', 'Monthly, 12 cycles'),
+  P('Deal lines', 'line.start_date', 'Billing start date', '1 November 2026'),
 ];
 
 /** The loop over deal lines. */
@@ -109,17 +115,23 @@ export interface DocumentSource {
     constraint: string | null;
     decisionMaker: string | null;
     discoveryDate: string | null;
+    taxMode: TaxMode;
+    discounts: Pick<DealDiscount, 'kind' | 'value'>[];
   };
   company: { name: string; industry: string | null; hq: string | null; domain: string | null } | null;
   contact: { fullName: string; jobTitle: string | null; email: string | null; phone: string | null } | null;
   owner: { name: string | null; email: string | null; jobTitle: string | null; phone: string | null } | null;
   lines: {
     product: string | null;
-    billingKind: string | null;
+    unit: string | null;
+    description: string | null;
     quantity: string | number;
     unitPrice: string | number;
     vatRate: string | number;
-    schedule: string;
+    discountKind: DiscountKind;
+    discountValue: string | number;
+    billingFrequency: BillingFrequency;
+    billingCycles: number | null;
     startDate: string | null;
   }[];
   now: Date;
@@ -170,7 +182,13 @@ export function formatToday(now: Date, timezone: string): string {
   }
 }
 
-const UNITS: Record<string, string> = { Hourly: 'h', Monthly: 'mo', Yearly: 'yr' };
+const FREQUENCY: Record<BillingFrequency, string> = { one_time: 'One time', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly', annually: 'Annually' };
+
+/** "One time", "Monthly, 4 cycles" or "Monthly, until canceled". */
+export function billingText(frequency: BillingFrequency, cycles: number | null): string {
+  if (frequency === 'one_time') return FREQUENCY.one_time;
+  return `${FREQUENCY[frequency]}, ${cycles ? `${cycles} ${cycles === 1 ? 'cycle' : 'cycles'}` : 'until canceled'}`;
+}
 const text = (v: string | null | undefined) => (v ?? '').trim();
 const quantity = (v: string | number) => String(round2(num(v)));
 const percent = (v: string | number) => `${round2(num(v))}%`;
@@ -183,24 +201,36 @@ export function buildTemplateData(src: DocumentSource): TemplateData {
   const cur = src.deal.currency || src.workspace.currency;
   const money = (n: number) => formatMoney(n, cur, src.workspace.currency);
 
-  const lines = src.lines.map((ln) => {
-    const net = num(ln.quantity) * num(ln.unitPrice);
-    const vat = (net * num(ln.vatRate)) / 100;
+  const inputs = src.lines.map((ln) => ({
+    quantity: num(ln.quantity),
+    unitPrice: num(ln.unitPrice),
+    vatRate: num(ln.vatRate),
+    discountKind: ln.discountKind,
+    discountValue: num(ln.discountValue),
+    billingFrequency: ln.billingFrequency,
+    billingCycles: ln.billingCycles,
+  }));
+  const totals = dealTotals(inputs, src.deal.taxMode, src.deal.discounts);
+  const lines = src.lines.map((ln, i) => {
+    const { tcv } = totals.lines[i]!;
+    const { net } = splitTax(tcv, num(ln.vatRate), src.deal.taxMode === 'none' ? 'none' : 'inclusive');
     return {
       'line.product': text(ln.product),
+      'line.description': text(ln.description),
       'line.quantity': quantity(ln.quantity),
-      'line.unit': UNITS[ln.billingKind ?? ''] ?? '',
+      'line.unit': text(ln.unit),
       'line.unit_price': money(num(ln.unitPrice)),
+      'line.discount': num(ln.discountValue) > 0 ? (ln.discountKind === 'percent' ? percent(ln.discountValue) : money(num(ln.discountValue))) : '',
       'line.vat_rate': percent(ln.vatRate),
       'line.net': money(net),
-      'line.vat': money(vat),
-      'line.total': money(net + vat),
-      'line.schedule': ln.schedule,
+      'line.vat': money(tcv - net),
+      'line.total': money(tcv),
+      'line.schedule': billingText(ln.billingFrequency, ln.billingCycles),
       'line.start_date': formatDate(ln.startDate),
     };
   });
   const amount = num(src.deal.amount);
-  const vat = src.lines.reduce((sum, ln) => sum + (num(ln.quantity) * num(ln.unitPrice) * num(ln.vatRate)) / 100, 0);
+  const vat = totals.tax;
   const contactName = text(src.contact?.fullName);
 
   const values: Record<string, string> = {
@@ -218,6 +248,7 @@ export function buildTemplateData(src: DocumentSource): TemplateData {
     'deal.amount': money(amount),
     'deal.vat': money(vat),
     'deal.total': money(amount + vat),
+    'deal.discount': totals.discount > 0 ? money(totals.discount) : '',
     'deal.currency': cur,
     'deal.closing_date': formatDate(src.deal.closeDate),
     'deal.stage': text(src.deal.stage),

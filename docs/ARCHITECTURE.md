@@ -599,12 +599,12 @@ the store is the one place that talks to the backend.
 
   After a delete the UI opens the list screen and reloads the workspace.
 - Activity history is loaded per deal when a deal, company or contact screen opens (`ensureLog`).
-- Deal lines: the backend recalculates the deal amount on every line change. A product that is
-  on a deal can't be deleted from the catalog.
+- Deal products: the backend recalculates the deal amount when they are saved (CD-83). A product
+  that is on a deal can't be deleted from the catalog.
 - No made-up dates: a deal without a closing date has none (it only matches "Any closing date" on
   Overview), and a payment without a date is left out of "Funnel by payment due date" (the card
-  says how many lines were left out). Payments are dated from the line's start date, but a
-  milestone with its own date counts even when its line has no start date.
+  says how many deals had payments left out). Payments are dated by the installments, or from each
+  line's billing start date (CD-83).
 - Stage to-dos: a playbook to-do gets a row on first touch, keyed by deal + stage + checklist item
   id (CD-32). A stage's checklist is `funnel_stages.checklist_items` (`[{ id, label }]`); renaming
   an item in the funnel builder keeps its id, so every deal keeps its tick, note and outcome, and
@@ -644,7 +644,7 @@ the store is the one place that talks to the backend.
     `en-US` for USD, `en-GB` for GBP, …; `en-US` otherwise), so a euro workspace still reads
     "€14,000" and a CAD one writes USD as "US$". Totals are summed per currency and listed side by
     side, workspace currency first ("$14,000 + €2,500"), never added together (`moneyTotal`). There
-    are no exchange rates. Products have a currency of their own (CD-77, see below).
+    are no exchange rates. Products have no currency (CD-83, see below).
   - **Time zone**: "today" (Today, overdue, a new task's default due date, the closing-date
     filters) and the dates of timeline entries and completed to-dos use the workspace time zone,
     not the browser's (`todayIso(tz)`, `momentLabel`). Due dates and closing dates are calendar
@@ -739,22 +739,57 @@ only; a manager scoped to their team is a follow-up (it needs teams first).
 - Members can still read deals and their owners (as before), so a determined member could apply a
   rate they know; what is protected is the rules and the bonus figures.
 
-## Product and deal currency (CD-77)
+## Products, deal products and currency (CD-83)
 
-- `products.currency` (ISO 4217). A new product takes the workspace currency unless the request
-  names one; existing products got their workspace's currency in `drizzle/0014`. The Products
-  screen has a Currency column and the New product dialog a Currency field.
-- **A line is in its deal's currency.** There are no exchange rates, so adding a product priced in
-  another currency to a deal, or switching a line to one, is refused (409: "Design USD is priced in
-  USD, but this deal is in EUR. Pick a product priced in EUR, or change the deal's currency
-  first."). The deal's line picker shows other currencies but greys them out, and "Add line" picks
-  the first product in the deal's currency (or says there is none).
-- **Changing a deal's currency** (`PATCH /api/crm/deals/:id { currency }`; the deal Summary has a
-  Currency field) is refused while a line uses a product priced in another currency than the new
-  one (409, naming the products); lines without a product don't block it. Without lines the amount
-  keeps its number and is read in the new currency. The UI checks the same rule first and says why.
-- A product's currency can't change while it is on deals in another currency (409, naming the deal).
-- The CSV import and export already carried the deal currency; nothing else lists products.
+Replaces the CD-77 model (products with a currency of their own, payment schedules and
+milestones on lines); `drizzle/0022_products_deal_billing.sql` converts existing data.
+
+- **Currencies**: the workspace has one main currency, picked when the owner creates the workspace
+  (`POST /api/tenants { name, currency }`) and used for reporting. Each deal has its own
+  (`deals.currency`). **Products have no currency**: a deal reads their prices in its currency, so
+  any product fits any deal and changing a deal's currency keeps the numbers (no exchange rates).
+- **Products** (`products`): name, description, unit ("hour", "seat"), unit price, default
+  quantity (the product's price is unit price × quantity), tax rate, billing frequency
+  (`one_time`, `weekly`, `monthly`, `quarterly`, `annually`) and, when recurring, billing cycles
+  (a number, or null for "renew until canceled"; one-time products have none, a check constraint
+  keeps that). The Products screen lists them; a row opens the product dialog, which also adds
+  new ones. A product on a deal can't be deleted.
+- **Deal products** are saved as a whole by the deal's products dialog:
+  `PUT /api/crm/deals/:id/products { currency?, taxMode, lines, discounts, installments }`
+  (`deal-lines.service.ts`). Lines keep their ids (sent back unchanged are updated, new ones are
+  inserted, missing ones deleted), so the change history shows only what changed. A line has the
+  product, description, billing start date, quantity, unit price, a discount (percent or amount),
+  tax rate, billing frequency and cycles.
+- **Tax mode** (`deals.tax_mode`): the prices on the deal exclude tax, include it, or have none.
+- **Deal discounts** (`deals.discounts`, jsonb `[{ id, label, kind, value }]`) apply to the
+  one-time products only, spread over them proportionally.
+- **Installments** (`deals.installments`, jsonb `[{ id, description, date, amount }]`) split the
+  one-time products into dated payments. A deal with installments can't have recurring products
+  (400, both in the API and in the dialog). The dialog warns when they don't add up to the one-time
+  products with tax.
+- **Money** (`deals/deal-value.ts` in the API, the same rules in `store/dealMath.ts`): a line bills
+  quantity × unit price less its discount per cycle; one-time lines once, recurring ones for their
+  cycles, "until canceled" counts one year of cycles. The **deal value** (`deals.amount`) is the
+  contract value without tax, recalculated on every save. MRR, ARR and ACV (the first year) come
+  from the same numbers.
+- **Payments** (Overview's "Funnel by payment due date", "When fully billed" bonuses, the proposal
+  preview): a deal's installments when it has them, otherwise each line's billings from its
+  billing start date (`billingDates`). Payments without a date are left out and counted.
+- **Documents**: `{{line.schedule}}` is the billing ("Monthly, 4 cycles"), `{{line.description}}`,
+  `{{line.discount}}` and `{{deal.discount}}` are new, and `{{deal.total}}` is labelled
+  "Total with tax".
+
+## Deal page (CD-83)
+
+- The header shows the funnel and stage ("SMB → Proposal"), the deal name (editable), the owner,
+  **Won** (moves the deal to the funnel's won stage) and **Lost**, a menu with **Delete deal**
+  (owners and admins), and the stage bar: stages as chevrons, the current one with its days in
+  the stage; clicking a stage moves the deal there. The screen title is "Deal", not the name.
+- On the side: **Summary** (icons instead of labels, the deal value first with a "+ Products" or
+  "N products" link and ACV, ARR and MRR), **Company**, **Products** (each product with its
+  quantity, amount and billing, the installments when there are any, and a pencil to open the
+  products dialog), **Discovery** and **Fit score**. The activity composer no longer has a
+  Products tab.
 
 ## First-run onboarding (CD-68)
 

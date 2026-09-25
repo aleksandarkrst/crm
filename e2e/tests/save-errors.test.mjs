@@ -28,9 +28,9 @@ describe('failed saves', () => {
   });
 
   step('a failed title save keeps the HQ typed right after it', async () => {
-    await page.waitForSelector('header input.ghost');
+    await page.waitForSelector('[data-testid=deal-title]');
     // The title is saved (and fails) while the HQ edit is still waiting out its typing pause.
-    await setValue(page, 'header input.ghost', 'Renamed but not saved');
+    await setValue(page, '[data-testid=deal-title]', 'Renamed but not saved');
     await sleep(500);
     assert.ok(await setByLabel(page, 'HQ', 'Novi Sad'), 'HQ field found');
 
@@ -42,13 +42,12 @@ describe('failed saves', () => {
     assert.ok(saved, 'HQ saved');
     await sleep(1_000); // let the reload after the failure land
     const hq = await page.evaluate(() => {
-      const span = [...document.querySelectorAll('span')].find((el) => el.textContent.trim() === 'HQ');
-      return span?.parentElement?.querySelector('input')?.value;
+      return document.querySelector('.icon-row[data-label="HQ"] input')?.value;
     });
     assert.equal(hq, 'Novi Sad');
 
     // The failed title is back to what the database has, so the screen doesn't claim it was saved.
-    const title = await page.$eval('header input.ghost', (el) => el.value);
+    const title = await page.$eval('[data-testid=deal-title]', (el) => el.value);
     assert.equal(title, (await api(page, '/crm/deals/' + dealId)).title);
     assert.notEqual(title, 'Renamed but not saved');
 
@@ -60,10 +59,10 @@ describe('failed saves', () => {
 
   step('edits made after the failure are saved normally', async () => {
     failDealPatches = false;
-    await setValue(page, 'header input.ghost', 'Renamed for real');
+    await setValue(page, '[data-testid=deal-title]', 'Renamed for real');
     const saved = await eventually(async () => (await api(page, '/crm/deals/' + dealId)).title === 'Renamed for real');
     assert.ok(saved, 'title saved once the API accepts it');
-    assert.equal(await page.$eval('header input.ghost', (el) => el.value), 'Renamed for real');
+    assert.equal(await page.$eval('[data-testid=deal-title]', (el) => el.value), 'Renamed for real');
   });
 
   it('throws no uncaught errors in the pages', () => {

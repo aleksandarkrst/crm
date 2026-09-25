@@ -1,4 +1,4 @@
-// Deal lines and stage to-dos: edits in the UI reach the API and come back after a reload.
+// Deal products and stage to-dos: edits in the UI reach the API and come back after a reload.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
@@ -9,15 +9,15 @@ import {
   createDealInUi,
   eventually,
   newUserWithWorkspace,
-  setByLabel,
   setClosingDate,
+  setValue,
   steps,
   text,
   useBrowser,
   waitForToastToClear,
 } from '../lib/harness.mjs';
 
-describe('deal lines and stage to-dos', () => {
+describe('deal products and stage to-dos', () => {
   const browser = useBrowser();
   const step = steps(browser, 'deal-work');
   let page;
@@ -41,27 +41,39 @@ describe('deal lines and stage to-dos', () => {
     await waitForToastToClear(page);
   });
 
-  step('adds a deal line and saves quantity and payment schedule', async () => {
-    // A closing date enables "Add line".
+  step('adds a product in the products dialog with quantity and monthly billing for 4 cycles', async () => {
     await setClosingDate(page, '2026-12-15');
     await eventually(async () => (await api(page, '/crm/deals/' + dealId)).closeDate === '2026-12-15');
-    await clickButton(page, 'Products');
-    await clickButton(page, 'Add line');
-    await page.waitForFunction(() => document.body.innerText.includes('1 line'));
-    assert.ok(await setByLabel(page, 'Qty', '3'), 'Qty field found');
-    assert.ok(await setByLabel(page, 'Payment schedule', 'Custom milestones', 'select'), 'Payment schedule field found');
+    await click(page, '[data-testid=open-products]');
+    await click(page, '[data-testid=add-line]');
+    await page.waitForSelector('[data-testid=deal-line]');
+    await setValue(page, '.modal input[aria-label=Quantity]', '3');
+    await click(page, '[data-testid=line-billing]');
+    await page.waitForSelector('::-p-text(Edit billing frequency)');
+    await setValue(page, '.modal .hint-box select', 'monthly');
+    await click(page, '.modal .hint-box input[type=radio]:not(:checked)'); // "Fixed number of billing cycles"
+    await setValue(page, '.modal input[aria-label="Number of billing cycles"]', '4');
+    await page.waitForFunction(() => document.querySelector('[data-testid=line-billing]')?.textContent.includes('Monthly (4 cycles)'));
+    // 3 × 5,000 a month for 4 months, without tax; with 20% tax 72,000.
+    await page.waitForFunction(() => document.querySelector('[data-testid=summary-subtotal]')?.textContent.includes('60,000.00'));
+    assert.match(await page.$eval('[data-testid=summary-total]', (el) => el.textContent), /72,000\.00/);
+    await click(page, '.modal-actions .btn-primary');
+    await page.waitForFunction(() => !document.querySelector('.modal'));
 
     const line = await eventually(async () => {
       const lines = await api(page, '/crm/deal-lines');
-      return lines.length === 1 && Number(lines[0].quantity) === 3 && lines[0].schedule === 'Custom milestones' && lines[0];
+      return lines.length === 1 && Number(lines[0].quantity) === 3 && lines[0];
     });
-    assert.ok(line, 'line saved with quantity 3 and custom milestones');
+    assert.ok(line, 'line saved with quantity 3');
     assert.equal(line.dealId, dealId);
+    assert.equal(line.billingFrequency, 'monthly');
+    assert.equal(line.billingCycles, 4);
+    assert.equal(line.startDate, '2026-12-16'); // the day after the closing date
   });
 
   step('the backend recalculates the deal amount', async () => {
-    const amount = await eventually(async () => Number((await api(page, '/crm/deals/' + dealId)).amount) === 15000);
-    assert.ok(amount, 'amount is 3 × 5000');
+    const amount = await eventually(async () => Number((await api(page, '/crm/deals/' + dealId)).amount) === 60000);
+    assert.ok(amount, 'amount is 3 × 5000 × 4 cycles');
   });
 
   step('ticks, annotates and adds to-dos', async () => {
@@ -91,8 +103,9 @@ describe('deal lines and stage to-dos', () => {
     assert.match(await text(page), /Done/);
     const extra = await page.evaluate(() => [...document.querySelectorAll('input[placeholder="Name this to-do"]')].some((i) => i.value === 'Send NDA'));
     assert.ok(extra, 'off-playbook to-do shown');
-    await clickButton(page, 'Products');
-    await page.waitForFunction(() => document.body.innerText.includes('1 line · €15,000 net'));
+    await page.waitForFunction(() => document.querySelector('[data-testid=deal-products]')?.innerText.includes('3x Website'));
+    assert.match(await page.$eval('[data-testid=deal-products]', (el) => el.innerText), /Monthly \(4 cycles\)/);
+    assert.match(await page.$eval('[data-testid=deal-value]', (el) => el.textContent), /60,000\.00/);
   });
 
   step('deletes the off-playbook to-do', async () => {
@@ -104,7 +117,8 @@ describe('deal lines and stage to-dos', () => {
   step("won't delete a product that is on a deal", async () => {
     await page.goto(BASE_URL + '/products', { waitUntil: 'networkidle0' });
     await waitForToastToClear(page);
-    await click(page, 'button[title="Remove"], button[title="Remove line"], .table-row button');
+    await click(page, '[data-testid=product-row]');
+    await clickButton(page, 'Delete');
     const toast = await page.waitForSelector('.toast');
     const message = await toast.evaluate((el) => el.textContent);
     assert.match(message, /is on 1 deal/);

@@ -7,7 +7,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildDocx, docxText, MAX_TEMPLATE_BYTES, starterTemplate } from '../../src/modules/crm/documents/docx';
-import { addMember, call, createTenant, firstFunnel, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, firstFunnel, ok, productLine, saveProducts, type Session, signIn } from './helpers';
 
 let owner: Session;
 let admin: Session;
@@ -176,7 +176,8 @@ describe('generating a document', () => {
       discoveryDate: '2026-09-05',
     });
     dealId = deal.id;
-    await ok('POST', `/crm/deals/${dealId}/lines`, { token: owner.token, tenant, body: { quantity: 2, unitPrice: 1500.5, vatRate: 20 } });
+    const product = await ok<{ id: string }>('POST', '/crm/products', { token: owner.token, tenant, body: { name: 'Brand strategy', unitPrice: 1500.5 } });
+    await saveProducts(owner, tenant, dealId, [productLine(product.id, { quantity: 2, unitPrice: 1500.5, vatRate: 20 })]);
   });
 
   it('a member generates it; the worker fills in the deal, in the deal currency', async () => {

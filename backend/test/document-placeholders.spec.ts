@@ -17,13 +17,15 @@ const source = (over: Partial<DocumentSource> = {}): DocumentSource => ({
     constraint: null,
     decisionMaker: '  ',
     discoveryDate: null,
+    taxMode: 'exclusive',
+    discounts: [],
   },
   company: { name: 'Acme d.o.o.', industry: null, hq: 'Belgrade', domain: null },
   contact: { fullName: 'Ivana Radić', jobTitle: 'CMO', email: 'ivana@acme.test', phone: null },
   owner: { name: 'Mila Jovanović', email: 'mila@studio.test', jobTitle: null, phone: null },
   lines: [
-    { product: 'Strategy', billingKind: 'Hourly', quantity: '2.00', unitPrice: '1500.50', vatRate: '20.00', schedule: 'Full amount on one date', startDate: '2026-11-01' },
-    { product: null, billingKind: null, quantity: '1', unitPrice: '0', vatRate: '0', schedule: 'Custom milestones', startDate: null },
+    { product: 'Strategy', unit: 'hour', description: 'Two workshops', quantity: '2.00', unitPrice: '1500.50', vatRate: '20.00', discountKind: 'percent', discountValue: '0', billingFrequency: 'one_time', billingCycles: null, startDate: '2026-11-01' },
+    { product: null, unit: null, description: null, quantity: '1', unitPrice: '0', vatRate: '0', discountKind: 'percent', discountValue: '0', billingFrequency: 'monthly', billingCycles: null, startDate: null },
   ],
   now: new Date('2026-09-24T23:30:00Z'),
   ...over,
@@ -53,6 +55,35 @@ describe('formatting', () => {
 });
 
 describe('buildTemplateData', () => {
+  it('fills lines and totals from the CD-83 billing model: discounts, cycles and tax mode', () => {
+    const data = buildTemplateData(
+      source({
+        deal: { ...source().deal, amount: '1680.00', taxMode: 'exclusive', discounts: [{ kind: 'amount', value: 100 }] },
+        lines: [
+          { product: 'Setup', unit: 'day', description: null, quantity: '1', unitPrice: '1000', vatRate: '20', discountKind: 'percent', discountValue: '10', billingFrequency: 'one_time', billingCycles: null, startDate: '2026-11-01' },
+          { product: 'Support', unit: 'month', description: null, quantity: '1', unitPrice: '200', vatRate: '20', discountKind: 'percent', discountValue: '0', billingFrequency: 'monthly', billingCycles: 4, startDate: '2026-11-01' },
+        ],
+      }),
+    );
+    // Setup: 1,000 less 10% = 900, less the €100 deal discount = 800 (+ 20% tax = 960).
+    expect(data.lines[0]).toMatchObject({ 'line.discount': '10%', 'line.net': '€800', 'line.vat': '€160', 'line.total': '€960', 'line.schedule': 'One time' });
+    // Support: 200 a month for 4 cycles = 800 (+ tax 160).
+    expect(data.lines[1]).toMatchObject({ 'line.net': '€800', 'line.vat': '€160', 'line.total': '€960', 'line.schedule': 'Monthly, 4 cycles' });
+    expect(data['deal.vat']).toBe('€320');
+    expect(data['deal.discount']).toBe('€100');
+  });
+
+  it('reads prices as tax inclusive when the deal says so', () => {
+    const data = buildTemplateData(
+      source({
+        deal: { ...source().deal, amount: '1000.00', taxMode: 'inclusive' },
+        lines: [{ product: 'Setup', unit: null, description: null, quantity: '1', unitPrice: '1200', vatRate: '20', discountKind: 'percent', discountValue: '0', billingFrequency: 'one_time', billingCycles: null, startDate: null }],
+      }),
+    );
+    expect(data.lines[0]).toMatchObject({ 'line.net': '€1,000', 'line.vat': '€200', 'line.total': '€1,200' });
+    expect(data['deal.vat']).toBe('€200');
+  });
+
   it('fills every field of the reference with a string', () => {
     const data = buildTemplateData(source());
     for (const p of PLACEHOLDERS) expect(typeof data[p.tag], p.tag).toBe('string');
@@ -71,8 +102,8 @@ describe('buildTemplateData', () => {
 
   it('builds one row per deal line', () => {
     const [first, second] = buildTemplateData(source()).lines;
-    expect(first).toMatchObject({ 'line.product': 'Strategy', 'line.quantity': '2', 'line.unit': 'h', 'line.unit_price': '€1,500.50', 'line.vat_rate': '20%', 'line.net': '€3,001', 'line.vat': '€600.20', 'line.total': '€3,601.20', 'line.start_date': '1 November 2026' });
-    expect(second).toMatchObject({ 'line.product': '', 'line.unit': '', 'line.total': '€0', 'line.start_date': '' });
+    expect(first).toMatchObject({ 'line.product': 'Strategy', 'line.description': 'Two workshops', 'line.quantity': '2', 'line.unit': 'hour', 'line.discount': '', 'line.schedule': 'One time', 'line.unit_price': '€1,500.50', 'line.vat_rate': '20%', 'line.net': '€3,001', 'line.vat': '€600.20', 'line.total': '€3,601.20', 'line.start_date': '1 November 2026' });
+    expect(second).toMatchObject({ 'line.product': '', 'line.unit': '', 'line.total': '€0', 'line.start_date': '', 'line.schedule': 'Monthly, until canceled' });
   });
 
   it('uses the deal currency, not the workspace one', () => {
@@ -104,7 +135,7 @@ describe('describeTags', () => {
   it('marks fields the CRM fills and ones it does not', () => {
     expect(describeTags(['deal.title', 'total', 'lines', 'typo.field', 'deal.title'])).toEqual([
       { tag: 'deal.title', known: true, label: 'Deal title' },
-      { tag: 'total', known: true, label: 'Total incl. VAT' },
+      { tag: 'total', known: true, label: 'Total with tax' },
       { tag: 'lines', known: true, label: 'Deal lines' },
       { tag: 'typo.field', known: false, label: null },
     ]);

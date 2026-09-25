@@ -6,6 +6,7 @@ import { DatabaseService, type Tx } from '../../../shared/database/database.serv
 import { mapDbError } from '../../../shared/database/errors';
 import {
   activities,
+  type BillingFrequency,
   auditLogs,
   companies,
   contacts,
@@ -125,10 +126,10 @@ export class OnboardingService {
         const timezone = workspace?.timezone ?? 'UTC';
         const marks: { kind: SampleKind; recordId: string }[] = [];
 
-        const productIds = new Map<string, { id: string; unitPrice: string; vatRate: string }>();
+        const productIds = new Map<string, { id: string; unitPrice: string; vatRate: string; billingFrequency: BillingFrequency; billingCycles: number | null }>();
         for (const { key, ...p } of SAMPLE_PRODUCTS) {
           const [row] = await tx.insert(products).values({ ...p, tenantId: ctx.tenantId }).returning({ id: products.id });
-          productIds.set(key, { id: row!.id, unitPrice: p.unitPrice, vatRate: p.vatRate });
+          productIds.set(key, { id: row!.id, unitPrice: p.unitPrice, vatRate: p.vatRate, billingFrequency: p.billingFrequency, billingCycles: p.billingCycles });
           marks.push({ kind: 'product', recordId: row!.id });
         }
         const companyIds = new Map<string, string>();
@@ -227,7 +228,7 @@ export class OnboardingService {
       timezone: string;
       companyIds: Map<string, string>;
       contactIds: Map<string, string>;
-      productIds: Map<string, { id: string; unitPrice: string; vatRate: string }>;
+      productIds: Map<string, { id: string; unitPrice: string; vatRate: string; billingFrequency: BillingFrequency; billingCycles: number | null }>;
     },
   ): Promise<string> {
     const now = Date.now();
@@ -278,10 +279,8 @@ export class OnboardingService {
         unitPrice: p.unitPrice,
         vatRate: p.vatRate,
         startDate: dateIn(refs.timezone, Math.max(d.closeInDays, 0)),
-        milestones: [
-          { label: 'On signature', pct: 40 },
-          { label: 'On delivery', pct: 60 },
-        ],
+        billingFrequency: p.billingFrequency,
+        billingCycles: p.billingCycles,
       });
     }
     for (const other of d.others ?? []) await tx.insert(dealContacts).values({ tenantId: ctx.tenantId, dealId, contactId: refs.contactIds.get(other)! });

@@ -3,6 +3,7 @@ import { ApiError, type ApiInvitePreview, type ApiMe, crmApi, getTenantId, setTe
 import { authMode, devLogin, getAccessToken, signIn, signOut } from '../lib/auth';
 import { loadWorkspace, type WorkspaceData } from '../store/remote';
 import { type Session, StoreProvider } from '../store/store';
+import { CURRENCIES } from '../store/seed';
 
 type Phase =
   | { kind: 'loading' }
@@ -243,6 +244,7 @@ function SignIn({ onDone, invited }: { onDone: () => void; invited: boolean }) {
 
 function CreateWorkspace({ me, onDone }: { me: ApiMe; onDone: (tenantId: string) => void }) {
   const [name, setName] = useState('');
+  const [currency, setCurrency] = useState('EUR');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const submit = async (e: FormEvent) => {
@@ -250,7 +252,7 @@ function CreateWorkspace({ me, onDone }: { me: ApiMe; onDone: (tenantId: string)
     setBusy(true);
     setError('');
     try {
-      const tenant = await crmApi.createTenant(name.trim());
+      const tenant = await crmApi.createTenant(name.trim(), currency);
       onDone(tenant.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -263,6 +265,17 @@ function CreateWorkspace({ me, onDone }: { me: ApiMe; onDone: (tenantId: string)
         <label className="form-label">
           Company or team name
           <input className="form-input" required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Cadence Studio" />
+        </label>
+        <label className="form-label">
+          Main currency
+          <select className="form-input" aria-label="Main currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+            {CURRENCIES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <span style={{ fontSize: 12, fontWeight: 400, letterSpacing: 0, textTransform: 'none', color: 'var(--text-2)' }}>Reports add up deals in this currency. Each deal can have its own.</span>
         </label>
         {error && <div style={{ fontSize: 12.5, color: '#B42318' }}>{error}</div>}
         <button type="submit" className="btn btn-primary" disabled={busy || !name.trim()}>

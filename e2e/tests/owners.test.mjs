@@ -91,8 +91,7 @@ describe('owners by id', () => {
     const bravo = deals.find((d) => d.deal.title === 'Bravo Owned');
     await page.goto(BASE_URL + '/deals/' + bravo.deal.id, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => {
-      const label = [...document.querySelectorAll('.field-label')].find((el) => el.textContent === 'Owner');
-      const select = label?.parentElement.querySelector('select');
+      const select = document.querySelector('select[aria-label=Owner]');
       return select && select.options[select.selectedIndex]?.textContent === 'Sam Seller (former member)';
     });
   });

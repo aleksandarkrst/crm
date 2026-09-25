@@ -4,7 +4,6 @@ import { initialsOf, script, stageOf, todayIso, todayLabel } from '../../store/s
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
 import { DealDocuments } from './DealDocuments';
-import { DealProducts } from './DealProducts';
 
 const TABS = [
   { k: 'email', label: 'Email', ch: 'EM' },
@@ -12,7 +11,6 @@ const TABS = [
   { k: 'linkedin', label: 'LinkedIn', ch: 'LI' },
   { k: 'meeting', label: 'Meeting', ch: 'MT' },
   { k: 'note', label: 'Note', ch: 'NT' },
-  { k: 'products', label: 'Products', ch: 'PRD' },
   { k: 'docs', label: 'Documents', ch: 'DOC' },
 ] as const;
 type TabKey = (typeof TABS)[number]['k'];
@@ -169,11 +167,10 @@ export function Composer({ lead }: { lead: Lead }) {
 
         {tab === 'note' && <textarea className="box-input" rows={5} placeholder="Write a note about this deal. Only your team sees it." value={body} onChange={setDraft('body')} style={{ background: 'var(--note)' }} />}
 
-        {tab === 'products' && <DealProducts lead={lead} />}
 
         {tab === 'docs' && <DealDocuments lead={lead} />}
 
-        {tab !== 'docs' && tab !== 'products' && (
+        {tab !== 'docs' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <button type="button" className="btn btn-primary" onClick={send}>
               {SEND_LABEL[tab]}

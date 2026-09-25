@@ -88,7 +88,7 @@ async function loadSource(tx: Tx, tenantId: string, dealId: string): Promise<Doc
   const [contact] = deal.primaryContactId ? await tx.select().from(contacts).where(eq(contacts.id, deal.primaryContactId)) : [];
   const [owner] = deal.ownerUserId ? await tx.select().from(users).where(eq(users.id, deal.ownerUserId)) : [];
   const lines = await tx
-    .select({ line: dealLines, product: products.name, billingKind: products.billingKind })
+    .select({ line: dealLines, product: products.name, unit: products.unit })
     .from(dealLines)
     .leftJoin(products, and(eq(products.tenantId, dealLines.tenantId), eq(products.id, dealLines.productId)))
     .where(eq(dealLines.dealId, dealId))
@@ -109,17 +109,23 @@ async function loadSource(tx: Tx, tenantId: string, dealId: string): Promise<Doc
       constraint: deal.constraint,
       decisionMaker: deal.decisionMaker,
       discoveryDate: deal.discoveryDate,
+      taxMode: deal.taxMode,
+      discounts: deal.discounts,
     },
     company: company ? { name: company.name, industry: company.industry, hq: company.hq, domain: company.domain } : null,
     contact: contact ? { fullName: contact.fullName, jobTitle: contact.jobTitle, email: contact.email, phone: contact.phone } : null,
     owner: owner ? { name: owner.displayName, email: owner.email, jobTitle: owner.jobTitle, phone: owner.phone } : null,
-    lines: lines.map(({ line, product, billingKind }) => ({
+    lines: lines.map(({ line, product, unit }) => ({
       product,
-      billingKind,
+      unit,
+      description: line.description,
       quantity: line.quantity,
       unitPrice: line.unitPrice,
       vatRate: line.vatRate,
-      schedule: line.schedule,
+      discountKind: line.discountKind,
+      discountValue: line.discountValue,
+      billingFrequency: line.billingFrequency,
+      billingCycles: line.billingCycles,
       startDate: line.startDate,
     })),
     now: new Date(),

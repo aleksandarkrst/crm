@@ -6,7 +6,17 @@ import { IdentityService } from './identity.service';
 import { TokenService } from './token.service';
 
 const DevLoginBody = z.object({ email: z.email(), name: z.string().trim().min(1).max(100) });
-const CreateTenantBody = z.object({ name: z.string().trim().min(1).max(100) });
+const CURRENCIES = new Set(Intl.supportedValuesOf('currency'));
+/** A new workspace: its name, and the main currency (ISO 4217) its reports use (CD-83). */
+const CreateTenantBody = z.object({
+  name: z.string().trim().min(1).max(100),
+  currency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine((c) => /^[A-Z]{3}$/.test(c) && CURRENCIES.has(c), 'Must be an ISO 4217 currency code, e.g. EUR')
+    .optional(),
+});
 
 @Controller()
 export class IdentityController {
@@ -30,6 +40,6 @@ export class IdentityController {
 
   @Post('tenants')
   async createTenant(@CurrentUser() user: AuthUser, @Body(new ZodPipe(CreateTenantBody)) body: z.infer<typeof CreateTenantBody>) {
-    return this.identity.createTenant(user.id, body.name);
+    return this.identity.createTenant(user.id, body.name, body.currency);
   }
 }

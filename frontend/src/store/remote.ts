@@ -61,18 +61,30 @@ const dateLabel = (iso: string, tz?: string) => momentLabel(iso, tz);
 export const mapLine = (l: ApiDealLine): DealLine => ({
   id: l.id,
   itemId: l.productId ?? '',
+  description: l.description ?? '',
   qty: Number(l.quantity),
   price: Number(l.unitPrice),
+  discountKind: l.discountKind,
+  discount: Number(l.discountValue),
   vat: Number(l.vatRate),
-  schedule: l.schedule,
+  frequency: l.billingFrequency,
+  cycles: l.billingFrequency === 'one_time' ? null : l.billingCycles,
   start: l.startDate ?? '',
-  months: l.months,
-  milestones: l.milestones,
 });
 
 export const mapCustomField = ({ position: _position, ...f }: ApiCustomField): CustomFieldDef => f;
 
-export const mapProduct = (p: ApiProduct): CatalogItem => ({ id: p.id, name: p.name, type: p.type, kind: p.billingKind, price: Number(p.unitPrice), vat: Number(p.vatRate), currency: p.currency });
+export const mapProduct = (p: ApiProduct): CatalogItem => ({
+  id: p.id,
+  name: p.name,
+  description: p.description ?? '',
+  unit: p.unit ?? '',
+  price: Number(p.unitPrice),
+  qty: Number(p.quantity),
+  vat: Number(p.vatRate),
+  frequency: p.billingFrequency,
+  cycles: p.billingFrequency === 'one_time' ? null : p.billingCycles,
+});
 
 /** Bonus rules by user id (CD-17); numbers as the inputs show them. */
 export const mapBonusRules = (b: ApiBonusRules): Record<string, BonusRule> =>
@@ -215,6 +227,10 @@ export async function loadWorkspace(only?: ReadonlySet<Part>): Promise<Workspace
       stage: deal.stageId,
       value: money(Number(deal.amount), { currency: deal.currency, locale }),
       currency: deal.currency,
+      taxMode: deal.taxMode,
+      discounts: deal.discounts ?? [],
+      installments: (deal.installments ?? []).map((i) => ({ ...i, date: i.date ?? '' })),
+      stageSince: deal.stageEnteredAt,
       score: deal.fitScore,
       stall: Math.max(0, Math.floor((now - lastTouch) / DAY)),
       industry: co?.industry ?? '—',

@@ -14,6 +14,9 @@ const FIELD_LABELS: Record<string, string> = {
   source: 'Source',
   amount: 'Value',
   currency: 'Currency',
+  taxMode: 'Amounts are',
+  discounts: 'Discounts',
+  installments: 'Installments',
   closeDate: 'Closing date',
   fitScore: 'Fit score',
   headline: 'Headline',
@@ -39,12 +42,16 @@ const LINE_LABELS: Record<string, string> = {
   productId: 'product',
   quantity: 'quantity',
   unitPrice: 'unit price',
-  vatRate: 'VAT',
-  schedule: 'payment schedule',
-  startDate: 'start date',
-  months: 'months',
-  milestones: 'milestones',
+  vatRate: 'tax',
+  description: 'description',
+  discountKind: 'discount type',
+  discountValue: 'discount',
+  billingFrequency: 'billing frequency',
+  billingCycles: 'billing cycles',
+  startDate: 'billing start date',
 };
+const FREQUENCY_TEXT: Record<string, string> = { one_time: 'One time', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly', annually: 'Annually' };
+const TAX_TEXT: Record<string, string> = { exclusive: 'Tax exclusive', inclusive: 'Tax inclusive', none: 'No tax' };
 const DATE_FIELDS = new Set(['closeDate', 'discoveryDate', 'startDate']);
 const NOUN: Record<HistoryEntity, string> = { deal: 'deal', company: 'company', contact: 'contact' };
 const PAGE = 30;
@@ -106,7 +113,11 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
     if (field === 'amount' || field === 'unitPrice') return money(Number(v), cur);
     if (field === 'vatRate') return `${Number(v)}%`;
     if (DATE_FIELDS.has(field) && typeof v === 'string') return dateText(v);
-    if (field === 'milestones' && Array.isArray(v)) return `${v.length} milestone${v.length === 1 ? '' : 's'}`;
+    if (field === 'billingFrequency' && typeof v === 'string') return FREQUENCY_TEXT[v] ?? v;
+    if (field === 'taxMode' && typeof v === 'string') return TAX_TEXT[v] ?? v;
+    if (field === 'discountKind') return v === 'percent' ? 'percent' : 'amount';
+    if (field === 'discounts' && Array.isArray(v)) return `${v.length} discount${v.length === 1 ? '' : 's'}`;
+    if (field === 'installments' && Array.isArray(v)) return `${v.length} installment${v.length === 1 ? '' : 's'}`;
     if (typeof v === 'string') return `“${clip(v)}”`;
     return String(v);
   };
