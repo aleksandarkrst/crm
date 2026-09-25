@@ -10,7 +10,7 @@ backend/    NestJS API + background worker (same image), Drizzle ORM, pg-boss jo
 e2e/        browser end-to-end tests (Puppeteer + node:test)
 infra/      Postgres init (roles), backup container, server bootstrap
 scripts/    deploy.sh — run on the server by CI
-docs/       ARCHITECTURE.md, DEPLOYMENT.md
+docs/       ARCHITECTURE.md, DEPLOYMENT.md, WORKFLOW.md (how work goes from issue to production)
 ```
 
 ## Run it locally
