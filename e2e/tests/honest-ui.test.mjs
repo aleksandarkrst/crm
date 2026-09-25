@@ -44,10 +44,10 @@ describe('honest UI', () => {
   let datedId;
   let undatedId;
 
-  step('signs in and shows the signed-in user in the sidebar', async () => {
+  step('signs in and shows the signed-in user in the header', async () => {
     page = await browser.person('olivia');
     await newUserWithWorkspace(page, { label: 'olivia', name: 'Olivia Honest', workspace: 'Honest Studio' });
-    const avatar = await page.waitForSelector('[data-testid=sidebar-avatar]');
+    const avatar = await page.waitForSelector('[data-testid=account-menu]');
     assert.equal((await avatar.evaluate((el) => el.textContent)).trim(), 'OH');
     assert.ok(!(await text(page)).includes('MJ'), 'no sample initials');
   });

@@ -27,10 +27,8 @@ interface TodayTask {
  */
 export function Today() {
   const { s, set, openLead, toggleLeadTask } = useStore();
-  const [query, setQuery] = useState('');
   const [owner, setOwner] = useState('Salesperson');
 
-  const q = query.toLowerCase().trim();
   const today = todayIso(s.workspace.timezone);
   const doneToday = todayLabel(s.workspace.timezone);
   const funnelTasks = s.leads
@@ -72,8 +70,7 @@ export function Today() {
         },
       ];
     });
-  const tasks = [...handTasks, ...funnelTasks]
-    .filter((t) => !q || t.company.toLowerCase().includes(q) || t.title.toLowerCase().includes(q));
+  const tasks = [...handTasks, ...funnelTasks];
   const groups = [
     { label: 'Overdue', fg: '#B42318', tasks: tasks.filter((t) => t.bucket === 0) },
     { label: 'Today', fg: '#101828', tasks: tasks.filter((t) => t.bucket === 1) },
@@ -83,14 +80,11 @@ export function Today() {
   return (
     <Screen title="Today">
       <FilterBar
-        search={{ value: query, onChange: setQuery, placeholder: 'Search tasks' }}
         chips={[{ value: owner, options: ['Salesperson', ...salesPeople(s)], onChange: setOwner }]}
         dirty={owner !== 'Salesperson'}
         onClear={() => {
           setOwner('Salesperson');
-          setQuery('');
         }}
-        action={{ label: 'New task', onClick: () => set({ taskOpen: true, taskEditId: null }) }}
       />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {s.leads.length === 0 && (

@@ -1,16 +1,18 @@
 import { useEffect } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import { CustomFieldRows } from '../components/CustomFields';
-import { DangerButton, FieldRow, GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
-import { ChangeHistory } from '../components/ChangeHistory';
+import { IconRow } from '../components/icons';
 import { Screen } from '../components/Layout';
+import { DealsSection, FocusTasks, RecordHeader, RecordHistory, Section } from '../components/RecordParts';
+import { GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
 import { paths } from '../lib/paths';
-import { BUYER_ROLES, CHANNEL_LABELS } from '../store/seed';
-import { allPeople, companyOfPerson, curOf, initialsOf, leadById, memberName, personById, timelineFor } from '../store/selectors';
+import { BUYER_ROLES } from '../store/seed';
+import { allPeople, companyOfPerson, companyRecords, contactsForLead, curOf, initialsOf, leadById, personById, timelineFor } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Person } from '../store/types';
 import { docState, docStateClass } from './lead/docs';
 
+/** A contact (CD-80): header like a deal's, how to reach them, their company, deals, tasks and history. */
 export function Contact() {
   const store = useStore();
   const { s, set } = store;
@@ -19,14 +21,17 @@ export function Contact() {
   // A contact is addressed by its person id or its backend contact id; unknown ids go back to the list.
   const p = personById(s, id) || allPeople(s).find((x) => x.contactId === id);
   const c = p ? leadById(s, p.leadId) : undefined;
+  const deals = p ? s.leads.filter((l) => l.id === p.leadId || contactsForLead(s, l.id).some((x) => (p.contactId ? x.contactId === p.contactId : x.id === p.id))) : [];
+  const dealIds = deals.map((l) => l.id).join(',');
   const leadId = c?.id;
   const { ensureLog, ensureDocs } = store;
   useEffect(() => {
-    if (leadId) ensureLog([leadId]);
+    if (dealIds) ensureLog(dealIds.split(','));
     if (leadId) ensureDocs(leadId);
-  }, [leadId, ensureLog, ensureDocs]);
+  }, [dealIds, leadId, ensureLog, ensureDocs]);
   if (!p) return <Navigate to={paths.contacts} replace />;
   const company = companyOfPerson(s, p);
+  const companyRec = companyRecords(s).find((r) => r.id === (p.companyId ?? c?.companyId));
 
   // Tap to email or call (CD-70); "—" stands for a missing value.
   const mailto = /^[^\s@]+@[^\s@]+$/.test(p.email.trim()) ? `mailto:${p.email.trim()}` : '';
@@ -35,6 +40,8 @@ export function Contact() {
   const q = picker.search.toLowerCase().trim();
   const companyOptions = s.leads.filter((l) => l.id !== p.leadId).filter((l) => !q || l.company.toLowerCase().includes(q));
   const docs = (leadId && s.dealDocs[leadId]) || [];
+  const activities = deals.flatMap((l) => timelineFor(s, l.id)).slice(0, 30);
+  const newDeal = () => set({ newLeadOpen: true, newLeadCompanyId: companyRec?.id ?? null, newLeadContactId: p.contactId ?? null });
 
   const onDelete = () => {
     const primaryOf = p.contactId ? s.leads.filter((l) => l.contactId === p.contactId) : [];
@@ -45,23 +52,45 @@ export function Contact() {
   };
 
   return (
-    <Screen title={p.name || 'Contact'} onTitleChange={(v) => store.patchPerson(p.id, { name: v })} crumb={{ label: 'Contacts', to: paths.contacts }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
-        <div style={{ flex: '1 1 420px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <div className="card card-pad">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-              <div className="avatar" style={{ width: 46, height: 46, fontSize: 15, fontWeight: 600 }}>
-                {p.initials || initialsOf(p.name)}
-              </div>
-              <input className="ghost" value={p.name} onChange={setField('name')} style={{ flex: '1 1 200px', minWidth: 0, fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em', borderRadius: 8, padding: '5px 8px', marginLeft: -8, width: 'auto' }} />
-              {store.canDelete && p.contactId && <DangerButton onClick={onDelete}>Delete contact</DangerButton>}
-            </div>
+    <Screen title="Contact" parent={{ label: 'Contacts', to: paths.contacts }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <RecordHeader
+          kind="contact"
+          initials={p.initials || initialsOf(p.name)}
+          name={p.name}
+          onName={(v) => store.patchPerson(p.id, { name: v })}
+          ownerId={p.ownerId}
+          ownerName={p.ownerName}
+          onOwner={p.contactId ? (ownerId) => store.patchPerson(p.id, { ownerId }) : undefined}
+          onNewDeal={newDeal}
+          onDelete={store.canDelete && p.contactId ? onDelete : undefined}
+          deleteLabel="Delete contact"
+        />
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--divider)' }}>
-              <FieldRow label="Role">
-                <GhostInput value={p.role} onChange={setField('role')} />
-              </FieldRow>
-              <FieldRow label="Company">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
+          <div className="lead-side" style={{ flex: '1 1 400px', maxWidth: 540, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+            <Section title="Summary" testId="contact-summary">
+              <IconRow icon="mail" label="Email">
+                <span className="contact-field">
+                  <GhostInput aria-label="Email" value={p.email} onChange={setField('email')} />
+                  {mailto && (
+                    <a className="contact-action" href={mailto} aria-label={`Email ${p.name}`}>
+                      Email
+                    </a>
+                  )}
+                </span>
+              </IconRow>
+              <IconRow icon="phone" label="Phone">
+                <span className="contact-field">
+                  <GhostInput aria-label="Phone" value={p.phone} onChange={setField('phone')} />
+                  {tel && (
+                    <a className="contact-action" href={tel} aria-label={`Call ${p.name}`}>
+                      Call
+                    </a>
+                  )}
+                </span>
+              </IconRow>
+              <IconRow icon="company" label="Company">
                 <Picker
                   picker={picker}
                   items={companyOptions.map((l) => (
@@ -80,86 +109,65 @@ export function Contact() {
                 >
                   <span>{company}</span>
                 </Picker>
-              </FieldRow>
-              <FieldRow label="Role in the decision">
-                <GhostSelect value={p.buyerRole || 'Influencer'} onChange={setField('buyerRole')} options={BUYER_ROLES} />
-              </FieldRow>
-              <FieldRow label="Email">
-                <span className="contact-field">
-                  <GhostInput value={p.email} onChange={setField('email')} />
-                  {mailto && (
-                    <a className="contact-action" href={mailto} aria-label={`Email ${p.name}`}>
-                      Email
-                    </a>
-                  )}
-                </span>
-              </FieldRow>
-              <FieldRow label="Phone">
-                <span className="contact-field">
-                  <GhostInput value={p.phone} onChange={setField('phone')} />
-                  {tel && (
-                    <a className="contact-action" href={tel} aria-label={`Call ${p.name}`}>
-                      Call
-                    </a>
-                  )}
-                </span>
-              </FieldRow>
-              <FieldRow label="Notes">
-                <textarea className="ghost" rows={2} value={p.notes ?? ''} onChange={setField('notes')} placeholder="How they influence the deal" style={{ resize: 'vertical', lineHeight: 1.5 }} />
-              </FieldRow>
+              </IconRow>
+            </Section>
+
+            <Section title="Details" testId="contact-details">
+              <IconRow icon="industry" label="Role">
+                <GhostInput aria-label="Role" placeholder="Job title" value={p.role} onChange={setField('role')} />
+              </IconRow>
+              <IconRow icon="team" label="Role in the decision">
+                <GhostSelect chevron aria-label="Role in the decision" value={p.buyerRole || 'Influencer'} onChange={setField('buyerRole')} options={BUYER_ROLES} />
+              </IconRow>
+              <IconRow icon="note" label="Notes">
+                <textarea className="ghost" aria-label="Notes" rows={2} value={p.notes ?? ''} onChange={setField('notes')} placeholder="How they influence the deal" style={{ resize: 'vertical', lineHeight: 1.5, flex: 1 }} />
+              </IconRow>
+              <IconRow icon="calendar" label="Last touch">
+                <span className="field-value">{!c ? '—' : c.stall === 0 ? 'Last touch today' : c.stall === 1 ? 'Last touch 1 day ago' : `Last touch ${c.stall} days ago`}</span>
+              </IconRow>
               <CustomFieldRows entity="contact" recordId={p.contactId} />
-              <FieldRow label="Owner">
-                <span className="field-value">{memberName(s, p.ownerId, p.ownerName)}</span>
-              </FieldRow>
-              <FieldRow label="Last touch">
-                <span className="field-value">{!c ? '—' : c.stall === 0 ? 'today' : c.stall === 1 ? '1 day ago' : c.stall + ' days ago'}</span>
-              </FieldRow>
-            </div>
+            </Section>
+
+            {companyRec && (
+              <Section title="Company" testId="contact-company">
+                <Link to={paths.company(companyRec.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 600 }}>
+                  <span className="avatar" style={{ width: 30, height: 30, borderRadius: 8, fontSize: 11 }}>
+                    {initialsOf(companyRec.name)}
+                  </span>
+                  {companyRec.name}
+                </Link>
+                <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 14px', fontSize: 13, marginTop: 8 }}>
+                  <span style={{ color: 'var(--text-2)' }}>Industry</span>
+                  <span>{companyRec.industry || '—'}</span>
+                  <span style={{ color: 'var(--text-2)' }}>HQ</span>
+                  <span>{companyRec.hq || '—'}</span>
+                  <span style={{ color: 'var(--text-2)' }}>Team size</span>
+                  <span>{companyRec.size || '—'}</span>
+                </div>
+              </Section>
+            )}
+
+            <DealsSection leads={deals} onAdd={newDeal} />
+
+            <Section title="Documents">
+              {docs.length === 0 && <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>Nothing generated yet. Documents generated for {company} will appear here.</span>}
+              {docs.map((d) => (
+                <button key={d.id} type="button" disabled={d.status !== 'ready'} title={d.status === 'ready' ? 'Download .docx' : undefined} onClick={() => void store.downloadDoc(d)} style={{ textAlign: 'left', cursor: d.status === 'ready' ? 'pointer' : 'default', border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 9, padding: '12px 13px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</span>
+                    <span className={'badge ' + docStateClass(docState(d))}>{docState(d)}</span>
+                  </div>
+                  <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                    {d.templateName} · {d.createdByName || 'someone who left'}
+                  </span>
+                </button>
+              ))}
+            </Section>
           </div>
 
-          <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 15, fontWeight: 600 }}>Activity with this contact</span>
-              <button type="button" className="btn-outline" onClick={() => set({ taskOpen: true, taskLeadId: c?.id ?? '' })}>
-                Add task
-              </button>
-            </div>
-            {(c ? timelineFor(s, c.id) : []).map((e, i) => (
-              <div key={i} style={{ display: 'flex', gap: 12, paddingTop: 13, borderTop: '1px solid var(--divider)', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: 11.5, color: 'var(--muted)', minWidth: 48, paddingTop: 2 }}>{e.date}</span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flex: 1 }}>
-                  <span style={{ fontSize: 13.5, fontWeight: 600 }}>{e.title}</span>
-                  <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>{e.detail}</span>
-                </div>
-                <span className="badge badge-neutral">{CHANNEL_LABELS[e.channel] || e.channel}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Who changed which field of the contact (CD-69). */}
-          {p.contactId && (
-            <div className="card card-pad">
-              <span style={{ fontSize: 15, fontWeight: 600 }}>Changes</span>
-              <ChangeHistory entity="contact" id={p.contactId} cur={curOf(s)} rev={JSON.stringify(p)} />
-            </div>
-          )}
-        </div>
-
-        <div style={{ flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <span className="caps-muted">Documents</span>
-            {docs.length === 0 && <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>Nothing generated yet. Documents generated for {company} will appear here.</span>}
-            {docs.map((d) => (
-              <button key={d.id} type="button" disabled={d.status !== 'ready'} title={d.status === 'ready' ? 'Download .docx' : undefined} onClick={() => void store.downloadDoc(d)} style={{ textAlign: 'left', cursor: d.status === 'ready' ? 'pointer' : 'default', border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 9, padding: '12px 13px', display: 'flex', flexDirection: 'column', gap: 5 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</span>
-                  <span className={'badge ' + docStateClass(docState(d))}>{docState(d)}</span>
-                </div>
-                <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                  {d.templateName} · {d.createdByName || 'someone who left'}
-                </span>
-              </button>
-            ))}
+          <div className="lead-main" style={{ flex: '999 1 480px', display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+            <FocusTasks leadIds={deals.map((l) => l.id)} />
+            <RecordHistory entries={activities} entity="contact" id={p.contactId} cur={curOf(s)} rev={JSON.stringify(p)} />
           </div>
         </div>
       </div>

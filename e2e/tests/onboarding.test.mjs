@@ -81,7 +81,7 @@ describe('first-run onboarding', () => {
     await clickButton(page, 'Hide');
     await page.waitForFunction(() => !document.querySelector('[data-testid=getting-started]'));
     await page.reload({ waitUntil: 'networkidle0' });
-    await page.waitForSelector('button::-p-text(New deal)');
+    await page.waitForSelector('[data-testid=new-menu]');
     assert.equal(await page.$('[data-testid=getting-started]'), null);
     await page.goto(BASE_URL + '/settings/workspace', { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=sample-data-card]');
@@ -97,7 +97,7 @@ describe('first-run onboarding', () => {
     await member.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
     await signIn(member, email('onboard-member'), 'Mo Member');
     await clickButton(member, 'Accept and join');
-    await member.waitForSelector('button::-p-text(New deal)');
+    await member.waitForSelector('[data-testid=new-menu]');
     await member.goto(BASE_URL + '/companies', { waitUntil: 'networkidle0' });
     await member.waitForSelector('[data-testid=empty-state]');
     assert.equal(await member.$('[data-testid=getting-started]'), null);

@@ -383,6 +383,11 @@ export interface State {
   sent: boolean;
   newLeadOpen: boolean;
   newLeadType: SegKey;
+  /** Company and contact the New deal dialog starts with (from a company or contact page, CD-80). */
+  newLeadCompanyId: string | null;
+  newLeadContactId: string | null;
+  /** The command palette (Ctrl/⌘ K, CD-80). */
+  paletteOpen: boolean;
   taskOpen: boolean;
   /** Deal the "New task" dialog opens on. */
   taskLeadId: string;

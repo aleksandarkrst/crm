@@ -60,7 +60,7 @@ describe('custom fields', () => {
     await member.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
     await signIn(member, email('cf-member'), 'Mia Member');
     await clickButton(member, 'Accept and join');
-    await member.waitForSelector('button::-p-text(New deal)');
+    await member.waitForSelector('[data-testid=new-menu]');
     await member.goto(`${BASE_URL}/settings/fields`, { waitUntil: 'networkidle0' });
     await member.waitForFunction(() => document.body.innerText.includes('Only owners and admins can add or change custom fields.'));
     assert.equal(await member.$('button::-p-text(New field)'), null, 'no New field button for members');

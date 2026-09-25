@@ -11,18 +11,15 @@ import { useStore } from '../store/store';
 export function Pipeline() {
   const store = useStore();
   const { s, set } = store;
-  const [query, setQuery] = useState('');
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
 
   const seg = s.segment;
   const stages = s.funnels[seg].stages;
   const f = s.filters;
-  const q = query.toLowerCase().trim();
   // Lost deals are hidden from the board unless the "lost" chip says otherwise (CD-60).
   const inView = s.leads
     .filter((l) => l.segment === seg)
-    .filter((l) => !q || l.company.toLowerCase().includes(q) || String(l.contact).toLowerCase().includes(q))
     .filter((l) => f.owner === 'Salesperson' || l.ownerId === f.owner)
     .filter((l) => f.stalled === 'Status' || (f.stalled === 'Stalled only' ? l.stall >= 3 : l.stall < 3))
     .filter((l) => !f.industry || f.industry === 'Industry' || l.industry === f.industry)
@@ -38,7 +35,6 @@ export function Pipeline() {
   return (
     <Screen title="Pipeline">
       <FilterBar
-        search={{ value: query, onChange: setQuery, placeholder: 'Search deals' }}
         chips={[
           {
             keepFirst: true,
@@ -55,7 +51,6 @@ export function Pipeline() {
         onClear={() => set((x) => ({ filters: { ...x.filters, ...DEFAULT_FILTERS } }))}
         meta={`${segLeads.length} ${segLeads.length === 1 ? 'lead' : 'leads'} · ${pipelineValue} open${lostHidden ? ` · ${lostHidden} lost hidden` : ''}`}
         extra={<DataActions type="deals" count={segLeads.length} exportCsv={() => dealsCsv(s, segLeads)} />}
-        action={{ label: 'New deal', onClick: () => set({ newLeadOpen: true }) }}
       />
 
       {s.leads.length === 0 && (

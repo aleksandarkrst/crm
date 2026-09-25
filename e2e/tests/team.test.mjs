@@ -71,7 +71,7 @@ describe('team and invitations', () => {
     const body = await text(bob);
     assert.ok(body.includes('Join Shared Co') && body.includes('Olivia Owner invited'), 'names workspace and inviter');
     await clickButton(bob, 'Accept and join');
-    await bob.waitForSelector('button::-p-text(New deal)');
+    await bob.waitForSelector('[data-testid=new-menu]');
   });
 
   step("the invitee lands in the shared workspace, not one of their own", async () => {

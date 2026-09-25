@@ -43,9 +43,9 @@ function NewDealModal() {
   const labels = companyLabels(records);
   const companies = records.map((c) => ({ value: c.id, label: labels.get(c.id) ?? c.name })).sort((a, b) => a.label.localeCompare(b.label));
   // The selected company's id, or NEW_CO.
-  const [company, setCompany] = useState(companies[0]?.value || NEW_CO);
+  const [company, setCompany] = useState((s.newLeadCompanyId && companies.some((c) => c.value === s.newLeadCompanyId) ? s.newLeadCompanyId : companies[0]?.value) || NEW_CO);
   const [companyName, setCompanyName] = useState('');
-  const [contactPick, setContactPick] = useState<string | null>(null);
+  const [contactPick, setContactPick] = useState<string | null>(() => allPeople(s).find((p) => p.contactId && p.contactId === s.newLeadContactId)?.name ?? null);
   const [contactName, setContactName] = useState('');
   const type = s.funnels[s.newLeadType] ? s.newLeadType : Object.keys(s.funnels)[0]!;
 
@@ -113,7 +113,7 @@ function NewDealModal() {
         Assigns the {funnel.stages.length}-stage funnel. First task: {funnel.stages[0]?.activity}.
       </div>
       <div className="modal-actions">
-        <button type="button" className="btn btn-secondary" onClick={() => set({ newLeadOpen: false })}>
+        <button type="button" className="btn btn-secondary" onClick={() => set({ newLeadOpen: false, newLeadCompanyId: null, newLeadContactId: null })}>
           Cancel
         </button>
         <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void create()}>

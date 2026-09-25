@@ -62,11 +62,11 @@ describe('phones and tablets', () => {
       await page.waitForFunction((p) => location.pathname.startsWith(p), {}, path);
       assert.equal(await page.$('[data-testid=more-sheet]'), null, `sheet closes after ${label}`);
     }
-    // The header's search and "New" menu stay on screen.
+    // The header's search, "+" menu, notifications and account menu stay on screen.
     await page.goto(BASE_URL + '/contacts', { waitUntil: 'networkidle0' });
     await page.waitForSelector('.screen-header .new-menu-btn');
-    const header = await page.evaluate(() => [...document.querySelectorAll('.search-box, .new-menu-btn')].map((el) => el.getBoundingClientRect().right <= window.innerWidth));
-    assert.deepEqual(header, [true, true]);
+    const header = await page.evaluate(() => ['.search-trigger', '.new-menu-btn', '[data-testid=notifications]', '[data-testid=account-menu]'].map((sel) => document.querySelector(sel).getBoundingClientRect().right <= window.innerWidth));
+    assert.deepEqual(header, [true, true, true, true]);
   });
 
   step("a deal's to-do can be ticked on a phone", async () => {
