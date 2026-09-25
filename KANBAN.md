@@ -52,7 +52,7 @@ Deals end as won or lost, the funnel can be shaped freely, and Overview measures
 - CD-24 Smaller frontend bundle
 - CD-75 Reliable browser tests (dev proxy fix)
 
-## 4 · Ready for a team (next)
+## 4 · Ready for a team (done)
 
 Several people working in one workspace.
 

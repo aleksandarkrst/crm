@@ -59,6 +59,7 @@ export class SettingsService {
         startPage: users.startPage,
         defaultFunnelId: memberships.defaultFunnelId,
         dailyDigest: memberships.dailyDigest,
+        notifyDealAssigned: memberships.notifyDealAssigned,
       })
       .from(users)
       .innerJoin(memberships, and(eq(memberships.userId, users.id), eq(memberships.tenantId, ctx.tenantId)))
@@ -67,9 +68,12 @@ export class SettingsService {
     return row;
   }
 
-  /** Updates the caller's own profile; `defaultFunnelId` and `dailyDigest` apply to this workspace only. */
+  /**
+   * Updates the caller's own profile; `defaultFunnelId` and the notification settings
+   * (`dailyDigest`, `notifyDealAssigned`, CD-16) apply to this workspace only.
+   */
   async updateProfile(ctx: TenantContext, user: AuthUser, input: UpdateProfile) {
-    const { defaultFunnelId, dailyDigest, ...own } = input;
+    const { defaultFunnelId, dailyDigest, notifyDealAssigned, ...own } = input;
     await this.database.withTenant(ctx.tenantId, async (tx) => {
       if (defaultFunnelId) {
         // RLS is on, so a funnel of another workspace is simply not found.
@@ -82,10 +86,10 @@ export class SettingsService {
           .set({ ...own, ...(own.displayName !== undefined ? { displayNameCustom: true } : {}) })
           .where(eq(users.id, ctx.userId));
       }
-      if (defaultFunnelId !== undefined || dailyDigest !== undefined) {
+      if (defaultFunnelId !== undefined || dailyDigest !== undefined || notifyDealAssigned !== undefined) {
         await tx
           .update(memberships)
-          .set({ defaultFunnelId, dailyDigest })
+          .set({ defaultFunnelId, dailyDigest, notifyDealAssigned })
           .where(and(eq(memberships.tenantId, ctx.tenantId), eq(memberships.userId, ctx.userId)));
       }
     });

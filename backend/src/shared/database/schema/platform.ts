@@ -53,10 +53,12 @@ export const memberships = pgTable(
     role: text('role', { enum: MEMBERSHIP_ROLES }).notNull().default('member'),
     // Profile settings that belong to one workspace: its funnels, and a digest of its pipeline.
     // No foreign key: funnels are RLS-protected CRM rows; ProfileService checks the id with the
-    // tenant set, a trigger clears it when the funnel is deleted (0013), and the UI falls back to
+    // tenant set, a trigger clears it when the funnel is deleted (0021), and the UI falls back to
     // the first funnel for an id it doesn't know.
     defaultFunnelId: uuid('default_funnel_id'),
     dailyDigest: boolean('daily_digest').notNull().default(true),
+    // Email me when someone else makes me the owner of a deal (CD-16).
+    notifyDealAssigned: boolean('notify_deal_assigned').notNull().default(true),
     /** The getting-started checklist (CD-68) is dismissed per user, so each admin decides for themselves. */
     onboardingDismissedAt: timestamp('onboarding_dismissed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -81,10 +83,13 @@ export const auditLogs = pgTable(
 );
 
 export const INVITATION_ROLES = ['admin', 'member'] as const;
+/** Where the invitation email is: queued (waiting for the worker or retrying), sent, or failed after its retries. */
+export const INVITATION_EMAIL_STATUSES = ['queued', 'sent', 'failed'] as const;
 
 /**
- * An invitation to join a tenant, sent to an email address. Only a SHA-256 hash of the token is
- * stored; the token itself travels in the invite link. Not tenant-scoped by RLS: accepting one
+ * An invitation to join a tenant, sent to an email address. The token is looked up by its SHA-256
+ * hash; it is also kept encrypted with APP_SECRET (`token_sealed`) so the worker can email the
+ * link and an admin can resend or copy it later (CD-7). Invitations from before CD-7 have none. Not tenant-scoped by RLS: accepting one
  * means finding it before the user is a member (the service always filters by tenant otherwise).
  */
 export const invitations = pgTable(
@@ -100,6 +105,10 @@ export const invitations = pgTable(
     acceptedAt: timestamp('accepted_at', { withTimezone: true }),
     acceptedByUserId: uuid('accepted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    tokenSealed: text('token_sealed'),
+    emailStatus: text('email_status', { enum: INVITATION_EMAIL_STATUSES }),
+    emailSentAt: timestamp('email_sent_at', { withTimezone: true }),
+    emailError: text('email_error'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('invitations_tenant_idx').on(t.tenantId)],

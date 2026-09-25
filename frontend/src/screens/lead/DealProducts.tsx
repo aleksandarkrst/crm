@@ -1,7 +1,7 @@
 import { RemoveButton } from '../../components/ui';
 import { Chevron } from '../../components/ui';
 import { SCHEDULE_TYPES } from '../../store/seed';
-import { closeIsoOf, curOf, grossOf, itemById, linesOf, money, monthLabel, netOf, num, shiftIso, vatOf } from '../../store/selectors';
+import { closeIsoOf, curOf, grossOf, itemById, itemCurrency, linesOf, money, monthLabel, netOf, num, shiftIso, vatOf } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { DealLine, Lead } from '../../store/types';
 
@@ -84,11 +84,16 @@ function Line({ lead, line: ln, minDate }: { lead: Lead; line: DealLine; minDate
       <div style={{ display: 'grid', gridTemplateColumns: LINE_COLS, gap: 10, alignItems: 'center', padding: '10px 12px' }}>
         <div style={{ position: 'relative', minWidth: 0 }}>
           <select className="ghost ghost-sm" value={ln.itemId} onChange={set('itemId')} style={{ appearance: 'none', WebkitAppearance: 'none', paddingRight: 24, fontWeight: 600 }}>
-            {s.catalog.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} · {c.kind}
-              </option>
-            ))}
+            {s.catalog.map((it) => {
+              // CD-77: a line is priced in the deal's currency; other currencies can't be picked.
+              const other = itemCurrency(s, it) !== c.currency;
+              return (
+                <option key={it.id} value={it.id} disabled={other && it.id !== ln.itemId}>
+                  {it.name} · {it.kind}
+                  {other ? ` · ${itemCurrency(s, it)}` : ''}
+                </option>
+              );
+            })}
           </select>
           <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--muted)', display: 'flex' }}>
             <Chevron />

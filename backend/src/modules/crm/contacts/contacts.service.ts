@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, eq, getTableColumns, ilike, or, type SQL } from 'drizzle-orm';
+import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
@@ -7,6 +8,8 @@ import { DatabaseService } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
 import { BUYER_ROLES, contacts, deals } from '../../../shared/database/schema';
 import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
+import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
+import { RecordHistoryService } from '../history/record-history.service';
 import { assertOwnerIsMember, userNameOf } from '../owner';
 
 export const CreateContact = z.object({
@@ -18,6 +21,8 @@ export const CreateContact = z.object({
   linkedin: optionalText(300),
   buyerRole: z.enum(BUYER_ROLES).optional(),
   ownerUserId: z.uuid().nullish(),
+  /** Custom field values by field id (CD-15); null or '' clears one. */
+  customFields: CustomFieldValuesInput,
   notes: optionalText(2000),
 });
 export const UpdateContact = nonEmptyPatch(CreateContact.partial());
@@ -34,6 +39,8 @@ export class ContactsService {
   constructor(
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
+    private readonly customFields: CustomFieldsService,
+    private readonly changes: RecordHistoryService,
   ) {}
 
   list(ctx: TenantContext, query: ContactsQuery) {
@@ -68,9 +75,12 @@ export class ContactsService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
+        // A create that sends custom field values (a create form) must fill the required ones.
+        const { customFields: cfInput, ...fields } = input;
+        const cf = await this.customFields.validate(tx, 'contact', cfInput, { requireAll: cfInput !== undefined });
         const [row] = await tx
           .insert(contacts)
-          .values({ ownerUserId: ctx.userId, ...input, tenantId: ctx.tenantId })
+          .values({ ownerUserId: ctx.userId, ...fields, customFields: cf.set, tenantId: ctx.tenantId })
           .returning();
         await this.audit.record(tx, ctx, { action: 'contact.created', entityType: 'contact', entityId: row!.id });
         return row!;
@@ -78,11 +88,20 @@ export class ContactsService {
       .catch(mapDbError);
   }
 
-  update(ctx: TenantContext, id: string, input: UpdateContact) {
+  /** With a `version` (If-Match), a field someone else changed since then is a 409 conflict (CD-20). */
+  update(ctx: TenantContext, id: string, input: UpdateContact, version?: Date) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        if (version) {
+          const [locked] = await tx.select().from(contacts).where(eq(contacts.id, id)).for('update');
+          if (!locked) throw new NotFoundException('Contact not found');
+          await this.changes.assertNoConflict(tx, ctx, 'contact', locked, input, version);
+        }
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
-        const [row] = await tx.update(contacts).set(input).where(eq(contacts.id, id)).returning();
+        const { customFields: cfInput, ...fields } = input;
+        const patch: PgUpdateSetSource<typeof contacts> = { ...fields };
+        if (cfInput !== undefined) patch.customFields = this.customFields.merged(contacts.customFields, await this.customFields.validate(tx, 'contact', cfInput));
+        const [row] = await tx.update(contacts).set(patch).where(eq(contacts.id, id)).returning();
         if (!row) throw new NotFoundException('Contact not found');
         await this.audit.record(tx, ctx, { action: 'contact.updated', entityType: 'contact', entityId: id, data: input });
         return row;

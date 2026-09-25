@@ -1,6 +1,7 @@
 /** Pure derivations over the store state (ported from the design prototype's logic). */
 import { CHAMP, CHAMP_LEVELS, SCRIPTS } from './seed';
-import type { CatalogItem, Champ, DealLine, Lead, LeadTask, LogEntry, Person, SegKey, Stage, State, TaskState } from './types';
+import type { CustomFieldEntity, CustomValue } from '../lib/api';
+import type { CatalogItem, Champ, CustomFieldDef, DealLine, Lead, LeadTask, LogEntry, Person, SegKey, Stage, State, TaskState } from './types';
 
 export const num = (v: unknown): number => Number(String(v ?? '').replace(/[^0-9.]/g, '')) || 0;
 
@@ -199,6 +200,17 @@ export const timelineFor = (s: State, leadId: string): LogEntry[] => s.log[leadI
 // ---------------------------------------------------------------- products, lines & payments
 
 const NO_ITEM: CatalogItem = { id: '', name: 'No product', type: 'Service', kind: 'One-off', price: 0, vat: 0 };
+/** The currency a product is priced in (CD-77). */
+export const itemCurrency = (s: State, item: CatalogItem | undefined): string => item?.currency || s.workspace.currency;
+/** Live custom fields of a record type, in order (CD-15). */
+export const customFieldsOf = (s: State, entity: CustomFieldEntity): CustomFieldDef[] => s.customFields.filter((f) => f.entity === entity);
+/** A custom field value as text, for lists and exports: option labels, Yes/No, plain numbers. */
+export function customValueText(f: CustomFieldDef, v: CustomValue | undefined): string {
+  if (v === undefined || v === null || v === '') return '';
+  if (f.type === 'select') return f.options.find((o) => o.id === v)?.label ?? '';
+  if (f.type === 'checkbox') return v ? 'Yes' : 'No';
+  return String(v);
+}
 export const itemById = (s: State, id: string): CatalogItem => s.catalog.find((c) => c.id === id) || s.catalog[0] || NO_ITEM;
 
 /** The deal's lines (products, prices and payment schedules) as saved in the backend. */
@@ -407,15 +419,21 @@ export const needsNextStep = (s: State, lead: Lead): boolean => lead.outcome ===
 
 // ---------------------------------------------------------------- sales bonuses
 
-/** Bonus rule of a salesperson; rules are kept per user id (browser-only for now) and start empty. */
+/** Bonus rule of a salesperson, saved per user id (CD-17); a salesperson without one has none. */
 export function bonusRule(s: State, ownerId: string) {
-  const trigger = s.workspace.bonusTrigger || 'On contract signed';
-  const saved = s.bonusRules[ownerId];
-  return { rate: saved?.rate ?? '', floor: saved?.floor ?? '', fixed: saved?.fixed ?? '', trigger };
+  const saved = s.bonusRules?.[ownerId];
+  return { rate: saved?.rate ?? '', floor: saved?.floor ?? '', fixed: saved?.fixed ?? '', trigger: s.bonusTrigger || 'On contract signed' };
 }
-export const bonusOf = (lead: Lead, rule: { rate: number | string; floor: number | string; fixed: number | string }): number => {
+/**
+ * A deal's bonus: the rate on its net value, or the flat amount when it is under the minimum. The
+ * minimum and the flat amount are in the workspace currency; there are no exchange rates, so a
+ * deal in another currency gets the rate only (in its own currency).
+ */
+export const bonusOf = (lead: Lead, rule: { rate: number | string; floor: number | string; fixed: number | string }, workspaceCurrency?: string): number => {
   const net = num(lead.value);
-  return net >= num(rule.floor) ? (net * num(rule.rate)) / 100 : num(rule.fixed);
+  const rated = (net * num(rule.rate)) / 100;
+  if (workspaceCurrency && lead.currency && lead.currency !== workspaceCurrency) return rated;
+  return net >= num(rule.floor) ? rated : num(rule.fixed);
 };
 // ---------------------------------------------------------------- people who own deals
 // Owners are matched and grouped by user id, never by name: two members can share a name, and

@@ -37,6 +37,9 @@ then SSHes to the server and runs `scripts/deploy.sh <sha>`. That script:
 | `POSTGRES_PASSWORD`, `APP_DB_PASSWORD` | `openssl rand -hex 32` each |
 | `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_CLIENT_ID` | from your identity provider (step 4) |
 | `CLOUDFLARE_TUNNEL_TOKEN` | from step 3 |
+| `APP_URL` | the public address, e.g. `https://app.yourdomain.com` (links in emails) |
+| `APP_SECRET` | `openssl rand -hex 32` (encrypts invite links at rest; changing it breaks "Resend" for older invitations) |
+| `MAIL_DRIVER`, `SMTP_URL`, `MAIL_FROM` | `smtp`, your provider's SMTP URL, and a sender on a domain verified with it (see below) |
 | `BACKUP_RCLONE_REMOTE` | e.g. `offsite-crypt:crm` (step 5) |
 
 For private GHCR images, log the server in once:
@@ -69,9 +72,29 @@ Any OIDC provider works. For example, in Auth0:
 Set the same values as GitHub **variables** (`OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_AUDIENCE`),
 because the frontend image bakes them in at build time.
 
+## 4a. Email (SMTP)
+
+The worker sends invitation emails, the daily digest and "deal assigned to you" emails through any
+SMTP provider: Postmark, Resend, Amazon SES, Mailgun and most others offer SMTP.
+
+1. Create an account, verify your sending domain (add the SPF/DKIM DNS records it gives you in
+   Cloudflare DNS) and create SMTP credentials.
+2. Set `MAIL_DRIVER=smtp`, `SMTP_URL=smtps://USER:PASSWORD@HOST:465` (or `smtp://…:587`;
+   URL-encode special characters in the password) and `MAIL_FROM="Cadence <no-reply@yourdomain.com>"`.
+3. Restart the worker (`docker compose up -d worker`), invite yourself on a second address and check
+   that **Settings → Team** says "Email sent". A failed send is retried `MAIL_RETRY_LIMIT` times
+   (default 4, backoff from 30 s) and then shown as "Email not delivered" with the reason; the logs
+   have it too (`docker compose logs worker`).
+
+With `MAIL_DRIVER=log` nothing is delivered: emails only go to the worker's log.
+
 ## 5. Backups
 
 - The `backup` container runs `pg_dump` every `BACKUP_INTERVAL_HOURS` into the `backups` volume and keeps `BACKUP_RETENTION_DAYS` days.
+- Each run also archives the file storage (the `app_storage` volume, mounted at `/storage`: uploaded
+  document templates and generated documents) as `<db>-files-<timestamp>.tar.gz` next to the dump,
+  right after it, and copies it off-server the same way. The database rows point at these files, so
+  keep and restore the two together.
 - Off-server copies:
   1. Create a Hetzner Object Storage bucket (or a Storage Box).
   2. Fill in `infra/backup/rclone.conf`. The `offsite-crypt` remote encrypts every file before upload.
@@ -87,6 +110,8 @@ docker compose stop api worker
 docker compose run --rm --entrypoint ls backup -lh /backups        # pick a file
 # or fetch an off-site copy:  docker compose run --rm --entrypoint rclone backup copy offsite-crypt:crm/<file> /backups/
 docker compose run --rm --entrypoint restore.sh backup /backups/app-<timestamp>.dump
+# the files from the same run (replaces everything in the app_storage volume):
+docker compose run --rm --entrypoint restore.sh backup /backups/app-files-<timestamp>.tar.gz
 docker compose start api worker
 ```
 

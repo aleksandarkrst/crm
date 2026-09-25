@@ -1,5 +1,5 @@
 {
-  "id": "f2700a4a-5e77-40f1-b7a1-5b0f47e265d1",
+  "id": "5250c08b-6259-4508-855b-64373d4b29c9",
   "prevId": "06e92655-8caf-43ca-a191-cbee45000ed4",
   "version": "7",
   "dialect": "postgresql",
@@ -297,12 +297,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": true
-        },
-        "onboarding_dismissed_at": {
-          "name": "onboarding_dismissed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -742,6 +736,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "custom_fields": {
+          "name": "custom_fields",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -889,11 +890,12 @@
           "primaryKey": false,
           "notNull": false
         },
-        "notes": {
-          "name": "notes",
-          "type": "text",
+        "custom_fields": {
+          "name": "custom_fields",
+          "type": "jsonb",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": "'{}'::jsonb"
         },
         "created_at": {
           "name": "created_at",
@@ -980,6 +982,170 @@
       "uniqueConstraints": {
         "contacts_tenant_id_uq": {
           "name": "contacts_tenant_id_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "tenant_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.custom_field_defs": {
+      "name": "custom_field_defs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity": {
+          "name": "entity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "options": {
+          "name": "options",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "required": {
+          "name": "required",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "custom_field_defs_tenant_entity_idx": {
+          "name": "custom_field_defs_tenant_entity_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "custom_field_defs_label_uq": {
+          "name": "custom_field_defs_label_uq",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lower(\"label\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"custom_field_defs\".\"deleted_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "custom_field_defs_tenant_id_tenants_id_fk": {
+          "name": "custom_field_defs_tenant_id_tenants_id_fk",
+          "tableFrom": "custom_field_defs",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "custom_field_defs_tenant_id_uq": {
+          "name": "custom_field_defs_tenant_id_uq",
           "nullsNotDistinct": false,
           "columns": [
             "tenant_id",
@@ -1617,6 +1783,34 @@
           "method": "btree",
           "with": {}
         },
+        "deal_tasks_playbook_uq": {
+          "name": "deal_tasks_playbook_uq",
+          "columns": [
+            {
+              "expression": "deal_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "stage_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "label",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "not \"deal_tasks\".\"off_playbook\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "deal_tasks_playbook_item_uq": {
           "name": "deal_tasks_playbook_item_uq",
           "columns": [
@@ -1882,6 +2076,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "custom_fields": {
+          "name": "custom_fields",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2104,6 +2305,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": 25
+        },
+        "checklist": {
+          "name": "checklist",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         },
         "checklist_items": {
           "name": "checklist_items",
@@ -2346,6 +2554,13 @@
           "notNull": true,
           "default": "'20'"
         },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'EUR'"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2414,8 +2629,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.sample_records": {
-      "name": "sample_records",
+    "public.sales_bonus_rules": {
+      "name": "sales_bonus_rules",
       "schema": "",
       "columns": {
         "tenant_id": {
@@ -2424,20 +2639,48 @@
           "primaryKey": false,
           "notNull": true
         },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "record_id": {
-          "name": "record_id",
+        "user_id": {
+          "name": "user_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
+        "rate": {
+          "name": "rate",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "floor": {
+          "name": "floor",
+          "type": "numeric(14, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "fixed": {
+          "name": "fixed",
+          "type": "numeric(14, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "updated_by_user_id": {
+          "name": "updated_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
@@ -2446,9 +2689,95 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "sample_records_tenant_id_tenants_id_fk": {
-          "name": "sample_records_tenant_id_tenants_id_fk",
-          "tableFrom": "sample_records",
+        "sales_bonus_rules_tenant_id_tenants_id_fk": {
+          "name": "sales_bonus_rules_tenant_id_tenants_id_fk",
+          "tableFrom": "sales_bonus_rules",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "sales_bonus_rules_user_id_users_id_fk": {
+          "name": "sales_bonus_rules_user_id_users_id_fk",
+          "tableFrom": "sales_bonus_rules",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "sales_bonus_rules_updated_by_user_id_users_id_fk": {
+          "name": "sales_bonus_rules_updated_by_user_id_users_id_fk",
+          "tableFrom": "sales_bonus_rules",
+          "tableTo": "users",
+          "columnsFrom": [
+            "updated_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "sales_bonus_rules_tenant_id_user_id_pk": {
+          "name": "sales_bonus_rules_tenant_id_user_id_pk",
+          "columns": [
+            "tenant_id",
+            "user_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "sales_bonus_rules_rate_ck": {
+          "name": "sales_bonus_rules_rate_ck",
+          "value": "\"sales_bonus_rules\".\"rate\" between 0 and 100"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.sales_bonus_settings": {
+      "name": "sales_bonus_settings",
+      "schema": "",
+      "columns": {
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "trigger": {
+          "name": "trigger",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'On contract signed'"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "sales_bonus_settings_tenant_id_tenants_id_fk": {
+          "name": "sales_bonus_settings_tenant_id_tenants_id_fk",
+          "tableFrom": "sales_bonus_settings",
           "tableTo": "tenants",
           "columnsFrom": [
             "tenant_id"
@@ -2460,16 +2789,7 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {
-        "sample_records_tenant_id_kind_record_id_pk": {
-          "name": "sample_records_tenant_id_kind_record_id_pk",
-          "columns": [
-            "tenant_id",
-            "kind",
-            "record_id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},

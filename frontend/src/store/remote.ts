@@ -3,9 +3,9 @@
  * a lead (deal) shows its company and primary contact inline, companies are derived from leads
  * plus companies without a deal, and people are primary contacts plus everyone else.
  */
-import { type ApiActivity, type ApiCompany, type ApiDealLine, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiProfile, type ApiStageChange, type ApiWorkspace, crmApi } from '../lib/api';
+import { type ApiActivity, type ApiBonusRules, type ApiCompany, type ApiCustomField, type ApiDealLine, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiInvitation, type ApiMember, type ApiProduct, type ApiProfile, type ApiStageChange, type ApiWorkspace, ApiError, crmApi } from '../lib/api';
 import { initialsOf, localeFor, momentLabel, money, taskKey } from './selectors';
-import type { CatalogItem, CompanyExtra, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, Profile, SegKey, StageChange, State, TeamMember, Workspace } from './types';
+import type { BonusRule, CatalogItem, CompanyExtra, CustomFieldDef, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, Profile, SegKey, StageChange, State, TeamMember, Workspace } from './types';
 
 export type WorkspaceData = Pick<
   State,
@@ -24,6 +24,11 @@ export type WorkspaceData = Pick<
   | 'team'
   | 'workspace'
   | 'profile'
+  | 'customFields'
+  | 'customValues'
+  | 'bonusRules'
+  | 'bonusTrigger'
+  | 'versions'
   | 'onboarding'
 >;
 
@@ -65,7 +70,21 @@ export const mapLine = (l: ApiDealLine): DealLine => ({
   milestones: l.milestones,
 });
 
-/** Workspace settings; the browser-only bonus trigger is kept by the store. */
+export const mapCustomField = ({ position: _position, ...f }: ApiCustomField): CustomFieldDef => f;
+
+export const mapProduct = (p: ApiProduct): CatalogItem => ({ id: p.id, name: p.name, type: p.type, kind: p.billingKind, price: Number(p.unitPrice), vat: Number(p.vatRate), currency: p.currency });
+
+/** Bonus rules by user id (CD-17); numbers as the inputs show them. */
+export const mapBonusRules = (b: ApiBonusRules): Record<string, BonusRule> =>
+  Object.fromEntries(b.rules.map((r) => [r.userId, { rate: Number(r.rate), floor: Number(r.floor), fixed: Number(r.fixed) }]));
+
+/** The bonus rules, or null for members: the API answers them 403 (CD-17). */
+const loadBonusRules = () => crmApi.bonusRules().catch((err: unknown) => (err instanceof ApiError && err.status === 403 ? null : Promise.reject(err)));
+
+/** Getting started (CD-68), or null for members: the API answers them 403. */
+const loadOnboarding = () => crmApi.onboarding().catch((err: unknown) => (err instanceof ApiError && err.status === 403 ? null : Promise.reject(err)));
+
+/** Workspace settings. */
 export const mapWorkspace = (w: ApiWorkspace): Workspace => ({ name: w.name, currency: w.currency, timezone: w.timezone, fiscalMonth: w.fiscalYearStartMonth });
 
 export const mapProfile = (p: ApiProfile): Profile => ({
@@ -78,7 +97,21 @@ export const mapProfile = (p: ApiProfile): Profile => ({
   startPage: p.startPage,
   defaultFunnelId: p.defaultFunnelId ?? '',
   digest: p.dailyDigest,
+  dealAssigned: p.notifyDealAssigned,
 });
+
+/** Members, then pending invitations with their email status. */
+export const mapTeam = (apiTeam: { members: ApiMember[]; invitations: ApiInvitation[] }): TeamMember[] => [
+  ...apiTeam.members.map<TeamMember>((m) => ({ id: m.userId, name: m.displayName || m.email || 'Member', email: m.email ?? '', role: ROLE_LABEL[m.role], status: 'Active' })),
+  ...apiTeam.invitations.map<TeamMember>((i) => ({
+    id: i.id,
+    name: i.email,
+    email: i.email,
+    role: ROLE_LABEL[i.role],
+    status: 'Invited',
+    invite: { emailStatus: i.emailStatus, emailSentAt: i.emailSentAt, emailError: i.emailError, hasLink: i.hasLink },
+  })),
+];
 
 export const mapActivity = (a: ApiActivity, tz?: string): LogEntry => ({ date: dateLabel(a.occurredAt, tz), channel: a.channel, title: a.title, detail: a.detail ?? '' });
 
@@ -106,26 +139,41 @@ export const mapLeadTask = (t: ApiDealTask, tz?: string): LeadTask => ({
   by: t.doneByName?.split(' ')[0] ?? undefined,
 });
 
-/** `canManage`: owners and admins also get the getting-started state (CD-68). */
-export async function loadWorkspace(canManage: boolean): Promise<WorkspaceData> {
-  const [apiFunnels, companies, contacts, dealRows, products, apiLines, apiTasks, apiTeam, apiWorkspace, apiProfile, onboarding] = await Promise.all([
-    crmApi.funnels(),
-    crmApi.companies(),
-    crmApi.contacts(),
-    crmApi.deals(),
-    crmApi.products(),
-    crmApi.dealLines(),
-    crmApi.dealTasks(),
-    crmApi.team(),
-    crmApi.workspace(),
-    crmApi.profile(),
-    canManage ? crmApi.onboarding() : null,
-  ]);
+/** What the workspace is built from, one API list each. */
+const PARTS = {
+  funnels: () => crmApi.funnels(),
+  companies: () => crmApi.companies(),
+  contacts: () => crmApi.contacts(),
+  deals: () => crmApi.deals(),
+  products: () => crmApi.products(),
+  lines: () => crmApi.dealLines(),
+  tasks: () => crmApi.dealTasks(),
+  team: () => crmApi.team(),
+  workspace: () => crmApi.workspace(),
+  profile: () => crmApi.profile(),
+  customFields: () => crmApi.customFields(),
+  bonus: () => loadBonusRules(),
+  onboarding: () => loadOnboarding(),
+};
+export type Part = keyof typeof PARTS;
+type Raw = { [K in Part]: Awaited<ReturnType<(typeof PARTS)[K]>> };
+/** The lists the last load read, so a live update (CD-20) re-reads only the ones that changed. */
+let lastRaw: Raw | null = null;
 
-  const team: TeamMember[] = [
-    ...apiTeam.members.map<TeamMember>((m) => ({ id: m.userId, name: m.displayName || m.email || 'Member', email: m.email ?? '', role: ROLE_LABEL[m.role], status: 'Active' })),
-    ...apiTeam.invitations.map<TeamMember>((i) => ({ id: i.id, name: i.email, email: i.email, role: ROLE_LABEL[i.role], status: 'Invited' })),
-  ];
+/**
+ * Loads the workspace. With `only`, just those lists are read again and the others are taken
+ * from the previous load (live updates); without it, everything is read.
+ */
+export async function loadWorkspace(only?: ReadonlySet<Part>): Promise<WorkspaceData> {
+  const prev = only ? lastRaw : null;
+  const keys = (Object.keys(PARTS) as Part[]).filter((k) => !prev || only!.has(k));
+  const fetched = await Promise.all(keys.map((k) => PARTS[k]()));
+  const raw = { ...prev } as Record<Part, unknown>;
+  keys.forEach((k, i) => (raw[k] = fetched[i]));
+  lastRaw = raw as Raw;
+  const { funnels: apiFunnels, companies, contacts, deals: dealRows, products, lines: apiLines, tasks: apiTasks, team: apiTeam, workspace: apiWorkspace, profile: apiProfile, customFields: apiFields, bonus: apiBonus, onboarding } = lastRaw;
+
+  const team = mapTeam(apiTeam);
 
   // Every funnel, keyed by its id, in the workspace's order (CD-10).
   if (apiFunnels.length === 0) throw new Error('This workspace has no funnel.');
@@ -231,7 +279,12 @@ export async function loadWorkspace(canManage: boolean): Promise<WorkspaceData> 
   const links: State['links'] = {};
   for (const r of dealRows) if (r.contactIds.length) links[r.deal.id] = r.contactIds.map(personIdOf);
 
-  const catalog: CatalogItem[] = products.map((p) => ({ id: p.id, name: p.name, type: p.type, kind: p.billingKind, price: Number(p.unitPrice), vat: Number(p.vatRate) }));
+  const catalog: CatalogItem[] = products.map(mapProduct);
+  const customValues: State['customValues'] = {
+    deal: Object.fromEntries(dealRows.map((r) => [r.deal.id, r.deal.customFields ?? {}])),
+    company: Object.fromEntries(companies.map((c) => [c.id, c.customFields ?? {}])),
+    contact: Object.fromEntries(contacts.map((c) => [c.id, c.customFields ?? {}])),
+  };
 
   const dealLines: State['dealLines'] = {};
   for (const l of apiLines) (dealLines[l.dealId] ||= []).push(mapLine(l));
@@ -269,7 +322,14 @@ export async function loadWorkspace(canManage: boolean): Promise<WorkspaceData> 
     };
   }
 
+  // The version of each deal, company and contact as loaded: sent as If-Match when editing (CD-20).
+  const versions: State['versions'] = {};
+  for (const { deal } of dealRows) versions['deal:' + deal.id] = deal.updatedAt;
+  for (const c of companies) versions['company:' + c.id] = c.updatedAt;
+  for (const c of contacts) versions['contact:' + c.id] = c.updatedAt;
+
   return {
+    versions,
     funnels,
     leads,
     extraCompanies,
@@ -285,6 +345,10 @@ export async function loadWorkspace(canManage: boolean): Promise<WorkspaceData> 
     team,
     workspace: mapWorkspace(apiWorkspace),
     profile: mapProfile(apiProfile),
+    customFields: apiFields.map(mapCustomField),
+    customValues,
+    bonusRules: apiBonus ? mapBonusRules(apiBonus) : null,
+    bonusTrigger: apiBonus?.trigger ?? 'On contract signed',
     onboarding,
   };
 }

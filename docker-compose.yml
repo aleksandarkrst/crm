@@ -16,6 +16,13 @@ x-backend-env: &backend-env
   OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
   CORS_ORIGINS: ${CORS_ORIGINS:-}
   STORAGE_DIR: /app/storage
+  APP_URL: ${APP_URL}
+  APP_SECRET: ${APP_SECRET}
+  MAIL_DRIVER: ${MAIL_DRIVER:-log}
+  SMTP_URL: ${SMTP_URL:-}
+  MAIL_FROM: ${MAIL_FROM:-Cadence <no-reply@localhost>}
+  MAIL_RETRY_LIMIT: ${MAIL_RETRY_LIMIT:-4}
+  MAIL_RETRY_DELAY_SECONDS: ${MAIL_RETRY_DELAY_SECONDS:-30}
 
 services:
   frontend:
@@ -73,6 +80,8 @@ services:
       AUTH_MODE: oidc
       OIDC_ISSUER: https://unused.invalid/
       OIDC_AUDIENCE: unused
+      APP_URL: https://unused.invalid
+      APP_SECRET: unused-by-migrations-but-required-in-production
     healthcheck:
       disable: true
     depends_on:
@@ -125,6 +134,9 @@ services:
       BACKUP_RCLONE_REMOTE: ${BACKUP_RCLONE_REMOTE:-}
     volumes:
       - backups:/backups
+      # Uploaded templates and generated documents (CD-13), archived next to each dump. Writable
+      # so restore.sh can put a files archive back.
+      - app_storage:/storage
       - ./infra/backup/rclone.conf:/config/rclone/rclone.conf:ro
     depends_on:
       postgres:

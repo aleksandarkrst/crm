@@ -1,4 +1,5 @@
-import type { ApiDateFormat, ApiLanguage, ApiOnboarding, ApiStageChange, ApiStartPage, DealOutcome, LostReason } from '../lib/api';
+import type { ApiCustomField, ApiDateFormat, ApiLanguage, ApiOnboarding, ApiStageChange, ApiStartPage, CustomFieldEntity, CustomFieldValues, DealOutcome, LostReason } from '../lib/api';
+import type { DealDoc, DocTemplate } from './documents';
 
 /** A funnel's backend id (CD-10: any number of funnels, not just the two personas). */
 export type SegKey = string;
@@ -126,6 +127,8 @@ export interface CatalogItem {
   kind: string; // One-off | Monthly | Yearly | Hourly
   price: number | string;
   vat: number | string;
+  /** ISO 4217 code of the price (CD-77); the workspace currency when unset. */
+  currency?: string;
 }
 
 export interface Milestone {
@@ -195,6 +198,8 @@ export interface TeamMember {
   email: string;
   role: 'Owner' | 'Admin' | 'Member';
   status: 'Active' | 'Invited';
+  /** Pending invitations only: where their email is (CD-7). */
+  invite?: { emailStatus: 'queued' | 'sent' | 'failed' | null; emailSentAt: string | null; emailError: string | null; hasLink: boolean };
 }
 
 export interface ToggleRow {
@@ -205,15 +210,8 @@ export interface ToggleRow {
   on: boolean;
 }
 
-export interface FieldDef {
-  id: string;
-  label: string;
-  type: string;
-  entity: 'Leads' | 'Contacts';
-  required: boolean;
-  system: boolean;
-  visible: boolean;
-}
+/** A custom field of deals, companies or contacts (CD-15), as the API returns it. */
+export type CustomFieldDef = Omit<ApiCustomField, 'position'>;
 
 /** Workspace settings, saved per tenant (see ApiWorkspace). */
 export interface Workspace {
@@ -224,8 +222,6 @@ export interface Workspace {
   timezone: string;
   /** Month the fiscal year starts, 1 = January. */
   fiscalMonth: number;
-  /** Sales-bonus rules are still browser-only. */
-  bonusTrigger?: string;
 }
 
 /** The signed-in user's profile (see ApiProfile). */
@@ -240,8 +236,9 @@ export interface Profile {
   startPage: ApiStartPage;
   /** Backend funnel id; '' for none. Applies to this workspace only. */
   defaultFunnelId: string;
-  /** Applies to this workspace only. */
+  /** Notification settings (Settings → Notifications, CD-16). Apply to this workspace only. */
   digest: boolean;
+  dealAssigned: boolean;
 }
 
 export interface BonusRule {
@@ -282,9 +279,11 @@ export interface NewContactDraft {
 
 export interface NewFieldDraft {
   label: string;
-  type: string;
-  entity: 'Leads' | 'Contacts';
+  type: ApiCustomField['type'];
+  entity: CustomFieldEntity;
   required: boolean;
+  /** Single-select options, one per line. */
+  options: string;
 }
 
 export interface NewProductDraft {
@@ -293,6 +292,8 @@ export interface NewProductDraft {
   kind: string;
   price: string;
   vat: string;
+  /** ISO 4217; '' means the workspace currency. */
+  currency?: string;
 }
 
 export interface State {
@@ -314,24 +315,45 @@ export interface State {
   /** Tasks from the "New task" dialog (see LeadTask). */
   leadTasks: LeadTask[];
   log: Record<string, LogEntry[]>;
+  /**
+   * The version (updatedAt) of each deal, company and contact the screen shows, keyed
+   * "deal:<id>" etc. Edits send it as If-Match, so the API can say when someone else changed the
+   * same field meanwhile (CD-20). Updated when the workspace is (re)loaded.
+   */
+  versions: Record<string, string>;
+  /** When a live update last touched a record (by id), so open views (history) re-read it. */
+  changedAt: Record<string, number>;
   /** Stage history of every deal, oldest first; null until Overview loads it (see refreshHistory). */
   stageHistory: StageChange[] | null;
   team: TeamMember[];
-  notifs: ToggleRow[];
   integrations: ToggleRow[];
-  fields: FieldDef[];
+  /** Custom field definitions (CD-15), in their order. */
+  customFields: CustomFieldDef[];
+  /** Custom field values by record type and record id (deal, company or contact id). */
+  customValues: Record<CustomFieldEntity, Record<string, CustomFieldValues>>;
   workspace: Workspace;
   profile: Profile;
   /** Getting started (CD-68), for owners and admins; null for members. */
   onboarding: ApiOnboarding | null;
-  bonusRules: Record<string, BonusRule>;
+  /**
+   * Sales bonus rules by user id (CD-17), saved in the workspace. null for members: the API
+   * doesn't show them the rules, and the UI hides the bonus tab and the Overview card.
+   */
+  bonusRules: Record<string, BonusRule> | null;
+  /** When a bonus counts as earned ("On contract signed" or "When fully billed"). */
+  bonusTrigger: string;
   filters: Filters;
   toast: string;
+  /** Document templates (CD-13); null until loaded (see loadTemplates). */
+  templates: DocTemplate[] | null;
+  /** Generated documents per deal id, loaded when a deal opens (see ensureDocs). */
+  dealDocs: Record<string, DealDoc[]>;
 
   // modals
   genOpen: boolean;
   genLead: string | null;
-  genStep: number;
+  /** The document the generation dialog follows (CD-13); null until it is generated. */
+  genDocId: string | null;
   docOpen: boolean;
   docLeadId: string | null;
   showMerge: boolean;
@@ -351,7 +373,6 @@ export interface State {
   personaBase: string;
   templateOpen: boolean;
   templateType: string;
-  templateFile: string | null;
   fieldOpen: boolean;
   newField: NewFieldDraft;
   productOpen: boolean;

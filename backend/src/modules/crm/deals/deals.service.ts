@@ -1,24 +1,24 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, not, or, type SQL } from 'drizzle-orm';
+import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
+import { StorageService } from '../../../infrastructure/storage/storage.service';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, type DealOutcome, deals, funnels, funnelStages, LOST_REASONS, tenants } from '../../../shared/database/schema';
+import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, dealDocuments, dealLines, type DealOutcome, deals, funnels, funnelStages, LOST_REASONS, products, tenants } from '../../../shared/database/schema';
 import { JobsService } from '../../../shared/events/jobs.service';
 import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
+import { currencyCode } from '../currency';
+import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
 import { assertOwnerIsMember, userNameOf } from '../owner';
+import { RecordHistoryService } from '../history/record-history.service';
 import { StageHistoryService } from './stage-history.service';
 
 const money = z.union([z.number(), z.string()]).transform((v) => String(v)).pipe(z.string().regex(/^\d{1,12}(\.\d{1,2})?$/, 'Invalid amount'));
 const champLevel = z.union([z.literal(0), z.literal(8), z.literal(17), z.literal(25)]);
-const CURRENCIES = new Set(Intl.supportedValuesOf('currency'));
-const currency = z
-  .string()
-  .trim()
-  .toUpperCase()
-  .refine((c) => /^[A-Z]{3}$/.test(c) && CURRENCIES.has(c), 'Must be an ISO 4217 currency code, e.g. EUR');
+const currency = currencyCode;
 
 export const CreateDeal = z.object({
   title: z.string().trim().min(1).max(200),
@@ -37,6 +37,8 @@ export const CreateDeal = z.object({
   constraint: optionalText(500),
   decisionMaker: optionalText(200),
   discoveryDate: z.iso.date().nullish(),
+  /** Custom field values by field id (CD-15); null or '' clears one. */
+  customFields: CustomFieldValuesInput,
 });
 export const UpdateDeal = nonEmptyPatch(
   CreateDeal.partial().extend({
@@ -72,6 +74,9 @@ export class DealsService {
     private readonly audit: AuditService,
     private readonly jobs: JobsService,
     private readonly history: StageHistoryService,
+    private readonly customFields: CustomFieldsService,
+    private readonly storage: StorageService,
+    private readonly changes: RecordHistoryService,
   ) {}
 
   /** Board/list view: deals with company, primary contact and stage names joined in. */
@@ -141,15 +146,19 @@ export class DealsService {
       .withTenant(ctx.tenantId, async (tx) => {
         const first = await this.firstStage(tx, input.funnelId);
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
+        // A create that sends custom field values (the New deal dialog) must fill the required ones.
+        const { customFields: cfInput, ...fields } = input;
+        const cf = await this.customFields.validate(tx, 'deal', cfInput, { requireAll: cfInput !== undefined });
         // tenants is a platform table without RLS, so filter by the caller's tenant explicitly.
         const [workspace] = await tx.select({ currency: tenants.currency }).from(tenants).where(eq(tenants.id, ctx.tenantId));
         const [row] = await tx
           .insert(deals)
-          .values({ ownerUserId: ctx.userId, currency: workspace?.currency, ...input, tenantId: ctx.tenantId, stageId: first.id, closedAt: first.isWon ? new Date() : null })
+          .values({ ownerUserId: ctx.userId, currency: workspace?.currency, ...fields, customFields: cf.set, tenantId: ctx.tenantId, stageId: first.id, closedAt: first.isWon ? new Date() : null })
           .returning();
         await this.history.record(tx, ctx, { dealId: row!.id, kind: 'created', fromStageId: null, toStageId: first.id, outcome: first.isWon ? 'won' : 'open' }, row!.createdAt);
         await this.log(tx, ctx, row!.id, 'RS', 'Deal created', input.source ? `Source: ${input.source}` : null);
         await this.audit.record(tx, ctx, { action: 'deal.created', entityType: 'deal', entityId: row!.id });
+        await this.notifyAssigned(tx, ctx, row!.id, null, row!.ownerUserId);
         return { ...row!, outcome: dealOutcome(row!, first.isWon) };
       })
       .catch(mapDbError);
@@ -157,13 +166,23 @@ export class DealsService {
 
   /**
    * Changing the funnel (a different target persona) restarts the deal at that funnel's first
-   * stage, and says so on the timeline ("Moved to funnel …").
+   * stage, and says so on the timeline ("Moved to funnel …"). With a `version` (If-Match), a field
+   * someone else changed since that version is a 409 conflict (RecordHistoryService).
    */
-  update(ctx: TenantContext, id: string, input: UpdateDeal) {
+  update(ctx: TenantContext, id: string, input: UpdateDeal, version?: Date) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        if (version) {
+          const [locked] = await tx.select().from(deals).where(eq(deals.id, id)).for('update');
+          if (!locked) throw new NotFoundException('Deal not found');
+          await this.changes.assertNoConflict(tx, ctx, 'deal', locked, input, version);
+        }
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
-        const patch: Partial<typeof deals.$inferInsert> = { ...input };
+        const [before] = input.ownerUserId !== undefined ? await tx.select({ ownerUserId: deals.ownerUserId }).from(deals).where(eq(deals.id, id)) : [];
+        const { customFields: cfInput, ...fields } = input;
+        const patch: PgUpdateSetSource<typeof deals> = { ...fields };
+        if (cfInput !== undefined) patch.customFields = this.customFields.merged(deals.customFields, await this.customFields.validate(tx, 'deal', cfInput));
+        if (input.currency) await this.assertCurrencyFitsLines(tx, id, input.currency);
         if (input.champ) patch.fitScore = input.champ.C + input.champ.H + input.champ.M + input.champ.P;
         let funnelChange: { from: string; to: typeof funnelStages.$inferSelect; funnel: string; at: Date } | null = null;
         if (input.funnelId) {
@@ -189,10 +208,20 @@ export class DealsService {
           await this.history.record(tx, ctx, { dealId: id, kind: 'funnel_changed', fromStageId: from, toStageId: to.id, outcome: to.isWon ? 'won' : 'open' }, at);
           await this.log(tx, ctx, id, 'NT', `Moved to funnel ${funnel}`, `Restarted at ${to.name} · next activity: ${to.activity}`);
         }
+        if (before) await this.notifyAssigned(tx, ctx, id, before.ownerUserId, row.ownerUserId);
         await this.audit.record(tx, ctx, { action: 'deal.updated', entityType: 'deal', entityId: id, data: input });
         return this.present(tx, row);
       })
       .catch(mapDbError);
+  }
+
+  /**
+   * When a deal gets a new owner who isn't the person making the change, tells the notifications
+   * module (job "crm.deal-assigned", in this transaction), which emails them if they want that.
+   */
+  private async notifyAssigned(tx: Tx, ctx: TenantContext, dealId: string, from: string | null, to: string | null) {
+    if (!to || to === from || to === ctx.userId) return;
+    await this.jobs.send('crm.deal-assigned', { tenantId: ctx.tenantId, dealId, assigneeUserId: to, actorUserId: ctx.userId }, tx);
   }
 
   /**
@@ -299,15 +328,40 @@ export class DealsService {
       .then(() => undefined);
   }
 
-  /** Deleting a deal also deletes its lines, to-dos, activities and contact links (FK cascade). */
-  remove(ctx: TenantContext, id: string) {
-    return this.database
+  /**
+   * Deleting a deal also deletes its lines, to-dos, activities, contact links and generated
+   * documents (FK cascade); the documents' files are removed once that has committed.
+   */
+  async remove(ctx: TenantContext, id: string) {
+    const files = await this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        const docs = await tx.select({ key: dealDocuments.storageKey }).from(dealDocuments).where(eq(dealDocuments.dealId, id));
         const [row] = await tx.delete(deals).where(eq(deals.id, id)).returning({ id: deals.id });
         if (!row) throw new NotFoundException('Deal not found');
         await this.audit.record(tx, ctx, { action: 'deal.deleted', entityType: 'deal', entityId: id });
+        return docs.flatMap((d) => (d.key ? [d.key] : []));
       })
       .catch(mapDbError);
+    for (const key of files) await this.storage.delete(ctx.tenantId, key);
+  }
+
+  /**
+   * CD-77: a deal's lines are priced in its currency, and there are no exchange rates. So the
+   * currency can only change while no line uses a product priced in another currency (409).
+   * Lines without a product, or with products in the new currency, don't stand in the way.
+   */
+  private async assertCurrencyFitsLines(tx: Tx, dealId: string, currency: string) {
+    const [deal] = await tx.select({ currency: deals.currency }).from(deals).where(eq(deals.id, dealId));
+    if (!deal || deal.currency === currency) return;
+    const clashing = await tx
+      .select({ name: products.name, currency: products.currency })
+      .from(dealLines)
+      .innerJoin(products, eq(products.id, dealLines.productId))
+      .where(and(eq(dealLines.dealId, dealId), not(eq(products.currency, currency))));
+    if (clashing.length === 0) return;
+    const names = [...new Set(clashing.map((c) => `${c.name} (${c.currency})`))].join(', ');
+    const lines = clashing.length === 1 ? '1 product line is' : `${clashing.length} product lines are`;
+    throw new ConflictException(`Can't change the currency to ${currency}: ${lines} priced in another currency (${names}). Remove those lines or replace them with products in ${currency} first.`);
   }
 
   /** A deal row with its outcome (see dealOutcome). */

@@ -16,7 +16,8 @@ Users → Cloudflare (DNS, WAF) → Cloudflare Tunnel → cloudflared ─┐   (
 - **worker**: the same image, started as `dist/worker.js`. It processes background jobs and cron schedules.
 - **migrate**: the same image as a one-off container (`docker compose run --rm migrate`).
 - **postgres**: PostgreSQL 17, only on the internal network.
-- **backup**: `pg_dump` on a schedule. Copies go off-server with rclone.
+- **backup**: `pg_dump` and a tar.gz of the file storage (`app_storage`: templates and generated
+  documents) on a schedule. Copies go off-server with rclone.
 
 One hostname serves both UI and API (`app.yourdomain.com` and `app.yourdomain.com/api`), so there is no CORS and cookies stay simple.
 
@@ -28,12 +29,14 @@ backend/src/
   worker.ts, worker.module.ts   worker entry; worker/job-handlers.ts registers handlers + cron
   modules/                      business domains — each owns its tables, services, controllers
     identity/                   users, tenants, memberships, auth guard
-    crm/                        companies, contacts, funnels, deals (+activities), products
+    realtime/                   GET /api/events: live change hints (LISTEN/NOTIFY → SSE)
+    crm/                        companies, contacts, funnels, deals (+activities), products, documents
     health/
   shared/                       cross-cutting, domain-free
     database/                   schema/, DatabaseService.withTenant(), migrate.ts, errors
     authorization/              TenantContext, @RequireTenant(role), @Tenant(), @CurrentUser()
     audit/                      AuditService.record(tx, ctx, …)
+    database/request-context.ts who acts (user, browser tab), handed to PostgreSQL by withTenant
     events/                     job types, JobsService (pg-boss), tenant provisioning hooks
     validation/                 ZodPipe, shared zod helpers
   infrastructure/               config (env validation), logging (pino), storage (files)
@@ -264,6 +267,76 @@ comma, semicolon, quote or line break. To guard against CSV (formula) injection,
 start with `=`, `+`, `-`, `@`, a tab or a carriage return get a leading `'`; numbers are written as
 numbers. The import drops that `'` again, so an exported file imports back unchanged.
 
+## Documents: templates and generation (CD-13)
+
+`backend/src/modules/crm/documents/`. Owners and admins upload Word (.docx) templates with merge
+fields; anyone in the workspace generates a document on a deal from one and downloads it.
+
+- **Tables** (`drizzle/0015_documents.sql`, RLS in `0016_documents_rls.sql`):
+  `document_templates` (name, document type from the design's list, original file name, size, the
+  merge fields found at upload, storage key, uploader) and `deal_documents` (deal, template id and
+  a copy of its name and type, document name, `status` queued → running → ready | failed, error,
+  storage key, size, `missing_fields`, who and when). `deal_documents.template_id` is a composite FK
+  with `ON DELETE SET NULL (template_id)` (PostgreSQL 15+; written in the custom migration because
+  Drizzle can't express the column list), so deleting a template keeps the documents made from it.
+  Deleting a deal deletes its documents (FK cascade).
+- **Merge fields** (`placeholders.ts`, the single source for the API, the upload scan and the
+  reference in Settings): double braces, as the design's template dialog says, e.g.
+  `{{company.name}}`, `{{contact.first_name}}`, `{{deal.headline}}`, `{{deal.amount}}` (net),
+  `{{deal.vat}}`, `{{deal.total}}`, `{{deal.closing_date}}`, `{{discovery.need}}` and the other
+  discovery notes (CD-14), `{{owner.name}}`, `{{workspace.name}}`, `{{today}}`. Deal lines repeat
+  with `{{#lines}} … {{/lines}}` (`{{line.product}}`, `{{line.quantity}}`, `{{line.unit_price}}`,
+  `{{line.total}}`, …); with the opening tag in a table row's first cell and the closing tag in its
+  last, the row repeats. The design's short forms (`{{company}}`, `{{contact_name}}`, `{{price}}`,
+  `{{total}}`, `{{need}}`) work too. `GET /api/crm/document-templates/placeholders` lists them all.
+- **Formatting**: amounts in the deal's currency, written in the locale of the workspace currency
+  like the UI (`€14,000`, `US$2,500` in a euro workspace), whole amounts without decimals; calendar
+  dates as "31 October 2026" (not shifted by time zones); `{{today}}` in the workspace time zone.
+  A known field without a value becomes empty (never "null") and is listed in `missing_fields`
+  ("Left empty: Constraint") on the document and its timeline entry. An unknown field
+  (`{{deal.amoutn}}`) stays in the document as written, so a typo is visible, and the upload
+  dialog flags it as "not recognised" before saving.
+- **Library**: [docxtemplater](https://docxtemplater.com/) (free core, MIT) and PizZip (MIT). No
+  paid modules: the parser is our own (flat dotted keys, see `docx.ts`), and the starter template is
+  generated in code (`starterTemplate()`), so it always matches the fields.
+- **Upload** (`POST /api/crm/document-templates`, multipart `file`, `name`, `docType`; owners and
+  admins): `.docx` only, at most 5 MB (multer's limit answers 413), not empty, a real Word zip that
+  unpacks to at most 60 MB, and a template docxtemplater can compile (an unclosed loop is a 400 with
+  the reason). `POST …/scan` runs the same checks and returns the fields without saving (the
+  dialog's "Parameters found"). `GET …/starter` is the starter template; `GET …/:id/file`
+  downloads a template; `DELETE …/:id` deletes it and its file.
+- **Generate** (`POST /api/crm/deals/:id/documents` `{ templateId, name? }`, any member): inserts a
+  `queued` document and sends `crm.generate-document` in the same transaction (202). The worker
+  (`DocumentGenerator`) marks it `running`, reads the deal, company, primary contact, owner, lines and
+  workspace with `withTenant`, fills the template, stores the file, marks it `ready` and writes
+  "Document generated · <name>" on the deal's timeline (from the template, by whom, what was left
+  empty). A broken or missing template marks it `failed` with a readable reason; it isn't retried.
+  The UI polls `GET /api/crm/deal-documents/:id` until it is ready or failed.
+  `GET /api/crm/deal-documents?dealId=` lists a deal's documents, `…/:id/file` downloads one, and
+  `DELETE …/:id` (owners, admins and whoever generated it) deletes it with its file and writes
+  "Document deleted" on the timeline.
+- **Files** (`infrastructure/storage/storage.service.ts`): on disk under `STORAGE_DIR`, one folder
+  per tenant: `<tenant>/templates/<id>.docx` and `<tenant>/documents/<id>.docx`, written to a
+  temporary name and renamed. There is no static route: a file is only streamed after its row was
+  found with `withTenant`, so it needs a signed-in member (401/403 otherwise) and another workspace
+  gets 404. Deleting a template, a document or a deal removes the files after the transaction
+  commits. In production `STORAGE_DIR` is the `app_storage` volume, shared by api and worker, and
+  the backup container archives it next to each database dump (see
+  [DEPLOYMENT.md](DEPLOYMENT.md#5-backups)).
+- **UI**: Settings → Document templates lists the uploaded templates (fields, uploader, Download,
+  Delete for owners/admins), keeps the built-in "Proposal v4" browser preview, and has the merge
+  field reference with **Download starter template**. **New template** (owners/admins) takes the
+  type, name and file, scans it and shows the fields before **Save template**. On a deal, the
+  composer's **Documents** tab picks a template (the stage's document type first), generates, and
+  lists the documents with their state, template, who, when and what was left empty, with Download
+  and Delete. Entering a stage whose entry document is a Proposal opens the generation dialog, which
+  follows the real job (queued, filling in, saved) and offers the download; with no templates it
+  offers the built-in preview and, for admins, the way to upload one. A contact's screen lists the
+  documents of their deal.
+- **Not done yet**: PDF output (it needs LibreOffice or a conversion service in the worker; a
+  follow-up), emailing a document, and "sent/signed" states (the built-in preview's "Mark as sent"
+  is still session-only).
+
 ## Auth
 
 The app handles authorization, not authentication. `AUTH_MODE=oidc` verifies JWTs from any
@@ -274,9 +347,24 @@ OpenID Connect provider (discovery → JWKS). Users are created on first request
 ### Teams and invitations
 
 A tenant's members and their roles live in `memberships`. Admins invite people from
-**Settings → Team** (`POST /api/team/invitations`). The API returns a one-time token and stores
-only its SHA-256 hash; the UI shows the link `/invite/<token>` to copy and send. For now, sending
-it is up to you. Emailing it from the worker is the natural next step.
+**Settings → Team** (`POST /api/team/invitations`). The API returns a one-time token, which the
+invite dialog shows as the link `/invite/<token>` to copy, and the worker emails the same link
+(CD-7, see "Email" below). The token is found by its SHA-256 hash (`token_hash`); it is also
+kept encrypted with `APP_SECRET` (`token_sealed`, AES-256-GCM), so the worker can build the email
+and admins can resend or copy it later.
+
+- **Email status**: `invitations.email_status` is `queued` (waiting for the worker, or retrying
+  after a failed send, with `email_error` set), `sent` (`email_sent_at`) or `failed` (every retry
+  failed; `email_error` says why). The Team tab shows it under the address ("Email sent 24 Sep",
+  "Sending email…", "Email not delivered: …") and polls every 3 s while one is on its way.
+- **Resend** (`POST /api/team/invitations/:id/resend`, admins) queues the email again with the same
+  link and gives the invitation another 7 days. **Copy link** (`GET /api/team/invitations/:id/link`,
+  admins) returns the token, for when the email doesn't arrive. Both answer 404 for an invitation
+  that was accepted, withdrawn or expired (or belongs to another workspace), and 409 for one from
+  before CD-7 (no stored link: withdraw it and invite again) or when `APP_SECRET` changed since.
+- The email names the workspace, who invited them and the role, and links to
+  `APP_URL/invite/<token>`. `APP_URL` is configured, never taken from the request, so a spoofed
+  Host header can't redirect invite links.
 
 - An invitation is for one email address, expires after 7 days, and works once. Re-inviting the
   same address replaces the pending invitation.
@@ -291,8 +379,186 @@ it is up to you. Emailing it from the worker is the natural next step.
 
 pg-boss keeps its queue in PostgreSQL (schema `pgboss`), so there is no Redis to run. Pass the
 current transaction to `jobs.send(name, data, tx)` so the job exists only if the business change
-commits. `DealsService.moveToStage` does this for `crm.deal-won`. Add Redis later only for caching
+commits. `DealsService.moveToStage` does this for `crm.deal-won`, and `DocumentsService.generate`
+for `crm.generate-document` (the worker fills the template, see "Documents" above). Add Redis later only for caching
 or very high job volume.
+
+The worker fetches up to 10 jobs of a queue at a time (and again straight away while batches come
+back full) and settles each job on its own, so one failing email doesn't retry the others. A
+handler gets `{ retryCount, retryLimit, lastAttempt }` to tell a final failure from one that will
+be retried. Modules register their own handlers through a worker module exported from their
+`index.ts` (`IdentityWorkerModule`, `NotificationsWorkerModule`).
+
+| Job | Sent by | Handled by |
+|---|---|---|
+| `crm.deal-won` | CRM, deal enters the won stage | worker placeholder (future projects handover) |
+| `crm.deal-assigned` | CRM, someone else becomes a deal's owner (create or change) | notifications: "deal assigned to you" email |
+| `identity.invitation-email` | identity, invitation created or resent | identity: the invitation email |
+| `notifications.digest-tick` | cron, every 15 minutes | notifications: queues the digests that are due |
+| `notifications.daily-digest` | the tick (or `POST /api/dev/digest`) | notifications: one member's digest |
+| `reporting.nightly` | cron, 02:00 UTC | placeholder |
+
+## Email (CD-7, CD-16)
+
+Only the worker sends email, through `Mailer` (`infrastructure/mail/`), whose driver `MAIL_DRIVER`
+picks:
+
+- `log` (the default; development and tests): writes each email to the log (recipient and subject
+  at info, the text at debug) and keeps the last ones in memory. Outside production it also
+  appends them to `$STORAGE_DIR/dev-mail/outbox.jsonl`, which `GET /api/dev/mail?to=<address>`
+  returns newest first (only with `AUTH_MODE=dev`; the API and worker are separate processes, so
+  the file is what they share). Addresses at the reserved `.invalid` domain fail, so failed sends
+  and their retries can be tried without a provider.
+- `smtp`: nodemailer with `SMTP_URL` (e.g. `smtps://USER:PASSWORD@smtp.postmarkapp.com:465`) and
+  `MAIL_FROM`; any provider with SMTP works (Postmark, Resend, SES, Mailgun).
+
+Mail jobs (`MAIL_JOBS` in `job-types.ts`) are retried `MAIL_RETRY_LIMIT` times (default 4) with
+exponential backoff from `MAIL_RETRY_DELAY_SECONDS` (default 30). Emails are plain text plus a
+simple HTML version with inline styles (`infrastructure/mail/html.ts` escapes everything).
+Links use `APP_URL`.
+
+| Variable | Default | |
+|---|---|---|
+| `APP_URL` | `http://localhost:5173` | public address for links; required in production |
+| `APP_SECRET` | `DEV_JWT_SECRET` outside production | ≥ 32 characters; encrypts invite links; required in production |
+| `MAIL_DRIVER` | `log` | `log` or `smtp` |
+| `SMTP_URL` | | required with `smtp` |
+| `MAIL_FROM` | `Cadence <no-reply@localhost>` | sender |
+| `MAIL_RETRY_LIMIT`, `MAIL_RETRY_DELAY_SECONDS` | `4`, `30` | retries of a failed send |
+
+Production values are listed in `docs/DEPLOYMENT.md` and the root `.env.example`.
+
+### Notification settings
+
+**Settings → Notifications** shows your own settings for the current workspace. They are columns
+on your membership, read and saved through `GET/PATCH /api/profile` like the rest of the profile
+(so they are per user and per workspace, and nobody else can change them):
+
+- **Daily digest email** (`memberships.daily_digest`, the setting the profile already had since
+  CD-12; the Profile screen shows the same switch).
+- **Deal assigned to you** (`memberships.notify_deal_assigned`, on by default).
+- "Document activity" and "Weekly pipeline report" are listed as **Coming soon**: nothing sends
+  them yet. The old browser-only "Stalled lead nudges" and "Task reminders" became the digest.
+
+### Daily digest
+
+Every 15 minutes `notifications.digest-tick` looks at each workspace's clock (its time zone,
+CD-73). Between 8:00 and 11:59 local time it queues `notifications.daily-digest` for each member
+with the digest on and an email address, unless `daily_digests` already has a row for them and
+that local date. The window lets a worker that was down at 8:00 catch up, without sending a
+"morning" email in the afternoon. The digest job claims the day (a new row, or a failed one being
+retried), loads the digest inside `withTenant` and:
+
+- sends it when it has something: the member's tasks that aren't done and are due before today
+  (overdue) or today, by the workspace's date, on deals that aren't lost; and their open deals
+  (not won, not lost) with no open task from the "New task" dialog, i.e. the Pipeline's "No next
+  step" flag. Each section lists up to 20 items linking to `/deals/<id>`;
+- records `skipped` without sending when all three are empty;
+- records `failed` with the error when the send throws; pg-boss retries it.
+
+`daily_digests` (tenant-scoped, RLS in `drizzle/0018_daily_digests_rls.sql`) holds one row per
+workspace, member and local date with its status (`sending`, `sent`, `skipped`, `failed`), item
+count and error. `GET /api/notifications/digest` returns what your digest for this workspace
+contains right now; with `AUTH_MODE=dev`, `POST /api/dev/digest` sends yours now, whatever the time.
+The content and the email are pure functions in `modules/notifications/digest-content.ts`.
+
+### Deal assigned to you
+
+`DealsService` queues `crm.deal-assigned` in the same transaction when a deal gets an owner who
+isn't the person making the change: a new deal created for someone else, or an owner change.
+Saving the same owner again or taking a deal yourself sends nothing, and neither does the CSV
+import. The worker checks the assignee's setting when it sends (so switching it off stops emails
+still in the queue), and skips deals that were deleted or given to someone else again meanwhile.
+
+## Working together: live updates, conflicts, change history
+
+### Change history (CD-69)
+
+`record_changes` has one row per changed field of a deal, company or contact: `entity_type`,
+`entity_id`, `action` (`created`, `updated`, `deleted`, and for deals `line_added`, `line_changed`,
+`line_removed`), `field` (the API's name: `title`, `stageId`, `ownerUserId`, `lostReason`, …),
+`old_value` / `new_value` (jsonb), a `label` (the record's name on created/deleted, the product's
+name on a line), `actor_user_id`, `client_id` (the browser tab) and `changed_at`.
+
+- **Written by triggers** (`drizzle/0020_record_changes_rls.sql`), not by services, so every write
+  path is covered: the API, CSV import (one `created` row per imported record) and worker jobs.
+  Stage changes, owner changes, lost/reopen (`lostReason` set / cleared, with `lostNote`), the
+  amount following the lines, and line changes (only the fields that changed) are all rows.
+  Lines deleted together with their deal aren't recorded; the deal's `deleted` row says it.
+- **Who**: `DatabaseService.withTenant` sets `app.user_id` and `app.client_id` next to
+  `app.tenant_id`, from the request (`RequestActorInterceptor`, an AsyncLocalStorage store: the
+  signed-in user and the `X-Client-Id` header). Outside a request (jobs) they are empty: "System".
+- **Why not `audit_logs`**: the audit log has one row per action with the request body as `data`,
+  no old value, and misses writes that don't go through those service calls (line changes'
+  effect on the amount, imports, stage deletes moving deals). A field history needs old → new per
+  field, written wherever the row changes, and indexed per record; the audit log stays what it is
+  (a coarse record of business actions).
+- **RLS**: tenant isolation as everywhere, and append-only: the policies allow SELECT and INSERT
+  only, so the app can't rewrite history.
+- `GET /api/crm/history?entityType=deal|company|contact&entityId=…&limit=50&offset=0` (any member),
+  newest first, `{ entries, more }` (limit ≤ 200). Ids come with names (`oldLabel` / `newLabel`:
+  stage, funnel, company, contact, owner); people are named only while they are members of the
+  workspace, otherwise "Former member". History starts with this migration; older changes aren't
+  known.
+- UI (`components/ChangeHistory.tsx`): the deal's **History** card has **Activity | Changes**; the
+  company and contact screens have a **Changes** card. Values are readable (stage names, amounts
+  in the deal's currency, dates, "empty"), 30 at a time with **Show older changes**, and the list
+  re-reads when the record changes.
+
+### Optimistic concurrency (CD-20)
+
+`PATCH` of a deal, company or contact takes `If-Match: "<updatedAt>"`, the version the client
+edited. The database sets `updated_at` (`crm_touch_version` trigger): whole milliseconds, strictly
+increasing per row, and the same moment as the history rows of that change.
+
+- If the row is newer than the version, the update locks the row and looks in `record_changes` for
+  changes after that version **to the fields this update sends**. A field someone changed since,
+  to a value other than the one sent, is a conflict: 409 with `message` ("Ana changed this deal
+  while you were editing. Your change to the title wasn't saved."), `conflicts` (field, current
+  value and its name, who, when) and `current` (the record).
+- Changes to other fields are merged (two people editing different fields don't conflict).
+  Changes made earlier by the same browser tab (`X-Client-Id`) never conflict, so quick typing
+  whose saves overlap is fine; another tab of the same user is told "You changed this deal in
+  another window…".
+- No `If-Match` (or `*`) keeps last-write-wins for API clients from before; a malformed one is 400.
+- Field-level rather than "any change → 409", because the deal row changes all the time without
+  anyone touching the fields being edited (a line changes the amount, logging a call sets
+  `last_contact_at`, a move sets the stage), which would make most edits fail.
+- The store keeps each record's version (`State.versions`) from its last load and sends it with
+  every deal, company and contact edit. On a 409 the toast shows the message and the current
+  value ("It now says “…”") and the workspace is reloaded, so the field shows it.
+
+### Live updates (CD-20)
+
+- **Database**: statement-level triggers on deals, companies, contacts, deal contacts, deal lines,
+  deal tasks (tasks and to-dos), activities, products, funnels and stages send `pg_notify` on
+  channel `crm_changes` when the transaction commits: `{ t: tenant, type, op, ids, dealIds,
+  client }`, one per statement and tenant, ids only (null when more than 50 rows changed, e.g. an
+  import: "re-read the list"). A rolled-back change sends nothing.
+- **API**: each API process holds one extra connection that LISTENs (`modules/realtime`) and hands
+  each notification to the streams of that tenant only. `GET /api/events` (any member) is a
+  Server-Sent Events stream: `ready`, then `change` events, a comment every 20 s (nginx closes
+  idle proxied connections after 60 s, Cloudflare after 100 s) and `X-Accel-Buffering: no`. It
+  ends when the token expires and when the user is no longer a member (checked every 30 s). If the
+  LISTEN connection drops, it reconnects with backoff and sends `resync` to every stream. It works
+  with several API processes because every process listens to the database, not to each other.
+- **Authentication**: the browser reads the stream with `fetch`, not `EventSource`, so it sends
+  the same `Authorization`, `X-Tenant-Id` and `X-Client-Id` headers as every other call. With
+  EventSource the token would have to go in the URL (kept in proxy and access logs) or a
+  short-lived stream token would need its own endpoint and expiry handling; fetch needs neither,
+  and each reconnect picks up a refreshed OIDC token.
+- **Browser**: the stream runs in a dedicated worker (`store/live.worker.ts`, `liveStream.ts`); the
+  page answers its requests for headers. Off the page, the long-lived request doesn't keep the
+  page "busy" for tools that wait for network idle (the e2e tests). It reconnects with backoff
+  (1 s doubling to 30 s, with jitter) and shows nothing when the stream drops; after a reconnect,
+  and when the window gets focus (at most every 10 s), it re-reads everything.
+- **Merging** (`store.tsx`, live updates): a hint is skipped if this tab made the change; others
+  are gathered for 300 ms, then only the lists they affect are re-read (`loadWorkspace(parts)`
+  re-reads those and reuses the rest of the last load), and loaded timelines of the deals
+  involved. Like the reload after a failed save, it waits until this tab's own edits are saved
+  (debounced typing is not sent early) and discards its result if an edit started while it loaded,
+  so it never overwrites what someone is typing. An edit based on an older version is caught by
+  the API (409 above).
 
 ## Frontend: store → API
 
@@ -346,7 +612,7 @@ the store is the one place that talks to the backend.
   its to-dos; they aren't deleted. Off-playbook to-dos are rows of their own.
   - Item ids are the only key (CD-78): the labels-only `funnel_stages.checklist` column, the
     triggers that kept it in sync and the unique index on `deal_tasks (deal_id, stage_id, label)`
-    were dropped in `drizzle/0013_onboarding_cleanup.sql`.
+    were dropped in `drizzle/0021_onboarding_cleanup.sql`.
   - `PATCH /api/crm/funnels/:id/stages/:stageId` takes `checklistItems` (keep `id` to rename,
     leave it out for a new item). `PUT /api/crm/deals/:id/tasks/playbook` takes `checklistItemId`;
     a label alone is refused (400).
@@ -378,8 +644,7 @@ the store is the one place that talks to the backend.
     `en-US` for USD, `en-GB` for GBP, …; `en-US` otherwise), so a euro workspace still reads
     "€14,000" and a CAD one writes USD as "US$". Totals are summed per currency and listed side by
     side, workspace currency first ("$14,000 + €2,500"), never added together (`moneyTotal`). There
-    are no exchange rates. Products have no currency of their own; their prices are in the workspace
-    currency.
+    are no exchange rates. Products have a currency of their own (CD-77, see below).
   - **Time zone**: "today" (Today, overdue, a new task's default due date, the closing-date
     filters) and the dates of timeline entries and completed to-dos use the workspace time zone,
     not the browser's (`todayIso(tz)`, `momentLabel`). Due dates and closing dates are calendar
@@ -390,12 +655,13 @@ the store is the one place that talks to the backend.
     stays the same.
 - Profile (**Profile settings**, `GET/PATCH /api/profile`, always the caller's own): name, job title,
   phone, language, date format and start page live on `users` and apply in every workspace. The
-  default funnel and the daily-digest choice live on `memberships`, because funnels and the digest
-  belong to one workspace. A name set here wins over the name in the sign-in token
+  default funnel and the notification settings (daily digest, deal assigned) live on
+  `memberships`, because funnels and notifications belong to one workspace. A name set here wins over the name in the sign-in token
   (`users.display_name_custom`). The start page and the default funnel take effect (the app opens
-  on them). Language, date format and the digest are only stored for now, and the UI says so.
+  on them). Language and date format are only stored for now, and the UI says so; the digest is
+  sent (see "Email").
   `memberships.default_funnel_id` has no foreign key (memberships has no RLS), so a trigger clears
-  it when its funnel is deleted (0013), and the Profile screen shows "First funnel (…)" when there
+  it when its funnel is deleted (0021), and the Profile screen shows "First funnel (…)" when there
   is none.
   Email and password belong to the sign-in provider and can't be changed here.
 - Discovery notes on a deal (headline, need, constraint, decision maker, discovery date) are
@@ -404,12 +670,91 @@ the store is the one place that talks to the backend.
 
 Still browser-only (seeded from `store/seed.ts`, lost on reload), because the backend doesn't have
 them yet:
-- document templates and generation (worker + storage)
-- sales-bonus rules (including "Sales bonus earned" on the Workspace tab); they start empty
-  (no made-up rate, minimum or flat amount)
-- invitation emails (links are copied by hand for now)
-- custom fields
-- notification and integration settings
+- integration settings (CD-79)
+
+## Custom fields (CD-15)
+
+Owners and admins define extra fields for deals, companies and contacts in **Settings → Customize
+Fields**; everyone fills them in. Definitions live in `custom_field_defs` (tenant-scoped, RLS in
+`drizzle/0014_custom_fields_bonus_rls.sql`): record type (`deal`, `company`, `contact`), label, type
+(`text`, `number`, `date`, `select`, `checkbox`, `url`), options (select only, `[{ id, label }]`),
+`required` and `position`. Labels are unique per record type among live fields (case-insensitive).
+
+- **Values** are a `custom_fields jsonb` column on `deals`, `companies` and `contacts`, keyed by
+  field id (`{ "<field id>": "PO-7", "<other id>": 12.5 }`). Why a column rather than a values table:
+  a record and its values are read and written together (lists, record screens, exports), so they
+  come with the row at no extra query or join, and a PATCH merges into the column in one statement
+  (`custom_fields || new - cleared`). A values table would pay off for querying and indexing by
+  value (filters, reports on custom fields), which nothing does yet; a GIN index on the column or a
+  move to a table is the path if that comes.
+- **Validation** (`CustomFieldsService.validate`): every create or update that sends `customFields`
+  is checked against the live definitions: unknown or deleted field ids are 400; text ≤ 2,000
+  characters, numbers finite, dates `YYYY-MM-DD`, checkboxes true/false, URLs http(s) with a host
+  (a missing `https://` is added), select values an option id (an option label is accepted and
+  stored as its id). `null` or `''` clears a value. The PATCH merges: fields not sent are kept.
+- **Required**: a required field can't be cleared once it has a value (400). A create that sends
+  `customFields` (the New deal and New contact forms do) must fill every required field of that
+  record type; creates that don't send any (quick "Add company", the New deal dialog's inline new
+  company, the CSV import, other API clients) still work and leave the field empty, and the record
+  shows the field marked with `*`. Enforcing it everywhere would make every record source
+  (import, quick add) know every field first.
+- **Renaming** a field or an option keeps the values (they are stored by id). An option still used
+  by a record can't be removed (409, with the count); the type of a field can't change.
+- **Deleting** is soft (`deleted_at`): the field disappears from the screens, forms and exports, its
+  name can be reused, and writes to it are refused (400). The values stay in the records, unseen.
+  The UI asks first and says exactly that.
+- Endpoints: `GET /api/crm/custom-fields[?entity=]` (members too), `POST /api/crm/custom-fields`,
+  `PATCH /api/crm/custom-fields/:id` (label, options, required), `PUT /api/crm/custom-fields/order`
+  (`{ entity, fieldIds }`, every live field once), `DELETE /api/crm/custom-fields/:id`; all but the
+  GET are owners and admins only (403 for members). At most 50 live fields per record type.
+- UI: the fields show under the standard ones on the deal Summary, the company screen and the
+  contact screen (saved as you type, `setCustomValue`), and in the New deal and New contact
+  dialogs. Companies have no create dialog, so company fields are filled on the company screen.
+  CSV **export** adds one column per live field (option labels, Yes/No, numbers as numbers).
+  CSV **import** doesn't map columns to custom fields yet (a follow-up: the import field list is
+  static and the row writers would need the definitions and a merge on update).
+
+## Sales bonus rules (CD-17)
+
+"Add the sales bonus rules in the workspace settings, so admin can only set it up or the manager
+for their team. We don't want users to view it." There is no manager role yet, so owners and admins
+only; a manager scoped to their team is a follow-up (it needs teams first).
+
+- `sales_bonus_rules` (tenant, user, `rate` %, `floor` = minimum deal, `fixed` = flat amount under
+  the minimum) and `sales_bonus_settings` (one row per tenant: `trigger`, "On contract signed" or
+  "When fully billed"), both with RLS. Amounts are in the workspace currency.
+- `GET /api/crm/bonus-rules` → `{ trigger, rules }`, `PATCH /api/crm/bonus-rules` `{ trigger }`,
+  `PUT /api/crm/bonus-rules/:userId` `{ rate, floor, fixed }` (the user must be a member),
+  `DELETE /api/crm/bonus-rules/:userId`. The whole controller requires the admin role, reading
+  included, so members get 403 and never receive a rule. Nothing about bonuses is on
+  `GET /api/workspace` (which members read).
+- UI: **Settings → Sales bonuses** (owners and admins; the tab and its route don't exist for
+  members) holds the trigger and a rate / minimum / flat amount per active member, saved as you
+  type. Overview's **Sales bonuses** card is shown to owners and admins only, read-only, with a link
+  to the tab; it computes earned and pending bonuses in the browser from the stored rules, grouped
+  by the deal's `ownerId` (CD-30). The store doesn't even ask for the rules as a member
+  (`remote.ts` treats the 403 as "no rules").
+- A deal in another currency than the workspace's gets the rate only: the minimum and the flat
+  amount are in the workspace currency and there are no exchange rates.
+- Members can still read deals and their owners (as before), so a determined member could apply a
+  rate they know; what is protected is the rules and the bonus figures.
+
+## Product and deal currency (CD-77)
+
+- `products.currency` (ISO 4217). A new product takes the workspace currency unless the request
+  names one; existing products got their workspace's currency in `drizzle/0014`. The Products
+  screen has a Currency column and the New product dialog a Currency field.
+- **A line is in its deal's currency.** There are no exchange rates, so adding a product priced in
+  another currency to a deal, or switching a line to one, is refused (409: "Design USD is priced in
+  USD, but this deal is in EUR. Pick a product priced in EUR, or change the deal's currency
+  first."). The deal's line picker shows other currencies but greys them out, and "Add line" picks
+  the first product in the deal's currency (or says there is none).
+- **Changing a deal's currency** (`PATCH /api/crm/deals/:id { currency }`; the deal Summary has a
+  Currency field) is refused while a line uses a product priced in another currency than the new
+  one (409, naming the products); lines without a product don't block it. Without lines the amount
+  keeps its number and is read in the new currency. The UI checks the same rule first and says why.
+- A product's currency can't change while it is on deals in another currency (409, naming the deal).
+- The CSV import and export already carried the deal currency; nothing else lists products.
 
 ## First-run onboarding (CD-68)
 

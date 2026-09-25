@@ -1,11 +1,13 @@
 import { useState } from 'react';
+import { CustomFieldInputs, customFieldsForCreate } from '../components/CustomFields';
 import { Modal, ModalHeader } from '../components/ui';
-import { LOST_REASONS, type LostReason } from '../lib/api';
+import { type CustomFieldPatch, type CustomFieldType, LOST_REASONS, type LostReason } from '../lib/api';
 import { paths } from '../lib/paths';
-import { BILLING_KINDS, BUYER_ROLES, CHANNEL_LABELS, DOC_TYPES, FIELD_TYPES, PARAM_SOURCES, PRODUCT_TYPES } from '../store/seed';
-import { allPeople, companyLabels, companyRecords, currencySymbol, curOf, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
+import { BILLING_KINDS, BUYER_ROLES, CHANNEL_LABELS, currencyOptions, FIELD_TYPES, PRODUCT_TYPES } from '../store/seed';
+import { allPeople, companyLabels, companyRecords, currencySymbol, customFieldsOf, leadById, localeFor, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { ChannelCode, Lead } from '../store/types';
+import { GenerationModal, NewTemplateModal } from './DocumentModals';
 import { ProposalDoc } from './ProposalDoc';
 
 /** Every overlay in the app; open/closed state lives in the store. */
@@ -28,43 +30,11 @@ export function Modals() {
   );
 }
 
-const GEN_STEPS = ['Reading the company record', 'Merging 14 fields from this lead', 'Applying Proposal template v4', 'Pricing from the service rate card', 'Ready for review'];
-
-function GenerationModal() {
-  const { s, openGenerated } = useStore();
-  const lead = leadById(s, s.genLead) || s.leads[0]!;
-  const ready = s.genStep >= 4;
-  return (
-    <div className="overlay" style={{ zIndex: 40 }}>
-      <div style={{ background: 'var(--white)', borderRadius: 14, width: '100%', maxWidth: 520, padding: 28, animation: 'dcFade .25s ease-out both' }}>
-        <div className="caps">Stage rule fired</div>
-        <div style={{ fontWeight: 600, letterSpacing: '-0.02em', fontSize: 24, lineHeight: 1.15, margin: '7px 0 6px' }}>Building the proposal for {lead.company}</div>
-        <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5 }}>Template: Proposal v4 · 8 sections · 14 merge fields</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 11, marginTop: 20 }}>
-          {GEN_STEPS.map((label, i) => {
-            const done = i < s.genStep;
-            const current = i === s.genStep;
-            return (
-              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-                <span style={{ flex: '0 0 18px', width: 18, height: 18, borderRadius: '50%', border: `1.5px solid ${done ? '#14503C' : current ? '#B4531B' : '#D0D5DD'}`, background: done ? '#14503C' : 'transparent', color: '#FFFFFF', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{done ? '✓' : ''}</span>
-                <span style={{ fontSize: 13.5, color: done || current ? '#101828' : '#98A2B3' }}>{label}</span>
-              </div>
-            );
-          })}
-        </div>
-        <button type="button" onClick={openGenerated} style={{ width: '100%', marginTop: 22, border: 0, cursor: ready ? 'pointer' : 'wait', background: ready ? '#14503C' : '#F1F3F6', color: ready ? '#F5F6F8' : '#98A2B3', fontSize: 13.5, fontWeight: 500, padding: 12, borderRadius: 8 }}>
-          {ready ? 'Review proposal' : 'Generating…'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 const NEW_CO = '+ New company…';
 const NEW_CT = '+ New contact…';
 
 function NewDealModal() {
-  const { s, set, createDeal } = useStore();
+  const { s, set, flash, createDeal } = useStore();
   const [busy, setBusy] = useState(false);
   const records = companyRecords(s);
   const labels = companyLabels(records);
@@ -83,8 +53,11 @@ function NewDealModal() {
   const contactOptions = [...people.map((p) => p.name), NEW_CT];
   const contact = contactPick && contactOptions.includes(contactPick) ? contactPick : contactOptions[0]!;
   const funnel = s.funnels[type];
+  const [custom, setCustom] = useState<CustomFieldPatch>({});
 
   const create = async () => {
+    const fields = customFieldsForCreate(customFieldsOf(s, 'deal'), custom);
+    if ('missing' in fields) return flash(`Fill in ${fields.missing} first`);
     const coName = companyIsNew ? companyName.trim() || 'New company' : (companyRec?.name ?? '');
     const ctName = contact === NEW_CT ? contactName.trim() : contact;
     const person = people.find((p) => p.name === ctName);
@@ -93,6 +66,7 @@ function NewDealModal() {
       company: { id: companyIsNew ? undefined : companyId, name: coName },
       contact: person ? { contactId: person.contactId, name: person.name } : ctName ? { name: ctName } : null,
       segment: type,
+      ...(customFieldsOf(s, 'deal').length ? { customFields: fields.values } : {}),
     });
     setBusy(false);
   };
@@ -131,6 +105,7 @@ function NewDealModal() {
           </button>
         ))}
       </div>
+      <CustomFieldInputs entity="deal" values={custom} onChange={setCustom} />
       <div className="hint-box">
         Assigns the {funnel.stages.length}-stage funnel. First task: {funnel.stages[0]?.activity}.
       </div>
@@ -273,15 +248,18 @@ function NewContactModal() {
   const { s, set, flash, createContact } = useStore();
   const [busy, setBusy] = useState(false);
   const nc = s.newContact;
+  const [custom, setCustom] = useState<CustomFieldPatch>({});
   const setNc = (k: keyof typeof nc) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const v = e.target.value;
     set((x) => ({ newContact: { ...x.newContact, [k]: v } }));
   };
   const create = async () => {
     if (!nc.name.trim()) return flash('Give the contact a name first');
+    const fields = customFieldsForCreate(customFieldsOf(s, 'contact'), custom);
+    if ('missing' in fields) return flash(`Fill in ${fields.missing} first`);
     setBusy(true);
     const lead = leadById(s, s.contactCompany) || s.leads[0];
-    await createContact({ ...nc, name: nc.name.trim() }, lead?.id);
+    await createContact({ ...nc, name: nc.name.trim() }, lead?.id, customFieldsOf(s, 'contact').length ? fields.values : undefined);
     setBusy(false);
   };
   return (
@@ -328,6 +306,7 @@ function NewContactModal() {
           ))}
         </select>
       </label>
+      <CustomFieldInputs entity="contact" values={custom} onChange={setCustom} />
       <label className="form-label">
         Notes
         <textarea className="form-input" rows={3} placeholder="How they influence the deal" value={nc.notes} onChange={(e) => set((x) => ({ newContact: { ...x.newContact, notes: e.target.value } }))} />
@@ -392,110 +371,68 @@ function NewPersonaModal() {
   );
 }
 
-function NewTemplateModal() {
-  const { s, set } = useStore();
-  const file = s.templateFile;
-  return (
-    <Modal maxWidth={600}>
-      <ModalHeader title="New template" sub="Upload the document you already use. Every parameter it contains becomes a merge field the CRM fills from the lead record." />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-        <span className="caps">Document type</span>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {DOC_TYPES.map((d) => (
-            <button key={d} type="button" className={s.templateType === d ? 'choice-pill on' : 'choice-pill'} onClick={() => set({ templateType: d })}>
-              {d}
-            </button>
-          ))}
-        </div>
-      </div>
-      <label className="form-label">
-        Template name
-        <input className="form-input" placeholder="e.g. Proposal — brand programme v1" />
-      </label>
-      <button
-        type="button"
-        onClick={() => set({ templateFile: s.templateType.toLowerCase().replace(/ /g, '-') + '.docx' })}
-        style={{ cursor: 'pointer', textAlign: 'left', border: `1px dashed ${file ? '#14503C' : '#D0D5DD'}`, background: file ? '#E7F2EE' : '#F5F6F8', borderRadius: 10, padding: 20, display: 'flex', flexDirection: 'column', gap: 5 }}
-      >
-        <span style={{ fontSize: 13.5, fontWeight: 600 }}>{file || 'Upload a .docx or .pdf'}</span>
-        <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45 }}>{file ? 'Scanned · 3 parameters recognised' : 'Choose the document you already send. Parameters written in double braces are detected automatically.'}</span>
-      </button>
-      {file && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 9, background: 'var(--bg-soft)', borderRadius: 10, padding: 14 }}>
-          <span className="caps">Parameters found</span>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-            {Object.entries(PARAM_SOURCES).map(([token, source]) => (
-              <span key={token} style={{ fontSize: 12, background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 9px', color: 'var(--ink)' }}>
-                {token} <span style={{ color: 'var(--muted)' }}>→ {source}</span>
-              </span>
-            ))}
-          </div>
-          <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>These fill automatically each time the template runs. Anything not recognised stays as plain text.</span>
-        </div>
-      )}
-      <div className="modal-actions">
-        <button type="button" className="btn btn-secondary" onClick={() => set({ templateOpen: false, templateFile: null })}>
-          Cancel
-        </button>
-        <span className="caps-muted" style={{ alignSelf: 'center' }}>
-          Coming soon
-        </span>
-        <button type="button" className="btn btn-disabled" disabled title="Saving your own templates is coming soon">
-          Save template
-        </button>
-      </div>
-    </Modal>
-  );
-}
-
+/** New custom field (CD-15) for deals, companies or contacts; owners and admins only. */
 function NewFieldModal() {
-  const { s, set, flash } = useStore();
+  const { s, set, flash, createCustomField } = useStore();
   const nf = s.newField;
-  const reset = { label: '', type: 'Text', entity: 'Leads' as const, required: false };
+  const [busy, setBusy] = useState(false);
+  const reset = { label: '', type: 'text' as CustomFieldType, entity: nf.entity, required: false, options: '' };
+  const patch = (p: Partial<typeof nf>) => set((x) => ({ newField: { ...x.newField, ...p } }));
+  const options = nf.options.split('\n').map((o) => o.trim()).filter(Boolean);
+  const entityLabel = { deal: 'deals', company: 'companies', contact: 'contacts' }[nf.entity];
+  const add = async () => {
+    if (!nf.label.trim() || busy) return;
+    if (nf.type === 'select' && options.length === 0) return flash('Add at least one option, one per line');
+    setBusy(true);
+    const ok = await createCustomField({ entity: nf.entity, label: nf.label, type: nf.type, required: nf.required, options });
+    setBusy(false);
+    if (!ok) return;
+    flash(nf.label.trim() + ' added to ' + entityLabel);
+    set({ fieldOpen: false, newField: reset });
+  };
   return (
     <Modal maxWidth={520}>
-      <ModalHeader title="New field" sub="Custom fields appear on the record and in the create form, and can be merged into documents." />
+      <ModalHeader title="New field" sub="Custom fields show on the record and in its create form, and are included in CSV exports." />
       <label className="form-label">
         Field name
-        <input className="form-input" placeholder="e.g. Contract end date" value={nf.label} onChange={(e) => set((x) => ({ newField: { ...x.newField, label: e.target.value } }))} />
+        <input className="form-input" placeholder="e.g. Contract end date" value={nf.label} onChange={(e) => patch({ label: e.target.value })} />
       </label>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         <span className="caps">Applies to</span>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {(['Leads', 'Contacts'] as const).map((en) => (
-            <button key={en} type="button" className={nf.entity === en ? 'choice-pill on' : 'choice-pill'} onClick={() => set((x) => ({ newField: { ...x.newField, entity: en } }))}>
-              {en}
+          {(['deal', 'company', 'contact'] as const).map((en) => (
+            <button key={en} type="button" className={nf.entity === en ? 'choice-pill on' : 'choice-pill'} onClick={() => patch({ entity: en })}>
+              {{ deal: 'Deals', company: 'Companies', contact: 'Contacts' }[en]}
             </button>
           ))}
         </div>
       </div>
       <label className="form-label">
         Type
-        <select className="form-input" value={nf.type} onChange={(e) => set((x) => ({ newField: { ...x.newField, type: e.target.value } }))}>
+        <select className="form-input" value={nf.type} onChange={(e) => patch({ type: e.target.value as CustomFieldType })}>
           {FIELD_TYPES.map((ft) => (
-            <option key={ft}>{ft}</option>
+            <option key={ft.value} value={ft.value}>
+              {ft.label}
+            </option>
           ))}
         </select>
       </label>
-      <button type="button" onClick={() => set((x) => ({ newField: { ...x.newField, required: !x.newField.required } }))} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', textAlign: 'left', border: 0, background: 'transparent', padding: 0 }}>
+      {nf.type === 'select' && (
+        <label className="form-label">
+          Options, one per line
+          <textarea className="form-input" rows={4} placeholder={'e.g.\nGold\nSilver\nBronze'} value={nf.options} onChange={(e) => patch({ options: e.target.value })} />
+        </label>
+      )}
+      <button type="button" onClick={() => patch({ required: !nf.required })} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', textAlign: 'left', border: 0, background: 'transparent', padding: 0 }}>
         <span style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${nf.required ? '#14503C' : '#D0D5DD'}`, background: nf.required ? '#14503C' : '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', fontSize: 11 }}>{nf.required ? '✓' : ''}</span>
-        <span style={{ fontSize: 13, color: 'var(--ink)' }}>Required before a lead can advance a stage</span>
+        <span style={{ fontSize: 13, color: 'var(--ink)' }}>Required: must be filled in when the record is created in its form, and can't be cleared</span>
       </button>
       <div className="modal-actions">
         <button type="button" className="btn btn-secondary" onClick={() => set({ fieldOpen: false, newField: reset })}>
           Cancel
         </button>
-        <button
-          type="button"
-          className={nf.label ? 'btn btn-primary' : 'btn btn-disabled'}
-          style={{ cursor: 'pointer' }}
-          onClick={() => {
-            if (!nf.label) return;
-            set((x) => ({ fields: [...x.fields, { id: 'f' + Date.now(), ...nf, system: false, visible: true }], fieldOpen: false, newField: reset }));
-            flash(nf.label + ' added to ' + nf.entity.toLowerCase() + ' for this session only; not saved yet');
-          }}
-        >
-          Add field
+        <button type="button" className={nf.label.trim() && !busy ? 'btn btn-primary' : 'btn btn-disabled'} style={{ cursor: 'pointer' }} disabled={busy} onClick={() => void add()}>
+          {busy ? 'Adding…' : 'Add field'}
         </button>
       </div>
     </Modal>
@@ -553,7 +490,9 @@ function DrillModal() {
 function NewProductModal() {
   const { s, set, flash, addProduct } = useStore();
   const p = s.newProduct;
-  const reset = { name: '', type: 'Service', kind: 'One-off', price: '', vat: '20' };
+  const reset = { name: '', type: 'Service', kind: 'One-off', price: '', vat: '20', currency: '' };
+  // CD-77: the price is in this currency; only deals in it can use the product.
+  const currency = p.currency || s.workspace.currency;
   const setP = (k: keyof typeof p) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const v = e.target.value;
     set((x) => ({ newProduct: { ...x.newProduct, [k]: v } }));
@@ -583,8 +522,18 @@ function NewProductModal() {
           </select>
         </label>
         <label className="form-label">
-          Unit price ({currencySymbol(curOf(s))})
+          Unit price ({currencySymbol({ currency, locale: localeFor(s.workspace.currency) })})
           <input className="form-input" placeholder="6500" value={p.price} onChange={setP('price')} />
+        </label>
+        <label className="form-label">
+          Currency
+          <select className="form-input" value={currency} onChange={setP('currency')}>
+            {currencyOptions(currency).map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="form-label">
           VAT %
@@ -601,7 +550,7 @@ function NewProductModal() {
           onClick={() => {
             const name = p.name.trim();
             if (!name) return flash('Give the product a name first');
-            void addProduct({ ...p, name }).then((ok) => {
+            void addProduct({ ...p, name, currency }).then((ok) => {
               if (!ok) return;
               set({ productOpen: false, newProduct: reset });
               flash(name + ' added to the catalog');

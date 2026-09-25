@@ -1,11 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { asc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { dealLines, deals, PAYMENT_SCHEDULES } from '../../../shared/database/schema';
+import { dealLines, deals, PAYMENT_SCHEDULES, products } from '../../../shared/database/schema';
 import { nonEmptyPatch, PaginationQuery } from '../../../shared/validation/common';
 
 const decimal = (max: number) =>
@@ -57,6 +57,7 @@ export class DealLinesService {
   create(ctx: TenantContext, dealId: string, input: CreateDealLine) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        await this.assertSameCurrency(tx, dealId, input.productId);
         const [row] = await tx
           .insert(dealLines)
           .values({ ...input, milestones: input.milestones ?? defaultMilestones(), tenantId: ctx.tenantId, dealId })
@@ -71,6 +72,11 @@ export class DealLinesService {
   update(ctx: TenantContext, id: string, input: UpdateDealLine) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        if (input.productId) {
+          const [line] = await tx.select({ dealId: dealLines.dealId }).from(dealLines).where(eq(dealLines.id, id));
+          if (!line) throw new NotFoundException('Deal line not found');
+          await this.assertSameCurrency(tx, line.dealId, input.productId);
+        }
         const [row] = await tx.update(dealLines).set(input).where(eq(dealLines.id, id)).returning();
         if (!row) throw new NotFoundException('Deal line not found');
         await this.syncAmount(tx, row.dealId);
@@ -88,6 +94,20 @@ export class DealLinesService {
         await this.audit.record(tx, ctx, { action: 'deal_line.deleted', entityType: 'deal', entityId: row.dealId, data: { lineId: id } });
       })
       .catch(mapDbError);
+  }
+
+  /**
+   * CD-77: a line is priced in its deal's currency and there are no exchange rates, so a product
+   * priced in another currency can't go on the deal (409) instead of being summed as if it matched.
+   */
+  private async assertSameCurrency(tx: Tx, dealId: string, productId: string | null | undefined) {
+    if (!productId) return;
+    const [deal] = await tx.select({ currency: deals.currency }).from(deals).where(eq(deals.id, dealId));
+    if (!deal) throw new NotFoundException('Deal not found');
+    const [product] = await tx.select({ name: products.name, currency: products.currency }).from(products).where(eq(products.id, productId));
+    if (!product) throw new NotFoundException('Product not found');
+    if (product.currency !== deal.currency)
+      throw new ConflictException(`${product.name} is priced in ${product.currency}, but this deal is in ${deal.currency}. Pick a product priced in ${deal.currency}, or change the deal's currency first.`);
   }
 
   private async syncAmount(tx: Tx, dealId: string) {

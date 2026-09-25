@@ -1,8 +1,10 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, crmApi, type DealInput, type DealLineInput, type LostReason, type ProfileInput, type TaskInput } from '../lib/api';
+import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealLineInput, type HistoryEntity, type LostReason, type ProfileInput, type TaskInput } from '../lib/api';
 import { paths } from '../lib/paths';
-import { loadWorkspace, mapActivity, mapLeadTask, mapLine, mapStageChange, type WorkspaceData } from './remote';
+import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference } from './documents';
+import { connectLive, type LiveEvent } from './live';
+import { loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type Part, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
 import {
   champFor,
@@ -10,8 +12,10 @@ import {
   companyRecords,
   curOf,
   defaultStart,
+  customFieldsOf,
   initialsOf,
   itemById,
+  itemCurrency,
   leadById,
   money,
   netOf,
@@ -25,7 +29,7 @@ import {
   todayLabel,
   todoItemsFor,
 } from './selectors';
-import type { Champ, ChannelCode, DealLine, Lead, LeadTask, LogEntry, NewContactDraft, NewProductDraft, Person, Profile, SegKey, Stage, State, TaskState, Workspace } from './types';
+import type { BonusRule, Champ, ChannelCode, CustomFieldDef, DealLine, Lead, LeadTask, LogEntry, NewContactDraft, NewProductDraft, Person, Profile, SegKey, Stage, State, TaskState, Workspace } from './types';
 
 type Updater = Partial<State> | ((s: State) => Partial<State>);
 
@@ -49,7 +53,7 @@ export interface Session {
 /**
  * Business records (deals with their lines and to-dos, companies, contacts, products, funnels,
  * activity), the workspace settings and your profile come from the API. Features the backend
- * doesn't have yet (documents, some settings tabs) still live only in this browser tab, seeded
+ * doesn't have yet (some settings tabs) still live only in this browser tab, seeded
  * from the design.
  */
 function loadInitial(data: WorkspaceData): State {
@@ -74,9 +78,49 @@ const errText = (err: unknown) => {
   const issue = err instanceof ApiError ? (err.body as { issues?: { path?: string; message?: string }[] } | null)?.issues?.[0] : undefined;
   return issue?.message ? `${err.message}: ${issue.path ? issue.path + ' ' : ''}${issue.message}` : err.message;
 };
+/** A typed value as the API takes it: numbers as numbers, '' as null (clears the field). */
+function customValueForApi(type: CustomFieldType, v: CustomValue | null): CustomValue | null {
+  if (v === null || v === '') return null;
+  if (type === 'number' && typeof v === 'string') {
+    const n = Number(v.trim().replace(',', '.'));
+    return v.trim() === '' ? null : Number.isFinite(n) ? n : v;
+  }
+  return v;
+}
+/** A lead's amount as a number (its value is kept formatted). */
+const valueNumOf = (l: Lead) => Number(String(l.value).replace(/[^0-9.-]/g, '')) || 0;
+/**
+ * A 409 from an edit that someone else's change got to first (CD-20): the API's message ("Ana
+ * changed this deal while you were editing. Your change to the title wasn't saved.") and the
+ * value the record has now.
+ */
+const conflictText = (err: unknown): string | null => {
+  const body = err instanceof ApiError && err.status === 409 ? (err.body as Partial<ApiConflict> | null) : null;
+  if (!body?.conflicts?.length || !body.message) return null;
+  const shown = (c: ApiConflict['conflicts'][number]) => {
+    const v = c.label ?? (c.value === null || c.value === undefined || c.value === '' ? 'empty' : String(c.value));
+    return v === 'empty' ? 'empty' : `“${v}”`;
+  };
+  const now = body.conflicts.length === 1 ? `It now says ${shown(body.conflicts[0]!)}.` : `It now says ${body.conflicts.map(shown).join(', ')}.`;
+  return `${body.message} ${now}`;
+};
+/** Which lists a live change hint means re-reading (see loadWorkspace). */
+const PARTS_OF: Record<string, Part[]> = {
+  // The getting-started checklist (CD-68) ticks itself from deals, products and funnels.
+  deal: ['deals', 'onboarding'],
+  deal_contact: ['deals'],
+  deal_line: ['lines', 'deals'],
+  task: ['tasks'],
+  company: ['companies'],
+  contact: ['contacts'],
+  product: ['products', 'onboarding'],
+  funnel: ['funnels', 'onboarding'],
+  activity: [],
+};
+const ALL_PARTS: Part[] = ['funnels', 'companies', 'contacts', 'deals', 'products', 'lines', 'tasks', 'team', 'customFields', 'bonus', 'onboarding'];
 const EMPTY_CONTACT: NewContactDraft = { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer', notes: '' };
 const DISCOVERY_FIELDS = ['headline', 'need', 'constraint', 'decisionMaker', 'discoveryDate'] as const satisfies readonly (keyof Lead & keyof DealInput)[];
-/** Workspace settings as the API names them (the bonus trigger has no backend yet). */
+/** Workspace settings as the API names them. */
 const WORKSPACE_FIELDS: Partial<Record<keyof Workspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth'>> = {
   name: 'name',
   currency: 'currency',
@@ -93,6 +137,7 @@ const PROFILE_FIELDS: Partial<Record<keyof Profile, keyof ProfileInput>> = {
   startPage: 'startPage',
   defaultFunnelId: 'defaultFunnelId',
   digest: 'dailyDigest',
+  dealAssigned: 'notifyDealAssigned',
 };
 
 function useStoreImpl(data: WorkspaceData, session: Session) {
@@ -101,7 +146,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
   ref.current = s;
   const navigate = useNavigate();
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const genTimer = useRef<ReturnType<typeof setInterval>>(undefined);
+  /** Documents being generated that the store follows (CD-13), by id; and deals whose documents were loaded. */
+  const docPolls = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const docsRequested = useRef(new Set<string>());
+  const placeholderRef = useRef<Promise<PlaceholderReference> | null>(null);
   /** Debounced writes that haven't been sent yet, by field key (see saveLater). */
   const saveTimers = useRef(new Map<string, { timer: ReturnType<typeof setTimeout>; run: () => void }>());
   /** Writes sent but not answered yet; `writeSeq` counts every write started. */
@@ -111,14 +159,17 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
   const reloading = useRef<Promise<void> | null>(null);
   const logRequested = useRef(new Set<string>());
   const pendingTasks = useRef(new Map<string, TaskInput>());
+  /** Live updates (CD-20): lists to re-read and deals whose timeline to re-read, gathered over a short pause. */
+  const livePending = useRef({ parts: new Set<Part>(), logs: new Set<string>(), touched: new Set<string>(), timer: undefined as ReturnType<typeof setTimeout> | undefined, running: false, lastFull: 0 });
 
   const set = useCallback((u: Updater) => setState((prev) => ({ ...prev, ...(typeof u === 'function' ? u(prev) : u) })), []);
 
   useEffect(() => {
     const timers = saveTimers.current;
+    const polls = docPolls.current;
     return () => {
       clearTimeout(toastTimer.current);
-      clearInterval(genTimer.current);
+      polls.forEach((t) => clearTimeout(t));
       timers.forEach((t) => clearTimeout(t.timer));
     };
   }, []);
@@ -167,6 +218,26 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       saveTimers.current.delete(key);
       notifyIfIdle();
     };
+    /** Shows a freshly loaded workspace; a funnel that was deleted can't stay open. */
+    const applyData = (data: WorkspaceData, touched: Iterable<string> = []) =>
+      set((x) => {
+        const first = Object.keys(data.funnels)[0]!;
+        const valid = (id: string) => (data.funnels[id] ? id : first);
+        // Generated documents only live in this tab so far: keep them on their deal.
+        const docs = new Map(x.leads.filter((l) => l.docs?.length).map((l) => [l.id, l.docs]));
+        const leads = docs.size ? data.leads.map((l) => (docs.has(l.id) ? { ...l, docs: docs.get(l.id) } : l)) : data.leads;
+        const now = Date.now();
+        const changedAt = { ...x.changedAt };
+        for (const id of touched) changedAt[id] = now;
+        return {
+          ...data,
+          leads,
+          changedAt,
+          segment: valid(x.segment),
+          newLeadType: valid(x.newLeadType),
+          filters: x.filters.audience === 'Audience' || data.funnels[x.filters.audience] ? x.filters : { ...x.filters, audience: 'Audience' },
+        };
+      });
     /** Re-reads the workspace from the API once all pending edits are saved (see above). */
     const reload = (): Promise<void> => {
       reloading.current ??= (async () => {
@@ -175,14 +246,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           for (let attempt = 0; attempt < 5; attempt++) {
             await whenIdle();
             const seq = writeSeq.current;
-            const data = await loadWorkspace(session.tenant.role !== 'member');
+            const data = await loadWorkspace();
             if (seq === writeSeq.current && isIdle()) {
-              // A funnel that was deleted can't stay open.
-              set((x) => {
-                const first = Object.keys(data.funnels)[0]!;
-                const valid = (id: string) => (data.funnels[id] ? id : first);
-                return { ...data, segment: valid(x.segment), newLeadType: valid(x.newLeadType), filters: x.filters.audience === 'Audience' || data.funnels[x.filters.audience] ? x.filters : { ...x.filters, audience: 'Audience' } };
-              });
+              applyData(data);
               return;
             }
           }
@@ -211,7 +277,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         notifyIfIdle();
       }
       if (failed) {
-        flash(`Not saved: ${what} (${errText(failed)}). It was reset to the saved value.`, 7000);
+        flash(conflictText(failed) ?? `Not saved: ${what} (${errText(failed)}). It was reset to the saved value.`, conflictText(failed) ? 10_000 : 7000);
         await reload();
         return;
       }
@@ -234,6 +300,84 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const rows = await crmApi.activities(leadId);
       set((x) => ({ log: { ...x.log, [leadId]: rows.map((a) => mapActivity(a, x.workspace.timezone)) } }));
     };
+    /** The version this tab shows of a record: its edits say they are based on it (If-Match, CD-20). */
+    const ver = (kind: HistoryEntity, id: string): string | undefined => cur().versions[`${kind}:${id}`];
+
+    // ------------------------------------------------------------ live updates (CD-20)
+    /*
+     * A change hint from another tab or person names what changed. After a short pause (hints come
+     * in bursts) the lists it affects are read again and shown. Like `reload`, it never overwrites
+     * what this tab is editing: it waits until this tab's own edits are saved (without sending
+     * typing early), and throws its result away if an edit started while it loaded. An edit made
+     * on top of an older version is caught by the API instead (409, see conflictText). Timelines of
+     * deals this tab has loaded are re-read too. Errors stay quiet: the next hint or focus retries.
+     */
+    const queueRefresh = (parts: Iterable<Part>, logs: Iterable<string> = [], touched: Iterable<string> = [], delay = 300) => {
+      const p = livePending.current;
+      for (const x of parts) p.parts.add(x);
+      for (const x of logs) p.logs.add(x);
+      for (const x of touched) p.touched.add(x);
+      clearTimeout(p.timer);
+      p.timer = setTimeout(() => void runRefresh(), delay);
+    };
+    const runRefresh = async () => {
+      const p = livePending.current;
+      if (p.running) return; // the running refresh picks the new hints up when it is done
+      p.running = true;
+      let retryLater = false;
+      try {
+        while (p.parts.size || p.logs.size) {
+          const parts = new Set(p.parts);
+          const logs = [...p.logs];
+          const touched = [...p.touched];
+          p.parts.clear();
+          p.logs.clear();
+          p.touched.clear();
+          for (const id of logs) if (logRequested.current.has(id)) await refreshLog(id).catch(() => undefined);
+          if (parts.size === 0) continue;
+          let applied = false;
+          for (let attempt = 0; attempt < 5 && !applied; attempt++) {
+            await whenIdle();
+            if (reloading.current) await reloading.current;
+            const seq = writeSeq.current;
+            const data = await loadWorkspace(parts);
+            if (seq === writeSeq.current && isIdle()) {
+              applyData(data, touched);
+              applied = true;
+            }
+          }
+          if (!applied) {
+            parts.forEach((x) => p.parts.add(x));
+            touched.forEach((x) => p.touched.add(x));
+            retryLater = true;
+            break;
+          }
+        }
+      } catch {
+        retryLater = true;
+      } finally {
+        p.running = false;
+        if (p.parts.size || p.logs.size) queueRefresh([], [], [], retryLater ? 3000 : 300);
+      }
+    };
+    /** Everything this tab shows, after the stream was down (hints may be missing) or on focus. */
+    const refreshAll = () => {
+      livePending.current.lastFull = Date.now();
+      queueRefresh(ALL_PARTS, logRequested.current);
+    };
+    const onLiveEvent = (e: LiveEvent) => {
+      if (e.type === 'resync') return refreshAll();
+      if (e.client === CLIENT_ID) return; // this tab's own change: the screen has it already
+      const parts = PARTS_OF[e.type] ?? ALL_PARTS;
+      const dealIds = [...(e.dealIds ?? []), ...(e.type === 'deal' ? (e.ids ?? []) : [])];
+      const logs = e.dealIds === null ? [...logRequested.current] : dealIds.filter((id) => logRequested.current.has(id));
+      queueRefresh(parts, logs, e.type === 'activity' ? [] : [...(e.ids ?? []), ...(e.dealIds ?? [])]);
+    };
+    /** Fallback when hints were missed (a sleeping laptop, a proxy that dropped the stream). */
+    const onFocus = () => {
+      if (Date.now() - livePending.current.lastFull > 10_000) refreshAll();
+    };
+
     /** Loads the activity history of these leads once (screens call it when they open). */
     const ensureLog = (leadIds: string[]) => {
       for (const id of leadIds) {
@@ -256,18 +400,82 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }
     };
 
-    const startGeneration = (leadId: string) => {
-      clearInterval(genTimer.current);
-      set({ genOpen: true, genLead: leadId, genStep: 0, sent: false });
-      genTimer.current = setInterval(() => {
-        set((x) => {
-          if (x.genStep >= 4) {
-            clearInterval(genTimer.current);
-            return {};
+    // ------------------------------------------------------------ documents (CD-13)
+    /** Loads the workspace's document templates (Settings, the deal's Documents tab, generation). */
+    const loadTemplates = async () => {
+      try {
+        set({ templates: await docsApi.templates() });
+      } catch (err) {
+        flash('Could not load the document templates: ' + errText(err));
+      }
+    };
+    const putDoc = (doc: DealDoc) =>
+      set((x) => {
+        const list = x.dealDocs[doc.dealId] || [];
+        const next = list.some((d) => d.id === doc.id) ? list.map((d) => (d.id === doc.id ? doc : d)) : [doc, ...list];
+        return { dealDocs: { ...x.dealDocs, [doc.dealId]: next } };
+      });
+    /** Follows a document the worker is generating until it is ready or failed. */
+    const pollDoc = (doc: DealDoc) => {
+      if (docPolls.current.has(doc.id)) return;
+      const started = Date.now();
+      const tick = async () => {
+        try {
+          const latest = await docsApi.document(doc.id);
+          putDoc(latest);
+          if (!docBusy(latest)) {
+            docPolls.current.delete(doc.id);
+            if (latest.status === 'ready') flash(`${latest.name} is ready`);
+            else flash(`Could not generate ${latest.name}: ${latest.error ?? 'unknown error'}`, 7000);
+            void refreshLog(latest.dealId).catch(() => undefined);
+            return;
           }
-          return { genStep: x.genStep + 1 };
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 404) {
+            docPolls.current.delete(doc.id);
+            return;
+          }
+        }
+        // The worker normally takes a second or two; keep asking for a few minutes, slowing down.
+        if (Date.now() - started > 5 * 60_000) {
+          docPolls.current.delete(doc.id);
+          return;
+        }
+        docPolls.current.set(doc.id, setTimeout(tick, Date.now() - started < 20_000 ? 700 : 3000));
+      };
+      docPolls.current.set(doc.id, setTimeout(tick, 400));
+    };
+    /** Loads a deal's documents once per session (and follows any still being generated). */
+    const ensureDocs = (leadId: string) => {
+      if (docsRequested.current.has(leadId)) return;
+      docsRequested.current.add(leadId);
+      docsApi
+        .documents(leadId)
+        .then((docs) => {
+          set((x) => ({ dealDocs: { ...x.dealDocs, [leadId]: docs } }));
+          docs.filter(docBusy).forEach(pollDoc);
+        })
+        .catch((err) => {
+          docsRequested.current.delete(leadId);
+          flash('Could not load the documents: ' + errText(err));
         });
-      }, 620);
+    };
+    /** Queues a document for the worker; returns it (queued) or null when that failed. */
+    const generateDoc = async (leadId: string, templateId: string): Promise<DealDoc | null> => {
+      try {
+        const doc = await docsApi.generate(leadId, templateId);
+        putDoc(doc);
+        pollDoc(doc);
+        return doc;
+      } catch (err) {
+        flash('Could not generate the document: ' + errText(err), 7000);
+        return null;
+      }
+    };
+    /** Opens the generation dialog for a deal (on entering a Proposal stage, or from its Documents tab). */
+    const startGeneration = (leadId: string) => {
+      set({ genOpen: true, genLead: leadId, genDocId: null });
+      void loadTemplates();
     };
 
     const moveLead = (leadId: string, stageId: string) => {
@@ -335,6 +543,15 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         flash('Payments must fall after the closing date');
         return;
       }
+      if (key === 'itemId' && lead) {
+        // CD-77: a product in another currency can't go on the deal (no exchange rates).
+        const it = cur().catalog.find((c) => c.id === v);
+        const dealCur = curOf(cur(), lead).currency;
+        if (it && itemCurrency(cur(), it) !== dealCur) {
+          flash(`${it.name} is priced in ${itemCurrency(cur(), it)}, but this deal is in ${dealCur}. Pick a product priced in ${dealCur}, or change the deal's currency first.`, 6000);
+          return;
+        }
+      }
       updateLines(leadId, (ls) =>
         ls.map((l) => {
           if (l.id !== lineId) return l;
@@ -352,9 +569,15 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         flash('Set the closing date first');
         return;
       }
-      const it = cur().catalog[0];
-      if (!it) {
+      if (!cur().catalog.length) {
         flash('Add a product to the catalog first');
+        return;
+      }
+      // CD-77: lines are priced in the deal's currency, so only products in that currency fit.
+      const dealCur = curOf(cur(), lead).currency;
+      const it = cur().catalog.find((c) => itemCurrency(cur(), c) === dealCur);
+      if (!it) {
+        flash(`No product is priced in ${dealCur}. Add one to the catalog, or change the deal's currency.`, 6000);
         return;
       }
       const position = (cur().dealLines[lead.id] || []).length;
@@ -425,7 +648,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       for (const [k, v] of Object.entries(patch)) {
         const field = CONTACT_FIELDS[k as keyof Person];
         const value = String(v ?? '');
-        if (field && !(field === 'fullName' && !value.trim())) saveLater(`contact:${contactId}:${field}`, () => crmApi.updateContact(contactId, { [field]: value }), `${p.name}'s ${k === 'role' ? 'job title' : k === 'buyerRole' ? 'buyer role' : k}`);
+        if (field && !(field === 'fullName' && !value.trim())) saveLater(`contact:${contactId}:${field}`, () => crmApi.updateContact(contactId, { [field]: value }, ver('contact', contactId)), `${p.name}'s ${k === 'role' ? 'job title' : k === 'buyerRole' ? 'buyer role' : k}`);
       }
       const withInitials = patch.name !== undefined ? { ...patch, initials: initialsOf(patch.name) } : patch;
       if (p.primary) {
@@ -807,7 +1030,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     /** Companies are identified by id (names aren't unique), so renaming one keeps its route. */
     const setCompanyField = (companyId: string, key: 'name' | 'industry' | 'hq' | 'size' | 'source', v: string) => {
       const field = key === 'size' ? 'teamSize' : key;
-      if (!(key === 'name' && !v.trim())) saveLater(`company:${companyId}:${field}`, () => crmApi.updateCompany(companyId, { [field]: v }), `the company ${key === 'hq' ? 'HQ' : key === 'size' ? 'team size' : key}`);
+      if (!(key === 'name' && !v.trim())) saveLater(`company:${companyId}:${field}`, () => crmApi.updateCompany(companyId, { [field]: v }, ver('company', companyId)), `the company ${key === 'hq' ? 'HQ' : key === 'size' ? 'team size' : key}`);
       set((x) => ({
         leads: x.leads.map((l) => (l.companyId === companyId ? { ...l, ...(key === 'name' ? { company: v } : { [key]: v }) } : l)),
         extraCompanies: x.extraCompanies.map((c) => (c.id === companyId ? { ...c, [key]: v } : c)),
@@ -832,24 +1055,24 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       if (hq !== undefined && companyId) setCompanyField(companyId, 'hq', hq);
       if (size !== undefined && companyId) setCompanyField(companyId, 'size', size);
       const { title, closeDate, source, ownerId } = dealPatch;
-      if (title !== undefined && title.trim()) saveLater('title:' + id, () => crmApi.updateDeal(id, { title: title.trim() }), 'the deal title');
-      if (closeDate !== undefined) saveLater('close:' + id, () => crmApi.updateDeal(id, { closeDate: closeDate || null }), 'the closing date');
-      if (source !== undefined) saveLater('source:' + id, () => crmApi.updateDeal(id, { source }), 'the deal source');
+      if (title !== undefined && title.trim()) saveLater('title:' + id, () => crmApi.updateDeal(id, { title: title.trim() }, ver('deal', id)), 'the deal title');
+      if (closeDate !== undefined) saveLater('close:' + id, () => crmApi.updateDeal(id, { closeDate: closeDate || null }, ver('deal', id)), 'the closing date');
+      if (source !== undefined) saveLater('source:' + id, () => crmApi.updateDeal(id, { source }, ver('deal', id)), 'the deal source');
       // Discovery notes (merged into the proposal). Empty text clears the field.
       for (const key of DISCOVERY_FIELDS) {
         const v = dealPatch[key];
-        if (v !== undefined) saveLater(`${key}:${id}`, () => crmApi.updateDeal(id, { [key]: key === 'discoveryDate' ? v || null : v }), 'the discovery notes');
+        if (v !== undefined) saveLater(`${key}:${id}`, () => crmApi.updateDeal(id, { [key]: key === 'discoveryDate' ? v || null : v }, ver('deal', id)), 'the discovery notes');
       }
       if (dealPatch.companyId !== undefined && dealPatch.companyId !== companyId) {
         const target = dealPatch.companyId;
         const rec = target ? companyRecords(cur()).find((c) => c.id === target) : undefined;
         if (target && !rec) return;
         dealPatch.company = rec?.name ?? 'No company';
-        void save(() => crmApi.updateDeal(id, { companyId: target }), reload, 'the company of this deal');
+        void save(() => crmApi.updateDeal(id, { companyId: target }, ver('deal', id)), reload, 'the company of this deal');
       }
       if (ownerId !== undefined && ownerId !== lead.ownerId) {
         dealPatch.owner = cur().team.find((m) => m.status === 'Active' && m.id === ownerId)?.name;
-        void save(() => crmApi.updateDeal(id, { ownerUserId: ownerId }), undefined, 'the deal owner');
+        void save(() => crmApi.updateDeal(id, { ownerUserId: ownerId }, ver('deal', id)), undefined, 'the deal owner');
       }
       mapLead(id, (l) => ({ ...l, ...dealPatch }));
     };
@@ -898,6 +1121,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       flash,
       navigate,
       reload,
+      /** Live updates (CD-20), wired up below. */
+      live: { onEvent: onLiveEvent, refreshAll, onFocus },
+      /** A page of the change history of a deal, company or contact (CD-69), newest first. */
+      loadChanges: (entity: HistoryEntity, id: string, offset = 0) => crmApi.history(entity, id, offset),
       ensureLog,
       refreshHistory,
       moveLead,
@@ -912,18 +1139,57 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           return;
         }
         mapLead(id, (l) => ({ ...l, segment: seg, stage: stagesFor(cur(), seg)[0]!.id }));
-        void save(() => crmApi.updateDeal(id, { funnelId }), () => refreshLog(id), 'the funnel');
+        void save(() => crmApi.updateDeal(id, { funnelId }, ver('deal', id)), () => refreshLog(id), 'the funnel');
         flash('Funnel reassigned · lead moved to the first stage');
       },
       openLead: (id: string) => navigate(paths.lead(id)),
       openContact: (id: string) => navigate(paths.contact(id)),
       openCompany: (id: string) => navigate(paths.company(id)),
-      openGenerated: () => {
-        const x = cur();
-        if (x.genStep < 4 || !x.genLead) return;
-        const leadId = x.genLead;
-        mapLead(leadId, (l) => ({ ...l, docs: [{ name: 'Proposal — ' + (l.headline || l.title || l.company), state: 'draft', meta: 'v1 · generated just now · not sent' }, ...(l.docs || [])] }));
-        set({ genOpen: false, docOpen: true, docLeadId: leadId, sent: false });
+      loadTemplates,
+      ensureDocs,
+      generateDoc,
+      /** Generates from the dialog and keeps the dialog on that document. */
+      generateInDialog: async (templateId: string) => {
+        const leadId = cur().genLead;
+        if (!leadId) return;
+        const doc = await generateDoc(leadId, templateId);
+        if (doc) set({ genDocId: doc.id });
+      },
+      downloadDoc: (doc: DealDoc) => docsApi.downloadDocument(doc).catch((err) => flash('Could not download: ' + errText(err), 7000)),
+      deleteDoc: async (doc: DealDoc) => {
+        try {
+          await docsApi.deleteDocument(doc.id);
+          set((x) => ({ dealDocs: { ...x.dealDocs, [doc.dealId]: (x.dealDocs[doc.dealId] || []).filter((d) => d.id !== doc.id) } }));
+          flash(doc.name + ' deleted');
+          void refreshLog(doc.dealId).catch(() => undefined);
+        } catch (err) {
+          flash('Could not delete the document: ' + errText(err), 7000);
+        }
+      },
+      scanTemplate: (file: File) => docsApi.scan(file),
+      /** The merge field reference (fetched once per session). */
+      loadPlaceholders: () =>
+        (placeholderRef.current ??= docsApi.placeholders().catch((err) => {
+          placeholderRef.current = null;
+          throw err;
+        })),
+      downloadTemplate: (t: DocTemplate) => docsApi.downloadTemplate(t).catch((err) => flash('Could not download: ' + errText(err), 7000)),
+      downloadStarter: () => docsApi.downloadStarter().catch((err) => flash('Could not download: ' + errText(err), 7000)),
+      /** Uploads a template (owners and admins); returns it, or throws with the API's reason. */
+      uploadTemplate: async (file: File, name: string, docType: DocType) => {
+        const t = await docsApi.createTemplate(file, name, docType);
+        set((x) => ({ templates: [t, ...(x.templates || []).filter((y) => y.id !== t.id)] }));
+        flash(`${t.name} saved`);
+        return t;
+      },
+      deleteTemplate: async (t: DocTemplate) => {
+        try {
+          await docsApi.deleteTemplate(t.id);
+          set((x) => ({ templates: (x.templates || []).filter((y) => y.id !== t.id) }));
+          flash(`${t.name} deleted · documents made from it are kept`);
+        } catch (err) {
+          flash('Could not delete the template: ' + errText(err), 7000);
+        }
       },
       openDoc: (leadId: string) => set({ docOpen: true, docLeadId: leadId, sent: false }),
       sendDoc: () => {
@@ -949,7 +1215,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         // Quick clicks across the four criteria become one write of the final scores.
         saveLater('champ:' + leadId, async () => {
           const champ = cur().champ[leadId];
-          if (champ) await crmApi.updateDeal(leadId, { champ });
+          if (champ) await crmApi.updateDeal(leadId, { champ }, ver('deal', leadId));
         }, 'the fit score');
       },
       linkPerson,
@@ -1021,14 +1287,14 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
 
       // ---------------------------------------------------------- creating records
       /** New deal; creates the company and the primary contact first when they are new. */
-      createDeal: async (input: { company: { id?: string; name: string }; contact: { contactId?: string; name: string } | null; segment: SegKey }) => {
+      createDeal: async (input: { company: { id?: string; name: string }; contact: { contactId?: string; name: string } | null; segment: SegKey; customFields?: CustomFieldPatch }) => {
         const funnelId = cur().funnels[input.segment]?.id;
         if (!funnelId) return;
         try {
           const companyId = input.company.id ?? (await crmApi.createCompany({ name: input.company.name })).id;
           let primaryContactId = input.contact?.contactId;
           if (input.contact && !primaryContactId) primaryContactId = (await crmApi.createContact({ fullName: input.contact.name, companyId, buyerRole: 'Decision maker' })).id;
-          const deal = await crmApi.createDeal({ title: input.company.name, funnelId, companyId, primaryContactId: primaryContactId ?? null });
+          const deal = await crmApi.createDeal({ title: input.company.name, funnelId, companyId, primaryContactId: primaryContactId ?? null, ...(input.customFields ? { customFields: input.customFields } : {}) });
           await reload();
           set({ newLeadOpen: false, segment: input.segment });
           navigate(paths.lead(deal.id));
@@ -1038,7 +1304,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         }
       },
       /** New contact at the company of the chosen lead, linked to that lead. */
-      createContact: async (draft: NewContactDraft, leadId: string | undefined) => {
+      createContact: async (draft: NewContactDraft, leadId: string | undefined, customFields?: CustomFieldPatch) => {
         const lead = leadById(cur(), leadId);
         try {
           const c = await crmApi.createContact({
@@ -1050,6 +1316,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             buyerRole: draft.buyerRole,
             notes: draft.notes,
             companyId: lead?.companyId ?? null,
+            ...(customFields ? { customFields } : {}),
           });
           if (lead) await crmApi.linkContact(lead.id, c.id);
           await reload();
@@ -1092,7 +1359,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       },
 
       // ---------------------------------------------------------- team
-      /** Creates an invitation and returns the link to share (shown once; only its hash is stored). */
+      /** Creates an invitation, which the worker emails (CD-7), and returns its link to copy as a fallback. */
       inviteMember: async (email: string, role: 'admin' | 'member'): Promise<string | null> => {
         try {
           const { token } = await crmApi.invite(email, role);
@@ -1100,6 +1367,39 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           return `${window.location.origin}/invite/${token}`;
         } catch (err) {
           flash('Not invited: ' + errText(err));
+          return null;
+        }
+      },
+      /** Reloads only the team (the Team tab polls this while invitation emails are on their way). */
+      refreshTeam: async () => {
+        try {
+          set({ team: mapTeam(await crmApi.team()) });
+        } catch {
+          // the next poll or reload tries again
+        }
+      },
+      /** Emails a pending invitation again (same link, 7 more days). */
+      resendInvitation: async (id: string) => {
+        try {
+          const row = await crmApi.resendInvitation(id);
+          set((x) => ({ team: x.team.map((m) => (m.id === id ? { ...m, invite: { emailStatus: row.emailStatus, emailSentAt: row.emailSentAt, emailError: row.emailError, hasLink: row.hasLink } } : m)) }));
+          flash('Sending the invitation to ' + row.email + ' again');
+        } catch (err) {
+          flash('Not resent: ' + errText(err), 7000);
+        }
+      },
+      /** Copies a pending invitation's link to the clipboard, for when the email doesn't arrive. */
+      copyInvitationLink: async (id: string): Promise<string | null> => {
+        try {
+          const { token } = await crmApi.invitationLink(id);
+          const link = `${window.location.origin}/invite/${token}`;
+          await navigator.clipboard.writeText(link).then(
+            () => flash('Invite link copied. It works once, for the invited email address.'),
+            () => flash('Invite link: ' + link, 12000),
+          );
+          return link;
+        } catch (err) {
+          flash('No link: ' + errText(err), 7000);
           return null;
         }
       },
@@ -1132,16 +1432,19 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             billingKind: draft.kind as 'One-off' | 'Monthly' | 'Yearly' | 'Hourly',
             unitPrice: num(draft.price),
             vatRate: num(draft.vat),
+            ...(draft.currency ? { currency: draft.currency } : {}),
           });
-          set((x) => ({ catalog: [...x.catalog, { id: p.id, name: p.name, type: p.type, kind: p.billingKind, price: Number(p.unitPrice), vat: Number(p.vatRate) }] }));
+          set((x) => ({ catalog: [...x.catalog, mapProduct(p)] }));
           return true;
         } catch (err) {
           flash('Not saved: ' + errText(err));
           return false;
         }
       },
-      patchProduct: (id: string, key: 'name' | 'type' | 'kind' | 'price' | 'vat', v: string) => {
+      patchProduct: (id: string, key: 'name' | 'type' | 'kind' | 'price' | 'vat' | 'currency', v: string) => {
         set((x) => ({ catalog: x.catalog.map((c) => (c.id === id ? { ...c, [key]: v } : c)) }));
+        // A product on deals in another currency can't switch (the API names the deal); the failed save puts it back.
+        if (key === 'currency') return void save(() => crmApi.updateProduct(id, { currency: v }), undefined, 'the product currency');
         const field = ({ name: 'name', type: 'type', kind: 'billingKind', price: 'unitPrice', vat: 'vatRate' } as const)[key];
         if (key === 'name' && !v.trim()) return;
         saveLater(`product:${id}:${field}`, () => crmApi.updateProduct(id, { [field]: key === 'price' || key === 'vat' ? num(v) : v }), `the product ${key === 'kind' ? 'billing' : key === 'vat' ? 'VAT' : key}`);
@@ -1149,6 +1452,117 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       removeProduct: (id: string) => {
         set((x) => ({ catalog: x.catalog.filter((k) => k.id !== id) }));
         void save(() => crmApi.deleteProduct(id), undefined, 'removing the product');
+      },
+
+      // ---------------------------------------------------------- deal currency (CD-77)
+      /**
+       * Changes a deal's currency. Its lines are priced in it and there are no exchange rates, so
+       * the change is refused while a line uses a product priced in another currency.
+       */
+      setDealCurrency: (leadId: string, currency: string) => {
+        const lead = leadById(cur(), leadId);
+        if (!lead || curOf(cur(), lead).currency === currency) return;
+        const clashing = (cur().dealLines[leadId] || []).map((l) => cur().catalog.find((c) => c.id === l.itemId)).filter((c) => !!c && itemCurrency(cur(), c) !== currency);
+        if (clashing.length) {
+          const names = [...new Set(clashing.map((c) => `${c!.name} (${itemCurrency(cur(), c)})`))].join(', ');
+          flash(`Can't change the currency to ${currency}: ${clashing.length === 1 ? '1 product line is' : clashing.length + ' product lines are'} priced in another currency (${names}). Remove those lines or replace them with products in ${currency} first.`, 8000);
+          return;
+        }
+        mapLead(leadId, (l) => ({ ...l, currency, value: money(valueNumOf(l), { currency, locale: curOf(cur()).locale }) }));
+        void save(() => crmApi.updateDeal(leadId, { currency }), reload, 'the deal currency');
+        flash('Deal currency changed to ' + currency);
+      },
+
+      // ---------------------------------------------------------- custom fields (CD-15)
+      /** Owners and admins define custom fields; everyone fills them in. */
+      canEditFields: canEditFunnels,
+      /** Sets a custom field value on a deal, company or contact; saved after a pause (one write per field). */
+      setCustomValue: (entity: CustomFieldEntity, recordId: string, field: CustomFieldDef, value: CustomValue | null) => {
+        set((x) => {
+          const values = { ...(x.customValues[entity][recordId] || {}) };
+          if (value === null || value === '') delete values[field.id];
+          else values[field.id] = value;
+          return { customValues: { ...x.customValues, [entity]: { ...x.customValues[entity], [recordId]: values } } };
+        });
+        const body = { customFields: { [field.id]: customValueForApi(field.type, value) } };
+        const write = entity === 'deal' ? () => crmApi.updateDeal(recordId, body) : entity === 'company' ? () => crmApi.updateCompany(recordId, body) : () => crmApi.updateContact(recordId, body);
+        saveLater(`custom:${recordId}:${field.id}`, write, field.label);
+      },
+      createCustomField: async (draft: { entity: CustomFieldEntity; label: string; type: CustomFieldType; required: boolean; options: string[] }): Promise<boolean> => {
+        try {
+          const f = await crmApi.createCustomField({ entity: draft.entity, label: draft.label.trim(), type: draft.type, required: draft.required, ...(draft.type === 'select' ? { options: draft.options.map((label) => ({ label })) } : {}) });
+          set((x) => ({ customFields: [...x.customFields, mapCustomField(f)] }));
+          return true;
+        } catch (err) {
+          flash('Not saved: ' + errText(err));
+          return false;
+        }
+      },
+      /** Renames a field (after a pause), or changes its options or whether it is required. */
+      updateCustomField: (id: string, patch: { label?: string; required?: boolean; options?: { id?: string; label: string }[] }) => {
+        const f = cur().customFields.find((x) => x.id === id);
+        if (!f) return;
+        set((x) => ({ customFields: x.customFields.map((y) => (y.id === id ? { ...y, ...(patch.label !== undefined ? { label: patch.label } : {}), ...(patch.required !== undefined ? { required: patch.required } : {}) } : y)) }));
+        if (patch.label !== undefined) {
+          if (patch.label.trim()) saveLater('field-label:' + id, () => crmApi.updateCustomField(id, { label: patch.label!.trim() }), 'the field name');
+          return;
+        }
+        void save(
+          async () => {
+            const row = await crmApi.updateCustomField(id, { ...(patch.required !== undefined ? { required: patch.required } : {}), ...(patch.options ? { options: patch.options } : {}) });
+            set((x) => ({ customFields: x.customFields.map((y) => (y.id === id ? { ...mapCustomField(row), label: y.label } : y)) }));
+          },
+          undefined,
+          patch.options ? 'the options of ' + f.label : f.label,
+        );
+      },
+      /** Moves a field one place up (-1) or down (+1) among the fields of its record type. */
+      moveCustomField: (id: string, dir: -1 | 1) => {
+        const f = cur().customFields.find((x) => x.id === id);
+        if (!f) return;
+        const list = customFieldsOf(cur(), f.entity);
+        const i = list.findIndex((x) => x.id === id);
+        const j = i + dir;
+        if (j < 0 || j >= list.length) return;
+        [list[i], list[j]] = [list[j]!, list[i]!];
+        set((x) => ({ customFields: [...x.customFields.filter((y) => y.entity !== f.entity), ...list] }));
+        void save(() => crmApi.reorderCustomFields(f.entity, list.map((x) => x.id)), undefined, 'the field order');
+      },
+      /** Hides a field everywhere (its values are kept in the records, unseen). */
+      deleteCustomField: (id: string) => {
+        const f = cur().customFields.find((x) => x.id === id);
+        if (!f) return;
+        cancelSaves(id);
+        set((x) => ({ customFields: x.customFields.filter((y) => y.id !== id) }));
+        void save(() => crmApi.deleteCustomField(id), undefined, 'deleting ' + f.label);
+        flash(f.label + ' deleted');
+      },
+
+      // ---------------------------------------------------------- sales bonuses (CD-17)
+      /** Only owners and admins see and set the bonus rules; the API returns 403 to members. */
+      canSeeBonuses: canEditFunnels,
+      setBonusTrigger: (trigger: string) => {
+        set({ bonusTrigger: trigger });
+        void save(() => crmApi.updateBonusSettings(trigger), undefined, 'when bonuses are earned');
+      },
+      /** Edits one number of a salesperson's rule; the whole rule is saved after a pause. */
+      setBonusRule: (userId: string, key: keyof BonusRule, v: string) => {
+        set((x) => {
+          const saved = x.bonusRules?.[userId] ?? { rate: '', floor: '', fixed: '' };
+          return { bonusRules: { ...(x.bonusRules ?? {}), [userId]: { ...saved, [key]: v } } };
+        });
+        saveLater(
+          'bonus:' + userId,
+          async () => {
+            const r = cur().bonusRules?.[userId];
+            if (!r) return;
+            const saved = await crmApi.putBonusRule(userId, { rate: Math.min(100, num(r.rate)), floor: num(r.floor), fixed: num(r.fixed) });
+            // Keep what is still being typed for this person; take the stored rules for everyone else.
+            const stored = mapBonusRules(saved);
+            set((x) => ({ bonusRules: { ...stored, [userId]: x.bonusRules?.[userId] ?? stored[userId]! } }));
+          },
+          'the bonus rule',
+        );
       },
 
       // ---------------------------------------------------------- settings
@@ -1187,6 +1601,43 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       },
     };
   }, [set, flash, navigate, session]);
+
+  // Live updates (CD-20): the workspace's change stream, and a refresh when the window gets focus.
+  // Connected once per workspace: `actions` is rebuilt on navigation (useNavigate changes), so the
+  // handlers are reached through a ref instead of reconnecting (and dropping queued refreshes).
+  const liveRef = useRef(actions.live);
+  liveRef.current = actions.live;
+  useEffect(() => {
+    const live = {
+      onEvent: (e: LiveEvent) => liveRef.current.onEvent(e),
+      refreshAll: () => liveRef.current.refreshAll(),
+      onFocus: () => liveRef.current.onFocus(),
+    };
+    const pending = livePending.current;
+    const mounted = Date.now();
+    const stop = connectLive({
+      onEvent: live.onEvent,
+      // After a drop, hints may be missing: read everything. The first connect only needs that if
+      // the workspace was loaded a while before the stream was up.
+      onOpen: (first) => {
+        // Says the stream is up (the e2e tests wait for it; handy when debugging).
+        document.documentElement.dataset.live = 'on';
+        if (!first || Date.now() - mounted > 3000) live.refreshAll();
+      },
+    });
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') live.onFocus();
+    };
+    window.addEventListener('focus', live.onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      stop();
+      delete document.documentElement.dataset.live;
+      clearTimeout(pending.timer);
+      window.removeEventListener('focus', live.onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
 
   return { s, ...actions };
 }

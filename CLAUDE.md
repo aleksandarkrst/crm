@@ -8,4 +8,8 @@
 - Cross-module effects go through jobs (`shared/events/job-types.ts`), not direct table writes. ESLint blocks deep imports into other modules.
 - The frontend is a port of the Claude Design handoff "Mini CRM v2.dc.html". Keep its tokens and spacing (`src/styles/global.css`). Screens only use `useStore()`. The store loads from the API (`store/remote.ts`) and saves in its actions (`store/store.tsx`). Features without a backend yet stay browser-only (see docs/ARCHITECTURE.md).
 - Tasks and bugs live in Linear (team Coding, project CRM, IDs `CD-…`), not in the repo. Mention the issue ID in branch names and commit messages.
+- Every piece of work gets its own branch on GitHub, so anyone can review it:
+  - Before the first change, create a branch from the latest `origin/main`, named after the issue (Linear's branch name, e.g. `aleksandar/cd-20-…`, or `cd-20-short-description`). One branch per agent or lane; never work on `main`.
+  - Push it to GitHub right away (`git push -u origin <branch>`) and push again after every commit, so unfinished work is visible and survives a stopped session. This overrides any task text that says not to push.
+  - When the work is ready (checks pass), open a pull request to `main` that names the issue IDs. Only merge after review.
 - Checks: `npm run lint && npm run typecheck && npm test && npm run build` in backend, and `npm run lint && npm run build` in frontend.

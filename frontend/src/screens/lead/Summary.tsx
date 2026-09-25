@@ -1,5 +1,6 @@
+import { CustomFieldRows } from '../../components/CustomFields';
 import { DangerButton, FieldRow, GhostInput, GhostSelect, PersonChip, Picker, PickerRow, usePicker } from '../../components/ui';
-import { INDUSTRIES, SOURCES, TEAM_SIZES } from '../../store/seed';
+import { currencyOptions, INDUSTRIES, SOURCES, TEAM_SIZES } from '../../store/seed';
 import { allPeople, closeIsoOf, companyLabels, companyOfPerson, companyRecords, contactsForLead, curOf, funnelOptions, initialsOf, linesOf, memberLabels, memberName, money, netOf, vatOf } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
@@ -110,6 +111,9 @@ export function Summary({ lead }: { lead: Lead }) {
             </span>
           </span>
         </FieldRow>
+        <FieldRow label="Currency">
+          <GhostSelect chevron value={curOf(s, lead).currency} onChange={(e) => store.setDealCurrency(lead.id, e.target.value)} options={currencyOptions(curOf(s, lead).currency)} />
+        </FieldRow>
         <FieldRow label="Closing date">
           <GhostInput type="date" value={closeIsoOf(lead)} onChange={patch('closeDate')} />
         </FieldRow>
@@ -133,6 +137,7 @@ export function Summary({ lead }: { lead: Lead }) {
         <FieldRow label="Source">
           <GhostSelect chevron value={lead.source} onChange={patch('source')} options={SOURCES} />
         </FieldRow>
+        <CustomFieldRows entity="deal" recordId={lead.id} />
       </div>
     </div>
   );

@@ -9,9 +9,26 @@ export const CHANNELS = ['RS', 'EM', 'LI', 'WA', 'MT'] as const;
 export const CHANNEL_LABELS: Record<string, string> = { RS: 'Research task', EM: 'Email', LI: 'LinkedIn message', WA: 'WhatsApp message', MT: 'Meeting', PH: 'Call', NT: 'Note' };
 export const DOCS = ['None', 'Proposal', 'Quote', 'Contract', 'Invoice'];
 export const OWNERS = ['Mila Jovanović', 'Stefan Popović', 'Nina Đorđević'];
-export const DOC_TYPES = ['Proposal', 'Quote', 'Contract', 'NDA', 'Onboarding brief', 'Invoice'];
 export const BUYER_ROLES = ['Decision maker', 'Economic buyer', 'Champion', 'Influencer', 'Gatekeeper', 'End user'];
-export const FIELD_TYPES = ['Text', 'Number', 'Currency', 'Date', 'Dropdown', 'Checkbox'];
+/** Custom field types (CD-15) and how they are labelled. */
+export const FIELD_TYPES = [
+  { value: 'text', label: 'Text' },
+  { value: 'number', label: 'Number' },
+  { value: 'date', label: 'Date' },
+  { value: 'select', label: 'Single select' },
+  { value: 'checkbox', label: 'Checkbox' },
+  { value: 'url', label: 'URL' },
+] as const;
+/** Currencies offered for the workspace, deals and products (ISO 4217). */
+export const CURRENCIES = [
+  { value: 'EUR', label: 'EUR (€)' },
+  { value: 'RSD', label: 'RSD (дин)' },
+  { value: 'USD', label: 'USD ($)' },
+  { value: 'GBP', label: 'GBP (£)' },
+  { value: 'CHF', label: 'CHF (Fr.)' },
+];
+/** The currency options, plus `current` when it isn't one of them (set through the API). */
+export const currencyOptions = (current?: string) => (current && !CURRENCIES.some((c) => c.value === current) ? [...CURRENCIES, { value: current, label: current }] : CURRENCIES);
 export const SOURCES = ['Inbound web form', 'Referral', 'Outbound LinkedIn', 'Conference', 'Instagram DM', 'Trade fair'];
 export const INDUSTRIES = ['Architecture', 'Banking', 'Food & beverage', 'Freight & logistics', 'Furniture retail', 'Hospitality', 'Pharmaceuticals', 'Renewable energy', 'Wine', 'Other'];
 export const TEAM_SIZES = ['1–10 staff', '11–50 staff', '51–200 staff', '201–1,000 staff', '1,000+ staff'];
@@ -28,7 +45,6 @@ export const dateRangeLabel = (value: string, fiscalMonth: number): string =>
 export const VALUE_BANDS = ['Value', 'Under €25k', '€25k–€100k', 'Over €100k'];
 /** How a value band reads in the workspace currency ("Under $25k"); the values above stay the filter keys. */
 export const valueBandLabel = (value: string, symbol: string): string => value.split('€').join(symbol);
-export const PARAM_SOURCES: Record<string, string> = { '{{company}}': 'Lead · company', '{{contact_name}}': 'Lead · primary contact', '{{price}}': 'Lead · deal value' };
 export const PRODUCT_TYPES = ['Service', 'Product'];
 export const BILLING_KINDS = ['One-off', 'Monthly', 'Yearly', 'Hourly'];
 export const SCHEDULE_TYPES = ['Full amount on one date', 'Custom milestones', 'Equal monthly instalments', 'Recurring subscription'];
@@ -156,13 +172,9 @@ export function initialState(): State {
     extraTodoIds: {},
     leadTasks: [],
     log: {},
+    versions: {},
+    changedAt: {},
     team: [], // loaded from the API
-    notifs: [
-      { id: 'n1', label: 'Stalled lead nudges', desc: 'Daily digest of leads with no contact for 4+ days', on: true },
-      { id: 'n2', label: 'Task reminders', desc: 'Morning summary of tasks due today', on: true },
-      { id: 'n3', label: 'Document activity', desc: 'Alert when a proposal or contract is opened or signed', on: true },
-      { id: 'n4', label: 'Weekly pipeline report', desc: 'Monday email with stage conversion and open value', on: false },
-    ],
     integrations: [
       { id: 'i1', name: 'Gmail', desc: 'Sync email threads onto lead timelines', on: true },
       { id: 'i2', name: 'Google Calendar', desc: 'Push discovery calls and follow-ups', on: true },
@@ -171,35 +183,23 @@ export function initialState(): State {
       { id: 'i5', name: 'Slack', desc: 'Post won deals to #sales', on: true },
       { id: 'i6', name: 'Google Drive', desc: 'Store generated documents', on: true },
     ],
-    fields: [
-      { id: 'f1', label: 'Industry', type: 'Text', entity: 'Leads', required: true, system: true },
-      { id: 'f2', label: 'HQ', type: 'Text', entity: 'Leads', required: false, system: true },
-      { id: 'f3', label: 'Team size', type: 'Number', entity: 'Leads', required: false, system: true },
-      { id: 'f4', label: 'Deal value', type: 'Currency', entity: 'Leads', required: true, system: true },
-      { id: 'f5', label: 'Source', type: 'Dropdown', entity: 'Leads', required: true, system: true },
-      { id: 'f6', label: 'Renewal date', type: 'Date', entity: 'Leads', required: false, system: false },
-      { id: 'f7', label: 'Role', type: 'Text', entity: 'Contacts', required: true, system: true },
-      { id: 'f8', label: 'Email', type: 'Text', entity: 'Contacts', required: true, system: true },
-      { id: 'f9', label: 'Phone', type: 'Text', entity: 'Contacts', required: false, system: true },
-      { id: 'f10', label: 'LinkedIn', type: 'Text', entity: 'Contacts', required: false, system: true },
-      { id: 'f11', label: 'Role in the decision', type: 'Dropdown', entity: 'Contacts', required: true, system: true },
-      { id: 'f12', label: 'Company', type: 'Dropdown', entity: 'Contacts', required: true, system: true },
-      { id: 'f13', label: 'Company', type: 'Dropdown', entity: 'Leads', required: true, system: true },
-      { id: 'f14', label: 'Contacts', type: 'Dropdown', entity: 'Leads', required: true, system: true },
-      { id: 'f15', label: 'Closing date', type: 'Date', entity: 'Leads', required: false, system: true },
-      { id: 'f16', label: 'Funnel', type: 'Dropdown', entity: 'Leads', required: true, system: true },
-    ].map((f) => ({ ...f, entity: f.entity as 'Leads' | 'Contacts', visible: true })),
+    // Replaced by the saved custom fields and values when the workspace loads (store/remote.ts).
+    customFields: [],
+    customValues: { deal: {}, company: {}, contact: {} },
     // Replaced by the saved settings when the workspace loads (store/remote.ts).
     workspace: { name: '', currency: 'EUR', timezone: 'Europe/Belgrade', fiscalMonth: 1 },
-    profile: { name: '', title: '', email: '', phone: '', language: 'en', dateFormat: 'DD.MM.YYYY', startPage: 'pipeline', defaultFunnelId: '', digest: true },
+    profile: { name: '', title: '', email: '', phone: '', language: 'en', dateFormat: 'DD.MM.YYYY', startPage: 'pipeline', defaultFunnelId: '', digest: true, dealAssigned: true },
     onboarding: null,
-    bonusRules: {},
+    bonusRules: null,
+    bonusTrigger: 'On contract signed',
     filters: { ...DEFAULT_FILTERS },
     toast: '',
+    templates: null,
+    dealDocs: {},
 
     genOpen: false,
     genLead: null,
-    genStep: 0,
+    genDocId: null,
     docOpen: false,
     docLeadId: null,
     showMerge: true,
@@ -216,9 +216,9 @@ export function initialState(): State {
     personaBase: 'smb',
     templateOpen: false,
     templateType: 'Proposal',
-    templateFile: null,
+
     fieldOpen: false,
-    newField: { label: '', type: 'Text', entity: 'Leads', required: false },
+    newField: { label: '', type: 'text', entity: 'deal', required: false, options: '' },
     productOpen: false,
     newProduct: { name: '', type: 'Service', kind: 'One-off', price: '', vat: '20' },
     drill: null,

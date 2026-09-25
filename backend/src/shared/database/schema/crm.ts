@@ -41,6 +41,45 @@ const tenantId = () =>
     .notNull()
     .references(() => tenants.id, { onDelete: 'cascade' });
 
+// ---------------------------------------------------------------- custom fields (CD-15)
+
+/** Values of a record's custom fields, by field id. Validated against the definitions on write. */
+export type CustomFieldValues = Record<string, string | number | boolean>;
+export const CUSTOM_FIELD_ENTITIES = ['deal', 'company', 'contact'] as const;
+export type CustomFieldEntity = (typeof CUSTOM_FIELD_ENTITIES)[number];
+export const CUSTOM_FIELD_TYPES = ['text', 'number', 'date', 'select', 'checkbox', 'url'] as const;
+export type CustomFieldType = (typeof CUSTOM_FIELD_TYPES)[number];
+/** An option of a single-select field; values store the id, so renaming an option keeps them. */
+export interface CustomFieldOption {
+  id: string;
+  label: string;
+}
+
+/**
+ * A custom field of deals, companies or contacts, defined by owners and admins. Deleting one sets
+ * deleted_at: the field is hidden and its values stay in the records (they are not shown).
+ */
+export const customFieldDefs = pgTable(
+  'custom_field_defs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    entity: text('entity', { enum: CUSTOM_FIELD_ENTITIES }).notNull(),
+    label: text('label').notNull(),
+    type: text('type', { enum: CUSTOM_FIELD_TYPES }).notNull(),
+    options: jsonb('options').$type<CustomFieldOption[]>().notNull().default([]),
+    required: boolean('required').notNull().default(false),
+    position: integer('position').notNull().default(0),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    unique('custom_field_defs_tenant_id_uq').on(t.tenantId, t.id),
+    index('custom_field_defs_tenant_entity_idx').on(t.tenantId, t.entity, t.position),
+    uniqueIndex('custom_field_defs_label_uq').on(t.tenantId, t.entity, sql`lower(${t.label})`).where(sql`${t.deletedAt} is null`),
+  ],
+);
+
 // ---------------------------------------------------------------- companies & contacts
 
 export const companies = pgTable(
@@ -56,6 +95,8 @@ export const companies = pgTable(
     domain: text('domain'),
     ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
     notes: text('notes'),
+    /** Custom field values (CD-15), keyed by custom_field_defs.id; see CustomFieldsService. */
+    customFields: jsonb('custom_fields').$type<CustomFieldValues>().notNull().default({}),
     ...timestamps,
   },
   (t) => [unique('companies_tenant_id_uq').on(t.tenantId, t.id), index('companies_tenant_name_idx').on(t.tenantId, t.name)],
@@ -77,6 +118,8 @@ export const contacts = pgTable(
     linkedin: text('linkedin'),
     buyerRole: text('buyer_role', { enum: BUYER_ROLES }).notNull().default('Influencer'),
     ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Custom field values (CD-15), keyed by custom_field_defs.id. */
+    customFields: jsonb('custom_fields').$type<CustomFieldValues>().notNull().default({}),
     notes: text('notes'),
     ...timestamps,
   },
@@ -195,6 +238,8 @@ export const deals = pgTable(
     lostAt: timestamp('lost_at', { withTimezone: true }),
     lostReason: text('lost_reason', { enum: LOST_REASONS }),
     lostNote: text('lost_note'),
+    /** Custom field values (CD-15), keyed by custom_field_defs.id. */
+    customFields: jsonb('custom_fields').$type<CustomFieldValues>().notNull().default({}),
     ...timestamps,
   },
   (t) => [
@@ -260,6 +305,11 @@ export const products = pgTable(
     billingKind: text('billing_kind', { enum: BILLING_KINDS }).notNull().default('One-off'),
     unitPrice: numeric('unit_price', { precision: 14, scale: 2 }).notNull().default('0'),
     vatRate: numeric('vat_rate', { precision: 5, scale: 2 }).notNull().default('20'),
+    /**
+     * ISO 4217 code of the price (CD-77). New products get the workspace currency. A deal line
+     * can only use a product in the deal's currency (there are no exchange rates).
+     */
+    currency: text('currency').notNull().default('EUR'),
     ...timestamps,
   },
   (t) => [unique('products_tenant_id_uq').on(t.tenantId, t.id), index('products_tenant_name_idx').on(t.tenantId, t.name)],
@@ -385,6 +435,138 @@ export const dealStageHistory = pgTable(
     foreignKey({ columns: [t.tenantId, t.fromStageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deal_stage_history_from_stage_fk' }),
     foreignKey({ columns: [t.tenantId, t.toStageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deal_stage_history_to_stage_fk' }),
   ],
+);
+
+// ---------------------------------------------------------------- sales bonuses (CD-17)
+
+/** When a bonus counts as earned: the deal is won, or it is won and fully billed. */
+export const BONUS_TRIGGERS = ['On contract signed', 'When fully billed'] as const;
+
+/** The workspace's bonus settings (one row per tenant; owners and admins only). */
+export const salesBonusSettings = pgTable('sales_bonus_settings', {
+  tenantId: uuid('tenant_id')
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  trigger: text('trigger', { enum: BONUS_TRIGGERS }).notNull().default('On contract signed'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+/**
+ * A salesperson's bonus rule: `rate` % of a won deal's net value, or the flat `fixed` amount on
+ * deals under `floor`. The amounts are in the workspace currency. Owners and admins only.
+ */
+export const salesBonusRules = pgTable(
+  'sales_bonus_rules',
+  {
+    tenantId: tenantId(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    rate: numeric('rate', { precision: 5, scale: 2 }).notNull().default('0'),
+    floor: numeric('floor', { precision: 14, scale: 2 }).notNull().default('0'),
+    fixed: numeric('fixed', { precision: 14, scale: 2 }).notNull().default('0'),
+    updatedByUserId: uuid('updated_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.userId] }), check('sales_bonus_rules_rate_ck', sql`${t.rate} between 0 and 100`)],
+);
+
+// ---------------------------------------------------------------- documents (CD-13)
+
+/** What a template is for (Settings → Document templates, "Document type"). */
+export const DOCUMENT_TYPES = ['Proposal', 'Quote', 'Contract', 'NDA', 'Onboarding brief', 'Invoice'] as const;
+export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+
+/**
+ * A .docx template uploaded by an owner or admin. The file lives in storage under
+ * `<tenant>/templates/<id>.docx`; `placeholders` are the merge fields found in it at upload.
+ */
+export const documentTemplates = pgTable(
+  'document_templates',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    name: text('name').notNull(),
+    docType: text('doc_type', { enum: DOCUMENT_TYPES }).notNull().default('Proposal'),
+    fileName: text('file_name').notNull(), // as uploaded
+    sizeBytes: integer('size_bytes').notNull(),
+    storageKey: text('storage_key').notNull(),
+    placeholders: jsonb('placeholders').$type<string[]>().notNull().default([]),
+    uploadedByUserId: uuid('uploaded_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (t) => [unique('document_templates_tenant_id_uq').on(t.tenantId, t.id), index('document_templates_tenant_idx').on(t.tenantId, t.createdAt)],
+);
+
+export const DOCUMENT_STATUSES = ['queued', 'running', 'ready', 'failed'] as const;
+export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
+
+/**
+ * A document generated for a deal from a template by the worker (job `crm.generate-document`).
+ * The file lives under `<tenant>/documents/<id>.docx` once `status` is "ready". The template may be
+ * deleted later: `template_id` is then nulled (the FK is in the documents RLS migration, because it
+ * sets only that column to null) and `template_name` keeps saying where the document came from.
+ */
+export const dealDocuments = pgTable(
+  'deal_documents',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    dealId: uuid('deal_id').notNull(),
+    templateId: uuid('template_id'),
+    templateName: text('template_name').notNull(),
+    docType: text('doc_type', { enum: DOCUMENT_TYPES }).notNull(),
+    name: text('name').notNull(),
+    status: text('status', { enum: DOCUMENT_STATUSES }).notNull().default('queued'),
+    error: text('error'),
+    storageKey: text('storage_key'),
+    sizeBytes: integer('size_bytes'),
+    /** Merge fields the template uses that the deal had no value for (they were left empty). */
+    missingFields: jsonb('missing_fields').$type<string[]>().notNull().default([]),
+    createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    unique('deal_documents_tenant_id_uq').on(t.tenantId, t.id),
+    index('deal_documents_tenant_deal_idx').on(t.tenantId, t.dealId, t.createdAt),
+    foreignKey({ columns: [t.tenantId, t.dealId], foreignColumns: [deals.tenantId, deals.id], name: 'deal_documents_deal_fk' }).onDelete('cascade'),
+  ],
+);
+
+// ---------------------------------------------------------------- change history (CD-69)
+
+export const HISTORY_ENTITY_TYPES = ['deal', 'company', 'contact'] as const;
+export type HistoryEntityType = (typeof HISTORY_ENTITY_TYPES)[number];
+export const RECORD_CHANGE_ACTIONS = ['created', 'updated', 'deleted', 'line_added', 'line_changed', 'line_removed'] as const;
+export type RecordChangeAction = (typeof RECORD_CHANGE_ACTIONS)[number];
+
+/**
+ * Who changed which field of a deal, company or contact, and when (old → new). Written by
+ * database triggers (drizzle/0020_record_changes_rls.sql), so every write path is covered: the API,
+ * CSV import and worker jobs. The actor is the user set by DatabaseService.withTenant
+ * (app.user_id); null means the system. No foreign key to the record: the history outlives it.
+ * `field` uses the API's field names (title, ownerUserId, …); labels keep names that were true at
+ * the time (product names on deal lines).
+ */
+export const recordChanges = pgTable(
+  'record_changes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    entityType: text('entity_type', { enum: HISTORY_ENTITY_TYPES }).notNull(),
+    entityId: uuid('entity_id').notNull(),
+    action: text('action', { enum: RECORD_CHANGE_ACTIONS }).notNull(),
+    field: text('field'),
+    oldValue: jsonb('old_value'),
+    newValue: jsonb('new_value'),
+    label: text('label'),
+    actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** The browser tab that made the change (X-Client-Id), so a tab's own edits never conflict with each other. */
+    clientId: text('client_id'),
+    changedAt: timestamp('changed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('record_changes_entity_idx').on(t.tenantId, t.entityType, t.entityId, t.changedAt)],
 );
 
 // ---------------------------------------------------------------- sample data

@@ -38,4 +38,10 @@ CREATE TABLE "sample_records" (
 ALTER TABLE "sample_records" ADD CONSTRAINT "sample_records_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sample_records" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "sample_records" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
-CREATE POLICY tenant_isolation ON "sample_records" USING (tenant_id = app_current_tenant()) WITH CHECK (tenant_id = app_current_tenant());
+CREATE POLICY tenant_isolation ON "sample_records" USING (tenant_id = app_current_tenant()) WITH CHECK (tenant_id = app_current_tenant());--> statement-breakpoint
+
+-- CD-69 tracks contact fields for the change history; contact notes are tracked too.
+DROP TRIGGER "contacts_history" ON "contacts";--> statement-breakpoint
+CREATE TRIGGER contacts_history AFTER INSERT OR UPDATE OR DELETE ON "contacts" FOR EACH ROW EXECUTE FUNCTION crm_record_changes(
+  'contact', 'full_name', 'full_name:fullName', 'company_id:companyId', 'job_title:jobTitle', 'email:email', 'phone:phone',
+  'linkedin:linkedin', 'buyer_role:buyerRole', 'owner_user_id:ownerUserId', 'notes:notes');

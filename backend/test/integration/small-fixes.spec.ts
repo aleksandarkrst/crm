@@ -23,6 +23,10 @@ describe('contact notes', () => {
     const listed = (await ok('GET', '/crm/contacts?limit=200', as())).find((x: { id: string }) => x.id === c.id);
     expect(listed.notes).toBe('Prefers calls');
     expect((await ok('PATCH', `/crm/contacts/${c.id}`, { ...as(), body: { notes: '' } })).notes).toBeNull();
+    // The change history (CD-69) records note changes like the other contact fields.
+    const { entries } = await ok('GET', `/crm/history?entityType=contact&entityId=${c.id}`, as());
+    const notes = entries.filter((e: { field?: string | null }) => e.field === 'notes');
+    expect(notes.length).toBeGreaterThanOrEqual(2);
   });
 });
 

@@ -59,7 +59,7 @@ export function Companies() {
           setQuery('');
         }}
         meta={rows.length + (rows.length === 1 ? ' company' : ' companies')}
-        extra={<DataActions type="companies" count={rows.length} exportCsv={() => companiesCsv(rows)} />}
+        extra={<DataActions type="companies" count={rows.length} exportCsv={() => companiesCsv(s, rows)} />}
         action={{ label: 'Add company', onClick: addCompany }}
       />
       {companyRecords(s).length === 0 ? (

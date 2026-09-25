@@ -95,6 +95,7 @@ jobs:
       DEV_JWT_SECRET: ci-only-dev-secret-at-least-32-characters
       LOG_LEVEL: warn
       PORT: 3000
+      APP_URL: http://localhost:4173
       VITE_API_PROXY: http://127.0.0.1:3000
       E2E_BASE_URL: http://localhost:4173
       E2E_ARTIFACTS_DIR: ${{ github.workspace }}/e2e/artifacts
@@ -120,10 +121,11 @@ jobs:
           npm run build --prefix backend
           npm run db:migrate --prefix backend
           npm run build --prefix frontend
-      - name: Start the API and the UI (vite preview, proxying /api to the API)
+      - name: Start the API, the worker (documents, emails) and the UI (vite preview, proxying /api to the API)
         run: |
           mkdir -p e2e/artifacts
           (cd backend && nohup node dist/main.js > ../e2e/artifacts/api.log 2>&1 &)
+          (cd backend && nohup node dist/worker.js > ../e2e/artifacts/worker.log 2>&1 &)
           (cd frontend && nohup npx vite preview --port 4173 --strictPort > ../e2e/artifacts/ui.log 2>&1 &)
           for i in $(seq 60); do
             curl -fsS http://localhost:4173/api/health/ready && curl -fsS -o /dev/null http://localhost:4173/ && exit 0

@@ -96,8 +96,64 @@
     {
       "idx": 13,
       "version": "7",
-      "when": 1790288044283,
-      "tag": "0013_onboarding_cleanup",
+      "when": 1790261052200,
+      "tag": "0013_custom_fields_bonus_product_currency",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790261069307,
+      "tag": "0014_custom_fields_bonus_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1790280510885,
+      "tag": "0015_documents",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790280521235,
+      "tag": "0016_documents_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790280873338,
+      "tag": "0017_email_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790280886794,
+      "tag": "0018_daily_digests_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790281601789,
+      "tag": "0019_record_changes",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790281605622,
+      "tag": "0020_record_changes_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790314764025,
+      "tag": "0021_onboarding_cleanup",
       "breakpoints": true
     }
   ]

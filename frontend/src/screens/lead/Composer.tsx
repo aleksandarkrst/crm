@@ -3,8 +3,8 @@ import { CHANNEL_LABELS, OBJECTIONS } from '../../store/seed';
 import { initialsOf, script, stageOf, todayIso, todayLabel } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
+import { DealDocuments } from './DealDocuments';
 import { DealProducts } from './DealProducts';
-import { docStateClass } from './docs';
 
 const TABS = [
   { k: 'email', label: 'Email', ch: 'EM' },
@@ -64,8 +64,6 @@ export function Composer({ lead }: { lead: Lead }) {
     setDrafts((d) => Object.fromEntries(Object.entries(d).filter(([k]) => !k.startsWith(tab + '.'))));
     store.flash(entry.title + ' · added to history');
   };
-
-  const docs = lead.docs || [];
 
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
@@ -173,25 +171,7 @@ export function Composer({ lead }: { lead: Lead }) {
 
         {tab === 'products' && <DealProducts lead={lead} />}
 
-        {tab === 'docs' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {docs.map((d) => (
-              <div key={d.name} style={{ border: '1px solid var(--divider)', borderRadius: 8, padding: '11px 12px', display: 'flex', flexDirection: 'column', gap: 7 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 9 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</span>
-                  <span className={'badge ' + docStateClass(d.state)} style={{ fontSize: 9.5, textTransform: 'uppercase', padding: '3px 5px', borderRadius: 4 }}>
-                    {d.state}
-                  </span>
-                </div>
-                <span style={{ fontSize: 11.5, color: 'var(--text-2)' }}>{d.meta}</span>
-                <button type="button" className="btn-outline" style={{ alignSelf: 'flex-start', fontSize: 12, padding: '7px 11px', borderRadius: 6, fontWeight: 400 }} onClick={() => store.openDoc(lead.id)}>
-                  Open
-                </button>
-              </div>
-            ))}
-            {docs.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>No documents yet. The proposal is generated the moment this lead enters the Proposal stage.</div>}
-          </div>
-        )}
+        {tab === 'docs' && <DealDocuments lead={lead} />}
 
         {tab !== 'docs' && tab !== 'products' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
