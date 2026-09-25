@@ -11,8 +11,39 @@ export type { LiveEvent };
 
 const headers = async () => Object.fromEntries((await apiHeaders({ Accept: 'text/event-stream' })).entries());
 
-/** Starts the stream; the returned function stops it. */
+/**
+ * Starts the stream; the returned function stops it. Leaving the page (a reload, a sign-in
+ * redirect) closes the stream at once: the browser can keep a left page alive for back/forward,
+ * and a stream per left page would use up its few connections to the server, so later requests
+ * would wait forever. Coming back reconnects and reports it as a reconnect, so the store re-reads
+ * what it missed.
+ */
 export function connectLive(handlers: LiveHandlers): () => void {
+  let stop: (() => void) | null = null;
+  let resumed = false;
+  const start = () => {
+    stop = openStream({ ...handlers, onOpen: (first) => handlers.onOpen(first && !resumed) });
+  };
+  const onHide = () => {
+    stop?.();
+    stop = null;
+  };
+  const onShow = (e: PageTransitionEvent) => {
+    if (!e.persisted || stop) return;
+    resumed = true;
+    start();
+  };
+  window.addEventListener('pagehide', onHide);
+  window.addEventListener('pageshow', onShow);
+  start();
+  return () => {
+    window.removeEventListener('pagehide', onHide);
+    window.removeEventListener('pageshow', onShow);
+    onHide();
+  };
+}
+
+function openStream(handlers: LiveHandlers): () => void {
   let worker: Worker;
   try {
     worker = new Worker(new URL('./live.worker.ts', import.meta.url), { type: 'module' });
