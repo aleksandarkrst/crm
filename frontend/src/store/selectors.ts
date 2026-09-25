@@ -292,6 +292,7 @@ export function allPeople(s: State): Person[] {
       phone: l.phone,
       initials: l.initials,
       buyerRole: l.buyerRole || (/founder|ceo|owner|managing/i.test(l.role) ? 'Decision maker' : 'Influencer'),
+      notes: l.contactNotes ?? '',
       ownerId: l.contactOwnerId,
       ownerName: l.contactOwner,
     }))

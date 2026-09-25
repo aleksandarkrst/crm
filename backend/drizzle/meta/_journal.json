@@ -92,6 +92,13 @@
       "when": 1790243107622,
       "tag": "0012_stage_soft_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790288044283,
+      "tag": "0013_onboarding_cleanup",
+      "breakpoints": true
     }
   ]
 }

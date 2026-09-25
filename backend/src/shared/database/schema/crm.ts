@@ -77,6 +77,7 @@ export const contacts = pgTable(
     linkedin: text('linkedin'),
     buyerRole: text('buyer_role', { enum: BUYER_ROLES }).notNull().default('Influencer'),
     ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
+    notes: text('notes'),
     ...timestamps,
   },
   (t) => [
@@ -128,12 +129,7 @@ export const funnelStages = pgTable(
     channel: text('channel', { enum: CHANNELS }).notNull().default('EM'),
     documentOnEntry: text('document_on_entry'), // "Proposal", "Quote", ... or null
     winProbability: integer('win_probability').notNull().default(25),
-    /**
-     * The stage to-dos (gates). checklist_items is the source of truth; checklist keeps the labels
-     * only, in the same order, for code that still reads or writes it. A trigger keeps the two in
-     * sync (drizzle/0011_checklist_item_ids.sql).
-     */
-    checklist: jsonb('checklist').$type<string[]>().notNull().default([]),
+    /** The stage to-dos (gates), with stable ids (CD-32). */
     checklistItems: jsonb('checklist_items').$type<ChecklistItem[]>().notNull().default([]),
     isWon: boolean('is_won').notNull().default(false), // the terminal "won" stage
     /**
@@ -347,7 +343,6 @@ export const dealTasks = pgTable(
   (t) => [
     index('deal_tasks_tenant_deal_idx').on(t.tenantId, t.dealId),
     index('deal_tasks_tenant_due_idx').on(t.tenantId, t.dueDate).where(sql`${t.dueDate} is not null`),
-    uniqueIndex('deal_tasks_playbook_uq').on(t.dealId, t.stageId, t.label).where(sql`not ${t.offPlaybook}`),
     uniqueIndex('deal_tasks_playbook_item_uq').on(t.dealId, t.stageId, t.checklistItemId).where(sql`not ${t.offPlaybook} and ${t.checklistItemId} is not null`),
     foreignKey({ columns: [t.tenantId, t.dealId], foreignColumns: [deals.tenantId, deals.id], name: 'deal_tasks_deal_fk' }).onDelete('cascade'),
     foreignKey({ columns: [t.tenantId, t.stageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deal_tasks_stage_fk' }).onDelete('cascade'),
@@ -390,4 +385,25 @@ export const dealStageHistory = pgTable(
     foreignKey({ columns: [t.tenantId, t.fromStageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deal_stage_history_from_stage_fk' }),
     foreignKey({ columns: [t.tenantId, t.toStageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deal_stage_history_to_stage_fk' }),
   ],
+);
+
+// ---------------------------------------------------------------- sample data
+
+export const SAMPLE_KINDS = ['company', 'contact', 'product', 'deal'] as const;
+export type SampleKind = (typeof SAMPLE_KINDS)[number];
+
+/**
+ * The records "Load sample data" created (CD-68), so "Remove sample data" deletes exactly those.
+ * A table of ids rather than a flag on each table: the CRM tables stay as they are, and the
+ * marks go away with the records. Deal tasks, lines, activities and history cascade with deals.
+ */
+export const sampleRecords = pgTable(
+  'sample_records',
+  {
+    tenantId: tenantId(),
+    kind: text('kind', { enum: SAMPLE_KINDS }).notNull(),
+    recordId: uuid('record_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.kind, t.recordId] })],
 );

@@ -38,6 +38,10 @@ npm run dev
 Open http://localhost:5173.
 
 Sign in with any email (dev mode, no password), create a workspace, and start adding deals.
+A new workspace opens with a getting-started checklist (for owners and admins) and empty screens
+that say what fills them. To look around first, click **Load sample data**; **Remove sample data**
+deletes exactly those records again. The app also works on tablets and phones (bottom bar,
+one-tap call and email on contacts).
 To try teamwork locally, invite a second email in **Settings → Team**, then open the invite link in
 a private window and sign in as that email.
 

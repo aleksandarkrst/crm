@@ -53,7 +53,7 @@ describe('creating and renaming funnels', () => {
   it('copies the stages of another funnel, with new stage and checklist ids', async () => {
     const ent = (await funnelsNow()).find((f) => f.key === 'ent')!;
     const copy = await newFunnel({ label: 'Enterprise copy', copyFromFunnelId: ent.id }, admin);
-    expect(copy.stages.map((s) => [s.key, s.name, s.checklist, s.isWon])).toEqual(ent.stages.map((s) => [s.key, s.name, s.checklist, s.isWon]));
+    expect(copy.stages.map((s) => [s.key, s.name, s.checklistItems.map((i) => i.label), s.isWon])).toEqual(ent.stages.map((s) => [s.key, s.name, s.checklistItems.map((i) => i.label), s.isWon]));
     const ids = new Set(ent.stages.flatMap((s) => [s.id, ...s.checklistItems.map((i) => i.id)]));
     for (const s of copy.stages) {
       expect(ids.has(s.id)).toBe(false);
@@ -128,7 +128,8 @@ describe('adding and reordering stages', () => {
     const after = await ok<Funnel>('POST', `/crm/funnels/${f.id}/stages`, { ...as(admin), body: { name: 'Negotiation', checklistItems: [{ label: 'Terms agreed' }] } });
     expect(after.stages.map((s) => s.name)).toEqual(['New deal', 'Discovery', 'Proposal', 'Negotiation', 'Won']);
     const added = after.stages[3]!;
-    expect(added).toMatchObject({ key: 'negotiation', activity: 'Negotiation', channel: 'EM', winProbability: 25, isWon: false, checklist: ['Terms agreed'] });
+    expect(added).toMatchObject({ key: 'negotiation', activity: 'Negotiation', channel: 'EM', winProbability: 25, isWon: false });
+    expect(added.checklistItems.map((i) => i.label)).toEqual(['Terms agreed']);
     expect(added.checklistItems[0]!.id).toMatch(/^[0-9a-f-]{36}$/);
 
     const first = await ok<Funnel>('POST', `/crm/funnels/${f.id}/stages`, { ...as(), body: { name: 'Research', position: 0, channel: 'RS', winProbability: 5 } });

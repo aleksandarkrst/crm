@@ -25,7 +25,10 @@ export function Contact() {
   if (!p) return <Navigate to={paths.contacts} replace />;
   const company = companyOfPerson(s, p);
 
-  const setField = (key: keyof Person) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => store.patchPerson(p.id, { [key]: e.target.value });
+  // Tap to email or call (CD-70); "—" stands for a missing value.
+  const mailto = /^[^\s@]+@[^\s@]+$/.test(p.email.trim()) ? `mailto:${p.email.trim()}` : '';
+  const tel = /\d/.test(p.phone) ? `tel:${p.phone.replace(/[^\d+]/g, '')}` : '';
+  const setField = (key: keyof Person) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => store.patchPerson(p.id, { [key]: e.target.value });
   const q = picker.search.toLowerCase().trim();
   const companyOptions = s.leads.filter((l) => l.id !== p.leadId).filter((l) => !q || l.company.toLowerCase().includes(q));
   const docs = c?.docs || [];
@@ -79,10 +82,27 @@ export function Contact() {
                 <GhostSelect value={p.buyerRole || 'Influencer'} onChange={setField('buyerRole')} options={BUYER_ROLES} />
               </FieldRow>
               <FieldRow label="Email">
-                <GhostInput value={p.email} onChange={setField('email')} />
+                <span className="contact-field">
+                  <GhostInput value={p.email} onChange={setField('email')} />
+                  {mailto && (
+                    <a className="contact-action" href={mailto} aria-label={`Email ${p.name}`}>
+                      Email
+                    </a>
+                  )}
+                </span>
               </FieldRow>
               <FieldRow label="Phone">
-                <GhostInput value={p.phone} onChange={setField('phone')} />
+                <span className="contact-field">
+                  <GhostInput value={p.phone} onChange={setField('phone')} />
+                  {tel && (
+                    <a className="contact-action" href={tel} aria-label={`Call ${p.name}`}>
+                      Call
+                    </a>
+                  )}
+                </span>
+              </FieldRow>
+              <FieldRow label="Notes">
+                <textarea className="ghost" rows={2} value={p.notes ?? ''} onChange={setField('notes')} placeholder="How they influence the deal" style={{ resize: 'vertical', lineHeight: 1.5 }} />
               </FieldRow>
               <FieldRow label="Owner">
                 <span className="field-value">{memberName(s, p.ownerId, p.ownerName)}</span>

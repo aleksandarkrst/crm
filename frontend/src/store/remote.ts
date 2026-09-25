@@ -24,6 +24,7 @@ export type WorkspaceData = Pick<
   | 'team'
   | 'workspace'
   | 'profile'
+  | 'onboarding'
 >;
 
 export const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member' } as const;
@@ -105,8 +106,9 @@ export const mapLeadTask = (t: ApiDealTask, tz?: string): LeadTask => ({
   by: t.doneByName?.split(' ')[0] ?? undefined,
 });
 
-export async function loadWorkspace(): Promise<WorkspaceData> {
-  const [apiFunnels, companies, contacts, dealRows, products, apiLines, apiTasks, apiTeam, apiWorkspace, apiProfile] = await Promise.all([
+/** `canManage`: owners and admins also get the getting-started state (CD-68). */
+export async function loadWorkspace(canManage: boolean): Promise<WorkspaceData> {
+  const [apiFunnels, companies, contacts, dealRows, products, apiLines, apiTasks, apiTeam, apiWorkspace, apiProfile, onboarding] = await Promise.all([
     crmApi.funnels(),
     crmApi.companies(),
     crmApi.contacts(),
@@ -117,6 +119,7 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     crmApi.team(),
     crmApi.workspace(),
     crmApi.profile(),
+    canManage ? crmApi.onboarding() : null,
   ]);
 
   const team: TeamMember[] = [
@@ -155,6 +158,7 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
       email: ct?.email ?? '—',
       phone: ct?.phone ?? '—',
       buyerRole: ct?.buyerRole,
+      contactNotes: ct?.notes ?? '',
       contactOwnerId: ct?.ownerUserId,
       contactOwner: ct?.ownerName ?? undefined,
       owner: ownerName ?? undefined,
@@ -217,6 +221,7 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
       phone: c.phone ?? '',
       linkedin: c.linkedin ?? undefined,
       buyerRole: c.buyerRole,
+      notes: c.notes ?? '',
       initials: initialsOf(c.fullName),
       ownerId: c.ownerUserId,
       ownerName: c.ownerName ?? undefined,
@@ -280,5 +285,6 @@ export async function loadWorkspace(): Promise<WorkspaceData> {
     team,
     workspace: mapWorkspace(apiWorkspace),
     profile: mapProfile(apiProfile),
+    onboarding,
   };
 }

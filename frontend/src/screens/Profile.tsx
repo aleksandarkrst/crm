@@ -29,7 +29,10 @@ export function Profile() {
   const { s, patchProfile, session } = useStore();
   const p = s.profile;
   const setP = (k: keyof ProfileT) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => patchProfile({ [k]: e.target.value });
+  // No default (or one whose funnel was deleted) means the first funnel; say which one that is.
   const funnels = funnelOptions(s);
+  const defaultFunnel = s.funnels[p.defaultFunnelId] ? p.defaultFunnelId : '';
+  const funnelChoices = [{ value: '', label: `First funnel${funnels[0] ? ` (${funnels[0].label})` : ''}` }, ...funnels];
 
   return (
     <Screen title="Profile settings">
@@ -76,7 +79,7 @@ export function Profile() {
             <GhostSelect style={selectStyle} value={p.startPage} onChange={setP('startPage')} options={START_PAGES} />
           </FieldRow>
           <FieldRow label="Default funnel">
-            <GhostSelect style={selectStyle} value={p.defaultFunnelId} onChange={setP('defaultFunnelId')} options={funnels} />
+            <GhostSelect style={selectStyle} value={defaultFunnel} onChange={setP('defaultFunnelId')} options={funnelChoices} />
           </FieldRow>
           <span style={{ ...note, margin: '2px 0 0' }}>The pipeline opens on your default funnel in {session.tenant.name}.</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '8px 0 2px', borderTop: '1px solid var(--divider)', marginTop: 8 }}>

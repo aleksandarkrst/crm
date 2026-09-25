@@ -1,4 +1,4 @@
-import type { ApiDateFormat, ApiLanguage, ApiStageChange, ApiStartPage, DealOutcome, LostReason } from '../lib/api';
+import type { ApiDateFormat, ApiLanguage, ApiOnboarding, ApiStageChange, ApiStartPage, DealOutcome, LostReason } from '../lib/api';
 
 /** A funnel's backend id (CD-10: any number of funnels, not just the two personas). */
 export type SegKey = string;
@@ -48,6 +48,8 @@ export interface Lead {
   email: string;
   phone: string;
   buyerRole?: string;
+  /** Notes on the primary contact (from the New contact dialog or the contact screen). */
+  contactNotes?: string;
   /** Owner of the primary contact (user id, and last known name from the API). */
   contactOwnerId?: string | null;
   contactOwner?: string;
@@ -98,6 +100,7 @@ export interface Person {
   phone: string;
   linkedin?: string;
   buyerRole?: string;
+  notes?: string;
   initials: string;
   /** Owner of the contact (user id); ownerName is their last known name, from the API. */
   ownerId?: string | null;
@@ -274,6 +277,7 @@ export interface NewContactDraft {
   phone: string;
   linkedin: string;
   buyerRole: string;
+  notes: string;
 }
 
 export interface NewFieldDraft {
@@ -318,6 +322,8 @@ export interface State {
   fields: FieldDef[];
   workspace: Workspace;
   profile: Profile;
+  /** Getting started (CD-68), for owners and admins; null for members. */
+  onboarding: ApiOnboarding | null;
   bonusRules: Record<string, BonusRule>;
   filters: Filters;
   toast: string;

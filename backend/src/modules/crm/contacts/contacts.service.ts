@@ -18,6 +18,7 @@ export const CreateContact = z.object({
   linkedin: optionalText(300),
   buyerRole: z.enum(BUYER_ROLES).optional(),
   ownerUserId: z.uuid().nullish(),
+  notes: optionalText(2000),
 });
 export const UpdateContact = nonEmptyPatch(CreateContact.partial());
 export const ContactsQuery = PaginationQuery.extend({

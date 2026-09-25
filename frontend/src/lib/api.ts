@@ -60,8 +60,6 @@ export interface ApiFunnelStage {
   channel: Channel;
   documentOnEntry: string | null;
   winProbability: number;
-  /** The labels of checklistItems, in order. */
-  checklist: string[];
   /** Stage to-dos with stable ids (CD-32): renaming one keeps the deals' progress on it. */
   checklistItems: ApiChecklistItem[];
   isWon: boolean;
@@ -116,6 +114,21 @@ export interface ApiProfile {
   defaultFunnelId: string | null;
   dailyDigest: boolean;
 }
+/** Getting started (CD-68): the checklist's steps, derived from the workspace's records. */
+export type ApiOnboardingStep = 'funnel' | 'products' | 'deals' | 'invite';
+export type ApiSampleKind = 'company' | 'contact' | 'product' | 'deal';
+export interface ApiOnboarding {
+  steps: { key: ApiOnboardingStep; done: boolean }[];
+  complete: boolean;
+  dismissed: boolean;
+  sampleData: { loaded: boolean; counts: Record<ApiSampleKind, number> };
+}
+export interface ApiSampleRemoval {
+  removed: Record<ApiSampleKind, number>;
+  /** Sample records kept because real records use them (they become ordinary records). */
+  kept: Record<ApiSampleKind, number>;
+  state: ApiOnboarding;
+}
 export type ProfileInput = Partial<Omit<ApiProfile, 'userId' | 'email'>>;
 export interface ApiCompany {
   id: string;
@@ -140,6 +153,7 @@ export interface ApiContact {
   linkedin: string | null;
   buyerRole: string;
   ownerUserId: string | null;
+  notes: string | null;
   /** Current name of the owner, also after they left the workspace (lists only). */
   ownerName?: string | null;
 }
@@ -318,6 +332,10 @@ export const crmApi = {
   updateWorkspace: (input: WorkspaceInput) => api<ApiWorkspace>('/workspace', { method: 'PATCH', json: input }),
   profile: () => api<ApiProfile>('/profile'),
   updateProfile: (input: ProfileInput) => api<ApiProfile>('/profile', { method: 'PATCH', json: input }),
+  onboarding: () => api<ApiOnboarding>('/onboarding'),
+  setOnboardingDismissed: (dismissed: boolean) => api<ApiOnboarding>('/onboarding/dismissed', { method: 'PUT', json: { dismissed } }),
+  loadSampleData: () => api<ApiOnboarding>('/onboarding/sample-data', { method: 'POST' }),
+  removeSampleData: () => api<ApiSampleRemoval>('/onboarding/sample-data', { method: 'DELETE' }),
 
   team: () => api<{ members: ApiMember[]; invitations: ApiInvitation[] }>('/team'),
   invite: (email: string, role: 'admin' | 'member') => api<{ invitation: ApiInvitation; token: string }>('/team/invitations', { method: 'POST', json: { email, role } }),

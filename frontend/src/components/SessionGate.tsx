@@ -53,7 +53,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
       const wanted = preferTenant ?? getTenantId();
       const tenant = me.tenants.find((t) => t.id === wanted) ?? me.tenants[0]!;
       setTenantId(tenant.id);
-      setPhase({ kind: 'ready', me, tenantId: tenant.id, data: await loadWorkspace() });
+      setPhase({ kind: 'ready', me, tenantId: tenant.id, data: await loadWorkspace(tenant.role !== 'member') });
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         await signOut();

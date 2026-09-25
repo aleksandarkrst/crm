@@ -41,7 +41,7 @@ describe('renaming a checklist item', () => {
     await setValue(page, 'input[data-e2e=rename-me]', 'Socials checked');
     const stage = await eventually(async () => {
       const funnels = await api(page, '/crm/funnels');
-      return funnels.flatMap((f) => f.stages).find((s) => s.checklist.includes('Socials checked'));
+      return funnels.flatMap((f) => f.stages).find((s) => s.checklistItems.some((i) => i.label === 'Socials checked'));
     });
     assert.ok(stage, 'rename saved');
   });

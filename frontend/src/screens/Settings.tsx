@@ -71,6 +71,7 @@ export function Settings() {
       </div>
 
       {current === 'workspace' && <WorkspaceTab />}
+      {current === 'workspace' && <GettingStartedCard />}
       {current === 'team' && <TeamTab />}
       {current === 'roles' && <RolesTab />}
       {current === 'funnel' && <FunnelBuilder />}
@@ -138,6 +139,45 @@ function WorkspaceTab() {
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 8 }}>
         {ro ? 'Only owners and admins can change the workspace settings.' : 'Changes are saved as you make them.'} The sales bonus setting isn't saved yet.
       </span>
+    </div>
+  );
+}
+
+/** Getting started (CD-68) for owners and admins: show the checklist again, load or remove sample data. */
+function GettingStartedCard() {
+  const { s, setOnboardingDismissed, loadSampleData, removeSampleData } = useStore();
+  const [busy, setBusy] = useState(false);
+  const ob = s.onboarding;
+  if (!ob) return null;
+  const run = (fn: () => Promise<void>) => () => {
+    setBusy(true);
+    void fn().finally(() => setBusy(false));
+  };
+  const c = ob.sampleData.counts;
+  return (
+    <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 18 }} data-testid="sample-data-card">
+      <div className="card-title">Getting started and sample data</div>
+      <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>
+        {ob.sampleData.loaded
+          ? `Sample data is loaded: ${c.company} companies, ${c.contact} contacts, ${c.product} products and ${c.deal} deals. Removing it deletes exactly those records; your own stay.`
+          : 'Sample data adds a few companies, contacts, products and deals (with tasks) to look around with. It is marked, so you can remove exactly those records again in one click.'}
+      </span>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {ob.sampleData.loaded ? (
+          <button type="button" className="btn-outline" disabled={busy} onClick={run(removeSampleData)}>
+            Remove sample data
+          </button>
+        ) : (
+          <button type="button" className="btn-outline" disabled={busy} onClick={run(loadSampleData)}>
+            Load sample data
+          </button>
+        )}
+        {ob.dismissed && !ob.complete && (
+          <button type="button" className="btn-outline" disabled={busy} onClick={run(() => setOnboardingDismissed(false))}>
+            Show the getting-started checklist
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -361,6 +401,11 @@ function FunnelBuilder() {
           How they buy
           <input className="form-input" value={funnel.note} disabled={!editable} placeholder="Who decides, how long it takes, what slows it down" onChange={(e) => store.patchFunnel(funnel.id, { note: e.target.value })} />
         </label>
+        {!editable && (
+          <div data-testid="funnels-read-only" style={{ gridColumn: '1 / -1', fontSize: 12, color: 'var(--text-2)' }}>
+            Only owners and admins can change funnels, stages and their to-dos.
+          </div>
+        )}
         {editable && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, gridColumn: '1 / -1', fontSize: 12, color: 'var(--text-2)' }}>
             <span>
@@ -381,7 +426,7 @@ function FunnelBuilder() {
             <div style={{ fontSize: 12, color: 'var(--muted)', paddingTop: 4 }}>{String(idx + 1).padStart(2, '0')}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 13, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                <input className="ghost" value={st.name} onChange={(e) => store.editStage(idx, 'name', e.target.value)} style={{ fontSize: 15, fontWeight: 600, padding: '3px 7px', marginLeft: -7, minWidth: 180, width: 'auto' }} />
+                <input className="ghost" value={st.name} disabled={!editable} onChange={(e) => store.editStage(idx, 'name', e.target.value)} style={{ fontSize: 15, fontWeight: 600, padding: '3px 7px', marginLeft: -7, minWidth: 180, width: 'auto' }} />
                 {editable && (
                   <span style={{ display: 'inline-flex', gap: 6 }}>
                     <button type="button" title="Move up" disabled={idx === 0} onClick={() => store.moveStage(idx, -1)} style={{ ...smallBtn, opacity: idx === 0 ? 0.4 : 1 }}>
@@ -408,7 +453,7 @@ function FunnelBuilder() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
                 <label className="form-label">
                   Activity
-                  <select className="form-input" style={{ padding: '9px 10px' }} value={st.activity} onChange={(e) => store.editStage(idx, 'activity', e.target.value)}>
+                  <select className="form-input" disabled={!editable} style={{ padding: '9px 10px' }} value={st.activity} onChange={(e) => store.editStage(idx, 'activity', e.target.value)}>
                     {ACTIVITIES.map((o) => (
                       <option key={o}>{o}</option>
                     ))}
@@ -416,7 +461,7 @@ function FunnelBuilder() {
                 </label>
                 <label className="form-label">
                   Channel
-                  <select className="form-input" style={{ padding: '9px 10px' }} value={st.channel} onChange={(e) => store.editStage(idx, 'channel', e.target.value)}>
+                  <select className="form-input" disabled={!editable} style={{ padding: '9px 10px' }} value={st.channel} onChange={(e) => store.editStage(idx, 'channel', e.target.value)}>
                     {CHANNELS.map((c) => (
                       <option key={c} value={c}>
                         {CHANNEL_LABELS[c]}
@@ -426,7 +471,7 @@ function FunnelBuilder() {
                 </label>
                 <label className="form-label">
                   Document on entry
-                  <select className="form-input" style={{ padding: '9px 10px' }} value={st.doc} onChange={(e) => store.editStage(idx, 'doc', e.target.value)}>
+                  <select className="form-input" disabled={!editable} style={{ padding: '9px 10px' }} value={st.doc} onChange={(e) => store.editStage(idx, 'doc', e.target.value)}>
                     {DOCS.map((o) => (
                       <option key={o}>{o}</option>
                     ))}
@@ -435,7 +480,7 @@ function FunnelBuilder() {
                 <label className="form-label">
                   Win probability
                   <span style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--white)', padding: '0 10px 0 0' }}>
-                    <input type="number" min={0} max={100} step={5} value={st.prob} onChange={(e) => store.editProb(idx, e.target.value)} style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', padding: '9px 4px 9px 10px', fontSize: 13, color: 'var(--ink)', textTransform: 'none', letterSpacing: 0 }} />
+                    <input type="number" disabled={!editable} min={0} max={100} step={5} value={st.prob} onChange={(e) => store.editProb(idx, e.target.value)} style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', padding: '9px 4px 9px 10px', fontSize: 13, color: 'var(--ink)', textTransform: 'none', letterSpacing: 0 }} />
                     <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-2)', letterSpacing: 0 }}>%</span>
                   </span>
                 </label>
@@ -446,15 +491,15 @@ function FunnelBuilder() {
                 <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
                   {st.checklist.map((c, gi) => (
                     <span key={st.checklistIds[gi] ?? gi} className="gate-chip">
-                      <input value={c} onChange={(e) => store.renameGate(idx, gi, e.target.value)} style={{ border: 0, outline: 0, background: 'transparent', fontSize: 12, color: 'var(--ink)', width: Math.max(9, Math.min(34, c.length + 1)) + 'ch' }} />
-                      <button type="button" className="pill-x" title="Delete to-do" onClick={() => store.removeGate(idx, gi)}>
+                      <input value={c} disabled={!editable} onChange={(e) => store.renameGate(idx, gi, e.target.value)} style={{ border: 0, outline: 0, background: 'transparent', fontSize: 12, color: 'var(--ink)', width: Math.max(9, Math.min(34, c.length + 1)) + 'ch' }} />
+                      {editable && <button type="button" className="pill-x" title="Delete to-do" onClick={() => store.removeGate(idx, gi)}>
                         ×
-                      </button>
+                      </button>}
                     </span>
                   ))}
-                  <button type="button" onClick={() => store.addGate(idx)} style={{ fontSize: 12, border: '1px dashed var(--dashed)', background: 'transparent', color: 'var(--text-2)', cursor: 'pointer', borderRadius: 20, padding: '6px 11px' }}>
+                  {editable && <button type="button" onClick={() => store.addGate(idx)} style={{ fontSize: 12, border: '1px dashed var(--dashed)', background: 'transparent', color: 'var(--text-2)', cursor: 'pointer', borderRadius: 20, padding: '6px 11px' }}>
                     + to-do
-                  </button>
+                  </button>}
                 </div>
               </div>
             </div>
