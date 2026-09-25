@@ -1,28 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { useMatch } from 'react-router-dom';
-import { useStore } from '../store/store';
+import { ICONS, useCommands } from './commands';
 
 /**
- * The header's "New" menu (CD-66): opens the same dialogs as the buttons on each screen, from any
- * screen (on a deal's screen, a new task or contact is for that deal). A company has no dialog:
- * like "Add company" on Companies, it is created and opened.
+ * The header's "+" menu (CD-66, CD-80): creates a deal, contact, company, task or product from any
+ * screen (on a deal's screen, a new task or contact is for that deal). While it is open, the
+ * letter next to an item runs it.
  */
 export function NewMenu() {
-  const { s, set, addCompany } = useStore();
-  // On a deal's screen, a new task or contact starts out linked to that deal.
-  const dealId = useMatch('/deals/:id')?.params.id;
-  const onDeal = dealId && s.leads.some((l) => l.id === dealId) ? dealId : undefined;
+  const items = useCommands().filter((c) => c.group === 'Create');
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
-
-  const items: { key: string; label: string; hint: string; run: () => void }[] = [
-    { key: 'deal', label: 'Deal', hint: 'Starts a funnel', run: () => set({ newLeadOpen: true }) },
-    { key: 'contact', label: 'Contact', hint: 'Linked to a deal', run: () => set(onDeal ? { contactOpen: true, contactCompany: onDeal } : { contactOpen: true }) },
-    { key: 'company', label: 'Company', hint: 'Opens the new record', run: addCompany },
-    { key: 'task', label: 'Task', hint: 'Shows in Today', run: () => set(onDeal ? { taskOpen: true, taskLeadId: onDeal } : { taskOpen: true }) },
-    { key: 'product', label: 'Product', hint: 'Adds to the catalog', run: () => set({ productOpen: true }) },
-  ];
 
   useEffect(() => {
     if (!open) return;
@@ -47,7 +35,11 @@ export function NewMenu() {
       }
       return;
     }
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    const byKey = items.findIndex((it) => it.key && it.key.toLowerCase() === e.key.toLowerCase());
+    if (byKey >= 0 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      pick(byKey);
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       setActive((a) => (a + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length);
     } else if (e.key === 'Enter') {
@@ -62,8 +54,10 @@ export function NewMenu() {
     <div ref={ref} className="new-menu" onKeyDown={onKeyDown}>
       <button
         type="button"
-        className="btn btn-primary new-menu-btn"
+        className="round-btn new-menu-btn"
         data-testid="new-menu"
+        aria-label="Create new"
+        title="Create new"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => {
@@ -71,26 +65,35 @@ export function NewMenu() {
           setOpen(!open);
         }}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-        New
+        {open ? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        ) : (
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        )}
       </button>
       {open && (
-        <div className="menu-pop" role="menu" style={{ right: 0, width: 230 }}>
-          <div className="caps-muted menu-label">Create new</div>
+        <div className="menu-pop new-menu-pop" role="menu">
           {items.map((it, i) => (
             <button
-              key={it.key}
+              key={it.id}
               type="button"
               role="menuitem"
-              data-testid={`new-${it.key}`}
+              data-testid={it.id}
               className={i === active ? 'menu-item active' : 'menu-item'}
               onMouseEnter={() => setActive(i)}
               onClick={() => pick(i)}
             >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--text-2)' }}>
+                <path d={ICONS[it.icon]} />
+              </svg>
               <span className="menu-item-title">{it.label}</span>
-              <span className="menu-item-sub">{it.hint}</span>
+              <kbd className="kbd" style={{ marginLeft: 'auto' }} aria-label={`Shortcut ${it.key}`}>
+                {it.key}
+              </kbd>
             </button>
           ))}
         </div>

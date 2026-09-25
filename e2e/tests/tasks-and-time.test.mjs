@@ -2,7 +2,7 @@
 // dialog (CD-28), the workspace currency and fiscal year (CD-73), and "1 lead" (CD-74).
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, clickButton, eventually, newUserWithWorkspace, setValue, steps, text, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, clickButton, eventually, newUserWithWorkspace, setValue, steps, text, useBrowser, waitForToastToClear, createNew } from '../lib/harness.mjs';
 
 /** An ISO date `days` from today in a time zone (new workspaces use Europe/Belgrade). */
 function isoDay(days, tz = 'Europe/Belgrade') {
@@ -59,7 +59,7 @@ describe('tasks: overdue, editing and channels', () => {
   step('the task dialog offers all seven channels, Call and Note included', async () => {
     await page.goto(BASE_URL + '/today', { waitUntil: 'networkidle0' });
     await waitForToastToClear(page).catch(() => {});
-    await clickButton(page, 'New task');
+    await createNew(page, 'task');
     await page.waitForSelector('input[placeholder="e.g. Send revised scope to procurement"]');
     const labels = await page.evaluate(() => {
       const sel = [...document.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.value === 'EM'));

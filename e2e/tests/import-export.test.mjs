@@ -133,13 +133,23 @@ describe('CSV import and export', () => {
 
   step('export follows the filters on screen', async () => {
     rmSync(downloads, { recursive: true, force: true });
-    await page.type('input[placeholder="Search contacts"]', 'Gina');
-    await page.waitForFunction(() => !document.body.innerText.includes('=HYPERLINK'));
+    const globexId = (await api(page, '/crm/companies')).find((c) => c.name === globex).id;
+    await page.$$eval(
+      'select',
+      (els, id) => {
+        const el = els.find((x) => [...x.options].some((o) => o.value === id));
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(el, id);
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      },
+      globexId,
+    );
+    await page.waitForFunction(() => document.querySelectorAll('.table-row').length === 2);
     await clickButton(page, 'Export');
     const name = await eventually(() => existsSync(downloads) && readdirSync(downloads).find((f) => f.endsWith('.csv')), { timeout: 10_000 });
     const lines = readFileSync(join(downloads, name), 'utf8').split('\r\n').filter(Boolean);
-    assert.equal(lines.length, 2);
-    assert.match(lines[1], /Gina Globex/);
+    // The header and the two contacts at Globex; the others are filtered out.
+    assert.equal(lines.length, 3, lines.join('\n'));
+    assert.ok(lines.every((l, i) => i === 0 || l.includes(globex)), lines.join('\n'));
     assert.equal(browser.errors.length, 0, browser.errors.join('\n'));
   });
 });

@@ -151,7 +151,7 @@ describe('settings and discovery fields', () => {
     await member.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
     await signIn(member, email('settings-member'), 'Max Member');
     await clickButton(member, 'Accept and join');
-    await member.waitForSelector('button::-p-text(New deal)');
+    await member.waitForSelector('[data-testid=new-menu]');
     await member.goto(`${BASE_URL}/settings/workspace`, { waitUntil: 'networkidle0' });
     await member.waitForFunction(() => document.body.innerText.includes('Only owners and admins can change the workspace settings.'));
     assert.equal(await valueByLabel(member, 'Name'), workspaceName);

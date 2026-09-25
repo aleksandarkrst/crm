@@ -35,7 +35,7 @@ describe('live updates, conflicts and change history', () => {
     await ana.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
     await signIn(ana, email('live-ana'), 'Ana Member');
     await clickButton(ana, 'Accept and join');
-    await ana.waitForSelector('button::-p-text(New deal)');
+    await ana.waitForSelector('[data-testid=new-menu]');
   });
 
   step("one person's change appears for the other without a reload", async () => {

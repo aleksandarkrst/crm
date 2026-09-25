@@ -34,7 +34,7 @@ describe('pipeline journey', () => {
     await page.waitForSelector('::-p-text(Create your workspace)');
     await page.type('input[placeholder="e.g. Cadence Studio"]', 'E2E Studio');
     await clickButton(page, 'Create workspace');
-    await page.waitForSelector('button::-p-text(New deal)');
+    await page.waitForSelector('[data-testid=new-menu]');
   });
 
   step('adds a product to the catalog', async () => {

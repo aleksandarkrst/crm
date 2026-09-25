@@ -19,7 +19,7 @@ describe('sales bonus rules', () => {
     await member.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
     await signIn(member, email('bonus-member'), 'Sara Seller');
     await clickButton(member, 'Accept and join');
-    await member.waitForSelector('button::-p-text(New deal)');
+    await member.waitForSelector('[data-testid=new-menu]');
     memberId = (await api(page, '/team')).members.find((m) => m.displayName === 'Sara Seller').userId;
   });
 

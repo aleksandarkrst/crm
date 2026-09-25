@@ -12,27 +12,22 @@ const ANY = 'Billing frequency';
 /** The catalog (CD-83): a row opens the product in a dialog. */
 export function Products() {
   const { s, set, openProduct } = useStore();
-  const [query, setQuery] = useState('');
   const [frequency, setFrequency] = useState(ANY);
 
   const usage: Record<string, string[]> = {};
   s.leads.forEach((l) => linesOf(s, l).forEach((ln) => (usage[ln.itemId] ||= []).push(l.id)));
-  const q = query.toLowerCase().trim();
   const wanted = FREQUENCIES.find((f) => f.label === frequency)?.value;
-  const rows = s.catalog.filter((c) => !q || c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q)).filter((c) => !wanted || c.frequency === wanted);
+  const rows = s.catalog.filter((c) => !wanted || c.frequency === wanted);
   const locale = localeFor(s.workspace.currency);
 
   return (
     <Screen title="Products & services">
       <FilterBar
-        search={{ value: query, onChange: setQuery, placeholder: 'Search catalog' }}
         chips={[{ value: frequency, options: [ANY, ...FREQUENCIES.map((f) => f.label)], onChange: setFrequency }]}
         dirty={frequency !== ANY}
         onClear={() => {
           setFrequency(ANY);
-          setQuery('');
         }}
-        action={{ label: 'New product', onClick: () => openProduct(null) }}
       />
       {s.catalog.length === 0 ? (
         <EmptyState
