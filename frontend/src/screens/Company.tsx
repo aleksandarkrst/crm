@@ -69,7 +69,7 @@ export function Company() {
           initials={initialsOf(rec.name)}
           name={rec.name}
           onName={(v) => store.setCompanyField(rec.id, 'name', v)}
-          ownerId={extra?.ownerId ?? rec.ownerId}
+          ownerId={extra ? (extra.ownerId ?? null) : rec.ownerId}
           ownerName={extra?.owner}
           onOwner={(ownerId) => store.setCompanyOwner(rec.id, ownerId)}
           onNewDeal={newDeal}
@@ -100,7 +100,7 @@ export function Company() {
             <Section
               title={`Contacts (${people.length})`}
               testId="company-contacts"
-              action={<AddButton label="Add a contact" onClick={() => set(target ? { contactOpen: true, contactCompany: target.id } : { contactOpen: true })} />}
+              action={<AddButton label="Add a contact" onClick={() => set(target ? { contactOpen: true, contactCompany: target.id, contactCompanyId: null } : { contactOpen: true, contactCompanyId: rec.id })} />}
             >
               {people.map((p) => (
                 <button key={p.id} type="button" onClick={() => store.openContact(p.contactId || p.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', border: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left', font: 'inherit' }}>

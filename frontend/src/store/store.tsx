@@ -1260,9 +1260,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           flash('Not saved: ' + errText(err));
         }
       },
-      /** New contact at the company of the chosen lead, linked to that lead. */
-      createContact: async (draft: NewContactDraft, leadId: string | undefined, customFields?: CustomFieldPatch) => {
-        const lead = leadById(cur(), leadId);
+      /** New contact at the company of the chosen lead, linked to that lead; or at `companyId` with no deal. */
+      createContact: async (draft: NewContactDraft, leadId: string | undefined, customFields?: CustomFieldPatch, companyId?: string) => {
+        const lead = companyId ? undefined : leadById(cur(), leadId);
         try {
           const c = await crmApi.createContact({
             fullName: draft.name,
@@ -1272,12 +1272,12 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             linkedin: draft.linkedin,
             buyerRole: draft.buyerRole,
             notes: draft.notes,
-            companyId: lead?.companyId ?? null,
+            companyId: companyId ?? lead?.companyId ?? null,
             ...(customFields ? { customFields } : {}),
           });
           if (lead) await crmApi.linkContact(lead.id, c.id);
           await reload();
-          set({ contactOpen: false, newContact: EMPTY_CONTACT });
+          set({ contactOpen: false, contactCompanyId: null, newContact: EMPTY_CONTACT });
           flash(draft.name + (lead ? ' added to ' + lead.company : ' added'));
         } catch (err) {
           flash('Not saved: ' + errText(err));

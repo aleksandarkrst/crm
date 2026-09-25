@@ -395,6 +395,8 @@ export interface State {
   taskEditId: string | null;
   contactOpen: boolean;
   contactCompany: string;
+  /** Company the New contact dialog adds to without linking a deal (a company page with no deals, CD-80). */
+  contactCompanyId: string | null;
   newContact: NewContactDraft;
   personaOpen: boolean;
   /** Funnel id the "New funnel" dialog copies, or 'blank'. */
