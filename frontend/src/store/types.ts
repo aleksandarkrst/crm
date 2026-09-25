@@ -383,6 +383,11 @@ export interface State {
   sent: boolean;
   newLeadOpen: boolean;
   newLeadType: SegKey;
+  /** Company and contact the New deal dialog starts with (from a company or contact page, CD-80). */
+  newLeadCompanyId: string | null;
+  newLeadContactId: string | null;
+  /** The command palette (Ctrl/⌘ K, CD-80). */
+  paletteOpen: boolean;
   taskOpen: boolean;
   /** Deal the "New task" dialog opens on. */
   taskLeadId: string;
@@ -390,6 +395,8 @@ export interface State {
   taskEditId: string | null;
   contactOpen: boolean;
   contactCompany: string;
+  /** Company the New contact dialog adds to without linking a deal (a company page with no deals, CD-80). */
+  contactCompanyId: string | null;
   newContact: NewContactDraft;
   personaOpen: boolean;
   /** Funnel id the "New funnel" dialog copies, or 'blank'. */

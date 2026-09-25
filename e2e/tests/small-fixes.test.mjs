@@ -2,7 +2,7 @@
 // members see the funnel builder's stage fields read-only.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, clickButton, email, eventually, newUserWithWorkspace, setValue, signIn, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, clickButton, email, eventually, newUserWithWorkspace, setValue, signIn, steps, useBrowser, createNew } from '../lib/harness.mjs';
 
 describe('contact notes and read-only funnels', () => {
   const browser = useBrowser();
@@ -15,7 +15,7 @@ describe('contact notes and read-only funnels', () => {
     const funnels = await api(page, '/crm/funnels');
     await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Notes deal', funnelId: funnels[0].id }) });
     await page.goto(BASE_URL + '/contacts', { waitUntil: 'networkidle0' });
-    await clickButton(page, 'New contact');
+    await createNew(page, 'contact');
     await page.waitForSelector('input[placeholder="e.g. Ana Marković"]');
     await page.type('input[placeholder="e.g. Ana Marković"]', 'Nina Notes');
     await setValue(page, 'textarea[placeholder="How they influence the deal"]', 'Signs off on budgets over 10k');
@@ -34,7 +34,7 @@ describe('contact notes and read-only funnels', () => {
     await member.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
     await signIn(member, email('fixes-member'), 'Max Member');
     await clickButton(member, 'Accept and join');
-    await member.waitForSelector('button::-p-text(New deal)');
+    await member.waitForSelector('[data-testid=new-menu]');
     await member.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });
     await member.waitForSelector('[data-testid=funnels-read-only]');
     const fields = await member.$$eval('.gate-chip input, input.ghost, select.form-input, input[type=number]', (els) => els.map((el) => el.disabled));

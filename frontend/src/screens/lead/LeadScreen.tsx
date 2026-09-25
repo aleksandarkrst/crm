@@ -30,7 +30,7 @@ export function LeadScreen() {
   const totalFg = total >= 80 ? '#14503C' : total >= 55 ? '#B4531B' : '#B42318';
 
   return (
-    <Screen title="Deal">
+    <Screen title="Deal" parent={{ label: 'Pipeline', to: paths.pipeline }}>
       <div key={lead.id} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <DealHeader lead={lead} />
 

@@ -27,15 +27,12 @@ const NUMERIC = new Set<Key>(['value', 'oppCount', 'contactCount']);
 
 export function Companies() {
   const { s, addCompany, openCompany } = useStore();
-  const [query, setQuery] = useState('');
   const [industry, setIndustry] = useState('Industry');
   const [owner, setOwner] = useState('Owner');
   const { sort, toggle } = useSort<Key>('name');
 
-  const q = query.toLowerCase().trim();
   const sortVal = (c: CompanyRecord) => (NUMERIC.has(sort.key) ? (c[sort.key] as number) : String(c[sort.key] || '').toLowerCase());
   const rows = companyRecords(s)
-    .filter((c) => !q || c.name.toLowerCase().includes(q) || String(c.industry || '').toLowerCase().includes(q) || String(c.hq || '').toLowerCase().includes(q))
     .filter((c) => industry === 'Industry' || c.industry === industry)
     .filter((c) => owner === 'Owner' || c.ownerId === owner)
     .sort((a, b) => {
@@ -47,7 +44,6 @@ export function Companies() {
   return (
     <Screen title="Companies">
       <FilterBar
-        search={{ value: query, onChange: setQuery, placeholder: 'Search companies' }}
         chips={[
           { value: industry, options: ['Industry', ...INDUSTRIES], onChange: setIndustry },
           { value: owner, options: ['Owner', ...salesPeople(s)], onChange: setOwner },
@@ -56,11 +52,9 @@ export function Companies() {
         onClear={() => {
           setIndustry('Industry');
           setOwner('Owner');
-          setQuery('');
         }}
         meta={rows.length + (rows.length === 1 ? ' company' : ' companies')}
         extra={<DataActions type="companies" count={rows.length} exportCsv={() => companiesCsv(s, rows)} />}
-        action={{ label: 'Add company', onClick: addCompany }}
       />
       {companyRecords(s).length === 0 ? (
         <EmptyState title="No companies yet" text="Companies are the organisations you sell to. Add one, or import a list from a CSV file." action={{ label: 'Add company', onClick: addCompany }} />

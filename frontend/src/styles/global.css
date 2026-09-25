@@ -208,9 +208,7 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 .nav-more, .more-sheet, .more-backdrop { display: none; }
 
 @media (max-width: 1024px) {
-  .search-box { width: 220px; }
-  .search-box.focused { width: 280px; }
-  .screen-header input.ghost { field-sizing: content; min-width: 160px !important; max-width: 100%; }
+  .search-trigger { width: 240px; }
   .screen-content { padding: 16px 20px 40px !important; }
   .pipeline-board { margin: 0 -20px -40px !important; padding: 0 20px !important; }
   .getting-started, .sample-bar { margin-left: 20px; margin-right: 20px; }
@@ -233,16 +231,16 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
   .more-sheet { display: flex; flex-direction: column; position: fixed; left: 8px; right: 8px; bottom: calc(70px + env(safe-area-inset-bottom)); background: var(--white); color: var(--ink); border-radius: 12px; box-shadow: var(--shadow-pop); padding: 6px; z-index: 42; animation: dcFade .14s ease-out both; }
   .more-sheet .menu-item { color: var(--ink); text-decoration: none; padding: 11px 10px; }
 
-  /* Header: the title on its own row, then search (full width) and "New". */
-  .screen-header { padding: 10px 14px !important; gap: 8px !important; }
-  .screen-header > div:first-child { flex: 1 1 100%; min-width: 0; }
+  /* Header: the title and the account on one row, then search (full width) and "+". */
+  .screen-header { grid-template-columns: 1fr auto !important; padding: 10px 14px !important; gap: 8px !important; }
+  .header-title { grid-column: 1; grid-row: 1; }
+  .header-right { grid-column: 2; grid-row: 1; }
+  .header-center { grid-column: 1 / -1; grid-row: 2; }
   .screen-header h1 { font-size: 20px !important; }
-  .screen-header input.ghost { min-width: 0 !important; max-width: 100%; }
-  .header-tools { flex: 1 1 100%; margin-left: 0 !important; }
-  .header-tools .search { flex: 1; min-width: 0; }
-  .search-box, .search-box.focused { width: 100%; }
-  .search-box .kbd { display: none; }
-  .search-pop { left: 0; right: 0; width: auto; }
+  .search-trigger { flex: 1; width: auto; min-width: 0; }
+  .search-trigger .kbd { display: none; }
+  .palette-overlay { align-items: flex-start !important; padding: 12px !important; }
+  .palette-foot { display: none !important; }
   .screen-content { padding: 14px 14px 28px !important; min-width: 0; }
 
   /* Filter bars: search on its own row, two filters per row, actions wrap. */

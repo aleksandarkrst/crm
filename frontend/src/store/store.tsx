@@ -596,6 +596,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const p = personById(cur(), id);
       const contactId = p?.contactId;
       if (!p || !contactId) return;
+      if (patch.ownerId) {
+        const ownerUserId = patch.ownerId;
+        void save(() => crmApi.updateContact(contactId, { ownerUserId }, ver('contact', contactId)), reload, `${p.name}'s owner`);
+      }
       for (const [k, v] of Object.entries(patch)) {
         const field = CONTACT_FIELDS[k as keyof Person];
         const value = String(v ?? '');
@@ -603,7 +607,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }
       const withInitials = patch.name !== undefined ? { ...patch, initials: initialsOf(patch.name) } : patch;
       if (p.primary) {
-        const map: Record<string, string> = { name: 'contact', role: 'role', email: 'email', phone: 'phone', buyerRole: 'buyerRole', notes: 'contactNotes', initials: 'initials' };
+        const map: Record<string, string> = { name: 'contact', role: 'role', email: 'email', phone: 'phone', buyerRole: 'buyerRole', notes: 'contactNotes', initials: 'initials', ownerId: 'contactOwnerId' };
         const lp: Record<string, unknown> = {};
         Object.entries(withInitials).forEach(([k, v]) => (lp[map[k] || k] = v));
         set((x) => ({ leads: x.leads.map((l) => (l.contactId === contactId ? { ...l, ...lp } : l)) }));
@@ -989,6 +993,12 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }));
     };
 
+    /** Hands a company to another workspace member (CD-80). */
+    const setCompanyOwner = (companyId: string, ownerId: string) => {
+      set((x) => ({ extraCompanies: x.extraCompanies.map((c) => (c.id === companyId ? { ...c, ownerId } : c)) }));
+      void save(() => crmApi.updateCompany(companyId, { ownerUserId: ownerId }, ver('company', companyId)), reload, 'the company owner');
+    };
+
     /**
      * Deal fields save to the deal; industry, HQ and team size belong to the company. `companyId`
      * moves the deal to another company, `ownerId` hands it to another workspace member.
@@ -1211,6 +1221,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           true,
         ),
       setCompanyField,
+      setCompanyOwner,
       addCompany: () => {
         const taken = new Set(companyRecords(cur()).map((c) => c.name));
         let name = 'New company';
@@ -1242,16 +1253,16 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           if (input.contact && !primaryContactId) primaryContactId = (await crmApi.createContact({ fullName: input.contact.name, companyId, buyerRole: 'Decision maker' })).id;
           const deal = await crmApi.createDeal({ title: input.company.name, funnelId, companyId, primaryContactId: primaryContactId ?? null, ...(input.customFields ? { customFields: input.customFields } : {}) });
           await reload();
-          set({ newLeadOpen: false, segment: input.segment });
+          set({ newLeadOpen: false, newLeadCompanyId: null, newLeadContactId: null, segment: input.segment });
           navigate(paths.lead(deal.id));
           flash(input.company.name + ' added · funnel assigned · first task due today');
         } catch (err) {
           flash('Not saved: ' + errText(err));
         }
       },
-      /** New contact at the company of the chosen lead, linked to that lead. */
-      createContact: async (draft: NewContactDraft, leadId: string | undefined, customFields?: CustomFieldPatch) => {
-        const lead = leadById(cur(), leadId);
+      /** New contact at the company of the chosen lead, linked to that lead; or at `companyId` with no deal. */
+      createContact: async (draft: NewContactDraft, leadId: string | undefined, customFields?: CustomFieldPatch, companyId?: string) => {
+        const lead = companyId ? undefined : leadById(cur(), leadId);
         try {
           const c = await crmApi.createContact({
             fullName: draft.name,
@@ -1261,12 +1272,12 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             linkedin: draft.linkedin,
             buyerRole: draft.buyerRole,
             notes: draft.notes,
-            companyId: lead?.companyId ?? null,
+            companyId: companyId ?? lead?.companyId ?? null,
             ...(customFields ? { customFields } : {}),
           });
           if (lead) await crmApi.linkContact(lead.id, c.id);
           await reload();
-          set({ contactOpen: false, newContact: EMPTY_CONTACT });
+          set({ contactOpen: false, contactCompanyId: null, newContact: EMPTY_CONTACT });
           flash(draft.name + (lead ? ' added to ' + lead.company : ' added'));
         } catch (err) {
           flash('Not saved: ' + errText(err));

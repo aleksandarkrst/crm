@@ -1,11 +1,12 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { paths } from '../lib/paths';
 import { Modals } from '../modals/Modals';
-import { initialsOf, overdueTasks } from '../store/selectors';
+import { overdueTasks } from '../store/selectors';
 import { useStore } from '../store/store';
 import { GettingStarted } from './GettingStarted';
-import { HeaderTools } from './HeaderTools';
+import { CommandPalette } from './CommandPalette';
+import { HeaderCenter, HeaderRight } from './HeaderTools';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 const NAV = [
@@ -67,18 +68,6 @@ function Sidebar() {
         ))}
         <MoreMenu name={name} />
       </nav>
-      <div className="nav-desktop" style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, width: '100%' }}>
-        {NAV_BOTTOM.map((n) => (
-          <NavItem key={n.to} {...n} />
-        ))}
-        <NavLink to={paths.profile} title={`Profile settings · ${name}`} data-testid="sidebar-avatar" style={{ textDecoration: 'none' }}>
-          {({ isActive }) => (
-            <div style={{ width: 36, height: 36, borderRadius: '50%', background: isActive ? '#CBE3DA' : '#E7F2EE', color: '#14503C', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600 }}>
-              {initialsOf(name)}
-            </div>
-          )}
-        </NavLink>
-      </div>
     </aside>
   );
 }
@@ -132,7 +121,18 @@ function MoreMenu({ name }: { name: string }) {
 }
 
 export function Layout() {
-  const { s } = useStore();
+  const { s, set } = useStore();
+  // Ctrl K / ⌘K opens (and closes) the command palette from anywhere (CD-80).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        set((x) => ({ paletteOpen: !x.paletteOpen }));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [set]);
   return (
     <div style={{ display: 'flex', minHeight: '100vh', color: 'var(--ink)', background: 'var(--white)' }}>
       <Sidebar />
@@ -141,47 +141,38 @@ export function Layout() {
         <Outlet />
       </main>
       <Modals />
+      {s.paletteOpen && <CommandPalette />}
       {s.toast && <div className="toast">{s.toast}</div>}
     </div>
   );
 }
 
 /**
- * Header + content frame for one screen. `onTitleChange` makes the title inline-editable
- * (deal and contact screens); `crumb` shows "Parent / Current" above the content.
+ * Header + content frame for one screen (CD-80): the screen's name on the left ("Companies /
+ * Company" on a record, with a link back), search and "+" in the middle, notifications and the
+ * account menu on the right. Records show their own name in the page, not in the header.
  */
-export function Screen({ title, onTitleChange, crumb, children }: { title: string; onTitleChange?: (v: string) => void; crumb?: { label: string; to: string }; children: ReactNode }) {
-  const [hover, setHover] = useState(false);
+export function Screen({ title, parent, children }: { title: string; parent?: { label: string; to: string }; children: ReactNode }) {
   return (
     <>
-      <header className="screen-header" style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', padding: '11px 24px', background: 'var(--white)', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 5 }}>
-        <div>
-          {onTitleChange ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
-              <input
-                className="ghost"
-                value={title}
-                onChange={(e) => onTitleChange(e.target.value)}
-                style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.15, borderRadius: 8, padding: '3px 8px', marginLeft: -8, minWidth: 240, width: 'auto' }}
-              />
-              <span style={{ fontSize: 13, color: 'var(--muted)', opacity: hover ? 1 : 0 }}>✎</span>
-            </div>
-          ) : (
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.15 }}>{title}</h1>
+      <header className="screen-header">
+        <div className="header-title">
+          {parent && (
+            <>
+              <Link to={parent.to} className="crumb-link header-parent">
+                {parent.label}
+              </Link>
+              <span className="header-sep" aria-hidden>
+                /
+              </span>
+            </>
           )}
+          <h1>{title}</h1>
         </div>
-        <HeaderTools />
+        <HeaderCenter />
+        <HeaderRight />
       </header>
       <div className="screen-content" style={{ padding: '18px 30px 44px', flex: 1, background: 'var(--white)' }}>
-        {crumb && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--muted)', marginBottom: 14 }}>
-            <Link to={crumb.to} className="crumb-link">
-              {crumb.label}
-            </Link>
-            <span>/</span>
-            <span style={{ color: 'var(--ink)' }}>{title}</span>
-          </div>
-        )}
         {children}
       </div>
     </>

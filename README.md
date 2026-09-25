@@ -130,7 +130,7 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   the Pipeline's lost view and reopening; stage conversion on Overview; a third funnel with a deal
   in it, adding and removing stages; renaming a checklist item without losing the tick; importing
   companies and deals through the import dialog, and the exported contacts CSV (downloaded to a
-  temp folder); the header search (Ctrl+K, keyboard navigation), the New menu and the sidebar
+  temp folder); the command palette (Ctrl+K, records and actions, keyboard navigation), the "+" menu and its letters, the account menu, the company and contact pages, and the sidebar
   workspace switcher; a custom field added in Settings and filled on a deal (after a reload, by a
   member too, and deleted); the sales bonus tab and Overview card hidden from members; changing a
   the deal currency in the products dialog; products, deal discounts and installments; downloading the starter template, uploading it as

@@ -779,6 +779,31 @@ milestones on lines); `drizzle/0022_products_deal_billing.sql` converts existing
   `{{line.discount}}` and `{{deal.discount}}` are new, and `{{deal.total}}` is labelled
   "Total with tax".
 
+## Header, command palette and record pages (CD-80)
+
+- **Header** (`Screen` in `components/Layout.tsx`): the screen's name on the left ("Companies /
+  Company" on a record, the parent is a link), search and the "+" menu in the middle,
+  notifications and the account menu on the right; the same on every screen, Settings included.
+  Records show their own name in the page, never in the header. The list screens no longer have
+  their own search box or "New …" button (empty states still offer one).
+- **Command palette** (`components/CommandPalette.tsx`): Ctrl K / ⌘K from anywhere, or a click on
+  the header search. It searches deals, companies and contacts in the loaded workspace
+  (`store/search.ts`) and the app's actions (`components/commands.ts`): create a deal, contact,
+  company, task or product, go to a screen, or open a setting. Arrows move, Enter runs, Escape
+  closes.
+- **"+" menu** (`components/NewMenu.tsx`): the same create actions, each with a letter that runs
+  it while the menu is open (D deal, P contact, O company, T task, R product). On a deal's screen a
+  new task or contact is for that deal.
+- **Notifications**: the bell lists your own open tasks that are overdue or due today (nothing
+  else is made up); the account menu has Personal preferences, Workspace settings, Team and Sign
+  out. The sidebar no longer has Settings and the avatar (on phones they stay under "More").
+- **Company and contact pages** look like the deal page: a record header (name, owner, "+ Deal",
+  which opens the New deal dialog with this company or contact, and a menu with Delete for owners
+  and admins), on the left Summary and Details with icons, Deals (open ones, won and lost with
+  their share and value), the company's contacts or the contact's company and documents; on the
+  right Focus (open tasks on their deals) and History (activity on their deals, and changes).
+  Companies and contacts can now be handed to another owner there.
+
 ## Deal page (CD-83)
 
 - The header shows the funnel and stage ("SMB → Proposal"), the deal name (editable), the owner,

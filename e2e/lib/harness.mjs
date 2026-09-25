@@ -195,7 +195,7 @@ export async function createWorkspace(page, name, currency) {
   await page.type('input[placeholder="e.g. Cadence Studio"]', name);
   if (currency) await setValue(page, 'select[aria-label="Main currency"]', currency);
   await click(page, 'button[type=submit]');
-  await page.waitForSelector('button::-p-text(New deal)');
+  await page.waitForSelector('[data-testid=new-menu]');
 }
 
 /** Opens the app, signs in as a new user and creates a workspace. */
@@ -205,9 +205,15 @@ export async function newUserWithWorkspace(page, { label, name, workspace, curre
   await createWorkspace(page, workspace, currency);
 }
 
-/** "New deal" on the pipeline with a new company and contact; returns the new deal id. */
+/** Opens a "Create" dialog from the header's "+" menu (CD-80): deal, contact, company, task or product. */
+export async function createNew(page, kind) {
+  await click(page, '[data-testid=new-menu]');
+  await click(page, `[data-testid=new-${kind}]`);
+}
+
+/** "New deal" from the header's "+" menu with a new company and contact; returns the new deal id. */
 export async function createDealInUi(page, { company, contact }) {
-  await clickButton(page, 'New deal');
+  await createNew(page, 'deal');
   await page.waitForSelector('input[placeholder="Company name"]');
   await page.type('input[placeholder="Company name"]', company);
   await page.type('input[placeholder="Full name"]', contact);

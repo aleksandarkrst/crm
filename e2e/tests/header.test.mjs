@@ -1,5 +1,6 @@
-// The header and sidebar tools: global search with Ctrl+K and keyboard navigation (CD-63), the
-// "New" menu on any screen (CD-66) and the workspace switcher in the sidebar (CD-23).
+// The header and sidebar tools: the command palette with Ctrl+K, its search and keyboard
+// navigation (CD-63, CD-80), the "+" menu on any screen (CD-66, CD-80), the account menu and the
+// workspace switcher in the sidebar (CD-23).
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { api, BASE_URL, click, clickButton, createDealInUi, newUserWithWorkspace, RUN, setValue, steps, text, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
@@ -14,18 +15,17 @@ const results = (page) =>
     })),
   );
 
+/** Opens the palette from the header (if it isn't open) and searches. */
 async function search(page, query) {
-  await page.$eval('[data-testid=global-search]', (el) => {
-    el.focus();
-    el.select();
-  });
-  await page.keyboard.press('Backspace');
-  await page.type('[data-testid=global-search]', query);
+  if (!(await page.$('[data-testid=palette]'))) await click(page, '[data-testid=global-search]');
+  await page.waitForSelector('[data-testid=palette-input]');
+  await setValue(page, '[data-testid=palette-input]', '');
+  await page.type('[data-testid=palette-input]', query);
   await page.waitForSelector('[data-testid=search-results] [role=option]');
   return results(page);
 }
 
-describe('header search, New menu and workspace switcher', () => {
+describe('command palette, + menu, account menu and workspace switcher', () => {
   const browser = useBrowser();
   const step = steps(browser, 'header');
   const firstWorkspace = `Header Studio ${RUN}`;
@@ -45,22 +45,27 @@ describe('header search, New menu and workspace switcher', () => {
     await page.reload({ waitUntil: 'networkidle0' });
   });
 
-  step('Ctrl+K focuses the search box from any screen', async () => {
+  step('Ctrl+K opens the command palette from any screen, with the actions', async () => {
     await page.goto(BASE_URL + '/products', { waitUntil: 'networkidle0' });
     await page.click('h1');
     await page.keyboard.down('Control');
     await page.keyboard.press('k');
     await page.keyboard.up('Control');
+    await page.waitForSelector('[data-testid=palette]');
     const focused = await page.evaluate(() => document.activeElement?.getAttribute('data-testid'));
-    assert.equal(focused, 'global-search');
+    assert.equal(focused, 'palette-input');
+    const rows = await results(page);
+    for (const title of ['Create deal', 'Create contact', 'Create company', 'Create task', 'Create product', 'Pipeline', 'Workspace settings']) {
+      assert.ok(rows.some((r) => r.title === title), `${title} in ${JSON.stringify(rows)}`);
+    }
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=palette]'));
   });
 
   step('finds a deal by part of its name and opens it with Enter', async () => {
-    await page.type('[data-testid=global-search]', 'northw');
-    await page.waitForSelector('[data-testid=search-results] [role=option]');
-    const rows = await results(page);
-    assert.deepEqual(rows[0], { group: 'deal', title: 'Northwind d.o.o.', selected: true }, JSON.stringify(rows));
-    assert.ok(rows.some((r) => r.group === 'company' && r.title === 'Northwind d.o.o.'), 'company group lists the company');
+    const rows = await search(page, 'northw');
+    assert.deepEqual(rows[0], { group: 'Deals', title: 'Northwind d.o.o.', selected: true }, JSON.stringify(rows));
+    assert.ok(rows.some((r) => r.group === 'Companies' && r.title === 'Northwind d.o.o.'), 'company group lists the company');
     assert.ok(!rows.some((r) => r.title === 'Bluefin Labs'), 'other deals are not listed');
     await page.keyboard.press('Enter');
     await page.waitForFunction((id) => location.pathname === '/deals/' + id, {}, northwindId);
@@ -70,27 +75,56 @@ describe('header search, New menu and workspace switcher', () => {
   step('finds a contact by part of the name (without accents) and opens it with the arrow keys', async () => {
     await waitForToastToClear(page);
     const rows = await search(page, 'markov');
-    const target = rows.findIndex((r) => r.group === 'contact' && r.title === 'Ana Marković');
+    const target = rows.findIndex((r) => r.group === 'Contacts' && r.title === 'Ana Marković');
     assert.ok(target >= 0, 'contact listed: ' + JSON.stringify(rows));
     assert.ok(!rows.some((r) => r.title === 'Petar Petrović'), 'other contacts are not listed');
     // Contacts are found by email too.
     const byEmail = await search(page, 'petar@blue');
-    assert.ok(byEmail.some((r) => r.group === 'contact' && r.title === 'Petar Petrović'), 'found by email: ' + JSON.stringify(byEmail));
+    assert.ok(byEmail.some((r) => r.group === 'Contacts' && r.title === 'Petar Petrović'), 'found by email: ' + JSON.stringify(byEmail));
     await search(page, 'markov');
     for (let i = 0; i < target; i++) await page.keyboard.press('ArrowDown');
     assert.equal((await results(page))[target].selected, true, 'the arrow keys move the selection');
     await page.keyboard.press('Enter');
     // The route changes in a transition: wait for the contact screen itself.
     await page.waitForFunction(() => location.pathname.startsWith('/contacts/'));
-    await page.waitForSelector('button::-p-text(Delete contact)');
-    assert.match(await page.$eval('header', (el) => el.querySelector('input.ghost')?.value ?? el.textContent), /Ana Marković/);
+    await page.waitForFunction(() => document.querySelector('[data-testid=record-name]')?.value === 'Ana Marković');
+    // The header names the screen, not the record.
+    assert.equal(await page.$eval('header h1', (el) => el.textContent), 'Contact');
   });
 
-  step('says so when nothing matches, and Escape closes the results', async () => {
-    await page.type('[data-testid=global-search]', 'zzqx-nothing');
-    await page.waitForFunction(() => document.querySelector('[data-testid=search-results]')?.textContent.includes('No deals, companies or contacts match'));
+  step('says so when nothing matches, and Escape closes the palette', async () => {
+    await click(page, '[data-testid=global-search]');
+    await page.type('[data-testid=palette-input]', 'zzqx-nothing');
+    await page.waitForFunction(() => document.querySelector('[data-testid=search-results]')?.textContent.includes('Nothing matches'));
     await page.keyboard.press('Escape');
-    await page.waitForFunction(() => !document.querySelector('[data-testid=search-results]'));
+    await page.waitForFunction(() => !document.querySelector('[data-testid=palette]'));
+  });
+
+  step('runs an action from the palette: "product" → Create product', async () => {
+    const rows = await search(page, 'product');
+    assert.equal(rows[0].title, 'Create product', JSON.stringify(rows));
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('::-p-text(New product or service)');
+    await clickButton(page, 'Cancel');
+    await page.waitForFunction(() => !document.querySelector('.modal'));
+  });
+
+  step('the + menu runs an item by its letter', async () => {
+    await click(page, '[data-testid=new-menu]');
+    await page.waitForSelector('[data-testid=new-task]');
+    await page.keyboard.press('t');
+    await page.waitForSelector('input[placeholder="e.g. Send revised scope to procurement"]');
+    await clickButton(page, 'Cancel');
+    await page.waitForFunction(() => !document.querySelector('.modal'));
+  });
+
+  step('the account menu opens personal preferences; the bell lists your tasks due', async () => {
+    await click(page, '[data-testid=notifications]');
+    await page.waitForSelector('[data-testid=notifications-pop]');
+    assert.match(await page.$eval('[data-testid=notifications-pop]', (el) => el.innerText), /Nothing overdue or due today|Overdue|Today/);
+    await click(page, '[data-testid=account-menu]');
+    await clickButton(page, 'Personal preferences');
+    await page.waitForFunction(() => location.pathname === '/profile');
   });
 
   step('opens the New deal dialog from the Contacts screen', async () => {

@@ -1,18 +1,20 @@
 import { useEffect } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { CustomFieldRows } from '../components/CustomFields';
-import { DangerButton, FieldRow, GhostInput, GhostSelect, PersonChip, Picker, PickerRow, usePicker } from '../components/ui';
-import { ChangeHistory } from '../components/ChangeHistory';
+import { IconRow } from '../components/icons';
 import { Screen } from '../components/Layout';
+import { AddButton, DealsSection, FocusTasks, RecordHeader, RecordHistory, Section } from '../components/RecordParts';
+import { GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
 import { paths } from '../lib/paths';
-import { CHANNEL_LABELS, INDUSTRIES, SOURCES, TEAM_SIZES } from '../store/seed';
-import { allPeople, closeIsoOf, companyOfPerson, companyRecords, contactsForLead, curOf, initialsOf, stageOf, timelineFor } from '../store/selectors';
+import { INDUSTRIES, SOURCES, TEAM_SIZES } from '../store/seed';
+import { allPeople, companyOfPerson, companyRecords, contactsForLead, curOf, initialsOf, timelineFor } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Person } from '../store/types';
 
+/** A company (CD-80): header like a deal's, its details, deals and contacts, open tasks and history. */
 export function Company() {
   const store = useStore();
-  const { s } = store;
+  const { s, set } = store;
   const { id = '' } = useParams();
   const picker = usePicker();
   const rec = companyRecords(s).find((c) => c.id === id);
@@ -22,25 +24,30 @@ export function Company() {
     if (leadIds) ensureLog(leadIds.split(','));
   }, [leadIds, ensureLog]);
   if (!rec) return <Navigate to={paths.companies} replace />;
+  const extra = s.extraCompanies.find((c) => c.id === rec.id);
 
+  // Its own contacts and everyone on its deals.
   const people: Person[] = [];
   const seen = new Set<string>();
-  rec.leads.forEach((l) =>
-    contactsForLead(s, l.id).forEach((p) => {
-      if (!seen.has(p.id)) {
-        seen.add(p.id);
-        people.push(p);
-      }
-    }),
-  );
+  const add = (p: Person) => {
+    const key = p.contactId || p.id;
+    if (seen.has(key)) return;
+    seen.add(key);
+    people.push(p);
+  };
+  allPeople(s)
+    .filter((p) => p.companyId === rec.id)
+    .forEach(add);
+  rec.leads.forEach((l) => contactsForLead(s, l.id).forEach(add));
   const q = picker.search.toLowerCase().trim();
   const directory = allPeople(s)
-    .filter((p) => !seen.has(p.id))
+    .filter((p) => !seen.has(p.contactId || p.id))
     .filter((p) => !q || String(p.name || '').toLowerCase().includes(q));
   const target = rec.leads[0];
 
-  const activities = rec.leads.flatMap((l) => timelineFor(s, l.id)).slice(0, 10);
-  const set = (key: 'name' | 'industry' | 'hq' | 'size' | 'source') => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => store.setCompanyField(rec.id, key, e.target.value);
+  const activities = rec.leads.flatMap((l) => timelineFor(s, l.id)).slice(0, 30);
+  const setField = (key: 'name' | 'industry' | 'hq' | 'size' | 'source') => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => store.setCompanyField(rec.id, key, e.target.value);
+  const newDeal = () => set({ newLeadOpen: true, newLeadCompanyId: rec.id, newLeadContactId: null });
 
   /** Deals keep a company, so a company with deals can't be deleted; its contacts are kept. */
   const onDelete = () => {
@@ -55,109 +62,83 @@ export function Company() {
   };
 
   return (
-    <Screen title={rec.name || 'Company'} crumb={{ label: 'Companies', to: paths.companies }}>
-      <div style={{ maxWidth: 720, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div className="card card-pad">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <input className="ghost" value={rec.name} onChange={set('name')} style={{ flex: 1, minWidth: 0, fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em', borderRadius: 8, padding: '5px 8px', marginLeft: -8 }} />
-            {store.canDelete && <DangerButton onClick={onDelete}>Delete company</DangerButton>}
-          </div>
-          <div style={{ fontSize: 12.5, color: 'var(--text-2)', marginTop: 2 }}>
-            {rec.oppCount}
-            {rec.oppCount === 1 ? ' opportunity · ' : ' opportunities · '}
-            {rec.valueLabel} open
-          </div>
+    <Screen title="Company" parent={{ label: 'Companies', to: paths.companies }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <RecordHeader
+          kind="company"
+          initials={initialsOf(rec.name)}
+          name={rec.name}
+          onName={(v) => store.setCompanyField(rec.id, 'name', v)}
+          ownerId={extra ? (extra.ownerId ?? null) : rec.ownerId}
+          ownerName={extra?.owner}
+          onOwner={(ownerId) => store.setCompanyOwner(rec.id, ownerId)}
+          onNewDeal={newDeal}
+          onDelete={store.canDelete ? onDelete : undefined}
+          deleteLabel="Delete company"
+        />
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--divider)' }}>
-            <FieldRow label="Industry">
-              <GhostSelect value={rec.industry} onChange={set('industry')} options={INDUSTRIES} />
-            </FieldRow>
-            <FieldRow label="HQ">
-              <GhostInput value={rec.hq} onChange={set('hq')} />
-            </FieldRow>
-            <FieldRow label="Team size">
-              <GhostSelect value={rec.size} onChange={set('size')} options={TEAM_SIZES} />
-            </FieldRow>
-            <FieldRow label="Source">
-              <GhostSelect value={rec.source} onChange={set('source')} options={SOURCES} />
-            </FieldRow>
-            <CustomFieldRows entity="company" recordId={rec.id} />
-            <FieldRow label="Contacts">
-              <Picker
-                picker={picker}
-                placeholder="Search contacts…"
-                items={directory.map((p) => (
-                  <PickerRow
-                    key={p.id}
-                    initials={p.initials || initialsOf(p.name)}
-                    title={p.name}
-                    subtitle={companyOfPerson(s, p)}
-                    onPick={() => {
-                      if (target) {
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
+          <div className="lead-side" style={{ flex: '1 1 400px', maxWidth: 540, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+            <Section title="Summary" testId="company-summary">
+              <IconRow icon="industry" label="Industry">
+                <GhostSelect chevron aria-label="Industry" value={rec.industry} onChange={setField('industry')} options={INDUSTRIES} />
+              </IconRow>
+              <IconRow icon="location" label="HQ">
+                <GhostInput aria-label="HQ" value={rec.hq} onChange={setField('hq')} />
+              </IconRow>
+              <IconRow icon="team" label="Team size">
+                <GhostSelect chevron aria-label="Team size" value={rec.size} onChange={setField('size')} options={TEAM_SIZES} />
+              </IconRow>
+              <IconRow icon="source" label="Source">
+                <GhostSelect chevron aria-label="Source" value={rec.source} onChange={setField('source')} options={SOURCES} />
+              </IconRow>
+              <CustomFieldRows entity="company" recordId={rec.id} />
+            </Section>
+
+            <DealsSection leads={rec.leads} onAdd={newDeal} />
+
+            <Section
+              title={`Contacts (${people.length})`}
+              testId="company-contacts"
+              action={<AddButton label="Add a contact" onClick={() => set(target ? { contactOpen: true, contactCompany: target.id, contactCompanyId: null } : { contactOpen: true, contactCompanyId: rec.id })} />}
+            >
+              {people.map((p) => (
+                <button key={p.id} type="button" onClick={() => store.openContact(p.contactId || p.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', border: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left', font: 'inherit' }}>
+                  <span className="avatar" style={{ width: 28, height: 28, fontSize: 10.5, fontWeight: 600 }}>
+                    {p.initials || initialsOf(p.name)}
+                  </span>
+                  <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--brand)' }}>{p.name}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{[p.role, p.buyerRole].filter((x) => x && x !== '—').join(' · ')}</span>
+                  </span>
+                </button>
+              ))}
+              {people.length === 0 && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>No contacts yet.</span>}
+              {target && (
+                <Picker
+                  picker={picker}
+                  placeholder="Link an existing contact…"
+                  items={directory.map((p) => (
+                    <PickerRow
+                      key={p.id}
+                      initials={p.initials || initialsOf(p.name)}
+                      title={p.name}
+                      subtitle={companyOfPerson(s, p)}
+                      onPick={() => {
                         store.linkPerson(target.id, p.id);
                         picker.setSearch('');
-                      }
-                    }}
-                  />
-                ))}
-              >
-                {people.map((p, i) => (
-                  <PersonChip
-                    key={p.id}
-                    initials={p.initials || initialsOf(p.name)}
-                    label={i < people.length - 1 ? p.name + ',' : p.name}
-                    onDrop={(e) => {
-                      e.stopPropagation();
-                      rec.leads.forEach((l) => store.unlinkPerson(l.id, p.id));
-                    }}
-                  />
-                ))}
-              </Picker>
-            </FieldRow>
-            <FieldRow label="Owner">
-              <span className="field-value">{rec.owner}</span>
-            </FieldRow>
+                      }}
+                    />
+                  ))}
+                />
+              )}
+            </Section>
           </div>
-        </div>
 
-        <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div className="card-title">Opportunities</div>
-          {rec.leads.map((l) => (
-            <div key={l.id} onClick={() => store.openLead(l.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderTop: '1px solid var(--divider)', cursor: 'pointer' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
-                <span style={{ fontSize: 13.5, fontWeight: 600 }}>{l.title || l.company}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                  {s.funnels[l.segment]?.label ?? 'Funnel'} · {closeIsoOf(l) ? 'closes ' + closeIsoOf(l) : 'no closing date'}
-                </span>
-              </div>
-              <span style={{ fontSize: 12.5, color: 'var(--brand)', whiteSpace: 'nowrap' }}>{l.value}</span>
-              <span className="badge badge-neutral">{stageOf(s, l).name}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="card card-pad">
-          <div className="card-title" style={{ marginBottom: 8 }}>
-            Activity
+          <div className="lead-main" style={{ flex: '999 1 480px', display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+            <FocusTasks leadIds={rec.leads.map((l) => l.id)} />
+            <RecordHistory entries={activities} entity="company" id={rec.id} cur={curOf(s)} rev={JSON.stringify([rec.name, rec.industry, rec.hq, rec.size, rec.source, extra?.ownerId])} />
           </div>
-          {activities.map((e, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '78px 1fr auto', gap: 14, padding: '11px 0', borderTop: '1px solid var(--divider)', alignItems: 'start' }}>
-              <div style={{ fontSize: 11, color: 'var(--muted)' }}>{e.date}</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-                <span style={{ fontSize: 13, fontWeight: 500 }}>{e.title}</span>
-                <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45 }}>{e.detail}</div>
-              </div>
-              <span className="badge badge-neutral">{CHANNEL_LABELS[e.channel] || e.channel}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Who changed which field of the company (CD-69). */}
-        <div className="card card-pad">
-          <div className="card-title" style={{ marginBottom: 8 }}>
-            Changes
-          </div>
-          <ChangeHistory entity="company" id={rec.id} cur={curOf(s)} rev={JSON.stringify([rec.name, rec.industry, rec.hq, rec.size, rec.source, rec.owner])} />
         </div>
       </div>
     </Screen>

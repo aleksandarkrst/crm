@@ -23,17 +23,14 @@ export const isSenior = (role: string) => /decision maker|economic buyer/i.test(
 
 export function Contacts() {
   const { s, set, openContact } = useStore();
-  const [query, setQuery] = useState('');
   const [company, setCompany] = useState('Company');
   const [owner, setOwner] = useState('Salesperson');
   const [buyerRole, setBuyerRole] = useState('Buyer role');
   const { sort, toggle } = useSort<Key>('contact');
 
-  const q = query.toLowerCase().trim();
   const rows = allPeople(s)
     // The contact's own owner (from the contacts API), not the owner of a deal they are on.
     .map((p) => ({ id: p.id, contact: p.name, role: p.role, company: companyOfPerson(s, p), companyId: companyIdOfPerson(s, p), email: p.email, phone: p.phone, decisionMaker: p.buyerRole || 'Influencer', owner: memberName(s, p.ownerId, p.ownerName), ownerId: p.ownerId ?? null }))
-    .filter((r) => !q || [r.contact, r.company, r.role, r.email].some((v) => String(v).toLowerCase().includes(q)))
     .filter((r) => company === 'Company' || r.companyId === company)
     .filter((r) => owner === 'Salesperson' || r.ownerId === owner)
     .filter((r) => buyerRole === 'Buyer role' || r.decisionMaker === buyerRole)
@@ -42,7 +39,6 @@ export function Contacts() {
   return (
     <Screen title="Contacts">
       <FilterBar
-        search={{ value: query, onChange: setQuery, placeholder: 'Search contacts' }}
         chips={[
           { value: company, options: ['Company', ...[...companyLabels(companyRecords(s))].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))], onChange: setCompany },
           { value: owner, options: ['Salesperson', ...salesPeople(s)], onChange: setOwner },
@@ -53,10 +49,8 @@ export function Contacts() {
           setCompany('Company');
           setOwner('Salesperson');
           setBuyerRole('Buyer role');
-          setQuery('');
         }}
         extra={<DataActions type="contacts" count={rows.length} exportCsv={() => contactsCsv(s, rows)} />}
-        action={{ label: 'New contact', onClick: () => set({ contactOpen: true }) }}
       />
       {allPeople(s).length === 0 ? (
         <EmptyState title="No contacts yet" text="Contacts are the people you talk to at your companies: who decides, who pays, who champions you." action={{ label: 'New contact', onClick: () => set({ contactOpen: true }) }} />
