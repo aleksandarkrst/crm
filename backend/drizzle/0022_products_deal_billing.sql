@@ -29,12 +29,18 @@ UPDATE "products" SET
   "unit" = CASE "billing_kind" WHEN 'Hourly' THEN 'hour' END;--> statement-breakpoint
 UPDATE "deal_lines" SET "billing_frequency" = CASE "schedule" WHEN 'Recurring subscription' THEN 'monthly' ELSE 'one_time' END;--> statement-breakpoint
 -- The deal value is the contract value without tax; "until canceled" counts one year of cycles.
+-- The recalculation is a conversion, not an edit: it skips the change history (record_changes forces
+-- RLS too, and there is no author) and keeps each deal's version, so open edits don't get a 409.
+ALTER TABLE "deals" DISABLE TRIGGER "deals_history";--> statement-breakpoint
+ALTER TABLE "deals" DISABLE TRIGGER "deals_version";--> statement-breakpoint
 UPDATE "deals" d SET "amount" = x.total FROM (
   SELECT "deal_id", round(sum("quantity" * "unit_price" * CASE "billing_frequency" WHEN 'one_time' THEN 1
     WHEN 'weekly' THEN coalesce("billing_cycles", 52) WHEN 'monthly' THEN coalesce("billing_cycles", 12)
     WHEN 'quarterly' THEN coalesce("billing_cycles", 4) ELSE coalesce("billing_cycles", 1) END), 2) AS total
   FROM "deal_lines" GROUP BY "deal_id") x
-WHERE d."id" = x."deal_id";--> statement-breakpoint
+WHERE d."id" = x."deal_id" AND d."amount" IS DISTINCT FROM x.total;--> statement-breakpoint
+ALTER TABLE "deals" ENABLE TRIGGER "deals_version";--> statement-breakpoint
+ALTER TABLE "deals" ENABLE TRIGGER "deals_history";--> statement-breakpoint
 ALTER TABLE "products" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "deal_lines" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "deals" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
