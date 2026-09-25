@@ -5,7 +5,7 @@
 import type { CustomFieldEntity } from '../lib/api';
 import { type CsvColumn, toCsv } from '../lib/csv';
 import { type CompanyRecord, customFieldsOf, customValueText, memberName, ownerOf, personById, valueNum } from './selectors';
-import type { Funnel, Lead, State } from './types';
+import type { CatalogItem, Funnel, Lead, State } from './types';
 
 /**
  * One column per custom field of the record type (CD-15), after the standard ones: option labels,
@@ -85,5 +85,21 @@ export function contactsCsv(s: State, rows: { id: string; company: string; compa
     { header: 'Buyer role', value: ({ p }) => p!.buyerRole || 'Influencer' },
     { header: 'Owner', value: ({ p }) => clean(memberName(s, p!.ownerId, p!.ownerName)) },
     ...customColumns<(typeof people)[number]>(s, 'contact', ({ p }) => p!.contactId),
+  ]);
+}
+
+/** Products as the Products screen lists them (CD-81); the columns import back in. */
+export function productsCsv(items: CatalogItem[]): string {
+  const frequency: Record<CatalogItem['frequency'], string> = { one_time: 'One time', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly', annually: 'Annually' };
+  return toCsv(items, [
+    { header: 'Product ID', value: (p) => p.id },
+    { header: 'Name', value: (p) => p.name },
+    { header: 'Description', value: (p) => p.description },
+    { header: 'Unit price', value: (p) => p.price },
+    { header: 'Unit', value: (p) => p.unit },
+    { header: 'Quantity', value: (p) => p.qty },
+    { header: 'Tax %', value: (p) => p.vat },
+    { header: 'Billing frequency', value: (p) => frequency[p.frequency] },
+    { header: 'Billing cycles', value: (p) => p.cycles ?? '' },
   ]);
 }

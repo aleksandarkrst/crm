@@ -179,11 +179,12 @@ the Overview audience filter).
 
 ### Import (CD-64)
 
-`backend/src/modules/crm/import/` imports companies, contacts and deals from a CSV. It has no table
+`backend/src/modules/crm/import/` imports companies, contacts, deals and (CD-81) products from a
+CSV. It has no table
 of its own, so nothing about an import is stored between requests: the browser keeps the file's
 text and sends it with each call as JSON (`{ csv, mapping?, duplicates?, funnelId? }`).
 
-- `POST /api/crm/import/:type/preview` (`companies`, `contacts`, `deals`) parses and validates the
+- `POST /api/crm/import/:type/preview` (`companies`, `contacts`, `deals`, `products`) parses and validates the
   whole file and writes nothing. Without a `mapping` it guesses one from the header names (field
   label, key or an alias such as "Website" → domain, ignoring case and punctuation). It returns the
   headers, the mapping, the field list, counts over every row (new, update, skip, errors, new
@@ -245,9 +246,15 @@ reloads the workspace. The API calls live in `store/importExport.ts`.
 
 ### Export (CD-65)
 
-**Export** on Pipeline, Companies and Contacts downloads the list the screen shows, with its search
-and filters applied (Pipeline: the funnel on screen and the lost-deals view too), as
-`cadence-<list>-<date>.csv`. Owners and admins only; the buttons are hidden for members.
+**Export filter results** in the "⋯" menu of Pipeline, Companies, Contacts and Products (CD-81,
+next to **Import data**) downloads the list the screen shows, with its filters applied (Pipeline:
+the funnel on screen and the lost-deals view too), as `cadence-<list>-<date>.csv`. Owners and
+admins only; the menu is hidden for members. The menu is only on those four list screens.
+
+Products (CD-81) are matched by name like companies (skip or update). Their columns are name,
+description, unit price, unit, quantity, tax %, billing frequency ("One time", "Monthly", …, also
+"yearly" or the API keys) and billing cycles (recurring only; empty renews until canceled). The
+product export has the same columns plus the id, so an exported file imports back.
 
 The file is built in the browser (`store/exportCsv.ts`, `lib/csv.ts`), not on the server, because
 "what the screen shows" is defined by filters that exist only in the UI (stalled days, value bands,

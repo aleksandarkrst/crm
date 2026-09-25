@@ -21,6 +21,7 @@ const TYPES: { key: ImportType; label: string; sub: string }[] = [
   { key: 'companies', label: 'Companies', sub: 'Duplicates are matched by name' },
   { key: 'contacts', label: 'Contacts', sub: 'Duplicates are matched by email' },
   { key: 'deals', label: 'Deals', sub: 'Matched to companies, funnels, stages and owners' },
+  { key: 'products', label: 'Products', sub: 'Duplicates are matched by name' },
 ];
 const STEPS = ['File', 'Columns', 'Preview', 'Done'] as const;
 type Step = (typeof STEPS)[number];
@@ -213,7 +214,7 @@ export function ImportDialog({ initialType, onClose }: { initialType: ImportType
           </div>
           {type !== 'deals' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span className="caps">{type === 'companies' ? 'Same name as an existing company' : 'Same email as an existing contact'}</span>
+              <span className="caps">{type === 'companies' ? 'Same name as an existing company' : type === 'products' ? 'Same name as an existing product' : 'Same email as an existing contact'}</span>
               {(['skip', 'update'] as DuplicateMode[]).map((d) => (
                 <button
                   key={d}

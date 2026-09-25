@@ -1,6 +1,6 @@
 /** What each import type can read from a CSV, how headers are guessed, and the template files. */
 
-export const IMPORT_TYPES = ['companies', 'contacts', 'deals'] as const;
+export const IMPORT_TYPES = ['companies', 'contacts', 'deals', 'products'] as const;
 export type ImportType = (typeof IMPORT_TYPES)[number];
 
 export interface ImportField {
@@ -56,6 +56,17 @@ export const IMPORT_FIELDS: Record<ImportType, ImportField[]> = {
     owner,
     { key: 'contactName', label: 'Contact', required: false, aliases: ['contact name', 'primary contact', 'person'], hint: 'Created if no contact has the email', example: 'Ana Petrović' },
     { key: 'contactEmail', label: 'Contact email', required: false, aliases: ['email', 'contact e-mail', 'e-mail'], hint: 'Matched to an existing contact', example: 'ana@northwind.example' },
+  ],
+  // CD-81: products have no currency; a deal reads their prices in its own.
+  products: [
+    { key: 'name', label: 'Name', required: true, aliases: ['product', 'product name', 'service', 'item', 'title'], hint: 'Products are matched by name', example: 'Brand identity sprint' },
+    { key: 'description', label: 'Description', required: false, aliases: ['details', 'notes'], example: 'Two-week sprint' },
+    { key: 'unitPrice', label: 'Unit price', required: false, aliases: ['price', 'unit cost', 'rate', 'amount'], example: '6500' },
+    { key: 'unit', label: 'Unit', required: false, aliases: ['uom', 'unit of measure'], example: 'project' },
+    { key: 'quantity', label: 'Quantity', required: false, aliases: ['qty', 'default quantity'], example: '1' },
+    { key: 'vatRate', label: 'Tax %', required: false, aliases: ['tax', 'vat', 'vat %', 'vat rate', 'tax rate'], example: '20' },
+    { key: 'billingFrequency', label: 'Billing frequency', required: false, aliases: ['billing', 'frequency', 'billing period'], hint: 'One time, Weekly, Monthly, Quarterly or Annually', example: 'One time' },
+    { key: 'billingCycles', label: 'Billing cycles', required: false, aliases: ['cycles', 'number of cycles'], hint: 'Recurring only; empty means until canceled', example: '' },
   ],
 };
 
