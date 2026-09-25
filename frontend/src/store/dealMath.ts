@@ -119,12 +119,15 @@ export function dealTotals(lines: DealLine[], mode: TaxMode, discounts: Pick<Dea
   };
 }
 
-/** `iso` moved by whole months or weeks; '' without a date. */
+/** `iso` moved by whole months (kept within the target month: 31 Jan + 1 month is 28 Feb) or days; '' without a date. */
 function shift(iso: string, months: number, days = 0): string {
   const d = new Date(iso + 'T00:00:00Z');
   if (isNaN(d.getTime())) return '';
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
   d.setUTCMonth(d.getUTCMonth() + months);
-  d.setUTCDate(d.getUTCDate() + days);
+  const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, lastDay) + days);
   return d.toISOString().slice(0, 10);
 }
 
