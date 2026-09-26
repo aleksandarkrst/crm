@@ -91,7 +91,9 @@ else
   fail 'a new database backup was created and validated'
 fi
 
-if docker compose logs --no-color cloudflared 2>/dev/null | grep -q 'Registered tunnel connection'; then
+# Consume the full stream: grep -q can close the pipe early and make Docker fail with
+# SIGPIPE under pipefail even when a registration was found.
+if docker compose logs --no-color cloudflared 2>/dev/null | grep 'Registered tunnel connection' >/dev/null; then
   pass 'Cloudflare Tunnel registered a connection'
 else
   fail 'Cloudflare Tunnel registered a connection'
