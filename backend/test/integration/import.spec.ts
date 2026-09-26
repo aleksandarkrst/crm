@@ -332,6 +332,24 @@ describe('importing products (CD-81)', () => {
     expect(Number(found[0].unitPrice)).toBe(250);
   });
 
+  it('updating billing: a frequency sets the cycles too, and cycles alone keep the frequency', async () => {
+    const monthly = uniq('Support');
+    const other = uniq('Hosting');
+    await ok('POST', '/crm/products', { ...as(), body: { name: monthly, unitPrice: 100, billingFrequency: 'monthly', billingCycles: 12 } });
+    await ok('POST', '/crm/products', { ...as(), body: { name: other, unitPrice: 50, billingFrequency: 'monthly', billingCycles: 12 } });
+    // Switching to one time drops the cycles; Monthly with an empty cell renews until canceled.
+    const switched = `Name,Billing frequency,Billing cycles\n${monthly},One time,\n${other},Monthly,\n`;
+    expect(await commit('products', { csv: switched, duplicates: 'update' })).toMatchObject({ updated: 2, failed: 0 });
+    expect((await productsNamed(monthly))[0]).toMatchObject({ billingFrequency: 'one_time', billingCycles: null });
+    expect((await productsNamed(other))[0]).toMatchObject({ billingFrequency: 'monthly', billingCycles: null });
+    // A file without the frequency column changes the cycles of a recurring product, and rejects them on a one-time one.
+    const cyclesOnly = `Name,Billing cycles\n${other},24\n${monthly},3\n`;
+    const res = await commit('products', { csv: cyclesOnly, duplicates: 'update' });
+    expect(res).toMatchObject({ updated: 1, failed: 1 });
+    expect(res.failures.map((f: Json) => f.reason)).toEqual(['Billing cycles: only recurring products (weekly, monthly, quarterly or annually) have billing cycles']);
+    expect((await productsNamed(other))[0]).toMatchObject({ billingFrequency: 'monthly', billingCycles: 24 });
+  });
+
   it('members get 403', async () => {
     expect((await call('POST', '/crm/import/products/preview', { ...as(member), body: { csv: 'Name\nx\n' } })).status).toBe(403);
   });

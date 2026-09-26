@@ -53,6 +53,8 @@ interface Lookups {
   contactsByEmail: Map<string, string>;
   /** lower(trim(name)) → id of the oldest product with that name (CD-81). */
   productsByName: Map<string, string>;
+  /** Product id → its billing frequency, so a row that leaves the frequency out is checked against it (CD-81). */
+  productFrequency: Map<string, BillingFrequency>;
   /** lower(email) → user id, members of this workspace only. */
   members: Map<string, string>;
   funnels: Funnel[];
@@ -311,9 +313,14 @@ export class ImportService {
       if (c.email && !contactsByEmail.has(key(c.email))) contactsByEmail.set(key(c.email), c.id);
     }
     const productsByName = new Map<string, string>();
+    const productFrequency = new Map<string, BillingFrequency>();
     if (type === 'products') {
-      for (const p of await tx.select({ id: products.id, name: products.name }).from(products).orderBy(asc(products.createdAt), asc(products.id))) {
+      for (const p of await tx
+        .select({ id: products.id, name: products.name, billingFrequency: products.billingFrequency })
+        .from(products)
+        .orderBy(asc(products.createdAt), asc(products.id))) {
         if (!productsByName.has(key(p.name))) productsByName.set(key(p.name), p.id);
+        productFrequency.set(p.id, p.billingFrequency as BillingFrequency);
       }
     }
     // memberships has no RLS (it decides access), so filter by tenant explicitly.
@@ -333,7 +340,7 @@ export class ImportService {
     }
     // tenants has no RLS either.
     const [workspace] = await tx.select({ currency: tenants.currency }).from(tenants).where(eq(tenants.id, ctx.tenantId));
-    return { companiesByName, contactsByEmail, productsByName, members, funnels: fs, currency: workspace?.currency ?? 'EUR' };
+    return { companiesByName, contactsByEmail, productsByName, productFrequency, members, funnels: fs, currency: workspace?.currency ?? 'EUR' };
   }
 
   private defaultFunnel(type: ImportType, lookups: Lookups, funnelId: string | undefined): Funnel | null {
@@ -396,11 +403,14 @@ export class ImportService {
       billingFrequency = aliases[want] ?? BILLING_FREQUENCIES.find((f) => f === v.billingFrequency);
       if (!billingFrequency) errors.push(`Billing frequency: "${v.billingFrequency}" is not One time, Weekly, Monthly, Quarterly or Annually`);
     }
+    // An existing product keeps its frequency when the row leaves it out, so cycles are checked against that.
+    const existingId = v.name ? lk.productsByName.get(key(v.name)) : undefined;
+    const frequency = billingFrequency ?? (existingId ? lk.productFrequency.get(existingId) : undefined);
     let billingCycles: number | null | undefined;
     if (v.billingCycles) {
       billingCycles = Number(v.billingCycles);
       if (!Number.isInteger(billingCycles)) errors.push(`Billing cycles: "${v.billingCycles}" is not a whole number`);
-      else if (!billingFrequency || billingFrequency === 'one_time') errors.push('Billing cycles: only recurring products (weekly, monthly, quarterly or annually) have billing cycles');
+      else if (!frequency || frequency === 'one_time') errors.push('Billing cycles: only recurring products (weekly, monthly, quarterly or annually) have billing cycles');
     } else if (billingFrequency && billingFrequency !== 'one_time') billingCycles = null;
     const parsed = CreateProduct.safeParse({
       name: v.name,
@@ -419,13 +429,19 @@ export class ImportService {
     const existing = lk.productsByName.get(key(input.name));
     if (existing) {
       const patch = present({ ...input, name: undefined });
+      // A row that sets the frequency also sets the cycles: none for one time, an empty cell means until canceled.
+      if (billingFrequency) patch.billingCycles = input.billingCycles ?? null;
       if (duplicates === 'skip') return { ...result, status: 'skip', messages: [`A product named "${input.name}" already exists`] };
       if (Object.keys(patch).length === 0) return { ...result, status: 'skip', messages: [`"${input.name}" already exists and the row has nothing else to update`] };
       await w.updateProduct(existing, patch);
+      if (patch.billingFrequency) result.effects.push(() => lk.productFrequency.set(existing, patch.billingFrequency!));
       return { ...result, status: 'update', notes: [`Updates the existing product "${input.name}"`] };
     }
     const id = await w.createProduct(input);
-    result.effects.push(() => lk.productsByName.set(key(input.name), id));
+    result.effects.push(() => {
+      lk.productsByName.set(key(input.name), id);
+      lk.productFrequency.set(id, input.billingFrequency ?? 'one_time');
+    });
     return result;
   }
 
@@ -664,11 +680,17 @@ interface Queue {
 }
 const emptyQueue = (): Queue => ({ companies: [], contacts: [], deals: [], history: [], activities: [], products: [], updates: [] });
 
-const cloneLookups = (lk: Lookups) => ({ companiesByName: new Map(lk.companiesByName), contactsByEmail: new Map(lk.contactsByEmail), productsByName: new Map(lk.productsByName) });
+const cloneLookups = (lk: Lookups) => ({
+  companiesByName: new Map(lk.companiesByName),
+  contactsByEmail: new Map(lk.contactsByEmail),
+  productsByName: new Map(lk.productsByName),
+  productFrequency: new Map(lk.productFrequency),
+});
 function restoreLookups(lk: Lookups, saved: ReturnType<typeof cloneLookups>) {
   lk.companiesByName = saved.companiesByName;
   lk.contactsByEmail = saved.contactsByEmail;
   lk.productsByName = saved.productsByName;
+  lk.productFrequency = saved.productFrequency;
 }
 
 /** A short reason for a row that failed to save. */
