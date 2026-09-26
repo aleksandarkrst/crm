@@ -126,7 +126,157 @@ Repository **variables**:
 - `DEPLOY_ENABLED=true` (deploys are skipped until you set it)
 - `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_AUDIENCE`
 
-The first deploy: push to `main`, or run the workflow manually. Watch it with `docker compose logs -f api worker` on the server.
+The first deploy: merge an approved pull request to `main`, or run the workflow manually on `main` with `verify_images` disabled. Watch it with `docker compose logs -f api worker` on the server.
+
+### Verify Docker images before merging
+
+On the CD-34 branch, open **Actions → CI / CD → Run workflow**, select that branch, and
+check **Build both Docker images without publishing them** (`verify_images=true`). The
+`backend`, `frontend`, `integration`, and `e2e` jobs must pass before `images` builds both
+Dockerfiles with the configured frontend OIDC build arguments. Confirm both builds pass and
+`deploy` is skipped. This verifies image builds; it does not run a production stack.
+
+Verification skips GHCR login, image publishing, and deployment, even if `main` is selected
+accidentally. An ordinary push to a feature branch does not start this workflow; open a pull
+request for the four standard checks, or dispatch explicitly for image verification. If GitHub
+does not offer **Run workflow**, the dispatch-enabled workflow must first exist on the default
+branch. After review, normal pushes to `main` (and manual runs with verification disabled)
+retain the existing image publishing and `DEPLOY_ENABLED`-gated deployment behavior.
+
+## 7. Production server verification
+
+Run this checklist on the Hetzner server after the first deploy, and again after changing the
+Compose file, deployment script, tunnel, or backup setup. Docker Desktop is not a substitute for
+this check: it does not exercise the server firewall, Linux volume permissions, GHCR login, or the
+real Cloudflare Tunnel.
+
+Before starting, record the date, server name, public hostname and deployed commit in the issue or
+release notes. Do not paste secrets or the contents of `.env` into the record.
+
+### Automated smoke test
+
+After the first deploy, run the production smoke test **on the server as `deploy`**:
+
+```bash
+cd /opt/crm
+bash scripts/verify-production.sh
+# To check a different hostname than APP_URL:
+bash scripts/verify-production.sh https://app.yourdomain.com
+```
+
+The test validates the rendered Compose configuration; confirms that PostgreSQL, the API, worker,
+nginx, tunnel, and backup service are running; exercises health endpoints both inside Docker and
+through the public tunnel; checks that no container publishes a host port; confirms the runtime
+database role cannot bypass row-level security; reruns migrations to prove they are idempotent; and
+creates and validates a fresh database backup. It exits non-zero if any check fails, making the
+output suitable for attaching to the deployment issue.
+
+The smoke test proves that a backup can be *created*, not that it can be restored. Complete the
+restore drill in [Backups](#5-backups) separately, using a disposable server or during a planned
+maintenance window. Also confirm the new dump and matching files archive exist in off-site storage;
+that requires access to the storage provider and cannot be inferred from the local Docker volume.
+
+The checks below cover the remaining production acceptance steps and troubleshooting.
+
+### Stack and network
+
+From `/opt/crm`, confirm that Compose resolves the production configuration and that every
+long-running service is up. `migrate` is a one-shot tool and is not expected in `docker compose ps`.
+
+```bash
+cd /opt/crm
+docker compose config --quiet
+docker compose ps
+docker compose images
+git rev-parse HEAD
+grep '^APP_VERSION=' .env
+```
+
+The commit from Git and `APP_VERSION` must match, and the frontend/backend images must carry that
+version. `postgres`, `api`, `frontend`, `worker`, `cloudflared`, and `backup` should be running;
+health-checked services should be healthy. Check that no container publishes a host port—the
+`PORTS` column may show internal ports such as `3000/tcp` or `80/tcp`, but must not contain a host
+mapping such as `0.0.0.0:3000->3000/tcp`:
+
+```bash
+docker compose ps --format 'table {{.Service}}\t{{.Status}}\t{{.Ports}}'
+sudo ss -lntup
+sudo ufw status verbose
+```
+
+Only SSH should be listening publicly. Also confirm in the Hetzner console that the attached Cloud
+Firewall permits inbound TCP 22 only. Docker's internal listeners and loopback/system services are
+acceptable; investigate any unexpected listener on `0.0.0.0` or `[::]` before continuing.
+
+### Application, tunnel and worker
+
+Test readiness inside the private Compose network and then through the actual public hostname:
+
+```bash
+docker compose exec -T api node -e \
+  "fetch('http://127.0.0.1:3000/api/health/ready').then(async r => { console.log(r.status, await r.text()); process.exit(r.ok ? 0 : 1) })"
+curl --fail --show-error --silent https://app.yourdomain.com/api/health/ready
+docker compose logs --since=15m api worker frontend cloudflared
+```
+
+The two health checks must succeed, and the recent logs must not show a restart loop, database
+authentication/migration failures, nginx upstream errors, or tunnel connection failures. In a
+browser, sign in through the production OIDC provider and exercise one write/read path (for
+example, create and then edit a test contact). This checks the frontend configuration, API proxy,
+OIDC token, database runtime role and row-level-security path together. Trigger a worker-backed
+action such as sending a test invitation, confirm it is processed in `worker` logs, keep the test record and an uploaded file for the persistence and restore checks below.
+
+### Migrations and persistence
+
+Migrations must be repeatable, and application data must survive a container replacement:
+
+```bash
+docker compose run --rm migrate
+docker compose run --rm migrate
+docker compose up -d --force-recreate api worker frontend
+docker compose exec -T api node -e \
+  "fetch('http://127.0.0.1:3000/api/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+```
+
+Both migration runs must exit successfully. Sign in again and confirm the test record still exists
+after recreation. Keep it until the restore drill is complete, then remove the test data. Do not use `docker compose down -v`: `-v` deletes production
+database, file and backup volumes.
+
+### Backup and restore drill
+
+Create a backup and verify both artifacts locally and off-server. The dump and files archive from
+the same run share a timestamp and must be kept together.
+
+```bash
+docker compose run --rm backup once
+docker compose run --rm --entrypoint sh backup -c \
+  'ls -lh /backups && pg_restore --list "$(ls -1t /backups/*.dump | head -1)" >/dev/null && tar -tzf "$(ls -1t /backups/*-files-*.tar.gz | head -1)" >/dev/null'
+docker compose run --rm --entrypoint sh backup -c 'rclone lsl "$BACKUP_RCLONE_REMOTE"'
+```
+
+All commands must succeed and the remote listing must contain the new pair. Complete the restore
+test before enabling automatic deploys: use a fresh disposable server or an agreed maintenance
+window, follow the [Restore](#restore-practise-this-before-you-need-it) procedure with that pair,
+and verify login plus the restored test record and uploaded file. A backup has not been validated
+until it has been restored successfully. Never perform an unplanned restore over live production.
+
+### Deployment and rollback
+
+Finally, verify the same path GitHub Actions will use rather than only running Compose commands by
+hand:
+
+1. Run the deploy workflow for a known commit and confirm its `scripts/deploy.sh` output includes a
+   successful backup, migration and readiness check.
+2. Confirm `git rev-parse HEAD`, `APP_VERSION`, and the image tags in `docker compose images`
+   match the deployed SHA; both internal and public readiness URLs must return healthy responses.
+3. Deploy the previous known-good image SHA with `bash scripts/deploy.sh <previous-sha>`, repeat the
+   health and browser smoke tests, then deploy the intended SHA again. This tests application
+   rollback only; it does not reverse a destructive database migration.
+4. Check `docker compose ps` and the last 15 minutes of logs once more after the final deploy.
+
+Record pass/fail and relevant non-secret output for each section. If any check fails, leave
+`DEPLOY_ENABLED` unset or `false`, retain the failing container logs, and fix the production path
+before enabling automatic deploys.
 
 ## Operations cheat sheet
 
@@ -135,6 +285,7 @@ docker compose ps                         # status
 docker compose logs -f --tail=100 api     # logs
 docker compose run --rm migrate           # migrations by hand
 bash scripts/deploy.sh <sha>              # deploy / roll back to any built commit
+bash scripts/verify-production.sh         # smoke-test the live stack and tunnel
 docker compose exec postgres psql -U app_admin app
 ```
 
