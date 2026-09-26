@@ -15,7 +15,7 @@ docs/       ARCHITECTURE.md, DEPLOYMENT.md, WORKFLOW.md (how work goes from issu
 
 ## Run it locally
 
-Prerequisites: Node.js 22.12+ and Docker Desktop.
+Prerequisites: Node.js 24 LTS (24.11+) and Docker Desktop.
 
 ```bash
 # 1. Database (PostgreSQL 17 on localhost:5432, with the app roles pre-created)
