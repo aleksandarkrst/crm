@@ -1,11 +1,12 @@
-// CSV import (CD-64) and export (CD-65): import companies and deals through the dialog and see
-// them in the lists, then export the contacts list and check the downloaded file.
+// CSV import (CD-64) and export (CD-65) from the "⋯" menu of the list screens (CD-81): import
+// companies, deals and products through the dialog and see them in the lists, then export the
+// contacts and products lists and check the downloaded files.
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe } from 'node:test';
-import { api, BASE_URL, clickButton, eventually, newUserWithWorkspace, RUN, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, eventually, newUserWithWorkspace, RUN, steps, useBrowser } from '../lib/harness.mjs';
 
 const dir = mkdtempSync(join(tmpdir(), 'cadence-e2e-csv-'));
 const downloads = join(dir, 'downloads');
@@ -20,10 +21,17 @@ const csvFile = (name, content) => {
 
 /** Opens the import dialog on the current screen and uploads `file`; waits for the column step. */
 async function upload(page, file) {
-  await clickButton(page, 'Import');
+  await click(page, '[data-testid=data-menu]');
+  await clickButton(page, 'Import data');
   const input = await page.waitForSelector('.modal input[type=file]');
   await input.uploadFile(file);
   await page.waitForSelector('.modal select[data-field]');
+}
+
+/** "Export filter results" from the screen's "⋯" menu. */
+async function exportList(page) {
+  await click(page, '[data-testid=data-menu]');
+  await clickButton(page, 'Export filter results');
 }
 
 const modalText = (page) => page.$eval('.modal', (el) => el.innerText);
@@ -112,7 +120,7 @@ describe('CSV import and export', () => {
 
     const cdp = await page.createCDPSession();
     await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads, browserContextId: page.browserContext().id });
-    await clickButton(page, 'Export');
+    await exportList(page);
     const name = await eventually(() => existsSync(downloads) && readdirSync(downloads).find((f) => f.endsWith('.csv')), { timeout: 10_000 });
     assert.ok(name, 'a CSV was downloaded');
     assert.match(name, /^cadence-contacts-\d{4}-\d{2}-\d{2}\.csv$/);
@@ -144,7 +152,7 @@ describe('CSV import and export', () => {
       globexId,
     );
     await page.waitForFunction(() => document.querySelectorAll('.table-row').length === 2);
-    await clickButton(page, 'Export');
+    await exportList(page);
     const name = await eventually(() => existsSync(downloads) && readdirSync(downloads).find((f) => f.endsWith('.csv')), { timeout: 10_000 });
     const lines = readFileSync(join(downloads, name), 'utf8').split('\r\n').filter(Boolean);
     // The header and the two contacts at Globex; the others are filtered out.
@@ -152,5 +160,30 @@ describe('CSV import and export', () => {
     assert.ok(lines.every((l, i) => i === 0 || l.includes(globex)), lines.join('\n'));
     assert.equal(browser.errors.length, 0, browser.errors.join('\n'));
   });
-});
 
+  step('imports products from the Products screen and exports them back', async () => {
+    await page.goto(BASE_URL + '/products', { waitUntil: 'networkidle0' });
+    const file = csvFile('products.csv', `Name,Unit price,Unit,Tax %,Billing frequency,Billing cycles\r\nSupport plan ${RUN},300,month,20,Monthly,12\r\nWorkshop ${RUN},1200,day,20,One time,\r\n`);
+    await upload(page, file);
+    await clickButton(page, 'Preview');
+    await page.waitForSelector('[data-testid=import-counts]');
+    assert.match(await page.$eval('[data-testid=import-counts]', (el) => el.innerText), /2 new/);
+    await clickButton(page, 'Import 2 rows');
+    const saved = await eventually(async () => {
+      const list = await api(page, '/crm/products');
+      return list.filter((p) => p.name.endsWith(RUN)).length === 2 && list;
+    });
+    assert.ok(saved, 'both products imported');
+    assert.equal(saved.find((p) => p.name === `Support plan ${RUN}`).billingCycles, 12);
+    await clickButton(page, 'Done');
+    await page.waitForFunction(() => document.body.innerText.includes('Monthly (12 cycles)'));
+
+    rmSync(downloads, { recursive: true, force: true });
+    await exportList(page);
+    const name = await eventually(() => existsSync(downloads) && readdirSync(downloads).find((f) => f.endsWith('.csv')), { timeout: 10_000 });
+    assert.match(name, /^cadence-products-/);
+    const lines = readFileSync(join(downloads, name), 'utf8').replace(/^\uFEFF/, '').split('\r\n').filter(Boolean);
+    assert.equal(lines[0], 'Product ID,Name,Description,Unit price,Unit,Quantity,Tax %,Billing frequency,Billing cycles');
+    assert.ok(lines.some((l) => l.includes(`Support plan ${RUN},,300,month,1,20,Monthly,12`)), lines.join('\n'));
+  });
+});

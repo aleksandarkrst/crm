@@ -50,7 +50,7 @@ describe('who can import', () => {
   });
 
   it('rejects an unknown type', async () => {
-    expect((await call('POST', '/crm/import/products/preview', { ...as(), body: { csv: 'Name\nx\n' } })).status).toBe(400);
+    expect((await call('POST', '/crm/import/invoices/preview', { ...as(), body: { csv: 'Name\nx\n' } })).status).toBe(400);
   });
 });
 
@@ -60,6 +60,7 @@ describe('templates', () => {
       ['companies', 'Name,Industry,HQ'],
       ['contacts', 'Full name,Email'],
       ['deals', 'Deal,Company,Funnel,Stage,Value,Closing date'],
+      ['products', 'Name,Description,Unit price,Unit,Quantity,Tax %,Billing frequency,Billing cycles'],
     ] as const) {
       const res = await fetch(`${inject('apiUrl')}/api/crm/import/${type}/template`, { headers: { authorization: `Bearer ${owner.token}`, 'x-tenant-id': tenant } });
       expect(res.status).toBe(200);
@@ -286,6 +287,71 @@ describe('importing deals', () => {
     const res = await commit('deals', { csv: `Deal,Company,Contact email\nX,${uniq('Nobody Co')},nobody-${Date.now()}@example.test\n` });
     expect(res).toMatchObject({ created: 0, failed: 1, newCompanies: 0 });
     expect(res.failures[0].reason).toMatch(/^Contact email: no contact has the email /);
+  });
+});
+
+describe('importing products (CD-81)', () => {
+  const productsNamed = async (name: string) => (await ok<Json[]>('GET', `/crm/products?q=${encodeURIComponent(name)}&limit=200`, as())).filter((p) => p.name.toLowerCase() === name.toLowerCase());
+
+  it('creates products with price, unit, tax and billing, and reports bad rows', async () => {
+    const a = uniq('Setup');
+    const b = uniq('Retainer');
+    const c = uniq('Licence');
+    const d = uniq('Broken');
+    const csv = [
+      'Name,Description,Unit price,Unit,Quantity,Tax %,Billing frequency,Billing cycles',
+      `${a},One-off setup,"1.500,50",project,1,20%,One time,`,
+      `${b},,900,month,1,20,Monthly,6`,
+      `${c},,120,seat,10,0,yearly,`,
+      `${d},,10,,,,Fortnightly,`,
+      `${uniq('Cycles')},,10,,,,,4`,
+    ].join('\n');
+    const pre = await preview('products', { csv });
+    expect(pre.counts).toMatchObject({ create: 3, invalid: 2 });
+    const res = await commit('products', { csv });
+    expect(res).toMatchObject({ created: 3, failed: 2 });
+    expect(res.failures.map((f: Json) => f.reason)).toEqual([
+      'Billing frequency: "Fortnightly" is not One time, Weekly, Monthly, Quarterly or Annually',
+      'Billing cycles: only recurring products (weekly, monthly, quarterly or annually) have billing cycles',
+    ]);
+    expect((await productsNamed(a))[0]).toMatchObject({ description: 'One-off setup', unitPrice: '1500.50', unit: 'project', vatRate: '20.00', billingFrequency: 'one_time', billingCycles: null });
+    expect((await productsNamed(b))[0]).toMatchObject({ unitPrice: '900.00', billingFrequency: 'monthly', billingCycles: 6 });
+    // Recurring without cycles renews until canceled.
+    expect((await productsNamed(c))[0]).toMatchObject({ quantity: '10.00', vatRate: '0.00', billingFrequency: 'annually', billingCycles: null });
+  });
+
+  it('matches existing products by name: skipped by default, updated when asked', async () => {
+    const name = uniq('Audit');
+    await ok('POST', '/crm/products', { ...as(), body: { name, unitPrice: 100 } });
+    const csv = `Name,Unit price\n${name.toUpperCase()},250\n`;
+    expect(await commit('products', { csv })).toMatchObject({ created: 0, skipped: 1 });
+    expect(Number((await productsNamed(name))[0].unitPrice)).toBe(100);
+    expect(await commit('products', { csv, duplicates: 'update' })).toMatchObject({ updated: 1 });
+    const found = await productsNamed(name);
+    expect(found).toHaveLength(1);
+    expect(Number(found[0].unitPrice)).toBe(250);
+  });
+
+  it('updating billing: a frequency sets the cycles too, and cycles alone keep the frequency', async () => {
+    const monthly = uniq('Support');
+    const other = uniq('Hosting');
+    await ok('POST', '/crm/products', { ...as(), body: { name: monthly, unitPrice: 100, billingFrequency: 'monthly', billingCycles: 12 } });
+    await ok('POST', '/crm/products', { ...as(), body: { name: other, unitPrice: 50, billingFrequency: 'monthly', billingCycles: 12 } });
+    // Switching to one time drops the cycles; Monthly with an empty cell renews until canceled.
+    const switched = `Name,Billing frequency,Billing cycles\n${monthly},One time,\n${other},Monthly,\n`;
+    expect(await commit('products', { csv: switched, duplicates: 'update' })).toMatchObject({ updated: 2, failed: 0 });
+    expect((await productsNamed(monthly))[0]).toMatchObject({ billingFrequency: 'one_time', billingCycles: null });
+    expect((await productsNamed(other))[0]).toMatchObject({ billingFrequency: 'monthly', billingCycles: null });
+    // A file without the frequency column changes the cycles of a recurring product, and rejects them on a one-time one.
+    const cyclesOnly = `Name,Billing cycles\n${other},24\n${monthly},3\n`;
+    const res = await commit('products', { csv: cyclesOnly, duplicates: 'update' });
+    expect(res).toMatchObject({ updated: 1, failed: 1 });
+    expect(res.failures.map((f: Json) => f.reason)).toEqual(['Billing cycles: only recurring products (weekly, monthly, quarterly or annually) have billing cycles']);
+    expect((await productsNamed(other))[0]).toMatchObject({ billingFrequency: 'monthly', billingCycles: 24 });
+  });
+
+  it('members get 403', async () => {
+    expect((await call('POST', '/crm/import/products/preview', { ...as(member), body: { csv: 'Name\nx\n' } })).status).toBe(403);
   });
 });
 

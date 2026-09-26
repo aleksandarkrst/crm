@@ -7,7 +7,7 @@ import { getAccessToken } from '../lib/auth';
 import { type CsvColumn, toCsv } from '../lib/csv';
 import type { Funnel, State } from './types';
 
-export type ImportType = 'companies' | 'contacts' | 'deals';
+export type ImportType = 'companies' | 'contacts' | 'deals' | 'products';
 export type DuplicateMode = 'skip' | 'update';
 export type Mapping = Record<string, number | null>;
 

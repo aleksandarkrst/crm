@@ -6,10 +6,11 @@ import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { activities, BUYER_ROLES, companies, contacts, dealStageHistory, deals, funnels, funnelStages, memberships, tenants, users } from '../../../shared/database/schema';
+import { activities, BILLING_FREQUENCIES, type BillingFrequency, BUYER_ROLES, companies, contacts, dealStageHistory, deals, funnels, funnelStages, memberships, products, tenants, users } from '../../../shared/database/schema';
 import { CreateCompany } from '../companies/companies.service';
 import { CreateContact } from '../contacts/contacts.service';
 import { CreateDeal } from '../deals/deals.service';
+import { CreateProduct } from '../products/products.service';
 import { StageHistoryService } from '../deals/stage-history.service';
 import { CsvError, type CsvRow, parseCsv, unguardCell } from './csv';
 import { type ColumnMapping, guessMapping, IMPORT_FIELDS, type ImportType } from './import-fields';
@@ -50,6 +51,10 @@ interface Lookups {
   companiesByName: Map<string, string>;
   /** lower(email) → contact id. */
   contactsByEmail: Map<string, string>;
+  /** lower(trim(name)) → id of the oldest product with that name (CD-81). */
+  productsByName: Map<string, string>;
+  /** Product id → its billing frequency, so a row that leaves the frequency out is checked against it (CD-81). */
+  productFrequency: Map<string, BillingFrequency>;
   /** lower(email) → user id, members of this workspace only. */
   members: Map<string, string>;
   funnels: Funnel[];
@@ -64,6 +69,8 @@ interface Writer {
   createContact(input: CreateContact): Promise<string>;
   updateContact(id: string, patch: Partial<CreateContact>): Promise<void>;
   createDeal(input: CreateDeal, stage: Funnel['stages'][number], refs: { companyId: string; primaryContactId: string | null }): Promise<string>;
+  createProduct(input: CreateProduct): Promise<string>;
+  updateProduct(id: string, patch: Partial<CreateProduct>): Promise<void>;
 }
 
 interface RowResult {
@@ -111,7 +118,7 @@ function present<T extends Record<string, unknown>>(obj: T): Partial<T> {
 }
 
 /**
- * CSV import of companies, contacts and deals (CD-64). No table of its own: `preview` parses and
+ * CSV import of companies, contacts, deals (CD-64) and products (CD-81). No table of its own: `preview` parses and
  * validates the whole file and writes nothing, `commit` parses it again and saves the rows in
  * batches of 200, each in one `withTenant` transaction: rows are checked in memory, their writes
  * queued and saved with multi-row inserts. If the database refuses a batch, it is redone row by row
@@ -136,6 +143,8 @@ export class ImportService {
       createContact: async () => `new-contact-${++fake}`,
       updateContact: async () => undefined,
       createDeal: async () => `new-deal-${++fake}`,
+      createProduct: async () => `new-product-${++fake}`,
+      updateProduct: async () => undefined,
     };
 
     const counts = { rows: prep.rows.length, create: 0, update: 0, skip: 0, invalid: 0, newCompanies: 0, newContacts: 0 };
@@ -303,6 +312,17 @@ export class ImportService {
     for (const c of await tx.select({ id: contacts.id, email: contacts.email }).from(contacts).where(isNotNull(contacts.email)).orderBy(asc(contacts.createdAt), asc(contacts.id))) {
       if (c.email && !contactsByEmail.has(key(c.email))) contactsByEmail.set(key(c.email), c.id);
     }
+    const productsByName = new Map<string, string>();
+    const productFrequency = new Map<string, BillingFrequency>();
+    if (type === 'products') {
+      for (const p of await tx
+        .select({ id: products.id, name: products.name, billingFrequency: products.billingFrequency })
+        .from(products)
+        .orderBy(asc(products.createdAt), asc(products.id))) {
+        if (!productsByName.has(key(p.name))) productsByName.set(key(p.name), p.id);
+        productFrequency.set(p.id, p.billingFrequency as BillingFrequency);
+      }
+    }
     // memberships has no RLS (it decides access), so filter by tenant explicitly.
     const members = new Map<string, string>();
     for (const m of await tx.select({ userId: memberships.userId, email: users.email }).from(memberships).innerJoin(users, eq(users.id, memberships.userId)).where(eq(memberships.tenantId, ctx.tenantId))) {
@@ -320,7 +340,7 @@ export class ImportService {
     }
     // tenants has no RLS either.
     const [workspace] = await tx.select({ currency: tenants.currency }).from(tenants).where(eq(tenants.id, ctx.tenantId));
-    return { companiesByName, contactsByEmail, members, funnels: fs, currency: workspace?.currency ?? 'EUR' };
+    return { companiesByName, contactsByEmail, productsByName, productFrequency, members, funnels: fs, currency: workspace?.currency ?? 'EUR' };
   }
 
   private defaultFunnel(type: ImportType, lookups: Lookups, funnelId: string | undefined): Funnel | null {
@@ -360,7 +380,69 @@ export class ImportService {
         return this.contactRow(v, lk, duplicates, w, result, errors, ownerUserId, zodErrors, invalid);
       case 'deals':
         return this.dealRow(v, lk, funnel, w, result, errors, ownerUserId, zodErrors, invalid);
+      case 'products':
+        return this.productRow(v, lk, duplicates, w, result, errors, zodErrors, invalid);
     }
+  }
+
+  /** A product (CD-81), matched by name like companies. Frequencies are read by label or key. */
+  private async productRow(
+    v: Record<string, string>,
+    lk: Lookups,
+    duplicates: 'skip' | 'update',
+    w: Writer,
+    result: RowResult,
+    errors: string[],
+    zodErrors: (err: z.ZodError) => string[],
+    invalid: (m: string[]) => RowResult,
+  ): Promise<RowResult> {
+    let billingFrequency: BillingFrequency | undefined;
+    if (v.billingFrequency) {
+      const want = v.billingFrequency.toLowerCase().replace(/[^a-z]/g, '');
+      const aliases: Record<string, BillingFrequency> = { onetime: 'one_time', once: 'one_time', oneoff: 'one_time', weekly: 'weekly', monthly: 'monthly', quarterly: 'quarterly', annually: 'annually', yearly: 'annually', annual: 'annually' };
+      billingFrequency = aliases[want] ?? BILLING_FREQUENCIES.find((f) => f === v.billingFrequency);
+      if (!billingFrequency) errors.push(`Billing frequency: "${v.billingFrequency}" is not One time, Weekly, Monthly, Quarterly or Annually`);
+    }
+    // An existing product keeps its frequency when the row leaves it out, so cycles are checked against that.
+    const existingId = v.name ? lk.productsByName.get(key(v.name)) : undefined;
+    const frequency = billingFrequency ?? (existingId ? lk.productFrequency.get(existingId) : undefined);
+    let billingCycles: number | null | undefined;
+    if (v.billingCycles) {
+      billingCycles = Number(v.billingCycles);
+      if (!Number.isInteger(billingCycles)) errors.push(`Billing cycles: "${v.billingCycles}" is not a whole number`);
+      else if (!frequency || frequency === 'one_time') errors.push('Billing cycles: only recurring products (weekly, monthly, quarterly or annually) have billing cycles');
+    } else if (billingFrequency && billingFrequency !== 'one_time') billingCycles = null;
+    const parsed = CreateProduct.safeParse({
+      name: v.name,
+      description: v.description,
+      unit: v.unit,
+      unitPrice: v.unitPrice ? normalizeAmount(v.unitPrice) : undefined,
+      quantity: v.quantity ? normalizeAmount(v.quantity) : undefined,
+      vatRate: v.vatRate ? normalizeAmount(v.vatRate.replace('%', '')) : undefined,
+      billingFrequency,
+      billingCycles: billingFrequency === 'one_time' ? null : billingCycles,
+    });
+    if (!parsed.success) errors.push(...zodErrors(parsed.error).filter((m) => !(v.name === '' && m.startsWith('Name:'))));
+    if (errors.length || !parsed.success) return invalid(errors);
+
+    const input = parsed.data;
+    const existing = lk.productsByName.get(key(input.name));
+    if (existing) {
+      const patch = present({ ...input, name: undefined });
+      // A row that sets the frequency also sets the cycles: none for one time, an empty cell means until canceled.
+      if (billingFrequency) patch.billingCycles = input.billingCycles ?? null;
+      if (duplicates === 'skip') return { ...result, status: 'skip', messages: [`A product named "${input.name}" already exists`] };
+      if (Object.keys(patch).length === 0) return { ...result, status: 'skip', messages: [`"${input.name}" already exists and the row has nothing else to update`] };
+      await w.updateProduct(existing, patch);
+      if (patch.billingFrequency) result.effects.push(() => lk.productFrequency.set(existing, patch.billingFrequency!));
+      return { ...result, status: 'update', notes: [`Updates the existing product "${input.name}"`] };
+    }
+    const id = await w.createProduct(input);
+    result.effects.push(() => {
+      lk.productsByName.set(key(input.name), id);
+      lk.productFrequency.set(id, input.billingFrequency ?? 'one_time');
+    });
+    return result;
   }
 
   private async companyRow(
@@ -521,12 +603,19 @@ export class ImportService {
         q.activities.push({ tenantId, dealId: id, actorUserId: ctx.userId, channel: 'RS', title: 'Deal created', detail: importedDetail(input.source) });
         return id;
       },
+      createProduct: async (input) => {
+        const id = randomUUID();
+        q.products.push({ ...input, id, tenantId });
+        return id;
+      },
+      updateProduct: async (id, patch) => void q.updates.push((tx) => tx.update(products).set(patch).where(eq(products.id, id))),
     };
   }
 
   /** Saves a queued batch: parents before children, a few rows per statement. */
   private async flush(tx: Tx, q: Queue): Promise<void> {
     const chunks = <T>(rows: T[], size = 100) => Array.from({ length: Math.ceil(rows.length / size) }, (_, i) => rows.slice(i * size, i * size + size));
+    for (const c of chunks(q.products)) await tx.insert(products).values(c);
     for (const c of chunks(q.companies)) await tx.insert(companies).values(c);
     for (const update of q.updates) await update(tx);
     for (const c of chunks(q.contacts)) await tx.insert(contacts).values(c);
@@ -564,6 +653,13 @@ export class ImportService {
         await tx.insert(activities).values({ tenantId, dealId: row!.id, actorUserId: ctx.userId, channel: 'RS', title: 'Deal created', detail: importedDetail(input.source) });
         return row!.id;
       },
+      createProduct: async (input) => {
+        const [row] = await tx.insert(products).values({ ...input, tenantId }).returning({ id: products.id });
+        return row!.id;
+      },
+      updateProduct: async (id, patch) => {
+        await tx.update(products).set(patch).where(eq(products.id, id));
+      },
     };
   }
 }
@@ -579,14 +675,22 @@ interface Queue {
   deals: (typeof deals.$inferInsert)[];
   history: (typeof dealStageHistory.$inferInsert)[];
   activities: (typeof activities.$inferInsert)[];
+  products: (typeof products.$inferInsert)[];
   updates: ((tx: Tx) => Promise<unknown>)[];
 }
-const emptyQueue = (): Queue => ({ companies: [], contacts: [], deals: [], history: [], activities: [], updates: [] });
+const emptyQueue = (): Queue => ({ companies: [], contacts: [], deals: [], history: [], activities: [], products: [], updates: [] });
 
-const cloneLookups = (lk: Lookups) => ({ companiesByName: new Map(lk.companiesByName), contactsByEmail: new Map(lk.contactsByEmail) });
+const cloneLookups = (lk: Lookups) => ({
+  companiesByName: new Map(lk.companiesByName),
+  contactsByEmail: new Map(lk.contactsByEmail),
+  productsByName: new Map(lk.productsByName),
+  productFrequency: new Map(lk.productFrequency),
+});
 function restoreLookups(lk: Lookups, saved: ReturnType<typeof cloneLookups>) {
   lk.companiesByName = saved.companiesByName;
   lk.contactsByEmail = saved.contactsByEmail;
+  lk.productsByName = saved.productsByName;
+  lk.productFrequency = saved.productFrequency;
 }
 
 /** A short reason for a row that failed to save. */

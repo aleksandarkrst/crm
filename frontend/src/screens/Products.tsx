@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { DataActions } from '../components/DataActions';
 import { FilterBar } from '../components/ui';
 import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Layout';
 import { billingText, FREQUENCIES } from '../store/dealMath';
+import { productsCsv } from '../store/exportCsv';
 import { linesOf, localeFor, plainAmount } from '../store/selectors';
 import { useStore } from '../store/store';
 
@@ -28,11 +30,12 @@ export function Products() {
         onClear={() => {
           setFrequency(ANY);
         }}
+        extra={<DataActions type="products" count={rows.length} exportCsv={() => productsCsv(rows)} />}
       />
       {s.catalog.length === 0 ? (
         <EmptyState
           title="No products or services yet"
-          text="Your catalog is what you put on deals: products and services with their prices, tax and billing. A deal gives them its currency."
+          text="Your catalog is what you put on deals: products and services with their prices, tax and billing. A deal gives them its currency. Add them one by one, or import a CSV file from the ⋯ menu."
           action={{ label: 'New product', onClick: () => openProduct(null) }}
         />
       ) : (
