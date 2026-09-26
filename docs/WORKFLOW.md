@@ -76,6 +76,10 @@ When the checks pass, open a pull request to `main`:
 **GitHub CI** then runs four checks on the pull request: `backend`, `frontend`, `integration` and
 `e2e`. All four must be green before merging.
 
+The image build can also be checked before merging. Run **CI / CD** from the Actions tab against
+the branch and enable **Build both Docker images without publishing them**. The four checks run
+first, followed by `images`; branch verification never pushes an image or starts `deploy`.
+
 ## 5. Review
 
 The reviewer (today: the project owner) checks:
