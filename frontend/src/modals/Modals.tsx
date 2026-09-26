@@ -251,6 +251,7 @@ function NewContactModal() {
   const { s, set, flash, createContact } = useStore();
   const [busy, setBusy] = useState(false);
   const nc = s.newContact;
+  const fixedCompany = s.contactCompanyId ? companyRecords(s).find((c) => c.id === s.contactCompanyId) : undefined;
   const [custom, setCustom] = useState<CustomFieldPatch>({});
   const setNc = (k: keyof typeof nc) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const v = e.target.value;
@@ -262,7 +263,7 @@ function NewContactModal() {
     if ('missing' in fields) return flash(`Fill in ${fields.missing} first`);
     setBusy(true);
     const lead = leadById(s, s.contactCompany) || s.leads[0];
-    await createContact({ ...nc, name: nc.name.trim() }, lead?.id, customFieldsOf(s, 'contact').length ? fields.values : undefined);
+    await createContact({ ...nc, name: nc.name.trim() }, lead?.id, customFieldsOf(s, 'contact').length ? fields.values : undefined, s.contactCompanyId ?? undefined);
     setBusy(false);
   };
   return (
@@ -289,17 +290,24 @@ function NewContactModal() {
           LinkedIn
           <input className="form-input" placeholder="linkedin.com/in/…" value={nc.linkedin} onChange={setNc('linkedin')} />
         </label>
-        <label className="form-label">
-          Linked lead
-          <select className="form-input" value={s.contactCompany} onChange={(e) => set({ contactCompany: e.target.value })}>
-            {s.leads.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.company} · {l.title && l.title !== l.company ? l.title + ' · ' : ''}
-                {stageOf(s, l).name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {fixedCompany ? (
+          <label className="form-label">
+            Company
+            <input className="form-input" value={fixedCompany.name} readOnly />
+          </label>
+        ) : (
+          <label className="form-label">
+            Linked lead
+            <select className="form-input" value={s.contactCompany} onChange={(e) => set({ contactCompany: e.target.value })}>
+              {s.leads.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.company} · {l.title && l.title !== l.company ? l.title + ' · ' : ''}
+                  {stageOf(s, l).name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
       <label className="form-label" style={{ maxWidth: 280 }}>
         Role in the decision
@@ -315,7 +323,7 @@ function NewContactModal() {
         <textarea className="form-input" rows={3} placeholder="How they influence the deal" value={nc.notes} onChange={(e) => set((x) => ({ newContact: { ...x.newContact, notes: e.target.value } }))} />
       </label>
       <div className="modal-actions">
-        <button type="button" className="btn btn-secondary" onClick={() => set({ contactOpen: false })}>
+        <button type="button" className="btn btn-secondary" onClick={() => set({ contactOpen: false, contactCompanyId: null })}>
           Cancel
         </button>
         <button type="button" className={nc.name && !busy ? 'btn btn-primary' : 'btn btn-disabled'} style={{ cursor: 'pointer' }} disabled={busy} onClick={() => void create()}>
