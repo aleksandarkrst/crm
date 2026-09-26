@@ -128,6 +128,29 @@ Repository **variables**:
 
 The first deploy: push to `main`, or run the workflow manually. Watch it with `docker compose logs -f api worker` on the server.
 
+## 7. Verify a real deployment
+
+After the first deploy, run the production smoke test **on the server as `deploy`**:
+
+```bash
+cd /opt/crm
+bash scripts/verify-production.sh
+# To check a different hostname than APP_URL:
+bash scripts/verify-production.sh https://app.yourdomain.com
+```
+
+The test validates the rendered Compose configuration; confirms that PostgreSQL, the API, worker,
+nginx, tunnel, and backup service are running; exercises health endpoints both inside Docker and
+through the public tunnel; checks that no container publishes a host port; confirms the runtime
+database role cannot bypass row-level security; reruns migrations to prove they are idempotent; and
+creates and validates a fresh database backup. It exits non-zero if any check fails, making the
+output suitable for attaching to the deployment issue.
+
+The smoke test proves that a backup can be *created*, not that it can be restored. Complete the
+restore drill in [Backups](#5-backups) separately, using a disposable server or during a planned
+maintenance window. Also confirm the new dump and matching files archive exist in off-site storage;
+that requires access to the storage provider and cannot be inferred from the local Docker volume.
+
 ## Operations cheat sheet
 
 ```bash
@@ -135,6 +158,7 @@ docker compose ps                         # status
 docker compose logs -f --tail=100 api     # logs
 docker compose run --rm migrate           # migrations by hand
 bash scripts/deploy.sh <sha>              # deploy / roll back to any built commit
+bash scripts/verify-production.sh         # smoke-test the live stack and tunnel
 docker compose exec postgres psql -U app_admin app
 ```
 
