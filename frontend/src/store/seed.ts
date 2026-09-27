@@ -2,13 +2,12 @@
  * Reference data and demo records from the Mini CRM v2 design. The UI runs on these until each
  * screen is switched to the API (see src/store/README.md).
  */
-import type { CatalogItem, Filters, Funnel, Lead, LogEntry, SegKey, Stage, State } from './types';
+import type { CatalogItem, Filters, Funnel, Lead, SegKey, Stage, State } from './types';
 
 export const ACTIVITIES = ['Qualify & research', 'Personalized email', 'LinkedIn touch', 'WhatsApp check-in', 'Discovery call', 'Discovery workshop', 'Multi-thread to stakeholders', 'Send proposal + walkthrough', 'Procurement follow-up', 'Negotiation call', 'Kickoff scheduling'];
 export const CHANNELS = ['RS', 'EM', 'LI', 'WA', 'MT'] as const;
 export const CHANNEL_LABELS: Record<string, string> = { RS: 'Research task', EM: 'Email', LI: 'LinkedIn message', WA: 'WhatsApp message', MT: 'Meeting', PH: 'Call', NT: 'Note' };
 export const DOCS = ['None', 'Proposal', 'Quote', 'Contract', 'Invoice'];
-export const OWNERS = ['Mila Jovanović', 'Stefan Popović', 'Nina Đorđević'];
 export const BUYER_ROLES = ['Decision maker', 'Economic buyer', 'Champion', 'Influencer', 'Gatekeeper', 'End user'];
 /** Custom field types (CD-15) and how they are labelled. */
 export const FIELD_TYPES = [
@@ -139,13 +138,6 @@ const DEMO_LEADS: Omit<Lead, 'outcome' | 'taxMode' | 'discounts' | 'installments
   { id: 'l9', company: 'Kalemi Wines', contact: 'Teodora Vuković', role: 'Export Manager', initials: 'TV', email: 'teodora@kalemi.rs', phone: '+381 63 900 712', segment: 'smb', stage: 'won', value: '€18,500', score: 88, stall: 0, industry: 'Wine', hq: 'Vršac', size: '11–50 staff', source: 'Trade fair', need: 'an export-ready brand story for German and Austrian distributors.', constraint: 'distributor meetings in February', decisionMaker: 'you and the owner', discoveryDate: '18 Aug', headline: 'Export-ready, distributor-first', lines: [['Export brand story', '€11,500'], ['Trade materials', '€7,000']], total: '€18,500', docs: [{ name: 'Proposal — export brand', state: 'signed', meta: 'v1 · generated 26 Aug · signed 08 Sep' }] },
 ];
 export const LEADS: Lead[] = DEMO_LEADS.map((l) => ({ ...l, outcome: l.stage === 'won' ? 'won' : 'open', taxMode: 'exclusive', discounts: [], installments: [] }));
-
-export const DEFAULT_TIMELINE: LogEntry[] = [
-  { date: '18 Sep', channel: 'EM', title: 'Proposal sent', detail: 'Generated from Proposal template v4, 14 fields merged from this record.' },
-  { date: '15 Sep', channel: 'MT', title: 'Discovery call · 38 min', detail: 'Goals, budget range and decision process captured against the stage checklist.' },
-  { date: '11 Sep', channel: 'LI', title: 'LinkedIn touch', detail: 'Stage script used as sent, no edits.' },
-  { date: '09 Sep', channel: 'RS', title: 'Lead created', detail: 'Inbound web form. Fit score 77 — funnel assigned automatically.' },
-];
 
 /** Pipeline board views: lost deals are hidden by default. */
 export const LOST_VIEWS = ['Open & won deals', 'Include lost deals', 'Lost deals only'] as const;
