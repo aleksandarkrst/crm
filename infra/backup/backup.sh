@@ -1,7 +1,8 @@
 #!/bin/sh
 # PostgreSQL backups: pg_dump (custom format) to /backups, plus a tar.gz of the file storage
 # (/storage: document templates and generated documents), pruned after BACKUP_RETENTION_DAYS,
-# and copied off the server with rclone when BACKUP_RCLONE_REMOTE is set.
+# and copied off the server with rclone when BACKUP_RCLONE_REMOTE is set, plus a weekly copy kept
+# longer (CD-94).
 #
 #   backup.sh loop   # default: back up every BACKUP_INTERVAL_HOURS, check the disk every hour
 #   backup.sh once   # one backup now (deploy.sh runs this before migrations)
@@ -11,8 +12,13 @@
 # the monitor alerts on a failure or when the reports stop coming.
 set -eu
 
-INTERVAL_HOURS="${BACKUP_INTERVAL_HOURS:-24}"
+INTERVAL_HOURS="${BACKUP_INTERVAL_HOURS:-6}"
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
+# Off-site only: one copy a week (the first backup on WEEKLY_DAY, 1 = Monday … 7 = Sunday) is also
+# kept under weekly/ for WEEKLY_RETENTION_DAYS, for problems noticed after two weeks (CD-94).
+# 0 turns the weekly copies off.
+WEEKLY_RETENTION_DAYS="${BACKUP_WEEKLY_RETENTION_DAYS:-90}"
+WEEKLY_DAY="${BACKUP_WEEKLY_DAY:-7}"
 REMOTE="${BACKUP_RCLONE_REMOTE:-}"
 STORAGE="${BACKUP_STORAGE_DIR:-/storage}"
 BACKUP_HEARTBEAT="${BACKUP_HEARTBEAT_URL:-}"
@@ -71,7 +77,16 @@ run_backup() {
     echo "[backup] copying to ${REMOTE}"
     rclone copy "${file}" "${REMOTE}/" --quiet
     [ -n "${files}" ] && rclone copy "${files}" "${REMOTE}/" --quiet
-    rclone delete "${REMOTE}/" --min-age "${RETENTION_DAYS}d" --quiet || true
+    if [ "${WEEKLY_RETENTION_DAYS}" -gt 0 ] && [ "$(date -u +%u)" = "${WEEKLY_DAY}" ]       && [ -z "$(rclone lsf "${REMOTE}/weekly/" --max-age 24h --include '*.dump' 2>/dev/null)" ]; then
+      echo "[backup] keeping this one as the weekly copy"
+      rclone copy "${file}" "${REMOTE}/weekly/" --quiet
+      [ -n "${files}" ] && rclone copy "${files}" "${REMOTE}/weekly/" --quiet
+    fi
+    # Pruning: the daily copies at the top level only (--max-depth 1 leaves weekly/ alone), then the
+    # weekly ones. With versioning and Object Lock on the bucket (docs/DEPLOYMENT.md) a delete only
+    # hides a file: its locked version stays for the lock period, whoever deletes it.
+    rclone delete "${REMOTE}/" --max-depth 1 --min-age "${RETENTION_DAYS}d" --quiet || true
+    [ "${WEEKLY_RETENTION_DAYS}" -gt 0 ] && { rclone delete "${REMOTE}/weekly/" --min-age "${WEEKLY_RETENTION_DAYS}d" --quiet || true; }
   else
     echo "[backup] WARNING: BACKUP_RCLONE_REMOTE not set — backup exists only on this server"
   fi
