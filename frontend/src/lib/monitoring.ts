@@ -25,7 +25,7 @@ export function startErrorTracking(): void {
     Sentry.init({
       dsn: DSN,
       release: import.meta.env.VITE_APP_VERSION || undefined,
-      environment: import.meta.env.MODE,
+      environment: import.meta.env.VITE_SENTRY_ENVIRONMENT || import.meta.env.MODE,
       dataCollection: {
         userInfo: false,
         cookies: false,

@@ -14,7 +14,7 @@ export function initErrorTracking(service: 'api' | 'worker'): void {
   if (!env.SENTRY_DSN) return;
   Sentry.init({
     dsn: env.SENTRY_DSN,
-    environment: env.NODE_ENV,
+    environment: env.SENTRY_ENVIRONMENT || env.NODE_ENV,
     release: env.APP_VERSION && env.APP_VERSION !== 'latest' ? env.APP_VERSION : undefined,
     // Sentry collects all of these by default. Local variables of stack frames would carry CRM data.
     dataCollection: {

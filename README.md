@@ -185,3 +185,4 @@ Details and exact values are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 - [ ] **Identity provider** (Auth0, Zitadel, Keycloak, Entra ID…): create an SPA app and an API/audience, and set the `OIDC_*` values.
 - [ ] **Off-site backups**: use Hetzner Object Storage or a Storage Box, fill in `infra/backup/rclone.conf`, and test a restore.
 - [ ] **GitHub secrets/variables**: add `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, then `DEPLOY_ENABLED=true` plus the `OIDC_*` variables.
+- [ ] **Staging** (optional, recommended): a second stack in `/opt/crm-staging` with its own tunnel and Auth0 app, then `STAGING_DEPLOY_ENABLED=true`. Merges then go to staging, and production gets a commit through the "Promote to production" workflow ([docs/DEPLOYMENT.md, Staging](docs/DEPLOYMENT.md#9-staging)).

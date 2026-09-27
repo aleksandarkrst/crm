@@ -31,6 +31,8 @@ const EnvSchema = z
 
     // Error tracking (CD-8): the backend project's Sentry DSN. Unset or empty = off.
     SENTRY_DSN: z.union([z.literal(''), z.url()]).optional(),
+    // Which deployment the errors come from (production, staging). Defaults to NODE_ENV.
+    SENTRY_ENVIRONMENT: z.string().optional(),
     // The deployed commit (set by scripts/deploy.sh), sent with each error as its release.
     APP_VERSION: z.string().optional(),
 
