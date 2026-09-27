@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, type OnApplicationShutdown, type OnModuleIn
 import { sql } from 'drizzle-orm';
 import { fromDrizzle, type JobResult, PgBoss } from 'pg-boss';
 import { ENV, type Env } from '../../infrastructure/config/config.module';
+import { reportError } from '../../infrastructure/monitoring';
 import type { Tx } from '../database/database.service';
 import { JOB_NAMES, type JobName, type JobPayloads, MAIL_JOBS } from './job-types';
 
@@ -49,7 +50,10 @@ export class JobsService implements OnModuleInit, OnApplicationShutdown {
       supervise: isWorker,
       schedule: isWorker,
     });
-    this.boss.on('error', (err) => this.logger.error(err));
+    this.boss.on('error', (err) => {
+      this.logger.error(err);
+      reportError(err, { tags: { component: 'pg-boss' } });
+    });
   }
 
   async onModuleInit(): Promise<void> {
@@ -95,6 +99,8 @@ export class JobsService implements OnModuleInit, OnApplicationShutdown {
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           this.logger.warn(`Job ${name} ${job.id} failed (attempt ${job.retryCount + 1} of ${job.retryLimit + 1}): ${message}`);
+          // Only when no retry is left: a send that works on the second try isn't worth an alert.
+          if (job.retryCount >= job.retryLimit) reportError(err, { tags: { job: name } });
           results.push({ id: job.id, status: 'failed', output: { message } });
         }
       }

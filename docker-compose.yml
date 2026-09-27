@@ -23,6 +23,9 @@ x-backend-env: &backend-env
   MAIL_FROM: ${MAIL_FROM:-Cadence <no-reply@localhost>}
   MAIL_RETRY_LIMIT: ${MAIL_RETRY_LIMIT:-4}
   MAIL_RETRY_DELAY_SECONDS: ${MAIL_RETRY_DELAY_SECONDS:-30}
+  # Error tracking (CD-8): empty = off. The version tags each error with the deployed commit.
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  APP_VERSION: ${APP_VERSION:-latest}
 
 services:
   frontend:
@@ -132,6 +135,10 @@ services:
       # Off-server copy via rclone (e.g. Hetzner Storage Box / Object Storage wrapped in an
       # rclone "crypt" remote so copies are encrypted). Leave empty to keep local copies only.
       BACKUP_RCLONE_REMOTE: ${BACKUP_RCLONE_REMOTE:-}
+      # Alerts (CD-8): Better Stack heartbeat URLs; empty = no alerts.
+      BACKUP_HEARTBEAT_URL: ${BACKUP_HEARTBEAT_URL:-}
+      DISK_HEARTBEAT_URL: ${DISK_HEARTBEAT_URL:-}
+      DISK_ALERT_PERCENT: ${DISK_ALERT_PERCENT:-85}
     volumes:
       - backups:/backups
       # Uploaded templates and generated documents (CD-13), archived next to each dump. Writable

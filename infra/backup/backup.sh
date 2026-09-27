@@ -3,14 +3,41 @@
 # (/storage: document templates and generated documents), pruned after BACKUP_RETENTION_DAYS,
 # and copied off the server with rclone when BACKUP_RCLONE_REMOTE is set.
 #
-#   backup.sh loop   # default: back up every BACKUP_INTERVAL_HOURS
+#   backup.sh loop   # default: back up every BACKUP_INTERVAL_HOURS, check the disk every hour
 #   backup.sh once   # one backup now (deploy.sh runs this before migrations)
+#
+# Alerts (CD-8): each backup reports to BACKUP_HEARTBEAT_URL and each disk check to
+# DISK_HEARTBEAT_URL (Better Stack heartbeats). "<url>" means OK, "<url>/fail" means failed, and
+# the monitor alerts on a failure or when the reports stop coming.
 set -eu
 
 INTERVAL_HOURS="${BACKUP_INTERVAL_HOURS:-24}"
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
 REMOTE="${BACKUP_RCLONE_REMOTE:-}"
 STORAGE="${BACKUP_STORAGE_DIR:-/storage}"
+BACKUP_HEARTBEAT="${BACKUP_HEARTBEAT_URL:-}"
+DISK_HEARTBEAT="${DISK_HEARTBEAT_URL:-}"
+DISK_ALERT_PERCENT="${DISK_ALERT_PERCENT:-85}"
+DISK_CHECK_MINUTES="${DISK_CHECK_MINUTES:-60}"
+
+# heartbeat <url> ok|fail <message>. A monitor that can't be reached must never fail a backup.
+heartbeat() {
+  [ -n "$1" ] || return 0
+  url="$1"
+  [ "$2" = ok ] || url="${1%/}/fail"
+  curl -fsS -m 10 --retry 3 -o /dev/null --data-raw "$3" "$url" || echo "[backup] WARNING: could not reach the heartbeat monitor"
+}
+
+# The /backups volume lives on the server's disk, so its usage is the disk's.
+check_disk() {
+  used="$(df -P /backups | awk 'NR == 2 { sub("%", "", $5); print $5 }')"
+  if [ "${used}" -ge "${DISK_ALERT_PERCENT}" ]; then
+    echo "[backup] WARNING: disk ${used}% full (alert at ${DISK_ALERT_PERCENT}%)"
+    heartbeat "${DISK_HEARTBEAT}" fail "Disk ${used}% full (alert at ${DISK_ALERT_PERCENT}%)"
+  else
+    heartbeat "${DISK_HEARTBEAT}" ok "Disk ${used}% full"
+  fi
+}
 
 run_backup() {
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -49,11 +76,22 @@ run_backup() {
 }
 
 case "${1:-loop}" in
-  once) run_backup ;;
+  once)
+    # run_backup runs at the top level, so set -e stops it at the first failing step (inside an
+    # `if` or `||` the shell would ignore set -e). The exit trap reports how it ended.
+    trap 'status=$?; if [ "$status" -eq 0 ]; then heartbeat "${BACKUP_HEARTBEAT}" ok "Backup done"; else heartbeat "${BACKUP_HEARTBEAT}" fail "Backup failed (exit ${status}), see: docker compose logs backup"; fi' EXIT
+    run_backup
+    ;;
   loop)
+    next_backup=0
     while true; do
-      run_backup || echo "[backup] FAILED — retrying next cycle"
-      sleep "$((INTERVAL_HOURS * 3600))"
+      check_disk || echo "[backup] WARNING: disk check failed"
+      if [ "$(date +%s)" -ge "${next_backup}" ]; then
+        # A separate process, for set -e (see "once"); it reports to the heartbeat itself.
+        "$0" once || echo "[backup] FAILED — retrying next cycle"
+        next_backup="$(($(date +%s) + INTERVAL_HOURS * 3600))"
+      fi
+      sleep "$((DISK_CHECK_MINUTES * 60))"
     done
     ;;
   *) echo "usage: backup.sh [loop|once]" >&2; exit 2 ;;

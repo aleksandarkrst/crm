@@ -178,6 +178,8 @@ jobs:
             VITE_OIDC_AUTHORITY=${{ vars.OIDC_ISSUER }}
             VITE_OIDC_CLIENT_ID=${{ vars.OIDC_CLIENT_ID }}
             VITE_OIDC_AUDIENCE=${{ vars.OIDC_AUDIENCE }}
+            VITE_SENTRY_DSN=${{ vars.SENTRY_FRONTEND_DSN }}
+            VITE_APP_VERSION=${{ github.sha }}
           tags: ${{ env.IMAGE_PREFIX }}-frontend:${{ github.sha }},${{ env.IMAGE_PREFIX }}-frontend:latest
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend

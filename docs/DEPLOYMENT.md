@@ -291,6 +291,56 @@ Record pass/fail and relevant non-secret output for each section. If any check f
 `DEPLOY_ENABLED` unset or `false`, retain the failing container logs, and fix the production path
 before enabling automatic deploys.
 
+## 8. Monitoring and alerts
+
+Three things tell you something is wrong before a user does (CD-8). Set up alert delivery (email,
+and the Better Stack app for push notifications) under **Better Stack → Uptime → Who's on call**.
+
+| What | Service | Alerts when |
+|---|---|---|
+| The app is reachable | Better Stack monitor on `/api/health/ready` | the check fails (app down, database down, tunnel down) |
+| Backups | Better Stack heartbeat from `backup.sh` | a backup fails, or none arrives for a day |
+| Disk space | Better Stack heartbeat from `backup.sh` (hourly) | the disk is 85% full, or the checks stop |
+| Errors | Sentry (EU), backend and frontend projects | new unexpected errors (5xx, crashes, jobs out of retries) |
+
+### Uptime (Better Stack)
+
+**Uptime → Monitors → Create monitor**:
+- URL `https://app.yourdomain.com/api/health/ready`, alert when **the URL becomes unavailable**
+  (it returns 503 when the database is down).
+- Check every 3 minutes, and confirm from 2 locations before alerting (avoids one-off blips).
+- The rate limits never apply to `/api/health` (docs/ARCHITECTURE.md, "Rate limits").
+
+### Backup and disk heartbeats (Better Stack)
+
+**Uptime → Heartbeats → Create heartbeat**, twice:
+- `crm backups`: expected every **1 day**, grace period **2 hours**.
+- `crm disk`: expected every **1 hour**, grace period **30 minutes**.
+
+Put their URLs in `/opt/crm/.env` as `BACKUP_HEARTBEAT_URL` and `DISK_HEARTBEAT_URL`, then run
+`docker compose up -d --build backup`. After each backup, `backup.sh` calls the URL, or `<url>/fail`
+when any step fails, including the off-site copy. Every hour it reports the disk use, and reports
+a failure from `DISK_ALERT_PERCENT` (default 85). Better Stack also alerts when the calls stop,
+so a stopped backup container is caught too. Test it with
+`docker compose run --rm backup once`: the `crm backups` heartbeat should show a new success.
+
+### Errors (Sentry)
+
+Create an organization in the **EU data region** (sentry.io → "Data storage location: EU"), then
+two projects: **Node.js** (`crm-backend`) and **React** (`crm-frontend`).
+- Backend: put its DSN in `/opt/crm/.env` as `SENTRY_DSN`, then `docker compose up -d api worker`.
+- Frontend: add the repository **variable** `SENTRY_FRONTEND_DSN` (a browser DSN is public by
+  design). It is built into the next image, so it takes effect with the next deploy.
+- Each error carries the deployed commit as its release.
+- **Settings → Security & Privacy**: turn on **Data scrubbing** and **Prevent storing IP addresses**.
+  The app already sends no request bodies, headers, cookies, IP addresses or local variables, and
+  cuts invitation tokens and query strings out of URLs; the user appears only as an internal id.
+- Set up alerts under **Alerts → Create alert → Issues**: "a new issue is created" → email.
+
+What gets reported: API responses of 500 and above, crashes of the API and worker, background jobs
+that failed their last retry (e.g. an email that could not be sent), and browser errors that break
+the page. Client mistakes (4xx, including 429) are not reported.
+
 ## Operations cheat sheet
 
 ```bash

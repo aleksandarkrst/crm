@@ -39,6 +39,8 @@ export default defineConfig({
           groups: [
             { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
             { name: 'router', test: /node_modules[\\/](react-router|react-router-dom|cookie|set-cookie-parser)[\\/]/ },
+            // Error tracking (CD-8), loaded after startup and only when a Sentry DSN is built in.
+            { name: 'sentry', test: /node_modules[\\/]@sentry[\\/]/ },
           ],
         },
       },
