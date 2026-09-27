@@ -25,11 +25,14 @@ x-backend-env: &backend-env
   MAIL_RETRY_DELAY_SECONDS: ${MAIL_RETRY_DELAY_SECONDS:-30}
   # Error tracking (CD-8): empty = off. The version tags each error with the deployed commit.
   SENTRY_DSN: ${SENTRY_DSN:-}
+  SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
   APP_VERSION: ${APP_VERSION:-latest}
 
 services:
   frontend:
-    image: ${IMAGE_PREFIX:-crm}-frontend:${APP_VERSION:-latest}
+    # The staging stack sets FRONTEND_VARIANT=-staging: the frontend is built per environment
+    # because the sign-in app and Sentry environment are compiled into it.
+    image: ${IMAGE_PREFIX:-crm}-frontend:${APP_VERSION:-latest}${FRONTEND_VARIANT:-}
     build:
       context: ./frontend
       args:

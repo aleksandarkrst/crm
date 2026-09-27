@@ -108,24 +108,24 @@ Review comments are answered on the pull request: fixed in a new commit, or expl
 After every merge, CI runs again on `main` and then:
 
 1. **`images`**: builds the backend and frontend Docker images and stores them in GitHub's
-   container registry, tagged with the commit.
-2. **`deploy`**: copies them to the server over SSH and restarts the app
-   (`scripts/deploy.sh`). **Switched off until the server exists**: it only runs when the
-   repository variable `DEPLOY_ENABLED` is `true` (milestone "Go live", CD-2 to CD-6).
+   container registry, tagged with the commit (the frontend twice: production and `-staging`,
+   because the sign-in app is compiled into it).
+2. **`deploy-staging`**: deploys the commit to staging (https://staging.simplicity-labs.com,
+   same server, own database) and runs the smoke test there.
+3. **Check it on staging**: whoever merged opens staging and tries the change.
+4. **Promote to production**: Actions → *Promote to production* → Run workflow (or
+   `gh workflow run promote.yml`). It deploys the commit staging runs now and smoke-tests
+   production. Only commits that passed staging can be promoted.
 
-Until then, merging means "approved and on `main`"; the app runs locally.
+Setup and details: [DEPLOYMENT.md, Staging](DEPLOYMENT.md#9-staging). Until
+`STAGING_DEPLOY_ENABLED` is `true`, step 1 is followed by a direct production deploy instead
+(when `DEPLOY_ENABLED` is `true`).
 
-### Once the app is live
-
-- **Staging first.** A second environment with its own database, deployed automatically from
-  `main`. Changes are tried there before production.
-- **Production on purpose**, e.g. when a release tag (`v1.4`) is created or a deploy is approved
-  in GitHub (the `production` environment can require an approval; on a private repository
-  that also needs a paid plan).
-- **Rollback**: every deploy is an image tagged with its commit; going back means deploying the
-  previous one. Practise it once before it's needed.
+- **Rollback**: every deploy is an image tagged with its commit; going back means promoting (or
+  running `scripts/deploy.sh` with) the previous one.
 - **Migrations that are safe on live data**: add a column before code uses it; remove an old
-  column in a later release, never in the same one as the code that stops using it.
+  column in a later release, never in the same one as the code that stops using it. Staging runs
+  each migration first, but on its own data, so this still matters.
 - **Backups with a practised restore** (CD-5) before real customer data goes in.
 - **Secrets never in the repository**: they live in GitHub secrets and on the server. Agents never
   get production credentials.
