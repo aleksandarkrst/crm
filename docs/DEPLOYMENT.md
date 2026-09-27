@@ -1,7 +1,9 @@
 # Deployment: Hetzner + Docker + Cloudflare Tunnel
 
 End state: pushing to `main` runs checks, builds versioned images to GitHub Container Registry,
-then SSHes to the server and runs `scripts/deploy.sh <sha>`. That script:
+then SSHes to the server and runs `scripts/deploy.sh <sha>`, on staging first once it exists
+([Staging](#9-staging)); production then gets the same commit from the "Promote to production"
+workflow. `deploy.sh`:
 1. checks out the commit
 2. pulls the images
 3. backs up the database
@@ -129,6 +131,8 @@ Repository **secrets** (`Settings → Secrets and variables → Actions`):
 
 Repository **variables**:
 - `DEPLOY_ENABLED=true` (deploys are skipped until you set it)
+- `STAGING_DEPLOY_ENABLED=true`, `STAGING_OIDC_CLIENT_ID`, `STAGING_OIDC_AUDIENCE`: merges go to
+  staging and production is promoted by hand ([Staging](#9-staging))
 - `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_AUDIENCE`
 
 The server also needs access to GitHub, because `deploy.sh` fetches the commit it deploys:
@@ -346,6 +350,91 @@ What gets reported: API responses of 500 and above, crashes of the API and worke
 that failed their last retry (e.g. an email that could not be sent), and browser errors that break
 the page. Client mistakes (4xx, including 429) are not reported.
 
+## 9. Staging
+
+Staging runs the same images, compose file and scripts as production, on the **same server**, as
+a second Compose project in `/opt/crm-staging`. It has its own database, volumes, networks,
+Cloudflare Tunnel, Auth0 application and API, and backups. Nothing in it can reach production's
+containers: Compose prefixes every network and volume with the project name (`crm-staging`).
+
+**The flow** (CD-105):
+1. A merge to `main` runs CI, builds the images (the frontend twice: for production and, tagged
+   `<sha>-staging`, for staging), deploys to staging and runs `scripts/verify-production.sh` there.
+2. Check the change on https://staging.simplicity-labs.com.
+3. **Actions → Promote to production → Run workflow** (or `gh workflow run promote.yml`). It
+   deploys the commit that staging runs now to production, then runs the smoke test there. It only
+   accepts commits whose staging deploy succeeded; to promote an older one, give its SHA.
+
+Production is no longer deployed on every merge while `STAGING_DEPLOY_ENABLED=true`. Merges that
+pile up on staging go to production together with the next promote. Rolling production back:
+promote an earlier commit that passed staging, or run `scripts/deploy.sh <sha>` on the server.
+
+### Setting it up (once)
+
+1. **Cloudflare**: create a second tunnel `crm-staging` (Zero Trust → Networks → Tunnels) with
+   the public hostname `staging.simplicity-labs.com` → `HTTP` → `frontend:80`. A separate tunnel,
+   because production's `cloudflared` can't reach the staging network. Keep the token for `.env`.
+   Optional: put it behind Cloudflare Access so only the team can open it.
+2. **Auth0** (same tenant): an API `Simplicity CRM API (staging)` with identifier
+   `https://staging.simplicity-labs.com/api` and Allow Offline Access on, and a Single Page
+   Application `CRM (staging)` with callback `https://staging.simplicity-labs.com/auth/callback`,
+   logout URL and web origin `https://staging.simplicity-labs.com`, grant types authorization code
+   and refresh token, rotating refresh tokens. Enable the same connections as production's app.
+   The post-login Action that adds `email` covers every application. A separate audience keeps
+   staging tokens from being accepted by the production API.
+3. **The server**, as `deploy`:
+   ```bash
+   git clone git@github.com:YOU/crm.git /opt/crm-staging && cd /opt/crm-staging
+   cp /opt/crm/.env .env && chmod 600 .env
+   cp /opt/crm/infra/backup/rclone.conf infra/backup/rclone.conf && chmod 600 infra/backup/rclone.conf
+   ```
+   then change `.env` (everything not listed stays as production's):
+
+   | Variable | Staging value |
+   |---|---|
+   | `COMPOSE_PROJECT_NAME` | `crm-staging` |
+   | `FRONTEND_VARIANT` | `-staging` (pulls the staging frontend image) |
+   | `POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `APP_SECRET` | new values (`openssl rand -hex 32`) |
+   | `OIDC_AUDIENCE`, `OIDC_CLIENT_ID` | the staging API identifier and SPA client ID |
+   | `APP_URL` | `https://staging.simplicity-labs.com` |
+   | `CLOUDFLARE_TUNNEL_TOKEN` | the staging tunnel's token |
+   | `MAIL_DRIVER` | `log`, or `smtp` with a sandbox SMTP (never real customers' addresses) |
+   | `SENTRY_ENVIRONMENT` | `staging` (same Sentry projects, filtered by environment) |
+   | `BACKUP_RCLONE_REMOTE` | a separate prefix, e.g. `offsite-crypt:crm-staging` |
+   | `BACKUP_HEARTBEAT_URL`, `DISK_HEARTBEAT_URL` | empty (production's heartbeats already watch the disk) |
+   | `API_MEM_LIMIT`, `WORKER_MEM_LIMIT` | `384m` each, so staging can't starve production |
+
+   The staging stack uses about 1 GB of memory; check `free -h` has that to spare.
+4. **GitHub** (`Settings → Secrets and variables → Actions → Variables`): `STAGING_OIDC_CLIENT_ID`,
+   `STAGING_OIDC_AUDIENCE`, optionally `STAGING_URL`, and last `STAGING_DEPLOY_ENABLED=true`. The
+   staging job uses the same `DEPLOY_*` secrets (same server). GitHub creates the `staging`
+   environment on the first deploy.
+5. Merge something (or re-run the latest `main` workflow). The first deploy creates the empty
+   database and migrates it.
+
+### Data
+
+Staging starts empty: sign in, create a workspace and choose the sample data. To try something on
+real-looking data, restore a production dump into staging (it also rehearses the restore path).
+The staging worker would email real people, so stop it first (`docker compose stop worker` in
+`/opt/crm-staging`), restore with `infra/backup/restore.sh` as in [Restore](#restore-practise-this-before-you-need-it),
+then drop queued jobs and change the email addresses before starting it again:
+```bash
+docker compose exec -T postgres psql -U app_admin app -c "
+  delete from pgboss.job where state in ('created', 'retry');
+  update users set email = 'user+' || id || '@example.invalid';
+  update contacts set email = null, phone = null;
+  update invitations set email = 'invite+' || id || '@example.invalid';"
+docker compose start worker
+```
+A person's email comes back from Auth0 when they sign in to staging themselves.
+
+### What to check on staging before promoting
+
+Sign in, the screens the change touched, and when relevant: an invitation (with `MAIL_DRIVER=log`
+the link is in `docker compose logs worker`), generating a document, and
+`docker compose run --rm backup once`.
+
 ## Operations cheat sheet
 
 ```bash
@@ -354,6 +443,7 @@ docker compose logs -f --tail=100 api     # logs
 docker compose run --rm migrate           # migrations by hand
 bash scripts/deploy.sh <sha>              # deploy / roll back to any built commit
 bash scripts/verify-production.sh         # smoke-test the live stack and tunnel
+gh workflow run promote.yml               # (from your machine) staging's commit → production
 docker compose exec postgres psql -U app_admin app
 ```
 

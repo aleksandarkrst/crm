@@ -183,29 +183,42 @@ jobs:
           tags: ${{ env.IMAGE_PREFIX }}-frontend:${{ github.sha }},${{ env.IMAGE_PREFIX }}-frontend:latest
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
-
-  deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && !inputs.verify_images && vars.DEPLOY_ENABLED == 'true'
-    needs: [images]
-    runs-on: ubuntu-latest
-    environment: production
-    permissions: { contents: read, packages: read }
-    steps:
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1
-        env:
-          # The images are private. The job's token logs the server in to GHCR for this pull
-          # only and expires with the job, so no registry password lives on the server.
-          GHCR_USER: ${{ github.actor }}
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The same commit built for staging (CD-105): its own sign-in app and API audience, and
+      # errors tagged "staging". Tagged <sha>-staging; the backend image is shared.
+      - uses: docker/build-push-action@v7
+        if: vars.STAGING_DEPLOY_ENABLED == 'true'
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: GHCR_USER,GHCR_TOKEN
-          script: |
-            printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin || exit 1
-            status=0
-            bash /opt/crm/scripts/deploy.sh ${{ github.sha }} || status=$?
-            docker logout ghcr.io
-            exit $status
+          context: frontend
+          push: ${{ github.ref == 'refs/heads/main' && !inputs.verify_images }}
+          build-args: |
+            VITE_AUTH_MODE=${{ vars.AUTH_MODE || 'oidc' }}
+            VITE_OIDC_AUTHORITY=${{ vars.OIDC_ISSUER }}
+            VITE_OIDC_CLIENT_ID=${{ vars.STAGING_OIDC_CLIENT_ID }}
+            VITE_OIDC_AUDIENCE=${{ vars.STAGING_OIDC_AUDIENCE }}
+            VITE_SENTRY_DSN=${{ vars.SENTRY_FRONTEND_DSN }}
+            VITE_SENTRY_ENVIRONMENT=staging
+            VITE_APP_VERSION=${{ github.sha }}
+          tags: ${{ env.IMAGE_PREFIX }}-frontend:${{ github.sha }}-staging
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend-staging
+
+  # With staging (STAGING_DEPLOY_ENABLED=true), every merge to main goes to staging: /opt/crm-staging
+  # on the same server, with its own Compose project, database, tunnel and sign-in app. The smoke
+  # test runs there. Production then gets the same commit from the "Promote to production"
+  # workflow (promote.yml) once someone has checked it on staging.
+  deploy-staging:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && !inputs.verify_images && vars.STAGING_DEPLOY_ENABLED == 'true'
+    needs: [images]
+    uses: ./.github/workflows/deploy.yml
+    with: { environment: staging, app_dir: /opt/crm-staging, sha: '${{ github.sha }}', verify: true }
+    secrets: inherit
+    permissions: { contents: read, packages: read }
+
+  # Without staging, production follows every merge directly.
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && !inputs.verify_images && vars.DEPLOY_ENABLED == 'true' && vars.STAGING_DEPLOY_ENABLED != 'true'
+    needs: [images]
+    uses: ./.github/workflows/deploy.yml
+    with: { environment: production, app_dir: /opt/crm, sha: '${{ github.sha }}', verify: false }
+    secrets: inherit
+    permissions: { contents: read, packages: read }

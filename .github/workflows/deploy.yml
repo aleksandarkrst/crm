@@ -1,0 +1,47 @@
+# Deploys one commit's images to one environment on the server (CD-105). Called by ci.yml
+# (staging, or production when there is no staging) and promote.yml (production).
+name: Deploy
+
+on:
+  workflow_call:
+    inputs:
+      environment: { type: string, required: true, description: 'staging or production' }
+      app_dir: { type: string, required: true, description: 'the checkout on the server, e.g. /opt/crm' }
+      sha: { type: string, required: true, description: 'the commit whose images to deploy' }
+      verify: { type: boolean, default: false, description: 'run scripts/verify-production.sh afterwards' }
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ inputs.environment == 'staging' && (vars.STAGING_URL || 'https://staging.simplicity-labs.com') || (vars.PRODUCTION_URL || 'https://app.simplicity-labs.com') }}
+    # One deploy per environment at a time; a second one waits instead of cancelling the first.
+    concurrency: { group: 'deploy-${{ inputs.environment }}', cancel-in-progress: false }
+    permissions: { contents: read, packages: read }
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        env:
+          # The images are private. The job's token logs the server in to GHCR for this pull
+          # only and expires with the job, so no registry password lives on the server.
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APP_DIR: ${{ inputs.app_dir }}
+          VERSION: ${{ inputs.sha }}
+          VERIFY: ${{ inputs.verify }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: GHCR_USER,GHCR_TOKEN,APP_DIR,VERSION,VERIFY
+          command_timeout: 20m
+          script: |
+            printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin || exit 1
+            status=0
+            APP_DIR="$APP_DIR" bash "$APP_DIR/scripts/deploy.sh" "$VERSION" || status=$?
+            docker logout ghcr.io
+            [ "$status" -eq 0 ] || exit "$status"
+            if [ "$VERIFY" = true ]; then
+              APP_DIR="$APP_DIR" bash "$APP_DIR/scripts/verify-production.sh"
+            fi
