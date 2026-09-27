@@ -1,0 +1,67 @@
+# Ships the containers' logs to Better Stack (CD-102). Run by the "logs" service in
+# docker-compose.yml, only with COMPOSE_PROFILES=logs. Checks: infra/logs/vector.test.yaml.
+#
+# Each Docker log line is JSON ({"log", "stream", "time", "attrs"}); the API's and worker's own
+# lines inside it are pino JSON again (level 30 info, 40 warn, 50 error, 60 fatal), and are sent
+# as fields so Better Stack can filter and alert on them (e.g. level >= 50).
+data_dir: /var/lib/vector
+
+# The Better Stack host and token come from files compose mounts in /run/secrets (Vector no longer
+# reads environment variables in its config).
+secret:
+  betterstack:
+    type: directory
+    path: /run/secrets
+
+sources:
+  containers:
+    type: file
+    include: [/var/lib/docker/containers/*/*-json.log]
+    # Only new lines on the first start; after that Vector remembers where it was (data_dir).
+    read_from: end
+
+transforms:
+  parsed:
+    type: remap
+    inputs: [containers]
+    source: |
+      docker, err = parse_json(string!(.message))
+      if err != null || !is_object(docker) {
+        docker = {"log": .message}
+      }
+      line = strip_whitespace(to_string(docker.log) ?? "")
+      service = to_string(docker.attrs."com.docker.compose.service") ?? "unknown"
+      app, err = parse_json(line)
+      if err == null && is_object(app) {
+        . = object!(app)
+        if exists(.msg) { .message = .msg; del(.msg) } else { .message = line }
+      } else {
+        . = {"message": line}
+      }
+      .service = service
+      .stream = docker.stream
+      .dt = docker.time
+
+  shipped:
+    type: filter
+    inputs: [parsed]
+    # Not its own lines (they would feed back), and not empty ones.
+    condition: '.service != "logs" && .message != ""'
+
+sinks:
+  betterstack:
+    type: http
+    inputs: [shipped]
+    uri: "https://SECRET[betterstack.betterstack_logs_host]"
+    method: post
+    encoding:
+      codec: json
+    compression: gzip
+    auth:
+      strategy: bearer
+      token: "SECRET[betterstack.betterstack_logs_token]"
+    # Keep lines in memory and on disk for a while if Better Stack can't be reached.
+    buffer:
+      type: disk
+      max_size: 268435488
+      when_full: drop_newest

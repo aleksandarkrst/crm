@@ -1,0 +1,43 @@
+# Unit tests for vector.yaml:  vector test /etc/vector/vector.yaml /etc/vector/vector.test.yaml
+tests:
+  - name: a pino line from the api becomes fields, with the service
+    inputs:
+      - insert_at: parsed
+        type: log
+        log_fields:
+          message: '{"log":"{\"level\":50,\"time\":1,\"msg\":\"Job failed\",\"req\":{\"url\":\"/api/x\"}}\n","stream":"stdout","time":"2026-09-27T12:00:00Z","attrs":{"com.docker.compose.service":"api"}}'
+    outputs:
+      - extract_from: parsed
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.level, 50)
+              assert_eq!(.message, "Job failed")
+              assert_eq!(.service, "api")
+              assert_eq!(.req.url, "/api/x")
+              assert_eq!(.dt, "2026-09-27T12:00:00Z")
+              assert!(!exists(.msg))
+
+  - name: a plain line (nginx, postgres) is kept as the message
+    inputs:
+      - insert_at: parsed
+        type: log
+        log_fields:
+          message: '{"log":"LOG:  checkpoint complete\n","stream":"stderr","time":"2026-09-27T12:00:00Z","attrs":{"com.docker.compose.service":"postgres"}}'
+    outputs:
+      - extract_from: parsed
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.message, "LOG:  checkpoint complete")
+              assert_eq!(.service, "postgres")
+              assert_eq!(.stream, "stderr")
+
+  - name: its own lines are not shipped
+    inputs:
+      - insert_at: shipped
+        type: log
+        log_fields:
+          message: "vector started"
+          service: logs
+    no_outputs_from: [shipped]
