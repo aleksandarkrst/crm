@@ -7,6 +7,15 @@
 #
 # Deploys normally go through scripts/deploy.sh (called by GitHub Actions).
 
+# Logs stay on the server as before (20 MB x 5 per container), now labelled with the compose service
+# so the optional "logs" service can ship them to Better Stack by name (CD-102).
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 20m
+    max-file: "5"
+    labels: com.docker.compose.service
+
 x-backend-env: &backend-env
   NODE_ENV: production
   LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -30,6 +39,7 @@ x-backend-env: &backend-env
 
 services:
   frontend:
+    logging: *logging
     # The staging stack sets FRONTEND_VARIANT=-staging: the frontend is built per environment
     # because the sign-in app and Sentry environment are compiled into it.
     image: ${IMAGE_PREFIX:-crm}-frontend:${APP_VERSION:-latest}${FRONTEND_VARIANT:-}
@@ -47,6 +57,7 @@ services:
     networks: [edge]
 
   api:
+    logging: *logging
     image: ${IMAGE_PREFIX:-crm}-backend:${APP_VERSION:-latest}
     build: ./backend
     restart: unless-stopped
@@ -64,6 +75,7 @@ services:
     networks: [edge, data]
 
   worker:
+    logging: *logging
     image: ${IMAGE_PREFIX:-crm}-backend:${APP_VERSION:-latest}
     command: ["node", "dist/worker.js"]
     restart: unless-stopped
@@ -80,6 +92,7 @@ services:
     networks: [data, edge]
 
   migrate:
+    logging: *logging
     image: ${IMAGE_PREFIX:-crm}-backend:${APP_VERSION:-latest}
     command: ["node", "dist/shared/database/migrate.js"]
     profiles: [tools]
@@ -100,6 +113,7 @@ services:
     networks: [data]
 
   postgres:
+    logging: *logging
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
@@ -121,6 +135,7 @@ services:
     networks: [data]
 
   cloudflared:
+    logging: *logging
     image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-2026.9.1}
     restart: unless-stopped
     command: ["tunnel", "--no-autoupdate", "run"]
@@ -130,6 +145,7 @@ services:
     networks: [edge]
 
   backup:
+    logging: *logging
     build: ./infra/backup
     restart: unless-stopped
     environment:
@@ -160,12 +176,36 @@ services:
         condition: service_healthy
     networks: [data, edge]
 
+  # Ships every container's logs to Better Stack (CD-102). Off unless COMPOSE_PROFILES=logs and the
+  # Better Stack source's host and token are set in .env (docs/DEPLOYMENT.md). It reads the log
+  # files read-only; it has no Docker socket.
+  logs:
+    image: timberio/vector:0.58.0-alpine
+    profiles: [logs]
+    restart: unless-stopped
+    logging: *logging
+    # Mounted as files in /run/secrets, where vector.yaml reads them.
+    secrets: [betterstack_logs_host, betterstack_logs_token]
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./infra/logs/vector.yaml:/etc/vector/vector.yaml:ro
+      - logs_state:/var/lib/vector
+    mem_limit: 256m
+    networks: [edge]
+
 networks:
   edge: {}
   data:
     internal: true
 
 volumes:
+  logs_state:
   postgres_data:
   app_storage:
   backups:
+
+secrets:
+  betterstack_logs_host:
+    environment: BETTERSTACK_LOGS_HOST
+  betterstack_logs_token:
+    environment: BETTERSTACK_LOGS_TOKEN

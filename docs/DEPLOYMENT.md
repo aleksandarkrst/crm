@@ -429,6 +429,47 @@ What gets reported: API responses of 500 and above, crashes of the API and worke
 that failed their last retry (e.g. an email that could not be sent), and browser errors that break
 the page. Client mistakes (4xx, including 429) are not reported.
 
+**Prove the frontend reports (CD-102).** Until a browser error has arrived, it isn't known to work.
+Open the app, open the browser's developer tools console and run
+`setTimeout(() => { throw new Error('Sentry frontend test') })`. Within a minute the error should be
+in `crm-frontend` with the deployed commit as its release. Resolve it afterwards.
+
+**Readable stack traces (source maps).** Without them a browser error points into minified code.
+1. In Sentry, **Settings → Developer Settings → Organization Tokens** → create one (it can upload
+   source maps and create releases, nothing else).
+2. Add it as the repository **secret** `SENTRY_AUTH_TOKEN`, and the repository **variables**
+   `SENTRY_ORG` (`simplicity-labs-6t`) and `SENTRY_FRONTEND_PROJECT` (`crm-frontend`).
+3. The next frontend image build uploads the maps for its commit and deletes them from the image,
+   so they are never served. A wrong token only shows as an error in the build log; the build
+   still succeeds.
+4. Repeat the test error above: its stack trace now shows the source files and lines.
+
+### Logs off the server (Better Stack Logs, CD-102)
+
+Container logs live in `docker compose logs` on the server (20 MB x 5 per container). To keep them
+searchable when a container is recreated or the server is lost, and to be alerted on errors:
+1. In Better Stack, **Telemetry → Sources → Connect source**, platform **Vector**, data region EU.
+   Note its **ingesting host** and **source token**.
+2. In `/opt/crm/.env` add
+   ```
+   COMPOSE_PROFILES=logs
+   BETTERSTACK_LOGS_HOST=<ingesting host, without https://>
+   BETTERSTACK_LOGS_TOKEN=<source token>
+   ```
+   then `docker compose up -d`. This starts the `logs` service (Vector, `infra/logs/vector.yaml`),
+   which reads the containers' log files read-only and sends new lines. The first `up -d` after
+   this change also recreates the other containers once, for the log labels (a few seconds).
+3. Check the source in Better Stack shows lines from `api`, `worker`, `frontend` and `postgres`
+   (field `service`). The API's and worker's lines come as fields (`level`, `msg` as `message`,
+   `req.method`, `req.url`, `res.statusCode`, `responseTime`).
+4. Set the retention (7–30 days) and add an alert: `service` is `api` or `worker` and
+   `level >= 50` (error and fatal) → email. Warnings such as "Live updates: database listener
+   lost" are `level = 40`; add an alert for those too if you want them.
+
+What leaves the server: request logs carry no authorization, cookie or referer headers, no query
+strings and no invitation tokens (`backend/src/infrastructure/logging`), the same as error reports.
+To stop shipping, remove `COMPOSE_PROFILES=logs` and run `docker compose up -d --remove-orphans`.
+
 ## 9. Staging
 
 Staging runs the same images, compose file and scripts as production, on the **same server**, as

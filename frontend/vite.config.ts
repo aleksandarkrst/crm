@@ -1,4 +1,5 @@
 import { Agent } from 'node:http';
+import { sentryVitePlugin } from '@sentry/vite-plugin';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
@@ -21,8 +22,31 @@ const apiAgent = new Agent({ keepAlive: true, maxSockets: 32 });
 
 const proxy = { '/api': { target: apiTarget, agent: apiAgent } };
 
+/**
+ * Readable stack traces in Sentry (CD-102): when the image build has a SENTRY_AUTH_TOKEN (a build
+ * secret, never in the image), the build writes source maps, uploads them to the frontend project
+ * for this release (VITE_APP_VERSION, the same one Sentry.init reports) and deletes them, so they
+ * are never served. Without a token nothing changes.
+ */
+const uploadSourceMaps = !!process.env.SENTRY_AUTH_TOKEN && !!process.env.VITE_SENTRY_DSN;
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    ...(uploadSourceMaps
+      ? [
+          sentryVitePlugin({
+            authToken: process.env.SENTRY_AUTH_TOKEN,
+            org: process.env.SENTRY_ORG,
+            project: process.env.SENTRY_PROJECT,
+            url: process.env.SENTRY_URL || 'https://de.sentry.io/',
+            release: { name: process.env.VITE_APP_VERSION || undefined },
+            sourcemaps: { filesToDeleteAfterUpload: ['./dist/**/*.map'] },
+            telemetry: false,
+          }),
+        ]
+      : []),
+  ],
   server: {
     // Overridable so several copies can run side by side (e.g. parallel worktrees).
     port: Number(process.env.VITE_PORT) || 5173,
@@ -33,6 +57,8 @@ export default defineConfig({
   // production policy (CD-92): CSP_PREVIEW="$(node scripts/csp.mjs policy)" npx vite preview
   preview: { proxy, headers: process.env.CSP_PREVIEW ? { 'Content-Security-Policy': process.env.CSP_PREVIEW } : undefined },
   build: {
+    // 'hidden': maps for the upload only, no sourceMappingURL comment in the served files.
+    sourcemap: uploadSourceMaps ? 'hidden' : false,
     rolldownOptions: {
       output: {
         // Vendor code in its own chunks (CD-24): it changes less often than the app, so browsers

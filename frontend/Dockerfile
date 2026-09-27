@@ -13,7 +13,14 @@ ARG VITE_SENTRY_DSN=
 ARG VITE_SENTRY_ENVIRONMENT=production
 ARG VITE_APP_VERSION=
 ENV VITE_AUTH_MODE=$VITE_AUTH_MODE VITE_OIDC_AUTHORITY=$VITE_OIDC_AUTHORITY VITE_OIDC_CLIENT_ID=$VITE_OIDC_CLIENT_ID VITE_OIDC_AUDIENCE=$VITE_OIDC_AUDIENCE VITE_SENTRY_DSN=$VITE_SENTRY_DSN VITE_SENTRY_ENVIRONMENT=$VITE_SENTRY_ENVIRONMENT VITE_APP_VERSION=$VITE_APP_VERSION
-RUN npm run build
+# Source maps go to Sentry when a token is given as a build secret (CD-102, see vite.config.ts);
+# the secret is only mounted for this step and never stored in a layer.
+ARG SENTRY_ORG=
+ARG SENTRY_PROJECT=
+RUN --mount=type=secret,id=sentry_auth_token,required=false \
+    SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_auth_token 2>/dev/null || true)" \
+    SENTRY_ORG="$SENTRY_ORG" SENTRY_PROJECT="$SENTRY_PROJECT" npm run build \
+    && ! ls dist/assets/*.map >/dev/null 2>&1
 # The page's Content-Security-Policy, from the same variables (CD-92). Report-only until
 # CSP_ENFORCE=true (see docs/DEPLOYMENT.md).
 ARG CSP_ENFORCE=false

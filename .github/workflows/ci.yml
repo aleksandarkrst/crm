@@ -181,6 +181,12 @@ jobs:
             VITE_SENTRY_DSN=${{ vars.SENTRY_FRONTEND_DSN }}
             VITE_APP_VERSION=${{ github.sha }}
             CSP_ENFORCE=${{ vars.CSP_ENFORCE || 'false' }}
+            SENTRY_ORG=${{ vars.SENTRY_ORG }}
+            SENTRY_PROJECT=${{ vars.SENTRY_FRONTEND_PROJECT }}
+          # Source maps for Sentry (CD-102); empty = none uploaded. A build secret, not an arg, so it
+          # never lands in the image.
+          secrets: |
+            sentry_auth_token=${{ secrets.SENTRY_AUTH_TOKEN }}
           tags: ${{ env.IMAGE_PREFIX }}-frontend:${{ github.sha }},${{ env.IMAGE_PREFIX }}-frontend:latest
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
