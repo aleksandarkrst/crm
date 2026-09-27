@@ -1,17 +1,20 @@
 import 'reflect-metadata';
-import { NestFactory } from '@nestjs/core';
+import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { json, type NextFunction, type Request, type Response } from 'express';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { loadEnv } from './infrastructure/config/env';
+import { ErrorReportingFilter, initErrorTracking } from './infrastructure/monitoring';
 
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
+  initErrorTracking('api');
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
 
   app.useLogger(app.get(Logger));
+  app.useGlobalFilters(new ErrorReportingFilter(app.get(HttpAdapterHost).httpAdapter));
   app.setGlobalPrefix('api');
   // Requests arrive via cloudflared; trust its X-Forwarded-* headers for client IP and protocol.
   app.set('trust proxy', true);
