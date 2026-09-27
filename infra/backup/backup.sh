@@ -46,7 +46,8 @@ run_backup() {
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
   file="/backups/${PGDATABASE}-${stamp}.dump"
   echo "[backup] dumping ${PGDATABASE} → ${file}"
-  pg_dump --format=custom --no-owner --file="${file}.partial"
+  # With owners: the dump records that the pgboss schema belongs to the runtime role (CD-89).
+  pg_dump --format=custom --file="${file}.partial"
   mv "${file}.partial" "${file}"
   # A dump that cannot be listed is useless; fail loudly.
   pg_restore --list "${file}" >/dev/null
