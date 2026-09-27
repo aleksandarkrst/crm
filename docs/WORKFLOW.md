@@ -168,3 +168,15 @@ settings on GitHub, not in the code:
 For a **private** repository, GitHub enforces rulesets only on paid plans (GitHub Pro for a
 personal account, or Team for an organization). On the free plan the ruleset can be created but
 is not enforced; the rules then hold by agreement.
+
+## 10. Dependencies and CI supply chain
+
+- **Dependabot** (`.github/dependabot.yml`) opens pull requests every Monday for npm (backend,
+  frontend, e2e), GitHub Actions and Docker images. Minor and patch updates come grouped; review
+  and merge them like any other pull request (they don't need a Linear issue).
+- Turn on **Settings → Advanced Security → Dependabot alerts** (and security updates), so a
+  vulnerable dependency is reported as soon as it's published, not only when `npm audit` runs.
+- **Actions are pinned by full commit SHA** with the version in a comment
+  (`uses: owner/action@<sha> # v1.2.3`). A tag can be moved to other code; a SHA can't. This
+  matters most for the deploy step, which receives the production SSH key. Add new actions the
+  same way.

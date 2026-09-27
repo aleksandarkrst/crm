@@ -1,0 +1,39 @@
+# Weekly dependency updates (CD-95). Minor and patch updates are grouped into one pull request
+# per directory, so the queue stays reviewable; majors come one by one. Each pull request runs the
+# normal CI checks and is reviewed and merged like any other change.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directories: [/backend, /frontend, /e2e]
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 10
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Pinned to ~6.0 until the tooling supports TypeScript 7 (see CLAUDE.md).
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+
+  # Actions are pinned by commit SHA; Dependabot updates the SHA and the version comment.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    groups:
+      actions:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directories: [/backend, /frontend, /infra/backup]
+    schedule: { interval: weekly, day: monday }
+    ignore:
+      # A PostgreSQL major upgrade needs a dump and restore, not an image bump.
+      - dependency-name: postgres
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    ignore:
+      - dependency-name: postgres
+        update-types: [version-update:semver-major]
