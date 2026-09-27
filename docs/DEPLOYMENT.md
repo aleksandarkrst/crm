@@ -58,10 +58,16 @@ Never route `postgres` through the tunnel. It is only on the internal Docker net
 ## 4. Identity provider (OIDC)
 
 Any OIDC provider works. For example, in Auth0:
-- **API**: identifier = `OIDC_AUDIENCE` (e.g. `https://app.yourdomain.com/api`).
+- **API**: identifier = `OIDC_AUDIENCE` (e.g. `https://app.yourdomain.com/api`). Turn on
+  **Allow Offline Access**, so the app gets refresh tokens and sessions renew themselves instead
+  of ending after the 2-hour access token (CD-88).
 - **Single Page Application**: allowed callback `https://app.yourdomain.com/auth/callback`,
   logout URL `https://app.yourdomain.com`, web origin `https://app.yourdomain.com`.
-  Its client ID goes in `OIDC_CLIENT_ID`.
+  Its client ID goes in `OIDC_CLIENT_ID`. Under **Refresh Token Rotation** turn on **Allow
+  Refresh Token Rotation**, and under **Refresh Token Expiration** set an absolute lifetime
+  (e.g. 30 days) and an inactivity lifetime (e.g. 7 days). The `refresh_token` grant must stay on.
+  Without these, the app still works: when the token runs out it asks the user to sign in again
+  (in a popup, keeping their unsaved edits).
 - `OIDC_ISSUER` is the tenant URL, e.g. `https://your-tenant.eu.auth0.com/` (trailing slash as the provider issues it).
 - **Put the user's email in the access token.** Accepting a team invitation matches the invited
   address against the `email` claim of the access token (`backend/src/modules/identity/token.service.ts`).

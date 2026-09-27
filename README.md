@@ -137,7 +137,8 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   a template, generating a proposal on a deal and downloading it; the Team tab's invitation email
   status, Resend and Copy link, and the Notifications tab's settings surviving a reload (the worker must be
   running); two members in two browsers: a change appears for the other without a reload,
-  editing the same field at once explains the refused change, and the deal's change history.
+  editing the same field at once explains the refused change, and the deal's change history;
+  a session that ends mid-edit opens "Your session ended" and saves the edit after signing in again.
 
 Both suites create their own users and workspaces with unique emails, so they can run against
 the dev database without resetting it. The database must be migrated first.
