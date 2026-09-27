@@ -121,13 +121,32 @@ Browser ──HTTPS──► Cloudflare (DNS, TLS, WAF) ──Tunnel──► cl
 | Hetzner Cloud | VPS, Cloud Firewall | Running, 75 GB disk, 7 % used |
 | Cloudflare | DNS, TLS, Tunnel, WAF | Tunnel up; HSTS set by Cloudflare |
 | Auth0 | OIDC identity provider | In use, tenant `dev-yz7q4hukh2ycg4il`; Google login on Auth0 dev keys (see Auth0 tenant) |
-| GitHub + GHCR | Code, CI/CD, private images | Private repo `aleksandarkrst/crm` |
+| GitHub + GHCR | Code, CI/CD, private images | Private repo `aleksandarkrst/crm`, free plan (no branch protection); CI green |
 | Sentry (EU, `de.sentry.io`) | Errors: `crm-backend`, `crm-frontend` | Backend DSN set on the server; frontend DSN built into the live bundle (lazy `sentry` chunk); no unresolved issues in 14 days |
 | Better Stack | Uptime monitor, backup and disk heartbeats | Heartbeat URLs set on the server |
 | Off-site storage (rclone crypt remote `offsite-crypt:crm`) | Encrypted backup copies | Receiving dumps and file archives |
 | SMTP provider | Invitation, digest and assignment emails | **Not configured: `MAIL_DRIVER=log`, no `SMTP_URL`** |
 
 Not used: Supabase, Vercel, Redis, payments or billing providers, incoming webhooks.
+
+### GitHub (read with the `gh` CLI, 2026-09-27)
+
+- Repo `aleksandarkrst/crm`, private, on the free plan. Branches are deleted after merge.
+- **No branch protection is possible**: branch protection and rulesets need GitHub Pro for a private
+  repo (the API answers 403). Anyone with write access can push to `main`, and a push to `main`
+  deploys to production. Every commit on `main` since 24 Sep came through a PR; the 25 direct
+  pushes before that predate automatic deploys (CD-6, 27 Sep).
+- **Environment `production`**: no required reviewers, no wait timer, no branch policy.
+- **Secrets** (names only): `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `SENTRY_FRONTEND_DSN`.
+  **Variables**: `DEPLOY_ENABLED`, `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_AUDIENCE`,
+  `SENTRY_FRONTEND_DSN`. The workflow reads the DSN from the variable; the secret of the same name
+  is unused. `AUTH_MODE` is not set and falls back to `oidc`.
+- **Actions**: default `GITHUB_TOKEN` is read-only; jobs raise it only as needed
+  (`packages: write` for the image push). Actions are referenced by major tag, not commit SHA,
+  including the third-party `appleboy/ssh-action@v1`, which receives the deploy SSH key.
+- **Runs**: 51 runs so far, 48 succeeded, 2 were cancelled (superseded), 1 failed (e2e and integration
+  on a PR branch that was fixed before merge). Every deploy from `main` succeeded.
+- **Dependabot**: alerts are disabled and there is no `.github/dependabot.yml`.
 
 ## Hosting, environments and deployment
 
@@ -178,9 +197,7 @@ check. Also once before every deploy's migrations.
 
 ## Not checked in Phase 1
 
-- **GitHub Actions history, branch protection, secrets and variables**: the repo is private, the
-  `gh` CLI isn't installed, and the reconnected GitHub connector exposes no tools to this session
-  yet. `SENTRY_FRONTEND_DSN` is set as a variable (confirmed by the user and by the live bundle).
+- **GitHub branch protection and rulesets**: the API refuses both on a private repo without GitHub Pro (HTTP 403), so none can exist. Secret scanning status is not reported for the same reason.
 - **Cloudflare** (WAF rules, Access policies, tunnel config): connected by the user, but no Cloudflare tools are loaded in this session yet.
 - **Better Stack** (monitor and heartbeat state): no access.
 
