@@ -291,6 +291,26 @@ Record pass/fail and relevant non-secret output for each section. If any check f
 `DEPLOY_ENABLED` unset or `false`, retain the failing container logs, and fix the production path
 before enabling automatic deploys.
 
+### Content-Security-Policy and HSTS (CD-92)
+
+nginx sends `Strict-Transport-Security: max-age=15552000` (6 months, no preload) and a
+Content-Security-Policy on the app page and its files. The policy is generated when the frontend
+image is built (`frontend/scripts/csp.mjs`) from the same variables as the bundle, so it names the
+exact sign-in provider (`OIDC_ISSUER`) and Sentry hosts. It allows only this site's own scripts,
+Google Fonts, the provider and Sentry, and forbids frames, plugins and being framed.
+
+It starts as **report-only** (`Content-Security-Policy-Report-Only`): the browser reports what the
+policy would block (to the frontend Sentry project, as "CSP" issues) but blocks nothing. To enforce
+it:
+1. After a deploy, sign in, sign out, generate and download a document, and leave the app open
+   past a token renewal. Check Sentry for CSP reports over a few days of normal use.
+2. If there are none (or only from browser extensions), set the repository **variable**
+   `CSP_ENFORCE` to `true` and redeploy. The next image sends `Content-Security-Policy`.
+3. If something then breaks, set it back to `false` and redeploy.
+
+To try a policy locally with the built app: `cd frontend && npm run build`, then
+`CSP_PREVIEW="$(node scripts/csp.mjs policy)" npx vite preview` (it enforces it).
+
 ## 8. Monitoring and alerts
 
 Three things tell you something is wrong before a user does (CD-8). Set up alert delivery (email,

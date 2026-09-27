@@ -55,6 +55,11 @@ export function useBrowser() {
       await page.setViewport({ width: 1400, height: 1100 });
       page.setDefaultTimeout(TIMEOUT);
       page.on('pageerror', (e) => state.errors.push(`${name}: ${e.message}`));
+      // Anything a Content-Security-Policy blocks counts as an error too (CD-92: run the suite
+      // against `vite preview` with CSP_PREVIEW to check the production policy).
+      page.on('console', (m) => {
+        if (/Content Security Policy/i.test(m.text())) state.errors.push(`${name}: ${m.text()}`);
+      });
       page.on('dialog', (d) => void d.accept());
       state.pages.push({ name, page });
       return page;

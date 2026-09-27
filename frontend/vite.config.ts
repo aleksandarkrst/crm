@@ -29,7 +29,9 @@ export default defineConfig({
     // Same-origin in dev too: the browser calls /api, Vite forwards to the local backend.
     proxy,
   },
-  preview: { proxy },
+  // CSP_PREVIEW: serve the built app with this Content-Security-Policy enforced, to check the
+  // production policy (CD-92): CSP_PREVIEW="$(node scripts/csp.mjs policy)" npx vite preview
+  preview: { proxy, headers: process.env.CSP_PREVIEW ? { 'Content-Security-Policy': process.env.CSP_PREVIEW } : undefined },
   build: {
     rolldownOptions: {
       output: {
