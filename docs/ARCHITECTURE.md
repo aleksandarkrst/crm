@@ -321,8 +321,11 @@ fields; anyone in the workspace generates a document on a deal from one and down
   generated in code (`starterTemplate()`), so it always matches the fields.
 - **Upload** (`POST /api/crm/document-templates`, multipart `file`, `name`, `docType`; owners and
   admins): `.docx` only, at most 5 MB (multer's limit answers 413), not empty, a real Word zip that
-  unpacks to at most 60 MB, and a template docxtemplater can compile (an unclosed loop is a 400 with
-  the reason). `POST …/scan` runs the same checks and returns the fields without saving (the
+  unpacks to at most 60 MB in at most 2,000 parts, and a template docxtemplater can compile (an unclosed loop is a 400 with
+  the reason). The 60 MB is measured by inflating every part with a capped zlib before PizZip
+  reads it, not taken from the sizes the zip claims, which a crafted file can forge (CD-104); the
+  worker runs the same check before rendering. The api and worker containers also have memory
+  limits (`API_MEM_LIMIT`, `WORKER_MEM_LIMIT`, 768 MB by default). `POST …/scan` runs the same checks and returns the fields without saving (the
   dialog's "Parameters found"). `GET …/starter` is the starter template; `GET …/:id/file`
   downloads a template; `DELETE …/:id` deletes it and its file.
 - **Generate** (`POST /api/crm/deals/:id/documents` `{ templateId, name? }`, any member): inserts a
