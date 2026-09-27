@@ -21,11 +21,14 @@ DISK_ALERT_PERCENT="${DISK_ALERT_PERCENT:-85}"
 DISK_CHECK_MINUTES="${DISK_CHECK_MINUTES:-60}"
 
 # heartbeat <url> ok|fail <message>. A monitor that can't be reached must never fail a backup.
+# Better Stack takes the message as JSON (it rejects a plain-text body with 400); the messages
+# are this script's own and contain no quotes.
 heartbeat() {
   [ -n "$1" ] || return 0
   url="$1"
   [ "$2" = ok ] || url="${1%/}/fail"
-  curl -fsS -m 10 --retry 3 -o /dev/null --data-raw "$3" "$url" || echo "[backup] WARNING: could not reach the heartbeat monitor"
+  curl -fsS -m 10 --retry 3 -o /dev/null -H 'Content-Type: application/json' --data-raw "{\"message\":\"$3\"}" "$url" \
+    || echo "[backup] WARNING: could not reach the heartbeat monitor"
 }
 
 # The /backups volume lives on the server's disk, so its usage is the disk's.
