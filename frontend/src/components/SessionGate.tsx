@@ -131,6 +131,9 @@ function Centered({ title, sub, children }: { title: string; sub?: string; child
           {sub && <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 4 }}>{sub}</div>}
         </div>
         {children}
+        <a href="/privacy.html" style={{ fontSize: 12, color: 'var(--muted-2)', alignSelf: 'center' }}>
+          Privacy policy
+        </a>
       </div>
     </div>
   );
