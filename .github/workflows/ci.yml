@@ -185,11 +185,23 @@ jobs:
     needs: [images]
     runs-on: ubuntu-latest
     environment: production
+    permissions: { contents: read, packages: read }
     steps:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1
+        env:
+          # The images are private. The job's token logs the server in to GHCR for this pull
+          # only and expires with the job, so no registry password lives on the server.
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: bash /opt/crm/scripts/deploy.sh ${{ github.sha }}
+          envs: GHCR_USER,GHCR_TOKEN
+          script: |
+            printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin || exit 1
+            status=0
+            bash /opt/crm/scripts/deploy.sh ${{ github.sha }} || status=$?
+            docker logout ghcr.io
+            exit $status

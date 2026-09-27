@@ -126,6 +126,19 @@ Repository **variables**:
 - `DEPLOY_ENABLED=true` (deploys are skipped until you set it)
 - `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_AUDIENCE`
 
+The server also needs access to GitHub, because `deploy.sh` fetches the commit it deploys:
+- **Fetching the repo:** a read-only **deploy key** (`Settings → Deploy keys`, "Allow write access" off) whose private key is `/home/deploy/.ssh/crm_github`. Point git at it in `/home/deploy/.ssh/config`:
+  ```
+  Host github.com
+    User git
+    IdentityFile ~/.ssh/crm_github
+    IdentitiesOnly yes
+  ```
+  Check it with `ssh -T git@github.com` as `deploy`: it should greet you by the repository name.
+- **Pulling images:** nothing to set up. The images are private, so the `deploy` job logs the server in to GHCR with the job's own token, which expires when the job ends, and logs out again after the deploy. A manual `docker compose pull` on the server needs its own `docker login ghcr.io` with a token that has `read:packages`.
+
+Use a separate key pair for `DEPLOY_SSH_KEY`, not a personal key, so it can be revoked on its own.
+
 The first deploy: merge an approved pull request to `main`, or run the workflow manually on `main` with `verify_images` disabled. Watch it with `docker compose logs -f api worker` on the server.
 
 ### Verify Docker images before merging
