@@ -11,6 +11,11 @@ workflow. `deploy.sh`:
 5. restarts the stack
 6. waits for `/api/health/ready`
 
+If any step fails, it puts the previous version back by itself: it checks out the previous commit,
+pins its `APP_VERSION` in `.env` again and, if the new containers had already started, starts the
+previous images and waits for them to be ready. The deploy still exits with an error, so the CI run
+goes red. Migrations that already ran stay applied (see [Rollback](#operations-cheat-sheet)).
+
 ## 1. Server (Hetzner Cloud)
 
 1. Create a server: **Ubuntu 26.04 LTS**, CX22 or larger, and add your SSH key.
@@ -442,9 +447,22 @@ gh workflow run promote.yml               # (from your machine) staging's commit
 docker compose exec postgres psql -U app_admin app
 ```
 
-**Rollback:** run `bash scripts/deploy.sh <previous-sha>`. Migrations should be backward-compatible
-(add columns before code uses them, drop them one release later). A destructive migration
-can't be undone this way, so restore the pre-deploy backup instead.
+**Automatic rollback:** when a deploy fails, `deploy.sh` restores the previous version itself (the
+log ends with `rolled back — <sha> is live again`). Check the failed run's log, fix the cause on a
+branch, and merge again. If the log says `ROLLBACK FAILED`, the previous version didn't come up
+either: follow the manual rollback below.
+
+**Manual rollback** (a bad version passed the readiness check, or the automatic rollback failed):
+1. Find the last good SHA: the previous successful **deploy** run under GitHub → Actions → CI / CD,
+   or `git log --oneline` on `main`. Its image is still in the registry.
+2. Either re-run that commit's deploy job from GitHub (Actions → the run → **Re-run jobs**), or on
+   the server run `bash scripts/deploy.sh <good-sha>`.
+3. Run `bash scripts/verify-production.sh`.
+
+Migrations are not undone by either rollback. They must be backward-compatible, so the previous
+image still works on the new schema (the rule is in [WORKFLOW.md](WORKFLOW.md#7-from-main-to-production)).
+Restore the pre-deploy backup (`/backups`, taken by every deploy) only when a migration destroyed or
+corrupted data, because it also throws away everything written since the deploy.
 
 **When to outgrow one server:** once backups, restore tests and monitoring are routine and load
 grows, move PostgreSQL to its own server or a managed service. Change `DATABASE_URL` and
