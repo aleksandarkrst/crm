@@ -1,8 +1,8 @@
 # Architecture audit (CD-87)
 
 Phase 1 of the production readiness audit: a map of the system as it is on 2026-09-27, checked
-against the code on `main` (`1eed43f`) and the live production server. Findings and scores follow
-in later phases (see the end of this file).
+against the code on `main` (`1eed43f`) and the live production server. Findings, scores and fixes
+are at the end of this file.
 
 ## At a glance
 
@@ -119,7 +119,7 @@ Browser ──HTTPS──► Cloudflare (DNS, TLS, WAF) ──Tunnel──► cl
 | Service | Use | Status in production (checked 2026-09-27) |
 |---|---|---|
 | Hetzner Cloud | VPS, Cloud Firewall | Running, 75 GB disk, 7 % used |
-| Cloudflare | DNS, TLS, Tunnel, WAF | Tunnel up; HSTS set by Cloudflare |
+| Cloudflare | DNS, TLS, Tunnel, WAF | Tunnel up; no HSTS from Cloudflare (only `/api` sends it, via helmet) |
 | Auth0 | OIDC identity provider | In use, tenant `dev-yz7q4hukh2ycg4il`; Google login on Auth0 dev keys (see Auth0 tenant) |
 | GitHub + GHCR | Code, CI/CD, private images | Private repo `aleksandarkrst/crm`, free plan (no branch protection); CI green |
 | Sentry (EU, `de.sentry.io`) | Errors: `crm-backend`, `crm-frontend` | Backend DSN set on the server; frontend DSN built into the live bundle (lazy `sentry` chunk); no unresolved issues in 14 days |
@@ -201,6 +201,80 @@ check. Also once before every deploy's migrations.
 - **Cloudflare** (WAF rules, Access policies, tunnel config): connected by the user, but no Cloudflare tools are loaded in this session yet.
 - **Better Stack** (monitor and heartbeat state): no access.
 
-## Findings
+## Findings (Phase 2 and 3, 2026-09-27)
 
-Phase 2 (audit) and Phase 3 (fixes) are added below as they are completed.
+Checked against the code on `main` (`1eed43f`), the live server (read-only), the live database
+(read-only queries in read-only transactions), Auth0, GitHub, Sentry and the public site. Every
+finding is logged in Linear (project CRM, milestone "6 - Go live").
+
+### Scores
+
+| Area | Score | Why |
+|---|---|---|
+| A. Architecture and code logic | 8/10 | Clean modular monolith, zod validation and UUID checks on every route, consistent patterns; the gaps are in session handling and one job edge case. |
+| B. Security | 6/10 | Auth, tenant isolation (guard + forced RLS + composite keys) and input handling are strong; weak spots are around them: no branch protection, missing page headers (fixed), no CSP, Auth0 dev keys, an unpinned deploy action. |
+| C. Database | 8/10 | RLS forced on all 20 tenant tables, migrations complete and in sync with the live schema; foreign-key indexes were missing (fixed), no statement timeouts. |
+| D. Backups and recovery | 4/10 | Daily encrypted off-site backups with heartbeats exist, but a restore breaks the job queue, the recovery point is 24 h, and the off-site copies can be deleted from the server. |
+| E. Health and observability | 7/10 | Backend Sentry, health and readiness checks, uptime and heartbeat alerts all work; frontend error tracking is unproven and logs are not kept off the server. |
+| F. Operations, CI/CD, environments | 5/10 | CI runs lint, types, unit, integration and browser tests on every PR; but nothing enforces review before production, there is no staging, a failed deploy doesn't roll back, Dependabot is off. |
+| G. Processes and workflows | 5/10 | Jobs are transactional, retried and idempotent where it matters; but production sends no email while the UI says "Email sent", and after 2 hours edits are discarded. |
+| H. Performance | 7/10 | Small bundles, paginated and indexed API; the client loads whole workspaces, which will be the first thing to slow down. |
+
+### All findings
+
+| Severity | Area | Finding | Status | Linear |
+|---|---|---|---|---|
+| High | Security / G | Sessions end after 2 hours; later edits are discarded with no sign-in prompt | Open (proposal) | CD-88 |
+| High | Backups | Restoring a backup breaks the job queue (`--no-owner` drops the pgboss owner; reproduced) | Open (proposal) | CD-89 |
+| High | Infrastructure | Nothing stops an unreviewed push to `main` from deploying (no branch protection on GitHub Free, no environment reviewers) | Open (decision) | CD-90 |
+| High | Processes | Production sends no email (`MAIL_DRIVER=log`), yet the Team tab shows "Email sent" | Open (comment) | CD-84 |
+| Medium | Security | App page served without X-Frame-Options, nosniff and Referrer-Policy; `/api` had conflicting duplicates | **Fixed** `3cde90e` | CD-91 |
+| Medium | Security | No Content-Security-Policy and no HSTS on the app page | Open (proposal) | CD-92 |
+| Medium | Security | Auth0: Google login on development keys; implicit grant, unused M2M app | Open (proposal) | CD-93 |
+| Medium | Backups | 24 h recovery point, no point-in-time recovery, off-site copies deletable from the server | Open (proposal) | CD-94 |
+| Medium | Security / F | Deploy SSH key passed to a tag-pinned third-party action; Dependabot off; dev-only npm advisories | Open (proposal) | CD-95 |
+| Medium | Infrastructure | A failed deploy leaves the broken version running; rollback can't undo migrations | Open (proposal) | CD-96 |
+| Medium | Infrastructure | No staging environment | Open (decision) | CD-97 |
+| Medium | Performance | The client loads every record of every list at start-up and on live refreshes | Open (proposal) | CD-98 |
+| Low | Database | Foreign keys without indexes on deals, deal contacts, lines and tasks | **Fixed** `7e661d2` (migration 0023, not applied yet) | CD-99 |
+| Low | Bug | A document can stay "generating" forever after a worker restart mid-job | Open | CD-100 |
+| Low | Database | No statement or idle-transaction timeouts; audit log not append-only; migrations as superuser | Open (proposal) | CD-101 |
+| Low | Observability | Frontend Sentry has never received an event; logs only on the server | Open | CD-102 |
+| Low | Tech debt | Design demo data still ships in the frontend store | Partly fixed `0104a84` | CD-103 |
+| Low | Security | Template upload has no limit on unzipped size (admins only) | Open | CD-104 |
+
+### Verified and fine
+
+- Every route needs a valid bearer token except `/api/health*` and the dev login, which production
+  refuses; tenant routes check membership and role on every request; roles can't be raised past
+  the caller's own (owner-only rules for owners).
+- RLS enabled and forced on all 20 tenant tables in production, identical to the migrations; the
+  runtime role has no superuser or BYPASSRLS. All 23 migrations applied; the schema and migrations
+  are in sync (drizzle-kit generated nothing but the new indexes).
+- No XSS sinks (`dangerouslySetInnerHTML` unused), email HTML escaped, CSV export guards against
+  formula injection, user links forced to `https://`, file paths confined per tenant, invitation
+  tokens hashed and bound to the verified email.
+- `npm audit`: 0 vulnerabilities in production dependencies (backend and frontend); 4 moderate in
+  backend dev tooling (drizzle-kit → esbuild), not reachable in production.
+- No secrets in the repository; only placeholder values in `.env.example` files.
+- Jobs: none failed; digests idempotent per day; mail retries with backoff and alerts on the last
+  attempt; document generation marks failures with a readable reason. CSV import commits in
+  batches with a savepoint per row and reports failed rows.
+- Server: all containers healthy, 7 % disk used, Docker log rotation on, no errors in 24 h.
+
+### Fixes on this branch
+
+| Commit | Change | Checks |
+|---|---|---|
+| `3cde90e` | nginx: security headers on every page nginx serves, none duplicated on `/api` | nginx 1.29 container (`nginx -t`, headers per path); frontend lint and build |
+| `7e661d2` | Migration 0023: eight foreign-key indexes | Backend lint, typecheck, 71 unit tests, build; all 24 migrations on a fresh PostgreSQL 17; 237 integration tests |
+| `0104a84` | Remove unused demo constants from the store seed | Frontend lint and build |
+
+### Not checked
+
+- **Cloudflare** (WAF, firewall rules, Access, tunnel settings, whether HSTS or "Always use HTTPS"
+  is set at the zone): no Cloudflare tools in this session.
+- **Better Stack** (which monitors and heartbeats exist and who gets alerted): no access.
+- **Auth0 attack protection and MFA**: not readable by the connector.
+- **Hetzner** (Cloud Firewall rules, snapshots, bucket versioning and Object Lock): no access; the
+  firewall was taken from the bootstrap docs, not verified.
