@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { z } from 'zod';
 import { type AuthUser, CurrentUser, Public } from '../../shared/authorization';
+import { RateLimit } from '../../shared/rate-limit';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
 import { IdentityService } from './identity.service';
 import { TokenService } from './token.service';
@@ -27,6 +28,7 @@ export class IdentityController {
 
   /** Local development only (AUTH_MODE=dev): log in as any email, no password. */
   @Public()
+  @RateLimit('signIn')
   @Post('auth/dev-login')
   @HttpCode(200)
   async devLogin(@Body(new ZodPipe(DevLoginBody)) body: z.infer<typeof DevLoginBody>) {
@@ -39,6 +41,7 @@ export class IdentityController {
   }
 
   @Post('tenants')
+  @RateLimit('heavy')
   async createTenant(@CurrentUser() user: AuthUser, @Body(new ZodPipe(CreateTenantBody)) body: z.infer<typeof CreateTenantBody>) {
     return this.identity.createTenant(user.id, body.name, body.currency);
   }

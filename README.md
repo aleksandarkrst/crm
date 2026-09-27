@@ -155,7 +155,7 @@ npm run test:integration
 #   worker from this checkout uses too, in case it picks up a generation job first.
 
 # Browser tests: start the API, the worker and the UI, then run the suite
-cd backend && npm run build && PORT=3101 node dist/main.js                    # terminal 1
+cd backend && npm run build && PORT=3101 RATE_LIMIT_ENABLED=false node dist/main.js   # terminal 1 (the suite signs in more often than the rate limits allow)
 cd backend && node dist/worker.js                                             # terminal 1b (documents, emails)
 cd frontend && VITE_PORT=5174 VITE_API_PROXY=http://127.0.0.1:3101 npm run dev   # terminal 2
 cd e2e && npm ci && E2E_BASE_URL=http://localhost:5174 npm test                # terminal 3

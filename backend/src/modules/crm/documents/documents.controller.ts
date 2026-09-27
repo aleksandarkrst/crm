@@ -3,6 +3,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { memoryStorage } from 'multer';
 import { RequireTenant, Tenant, type TenantContext } from '../../../shared/authorization';
+import { RateLimit } from '../../../shared/rate-limit';
 import { UuidParam } from '../../../shared/validation/common';
 import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
 import { DOCX_MIME, MAX_TEMPLATE_BYTES, starterTemplate } from './docx';
@@ -60,6 +61,7 @@ export class DocumentsController {
 
   /** Checks a .docx and lists its merge fields without saving it. */
   @Post('document-templates/scan')
+  @RateLimit('heavy')
   @RequireTenant('admin')
   @HttpCode(200)
   @Upload()
@@ -69,6 +71,7 @@ export class DocumentsController {
 
   /** multipart/form-data: `file` (.docx), `name`, `docType`. */
   @Post('document-templates')
+  @RateLimit('heavy')
   @RequireTenant('admin')
   @Upload()
   createTemplate(@Tenant() ctx: TenantContext, @UploadedFile() file: UploadedDocx | undefined, @Body(new ZodPipe(CreateTemplate)) body: CreateTemplate) {
@@ -96,6 +99,7 @@ export class DocumentsController {
 
   /** Queues generation (202); poll GET deal-documents/:id until status is "ready" or "failed". */
   @Post('deals/:id/documents')
+  @RateLimit('heavy')
   @HttpCode(202)
   generate(@Tenant() ctx: TenantContext, @Param('id', Id) dealId: string, @Body(new ZodPipe(GenerateDocument)) body: GenerateDocument) {
     return this.documents.generate(ctx, dealId, body);

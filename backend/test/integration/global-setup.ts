@@ -56,6 +56,8 @@ export default async function setup(project: TestProject) {
     LOG_LEVEL: process.env.LOG_LEVEL || 'warn',
     DATABASE_URL: databaseUrl,
     AUTH_MODE: 'dev',
+    // Every test signs in fresh users from localhost, far past the sign-in limit (CD-18).
+    RATE_LIMIT_ENABLED: 'false',
     DEV_JWT_SECRET: process.env.DEV_JWT_SECRET || 'integration-tests-secret-at-least-32-characters',
     CORS_ORIGINS: '',
     STORAGE_DIR: storageDir,
