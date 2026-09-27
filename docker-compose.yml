@@ -132,8 +132,9 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD}
       # restore.sh hands the pgboss schema back to this role after a restore (CD-89).
       APP_DB_USER: ${APP_DB_USER}
-      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-6}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_WEEKLY_RETENTION_DAYS: ${BACKUP_WEEKLY_RETENTION_DAYS:-90}
       # Off-server copy via rclone (e.g. Hetzner Storage Box / Object Storage wrapped in an
       # rclone "crypt" remote so copies are encrypted). Leave empty to keep local copies only.
       BACKUP_RCLONE_REMOTE: ${BACKUP_RCLONE_REMOTE:-}

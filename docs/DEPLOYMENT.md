@@ -101,6 +101,37 @@ With `MAIL_DRIVER=log` nothing is delivered: emails only go to the worker's log.
   3. Store the crypt passphrases in your password manager. Without them the backups cannot be read.
 - Run a backup now: `docker compose run --rm backup once`.
 - A backup is also taken automatically before every deploy's migrations.
+- **How much can be lost (CD-94).** A dump runs every `BACKUP_INTERVAL_HOURS` (6 by default; older
+  `.env` files say 24, change it), so at most about 6 hours of work. If that is too much once
+  customers rely on it, the next step is continuous WAL archiving (pgBackRest or WAL-G to the same
+  bucket, point-in-time recovery to any second) or a managed PostgreSQL; both are decisions, not
+  set up.
+- **Retention.** Local and off-site daily copies: `BACKUP_RETENTION_DAYS` (14). Off-site also keeps
+  one copy a week under `weekly/` for `BACKUP_WEEKLY_RETENTION_DAYS` (90), for problems noticed
+  late.
+
+### Protect the off-site copies from the server (CD-94)
+
+`backup.sh` holds credentials that can delete, so root on the server (or a bug) could wipe the
+off-site copies too. Make the bucket keep what was deleted:
+
+1. Create the bucket with **Object Lock** enabled (it can only be turned on when the bucket is
+   created, and it turns on versioning). For an existing bucket, create a new one, copy the backups
+   over (`rclone copy offsite:old-bucket offsite:new-bucket`) and point `rclone.conf` at it.
+2. Set a **default retention** of 30 days in **governance** mode (compliance mode can't be shortened
+   even by you; switch to it once the setup has settled). Every uploaded version is then
+   undeletable for 30 days: a delete from the server only adds a delete marker.
+3. Add a **lifecycle rule** that expires noncurrent versions after 31 days, so deleted and pruned
+   backups don't pile up. It needs no prefix, which matters because the crypt remote encrypts
+   file and folder names.
+4. If the provider supports it, give the server a key that can write and list but not delete. If
+   not, Object Lock still protects every version for the lock period.
+5. Run `docker compose run --rm backup once` and check the upload works (some providers want a
+   checksum on uploads to locked buckets; rclone sends MD5).
+
+To recover a backup that was deleted or pruned, list old versions with
+`docker compose run --rm --entrypoint rclone backup lsl --s3-versions offsite-crypt:crm` and copy
+the one you need to `/backups/` (try this during a restore drill).
 
 ### Restore (practise this before you need it)
 
