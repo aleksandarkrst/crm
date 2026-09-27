@@ -3,7 +3,7 @@
  * a lead (deal) shows its company and primary contact inline, companies are derived from leads
  * plus companies without a deal, and people are primary contacts plus everyone else.
  */
-import { type ApiActivity, type ApiBonusRules, type ApiCompany, type ApiCustomField, type ApiDealLine, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiInvitation, type ApiMember, type ApiProduct, type ApiProfile, type ApiStageChange, type ApiWorkspace, ApiError, crmApi } from '../lib/api';
+import { type ApiActivity, type ApiBonusRules, type ApiCompany, type ApiCustomField, type ApiDealLine, type ApiDealRow, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiInvitation, type ApiMember, type ApiProduct, type ApiProfile, type ApiStageChange, type ApiWorkspace, ApiError, crmApi } from '../lib/api';
 import { initialsOf, localeFor, momentLabel, money, taskKey } from './selectors';
 import type { BonusRule, CatalogItem, CompanyExtra, CustomFieldDef, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, Profile, SegKey, StageChange, State, TeamMember, Workspace } from './types';
 
@@ -173,15 +173,79 @@ type Raw = { [K in Part]: Awaited<ReturnType<(typeof PARTS)[K]>> };
 let lastRaw: Raw | null = null;
 
 /**
- * Loads the workspace. With `only`, just those lists are read again and the others are taken
- * from the previous load (live updates); without it, everything is read.
+ * The lists a live update can re-read row by row (CD-98): `fetch` gets the rows named by a change
+ * hint (by id, or for lines and to-dos by deal), `key` says which hinted id a row belongs to, and
+ * `order` sorts the merged list the way the API does where screens show it in list order.
  */
-export async function loadWorkspace(only?: ReadonlySet<Part>): Promise<WorkspaceData> {
+type Rows = { fetch: (ids: string[]) => Promise<unknown[]>; key: (row: never) => string; order?: (rows: unknown[], raw: Raw) => unknown[] };
+const BY_ID: Partial<Record<Part, Rows>> = {
+  deals: {
+    fetch: (ids) => crmApi.deals(ids),
+    key: (r: ApiDealRow) => r.deal.id,
+    // As the API sorts them: by stage position, then most recently changed first.
+    order: (rows, raw) => {
+      const position = new Map<string, number>();
+      for (const f of raw.funnels) for (const st of f.stages) position.set(st.id, st.position);
+      return [...(rows as ApiDealRow[])].sort(
+        (a, b) => (position.get(a.deal.stageId) ?? 0) - (position.get(b.deal.stageId) ?? 0) || b.deal.updatedAt.localeCompare(a.deal.updatedAt),
+      );
+    },
+  },
+  companies: { fetch: (ids) => crmApi.companies(ids), key: (r: ApiCompany) => r.id },
+  contacts: { fetch: (ids) => crmApi.contacts(ids), key: (r: ApiContact) => r.id },
+  products: { fetch: (ids) => crmApi.products(ids), key: (r: ApiProduct) => r.id, order: (rows) => [...(rows as ApiProduct[])].sort((a, b) => a.name.localeCompare(b.name)) },
+  lines: { fetch: (ids) => crmApi.dealLines(ids), key: (r: ApiDealLine) => r.dealId },
+  tasks: { fetch: (ids) => crmApi.dealTasks(ids), key: (r: ApiDealTask) => r.dealId },
+};
+/** More ids than this and the whole list is read instead (the API takes at most 200). */
+const MAX_IDS = 200;
+
+/**
+ * What a live update names per list: re-read only these rows (ids, or deal ids for `lines` and
+ * `tasks`). A list that is refreshed but has no entry here is read whole.
+ */
+export type Changed = Partial<Record<Part, ReadonlySet<string>>>;
+
+/** Replaces the rows of the hinted keys with the fresh ones, in place; new keys go at the end. */
+function merge(prev: unknown[], fresh: unknown[], ids: ReadonlySet<string>, key: (row: never) => string): unknown[] {
+  const groups = new Map<string, unknown[]>();
+  for (const row of fresh) {
+    const k = key(row as never);
+    groups.set(k, [...(groups.get(k) ?? []), row]);
+  }
+  const out: unknown[] = [];
+  const done = new Set<string>();
+  for (const row of prev) {
+    const k = key(row as never);
+    if (!ids.has(k)) out.push(row);
+    else if (!done.has(k)) {
+      done.add(k);
+      out.push(...(groups.get(k) ?? [])); // none: deleted (or no longer visible)
+    }
+  }
+  for (const [k, rows] of groups) if (!done.has(k)) out.push(...rows);
+  return out;
+}
+
+/**
+ * Loads the workspace. With `only`, just those lists are read again and the others are taken
+ * from the previous load (live updates); lists with ids in `changed` are re-read only for those
+ * rows. Without `only`, everything is read.
+ */
+export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed = {}): Promise<WorkspaceData> {
   const prev = only ? lastRaw : null;
   const keys = (Object.keys(PARTS) as Part[]).filter((k) => !prev || only!.has(k));
-  const fetched = await Promise.all(keys.map((k) => PARTS[k]()));
+  const partial = (k: Part) => (prev && BY_ID[k] && changed[k] && changed[k].size <= MAX_IDS ? [...changed[k]] : null);
+  const fetched = await Promise.all(keys.map((k) => (partial(k) ? BY_ID[k]!.fetch(partial(k)!) : PARTS[k]())));
   const raw = { ...prev } as Record<Part, unknown>;
-  keys.forEach((k, i) => (raw[k] = fetched[i]));
+  keys.forEach((k, i) => {
+    const ids = partial(k);
+    raw[k] = ids && prev ? merge(prev[k] as unknown[], fetched[i] as unknown[], new Set(ids), BY_ID[k]!.key) : fetched[i];
+  });
+  for (const k of keys) {
+    const order = BY_ID[k]?.order;
+    if (order && partial(k)) raw[k] = order(raw[k] as unknown[], raw as Raw);
+  }
   lastRaw = raw as Raw;
   const { funnels: apiFunnels, companies, contacts, deals: dealRows, products, lines: apiLines, tasks: apiTasks, team: apiTeam, workspace: apiWorkspace, profile: apiProfile, customFields: apiFields, bonus: apiBonus, onboarding } = lastRaw;
 

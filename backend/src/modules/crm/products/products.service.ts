@@ -1,12 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, eq, ilike, type SQL } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
 import { BILLING_FREQUENCIES, products } from '../../../shared/database/schema';
-import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
+import { ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 
 const decimal = (max: number) =>
   z
@@ -30,7 +30,7 @@ const ProductFields = z.object({
 });
 export const CreateProduct = ProductFields.partial().required({ name: true });
 export const UpdateProduct = nonEmptyPatch(ProductFields.partial());
-export const ProductsQuery = PaginationQuery.extend({ billingFrequency: z.enum(BILLING_FREQUENCIES).optional() });
+export const ProductsQuery = ListQuery.extend({ billingFrequency: z.enum(BILLING_FREQUENCIES).optional() });
 export type CreateProduct = z.infer<typeof CreateProduct>;
 export type UpdateProduct = z.infer<typeof UpdateProduct>;
 export type ProductsQuery = z.infer<typeof ProductsQuery>;
@@ -54,6 +54,7 @@ export class ProductsService {
     const filters: (SQL | undefined)[] = [];
     if (query.billingFrequency) filters.push(eq(products.billingFrequency, query.billingFrequency));
     if (query.q) filters.push(ilike(products.name, `%${query.q}%`));
+    if (query.ids) filters.push(inArray(products.id, query.ids));
     return this.database.withTenant(ctx.tenantId, (tx) =>
       tx.select().from(products).where(and(...filters)).orderBy(asc(products.name)).limit(query.limit).offset(query.offset),
     );

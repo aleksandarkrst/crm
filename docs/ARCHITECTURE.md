@@ -588,7 +588,12 @@ increasing per row, and the same moment as the history rows of that change.
 - **Merging** (`store.tsx`, live updates): a hint is skipped if this tab made the change; others
   are gathered for 300 ms, then only the lists they affect are re-read (`loadWorkspace(parts)`
   re-reads those and reuses the rest of the last load), and loaded timelines of the deals
-  involved. Like the reload after a failed save, it waits until this tab's own edits are saved
+  involved. Within a list, only the rows the hints name are read (CD-98): deals, companies,
+  contacts and products by `?ids=`, deal lines and to-dos by `?dealIds=` (at most 200; the API
+  returns only rows of the workspace that still exist). They replace their old copies in place
+  (a row that didn't come back was deleted), and deals and products are sorted as the API sorts
+  them. A hint without ids (over 50 rows changed), more than 200 ids, funnels and the checklist
+  are read whole, as is everything after a reconnect or on focus. Like the reload after a failed save, it waits until this tab's own edits are saved
   (debounced typing is not sent early) and discards its result if an edit started while it loaded,
   so it never overwrites what someone is typing. An edit based on an older version is caught by
   the API (409 above).

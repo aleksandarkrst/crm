@@ -7,7 +7,7 @@ import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
 import { BILLING_FREQUENCIES, dealLines, deals, DISCOUNT_KINDS, TAX_MODES } from '../../../shared/database/schema';
-import { optionalText, PaginationQuery } from '../../../shared/validation/common';
+import { type DealRowsQuery, optionalText } from '../../../shared/validation/common';
 import { currencyCode } from '../currency';
 import { dealTotals, isRecurring, type LineInput } from './deal-value';
 
@@ -83,9 +83,13 @@ export class DealLinesService {
   ) {}
 
   /** All lines of the workspace (Overview forecasts payments across every deal). */
-  list(ctx: TenantContext, page: PaginationQuery) {
+  list(ctx: TenantContext, page: DealRowsQuery) {
     return this.database.withTenant(ctx.tenantId, (tx) =>
-      tx.select().from(dealLines).orderBy(asc(dealLines.dealId), asc(dealLines.position), asc(dealLines.createdAt)).limit(page.limit).offset(page.offset),
+      tx
+        .select()
+        .from(dealLines)
+        .where(page.dealIds ? inArray(dealLines.dealId, page.dealIds) : undefined)
+        .orderBy(asc(dealLines.dealId), asc(dealLines.position), asc(dealLines.createdAt)).limit(page.limit).offset(page.offset),
     );
   }
 

@@ -52,6 +52,9 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
   return body as T;
 }
 
+/** `path` limited to some rows (`?ids=` or `?dealIds=`, at most 200; CD-98), or the whole list. */
+const only = (path: string, param: 'ids' | 'dealIds', ids?: readonly string[]) => (ids ? `${path}?${param}=${ids.join(',')}` : path);
+
 /** Fetches every page of a list endpoint (the API caps a page at 200 rows). */
 async function all<T>(path: string): Promise<T[]> {
   const out: T[] = [];
@@ -480,17 +483,17 @@ export const crmApi = {
   deleteStage: (funnelId: string, stageId: string, moveDealsTo?: string) =>
     api<ApiFunnel>(`/crm/funnels/${funnelId}/stages/${stageId}${moveDealsTo ? '?moveDealsTo=' + moveDealsTo : ''}`, { method: 'DELETE' }),
 
-  companies: () => all<ApiCompany>('/crm/companies'),
+  companies: (ids?: readonly string[]) => all<ApiCompany>(only('/crm/companies', 'ids', ids)),
   createCompany: (input: CompanyInput & { name: string }) => api<ApiCompany>('/crm/companies', { method: 'POST', json: input }),
   updateCompany: (id: string, input: CompanyInput, version?: string) => api<ApiCompany>(`/crm/companies/${id}`, { method: 'PATCH', json: input, headers: ifMatch(version) }),
   deleteCompany: (id: string) => api(`/crm/companies/${id}`, { method: 'DELETE' }),
 
-  contacts: () => all<ApiContact>('/crm/contacts'),
+  contacts: (ids?: readonly string[]) => all<ApiContact>(only('/crm/contacts', 'ids', ids)),
   createContact: (input: ContactInput & { fullName: string }) => api<ApiContact>('/crm/contacts', { method: 'POST', json: input }),
   updateContact: (id: string, input: ContactInput, version?: string) => api<ApiContact>(`/crm/contacts/${id}`, { method: 'PATCH', json: input, headers: ifMatch(version) }),
   deleteContact: (id: string) => api(`/crm/contacts/${id}`, { method: 'DELETE' }),
 
-  deals: () => all<ApiDealRow>('/crm/deals'),
+  deals: (ids?: readonly string[]) => all<ApiDealRow>(only('/crm/deals', 'ids', ids)),
   createDeal: (input: DealInput & { title: string; funnelId: string }) => api<ApiDeal>('/crm/deals', { method: 'POST', json: input }),
   updateDeal: (id: string, input: DealInput, version?: string) => api<ApiDeal>(`/crm/deals/${id}`, { method: 'PATCH', json: input, headers: ifMatch(version) }),
   deleteDeal: (id: string) => api(`/crm/deals/${id}`, { method: 'DELETE' }),
@@ -504,10 +507,10 @@ export const crmApi = {
   logActivity: (dealId: string, input: { channel: Channel; title: string; detail?: string | null }) =>
     api<ApiActivity>(`/crm/deals/${dealId}/activities`, { method: 'POST', json: input }),
 
-  dealLines: () => all<ApiDealLine>('/crm/deal-lines'),
+  dealLines: (dealIds?: readonly string[]) => all<ApiDealLine>(only('/crm/deal-lines', 'dealIds', dealIds)),
   saveDealProducts: (dealId: string, input: DealProductsInput) => api<{ lines: ApiDealLine[] }>(`/crm/deals/${dealId}/products`, { method: 'PUT', json: input }),
 
-  dealTasks: () => all<ApiDealTask>('/crm/deal-tasks'),
+  dealTasks: (dealIds?: readonly string[]) => all<ApiDealTask>(only('/crm/deal-tasks', 'dealIds', dealIds)),
   upsertPlaybookTask: (dealId: string, input: TaskInput & { stageId: string; checklistItemId: string }) =>
     api<ApiDealTask>(`/crm/deals/${dealId}/tasks/playbook`, { method: 'PUT', json: input }),
   createTask: (dealId: string, input: TaskInput & { stageId: string; label: string; position?: number; blocksAdvance?: boolean }) =>
@@ -515,7 +518,7 @@ export const crmApi = {
   updateTask: (id: string, input: TaskInput) => api<ApiDealTask>(`/crm/deal-tasks/${id}`, { method: 'PATCH', json: input }),
   deleteTask: (id: string) => api(`/crm/deal-tasks/${id}`, { method: 'DELETE' }),
 
-  products: () => all<ApiProduct>('/crm/products'),
+  products: (ids?: readonly string[]) => all<ApiProduct>(only('/crm/products', 'ids', ids)),
   createProduct: (input: ProductInput & { name: string }) => api<ApiProduct>('/crm/products', { method: 'POST', json: input }),
   updateProduct: (id: string, input: ProductInput) => api<ApiProduct>(`/crm/products/${id}`, { method: 'PATCH', json: input }),
   deleteProduct: (id: string) => api(`/crm/products/${id}`, { method: 'DELETE' }),

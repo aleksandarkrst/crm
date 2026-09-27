@@ -9,7 +9,7 @@ import { DatabaseService, type Tx } from '../../../shared/database/database.serv
 import { mapDbError } from '../../../shared/database/errors';
 import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, dealDocuments, type DealOutcome, deals, funnels, funnelStages, LOST_REASONS, tenants } from '../../../shared/database/schema';
 import { JobsService } from '../../../shared/events/jobs.service';
-import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
+import { ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { currencyCode } from '../currency';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
 import { assertOwnerIsMember, userNameOf } from '../owner';
@@ -47,7 +47,7 @@ export const UpdateDeal = nonEmptyPatch(
 );
 export const MoveDeal = z.object({ stageId: z.uuid() });
 export const MarkLost = z.object({ reason: z.enum(LOST_REASONS), note: optionalText(1000) });
-export const DealsQuery = PaginationQuery.extend({
+export const DealsQuery = ListQuery.extend({
   funnelId: z.uuid().optional(),
   stageId: z.uuid().optional(),
   companyId: z.uuid().optional(),
@@ -86,6 +86,7 @@ export class DealsService {
     if (query.stageId) filters.push(eq(deals.stageId, query.stageId));
     if (query.companyId) filters.push(eq(deals.companyId, query.companyId));
     if (query.ownerUserId) filters.push(eq(deals.ownerUserId, query.ownerUserId));
+    if (query.ids) filters.push(inArray(deals.id, query.ids));
     if (query.outcome === 'lost') filters.push(isNotNull(deals.lostAt));
     else if (query.outcome) filters.push(isNull(deals.lostAt), query.outcome === 'won' ? eq(funnelStages.isWon, true) : not(funnelStages.isWon));
     if (query.q) {

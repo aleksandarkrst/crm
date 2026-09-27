@@ -1,11 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
 import { activities, CHANNELS, dealTasks, funnelStages, memberships, users } from '../../../shared/database/schema';
-import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
+import { type DealRowsQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { userNameOf } from '../owner';
 
 const label = z.string().trim().max(200);
@@ -59,7 +59,7 @@ async function assertMember(tx: Tx, ctx: TenantContext, userId: string): Promise
 export class DealTasksService {
   constructor(private readonly database: DatabaseService) {}
 
-  list(ctx: TenantContext, page: PaginationQuery) {
+  list(ctx: TenantContext, page: DealRowsQuery) {
     return this.database.withTenant(ctx.tenantId, (tx) =>
       tx
         .select({
@@ -69,6 +69,7 @@ export class DealTasksService {
         })
         .from(dealTasks)
         .leftJoin(users, eq(users.id, dealTasks.doneByUserId))
+        .where(page.dealIds ? inArray(dealTasks.dealId, page.dealIds) : undefined)
         .orderBy(asc(dealTasks.dealId), asc(dealTasks.position), asc(dealTasks.createdAt))
         .limit(page.limit)
         .offset(page.offset),
