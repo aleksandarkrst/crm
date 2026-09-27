@@ -101,7 +101,7 @@ Browser ──HTTPS──► Cloudflare (DNS, TLS, WAF) ──Tunnel──► cl
 | Cloudflare | DNS, TLS, Tunnel, WAF | Tunnel up; HSTS set by Cloudflare |
 | Auth0 | OIDC identity provider | In use (issuer baked into the SPA) |
 | GitHub + GHCR | Code, CI/CD, private images | Private repo `aleksandarkrst/crm` |
-| Sentry (EU, `de.sentry.io`) | Errors: `crm-backend`, `crm-frontend` | Backend DSN set on the server; **frontend DSN not in the live bundle**; no unresolved issues in 14 days |
+| Sentry (EU, `de.sentry.io`) | Errors: `crm-backend`, `crm-frontend` | Backend DSN set on the server; frontend DSN built into the live bundle (lazy `sentry` chunk); no unresolved issues in 14 days |
 | Better Stack | Uptime monitor, backup and disk heartbeats | Heartbeat URLs set on the server |
 | Off-site storage (rclone crypt remote `offsite-crypt:crm`) | Encrypted backup copies | Receiving dumps and file archives |
 | SMTP provider | Invitation, digest and assignment emails | **Not configured: `MAIL_DRIVER=log`, no `SMTP_URL`** |
@@ -123,8 +123,8 @@ Not used: Supabase, Vercel, Redis, payments or billing providers, incoming webho
 - **Deploy** (`scripts/deploy.sh <sha>`): check out the SHA, pin `APP_VERSION` in `.env`, pull
   images, **back up**, run migrations, `docker compose up -d`, wait up to 60 s for `/api/health/ready`.
 - **Rollback**: `deploy.sh <previous-sha>` (application only; destructive migrations need a restore).
-- **Live state**: the server runs `4e5d5e4` (PR #16). `main` is at `1eed43f` (PR #17, heartbeat
-  JSON fix), which was **not deployed**. The CI history could not be read (see "Not checked").
+- **Live state** (rechecked 2026-09-27): the server runs `1eed43f`, the head of `main` (PR #17);
+  `APP_VERSION` matches. The first check had caught that deploy mid-way.
 
 ## Background jobs, cron and queues
 
@@ -158,9 +158,10 @@ check. Also once before every deploy's migrations.
 ## Not checked in Phase 1
 
 - **GitHub Actions history, branch protection, secrets and variables**: the repo is private, the
-  `gh` CLI isn't installed and the GitHub MCP connector isn't authorized.
+  `gh` CLI isn't installed, and the reconnected GitHub connector exposes no tools to this session
+  yet. `SENTRY_FRONTEND_DSN` is set as a variable (confirmed by the user and by the live bundle).
 - **Auth0 tenant configuration** (token claims, allowed callbacks, MFA): no access.
-- **Cloudflare** (WAF rules, Access policies, tunnel config): no access.
+- **Cloudflare** (WAF rules, Access policies, tunnel config): connected by the user, but no Cloudflare tools are loaded in this session yet.
 - **Better Stack** (monitor and heartbeat state): no access.
 
 ## Findings
