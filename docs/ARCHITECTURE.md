@@ -331,6 +331,10 @@ fields; anyone in the workspace generates a document on a deal from one and down
   workspace with `withTenant`, fills the template, stores the file, marks it `ready` and writes
   "Document generated · <name>" on the deal's timeline (from the template, by whom, what was left
   empty). A broken or missing template marks it `failed` with a readable reason; it isn't retried.
+  If the worker stops mid-job (a deploy, a crash), pg-boss delivers the job again and that retry
+  takes over the `running` document; a first delivery only claims `queued` ones (CD-100). As a
+  backstop, the nightly job (`reporting.nightly`) marks documents `running` for over an hour as
+  `failed` ("Generation was interrupted. Try again.").
   The UI polls `GET /api/crm/deal-documents/:id` until it is ready or failed.
   `GET /api/crm/deal-documents?dealId=` lists a deal's documents, `…/:id/file` downloads one, and
   `DELETE …/:id` (owners, admins and whoever generated it) deletes it with its file and writes
