@@ -1,8 +1,8 @@
 /**
- * Reference data and demo records from the Mini CRM v2 design. The UI runs on these until each
- * screen is switched to the API (see src/store/README.md).
+ * Reference data from the Mini CRM v2 design (pick lists, labels, sales scripts) and the store's
+ * starting state. No demo records: deals, funnels and products come from the API (CD-103).
  */
-import type { CatalogItem, Filters, Funnel, Lead, SegKey, Stage, State } from './types';
+import type { Filters, State } from './types';
 
 export const ACTIVITIES = ['Qualify & research', 'Personalized email', 'LinkedIn touch', 'WhatsApp check-in', 'Discovery call', 'Discovery workshop', 'Multi-thread to stakeholders', 'Send proposal + walkthrough', 'Procurement follow-up', 'Negotiation call', 'Kickoff scheduling'];
 export const CHANNELS = ['RS', 'EM', 'LI', 'WA', 'MT'] as const;
@@ -70,17 +70,6 @@ export const OBJECTIONS = [
   { q: '“We already have an agency.”', a: 'Position as the gap, not the replacement: one workstream your incumbent is not covering.' },
 ];
 
-export const CATALOG: CatalogItem[] = [
-  { id: 'c1', name: 'Brand identity sprint', description: '', unit: '', price: 6500, qty: 1, vat: 20, frequency: 'one_time', cycles: null },
-  { id: 'c2', name: 'Website design & build', description: '', unit: '', price: 14000, qty: 1, vat: 20, frequency: 'one_time', cycles: null },
-  { id: 'c3', name: 'Content retainer', description: '', unit: '', price: 1800, qty: 1, vat: 20, frequency: 'monthly', cycles: null },
-  { id: 'c4', name: 'Campaign management', description: '', unit: '', price: 2400, qty: 1, vat: 20, frequency: 'monthly', cycles: 6 },
-  { id: 'c5', name: 'Senior consulting', description: '', unit: 'hour', price: 95, qty: 10, vat: 20, frequency: 'one_time', cycles: null },
-  { id: 'c6', name: 'Cadence CRM licence', description: '', unit: 'seat', price: 1200, qty: 1, vat: 20, frequency: 'annually', cycles: null },
-  { id: 'c7', name: 'Analytics dashboard', description: '', unit: '', price: 3200, qty: 1, vat: 20, frequency: 'one_time', cycles: null },
-  { id: 'c8', name: 'Training workshop', description: '', unit: 'hour', price: 120, qty: 8, vat: 20, frequency: 'one_time', cycles: null },
-];
-
 export const CHAMP = [
   { key: 'C', name: 'Challenges', prompt: 'Is there a named problem we are proven at solving?' },
   { key: 'H', name: 'Authority', prompt: 'Are we talking to the person who signs, or a path to them?' },
@@ -89,71 +78,21 @@ export const CHAMP = [
 ] as const;
 export const CHAMP_LEVELS = [{ label: 'None', v: 0 }, { label: 'Weak', v: 8 }, { label: 'Partial', v: 17 }, { label: 'Strong', v: 25 }];
 
-const DEFAULT_PROB: Record<string, number> = { new: 10, touch: 15, qualify: 20, discovery: 30, stakeholders: 40, proposal: 50, review: 65, negotiation: 75, won: 100 };
-export function mkStage(id: string, name: string, activity: string, channel: Stage['channel'], doc: string, checklist: string[]): Stage {
-  return { id, name, activity, channel, doc, checklist, checklistIds: checklist.map((_, i) => `${id}-${i}`), prob: DEFAULT_PROB[id] ?? 25, won: id === 'won' };
-}
-
-export const BASE_FUNNELS: Record<SegKey, Funnel> = {
-  smb: {
-    id: 'smb',
-    label: 'SMB — CEO decides',
-    note: 'One decision maker. Short funnel, no procurement loop, proposal goes out right after the discovery call.',
-    stages: [
-      mkStage('new', 'New deal', 'Qualify & research', 'RS', 'None', ['Fit score entered', 'Website + socials reviewed']),
-      mkStage('touch', 'First touch', 'Personalized email', 'EM', 'None', ['Email sent', 'Reply or second touch logged']),
-      mkStage('discovery', 'Discovery call', 'Discovery call', 'MT', 'None', ['Goals captured', 'Budget range confirmed']),
-      mkStage('proposal', 'Proposal', 'Send proposal + walkthrough', 'EM', 'Proposal', ['Proposal sent', 'Walkthrough booked']),
-      mkStage('negotiation', 'Negotiation', 'Negotiation call', 'MT', 'None', ['Scope agreed', 'Start date agreed']),
-      mkStage('won', 'Won', 'Kickoff scheduling', 'MT', 'None', ['Kickoff booked']),
-    ],
-  },
-  ent: {
-    id: 'ent',
-    label: 'Enterprise — buying committee',
-    note: 'Multiple approvers. Extra stages for stakeholder mapping and procurement review; the proposal is written for people who were not in the room.',
-    stages: [
-      mkStage('new', 'New deal', 'Qualify & research', 'RS', 'None', ['Fit score entered', 'Account mapped']),
-      mkStage('qualify', 'Qualification', 'LinkedIn touch', 'LI', 'None', ['Mandate confirmed', 'Budget owner named']),
-      mkStage('discovery', 'Discovery workshop', 'Discovery workshop', 'MT', 'None', ['3+ stakeholders attended', 'Sponsor named']),
-      mkStage('stakeholders', 'Stakeholder map', 'Multi-thread to stakeholders', 'LI', 'None', ['Committee mapped', 'One-pager sent to each']),
-      mkStage('proposal', 'Proposal', 'Send proposal + walkthrough', 'EM', 'Proposal', ['Proposal sent', 'Walkthrough booked', 'Sponsor aligned']),
-      mkStage('review', 'Procurement review', 'Procurement follow-up', 'EM', 'None', ['Terms submitted', 'Legal contact engaged']),
-      mkStage('negotiation', 'Negotiation', 'Negotiation call', 'MT', 'None', ['Scope agreed', 'Signing path confirmed']),
-      mkStage('won', 'Won', 'Kickoff scheduling', 'MT', 'None', ['Kickoff booked']),
-    ],
-  },
-};
-
-/** Design demo deals (the API replaces them on load). */
-const DEMO_LEADS: Omit<Lead, 'outcome' | 'taxMode' | 'discounts' | 'installments'>[] = [
-  { id: 'l1', company: 'Bellhaus Interiors', contact: 'Ana Marković', role: 'Founder & CEO', initials: 'AM', email: 'ana@bellhaus.rs', phone: '+381 63 118 204', segment: 'smb', stage: 'touch', value: '€14,000', score: 82, stall: 1, industry: 'Furniture retail', hq: 'Novi Sad', size: '11–50 staff', source: 'Inbound web form', need: 'a brand refresh before the spring showroom launch, plus a PR push in design press.', constraint: 'the showroom opens in 14 weeks', decisionMaker: 'you as founder', discoveryDate: '12 Sep', headline: 'A brand that carries the new showroom', lines: [['Brand refresh & guidelines', '€8,000'], ['Launch PR programme', '€4,500'], ['Photography direction', '€1,500']], total: '€14,000' },
-  { id: 'l2', company: 'Nordvik Logistics', contact: 'Petar Ilić', role: 'Marketing Director', initials: 'PI', email: 'p.ilic@nordvik.com', phone: '+381 11 402 771', segment: 'ent', stage: 'discovery', value: '€62,000', score: 74, stall: 6, industry: 'Freight & logistics', hq: 'Belgrade', size: '1,000+ staff', source: 'Referral', need: 'a repositioning across six markets with one message the sales team can actually use.', constraint: 'procurement requires three approvals', decisionMaker: 'the CMO with CFO sign-off', discoveryDate: '03 Sep', headline: 'One story across six markets', lines: [['Positioning & messaging', '€24,000'], ['Market rollout toolkit', '€21,000'], ['Sales enablement programme', '€17,000']], total: '€62,000' },
-  { id: 'l3', company: 'Ferma Organik', contact: 'Jelena Pavlović', role: 'Owner', initials: 'JP', email: 'jelena@fermaorganik.rs', phone: '+381 64 255 190', segment: 'smb', stage: 'discovery', value: '€9,500', score: 68, stall: 2, industry: 'Food & beverage', hq: 'Šabac', size: '11–50 staff', source: 'Instagram DM', need: 'packaging that survives the shelf next to imported brands, and a retail PR story.', constraint: 'listing deadline with two chains in November', decisionMaker: 'you as owner', discoveryDate: '15 Sep', headline: 'Packaging that wins the shelf', lines: [['Packaging system', '€6,000'], ['Retail launch PR', '€3,500']], total: '€9,500' },
-  { id: 'l4', company: 'Adriatic Bank', contact: 'Marko Simić', role: 'Head of Brand', initials: 'MS', email: 'marko.simic@adriatic.bank', phone: '+381 11 330 550', segment: 'ent', stage: 'stakeholders', value: '€145,000', score: 91, stall: 3, industry: 'Banking', hq: 'Belgrade', size: '1,000+ staff', source: 'Outbound LinkedIn', need: 'a brand platform for the retail arm and a PR reset after last year\'s coverage.', constraint: 'regulatory review of all public messaging', decisionMaker: 'a committee of brand, retail and compliance', discoveryDate: '28 Aug', headline: 'Rebuilding trust in retail banking', lines: [['Brand platform', '€58,000'], ['Campaign development', '€49,000'], ['PR & reputation programme', '€38,000']], total: '€145,000' },
-  { id: 'l5', company: 'Voltek Energy', contact: 'Ivana Radić', role: 'Communications Lead', initials: 'IR', email: 'i.radic@voltek.eu', phone: '+381 21 660 118', segment: 'ent', stage: 'proposal', value: '€78,000', score: 79, stall: 1, industry: 'Renewable energy', hq: 'Novi Sad', size: '201–1,000 staff', source: 'Conference', need: 'an ESG communications programme that holds up with investors and local press at once.', constraint: 'investor day in March', decisionMaker: 'the CEO with board visibility', discoveryDate: '05 Sep', headline: 'An ESG story investors can verify', lines: [['Communications strategy', '€29,000'], ['Investor narrative & materials', '€27,000'], ['Local press programme', '€22,000']], total: '€78,000', docs: [{ name: 'Proposal — ESG communications', state: 'sent', meta: 'v1 · generated 16 Sep · viewed 4 times' }] },
-  { id: 'l6', company: 'Studio Kap', contact: 'Nikola Đurić', role: 'Managing Partner', initials: 'ND', email: 'nikola@studiokap.rs', phone: '+381 62 448 021', segment: 'smb', stage: 'new', value: '€6,800', score: 54, stall: 0, industry: 'Architecture', hq: 'Belgrade', size: '1–10 staff', source: 'Inbound web form', need: 'visibility in architecture press and a portfolio site that converts enquiries.', constraint: 'two-person marketing capacity', decisionMaker: 'you and your partner', discoveryDate: '—', headline: 'Press and portfolio, working together', lines: [['Press programme', '€4,300'], ['Portfolio narrative', '€2,500']], total: '€6,800' },
-  { id: 'l7', company: 'Meridian Pharma', contact: 'Sofija Nikolić', role: 'Brand Manager', initials: 'SN', email: 's.nikolic@meridian.pharma', phone: '+381 11 771 004', segment: 'ent', stage: 'negotiation', value: '€96,000', score: 85, stall: 2, industry: 'Pharmaceuticals', hq: 'Belgrade', size: '1,000+ staff', source: 'Referral', need: 'a patient-facing campaign that clears medical and legal review without losing its edge.', constraint: 'medical review on every asset', decisionMaker: 'brand, medical affairs and legal', discoveryDate: '22 Aug', headline: 'A campaign that clears review', lines: [['Campaign platform', '€41,000'], ['Asset production', '€35,000'], ['Review & compliance workflow', '€20,000']], total: '€96,000', docs: [{ name: 'Proposal — patient campaign', state: 'signed', meta: 'v2 · generated 02 Sep · signed 17 Sep' }] },
-  { id: 'l8', company: 'Hotel Sava', contact: 'Dragan Kostić', role: 'General Manager', initials: 'DK', email: 'gm@hotelsava.rs', phone: '+381 11 260 400', segment: 'smb', stage: 'proposal', value: '€22,000', score: 77, stall: 4, industry: 'Hospitality', hq: 'Belgrade', size: '51–200 staff', source: 'Inbound web form', need: 'direct bookings over OTA dependence, and a repositioning for the renovated wing.', constraint: 'renovation reopens in June', decisionMaker: 'you with the owner group', discoveryDate: '09 Sep', headline: 'Direct bookings, better guests', lines: [['Repositioning', '€11,000'], ['Direct booking campaign', '€8,000'], ['PR for reopening', '€3,000']], total: '€22,000', docs: [{ name: 'Proposal — direct bookings', state: 'draft', meta: 'v1 · generated 18 Sep · not sent' }] },
-  { id: 'l9', company: 'Kalemi Wines', contact: 'Teodora Vuković', role: 'Export Manager', initials: 'TV', email: 'teodora@kalemi.rs', phone: '+381 63 900 712', segment: 'smb', stage: 'won', value: '€18,500', score: 88, stall: 0, industry: 'Wine', hq: 'Vršac', size: '11–50 staff', source: 'Trade fair', need: 'an export-ready brand story for German and Austrian distributors.', constraint: 'distributor meetings in February', decisionMaker: 'you and the owner', discoveryDate: '18 Aug', headline: 'Export-ready, distributor-first', lines: [['Export brand story', '€11,500'], ['Trade materials', '€7,000']], total: '€18,500', docs: [{ name: 'Proposal — export brand', state: 'signed', meta: 'v1 · generated 26 Aug · signed 08 Sep' }] },
-];
-export const LEADS: Lead[] = DEMO_LEADS.map((l) => ({ ...l, outcome: l.stage === 'won' ? 'won' : 'open', taxMode: 'exclusive', discounts: [], installments: [] }));
-
 /** Pipeline board views: lost deals are hidden by default. */
 export const LOST_VIEWS = ['Open & won deals', 'Include lost deals', 'Lost deals only'] as const;
 export const DEFAULT_FILTERS: Filters = { audience: 'Audience', owner: 'Salesperson', dates: 'Any closing date', source: 'Source', stage: 'Stage', industry: 'Industry', stalled: 'Status', band: 'Value', lost: LOST_VIEWS[0] };
 
-const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
-
 export function initialState(): State {
   return {
-    funnels: clone(BASE_FUNNELS),
-    segment: 'smb',
-    leads: clone(LEADS),
+    // Business records start empty: the workspace's own come from the API before any screen
+    // renders (store/remote.ts), so nothing here can ever show as someone's data (CD-103).
+    funnels: {},
+    segment: '',
+    leads: [],
     extraCompanies: [],
     extraPeople: [],
     links: {},
-    catalog: CATALOG.map((c) => ({ ...c })),
+    catalog: [],
     dealLines: {},
     champ: {},
     tasks: {},
@@ -194,16 +133,16 @@ export function initialState(): State {
     showMerge: true,
     sent: false,
     newLeadOpen: false,
-    newLeadType: 'smb',
+    newLeadType: '',
     taskOpen: false,
     taskLeadId: '',
     taskEditId: null,
     contactOpen: false,
-    contactCompany: 'Bellhaus Interiors',
+    contactCompany: '',
     contactCompanyId: null,
     newContact: { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer', notes: '' },
     personaOpen: false,
-    personaBase: 'smb',
+    personaBase: '',
     templateOpen: false,
     templateType: 'Proposal',
 
