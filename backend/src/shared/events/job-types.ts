@@ -20,7 +20,7 @@ export interface JobPayloads {
   'notifications.digest-tick': Record<string, never>;
   /** One member's daily digest for one workspace and local date. `force` skips the "once a day" and "turned on" checks (dev trigger). */
   'notifications.daily-digest': { tenantId: string; userId: string; date: string; force?: boolean };
-  /** Scheduled nightly by the worker. Placeholder for reporting snapshots. */
+  /** Scheduled nightly by the worker: fails document generations that were interrupted (CD-100). Placeholder for reporting snapshots. */
   'reporting.nightly': Record<string, never>;
 }
 

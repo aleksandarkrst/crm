@@ -30,9 +30,10 @@ export class JobHandlers implements OnApplicationBootstrap {
       this.logger.log(`Deal won: ${deal?.title ?? dealId} (tenant ${tenantId}) — handover not implemented yet`);
     });
 
-    await this.jobs.work('crm.generate-document', ({ tenantId, documentId }) => this.documents.run(tenantId, documentId));
+    await this.jobs.work('crm.generate-document', ({ tenantId, documentId }, attempt) => this.documents.run(tenantId, documentId, attempt));
 
     await this.jobs.work('reporting.nightly', async () => {
+      await this.documents.failInterrupted();
       this.logger.log('Nightly reporting job ran (placeholder)');
     });
     await this.jobs.schedule('reporting.nightly', '0 2 * * *');

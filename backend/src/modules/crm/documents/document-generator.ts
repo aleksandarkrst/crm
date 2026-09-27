@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { StorageService } from '../../../infrastructure/storage/storage.service';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
+import type { JobAttempt } from '../../../shared/events/jobs.service';
 import { activities, companies, contacts, dealDocuments, dealLines, deals, documentTemplates, funnels, funnelStages, products, tenants, users } from '../../../shared/database/schema';
 import { renderTemplate, TemplateFileError } from './docx';
 import { documentKey } from './documents.service';
@@ -22,12 +23,19 @@ export class DocumentGenerator {
     private readonly storage: StorageService,
   ) {}
 
-  async run(tenantId: string, documentId: string): Promise<void> {
+  /**
+   * `attempt.retryCount` > 0 means pg-boss is delivering the job again: the earlier attempt
+   * failed or its worker stopped (a deploy, a crash) after marking the document `running`. That
+   * attempt is over, so this one takes the document over instead of leaving it generating
+   * forever (CD-100).
+   */
+  async run(tenantId: string, documentId: string, attempt: Pick<JobAttempt, 'retryCount'> = { retryCount: 0 }): Promise<void> {
+    const claimable = attempt.retryCount > 0 ? inArray(dealDocuments.status, ['queued', 'running']) : eq(dealDocuments.status, 'queued');
     const job = await this.database.withTenant(tenantId, async (tx) => {
       const [doc] = await tx
         .update(dealDocuments)
         .set({ status: 'running', error: null })
-        .where(and(eq(dealDocuments.id, documentId), eq(dealDocuments.status, 'queued')))
+        .where(and(eq(dealDocuments.id, documentId), claimable))
         .returning();
       if (!doc) return null; // deleted meanwhile, or already handled
       const [template] = doc.templateId ? await tx.select({ key: documentTemplates.storageKey }).from(documentTemplates).where(eq(documentTemplates.id, doc.templateId)) : [];
@@ -71,7 +79,33 @@ export class DocumentGenerator {
       );
     }
   }
+
+  /**
+   * Marks documents that have been `running` for over an hour as failed, in every workspace. The
+   * backstop for an interrupted generation whose retries ran out too (each attempt may run up to
+   * pg-boss's 15-minute expiry). Claiming a document is its last update before it finishes, so
+   * `updated_at` is when it started running. Runs in the nightly job.
+   */
+  async failInterrupted(): Promise<number> {
+    const workspaces = await this.database.db.select({ id: tenants.id }).from(tenants);
+    let failed = 0;
+    for (const { id } of workspaces) {
+      const rows = await this.database.withTenant(id, (tx) =>
+        tx
+          .update(dealDocuments)
+          .set({ status: 'failed', error: INTERRUPTED, completedAt: new Date() })
+          .where(and(eq(dealDocuments.status, 'running'), lt(dealDocuments.updatedAt, sql`now() - ${STUCK_AFTER}::interval`)))
+          .returning({ id: dealDocuments.id }),
+      );
+      failed += rows.length;
+    }
+    if (failed) this.logger.warn(`Marked ${failed} interrupted document generation(s) as failed`);
+    return failed;
+  }
 }
+
+const STUCK_AFTER = '1 hour';
+const INTERRUPTED = 'Generation was interrupted. Try again.';
 
 /** Everything the merge fields need, read with the tenant set (RLS applies). */
 async function loadSource(tx: Tx, tenantId: string, dealId: string): Promise<DocumentSource | null> {

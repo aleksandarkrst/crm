@@ -5,8 +5,11 @@
  */
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { beforeAll, describe, expect, inject, it } from 'vitest';
+import { Client } from 'pg';
+import { PgBoss } from 'pg-boss';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildDocx, docxText, MAX_TEMPLATE_BYTES, starterTemplate } from '../../src/modules/crm/documents/docx';
+import { DEFAULT_MIGRATION_DATABASE_URL } from './env';
 import { addMember, call, createTenant, firstFunnel, ok, productLine, saveProducts, type Session, signIn } from './helpers';
 
 let owner: Session;
@@ -240,6 +243,78 @@ describe('generating a document', () => {
     const theirFunnel = (await firstFunnel(outsider, otherTenant)).id;
     const theirDeal = await newDeal(outsider, otherTenant, theirFunnel);
     expect((await call('POST', `/crm/deals/${theirDeal.id}/documents`, { token: outsider.token, tenant: otherTenant, body: { templateId: template.id } })).status).toBe(400);
+  });
+});
+
+describe('an interrupted generation (CD-100)', () => {
+  // The worker stopping mid-job is simulated: the document is set back to "running" with SQL (as
+  // the owner) and the job is sent with pg-boss directly, as a first delivery or as a retry.
+  let db: Client;
+  let boss: PgBoss;
+  let template: Template;
+  let dealId: string;
+
+  beforeAll(async () => {
+    db = new Client({ connectionString: process.env.MIGRATION_DATABASE_URL || DEFAULT_MIGRATION_DATABASE_URL });
+    await db.connect();
+    boss = new PgBoss({ connectionString: inject('databaseUrl'), schema: 'pgboss', createSchema: false, supervise: false, schedule: false });
+    boss.on('error', () => {});
+    await boss.start();
+    template = await upload(owner, tenant, starterTemplate(), 'Proposal — interrupted');
+    dealId = (await newDeal(owner, tenant, funnelId)).id;
+  });
+  afterAll(async () => {
+    await boss?.stop({ graceful: false });
+    await db?.end();
+  });
+
+  /** A generated document, then put back to "running" as if its worker had died. */
+  async function leftRunning(since = 'now()'): Promise<string> {
+    const queued = await ok<Doc>('POST', `/crm/deals/${dealId}/documents`, { token: owner.token, tenant, body: { templateId: template.id } }, 202);
+    expect((await waitForDocument(owner, tenant, queued.id)).status).toBe('ready');
+    await db.query(`update deal_documents set status = 'running', storage_key = null, completed_at = null, updated_at = ${since} where id = $1`, [queued.id]);
+    return queued.id;
+  }
+
+  async function waitForJob(name: string, id: string) {
+    const deadline = Date.now() + 15_000;
+    for (;;) {
+      const job = await boss.getJobById(name, id);
+      if (job?.state === 'completed' || job?.state === 'failed') return job.state;
+      if (Date.now() > deadline) throw new Error(`Job ${name} ${id} still ${job?.state}; is the worker running?`);
+      await new Promise((r) => setTimeout(r, 150));
+    }
+  }
+
+  const status = async (id: string) => (await db.query(`select status, error from deal_documents where id = $1`, [id])).rows[0] as { status: string; error: string | null };
+
+  it('a retry takes over a document its earlier attempt left running', async () => {
+    const id = await leftRunning();
+    // Held back 2 s and marked as started once, so the worker gets it as a retry (retryCount 1).
+    const jobId = await boss.send('crm.generate-document', { tenantId: tenant, documentId: id, actorUserId: owner.userId }, { startAfter: 2 });
+    await db.query(`update pgboss.job set started_on = now() where name = 'crm.generate-document' and id = $1`, [jobId]);
+    const doc = await waitForDocument(owner, tenant, id);
+    expect(doc.status, doc.error ?? '').toBe('ready');
+    const file = await raw('GET', `/crm/deal-documents/${id}/file`, { token: owner.token, tenant });
+    expect(file.status).toBe(200);
+  });
+
+  it('a first delivery leaves a running document to the attempt that is running it', async () => {
+    const id = await leftRunning();
+    const jobId = await boss.send('crm.generate-document', { tenantId: tenant, documentId: id, actorUserId: owner.userId });
+    expect(await waitForJob('crm.generate-document', jobId!)).toBe('completed');
+    expect((await status(id)).status).toBe('running');
+    await db.query(`update deal_documents set status = 'failed' where id = $1`, [id]);
+  });
+
+  it('the nightly job fails documents running for over an hour, and only those', async () => {
+    const stuck = await leftRunning(`now() - interval '2 hours'`);
+    const recent = await leftRunning(`now() - interval '5 minutes'`);
+    const jobId = await boss.send('reporting.nightly', {});
+    expect(await waitForJob('reporting.nightly', jobId!)).toBe('completed');
+    expect(await status(stuck)).toEqual({ status: 'failed', error: 'Generation was interrupted. Try again.' });
+    expect((await status(recent)).status).toBe('running');
+    await db.query(`update deal_documents set status = 'failed' where id = $1`, [recent]);
   });
 });
 
