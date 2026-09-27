@@ -1,13 +1,23 @@
 import { Inject, Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import { Pool, type PoolConfig } from 'pg';
 import { ENV, type Env } from '../../infrastructure/config/config.module';
 import { requestActor } from './request-context';
 import * as schema from './schema';
 
 export type Database = NodePgDatabase<typeof schema>;
 export type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
+
+/** The runtime pool, with per-session time limits (CD-101). 0 leaves a limit off. */
+export function poolConfig(env: Pick<Env, 'DATABASE_URL' | 'DATABASE_POOL_MAX' | 'DATABASE_STATEMENT_TIMEOUT_MS' | 'DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS'>): PoolConfig {
+  return {
+    connectionString: env.DATABASE_URL,
+    max: env.DATABASE_POOL_MAX,
+    ...(env.DATABASE_STATEMENT_TIMEOUT_MS ? { statement_timeout: env.DATABASE_STATEMENT_TIMEOUT_MS } : {}),
+    ...(env.DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS ? { idle_in_transaction_session_timeout: env.DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS } : {}),
+  };
+}
 
 @Injectable()
 export class DatabaseService implements OnModuleDestroy {
@@ -19,7 +29,7 @@ export class DatabaseService implements OnModuleDestroy {
   readonly db: Database;
 
   constructor(@Inject(ENV) env: Env) {
-    this.pool = new Pool({ connectionString: env.DATABASE_URL, max: env.DATABASE_POOL_MAX });
+    this.pool = new Pool(poolConfig(env));
     this.db = drizzle(this.pool, { schema });
   }
 

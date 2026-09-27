@@ -169,6 +169,13 @@
       "when": 1790509978733,
       "tag": "0023_fk_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790514299166,
+      "tag": "0024_audit_logs_append_only",
+      "breakpoints": true
     }
   ]
 }

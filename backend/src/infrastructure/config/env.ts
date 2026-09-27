@@ -11,6 +11,11 @@ const EnvSchema = z
     // Owner connection: used only by migrations.
     MIGRATION_DATABASE_URL: z.string().url().optional(),
     DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
+    // Limits for the runtime connections (CD-101), in milliseconds; 0 turns one off. A runaway
+    // query, or a transaction a bug leaves open, would otherwise hold a pooled connection and its
+    // row locks until the process restarts. Migrations use their own connection, without limits.
+    DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(30_000),
+    DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(60_000),
 
     // "dev" issues local tokens from /api/auth/dev-login. "oidc" verifies tokens from an
     // external identity provider (Auth0, Clerk, Zitadel, Keycloak, Entra ID, ...).
