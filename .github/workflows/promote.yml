@@ -1,0 +1,50 @@
+# Promote to production (CD-105): deploys to production a commit that is already running on
+# staging and passed its smoke test there. Run it after checking the change on staging:
+#   Actions → Promote to production → Run workflow   (or: gh workflow run promote.yml)
+# The same images go out: the backend image is shared and the production frontend image was
+# built from the same commit.
+name: Promote to production
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Commit to promote (empty = what staging runs now)
+        required: false
+        default: ''
+
+jobs:
+  pick:
+    runs-on: ubuntu-latest
+    permissions: { deployments: read }
+    outputs:
+      sha: ${{ steps.pick.outputs.sha }}
+    steps:
+      - id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          WANTED: ${{ inputs.sha }}
+        run: |
+          # GitHub records every run of the staging deploy job as a deployment of its commit.
+          # Take the newest successful one (or the newest successful one of the requested commit).
+          for row in $(gh api "repos/$REPO/deployments?environment=staging&per_page=50" --jq '.[] | "\(.id):\(.sha)"'); do
+            id="${row%%:*}"; sha="${row#*:}"
+            if [ -n "$WANTED" ] && [ "${sha#"$WANTED"}" = "$sha" ]; then continue; fi
+            state="$(gh api "repos/$REPO/deployments/$id/statuses" --jq '.[0].state')"
+            if [ "$state" = success ]; then
+              echo "Promoting $sha (deployment $id on staging)"
+              echo "sha=$sha" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "::error::No successful staging deployment${WANTED:+ of $WANTED}. Only commits that passed staging can be promoted."
+          exit 1
+
+  deploy:
+    needs: [pick]
+    if: vars.DEPLOY_ENABLED == 'true'
+    uses: ./.github/workflows/deploy.yml
+    with: { environment: production, app_dir: /opt/crm, sha: '${{ needs.pick.outputs.sha }}', verify: true }
+    secrets: inherit
+    permissions: { contents: read, packages: read }
