@@ -1,13 +1,13 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { RequireTenant, Tenant, type TenantContext } from '../../../shared/authorization';
-import { PaginationQuery, UuidParam } from '../../../shared/validation/common';
+import { DealRowsQuery, UuidParam } from '../../../shared/validation/common';
 import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
 import { DealLinesService, SaveDealProducts } from './deal-lines.service';
 import { CreateExtraTask, DealTasksService, UpdateTask, UpsertPlaybookTask } from './deal-tasks.service';
 import { StageHistoryQuery, StageHistoryService } from './stage-history.service';
 
 const Id = new ZodPipe(UuidParam);
-const Page = new ZodPipe(PaginationQuery);
+const Page = new ZodPipe(DealRowsQuery);
 
 /** Deal products (lines), stage to-dos and stage history. */
 @Controller('crm')
@@ -21,7 +21,7 @@ export class DealWorkController {
 
   // ------------------------------------------------------------ deal lines
   @Get('deal-lines')
-  listLines(@Tenant() ctx: TenantContext, @Query(Page) page: PaginationQuery) {
+  listLines(@Tenant() ctx: TenantContext, @Query(Page) page: DealRowsQuery) {
     return this.lines.list(ctx, page);
   }
 
@@ -33,7 +33,7 @@ export class DealWorkController {
 
   // ------------------------------------------------------------ stage to-dos
   @Get('deal-tasks')
-  listTasks(@Tenant() ctx: TenantContext, @Query(Page) page: PaginationQuery) {
+  listTasks(@Tenant() ctx: TenantContext, @Query(Page) page: DealRowsQuery) {
     return this.tasks.list(ctx, page);
   }
 

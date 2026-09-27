@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { asc, count, eq, getTableColumns, ilike, or } from 'drizzle-orm';
+import { and, asc, count, eq, getTableColumns, ilike, inArray, or } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
@@ -7,7 +7,7 @@ import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
 import { companies, contacts, deals } from '../../../shared/database/schema';
-import { nonEmptyPatch, optionalText, type PaginationQuery } from '../../../shared/validation/common';
+import { type ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
 import { RecordHistoryService } from '../history/record-history.service';
 import { assertOwnerIsMember, userNameOf } from '../owner';
@@ -43,13 +43,13 @@ export class CompaniesService {
     private readonly changes: RecordHistoryService,
   ) {}
 
-  list(ctx: TenantContext, page: PaginationQuery) {
+  list(ctx: TenantContext, page: ListQuery) {
     const like = page.q ? `%${page.q}%` : undefined;
     return this.database.withTenant(ctx.tenantId, (tx) =>
       tx
         .select({ ...getTableColumns(companies), ownerName: userNameOf(companies.ownerUserId) })
         .from(companies)
-        .where(like ? or(ilike(companies.name, like), ilike(companies.industry, like), ilike(companies.hq, like)) : undefined)
+        .where(and(like ? or(ilike(companies.name, like), ilike(companies.industry, like), ilike(companies.hq, like)) : undefined, page.ids ? inArray(companies.id, page.ids) : undefined))
         .orderBy(asc(companies.name))
         .limit(page.limit)
         .offset(page.offset),

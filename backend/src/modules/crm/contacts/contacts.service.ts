@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, eq, getTableColumns, ilike, or, type SQL } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns, ilike, inArray, or, type SQL } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
@@ -7,7 +7,7 @@ import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
 import { BUYER_ROLES, contacts, deals } from '../../../shared/database/schema';
-import { nonEmptyPatch, optionalText, PaginationQuery } from '../../../shared/validation/common';
+import { ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
 import { RecordHistoryService } from '../history/record-history.service';
 import { assertOwnerIsMember, userNameOf } from '../owner';
@@ -26,7 +26,7 @@ export const CreateContact = z.object({
   notes: optionalText(2000),
 });
 export const UpdateContact = nonEmptyPatch(CreateContact.partial());
-export const ContactsQuery = PaginationQuery.extend({
+export const ContactsQuery = ListQuery.extend({
   companyId: z.uuid().optional(),
   buyerRole: z.enum(BUYER_ROLES).optional(),
 });
@@ -47,6 +47,7 @@ export class ContactsService {
     const filters: (SQL | undefined)[] = [];
     if (query.companyId) filters.push(eq(contacts.companyId, query.companyId));
     if (query.buyerRole) filters.push(eq(contacts.buyerRole, query.buyerRole));
+    if (query.ids) filters.push(inArray(contacts.id, query.ids));
     if (query.q) {
       const like = `%${query.q}%`;
       filters.push(or(ilike(contacts.fullName, like), ilike(contacts.email, like), ilike(contacts.jobTitle, like)));

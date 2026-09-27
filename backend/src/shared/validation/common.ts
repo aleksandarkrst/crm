@@ -9,6 +9,21 @@ export const PaginationQuery = z.object({
 });
 export type PaginationQuery = z.infer<typeof PaginationQuery>;
 
+/**
+ * `?ids=a,b,c`: only these rows (at most 200). A live update re-reads just the rows its change
+ * hint names instead of the whole list (CD-98). Rows that are gone are simply not returned.
+ */
+export const IdList = z
+  .string()
+  .transform((s) => s.split(',').filter(Boolean))
+  .pipe(z.array(z.uuid()).min(1).max(200));
+/** A list endpoint that can also return just some rows by id. */
+export const ListQuery = PaginationQuery.extend({ ids: IdList.optional() });
+export type ListQuery = z.infer<typeof ListQuery>;
+/** Deal lines and to-dos: just the rows of some deals (`?dealIds=`). */
+export const DealRowsQuery = PaginationQuery.extend({ dealIds: IdList.optional() });
+export type DealRowsQuery = z.infer<typeof DealRowsQuery>;
+
 /** Empty strings from HTML forms become null. */
 export const optionalText = (max = 500) =>
   z

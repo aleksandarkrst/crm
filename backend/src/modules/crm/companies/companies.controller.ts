@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { RequireTenant, Tenant, type TenantContext } from '../../../shared/authorization';
-import { PaginationQuery, UuidParam } from '../../../shared/validation/common';
+import { ListQuery, UuidParam } from '../../../shared/validation/common';
 import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
 import { parseVersion } from '../history/record-history.service';
 import { CompaniesService, CreateCompany, UpdateCompany } from './companies.service';
@@ -11,7 +11,7 @@ export class CompaniesController {
   constructor(private readonly companies: CompaniesService) {}
 
   @Get()
-  list(@Tenant() ctx: TenantContext, @Query(new ZodPipe(PaginationQuery)) page: PaginationQuery) {
+  list(@Tenant() ctx: TenantContext, @Query(new ZodPipe(ListQuery)) page: ListQuery) {
     return this.companies.list(ctx, page);
   }
 

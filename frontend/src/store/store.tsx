@@ -4,7 +4,7 @@ import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant,
 import { paths } from '../lib/paths';
 import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference } from './documents';
 import { connectLive, type LiveEvent } from './live';
-import { loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type Part, type WorkspaceData } from './remote';
+import { type Changed, loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type Part, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
 import {
   champFor,
@@ -131,6 +131,33 @@ const PARTS_OF: Record<string, Part[]> = {
   funnel: ['funnels', 'onboarding'],
   activity: [],
 };
+/**
+ * Which rows of each list a change hint names (CD-98), so a live update re-reads just those: by id,
+ * or by deal for lines and to-dos. A list the hint affects but doesn't name rows for (funnels,
+ * the checklist) or a hint without ids (over 50 rows changed) is read whole.
+ */
+function rowsOf(e: LiveEvent): Partial<Record<Part, readonly string[] | null>> {
+  const ids = e.ids ?? null;
+  const deals = e.dealIds ?? null;
+  switch (e.type) {
+    case 'deal':
+      return { deals: ids };
+    case 'deal_contact':
+      return { deals };
+    case 'deal_line':
+      return { lines: deals, deals };
+    case 'task':
+      return { tasks: deals };
+    case 'company':
+      return { companies: ids };
+    case 'contact':
+      return { contacts: ids };
+    case 'product':
+      return { products: ids };
+    default:
+      return {};
+  }
+}
 const ALL_PARTS: Part[] = ['funnels', 'companies', 'contacts', 'deals', 'products', 'lines', 'tasks', 'team', 'customFields', 'bonus', 'onboarding'];
 const EMPTY_CONTACT: NewContactDraft = { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer', notes: '' };
 const DISCOVERY_FIELDS = ['headline', 'need', 'constraint', 'decisionMaker', 'discoveryDate'] as const satisfies readonly (keyof Lead & keyof DealInput)[];
@@ -174,7 +201,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
   const logRequested = useRef(new Set<string>());
   const pendingTasks = useRef(new Map<string, TaskInput>());
   /** Live updates (CD-20): lists to re-read and deals whose timeline to re-read, gathered over a short pause. */
-  const livePending = useRef({ parts: new Set<Part>(), logs: new Set<string>(), touched: new Set<string>(), timer: undefined as ReturnType<typeof setTimeout> | undefined, running: false, lastFull: 0 });
+  // rows: per list, the rows to re-read (CD-98); null = the whole list.
+  const livePending = useRef({ parts: new Set<Part>(), rows: new Map<Part, Set<string> | null>(), logs: new Set<string>(), touched: new Set<string>(), timer: undefined as ReturnType<typeof setTimeout> | undefined, running: false, lastFull: 0 });
 
   const set = useCallback((u: Updater) => setState((prev) => ({ ...prev, ...(typeof u === 'function' ? u(prev) : u) })), []);
 
@@ -326,9 +354,17 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
      * on top of an older version is caught by the API instead (409, see conflictText). Timelines of
      * deals this tab has loaded are re-read too. Errors stay quiet: the next hint or focus retries.
      */
-    const queueRefresh = (parts: Iterable<Part>, logs: Iterable<string> = [], touched: Iterable<string> = [], delay = 300) => {
+    const queueRefresh = (parts: Iterable<Part>, logs: Iterable<string> = [], touched: Iterable<string> = [], delay = 300, rows: Partial<Record<Part, readonly string[] | null>> = {}) => {
       const p = livePending.current;
-      for (const x of parts) p.parts.add(x);
+      for (const x of parts) {
+        const had = p.parts.has(x);
+        p.parts.add(x);
+        const ids = rows[x];
+        const pending = p.rows.get(x);
+        // Whole beats rows: a list already due to be read whole stays whole.
+        if (!ids || (had && pending === undefined) || pending === null) p.rows.set(x, null);
+        else p.rows.set(x, new Set([...(pending ?? []), ...ids]));
+      }
       for (const x of logs) p.logs.add(x);
       for (const x of touched) p.touched.add(x);
       clearTimeout(p.timer);
@@ -342,9 +378,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       try {
         while (p.parts.size || p.logs.size) {
           const parts = new Set(p.parts);
+          const rows = new Map(p.rows);
           const logs = [...p.logs];
           const touched = [...p.touched];
           p.parts.clear();
+          p.rows.clear();
           p.logs.clear();
           p.touched.clear();
           for (const id of logs) if (logRequested.current.has(id)) await refreshLog(id).catch(() => undefined);
@@ -354,7 +392,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             await whenIdle();
             if (reloading.current) await reloading.current;
             const seq = writeSeq.current;
-            const data = await loadWorkspace(parts);
+            const changed: Changed = {};
+            for (const [part, ids] of rows) if (ids) changed[part] = ids;
+            const data = await loadWorkspace(parts, changed);
             if (seq === writeSeq.current && isIdle()) {
               applyData(data, touched);
               applied = true;
@@ -362,6 +402,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           }
           if (!applied) {
             parts.forEach((x) => p.parts.add(x));
+            rows.forEach((ids, x) => {
+              const pending = p.rows.get(x);
+              p.rows.set(x, ids === null || pending === null ? null : new Set([...ids, ...(pending ?? [])]));
+            });
             touched.forEach((x) => p.touched.add(x));
             retryLater = true;
             break;
@@ -385,7 +429,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const parts = PARTS_OF[e.type] ?? ALL_PARTS;
       const dealIds = [...(e.dealIds ?? []), ...(e.type === 'deal' ? (e.ids ?? []) : [])];
       const logs = e.dealIds === null ? [...logRequested.current] : dealIds.filter((id) => logRequested.current.has(id));
-      queueRefresh(parts, logs, e.type === 'activity' ? [] : [...(e.ids ?? []), ...(e.dealIds ?? [])]);
+      queueRefresh(parts, logs, e.type === 'activity' ? [] : [...(e.ids ?? []), ...(e.dealIds ?? [])], 300, rowsOf(e));
     };
     /** Fallback when hints were missed (a sleeping laptop, a proxy that dropped the stream). */
     const onFocus = () => {
