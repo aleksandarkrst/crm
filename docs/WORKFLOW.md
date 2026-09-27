@@ -124,8 +124,15 @@ Until then, merging means "approved and on `main`"; the app runs locally.
   that also needs a paid plan).
 - **Rollback**: every deploy is an image tagged with its commit; going back means deploying the
   previous one. Practise it once before it's needed.
-- **Migrations that are safe on live data**: add a column before code uses it; remove an old
-  column in a later release, never in the same one as the code that stops using it.
+- **Migrations that are safe on live data (expand, then contract).** A failed deploy rolls back
+  to the previous image automatically, but the migration stays applied, so the previous release
+  must keep working on the new schema:
+  - add a column, table or index before code uses it; new columns are nullable or have a default;
+  - remove or rename a column only in a later release, after no deployed code reads it (a rename
+    is: add the new column, write both, backfill, switch reads, then drop the old one);
+  - never change a column's type or meaning in place.
+  A migration that can't follow this needs a plan in its pull request (maintenance window, or
+  restoring the pre-deploy backup on failure).
 - **Backups with a practised restore** (CD-5) before real customer data goes in.
 - **Secrets never in the repository**: they live in GitHub secrets and on the server. Agents never
   get production credentials.
