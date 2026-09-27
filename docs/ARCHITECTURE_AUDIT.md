@@ -43,7 +43,7 @@ Browser ──HTTPS──► Cloudflare (DNS, TLS, WAF) ──Tunnel──► cl
   SSE stream (`GET /api/events`) read in a dedicated worker (`store/live.worker.ts`). OIDC config and
   the Sentry DSN are baked in at image build time (`VITE_*` build args from GitHub variables).
   One feature is still browser-only: integration settings (CD-79).
-- **Backend** (`backend/src/`): ~92 HTTP routes under `/api`, grouped in modules:
+- **Backend** (`backend/src/`): ~93 HTTP routes under `/api`, grouped in modules:
   - `identity`: `/me`, tenants, team and invitations, profile, workspace settings, auth guard, dev login (dev mode only)
   - `crm`: companies, contacts, deals (+ lines, tasks, activities, stage history, lost/reopen), funnels and stages, products, custom fields, bonus rules, documents, CSV import, record history, onboarding and sample data
   - `notifications`: digest preview, dev-only digest/mail endpoints
@@ -61,7 +61,7 @@ Browser ──HTTPS──► Cloudflare (DNS, TLS, WAF) ──Tunnel──► cl
 - **Roles** (`infra/postgres/init/01-roles.sh`): `app_admin` owns the tables and runs migrations only;
   `app_runtime` (NOSUPERUSER, NOBYPASSRLS) is used by api and worker, so RLS always applies. The
   `pgboss` schema is pre-created and owned by `app_runtime` (JobsService uses `createSchema: false`).
-- **27 tables**. Platform: `tenants`, `users`, `memberships`, `invitations`, `audit_logs`,
+- **24 tables**. Platform: `tenants`, `users`, `memberships`, `invitations`, `audit_logs`,
   `sample_records`. CRM: `companies`, `contacts`, `deals`, `deal_contacts`, `deal_lines`,
   `deal_tasks`, `deal_stage_history`, `activities`, `funnels`, `funnel_stages`, `products`,
   `custom_field_defs`, `sales_bonus_rules`, `sales_bonus_settings`, `document_templates`,
@@ -160,7 +160,7 @@ check. Also once before every deploy's migrations.
 - **GitHub Actions history, branch protection, secrets and variables**: the repo is private, the
   `gh` CLI isn't installed, and the reconnected GitHub connector exposes no tools to this session
   yet. `SENTRY_FRONTEND_DSN` is set as a variable (confirmed by the user and by the live bundle).
-- **Auth0 tenant configuration** (token claims, allowed callbacks, MFA): no access.
+- **Auth0 tenant configuration** (token claims, allowed callbacks, MFA): the Auth0 connector is loaded but its token is rejected ("Invalid token", missing read scopes).
 - **Cloudflare** (WAF rules, Access policies, tunnel config): connected by the user, but no Cloudflare tools are loaded in this session yet.
 - **Better Stack** (monitor and heartbeat state): no access.
 
