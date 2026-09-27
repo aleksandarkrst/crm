@@ -368,6 +368,25 @@ OpenID Connect provider (discovery → JWKS). Users are created on first request
 ("just-in-time"). Tenants and roles live in our database. `AUTH_MODE=dev` adds a passwordless
 `/api/auth/dev-login` for local work, and the app refuses to start with it when `NODE_ENV=production`.
 
+### Sessions that don't end mid-work (CD-88)
+
+The browser signs in with authorization code + PKCE (`frontend/src/lib/auth.ts`, oidc-client-ts,
+tokens in `sessionStorage`). The access token lasts 2 hours, so:
+
+- **Renewal.** The scope includes `offline_access`, so the provider issues a refresh token
+  (rotating: each use replaces it). oidc-client-ts renews the access token shortly before it
+  expires; `getAccessToken()` also renews one that has expired anyway (a laptop that slept).
+- **401 anywhere.** Every API call goes through `authorizedFetch()` (`lib/api.ts`): on 401 it
+  renews once and sends the request again. If that fails too, the session has ended:
+  `SessionEndedDialog` opens over the app and requests wait (`lib/session.ts`) instead of failing.
+  An edit is therefore neither reset nor lost; it is saved once the user signs in again. That
+  sign-in runs in a popup (same `/auth/callback`, `signinCallback()` handles both), so the page and
+  its unsaved edits stay; signing in as someone else doesn't release the waiting edits. **Sign out**
+  in the dialog discards them. Before the app is open (start-up) a 401 goes to the sign-in screen
+  as before. The live-update stream reconnects with a fresh token on its own.
+- Covered by `e2e/tests/session-expiry.test.mjs` (dev mode: an invalid token, the dialog, the edit
+  saved after signing in again).
+
 ### Teams and invitations
 
 A tenant's members and their roles live in `memberships`. Admins invite people from

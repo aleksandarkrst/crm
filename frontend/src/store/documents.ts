@@ -3,8 +3,7 @@
  * with {{merge fields}} that owners and admins upload; anyone generates a document on a deal from
  * one (a worker job fills it in) and downloads it. The store calls these; screens use the store.
  */
-import { api, ApiError, getTenantId } from '../lib/api';
-import { getAccessToken } from '../lib/auth';
+import { api, ApiError, authorizedFetch } from '../lib/api';
 
 export const DOC_TYPES = ['Proposal', 'Quote', 'Contract', 'NDA', 'Onboarding brief', 'Invoice'] as const;
 export type DocType = (typeof DOC_TYPES)[number];
@@ -62,18 +61,10 @@ export interface ScanResult {
   placeholders: FoundPlaceholder[];
 }
 
-async function authHeaders(): Promise<Headers> {
-  const headers = new Headers();
-  const token = await getAccessToken();
-  if (token) headers.set('Authorization', `Bearer ${token}`);
-  const tenant = getTenantId();
-  if (tenant) headers.set('X-Tenant-Id', tenant);
-  return headers;
-}
 
 /** Multipart upload (api() sends JSON only). */
 async function upload<T>(path: string, form: FormData): Promise<T> {
-  const res = await fetch(`/api${path}`, { method: 'POST', headers: await authHeaders(), body: form });
+  const res = await authorizedFetch(path, { method: 'POST', body: form });
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(res.status, res.status === 413 ? { message: 'The file is larger than 5 MB' } : body);
   return body as T;
@@ -81,7 +72,7 @@ async function upload<T>(path: string, form: FormData): Promise<T> {
 
 /** Downloads a file behind auth and saves it under the name the API gives it. */
 async function download(path: string, fallback: string): Promise<void> {
-  const res = await fetch(`/api${path}`, { headers: await authHeaders() });
+  const res = await authorizedFetch(path);
   if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
   const disposition = res.headers.get('Content-Disposition') || '';
   const star = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];

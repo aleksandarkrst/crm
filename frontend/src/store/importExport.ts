@@ -2,8 +2,7 @@
  * CSV import (CD-64), next to the store: preview, commit and the template come from the API. For
  * owners and admins (the API returns 403 to members; the buttons are hidden for them).
  */
-import { api, getTenantId } from '../lib/api';
-import { getAccessToken } from '../lib/auth';
+import { api, authorizedFetch } from '../lib/api';
 import { type CsvColumn, toCsv } from '../lib/csv';
 import type { Funnel, State } from './types';
 
@@ -58,12 +57,7 @@ export const importApi = {
   commit: (type: ImportType, req: ImportRequest) => api<ImportResult>(`/crm/import/${type}/commit`, { method: 'POST', json: req }),
   /** The template is CSV, not JSON, so it doesn't go through api(). */
   template: async (type: ImportType): Promise<string> => {
-    const headers = new Headers();
-    const token = await getAccessToken();
-    if (token) headers.set('Authorization', `Bearer ${token}`);
-    const tenant = getTenantId();
-    if (tenant) headers.set('X-Tenant-Id', tenant);
-    const res = await fetch(`/api/crm/import/${type}/template`, { headers });
+    const res = await authorizedFetch(`/crm/import/${type}/template`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     // Keep the BOM: text() drops it, and Excel needs it to read UTF-8.
     return '\uFEFF' + (await res.text()).replace(/^\uFEFF/, '');

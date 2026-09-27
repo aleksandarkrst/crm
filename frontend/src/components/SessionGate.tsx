@@ -3,6 +3,7 @@ import { ApiError, type ApiInvitePreview, type ApiMe, crmApi, getTenantId, setTe
 import { authMode, devLogin, getAccessToken, signIn, signOut } from '../lib/auth';
 import { loadWorkspace, type WorkspaceData } from '../store/remote';
 import { type Session, StoreProvider } from '../store/store';
+import { SessionEndedDialog } from './SessionEndedDialog';
 import { CURRENCIES } from '../store/seed';
 
 type Phase =
@@ -96,6 +97,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
     return (
       <StoreProvider key={session.tenant.id} data={phase.data} session={session}>
         {children}
+        <SessionEndedDialog email={session.email} name={session.userName} onSignOut={session.signOut} />
       </StoreProvider>
     );
   if (phase.kind === 'signed-out') return <SignIn invited={!!sessionStorage.getItem(INVITE_KEY)} onDone={() => void start()} />;

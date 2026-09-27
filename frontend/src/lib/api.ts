@@ -5,7 +5,8 @@
  * Every tenant-scoped call carries the X-Tenant-Id header; the backend checks membership and
  * PostgreSQL row-level security enforces the isolation.
  */
-import { getAccessToken } from './auth';
+import { getAccessToken, renewSession } from './auth';
+import { canSignInAgain, sessionEnded, whenSignedInAgain } from './session';
 
 const TENANT_KEY = 'crm.tenantId';
 
@@ -42,11 +43,33 @@ export async function apiHeaders(init?: HeadersInit): Promise<Headers> {
 /** `If-Match` with the version (updatedAt) an edit was based on; none means last-write-wins. */
 const ifMatch = (version?: string): HeadersInit | undefined => (version ? { 'If-Match': `"${version}"` } : undefined);
 
+/**
+ * fetch(`/api${path}`) with this tab's headers and a session that doesn't end mid-work (CD-88).
+ * On 401 it renews the token once and sends the request again. If that fails too while the app is
+ * open, the session has ended: the "sign in again" dialog opens, and the request waits for it and
+ * then goes out again, so an edit is saved late instead of thrown away. Before the app is open
+ * (start-up) the 401 response is returned to the caller.
+ */
+export async function authorizedFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const send = async () => fetch(`/api${path}`, { ...init, headers: await apiHeaders(init.headers) });
+  for (;;) {
+    await whenSignedInAgain();
+    let res = await send();
+    if (res.status !== 401) return res;
+    if (await renewSession()) {
+      res = await send();
+      if (res.status !== 401) return res;
+    }
+    if (!canSignInAgain()) return res;
+    sessionEnded();
+  }
+}
+
 export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
-  const headers = await apiHeaders(init.headers);
+  const headers = new Headers(init.headers);
   if (init.json !== undefined) headers.set('Content-Type', 'application/json');
 
-  const res = await fetch(`/api${path}`, { ...init, headers, body: init.json !== undefined ? JSON.stringify(init.json) : init.body });
+  const res = await authorizedFetch(path, { ...init, headers, body: init.json !== undefined ? JSON.stringify(init.json) : init.body });
   const body: unknown = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(res.status, body);
   return body as T;
