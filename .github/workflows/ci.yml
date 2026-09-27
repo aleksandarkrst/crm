@@ -199,6 +199,8 @@ jobs:
             VITE_SENTRY_DSN=${{ vars.SENTRY_FRONTEND_DSN }}
             VITE_SENTRY_ENVIRONMENT=staging
             VITE_APP_VERSION=${{ github.sha }}
+            # Staging enforces the Content-Security-Policy, so a violation breaks staging first.
+            CSP_ENFORCE=${{ vars.STAGING_CSP_ENFORCE || 'true' }}
           tags: ${{ env.IMAGE_PREFIX }}-frontend:${{ github.sha }}-staging
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend-staging

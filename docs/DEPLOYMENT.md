@@ -303,14 +303,16 @@ image is built (`frontend/scripts/csp.mjs`) from the same variables as the bundl
 exact sign-in provider (`OIDC_ISSUER`) and Sentry hosts. It allows only this site's own scripts,
 Google Fonts, the provider and Sentry, and forbids frames, plugins and being framed.
 
-It starts as **report-only** (`Content-Security-Policy-Report-Only`): the browser reports what the
-policy would block (to the frontend Sentry project, as "CSP" issues) but blocks nothing. To enforce
-it:
+Staging always enforces it (`STAGING_CSP_ENFORCE`, default `true`), so a change that the policy
+would break fails on staging first. Production starts as **report-only**
+(`Content-Security-Policy-Report-Only`): the browser reports what the policy would block (to the
+frontend Sentry project, as "CSP" issues) but blocks nothing. To enforce it:
 1. After a deploy, sign in, sign out, generate and download a document, and leave the app open
    past a token renewal. Check Sentry for CSP reports over a few days of normal use.
 2. If there are none (or only from browser extensions), set the repository **variable**
-   `CSP_ENFORCE` to `true` and redeploy. The next image sends `Content-Security-Policy`.
-3. If something then breaks, set it back to `false` and redeploy.
+   `CSP_ENFORCE` to `true`. The next merge's production image sends `Content-Security-Policy`.
+3. If something then breaks, set it back to `false` and merge (or re-run the latest `main` run),
+   then promote.
 
 To try a policy locally with the built app: `cd frontend && npm run build`, then
 `CSP_PREVIEW="$(node scripts/csp.mjs policy)" npx vite preview` (it enforces it).
