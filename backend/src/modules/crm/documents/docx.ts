@@ -1,4 +1,5 @@
 import Docxtemplater from 'docxtemplater';
+import { inflateRawSync } from 'node:zlib';
 import PizZip from 'pizzip';
 import type { TemplateData } from './placeholders';
 
@@ -26,13 +27,49 @@ function openZip(file: Buffer): PizZip {
     throw new TemplateFileError('This file is not a Word document (.docx). Save it as .docx and upload it again.');
   }
   if (!zip.file('word/document.xml')) throw new TemplateFileError('This file is not a Word document (.docx): it has no document body.');
-  let unpacked = 0;
-  for (const entry of Object.values(zip.files)) {
-    unpacked += (entry as unknown as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize ?? 0;
-  }
-  if (unpacked > MAX_UNPACKED_BYTES) throw new TemplateFileError('This document is too large once unpacked.');
+  checkUnpackedSize(zip);
   return zip;
 }
+
+/**
+ * Refuses zip bombs before anything reads the document (CD-104). PizZip loads lazily, but when a
+ * part is read it inflates it completely and only then compares it with the size the zip claims,
+ * which can be forged. So every part is inflated here first, with zlib capped at what is left of
+ * the budget: a bomb stops at the cap instead of filling memory. Costs one extra inflate of a
+ * file that is at most MAX_TEMPLATE_BYTES compressed.
+ */
+function checkUnpackedSize(zip: PizZip): void {
+  const entries = Object.values(zip.files).filter((e) => !e.dir);
+  if (entries.length > MAX_ENTRIES) throw new TemplateFileError('This document has too many parts.');
+  let budget = MAX_UNPACKED_BYTES;
+  for (const entry of entries) {
+    const data = (entry as unknown as { _data?: CompressedEntry })._data;
+    if (!data?.getCompressedContent) continue; // added in memory, not read from the upload
+    const raw = Buffer.from(data.getCompressedContent());
+    let size: number;
+    if (data.compressionMethod === STORED) size = raw.length;
+    else if (data.compressionMethod === DEFLATE) {
+      try {
+        size = inflateRawSync(raw, { maxOutputLength: budget + 1 }).length;
+      } catch (err) {
+        if ((err as { code?: string }).code === 'ERR_BUFFER_TOO_LARGE') throw new TemplateFileError(TOO_LARGE);
+        throw new TemplateFileError('This file is not a Word document (.docx). Save it as .docx and upload it again.');
+      }
+    } else throw new TemplateFileError('This file is not a Word document (.docx). Save it as .docx and upload it again.');
+    budget -= size;
+    if (budget < 0) throw new TemplateFileError(TOO_LARGE);
+  }
+}
+
+interface CompressedEntry {
+  compressionMethod: string;
+  getCompressedContent(): Uint8Array | string;
+}
+const STORED = '\x00\x00';
+const DEFLATE = '\x08\x00';
+const TOO_LARGE = 'This document is too large once unpacked.';
+/** Word documents have tens of parts; thousands mean a crafted file. */
+const MAX_ENTRIES = 2000;
 
 /** Turns docxtemplater's error (often several) into one readable sentence. */
 function templateErrorMessage(err: unknown): string {

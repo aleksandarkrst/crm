@@ -52,6 +52,9 @@ services:
       PORT: 3000
     volumes:
       - app_storage:/app/storage
+    # A runaway request (e.g. a crafted document) is killed and restarted instead of taking the
+    # whole server's memory (CD-104). Node sizes its heap to this limit.
+    mem_limit: ${API_MEM_LIMIT:-768m}
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,6 +67,7 @@ services:
     environment: *backend-env
     volumes:
       - app_storage:/app/storage
+    mem_limit: ${WORKER_MEM_LIMIT:-768m}
     healthcheck:
       disable: true
     depends_on:
