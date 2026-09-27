@@ -12,6 +12,7 @@ import { RealtimeModule } from './modules/realtime';
 import { AuditModule } from './shared/audit/audit.module';
 import { DatabaseModule } from './shared/database/database.module';
 import { EventsModule } from './shared/events/events.module';
+import { RateLimitModule } from './shared/rate-limit';
 
 /**
  * The HTTP API. Business modules live in src/modules; add new domains (projects, workforce,
@@ -21,6 +22,7 @@ import { EventsModule } from './shared/events/events.module';
   imports: [
     ConfigModule,
     LoggingModule,
+    ...(loadEnv().RATE_LIMIT_ENABLED ? [RateLimitModule] : []),
     DatabaseModule,
     StorageModule,
     AuditModule,

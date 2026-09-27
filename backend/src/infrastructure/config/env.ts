@@ -22,6 +22,13 @@ const EnvSchema = z
     // Comma-separated. Leave empty when the frontend and API share one hostname.
     CORS_ORIGINS: z.string().default(''),
 
+    // API rate limits (CD-18). Only the test suites turn them off: they sign in far more often
+    // from one address than any person would.
+    RATE_LIMIT_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((v) => v === 'true'),
+
     STORAGE_DIR: z.string().default('./storage'),
 
     // Public address of the web app, for links in emails (invitations, digests). Never taken

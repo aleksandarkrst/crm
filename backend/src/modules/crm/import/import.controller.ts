@@ -2,6 +2,7 @@ import { Body, Controller, Get, Header, HttpCode, Param, Post, Res } from '@nest
 import type { Response } from 'express';
 import { z } from 'zod';
 import { RequireTenant, Tenant, type TenantContext } from '../../../shared/authorization';
+import { RateLimit } from '../../../shared/rate-limit';
 import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
 import { IMPORT_TYPES, type ImportType, templateCsv } from './import-fields';
 import { ImportRequest, ImportService } from './import.service';
@@ -27,6 +28,7 @@ export class ImportController {
 
   /** Parses and validates the whole file and writes nothing: guessed mapping, first rows, counts. */
   @Post(':type/preview')
+  @RateLimit('heavy')
   @HttpCode(200)
   preview(@Tenant() ctx: TenantContext, @Param('type', Type) type: ImportType, @Body(new ZodPipe(ImportRequest)) body: ImportRequest) {
     return this.imports.preview(ctx, type, body);
@@ -34,6 +36,7 @@ export class ImportController {
 
   /** Imports the rows in batches and returns created / updated / skipped / failed, with reasons. */
   @Post(':type/commit')
+  @RateLimit('heavy')
   @HttpCode(200)
   commit(@Tenant() ctx: TenantContext, @Param('type', Type) type: ImportType, @Body(new ZodPipe(ImportRequest)) body: ImportRequest) {
     return this.imports.commit(ctx, type, body);

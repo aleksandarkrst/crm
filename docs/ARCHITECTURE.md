@@ -382,6 +382,32 @@ and admins can resend or copy it later.
 - `invitations`, like `memberships`, has no RLS because it decides access before tenant context
   exists. `TeamService` filters by tenant explicitly.
 
+### Rate limits (CD-18)
+
+`shared/rate-limit` caps how fast one client can call the API. Over a limit, the API answers
+**429** with `Retry-After` and "Too many requests. Try again in N seconds.", which the UI shows
+like any other error.
+
+| Limit | Counted per | Allowance | Where |
+|---|---|---|---|
+| Every request | client IP | 1200 / minute | all routes except `/api/health` |
+| Sign-in | client IP | 20 / 10 minutes | `@RateLimit('signIn')`: dev login, opening and accepting an invitation |
+| Changes | user | 120 / minute | every POST, PUT, PATCH and DELETE by a signed-in user |
+| Email | user | 20 / hour | `@RateLimit('email')`: inviting, resending an invitation |
+| Heavy | user | 30 / 10 minutes | `@RateLimit('heavy')`: CSV import, document templates and generation, sample data, new workspaces |
+
+- The IP limit is a middleware, so it runs before `AuthGuard` and also counts requests with bad
+  tokens. The others are a global interceptor, which runs after it and knows the user, so
+  colleagues behind one office address don't use up each other's allowance.
+- The client IP is `req.ip`: nginx sets `X-Forwarded-For` to Cloudflare's `CF-Connecting-IP`,
+  and the API can only be reached through nginx.
+- Counters are fixed windows in the API's memory (`RateLimiter`). They reset when the API
+  restarts, and more than one API replica would need a shared store.
+- Mark a new route that sends email or does expensive work with `@RateLimit('email')` or
+  `@RateLimit('heavy')`. Sign-in is handled by the identity provider, which has its own limits.
+- `RATE_LIMIT_ENABLED=false` switches it all off. Only the integration and browser test runs do
+  that, because they sign in fresh users from one address all the time.
+
 ## Background jobs
 
 pg-boss keeps its queue in PostgreSQL (schema `pgboss`), so there is no Redis to run. Pass the

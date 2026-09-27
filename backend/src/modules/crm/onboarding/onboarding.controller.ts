@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Post, Put } from '@nestjs/common';
 import { z } from 'zod';
 import { RequireTenant, Tenant, type TenantContext } from '../../../shared/authorization';
+import { RateLimit } from '../../../shared/rate-limit';
 import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
 import { OnboardingService } from './onboarding.service';
 
@@ -25,12 +26,14 @@ export class OnboardingController {
   }
 
   @Post('sample-data')
+  @RateLimit('heavy')
   @HttpCode(201)
   loadSampleData(@Tenant() ctx: TenantContext) {
     return this.onboarding.loadSampleData(ctx);
   }
 
   @Delete('sample-data')
+  @RateLimit('heavy')
   removeSampleData(@Tenant() ctx: TenantContext) {
     return this.onboarding.removeSampleData(ctx);
   }
