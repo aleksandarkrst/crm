@@ -93,13 +93,34 @@ Browser ──HTTPS──► Cloudflare (DNS, TLS, WAF) ──Tunnel──► cl
 - `AUTH_MODE=dev` (passwordless dev login) is refused at startup when `NODE_ENV=production`.
   Verified live: production answers the dev-login route with 401 "Dev login disabled" after validation.
 
+### Auth0 tenant (read through the Auth0 connector, 2026-09-27)
+
+- Tenant `dev-yz7q4hukh2ycg4il` (US region). Connections in use: Username-Password and Google.
+- **Application "CRM"** (SPA, public client, no secret): callback `https://app.simplicity-labs.com/auth/callback`,
+  logout URL and web origin `https://app.simplicity-labs.com`, RS256. Grant types still include
+  `implicit` and `refresh_token`, although the SPA uses code + PKCE only and never asks for `offline_access`.
+- **API "Simplicity CRM API"** (audience `https://app.simplicity-labs.com/api`, matches the SPA's
+  `audience` parameter): RS256, no refresh tokens (`allow_offline_access: false`), access tokens from
+  the browser last 2 h (`token_lifetime_for_web: 7200`). The SPA sets no `silent_redirect_uri` and
+  gets no refresh token, so it cannot renew: after 2 h the token expires mid-session.
+- **Action "CRM user details"** (post-login, node22, deployed): for this API only, adds the `email`
+  claim only when `email_verified` is true, plus `name`. Invitation binding to email relies on this.
+- **Other clients**: "Simplicity CRM API (Test Application)", an M2M client created with the API
+  (client credentials, unused by the app); the tenant's "Default App".
+- **Logs** (last 50 events, 26–27 Sep): 13 successful logins, 3 signups, 2 users. Four failed code
+  exchanges at 11:31–11:32 on 26 Sep were setup-time and stopped after the client was updated at 11:33.
+  One warning: the **Google connection uses Auth0 development keys**, which Auth0 says must not be
+  used in production.
+- Not readable with this connector: MFA, brute-force and breached-password protection, and the
+  tenant's environment tag.
+
 ## Third-party services
 
 | Service | Use | Status in production (checked 2026-09-27) |
 |---|---|---|
 | Hetzner Cloud | VPS, Cloud Firewall | Running, 75 GB disk, 7 % used |
 | Cloudflare | DNS, TLS, Tunnel, WAF | Tunnel up; HSTS set by Cloudflare |
-| Auth0 | OIDC identity provider | In use (issuer baked into the SPA) |
+| Auth0 | OIDC identity provider | In use, tenant `dev-yz7q4hukh2ycg4il`; Google login on Auth0 dev keys (see Auth0 tenant) |
 | GitHub + GHCR | Code, CI/CD, private images | Private repo `aleksandarkrst/crm` |
 | Sentry (EU, `de.sentry.io`) | Errors: `crm-backend`, `crm-frontend` | Backend DSN set on the server; frontend DSN built into the live bundle (lazy `sentry` chunk); no unresolved issues in 14 days |
 | Better Stack | Uptime monitor, backup and disk heartbeats | Heartbeat URLs set on the server |
@@ -160,7 +181,6 @@ check. Also once before every deploy's migrations.
 - **GitHub Actions history, branch protection, secrets and variables**: the repo is private, the
   `gh` CLI isn't installed, and the reconnected GitHub connector exposes no tools to this session
   yet. `SENTRY_FRONTEND_DSN` is set as a variable (confirmed by the user and by the live bundle).
-- **Auth0 tenant configuration** (token claims, allowed callbacks, MFA): the Auth0 connector is loaded but its token is rejected ("Invalid token", missing read scopes).
 - **Cloudflare** (WAF rules, Access policies, tunnel config): connected by the user, but no Cloudflare tools are loaded in this session yet.
 - **Better Stack** (monitor and heartbeat state): no access.
 
