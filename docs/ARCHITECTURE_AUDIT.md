@@ -205,7 +205,7 @@ check. Also once before every deploy's migrations.
 
 Checked against the code on `main` (`1eed43f`), the live server (read-only), the live database
 (read-only queries in read-only transactions), Auth0, GitHub, Sentry and the public site. Every
-finding is logged in Linear (project CRM, milestone "6 - Go live").
+finding is logged in Linear (project CRM, milestone "7 - Architecture & Infra improvements").
 
 ### Scores
 
@@ -226,7 +226,7 @@ finding is logged in Linear (project CRM, milestone "6 - Go live").
 |---|---|---|---|---|
 | High | Security / G | Sessions end after 2 hours; later edits are discarded with no sign-in prompt | Open (proposal) | CD-88 |
 | High | Backups | Restoring a backup breaks the job queue (`--no-owner` drops the pgboss owner; reproduced) | Open (proposal) | CD-89 |
-| High | Infrastructure | Nothing stops an unreviewed push to `main` from deploying (no branch protection on GitHub Free, no environment reviewers) | Open (decision) | CD-90 |
+| High | Infrastructure | Nothing stops an unreviewed push to `main` from deploying (no branch protection on GitHub Free, no environment reviewers) | Won't do (single developer; staging and deploy rollback instead) | CD-90 |
 | High | Processes | Production sends no email (`MAIL_DRIVER=log`), yet the Team tab shows "Email sent" | Open (comment) | CD-84 |
 | Medium | Security | App page served without X-Frame-Options, nosniff and Referrer-Policy; `/api` had conflicting duplicates | **Fixed** `3cde90e` | CD-91 |
 | Medium | Security | No Content-Security-Policy and no HSTS on the app page | Open (proposal) | CD-92 |
@@ -234,7 +234,7 @@ finding is logged in Linear (project CRM, milestone "6 - Go live").
 | Medium | Backups | 24 h recovery point, no point-in-time recovery, off-site copies deletable from the server | Open (proposal) | CD-94 |
 | Medium | Security / F | Deploy SSH key passed to a tag-pinned third-party action; Dependabot off; dev-only npm advisories | Open (proposal) | CD-95 |
 | Medium | Infrastructure | A failed deploy leaves the broken version running; rollback can't undo migrations | Open (proposal) | CD-96 |
-| Medium | Infrastructure | No staging environment | Open (decision) | CD-97 |
+| Medium | Infrastructure | No staging environment | Open: create one | CD-105 (CD-97 duplicate) |
 | Medium | Performance | The client loads every record of every list at start-up and on live refreshes | Open (proposal) | CD-98 |
 | Low | Database | Foreign keys without indexes on deals, deal contacts, lines and tasks | **Fixed** `7e661d2` (migration 0023, not applied yet) | CD-99 |
 | Low | Bug | A document can stay "generating" forever after a worker restart mid-job | Open | CD-100 |
