@@ -218,6 +218,17 @@ describe('in SQL, as the runtime role', () => {
     });
   });
 
+  it('keeps the audit log append-only: rows can be added and read, never changed or deleted (CD-101)', async () => {
+    await asTenant(tenantA, async () => {
+      const { rows } = await db.query(`insert into audit_logs (tenant_id, action, entity_type) values ($1, 'test.append', 'test') returning id`, [tenantA]);
+      expect((await db.query(`select 1 from audit_logs where id = $1`, [rows[0].id])).rowCount).toBe(1);
+    });
+    for (const text of [`update audit_logs set action = 'x'`, `delete from audit_logs`, `truncate audit_logs`]) {
+      const code = await asTenant(tenantA, () => sqlError(db.query(text)));
+      expect(code, text).toBe('42501'); // insufficient_privilege
+    }
+  });
+
   it("rejects cross-tenant references (composite foreign keys)", async () => {
     const stageB = funnelB.stages[0]!.id;
     const cases: [string, string, unknown[]][] = [

@@ -60,6 +60,19 @@ project), send a job (`shared/events/job-types.ts`) instead of writing the other
 This is verified end to end against real PostgreSQL. A second tenant sees none of the first
 tenant's rows, cross-tenant inserts are rejected, and a non-member gets 403.
 
+Two tables are **append-only** for the app: `record_changes` (change history) and `audit_logs`
+(`0024_audit_logs_append_only.sql`). Their policies allow SELECT and INSERT only, and the runtime
+role has no UPDATE, DELETE or TRUNCATE on `audit_logs`, so neither a bug nor a compromised API can
+rewrite history.
+
+**Time limits on runtime connections (CD-101).** The API's and worker's pool sets
+`statement_timeout` (30 s, `DATABASE_STATEMENT_TIMEOUT_MS`) and
+`idle_in_transaction_session_timeout` (60 s, `DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS`; 0 turns
+either off). A runaway query or a transaction a bug leaves open is cancelled instead of holding a
+pooled connection and its locks until a restart. Keep slow work (rendering, sending mail, calls to
+other services) outside `withTenant` transactions. Migrations, pg-boss and the live-update
+listener use their own connections without these limits.
+
 ### Adding a tenant-scoped table
 
 1. Define it in `shared/database/schema/<module>.ts` with a `tenant_id` column, `unique(tenant_id, id)`, and composite FKs.
