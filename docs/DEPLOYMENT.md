@@ -122,6 +122,26 @@ docker compose run --rm --entrypoint restore.sh backup /backups/app-files-<times
 docker compose start api worker
 ```
 
+How the database restore works: `restore.sh` restores the dump into a fresh database
+(`app_restore`), grants the runtime role its access, gives it back the `pgboss` schema (pg-boss must
+own its tables), checks that the runtime role can read the job queue, and only then swaps it in.
+The database it replaced is kept as `app_before_restore`. If any step fails, the current database
+is left untouched.
+
+Check the restore before you throw away the old database:
+1. `docker compose logs --tail=50 api worker` shows no `permission denied` errors.
+2. Sign in and open a restored record.
+3. Send an invitation (or generate a document) and check that `docker compose logs worker` shows
+   the job being processed. This proves the job queue works, not only the tables.
+4. Then free the space: `docker compose exec postgres dropdb -U app_admin app_before_restore`.
+   To undo the restore instead, stop api and worker and rename the databases back.
+
+Record each restore drill (date, backup used, which checks passed) in the table below.
+
+| Date | Backup | Where | Result |
+|---|---|---|---|
+| | | | |
+
 ## 6. GitHub Actions
 
 Repository **secrets** (`Settings → Secrets and variables → Actions`):
