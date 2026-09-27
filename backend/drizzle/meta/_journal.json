@@ -162,6 +162,13 @@
       "when": 1790371728921,
       "tag": "0022_products_deal_billing",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790509978733,
+      "tag": "0023_fk_indexes",
+      "breakpoints": true
     }
   ]
 }

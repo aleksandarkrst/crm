@@ -274,6 +274,11 @@ export const deals = pgTable(
     unique('deals_tenant_id_uq').on(t.tenantId, t.id),
     check('deals_lost_ck', sql`(${t.lostAt} is null) = (${t.lostReason} is null) and (${t.lostNote} is null or ${t.lostAt} is not null)`),
     index('deals_tenant_funnel_stage_idx').on(t.tenantId, t.funnelId, t.stageId),
+    // For the foreign keys: company and contact pages, the owner filter, stage removal (CD-87).
+    index('deals_tenant_company_idx').on(t.tenantId, t.companyId),
+    index('deals_tenant_contact_idx').on(t.tenantId, t.primaryContactId),
+    index('deals_tenant_stage_idx').on(t.tenantId, t.stageId),
+    index('deals_tenant_owner_idx').on(t.tenantId, t.ownerUserId),
     foreignKey({ columns: [t.tenantId, t.companyId], foreignColumns: [companies.tenantId, companies.id], name: 'deals_company_fk' }),
     foreignKey({ columns: [t.tenantId, t.primaryContactId], foreignColumns: [contacts.tenantId, contacts.id], name: 'deals_contact_fk' }),
     foreignKey({ columns: [t.tenantId, t.funnelId], foreignColumns: [funnels.tenantId, funnels.id], name: 'deals_funnel_fk' }),
@@ -293,6 +298,8 @@ export const dealContacts = pgTable(
   },
   (t) => [
     primaryKey({ columns: [t.tenantId, t.dealId, t.contactId] }),
+    // Deleting a contact cascades here by contact (CD-87).
+    index('deal_contacts_tenant_contact_idx').on(t.tenantId, t.contactId),
     foreignKey({ columns: [t.tenantId, t.dealId], foreignColumns: [deals.tenantId, deals.id], name: 'deal_contacts_deal_fk' }).onDelete('cascade'),
     foreignKey({ columns: [t.tenantId, t.contactId], foreignColumns: [contacts.tenantId, contacts.id], name: 'deal_contacts_contact_fk' }).onDelete('cascade'),
   ],
@@ -381,6 +388,8 @@ export const dealLines = pgTable(
   (t) => [
     unique('deal_lines_tenant_id_uq').on(t.tenantId, t.id),
     index('deal_lines_tenant_deal_idx').on(t.tenantId, t.dealId),
+    // Deleting a product checks this foreign key (CD-87).
+    index('deal_lines_tenant_product_idx').on(t.tenantId, t.productId),
     foreignKey({ columns: [t.tenantId, t.dealId], foreignColumns: [deals.tenantId, deals.id], name: 'deal_lines_deal_fk' }).onDelete('cascade'),
     // A product used on a deal can't be deleted from the catalog.
     foreignKey({ columns: [t.tenantId, t.productId], foreignColumns: [products.tenantId, products.id], name: 'deal_lines_product_fk' }),
@@ -424,6 +433,9 @@ export const dealTasks = pgTable(
   },
   (t) => [
     index('deal_tasks_tenant_deal_idx').on(t.tenantId, t.dealId),
+    // Stage removal moves and deletes to-dos by stage; the daily digest reads them by assignee (CD-87).
+    index('deal_tasks_tenant_stage_idx').on(t.tenantId, t.stageId),
+    index('deal_tasks_tenant_assignee_idx').on(t.tenantId, t.assigneeUserId),
     index('deal_tasks_tenant_due_idx').on(t.tenantId, t.dueDate).where(sql`${t.dueDate} is not null`),
     uniqueIndex('deal_tasks_playbook_item_uq').on(t.dealId, t.stageId, t.checklistItemId).where(sql`not ${t.offPlaybook} and ${t.checklistItemId} is not null`),
     foreignKey({ columns: [t.tenantId, t.dealId], foreignColumns: [deals.tenantId, deals.id], name: 'deal_tasks_deal_fk' }).onDelete('cascade'),
