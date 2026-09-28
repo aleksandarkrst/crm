@@ -176,6 +176,13 @@
       "when": 1790514299166,
       "tag": "0024_audit_logs_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790613441918,
+      "tag": "0025_signup_requests",
+      "breakpoints": true
     }
   ]
 }

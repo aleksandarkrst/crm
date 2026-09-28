@@ -16,6 +16,8 @@ export interface JobPayloads {
   'crm.deal-assigned': { tenantId: string; dealId: string; assigneeUserId: string; actorUserId: string };
   /** Sent by identity when an invitation is created or resent; identity's worker handler emails it (CD-7). */
   'identity.invitation-email': { tenantId: string; invitationId: string };
+  /** Sent by identity when someone creates an account with email; the worker emails the confirmation link (CD-114). */
+  'identity.signup-email': { requestId: string };
   /** Cron (every 15 minutes): queues the daily digests of workspaces where it is morning now. */
   'notifications.digest-tick': Record<string, never>;
   /** One member's daily digest for one workspace and local date. `force` skips the "once a day" and "turned on" checks (dev trigger). */
@@ -31,10 +33,11 @@ export const JOB_NAMES = [
   'crm.deal-assigned',
   'crm.generate-document',
   'identity.invitation-email',
+  'identity.signup-email',
   'notifications.digest-tick',
   'notifications.daily-digest',
   'reporting.nightly',
 ] as const satisfies readonly JobName[];
 
 /** Jobs that send email: retried MAIL_RETRY_LIMIT times with backoff from MAIL_RETRY_DELAY_SECONDS. */
-export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'identity.invitation-email', 'notifications.daily-digest']);
+export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest']);
