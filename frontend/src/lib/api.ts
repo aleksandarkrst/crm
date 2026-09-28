@@ -5,7 +5,7 @@
  * Every tenant-scoped call carries the X-Tenant-Id header; the backend checks membership and
  * PostgreSQL row-level security enforces the isolation.
  */
-import { getAccessToken, renewSession } from './auth';
+import { getAccessToken, renewSession, type SignedIn } from './auth';
 import { canSignInAgain, sessionEnded, whenSignedInAgain } from './session';
 
 const TENANT_KEY = 'crm.tenantId';
@@ -95,7 +95,18 @@ export const signupApi = {
   options: () => publicApi<SignupOptions>('/auth/signup/options'),
   start: (email: string) => publicApi<{ sent: true }>('/auth/signup', { email }),
   check: (token: string) => publicApi<{ email: string }>('/auth/signup/check', { token }),
-  complete: (token: string, password: string) => publicApi<{ email: string }>('/auth/signup/complete', { token, password }),
+  /** Creates the account and signs in: the access token is there unless signing in failed. */
+  complete: (token: string, password: string) => publicApi<LinkDone>('/auth/signup/complete', { token, password }),
+};
+
+/** An emailed link used up: the account's email, and the session when signing in worked. */
+export type LinkDone = { email: string } & Partial<SignedIn>;
+
+/** "Forgot password?" (CD-114): the same shape as creating an account, and the same problems (410). */
+export const passwordApi = {
+  forgot: (email: string) => publicApi<{ sent: true }>('/auth/password/forgot', { email }),
+  check: (token: string) => publicApi<{ email: string }>('/auth/password/check', { token }),
+  reset: (token: string, password: string) => publicApi<LinkDone>('/auth/password/reset', { token, password }),
 };
 
 /** `path` limited to some rows (`?ids=` or `?dealIds=`, at most 200; CD-98), or the whole list. */

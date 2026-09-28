@@ -1,6 +1,7 @@
 // Creating an account with email (CD-114): a signed-out visitor sees only sign-in, goes to
 // "Create account", confirms the address through the emailed link and chooses a password, then
 // lands signed in. The link works once; a broken link explains itself and offers a new email.
+// "Forgot password?" works the same way: an emailed link, a new password, signed in.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
 import { api, BASE_URL, click, clickButton, email, eventually, newUserWithWorkspace, steps, text, useBrowser } from '../lib/harness.mjs';
@@ -77,5 +78,26 @@ describe('create account with email', () => {
     await stranger.waitForFunction(() => document.body.innerText.includes("This link doesn't work"));
     await clickButton(stranger, 'Send a new email');
     await stranger.waitForFunction(() => document.body.innerText.includes('Create your Cadence account'));
+  });
+
+  step('forgot password: an emailed link sets a new password and signs in', async () => {
+    const forgetful = await browser.person('forgetful');
+    await forgetful.goto(BASE_URL + '/forgot-password', { waitUntil: 'networkidle0' });
+    await forgetful.waitForFunction(() => document.body.innerText.includes('Reset your password'));
+    await forgetful.type('input[type=email]', address);
+    await clickButton(forgetful, 'Send reset link');
+    await forgetful.waitForFunction(() => document.body.innerText.includes('Check your email'));
+    const mail = await eventually(async () => (await api(reader, `/dev/mail?to=${encodeURIComponent(address)}`)).find((m) => m.subject === 'Reset your Cadence password'), { timeout: 20_000 });
+    assert.ok(mail, 'reset email');
+    const reset = /(https?:\/\/\S+\/reset-password#[A-Za-z0-9_-]+)/.exec(mail.text)?.[1];
+    assert.ok(reset, mail.text);
+    await forgetful.goto(BASE_URL + '/reset-password' + reset.slice(reset.indexOf('#')), { waitUntil: 'networkidle0' });
+    await forgetful.waitForFunction(() => document.body.innerText.includes('Choose a new password'));
+    const [password, confirm] = await forgetful.$$('input[type=password]');
+    await password.type('another long password');
+    await confirm.type('another long password');
+    await click(forgetful, 'button[type=submit]');
+    await forgetful.waitForFunction(() => document.body.innerText.includes('Create your workspace'), { timeout: 20_000 });
+    assert.match(await text(forgetful), new RegExp(`Signed in as ${address.replace(/[.]/g, '\\.')}`));
   });
 });

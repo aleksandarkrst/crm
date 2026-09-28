@@ -27,6 +27,8 @@ x-backend-env: &backend-env
   AUTH0_MANAGEMENT_CLIENT_ID: ${AUTH0_MANAGEMENT_CLIENT_ID:-}
   AUTH0_MANAGEMENT_CLIENT_SECRET: ${AUTH0_MANAGEMENT_CLIENT_SECRET:-}
   AUTH0_DB_CONNECTION: ${AUTH0_DB_CONNECTION:-Username-Password-Authentication}
+  AUTH0_LOGIN_CLIENT_ID: ${AUTH0_LOGIN_CLIENT_ID:-}
+  AUTH0_LOGIN_CLIENT_SECRET: ${AUTH0_LOGIN_CLIENT_SECRET:-}
   AUTH_GOOGLE_CONNECTION: ${AUTH_GOOGLE_CONNECTION-google-oauth2}
   CORS_ORIGINS: ${CORS_ORIGINS:-}
   STORAGE_DIR: /app/storage
@@ -46,15 +48,12 @@ services:
   frontend:
     logging: *logging
     # The staging stack sets FRONTEND_VARIANT=-staging: the frontend is built per environment
-    # because the sign-in app and Sentry environment are compiled into it.
+    # because the Sentry environment is compiled into it.
     image: ${IMAGE_PREFIX:-crm}-frontend:${APP_VERSION:-latest}${FRONTEND_VARIANT:-}
     build:
       context: ./frontend
       args:
         VITE_AUTH_MODE: ${AUTH_MODE:-oidc}
-        VITE_OIDC_AUTHORITY: ${OIDC_ISSUER:-}
-        VITE_OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
-        VITE_OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
     restart: unless-stopped
     depends_on:
       api:

@@ -130,6 +130,8 @@ export const signupRequests = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     email: text('email').notNull(), // stored lower-case
+    // 'signup': confirms the address before the account exists; 'reset': "Forgot password?".
+    purpose: text('purpose').$type<'signup' | 'reset'>().notNull().default('signup'),
     tokenHash: text('token_hash').notNull().unique(),
     tokenSealed: text('token_sealed').notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),

@@ -4,7 +4,7 @@ import { ApiError, type ApiInvitePreview, type ApiMe, crmApi, getTenantId, setTe
 import { getAccessToken, signOut } from '../lib/auth';
 import { loadWorkspace, type WorkspaceData } from '../store/remote';
 import { type Session, StoreProvider } from '../store/store';
-import { Centered, SignIn, SignUp, VerifySignup } from './AuthScreens';
+import { Centered, ForgotPassword, ResetPassword, SignIn, SignUp, VerifySignup } from './AuthScreens';
 import { SessionEndedDialog } from './SessionEndedDialog';
 import { CURRENCIES } from '../store/seed';
 
@@ -20,7 +20,7 @@ type Phase =
 
 /**
  * An invite link (/invite/<token>) is remembered for this tab, so it survives signing in first
- * (including the redirect to an OIDC provider and back).
+ * (including the way through Google and back).
  */
 const INVITE_KEY = 'crm.inviteToken';
 function pendingInvite(): string | null {
@@ -101,16 +101,13 @@ export function SessionGate({ children }: { children: ReactNode }) {
     };
   }, [me, tenantId, start]);
 
-  // The confirmation link works whoever is signed in here: finishing it signs in the new account.
-  if (pathname === '/signup/verify')
-    return (
-      <VerifySignup
-        onSignedIn={() => {
-          navigate('/', { replace: true });
-          void start();
-        }}
-      />
-    );
+  // Emailed links work whoever is signed in here: finishing one signs in its account.
+  const signedIn = () => {
+    navigate('/', { replace: true });
+    void start();
+  };
+  if (pathname === '/signup/verify') return <VerifySignup onSignedIn={signedIn} />;
+  if (pathname === '/reset-password') return <ResetPassword onSignedIn={signedIn} />;
   if (phase.kind === 'ready' && session)
     return (
       <StoreProvider key={session.tenant.id} data={phase.data} session={session}>
@@ -121,6 +118,8 @@ export function SessionGate({ children }: { children: ReactNode }) {
   if (phase.kind === 'signed-out')
     return pathname === '/signup' ? (
       <SignUp />
+    ) : pathname === '/forgot-password' ? (
+      <ForgotPassword />
     ) : (
       <SignIn
         invited={!!sessionStorage.getItem(INVITE_KEY)}

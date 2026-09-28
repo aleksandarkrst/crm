@@ -21,12 +21,15 @@ export abstract class AccountDirectory {
   abstract readonly available: boolean;
   /** Creates a password user whose email address counts as verified. Throws AccountError. */
   abstract createPasswordUser(email: string, password: string): Promise<void>;
+  /** Sets a new password for the provider's user `userId` (e.g. "auth0|abc"). Throws AccountError. */
+  abstract setPassword(userId: string, password: string): Promise<void>;
 }
 
 /** AUTH_MODE=dev: there are no passwords, dev sign-in accepts any email. */
 export class DevAccounts extends AccountDirectory {
   readonly available = true;
   async createPasswordUser(): Promise<void> {}
+  async setPassword(): Promise<void> {}
 }
 
 /** oidc mode without Management API credentials: "Continue with email" is hidden. */
@@ -35,15 +38,18 @@ export class NoAccounts extends AccountDirectory {
   createPasswordUser(): Promise<void> {
     return Promise.reject(new AccountError('unavailable', "Creating an account with email isn't available. Continue with Google instead."));
   }
+  setPassword(): Promise<void> {
+    return Promise.reject(new AccountError('unavailable', "Resetting a password isn't available here yet."));
+  }
 }
 
 /** The sign-up request's row stays locked while Auth0 answers, so don't wait long. */
 const TIMEOUT_MS = 15_000;
-const UNAVAILABLE = "We couldn't create your account just now. Try again in a few minutes.";
+const UNAVAILABLE = "That didn't work just now: our sign-in service didn't answer. Try again in a few minutes.";
 
 /**
- * Auth0's Management API, with a machine-to-machine app that may `create:users`
- * (AUTH0_MANAGEMENT_*). The domain is the tenant's own (…auth0.com), not a custom domain.
+ * Auth0's Management API, with a machine-to-machine app that may `create:users` and
+ * `update:users` (AUTH0_MANAGEMENT_*). The domain is the tenant's own (…auth0.com), not a custom domain.
  */
 export class Auth0Accounts extends AccountDirectory {
   readonly available = true;
@@ -60,23 +66,37 @@ export class Auth0Accounts extends AccountDirectory {
   }
 
   async createPasswordUser(email: string, password: string): Promise<void> {
-    const res = await fetch(`https://${this.domain}/api/v2/users`, {
-      method: 'POST',
+    const res = await this.call('POST', '/users', { connection: this.connection, email, password, email_verified: true, verify_email: false });
+    if (res.ok) return;
+    if (res.status === 409) throw new AccountError('exists', 'This email already has an account. Sign in instead.');
+    await this.refused(res, 'create a user');
+  }
+
+  async setPassword(userId: string, password: string): Promise<void> {
+    const res = await this.call('PATCH', `/users/${encodeURIComponent(userId)}`, { connection: this.connection, password });
+    if (res.ok) return;
+    await this.refused(res, 'set a password');
+  }
+
+  private async call(method: string, path: string, body: unknown): Promise<Response> {
+    return fetch(`https://${this.domain}/api/v2${path}`, {
+      method,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await this.managementToken()}` },
-      body: JSON.stringify({ connection: this.connection, email, password, email_verified: true, verify_email: false }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     }).catch((err: unknown) => {
       this.logger.error(`Auth0 unreachable: ${err instanceof Error ? err.message : String(err)}`);
       throw new AccountError('unavailable', UNAVAILABLE);
     });
-    if (res.ok) return;
+  }
+
+  private async refused(res: Response, what: string): Promise<never> {
     const body = (await res.json().catch(() => null)) as { message?: string } | null;
     const detail = body?.message ?? '';
-    if (res.status === 409) throw new AccountError('exists', 'This email already has an account. Sign in instead.');
     // Auth0 checks the password against the connection's policy: "PasswordStrengthError: Password is too weak".
     if (res.status === 400 && /password/i.test(detail)) throw new AccountError('password', passwordProblem(detail));
     if (res.status === 401) this.token = null;
-    this.logger.error(`Auth0 refused to create a user: ${res.status} ${detail}`);
+    this.logger.error(`Auth0 refused to ${what}: ${res.status} ${detail}`);
     throw new AccountError('unavailable', UNAVAILABLE);
   }
 

@@ -101,9 +101,9 @@
               An identifier from our sign-in provider (Auth0), your email address and name. If you
               sign in with Google, Google shares your name, email address and profile picture with
               the sign-in provider; Cadence keeps only your name and email. If you create an account
-              with email, Cadence keeps the address and a one-time confirmation link until a week after
-              the link expires (eight days at most); the password you choose goes to the sign-in provider and is
-              never stored by Cadence.
+              with email or reset your password, Cadence keeps the address and a one-time link until a
+              week after the link expires (eight days at most); the password you choose goes to the
+              sign-in provider and is never stored by Cadence.
             </td>
             <td>To create your account, sign you in and match team invitations to you.</td>
           </tr>
@@ -222,9 +222,10 @@
 
       <h2>Your browser</h2>
       <p>
-        Cadence stores your sign-in session and which workspace you last opened in your browser's
-        storage, only so the app works. There are no advertising or analytics cookies. The sign-in
-        page (run by Auth0) uses its own cookies to keep you signed in.
+        Cadence keeps you signed in with one cookie (<code>crm_session</code>, up to 30 days, removed
+        when you sign out), plus a short-lived cookie while "Continue with Google" runs, and stores
+        which workspace you last opened in your browser's storage, only so the app works. There are
+        no advertising or analytics cookies.
       </p>
 
       <h2>Your rights</h2>

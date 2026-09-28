@@ -6,12 +6,13 @@ import { DatabaseService } from '../../shared/database/database.service';
 import { signupRequests } from '../../shared/database/schema';
 import type { JobPayloads } from '../../shared/events/job-types';
 import { JobsService } from '../../shared/events/jobs.service';
-import { existingAccountEmail, loginLink, signInMethod, signupEmail, signupLink, signupLinkBox } from './signup-email';
-import { accountFor, SIGNUP_TTL_HOURS } from './signup.service';
+import { existingAccountEmail, loginLink, noPasswordEmail, passwordResetEmail, resetLink, signInMethod, signupEmail, signupLink, signupLinkBox } from './signup-email';
+import { accountFor, providerUserId, SIGNUP_TTL_HOURS, TTL_HOURS } from './signup.service';
 
 /**
- * Worker side of "Continue with email" (CD-114): emails the confirmation link, or, when the
- * address already has an account, tells its owner to sign in. A send that throws is retried
+ * Worker side of "Continue with email" and "Forgot password?" (CD-114): emails the link, or, when
+ * the address already has an account (sign-up) or has no password (reset), how to sign in instead.
+ * A reset for an address without an account sends nothing. A send that throws is retried
  * (MAIL_JOBS). Requests that were used, replaced or expired in the meantime are not emailed.
  */
 @Injectable()
@@ -39,16 +40,33 @@ export class SignupEmailJob implements OnApplicationBootstrap {
       return;
     }
     const { row, account } = found;
+    if (row.purpose === 'reset') return this.reset(row, account);
     if (account) {
       await this.mailer.send(existingAccountEmail({ to: row.email, link: loginLink(this.env.APP_URL), method: signInMethod(account.authSubject) }));
       return;
     }
-    const token = signupLinkBox(this.env)?.open(row.tokenSealed);
-    if (!token) {
-      // Sealed with another APP_SECRET: retrying can't help. Asking again sends a new link.
-      this.logger.error(`Sign-up request ${requestId}: the link can't be read with this APP_SECRET; not emailed`);
+    const token = this.open(row);
+    if (!token) return;
+    await this.mailer.send(signupEmail({ to: row.email, link: signupLink(this.env.APP_URL, token), hours: SIGNUP_TTL_HOURS }));
+  }
+
+  private async reset(row: typeof signupRequests.$inferSelect, account: { authSubject: string } | null): Promise<void> {
+    if (!account) {
+      this.logger.log(`Password reset ${row.id}: no account for the address; not emailed`);
       return;
     }
-    await this.mailer.send(signupEmail({ to: row.email, link: signupLink(this.env.APP_URL, token), hours: SIGNUP_TTL_HOURS }));
+    if (!providerUserId(account.authSubject, this.env.AUTH_MODE)) {
+      await this.mailer.send(noPasswordEmail({ to: row.email, link: loginLink(this.env.APP_URL) }));
+      return;
+    }
+    const token = this.open(row);
+    if (token) await this.mailer.send(passwordResetEmail({ to: row.email, link: resetLink(this.env.APP_URL, token), hours: TTL_HOURS.reset }));
+  }
+
+  private open(row: typeof signupRequests.$inferSelect): string | null {
+    const token = signupLinkBox(this.env)?.open(row.tokenSealed) ?? null;
+    // Sealed with another APP_SECRET: retrying can't help. Asking again sends a new link.
+    if (!token) this.logger.error(`Email link ${row.id} can't be read with this APP_SECRET; not emailed`);
+    return token;
   }
 }
