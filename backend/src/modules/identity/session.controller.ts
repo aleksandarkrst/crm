@@ -1,11 +1,10 @@
-import { Body, Controller, Get, HttpCode, HttpException, HttpStatus, Inject, Injectable, Post, Query, Req, Res, UnsupportedMediaTypeException } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, HttpCode, HttpException, HttpStatus, Inject, Injectable, Post, Query, Req, Res, UnsupportedMediaTypeException } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { ENV, type Env } from '../../infrastructure/config/config.module';
 import { Public } from '../../shared/authorization';
 import { RateLimit } from '../../shared/rate-limit';
-import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
 import { pkce, SessionError, SessionProvider, type SessionTokens } from './sessions';
 
 /** The refresh token. httpOnly, so page scripts never see it; only sent to /api/auth. */
@@ -119,9 +118,12 @@ export class SessionController {
   @Post('login')
   @HttpCode(200)
   @RateLimit('signIn')
-  login(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body(new ZodPipe(LoginBody)) body: z.infer<typeof LoginBody>): Promise<SignedIn> {
+  login(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() raw: unknown): Promise<SignedIn> {
+    // Before validating: a form post has no JSON body, and should be told 415, not 400.
     requireJson(req);
-    return this.cookies.passwordLogin(req, res, body.email, body.password);
+    const body = LoginBody.safeParse(raw);
+    if (!body.success) throw new BadRequestException('Enter your email and password.');
+    return this.cookies.passwordLogin(req, res, body.data.email, body.data.password);
   }
 
   /** A new access token for the session in the cookie; 401 when there is none or it ended. */
