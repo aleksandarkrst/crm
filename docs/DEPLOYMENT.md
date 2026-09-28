@@ -42,7 +42,7 @@ goes red. Migrations that already ran stay applied (see [Rollback](#operations-c
 |---|---|
 | `IMAGE_PREFIX` | `ghcr.io/<github-user-or-org>/<repo>` (lowercase) |
 | `POSTGRES_PASSWORD`, `APP_DB_PASSWORD` | `openssl rand -hex 32` each |
-| `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_CLIENT_ID` | from your identity provider (step 4) |
+| `OIDC_ISSUER`, `OIDC_AUDIENCE`, `AUTH0_LOGIN_CLIENT_ID`, `AUTH0_LOGIN_CLIENT_SECRET` | from your identity provider (step 4) |
 | `CLOUDFLARE_TUNNEL_TOKEN` | from step 3 |
 | `APP_URL` | the public address, e.g. `https://app.yourdomain.com` (links in emails) |
 | `APP_SECRET` | `openssl rand -hex 32` (encrypts invite links at rest; changing it breaks "Resend" for older invitations) |
@@ -62,19 +62,27 @@ For private GHCR images, log the server in once:
 
 Never route `postgres` through the tunnel. It is only on the internal Docker network.
 
-## 4. Identity provider (OIDC)
+## 4. Identity provider (Auth0)
 
-Any OIDC provider works. For example, in Auth0:
+People sign in on Cadence's own pages (CD-114): the backend checks the password with Auth0, or runs
+"Continue with Google" through it, and keeps the session in an httpOnly cookie. Nobody sees an Auth0
+page. In Auth0:
 - **API**: identifier = `OIDC_AUDIENCE` (e.g. `https://app.yourdomain.com/api`). Turn on
-  **Allow Offline Access**, so the app gets refresh tokens and sessions renew themselves instead
+  **Allow Offline Access**, so sign-in gets a refresh token and sessions renew themselves instead
   of ending after the 2-hour access token (CD-88).
-- **Single Page Application**: allowed callback `https://app.yourdomain.com/auth/callback`,
-  logout URL `https://app.yourdomain.com`, web origin `https://app.yourdomain.com`.
-  Its client ID goes in `OIDC_CLIENT_ID`. Under **Refresh Token Rotation** turn on **Allow
-  Refresh Token Rotation**, and under **Refresh Token Expiration** set an absolute lifetime
-  (e.g. 30 days) and an inactivity lifetime (e.g. 7 days). The `refresh_token` grant must stay on.
-  Without these, the app still works: when the token runs out it asks the user to sign in again
-  (in a popup, keeping their unsaved edits).
+- **Applications → Regular Web Application** (e.g. `CRM sign-in`). Its client ID and secret go in
+  `AUTH0_LOGIN_CLIENT_ID` and `AUTH0_LOGIN_CLIENT_SECRET`; without them nobody can sign in (the API
+  logs an error at startup and sign-in answers 503).
+  - **Allowed Callback URLs**: `https://app.yourdomain.com/api/auth/callback`.
+  - **Advanced Settings → Grant Types**: **Password**, **Authorization Code** and **Refresh Token**.
+  - **Credentials → Authentication Method**: Client Secret (Post). Turn on **Trust Token Endpoint IP
+    Header**, so Auth0's brute-force protection counts attempts per visitor, not per server (the
+    backend sends the visitor's address in `auth0-forwarded-for`).
+  - **Refresh Token Rotation**: on, with a reuse interval of a few seconds. **Refresh Token
+    Expiration**: an absolute lifetime of 30 days (the cookie's) and an inactivity lifetime (e.g. 7 days).
+  - **Connections**: the database connection (below) and Google.
+- **Settings → API Authorization Settings → Default Directory**: the database connection's name
+  (`AUTH0_DB_CONNECTION`). The password grant needs it.
 - `OIDC_ISSUER` is the tenant URL, e.g. `https://your-tenant.eu.auth0.com/` (trailing slash as the provider issues it).
 - **Put the user's email in the access token.** Accepting a team invitation matches the invited
   address against the `email` claim of the access token (`backend/src/modules/identity/token.service.ts`).
@@ -82,25 +90,27 @@ Any OIDC provider works. For example, in Auth0:
   `event.user.email`. If your provider only allows namespaced custom claims, read that claim name in
   `token.service.ts`. Test it once by inviting yourself on a second email.
 
-- **Creating an account (CD-114).** The app's own "Create account" page confirms the email first,
-  then creates the user in Auth0 with the chosen password:
+- **Creating an account and resetting a password (CD-114).** The app's own "Create account" page
+  confirms the email first, then creates the user in Auth0 with the chosen password; "Forgot
+  password?" sends a one-hour link and sets the new password the same way:
   - **Applications → Machine to Machine**: create `CRM account creation`, authorize it for the
-    **Auth0 Management API** with only the `create:users` permission. Put the tenant domain (e.g.
-    `your-tenant.eu.auth0.com`), its client ID and secret in `AUTH0_MANAGEMENT_DOMAIN`,
-    `AUTH0_MANAGEMENT_CLIENT_ID`, `AUTH0_MANAGEMENT_CLIENT_SECRET`. Without them, email sign-up is
-    hidden. It also needs working email (section 4a).
+    **Auth0 Management API** with only the `create:users` and `update:users` permissions. Put the
+    tenant domain (e.g. `your-tenant.eu.auth0.com`), its client ID and secret in
+    `AUTH0_MANAGEMENT_DOMAIN`, `AUTH0_MANAGEMENT_CLIENT_ID`, `AUTH0_MANAGEMENT_CLIENT_SECRET`.
+    Without them, email sign-up is hidden and password reset fails. Both also need working email
+    (section 4a).
   - **Authentication → Database → Username-Password-Authentication** (or the connection named in
-    `AUTH0_DB_CONNECTION`): turn on **Disable Sign Ups**, so nobody creates an unconfirmed account on
-    the Auth0 page; the Management API still can. Its password policy applies to the chosen password.
-  - **Authentication → Social → Google**: enable it for the SPA (with your own Google OAuth client in
-    production; Auth0's dev keys only work for testing). Its name goes in `AUTH_GOOGLE_CONNECTION`
-    (default `google-oauth2`; empty hides "Continue with Google").
+    `AUTH0_DB_CONNECTION`): turn on **Disable Sign Ups**, so nobody creates an unconfirmed account
+    through Auth0 directly; the Management API still can. Its password policy applies to the chosen
+    password.
+  - **Authentication → Social → Google**: enable it for the sign-in application (with your own Google
+    OAuth client in production; Auth0's dev keys only work for testing). Its name goes in
+    `AUTH_GOOGLE_CONNECTION` (default `google-oauth2`; empty hides "Continue with Google").
   - A Google sign-in whose email already has a Cadence account that signs in with a password (or the
     other way round) is refused with a message, not turned into a second account. Auth0 keeps the
     new identity as its own user; link accounts in Auth0 if you want both ways to work.
 
-Set the same values as GitHub **variables** (`OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_AUDIENCE`),
-because the frontend image bakes them in at build time.
+The frontend image has no sign-in settings baked in, so the same image works for any tenant.
 
 ## 4a. Email (SMTP)
 
@@ -205,9 +215,8 @@ Repository **secrets** (`Settings → Secrets and variables → Actions`):
 
 Repository **variables**:
 - `DEPLOY_ENABLED=true` (deploys are skipped until you set it)
-- `STAGING_DEPLOY_ENABLED=true`, `STAGING_OIDC_CLIENT_ID`, `STAGING_OIDC_AUDIENCE`: merges go to
-  staging and production is promoted by hand ([Staging](#9-staging))
-- `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_AUDIENCE`
+- `STAGING_DEPLOY_ENABLED=true`: merges go to staging and production is promoted by hand
+  ([Staging](#9-staging))
 
 The server also needs access to GitHub, because `deploy.sh` fetches the commit it deploys:
 - **Fetching the repo:** a read-only **deploy key** (`Settings → Deploy keys`, "Allow write access" off) whose private key is `/home/deploy/.ssh/crm_github`. Point git at it in `/home/deploy/.ssh/config`:
@@ -513,10 +522,10 @@ promote an earlier commit that passed staging, or run `scripts/deploy.sh <sha>` 
    because production's `cloudflared` can't reach the staging network. Keep the token for `.env`.
    Optional: put it behind Cloudflare Access so only the team can open it.
 2. **Auth0** (same tenant): an API `Simplicity CRM API (staging)` with identifier
-   `https://staging.simplicity-labs.com/api` and Allow Offline Access on, and a Single Page
-   Application `CRM (staging)` with callback `https://staging.simplicity-labs.com/auth/callback`,
-   logout URL and web origin `https://staging.simplicity-labs.com`, grant types authorization code
-   and refresh token, rotating refresh tokens. Enable the same connections as production's app.
+   `https://staging.simplicity-labs.com/api` and Allow Offline Access on, and a Regular Web
+   Application `CRM sign-in (staging)` set up like production's (section 4) with callback
+   `https://staging.simplicity-labs.com/api/auth/callback`. Enable the same connections as
+   production's app.
    The post-login Action that adds `email` covers every application. A separate audience keeps
    staging tokens from being accepted by the production API.
 3. **The server**, as `deploy`:
@@ -532,7 +541,7 @@ promote an earlier commit that passed staging, or run `scripts/deploy.sh <sha>` 
    | `COMPOSE_PROJECT_NAME` | `crm-staging` |
    | `FRONTEND_VARIANT` | `-staging` (pulls the staging frontend image) |
    | `POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `APP_SECRET` | new values (`openssl rand -hex 32`) |
-   | `OIDC_AUDIENCE`, `OIDC_CLIENT_ID` | the staging API identifier and SPA client ID |
+   | `OIDC_AUDIENCE`, `AUTH0_LOGIN_CLIENT_ID`, `AUTH0_LOGIN_CLIENT_SECRET` | the staging API identifier and sign-in application |
    | `APP_URL` | `https://staging.simplicity-labs.com` |
    | `CLOUDFLARE_TUNNEL_TOKEN` | the staging tunnel's token |
    | `MAIL_DRIVER` | `log`, or `smtp` with a sandbox SMTP (never real customers' addresses) |
@@ -542,8 +551,8 @@ promote an earlier commit that passed staging, or run `scripts/deploy.sh <sha>` 
    | `API_MEM_LIMIT`, `WORKER_MEM_LIMIT` | `384m` each, so staging can't starve production |
 
    The staging stack uses about 1 GB of memory; check `free -h` has that to spare.
-4. **GitHub** (`Settings → Secrets and variables → Actions → Variables`): `STAGING_OIDC_CLIENT_ID`,
-   `STAGING_OIDC_AUDIENCE`, optionally `STAGING_URL`, and last `STAGING_DEPLOY_ENABLED=true`. The
+4. **GitHub** (`Settings → Secrets and variables → Actions → Variables`): optionally `STAGING_URL`,
+   and last `STAGING_DEPLOY_ENABLED=true`. The
    staging job uses the same `DEPLOY_*` secrets (same server). GitHub creates the `staging`
    environment on the first deploy.
 5. Merge something (or re-run the latest `main` workflow). The first deploy creates the empty

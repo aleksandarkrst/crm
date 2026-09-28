@@ -373,20 +373,35 @@ OpenID Connect provider (discovery → JWKS). Users are created on first request
 
 ### Sessions that don't end mid-work (CD-88)
 
-The browser signs in with authorization code + PKCE (`frontend/src/lib/auth.ts`, oidc-client-ts,
-tokens in `sessionStorage`). The access token lasts 2 hours, so:
+Signing in happens on Cadence's own pages; the backend talks to the provider (`identity/sessions.ts`,
+`session.controller.ts`):
 
-- **Renewal.** The scope includes `offline_access`, so the provider issues a refresh token
-  (rotating: each use replaces it). oidc-client-ts renews the access token shortly before it
-  expires; `getAccessToken()` also renews one that has expired anyway (a laptop that slept).
+- **Password**: `POST /api/auth/login {email, password}` uses Auth0's password-realm grant with the
+  sign-in application (`AUTH0_LOGIN_CLIENT_*`) and the visitor's address in `auth0-forwarded-for`,
+  so the provider's brute-force protection counts per visitor. Its errors become messages that
+  don't tell whether an account exists.
+- **Google**: `GET /api/auth/google` redirects to the provider with `connection=` and PKCE (verifier
+  and state in a 10-minute `crm_oauth` cookie); `/api/auth/callback` exchanges the code and
+  redirects to `/auth/callback?result=ok|cancelled|failed|unavailable`.
+- **The session**: the refresh token (`offline_access`, rotating) lives in the httpOnly `crm_session`
+  cookie (SameSite=Strict, path `/api/auth`, 30 days). The browser keeps only the access token, in
+  memory (`frontend/src/lib/auth.ts`), and gets a new one from `POST /api/auth/refresh` shortly
+  before it expires; a reload does the same. Tabs take turns renewing (`navigator.locks`), because
+  each use replaces the refresh token. `POST /api/auth/logout` revokes it and clears the cookie.
+  These endpoints only accept JSON, which a cross-site form can't send.
+
+The access token lasts 2 hours, so:
+
+- **Renewal.** `getAccessToken()` renews one that is about to expire or has expired anyway (a
+  laptop that slept).
 - **401 anywhere.** Every API call goes through `authorizedFetch()` (`lib/api.ts`): on 401 it
   renews once and sends the request again. If that fails too, the session has ended:
   `SessionEndedDialog` opens over the app and requests wait (`lib/session.ts`) instead of failing.
-  An edit is therefore neither reset nor lost; it is saved once the user signs in again. That
-  sign-in runs in a popup (same `/auth/callback`, `signinCallback()` handles both), so the page and
-  its unsaved edits stay; signing in as someone else doesn't release the waiting edits. **Sign out**
-  in the dialog discards them. Before the app is open (start-up) a 401 goes to the sign-in screen
-  as before. The live-update stream reconnects with a fresh token on its own.
+  An edit is therefore neither reset nor lost; it is saved once the user signs in again, with the
+  password right in the dialog or Google in a popup (`/auth/callback` posts the result back to the
+  page), so the page and its unsaved edits stay; signing in as someone else doesn't release the
+  waiting edits. **Sign out** in the dialog discards them. Before the app is open (start-up) a 401
+  goes to the sign-in screen as before. The live-update stream reconnects with a fresh token on its own.
 - Covered by `e2e/tests/session-expiry.test.mjs` (dev mode: an invalid token, the dialog, the edit
   saved after signing in again).
 
@@ -394,9 +409,9 @@ tokens in `sessionStorage`). The access token lasts 2 hours, so:
 
 - Signed out, every address shows the sign-in page (`/login`); `/signup` is "Create account". No
   CRM data loads before sign-in (`SessionGate`). Screens: `components/AuthScreens.tsx`.
-- **Google**: a redirect to the provider with `connection=<AUTH_GOOGLE_CONNECTION>` (from
-  `GET /api/auth/signup/options`), for signing in and creating an account alike. A cancelled or
-  refused sign-in comes back to `/auth/callback` with an error, which the sign-in page explains.
+- **Google**: "Continue with Google" (shown when `GET /api/auth/signup/options` says so) goes through
+  `/api/auth/google`, for signing in and creating an account alike. A cancelled or refused sign-in
+  comes back to `/auth/callback` with a result, which the sign-in page explains.
 - **Email**: Cadence confirms the address itself, before any password exists:
   1. `POST /api/auth/signup {email}` always answers 202 `{sent:true}`, so it can't tell whether the
      address has an account. The worker (`identity.signup-email`) emails a link, or, when the address
@@ -407,8 +422,11 @@ tokens in `sessionStorage`). The access token lasts 2 hours, so:
   3. `check` shows the address; `complete {token, password}` creates the user at the provider with
      `email_verified: true` (Auth0 Management API, `accounts.ts`) and uses the link up. A password the
      provider refuses doesn't use it up. Cadence never stores the password.
-  4. The browser then signs in: dev mode directly, OIDC by sending the user to the provider with the
-     email filled in, where they type the new password once.
+  4. `complete` also signs in (the session cookie above), so the new account opens right away.
+- **Forgot password**: `POST /api/auth/password/forgot {email}` works the same way (always 202,
+  `purpose='reset'` rows in `signup_requests`): a one-hour link `/reset-password#<token>`, then
+  `reset {token, password}` sets it with the Management API (`update:users`) and signs in. An
+  address without a password account gets an email saying how it signs in.
 - **One account per email**: `IdentityService.resolveUser` refuses (409 `account_exists`) a sign-in
   subject it hasn't seen whose email already belongs to a user with another subject (e.g. Google
   after email and password). The app says how that account signs in and offers **Sign out**.

@@ -30,6 +30,11 @@ const EnvSchema = z
     AUTH0_MANAGEMENT_CLIENT_ID: z.string().optional(),
     AUTH0_MANAGEMENT_CLIENT_SECRET: z.string().optional(),
     AUTH0_DB_CONNECTION: z.string().default('Username-Password-Authentication'),
+    // Signing in on Cadence's own pages (CD-114): a Regular Web Application with the Password,
+    // Authorization Code and Refresh Token grants. The backend checks passwords with it and keeps
+    // the refresh token in an httpOnly cookie. Without them nobody can sign in when AUTH_MODE=oidc.
+    AUTH0_LOGIN_CLIENT_ID: z.string().optional(),
+    AUTH0_LOGIN_CLIENT_SECRET: z.string().optional(),
     // The provider's connection for "Continue with Google" (sent as `connection=`). Empty hides it.
     AUTH_GOOGLE_CONNECTION: z.string().default('google-oauth2'),
 

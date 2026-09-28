@@ -3,7 +3,7 @@ import { Navigate, Outlet, Route, Routes, useNavigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { SessionGate } from './components/SessionGate';
 import type { ApiStartPage } from './lib/api';
-import { completeSignIn, rememberSignInProblem } from './lib/auth';
+import { POPUP_MESSAGE, rememberSignInProblem } from './lib/auth';
 import { paths } from './lib/paths';
 import { useStore } from './store/store';
 
@@ -48,17 +48,23 @@ function LazyScreens() {
   );
 }
 
+/**
+ * Back from "Continue with Google" (/api/auth/callback sends the browser here with how it went).
+ * In the popup of "sign in again" it tells the page that opened it and closes.
+ */
 function AuthCallback() {
   const navigate = useNavigate();
   useEffect(() => {
-    completeSignIn()
-      .then(() => navigate('/', { replace: true }))
-      .catch((err: unknown) => {
-        console.error('Sign-in failed', err);
-        // Back to the sign-in page, which says what happened (cancelled, refused by the provider).
-        rememberSignInProblem(err);
-        navigate('/login', { replace: true });
-      });
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get('result');
+    if (params.get('popup') === '1' && window.opener) {
+      (window.opener as Window).postMessage({ type: POPUP_MESSAGE, result }, window.location.origin);
+      window.close();
+      return;
+    }
+    // On failure, back to the sign-in page, which says what happened (cancelled, refused).
+    if (result !== 'ok') rememberSignInProblem(result);
+    navigate(result === 'ok' ? '/' : '/login', { replace: true });
   }, [navigate]);
   return null;
 }

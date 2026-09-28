@@ -5,7 +5,6 @@
   "type": "module",
   "dependencies": {
     "@sentry/react": "^11.0.0",
-    "oidc-client-ts": "^3.5.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router-dom": "^7.18.4"

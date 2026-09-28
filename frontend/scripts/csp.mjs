@@ -1,5 +1,5 @@
 // The Content-Security-Policy of the app page (CD-92), built from the same variables the bundle is
-// built with, so it names the exact sign-in provider and Sentry hosts instead of wildcards.
+// built with, so it names the exact Sentry host instead of a wildcard.
 //
 //   node scripts/csp.mjs policy   # the policy, one line (e.g. CSP_PREVIEW for `vite preview`)
 //   node scripts/csp.mjs nginx    # an nginx include with the header (the Docker image uses this)
@@ -8,14 +8,6 @@
 // which only reports. Reports go to the frontend's Sentry project when VITE_SENTRY_DSN is set.
 
 const env = process.env;
-
-const origin = (url) => {
-  try {
-    return url ? new URL(url).origin : null;
-  } catch {
-    return null;
-  }
-};
 
 function sentry() {
   try {
@@ -30,7 +22,6 @@ function sentry() {
 }
 
 export function policy() {
-  const auth = env.VITE_AUTH_MODE === 'dev' ? null : origin(env.VITE_OIDC_AUTHORITY);
   const s = sentry();
   const directives = [
     ["default-src", "'self'"],
@@ -39,8 +30,8 @@ export function policy() {
     ["style-src", "'self' 'unsafe-inline' https://fonts.googleapis.com"],
     ["font-src", "'self' https://fonts.gstatic.com"],
     ["img-src", "'self' data: blob:"],
-    // The API is same-origin; the sign-in provider for discovery and token renewal; Sentry.
-    ["connect-src", ["'self'", auth, s?.host].filter(Boolean).join(' ')],
+    // The API is same-origin, sign-in included (CD-114: the backend talks to the provider); Sentry.
+    ["connect-src", ["'self'", s?.host].filter(Boolean).join(' ')],
     // The live-update worker is a bundled file.
     ["worker-src", "'self'"],
     ["frame-src", "'none'"],

@@ -175,9 +175,6 @@ jobs:
           push: ${{ github.ref == 'refs/heads/main' && !inputs.verify_images }}
           build-args: |
             VITE_AUTH_MODE=${{ vars.AUTH_MODE || 'oidc' }}
-            VITE_OIDC_AUTHORITY=${{ vars.OIDC_ISSUER }}
-            VITE_OIDC_CLIENT_ID=${{ vars.OIDC_CLIENT_ID }}
-            VITE_OIDC_AUDIENCE=${{ vars.OIDC_AUDIENCE }}
             VITE_SENTRY_DSN=${{ vars.SENTRY_FRONTEND_DSN }}
             VITE_APP_VERSION=${{ github.sha }}
             CSP_ENFORCE=${{ vars.CSP_ENFORCE || 'false' }}
@@ -199,9 +196,6 @@ jobs:
           push: ${{ github.ref == 'refs/heads/main' && !inputs.verify_images }}
           build-args: |
             VITE_AUTH_MODE=${{ vars.AUTH_MODE || 'oidc' }}
-            VITE_OIDC_AUTHORITY=${{ vars.OIDC_ISSUER }}
-            VITE_OIDC_CLIENT_ID=${{ vars.STAGING_OIDC_CLIENT_ID }}
-            VITE_OIDC_AUDIENCE=${{ vars.STAGING_OIDC_AUDIENCE }}
             VITE_SENTRY_DSN=${{ vars.SENTRY_FRONTEND_DSN }}
             VITE_SENTRY_ENVIRONMENT=staging
             VITE_APP_VERSION=${{ github.sha }}

@@ -1,6 +1,7 @@
 CREATE TABLE "signup_requests" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"email" text NOT NULL,
+	"purpose" text DEFAULT 'signup' NOT NULL,
 	"token_hash" text NOT NULL,
 	"token_sealed" text NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,

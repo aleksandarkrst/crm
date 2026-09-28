@@ -13,6 +13,8 @@ const base = (appUrl: string) => appUrl.replace(/\/+$/, '');
 /** The token goes after `#`, so it never reaches a server log. */
 export const signupLink = (appUrl: string, token: string) => `${base(appUrl)}/signup/verify#${token}`;
 export const loginLink = (appUrl: string) => `${base(appUrl)}/login`;
+/** "Forgot password?": the page that chooses a new password. */
+export const resetLink = (appUrl: string, token: string) => `${base(appUrl)}/reset-password#${token}`;
 
 /** How an existing account signs in, from its subject ("<issuer>|<provider sub>"). */
 export type SignInMethod = 'google' | 'password' | 'other';
@@ -70,6 +72,37 @@ export function existingAccountEmail(input: { to: string; link: string; method: 
       `<p style="margin:0 0 12px">Someone asked to create a Cadence account for <strong>${escapeHtml(input.to)}</strong>, but this address already has one. ${escapeHtml(how)}</p>`,
       buttonHtml('Sign in to Cadence', input.link),
     ].join('\n'),
+    IGNORE,
+  );
+  return { to: input.to, subject, text, html };
+}
+
+/** "Forgot password?" for an account that signs in with a password: the link to choose a new one. */
+export function passwordResetEmail(input: { to: string; link: string; hours: number }): MailMessage {
+  const subject = 'Reset your Cadence password';
+  const ignore = "If you didn't ask for this, you can ignore this email. Your password stays the same until the link is opened.";
+  const valid = `The link works once, for ${input.hours === 1 ? 'one hour' : `${input.hours} hours`}.`;
+  const text = ['Hi,', '', `To choose a new password for your Cadence account ${input.to}, open this link:`, input.link, '', valid, '', ignore].join('\n');
+  const html = layoutHtml(
+    [
+      `<p style="margin:0 0 12px">Hi,</p>`,
+      `<p style="margin:0 0 12px">To choose a new password for your Cadence account <strong>${escapeHtml(input.to)}</strong>, use the button below.</p>`,
+      buttonHtml('Choose a new password', input.link),
+      `<p style="margin:0 0 12px">${valid}</p>`,
+      `<p style="margin:0 0 12px;color:#475467;font-size:12.5px">If the button doesn't work, paste this link into your browser:<br><a href="${escapeHtml(input.link)}" style="color:#14503C;word-break:break-all">${escapeHtml(input.link)}</a></p>`,
+    ].join('\n'),
+    ignore,
+  );
+  return { to: input.to, subject, text, html };
+}
+
+/** "Forgot password?" for an account that has no password (it signs in with Google): how to sign in instead. */
+export function noPasswordEmail(input: { to: string; link: string }): MailMessage {
+  const subject = 'Signing in to Cadence';
+  const how = `Your Cadence account ${input.to} signs in with Google, so it has no password to reset. Choose "Continue with Google" on the sign-in page.`;
+  const text = ['Hi,', '', how, '', input.link, '', IGNORE].join('\n');
+  const html = layoutHtml(
+    [`<p style="margin:0 0 12px">Hi,</p>`, `<p style="margin:0 0 12px">${escapeHtml(how)}</p>`, buttonHtml('Sign in to Cadence', input.link)].join('\n'),
     IGNORE,
   );
   return { to: input.to, subject, text, html };
