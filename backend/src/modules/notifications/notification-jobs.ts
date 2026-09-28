@@ -92,6 +92,10 @@ export class NotificationJobs implements OnApplicationBootstrap {
       await record({ status: 'skipped', itemCount: 0 });
       return;
     }
+    if (this.mailer.notDelivered) {
+      await record({ status: 'failed', error: this.mailer.notDelivered });
+      return;
+    }
     const message = digestEmail({ to: who.email, memberName: who.name, workspaceName: who.workspaceName, appUrl: this.env.APP_URL, digest });
     try {
       await this.mailer.send(message);
@@ -134,6 +138,10 @@ export class NotificationJobs implements OnApplicationBootstrap {
     );
     // Deleted, or given to someone else again before this ran: nothing to tell.
     if (!deal || deal.ownerUserId !== assigneeUserId) return;
+    if (this.mailer.notDelivered) {
+      this.logger.warn(`Deal-assigned email for deal ${dealId} not sent: ${this.mailer.notDelivered}`);
+      return;
+    }
 
     await this.mailer.send(
       dealAssignedEmail({ to: assignee.email, assigneeName: assignee.name, actorName: actor?.name ?? 'A teammate', workspaceName: assignee.workspaceName, appUrl: this.env.APP_URL, deal }),

@@ -17,12 +17,16 @@ const KEEP = 200;
 export class LogMailer extends Mailer {
   private readonly logger = new Logger('Mail');
   readonly sent: SentMail[] = [];
+  override readonly notDelivered: string | null;
 
+  /** `notDelivered`: set in production, where no one can read what this driver "sends". */
   constructor(
     private readonly from: string,
     private readonly outboxFile: string | null,
+    notDelivered: string | null = null,
   ) {
     super();
+    this.notDelivered = notDelivered;
   }
 
   async send(message: MailMessage): Promise<void> {

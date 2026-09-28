@@ -55,6 +55,11 @@ export class InvitationEmailJob implements OnApplicationBootstrap {
       this.logger.log(`Invitation ${invitationId} is no longer pending; not emailed`);
       return;
     }
+    if (this.mailer.notDelivered) {
+      // Retrying can't help either, and "sent" would be a lie: the owner has to share the link.
+      await this.setStatus(tenantId, invitationId, { emailStatus: 'failed', emailError: this.mailer.notDelivered });
+      return;
+    }
     const token = row.tokenSealed ? inviteLinkBox(this.env)?.open(row.tokenSealed) : null;
     if (!token) {
       // Retrying can't help: the link was sealed with another APP_SECRET (or never stored).

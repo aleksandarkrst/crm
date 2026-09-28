@@ -126,7 +126,9 @@ SMTP provider: Postmark, Resend, Amazon SES, Mailgun and most others offer SMTP.
    (default 4, backoff from 30 s) and then shown as "Email not delivered" with the reason; the logs
    have it too (`docker compose logs worker`).
 
-With `MAIL_DRIVER=log` nothing is delivered: emails only go to the worker's log.
+With `MAIL_DRIVER=log` nothing is delivered: emails only go to the worker's log. In production the
+worker then says so at startup, marks new invitations "Email not delivered: Email isn't set up on
+this server yet…" (so owners copy the link instead) and records daily digests as failed (CD-84).
 
 ## 5. Backups
 

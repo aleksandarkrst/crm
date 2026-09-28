@@ -18,5 +18,11 @@ export interface SentMail extends MailMessage {
  * fails and pg-boss retries it.
  */
 export abstract class Mailer {
+  /**
+   * Why messages never reach anyone (the log driver in production), or null when they do. Jobs
+   * check it before sending, so nothing is reported as sent that wasn't (CD-84).
+   */
+  readonly notDelivered: string | null = null;
+
   abstract send(message: MailMessage): Promise<void>;
 }
