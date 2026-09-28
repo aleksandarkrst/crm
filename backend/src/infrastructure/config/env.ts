@@ -23,6 +23,15 @@ const EnvSchema = z
     DEV_JWT_SECRET: z.string().min(32).optional(),
     OIDC_ISSUER: z.string().url().optional(),
     OIDC_AUDIENCE: z.string().optional(),
+    // Creating an account with email and password (CD-114). Cadence confirms the address itself,
+    // then creates the password user in Auth0 through its Management API: a machine-to-machine
+    // app allowed `create:users`. Unset in oidc mode = "Continue with email" is hidden.
+    AUTH0_MANAGEMENT_DOMAIN: z.string().optional(), // e.g. your-tenant.eu.auth0.com
+    AUTH0_MANAGEMENT_CLIENT_ID: z.string().optional(),
+    AUTH0_MANAGEMENT_CLIENT_SECRET: z.string().optional(),
+    AUTH0_DB_CONNECTION: z.string().default('Username-Password-Authentication'),
+    // The provider's connection for "Continue with Google" (sent as `connection=`). Empty hides it.
+    AUTH_GOOGLE_CONNECTION: z.string().default('google-oauth2'),
 
     // Comma-separated. Leave empty when the frontend and API share one hostname.
     CORS_ORIGINS: z.string().default(''),
@@ -74,6 +83,10 @@ const EnvSchema = z
     }
     if (env.MAIL_DRIVER === 'smtp' && !env.SMTP_URL) {
       ctx.addIssue({ code: 'custom', path: ['SMTP_URL'], message: 'required when MAIL_DRIVER=smtp' });
+    }
+    const management = [env.AUTH0_MANAGEMENT_DOMAIN, env.AUTH0_MANAGEMENT_CLIENT_ID, env.AUTH0_MANAGEMENT_CLIENT_SECRET].filter(Boolean).length;
+    if (management !== 0 && management !== 3) {
+      ctx.addIssue({ code: 'custom', path: ['AUTH0_MANAGEMENT_DOMAIN'], message: 'set AUTH0_MANAGEMENT_DOMAIN, _CLIENT_ID and _CLIENT_SECRET together' });
     }
     if (env.AUTH_MODE === 'oidc' && (!env.OIDC_ISSUER || !env.OIDC_AUDIENCE)) {
       ctx.addIssue({ code: 'custom', path: ['OIDC_ISSUER'], message: 'OIDC_ISSUER and OIDC_AUDIENCE are required when AUTH_MODE=oidc' });

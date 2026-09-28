@@ -25,22 +25,27 @@ export const PROFILE_LANGUAGES = ['en', 'sr', 'de'] as const;
 export const DATE_FORMATS = ['DD.MM.YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'] as const;
 export const START_PAGES = ['pipeline', 'overview', 'today', 'contacts'] as const;
 
-export const users = pgTable('users', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  // "<issuer>|<sub>" from the identity provider token. Stable per person per provider.
-  authSubject: text('auth_subject').notNull().unique(),
-  email: text('email'),
-  displayName: text('display_name'),
-  // True once the user has set their name in the profile; sign-ins then stop overwriting it.
-  displayNameCustom: boolean('display_name_custom').notNull().default(false),
-  // Profile settings. They are the user's own and apply in every workspace.
-  jobTitle: text('job_title'),
-  phone: text('phone'),
-  language: text('language', { enum: PROFILE_LANGUAGES }).notNull().default('en'),
-  dateFormat: text('date_format', { enum: DATE_FORMATS }).notNull().default('DD.MM.YYYY'),
-  startPage: text('start_page', { enum: START_PAGES }).notNull().default('pipeline'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const users = pgTable(
+  'users',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // "<issuer>|<sub>" from the identity provider token. Stable per person per provider.
+    authSubject: text('auth_subject').notNull().unique(),
+    email: text('email'),
+    displayName: text('display_name'),
+    // True once the user has set their name in the profile; sign-ins then stop overwriting it.
+    displayNameCustom: boolean('display_name_custom').notNull().default(false),
+    // Profile settings. They are the user's own and apply in every workspace.
+    jobTitle: text('job_title'),
+    phone: text('phone'),
+    language: text('language', { enum: PROFILE_LANGUAGES }).notNull().default('en'),
+    dateFormat: text('date_format', { enum: DATE_FORMATS }).notNull().default('DD.MM.YYYY'),
+    startPage: text('start_page', { enum: START_PAGES }).notNull().default('pipeline'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  // Finds the account an email address already has, whichever way it signs in (CD-114).
+  (t) => [index('users_email_lower_idx').on(sql`lower(${t.email})`)],
+);
 
 export const MEMBERSHIP_ROLES = ['owner', 'admin', 'member'] as const;
 export type MembershipRole = (typeof MEMBERSHIP_ROLES)[number];
@@ -112,4 +117,24 @@ export const invitations = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('invitations_tenant_idx').on(t.tenantId)],
+);
+
+/**
+ * Creating an account with email and password (CD-114): someone asked for a confirmation email.
+ * The link's token is looked up by its SHA-256 hash and kept encrypted with APP_SECRET
+ * (`token_sealed`) so the worker can email it. It works once (`used_at`) until `expires_at`; a new
+ * request for the same address deletes the older ones. Not tenant-scoped: there is no user yet.
+ */
+export const signupRequests = pgTable(
+  'signup_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    email: text('email').notNull(), // stored lower-case
+    tokenHash: text('token_hash').notNull().unique(),
+    tokenSealed: text('token_sealed').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('signup_requests_email_idx').on(t.email)],
 );

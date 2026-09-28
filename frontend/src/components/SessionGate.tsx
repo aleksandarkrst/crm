@@ -1,8 +1,10 @@
 import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ApiError, type ApiInvitePreview, type ApiMe, crmApi, getTenantId, setTenantId } from '../lib/api';
-import { authMode, devLogin, getAccessToken, signIn, signOut } from '../lib/auth';
+import { getAccessToken, signOut } from '../lib/auth';
 import { loadWorkspace, type WorkspaceData } from '../store/remote';
 import { type Session, StoreProvider } from '../store/store';
+import { Centered, SignIn, SignUp, VerifySignup } from './AuthScreens';
 import { SessionEndedDialog } from './SessionEndedDialog';
 import { CURRENCIES } from '../store/seed';
 
@@ -12,6 +14,8 @@ type Phase =
   | { kind: 'no-workspace'; me: ApiMe }
   | { kind: 'invite'; me: ApiMe; token: string; preview: ApiInvitePreview | null; problem?: string }
   | { kind: 'error'; message: string }
+  /** Signed in a new way (e.g. Google) with an email whose account signs in another way (CD-114). */
+  | { kind: 'account-exists'; message: string }
   | { kind: 'ready'; me: ApiMe; tenantId: string; data: WorkspaceData };
 
 /**
@@ -35,6 +39,8 @@ const clearInvite = () => sessionStorage.removeItem(INVITE_KEY);
  */
 export function SessionGate({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
 
   const start = useCallback(async (preferTenant?: string) => {
     setPhase({ kind: 'loading' });
@@ -61,6 +67,8 @@ export function SessionGate({ children }: { children: ReactNode }) {
         await signOut();
         return setPhase({ kind: 'signed-out' });
       }
+      if (err instanceof ApiError && err.status === 409 && (err.body as { code?: string } | null)?.code === 'account_exists')
+        return setPhase({ kind: 'account-exists', message: err.message });
       setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
     }
   }, []);
@@ -93,6 +101,16 @@ export function SessionGate({ children }: { children: ReactNode }) {
     };
   }, [me, tenantId, start]);
 
+  // The confirmation link works whoever is signed in here: finishing it signs in the new account.
+  if (pathname === '/signup/verify')
+    return (
+      <VerifySignup
+        onSignedIn={() => {
+          navigate('/', { replace: true });
+          void start();
+        }}
+      />
+    );
   if (phase.kind === 'ready' && session)
     return (
       <StoreProvider key={session.tenant.id} data={phase.data} session={session}>
@@ -100,7 +118,26 @@ export function SessionGate({ children }: { children: ReactNode }) {
         <SessionEndedDialog email={session.email} name={session.userName} onSignOut={session.signOut} />
       </StoreProvider>
     );
-  if (phase.kind === 'signed-out') return <SignIn invited={!!sessionStorage.getItem(INVITE_KEY)} onDone={() => void start()} />;
+  if (phase.kind === 'signed-out')
+    return pathname === '/signup' ? (
+      <SignUp />
+    ) : (
+      <SignIn
+        invited={!!sessionStorage.getItem(INVITE_KEY)}
+        onDone={() => {
+          if (pathname === '/login') navigate('/', { replace: true });
+          void start();
+        }}
+      />
+    );
+  if (phase.kind === 'account-exists')
+    return (
+      <Centered title="This email already has an account" sub={phase.message}>
+        <button type="button" className="btn btn-primary" onClick={() => void signOut().then(() => setPhase({ kind: 'signed-out' }))}>
+          Sign out
+        </button>
+      </Centered>
+    );
   if (phase.kind === 'invite')
     return (
       <AcceptInvite
@@ -121,24 +158,6 @@ export function SessionGate({ children }: { children: ReactNode }) {
       </Centered>
     );
   return <Centered title="Loading…" />;
-}
-
-function Centered({ title, sub, children }: { title: string; sub?: string; children?: ReactNode }) {
-  return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--white)', padding: 16 }}>
-      <div className="card card-pad" style={{ width: '100%', maxWidth: 400, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ width: 38, height: 38, borderRadius: 10, background: '#101828', color: '#F5F6F8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, fontWeight: 700 }}>C</div>
-        <div>
-          <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-0.02em' }}>{title}</div>
-          {sub && <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 4 }}>{sub}</div>}
-        </div>
-        {children}
-        <a href="/privacy.html" style={{ fontSize: 12, color: 'var(--muted-2)', alignSelf: 'center' }}>
-          Privacy policy
-        </a>
-      </div>
-    </div>
-  );
 }
 
 function AcceptInvite({ phase, onDone }: { phase: Extract<Phase, { kind: 'invite' }>; onDone: (tenantId?: string) => void }) {
@@ -196,53 +215,6 @@ function AcceptInvite({ phase, onDone }: { phase: Extract<Phase, { kind: 'invite
           Not now
         </button>
       )}
-    </Centered>
-  );
-}
-
-function SignIn({ onDone, invited }: { onDone: () => void; invited: boolean }) {
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  if (authMode === 'oidc')
-    return (
-      <Centered title="Sign in to Cadence" sub={invited ? 'Sign in to accept your invitation.' : "You'll continue with your company's sign-in provider."}>
-        <button type="button" className="btn btn-primary" onClick={() => void signIn()}>
-          Sign in
-        </button>
-      </Centered>
-    );
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setError('');
-    try {
-      await devLogin(email.trim(), name.trim() || email.trim());
-      onDone();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setBusy(false);
-    }
-  };
-  return (
-    <Centered title="Sign in to Cadence" sub={invited ? 'Sign in with the email address the invitation was sent to.' : 'Development sign-in: no password. Any email creates a user.'}>
-      <form onSubmit={(e) => void submit(e)} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <label className="form-label">
-          Email
-          <input className="form-input" type="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
-        </label>
-        <label className="form-label">
-          Name
-          <input className="form-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
-        </label>
-        {error && <div style={{ fontSize: 12.5, color: '#B42318' }}>{error}</div>}
-        <button type="submit" className="btn btn-primary" disabled={busy}>
-          {busy ? 'Signing in…' : 'Sign in'}
-        </button>
-      </form>
     </Centered>
   );
 }

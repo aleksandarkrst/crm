@@ -3,7 +3,7 @@ import { Navigate, Outlet, Route, Routes, useNavigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { SessionGate } from './components/SessionGate';
 import type { ApiStartPage } from './lib/api';
-import { completeSignIn } from './lib/auth';
+import { completeSignIn, rememberSignInProblem } from './lib/auth';
 import { paths } from './lib/paths';
 import { useStore } from './store/store';
 
@@ -52,8 +52,13 @@ function AuthCallback() {
   const navigate = useNavigate();
   useEffect(() => {
     completeSignIn()
-      .catch((err: unknown) => console.error('Sign-in failed', err))
-      .finally(() => navigate('/', { replace: true }));
+      .then(() => navigate('/', { replace: true }))
+      .catch((err: unknown) => {
+        console.error('Sign-in failed', err);
+        // Back to the sign-in page, which says what happened (cancelled, refused by the provider).
+        rememberSignInProblem(err);
+        navigate('/login', { replace: true });
+      });
   }, [navigate]);
   return null;
 }

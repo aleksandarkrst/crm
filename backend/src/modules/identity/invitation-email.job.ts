@@ -7,6 +7,7 @@ import { invitations, tenants, users } from '../../shared/database/schema';
 import type { JobPayloads } from '../../shared/events/job-types';
 import { type JobAttempt, JobsService } from '../../shared/events/jobs.service';
 import { invitationEmail, inviteLink, inviteLinkBox } from './invitation-email';
+import { SignupEmailJob } from './signup-email.job';
 
 /**
  * Worker side of CD-7: emails an invitation. A send that throws fails the job and pg-boss retries
@@ -92,5 +93,5 @@ export class InvitationEmailJob implements OnApplicationBootstrap {
 }
 
 /** Registered in the worker (WorkerModule). */
-@Module({ providers: [InvitationEmailJob] })
+@Module({ providers: [InvitationEmailJob, SignupEmailJob] })
 export class IdentityWorkerModule {}

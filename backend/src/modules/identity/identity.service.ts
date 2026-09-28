@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { ConflictException, HttpStatus, Injectable } from '@nestjs/common';
+import { and, asc, eq, ne, sql } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import type { AuthUser } from '../../shared/authorization';
 import { DatabaseService } from '../../shared/database/database.service';
 import { memberships, type MembershipRole, tenants, users } from '../../shared/database/schema';
 import { TenantProvisioning } from '../../shared/events/tenant-provisioning';
+import { signInMethod } from './signup-email';
 import type { VerifiedIdentity } from './token.service';
 
 const USER_CACHE_TTL_MS = 60_000;
@@ -22,6 +23,7 @@ export class IdentityService {
   async resolveUser(identity: VerifiedIdentity): Promise<AuthUser> {
     const cached = this.userCache.get(identity.subject);
     if (cached && cached.expires > Date.now()) return cached.user;
+    await this.refuseSecondAccount(identity);
 
     const [row] = await this.database.db
       .insert(users)
@@ -39,6 +41,36 @@ export class IdentityService {
     const user: AuthUser = { id: row!.id, authSubject: row!.authSubject, email: row!.email, displayName: row!.displayName };
     this.userCache.set(identity.subject, { user, expires: Date.now() + USER_CACHE_TTL_MS });
     return user;
+  }
+
+  /**
+   * A new sign-in whose email already belongs to an account that signs in another way (created
+   * with a password, now "Continue with Google", or the reverse): the provider sees two users.
+   * Refused instead of quietly starting a second, empty account (CD-114). Linking them stays a
+   * deliberate step for later; until then the person signs in the way they did before.
+   */
+  private async refuseSecondAccount(identity: VerifiedIdentity): Promise<void> {
+    if (!identity.email) return;
+    const [other] = await this.database.db
+      .select({ authSubject: users.authSubject })
+      .from(users)
+      .where(
+        and(
+          eq(sql`lower(${users.email})`, identity.email.toLowerCase()),
+          ne(users.authSubject, identity.subject),
+          sql`not exists (select 1 from ${users} u where u.auth_subject = ${identity.subject})`,
+        ),
+      )
+      .limit(1);
+    if (!other) return;
+    const method = signInMethod(other.authSubject);
+    const how = method === 'google' ? 'with Google' : method === 'password' ? 'with your email and password' : 'the way you did before';
+    throw new ConflictException({
+      statusCode: HttpStatus.CONFLICT,
+      code: 'account_exists',
+      method,
+      message: `${identity.email} already has a Cadence account that signs in another way. Sign out, then sign in ${how}.`,
+    });
   }
 
   /** Drops a cached user after their profile changed (the next request re-reads it). */
