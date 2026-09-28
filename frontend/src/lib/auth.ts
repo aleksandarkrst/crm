@@ -95,7 +95,40 @@ export async function devLogin(email: string, name: string): Promise<void> {
   localStorage.setItem(DEV_TOKEN_KEY, accessToken);
 }
 
-export const signIn = async () => (await oidc()).signinRedirect();
+/**
+ * Sends the user to the provider's sign-in page. `connection` goes straight to one way of signing
+ * in (e.g. Google), and `loginHint` fills in the email and asks for that account's password, as
+ * after creating an account (CD-114). The audience is repeated: these parameters replace the
+ * UserManager's own.
+ */
+export async function signIn(opts: { connection?: string; loginHint?: string } = {}) {
+  const audience = import.meta.env.VITE_OIDC_AUDIENCE as string | undefined;
+  return (await oidc()).signinRedirect({
+    extraQueryParams: { ...(audience ? { audience } : {}), ...(opts.connection ? { connection: opts.connection } : {}) },
+    ...(opts.loginHint ? { login_hint: opts.loginHint, prompt: 'login' } : {}),
+  });
+}
+
+/**
+ * Why the last sign-in didn't finish, for the sign-in page (CD-114): cancelled at Google, refused
+ * by the provider, or the redirect came back broken. Kept for this tab until it has been shown.
+ */
+const PROBLEM_KEY = 'crm.signInProblem';
+export function rememberSignInProblem(err: unknown) {
+  const { error, error_description: description } = (err ?? {}) as { error?: string; error_description?: string };
+  const message =
+    error === 'access_denied' && (!description || /did not authori[sz]e|cancel/i.test(description))
+      ? 'Sign-in was cancelled. Choose a way to sign in when you are ready.'
+      : description
+        ? `Sign-in didn't finish: ${description}`
+        : "Sign-in didn't finish. Try again, or choose another way to sign in.";
+  sessionStorage.setItem(PROBLEM_KEY, message);
+}
+export function takeSignInProblem(): string {
+  const message = sessionStorage.getItem(PROBLEM_KEY) ?? '';
+  sessionStorage.removeItem(PROBLEM_KEY);
+  return message;
+}
 /** Finishes a sign-in at /auth/callback: a redirect, or the popup of signInAgain (which it closes). */
 export const completeSignIn = async () => (await oidc()).signinCallback();
 

@@ -390,6 +390,30 @@ tokens in `sessionStorage`). The access token lasts 2 hours, so:
 - Covered by `e2e/tests/session-expiry.test.mjs` (dev mode: an invalid token, the dialog, the edit
   saved after signing in again).
 
+### Creating an account and signing in (CD-114)
+
+- Signed out, every address shows the sign-in page (`/login`); `/signup` is "Create account". No
+  CRM data loads before sign-in (`SessionGate`). Screens: `components/AuthScreens.tsx`.
+- **Google**: a redirect to the provider with `connection=<AUTH_GOOGLE_CONNECTION>` (from
+  `GET /api/auth/signup/options`), for signing in and creating an account alike. A cancelled or
+  refused sign-in comes back to `/auth/callback` with an error, which the sign-in page explains.
+- **Email**: Cadence confirms the address itself, before any password exists:
+  1. `POST /api/auth/signup {email}` always answers 202 `{sent:true}`, so it can't tell whether the
+     address has an account. The worker (`identity.signup-email`) emails a link, or, when the address
+     already has an account, "You already have a Cadence account" with how that account signs in.
+  2. The link is `/signup/verify#<token>` (after `#`, so it stays out of server logs). The token is
+     stored as a SHA-256 hash (plus sealed with `APP_SECRET`, so a retried job can email it), works for
+     24 hours and once. A new email replaces older links; asking again within 60 s sends nothing.
+  3. `check` shows the address; `complete {token, password}` creates the user at the provider with
+     `email_verified: true` (Auth0 Management API, `accounts.ts`) and uses the link up. A password the
+     provider refuses doesn't use it up. Cadence never stores the password.
+  4. The browser then signs in: dev mode directly, OIDC by sending the user to the provider with the
+     email filled in, where they type the new password once.
+- **One account per email**: `IdentityService.resolveUser` refuses (409 `account_exists`) a sign-in
+  subject it hasn't seen whose email already belongs to a user with another subject (e.g. Google
+  after email and password). The app says how that account signs in and offers **Sign out**.
+- Covered by `backend/test/integration/signup.spec.ts` and `e2e/tests/signup.test.mjs` (dev mode).
+
 ### Teams and invitations
 
 A tenant's members and their roles live in `memberships`. Admins invite people from
@@ -430,7 +454,7 @@ like any other error.
 | Limit | Counted per | Allowance | Where |
 |---|---|---|---|
 | Every request | client IP | 1200 / minute | all routes except `/api/health` |
-| Sign-in | client IP | 20 / 10 minutes | `@RateLimit('signIn')`: dev login, opening and accepting an invitation |
+| Sign-in | client IP | 20 / 10 minutes | `@RateLimit('signIn')`: dev login, opening and accepting an invitation, creating an account |
 | Changes | user | 120 / minute | every POST, PUT, PATCH and DELETE by a signed-in user |
 | Email | user | 20 / hour | `@RateLimit('email')`: inviting, resending an invitation |
 | Heavy | user | 30 / 10 minutes | `@RateLimit('heavy')`: CSV import, document templates and generation, sample data, new workspaces |

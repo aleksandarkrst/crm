@@ -75,6 +75,29 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
   return body as T;
 }
 
+/** A call made before signing in (creating an account, CD-114): no token, no workspace. */
+async function publicApi<T>(path: string, json?: unknown): Promise<T> {
+  const res = await fetch(`/api${path}`, json === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(json) });
+  const body: unknown = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(res.status, body);
+  return body as T;
+}
+
+/** Ways to create an account here: email (a confirmation link), and the provider's Google connection. */
+export interface SignupOptions {
+  email: boolean;
+  google: string | null;
+}
+/** Why a confirmation link doesn't work (410), or that its address has an account already (409). */
+export type SignupProblem = { code: 'invalid' | 'expired' | 'used' | 'exists'; message: string; email?: string };
+
+export const signupApi = {
+  options: () => publicApi<SignupOptions>('/auth/signup/options'),
+  start: (email: string) => publicApi<{ sent: true }>('/auth/signup', { email }),
+  check: (token: string) => publicApi<{ email: string }>('/auth/signup/check', { token }),
+  complete: (token: string, password: string) => publicApi<{ email: string }>('/auth/signup/complete', { token, password }),
+};
+
 /** `path` limited to some rows (`?ids=` or `?dealIds=`, at most 200; CD-98), or the whole list. */
 const only = (path: string, param: 'ids' | 'dealIds', ids?: readonly string[]) => (ids ? `${path}?${param}=${ids.join(',')}` : path);
 

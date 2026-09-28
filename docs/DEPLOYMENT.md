@@ -82,6 +82,23 @@ Any OIDC provider works. For example, in Auth0:
   `event.user.email`. If your provider only allows namespaced custom claims, read that claim name in
   `token.service.ts`. Test it once by inviting yourself on a second email.
 
+- **Creating an account (CD-114).** The app's own "Create account" page confirms the email first,
+  then creates the user in Auth0 with the chosen password:
+  - **Applications → Machine to Machine**: create `CRM account creation`, authorize it for the
+    **Auth0 Management API** with only the `create:users` permission. Put the tenant domain (e.g.
+    `your-tenant.eu.auth0.com`), its client ID and secret in `AUTH0_MANAGEMENT_DOMAIN`,
+    `AUTH0_MANAGEMENT_CLIENT_ID`, `AUTH0_MANAGEMENT_CLIENT_SECRET`. Without them, email sign-up is
+    hidden. It also needs working email (section 4a).
+  - **Authentication → Database → Username-Password-Authentication** (or the connection named in
+    `AUTH0_DB_CONNECTION`): turn on **Disable Sign Ups**, so nobody creates an unconfirmed account on
+    the Auth0 page; the Management API still can. Its password policy applies to the chosen password.
+  - **Authentication → Social → Google**: enable it for the SPA (with your own Google OAuth client in
+    production; Auth0's dev keys only work for testing). Its name goes in `AUTH_GOOGLE_CONNECTION`
+    (default `google-oauth2`; empty hides "Continue with Google").
+  - A Google sign-in whose email already has a Cadence account that signs in with a password (or the
+    other way round) is refused with a message, not turned into a second account. Auth0 keeps the
+    new identity as its own user; link accounts in Auth0 if you want both ways to work.
+
 Set the same values as GitHub **variables** (`OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_AUDIENCE`),
 because the frontend image bakes them in at build time.
 
