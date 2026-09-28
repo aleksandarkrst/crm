@@ -6,7 +6,7 @@ import type { Env } from '../src/infrastructure/config/env';
 import { SecretBox } from '../src/infrastructure/crypto/secret-box';
 import { escapeHtml } from '../src/infrastructure/mail/html';
 import { LogMailer, readOutbox } from '../src/infrastructure/mail/log-mailer';
-import { createMailer, outboxFileOf } from '../src/infrastructure/mail/mail.module';
+import { createMailer, MAIL_NOT_SET_UP, outboxFileOf } from '../src/infrastructure/mail/mail.module';
 import { SmtpMailer } from '../src/infrastructure/mail/smtp-mailer';
 import { invitationEmail, inviteLink } from '../src/modules/identity/invitation-email';
 
@@ -48,6 +48,12 @@ describe('createMailer', () => {
   it('picks the driver from MAIL_DRIVER', () => {
     expect(createMailer(env({}))).toBeInstanceOf(LogMailer);
     expect(createMailer(env({ MAIL_DRIVER: 'smtp', SMTP_URL: 'smtp://user:pass@localhost:2525' }))).toBeInstanceOf(SmtpMailer);
+  });
+
+  it('says the log driver delivers nothing only in production (CD-84)', () => {
+    expect(createMailer(env({})).notDelivered).toBeNull();
+    expect(createMailer(env({ NODE_ENV: 'production' })).notDelivered).toBe(MAIL_NOT_SET_UP);
+    expect(createMailer(env({ NODE_ENV: 'production', MAIL_DRIVER: 'smtp', SMTP_URL: 'smtp://user:pass@localhost:2525' })).notDelivered).toBeNull();
   });
 
   it('keeps an outbox file only outside production', () => {

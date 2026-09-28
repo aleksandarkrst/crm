@@ -1,4 +1,4 @@
-import { Controller, Get, Global, Inject, Module, Query } from '@nestjs/common';
+import { Controller, Get, Global, Inject, Logger, Module, Query } from '@nestjs/common';
 import { join, resolve } from 'node:path';
 import { ENV, type Env } from '../config/config.module';
 import { LogMailer, readOutbox } from './log-mailer';
@@ -8,9 +8,14 @@ import { SmtpMailer } from './smtp-mailer';
 /** Where the log driver keeps messages outside production, so tests and developers can read them. */
 export const outboxFileOf = (env: Env): string | null => (env.NODE_ENV === 'production' ? null : join(resolve(env.STORAGE_DIR), 'dev-mail', 'outbox.jsonl'));
 
+/** What an owner sees on an invitation that couldn't be emailed because no provider is set up. */
+export const MAIL_NOT_SET_UP = "Email isn't set up on this server yet. Copy the invite link and send it yourself.";
+
 export function createMailer(env: Env): Mailer {
   if (env.MAIL_DRIVER === 'smtp') return new SmtpMailer(env.SMTP_URL!, env.MAIL_FROM);
-  return new LogMailer(env.MAIL_FROM, outboxFileOf(env));
+  if (env.NODE_ENV !== 'production') return new LogMailer(env.MAIL_FROM, outboxFileOf(env));
+  new Logger('Mail').warn('MAIL_DRIVER=log in production: no email is delivered (docs/DEPLOYMENT.md, "Email")');
+  return new LogMailer(env.MAIL_FROM, null, MAIL_NOT_SET_UP);
 }
 
 /** Email sending (see Mailer). Inject `Mailer`. */

@@ -480,7 +480,8 @@ picks:
   appends them to `$STORAGE_DIR/dev-mail/outbox.jsonl`, which `GET /api/dev/mail?to=<address>`
   returns newest first (only with `AUTH_MODE=dev`; the API and worker are separate processes, so
   the file is what they share). Addresses at the reserved `.invalid` domain fail, so failed sends
-  and their retries can be tried without a provider.
+  and their retries can be tried without a provider. In production the driver reports
+  `notDelivered`, and the jobs record invitations and digests as failed instead of sent (CD-84).
 - `smtp`: nodemailer with `SMTP_URL` (e.g. `smtps://USER:PASSWORD@smtp.postmarkapp.com:465`) and
   `MAIL_FROM`; any provider with SMTP works (Postmark, Resend, SES, Mailgun).
 
