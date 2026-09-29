@@ -2,7 +2,7 @@
 // members see the funnel builder's stage fields read-only.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, clickButton, email, eventually, newUserWithWorkspace, setValue, signIn, steps, useBrowser, createNew } from '../lib/harness.mjs';
+import { api, BASE_URL, clickButton, email, eventually, newUserWithWorkspace, setValue, signIn, steps, useBrowser, createNew, finishOnboarding } from '../lib/harness.mjs';
 
 describe('contact notes and read-only funnels', () => {
   const browser = useBrowser();
@@ -34,7 +34,7 @@ describe('contact notes and read-only funnels', () => {
     await member.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
     await signIn(member, email('fixes-member'), 'Max Member');
     await clickButton(member, 'Accept and join');
-    await member.waitForSelector('[data-testid=new-menu]');
+    await finishOnboarding(member);
     await member.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });
     await member.waitForSelector('[data-testid=funnels-read-only]');
     const fields = await member.$$eval('.gate-chip input, input.ghost, select.form-input, input[type=number]', (els) => els.map((el) => el.disabled));

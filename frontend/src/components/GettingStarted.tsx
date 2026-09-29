@@ -1,22 +1,31 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import type { ApiOnboardingStep } from '../lib/api';
+import type { ApiOnboardingStep, ApiSampleKind } from '../lib/api';
 import { paths } from '../lib/paths';
 import { useStore } from '../store/store';
 
+/** The workspace's activation steps (CD-115). */
 const STEPS: Record<ApiOnboardingStep, { label: string; hint: string; to: string }> = {
+  invite: { label: 'Invite your team', hint: 'Work on deals together', to: paths.settings('team') },
+  records: { label: 'Add your first records', hint: 'A contact, a company, a product and a deal', to: paths.pipeline },
+  template: { label: 'Set up a document template', hint: 'Proposals and quotes filled from a deal', to: paths.settings('templates') },
   funnel: { label: 'Set up your funnel', hint: 'Rename stages, set their to-dos', to: paths.settings('funnel') },
-  products: { label: 'Add products', hint: 'What you sell, with prices', to: paths.products },
-  deals: { label: 'Import or add your first deals', hint: 'From a CSV or one by one', to: paths.pipeline },
-  invite: { label: 'Invite a colleague', hint: 'Work on deals together', to: paths.settings('team') },
+};
+/** The parts of "Add your first records", each with the screen where it is added. */
+const RECORDS: Record<ApiSampleKind, { label: string; to: string }> = {
+  contact: { label: 'Contact', to: paths.contacts },
+  company: { label: 'Company', to: paths.companies },
+  product: { label: 'Product', to: paths.products },
+  deal: { label: 'Deal', to: paths.pipeline },
 };
 
 /** The main screens show it; a deal, contact or settings page is left to the task at hand. */
 const SHOWN_ON: string[] = [paths.overview, paths.pipeline, paths.today, paths.companies, paths.contacts, paths.products];
 
 /**
- * Getting started (CD-68), for owners and admins of a new workspace: four steps that tick
- * themselves from the workspace's records, until they are all done or the user hides the list.
+ * Getting started (CD-68), for owners and admins of a new workspace: the four activation steps
+ * (CD-115: team invited, first records, a document template, the funnel) that tick themselves from
+ * the workspace's records, until they are all done or the user hides the list.
  * Sample data can be loaded to look around, and removed again in one click; while it is loaded,
  * a slim bar says so even after the checklist is gone.
  */
@@ -80,17 +89,31 @@ export function GettingStarted() {
         <span style={{ width: `${(doneCount / ob.steps.length) * 100}%` }} />
       </div>
       <ol className="getting-started-items">
-        {ob.steps.map(({ key, done }) => (
-          <li key={key} className={done ? 'done' : ''} data-step={key} data-done={done}>
-            <Link to={STEPS[key].to}>
-              <span className="getting-started-check">{done ? '✓' : ''}</span>
-              <span>
-                <span className="getting-started-label">{STEPS[key].label}</span>
-                <span className="getting-started-hint">{STEPS[key].hint}</span>
-              </span>
-            </Link>
-          </li>
-        ))}
+        {ob.steps.map(({ key, done, items }) => {
+          // "Add your first records" leads to the first one still missing.
+          const next = items?.find((x) => !x.done);
+          return (
+            <li key={key} className={done ? 'done' : ''} data-step={key} data-done={done}>
+              <Link to={next ? RECORDS[next.key].to : STEPS[key].to}>
+                <span className="getting-started-check">{done ? '✓' : ''}</span>
+                <span>
+                  <span className="getting-started-label">{STEPS[key].label}</span>
+                  <span className="getting-started-hint">{STEPS[key].hint}</span>
+                  {items && !done && (
+                    <span className="getting-started-parts">
+                      {items.map((x) => (
+                        <span key={x.key} className={x.done ? 'done' : ''} data-part={x.key} data-done={x.done}>
+                          {x.done ? '✓ ' : ''}
+                          {RECORDS[x.key].label}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
       </ol>
       {!sample && <span className="getting-started-note">Want to look around first? Sample data adds a few companies, contacts and deals, and removes them again in one click.</span>}
     </section>

@@ -4,7 +4,7 @@
 // "Changes" view lists who changed what.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, clickButton, createWorkspace, email, eventually, setValue, signIn, sleep, steps, text, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, clickButton, createWorkspace, email, eventually, setValue, signIn, sleep, steps, text, useBrowser, finishOnboarding } from '../lib/harness.mjs';
 
 describe('live updates, conflicts and change history', () => {
   const browser = useBrowser();
@@ -35,7 +35,7 @@ describe('live updates, conflicts and change history', () => {
     await ana.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
     await signIn(ana, email('live-ana'), 'Ana Member');
     await clickButton(ana, 'Accept and join');
-    await ana.waitForSelector('[data-testid=new-menu]');
+    await finishOnboarding(ana);
   });
 
   step("one person's change appears for the other without a reload", async () => {

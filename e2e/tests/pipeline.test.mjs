@@ -9,6 +9,7 @@ import {
   createDealInUi,
   email,
   eventually,
+  finishOnboarding,
   setClosingDate,
   signIn,
   steps,
@@ -34,7 +35,7 @@ describe('pipeline journey', () => {
     await page.waitForSelector('::-p-text(Create your workspace)');
     await page.type('input[placeholder="e.g. Cadence Studio"]', 'E2E Studio');
     await clickButton(page, 'Create workspace');
-    await page.waitForSelector('[data-testid=new-menu]');
+    await finishOnboarding(page);
   });
 
   step('adds a product to the catalog', async () => {
