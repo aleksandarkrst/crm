@@ -14,6 +14,7 @@ import {
   dealLines,
   deals,
   dealTasks,
+  documentTemplates,
   funnels,
   funnelStages,
   invitations,
@@ -27,8 +28,15 @@ import {
 import { StageHistoryService } from '../deals/stage-history.service';
 import { SAMPLE_COMPANIES, SAMPLE_CONTACTS, SAMPLE_DEALS, SAMPLE_PRODUCTS, SAMPLE_SOURCE, type SampleDeal } from './sample-data';
 
-export const ONBOARDING_STEPS = ['funnel', 'products', 'deals', 'invite'] as const;
+/**
+ * The workspace's activation steps (CD-115), in the order the checklist shows them: colleagues
+ * invited, the first contact, company, product and deal added, the first document template set
+ * up, and the first funnel set up.
+ */
+export const ONBOARDING_STEPS = ['invite', 'records', 'template', 'funnel'] as const;
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
+/** What "records" is made of: one of each, sample data not counted. */
+export const ONBOARDING_RECORDS = ['contact', 'company', 'product', 'deal'] as const satisfies readonly SampleKind[];
 
 /** Changes to the playbook that count as "set up your funnel". */
 const FUNNEL_ACTIONS = ['funnel.created', 'funnel.updated', 'funnel.deleted', 'funnel.stage_created', 'funnel.stage_updated', 'funnel.stage_deleted', 'funnel.stages_reordered'];
@@ -67,25 +75,35 @@ export class OnboardingService {
 
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const sample = await this.sampleIds(tx);
-      const exists = async (table: typeof products | typeof deals, ids: string[]) => {
+      const tables = { contact: contacts, company: companies, product: products, deal: deals };
+      const records = {} as Record<SampleKind, boolean>;
+      for (const kind of ONBOARDING_RECORDS) {
+        const table = tables[kind];
+        const ids = sample[kind];
         const [row] = await tx
           .select({ id: table.id })
           .from(table)
           .where(ids.length ? notInArray(table.id, ids) : undefined)
           .limit(1);
-        return Boolean(row);
-      };
+        records[kind] = Boolean(row);
+      }
+      const [template] = await tx.select({ id: documentTemplates.id }).from(documentTemplates).limit(1);
       const [funnelChange] = await tx.select({ id: auditLogs.id }).from(auditLogs).where(inArray(auditLogs.action, FUNNEL_ACTIONS)).limit(1);
       const done: Record<OnboardingStep, boolean> = {
-        funnel: Boolean(funnelChange),
-        products: await exists(products, sample.product),
-        deals: await exists(deals, sample.deal),
         invite: members > 1 || invited > 0,
+        records: ONBOARDING_RECORDS.every((k) => records[k]),
+        template: Boolean(template),
+        funnel: Boolean(funnelChange),
       };
       const counts = zeroCounts();
       for (const kind of SAMPLE_KINDS) counts[kind] = sample[kind].length;
       return {
-        steps: ONBOARDING_STEPS.map((key) => ({ key, done: done[key] })),
+        steps: ONBOARDING_STEPS.map((key) => ({
+          key,
+          done: done[key],
+          // The records step lists which of the four are there yet.
+          ...(key === 'records' ? { items: ONBOARDING_RECORDS.map((k) => ({ key: k, done: records[k] })) } : {}),
+        })),
         complete: ONBOARDING_STEPS.every((key) => done[key]),
         dismissed: Boolean(membership?.dismissedAt),
         sampleData: { loaded: SAMPLE_KINDS.some((k) => counts[k] > 0), counts },

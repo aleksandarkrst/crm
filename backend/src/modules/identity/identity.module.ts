@@ -14,15 +14,18 @@ import { SignupService } from './signup.service';
 import { TeamController } from './team.controller';
 import { TeamService } from './team.service';
 import { TokenService } from './token.service';
+import { UserOnboardingController } from './user-onboarding.controller';
+import { UserOnboardingService } from './user-onboarding.service';
 
 @Module({
-  controllers: [IdentityController, TeamController, SettingsController, SignupController, PasswordResetController, SessionController],
+  controllers: [IdentityController, TeamController, SettingsController, SignupController, PasswordResetController, SessionController, UserOnboardingController],
   providers: [
     TokenService,
     IdentityService,
     TeamService,
     SettingsService,
     SignupService,
+    UserOnboardingService,
     { provide: AccountDirectory, inject: [ENV], useFactory: createAccountDirectory },
     {
       provide: SessionProvider,

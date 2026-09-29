@@ -5,13 +5,17 @@ import { RateLimit } from '../../shared/rate-limit';
 import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
 import { CreateInvitation, TeamService, UpdateMember } from './team.service';
+import { UserOnboardingService } from './user-onboarding.service';
 
 const Id = new ZodPipe(UuidParam);
 const Token = new ZodPipe(z.string().regex(/^[A-Za-z0-9_-]{20,100}$/, 'Invalid invitation link'));
 
 @Controller()
 export class TeamController {
-  constructor(private readonly team: TeamService) {}
+  constructor(
+    private readonly team: TeamService,
+    private readonly onboarding: UserOnboardingService,
+  ) {}
 
   /** Members and pending invitations of the current tenant. */
   @Get('team')
@@ -74,7 +78,19 @@ export class TeamController {
   @Post('invitations/:token/accept')
   @RateLimit('signIn')
   @HttpCode(200)
-  accept(@CurrentUser() user: AuthUser, @Param('token', Token) token: string) {
-    return this.team.accept(user, token);
+  async accept(@CurrentUser() user: AuthUser, @Param('token', Token) token: string) {
+    const tenant = await this.team.accept(user, token);
+    await this.onboarding.completeIfDone(user);
+    return tenant;
+  }
+
+  /** Joins a workspace from the invitations waiting for the signed-in user's email (CD-115 onboarding). */
+  @Post('me/invitations/:id/accept')
+  @RateLimit('signIn')
+  @HttpCode(200)
+  async acceptPending(@CurrentUser() user: AuthUser, @Param('id', Id) id: string) {
+    const tenant = await this.team.acceptPending(user, id);
+    await this.onboarding.completeIfDone(user);
+    return tenant;
   }
 }

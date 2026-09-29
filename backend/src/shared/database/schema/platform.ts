@@ -24,6 +24,9 @@ export const tenants = pgTable(
 export const PROFILE_LANGUAGES = ['en', 'sr', 'de'] as const;
 export const DATE_FORMATS = ['DD.MM.YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'] as const;
 export const START_PAGES = ['pipeline', 'overview', 'today', 'contacts'] as const;
+/** Onboarding steps that are stored (CD-115). The workspace step is done once the user has a membership. */
+export const ONBOARDING_USER_STEPS = ['profile', 'team'] as const;
+export type OnboardingUserStep = (typeof ONBOARDING_USER_STEPS)[number];
 
 export const users = pgTable(
   'users',
@@ -41,6 +44,10 @@ export const users = pgTable(
     language: text('language', { enum: PROFILE_LANGUAGES }).notNull().default('en'),
     dateFormat: text('date_format', { enum: DATE_FORMATS }).notNull().default('DD.MM.YYYY'),
     startPage: text('start_page', { enum: START_PAGES }).notNull().default('pipeline'),
+    // Onboarding after the first sign-up (CD-115): the steps finished so far, so a refresh or a new
+    // session resumes where the user left off, and when it was completed (null = still onboarding).
+    onboardingSteps: text('onboarding_steps').array().$type<OnboardingUserStep[]>().notNull().default(sql`'{}'::text[]`),
+    onboardedAt: timestamp('onboarded_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   // Finds the account an email address already has, whichever way it signs in (CD-114).
