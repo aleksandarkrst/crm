@@ -200,6 +200,19 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 .getting-started-items li.done .getting-started-label { color: var(--muted-2); text-decoration: line-through; }
 .getting-started-hint { display: block; font-size: 12px; color: var(--text-2); margin-top: 2px; }
 .getting-started-note { font-size: 12px; color: var(--text-2); }
+.getting-started-parts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.getting-started-parts span { font-size: 11px; line-height: 1; padding: 4px 7px; border-radius: 10px; border: 1px solid var(--border); color: var(--text-2); }
+.getting-started-parts span.done { border-color: var(--brand-soft-2); background: var(--brand-tint); color: var(--brand); }
+/* Onboarding after the first sign-up (CD-115) */
+.onboarding-progress { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--text-2); }
+.onboarding-progress ol { list-style: none; margin: 0; padding: 0; display: flex; gap: 4px; }
+.onboarding-progress li { flex: 1; height: 4px; border-radius: 4px; background: var(--brand-soft-2); }
+.onboarding-progress li.done, .onboarding-progress li.current { background: var(--brand); }
+.onboarding-invites { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.onboarding-invites li { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; }
+.onboarding-invites li div { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 13px; }
+.onboarding-invites li div span { font-size: 12px; color: var(--text-2); }
+.onboarding-add { align-self: flex-start; border: 0; background: transparent; color: var(--brand); font-size: 13px; font-weight: 500; cursor: pointer; padding: 2px 0; }
 .getting-started-toggle { display: none; border: 0; background: transparent; color: var(--brand); font-size: 12px; font-weight: 500; cursor: pointer; padding: 0 0 0 8px; }
 .sample-bar { margin: 12px 30px 0; padding: 9px 14px; border-radius: 9px; background: var(--note); border: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-2); }
 
@@ -262,7 +275,7 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
   .getting-started-items { grid-template-columns: 1fr 1fr; gap: 6px; }
   .getting-started-items a { padding: 8px 9px; gap: 7px; }
   .getting-started-label { font-size: 12px; }
-  .getting-started-hint, .getting-started-note { display: none; }
+  .getting-started-hint, .getting-started-note, .getting-started-parts { display: none; }
   .getting-started-toggle { display: inline; }
   .getting-started:not(.open) .getting-started-items { display: none; }
 

@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, GoneException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, isNull, type SQL, sql } from 'drizzle-orm';
 import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { ENV, type Env } from '../../infrastructure/config/config.module';
@@ -198,7 +198,20 @@ export class TeamService {
 
   /** Joins the tenant. The signed-in user's email must be the invited one. */
   async accept(user: AuthUser, token: string) {
-    const row = await this.findByToken(token);
+    return this.join(user, await this.findByToken(token));
+  }
+
+  /**
+   * Joins the tenant of a pending invitation for the signed-in user's email, found by its id
+   * instead of the link (CD-115: onboarding lists the invitations waiting for the address).
+   */
+  async acceptPending(user: AuthUser, id: string) {
+    // Someone else's invitation is "not found": its id says nothing about who it is for.
+    const email = user.email?.toLowerCase() ?? '';
+    return this.join(user, await this.find(and(eq(invitations.id, id), eq(invitations.email, email))!));
+  }
+
+  private async join(user: AuthUser, row: Awaited<ReturnType<TeamService['find']>>) {
     if (!user.email) throw new BadRequestException('Your sign-in did not include an email address, so the invitation cannot be matched to you');
     if (user.email.toLowerCase() !== row.email) throw new ForbiddenException(`This invitation is for ${row.email}. You are signed in as ${user.email}.`);
 
@@ -218,7 +231,11 @@ export class TeamService {
     });
   }
 
-  private async findByToken(token: string) {
+  private findByToken(token: string) {
+    return this.find(eq(invitations.tokenHash, hashToken(token)));
+  }
+
+  private async find(where: SQL) {
     const [row] = await this.database.db
       .select({
         id: invitations.id,
@@ -234,7 +251,7 @@ export class TeamService {
       })
       .from(invitations)
       .innerJoin(tenants, eq(tenants.id, invitations.tenantId))
-      .where(eq(invitations.tokenHash, hashToken(token)));
+      .where(where);
     if (!row) throw new NotFoundException('Invitation not found');
     if (row.acceptedAt || row.revokedAt || row.expiresAt <= new Date()) throw new GoneException('This invitation has expired or was already used');
     return row;

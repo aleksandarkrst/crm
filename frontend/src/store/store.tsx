@@ -120,13 +120,13 @@ const conflictText = (err: unknown): string | null => {
 };
 /** Which lists a live change hint means re-reading (see loadWorkspace). */
 const PARTS_OF: Record<string, Part[]> = {
-  // The getting-started checklist (CD-68) ticks itself from deals, products and funnels.
+  // The getting-started checklist (CD-68, steps from CD-115) ticks itself from these records.
   deal: ['deals', 'onboarding'],
   deal_contact: ['deals'],
   deal_line: ['lines', 'deals'],
   task: ['tasks'],
-  company: ['companies'],
-  contact: ['contacts'],
+  company: ['companies', 'onboarding'],
+  contact: ['contacts', 'onboarding'],
   product: ['products', 'onboarding'],
   funnel: ['funnels', 'onboarding'],
   activity: [],
@@ -228,6 +228,14 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
   const actions = useMemo(() => {
     const cur = () => ref.current;
     const mapLead = (id: string, fn: (l: Lead) => Lead) => set((x) => ({ leads: x.leads.map((l) => (l.id === id ? fn(l) : l)) }));
+    /** Re-reads the getting-started checklist (owners and admins) after a change no live hint covers, e.g. templates. */
+    const refreshChecklist = () => {
+      if (!cur().onboarding) return;
+      crmApi.onboarding().then(
+        (onboarding) => set({ onboarding }),
+        () => undefined, // the checklist just stays as it was
+      );
+    };
 
     // ------------------------------------------------------------ persistence
     /*
@@ -1185,6 +1193,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         const t = await docsApi.createTemplate(file, name, docType);
         set((x) => ({ templates: [t, ...(x.templates || []).filter((y) => y.id !== t.id)] }));
         flash(`${t.name} saved`);
+        refreshChecklist();
         return t;
       },
       deleteTemplate: async (t: DocTemplate) => {
@@ -1192,6 +1201,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           await docsApi.deleteTemplate(t.id);
           set((x) => ({ templates: (x.templates || []).filter((y) => y.id !== t.id) }));
           flash(`${t.name} deleted · documents made from it are kept`);
+          refreshChecklist();
         } catch (err) {
           flash('Could not delete the template: ' + errText(err), 7000);
         }

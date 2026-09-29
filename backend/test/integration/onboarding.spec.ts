@@ -1,8 +1,10 @@
 /**
  * CD-68: the getting-started checklist (steps derived from the workspace's own records, dismissal
  * per user) and sample data that is loaded and removed again exactly, for owners and admins only.
+ * The steps are the workspace's activation steps from CD-115.
  */
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, inject, it } from 'vitest';
+import { starterTemplate } from '../../src/modules/crm/documents/docx';
 import { addMember, call, createTenant, type Funnel, type Json, ok, type Session, signIn } from './helpers';
 
 let owner: Session;
@@ -15,6 +17,8 @@ const as = (s: Session = owner, t = tenant) => ({ token: s.token, tenant: t });
 
 const state = (s: Session = owner, t = tenant) => ok('GET', '/onboarding', as(s, t));
 const done = (st: Json) => Object.fromEntries(st.steps.map((x: Json) => [x.key, x.done]));
+/** The records step's parts: first contact, company, product and deal (CD-115). */
+const items = (st: Json) => Object.fromEntries(st.steps.find((x: Json) => x.key === 'records').items.map((x: Json) => [x.key, x.done]));
 const list = (path: string, s: Session = owner, t = tenant) => ok<Json[]>('GET', `${path}${path.includes('?') ? '&' : '?'}limit=200`, as(s, t));
 
 beforeAll(async () => {
@@ -26,7 +30,9 @@ describe('the checklist', () => {
   it('starts with nothing done in a new workspace', async () => {
     const st = await state();
     expect(st).toMatchObject({ complete: false, dismissed: false, sampleData: { loaded: false, counts: { company: 0, contact: 0, product: 0, deal: 0 } } });
-    expect(done(st)).toEqual({ funnel: false, products: false, deals: false, invite: false });
+    expect(done(st)).toEqual({ invite: false, records: false, template: false, funnel: false });
+    expect(st.steps.map((x: Json) => x.key)).toEqual(['invite', 'records', 'template', 'funnel']);
+    expect(items(st)).toEqual({ contact: false, company: false, product: false, deal: false });
   });
 
   it('is for owners and admins: members and outsiders get 403 on every route', async () => {
@@ -57,11 +63,27 @@ describe('the checklist', () => {
     const funnel = (await ok<Funnel[]>('GET', '/crm/funnels', as()))[0]!;
     await ok('PATCH', `/crm/funnels/${funnel.id}/stages/${funnel.stages[0]!.id}`, { ...as(), body: { activity: 'Call' } });
     await ok('POST', '/crm/products', { ...as(), body: { name: 'Real product', unitPrice: 10 } });
-    expect(done(await state())).toEqual({ funnel: true, products: true, deals: false, invite: true });
+    let st = await state();
+    expect(done(st)).toEqual({ invite: true, records: false, template: false, funnel: true });
+    expect(items(st)).toEqual({ contact: false, company: false, product: true, deal: false });
+    // A deal with a new company and contact adds all three.
     await ok('POST', '/crm/deals', { ...as(), body: { title: 'Real deal', funnelId: funnel.id } });
-    const st = await state();
+    const company = await ok('POST', '/crm/companies', { ...as(), body: { name: 'Real company' } });
+    expect(items(await state())).toEqual({ contact: false, company: true, product: true, deal: true });
+    await ok('POST', '/crm/contacts', { ...as(), body: { fullName: 'Real Person', companyId: company.id } });
+    st = await state();
+    expect(done(st)).toEqual({ invite: true, records: true, template: false, funnel: true });
+    expect(st.complete).toBe(false);
+    // The first document template completes the checklist.
+    const form = new FormData();
+    form.append('file', new Blob([new Uint8Array(starterTemplate())]), 'proposal.docx');
+    form.append('name', 'Proposal');
+    form.append('docType', 'Proposal');
+    const res = await fetch(`${inject('apiUrl')}/api/crm/document-templates`, { method: 'POST', headers: { authorization: `Bearer ${owner.token}`, 'x-tenant-id': tenant }, body: form });
+    expect(res.status).toBe(201);
+    st = await state();
+    expect(done(st)).toEqual({ invite: true, records: true, template: true, funnel: true });
     expect(st.complete).toBe(true);
-    expect(done(st)).toEqual({ funnel: true, products: true, deals: true, invite: true });
   });
 
   it('counts a pending invitation as inviting a colleague', async () => {
@@ -82,7 +104,8 @@ describe('sample data', () => {
   it('loads a small, realistic set, marked as sample, and it does not tick the checklist', async () => {
     const st = await ok('POST', '/onboarding/sample-data', asT());
     expect(st.sampleData).toEqual({ loaded: true, counts: { company: 4, contact: 5, product: 3, deal: 6 } });
-    expect(done(st)).toMatchObject({ products: false, deals: false });
+    expect(done(st)).toMatchObject({ records: false });
+    expect(items(st)).toEqual({ contact: false, company: false, product: false, deal: false });
 
     const deals = await list('/crm/deals', owner, t);
     expect(deals).toHaveLength(6);

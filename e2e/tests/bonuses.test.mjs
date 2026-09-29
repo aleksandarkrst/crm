@@ -2,7 +2,7 @@
 // bonus card on Overview; members see neither, and the API refuses them.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, clickButton, email, eventually, newUserWithWorkspace, signIn, steps, text, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, clickButton, email, eventually, newUserWithWorkspace, signIn, steps, text, useBrowser, finishOnboarding } from '../lib/harness.mjs';
 
 describe('sales bonus rules', () => {
   const browser = useBrowser();
@@ -19,7 +19,7 @@ describe('sales bonus rules', () => {
     await member.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
     await signIn(member, email('bonus-member'), 'Sara Seller');
     await clickButton(member, 'Accept and join');
-    await member.waitForSelector('[data-testid=new-menu]');
+    await finishOnboarding(member);
     memberId = (await api(page, '/team')).members.find((m) => m.displayName === 'Sara Seller').userId;
   });
 

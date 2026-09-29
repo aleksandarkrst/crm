@@ -194,12 +194,42 @@ export async function signIn(page, address, name) {
   await click(page, 'button[type=submit]');
 }
 
-/** Creates the first workspace of a newly signed-in user and waits for the pipeline. */
+/** Creates the first workspace of a newly signed-in user, finishes onboarding and waits for the pipeline. */
 export async function createWorkspace(page, name, currency) {
   await page.waitForSelector('input[placeholder="e.g. Cadence Studio"]');
   await page.type('input[placeholder="e.g. Cadence Studio"]', name);
   if (currency) await setValue(page, 'select[aria-label="Main currency"]', currency);
   await click(page, 'button[type=submit]');
+  await finishOnboarding(page);
+}
+
+/**
+ * The rest of onboarding after the workspace was created or joined (CD-115): keeps the name the
+ * sign-in gave on "About you" (or `name`), skips "Invite your team", and waits for the app.
+ */
+export async function finishOnboarding(page, name = 'Test User') {
+  let last = null;
+  for (let i = 0; i < 4; i++) {
+    const at = await page.waitForFunction(
+      (last) => {
+        if (document.querySelector('[data-testid=new-menu]')) return 'app';
+        const progress = document.querySelector('[data-testid=onboarding-progress]')?.textContent ?? '';
+        const step = /About you/.test(progress) ? 'profile' : /Invite your team/.test(progress) ? 'team' : null;
+        return step !== last && step;
+      },
+      { timeout: 15_000 },
+      last,
+    );
+    last = await at.jsonValue();
+    if (last === 'app') return;
+    if (last === 'profile') {
+      const input = await page.waitForSelector('input[placeholder="e.g. Ana Petrović"]');
+      if (!(await input.evaluate((el) => el.value))) await input.type(name);
+      await click(page, 'button[type=submit]');
+    } else {
+      await clickButton(page, 'Skip for now');
+    }
+  }
   await page.waitForSelector('[data-testid=new-menu]');
 }
 

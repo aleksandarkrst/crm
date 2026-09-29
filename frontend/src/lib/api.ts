@@ -160,6 +160,27 @@ export interface ApiTenant {
 export interface ApiMe {
   user: { id: string; email: string | null; displayName: string | null };
   tenants: ApiTenant[];
+  onboarding: ApiUserOnboarding;
+}
+/** An invitation waiting for the signed-in user's email address (CD-115). */
+export interface ApiPendingInvitation {
+  id: string;
+  tenantName: string;
+  role: 'admin' | 'member';
+  invitedBy: string | null;
+  expiresAt: string;
+}
+/**
+ * Onboarding after the first sign-up (CD-115): create or join a workspace, then "About you", then
+ * (owners, skippable) "Invite your team". `required` is false once it is done, or for users who had
+ * a workspace before it existed.
+ */
+export type ApiUserOnboardingStep = 'workspace' | 'profile' | 'team';
+export interface ApiUserOnboarding {
+  required: boolean;
+  completedAt: string | null;
+  steps: { key: ApiUserOnboardingStep; done: boolean; skippable: boolean }[];
+  invitations: ApiPendingInvitation[];
 }
 /** Settings of the current workspace (GET/PATCH /workspace; owners and admins change them). */
 export interface ApiWorkspace {
@@ -192,11 +213,14 @@ export interface ApiProfile {
   /** Email me when someone else makes me the owner of a deal (CD-16). */
   notifyDealAssigned: boolean;
 }
-/** Getting started (CD-68): the checklist's steps, derived from the workspace's records. */
-export type ApiOnboardingStep = 'funnel' | 'products' | 'deals' | 'invite';
+/**
+ * Getting started (CD-68): the workspace's activation steps (CD-115), derived from its records.
+ * `records` lists which of the first contact, company, product and deal are there.
+ */
+export type ApiOnboardingStep = 'invite' | 'records' | 'template' | 'funnel';
 export type ApiSampleKind = 'company' | 'contact' | 'product' | 'deal';
 export interface ApiOnboarding {
-  steps: { key: ApiOnboardingStep; done: boolean }[];
+  steps: { key: ApiOnboardingStep; done: boolean; items?: { key: ApiSampleKind; done: boolean }[] }[];
   complete: boolean;
   dismissed: boolean;
   sampleData: { loaded: boolean; counts: Record<ApiSampleKind, number> };
@@ -508,7 +532,11 @@ export type StageInput = Partial<Pick<ApiFunnelStage, 'name' | 'activity' | 'cha
 
 export const crmApi = {
   me: () => api<ApiMe>('/me'),
-  createTenant: (name: string, currency?: string) => api<ApiTenant>('/tenants', { method: 'POST', json: { name, ...(currency ? { currency } : {}) } }),
+  createTenant: (name: string, currency?: string, timezone?: string) =>
+    api<ApiTenant>('/tenants', { method: 'POST', json: { name, ...(currency ? { currency } : {}), ...(timezone ? { timezone } : {}) } }),
+  saveOnboardingProfile: (name: string, jobTitle: string) => api<ApiUserOnboarding>('/me/onboarding/profile', { method: 'PUT', json: { name, jobTitle } }),
+  finishOnboardingTeam: () => api<ApiUserOnboarding>('/me/onboarding/team', { method: 'POST' }),
+  acceptPendingInvitation: (id: string) => api<ApiTenant>(`/me/invitations/${id}/accept`, { method: 'POST' }),
 
   workspace: () => api<ApiWorkspace>('/workspace'),
   updateWorkspace: (input: WorkspaceInput) => api<ApiWorkspace>('/workspace', { method: 'PATCH', json: input }),

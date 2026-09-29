@@ -2,7 +2,7 @@
 // and the value survives a reload; members can fill values but not change the definitions.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, clickButton, createDealInUi, email, eventually, newUserWithWorkspace, signIn, steps, text, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, clickButton, createDealInUi, email, eventually, newUserWithWorkspace, signIn, steps, text, useBrowser, waitForToastToClear, finishOnboarding } from '../lib/harness.mjs';
 
 /** Types into the custom field input with this label (data-custom-field) on the screen. */
 async function fillCustom(page, label, value) {
@@ -60,7 +60,7 @@ describe('custom fields', () => {
     await member.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
     await signIn(member, email('cf-member'), 'Mia Member');
     await clickButton(member, 'Accept and join');
-    await member.waitForSelector('[data-testid=new-menu]');
+    await finishOnboarding(member);
     await member.goto(`${BASE_URL}/settings/fields`, { waitUntil: 'networkidle0' });
     await member.waitForFunction(() => document.body.innerText.includes('Only owners and admins can add or change custom fields.'));
     assert.equal(await member.$('button::-p-text(New field)'), null, 'no New field button for members');

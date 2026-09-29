@@ -3,7 +3,7 @@
 // members removed.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, clickButton, email, eventually, signIn, steps, text, useBrowser, createWorkspace } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, email, eventually, signIn, steps, text, useBrowser, createWorkspace, finishOnboarding } from '../lib/harness.mjs';
 
 describe('team and invitations', () => {
   const browser = useBrowser();
@@ -71,7 +71,7 @@ describe('team and invitations', () => {
     const body = await text(bob);
     assert.ok(body.includes('Join Shared Co') && body.includes('Olivia Owner invited'), 'names workspace and inviter');
     await clickButton(bob, 'Accept and join');
-    await bob.waitForSelector('[data-testid=new-menu]');
+    await finishOnboarding(bob);
   });
 
   step("the invitee lands in the shared workspace, not one of their own", async () => {

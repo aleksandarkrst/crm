@@ -1,9 +1,9 @@
-// First run (CD-68): a new workspace shows the getting-started checklist and helpful empty
-// states; sample data loads and is removed again exactly; the checklist hides per user and is
+// First run (CD-68): a new workspace shows the getting-started checklist (the activation steps of
+// CD-115) and helpful empty states; sample data loads and is removed again exactly; the checklist hides per user and is
 // not shown to members.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, clickButton, email, eventually, newUserWithWorkspace, signIn, steps, text, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, email, eventually, newUserWithWorkspace, signIn, steps, text, useBrowser, waitForToastToClear, finishOnboarding } from '../lib/harness.mjs';
 
 describe('first-run onboarding', () => {
   const browser = useBrowser();
@@ -12,12 +12,15 @@ describe('first-run onboarding', () => {
 
   const emptyTitle = () => page.evaluate(() => document.querySelector('[data-testid=empty-state] .empty-block-title')?.textContent ?? null);
   const stepsDone = () => page.$$eval('[data-testid=getting-started] li', (lis) => Object.fromEntries(lis.map((li) => [li.dataset.step, li.dataset.done === 'true'])));
+  const partsDone = () => page.$$eval('[data-testid=getting-started] [data-part]', (els) => Object.fromEntries(els.map((el) => [el.dataset.part, el.dataset.done === 'true'])));
+  const nothingDone = { invite: false, records: false, template: false, funnel: false };
 
   step('a new workspace shows the checklist with nothing done', async () => {
     page = await browser.person('nora');
     await newUserWithWorkspace(page, { label: 'onboard', name: 'Nora Owner', workspace: 'Fresh Co' });
     await page.waitForSelector('[data-testid=getting-started]');
-    assert.deepEqual(await stepsDone(), { funnel: false, products: false, deals: false, invite: false });
+    assert.deepEqual(await stepsDone(), nothingDone);
+    assert.deepEqual(await partsDone(), { contact: false, company: false, product: false, deal: false });
     assert.match(await text(page), /0 of 4 done/);
   });
 
@@ -51,7 +54,7 @@ describe('first-run onboarding', () => {
     await page.waitForFunction(() => document.body.innerText.includes('Kestrel Logistics'));
     assert.equal(await page.$('[data-testid=empty-state]'), null, 'the pipeline is no longer empty');
     // Sample records don't tick the checklist: it is about the workspace's own setup.
-    assert.deepEqual(await stepsDone(), { funnel: false, products: false, deals: false, invite: false });
+    assert.deepEqual(await stepsDone(), nothingDone);
     const deals = await api(page, '/crm/deals');
     assert.equal(deals.length, 6);
     await page.goto(BASE_URL + '/today', { waitUntil: 'networkidle0' });
@@ -63,7 +66,9 @@ describe('first-run onboarding', () => {
     const funnels = await api(page, '/crm/funnels');
     await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'My own deal', funnelId: funnels[0].id }) });
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
-    assert.equal((await stepsDone()).deals, true);
+    await page.waitForSelector('[data-testid=getting-started] [data-part=deal][data-done=true]');
+    assert.deepEqual(await partsDone(), { contact: false, company: false, product: false, deal: true });
+    assert.equal((await stepsDone()).records, false);
 
     await click(page, '[data-testid=getting-started] [data-testid=remove-sample-data]');
     await page.waitForSelector('[data-testid=load-sample-data]', { timeout: 15_000 });
@@ -97,7 +102,7 @@ describe('first-run onboarding', () => {
     await member.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
     await signIn(member, email('onboard-member'), 'Mo Member');
     await clickButton(member, 'Accept and join');
-    await member.waitForSelector('[data-testid=new-menu]');
+    await finishOnboarding(member);
     await member.goto(BASE_URL + '/companies', { waitUntil: 'networkidle0' });
     await member.waitForSelector('[data-testid=empty-state]');
     assert.equal(await member.$('[data-testid=getting-started]'), null);

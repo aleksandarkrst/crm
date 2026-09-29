@@ -457,7 +457,8 @@ and admins can resend or copy it later.
 - An invitation is for one email address, expires after 7 days, and works once. Re-inviting the
   same address replaces the pending invitation.
 - Accepting (`POST /api/invitations/:token/accept`) requires a signed-in user with that email,
-  so a forwarded link is useless to anyone else.
+  so a forwarded link is useless to anyone else. Onboarding also offers the invitations pending for
+  the user's email without the link (`POST /api/me/invitations/:id/accept`, CD-115).
 - Owners manage everyone. Admins invite, change roles and remove members, but can't touch owners
   or grant the owner role. Every tenant keeps at least one owner. Anyone can leave.
 - `invitations`, like `memberships`, has no RLS because it decides access before tenant context
@@ -936,16 +937,49 @@ milestones on lines); `drizzle/0022_products_deal_billing.sql` converts existing
   products dialog), **Discovery** and **Fit score**. The activity composer no longer has a
   Products tab.
 
+## Onboarding after sign-up (CD-115)
+
+After the first sign-up (email or Google), a new user goes through onboarding before the app
+(`components/Onboarding.tsx`, shown by `SessionGate`). Returning users go straight to the app.
+
+| Step | Who | Fields | Can be skipped |
+|---|---|---|---|
+| 1. **Workspace** | everyone | Join a workspace an invitation waits for, **or** create one: name (required, ≤100), main currency (required, EUR by default), time zone (required, the browser's by default) | no |
+| 2. **About you** | everyone | Full name (required, the sign-in's name by default), job title (optional) | no |
+| 3. **Invite your team** | whoever created the workspace (owners) | Up to 10 email addresses, each Member or Admin | yes, "Skip for now" |
+
+- **Saved progress.** `users.onboarding_steps` lists the finished stored steps (`profile`, `team`);
+  the workspace step is done once the user has a membership. A refresh or a new session resumes at
+  the first unfinished step. When every step that applies is done, `users.onboarded_at` is set and
+  onboarding never comes back (not for a second workspace either). The migration
+  (`drizzle/0026_user_onboarding.sql`) marks everyone who already had a workspace as onboarded.
+- `GET /api/me` carries `onboarding` (`required`, `steps` with `done` and `skippable`,
+  `invitations`); `GET /api/me/onboarding` returns the same. `PUT /api/me/onboarding/profile`
+  `{ name, jobTitle? }` saves "About you"; `POST /api/me/onboarding/team` finishes or skips the team
+  step (the invitations themselves go through `POST /api/team/invitations`). `POST /api/tenants`
+  takes an optional `timezone`.
+- **Invited users join, they don't duplicate.** An invite link is remembered for the tab and
+  handled first ("Join <workspace>"). Without the link (the sign-up confirmation email opens in
+  another tab), onboarding lists the invitations still pending for the user's email address:
+  `POST /api/me/invitations/:id/accept` joins one, with the same rules as the link (the signed-in
+  email must be the invited one; someone else's invitation id is 404). Creating a separate
+  workspace stays possible behind "Create a new workspace instead". Invited users don't get the
+  team step; after "About you" they land in the workspace they joined.
+- Someone onboarded who later has no workspace left (they left it) sees only the workspace step.
+
 ## First-run onboarding (CD-68)
 
 Owners and admins of a workspace see a getting-started checklist above the main screens
 (`components/GettingStarted.tsx`), backed by `OnboardingService` in the CRM module
 (`modules/crm/onboarding/`). All routes are `@RequireTenant('admin')`:
 
-- `GET /api/onboarding` returns four steps, each derived from the workspace's own records, never
-  stored: **funnel** (any `funnel.*` action in `audit_logs`, i.e. someone changed the playbook),
-  **products** and **deals** (at least one that isn't sample data), **invite** (another member, or
-  an invitation that isn't revoked). It also returns `dismissed` and the sample-data counts.
+- `GET /api/onboarding` returns the workspace's four activation steps (CD-115), each derived from
+  the workspace's own records, never stored: **invite** (another member, or an invitation that
+  isn't revoked), **records** (at least one contact, company, product and deal that isn't sample
+  data; `items` says which of the four are there, and the checklist links to the first missing
+  one), **template** (a document template was uploaded) and **funnel** (any `funnel.*` action in
+  `audit_logs`, i.e. someone changed the playbook). It also returns `dismissed` and the
+  sample-data counts.
 - `PUT /api/onboarding/dismissed` `{ dismissed }` hides or shows the checklist. Dismissal is stored
   per user (`memberships.onboarding_dismissed_at`), not per workspace: each owner or admin finishes
   or hides their own checklist without hiding it for the others. It also disappears once every

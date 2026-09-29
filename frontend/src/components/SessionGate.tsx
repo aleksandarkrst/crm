@@ -1,17 +1,18 @@
-import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ApiError, type ApiInvitePreview, type ApiMe, crmApi, getTenantId, setTenantId } from '../lib/api';
 import { getAccessToken, signOut } from '../lib/auth';
 import { loadWorkspace, type WorkspaceData } from '../store/remote';
 import { type Session, StoreProvider } from '../store/store';
 import { Centered, ForgotPassword, ResetPassword, SignIn, SignUp, VerifySignup } from './AuthScreens';
+import { Onboarding } from './Onboarding';
 import { SessionEndedDialog } from './SessionEndedDialog';
-import { CURRENCIES } from '../store/seed';
 
 type Phase =
   | { kind: 'loading' }
   | { kind: 'signed-out' }
-  | { kind: 'no-workspace'; me: ApiMe }
+  /** Onboarding after the first sign-up (CD-115), or no workspace left to open. */
+  | { kind: 'onboarding'; me: ApiMe }
   | { kind: 'invite'; me: ApiMe; token: string; preview: ApiInvitePreview | null; problem?: string }
   | { kind: 'error'; message: string }
   /** Signed in a new way (e.g. Google) with an email whose account signs in another way (CD-114). */
@@ -34,8 +35,8 @@ function pendingInvite(): string | null {
 const clearInvite = () => sessionStorage.removeItem(INVITE_KEY);
 
 /**
- * Everything before the app itself: sign-in, picking or creating a workspace (tenant) and loading
- * its data. The store is created per workspace, so switching workspaces starts from a clean slate.
+ * Everything before the app itself: sign-in, onboarding (creating or joining a workspace, CD-115)
+ * and loading the workspace's data. The store is created per workspace, so switching workspaces starts from a clean slate.
  */
 export function SessionGate({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
@@ -57,7 +58,8 @@ export function SessionGate({ children }: { children: ReactNode }) {
           return setPhase({ kind: 'invite', me, token: invite, preview: null, problem: err instanceof Error ? err.message : String(err) });
         }
       }
-      if (me.tenants.length === 0) return setPhase({ kind: 'no-workspace', me });
+      // New users go through onboarding before the app; returning users go straight in.
+      if (me.onboarding.required || me.tenants.length === 0) return setPhase({ kind: 'onboarding', me });
       const wanted = preferTenant ?? getTenantId();
       const tenant = me.tenants.find((t) => t.id === wanted) ?? me.tenants[0]!;
       setTenantId(tenant.id);
@@ -100,6 +102,8 @@ export function SessionGate({ children }: { children: ReactNode }) {
       renameUser: (name) => setPhase((p) => (p.kind === 'ready' ? { ...p, me: { ...p.me, user: { ...p.me.user, displayName: name } } } : p)),
     };
   }, [me, tenantId, start]);
+
+  const openWorkspace = useCallback((id: string) => void start(id), [start]);
 
   // Emailed links work whoever is signed in here: finishing one signs in its account.
   const signedIn = () => {
@@ -147,7 +151,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
         }}
       />
     );
-  if (phase.kind === 'no-workspace') return <CreateWorkspace me={phase.me} onDone={(id) => void start(id)} />;
+  if (phase.kind === 'onboarding') return <Onboarding me={phase.me} onDone={openWorkspace} />;
   if (phase.kind === 'error')
     return (
       <Centered title="Could not load the workspace" sub={phase.message}>
@@ -214,53 +218,6 @@ function AcceptInvite({ phase, onDone }: { phase: Extract<Phase, { kind: 'invite
           Not now
         </button>
       )}
-    </Centered>
-  );
-}
-
-function CreateWorkspace({ me, onDone }: { me: ApiMe; onDone: (tenantId: string) => void }) {
-  const [name, setName] = useState('');
-  const [currency, setCurrency] = useState('EUR');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setError('');
-    try {
-      const tenant = await crmApi.createTenant(name.trim(), currency);
-      onDone(tenant.id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setBusy(false);
-    }
-  };
-  return (
-    <Centered title="Create your workspace" sub={`Signed in as ${me.user.email ?? me.user.displayName ?? 'you'}. A workspace holds your team's pipeline; it starts with two sales funnels you can edit.`}>
-      <form onSubmit={(e) => void submit(e)} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <label className="form-label">
-          Company or team name
-          <input className="form-input" required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Cadence Studio" />
-        </label>
-        <label className="form-label">
-          Main currency
-          <select className="form-input" aria-label="Main currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
-            {CURRENCIES.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-          <span style={{ fontSize: 12, fontWeight: 400, letterSpacing: 0, textTransform: 'none', color: 'var(--text-2)' }}>Reports add up deals in this currency. Each deal can have its own.</span>
-        </label>
-        {error && <div style={{ fontSize: 12.5, color: '#B42318' }}>{error}</div>}
-        <button type="submit" className="btn btn-primary" disabled={busy || !name.trim()}>
-          {busy ? 'Creating…' : 'Create workspace'}
-        </button>
-      </form>
-      <button type="button" className="btn btn-secondary" onClick={() => void signOut().then(() => window.location.reload())}>
-        Sign out
-      </button>
     </Centered>
   );
 }

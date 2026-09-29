@@ -1,7 +1,7 @@
 // Workspace settings, profile settings and the deal's discovery fields are saved and survive a reload.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, clickButton, createDealInUi, email, eventually, newUserWithWorkspace, RUN, setByLabel, signIn, steps, text, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, clickButton, createDealInUi, email, eventually, newUserWithWorkspace, RUN, setByLabel, signIn, steps, text, useBrowser, waitForToastToClear, finishOnboarding } from '../lib/harness.mjs';
 
 /** The value of the input/select/textarea next to a label (like setByLabel, for reading). */
 const valueByLabel = (page, label, tag = 'input') =>
@@ -151,7 +151,7 @@ describe('settings and discovery fields', () => {
     await member.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
     await signIn(member, email('settings-member'), 'Max Member');
     await clickButton(member, 'Accept and join');
-    await member.waitForSelector('[data-testid=new-menu]');
+    await finishOnboarding(member);
     await member.goto(`${BASE_URL}/settings/workspace`, { waitUntil: 'networkidle0' });
     await member.waitForFunction(() => document.body.innerText.includes('Only owners and admins can change the workspace settings.'));
     assert.equal(await valueByLabel(member, 'Name'), workspaceName);
