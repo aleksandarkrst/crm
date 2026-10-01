@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.environment }}
-      url: ${{ inputs.environment == 'staging' && (vars.STAGING_URL || 'https://staging.simplicity-labs.com') || (vars.PRODUCTION_URL || 'https://app.simplicity-labs.com') }}
+      url: ${{ inputs.environment == 'staging' && (vars.STAGING_URL || 'https://staging.pultly.com') || (vars.PRODUCTION_URL || 'https://app.pultly.com') }}
     # One deploy per environment at a time; a second one waits instead of cancelling the first.
     concurrency: { group: 'deploy-${{ inputs.environment }}', cancel-in-progress: false }
     permissions: { contents: read, packages: read }

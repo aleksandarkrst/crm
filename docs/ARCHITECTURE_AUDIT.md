@@ -11,7 +11,7 @@ are at the end of this file.
 | Product | Cadence CRM: multi-tenant CRM for small businesses (deals, companies, contacts, products, funnels, documents) |
 | Shape | Modular monolith: one NestJS backend image run as **api**, **worker** and **migrate**; a React SPA served by nginx |
 | Hosting | One Hetzner VPS (Ubuntu 26.04), Docker Compose, public traffic only via Cloudflare Tunnel |
-| Public URL | https://app.simplicity-labs.com (one hostname for UI and `/api`) |
+| Public URL | https://app.pultly.com (one hostname for UI and `/api`) |
 | Database | PostgreSQL 17 (container, internal network only), row-level security per tenant |
 | Auth | External OIDC provider (Auth0), JWTs verified by the API; tenants and roles in our database |
 | Deploys | Merge to `main` → GitHub Actions checks → images to GHCR → SSH → `scripts/deploy.sh <sha>` |
@@ -96,10 +96,10 @@ Browser ──HTTPS──► Cloudflare (DNS, TLS, WAF) ──Tunnel──► cl
 ### Auth0 tenant (read through the Auth0 connector, 2026-09-27)
 
 - Tenant `dev-yz7q4hukh2ycg4il` (US region). Connections in use: Username-Password and Google.
-- **Application "CRM"** (SPA, public client, no secret): callback `https://app.simplicity-labs.com/auth/callback`,
-  logout URL and web origin `https://app.simplicity-labs.com`, RS256. Grant types still include
+- **Application "CRM"** (SPA, public client, no secret): callback `https://app.pultly.com/auth/callback`,
+  logout URL and web origin `https://app.pultly.com`, RS256. Grant types still include
   `implicit` and `refresh_token`, although the SPA uses code + PKCE only and never asks for `offline_access`.
-- **API "Simplicity CRM API"** (audience `https://app.simplicity-labs.com/api`, matches the SPA's
+- **API "Simplicity CRM API"** (audience `https://app.simplicity-labs.com/api`, an identifier only that Auth0 cannot rename and that stays after the CD-124 domain switch; matches the SPA's
   `audience` parameter): RS256, no refresh tokens (`allow_offline_access: false`), access tokens from
   the browser last 2 h (`token_lifetime_for_web: 7200`). The SPA sets no `silent_redirect_uri` and
   gets no refresh token, so it cannot renew: after 2 h the token expires mid-session.

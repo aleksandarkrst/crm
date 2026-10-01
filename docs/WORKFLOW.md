@@ -110,7 +110,7 @@ After every merge, CI runs again on `main` and then:
 1. **`images`**: builds the backend and frontend Docker images and stores them in GitHub's
    container registry, tagged with the commit (the frontend twice: production and `-staging`,
    because the sign-in app is compiled into it).
-2. **`deploy-staging`**: deploys the commit to staging (https://staging.simplicity-labs.com,
+2. **`deploy-staging`**: deploys the commit to staging (https://staging.pultly.com,
    same server, own database) and runs the smoke test there.
 3. **Check it on staging**: whoever merged opens staging and tries the change.
 4. **Promote to production**: Actions → *Promote to production* → Run workflow (or
