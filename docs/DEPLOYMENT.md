@@ -508,7 +508,7 @@ containers: Compose prefixes every network and volume with the project name (`cr
 **The flow** (CD-105):
 1. A merge to `main` runs CI, builds the images (the frontend twice: for production and, tagged
    `<sha>-staging`, for staging), deploys to staging and runs `scripts/verify-production.sh` there.
-2. Check the change on https://staging.simplicity-labs.com.
+2. Check the change on https://staging.pultly.com.
 3. **Actions → Promote to production → Run workflow** (or `gh workflow run promote.yml`). It
    deploys the commit that staging runs now to production, then runs the smoke test there. It only
    accepts commits whose staging deploy succeeded; to promote an older one, give its SHA.
@@ -520,13 +520,13 @@ promote an earlier commit that passed staging, or run `scripts/deploy.sh <sha>` 
 ### Setting it up (once)
 
 1. **Cloudflare**: create a second tunnel `crm-staging` (Zero Trust → Networks → Tunnels) with
-   the public hostname `staging.simplicity-labs.com` → `HTTP` → `frontend:80`. A separate tunnel,
+   the public hostname `staging.pultly.com` → `HTTP` → `frontend:80`. A separate tunnel,
    because production's `cloudflared` can't reach the staging network. Keep the token for `.env`.
    Optional: put it behind Cloudflare Access so only the team can open it.
 2. **Auth0** (same tenant): an API `Simplicity CRM API (staging)` with identifier
-   `https://staging.simplicity-labs.com/api` and Allow Offline Access on, and a Regular Web
+   `https://staging.simplicity-labs.com/api` (an identifier only, kept after the domain switch) and Allow Offline Access on, and a Regular Web
    Application `CRM sign-in (staging)` set up like production's (section 4) with callback
-   `https://staging.simplicity-labs.com/api/auth/callback`. Enable the same connections as
+   `https://staging.pultly.com/api/auth/callback`. Enable the same connections as
    production's app.
    The post-login Action that adds `email` covers every application. A separate audience keeps
    staging tokens from being accepted by the production API.
@@ -544,7 +544,7 @@ promote an earlier commit that passed staging, or run `scripts/deploy.sh <sha>` 
    | `FRONTEND_VARIANT` | `-staging` (pulls the staging frontend image) |
    | `POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `APP_SECRET` | new values (`openssl rand -hex 32`) |
    | `OIDC_AUDIENCE`, `AUTH0_LOGIN_CLIENT_ID`, `AUTH0_LOGIN_CLIENT_SECRET` | the staging API identifier and sign-in application |
-   | `APP_URL` | `https://staging.simplicity-labs.com` |
+   | `APP_URL` | `https://staging.pultly.com` |
    | `CLOUDFLARE_TUNNEL_TOKEN` | the staging tunnel's token |
    | `MAIL_DRIVER` | `log`, or `smtp` with a sandbox SMTP (never real customers' addresses) |
    | `SENTRY_ENVIRONMENT` | `staging` (same Sentry projects, filtered by environment) |
