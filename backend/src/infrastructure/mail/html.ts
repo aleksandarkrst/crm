@@ -13,10 +13,10 @@ export function buttonHtml(label: string, href: string): string {
 export function layoutHtml(bodyHtml: string, footer: string): string {
   return [
     '<!doctype html>',
-    '<html><body style="margin:0;padding:24px;background:#F5F6F8;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#101828;font-size:14px;line-height:1.55">',
-    '<div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #E4E7EC;border-radius:10px;padding:28px">',
+    '<html><body style="margin:0;padding:24px;background:#F5F7F6;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0F1B16;font-size:14px;line-height:1.55">',
+    '<div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #E2E8E4;border-radius:10px;padding:28px">',
     bodyHtml,
-    `<p style="margin:28px 0 0;color:#667085;font-size:12px">${escapeHtml(footer)}</p>`,
+    `<p style="margin:28px 0 0;color:#6B7B73;font-size:12px">${escapeHtml(footer)}</p>`,
     '</div></body></html>',
   ].join('\n');
 }

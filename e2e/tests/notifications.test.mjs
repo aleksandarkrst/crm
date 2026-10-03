@@ -49,7 +49,7 @@ describe('emails: invitations and notification settings', () => {
     await page.waitForFunction((address) => document.querySelector(`[data-invite-email="${address}"] .invite-email-status`)?.textContent.startsWith('Email sent'), { timeout: 20_000 }, invitee);
     const mails = await api(page, `/dev/mail?to=${encodeURIComponent(invitee)}`);
     assert.equal(mails.length, 1);
-    assert.match(mails[0].subject, /^Mona Mailer invited you to Mail Co on Cadence$/);
+    assert.match(mails[0].subject, /^Mona Mailer invited you to Mail Co on Pultly$/);
     assert.ok(mails[0].text.includes('/invite/' + link.split('/invite/')[1]), 'the email carries the same link');
   });
 

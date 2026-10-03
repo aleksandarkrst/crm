@@ -18,14 +18,14 @@ describe('create account with email', () => {
     visitor = await browser.person('visitor');
     await visitor.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     const page = await text(visitor);
-    assert.match(page, /Sign in to Cadence/);
-    assert.match(page, /New to Cadence\?\s*Create account/);
+    assert.match(page, /Sign in to Pultly/);
+    assert.match(page, /New to Pultly\?\s*Create account/);
     assert.equal(await visitor.$('[data-testid=new-menu]'), null);
   });
 
   step('Create account asks for the email, then says to check it', async () => {
     await clickButton(visitor, 'Create account');
-    await visitor.waitForFunction(() => document.body.innerText.includes('Create your Cadence account'));
+    await visitor.waitForFunction(() => document.body.innerText.includes('Create your Pultly account'));
     assert.equal(new URL(visitor.url()).pathname, '/signup');
     await visitor.type('input[type=email]', address);
     await clickButton(visitor, 'Continue with email');
@@ -44,7 +44,7 @@ describe('create account with email', () => {
       return list.length > 0 && list;
     }, { timeout: 20_000 });
     assert.ok(mails, 'confirmation email');
-    assert.equal(mails[0].subject, 'Confirm your email to create your Cadence account');
+    assert.equal(mails[0].subject, 'Confirm your email to create your Pultly account');
     link = /(https?:\/\/\S+\/signup\/verify#[A-Za-z0-9_-]+)/.exec(mails[0].text)?.[1];
     assert.ok(link, mails[0].text);
   });
@@ -77,7 +77,7 @@ describe('create account with email', () => {
     await stranger.goto(BASE_URL + '/signup/verify#' + 'x'.repeat(43), { waitUntil: 'networkidle0' });
     await stranger.waitForFunction(() => document.body.innerText.includes("This link doesn't work"));
     await clickButton(stranger, 'Send a new email');
-    await stranger.waitForFunction(() => document.body.innerText.includes('Create your Cadence account'));
+    await stranger.waitForFunction(() => document.body.innerText.includes('Create your Pultly account'));
   });
 
   step('forgot password: an emailed link sets a new password and signs in', async () => {
@@ -87,7 +87,7 @@ describe('create account with email', () => {
     await forgetful.type('input[type=email]', address);
     await clickButton(forgetful, 'Send reset link');
     await forgetful.waitForFunction(() => document.body.innerText.includes('Check your email'));
-    const mail = await eventually(async () => (await api(reader, `/dev/mail?to=${encodeURIComponent(address)}`)).find((m) => m.subject === 'Reset your Cadence password'), { timeout: 20_000 });
+    const mail = await eventually(async () => (await api(reader, `/dev/mail?to=${encodeURIComponent(address)}`)).find((m) => m.subject === 'Reset your Pultly password'), { timeout: 20_000 });
     assert.ok(mail, 'reset email');
     const reset = /(https?:\/\/\S+\/reset-password#[A-Za-z0-9_-]+)/.exec(mail.text)?.[1];
     assert.ok(reset, mail.text);

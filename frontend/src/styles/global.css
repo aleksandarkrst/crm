@@ -1,24 +1,31 @@
 /*
- * Design tokens and shared styles, taken from the "Mini CRM v2" Claude Design handoff.
+ * Design tokens and shared styles. Layout and spacing come from the "Mini CRM v2" Claude Design
+ * handoff; colours and type follow the Pultly brand ("Forest Signal", Pultly Brand Guide v1.0), the
+ * same tokens pultly.com uses (website/src/styles/tokens.css).
  * Component-specific layout (grid templates, one-off sizes) stays inline next to the markup;
  * everything repeated — cards, buttons, inline-editable fields, labels — lives here.
  */
 
 :root {
-  --ink: #101828;
-  --text-2: #475467;
-  --muted: #98A2B3;
-  --muted-2: #667085;
-  --border: #E4E7EC;
-  --divider: #EEF0F4;
-  --divider-2: #F4F5F7;
-  --dashed: #D0D5DD;
-  --bg-soft: #F5F6F8;
-  --panel: #FAFBFC;
-  --chip: #F1F3F6;
-  --segment: #EDEFF3;
-  --hover-col: #E9ECF1;
+  --ink: #0F1B16;
+  --text-2: #475750;
+  --muted: #93A39B;
+  --muted-2: #6B7B73;
+  --border: #E2E8E4;
+  --divider: #EBF0ED;
+  --divider-2: #F1F4F2;
+  --dashed: #CAD3CE;
+  --bg-soft: #F5F7F6;
+  --panel: #FAFBFA;
+  --chip: #F2F5F3;
+  --segment: #EAEFEC;
+  --hover-col: #E6ECE8;
   --white: #FFFFFF;
+
+  /* Pultly brand: deep forest surfaces, green for actions, lime only as the signal (won, active). */
+  --forest: #0D241C;
+  --green-500: #2F7A5E;
+  --lime: #C6F16A;
 
   --brand: #14503C;
   --brand-dark: #0C3226;
@@ -33,15 +40,23 @@
   --danger-soft: #FDECEA;
   --note: #FFFCF2;
 
-  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.05);
-  --shadow-tile: 0 1px 2px rgba(16, 24, 40, 0.04);
-  --shadow-pop: 0 16px 38px rgba(16, 24, 40, 0.16);
+  /* Pipeline stages: green steps light to dark, lime only for won. */
+  --stage-done: #A3D2BF;
+  --stage-won: var(--lime);
+
+  --shadow-card: 0 1px 2px rgba(13, 36, 28, 0.05);
+  --shadow-tile: 0 1px 2px rgba(13, 36, 28, 0.04);
+  --shadow-pop: 0 16px 38px rgba(13, 36, 28, 0.16);
   --ring: 0 0 0 3px var(--brand-soft);
 
-  --font: 'Instrument Sans', system-ui, sans-serif;
+  /* Onest for the interface, Unbounded for brand voice: titles and big figures. */
+  --font: 'Onest', system-ui, sans-serif;
+  --font-display: 'Unbounded', 'Onest', system-ui, sans-serif;
 }
 
-html, body { margin: 0; padding: 0; background: var(--bg-soft); font-family: var(--font); color: var(--ink); }
+html, body { margin: 0; padding: 0; background: var(--bg-soft); font-family: var(--font); color: var(--ink); -webkit-font-smoothing: antialiased; }
+::selection { background: var(--lime); color: var(--forest); }
+.display { font-family: var(--font-display); font-weight: 500; letter-spacing: -0.03em; }
 * { box-sizing: border-box; }
 a { color: var(--brand); text-decoration: none; }
 a:hover { color: var(--brand-dark); text-decoration: underline; }
@@ -72,6 +87,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { width: 11px; height: 11p
 
 .btn { cursor: pointer; font-size: 13px; padding: 10px 15px; border-radius: 8px; white-space: nowrap; }
 .btn-primary { border: 0; background: var(--brand); color: var(--bg-soft); font-weight: 500; }
+.btn-primary:hover { background: var(--brand-dark); }
 .btn-secondary { border: 1px solid var(--border); background: var(--white); color: var(--text-2); }
 .btn-disabled { border: 0; background: var(--chip); color: var(--muted); font-weight: 500; cursor: not-allowed; }
 .btn-outline { border: 1px solid var(--brand); background: var(--white); color: var(--brand); cursor: pointer; font-size: 12.5px; font-weight: 500; padding: 8px 13px; border-radius: 7px; }
@@ -148,9 +164,9 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 
 /* ---------------------------------------------------------------- modals & toast */
 
-.overlay { position: fixed; inset: 0; background: rgba(16, 24, 40, 0.55); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 45; }
+.overlay { position: fixed; inset: 0; background: rgba(13, 36, 28, 0.55); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 45; }
 .modal { background: var(--white); border-radius: 14px; width: 100%; padding: 26px; animation: dcFade .22s ease-out both; display: flex; flex-direction: column; gap: 16px; max-height: 88vh; overflow-y: auto; }
-.modal-title { font-weight: 600; letter-spacing: -0.02em; font-size: 24px; line-height: 1.2; }
+.modal-title { font-family: var(--font-display); font-weight: 500; letter-spacing: -0.03em; font-size: 22px; line-height: 1.2; }
 .modal-sub { font-size: 13px; color: var(--text-2); margin-top: 5px; line-height: 1.5; }
 .modal-actions { display: flex; gap: 9px; justify-content: flex-end; }
 .hint-box { font-size: 12.5px; color: var(--text-2); background: var(--bg-soft); border-radius: 8px; padding: 12px 13px; line-height: 1.5; }
@@ -159,14 +175,14 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 .choice-pill { cursor: pointer; border: 1px solid var(--border); background: var(--white); color: var(--text-2); border-radius: 999px; padding: 8px 14px; font-size: 12.5px; font-weight: 500; }
 .choice-pill.on { border-color: var(--ink); background: var(--ink); color: var(--bg-soft); }
 
-.toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg-soft); padding: 13px 18px; border-radius: 9px; font-size: 13px; z-index: 60; animation: dcFade .2s ease-out both; box-shadow: 0 8px 28px rgba(16, 24, 40, 0.28); }
+.toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--forest); color: var(--bg-soft); padding: 13px 18px; border-radius: 9px; font-size: 13px; z-index: 60; animation: dcFade .2s ease-out both; box-shadow: 0 8px 28px rgba(13, 36, 28, 0.28); }
 
 .hover-underline:hover { text-decoration: underline; }
 
 .drill-row { text-align: left; cursor: pointer; border: 1px solid var(--border); background: var(--white); border-radius: 10px; padding: 12px 13px; display: flex; align-items: center; gap: 12px; }
 .drill-row:hover { background: var(--panel); }
 
-.doc-btn { border: 1px solid #344054; background: transparent; color: var(--bg-soft); cursor: pointer; font-size: 12.5px; padding: 9px 13px; border-radius: 7px; }
+.doc-btn { border: 1px solid #2A4238; background: transparent; color: var(--bg-soft); cursor: pointer; font-size: 12.5px; padding: 9px 13px; border-radius: 7px; }
 
 .pay-input { border: 1px solid var(--border); border-radius: 7px; padding: 7px 9px; font-size: 13px; color: var(--ink); background: var(--white); }
 
@@ -240,7 +256,7 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
   .app-sidebar .nav-label { font-size: 10px !important; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .nav-more { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 2px 0; border: 0; background: transparent; font-weight: 500; cursor: pointer; font-family: inherit; }
   .nav-more .nav-icon { display: flex; align-items: center; justify-content: center; }
-  .more-backdrop { display: block; position: fixed; inset: 0; background: rgba(16, 24, 40, 0.35); z-index: 41; }
+  .more-backdrop { display: block; position: fixed; inset: 0; background: rgba(13, 36, 28, 0.35); z-index: 41; }
   .more-sheet { display: flex; flex-direction: column; position: fixed; left: 8px; right: 8px; bottom: calc(70px + env(safe-area-inset-bottom)); background: var(--white); color: var(--ink); border-radius: 12px; box-shadow: var(--shadow-pop); padding: 6px; z-index: 42; animation: dcFade .14s ease-out both; }
   .more-sheet .menu-item { color: var(--ink); text-decoration: none; padding: 11px 10px; }
 
@@ -307,21 +323,21 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 .icon-row { gap: 10px; }
 .deal-header { display: flex; flex-direction: column; gap: 12px; }
 .deal-header-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.deal-title { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; padding: 3px 8px; margin-left: -8px; border-radius: 8px; min-width: 0; flex: 1 1 280px; }
+.deal-title { font-family: var(--font-display); font-size: 22px; font-weight: 500; letter-spacing: -0.03em; line-height: 1.2; padding: 3px 8px; margin-left: -8px; border-radius: 8px; min-width: 0; flex: 1 1 280px; }
 .deal-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.btn-won { border: 0; background: #14503C; color: #FFFFFF; font-weight: 600; }
+.btn-won { border: 0; background: var(--lime); color: var(--forest); font-weight: 600; }
 .btn-lost { border: 0; background: var(--danger); color: #FFFFFF; font-weight: 600; }
 .btn-won:hover, .btn-lost:hover { filter: brightness(1.08); }
 .stage-bar { display: flex; gap: 2px; min-width: 0; }
 .stage-chev { flex: 1 1 0; min-width: 0; height: 30px; border: 0; cursor: pointer; background: var(--chip); color: var(--text-2); font-size: 11.5px; font-weight: 500; padding: 0 14px 0 18px; clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stage-chev:first-child { clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%); border-radius: 6px 0 0 6px; padding-left: 12px; }
 .stage-chev:last-child { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 10px 50%); border-radius: 0 6px 6px 0; }
-.stage-chev.done { background: #6FB598; color: #FFFFFF; }
-.stage-chev.current { background: #14503C; color: #FFFFFF; font-weight: 600; }
+.stage-chev.done { background: var(--stage-done); color: var(--forest); }
+.stage-chev.current { background: var(--brand); color: #FFFFFF; font-weight: 600; }
 .stage-chev.lost.current { background: var(--danger); }
 .stage-chev:disabled { cursor: default; }
 .deal-crumb { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); flex-wrap: wrap; }
-.deal-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; background: var(--white); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 8px 24px rgba(16, 24, 40, 0.12); padding: 4px; min-width: 160px; }
+.deal-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; background: var(--white); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 8px 24px rgba(13, 36, 28, 0.12); padding: 4px; min-width: 160px; }
 .deal-menu button { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; color: var(--danger); }
 .deal-menu button:hover { background: var(--danger-soft); }
 @media (max-width: 700px) {

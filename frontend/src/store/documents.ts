@@ -103,7 +103,7 @@ export const docsApi = {
   createTemplate: (file: File, name: string, docType: DocType) => upload<DocTemplate>('/crm/document-templates', templateForm(file, { name, docType })),
   deleteTemplate: (id: string) => api<null>(`/crm/document-templates/${id}`, { method: 'DELETE' }),
   downloadTemplate: (t: DocTemplate) => download(`/crm/document-templates/${t.id}/file`, t.fileName),
-  downloadStarter: () => download('/crm/document-templates/starter', 'Cadence proposal starter template.docx'),
+  downloadStarter: () => download('/crm/document-templates/starter', 'Pultly proposal starter template.docx'),
 
   documents: (dealId: string) => api<DealDoc[]>(`/crm/deal-documents?dealId=${dealId}&limit=200`),
   document: (id: string) => api<DealDoc>(`/crm/deal-documents/${id}`),

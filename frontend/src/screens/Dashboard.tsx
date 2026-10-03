@@ -10,8 +10,8 @@ import { conversionMetrics, daysLabel, MIN_MOVED_DEALS } from '../store/metrics'
 import { useStore } from '../store/store';
 import type { Lead, SegKey } from '../store/types';
 
-const STAGE_SHADES = ['#E7F2EE', '#CBE3DA', '#A3CFC0', '#2F7A5E', '#1B6148', '#14503C', '#0C3226'];
-const TIME_SHADES = ['#F1F3F6', '#E0E3E9', '#C6CBD4', '#8A919F', '#5B6272', '#343B49'];
+const STAGE_SHADES = ['#E7F2EE', '#CBE3DA', '#A3D2BF', '#5FA587', '#2F7A5E', '#14503C', '#0D241C'];
+const TIME_SHADES = ['#F2F5F3', '#DFE6E2', '#C3CEC8', '#87968F', '#56665E', '#2E3D36'];
 const TIME_BUCKETS = [
   { label: 'Up to 12 months', range: [9, 999] },
   { label: 'Up to 9 months', range: [6, 9] },
@@ -73,8 +73,8 @@ export function Dashboard() {
       meta: plural(rows.length, 'deal') + ' · ' + valueTotal(s, rows),
       width: 100 - i * (58 / Math.max(1, stages.length - 1)) + '%',
       bg: STAGE_SHADES[Math.min(i, STAGE_SHADES.length - 1)],
-      fg: i >= 3 ? '#F5F6F8' : '#101828',
-      subFg: i >= 3 ? '#DCEBE4' : '#475467',
+      fg: i >= 4 ? '#F5F7F6' : '#0F1B16',
+      subFg: i >= 4 ? '#DCEBE4' : '#475750',
     };
   });
 
@@ -99,8 +99,8 @@ export function Dashboard() {
       value: moneyTotal(s, due),
       width: 100 - i * 11 + '%',
       bg: TIME_SHADES[i],
-      fg: i >= 3 ? '#F5F6F8' : '#101828',
-      subFg: i >= 3 ? '#E4E7EC' : '#475467',
+      fg: i >= 4 ? '#F5F7F6' : '#0F1B16',
+      subFg: i >= 3 ? '#E2E8E4' : '#475750',
     };
   });
 
@@ -157,7 +157,7 @@ export function Dashboard() {
           {metrics.map((m) => (
             <div key={m.label} className="card" style={{ padding: '16px 17px', display: 'flex', flexDirection: 'column', gap: 7 }}>
               <div className="caps">{m.label}</div>
-              <div style={{ fontWeight: 600, letterSpacing: '-0.02em', fontSize: 32, lineHeight: 1 }}>{m.value}</div>
+              <div className="display" style={{ fontSize: 30, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{m.value}</div>
               <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.4 }}>{m.note}</div>
             </div>
           ))}

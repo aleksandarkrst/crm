@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { after, describe } from 'node:test';
 import { api, BASE_URL, click, clickButton, eventually, newUserWithWorkspace, RUN, steps, useBrowser } from '../lib/harness.mjs';
 
-const dir = mkdtempSync(join(tmpdir(), 'cadence-e2e-csv-'));
+const dir = mkdtempSync(join(tmpdir(), 'pultly-e2e-csv-'));
 const downloads = join(dir, 'downloads');
 after(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -123,7 +123,7 @@ describe('CSV import and export', () => {
     await exportList(page);
     const name = await eventually(() => existsSync(downloads) && readdirSync(downloads).find((f) => f.endsWith('.csv')), { timeout: 10_000 });
     assert.ok(name, 'a CSV was downloaded');
-    assert.match(name, /^cadence-contacts-\d{4}-\d{2}-\d{2}\.csv$/);
+    assert.match(name, /^pultly-contacts-\d{4}-\d{2}-\d{2}\.csv$/);
 
     const bytes = readFileSync(join(downloads, name));
     assert.deepEqual([...bytes.subarray(0, 3)], [0xef, 0xbb, 0xbf], 'starts with a UTF-8 BOM');
@@ -181,7 +181,7 @@ describe('CSV import and export', () => {
     rmSync(downloads, { recursive: true, force: true });
     await exportList(page);
     const name = await eventually(() => existsSync(downloads) && readdirSync(downloads).find((f) => f.endsWith('.csv')), { timeout: 10_000 });
-    assert.match(name, /^cadence-products-/);
+    assert.match(name, /^pultly-products-/);
     const lines = readFileSync(join(downloads, name), 'utf8').replace(/^\uFEFF/, '').split('\r\n').filter(Boolean);
     assert.equal(lines[0], 'Product ID,Name,Description,Unit price,Unit,Quantity,Tax %,Billing frequency,Billing cycles');
     assert.ok(lines.some((l) => l.includes(`Support plan ${RUN},,300,month,1,20,Monthly,12`)), lines.join('\n'));

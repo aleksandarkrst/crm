@@ -8,7 +8,7 @@ are at the end of this file.
 
 | | |
 |---|---|
-| Product | Cadence CRM: multi-tenant CRM for small businesses (deals, companies, contacts, products, funnels, documents) |
+| Product | Pultly CRM: multi-tenant CRM for small businesses (deals, companies, contacts, products, funnels, documents) |
 | Shape | Modular monolith: one NestJS backend image run as **api**, **worker** and **migrate**; a React SPA served by nginx |
 | Hosting | One Hetzner VPS (Ubuntu 26.04), Docker Compose, public traffic only via Cloudflare Tunnel |
 | Public URL | https://app.pultly.com (one hostname for UI and `/api`) |

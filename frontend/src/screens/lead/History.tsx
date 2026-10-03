@@ -24,7 +24,7 @@ export function History({ lead }: { lead: Lead }) {
   const all = timelineFor(s, lead.id);
   const entries = filter === 'all' ? all : all.filter((e) => e.channel === filter);
   const tab = (k: typeof view, label: string) => (
-    <button type="button" data-testid={'history-' + k} aria-pressed={view === k} onClick={() => setView(k)} style={{ border: 0, cursor: 'pointer', background: view === k ? '#E7F2EE' : 'transparent', color: view === k ? '#14503C' : '#475467', fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 6 }}>
+    <button type="button" data-testid={'history-' + k} aria-pressed={view === k} onClick={() => setView(k)} style={{ border: 0, cursor: 'pointer', background: view === k ? '#E7F2EE' : 'transparent', color: view === k ? '#14503C' : '#475750', fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 6 }}>
       {label}
     </button>
   );
@@ -47,7 +47,7 @@ export function History({ lead }: { lead: Lead }) {
           const n = d.k === 'all' ? all.length : all.filter((e) => e.channel === d.k).length;
           const on = d.k === filter;
           return (
-            <button key={d.k} type="button" onClick={() => setFilter(d.k)} style={{ border: 0, cursor: 'pointer', background: on ? '#E7F2EE' : 'transparent', color: on ? '#14503C' : '#475467', fontSize: 12, fontWeight: 500, padding: '6px 10px', borderRadius: 6 }}>
+            <button key={d.k} type="button" onClick={() => setFilter(d.k)} style={{ border: 0, cursor: 'pointer', background: on ? '#E7F2EE' : 'transparent', color: on ? '#14503C' : '#475750', fontSize: 12, fontWeight: 500, padding: '6px 10px', borderRadius: 6 }}>
               {d.label} ({n})
             </button>
           );

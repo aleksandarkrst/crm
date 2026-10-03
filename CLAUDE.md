@@ -1,4 +1,4 @@
-# Cadence CRM: notes for coding agents
+# Pultly CRM: notes for coding agents
 
 - Monorepo without workspaces: `backend/` and `frontend/` each have their own package.json and lockfile. Run npm commands inside them.
 - Node 24 LTS (24.11+). The backend compiles to CommonJS and loads ESM-only deps (NestJS 12, pg-boss, jose) via `require(esm)`. Tests use Vitest, not Jest (Jest can't load them). There is no Nest CLI: build is `tsc -p tsconfig.build.json`.

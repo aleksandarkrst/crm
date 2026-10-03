@@ -218,7 +218,7 @@ export function FocusTasks({ leadIds }: { leadIds: string[] }) {
 export function RecordHistory({ entries, entity, id, cur, rev }: { entries: LogEntry[]; entity: HistoryEntity; id: string | undefined; cur: Cur; rev: string }) {
   const [view, setView] = useState<'activity' | 'changes'>('activity');
   const tab = (k: typeof view, label: string) => (
-    <button type="button" data-testid={'history-' + k} aria-pressed={view === k} onClick={() => setView(k)} style={{ border: 0, cursor: 'pointer', background: view === k ? '#E7F2EE' : 'transparent', color: view === k ? '#14503C' : '#475467', fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 6 }}>
+    <button type="button" data-testid={'history-' + k} aria-pressed={view === k} onClick={() => setView(k)} style={{ border: 0, cursor: 'pointer', background: view === k ? '#E7F2EE' : 'transparent', color: view === k ? '#14503C' : '#475750', fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 6 }}>
       {label}
     </button>
   );

@@ -63,8 +63,8 @@ export function Todos({ lead }: { lead: Lead }) {
           <div key={g.st.id} style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
               <span style={{ fontSize: 11, color: 'var(--muted)' }}>{String(g.gi + 1).padStart(2, '0')}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: g.isCurrent ? '#101828' : '#475467' }}>{g.st.name}</span>
-              <span className="tag" style={{ background: g.isCurrent ? '#101828' : g.complete ? '#E7F2EE' : '#FDF0E4', color: g.isCurrent ? '#F5F6F8' : g.complete ? '#14503C' : '#B4531B' }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: g.isCurrent ? '#0F1B16' : '#475750' }}>{g.st.name}</span>
+              <span className="tag" style={{ background: g.isCurrent ? '#0F1B16' : g.complete ? '#E7F2EE' : '#FDF0E4', color: g.isCurrent ? '#F5F7F6' : g.complete ? '#14503C' : '#B4531B' }}>
                 {g.isCurrent ? 'current stage' : g.complete ? 'completed' : 'left open'}
               </span>
               <span style={{ flex: 1, height: 1, background: 'var(--divider)' }} />
@@ -81,13 +81,13 @@ export function Todos({ lead }: { lead: Lead }) {
               };
               const channelLabel = CHANNEL_LABELS[g.st.channel] || g.st.channel;
               return (
-                <div key={i} style={{ border: `1px solid ${expanded ? '#14503C' : '#EEF0F4'}`, borderRadius: 9, background: expanded ? '#FAFBFC' : '#FFFFFF' }}>
+                <div key={i} style={{ border: `1px solid ${expanded ? '#14503C' : '#EBF0ED'}`, borderRadius: 9, background: expanded ? '#FAFBFA' : '#FFFFFF' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px' }}>
                     <button
                       type="button"
                       title="Mark done"
                       onClick={complete}
-                      style={{ flex: '0 0 19px', width: 19, height: 19, borderRadius: 6, border: `1px solid ${t.done ? '#14503C' : '#D0D5DD'}`, background: t.done ? '#14503C' : '#FFFFFF', color: '#FFFFFF', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                      style={{ flex: '0 0 19px', width: 19, height: 19, borderRadius: 6, border: `1px solid ${t.done ? '#14503C' : '#CAD3CE'}`, background: t.done ? '#14503C' : '#FFFFFF', color: '#FFFFFF', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
                     >
                       {t.done ? '✓' : ''}
                     </button>
@@ -97,10 +97,10 @@ export function Todos({ lead }: { lead: Lead }) {
                           value={item.label}
                           placeholder="Name this to-do"
                           onChange={(e) => store.renameExtra(lead.id, g.st.id, item.extraIdx!, e.target.value)}
-                          style={{ border: 0, outline: 0, background: 'transparent', padding: 0, fontSize: 13.5, color: t.done ? '#98A2B3' : '#101828', textDecoration: t.done ? 'line-through' : 'none', width: '100%' }}
+                          style={{ border: 0, outline: 0, background: 'transparent', padding: 0, fontSize: 13.5, color: t.done ? '#93A39B' : '#0F1B16', textDecoration: t.done ? 'line-through' : 'none', width: '100%' }}
                         />
                       ) : (
-                        <button type="button" onClick={toggleOpen} style={{ textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer', padding: 0, fontSize: 13.5, color: t.done ? '#98A2B3' : '#101828', textDecoration: t.done ? 'line-through' : 'none' }}>
+                        <button type="button" onClick={toggleOpen} style={{ textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer', padding: 0, fontSize: 13.5, color: t.done ? '#93A39B' : '#0F1B16', textDecoration: t.done ? 'line-through' : 'none' }}>
                           {item.label}
                         </button>
                       )}
@@ -151,7 +151,7 @@ export function Todos({ lead }: { lead: Lead }) {
                               key={o}
                               type="button"
                               onClick={() => store.patchTask(lead.id, g.st.id, i, { outcome: o })}
-                              style={{ border: `1px solid ${t.outcome === o ? '#101828' : '#E4E7EC'}`, background: t.outcome === o ? '#101828' : '#FFFFFF', color: t.outcome === o ? '#F5F6F8' : '#475467', cursor: 'pointer', fontSize: 12, padding: '7px 12px', borderRadius: 20 }}
+                              style={{ border: `1px solid ${t.outcome === o ? '#0F1B16' : '#E2E8E4'}`, background: t.outcome === o ? '#0F1B16' : '#FFFFFF', color: t.outcome === o ? '#F5F7F6' : '#475750', cursor: 'pointer', fontSize: 12, padding: '7px 12px', borderRadius: 20 }}
                             >
                               {o}
                             </button>
@@ -169,7 +169,7 @@ export function Todos({ lead }: { lead: Lead }) {
                         />
                       </label>
                       <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
-                        <button type="button" className="btn" onClick={complete} style={{ border: 0, fontWeight: 500, background: t.done ? '#F1F3F6' : '#14503C', color: t.done ? '#475467' : '#F5F6F8' }}>
+                        <button type="button" className="btn" onClick={complete} style={{ border: 0, fontWeight: 500, background: t.done ? '#F2F5F3' : '#14503C', color: t.done ? '#475750' : '#F5F7F6' }}>
                           {t.done ? 'Reopen' : 'Mark done'}
                         </button>
                         <button
@@ -201,7 +201,7 @@ export function Todos({ lead }: { lead: Lead }) {
                 <button
                   type="button"
                   onClick={() => store.advanceStage(lead.id)}
-                  style={{ alignSelf: 'flex-start', marginTop: 4, border: 0, cursor: canAdvance ? 'pointer' : 'not-allowed', background: canAdvance ? '#14503C' : '#F1F3F6', color: canAdvance ? '#F5F6F8' : '#98A2B3', fontSize: 13.5, fontWeight: 500, padding: '12px 18px', borderRadius: 8 }}
+                  style={{ alignSelf: 'flex-start', marginTop: 4, border: 0, cursor: canAdvance ? 'pointer' : 'not-allowed', background: canAdvance ? '#14503C' : '#F2F5F3', color: canAdvance ? '#F5F7F6' : '#93A39B', fontSize: 13.5, fontWeight: 500, padding: '12px 18px', borderRadius: 8 }}
                 >
                   {advanceLabel}
                 </button>
@@ -222,18 +222,18 @@ function LeadTaskRow({ task: t }: { task: LeadTask }) {
     ? `Done ${t.at ?? ''}${t.by ? ' by ' + t.by : ''}`
     : [t.due ? (overdue ? 'Overdue · due ' : 'Due ') + isoLabel(t.due) : 'No due date', memberName(s, t.ownerId, t.ownerName), t.note].filter(Boolean).join(' · ');
   return (
-    <div data-lead-task={t.id} data-overdue={overdue || undefined} style={{ border: `1px solid ${overdue ? '#F3C5C0' : '#EEF0F4'}`, borderRadius: 9, background: overdue ? '#FEF6F5' : '#FFFFFF' }}>
+    <div data-lead-task={t.id} data-overdue={overdue || undefined} style={{ border: `1px solid ${overdue ? '#F3C5C0' : '#EBF0ED'}`, borderRadius: 9, background: overdue ? '#FEF6F5' : '#FFFFFF' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px' }}>
         <button
           type="button"
           title={t.done ? 'Reopen' : 'Mark done'}
           onClick={() => toggleLeadTask(t.id)}
-          style={{ flex: '0 0 19px', width: 19, height: 19, borderRadius: 6, border: `1px solid ${t.done ? '#14503C' : '#D0D5DD'}`, background: t.done ? '#14503C' : '#FFFFFF', color: '#FFFFFF', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+          style={{ flex: '0 0 19px', width: 19, height: 19, borderRadius: 6, border: `1px solid ${t.done ? '#14503C' : '#CAD3CE'}`, background: t.done ? '#14503C' : '#FFFFFF', color: '#FFFFFF', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
         >
           {t.done ? '✓' : ''}
         </button>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <span style={{ fontSize: 13.5, color: t.done ? '#98A2B3' : '#101828', textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</span>
+          <span style={{ fontSize: 13.5, color: t.done ? '#93A39B' : '#0F1B16', textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</span>
           <span style={{ fontSize: 11.5, color: overdue ? 'var(--danger)' : 'var(--muted)' }}>{meta}</span>
         </div>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
@@ -268,7 +268,7 @@ function ChampPanel({ lead }: { lead: Lead }) {
           <div style={{ fontSize: 11.5, color: 'var(--text-2)', marginTop: 3 }}>25 points each. The total becomes the fit score.</div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          <span style={{ fontWeight: 600, letterSpacing: '-0.02em', fontSize: 28, lineHeight: 1, color: fg }}>{total}</span>
+          <span className="display" style={{ fontSize: 26, lineHeight: 1, color: fg }}>{total}</span>
           <span className="tag" style={{ padding: 0, color: fg }}>
             {total >= 80 ? 'pursue' : total >= 55 ? 'nurture' : 'disqualify'}
           </span>
@@ -290,7 +290,7 @@ function ChampPanel({ lead }: { lead: Lead }) {
                     key={l.label}
                     type="button"
                     onClick={() => store.setChamp(lead.id, c.key, l.v)}
-                    style={{ border: `1px solid ${on ? '#101828' : '#E4E7EC'}`, background: on ? '#101828' : '#FFFFFF', color: on ? '#F5F6F8' : '#475467', cursor: 'pointer', fontSize: 11, padding: '6px 4px', borderRadius: 6 }}
+                    style={{ border: `1px solid ${on ? '#0F1B16' : '#E2E8E4'}`, background: on ? '#0F1B16' : '#FFFFFF', color: on ? '#F5F7F6' : '#475750', cursor: 'pointer', fontSize: 11, padding: '6px 4px', borderRadius: 6 }}
                   >
                     {l.label}
                   </button>

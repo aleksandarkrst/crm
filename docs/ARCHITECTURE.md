@@ -261,7 +261,7 @@ reloads the workspace. The API calls live in `store/importExport.ts`.
 
 **Export filter results** in the "⋯" menu of Pipeline, Companies, Contacts and Products (CD-81,
 next to **Import data**) downloads the list the screen shows, with its filters applied (Pipeline:
-the funnel on screen and the lost-deals view too), as `cadence-<list>-<date>.csv`. Owners and
+the funnel on screen and the lost-deals view too), as `pultly-<list>-<date>.csv`. Owners and
 admins only; the menu is hidden for members. The menu is only on those four list screens.
 
 Products (CD-81) are matched by name like companies (skip or update). Their columns are name,
@@ -373,7 +373,7 @@ OpenID Connect provider (discovery → JWKS). Users are created on first request
 
 ### Sessions that don't end mid-work (CD-88)
 
-Signing in happens on Cadence's own pages; the backend talks to the provider (`identity/sessions.ts`,
+Signing in happens on Pultly's own pages; the backend talks to the provider (`identity/sessions.ts`,
 `session.controller.ts`):
 
 - **Password**: `POST /api/auth/login {email, password}` uses Auth0's password-realm grant with the
@@ -412,16 +412,16 @@ The access token lasts 2 hours, so:
 - **Google**: "Continue with Google" (shown when `GET /api/auth/signup/options` says so) goes through
   `/api/auth/google`, for signing in and creating an account alike. A cancelled or refused sign-in
   comes back to `/auth/callback` with a result, which the sign-in page explains.
-- **Email**: Cadence confirms the address itself, before any password exists:
+- **Email**: Pultly confirms the address itself, before any password exists:
   1. `POST /api/auth/signup {email}` always answers 202 `{sent:true}`, so it can't tell whether the
      address has an account. The worker (`identity.signup-email`) emails a link, or, when the address
-     already has an account, "You already have a Cadence account" with how that account signs in.
+     already has an account, "You already have a Pultly account" with how that account signs in.
   2. The link is `/signup/verify#<token>` (after `#`, so it stays out of server logs). The token is
      stored as a SHA-256 hash (plus sealed with `APP_SECRET`, so a retried job can email it), works for
      24 hours and once. A new email replaces older links; asking again within 60 s sends nothing.
   3. `check` shows the address; `complete {token, password}` creates the user at the provider with
      `email_verified: true` (Auth0 Management API, `accounts.ts`) and uses the link up. A password the
-     provider refuses doesn't use it up. Cadence never stores the password.
+     provider refuses doesn't use it up. Pultly never stores the password.
   4. `complete` also signs in (the session cookie above), so the new account opens right away.
 - **Forgot password**: `POST /api/auth/password/forgot {email}` works the same way (always 202,
   `purpose='reset'` rows in `signup_requests`): a one-hour link `/reset-password#<token>`, then
@@ -539,7 +539,7 @@ Links use `APP_URL`.
 | `APP_SECRET` | `DEV_JWT_SECRET` outside production | ≥ 32 characters; encrypts invite links; required in production |
 | `MAIL_DRIVER` | `log` | `log` or `smtp` |
 | `SMTP_URL` | | required with `smtp` |
-| `MAIL_FROM` | `Cadence <no-reply@localhost>` | sender |
+| `MAIL_FROM` | `Pultly <no-reply@localhost>` | sender |
 | `MAIL_RETRY_LIMIT`, `MAIL_RETRY_DELAY_SECONDS` | `4`, `30` | retries of a failed send |
 
 Production values are listed in `docs/DEPLOYMENT.md` and the root `.env.example`.

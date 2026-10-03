@@ -29,11 +29,11 @@ const IGNORE = "If you didn't ask for this, you can ignore this email. Nothing c
 
 /** The confirmation email of "Continue with email": the link that leads to choosing a password. */
 export function signupEmail(input: { to: string; link: string; hours: number }): MailMessage {
-  const subject = 'Confirm your email to create your Cadence account';
+  const subject = 'Confirm your email to create your Pultly account';
   const text = [
     'Hi,',
     '',
-    `To finish creating your Cadence account for ${input.to}, confirm your email address and choose a password:`,
+    `To finish creating your Pultly account for ${input.to}, confirm your email address and choose a password:`,
     input.link,
     '',
     `The link works once, for ${input.hours} hours.`,
@@ -43,10 +43,10 @@ export function signupEmail(input: { to: string; link: string; hours: number }):
   const html = layoutHtml(
     [
       `<p style="margin:0 0 12px">Hi,</p>`,
-      `<p style="margin:0 0 12px">To finish creating your Cadence account for <strong>${escapeHtml(input.to)}</strong>, confirm your email address and choose a password.</p>`,
+      `<p style="margin:0 0 12px">To finish creating your Pultly account for <strong>${escapeHtml(input.to)}</strong>, confirm your email address and choose a password.</p>`,
       buttonHtml('Confirm email address', input.link),
       `<p style="margin:0 0 12px">The link works once, for ${input.hours} hours.</p>`,
-      `<p style="margin:0 0 12px;color:#475467;font-size:12.5px">If the button doesn't work, paste this link into your browser:<br><a href="${escapeHtml(input.link)}" style="color:#14503C;word-break:break-all">${escapeHtml(input.link)}</a></p>`,
+      `<p style="margin:0 0 12px;color:#475750;font-size:12.5px">If the button doesn't work, paste this link into your browser:<br><a href="${escapeHtml(input.link)}" style="color:#14503C;word-break:break-all">${escapeHtml(input.link)}</a></p>`,
     ].join('\n'),
     IGNORE,
   );
@@ -64,13 +64,13 @@ export function existingAccountEmail(input: { to: string; link: string; method: 
       : input.method === 'password'
         ? 'Sign in with your email address and password. If you forgot the password, choose "Forgot password?" on the sign-in page.'
         : 'Sign in the way you did before.';
-  const subject = 'You already have a Cadence account';
-  const text = ['Hi,', '', `Someone asked to create a Cadence account for ${input.to}, but this address already has one. ${how}`, '', input.link, '', IGNORE].join('\n');
+  const subject = 'You already have a Pultly account';
+  const text = ['Hi,', '', `Someone asked to create a Pultly account for ${input.to}, but this address already has one. ${how}`, '', input.link, '', IGNORE].join('\n');
   const html = layoutHtml(
     [
       `<p style="margin:0 0 12px">Hi,</p>`,
-      `<p style="margin:0 0 12px">Someone asked to create a Cadence account for <strong>${escapeHtml(input.to)}</strong>, but this address already has one. ${escapeHtml(how)}</p>`,
-      buttonHtml('Sign in to Cadence', input.link),
+      `<p style="margin:0 0 12px">Someone asked to create a Pultly account for <strong>${escapeHtml(input.to)}</strong>, but this address already has one. ${escapeHtml(how)}</p>`,
+      buttonHtml('Sign in to Pultly', input.link),
     ].join('\n'),
     IGNORE,
   );
@@ -79,17 +79,17 @@ export function existingAccountEmail(input: { to: string; link: string; method: 
 
 /** "Forgot password?" for an account that signs in with a password: the link to choose a new one. */
 export function passwordResetEmail(input: { to: string; link: string; hours: number }): MailMessage {
-  const subject = 'Reset your Cadence password';
+  const subject = 'Reset your Pultly password';
   const ignore = "If you didn't ask for this, you can ignore this email. Your password stays the same until the link is opened.";
   const valid = `The link works once, for ${input.hours === 1 ? 'one hour' : `${input.hours} hours`}.`;
-  const text = ['Hi,', '', `To choose a new password for your Cadence account ${input.to}, open this link:`, input.link, '', valid, '', ignore].join('\n');
+  const text = ['Hi,', '', `To choose a new password for your Pultly account ${input.to}, open this link:`, input.link, '', valid, '', ignore].join('\n');
   const html = layoutHtml(
     [
       `<p style="margin:0 0 12px">Hi,</p>`,
-      `<p style="margin:0 0 12px">To choose a new password for your Cadence account <strong>${escapeHtml(input.to)}</strong>, use the button below.</p>`,
+      `<p style="margin:0 0 12px">To choose a new password for your Pultly account <strong>${escapeHtml(input.to)}</strong>, use the button below.</p>`,
       buttonHtml('Choose a new password', input.link),
       `<p style="margin:0 0 12px">${valid}</p>`,
-      `<p style="margin:0 0 12px;color:#475467;font-size:12.5px">If the button doesn't work, paste this link into your browser:<br><a href="${escapeHtml(input.link)}" style="color:#14503C;word-break:break-all">${escapeHtml(input.link)}</a></p>`,
+      `<p style="margin:0 0 12px;color:#475750;font-size:12.5px">If the button doesn't work, paste this link into your browser:<br><a href="${escapeHtml(input.link)}" style="color:#14503C;word-break:break-all">${escapeHtml(input.link)}</a></p>`,
     ].join('\n'),
     ignore,
   );
@@ -98,11 +98,11 @@ export function passwordResetEmail(input: { to: string; link: string; hours: num
 
 /** "Forgot password?" for an account that has no password (it signs in with Google): how to sign in instead. */
 export function noPasswordEmail(input: { to: string; link: string }): MailMessage {
-  const subject = 'Signing in to Cadence';
-  const how = `Your Cadence account ${input.to} signs in with Google, so it has no password to reset. Choose "Continue with Google" on the sign-in page.`;
+  const subject = 'Signing in to Pultly';
+  const how = `Your Pultly account ${input.to} signs in with Google, so it has no password to reset. Choose "Continue with Google" on the sign-in page.`;
   const text = ['Hi,', '', how, '', input.link, '', IGNORE].join('\n');
   const html = layoutHtml(
-    [`<p style="margin:0 0 12px">Hi,</p>`, `<p style="margin:0 0 12px">${escapeHtml(how)}</p>`, buttonHtml('Sign in to Cadence', input.link)].join('\n'),
+    [`<p style="margin:0 0 12px">Hi,</p>`, `<p style="margin:0 0 12px">${escapeHtml(how)}</p>`, buttonHtml('Sign in to Pultly', input.link)].join('\n'),
     IGNORE,
   );
   return { to: input.to, subject, text, html };

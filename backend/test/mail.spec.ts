@@ -11,16 +11,16 @@ import { SmtpMailer } from '../src/infrastructure/mail/smtp-mailer';
 import { invitationEmail, inviteLink } from '../src/modules/identity/invitation-email';
 
 const message = { to: 'ana@example.com', subject: 'Hello', text: 'Plain text', html: '<p>Hi</p>' };
-const env = (over: Partial<Env>): Env => ({ NODE_ENV: 'development', STORAGE_DIR: './storage', MAIL_DRIVER: 'log', MAIL_FROM: 'Cadence <no-reply@example.com>', ...over }) as Env;
+const env = (over: Partial<Env>): Env => ({ NODE_ENV: 'development', STORAGE_DIR: './storage', MAIL_DRIVER: 'log', MAIL_FROM: 'Pultly <no-reply@example.com>', ...over }) as Env;
 
 describe('LogMailer', () => {
   it('keeps the message in memory and appends it to the outbox file', async () => {
     const file = join(mkdtempSync(join(tmpdir(), 'mail-')), 'dev-mail', 'outbox.jsonl');
-    const mailer = new LogMailer('Cadence <no-reply@example.com>', file);
+    const mailer = new LogMailer('Pultly <no-reply@example.com>', file);
     await mailer.send(message);
     await mailer.send({ ...message, to: 'bo@example.com' });
     expect(mailer.sent.map((m) => m.to)).toEqual(['ana@example.com', 'bo@example.com']);
-    expect(mailer.sent[0]).toMatchObject({ ...message, from: 'Cadence <no-reply@example.com>' });
+    expect(mailer.sent[0]).toMatchObject({ ...message, from: 'Pultly <no-reply@example.com>' });
     expect(readFileSync(file, 'utf8').trim().split('\n')).toHaveLength(2);
     const read = await readOutbox(file);
     expect(read.map((m) => m.to)).toEqual(['ana@example.com', 'bo@example.com']);
@@ -91,8 +91,8 @@ describe('invitationEmail', () => {
     const mail = invitationEmail(input);
     expect(input.link).toBe('https://app.example.com/invite/tok_123');
     expect(mail.to).toBe('new@example.com');
-    expect(mail.subject).toBe('Ana Petrović invited you to Acme <Studio> on Cadence');
-    expect(mail.text).toContain('Ana Petrović (ana@example.com) invited you to join Acme <Studio> on Cadence as an admin');
+    expect(mail.subject).toBe('Ana Petrović invited you to Acme <Studio> on Pultly');
+    expect(mail.text).toContain('Ana Petrović (ana@example.com) invited you to join Acme <Studio> on Pultly as an admin');
     expect(mail.text).toContain('https://app.example.com/invite/tok_123');
     expect(mail.text).toContain('until 1 October 2026');
     expect(mail.html).toContain('href="https://app.example.com/invite/tok_123"');
@@ -107,6 +107,6 @@ describe('invitationEmail', () => {
 
   it('falls back to the email, or "A teammate", when the inviter has no name', () => {
     expect(invitationEmail({ ...input, inviterName: null }).subject).toMatch(/^ana@example\.com invited you/);
-    expect(invitationEmail({ ...input, inviterName: null, inviterEmail: null, role: 'member' }).text).toContain('A teammate invited you to join Acme <Studio> on Cadence as a member');
+    expect(invitationEmail({ ...input, inviterName: null, inviterEmail: null, role: 'member' }).text).toContain('A teammate invited you to join Acme <Studio> on Pultly as a member');
   });
 });

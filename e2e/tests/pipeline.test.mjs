@@ -27,13 +27,13 @@ describe('pipeline journey', () => {
   step('shows the sign-in screen', async () => {
     page = await browser.person('erin');
     await page.goto(BASE_URL, { waitUntil: 'networkidle0' });
-    assert.match(await text(page), /Sign in to Cadence/);
+    assert.match(await text(page), /Sign in to Pultly/);
   });
 
   step('asks a new user to create a workspace, then opens the pipeline', async () => {
     await signIn(page, email('erin'), 'Erin Test');
     await page.waitForSelector('::-p-text(Create your workspace)');
-    await page.type('input[placeholder="e.g. Cadence Studio"]', 'E2E Studio');
+    await page.type('input[placeholder="e.g. Pultly Studio"]', 'E2E Studio');
     await clickButton(page, 'Create workspace');
     await finishOnboarding(page);
   });

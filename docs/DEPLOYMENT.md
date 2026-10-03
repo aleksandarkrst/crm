@@ -71,7 +71,7 @@ Never route `postgres` through the tunnel. It is only on the internal Docker net
 
 ## 4. Identity provider (Auth0)
 
-People sign in on Cadence's own pages (CD-114): the backend checks the password with Auth0, or runs
+People sign in on Pultly's own pages (CD-114): the backend checks the password with Auth0, or runs
 "Continue with Google" through it, and keeps the session in an httpOnly cookie. Nobody sees an Auth0
 page. In Auth0:
 - **API**: identifier = `OIDC_AUDIENCE` (e.g. `https://app.yourdomain.com/api`). Turn on
@@ -113,7 +113,7 @@ page. In Auth0:
   - **Authentication → Social → Google**: enable it for the sign-in application (with your own Google
     OAuth client in production; Auth0's dev keys only work for testing). Its name goes in
     `AUTH_GOOGLE_CONNECTION` (default `google-oauth2`; empty hides "Continue with Google").
-  - A Google sign-in whose email already has a Cadence account that signs in with a password (or the
+  - A Google sign-in whose email already has a Pultly account that signs in with a password (or the
     other way round) is refused with a message, not turned into a second account. Auth0 keeps the
     new identity as its own user; link accounts in Auth0 if you want both ways to work.
 
@@ -127,7 +127,7 @@ SMTP provider: Postmark, Resend, Amazon SES, Mailgun and most others offer SMTP.
 1. Create an account, verify your sending domain (add the SPF/DKIM DNS records it gives you in
    Cloudflare DNS) and create SMTP credentials.
 2. Set `MAIL_DRIVER=smtp`, `SMTP_URL=smtps://USER:PASSWORD@HOST:465` (or `smtp://…:587`;
-   URL-encode special characters in the password) and `MAIL_FROM="Cadence <no-reply@yourdomain.com>"`.
+   URL-encode special characters in the password) and `MAIL_FROM="Pultly <no-reply@yourdomain.com>"`.
 3. Restart the worker (`docker compose up -d worker`), invite yourself on a second address and check
    that **Settings → Team** says "Email sent". A failed send is retried `MAIL_RETRY_LIMIT` times
    (default 4, backoff from 30 s) and then shown as "Email not delivered" with the reason; the logs

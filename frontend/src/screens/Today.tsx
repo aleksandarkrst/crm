@@ -73,8 +73,8 @@ export function Today() {
   const tasks = [...handTasks, ...funnelTasks];
   const groups = [
     { label: 'Overdue', fg: '#B42318', tasks: tasks.filter((t) => t.bucket === 0) },
-    { label: 'Today', fg: '#101828', tasks: tasks.filter((t) => t.bucket === 1) },
-    { label: 'Next up', fg: '#475467', tasks: tasks.filter((t) => t.bucket === 2) },
+    { label: 'Today', fg: '#0F1B16', tasks: tasks.filter((t) => t.bucket === 1) },
+    { label: 'Next up', fg: '#475750', tasks: tasks.filter((t) => t.bucket === 2) },
   ];
 
   return (
@@ -105,13 +105,13 @@ export function Today() {
                     type="button"
                     title={t.task.done ? 'Reopen' : 'Mark done'}
                     onClick={() => toggleLeadTask(t.id)}
-                    style={{ flex: '0 0 19px', width: 19, height: 19, borderRadius: 6, border: `1px solid ${t.task.done ? '#14503C' : '#D0D5DD'}`, background: t.task.done ? '#14503C' : '#FFFFFF', color: '#FFFFFF', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                    style={{ flex: '0 0 19px', width: 19, height: 19, borderRadius: 6, border: `1px solid ${t.task.done ? '#14503C' : '#CAD3CE'}`, background: t.task.done ? '#14503C' : '#FFFFFF', color: '#FFFFFF', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
                   >
                     {t.task.done ? '✓' : ''}
                   </button>
                 )}
                 <div style={{ flex: 1, minWidth: 200, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <span style={{ fontSize: 13.5, fontWeight: 600, color: t.task?.done ? '#98A2B3' : undefined, textDecoration: t.task?.done ? 'line-through' : 'none' }}>{t.title}</span>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: t.task?.done ? '#93A39B' : undefined, textDecoration: t.task?.done ? 'line-through' : 'none' }}>{t.title}</span>
                   <span style={{ fontSize: 12, color: t.task?.overdue ? 'var(--danger)' : 'var(--text-2)' }}>
                     {t.company} · {t.stageName} · {t.task?.overdue ? 'overdue · was due' : 'due'} {t.due}
                     {t.task ? ' · ' + t.task.owner : ''}

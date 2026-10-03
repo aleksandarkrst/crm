@@ -1,5 +1,5 @@
 /**
- * Authentication (CD-114). Signing in happens on Cadence's own pages; no provider page is shown.
+ * Authentication (CD-114). Signing in happens on Pultly's own pages; no provider page is shown.
  *
  * - VITE_AUTH_MODE=dev  → passwordless login against the backend's /api/auth/dev-login
  *                          (only works while the backend runs with AUTH_MODE=dev).

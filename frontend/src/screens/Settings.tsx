@@ -322,7 +322,7 @@ function RolesTab() {
               return (
                 <span
                   key={r}
-                  style={{ justifySelf: 'center', width: 20, height: 20, borderRadius: 5, border: `1.5px solid ${on ? '#14503C' : '#D0D5DD'}`, background: on ? '#14503C' : '#FFFFFF', color: '#F5F6F8', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  style={{ justifySelf: 'center', width: 20, height: 20, borderRadius: 5, border: `1.5px solid ${on ? '#14503C' : '#CAD3CE'}`, background: on ? '#14503C' : '#FFFFFF', color: '#F5F7F6', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >
                   {on ? '✓' : ''}
                 </span>
@@ -662,7 +662,7 @@ function FieldsTab() {
 function FieldDefRow({ field: fl, first, last }: { field: CustomFieldDef; first: boolean; last: boolean }) {
   const { canEditFields, updateCustomField, moveCustomField, deleteCustomField } = useStore();
   const [editing, setEditing] = useState<{ id?: string; label: string }[] | null>(null);
-  const pill = (on: boolean) => ({ cursor: canEditFields ? 'pointer' : 'default', border: `1px solid ${on ? '#14503C' : '#E4E7EC'}`, background: on ? '#E7F2EE' : '#FFFFFF', color: on ? '#14503C' : '#475467', fontSize: 12, padding: '6px 11px', borderRadius: 6 });
+  const pill = (on: boolean) => ({ cursor: canEditFields ? 'pointer' : 'default', border: `1px solid ${on ? '#14503C' : '#E2E8E4'}`, background: on ? '#E7F2EE' : '#FFFFFF', color: on ? '#14503C' : '#475750', fontSize: 12, padding: '6px 11px', borderRadius: 6 });
   const entityLabel = { deal: 'deal', company: 'company', contact: 'contact' }[fl.entity];
   const onDelete = () => {
     const question = `Delete the field "${fl.label}"? It disappears from every ${entityLabel}, from the ${entityLabel} forms and from CSV exports. Values already entered are kept in the records but no longer shown, and the field can't be brought back from here.`;
@@ -844,7 +844,7 @@ function IntegrationsTab() {
           <button
             type="button"
             onClick={() => set((x) => ({ integrations: x.integrations.map((y) => (y.id === i.id ? { ...y, on: !y.on } : y)) }))}
-            style={{ alignSelf: 'flex-start', cursor: 'pointer', border: '1px solid #14503C', background: i.on ? '#FFFFFF' : '#14503C', color: i.on ? '#14503C' : '#F5F6F8', fontSize: 12.5, fontWeight: 500, padding: '7px 12px', borderRadius: 7 }}
+            style={{ alignSelf: 'flex-start', cursor: 'pointer', border: '1px solid #14503C', background: i.on ? '#FFFFFF' : '#14503C', color: i.on ? '#14503C' : '#F5F7F6', fontSize: 12.5, fontWeight: 500, padding: '7px 12px', borderRadius: 7 }}
           >
             {i.on ? 'Connected' : 'Connect'}
           </button>

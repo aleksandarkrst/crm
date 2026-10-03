@@ -2,15 +2,16 @@ import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useState
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ApiError, type LinkDone, passwordApi, type SignupOptions, type SignupProblem, signupApi } from '../lib/api';
 import { adoptSession, authMode, devLogin, googleSignIn, passwordSignIn, takeSignInProblem } from '../lib/auth';
+import { Logo } from './Logo';
 
 /** The card every screen before the app uses: sign-in, creating an account, workspaces, invites. */
 export function Centered({ title, sub, children }: { title: string; sub?: string; children?: ReactNode }) {
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--white)', padding: 16 }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-soft)', padding: 16 }}>
       <div className="card card-pad" style={{ width: '100%', maxWidth: 400, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ width: 38, height: 38, borderRadius: 10, background: '#101828', color: '#F5F6F8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, fontWeight: 700 }}>C</div>
+        <Logo height={26} wordmark />
         <div>
-          <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-0.02em' }}>{title}</div>
+          <div className="display" style={{ fontSize: 20, lineHeight: 1.2 }}>{title}</div>
           {sub && <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 4 }}>{sub}</div>}
         </div>
         {children}
@@ -31,7 +32,7 @@ export const Problem = ({ children }: { children: ReactNode }) =>
 
 const linkButton: CSSProperties = { background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'var(--brand)', fontSize: 13, fontWeight: 500 };
 
-/** "New to Cadence? Create account" and back: the way between signing in and creating an account. */
+/** "New to Pultly? Create account" and back: the way between signing in and creating an account. */
 function SwitchTo({ question, label, to }: { question: string; label: string; to: string }) {
   const navigate = useNavigate();
   return (
@@ -98,7 +99,7 @@ export function SignIn({ onDone, invited }: { onDone: () => void; invited: boole
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const toSignup = <SwitchTo question="New to Cadence?" label="Create account" to="/signup" />;
+  const toSignup = <SwitchTo question="New to Pultly?" label="Create account" to="/signup" />;
 
   const run = async (e: FormEvent, signIn: () => Promise<void>) => {
     e.preventDefault();
@@ -115,7 +116,7 @@ export function SignIn({ onDone, invited }: { onDone: () => void; invited: boole
 
   if (authMode === 'oidc')
     return (
-      <Centered title="Sign in to Cadence" sub={invited ? 'Sign in to accept your invitation.' : 'Welcome back. Sign in with your email and password, or with Google.'}>
+      <Centered title="Sign in to Pultly" sub={invited ? 'Sign in to accept your invitation.' : 'Welcome back. Sign in with your email and password, or with Google.'}>
         {notice && <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>{notice}</div>}
         <Problem>{problem}</Problem>
         {options.google && (
@@ -148,7 +149,7 @@ export function SignIn({ onDone, invited }: { onDone: () => void; invited: boole
     );
 
   return (
-    <Centered title="Sign in to Cadence" sub={invited ? 'Sign in with the email address the invitation was sent to.' : 'Development sign-in: no password. Any email creates a user.'}>
+    <Centered title="Sign in to Pultly" sub={invited ? 'Sign in with the email address the invitation was sent to.' : 'Development sign-in: no password. Any email creates a user.'}>
       <Problem>{problem}</Problem>
       <form onSubmit={(e) => void run(e, () => devLogin(email.trim(), name.trim() || email.trim()))} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <label className="form-label">
@@ -279,7 +280,7 @@ export function SignUp() {
   );
   if (!options.email)
     return (
-      <Centered title="Create your Cadence account" sub="Choose how you'll sign in. You can create or join a workspace next.">
+      <Centered title="Create your Pultly account" sub="Choose how you'll sign in. You can create or join a workspace next.">
         {options.google && <GoogleButton />}
         <Problem>Creating an account with email isn't available yet{options.google ? '. Continue with Google instead.' : '.'}</Problem>
         <SwitchTo question="Already have an account?" label="Sign in" to="/login" />
@@ -287,7 +288,7 @@ export function SignUp() {
     );
   return (
     <EmailLinkRequest
-      title="Create your Cadence account"
+      title="Create your Pultly account"
       sub="Choose how you'll sign in. You can create or join a workspace next."
       button="Continue with email"
       before={google}
@@ -309,7 +310,7 @@ export function ForgotPassword() {
       button="Send reset link"
       send={(email) => passwordApi.forgot(email)}
       sent={(to) => ({
-        sub: `If ${to} has a Cadence account, we sent it a link to choose a new password. The link works for one hour.`,
+        sub: `If ${to} has a Pultly account, we sent it a link to choose a new password. The link works for one hour.`,
         hint: 'Nothing there? Check your spam folder, or send it again. If the account signs in with Google, the email says so instead.',
       })}
     />
@@ -456,7 +457,7 @@ export function VerifySignup({ onSignedIn }: { onSignedIn: () => void }) {
   );
 }
 
-/** /reset-password#<token>: the link from the "Reset your Cadence password" email. */
+/** /reset-password#<token>: the link from the "Reset your Pultly password" email. */
 export function ResetPassword({ onSignedIn }: { onSignedIn: () => void }) {
   return (
     <ChoosePassword

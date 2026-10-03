@@ -9,7 +9,7 @@ import { after, describe } from 'node:test';
 import { inflateRawSync } from 'node:zlib';
 import { api, BASE_URL, click, clickButton, createDealInUi, eventually, newUserWithWorkspace, RUN, setValue, steps, text, useBrowser } from '../lib/harness.mjs';
 
-const dir = mkdtempSync(join(tmpdir(), 'cadence-e2e-docs-'));
+const dir = mkdtempSync(join(tmpdir(), 'pultly-e2e-docs-'));
 after(() => rmSync(dir, { recursive: true, force: true }));
 
 /** One file out of a .docx (a zip), read through its central directory. */

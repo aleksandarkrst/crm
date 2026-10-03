@@ -12,7 +12,7 @@ export class AccountError extends Error {
 }
 
 /**
- * Where email-and-password accounts live (CD-114). Cadence never stores passwords: once it has
+ * Where email-and-password accounts live (CD-114). Pultly never stores passwords: once it has
  * confirmed the email address, it asks the identity provider to create the user with the password
  * the person chose. After that they sign in with the provider as usual.
  */

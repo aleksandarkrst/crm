@@ -37,7 +37,7 @@ x-backend-env: &backend-env
   APP_SECRET: ${APP_SECRET}
   MAIL_DRIVER: ${MAIL_DRIVER:-log}
   SMTP_URL: ${SMTP_URL:-}
-  MAIL_FROM: ${MAIL_FROM:-Cadence <no-reply@localhost>}
+  MAIL_FROM: ${MAIL_FROM:-Pultly <no-reply@localhost>}
   MAIL_RETRY_LIMIT: ${MAIL_RETRY_LIMIT:-4}
   MAIL_RETRY_DELAY_SECONDS: ${MAIL_RETRY_DELAY_SECONDS:-30}
   # Error tracking (CD-8): empty = off. The version tags each error with the deployed commit.

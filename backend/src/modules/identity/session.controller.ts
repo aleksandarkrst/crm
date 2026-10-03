@@ -99,7 +99,7 @@ const LoginBody = z.object({
 const OAuthState = z.object({ state: z.string(), verifier: z.string(), popup: z.boolean() });
 
 /**
- * Signing in on Cadence's own pages (CD-114). The browser holds only a short-lived access token in
+ * Signing in on Pultly's own pages (CD-114). The browser holds only a short-lived access token in
  * memory; the refresh token stays in an httpOnly cookie and /auth/refresh swaps it for a new one.
  */
 @Controller('auth')
