@@ -164,7 +164,7 @@ function CreateWorkspace({
       <form onSubmit={(e) => void submit(e)} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <label className="form-label">
           Company or team name
-          <input className="form-input" required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Cadence Studio" maxLength={100} />
+          <input className="form-input" required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Pultly Studio" maxLength={100} />
         </label>
         <label className="form-label">
           Main currency
@@ -287,7 +287,7 @@ function TeamStep({ workspace, progress, onDone }: { workspace: string; progress
     setBusy(false);
   };
   return (
-    <Centered title="Invite your team" sub={`Cadence works best with the people you sell with. Each one gets an email with a link to join ${workspace}.`}>
+    <Centered title="Invite your team" sub={`Pultly works best with the people you sell with. Each one gets an email with a link to join ${workspace}.`}>
       {progress}
       <form onSubmit={(e) => void send(e)} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {rows.map((r, i) => (

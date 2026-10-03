@@ -23,14 +23,14 @@ const EnvSchema = z
     DEV_JWT_SECRET: z.string().min(32).optional(),
     OIDC_ISSUER: z.string().url().optional(),
     OIDC_AUDIENCE: z.string().optional(),
-    // Creating an account with email and password (CD-114). Cadence confirms the address itself,
+    // Creating an account with email and password (CD-114). Pultly confirms the address itself,
     // then creates the password user in Auth0 through its Management API: a machine-to-machine
     // app allowed `create:users`. Unset in oidc mode = "Continue with email" is hidden.
     AUTH0_MANAGEMENT_DOMAIN: z.string().optional(), // e.g. your-tenant.eu.auth0.com
     AUTH0_MANAGEMENT_CLIENT_ID: z.string().optional(),
     AUTH0_MANAGEMENT_CLIENT_SECRET: z.string().optional(),
     AUTH0_DB_CONNECTION: z.string().default('Username-Password-Authentication'),
-    // Signing in on Cadence's own pages (CD-114): a Regular Web Application with the Password,
+    // Signing in on Pultly's own pages (CD-114): a Regular Web Application with the Password,
     // Authorization Code and Refresh Token grants. The backend checks passwords with it and keeps
     // the refresh token in an httpOnly cookie. Without them nobody can sign in when AUTH_MODE=oidc.
     AUTH0_LOGIN_CLIENT_ID: z.string().optional(),
@@ -68,7 +68,7 @@ const EnvSchema = z
     // file the dev-only /api/dev/mail endpoint reads). "smtp" sends through any SMTP provider.
     MAIL_DRIVER: z.enum(['log', 'smtp']).default('log'),
     SMTP_URL: z.string().optional(), // e.g. smtps://user:password@smtp.postmarkapp.com:465
-    MAIL_FROM: z.string().default('Cadence <no-reply@localhost>'),
+    MAIL_FROM: z.string().default('Pultly <no-reply@localhost>'),
     // pg-boss retries of a failed send, with exponential backoff from the delay.
     MAIL_RETRY_LIMIT: z.coerce.number().int().min(0).max(20).default(4),
     MAIL_RETRY_DELAY_SECONDS: z.coerce.number().int().min(1).default(30),

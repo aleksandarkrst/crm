@@ -1,11 +1,12 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { useStore } from '../store/store';
+import { Logo } from './Logo';
 import '../styles/header.css';
 
 const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member' } as const;
 
 /**
- * The "C" logo at the top of the sidebar opens the workspace switcher (CD-23): your workspaces with
+ * The Pultly mark at the top of the sidebar opens the workspace switcher (CD-23): your workspaces with
  * the current one marked, and a new workspace. Switching reuses the session's `switchTenant`, which
  * loads the other workspace from scratch.
  */
@@ -66,7 +67,7 @@ export function WorkspaceSwitcher() {
         aria-expanded={open}
         onClick={() => (open ? close() : setOpen(true))}
       >
-        C
+        <Logo height={30} onDark />
       </button>
       {open && (
         <div className="menu-pop ws-pop" role="menu" data-testid="workspace-menu">

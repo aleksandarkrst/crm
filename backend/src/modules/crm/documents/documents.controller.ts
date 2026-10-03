@@ -56,7 +56,7 @@ export class DocumentsController {
   /** A starter .docx that uses the main fields and the deal lines table. */
   @Get('document-templates/starter')
   starter(@Res({ passthrough: true }) res: Response) {
-    return attachment(res, 'Cadence proposal starter template', starterTemplate());
+    return attachment(res, 'Pultly proposal starter template', starterTemplate());
   }
 
   /** Checks a .docx and lists its merge fields without saving it. */

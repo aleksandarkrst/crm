@@ -143,13 +143,13 @@ export function Pipeline() {
                               fontSize: 10,
                               padding: '3px 5px',
                               borderRadius: 4,
-                              background: score >= 80 ? '#E7F2EE' : score >= 65 ? '#FDF0E4' : '#F1F3F6',
-                              color: score >= 80 ? '#14503C' : score >= 65 ? '#B4531B' : '#475467',
+                              background: score >= 80 ? '#E7F2EE' : score >= 65 ? '#FDF0E4' : '#F2F5F3',
+                              color: score >= 80 ? '#14503C' : score >= 65 ? '#B4531B' : '#475750',
                             }}
                           >
                             fit {score}
                           </span>
-                          <span style={{ fontSize: 11.5, color: l.stall >= 4 ? '#B42318' : '#475467' }}>{l.stall === 0 ? 'active today' : l.stall + 'd since contact'}</span>
+                          <span style={{ fontSize: 11.5, color: l.stall >= 4 ? '#B42318' : '#475750' }}>{l.stall === 0 ? 'active today' : l.stall + 'd since contact'}</span>
                         </div>
                         {lost ? (
                           <div style={{ borderTop: '1px dashed var(--border)', paddingTop: 7 }}>

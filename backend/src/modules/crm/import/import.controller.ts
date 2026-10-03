@@ -22,7 +22,7 @@ export class ImportController {
   @Get(':type/template')
   @Header('Content-Type', 'text/csv; charset=utf-8')
   template(@Param('type', Type) type: ImportType, @Res({ passthrough: true }) res: Response) {
-    res.setHeader('Content-Disposition', `attachment; filename="cadence-${type}-template.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="pultly-${type}-template.csv"`);
     return templateCsv(type);
   }
 

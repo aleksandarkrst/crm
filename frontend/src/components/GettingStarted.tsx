@@ -70,7 +70,7 @@ export function GettingStarted() {
     <section className={open ? 'getting-started open' : 'getting-started'} aria-label="Getting started" data-testid="getting-started">
       <div className="getting-started-head">
         <div>
-          <strong>Get started with Cadence</strong>
+          <strong>Get started with Pultly</strong>
           <span>
             {doneCount} of {ob.steps.length} done
             <button type="button" className="getting-started-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>

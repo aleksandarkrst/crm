@@ -69,7 +69,7 @@ export class IdentityService {
       statusCode: HttpStatus.CONFLICT,
       code: 'account_exists',
       method,
-      message: `${identity.email} already has a Cadence account that signs in another way. Sign out, then sign in ${how}.`,
+      message: `${identity.email} already has a Pultly account that signs in another way. Sign out, then sign in ${how}.`,
     });
   }
 

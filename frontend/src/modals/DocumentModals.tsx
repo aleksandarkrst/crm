@@ -76,8 +76,8 @@ export function GenerationModal() {
             const current = !step.done && (i === 0 || steps[i - 1]!.done) && docBusy(doc);
             return (
               <div key={step.label} style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-                <span style={{ flex: '0 0 18px', width: 18, height: 18, borderRadius: '50%', border: `1.5px solid ${step.done ? '#14503C' : current ? '#B4531B' : '#D0D5DD'}`, background: step.done ? '#14503C' : 'transparent', color: '#FFFFFF', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{step.done ? '✓' : ''}</span>
-                <span style={{ fontSize: 13.5, color: step.done || current ? '#101828' : '#98A2B3' }}>{step.label}</span>
+                <span style={{ flex: '0 0 18px', width: 18, height: 18, borderRadius: '50%', border: `1.5px solid ${step.done ? '#14503C' : current ? '#B4531B' : '#CAD3CE'}`, background: step.done ? '#14503C' : 'transparent', color: '#FFFFFF', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{step.done ? '✓' : ''}</span>
+                <span style={{ fontSize: 13.5, color: step.done || current ? '#0F1B16' : '#93A39B' }}>{step.label}</span>
               </div>
             );
           })}
@@ -207,7 +207,7 @@ export function NewTemplateModal() {
         <input className="form-input" placeholder="e.g. Proposal — brand programme v1" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
       </label>
       <label
-        style={{ position: 'relative', cursor: 'pointer', textAlign: 'left', border: `1px dashed ${scan ? '#14503C' : '#D0D5DD'}`, background: scan ? '#E7F2EE' : '#F5F6F8', borderRadius: 10, padding: 20, display: 'flex', flexDirection: 'column', gap: 5 }}
+        style={{ position: 'relative', cursor: 'pointer', textAlign: 'left', border: `1px dashed ${scan ? '#14503C' : '#CAD3CE'}`, background: scan ? '#E7F2EE' : '#F5F7F6', borderRadius: 10, padding: 20, display: 'flex', flexDirection: 'column', gap: 5 }}
       >
         <input
           type="file"

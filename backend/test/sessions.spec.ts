@@ -10,7 +10,7 @@ import type { Request } from 'express';
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const auth0 = () => new Auth0Sessions('https://login.example.test/', 'web-app', 'web-secret', 'https://api.example.test', 'Username-Password-Authentication');
 
-describe('signing in with Auth0 behind Cadence\'s own pages (CD-114)', () => {
+describe('signing in with Auth0 behind Pultly\'s own pages (CD-114)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('checks the password with the password-realm grant, passing on the person\'s address', async () => {

@@ -49,7 +49,7 @@ export function ProposalDoc() {
       })
     : lead.lines.map(([item, amount]) => ({ item, amount, detail: '' }));
 
-  const eyebrow = { fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: '#475467' };
+  const eyebrow = { fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: '#475750' };
 
   // Discovery notes saved on the deal. Anything not captured yet shows as a bracketed gap to fill in.
   const gap = (what: string) => `[${what} — add it under Discovery on the deal]`;
@@ -62,16 +62,16 @@ export function ProposalDoc() {
   return (
     <div className="overlay" style={{ zIndex: 50, alignItems: 'stretch', overflowY: 'auto', padding: 0 }}>
       <div style={{ background: 'var(--bg-soft)', width: '100%', maxWidth: 1080, minHeight: '100vh', animation: 'dcFade .25s ease-out both', margin: '0 auto' }}>
-        <div style={{ position: 'sticky', top: 0, background: '#101828', color: '#F5F6F8', padding: '14px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', zIndex: 2 }}>
+        <div style={{ position: 'sticky', top: 0, background: '#0F1B16', color: '#F5F7F6', padding: '14px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', zIndex: 2 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>Proposal — {lead.company}</span>
-            <span style={{ fontSize: 10.5, color: '#98A2B3' }}>Proposal v4 · generated from CRM record · {s.sent ? 'marked sent (this session only)' : 'draft, not saved'}</span>
+            <span style={{ fontSize: 10.5, color: '#93A39B' }}>Proposal v4 · generated from CRM record · {s.sent ? 'marked sent (this session only)' : 'draft, not saved'}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
             <button type="button" className="doc-btn" onClick={() => set((x) => ({ showMerge: !x.showMerge }))}>
               {s.showMerge ? 'Hide merge fields' : 'Show merge fields'}
             </button>
-            <button type="button" onClick={sendDoc} title={`Emailing proposals to ${first || 'the contact'} is coming soon; this only marks it as sent here.`} style={{ border: 0, background: '#F5F6F8', color: '#101828', cursor: 'pointer', fontSize: 12.5, fontWeight: 500, padding: '9px 14px', borderRadius: 7 }}>
+            <button type="button" onClick={sendDoc} title={`Emailing proposals to ${first || 'the contact'} is coming soon; this only marks it as sent here.`} style={{ border: 0, background: '#F5F7F6', color: '#0F1B16', cursor: 'pointer', fontSize: 12.5, fontWeight: 500, padding: '9px 14px', borderRadius: 7 }}>
               {s.sent ? 'Marked as sent ✓' : 'Mark as sent'}
             </button>
             <button type="button" className="doc-btn" onClick={() => set({ docOpen: false })}>
@@ -81,19 +81,19 @@ export function ProposalDoc() {
         </div>
 
         <div style={{ padding: '26px 22px 60px' }}>
-          <div style={{ background: '#FFFFFF', border: '1px solid #E4E7EC', padding: '56px 60px', display: 'flex', flexDirection: 'column', gap: 38 }}>
+          <div style={{ background: '#FFFFFF', border: '1px solid #E2E8E4', padding: '56px 60px', display: 'flex', flexDirection: 'column', gap: 38 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                 <span style={{ fontWeight: 700, letterSpacing: '-0.02em', fontSize: 20 }}>{s.workspace.name}</span>
               </div>
-              <span style={{ fontSize: 10.5, color: '#475467' }}>PRO-{lead.id.toUpperCase()}-2026</span>
+              <span style={{ fontSize: 10.5, color: '#475750' }}>PRO-{lead.id.toUpperCase()}-2026</span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, borderBottom: '1px solid #E4E7EC', paddingBottom: 34 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, borderBottom: '1px solid #E2E8E4', paddingBottom: 34 }}>
               <span style={{ ...eyebrow, color: '#B4531B' }}>Proposal</span>
               <span style={{ fontWeight: 600, letterSpacing: '-0.028em', fontSize: 44, lineHeight: 1.1 }}>{headline}</span>
-              <span style={{ fontSize: 15, color: '#475467', lineHeight: 1.6, maxWidth: 640 }}>
-                Prepared for <span style={{ color: '#101828', ...merge }}>{lead.contact}</span>, <span style={{ color: '#101828', ...merge }}>{lead.role}</span> at <span style={{ color: '#101828', ...merge }}>{lead.company}</span>.{' '}
+              <span style={{ fontSize: 15, color: '#475750', lineHeight: 1.6, maxWidth: 640 }}>
+                Prepared for <span style={{ color: '#0F1B16', ...merge }}>{lead.contact}</span>, <span style={{ color: '#0F1B16', ...merge }}>{lead.role}</span> at <span style={{ color: '#0F1B16', ...merge }}>{lead.company}</span>.{' '}
                 {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} · valid 30 days
               </span>
             </div>
@@ -109,9 +109,9 @@ export function ProposalDoc() {
               <span style={eyebrow}>02 — Scope</span>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 16 }}>
                 {lead.lines.map(([item]) => (
-                  <div key={item} style={{ borderTop: '2px solid #101828', paddingTop: 13, display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  <div key={item} style={{ borderTop: '2px solid #0F1B16', paddingTop: 13, display: 'flex', flexDirection: 'column', gap: 7 }}>
                     <span style={{ fontSize: 15, fontWeight: 600 }}>{item}</span>
-                    <span style={{ fontSize: 13.5, color: '#475467', lineHeight: 1.6 }}>Delivered by a named lead from our team, with a fixed review cadence and one point of contact.</span>
+                    <span style={{ fontSize: 13.5, color: '#475750', lineHeight: 1.6 }}>Delivered by a named lead from our team, with a fixed review cadence and one point of contact.</span>
                   </div>
                 ))}
               </div>
@@ -126,7 +126,7 @@ export function ProposalDoc() {
                   { when: 'Week 6–8', what: 'Rollout: remaining workstreams delivered and handed over.' },
                   { when: 'Week 9', what: 'Readout against the goals agreed in discovery.' },
                 ].map((t) => (
-                  <div key={t.when} style={{ display: 'grid', gridTemplateColumns: '96px 1fr', gap: 18, padding: '13px 0', borderBottom: '1px solid #EEF0F4' }}>
+                  <div key={t.when} style={{ display: 'grid', gridTemplateColumns: '96px 1fr', gap: 18, padding: '13px 0', borderBottom: '1px solid #EBF0ED' }}>
                     <span style={{ fontSize: 12.5, color: '#B4531B' }}>{t.when}</span>
                     <span style={{ fontSize: 14.5, lineHeight: 1.5 }}>{t.what}</span>
                   </div>
@@ -138,10 +138,10 @@ export function ProposalDoc() {
               <span style={eyebrow}>04 — Investment</span>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {docLines.map((l, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 18, padding: '13px 0', borderBottom: '1px solid #EEF0F4' }}>
+                  <div key={i} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 18, padding: '13px 0', borderBottom: '1px solid #EBF0ED' }}>
                     <span style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
                       <span style={{ fontSize: 14.5 }}>{l.item}</span>
-                      <span style={{ fontSize: 12.5, color: '#475467' }}>{l.detail}</span>
+                      <span style={{ fontSize: 12.5, color: '#475750' }}>{l.detail}</span>
                     </span>
                     <span style={{ fontSize: 14, whiteSpace: 'nowrap', ...merge }}>{l.amount}</span>
                   </div>
@@ -157,22 +157,22 @@ export function ProposalDoc() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <span style={eyebrow}>05 — Billing schedule</span>
-              {billing.length === 0 && <span style={{ fontSize: 14, color: '#475467' }}>Billing is set once products and services are added to the deal.</span>}
+              {billing.length === 0 && <span style={{ fontSize: 14, color: '#475750' }}>Billing is set once products and services are added to the deal.</span>}
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {billing.map((b, i) => (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '120px minmax(0,1fr) auto', gap: 18, alignItems: 'baseline', padding: '11px 0', borderBottom: '1px solid #EEF0F4' }}>
-                    <span style={{ fontSize: 13.5, color: '#475467' }}>{b.when}</span>
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '120px minmax(0,1fr) auto', gap: 18, alignItems: 'baseline', padding: '11px 0', borderBottom: '1px solid #EBF0ED' }}>
+                    <span style={{ fontSize: 13.5, color: '#475750' }}>{b.when}</span>
                     <span style={{ fontSize: 14 }}>{b.label}</span>
                     <span style={{ fontSize: 14, whiteSpace: 'nowrap', ...merge }}>{b.amount}</span>
                   </div>
                 ))}
               </div>
-              <span style={{ fontSize: 12.5, color: '#98A2B3' }}>Amounts include VAT.</span>
+              <span style={{ fontSize: 12.5, color: '#93A39B' }}>Amounts include VAT.</span>
             </div>
 
-            <div style={{ background: '#F5F6F8', borderLeft: '3px solid #14503C', padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+            <div style={{ background: '#F5F7F6', borderLeft: '3px solid #14503C', padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 9 }}>
               <span style={{ fontSize: 15, fontWeight: 600 }}>Next step</span>
-              <span style={{ fontSize: 14, color: '#475467', lineHeight: 1.65, maxWidth: 620 }}>A 20-minute walkthrough of section 04 with {first}. Approve the scope and we hold the team's start date for 14 days.</span>
+              <span style={{ fontSize: 14, color: '#475750', lineHeight: 1.65, maxWidth: 620 }}>A 20-minute walkthrough of section 04 with {first}. Approve the scope and we hold the team's start date for 14 days.</span>
             </div>
           </div>
         </div>
@@ -184,8 +184,8 @@ export function ProposalDoc() {
 function DocTotal({ label, value, pad }: { label: string; value: string; pad: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 18, padding: pad }}>
-      <span style={{ fontSize: 13.5, color: '#475467' }}>{label}</span>
-      <span style={{ fontSize: 14, color: '#475467' }}>{value}</span>
+      <span style={{ fontSize: 13.5, color: '#475750' }}>{label}</span>
+      <span style={{ fontSize: 14, color: '#475750' }}>{value}</span>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 # Development workflow
 
-How work moves from an idea to production in Cadence CRM. It applies to everyone who changes the
+How work moves from an idea to production in Pultly CRM. It applies to everyone who changes the
 code: people and coding agents (Claude, Codex and others). The short rules for agents are in
 [CLAUDE.md](../CLAUDE.md); this page explains the whole process and why.
 

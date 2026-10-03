@@ -103,7 +103,7 @@ export function Composer({ lead }: { lead: Lead }) {
             type="button"
             className="composer-tab"
             onClick={() => setTab(t.k)}
-            style={{ borderBottom: `2px solid ${t.k === tab ? '#14503C' : 'transparent'}`, fontWeight: t.k === tab ? 600 : 500, color: t.k === tab ? '#14503C' : '#475467' }}
+            style={{ borderBottom: `2px solid ${t.k === tab ? '#14503C' : 'transparent'}`, fontWeight: t.k === tab ? 600 : 500, color: t.k === tab ? '#14503C' : '#475750' }}
           >
             {t.label}
             {t.ch === stage.channel && <span title="Next step in the playbook" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--brand)' }} />}

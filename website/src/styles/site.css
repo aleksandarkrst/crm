@@ -9,14 +9,13 @@ input, button { font-family: inherit; font-size: inherit; }
 h1, h2 { margin: 0; }
 
 @keyframes plWord { from { opacity: 0; transform: translateY(0.35em); } to { opacity: 1; transform: none; } }
-@keyframes plRise { from { transform: scaleY(0); } to { transform: scaleY(1); } }
-@keyframes plMeter { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(.78); } }
+@keyframes plSweep { from { stroke-dashoffset: 12.6; } to { stroke-dashoffset: 0; } }
+@keyframes plDial { 0%, 100% { stroke-dashoffset: 0; } 50% { stroke-dashoffset: 3.4; } }
 @keyframes plFade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes plFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 
 /* ---------- design system pieces ---------- */
-.logo { display: inline-flex; align-items: center; }
-.logo-word { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.04em; line-height: 1; text-transform: lowercase; }
+.logo { display: block; flex: 0 0 auto; }
 
 .btn { cursor: pointer; font-size: 13px; padding: 10px 15px; border-radius: 8px; white-space: nowrap; }
 a.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
@@ -105,8 +104,8 @@ a.btn-secondary, a.btn-secondary:hover { color: var(--text-2); }
 .hero-art { display: flex; justify-content: center; }
 
 .desk-meter { position: relative; width: min(520px, 100%); padding: 40px 20px; }
-.desk-svg { display: block; overflow: visible; width: 100%; }
-.desk-bar { transform-box: fill-box; transform-origin: 50% 100%; }
+.desk-svg { display: block; width: 72%; margin: 0 auto; filter: drop-shadow(0 30px 50px rgba(13, 36, 28, .18)); }
+.desk-dial { stroke-dasharray: 12.6; }
 .desk-chip { position: absolute; background: #FFFFFF; border: 1px solid #E2E8E4; border-radius: 10px; padding: 10px 12px; box-shadow: 0 16px 38px rgba(16, 24, 40, .12); white-space: nowrap; }
 .desk-chip.lime { background: #C6F16A; border-color: #C6F16A; }
 .chip-title { font-size: 13px; font-weight: 600; color: #0F1B16; }

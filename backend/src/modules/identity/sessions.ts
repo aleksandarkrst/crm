@@ -24,7 +24,7 @@ const WRONG = "That email and password don't match. Check them and try again, or
 const UNAVAILABLE = "We couldn't sign you in just now. Try again in a few minutes.";
 
 /**
- * Signing in on Cadence's own pages (CD-114): the backend checks the password with the identity
+ * Signing in on Pultly's own pages (CD-114): the backend checks the password with the identity
  * provider and holds the refresh token in an httpOnly cookie; the browser only ever sees access
  * tokens. "Continue with Google" runs the authorization-code flow through the backend too, so no
  * page of the provider is shown, only Google's own.

@@ -19,7 +19,7 @@ describe('onboarding after sign-up', () => {
     await signIn(owner, email('onb-owner'), 'Olivia Onboarding');
     await owner.waitForSelector('::-p-text(Create your workspace)');
     assert.match(await progress(owner), /Step 1 of 3 · Workspace/);
-    await owner.type('input[placeholder="e.g. Cadence Studio"]', 'Onboarded Co');
+    await owner.type('input[placeholder="e.g. Pultly Studio"]', 'Onboarded Co');
     await owner.select('select[aria-label="Time zone"]', 'Asia/Tokyo');
     await clickButton(owner, 'Create workspace');
     await owner.waitForFunction(() => document.querySelector('[data-testid=onboarding-progress]')?.textContent.includes('About you'));

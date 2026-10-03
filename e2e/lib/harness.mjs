@@ -196,8 +196,8 @@ export async function signIn(page, address, name) {
 
 /** Creates the first workspace of a newly signed-in user, finishes onboarding and waits for the pipeline. */
 export async function createWorkspace(page, name, currency) {
-  await page.waitForSelector('input[placeholder="e.g. Cadence Studio"]');
-  await page.type('input[placeholder="e.g. Cadence Studio"]', name);
+  await page.waitForSelector('input[placeholder="e.g. Pultly Studio"]');
+  await page.type('input[placeholder="e.g. Pultly Studio"]', name);
   if (currency) await setValue(page, 'select[aria-label="Main currency"]', currency);
   await click(page, 'button[type=submit]');
   await finishOnboarding(page);

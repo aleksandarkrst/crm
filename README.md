@@ -1,4 +1,4 @@
-# Cadence CRM
+# Pultly CRM
 
 Multi-tenant SMB business platform. A modular monolith (Node.js + TypeScript) on PostgreSQL,
 deployed with Docker Compose on a Hetzner server behind a Cloudflare Tunnel. CRM is the first

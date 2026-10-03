@@ -1,4 +1,4 @@
-import { buttonHtml, escapeHtml, layoutHtml } from '../../infrastructure/mail/html';
+import { appOrigin, buttonHtml, escapeHtml, layoutHtml } from '../../infrastructure/mail/html';
 import type { MailMessage } from '../../infrastructure/mail/mailer';
 import { SecretBox } from '../../infrastructure/crypto/secret-box';
 import type { Env } from '../../infrastructure/config/config.module';
@@ -40,11 +40,11 @@ export function invitationEmail(input: InvitationEmailInput): MailMessage {
   const inviterFull = input.inviterName && input.inviterEmail && input.inviterName !== input.inviterEmail ? `${input.inviterName} (${input.inviterEmail})` : inviter;
   const role = input.role === 'admin' ? 'an admin' : 'a member';
   const until = dateLabel(input.expiresAt, input.timeZone);
-  const subject = `${inviter} invited you to ${input.workspaceName} on Cadence`;
+  const subject = `${inviter} invited you to ${input.workspaceName} on Pultly`;
   const text = [
     'Hi,',
     '',
-    `${inviterFull} invited you to join ${input.workspaceName} on Cadence as ${role}. Cadence is where the team keeps its deals, companies and contacts.`,
+    `${inviterFull} invited you to join ${input.workspaceName} on Pultly as ${role}. Pultly is where the team keeps its deals, companies and contacts.`,
     '',
     'Accept the invitation:',
     input.link,
@@ -56,12 +56,13 @@ export function invitationEmail(input: InvitationEmailInput): MailMessage {
   const html = layoutHtml(
     [
       `<p style="margin:0 0 12px">Hi,</p>`,
-      `<p style="margin:0 0 12px"><strong>${escapeHtml(inviterFull)}</strong> invited you to join <strong>${escapeHtml(input.workspaceName)}</strong> on Cadence as ${role}. Cadence is where the team keeps its deals, companies and contacts.</p>`,
+      `<p style="margin:0 0 12px"><strong>${escapeHtml(inviterFull)}</strong> invited you to join <strong>${escapeHtml(input.workspaceName)}</strong> on Pultly as ${role}. Pultly is where the team keeps its deals, companies and contacts.</p>`,
       buttonHtml('Accept the invitation', input.link),
       `<p style="margin:0 0 12px">The link works once, until ${escapeHtml(until)}. Sign in with this email address (${escapeHtml(input.to)}) to accept it.</p>`,
-      `<p style="margin:0 0 12px;color:#475467;font-size:12.5px">If the button doesn't work, paste this link into your browser:<br><a href="${escapeHtml(input.link)}" style="color:#14503C;word-break:break-all">${escapeHtml(input.link)}</a></p>`,
+      `<p style="margin:0 0 12px;color:#475750;font-size:12.5px">If the button doesn't work, paste this link into your browser:<br><a href="${escapeHtml(input.link)}" style="color:#14503C;word-break:break-all">${escapeHtml(input.link)}</a></p>`,
     ].join('\n'),
     "If you weren't expecting this invitation, you can ignore this email.",
+    appOrigin(input.link),
   );
   return { to: input.to, subject, text, html };
 }

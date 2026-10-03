@@ -37,7 +37,7 @@ describe('invitation email', () => {
     expect(invitation).toMatchObject({ emailStatus: 'queued', hasLink: true });
 
     const mail = await waitForMail(owner, invitee.email);
-    expect(mail.subject).toMatch(/^Mail-owner Tester invited you to Mail Studio .+ on Cadence$/);
+    expect(mail.subject).toMatch(/^Mail-owner Tester invited you to Mail Studio .+ on Pultly$/);
     expect(mail.text).toContain(`http://app.example.test/invite/${token}`);
     expect(mail.text).toContain('as an admin');
     expect(mail.text).toContain(owner.email);

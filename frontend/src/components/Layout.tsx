@@ -31,10 +31,10 @@ function NavItem({ to, label, icon, badge, phone }: { to: string; label: string;
   return (
     <NavLink to={to} className={phone ? 'nav-item' : 'nav-item nav-desktop'} style={{ textDecoration: 'none', width: '100%' }}>
       {({ isActive }) => {
-        const fg = isActive ? '#F5F6F8' : '#98A2B3';
+        const fg = isActive ? '#F5F7F6' : '#93A39B';
         return (
           <span className="nav-item-inner" style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, width: '100%', padding: '2px 0 4px', color: fg }}>
-            <span className="nav-icon" style={{ width: 46, height: 42, borderRadius: 11, background: isActive ? '#14503C' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span className="nav-icon" style={{ width: 46, height: 42, borderRadius: 11, background: isActive ? 'var(--green-500)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke={fg} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                 <path d={icon} />
               </svg>
@@ -58,7 +58,7 @@ function Sidebar() {
   const name = s.profile.name || session.userName;
   const overdue = overdueTasks(s).length;
   return (
-    <aside className="app-sidebar" style={{ width: 96, flex: '0 0 96px', background: '#101828', color: '#F5F6F8', padding: '18px 8px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, position: 'sticky', top: 0, height: '100vh', zIndex: 10 }}>
+    <aside className="app-sidebar" style={{ width: 96, flex: '0 0 96px', background: 'var(--forest)', color: '#F5F7F6', padding: '18px 8px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, position: 'sticky', top: 0, height: '100vh', zIndex: 10 }}>
       <div className="nav-desktop">
         <WorkspaceSwitcher />
       </div>
@@ -82,12 +82,12 @@ function MoreMenu({ name }: { name: string }) {
   const { pathname } = useLocation();
   const more = [...NAV.filter((n) => !n.phone), ...NAV_BOTTOM, { to: paths.profile, label: `Profile · ${name}`, icon: 'M12 11a3.3 3.3 0 1 0 0-6.6 3.3 3.3 0 0 0 0 6.6ZM5 20c1.2-3.1 4-4.7 7-4.7s5.8 1.6 7 4.7' }];
   const active = more.some((n) => pathname.startsWith(n.to));
-  const fg = active || open ? '#F5F6F8' : '#98A2B3';
+  const fg = active || open ? '#F5F7F6' : '#93A39B';
   const others = session.tenants.filter((t) => t.id !== session.tenant.id);
   return (
     <>
       <button type="button" className="nav-more" aria-expanded={open} aria-label="More" data-testid="nav-more" onClick={() => setOpen(!open)} style={{ color: fg }}>
-        <span className="nav-icon" style={{ background: active ? '#14503C' : 'transparent' }}>
+        <span className="nav-icon" style={{ background: active ? 'var(--green-500)' : 'transparent' }}>
           <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke={fg} strokeWidth="1.7" strokeLinecap="round">
             <path d="M5 12h.01M12 12h.01M19 12h.01" strokeWidth="3" />
           </svg>

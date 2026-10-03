@@ -3,7 +3,7 @@
  * and expires; the password can only be set through it; an address that already has an account
  * gets a "sign in instead" email, and the API answers the same either way. A new sign-in whose
  * email already belongs to an account that signs in another way is refused, not duplicated.
- * Signing in happens on Cadence's own pages: the refresh token lives in an httpOnly cookie, and
+ * Signing in happens on Pultly's own pages: the refresh token lives in an httpOnly cookie, and
  * "Forgot password?" works like creating an account.
  */
 import { Client } from 'pg';
@@ -38,7 +38,7 @@ afterAll(async () => {
 async function requestLink(email: string, count = 1): Promise<string> {
   expect(await ok('POST', '/auth/signup', { body: { email } }, 202)).toEqual({ sent: true });
   const mail = await waitForMail(reader, email, count);
-  expect(mail.subject).toBe('Confirm your email to create your Cadence account');
+  expect(mail.subject).toBe('Confirm your email to create your Pultly account');
   const token = /\/signup\/verify#([A-Za-z0-9_-]+)/.exec(mail.text)?.[1];
   expect(token, mail.text).toBeTruthy();
   expect(mail.html).toContain(`href="http://app.example.test/signup/verify#${token}"`);
@@ -105,7 +105,7 @@ describe('create account with email', () => {
     const existing = await signIn('signup-existing');
     expect(await ok('POST', '/auth/signup', { body: { email: existing.email } }, 202)).toEqual({ sent: true });
     const mail = await waitForMail(reader, existing.email);
-    expect(mail.subject).toBe('You already have a Cadence account');
+    expect(mail.subject).toBe('You already have a Pultly account');
     expect(mail.text).toContain('http://app.example.test/login');
     expect(mail.text).not.toContain('/signup/verify');
   });
@@ -140,7 +140,7 @@ describe('an email that already signs in another way', () => {
   });
 });
 
-describe('signing in on Cadence\'s own pages', () => {
+describe('signing in on Pultly\'s own pages', () => {
   it('keeps the session in a cookie that renews the access token, until signing out', async () => {
     const email = `session-${RUN}@example.test`;
     const login = await withCookie('/auth/login', { body: { email, password: 'any password in dev mode' } });
@@ -178,7 +178,7 @@ describe('forgot password', () => {
     const account = await signIn('reset-owner');
     expect(await ok('POST', '/auth/password/forgot', { body: { email: account.email } }, 202)).toEqual({ sent: true });
     const mail = await waitForMail(reader, account.email);
-    expect(mail.subject).toBe('Reset your Cadence password');
+    expect(mail.subject).toBe('Reset your Pultly password');
     expect(mail.text).toContain('for one hour');
     const token = /\/reset-password#([A-Za-z0-9_-]+)/.exec(mail.text)?.[1];
     expect(token, mail.text).toBeTruthy();

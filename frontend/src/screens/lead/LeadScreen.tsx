@@ -43,7 +43,7 @@ export function LeadScreen() {
             <div className="card" style={{ padding: 18 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
                 <div className="card-title">Fit score</div>
-                <span style={{ fontWeight: 600, letterSpacing: '-0.02em', fontSize: 26, lineHeight: 1, color: totalFg }}>{total}</span>
+                <span className="display" style={{ fontSize: 24, lineHeight: 1, color: totalFg }}>{total}</span>
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>
                 Scored with CHAMP inside the qualification to-do. {total >= 80 ? 'Qualified.' : total >= 55 ? 'Nurture — gaps remain.' : 'Below the floor.'}

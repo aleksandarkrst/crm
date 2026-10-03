@@ -109,7 +109,7 @@ export function ImportDialog({ initialType, onClose }: { initialType: ImportType
       setStep('Done');
       await reload();
     });
-  const downloadTemplate = () => run(async () => downloadText(`cadence-${type}-template.csv`, await importApi.template(type)));
+  const downloadTemplate = () => run(async () => downloadText(`pultly-${type}-template.csv`, await importApi.template(type)));
   const restart = () => {
     setStep('File');
     setCsv('');
@@ -307,7 +307,7 @@ export function ImportDialog({ initialType, onClose }: { initialType: ImportType
               <span>
                 {plural(result.failed, 'row')} failed, e.g. line {result.failures[0]!.line}: {result.failures[0]!.reason}
               </span>
-              <button type="button" className="btn-plain" onClick={() => downloadText(`cadence-${type}-import-failed.csv`, failuresCsv(result))}>
+              <button type="button" className="btn-plain" onClick={() => downloadText(`pultly-${type}-import-failed.csv`, failuresCsv(result))}>
                 Download failed rows
               </button>
             </div>

@@ -70,7 +70,7 @@ export function TemplatesTab() {
               <span style={{ fontSize: 15, fontWeight: 600 }}>Proposal v4</span>
               <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{lead ? 'Built in · a preview in the browser, not saved' : 'Built in · add a deal to preview it'}</span>
             </div>
-            <span className="tag" style={{ padding: '4px 6px', background: '#F1F3F6', color: '#475467' }}>
+            <span className="tag" style={{ padding: '4px 6px', background: '#F2F5F3', color: '#475750' }}>
               built-in
             </span>
           </div>

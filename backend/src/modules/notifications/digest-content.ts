@@ -114,17 +114,17 @@ export function digestEmail({ to, memberName, workspaceName, appUrl, digest }: D
   }
   text.push('', `Open Today: ${base}/today`, '', footer);
 
-  const html: string[] = [`<p style="margin:0 0 6px;font-size:16px;font-weight:600">${escapeHtml(greeting)}</p>`, `<p style="margin:0 0 8px;color:#475467">${escapeHtml(intro)}</p>`];
+  const html: string[] = [`<p style="margin:0 0 6px;font-size:16px;font-weight:600">${escapeHtml(greeting)}</p>`, `<p style="margin:0 0 8px;color:#475750">${escapeHtml(intro)}</p>`];
   for (const s of sections) {
-    html.push(`<h3 style="margin:22px 0 8px;font-size:14px">${escapeHtml(s.title)} <span style="color:#667085;font-weight:400">(${s.lines.length})</span></h3>`);
+    html.push(`<h3 style="margin:22px 0 8px;font-size:14px">${escapeHtml(s.title)} <span style="color:#6B7B73;font-weight:400">(${s.lines.length})</span></h3>`);
     html.push('<ul style="margin:0;padding-left:18px">');
     for (const l of s.lines.slice(0, DIGEST_SECTION_LIMIT)) html.push(`<li style="margin:0 0 6px"><a href="${escapeHtml(l.href)}" style="color:#14503C">${escapeHtml(l.text)}</a></li>`);
-    if (s.lines.length > DIGEST_SECTION_LIMIT) html.push(`<li style="margin:0 0 6px;color:#667085">and ${s.lines.length - DIGEST_SECTION_LIMIT} more</li>`);
+    if (s.lines.length > DIGEST_SECTION_LIMIT) html.push(`<li style="margin:0 0 6px;color:#6B7B73">and ${s.lines.length - DIGEST_SECTION_LIMIT} more</li>`);
     html.push('</ul>');
   }
   html.push(buttonHtml('Open Today', `${base}/today`));
 
-  return { to, subject, text: text.join('\n'), html: layoutHtml(html.join('\n'), footer) };
+  return { to, subject, text: text.join('\n'), html: layoutHtml(html.join('\n'), footer, appUrl) };
 }
 
 export interface DealAssignedEmailInput {
@@ -162,10 +162,11 @@ export function dealAssignedEmail({ to, assigneeName, actorName, workspaceName, 
     [
       `<p style="margin:0 0 12px">${escapeHtml(greeting)}</p>`,
       `<p style="margin:0 0 12px">${escapeHtml(intro)}</p>`,
-      `<p style="margin:0 0 12px;color:#475467">${facts.map(escapeHtml).join('<br>')}</p>`,
+      `<p style="margin:0 0 12px;color:#475750">${facts.map(escapeHtml).join('<br>')}</p>`,
       buttonHtml('Open the deal', link),
     ].join('\n'),
     footer,
+    appUrl,
   );
   return { to, subject, text, html };
 }

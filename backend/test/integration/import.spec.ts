@@ -65,7 +65,7 @@ describe('templates', () => {
       const res = await fetch(`${inject('apiUrl')}/api/crm/import/${type}/template`, { headers: { authorization: `Bearer ${owner.token}`, 'x-tenant-id': tenant } });
       expect(res.status).toBe(200);
       expect(res.headers.get('content-type')).toMatch(/^text\/csv/);
-      expect(res.headers.get('content-disposition')).toContain(`cadence-${type}-template.csv`);
+      expect(res.headers.get('content-disposition')).toContain(`pultly-${type}-template.csv`);
       const bytes = new Uint8Array(await res.arrayBuffer());
       expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
       expect(new TextDecoder().decode(bytes.slice(3))).toContain(header);
