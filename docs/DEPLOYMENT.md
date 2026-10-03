@@ -45,6 +45,7 @@ goes red. Migrations that already ran stay applied (see [Rollback](#operations-c
 | `OIDC_ISSUER`, `OIDC_AUDIENCE`, `AUTH0_LOGIN_CLIENT_ID`, `AUTH0_LOGIN_CLIENT_SECRET` | from your identity provider (step 4) |
 | `CLOUDFLARE_TUNNEL_TOKEN` | from step 3 |
 | `APP_URL` | the public address, e.g. `https://app.yourdomain.com` (links in emails) |
+| `WEBSITE_URL` | the public website's address, e.g. `https://yourdomain.com` (checked by the smoke test; empty = skipped) |
 | `APP_SECRET` | `openssl rand -hex 32` (encrypts invite links at rest; changing it breaks "Resend" for older invitations) |
 | `MAIL_DRIVER`, `SMTP_URL`, `MAIL_FROM` | `smtp`, your provider's SMTP URL, and a sender on a domain verified with it (see below) |
 | `BACKUP_RCLONE_REMOTE` | e.g. `offsite-crypt:crm` (step 5) |
@@ -58,6 +59,12 @@ For private GHCR images, log the server in once:
 2. Go to **Zero Trust → Networks → Tunnels → Create tunnel (Cloudflared)**. Name it and copy the **token** into `CLOUDFLARE_TUNNEL_TOKEN`.
 3. Under **Public hostname**, set `app.yourdomain.com` → service `HTTP` → `frontend:80`.
    nginx in the frontend container forwards `/api/*` to the API, so one route covers everything.
+   For the public website (`website/`, pultly.com), add two more public hostnames on the same
+   tunnel: `yourdomain.com` → `HTTP` → `website:80` and `www.yourdomain.com` → `HTTP` →
+   `website:80`. Cloudflare creates the DNS records; if the domain already has A, AAAA or CNAME
+   records for those names, delete them first. The website redirects `www` to the bare domain
+   itself. Its Sign in and Create account buttons open the app (`PRODUCTION_URL`, default
+   `https://app.pultly.com`, baked in when CI builds the image).
 4. Optional: in **Cloudflare Access**, protect `app.yourdomain.com` with an access policy while in private beta.
 
 Never route `postgres` through the tunnel. It is only on the internal Docker network.
@@ -523,6 +530,8 @@ promote an earlier commit that passed staging, or run `scripts/deploy.sh <sha>` 
    the public hostname `staging.pultly.com` → `HTTP` → `frontend:80`. A separate tunnel,
    because production's `cloudflared` can't reach the staging network. Keep the token for `.env`.
    Optional: put it behind Cloudflare Access so only the team can open it.
+   The staging stack runs the website too (its buttons open staging); to look at it, add a
+   hostname such as `www-staging.pultly.com` → `HTTP` → `website:80` on this tunnel.
 2. **Auth0** (same tenant): an API `Simplicity CRM API (staging)` with identifier
    `https://staging.simplicity-labs.com/api` (an identifier only, kept after the domain switch) and Allow Offline Access on, and a Regular Web
    Application `CRM sign-in (staging)` set up like production's (section 4) with callback

@@ -32,7 +32,7 @@ main() {
 
   log "pulling images"
   # api, worker and migrate share the backend image.
-  docker compose pull api worker frontend
+  docker compose pull api worker frontend website
 
   log "pre-migration backup"
   docker compose up -d postgres

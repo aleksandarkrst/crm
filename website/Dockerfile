@@ -4,6 +4,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+# Where Sign in and Create account point; Vite inlines it at build time.
+ARG VITE_APP_URL=https://app.pultly.com
+ENV VITE_APP_URL=$VITE_APP_URL
 RUN npm run build
 
 FROM nginx:1.29-alpine

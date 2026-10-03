@@ -22,4 +22,8 @@ npm run lint && npm run build
 - Animations (rotating hero word, rising bars, count-up, the tilting product screen, scroll reveal)
   are off for visitors with "reduce motion" turned on.
 
+Deployment: CI builds the `website` image on every merge to main and `scripts/deploy.sh` rolls it out
+with the app (service `website` in `docker-compose.yml`). The Cloudflare Tunnel routes pultly.com and
+www.pultly.com to `website:80`; nginx redirects www to pultly.com. See docs/DEPLOYMENT.md, section 3.
+
 Not done yet: there are no Terms or Privacy pages to link to.
