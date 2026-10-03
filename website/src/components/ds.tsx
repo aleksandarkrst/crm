@@ -1,6 +1,6 @@
 // The Pultly design system pieces the site uses (Claude Design "Pultly" design system, components/*),
 // ported to typed React. Their look comes from the classes in styles/site.css.
-import type { AnchorHTMLAttributes, CSSProperties, ReactNode } from 'react';
+import type { AnchorHTMLAttributes, ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react';
 import { ICON_PATHS, type IconName } from './icons';
 
 /**
@@ -32,6 +32,12 @@ export function Icon({ name, size = 16, color }: { name: IconName; size?: number
       <path d={ICON_PATHS[name]} />
     </svg>
   );
+}
+
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' };
+
+export function Button({ variant = 'primary', className, type = 'button', ...rest }: ButtonProps) {
+  return <button type={type} className={`btn btn-${variant}${className ? ' ' + className : ''}`} {...rest} />;
 }
 
 type ButtonLinkProps = AnchorHTMLAttributes<HTMLAnchorElement> & { variant?: 'primary' | 'secondary' };
