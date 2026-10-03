@@ -1,0 +1,68 @@
+/* Pultly design tokens, copied from the Pultly design system (Claude Design handoff, tokens/*.css). */
+/* Pultly "Forest Signal" colour tokens — from the Pultly Brand Guide v1.0, applied to the Cadence component set. */
+:root{
+/* brand */
+--forest:#0D241C;--green-700:#14503C;--green-500:#2F7A5E;--green-soft:#E7F2EE;--lime:#C6F16A;
+/* neutrals (green-tinted) */
+--ink:#0F1B16;--text-2:#475750;--muted:#93A39B;--muted-2:#6B7B73;
+--border:#E2E8E4;--divider:#EBF0ED;--divider-2:#F1F4F2;--dashed:#CAD3CE;
+--bg-soft:#F5F7F6;--panel:#FAFBFA;--chip:#F2F5F3;--segment:#EAEFEC;--hover-col:#E6ECE8;--white:#FFFFFF;
+/* brand scale (component aliases) */
+--brand:var(--green-700);--brand-dark:#0C3226;--brand-soft:var(--green-soft);--brand-soft-2:#CBE3DA;--brand-tint:#F3F8F6;--brand-head:#D7E9E1;
+/* semantic */
+--positive:var(--green-700);--positive-soft:var(--green-soft);
+--warn:#B4531B;--warn-soft:#FDF0E4;--danger:#B42318;--danger-soft:#FDECEA;--note:#FFFCF2;
+/* data + stages: green steps light → dark, lime only for final/won */
+--stage-1:#CBE3DA;--stage-2:#A3D2BF;--stage-3:#5FA587;--stage-4:#2F7A5E;--stage-5:#14503C;--stage-won:var(--lime);
+--stage-done:var(--stage-2);--column-bg:#EFF3F1;--doc-border:#2A4238;
+/* semantic aliases */
+--text-body:var(--ink);--text-secondary:var(--text-2);--text-muted:var(--muted);--text-placeholder:var(--muted);--text-on-dark:#F5F7F6;
+--surface-app:var(--bg-soft);--surface-page:var(--white);--surface-card:var(--white);--surface-panel:var(--panel);
+--surface-sidebar:var(--forest);--surface-dark:var(--forest);--surface-overlay:rgba(13,36,28,0.55);
+--border-default:var(--border);--border-subtle:var(--divider);--border-dashed:var(--dashed);
+--accent:var(--brand);--accent-hover:var(--brand-dark);--accent-soft:var(--brand-soft);--signal:var(--lime);--link:var(--brand);--link-hover:var(--brand-dark);
+}
+/* Type — Unbounded for brand voice, Onest for the interface (Pultly Brand Guide §03). Interface scale kept from the Cadence set. */
+:root{
+--font:'Onest',system-ui,sans-serif;
+--font-sans:var(--font);
+--font-display:'Unbounded','Onest',system-ui,sans-serif;
+--fs-mini:9.5px;--fs-tag:10px;--fs-caps:10.5px;--fs-xs:11px;--fs-xs-2:11.5px;--fs-sm:12px;--fs-sm-2:12.5px;
+--fs-body:13px;--fs-body-2:13.5px;--fs-card-title:14.5px;--fs-section:15px;--fs-lg:16px;
+--fs-h1:20px;--fs-display:24px;--fs-score:26px;--fs-figure:28px;--fs-hero:40px;
+--fw-regular:400;/* @kind font */
+--fw-medium:500;/* @kind font */
+--fw-semibold:600;/* @kind font */
+--fw-bold:700;/* @kind font */
+
+--ls-tight:-0.02em;--ls-display:-0.03em;--ls-wordmark:-0.04em;--ls-caps:0.08em;--ls-th:0.07em;--ls-tag:0.06em;
+--lh-tight:1.2;/* @kind font */
+--lh-hero:1.1;/* @kind font */
+--lh-body:1.48;/* @kind font */
+--lh-relaxed:1.55;/* @kind font */
+
+--text-title-size:var(--fs-display);--text-header-size:var(--fs-h1);--text-body-size:var(--fs-body);
+}
+/* Spacing + radii — exact values from the source (not snapped to a grid). */
+:root{
+--space-2:2px;--space-4:4px;--space-5:5px;--space-6:6px;--space-7:7px;--space-8:8px;--space-9:9px;--space-10:10px;
+--space-12:12px;--space-13:13px;--space-14:14px;--space-16:16px;--space-18:18px;--space-20:20px;--space-24:24px;--space-26:26px;--space-30:30px;--space-44:44px;
+--radius-tag:4px;--radius-badge:5px;--radius-sm:6px;--radius-input:7px;--radius-btn:8px;--radius-choice:9px;--radius-pop:10px;
+--radius-nav:11px;--radius-card:12px;--radius-modal:14px;--radius-pill:999px;
+--sidebar-w:96px;--screen-pad-x:30px;--header-pad:10px 24px;--column-w:268px;
+}
+/* Shadows, focus ring, motion. */
+:root{
+--shadow-card:0 1px 2px rgba(13,36,28,0.05);
+--shadow-tile:0 1px 2px rgba(13,36,28,0.04);
+--shadow-pop:0 16px 38px rgba(13,36,28,0.16);
+--shadow-menu:0 8px 24px rgba(13,36,28,0.12);
+--shadow-toast:0 8px 28px rgba(13,36,28,0.28);
+--ring:0 0 0 3px var(--brand-soft);
+--ease-out:ease-out;/* @kind other */
+--dur-pop:.14s;/* @kind other */
+--dur-toast:.2s;/* @kind other */
+--dur-modal:.22s;/* @kind other */
+--dur-switch:.15s;/* @kind other */
+
+}

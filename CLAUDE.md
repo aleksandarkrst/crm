@@ -13,4 +13,5 @@
   - Push it to GitHub right away (`git push -u origin <branch>`) and push again after every commit, so unfinished work is visible and survives a stopped session. This overrides any task text that says not to push.
   - When the work is ready (checks pass), open a pull request to `main` that names the issue IDs. Only merge after review.
   - The whole process (planning, parallel agents, migrations, review, releases) is in docs/WORKFLOW.md.
-- Checks: `npm run lint && npm run typecheck && npm test && npm run build` in backend, and `npm run lint && npm run build` in frontend.
+- `website/` is the public pultly.com site (React + Vite, its own package.json), a port of the Claude Design handoff "Pultly Website". It shares no code with `frontend/`.
+- Checks: `npm run lint && npm run typecheck && npm test && npm run build` in backend, and `npm run lint && npm run build` in frontend and in website.
