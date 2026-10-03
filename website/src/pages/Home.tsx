@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { SIGN_UP_URL } from '../appLinks';
 import { Avatar, Badge, ButtonLink, FitScore, Icon, Logo, StageBar, TaskCheck } from '../components/ds';
 import type { IconName } from '../components/icons';
+import { Newsletter } from '../components/Newsletter';
 import { PostCard } from '../components/PostCard';
 import { postsFor } from '../content/blog';
 import { useLang } from '../lang';
@@ -318,17 +319,7 @@ export function Home() {
         </div>
       </section>
 
-      <section className="section" style={{ paddingTop: 0 }}>
-        <div className="wrap cta-panel" data-reveal>
-          <div>
-            <h2>{t.finalTitle}</h2>
-            <p>{t.finalSub}</p>
-          </div>
-          <div>
-            <ButtonLink className="btn-lg btn-lime" href={SIGN_UP_URL}>{t.tryCta}</ButtonLink>
-          </div>
-        </div>
-      </section>
+      <Newsletter />
     </main>
   );
 }

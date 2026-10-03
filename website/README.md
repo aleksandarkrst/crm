@@ -26,4 +26,9 @@ Deployment: CI builds the `website` image on every merge to main and `scripts/de
 with the app (service `website` in `docker-compose.yml`). The Cloudflare Tunnel routes pultly.com and
 www.pultly.com to `website:80`; nginx redirects www to pultly.com. See docs/DEPLOYMENT.md, section 3.
 
+- The home page, the blog and every article end with a newsletter signup (`src/components/Newsletter.tsx`).
+  It POSTs `{ "email", "lang" }` as JSON to `VITE_NEWSLETTER_URL` (set at build time). **Without it,
+  nothing is stored**: the form only shows its thank-you message. When the address is on another
+  domain, add it to `connect-src` in `nginx.conf`'s Content-Security-Policy.
+
 Not done yet: there are no Terms or Privacy pages to link to.

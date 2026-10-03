@@ -30,10 +30,10 @@ const en = {
   forCaps: 'Who it\'s for', forTitle: 'Built for small teams with a lot going on.',
   audiences: [{ icon: 'team', t: 'Agencies', d: 'Follow each client from proposal to signed deal without retyping anything.' }, { icon: 'building', t: 'Studios', d: 'A small team and many deals. Everyone sees what happens next.' }, { icon: 'location', t: 'Growing businesses', d: 'Start with sales today. Add planning, projects and your team as you grow, without switching tools.' }],
   blogTeaser: 'From the blog', allArticles: 'All articles', read: 'Read article',
-  finalTitle: 'Run the whole business from one pult.', finalSub: 'Create a workspace and add your first deal.',
+  nlTitle: 'One email a month, worth reading.', nlSub: 'Guides on sales, planning and running a small business, plus what is new in Pultly.', nlPlaceholder: 'Your email', nlCta: 'Subscribe', nlNote: 'No spam. Unsubscribe with one click.', nlDone: 'Thanks! You are on the list.', nlError: 'That didn\'t work. Please try again.',
   blogTitle: 'Blog', blogSub: 'Guides on sales, planning and running a small business, plus news from Pultly.',
   cats: { all: 'All', guides: 'Guides', sales: 'Sales', product: 'Product' }, minRead: 'min read', by: 'Pultly team',
-  moreArticles: 'More articles', postCtaTitle: 'Try it in Pultly',
+  moreArticles: 'More articles',
   footTag: 'One workspace for planning, CRM, projects, workforce and reporting.', footProduct: 'Product', footAccount: 'Account'
 };
 
@@ -68,10 +68,10 @@ const sr: Copy = {
   forCaps: 'Za koga je', forTitle: 'Za male timove sa puno posla.',
   audiences: [{ icon: 'team', t: 'Agencije', d: 'Pratite svakog klijenta od ponude do potpisanog posla, bez prepisivanja.' }, { icon: 'building', t: 'Studiji', d: 'Mali tim i mnogo poslova. Svi vide šta je sledeće.' }, { icon: 'location', t: 'Firme u rastu', d: 'Počnite od prodaje danas. Dodajte planiranje, projekte i tim kako rastete, bez menjanja alata.' }],
   blogTeaser: 'Sa bloga', allArticles: 'Svi članci', read: 'Pročitajte članak',
-  finalTitle: 'Vodite ceo posao sa jednog pulta.', finalSub: 'Napravite radni prostor i dodajte prvi posao.',
+  nlTitle: 'Jedan mejl mesečno, vredan čitanja.', nlSub: 'Vodiči za prodaju, planiranje i vođenje male firme, i novosti iz Pultlyja.', nlPlaceholder: 'Vaš email', nlCta: 'Pretplatite se', nlNote: 'Bez spama. Odjava jednim klikom.', nlDone: 'Hvala! Na listi ste.', nlError: 'Nije uspelo. Pokušajte ponovo.',
   blogTitle: 'Blog', blogSub: 'Vodiči za prodaju, planiranje i vođenje male firme, i novosti iz Pultlyja.',
   cats: { all: 'Sve', guides: 'Vodiči', sales: 'Prodaja', product: 'Proizvod' }, minRead: 'min čitanja', by: 'Tim Pultly',
-  moreArticles: 'Još članaka', postCtaTitle: 'Isprobajte u Pultlyju',
+  moreArticles: 'Još članaka',
   footTag: 'Jedan radni prostor za planiranje, CRM, projekte, tim i izveštaje.', footProduct: 'Proizvod', footAccount: 'Nalog'
 };
 
