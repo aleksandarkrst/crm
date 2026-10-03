@@ -51,6 +51,8 @@ export function Article() {
   const { lang, t } = useLang();
   const posts = postsFor(lang, t);
   const post = posts.find((p) => p.id === id);
+  // Without this the newsletter panel (data-reveal) never fades in and stays invisible.
+  useReveal(lang, id);
   if (!post) return <Navigate to="/blog" replace />;
   const related = posts.filter((p) => p.id !== post.id).slice(0, 3);
   return (
