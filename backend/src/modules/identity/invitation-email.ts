@@ -1,4 +1,4 @@
-import { buttonHtml, escapeHtml, layoutHtml } from '../../infrastructure/mail/html';
+import { appOrigin, buttonHtml, escapeHtml, layoutHtml } from '../../infrastructure/mail/html';
 import type { MailMessage } from '../../infrastructure/mail/mailer';
 import { SecretBox } from '../../infrastructure/crypto/secret-box';
 import type { Env } from '../../infrastructure/config/config.module';
@@ -62,6 +62,7 @@ export function invitationEmail(input: InvitationEmailInput): MailMessage {
       `<p style="margin:0 0 12px;color:#475750;font-size:12.5px">If the button doesn't work, paste this link into your browser:<br><a href="${escapeHtml(input.link)}" style="color:#14503C;word-break:break-all">${escapeHtml(input.link)}</a></p>`,
     ].join('\n'),
     "If you weren't expecting this invitation, you can ignore this email.",
+    appOrigin(input.link),
   );
   return { to: input.to, subject, text, html };
 }

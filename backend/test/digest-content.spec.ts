@@ -69,6 +69,7 @@ describe('digestEmail', () => {
     expect(mail.text).toContain('https://app.example.com/settings/notifications');
     expect(mail.html).toContain('Call &lt;Ana&gt;');
     expect(mail.html).toContain('href="https://app.example.com/deals/d1"');
+    expect(mail.html).toContain('src="https://app.example.com/email-logo.png"');
   });
 
   it('leaves out empty sections and caps long ones', () => {

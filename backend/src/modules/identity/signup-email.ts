@@ -1,6 +1,6 @@
 import type { Env } from '../../infrastructure/config/config.module';
 import { SecretBox } from '../../infrastructure/crypto/secret-box';
-import { buttonHtml, escapeHtml, layoutHtml } from '../../infrastructure/mail/html';
+import { appOrigin, buttonHtml, escapeHtml, layoutHtml } from '../../infrastructure/mail/html';
 import type { MailMessage } from '../../infrastructure/mail/mailer';
 
 /** Encrypts sign-up tokens at rest (signup_requests.token_sealed), so the worker can email the link. */
@@ -49,6 +49,7 @@ export function signupEmail(input: { to: string; link: string; hours: number }):
       `<p style="margin:0 0 12px;color:#475750;font-size:12.5px">If the button doesn't work, paste this link into your browser:<br><a href="${escapeHtml(input.link)}" style="color:#14503C;word-break:break-all">${escapeHtml(input.link)}</a></p>`,
     ].join('\n'),
     IGNORE,
+    appOrigin(input.link),
   );
   return { to: input.to, subject, text, html };
 }
@@ -73,6 +74,7 @@ export function existingAccountEmail(input: { to: string; link: string; method: 
       buttonHtml('Sign in to Pultly', input.link),
     ].join('\n'),
     IGNORE,
+    appOrigin(input.link),
   );
   return { to: input.to, subject, text, html };
 }
@@ -92,6 +94,7 @@ export function passwordResetEmail(input: { to: string; link: string; hours: num
       `<p style="margin:0 0 12px;color:#475750;font-size:12.5px">If the button doesn't work, paste this link into your browser:<br><a href="${escapeHtml(input.link)}" style="color:#14503C;word-break:break-all">${escapeHtml(input.link)}</a></p>`,
     ].join('\n'),
     ignore,
+    appOrigin(input.link),
   );
   return { to: input.to, subject, text, html };
 }
@@ -104,6 +107,7 @@ export function noPasswordEmail(input: { to: string; link: string }): MailMessag
   const html = layoutHtml(
     [`<p style="margin:0 0 12px">Hi,</p>`, `<p style="margin:0 0 12px">${escapeHtml(how)}</p>`, buttonHtml('Sign in to Pultly', input.link)].join('\n'),
     IGNORE,
+    appOrigin(input.link),
   );
   return { to: input.to, subject, text, html };
 }

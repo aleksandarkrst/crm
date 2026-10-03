@@ -98,6 +98,12 @@ describe('invitationEmail', () => {
     expect(mail.html).toContain('href="https://app.example.com/invite/tok_123"');
   });
 
+  it('shows the Pultly logo from the app, with a text fallback (CD-203)', () => {
+    const mail = invitationEmail(input);
+    expect(mail.html).toContain('<img src="https://app.example.com/email-logo.png"');
+    expect(mail.html).toContain('alt="Pultly"');
+  });
+
   it('escapes names in the HTML version', () => {
     const mail = invitationEmail(input);
     expect(mail.html).toContain('Acme &lt;Studio&gt;');
