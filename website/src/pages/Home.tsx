@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Avatar, Badge, Button, FitScore, Icon, Logo, StageBar, TaskCheck } from '../components/ds';
+import { Link } from 'react-router-dom';
+import { SIGN_UP_URL } from '../appLinks';
+import { Avatar, Badge, ButtonLink, FitScore, Icon, Logo, StageBar, TaskCheck } from '../components/ds';
 import type { IconName } from '../components/icons';
 import { PostCard } from '../components/PostCard';
 import { postsFor } from '../content/blog';
@@ -66,7 +67,6 @@ function DeskMeter() {
 
 function Hero() {
   const { t } = useLang();
-  const navigate = useNavigate();
   const reduced = useReducedMotion();
   const [wi, setWi] = useState(0);
   useEffect(() => {
@@ -81,7 +81,7 @@ function Hero() {
         <h1>{t.h1}<br /><span key={wi} className="hero-word">{t.words[wi]}</span></h1>
         <p className="hero-sub">{t.heroSub}</p>
         <div className="hero-cta">
-          <Button className="btn-lg" onClick={() => navigate('/signup')}>{t.tryCta}</Button>
+          <ButtonLink className="btn-lg" href={SIGN_UP_URL}>{t.tryCta}</ButtonLink>
         </div>
       </div>
       <div className="hero-art"><DeskMeter /></div>
@@ -239,7 +239,6 @@ function HowItWorks() {
 
 export function Home() {
   const { lang, t } = useLang();
-  const navigate = useNavigate();
   useReveal(lang);
   const latest = postsFor(lang, t).slice(0, 3);
   return (
@@ -326,7 +325,7 @@ export function Home() {
             <p>{t.finalSub}</p>
           </div>
           <div>
-            <Button className="btn-lg btn-lime" onClick={() => navigate('/signup')}>{t.tryCta}</Button>
+            <ButtonLink className="btn-lg btn-lime" href={SIGN_UP_URL}>{t.tryCta}</ButtonLink>
           </div>
         </div>
       </section>

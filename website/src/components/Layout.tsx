@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation } from 'react-router-dom';
+import { SIGN_IN_URL, SIGN_UP_URL } from '../appLinks';
 import { useLang } from '../lang';
-import { Button, ChoicePill, Logo } from './ds';
+import { ButtonLink, ChoicePill, Logo } from './ds';
 
 function LangSwitch() {
   const { lang, setLang } = useLang();
@@ -27,7 +28,6 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
 function Header() {
   const { t } = useLang();
-  const navigate = useNavigate();
   const { pathname } = useLocation();
   const [menu, setMenu] = useState(false);
   useEffect(() => setMenu(false), [pathname]);
@@ -40,8 +40,8 @@ function Header() {
         <div style={{ flex: 1 }} />
         <div className="wide-only"><LangSwitch /></div>
         <div className="header-actions">
-          <Button variant="secondary" onClick={() => navigate('/signin')}>{t.signIn}</Button>
-          <Button className="wide-only" onClick={() => navigate('/signup')}>{t.tryCta}</Button>
+          <ButtonLink variant="secondary" href={SIGN_IN_URL}>{t.signIn}</ButtonLink>
+          <ButtonLink className="wide-only" href={SIGN_UP_URL}>{t.tryCta}</ButtonLink>
           <button type="button" className="menu-btn" aria-label="Menu" aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
             <span /><span /><span />
           </button>
@@ -53,7 +53,7 @@ function Header() {
           <span className="caps">{t.langLabel}</span>
           <LangSwitch />
         </div>
-        <Button className="btn-block" onClick={() => { close(); navigate('/signup'); }}>{t.tryCta}</Button>
+        <ButtonLink className="btn-block" href={SIGN_UP_URL}>{t.tryCta}</ButtonLink>
       </div>
     </header>
   );
@@ -76,8 +76,8 @@ function Footer() {
         </div>
         <div className="footer-col">
           <div className="caps">{t.footAccount}</div>
-          <Link to="/signin">{t.signIn}</Link>
-          <Link to="/signup">{t.createAccount}</Link>
+          <a href={SIGN_IN_URL}>{t.signIn}</a>
+          <a href={SIGN_UP_URL}>{t.createAccount}</a>
         </div>
       </div>
       <div className="wrap footer-bottom">© 2026 Pultly</div>
@@ -85,7 +85,7 @@ function Footer() {
   );
 }
 
-/** Home, blog and articles: header and footer. Sign up and sign in render without them. */
+/** Every page: header and footer around it. */
 export function SiteLayout() {
   return (
     <>

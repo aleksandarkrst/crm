@@ -1,6 +1,5 @@
 // Site copy in English and Serbian (Latin script), from the Claude Design handoff "Pultly Website".
 // Serbian must have exactly the same keys as English; TypeScript checks it.
-
 const en = {
   langLabel: 'Language', navProduct: 'Product', navModules: 'Modules', navBlog: 'Blog', signIn: 'Sign in', tryCta: 'Try Pultly',
   eyebrow: 'One pult for the whole business', h1: 'One pult for',
@@ -35,18 +34,10 @@ const en = {
   blogTitle: 'Blog', blogSub: 'Guides on sales, planning and running a small business, plus news from Pultly.',
   cats: { all: 'All', guides: 'Guides', sales: 'Sales', product: 'Product' }, minRead: 'min read', by: 'Pultly team',
   moreArticles: 'More articles', postCtaTitle: 'Try it in Pultly',
-  suPanelTitle: 'A workspace for your business, ready in a few minutes.',
-  suPoints: ['Pipeline, Today and Overview ready from day one', 'Import deals from a CSV file', 'Interface in English or Serbian'],
-  suTitle: 'Create your account', suSub: 'You\'ll set up your workspace next.',
-  fName: 'Full name', fEmail: 'Work email', fCompany: 'Company name', fPassword: 'Password', fPasswordPh: 'At least 8 characters',
-  legal: 'By creating an account you accept the Terms of service and Privacy policy.',
-  haveAccount: 'Already have an account?', sentTitle: 'Check your email', sentBody: 'A confirmation link was sent to {email}. Open it to finish setting up your workspace.', backHome: 'Back to home',
-  google: 'Continue with Google', orEmail: 'or', siTitle: 'Sign in to Pultly', siSub: 'Welcome back.', siPanelTitle: 'Your pult is where you left it.', siPoints: ['Today shows what is due', 'Stalled deals on the Overview', 'Your whole team in one workspace'], forgot: 'Forgot password?', noAccount: 'No account yet?', createOne: 'Create one',
   footTag: 'One workspace for planning, CRM, projects, workforce and reporting.', footProduct: 'Product', footAccount: 'Account'
 };
 
 export type Copy = typeof en;
-
 const sr: Copy = {
   langLabel: 'Jezik', navProduct: 'Proizvod', navModules: 'Moduli', navBlog: 'Blog', signIn: 'Prijava', tryCta: 'Isprobajte Pultly',
   eyebrow: 'Jedan pult za ceo biznis', h1: 'Jedan pult za',
@@ -81,13 +72,6 @@ const sr: Copy = {
   blogTitle: 'Blog', blogSub: 'Vodiči za prodaju, planiranje i vođenje male firme, i novosti iz Pultlyja.',
   cats: { all: 'Sve', guides: 'Vodiči', sales: 'Prodaja', product: 'Proizvod' }, minRead: 'min čitanja', by: 'Tim Pultly',
   moreArticles: 'Još članaka', postCtaTitle: 'Isprobajte u Pultlyju',
-  suPanelTitle: 'Radni prostor za vašu firmu, spreman za nekoliko minuta.',
-  suPoints: ['Levak, Danas i Pregled spremni od prvog dana', 'Uvoz poslova iz CSV fajla', 'Interfejs na srpskom ili engleskom'],
-  suTitle: 'Napravite nalog', suSub: 'Radni prostor podešavate u sledećem koraku.',
-  fName: 'Ime i prezime', fEmail: 'Poslovni email', fCompany: 'Naziv firme', fPassword: 'Lozinka', fPasswordPh: 'Najmanje 8 karaktera',
-  legal: 'Pravljenjem naloga prihvatate Uslove korišćenja i Politiku privatnosti.',
-  haveAccount: 'Već imate nalog?', sentTitle: 'Proverite email', sentBody: 'Link za potvrdu je poslat na {email}. Otvorite ga da završite podešavanje radnog prostora.', backHome: 'Nazad na početnu',
-  google: 'Nastavite sa Google nalogom', orEmail: 'ili', siTitle: 'Prijavite se u Pultly', siSub: 'Dobro došli nazad.', siPanelTitle: 'Vaš pult je tamo gde ste ga ostavili.', siPoints: ['Danas pokazuje šta je na redu', 'Zastali poslovi na Pregledu', 'Ceo tim u jednom radnom prostoru'], forgot: 'Zaboravljena lozinka?', noAccount: 'Nemate nalog?', createOne: 'Napravite ga',
   footTag: 'Jedan radni prostor za planiranje, CRM, projekte, tim i izveštaje.', footProduct: 'Proizvod', footAccount: 'Nalog'
 };
 

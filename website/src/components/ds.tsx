@@ -1,6 +1,6 @@
 // The Pultly design system pieces the site uses (Claude Design "Pultly" design system, components/*),
 // ported to typed React. Their look comes from the classes in styles/site.css.
-import type { ButtonHTMLAttributes, CSSProperties, InputHTMLAttributes, ReactNode } from 'react';
+import type { AnchorHTMLAttributes, CSSProperties, ReactNode } from 'react';
 import { ICON_PATHS, type IconName } from './icons';
 
 /** The control-desk mark, with the "pultly" wordmark when it is tall enough to read. */
@@ -31,10 +31,11 @@ export function Icon({ name, size = 16, color }: { name: IconName; size?: number
   );
 }
 
-type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' };
+type ButtonLinkProps = AnchorHTMLAttributes<HTMLAnchorElement> & { variant?: 'primary' | 'secondary' };
 
-export function Button({ variant = 'primary', className, type = 'button', ...rest }: ButtonProps) {
-  return <button type={type} className={`btn btn-${variant}${className ? ' ' + className : ''}`} {...rest} />;
+/** A link that looks like Button, for actions that leave the site (sign in, sign up). */
+export function ButtonLink({ variant = 'primary', className, ...rest }: ButtonLinkProps) {
+  return <a className={`btn btn-${variant}${className ? ' ' + className : ''}`} {...rest} />;
 }
 
 export function ChoicePill({ on, children, onClick }: { on: boolean; children: ReactNode; onClick: () => void }) {
@@ -73,14 +74,5 @@ export function TaskCheck({ done, onClick }: { done: boolean; onClick: () => voi
     <button type="button" className={done ? 'task-check done' : 'task-check'} aria-pressed={done} aria-label={done ? 'Reopen' : 'Mark done'} onClick={onClick}>
       {done ? '✓' : ''}
     </button>
-  );
-}
-
-export function FormField({ label, ...input }: { label: string } & InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <label className="form-label">
-      {label}
-      <input className="form-input" {...input} />
-    </label>
   );
 }

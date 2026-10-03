@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Avatar, Button, ChoicePill } from '../components/ds';
+import { Link, Navigate, useParams } from 'react-router-dom';
+import { SIGN_UP_URL } from '../appLinks';
+import { Avatar, ButtonLink, ChoicePill } from '../components/ds';
 import { PostCard, PostCover } from '../components/PostCard';
 import { postsFor } from '../content/blog';
 import type { Category } from '../content/posts';
@@ -45,7 +46,6 @@ export function Blog() {
 export function Article() {
   const { id } = useParams();
   const { lang, t } = useLang();
-  const navigate = useNavigate();
   const posts = postsFor(lang, t);
   const post = posts.find((p) => p.id === id);
   if (!post) return <Navigate to="/blog" replace />;
@@ -69,7 +69,7 @@ export function Article() {
             <div className="article-cta-title">{t.postCtaTitle}</div>
             <div className="article-cta-sub">{t.finalSub}</div>
           </div>
-          <Button className="btn-lime" onClick={() => navigate('/signup')}>{t.createAccount}</Button>
+          <ButtonLink className="btn-lime" href={SIGN_UP_URL}>{t.createAccount}</ButtonLink>
         </div>
       </article>
       <div className="related">
