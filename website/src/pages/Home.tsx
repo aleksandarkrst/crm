@@ -32,18 +32,22 @@ function Funnel({ rows, step }: { rows: { name: string; meta: string }[]; step: 
   );
 }
 
-/** The Pultly mark (CD-203) with its dial sweeping to the reading, and three cards floating around it. */
+/** The control-desk mark with its bars rising, and three cards floating around it. */
 function DeskMeter() {
   const { t } = useLang();
+  const bar = (d: string, fill: string, i: number) => (
+    <path key={i} d={d} fill={fill} className="desk-bar"
+      style={{ animation: `plRise .9s cubic-bezier(.2,.8,.2,1) ${0.25 + i * 0.18}s both, plMeter ${3 + i * 0.7}s ease-in-out ${1.4 + i * 0.3}s infinite` }} />
+  );
   const float = (delay: number) => ({ animation: `plFade .6s ease-out ${delay}s both, plFloat 6s ease-in-out ${delay + 0.6}s infinite` });
   return (
     <div className="desk-meter">
-      <svg viewBox="0 0 48 48" className="desk-svg" fill="none" aria-hidden="true">
-        <rect width="48" height="48" rx="12" fill="#0D241C" />
-        <path d="M15 13.5v22" stroke="#FFFFFF" strokeWidth="6" strokeLinecap="round" />
-        <circle cx="25" cy="20.5" r="8" stroke="#FFFFFF" strokeWidth="6" />
-        <path d="M25 12.5a8 8 0 0 1 8 8" stroke="#C6F16A" strokeWidth="6" className="desk-dial"
-          style={{ animation: 'plSweep 1.1s cubic-bezier(.2,.8,.2,1) .3s both, plDial 4s ease-in-out 1.8s infinite' }} />
+      <svg viewBox="0 0 64 48" className="desk-svg" aria-hidden="true">
+        <path d="M14 4h48L52 34H4z" fill="#0D241C" />
+        {bar('M20 28h5l2.7-8h-5z', '#FFFFFF', 0)}
+        {bar('M28 28h5l4-12h-5z', '#FFFFFF', 1)}
+        {bar('M36 28h5l5.3-16h-5z', '#C6F16A', 2)}
+        <rect x={4} y={39} width={36} height={5} rx={2.5} fill="#0D241C" />
       </svg>
       <div className="desk-chip" style={{ top: 6, left: 0, ...float(1.2) }}>
         <div className="chip-title">{t.tasks[0].title}</div>
