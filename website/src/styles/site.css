@@ -28,7 +28,7 @@ a.btn-secondary, a.btn-secondary:hover { color: var(--text-2); }
 .btn-secondary:hover { background: var(--bg-soft); }
 .btn-lg { height: 48px; padding: 0 26px; font-size: 15px; }
 .btn-lime, a.btn-lime, a.btn-lime:hover { background: var(--lime); border-color: var(--lime); color: var(--forest); }
-.btn-lime:hover { filter: brightness(1.04); }
+.btn-lime:hover { background: var(--lime); filter: brightness(1.04); }
 .btn-block { width: 100%; }
 
 .choice-pill { cursor: pointer; border: 1px solid var(--border); background: var(--white); color: var(--text-2); border-radius: 999px; padding: 8px 14px; font-size: 12.5px; font-weight: 500; }
@@ -196,9 +196,8 @@ a.btn-secondary, a.btn-secondary:hover { color: var(--text-2); }
 .newsletter-input { flex: 1 1 180px; min-width: 0; height: 48px; padding: 0 16px; border: 1px solid #2A4238; border-radius: 8px; background: #FFFFFF; color: var(--ink); font-size: 15px; }
 .newsletter-input::placeholder { color: var(--muted); }
 .newsletter-input:focus { outline: none; border-color: var(--lime); box-shadow: 0 0 0 3px rgba(198, 241, 106, .35); }
-.newsletter-form > .btn { align-self: flex-start; }
+.newsletter-form > .btn { align-self: stretch; }
 .newsletter-form > .btn:disabled { opacity: .7; cursor: default; }
-@media (max-width: 520px) { .newsletter-form > .btn { align-self: stretch; } }
 .cta-panel .newsletter-note { margin: 0; font-size: 13px; color: #93A39B; }
 .cta-panel .newsletter-error { margin: 0; font-size: 13.5px; color: #FFB4A8; }
 .cta-panel .newsletter-done { margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 600; letter-spacing: -0.02em; color: var(--lime); }
