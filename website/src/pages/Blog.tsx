@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { SIGN_UP_URL } from '../appLinks';
-import { Avatar, ButtonLink, ChoicePill } from '../components/ds';
+import { Avatar, ChoicePill } from '../components/ds';
+import { Newsletter } from '../components/Newsletter';
 import { PostCard, PostCover } from '../components/PostCard';
 import { postsFor } from '../content/blog';
 import type { Category } from '../content/posts';
@@ -17,6 +17,7 @@ export function Blog() {
   const posts = postsFor(lang, t).filter((p) => cat === 'all' || p.cat === cat);
   const [featured, ...rest] = posts;
   return (
+    <>
     <main className="blog-page">
       <div className="intro">
         <h1>{t.blogTitle}</h1>
@@ -40,6 +41,8 @@ export function Blog() {
         {rest.map((post) => <PostCard key={post.id} post={post} excerpt />)}
       </div>
     </main>
+    <Newsletter />
+    </>
   );
 }
 
@@ -51,6 +54,7 @@ export function Article() {
   if (!post) return <Navigate to="/blog" replace />;
   const related = posts.filter((p) => p.id !== post.id).slice(0, 3);
   return (
+    <>
     <main className="article-page">
       <article className="article">
         <Link to="/blog" className="article-back">← {t.navBlog}</Link>
@@ -63,13 +67,6 @@ export function Article() {
         </div>
         <div className="article-body">
           {post.body.map((b) => (b.startsWith('## ') ? <h2 key={b}>{b.slice(3)}</h2> : <p key={b}>{b}</p>))}
-        </div>
-        <div className="article-cta">
-          <div>
-            <div className="article-cta-title">{t.postCtaTitle}</div>
-            <div className="article-cta-sub">{t.finalSub}</div>
-          </div>
-          <ButtonLink className="btn-lime" href={SIGN_UP_URL}>{t.createAccount}</ButtonLink>
         </div>
       </article>
       <div className="related">
@@ -85,5 +82,7 @@ export function Article() {
         </div>
       </div>
     </main>
+    <Newsletter />
+    </>
   );
 }
