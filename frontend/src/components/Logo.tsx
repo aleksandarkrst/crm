@@ -1,23 +1,23 @@
 /**
- * The Pultly logo from the Pultly Brand Guide (01 · Logo): a slanted pult with three rising bars,
- * the last one always lime. On light grounds the pult is ink with white bars; on dark grounds it
- * is white with forest bars. The wordmark is Unbounded 600, lowercase, −0.04em; below 88 px wide
- * the guide wants the mark alone.
+ * The Pultly logo exactly as pultly.com draws it (website/src/components/ds.tsx): the control desk
+ * with three rising bars, the last one lime, and the "pultly" wordmark when it is tall enough to
+ * read. The two apps share no code, so it's copied; keep them the same.
  */
-export function Logo({ height = 30, onDark = false, wordmark = false }: { height?: number; onDark?: boolean; wordmark?: boolean }) {
-  const pult = onDark ? '#FFFFFF' : '#0F1B16';
+export function Logo({ height = 30, onDark = false, wordmark = true }: { height?: number; onDark?: boolean; wordmark?: boolean }) {
+  const panel = onDark ? '#FFFFFF' : '#0D241C';
   const bars = onDark ? '#0D241C' : '#FFFFFF';
+  const showWord = wordmark && height * 3.1 >= 88;
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: height * 0.21, color: pult }} aria-label="Pultly" role="img">
-      <svg viewBox="0 0 64 64" width={height} height={height} fill="none" aria-hidden="true" style={{ flex: '0 0 auto' }}>
-        <path d="M6 46L18 16H58L46 46Z" fill={pult} stroke={pult} strokeWidth="2" strokeLinejoin="round" />
-        <path d="M22 38L24.4 32" stroke={bars} strokeWidth="4" strokeLinecap="round" />
-        <path d="M30 38L33.6 29" stroke={bars} strokeWidth="4" strokeLinecap="round" />
-        <path d="M38 38L43.2 25" stroke="#C6F16A" strokeWidth="4" strokeLinecap="round" />
-        <path d="M10 54H44" stroke={pult} strokeWidth="4" strokeLinecap="round" />
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: height * 0.32, color: panel }} aria-label="pultly" role="img">
+      <svg viewBox="0 0 64 48" height={height} width={(height * 64) / 48} fill="none" aria-hidden="true">
+        <path d="M14 4h48L52 34H4z" fill={panel} />
+        <path d="M20 28h5l2.7-8h-5z" fill={bars} />
+        <path d="M28 28h5l4-12h-5z" fill={bars} />
+        <path d="M36 28h5l5.3-16h-5z" fill="#C6F16A" />
+        <rect x="4" y="39" width="36" height="5" rx="2.5" fill={panel} />
       </svg>
-      {wordmark && (
-        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, letterSpacing: '-0.04em', lineHeight: 1, fontSize: height * 0.63 }}>pultly</span>
+      {showWord && (
+        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, letterSpacing: '-0.04em', lineHeight: 1, textTransform: 'lowercase', fontSize: height * 0.92 }}>pultly</span>
       )}
     </span>
   );

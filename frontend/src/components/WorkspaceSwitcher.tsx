@@ -67,7 +67,7 @@ export function WorkspaceSwitcher() {
         aria-expanded={open}
         onClick={() => (open ? close() : setOpen(true))}
       >
-        <Logo height={38} onDark />
+        <Logo height={26} onDark wordmark={false} />
       </button>
       {open && (
         <div className="menu-pop ws-pop" role="menu" data-testid="workspace-menu">
