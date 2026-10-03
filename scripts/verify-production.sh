@@ -38,7 +38,7 @@ PUBLIC_URL="${PUBLIC_URL%/}"
 printf '[verify] checking Compose stack in %s\n' "$APP_DIR"
 run 'Compose configuration is valid' docker compose config --quiet
 
-expected_services=(postgres api worker frontend cloudflared backup)
+expected_services=(postgres api worker frontend website cloudflared backup)
 running="$(docker compose ps --services --status running 2>/dev/null || true)"
 for service in "${expected_services[@]}"; do
   if printf '%s\n' "$running" | grep -Fxq "$service"; then
@@ -54,6 +54,8 @@ run 'API readiness endpoint passes inside its container' docker compose exec -T 
   "fetch('http://127.0.0.1:3000/api/health/ready').then(r => { if (!r.ok) throw Error(String(r.status)) })"
 run 'nginx serves the frontend and can proxy API readiness' docker compose exec -T frontend \
   sh -c "wget -qO- http://127.0.0.1/healthz | grep -qx ok && wget -qO /dev/null http://127.0.0.1/api/health/ready"
+run 'nginx serves the website and its blog route' docker compose exec -T website \
+  sh -c "wget -qO- http://127.0.0.1/healthz | grep -qx ok && wget -qO /dev/null http://127.0.0.1/blog"
 
 # Production services must not bind ports on the host. An empty HostPort list is expected.
 if published_ports="$(
@@ -106,6 +108,14 @@ if [ -n "$PUBLIC_URL" ]; then
     --show-error --max-time 20 --output /dev/null "$PUBLIC_URL/api/health/ready"
 else
   fail 'APP_URL is set (or a public URL was passed as the first argument)'
+fi
+
+# The website's public address (pultly.com); optional, so stacks without it (staging) skip it.
+WEBSITE_URL="$(sed -n 's/^WEBSITE_URL=//p' .env | tail -n 1)"
+WEBSITE_URL="${WEBSITE_URL%/}"
+if [ -n "$WEBSITE_URL" ]; then
+  run "$WEBSITE_URL serves the website through the tunnel" curl --fail --silent --show-error \
+    --max-time 20 --output /dev/null "$WEBSITE_URL/blog"
 fi
 
 if [ "$failures" -ne 0 ]; then

@@ -1,5 +1,6 @@
 # Production stack for the Hetzner server. Nothing is published on a host port: public traffic
-# arrives only through the Cloudflare Tunnel (cloudflared → frontend, which proxies /api).
+# arrives only through the Cloudflare Tunnel (cloudflared → frontend, which proxies /api; and
+# cloudflared → website for pultly.com).
 #
 #   docker compose up -d                 # start / update the stack
 #   docker compose run --rm migrate      # apply database migrations
@@ -138,6 +139,16 @@ services:
     # Internal network only: never reachable from the internet or the tunnel.
     networks: [data]
 
+  # The public website (pultly.com), static files served by nginx. The tunnel routes pultly.com and
+  # www.pultly.com here; it has no access to the API or the database. Staging pulls the -staging
+  # variant, whose Sign in and Create account point at staging.
+  website:
+    logging: *logging
+    image: ${IMAGE_PREFIX:-crm}-website:${APP_VERSION:-latest}${FRONTEND_VARIANT:-}
+    build: ./website
+    restart: unless-stopped
+    networks: [edge]
+
   cloudflared:
     logging: *logging
     image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-2026.9.1}
@@ -145,7 +156,7 @@ services:
     command: ["tunnel", "--no-autoupdate", "run"]
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
-    depends_on: [frontend]
+    depends_on: [frontend, website]
     networks: [edge]
 
   backup:
