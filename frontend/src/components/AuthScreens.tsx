@@ -9,7 +9,7 @@ export function Centered({ title, sub, children }: { title: string; sub?: string
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-soft)', padding: 16 }}>
       <div className="card card-pad" style={{ width: '100%', maxWidth: 400, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Logo height={26} wordmark />
+        <Logo height={40} wordmark />
         <div>
           <div className="display" style={{ fontSize: 20, lineHeight: 1.2 }}>{title}</div>
           {sub && <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 4 }}>{sub}</div>}

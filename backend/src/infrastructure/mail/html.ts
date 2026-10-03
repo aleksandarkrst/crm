@@ -15,7 +15,7 @@ export function buttonHtml(label: string, href: string): string {
  */
 export function logoHtml(appUrl: string): string {
   const src = `${appUrl.replace(/\/+$/, '')}/email-logo.png`;
-  return `<p style="margin:0 0 24px"><img src="${escapeHtml(src)}" width="133" height="28" alt="Pultly" style="display:block;border:0;color:#0D241C;font-weight:600;font-size:18px"></p>`;
+  return `<p style="margin:0 0 24px"><img src="${escapeHtml(src)}" width="92" height="28" alt="Pultly" style="display:block;border:0;color:#0D241C;font-weight:600;font-size:18px"></p>`;
 }
 
 /** The app's address, from a link into it (the emails that only carry a link). */
