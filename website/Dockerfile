@@ -6,7 +6,10 @@ RUN npm ci
 COPY . .
 # Where Sign in and Create account point; Vite inlines it at build time.
 ARG VITE_APP_URL=https://app.pultly.com
-ENV VITE_APP_URL=$VITE_APP_URL
+# The MailerLite embedded form for newsletter signups (public IDs); empty = signups aren't stored.
+ARG VITE_MAILERLITE_ACCOUNT_ID=
+ARG VITE_MAILERLITE_FORM_ID=
+ENV VITE_APP_URL=$VITE_APP_URL VITE_MAILERLITE_ACCOUNT_ID=$VITE_MAILERLITE_ACCOUNT_ID VITE_MAILERLITE_FORM_ID=$VITE_MAILERLITE_FORM_ID
 RUN npm run build
 
 FROM nginx:1.29-alpine

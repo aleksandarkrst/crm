@@ -26,9 +26,12 @@ Deployment: CI builds the `website` image on every merge to main and `scripts/de
 with the app (service `website` in `docker-compose.yml`). The Cloudflare Tunnel routes pultly.com and
 www.pultly.com to `website:80`; nginx redirects www to pultly.com. See docs/DEPLOYMENT.md, section 3.
 
-- The home page, the blog and every article end with a newsletter signup (`src/components/Newsletter.tsx`).
-  It POSTs `{ "email", "lang" }` as JSON to `VITE_NEWSLETTER_URL` (set at build time). **Without it,
-  nothing is stored**: the form only shows its thank-you message. When the address is on another
-  domain, add it to `connect-src` in `nginx.conf`'s Content-Security-Policy.
+- The home page, the blog and every article end with a newsletter signup (name + email,
+  `src/components/Newsletter.tsx`). It posts to a MailerLite **embedded form**, which adds people to
+  its group and sends the confirmation email. The form is chosen at build time with
+  `VITE_MAILERLITE_ACCOUNT_ID` and `VITE_MAILERLITE_FORM_ID` (both in the form's embed code:
+  `.../jsonp/<account id>/forms/<form id>/subscribe`); CI takes them from the GitHub Actions
+  variables `MAILERLITE_ACCOUNT_ID` and `MAILERLITE_FORM_ID`. **Without them nothing is stored**:
+  the form only shows its thank-you message (that's how staging and local development run).
 
 Not done yet: there are no Terms or Privacy pages to link to.

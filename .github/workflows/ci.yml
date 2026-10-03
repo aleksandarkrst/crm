@@ -222,10 +222,13 @@ jobs:
           push: ${{ github.ref == 'refs/heads/main' && !inputs.verify_images }}
           build-args: |
             VITE_APP_URL=${{ vars.PRODUCTION_URL || 'https://app.pultly.com' }}
+            VITE_MAILERLITE_ACCOUNT_ID=${{ vars.MAILERLITE_ACCOUNT_ID }}
+            VITE_MAILERLITE_FORM_ID=${{ vars.MAILERLITE_FORM_ID }}
           tags: ${{ env.IMAGE_PREFIX }}-website:${{ github.sha }},${{ env.IMAGE_PREFIX }}-website:latest
           cache-from: type=gha,scope=website
           cache-to: type=gha,mode=max,scope=website
-      # Staging's website links to the staging app instead.
+      # Staging's website links to the staging app instead. It gets no MailerLite form, so trying the
+      # newsletter on staging never adds anyone to the real list.
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         if: vars.STAGING_DEPLOY_ENABLED == 'true'
         with:
