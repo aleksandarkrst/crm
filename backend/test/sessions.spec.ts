@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Auth0Accounts } from '../src/modules/identity/accounts';
-import { readCookie } from '../src/modules/identity/session.controller';
+import { readCookie, sessionProblem } from '../src/modules/identity/session.controller';
 import { Auth0Sessions, createSessionProvider, DevSessions, NoSessions, pkce, type SessionError } from '../src/modules/identity/sessions';
 import { noPasswordEmail, passwordResetEmail, resetLink } from '../src/modules/identity/signup-email';
 import { providerUserId } from '../src/modules/identity/signup.service';
@@ -49,6 +49,19 @@ describe('signing in with Auth0 behind Pultly\'s own pages (CD-114)', () => {
     expect(await reason()).toBe('unavailable');
     vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new Error('ECONNREFUSED'))));
     expect(await reason()).toBe('unavailable');
+  });
+
+  it('keeps what Auth0 answered as the cause of an "unavailable", for error tracking (CD-205)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(500, { error: 'server_error', error_description: 'Rate limit exceeded' })));
+    const err = (await auth0().passwordLogin('ana@example.test', 'x', '').catch((e: unknown) => e)) as SessionError;
+    expect(err.reason).toBe('unavailable');
+    expect(String((err.cause as Error).message)).toBe('Auth0 refused a password sign-in: 500 server_error Rate limit exceeded');
+
+    const http = sessionProblem(err);
+    expect(http.getStatus()).toBe(503);
+    expect(http.cause).toBe(err.cause);
+    // The person still only sees the general message.
+    expect(http.getResponse()).toEqual({ statusCode: 503, code: 'unavailable', message: err.message });
   });
 
   it('ends a session whose refresh token is no longer valid', async () => {
