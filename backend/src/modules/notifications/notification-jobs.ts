@@ -1,13 +1,15 @@
 import { Inject, Injectable, Logger, Module, type OnApplicationBootstrap } from '@nestjs/common';
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { ENV, type Env } from '../../infrastructure/config/config.module';
 import { Mailer } from '../../infrastructure/mail/mailer';
 import { DatabaseService } from '../../shared/database/database.service';
-import { companies, dailyDigests, deals, funnelStages, memberships, tenants, users } from '../../shared/database/schema';
+import { companies, dailyDigests, deals, funnelStages, memberships, tenants, users, visitPlanLines, visitPlans } from '../../shared/database/schema';
 import type { JobPayloads } from '../../shared/events/job-types';
 import { type JobAttempt, JobsService } from '../../shared/events/jobs.service';
+import { visitPlanPeriodLabel } from '../crm';
 import { dealAssignedEmail, digestEmail, digestItemCount, isDigestHour, isEmptyDigest, zonedNow } from './digest-content';
 import { DigestService } from './digest.service';
+import { visitPlanEmail } from './visit-plan-email';
 
 /** How often the worker looks for workspaces where it is digest time. */
 export const DIGEST_TICK_CRON = '*/15 * * * *';
@@ -20,7 +22,9 @@ export const DIGEST_TICK_CRON = '*/15 * * * *';
  * - "notifications.daily-digest": builds and sends one member's digest, or records it as skipped
  *   when it would be empty. `daily_digests` makes it once a day per member and workspace;
  * - "crm.deal-assigned": emails the new owner of a deal if someone else assigned it and they
- *   want that email.
+ *   want that email;
+ * - "crm.visit-plan-email": emails a salesperson the visit plan someone else made or changed for
+ *   them (CD-134), if they want that email.
  * Failed sends throw, so pg-boss retries them (MAIL_RETRY_LIMIT).
  */
 @Injectable()
@@ -39,6 +43,7 @@ export class NotificationJobs implements OnApplicationBootstrap {
     await this.jobs.work('notifications.digest-tick', () => this.tick());
     await this.jobs.work('notifications.daily-digest', (data, attempt) => this.sendDigest(data, attempt));
     await this.jobs.work('crm.deal-assigned', (data) => this.sendDealAssigned(data));
+    await this.jobs.work('crm.visit-plan-email', (data) => this.sendVisitPlan(data));
     await this.jobs.schedule('notifications.digest-tick', DIGEST_TICK_CRON);
   }
 
@@ -145,6 +150,56 @@ export class NotificationJobs implements OnApplicationBootstrap {
 
     await this.mailer.send(
       dealAssignedEmail({ to: assignee.email, assigneeName: assignee.name, actorName: actor?.name ?? 'A teammate', workspaceName: assignee.workspaceName, appUrl: this.env.APP_URL, deal }),
+    );
+  }
+
+  async sendVisitPlan({ tenantId, planId, actorUserId, kind }: JobPayloads['crm.visit-plan-email']): Promise<void> {
+    const [plan] = await this.database.withTenant(tenantId, (tx) =>
+      tx
+        .select({ id: visitPlans.id, salespersonUserId: visitPlans.salespersonUserId, periodType: visitPlans.periodType, periodStart: visitPlans.periodStart, periodEnd: visitPlans.periodEnd, note: visitPlans.note })
+        .from(visitPlans)
+        .where(eq(visitPlans.id, planId)),
+    );
+    // Deleted meanwhile, or now the actor's own plan: nothing to tell.
+    if (!plan || plan.salespersonUserId === actorUserId) return;
+    // The setting is read when sending, so switching it off stops emails still in the queue.
+    // CD-207 adds memberships.notify_visit_plans; until it exists this reads null, i.e. "on".
+    const [salesperson] = await this.database.db
+      .select({
+        email: users.email,
+        name: users.displayName,
+        wants: sql<boolean | null>`(to_jsonb(${memberships}) ->> 'notify_visit_plans')::boolean`,
+        workspaceName: tenants.name,
+        fiscal: tenants.fiscalYearStartMonth,
+      })
+      .from(memberships)
+      .innerJoin(users, eq(users.id, memberships.userId))
+      .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
+      .where(and(eq(memberships.tenantId, tenantId), eq(memberships.userId, plan.salespersonUserId)));
+    if (!salesperson?.email || salesperson.wants === false) return;
+    const lines = await this.database.withTenant(tenantId, (tx) =>
+      tx
+        .select({ companyName: companies.name, plannedVisits: visitPlanLines.plannedVisits })
+        .from(visitPlanLines)
+        .innerJoin(companies, eq(companies.id, visitPlanLines.companyId))
+        .where(eq(visitPlanLines.planId, planId))
+        .orderBy(asc(companies.name)),
+    );
+    const [actor] = await this.database.db.select({ name: sql<string>`coalesce(${users.displayName}, ${users.email}, 'A teammate')` }).from(users).where(eq(users.id, actorUserId));
+    if (this.mailer.notDelivered) {
+      this.logger.warn(`Visit plan email for plan ${planId} not sent: ${this.mailer.notDelivered}`);
+      return;
+    }
+    await this.mailer.send(
+      visitPlanEmail({
+        to: salesperson.email,
+        salespersonName: salesperson.name,
+        actorName: actor?.name ?? 'A teammate',
+        workspaceName: salesperson.workspaceName,
+        appUrl: this.env.APP_URL,
+        kind,
+        plan: { id: plan.id, periodLabel: visitPlanPeriodLabel(plan.periodType, plan.periodStart, plan.periodEnd, salesperson.fiscal), note: plan.note, lines },
+      }),
     );
   }
 }
