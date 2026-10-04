@@ -659,7 +659,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }
       const withInitials = patch.name !== undefined ? { ...patch, initials: initialsOf(patch.name) } : patch;
       if (p.primary) {
-        const map: Record<string, string> = { name: 'contact', role: 'role', email: 'email', phone: 'phone', buyerRole: 'buyerRole', notes: 'contactNotes', initials: 'initials', ownerId: 'contactOwnerId' };
+        const map: Record<string, string> = { name: 'contact', role: 'role', email: 'email', phone: 'phone', buyerRole: 'buyerRole', notes: 'contactNotes', linkedin: 'contactLinkedin', initials: 'initials', ownerId: 'contactOwnerId' };
         const lp: Record<string, unknown> = {};
         Object.entries(withInitials).forEach(([k, v]) => (lp[map[k] || k] = v));
         set((x) => ({ leads: x.leads.map((l) => (l.contactId === contactId ? { ...l, ...lp } : l)) }));
@@ -1034,12 +1034,16 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     };
 
     // ------------------------------------------------------------ companies
-    /** Companies are identified by id (names aren't unique), so renaming one keeps its route. */
-    const setCompanyField = (companyId: string, key: 'name' | 'industry' | 'hq' | 'size' | 'source', v: string) => {
+    /**
+     * Companies are identified by id (names aren't unique), so renaming one keeps its route. Domain
+     * and notes (CD-209) live on the company only; the other fields are also copied onto its deals.
+     */
+    const setCompanyField = (companyId: string, key: 'name' | 'industry' | 'hq' | 'size' | 'source' | 'domain' | 'notes', v: string) => {
       const field = key === 'size' ? 'teamSize' : key;
       if (!(key === 'name' && !v.trim())) saveLater(`company:${companyId}:${field}`, () => crmApi.updateCompany(companyId, { [field]: v }, ver('company', companyId)), `the company ${key === 'hq' ? 'HQ' : key === 'size' ? 'team size' : key}`);
+      const onDeals = key !== 'domain' && key !== 'notes';
       set((x) => ({
-        leads: x.leads.map((l) => (l.companyId === companyId ? { ...l, ...(key === 'name' ? { company: v } : { [key]: v }) } : l)),
+        leads: onDeals ? x.leads.map((l) => (l.companyId === companyId ? { ...l, ...(key === 'name' ? { company: v } : { [key]: v }) } : l)) : x.leads,
         extraCompanies: x.extraCompanies.map((c) => (c.id === companyId ? { ...c, [key]: v } : c)),
         extraPeople: key === 'name' ? x.extraPeople.map((p) => (p.companyId === companyId ? { ...p, company: v } : p)) : x.extraPeople,
       }));
