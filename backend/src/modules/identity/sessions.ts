@@ -15,8 +15,10 @@ export class SessionError extends Error {
   constructor(
     readonly reason: 'credentials' | 'blocked' | 'too-many' | 'reset' | 'expired' | 'unavailable',
     message: string,
+    // What the provider actually said, for error tracking; never shown to the person.
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
   }
 }
 
@@ -99,16 +101,18 @@ export class Auth0Sessions extends SessionProvider {
       throw new SessionError('reset', 'For your security, choose a new password: use "Forgot password?" to get a link by email.');
     if (/blocked/i.test(detail)) throw new SessionError('blocked', 'This account is blocked. Contact us to have it unblocked.');
     if (body.error === 'invalid_grant' || body.error === 'invalid_user_password') throw new SessionError('credentials', WRONG);
-    this.logger.error(`Auth0 refused a password sign-in: ${status} ${detail.trim()}`);
-    throw new SessionError('unavailable', UNAVAILABLE);
+    const why = `Auth0 refused a password sign-in: ${status} ${detail.trim()}`;
+    this.logger.error(why);
+    throw new SessionError('unavailable', UNAVAILABLE, { cause: new Error(why) });
   }
 
   async refresh(refreshToken: string): Promise<SessionTokens> {
     const reply = await this.token({ grant_type: 'refresh_token', refresh_token: refreshToken });
     if (reply.ok) return reply.tokens;
     if (reply.body.error === 'invalid_grant') throw new SessionError('expired', 'Your session ended. Sign in again.');
-    this.logger.error(`Auth0 refused a refresh: ${reply.status} ${reply.body.error ?? ''}`);
-    throw new SessionError('unavailable', UNAVAILABLE);
+    const why = `Auth0 refused a refresh: ${reply.status} ${reply.body.error ?? ''}`;
+    this.logger.error(why);
+    throw new SessionError('unavailable', UNAVAILABLE, { cause: new Error(why) });
   }
 
   async revoke(refreshToken: string): Promise<void> {
@@ -143,8 +147,9 @@ export class Auth0Sessions extends SessionProvider {
   async exchangeCode({ code, verifier, redirectUri }: { code: string; verifier: string; redirectUri: string }): Promise<SessionTokens> {
     const reply = await this.token({ grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: redirectUri });
     if (reply.ok) return reply.tokens;
-    this.logger.error(`Auth0 refused a code exchange: ${reply.status} ${reply.body.error ?? ''} ${reply.body.error_description ?? ''}`);
-    throw new SessionError('unavailable', UNAVAILABLE);
+    const why = `Auth0 refused a code exchange: ${reply.status} ${reply.body.error ?? ''} ${reply.body.error_description ?? ''}`;
+    this.logger.error(why);
+    throw new SessionError('unavailable', UNAVAILABLE, { cause: new Error(why) });
   }
 
   private async token(params: Record<string, string>, headers: Record<string, string> = {}) {
@@ -155,7 +160,7 @@ export class Auth0Sessions extends SessionProvider {
       signal: AbortSignal.timeout(TIMEOUT_MS),
     }).catch((err: unknown) => {
       this.logger.error(`Auth0 unreachable: ${err instanceof Error ? err.message : String(err)}`);
-      throw new SessionError('unavailable', UNAVAILABLE);
+      throw new SessionError('unavailable', UNAVAILABLE, { cause: err });
     });
     const body = ((await res.json().catch(() => null)) ?? {}) as TokenReply;
     if (res.ok && body.access_token)

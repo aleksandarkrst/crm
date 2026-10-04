@@ -25,13 +25,16 @@ export function policy() {
   const s = sentry();
   const directives = [
     ["default-src", "'self'"],
-    ["script-src", "'self'"],
+    // Cloudflare Web Analytics: Cloudflare adds its beacon script to the page and it reports to
+    // cloudflareinsights.com (Sentry CRM-FRONTEND-1).
+    ["script-src", "'self' https://static.cloudflareinsights.com"],
     // 'unsafe-inline' for style attributes: React renders inline styles throughout the app.
     ["style-src", "'self' 'unsafe-inline' https://fonts.googleapis.com"],
     ["font-src", "'self' https://fonts.gstatic.com"],
     ["img-src", "'self' data: blob:"],
-    // The API is same-origin, sign-in included (CD-114: the backend talks to the provider); Sentry.
-    ["connect-src", ["'self'", s?.host].filter(Boolean).join(' ')],
+    // The API is same-origin, sign-in included (CD-114: the backend talks to the provider); Sentry;
+    // Cloudflare Web Analytics.
+    ["connect-src", ["'self'", s?.host, 'https://cloudflareinsights.com'].filter(Boolean).join(' ')],
     // The live-update worker is a bundled file.
     ["worker-src", "'self'"],
     ["frame-src", "'none'"],

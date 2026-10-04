@@ -133,9 +133,12 @@ export function SignIn({ onDone, invited }: { onDone: () => void; invited: boole
           <label className="form-label">
             <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               Password
-              <button type="button" style={{ ...linkButton, fontSize: 12, textTransform: 'none', letterSpacing: 0 }} onClick={() => navigate('/forgot-password', { state: { email: email.trim() } })}>
-                Forgot password?
-              </button>
+              {/* Only when this server can send the reset email (Sentry CRM-BACKEND-3: a 503 otherwise). */}
+              {options.email && (
+                <button type="button" style={{ ...linkButton, fontSize: 12, textTransform: 'none', letterSpacing: 0 }} onClick={() => navigate('/forgot-password', { state: { email: email.trim() } })}>
+                  Forgot password?
+                </button>
+              )}
             </span>
             <input className="form-input" type="password" required autoFocus={!!email} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </label>

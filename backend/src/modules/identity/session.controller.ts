@@ -21,7 +21,9 @@ const STATUS: Record<SessionError['reason'], number> = {
   'too-many': HttpStatus.TOO_MANY_REQUESTS,
   unavailable: HttpStatus.SERVICE_UNAVAILABLE,
 };
-export const sessionProblem = (err: SessionError) => new HttpException({ statusCode: STATUS[err.reason], code: err.reason, message: err.message }, STATUS[err.reason]);
+// The cause (the provider's answer) goes to error tracking with a 503, so the report says why.
+export const sessionProblem = (err: SessionError) =>
+  new HttpException({ statusCode: STATUS[err.reason], code: err.reason, message: err.message }, STATUS[err.reason], { cause: err.cause });
 
 /** What the browser gets back from signing in: the access token only. */
 export interface SignedIn {

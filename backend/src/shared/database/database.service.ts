@@ -1,10 +1,12 @@
-import { Inject, Injectable, type OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool, type PoolConfig } from 'pg';
 import { ENV, type Env } from '../../infrastructure/config/config.module';
 import { requestActor } from './request-context';
 import * as schema from './schema';
+
+const logger = new Logger('Database');
 
 export type Database = NodePgDatabase<typeof schema>;
 export type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -30,6 +32,11 @@ export class DatabaseService implements OnModuleDestroy {
 
   constructor(@Inject(ENV) env: Env) {
     this.pool = new Pool(poolConfig(env));
+    // An idle connection that Postgres drops (a restart, a deploy) makes the pool emit 'error'.
+    // Without a listener that is an uncaught exception and the whole process exits (Sentry
+    // CRM-BACKEND-2). The pool has already discarded the connection and opens a new one when
+    // needed, so this only logs it.
+    this.pool.on('error', (err) => logger.warn(`Idle database connection closed: ${err.message}`));
     this.db = drizzle(this.pool, { schema });
   }
 
