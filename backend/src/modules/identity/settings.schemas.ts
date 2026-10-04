@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DATE_FORMATS, PROFILE_LANGUAGES, START_PAGES } from '../../shared/database/schema';
+import { CUSTOMER_EMAIL_LANGUAGES, DATE_FORMATS, PROFILE_LANGUAGES, START_PAGES } from '../../shared/database/schema';
 
 // ICU's lists (Node ships full ICU): every ISO 4217 code and every canonical IANA zone.
 const CURRENCIES = new Set(Intl.supportedValuesOf('currency'));
@@ -30,6 +30,7 @@ export const UpdateWorkspace = z
       .refine((c) => /^[A-Z]{3}$/.test(c) && CURRENCIES.has(c), 'Must be an ISO 4217 currency code, e.g. EUR'),
     timezone: z.string().trim().refine(isIanaTimeZone, 'Must be an IANA time zone, e.g. Europe/Belgrade'),
     fiscalYearStartMonth: z.number().int().min(1).max(12),
+    customerEmailLanguage: z.enum(CUSTOMER_EMAIL_LANGUAGES),
   })
   .partial()
   .refine(atLeastOne, 'Nothing to update');
@@ -57,6 +58,8 @@ export const UpdateProfile = z
     defaultFunnelId: z.uuid().nullable(),
     dailyDigest: z.boolean(),
     notifyDealAssigned: z.boolean(),
+    notifyMeetingInvites: z.boolean(),
+    notifyVisitPlans: z.boolean(),
   })
   .partial()
   .refine(atLeastOne, 'Nothing to update');

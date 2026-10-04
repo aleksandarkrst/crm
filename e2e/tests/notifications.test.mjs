@@ -77,29 +77,28 @@ describe('emails: invitations and notification settings', () => {
     assert.equal(await inviteStatus(page, invitee).then((s) => s?.startsWith('Email sent')), true);
   });
 
-  step('the Notifications tab has the two emails we send, the rest marked coming soon', async () => {
+  const SETTINGS = ['digest', 'assigned', 'meetings', 'visit-plans'];
+
+  step('the Notifications tab lists only the emails we send, all on by default', async () => {
     await page.goto(BASE_URL + '/settings/notifications', { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-notification="digest"] .switch');
-    assert.equal(await isOn(page, 'digest'), true);
-    assert.equal(await isOn(page, 'assigned'), true);
+    for (const id of SETTINGS) assert.equal(await isOn(page, id), true, id);
     const body = await text(page);
-    assert.ok(body.includes('Daily digest email') && body.includes('Deal assigned to you'), 'real settings listed');
-    assert.equal((body.match(/Coming soon/gi) ?? []).length, 2, 'two coming-soon rows');
-    assert.equal(await page.$('[data-notification="weekly"] .switch'), null, 'no switch for weekly report');
+    for (const label of ['Daily digest email', 'Deal assigned to you', 'Meeting invitations', 'Visit plans']) assert.ok(body.includes(label), label);
+    assert.ok(!/Coming soon/i.test(body), 'no coming-soon rows');
+    assert.ok(!body.includes('Weekly pipeline report') && !body.includes('Document activity'), 'placeholders removed');
   });
 
   step('switching them off saves, and survives a reload', async () => {
-    await page.click('[data-notification="assigned"] .switch');
-    await page.click('[data-notification="digest"] .switch');
+    for (const id of SETTINGS) await page.click(`[data-notification="${id}"] .switch`);
     const saved = await eventually(async () => {
       const p = await api(page, '/profile');
-      return p.notifyDealAssigned === false && p.dailyDigest === false && p;
+      return p.notifyDealAssigned === false && p.dailyDigest === false && p.notifyMeetingInvites === false && p.notifyVisitPlans === false && p;
     });
     assert.ok(saved, 'saved to the profile');
     await page.reload({ waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-notification="digest"] .switch');
-    assert.equal(await isOn(page, 'digest'), false);
-    assert.equal(await isOn(page, 'assigned'), false);
+    for (const id of SETTINGS) assert.equal(await isOn(page, id), false, id);
   });
 
   step('the profile shows the same daily digest setting', async () => {

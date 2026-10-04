@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput } from '../lib/api';
+import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type WorkspaceInput } from '../lib/api';
 import { paths } from '../lib/paths';
 import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference } from './documents';
 import { connectLive, type LiveEvent } from './live';
@@ -162,11 +162,12 @@ const ALL_PARTS: Part[] = ['funnels', 'companies', 'contacts', 'deals', 'product
 const EMPTY_CONTACT: NewContactDraft = { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer', notes: '' };
 const DISCOVERY_FIELDS = ['headline', 'need', 'constraint', 'decisionMaker', 'discoveryDate'] as const satisfies readonly (keyof Lead & keyof DealInput)[];
 /** Workspace settings as the API names them. */
-const WORKSPACE_FIELDS: Partial<Record<keyof Workspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth'>> = {
+const WORKSPACE_FIELDS: Partial<Record<keyof Workspace, keyof WorkspaceInput>> = {
   name: 'name',
   currency: 'currency',
   timezone: 'timezone',
   fiscalMonth: 'fiscalYearStartMonth',
+  customerEmailLanguage: 'customerEmailLanguage',
 };
 /** Profile fields as the API names them. */
 const PROFILE_FIELDS: Partial<Record<keyof Profile, keyof ProfileInput>> = {
@@ -179,6 +180,8 @@ const PROFILE_FIELDS: Partial<Record<keyof Profile, keyof ProfileInput>> = {
   defaultFunnelId: 'defaultFunnelId',
   digest: 'dailyDigest',
   dealAssigned: 'notifyDealAssigned',
+  meetingInvites: 'notifyMeetingInvites',
+  visitPlans: 'notifyVisitPlans',
 };
 
 function useStoreImpl(data: WorkspaceData, session: Session) {
