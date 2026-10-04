@@ -1,5 +1,6 @@
 import { buttonHtml, escapeHtml, layoutHtml } from '../../infrastructure/mail/html';
 import type { MailMessage } from '../../infrastructure/mail/mailer';
+import { zonedParts } from '../../shared/time/zoned-time';
 
 /**
  * The daily digest (CD-16), as pure functions so they can be unit-tested: which items go in, and
@@ -29,28 +30,62 @@ export interface DigestDealRow {
   stage: string;
 }
 
+/** A meeting (CD-130) the member organizes or takes part in. Times are ISO instants. */
+export interface DigestMeetingRow {
+  id: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  company: string;
+  status: 'planned' | 'held' | 'cancelled';
+}
+
 export interface Digest {
   date: string;
+  /** The workspace time zone the dates and meeting times are in. */
+  timeZone: string;
+  meetingsToday: DigestMeetingRow[];
   overdue: DigestTaskRow[];
   dueToday: DigestTaskRow[];
+  /** Meetings they organize that are still planned more than 24 hours after their end. */
+  notClosed: DigestMeetingRow[];
   noNextStep: DigestDealRow[];
+}
+
+/** A planned meeting is "Not closed" this long after its end (as in the CRM's meeting rules). */
+export const NOT_CLOSED_AFTER_MS = 24 * 60 * 60 * 1000;
+
+export interface DigestMeetings {
+  /** Meetings starting today or so; only the planned and held ones starting today count. */
+  today?: DigestMeetingRow[];
+  /** Candidates for "Not closed"; only planned ones that ended over 24 hours before `now` count. */
+  notClosed?: DigestMeetingRow[];
+  timeZone?: string;
+  now?: Date;
 }
 
 /**
  * Sorts a member's open tasks (due today or earlier) into overdue and due today, and lists their
- * open deals without a next step, as the Today screen and the Pipeline flags do.
+ * open deals without a next step, as the Today screen and the Pipeline flags do. Meetings: the
+ * ones starting today (workspace date), and their planned meetings that were never closed.
  */
-export function buildDigest(today: string, tasks: DigestTaskRow[], dealsWithoutNextStep: DigestDealRow[]): Digest {
+export function buildDigest(today: string, tasks: DigestTaskRow[], dealsWithoutNextStep: DigestDealRow[], meetings: DigestMeetings = {}): Digest {
+  const timeZone = meetings.timeZone ?? 'UTC';
+  const now = meetings.now ?? new Date();
   const byDue = (a: DigestTaskRow, b: DigestTaskRow) => a.dueDate.localeCompare(b.dueDate) || a.dealTitle.localeCompare(b.dealTitle) || a.title.localeCompare(b.title);
+  const byStart = (a: DigestMeetingRow, b: DigestMeetingRow) => a.startsAt.localeCompare(b.startsAt) || a.title.localeCompare(b.title);
   return {
     date: today,
+    timeZone,
+    meetingsToday: (meetings.today ?? []).filter((m) => m.status !== 'cancelled' && zonedParts(new Date(m.startsAt), timeZone).date === today).sort(byStart),
     overdue: tasks.filter((t) => t.dueDate < today).sort(byDue),
     dueToday: tasks.filter((t) => t.dueDate === today).sort(byDue),
+    notClosed: (meetings.notClosed ?? []).filter((m) => m.status === 'planned' && new Date(m.endsAt).getTime() < now.getTime() - NOT_CLOSED_AFTER_MS).sort(byStart),
     noNextStep: [...dealsWithoutNextStep].sort((a, b) => a.title.localeCompare(b.title)),
   };
 }
 
-export const digestItemCount = (d: Digest): number => d.overdue.length + d.dueToday.length + d.noNextStep.length;
+export const digestItemCount = (d: Digest): number => d.meetingsToday.length + d.overdue.length + d.dueToday.length + d.notClosed.length + d.noNextStep.length;
 export const isEmptyDigest = (d: Digest): boolean => digestItemCount(d) === 0;
 
 /** The current date and time on the clock of an IANA time zone. */
@@ -81,13 +116,17 @@ export interface DigestEmailInput {
   digest: Digest;
 }
 
-/** The digest email: a short summary line, then up to three sections with links to the deals. */
+/** The digest email: a short summary line, then up to five sections with links to the deals and meetings. */
 export function digestEmail({ to, memberName, workspaceName, appUrl, digest }: DigestEmailInput): MailMessage {
   const base = appUrl.replace(/\/+$/, '');
   const dealUrl = (id: string) => `${base}/deals/${id}`;
+  const meetingUrl = (id: string) => `${base}/meetings/${id}`;
+  const clock = (iso: string) => zonedParts(new Date(iso), digest.timeZone);
   const counts = [
+    digest.meetingsToday.length ? plural(digest.meetingsToday.length, 'meeting') + ' today' : null,
     digest.overdue.length ? `${digest.overdue.length} overdue` : null,
     digest.dueToday.length ? `${digest.dueToday.length} due today` : null,
+    digest.notClosed.length ? plural(digest.notClosed.length, 'meeting') + ' not closed' : null,
     digest.noNextStep.length ? plural(digest.noNextStep.length, 'deal') + ' without a next step' : null,
   ].filter(Boolean);
   const subject = `Your day in ${workspaceName}: ${counts.join(', ')}`;
@@ -97,8 +136,21 @@ export function digestEmail({ to, memberName, workspaceName, appUrl, digest }: D
     href: string;
   }
   const sections: { title: string; lines: Line[] }[] = [
+    {
+      title: 'Meetings today',
+      lines: digest.meetingsToday.map((m) => {
+        const start = clock(m.startsAt);
+        const end = clock(m.endsAt);
+        const time = end.date === start.date ? `${start.time}–${end.time}` : `from ${start.time}`;
+        return { text: `${time} ${m.title} · ${m.company}${m.status === 'held' ? ' (held)' : ''}`, href: meetingUrl(m.id) };
+      }),
+    },
     { title: 'Overdue tasks', lines: digest.overdue.map((t) => ({ text: `${t.title} (was due ${shortDay(t.dueDate)}) · ${onDeal(t.dealTitle, t.company)}`, href: dealUrl(t.dealId) })) },
     { title: 'Due today', lines: digest.dueToday.map((t) => ({ text: `${t.title} · ${onDeal(t.dealTitle, t.company)}`, href: dealUrl(t.dealId) })) },
+    {
+      title: 'Not closed meetings',
+      lines: digest.notClosed.map((m) => ({ text: `${m.title} · ${m.company} (${shortDay(clock(m.startsAt).date)})`, href: meetingUrl(m.id) })),
+    },
     { title: 'Deals with no next step', lines: digest.noNextStep.map((d) => ({ text: `${onDeal(d.title, d.company)} · ${d.stage}`, href: dealUrl(d.id) })) },
   ].filter((s) => s.lines.length);
 

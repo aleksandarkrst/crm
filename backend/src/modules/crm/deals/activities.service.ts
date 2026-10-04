@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { TenantContext } from '../../../shared/authorization';
-import { DatabaseService } from '../../../shared/database/database.service';
+import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
 import { activities, CHANNELS, deals } from '../../../shared/database/schema';
 import { optionalText } from '../../../shared/validation/common';
@@ -43,5 +43,27 @@ export class ActivitiesService {
         return row!;
       })
       .catch(mapDbError);
+  }
+
+  /**
+   * A timeline entry written by another change, in its transaction (meetings, CD-130). With
+   * `countsAsContact`, the deal's last contact moves to `occurredAt`, but never back in time
+   * (marking last week's meeting as held after yesterday's call keeps yesterday).
+   */
+  async record(
+    tx: Tx,
+    ctx: TenantContext,
+    dealId: string,
+    entry: { channel: (typeof CHANNELS)[number]; title: string; detail: string | null; occurredAt?: Date },
+    { countsAsContact = false } = {},
+  ): Promise<void> {
+    const occurredAt = entry.occurredAt ?? new Date();
+    await tx.insert(activities).values({ ...entry, occurredAt, tenantId: ctx.tenantId, dealId, actorUserId: ctx.userId });
+    if (countsAsContact) {
+      await tx
+        .update(deals)
+        .set({ lastContactAt: sql`greatest(coalesce(${deals.lastContactAt}, ${occurredAt}), ${occurredAt})` })
+        .where(eq(deals.id, dealId));
+    }
   }
 }

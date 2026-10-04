@@ -1,14 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, eq, isNotNull, isNull, lte, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../shared/database/database.service';
-import { companies, deals, dealTasks, funnelStages, memberships, tenants, users } from '../../shared/database/schema';
-import { buildDigest, type Digest, zonedNow } from './digest-content';
+import { companies, deals, dealTasks, funnelStages, meetingParticipants, meetings, memberships, tenants, users } from '../../shared/database/schema';
+import { buildDigest, type Digest, NOT_CLOSED_AFTER_MS, zonedNow } from './digest-content';
 
 /**
  * Loads a member's daily digest from the CRM tables (read only), inside withTenant so RLS applies:
  * - tasks assigned to them, not done, due today or earlier (the "New task" tasks; playbook to-dos
  *   have no due date), on deals that aren't lost;
- * - their open deals (not won, not lost) without an open task: the "No next step" flag.
+ * - their open deals (not won, not lost) without an open task or a planned meeting still ahead:
+ *   the "No next step" flag;
+ * - meetings (CD-130) starting today that they organize or take part in (planned or held), and
+ *   the planned meetings they organize that ended more than 24 hours ago ("Not closed").
  * "Today" is the workspace's date (its time zone), as on the Today screen.
  */
 @Injectable()
@@ -39,8 +42,11 @@ export class DigestService {
     return this.load(tenantId, userId, zonedNow(who.timezone).date);
   }
 
-  load(tenantId: string, userId: string, today: string): Promise<Digest> {
+  load(tenantId: string, userId: string, today: string, now: Date = new Date()): Promise<Digest> {
     return this.database.withTenant(tenantId, async (tx) => {
+      // tenants is a platform table without RLS, so filter by the tenant explicitly.
+      const [workspace] = await tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, tenantId));
+      const timeZone = workspace?.timezone ?? 'UTC';
       const tasks = await tx
         .select({
           id: dealTasks.id,
@@ -61,14 +67,48 @@ export class DigestService {
         .select({ dealId: dealTasks.dealId })
         .from(dealTasks)
         .where(and(eq(dealTasks.blocksAdvance, false), eq(dealTasks.done, false)));
+      // So is a planned meeting still ahead (CD-130).
+      const withMeetingAhead = tx
+        .select({ dealId: meetings.dealId })
+        .from(meetings)
+        .where(and(isNotNull(meetings.dealId), eq(meetings.status, 'planned'), gt(meetings.startsAt, now)));
       const stalled = await tx
         .select({ id: deals.id, title: deals.title, company: companies.name, stage: funnelStages.name })
         .from(deals)
         .innerJoin(funnelStages, eq(funnelStages.id, deals.stageId))
         .leftJoin(companies, eq(companies.id, deals.companyId))
-        .where(and(eq(deals.ownerUserId, userId), isNull(deals.lostAt), eq(funnelStages.isWon, false), notInArray(deals.id, withNextStep)));
+        .where(
+          and(eq(deals.ownerUserId, userId), isNull(deals.lostAt), eq(funnelStages.isWon, false), notInArray(deals.id, withNextStep), notInArray(deals.id, withMeetingAhead)),
+        );
 
-      return buildDigest(today, tasks, stalled);
+      const meetingRow = {
+        id: meetings.id,
+        title: meetings.title,
+        startsAt: meetings.startsAt,
+        endsAt: meetings.endsAt,
+        company: companies.name,
+        status: meetings.status,
+      };
+      const takesPart = or(
+        eq(meetings.organizerUserId, userId),
+        sql`exists (select 1 from ${meetingParticipants} p where p.meeting_id = ${meetings.id} and p.user_id = ${userId})`,
+      );
+      const meetingsToday = await tx
+        .select(meetingRow)
+        .from(meetings)
+        .innerJoin(companies, eq(companies.id, meetings.companyId))
+        .where(and(takesPart, inArray(meetings.status, ['planned', 'held']), sql`(${meetings.startsAt} at time zone ${timeZone})::date = ${today}::date`))
+        .orderBy(asc(meetings.startsAt));
+      const notClosed = await tx
+        .select(meetingRow)
+        .from(meetings)
+        .innerJoin(companies, eq(companies.id, meetings.companyId))
+        .where(and(eq(meetings.organizerUserId, userId), eq(meetings.status, 'planned'), lt(meetings.endsAt, new Date(now.getTime() - NOT_CLOSED_AFTER_MS))))
+        .orderBy(asc(meetings.startsAt))
+        .limit(100);
+
+      const iso = (rows: typeof meetingsToday) => rows.map((m) => ({ ...m, startsAt: m.startsAt.toISOString(), endsAt: m.endsAt.toISOString() }));
+      return buildDigest(today, tasks, stalled, { today: iso(meetingsToday), notClosed: iso(notClosed), timeZone, now });
     });
   }
 }

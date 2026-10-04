@@ -190,6 +190,20 @@
       "when": 1790662255246,
       "tag": "0026_user_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1791157417064,
+      "tag": "0027_meetings",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1791157421565,
+      "tag": "0028_meetings_rls",
+      "breakpoints": true
     }
   ]
 }

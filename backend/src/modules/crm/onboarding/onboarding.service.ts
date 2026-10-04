@@ -18,6 +18,7 @@ import {
   funnels,
   funnelStages,
   invitations,
+  meetings,
   memberships,
   products,
   SAMPLE_KINDS,
@@ -183,7 +184,7 @@ export class OnboardingService {
   /**
    * Deletes exactly the records the sample load created. Deals go with their lines, tasks,
    * activities and history. A sample company, contact or product that real records now use (a
-   * real deal at a sample company, say) is kept, and becomes an ordinary record.
+   * real deal or a meeting at a sample company, say) is kept, and becomes an ordinary record.
    */
   async removeSampleData(ctx: TenantContext) {
     const result = await this.database
@@ -207,7 +208,8 @@ export class OnboardingService {
         if (ids.company.length) {
           const usedByDeals = await tx.select({ id: deals.companyId }).from(deals).where(inArray(deals.companyId, ids.company));
           const usedByContacts = await tx.select({ id: contacts.companyId }).from(contacts).where(inArray(contacts.companyId, ids.company));
-          const keep = new Set([...usedByDeals, ...usedByContacts].map((u) => u.id));
+          const usedByMeetings = await tx.select({ id: meetings.companyId }).from(meetings).where(inArray(meetings.companyId, ids.company));
+          const keep = new Set([...usedByDeals, ...usedByContacts, ...usedByMeetings].map((u) => u.id));
           const drop = ids.company.filter((id) => !keep.has(id));
           if (drop.length) removed.company = (await tx.delete(companies).where(inArray(companies.id, drop)).returning({ id: companies.id })).length;
           kept.company = keep.size;
