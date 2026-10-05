@@ -924,6 +924,10 @@ milestones on lines); `drizzle/0022_products_deal_billing.sql` converts existing
   their share and value), the company's contacts or the contact's company and documents; on the
   right Focus (open tasks on their deals) and History (activity on their deals, and changes).
   Companies and contacts can now be handed to another owner there.
+- The company's **Domain** and **Notes** and the contact's **LinkedIn** (CD-209) edit in place there
+  like the other fields (saved after a pause, with If-Match). A domain such as `acme.com`, or a
+  LinkedIn value that is a web address (`linkedin.com/in/…` or http(s)), gets an **Open** link next
+  to the field, like Email and Call; other text stays plain. Only http(s) links are made.
 
 ## Deal page (CD-83)
 

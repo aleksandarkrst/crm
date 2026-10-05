@@ -283,6 +283,7 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
       phone: ct?.phone ?? '—',
       buyerRole: ct?.buyerRole,
       contactNotes: ct?.notes ?? '',
+      contactLinkedin: ct?.linkedin ?? '',
       contactOwnerId: ct?.ownerUserId,
       contactOwner: ct?.ownerName ?? undefined,
       owner: ownerName ?? undefined,
@@ -324,6 +325,8 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
     hq: c.hq ?? '',
     size: c.teamSize ?? '',
     source: c.source ?? '',
+    domain: c.domain ?? '',
+    notes: c.notes ?? '',
     owner: c.ownerName ?? '',
     ownerId: c.ownerUserId,
   }));

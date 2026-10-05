@@ -51,6 +51,8 @@ export interface Lead {
   buyerRole?: string;
   /** Notes on the primary contact (from the New contact dialog or the contact screen). */
   contactNotes?: string;
+  /** The primary contact's LinkedIn (a URL or whatever was typed); '' when none. */
+  contactLinkedin?: string;
   /** Owner of the primary contact (user id, and last known name from the API). */
   contactOwnerId?: string | null;
   contactOwner?: string;
@@ -121,6 +123,9 @@ export interface CompanyExtra {
   hq: string;
   size: string;
   source: string;
+  /** Website domain, e.g. "acme.com" (CD-209); '' when none. */
+  domain: string;
+  notes: string;
   /** Last known name of the owner, from the API (see memberName). */
   owner: string;
   ownerId?: string | null;
