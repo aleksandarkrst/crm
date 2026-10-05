@@ -23,7 +23,7 @@ RUN --mount=type=secret,id=sentry_auth_token,required=false \
 ARG CSP_ENFORCE=false
 RUN CSP_ENFORCE=$CSP_ENFORCE node scripts/csp.mjs nginx > csp.conf
 
-FROM nginx:1.29-alpine
+FROM nginx:1.31-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/csp.conf /etc/nginx/snippets/csp.conf
 COPY --from=build /app/dist /usr/share/nginx/html
