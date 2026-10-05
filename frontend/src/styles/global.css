@@ -645,3 +645,11 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .meeting-agenda-input { width: 100%; min-height: 84px; resize: vertical; line-height: 1.5; font-family: inherit; }
 .icon-row > select.ghost, .icon-row > input.ghost { flex: 1; min-width: 0; }
 .icon-row > select.ghost:disabled, .icon-row input.ghost:disabled { opacity: 1; color: var(--ink); cursor: default; background: transparent; }
+
+/* ---------------------------------------------------------------- import dialog (CD-64, CD-141) */
+.import-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.import-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 560px) {
+  .import-fields { grid-template-columns: 1fr; }
+  .import-summary { grid-template-columns: repeat(2, 1fr); }
+}
