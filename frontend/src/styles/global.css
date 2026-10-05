@@ -540,3 +540,31 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
   .vp-cell::before { content: attr(data-label); font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-2); }
   .vp-plan-actions { flex: 1 1 100%; justify-content: flex-start; }
 }
+
+/* ---- visit plan tracking (CD-135) ---- */
+.vp-pace { display: inline-block; font-weight: 600; font-variant-numeric: tabular-nums; border-radius: 6px; padding: 2px 7px; background: var(--chip); color: var(--ink); }
+.vp-pace-done { background: var(--brand-soft); color: var(--brand); }
+.vp-pace-behind { background: var(--warn-soft); color: var(--warn); }
+.vp-pace-not-started { background: var(--chip); color: var(--muted-2); }
+.vp-over { font-size: 11.5px; font-weight: 600; color: var(--green-500); white-space: nowrap; }
+.vp-count { border: 0; background: transparent; padding: 1px 6px; margin: 0 -6px; border-radius: 6px; font: inherit; font-weight: 600; color: var(--brand); text-decoration: underline; text-decoration-color: var(--brand-soft-2); text-underline-offset: 3px; cursor: pointer; }
+.vp-count:hover, .vp-count.open { background: var(--brand-soft); }
+.vp-plan-line > .vp-drill { margin: 0 12px 10px; }
+.vp-drill { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+.vp-drill-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 4px; }
+.vp-drill-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 0; font-size: 13px; color: var(--ink); text-decoration: none; border-top: 1px solid var(--divider); }
+.vp-drill-row:hover { color: var(--brand); }
+.vp-unplanned-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--divider); }
+.vp-progress-bar { height: 8px; border-radius: 4px; background: var(--chip); overflow: hidden; }
+.vp-progress-bar > span { display: block; height: 100%; background: var(--green-500); }
+.vp-progress-bar.behind > span { background: var(--warn); }
+.vp-card-stats { display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-end; }
+.vp-card-stat { display: flex; flex-direction: column; gap: 4px; }
+.vp-company-visits { font-size: 12.5px; color: var(--text-2); }
+.report-tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--divider); margin-bottom: 16px; }
+.report-table { overflow-x: auto; }
+.report-table .table-head, .report-table .table-row { min-width: 860px; }
+@media (max-width: 700px) {
+  .vp-plan-line > .table-row.vp-plan-row { min-width: 0; display: flex !important; flex-wrap: wrap; gap: 4px 14px; }
+  .vp-plan-line > .vp-drill { margin: 0 8px 10px; }
+}

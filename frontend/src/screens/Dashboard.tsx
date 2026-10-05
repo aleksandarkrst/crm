@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FilterBar } from '../components/ui';
 import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Layout';
+import { VisitProgressCard } from '../components/VisitProgressCard';
 import { paths } from '../lib/paths';
 import { DATE_RANGES, dateRangeLabel, DEFAULT_FILTERS, SOURCES } from '../store/seed';
 import { billedShare, bonusOf, bonusRule, closeIsoOf, closeRangeOf, curOf, currencySymbol, funnelOptions, inCloseRange, dealPayments, moneyTotal, num, salesPeople, stageOf, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
@@ -162,6 +163,9 @@ export function Dashboard() {
             </div>
           ))}
         </div>
+
+        {/* Its own plan period, independent of the closing-period filter above (CD-135). */}
+        <VisitProgressCard />
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 14 }}>
           <div className="card" style={{ padding: 18 }}>

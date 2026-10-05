@@ -1,18 +1,21 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { MeetingQuery } from '../lib/api';
+import { crmApi, type MeetingQuery } from '../lib/api';
 import { paths } from '../lib/paths';
 import type { MeetingDialogSeed } from '../store/meetings';
 import { useStore } from '../store/store';
 import { addDays, dateLabel, instantToZoned, todayIn } from '../store/time';
 import { useMeetingList } from '../store/useMeetings';
+import { useVisitProgress } from '../store/useVisitProgress';
 import { blockClass, StatusMark } from '../screens/calendar/parts';
 import { AddButton, Section } from './RecordParts';
 
 /**
  * "Meetings" on a company, contact or deal page (CD-130, spec 4.6): the next three upcoming
  * meetings, "Show all" (the Calendar's table filtered to the record) and "+ Meeting" prefilled
- * with the record. On a contact, the meetings where they are an external participant.
+ * with the record. On a contact, the meetings where they are an external participant. On a
+ * company in this month's visit plans, "Visits this month: held / planned" (CD-135), summed over
+ * the plans the viewer can see (everyone's for owners and admins, their own for members).
  */
 export function MeetingsCard({ record, seed }: { record: { companyId: string } | { dealId: string } | { contactId: string }; seed: MeetingDialogSeed }) {
   const { s, meetings } = useStore();
@@ -24,6 +27,8 @@ export function MeetingsCard({ record, seed }: { record: { companyId: string } |
   const today = todayIn(tz);
   const filter = 'companyId' in record ? { company: record.companyId } : 'dealId' in record ? { deal: record.dealId } : { contact: record.contactId };
   const all = paths.calendar({ view: 'table', user: 'all', from: addDays(today, -365), to: addDays(today, 365), ...filter });
+  const companyId = 'companyId' in record ? record.companyId : null;
+  const { data: visits } = useVisitProgress(companyId ? 'company-visits:' + companyId : null, () => crmApi.visitSummary({ periodType: 'month', companyId: companyId!, all: true }));
 
   return (
     <Section
@@ -38,6 +43,11 @@ export function MeetingsCard({ record, seed }: { record: { companyId: string } |
         </span>
       }
     >
+      {visits && visits.plans.length > 0 && (
+        <span className="vp-company-visits" data-testid="company-visits-this-month" title={`Customer visits held this month for the visit plans of ${visits.plans.map((p) => p.salespersonName).join(', ')}`}>
+          Visits this month: {visits.held} / {visits.planned}
+        </span>
+      )}
       {loading && rows.length === 0 && <span className="meeting-muted">Loading…</span>}
       {error && <span className="meeting-muted">Couldn't load the meetings.</span>}
       {!loading && !error && rows.length === 0 && <span className="meeting-muted">No upcoming meetings.</span>}

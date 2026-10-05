@@ -20,6 +20,7 @@ const Pipeline = lazy(() => import('./screens/Pipeline').then((m) => ({ default:
 const Products = lazy(() => import('./screens/Products').then((m) => ({ default: m.Products })));
 const Profile = lazy(() => import('./screens/Profile').then((m) => ({ default: m.Profile })));
 const Settings = lazy(() => import('./screens/Settings').then((m) => ({ default: m.Settings })));
+const Reports = lazy(() => import('./screens/Reports').then((m) => ({ default: m.Reports })));
 const Today = lazy(() => import('./screens/Today').then((m) => ({ default: m.Today })));
 const VisitPlan = lazy(() => import('./screens/VisitPlan').then((m) => ({ default: m.VisitPlan })));
 const VisitPlans = lazy(() => import('./screens/VisitPlans').then((m) => ({ default: m.VisitPlans })));
@@ -108,6 +109,8 @@ function AppRoutes() {
           <Route path="contacts/:id" element={<Contact />} />
           <Route path="deals/:id" element={<LeadScreen />} />
           <Route path="products" element={<Products />} />
+          <Route path="reports" element={<Navigate to={paths.reports()} replace />} />
+          <Route path="reports/:tab" element={<Reports />} />
           <Route path="settings" element={<Navigate to={paths.settings()} replace />} />
           <Route path="settings/:tab" element={<Settings />} />
           <Route path="profile" element={<Profile />} />
