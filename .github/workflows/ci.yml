@@ -89,8 +89,10 @@ jobs:
       - run: npm run db:migrate
       - run: npm run test:integration
 
-  # The UI in a real browser against the API and PostgreSQL.
+  # The UI in a real browser against the API and PostgreSQL. Not on pull requests (CD-218, ~16
+  # minutes each): it runs on main before images and the deploys, and on demand (Run workflow).
   e2e:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     services:
       postgres:

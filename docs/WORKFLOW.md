@@ -73,8 +73,11 @@ When the checks pass, open a pull request to `main`:
 - Move the Linear issue to **In Review** and link the pull request (Linear links it automatically
   when the branch name or title contains the issue ID).
 
-**GitHub CI** then runs four checks on the pull request: `backend`, `frontend`, `integration` and
-`e2e`. All four must be green before merging.
+**GitHub CI** then runs three checks on the pull request: `backend`, `frontend` and `integration`.
+All three must be green before merging. The `e2e` browser tests (about 16 minutes) don't run on
+pull requests (CD-218). They run on every push to `main`, where `images` and the deploys wait for
+them, and on demand: Actions → **CI / CD** → **Run workflow** on the branch. Run them that way
+before asking for review when a change touches the flows the e2e tests cover.
 
 The image build can also be checked before merging. Run **CI / CD** from the Actions tab against
 the branch and enable **Build both Docker images without publishing them**. The four checks run
@@ -161,7 +164,8 @@ settings on GitHub, not in the code:
   - **Require a pull request before merging** (required approvals: 0 while you are the only
     reviewer; GitHub doesn't let you approve your own pull request)
   - **Require status checks to pass**, with **Require branches to be up to date before merging**;
-    add the checks `backend`, `frontend`, `integration` and `e2e`
+    add the checks `backend`, `frontend` and `integration` (`e2e` is skipped on pull requests,
+    CD-218; don't add it, it would never report on a pull request)
   - **Block force pushes**
 - Bypass list: leave empty, so the rules apply to everyone.
 
