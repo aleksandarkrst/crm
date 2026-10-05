@@ -69,9 +69,11 @@ describe('internal minutes', () => {
 
     // Out of the editor, the text shows formatted.
     await click(mia, '[data-testid=minutes-add-step]');
-    const view = await mia.waitForSelector('[data-testid=minutes-summary-view]');
-    assert.equal(await view.evaluate((el) => el.querySelector('strong')?.textContent), 'pilot');
-    assert.equal(await mia.$eval('[data-testid=minutes-agreements-view]', (el) => el.querySelector('li')?.textContent), 'Pilot starts in November');
+    const view = await mia.waitForSelector('[data-testid=minutes-summary-view] strong');
+    assert.equal(await view.evaluate((el) => el.textContent), 'pilot');
+    // The agreements turn into their formatted view once the click is over.
+    const item = await mia.waitForSelector('[data-testid=minutes-agreements-view] li');
+    assert.equal(await item.evaluate((el) => el.textContent), 'Pilot starts in November');
     // The meeting counts as recorded.
     assert.equal((await api(mia, `/crm/meetings/${meeting.id}`)).internalMinutes, 'recorded');
   });
