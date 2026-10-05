@@ -6,7 +6,7 @@
  * meetings, "Organizer left" until an admin picks one); the calendar and contact filters.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, createTenant, eventually, type Json, mailTo, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, eventually, type Json, mailTo, ok, type Session, signIn } from './helpers';
 
 let owner: Session;
 let admin: Session;
@@ -169,6 +169,11 @@ describe('participants', () => {
     expect(kept.organizerUserId).toBe(carl.userId);
     expect(kept.participants.find((p: Json) => p.userId === carl.userId)).toMatchObject({ deleted: true, name: carl.name });
 
+    // Members can't pick the new organizer (spec 5.3; CD-211), but can still edit the meeting.
+    const refused = await call('PATCH', `/crm/meetings/${organized.id}`, { token: ana.token, tenant, body: { organizerUserId: ana.userId } });
+    expect(refused.status).toBe(403);
+    expect(refused.body.message).toContain('Only admins and owners can change the organizer');
+    expect(await patch(ana, organized.id, { location: 'Room 2' })).toMatchObject({ organizerUserId: null, location: 'Room 2' });
     // An admin picks the new organizer, who is told they were added.
     const fixed = await patch(admin, organized.id, { organizerUserId: bo.userId });
     expect(fixed).toMatchObject({ organizerUserId: bo.userId, organizerName: bo.name });

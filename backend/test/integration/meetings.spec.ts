@@ -245,6 +245,14 @@ describe('who may change and delete meetings', () => {
     expect((await ok('PATCH', `/crm/meetings/${m.id}`, { ...as(ana), body: { title: 'Ana edits' } })).title).toBe('Ana edits');
     expect((await ok('PATCH', `/crm/meetings/${m.id}`, { ...as(admin), body: { title: 'Admin edits' } })).title).toBe('Admin edits');
 
+    // Changing the organizer is for admins and owners (CD-211); sending the same one again is fine.
+    const handover = await create(ana, co.id);
+    expect((await call('PATCH', `/crm/meetings/${handover.id}`, { ...as(ana), body: { organizerUserId: bo.userId } })).status).toBe(403);
+    expect((await ok('PATCH', `/crm/meetings/${handover.id}`, { ...as(ana), body: { organizerUserId: ana.userId, title: 'Same organizer' } })).title).toBe('Same organizer');
+    expect((await ok('PATCH', `/crm/meetings/${handover.id}`, { ...as(admin), body: { organizerUserId: bo.userId } })).organizerUserId).toBe(bo.userId);
+    // Creating stays open: a member may schedule a meeting organized by someone else.
+    expect((await create(ana, co.id, { organizerUserId: bo.userId })).organizerUserId).toBe(bo.userId);
+
     // Only admins and owners delete; members can't, not even the organizer.
     const own = await create(bo, co.id);
     expect((await call('DELETE', `/crm/meetings/${own.id}`, as(bo))).status).toBe(403);

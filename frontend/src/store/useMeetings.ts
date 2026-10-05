@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ApiMeeting, MeetingQuery } from '../lib/api';
 import { meetingKey } from './meetings';
 import { useStore } from './store';
@@ -8,7 +8,7 @@ import { useStore } from './store';
  * list without loading it again. `query` may be a new object on every render; its key decides
  * when it is loaded. null loads nothing.
  */
-export function useMeetingList(query: MeetingQuery | null): { meetings: ApiMeeting[]; loading: boolean; more: boolean; error: string | null } {
+export function useMeetingList(query: MeetingQuery | null): { meetings: ApiMeeting[]; loading: boolean; more: boolean; error: string | null; loadMore: () => Promise<void> } {
   const { s, meetings: actions } = useStore();
   const key = query ? meetingKey(query) : '';
   // The store's action object is rebuilt on navigation; the list is (re)loaded only when the key changes.
@@ -23,7 +23,10 @@ export function useMeetingList(query: MeetingQuery | null): { meetings: ApiMeeti
   const list = key ? s.meetingLists[key] : undefined;
   const cache = s.meetings;
   const rows = useMemo(() => (list ? list.ids.map((id) => cache[id]).filter((m): m is ApiMeeting => !!m) : []), [list, cache]);
-  return { meetings: rows, loading: !!key && (!list || list.loading), more: !!list?.more, error: list?.error ?? null };
+  const more = useRef(actions.loadMore);
+  more.current = actions.loadMore;
+  const loadMore = useCallback(() => more.current(key), [key]);
+  return { meetings: rows, loading: !!key && (!list || list.loading), more: !!list?.more, error: list?.error ?? null, loadMore };
 }
 
 /**

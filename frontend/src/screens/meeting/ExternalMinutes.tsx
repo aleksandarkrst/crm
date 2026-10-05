@@ -28,7 +28,7 @@ const subjectLine = (s: string) => s.replace(/[\r\n]+/g, ' ').trim();
 
 /**
  * The external minutes (CD-133): a text for the customer, separate from the internal minutes.
- * The first time anyone opens it, it is filled in from a template (the meeting, both sides, the
+ * The first time someone who may edit it opens it once the meeting is held, it is filled in from a template (the meeting, both sides, the
  * agreements and next steps without owners); after that only "Copy from internal minutes" copies
  * anything. It saves itself like the internal minutes. Once the meeting is held, the people who
  * may change it send it by email: tick the customer's people (those with an email), add members
@@ -42,7 +42,8 @@ export function ExternalMinutes({ meeting }: { meeting: ApiMeeting }) {
   const actions = useRef(meetings);
   actions.current = meetings;
 
-  // Read when the tab opens, and again when the text (minutesUpdatedAt) or a delivery (sendsUpdatedAt) changed.
+  // Read when the tab opens, and again when the text (minutesUpdatedAt), a delivery (sendsUpdatedAt) or the
+  // status changed: the template is filled in once the meeting is held, for someone who may edit it (CD-211).
   useEffect(() => {
     let alive = true;
     actions.current.loadExternal(meeting.id).then(
@@ -56,7 +57,7 @@ export function ExternalMinutes({ meeting }: { meeting: ApiMeeting }) {
     return () => {
       alive = false;
     };
-  }, [meeting.id, meeting.minutesUpdatedAt, meeting.sendsUpdatedAt]);
+  }, [meeting.id, meeting.status, meeting.minutesUpdatedAt, meeting.sendsUpdatedAt]);
 
   if (!stored) {
     return (

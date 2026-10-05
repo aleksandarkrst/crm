@@ -227,6 +227,30 @@ export function meetingActions(ctx: Ctx) {
     }
   };
 
+  /**
+   * The next page of a list (the Table's "Load more", CD-211): the query again from the rows
+   * already shown, added at the end. A reload of the list (a live update) starts from the first page.
+   */
+  const loadMore = async (key: string) => {
+    const list = cur().meetingLists[key];
+    if (!list || list.loading || !list.more) return;
+    const seq = rt.seq.get(key) ?? 0;
+    try {
+      const res = await crmApi.meetings.list({ ...list.query, offset: list.ids.length });
+      if (rt.seq.get(key) !== seq || !rt.watchers.has(key)) return;
+      set((s) => {
+        const now = s.meetingLists[key];
+        if (!now) return {};
+        const meetings = { ...s.meetings };
+        for (const m of res.meetings) meetings[m.id] = m;
+        const seen = new Set(now.ids);
+        return { meetings, meetingLists: { ...s.meetingLists, [key]: { ...now, ids: [...now.ids, ...res.meetings.map((m) => m.id).filter((id) => !seen.has(id))], more: res.more } } };
+      });
+    } catch (err) {
+      flash("Couldn't load more meetings: " + ctx.errText(err), 7000);
+    }
+  };
+
   /** A screen shows this list: load it (again); the returned function says it is gone. */
   const watch = (key: string, query: MeetingQuery) => {
     rt.watchers.set(key, (rt.watchers.get(key) ?? 0) + 1);
@@ -495,6 +519,7 @@ export function meetingActions(ctx: Ctx) {
 
   return {
     watch,
+    loadMore,
     view,
     fetchOne,
     onLive,

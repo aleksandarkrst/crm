@@ -53,6 +53,8 @@ describe('external minutes by email', () => {
   });
 
   step('the text starts from the template and saves itself after editing', async () => {
+    // The template is filled in once the meeting is held (CD-211): the open tab reads it again.
+    await page.waitForFunction(() => document.querySelector('[data-testid=external-subject]')?.value.startsWith('Minutes: '), { timeout: 10_000 });
     const subject = await page.$eval('[data-testid=external-subject]', (el) => el.value);
     assert.match(subject, /^Minutes: Pilot review, /);
     await page.waitForSelector('[data-testid=external-body-view]');
