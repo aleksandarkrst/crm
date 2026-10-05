@@ -60,7 +60,8 @@ describe('calendar performance', () => {
 
   step(`the month view shows them all within ${BUDGET_MS} ms`, async () => {
     await page.goto(`${BASE_URL}/calendar?view=month&date=${BEFORE}`, { waitUntil: 'networkidle0' });
-    await page.waitForFunction(() => /^0 meetings/.test(document.querySelector('.cal-meta')?.textContent ?? ''), { timeout: 15_000 });
+    // The grid of the month before also shows the first days of this month, so it is not empty: wait for it to finish loading.
+    await page.waitForFunction(() => /^\d+ meetings?/.test(document.querySelector('.cal-meta')?.textContent ?? ''), { timeout: 15_000 });
 
     await page.evaluate(() => {
       window.__perfStart = performance.now();
