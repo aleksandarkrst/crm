@@ -581,7 +581,10 @@ export interface ApiMeeting {
   internalMinutes: 'missing' | 'recorded';
   /** The minutes' version, null before anyone wrote them: an open minutes tab reads them again when it changes. */
   minutesUpdatedAt: string | null;
+  /** The external minutes' latest send (CD-133). */
   externalDelivery: 'not_sent' | 'queued' | 'sent' | 'failed';
+  /** Moves whenever a send's delivery changes: an open send log reads again. */
+  sendsUpdatedAt: string | null;
   createdByUserId: string | null;
   createdAt: string;
   /** The version: send it back as If-Match when changing the meeting. */
@@ -624,6 +627,63 @@ export interface InternalMinutesInput {
   summary?: string;
   agreements?: string;
   nextSteps?: Omit<ApiMeetingNextStep, 'taskId'>[];
+}
+export type MinutesDeliveryStatus = 'queued' | 'sent' | 'failed';
+/** One person a send of the external minutes went to: a contact (to) or a member (cc). */
+export interface ApiMinutesRecipient {
+  id: string;
+  kind: 'to' | 'cc';
+  contactId: string | null;
+  userId: string | null;
+  name: string;
+  email: string;
+  status: MinutesDeliveryStatus;
+  error: string | null;
+  sentAt: string | null;
+}
+/** One send of the external minutes (CD-133): an exact copy of what was sent. */
+export interface ApiMinutesSend {
+  id: string;
+  meetingId: string;
+  senderUserId: string | null;
+  senderName: string;
+  senderEmail: string;
+  subject: string;
+  body: string;
+  language: 'en' | 'sr';
+  /** failed when any recipient failed, queued while any is queued, else sent. */
+  status: MinutesDeliveryStatus;
+  recipients: ApiMinutesRecipient[];
+  createdAt: string;
+}
+/** The external minutes' text (CD-133). */
+export interface ApiExternalMinutes {
+  subject: string;
+  body: string;
+  prefilled: boolean;
+  /** The version (If-Match); null before it was written. */
+  updatedAt: string | null;
+  updatedByName: string | null;
+  language: 'en' | 'sr';
+  lastSend: ApiMinutesSend | null;
+  changedSinceLastSend: boolean;
+}
+/** Preview and send: contacts (external participants with an email) and members to copy. */
+export interface MinutesEmailInput {
+  subject: string;
+  body: string;
+  toContactIds: string[];
+  ccUserIds: string[];
+}
+/** The email exactly as it goes out. */
+export interface ApiMinutesEmail {
+  from: string;
+  replyTo: string;
+  to: { name: string; email: string }[];
+  cc: { name: string; email: string }[];
+  subject: string;
+  text: string;
+  html: string;
 }
 /** GET /crm/meetings: meetings overlapping [from, to), or by record or ids. */
 export interface MeetingQuery {
@@ -775,5 +835,14 @@ export const crmApi = {
     saveMinutes: (id: string, input: InternalMinutesInput, version: string | null) =>
       api<ApiInternalMinutes>(`/crm/meetings/${id}/minutes/internal`, { method: 'PUT', json: input, headers: ifMatch(version ?? '1970-01-01T00:00:00.000Z') }),
     stepTask: (id: string, stepId: string) => api<{ minutes: ApiInternalMinutes; task: ApiDealTask }>(`/crm/meetings/${id}/minutes/next-steps/${stepId}/task`, { method: 'POST' }),
+    /** External minutes (CD-133): the first read fills in the template. */
+    external: (id: string) => api<ApiExternalMinutes>(`/crm/meetings/${id}/minutes/external`),
+    saveExternal: (id: string, input: { subject?: string; body?: string }, version: string | null) =>
+      api<ApiExternalMinutes>(`/crm/meetings/${id}/minutes/external`, { method: 'PUT', json: input, headers: ifMatch(version ?? '1970-01-01T00:00:00.000Z') }),
+    copyInternal: (id: string) => api<{ subject: string; body: string }>(`/crm/meetings/${id}/minutes/external/copy-internal`, { method: 'POST' }),
+    previewMinutes: (id: string, input: MinutesEmailInput) => api<ApiMinutesEmail>(`/crm/meetings/${id}/minutes/preview`, { method: 'POST', json: input }),
+    sendMinutes: (id: string, input: MinutesEmailInput) => api<ApiMinutesSend>(`/crm/meetings/${id}/minutes/send`, { method: 'POST', json: input }),
+    sends: (id: string) => api<ApiMinutesSend[]>(`/crm/meetings/${id}/minutes/sends`),
+    retrySend: (id: string, sendId: string) => api<ApiMinutesSend>(`/crm/meetings/${id}/minutes/sends/${sendId}/retry`, { method: 'POST' }),
   },
 };

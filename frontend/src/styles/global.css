@@ -545,3 +545,29 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .minutes-step-read { font-size: 13.5px; overflow-wrap: anywhere; }
 .minutes-task-link { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 .minutes-add { align-self: flex-start; }
+
+/* ---- external minutes (CD-133) ---- */
+.ext-last { display: flex; flex-direction: column; gap: 8px; font-size: 13px; background: var(--bg-soft); border-radius: 8px; padding: 10px 12px; overflow-wrap: anywhere; }
+.ext-changed { margin-left: 8px; }
+.ext-status { display: flex; flex-direction: column; gap: 6px; }
+.ext-status-row { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; min-width: 0; overflow-wrap: anywhere; }
+.ext-error { color: var(--danger); }
+.ext-retry { align-self: flex-start; padding: 6px 12px; }
+.ext-people { display: flex; flex-direction: column; gap: 6px; }
+.ext-person { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; min-width: 0; overflow-wrap: anywhere; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.ext-person.is-off { cursor: default; color: var(--muted); }
+.ext-add-cc { max-width: 280px; padding: 7px 9px; }
+.ext-send-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ext-preview-head { display: grid; grid-template-columns: 76px 1fr; gap: 6px 12px; margin: 0; font-size: 13px; }
+.ext-preview-head dt { color: var(--text-2); font-weight: 600; }
+.ext-preview-head dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.ext-preview-body { width: 100%; height: 360px; border: 1px solid var(--border); border-radius: 8px; background: var(--white); }
+.ext-log { display: flex; flex-direction: column; gap: 12px; margin-top: 20px; }
+.ext-log-item { border-top: 1px solid var(--divider); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; min-width: 0; }
+.ext-log-item summary { cursor: pointer; color: var(--brand); font-weight: 600; font-size: 12.5px; }
+.ext-log-body { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg-soft); border-radius: 8px; padding: 10px 12px; margin-top: 6px; font-size: 13px; }
+@media (max-width: 600px) {
+  .ext-preview-head { grid-template-columns: 1fr; gap: 2px; }
+  .ext-preview-head dd { margin-bottom: 6px; }
+  .ext-preview-body { height: 300px; }
+}

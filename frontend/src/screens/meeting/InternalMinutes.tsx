@@ -325,7 +325,7 @@ function link(v: string, a: number, b: number, url: string): Edit {
  * A text with the minutes' formatting (bold, bullet lists, links; see RichText): a textarea with a
  * small toolbar while it is edited, else the formatted text (click to edit).
  */
-function RichField({
+export function RichField({
   label,
   testId,
   value,

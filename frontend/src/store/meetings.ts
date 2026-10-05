@@ -15,14 +15,22 @@
  * Internal minutes (CD-132) are read per meeting into `s.meetingMinutes` when its minutes tab
  * opens. Their changes report the meeting (live hint `meeting`); its `minutesUpdatedAt` then
  * tells the open tab to read them again.
+ *
+ * External minutes (CD-133) and their send log are read by the open External minutes tab (and
+ * the History tab) through these actions, and kept there: a send's delivery changing moves the
+ * meeting's `sendsUpdatedAt` (live hint `meeting`), the external text its `minutesUpdatedAt`.
  */
 import {
+  type ApiExternalMinutes,
   type ApiInternalMinutes,
   type ApiMeeting,
+  type ApiMinutesEmail,
+  type ApiMinutesSend,
   ApiError,
   type ApiRole,
   crmApi,
   type InternalMinutesInput,
+  type MinutesEmailInput,
   type MeetingInput,
   type MeetingQuery,
   type MeetingStatus,
@@ -406,6 +414,69 @@ export function meetingActions(ctx: Ctx) {
     }
   };
 
+  // ------------------------------------------------------------ external minutes (CD-133)
+  /** The external text (the first read fills in the template); throws when it can't be read. */
+  const loadExternal = (id: string) => crmApi.meetings.external(id);
+  /**
+   * Saves the subject and/or body based on `version`. `{ saved }`, `{ conflict }` (shown; the text
+   * read again, null if that failed) or null for another failure (shown).
+   */
+  const saveExternal = async (id: string, input: { subject?: string; body?: string }, version: string | null): Promise<{ saved: ApiExternalMinutes } | { conflict: ApiExternalMinutes | null } | null> => {
+    try {
+      return { saved: await crmApi.meetings.saveExternal(id, input, version) };
+    } catch (err) {
+      const conflict = ctx.conflictText(err);
+      flash(conflict ?? `Not saved: the external minutes (${ctx.errText(err)}).`, conflict ? 10_000 : 7000);
+      if (!conflict) return null;
+      return { conflict: await loadExternal(id).catch(() => null) };
+    }
+  };
+  /** "Copy from internal minutes": the template from the internal minutes as they are now; null (after saying why) when it failed. */
+  const copyInternal = async (id: string): Promise<string | null> => {
+    try {
+      return (await crmApi.meetings.copyInternal(id)).body;
+    } catch (err) {
+      flash("Couldn't copy the internal minutes: " + ctx.errText(err), 7000);
+      return null;
+    }
+  };
+  /** The exact email; throws an Error with the API's reason (the dialog shows it). */
+  const previewMinutes = async (id: string, input: MinutesEmailInput): Promise<ApiMinutesEmail> => {
+    try {
+      return await crmApi.meetings.previewMinutes(id, input);
+    } catch (err) {
+      throw new Error(ctx.errText(err), { cause: err });
+    }
+  };
+  /** Sends the minutes; the meeting (delivery) and the deal's timeline follow. Throws with the API's reason. */
+  const sendMinutes = async (id: string, input: MinutesEmailInput): Promise<ApiMinutesSend> => {
+    let sent: ApiMinutesSend;
+    try {
+      sent = await crmApi.meetings.sendMinutes(id, input);
+    } catch (err) {
+      throw new Error(ctx.errText(err), { cause: err });
+    }
+    const m = cur().meetings[id];
+    if (m?.dealId) ctx.dealChanged(m.dealId);
+    void fetchOne(id).catch(() => undefined);
+    flash(`Minutes sent to ${sent.recipients.filter((r) => r.kind === 'to').map((r) => r.name).join(', ')}`);
+    return sent;
+  };
+  /** Every send, newest first; throws when they can't be read. */
+  const loadSends = (id: string) => crmApi.meetings.sends(id);
+  /** Retry the failed recipients of a send; null (after saying why) when refused. */
+  const retrySend = async (id: string, sendId: string): Promise<ApiMinutesSend | null> => {
+    try {
+      const res = await crmApi.meetings.retrySend(id, sendId);
+      void fetchOne(id).catch(() => undefined);
+      flash('Sending again to the recipients that failed');
+      return res;
+    } catch (err) {
+      flash('Not retried: ' + ctx.errText(err), 7000);
+      return null;
+    }
+  };
+
   /**
    * Other meetings of these members that overlap the time (the dialog's warning, spec 4.4). It
    * never blocks saving.
@@ -440,6 +511,13 @@ export function meetingActions(ctx: Ctx) {
     loadMinutes,
     saveMinutes,
     createStepTask,
+    loadExternal,
+    saveExternal,
+    copyInternal,
+    previewMinutes,
+    sendMinutes,
+    loadSends,
+    retrySend,
     /** Opens the New meeting dialog (prefilled), or the dialog editing a meeting (`seed.id`). */
     openDialog: (seed: MeetingDialogSeed = {}) => set({ meetingDialog: seed }),
     closeDialog: () => set({ meetingDialog: null }),
