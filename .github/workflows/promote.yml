@@ -2,7 +2,8 @@
 # staging and passed its smoke test there. Run it after checking the change on staging:
 #   Actions → Promote to production → Run workflow   (or: gh workflow run promote.yml)
 # The same images go out: the backend image is shared and the production frontend image was
-# built from the same commit.
+# built from the same commit. The browser tests (e2e.yml) run on that commit first; production is
+# deployed only when they pass (CD-218: they run nowhere else automatically).
 name: Promote to production
 
 on:
@@ -41,8 +42,14 @@ jobs:
           echo "::error::No successful staging deployment${WANTED:+ of $WANTED}. Only commits that passed staging can be promoted."
           exit 1
 
-  deploy:
+  e2e:
     needs: [pick]
+    uses: ./.github/workflows/e2e.yml
+    with: { ref: '${{ needs.pick.outputs.sha }}' }
+    permissions: { contents: read }
+
+  deploy:
+    needs: [pick, e2e]
     if: vars.DEPLOY_ENABLED == 'true'
     uses: ./.github/workflows/deploy.yml
     with: { environment: production, app_dir: /opt/crm, sha: '${{ needs.pick.outputs.sha }}', verify: true }
