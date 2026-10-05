@@ -6,6 +6,7 @@ import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
+import { JobsService } from '../../../shared/events/jobs.service';
 import {
   companies,
   contacts,
@@ -25,6 +26,7 @@ import { IdList, nonEmptyPatch, optionalText } from '../../../shared/validation/
 import { ActivitiesService } from '../deals/activities.service';
 import { RecordHistoryService } from '../history/record-history.service';
 import { userNameOf } from '../owner';
+import type { InviteKind } from './meeting-invite';
 import { canManageMeeting, isNotClosed, type MeetingChange, meetingChangeError, NOT_CLOSED_AFTER_MS } from './meeting-rules';
 
 const instant = z.iso.datetime({ offset: true });
@@ -159,6 +161,11 @@ interface People {
  * create them; changing one takes an owner or admin, its organizer or an internal participant
  * (meeting-rules.ts). A meeting linked to a deal writes its timeline entries in the same
  * transaction: scheduled, held (which counts as contact with the customer) and cancelled.
+ *
+ * Internal participants are emailed (with an .ics) by the worker, through "crm.meeting-invite" jobs
+ * queued in the same transaction (CD-131): when someone else adds them to a planned meeting, and
+ * when a planned meeting's time or place changes, it is cancelled or restored. Customers never
+ * get these emails.
  */
 @Injectable()
 export class MeetingsService {
@@ -167,6 +174,7 @@ export class MeetingsService {
     private readonly audit: AuditService,
     private readonly activities: ActivitiesService,
     private readonly changes: RecordHistoryService,
+    private readonly jobs: JobsService,
   ) {}
 
   list(ctx: TenantContext, query: MeetingsQuery) {
@@ -236,7 +244,8 @@ export class MeetingsService {
           })
           .returning();
         const meeting = row!;
-        await this.syncParticipants(tx, ctx, meeting.id, organizerUserId, found, internal, input.externalContactIds ?? []);
+        const { addedUserIds } = await this.syncParticipants(tx, ctx, meeting.id, organizerUserId, found, internal, input.externalContactIds ?? []);
+        await this.invite(tx, ctx, meeting.id, 'added', addedUserIds);
         if (meeting.dealId) {
           await this.activities.record(tx, ctx, meeting.dealId, { channel: 'MT', title: `Meeting scheduled · ${meeting.title}`, detail: await this.when(tx, ctx, meeting) });
         }
@@ -274,11 +283,21 @@ export class MeetingsService {
         const patch: PgUpdateSetSource<typeof meetings> = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
         if (input.startsAt !== undefined) patch.startsAt = startsAt;
         if (input.endsAt !== undefined) patch.endsAt = endsAt;
-        const participantsChanged = internalUserIds
+        // A planned meeting moved to another time or place: its participants' calendars get the new version.
+        const planned = current.status === 'planned';
+        const moved =
+          planned &&
+          (startsAt.getTime() !== current.startsAt.getTime() || endsAt.getTime() !== current.endsAt.getTime() || (input.location !== undefined && (input.location ?? null) !== current.location));
+        if (moved) patch.icsSequence = sql`${meetings.icsSequence} + 1`;
+        const sync = internalUserIds
           ? await this.syncParticipants(tx, ctx, id, organizerUserId, found, internalUserIds, externalContactIds)
           : await this.syncParticipants(tx, ctx, id, organizerUserId, found, [], externalContactIds, true);
         // A change of people alone still moves the version, so the next If-Match is current.
-        if (Object.keys(patch).length || participantsChanged) await tx.update(meetings).set(Object.keys(patch).length ? patch : { updatedAt: new Date() }).where(eq(meetings.id, id));
+        if (Object.keys(patch).length || sync.changed) await tx.update(meetings).set(Object.keys(patch).length ? patch : { updatedAt: new Date() }).where(eq(meetings.id, id));
+        if (planned) {
+          await this.invite(tx, ctx, id, 'added', sync.addedUserIds);
+          if (moved) await this.invite(tx, ctx, id, 'updated', (await this.internalUserIds(tx, id)).filter((u) => !sync.addedUserIds.includes(u)));
+        }
         await this.audit.record(tx, ctx, { action: 'meeting.updated', entityType: 'meeting', entityId: id, data: input });
         return this.load(tx, ctx, id);
       })
@@ -297,7 +316,8 @@ export class MeetingsService {
   /** Planned → cancelled, with an optional reason. */
   cancel(ctx: TenantContext, id: string, input: CancelMeeting): Promise<ApiMeeting> {
     const reason = input.reason ?? null;
-    return this.changeStatus(ctx, id, 'cancel', { status: 'cancelled', cancelledAt: new Date(), cancelReason: reason }, async (tx, m) => {
+    return this.changeStatus(ctx, id, 'cancel', { status: 'cancelled', cancelledAt: new Date(), cancelReason: reason, icsSequence: sql`${meetings.icsSequence} + 1` }, async (tx, m) => {
+      await this.invite(tx, ctx, id, 'cancelled', await this.internalUserIds(tx, id));
       if (!m.dealId) return;
       const when = await this.when(tx, ctx, m);
       await this.activities.record(tx, ctx, m.dealId, { channel: 'MT', title: `Meeting cancelled · ${m.title}`, detail: reason ? `${when}\nReason: ${reason}` : when });
@@ -309,9 +329,11 @@ export class MeetingsService {
     return this.changeStatus(ctx, id, 'undo-held', { status: 'planned', heldAt: null });
   }
 
-  /** Cancelled → planned ("Restore"). */
+  /** Cancelled → planned ("Restore"). The participants' calendars get it back (an update). */
   restore(ctx: TenantContext, id: string): Promise<ApiMeeting> {
-    return this.changeStatus(ctx, id, 'restore', { status: 'planned', cancelledAt: null, cancelReason: null });
+    return this.changeStatus(ctx, id, 'restore', { status: 'planned', cancelledAt: null, cancelReason: null, icsSequence: sql`${meetings.icsSequence} + 1` }, async (tx) => {
+      await this.invite(tx, ctx, id, 'updated', await this.internalUserIds(tx, id));
+    });
   }
 
   /** Owners and admins only (the route says so). Participants go with the meeting. */
@@ -349,17 +371,33 @@ export class MeetingsService {
   private async lockForChange(tx: Tx, ctx: TenantContext, id: string, change: MeetingChange): Promise<MeetingRow> {
     const [meeting] = await tx.select().from(meetings).where(eq(meetings.id, id)).for('update');
     if (!meeting) throw new NotFoundException('Meeting not found');
-    const internal = await tx
-      .select({ userId: meetingParticipants.userId })
-      .from(meetingParticipants)
-      .where(and(eq(meetingParticipants.meetingId, id), eq(meetingParticipants.kind, 'internal')));
-    const internalUserIds = internal.flatMap((p) => (p.userId ? [p.userId] : []));
+    const internalUserIds = await this.internalUserIds(tx, id);
     if (!canManageMeeting(ctx, { organizerUserId: meeting.organizerUserId, internalUserIds })) {
       throw new ForbiddenException('Only its organizer, its internal participants, admins and owners can change this meeting');
     }
     const error = meetingChangeError(change, meeting, new Date());
     if (error) throw new ConflictException(error);
     return meeting;
+  }
+
+  /** The members on the meeting (organizer included). */
+  private async internalUserIds(tx: Tx, meetingId: string): Promise<string[]> {
+    const rows = await tx
+      .select({ userId: meetingParticipants.userId })
+      .from(meetingParticipants)
+      .where(and(eq(meetingParticipants.meetingId, meetingId), eq(meetingParticipants.kind, 'internal')));
+    return rows.flatMap((p) => (p.userId ? [p.userId] : []));
+  }
+
+  /**
+   * Queues the email to each of these members but the caller, one job each (a retry never emails
+   * the others twice). The worker decides at send time whether it still goes (meeting-jobs.ts).
+   */
+  private async invite(tx: Tx, ctx: TenantContext, meetingId: string, kind: InviteKind, userIds: readonly string[]) {
+    for (const userId of new Set(userIds)) {
+      if (userId === ctx.userId) continue;
+      await this.jobs.send('crm.meeting-invite', { tenantId: ctx.tenantId, meetingId, userIds: [userId], actorUserId: ctx.userId, kind }, tx);
+    }
   }
 
   /** The company must exist; a deal must exist and belong to that company (400 otherwise). */
@@ -394,7 +432,7 @@ export class MeetingsService {
    * Makes the meeting's people match: `internal` (always including the organizer) and, when given,
    * `external`. With `keepInternal`, only the organizer is added if missing and nobody is removed.
    * Rows of deleted contacts and former members (no id any more) are kept. Returns whether
-   * anything changed.
+   * anything changed, and the members added.
    */
   private async syncParticipants(
     tx: Tx,
@@ -405,7 +443,7 @@ export class MeetingsService {
     internal: string[],
     external: string[] | undefined,
     keepInternal = false,
-  ): Promise<boolean> {
+  ): Promise<{ changed: boolean; addedUserIds: string[] }> {
     const existing = await tx.select().from(meetingParticipants).where(eq(meetingParticipants.meetingId, meetingId));
     const wantedUsers = new Set(internal);
     if (organizerUserId) wantedUsers.add(organizerUserId);
@@ -423,7 +461,7 @@ export class MeetingsService {
       ...addContacts.map((contactId) => ({ kind: 'external' as const, userId: null, contactId, name: found.contacts.get(contactId)!.name, email: found.contacts.get(contactId)!.email })),
     ];
     if (rows.length) await tx.insert(meetingParticipants).values(rows.map((r) => ({ ...r, tenantId: ctx.tenantId, meetingId })));
-    return remove.length > 0 || rows.length > 0;
+    return { changed: remove.length > 0 || rows.length > 0, addedUserIds: rows.flatMap((r) => (r.userId ? [r.userId] : [])) };
   }
 
   /** "Tue 6 Oct 2026, 10:00–11:00 · <location>", in the workspace time zone, for the deal's timeline. */
