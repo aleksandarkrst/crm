@@ -129,7 +129,7 @@ export const mapProfile = (p: ApiProfile): Profile => ({
 
 /** Members, then pending invitations with their email status. */
 export const mapTeam = (apiTeam: { members: ApiMember[]; invitations: ApiInvitation[] }): TeamMember[] => [
-  ...apiTeam.members.map<TeamMember>((m) => ({ id: m.userId, name: m.displayName || m.email || 'Member', email: m.email ?? '', role: ROLE_LABEL[m.role], status: 'Active' })),
+  ...apiTeam.members.map<TeamMember>((m) => ({ id: m.userId, name: m.displayName || m.email || 'Member', email: m.email ?? '', role: ROLE_LABEL[m.role], status: 'Active', employeeId: m.employeeId ?? null })),
   ...apiTeam.invitations.map<TeamMember>((i) => ({
     id: i.id,
     name: i.email,

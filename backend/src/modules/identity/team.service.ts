@@ -1,18 +1,16 @@
 import { BadRequestException, ConflictException, ForbiddenException, GoneException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, eq, gt, isNull, type SQL, sql } from 'drizzle-orm';
-import { createHash, randomBytes } from 'node:crypto';
+import { and, asc, eq, isNull, type SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { ENV, type Env } from '../../infrastructure/config/config.module';
 import type { SecretBox } from '../../infrastructure/crypto/secret-box';
 import { AuditService } from '../../shared/audit/audit.service';
 import { type AuthUser, hasRole, type TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
-import { INVITATION_ROLES, invitations, MEMBERSHIP_ROLES, memberships, tenants, users } from '../../shared/database/schema';
+import { employees, INVITATION_ROLES, invitations, MEMBERSHIP_ROLES, memberships, tenants, users } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
-import { linkNewMember, unlinkMember } from '../people';
+import { linkNewMember } from '../people';
 import { inviteLinkBox } from './invitation-email';
-
-const INVITE_TTL_DAYS = 7;
+import { createInvitation, hashInviteToken, invitationColumns, inviteExpiry, keepAnOwner, pendingInvitation as pending, removeMembership } from './membership';
 
 export const CreateInvitation = z.object({
   email: z.email().transform((e) => e.trim().toLowerCase()),
@@ -22,24 +20,7 @@ export const UpdateMember = z.object({ role: z.enum(MEMBERSHIP_ROLES) });
 export type CreateInvitation = z.infer<typeof CreateInvitation>;
 export type UpdateMember = z.infer<typeof UpdateMember>;
 
-const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
-const pending = () => and(isNull(invitations.acceptedAt), isNull(invitations.revokedAt), gt(invitations.expiresAt, sql`now()`));
-const expiry = () => new Date(Date.now() + INVITE_TTL_DAYS * 86_400_000);
 const NO_STORED_LINK = 'This invitation was created before invite links were kept, so it can only be withdrawn. Withdraw it and invite them again.';
-
-/** What the Team tab shows about a pending invitation, including its email (CD-7). */
-const invitationColumns = {
-  id: invitations.id,
-  email: invitations.email,
-  role: invitations.role,
-  expiresAt: invitations.expiresAt,
-  createdAt: invitations.createdAt,
-  emailStatus: invitations.emailStatus,
-  emailSentAt: invitations.emailSentAt,
-  emailError: invitations.emailError,
-  /** False for invitations from before CD-7: no stored link to resend or copy. */
-  hasLink: sql<boolean>`${invitations.tokenSealed} is not null`,
-};
 
 /**
  * Team management: members of a tenant and invitations to join it.
@@ -56,24 +37,28 @@ export class TeamService {
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
     private readonly jobs: JobsService,
-    @Inject(ENV) env: Env,
+    @Inject(ENV) private readonly env: Env,
   ) {
     this.box = inviteLinkBox(env);
   }
 
-  async list(ctx: TenantContext) {
-    const members = await this.database.db
-      .select({ userId: users.id, email: users.email, displayName: users.displayName, role: memberships.role, joinedAt: memberships.createdAt })
-      .from(memberships)
-      .innerJoin(users, eq(users.id, memberships.userId))
-      .where(eq(memberships.tenantId, ctx.tenantId))
-      .orderBy(asc(memberships.createdAt));
-    const invites = await this.database.db
-      .select(invitationColumns)
-      .from(invitations)
-      .where(and(eq(invitations.tenantId, ctx.tenantId), pending()))
-      .orderBy(asc(invitations.createdAt));
-    return { members, invitations: invites };
+  /** Members (with their employee record, milestone 13: the Team tab links to the card) and pending invitations. */
+  list(ctx: TenantContext) {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const members = await tx
+        .select({ userId: users.id, email: users.email, displayName: users.displayName, role: memberships.role, joinedAt: memberships.createdAt, employeeId: employees.id })
+        .from(memberships)
+        .innerJoin(users, eq(users.id, memberships.userId))
+        .leftJoin(employees, and(eq(employees.userId, memberships.userId), eq(employees.tenantId, memberships.tenantId)))
+        .where(eq(memberships.tenantId, ctx.tenantId))
+        .orderBy(asc(memberships.createdAt));
+      const invites = await tx
+        .select(invitationColumns)
+        .from(invitations)
+        .where(and(eq(invitations.tenantId, ctx.tenantId), pending()))
+        .orderBy(asc(invitations.createdAt));
+      return { members, invitations: invites };
+    });
   }
 
   /**
@@ -81,38 +66,7 @@ export class TeamService {
    * link too (job "identity.invitation-email", queued in this transaction).
    */
   invite(ctx: TenantContext, input: CreateInvitation) {
-    return this.database.withTenant(ctx.tenantId, async (tx) => {
-      const [existing] = await tx
-        .select({ userId: users.id })
-        .from(memberships)
-        .innerJoin(users, eq(users.id, memberships.userId))
-        .where(and(eq(memberships.tenantId, ctx.tenantId), sql`lower(${users.email}) = ${input.email}`));
-      if (existing) throw new ConflictException(`${input.email} is already a member`);
-
-      // A new invitation replaces any pending one for the same address.
-      await tx
-        .update(invitations)
-        .set({ revokedAt: new Date() })
-        .where(and(eq(invitations.tenantId, ctx.tenantId), eq(invitations.email, input.email), pending()));
-
-      const token = randomBytes(32).toString('base64url');
-      const [row] = await tx
-        .insert(invitations)
-        .values({
-          tenantId: ctx.tenantId,
-          email: input.email,
-          role: input.role,
-          tokenHash: hashToken(token),
-          invitedByUserId: ctx.userId,
-          expiresAt: expiry(),
-          tokenSealed: this.box?.seal(token) ?? null,
-          emailStatus: this.box ? 'queued' : null,
-        })
-        .returning(invitationColumns);
-      if (this.box) await this.jobs.send('identity.invitation-email', { tenantId: ctx.tenantId, invitationId: row!.id }, tx);
-      await this.audit.record(tx, ctx, { action: 'invitation.created', entityType: 'invitation', entityId: row!.id, data: { email: input.email, role: input.role } });
-      return { invitation: row!, token };
-    });
+    return this.database.withTenant(ctx.tenantId, (tx) => createInvitation(tx, { jobs: this.jobs, audit: this.audit, env: this.env }, ctx, input));
   }
 
   /** Emails a pending invitation again, with the same link, and gives it another 7 days. */
@@ -122,7 +76,7 @@ export class TeamService {
       if (!found.tokenSealed || !this.box?.open(found.tokenSealed)) throw new ConflictException(NO_STORED_LINK);
       const [row] = await tx
         .update(invitations)
-        .set({ emailStatus: 'queued', emailError: null, expiresAt: expiry() })
+        .set({ emailStatus: 'queued', emailError: null, expiresAt: inviteExpiry() })
         .where(and(eq(invitations.id, id), eq(invitations.tenantId, ctx.tenantId)))
         .returning(invitationColumns);
       await this.jobs.send('identity.invitation-email', { tenantId: ctx.tenantId, invitationId: id }, tx);
@@ -166,7 +120,7 @@ export class TeamService {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const target = await this.memberRole(tx, ctx.tenantId, userId);
       if ((target === 'owner' || input.role === 'owner') && ctx.role !== 'owner') throw new ForbiddenException('Only an owner can change who is an owner');
-      if (target === 'owner' && input.role !== 'owner') await this.keepAnOwner(tx, ctx.tenantId);
+      if (target === 'owner' && input.role !== 'owner') await keepAnOwner(tx, ctx.tenantId);
       await tx.update(memberships).set({ role: input.role }).where(and(eq(memberships.tenantId, ctx.tenantId), eq(memberships.userId, userId)));
       await this.audit.record(tx, ctx, { action: 'member.role_changed', entityType: 'user', entityId: userId, data: { from: target, to: input.role } });
       return { userId, role: input.role };
@@ -179,14 +133,9 @@ export class TeamService {
       const self = userId === ctx.userId;
       if (!self && !hasRole(ctx.role, 'admin')) throw new ForbiddenException('Requires admin role');
       const target = await this.memberRole(tx, ctx.tenantId, userId);
-      if (target === 'owner') {
-        if (!self && ctx.role !== 'owner') throw new ForbiddenException('Only an owner can remove an owner');
-        await this.keepAnOwner(tx, ctx.tenantId);
-      }
-      await tx.delete(memberships).where(and(eq(memberships.tenantId, ctx.tenantId), eq(memberships.userId, userId)));
+      if (target === 'owner' && !self && ctx.role !== 'owner') throw new ForbiddenException('Only an owner can remove an owner');
       // Their employee record stays, Active with "No account" (spec 4.8).
-      await unlinkMember(tx, ctx.tenantId, userId);
-      await this.audit.record(tx, ctx, { action: self ? 'member.left' : 'member.removed', entityType: 'user', entityId: userId });
+      await removeMembership(tx, this.audit, ctx, userId, self ? 'member.left' : 'member.removed');
       // CRM takes them off future meetings (CD-131), only if this commits.
       await this.jobs.send('identity.member-removed', { tenantId: ctx.tenantId, userId }, tx);
     });
@@ -244,7 +193,7 @@ export class TeamService {
   }
 
   private findByToken(token: string) {
-    return this.find(eq(invitations.tokenHash, hashToken(token)));
+    return this.find(eq(invitations.tokenHash, hashInviteToken(token)));
   }
 
   private async find(where: SQL) {
@@ -277,16 +226,5 @@ export class TeamService {
       .where(and(eq(memberships.tenantId, tenantId), eq(memberships.userId, userId)));
     if (!m) throw new NotFoundException('Member not found');
     return m.role;
-  }
-
-  /** Throws if the tenant would be left without an owner after one owner is demoted or removed. */
-  private async keepAnOwner(tx: Tx, tenantId: string) {
-    // Lock the owner rows so two concurrent demotions can't both pass the check.
-    const owners = await tx
-      .select({ userId: memberships.userId })
-      .from(memberships)
-      .where(and(eq(memberships.tenantId, tenantId), eq(memberships.role, 'owner')))
-      .for('update');
-    if (owners.length <= 1) throw new ConflictException('A workspace needs at least one owner. Make someone else an owner first.');
   }
 }

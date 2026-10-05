@@ -1,5 +1,8 @@
+import { useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { FieldRow, GhostInput, GhostSelect, Switch } from '../components/ui';
 import { Screen } from '../components/Layout';
+import { paths } from '../lib/paths';
 import { funnelOptions, initialsOf } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Profile as ProfileT } from '../store/types';
@@ -26,8 +29,14 @@ const START_PAGES = [
  * digest apply to the current workspace. Passwords belong to the sign-in provider.
  */
 export function Profile() {
-  const { s, patchProfile, session } = useStore();
+  const { s, patchProfile, session, employeeCard } = useStore();
   const p = s.profile;
+  // Your employee record in this workspace (milestone 13): "My employee card".
+  const loadMine = employeeCard.loadMyEmployeeId;
+  const mine = s.myEmployeeId;
+  useEffect(() => {
+    if (mine === undefined) void loadMine();
+  }, [mine, loadMine]);
   const setP = (k: keyof ProfileT) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => patchProfile({ [k]: e.target.value });
   // No default (or one whose funnel was deleted) means the first funnel; say which one that is.
   const funnels = funnelOptions(s);
@@ -111,6 +120,14 @@ export function Profile() {
               {session.tenant.role}
             </span>
           </FieldRow>
+          {mine && (
+            <FieldRow label="Employee">
+              <Link className="field-value" to={paths.employee(mine)} data-testid="my-employee-card" style={{ color: 'var(--brand)' }}>
+                My employee card
+              </Link>
+            </FieldRow>
+          )}
+          <span style={note}>The job title and phone above are yours in every workspace; your employee card holds what HR uses here.</span>
         </div>
       </div>
     </Screen>

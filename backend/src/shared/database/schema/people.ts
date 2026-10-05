@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, date, foreignKey, index, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, date, foreignKey, index, jsonb, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { tenants, users } from './platform';
 
 /**
@@ -29,6 +29,16 @@ export const EMPLOYMENT_TYPES = ['permanent', 'fixed_term', 'contractor', 'stude
 export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
 export const LEAVING_REASONS = ['resigned', 'contract_ended', 'dismissed', 'retired', 'other'] as const;
 export type LeavingReason = (typeof LEAVING_REASONS)[number];
+
+/** A scheduled deactivation's choices (employees.deactivation_plan). Employee ids; null means "nobody". */
+export interface DeactivationPlan {
+  /** New manager of the leaving person's direct reports ("No manager" = null). */
+  reportsManagerId: string | null;
+  teamLeads: { teamId: string; employeeId: string | null }[];
+  departmentHeads: { departmentId: string; employeeId: string | null }[];
+  /** Who scheduled it (the audit entry when the job applies it). */
+  byUserId: string;
+}
 /** Functional roles that an Admin assigns (spec 9.1). Employee, Manager and Admin are derived. */
 export const ASSIGNED_ROLES = ['administration', 'payroll'] as const;
 export type AssignedRole = (typeof ASSIGNED_ROLES)[number];
@@ -125,6 +135,12 @@ export const employees = pgTable(
     /** When the deactivation was applied (status Inactive). */
     deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
     leavingReason: text('leaving_reason', { enum: LEAVING_REASONS }),
+    /**
+     * What a deactivation with a future last working day will do on the day after it (spec 4.8,
+     * the daily job people.deactivate-due): the new manager of the direct reports and the
+     * replacements of team leads and department heads chosen in the dialog. Null otherwise.
+     */
+    deactivationPlan: jsonb('deactivation_plan').$type<DeactivationPlan>(),
     /** First time a member was linked; an employee that was ever linked can't be deleted (spec 4.8). */
     firstLinkedAt: timestamp('first_linked_at', { withTimezone: true }),
     createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),

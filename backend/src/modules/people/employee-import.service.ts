@@ -44,7 +44,7 @@ const TYPE = 'employees';
  *            with the loop check over the final tree. A row whose manager's row failed is saved
  *            without a manager and listed. No "New manager" emails (spec 10.2).
  * Live updates are quiet during the import; the last transaction sends one "re-read the list" hint
- * per type. Invitations (Admins, optional) are queued as one `people.import-invite` job.
+ * per type. Invitations (Admins, optional) are queued as one `people.bulk-invite` job (as Members).
  */
 @Injectable()
 export class EmployeeImportService {
@@ -189,7 +189,7 @@ export class EmployeeImportService {
       await quiet(tx);
       const result = await this.setManagers(tx, ctx, writable, saved);
       const invitees = req.invite ? writable.filter((p) => p.status === 'create' && saved.has(p) && p.email).map((p) => p.id) : [];
-      if (invitees.length) await this.jobs.send('people.import-invite', { tenantId: ctx.tenantId, actorUserId: ctx.userId, employeeIds: invitees }, tx);
+      if (invitees.length) await this.jobs.send('people.bulk-invite', { tenantId: ctx.tenantId, actorUserId: ctx.userId, employeeIds: invitees, role: 'member' }, tx);
       // One "re-read the list" hint per type for everyone else (ids null), now that it's all saved.
       for (const type of ['employee', ...(org.departments.length ? ['department'] : []), ...(org.teams.length ? ['team'] : [])]) {
         await tx.execute(

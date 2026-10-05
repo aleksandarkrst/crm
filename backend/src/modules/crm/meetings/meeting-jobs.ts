@@ -20,6 +20,8 @@ import { minutesEmail, minutesMailMessage } from './minutes-email';
  * - "identity.member-removed": a member left or was removed. They come off the future planned
  *   meetings; where they organized one, it has no organizer ("Organizer left") until an admin
  *   picks one. Past and held meetings keep them, shown as a former member.
+ * - "people.employee-deactivated": an employee left the company and lost their membership (spec
+ *   4.8); the same as "identity.member-removed" for their account.
  */
 @Injectable()
 export class MeetingJobs implements OnApplicationBootstrap {
@@ -35,6 +37,10 @@ export class MeetingJobs implements OnApplicationBootstrap {
   async onApplicationBootstrap(): Promise<void> {
     await this.jobs.work('crm.meeting-invite', (data) => this.sendInvites(data));
     await this.jobs.work('identity.member-removed', (data) => this.memberRemoved(data));
+    // An employee who left the company (milestone 13, spec 4.8) is handled like a member who left.
+    await this.jobs.work('people.employee-deactivated', async ({ tenantId, userId }) => {
+      if (userId) await this.memberRemoved({ tenantId, userId });
+    });
     await this.jobs.work('crm.meeting-minutes-email', (data, attempt) => this.sendMinutes(data, attempt));
   }
 
