@@ -663,15 +663,72 @@ export const meetingParticipants = pgTable(
   ],
 );
 
+// ---------------------------------------------------------------- visit plans (CD-134)
+
+export const VISIT_PLAN_PERIOD_TYPES = ['month', 'quarter'] as const;
+export type VisitPlanPeriodType = (typeof VISIT_PLAN_PERIOD_TYPES)[number];
+
+/**
+ * How many customer visits a salesperson should make to which companies in one month or fiscal
+ * quarter. `period_start` is the first day of the period, `period_end` the first day after it
+ * (quarters follow tenants.fiscal_year_start_month when the plan is saved). One plan per
+ * salesperson, period type and period.
+ */
+export const visitPlans = pgTable(
+  'visit_plans',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    salespersonUserId: uuid('salesperson_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    periodType: text('period_type', { enum: VISIT_PLAN_PERIOD_TYPES }).notNull(),
+    periodStart: date('period_start').notNull(),
+    periodEnd: date('period_end').notNull(),
+    note: text('note'),
+    createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (t) => [
+    unique('visit_plans_tenant_id_uq').on(t.tenantId, t.id),
+    unique('visit_plans_period_uq').on(t.tenantId, t.salespersonUserId, t.periodType, t.periodStart),
+    index('visit_plans_tenant_period_idx').on(t.tenantId, t.periodStart),
+    check('visit_plans_period_type_ck', sql`${t.periodType} in ('month', 'quarter')`),
+    check('visit_plans_period_ck', sql`${t.periodEnd} > ${t.periodStart}`),
+  ],
+);
+
+/** One customer of a visit plan and how often to visit it (1–99). A company is in a plan once. */
+export const visitPlanLines = pgTable(
+  'visit_plan_lines',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    planId: uuid('plan_id').notNull(),
+    companyId: uuid('company_id').notNull(),
+    plannedVisits: integer('planned_visits').notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    unique('visit_plan_lines_tenant_id_uq').on(t.tenantId, t.id),
+    unique('visit_plan_lines_company_uq').on(t.planId, t.companyId),
+    // Deleting a company checks this foreign key (it is refused while the company is in a plan).
+    index('visit_plan_lines_tenant_company_idx').on(t.tenantId, t.companyId),
+    foreignKey({ columns: [t.tenantId, t.planId], foreignColumns: [visitPlans.tenantId, visitPlans.id], name: 'visit_plan_lines_plan_fk' }).onDelete('cascade'),
+    foreignKey({ columns: [t.tenantId, t.companyId], foreignColumns: [companies.tenantId, companies.id], name: 'visit_plan_lines_company_fk' }),
+    check('visit_plan_lines_planned_ck', sql`${t.plannedVisits} between 1 and 99`),
+  ],
+);
+
 // ---------------------------------------------------------------- change history (CD-69)
 
-export const HISTORY_ENTITY_TYPES = ['deal', 'company', 'contact', 'meeting'] as const;
+export const HISTORY_ENTITY_TYPES = ['deal', 'company', 'contact', 'meeting', 'visit_plan'] as const;
 export type HistoryEntityType = (typeof HISTORY_ENTITY_TYPES)[number];
 export const RECORD_CHANGE_ACTIONS = ['created', 'updated', 'deleted', 'line_added', 'line_changed', 'line_removed', 'participant_added', 'participant_removed'] as const;
 export type RecordChangeAction = (typeof RECORD_CHANGE_ACTIONS)[number];
 
 /**
- * Who changed which field of a deal, company or contact, and when (old → new). Written by
+ * Who changed which field of a deal, company, contact or visit plan (CD-134), and when (old → new). Written by
  * database triggers (drizzle/0020_record_changes_rls.sql), so every write path is covered: the API,
  * CSV import and worker jobs. The actor is the user set by DatabaseService.withTenant
  * (app.user_id); null means the system. No foreign key to the record: the history outlives it.

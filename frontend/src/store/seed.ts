@@ -110,6 +110,7 @@ export function initialState(): State {
     workspace: { name: '', currency: 'EUR', timezone: 'Europe/Belgrade', fiscalMonth: 1, customerEmailLanguage: 'en' },
     profile: { name: '', title: '', email: '', phone: '', language: 'en', dateFormat: 'DD.MM.YYYY', startPage: 'pipeline', defaultFunnelId: '', digest: true, dealAssigned: true, meetingInvites: true, visitPlans: true },
     onboarding: null,
+    visitPlans: [], // loaded from the API (CD-134)
     bonusRules: null,
     bonusTrigger: 'On contract signed',
     filters: { ...DEFAULT_FILTERS },

@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type WorkspaceInput } from '../lib/api';
+import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput } from '../lib/api';
 import { paths } from '../lib/paths';
 import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference } from './documents';
 import { connectLive, type LiveEvent } from './live';
@@ -26,6 +26,7 @@ import {
   todoItemsFor,
 } from './selectors';
 import { dealTotals } from './dealMath';
+import { sortPlans, type VisitPlan } from './visitPlans';
 import type { BillingFrequency, BonusRule, Champ, ChannelCode, CustomFieldDef, DealDiscount, DealLine, Installment, Lead, LeadTask, LogEntry, NewContactDraft, Person, Profile, SegKey, Stage, State, TaskState, TaxMode, Workspace } from './types';
 
 /** What the product dialog edits (CD-83); numbers as typed. */
@@ -133,6 +134,7 @@ const PARTS_OF: Record<string, Part[]> = {
   activity: [],
   // Meetings (CD-130) aren't part of the workspace load: the meeting slice re-reads them.
   meeting: [],
+  visit_plan: ['visitPlans'],
 };
 /**
  * Which rows of each list a change hint names (CD-98), so a live update re-reads just those: by id,
@@ -157,11 +159,13 @@ function rowsOf(e: LiveEvent): Partial<Record<Part, readonly string[] | null>> {
       return { contacts: ids };
     case 'product':
       return { products: ids };
+    case 'visit_plan':
+      return { visitPlans: ids };
     default:
       return {};
   }
 }
-const ALL_PARTS: Part[] = ['funnels', 'companies', 'contacts', 'deals', 'products', 'lines', 'tasks', 'team', 'customFields', 'bonus', 'onboarding'];
+const ALL_PARTS: Part[] = ['funnels', 'companies', 'contacts', 'deals', 'products', 'lines', 'tasks', 'team', 'customFields', 'bonus', 'onboarding', 'visitPlans'];
 const EMPTY_CONTACT: NewContactDraft = { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer', notes: '' };
 const DISCOVERY_FIELDS = ['headline', 'need', 'constraint', 'decisionMaker', 'discoveryDate'] as const satisfies readonly (keyof Lead & keyof DealInput)[];
 /** Workspace settings as the API names them. */
@@ -1157,6 +1161,45 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       await remove(() => crmApi.deleteContact(contactId), paths.contacts, p.name + ' deleted');
     };
 
+    // ------------------------------------------------------------ visit plans (CD-134; owners and admins edit)
+    const mapPlan = (id: string, fn: (p: VisitPlan) => VisitPlan) => set((x) => ({ visitPlans: x.visitPlans.map((p) => (p.id === id ? fn(p) : p)) }));
+    /** After a save, the plan's new version (If-Match for the next one). The screen already shows the change. */
+    const planSaved = (plan: VisitPlan) => set((x) => ({ versions: { ...x.versions, ['visit_plan:' + plan.id]: plan.updatedAt } }));
+    const planWrite = (id: string, input: Partial<VisitPlanInput>) => crmApi.updateVisitPlan(id, input, ver('visit_plan', id)).then(planSaved);
+    /** Creates a plan; on failure (e.g. a plan for that person and period exists) returns the reason instead. */
+    const createVisitPlan = async (input: VisitPlanInput): Promise<{ plan: VisitPlan } | { error: string }> => {
+      try {
+        const plan = await crmApi.createVisitPlan(input);
+        set((x) => ({ visitPlans: sortPlans([plan, ...x.visitPlans.filter((p) => p.id !== plan.id)]), versions: { ...x.versions, ['visit_plan:' + plan.id]: plan.updatedAt } }));
+        return { plan };
+      } catch (err) {
+        return { error: errText(err) };
+      }
+    };
+    /** Replaces a plan's lines (add a customer, change a number, remove one); typing is saved after a pause. */
+    const setPlanLines = (id: string, lines: { companyId: string; plannedVisits: number }[]) => {
+      const names = new Map(companyRecords(cur()).map((c) => [c.id, c.name]));
+      const plan = cur().visitPlans.find((p) => p.id === id);
+      if (!plan) return;
+      const old = new Map(plan.lines.map((l) => [l.companyId, l]));
+      const next = lines.map((l) => ({ id: old.get(l.companyId)?.id ?? '', companyId: l.companyId, companyName: old.get(l.companyId)?.companyName ?? names.get(l.companyId) ?? 'Company', plannedVisits: l.plannedVisits }));
+      mapPlan(id, (p) => ({ ...p, lines: next, totalPlanned: next.reduce((sum, l) => sum + l.plannedVisits, 0) }));
+      saveLater(`visit_plan:${id}:lines`, () => {
+        const now = cur().visitPlans.find((p) => p.id === id);
+        return now ? planWrite(id, { lines: now.lines.map((l) => ({ companyId: l.companyId, plannedVisits: l.plannedVisits })) }) : Promise.resolve();
+      }, 'the customers of this plan');
+    };
+    const setPlanNote = (id: string, note: string) => {
+      mapPlan(id, (p) => ({ ...p, note }));
+      saveLater(`visit_plan:${id}:note`, () => planWrite(id, { note: note.trim() || null }), 'the note of this plan');
+    };
+    const deleteVisitPlan = async (id: string) => {
+      const plan = cur().visitPlans.find((p) => p.id === id);
+      if (!plan) return;
+      cancelSaves(id);
+      await remove(() => crmApi.deleteVisitPlan(id), paths.visitPlans, `Visit plan for ${plan.periodLabel} deleted`);
+    };
+
     return {
       set,
       flash,
@@ -1322,6 +1365,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         );
       },
       canDelete,
+      createVisitPlan,
+      setPlanLines,
+      setPlanNote,
+      deleteVisitPlan,
       deleteDeal,
       deleteCompany,
       deleteContact,

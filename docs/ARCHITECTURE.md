@@ -510,6 +510,7 @@ be retried. Modules register their own handlers through a worker module exported
 | `crm.deal-assigned` | CRM, someone else becomes a deal's owner (create or change) | notifications: "deal assigned to you" email |
 | `crm.meeting-invite` | CRM, someone else adds a member to a planned meeting, or moves, cancels or restores one (one job per member) | CRM worker (`CrmWorkerModule`): the meeting email with an .ics |
 | `identity.member-removed` | identity, a member is removed or leaves | CRM worker: off future planned meetings, "Organizer left" where they organized |
+| `crm.visit-plan-email` | CRM, someone else creates or changes a salesperson's visit plan (CD-134) | notifications: "your visit plan" email |
 | `identity.invitation-email` | identity, invitation created or resent | identity: the invitation email |
 | `notifications.digest-tick` | cron, every 15 minutes | notifications: queues the digests that are due |
 | `notifications.daily-digest` | the tick (or `POST /api/dev/digest`) | notifications: one member's digest |
@@ -601,6 +602,53 @@ isn't the person making the change: a new deal created for someone else, or an o
 Saving the same owner again or taking a deal yourself sends nothing, and neither does the CSV
 import. The worker checks the assignee's setting when it sends (so switching it off stops emails
 still in the queue), and skips deals that were deleted or given to someone else again meanwhile.
+
+## Visit plans (CD-134)
+
+A visit plan says how many customer visits one salesperson should make to which companies in one
+month or fiscal quarter. Counting the visits actually held (planned vs. held, Reports, the Overview
+card) is CD-135; until then the screens show "—" in the Held, Upcoming and Completion columns.
+
+- **Tables** (crm module, RLS in `drizzle/0028_visit_plans_rls.sql`): `visit_plans` (salesperson,
+  `period_type` `month`|`quarter`, `period_start` = first day, `period_end` = first day after,
+  note ≤ 2,000) with unique (tenant, salesperson, period type, period start); `visit_plan_lines`
+  (plan → cascade, company, `planned_visits` 1–99, unique per plan and company). The company FK
+  has no cascade: deleting a company that is in a plan is refused with 409 ("… is in 1 visit
+  plan. Remove it from the plans first."), like a company with deals; "Remove sample data" keeps
+  such a company.
+- **Periods** (`visit-plans/periods.ts`, pure, unit-tested; the frontend has the same rules in
+  `store/visitPlans.ts`): a quarter starts 0, 3, 6 or 9 months after `tenants.fiscal_year_start_month`
+  and the fiscal year is named after the calendar year it ends in. Labels: "October 2026";
+  "Q4 2026" for a January fiscal year, else "Q1 FY2027 (Oct–Dec 2026)". A `periodStart` that isn't
+  the first day of a period is 400. Plans keep their stored dates when the fiscal year setting
+  changes later (their label then reads by months, "Oct–Dec 2026").
+- **API** (`/api/crm/visit-plans`): `GET ?periodType=&periodStart=&salespersonUserId=&ids=` →
+  `{ plans }` (with lines, company names, `totalPlanned`, `periodLabel`), `GET /:id`, and for owners
+  and admins `POST`, `PATCH /:id` (`lines` replaces the lines, matched by company; If-Match like
+  deals) and `DELETE /:id` (meetings are never touched). Members get only their own plans: the list
+  is forced to them, someone else's plan (and its history) is 404, and every write is 403. A second
+  plan for the same person and period is 409 ("Mia already has a plan for October 2026…");
+  duplicate companies in `lines`, numbers outside 1–99, no lines, unknown companies and a
+  salesperson who isn't a member are 400.
+- **History and live updates**: `record_changes` rows with `entity_type = 'visit_plan'`
+  (salesperson, period type, period start, note; lines as `line_added` / `line_changed` /
+  `line_removed` labelled with the company's name, like deal lines). Both tables send `crm_changes`
+  hints of type `visit_plan` whose ids are plan ids (lines report their plan), and the store
+  re-reads those plans (`?ids=`). Saving lines touches the plan, so its version moves.
+- **Email**: when someone other than the salesperson creates a plan, changes it, or hands it to
+  another salesperson, `VisitPlansService` queues `crm.visit-plan-email` in the same transaction.
+  The notifications worker sends "Your visit plan for October 2026" (or "… was changed") with the
+  customers, numbers, note and a link to `/visit-plans/<id>` (`notifications/visit-plan-email.ts`).
+  It reads the salesperson's `memberships.notify_visit_plans` (CD-207) when sending and skips
+  deleted plans and plans that are now the actor's own.
+- **UI**: sidebar "Visit plans" (after Today and Calendar), `/visit-plans` (list with period and,
+  for owners and admins, salesperson filters; "New plan") and `/visit-plans/:id` (customers with
+  planned visits, edited in place by owners and admins and saved as you go; "Copy to next period";
+  Delete; note; History). "New plan" has "Copy from previous period": the same salesperson's plan
+  of the same type for the period before fills the customers, which can be changed before saving.
+  "Schedule visit" opens New meeting prefilled with the company, Customer visit and the salesperson
+  as organizer (`meetings.openDialog`). The store keeps the plans in
+  `s.visitPlans` (loaded with the workspace).
 
 ## Working together: live updates, conflicts, change history
 

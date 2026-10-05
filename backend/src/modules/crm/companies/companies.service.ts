@@ -6,7 +6,7 @@ import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { companies, contacts, deals, meetings } from '../../../shared/database/schema';
+import { companies, contacts, deals, meetings, visitPlanLines } from '../../../shared/database/schema';
 import { type ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
 import { RecordHistoryService } from '../history/record-history.service';
@@ -104,7 +104,8 @@ export class CompaniesService {
 
   /**
    * A company with deals or meetings can't be deleted (409): they would lose their customer, so
-   * they have to be deleted or moved first. Its contacts are kept and no longer belong to a company.
+   * they have to be deleted or moved first. The same goes for a company in a visit plan (CD-134).
+   * Its contacts are kept and no longer belong to a company.
    */
   remove(ctx: TenantContext, id: string) {
     return this.database
@@ -120,6 +121,12 @@ export class CompaniesService {
         if (booked && booked.n > 0) {
           const what = booked.n === 1 ? '1 meeting' : `${booked.n} meetings`;
           throw new ConflictException(`${company.name} has ${what}. Delete them or move them to another company first.`);
+        }
+        // Visit plans (CD-134) name their customers; a plan would silently lose one.
+        const [planned] = await tx.select({ n: count() }).from(visitPlanLines).where(eq(visitPlanLines.companyId, id));
+        if (planned && planned.n > 0) {
+          const what = planned.n === 1 ? '1 visit plan' : `${planned.n} visit plans`;
+          throw new ConflictException(`${company.name} is in ${what}. Remove it from the plans first.`);
         }
         const detached = await tx.update(contacts).set({ companyId: null }).where(eq(contacts.companyId, id)).returning({ id: contacts.id });
         await tx.delete(companies).where(eq(companies.id, id));

@@ -2,6 +2,7 @@ import type { ApiCustomerEmailLanguage, ApiCustomField, ApiDateFormat, ApiLangua
 import type { DealDoc, DocTemplate } from './documents';
 import type { MeetingDialogSeed, MeetingList } from './meetings';
 import type { ApiMeeting } from '../lib/api';
+import type { VisitPlan } from './visitPlans';
 
 /** A funnel's backend id (CD-10: any number of funnels, not just the two personas). */
 export type SegKey = string;
@@ -360,6 +361,8 @@ export interface State {
   profile: Profile;
   /** Getting started (CD-68), for owners and admins; null for members. */
   onboarding: ApiOnboarding | null;
+  /** Customer visit plans (CD-134) this user may see (members: their own), newest period first. */
+  visitPlans: VisitPlan[];
   /**
    * Sales bonus rules by user id (CD-17), saved in the workspace. null for members: the API
    * doesn't show them the rules, and the UI hides the bonus tab and the Overview card.
