@@ -369,7 +369,12 @@ export class ExternalMinutesService {
 
   /** The 409 of a conflicting edit, in the shape the app shows ("… It now says …"). */
   private async conflict(tx: Tx, row: typeof meetingMinutes.$inferSelect, fields: ('externalSubject' | 'externalBody')[]): Promise<never> {
-    const [who] = row.externalUpdatedByUserId ? await tx.select({ name: userNameOf(users.id) }).from(users).where(eq(users.id, row.externalUpdatedByUserId)) : [];
+    const [who] = row.externalUpdatedByUserId
+      ? await tx
+          .select({ name: sql<string>`coalesce(${users.displayName}, ${users.email})` })
+          .from(users)
+          .where(eq(users.id, row.externalUpdatedByUserId))
+      : [];
     const name = who?.name ?? 'Someone';
     const parts = fields.map((f) => (f === 'externalSubject' ? 'the subject' : 'the text'));
     throw new ConflictException({

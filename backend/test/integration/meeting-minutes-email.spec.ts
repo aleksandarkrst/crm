@@ -86,8 +86,10 @@ describe('the external text', () => {
     expect(first.prefilled).toBe(true);
     expect(first.subject).toMatch(/^Minutes: Template review, \d+ \w{3} \d{4}$/);
     expect(first.body).toContain('**Template review**');
-    expect(first.body).toContain(`- Customer Co: Jovan Jovanović, Mara Marić, No Mail, Bounce Person`);
-    expect(first.body).toContain(`${owner.name}, ${ana.name}`);
+    const side = (prefix: string) => first.body.split('\n').find((l: string) => l.startsWith(prefix)) ?? '';
+    const customers = side('- Customer Co: ');
+    for (const name of ['Jovan Jovanović', 'Mara Marić', 'No Mail', 'Bounce Person']) expect(customers).toContain(name);
+    expect(side('- Minutes email ')).toContain(`${owner.name}, ${ana.name}`);
     expect(first.body).toContain('**Agreements**\nPilot in Belgrade');
     // Next steps without their (internal) owners.
     expect(first.body).toContain('**Next steps**\n- Send the offer');
