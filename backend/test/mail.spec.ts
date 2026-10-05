@@ -39,6 +39,15 @@ describe('LogMailer', () => {
     expect(mailer.sent).toHaveLength(0);
   });
 
+  it('sends to several people and copies, from a display name, and reports the refused ones (CD-133)', async () => {
+    const mailer = new LogMailer('Pultly <no-reply@example.com>', null);
+    const res = await mailer.send({ ...message, to: ['jo@customer.example.com', 'gone@nowhere.invalid'], cc: ['bo@example.com'], replyTo: 'ana@example.com', fromName: 'Ana "A" Petrović' });
+    expect(res).toEqual({ rejected: ['gone@nowhere.invalid'] });
+    expect(mailer.sent[0]).toMatchObject({ from: '"Ana A Petrović" <no-reply@example.com>', replyTo: 'ana@example.com', cc: ['bo@example.com'], rejected: ['gone@nowhere.invalid'] });
+    await expect(mailer.send({ ...message, to: ['a@x.invalid'], cc: ['b@y.invalid'] })).rejects.toThrow(/Mailbox unavailable/);
+    expect(await mailer.send(message)).toEqual({ rejected: [] });
+  });
+
   it('keeps attachments with the message and in the outbox (CD-131)', async () => {
     const file = join(mkdtempSync(join(tmpdir(), 'mail-')), 'dev-mail', 'outbox.jsonl');
     const mailer = new LogMailer('x@example.com', file);
