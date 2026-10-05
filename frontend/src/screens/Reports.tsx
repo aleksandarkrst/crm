@@ -17,7 +17,7 @@ const ANY_CUSTOMER = 'Customer';
 
 /**
  * Reports (CD-135), for owners and admins. "Visit-plan completion": per salesperson, for a month
- * or fiscal quarter, the planned visits, the held ones (completion caps each customer at its plan),
+ * or fiscal quarter (the sum of its three monthly plans, CD-212), the planned visits, the held ones (completion caps each customer at its plan),
  * upcoming, not closed, unplanned and over-plan visits; filtered by salesperson and customer (the
  * customer filter shows how often that customer was visited, across salespeople). Every count opens
  * the Calendar's table with exactly the meetings behind it (CD-211); plans open their page. The filters live in the URL,
@@ -103,8 +103,8 @@ export function Reports() {
           {
             value: periodType,
             options: [
-              { value: 'month', label: 'Monthly plans' },
-              { value: 'quarter', label: 'Quarterly plans' },
+              { value: 'month', label: 'Month' },
+              { value: 'quarter', label: 'Quarter' },
             ],
             onChange: (v) => update({ periodType: v, periodStart: null }),
             keepFirst: true,
@@ -174,13 +174,22 @@ function VisitReportTable({ report, companyId }: { report: ApiVisitReport; compa
       </>
     );
   };
+  // A month links its plan; a quarter each of its monthly plans (CD-212).
   const planCell = (r: ApiVisitReportRow) =>
-    r.planId ? (
-      <Link to={paths.visitPlan(r.planId)} className="crumb-link" data-testid="report-plan-link">
+    r.plans.length === 0 ? (
+      <span style={{ color: 'var(--muted)' }}>No plan</span>
+    ) : report.periodType === 'month' ? (
+      <Link to={paths.visitPlan(r.plans[0]!.id)} className="crumb-link" data-testid="report-plan-link">
         {report.periodLabel}
       </Link>
     ) : (
-      <span style={{ color: 'var(--muted)' }}>No plan</span>
+      <span style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}>
+        {r.plans.map((p) => (
+          <Link key={p.id} to={paths.visitPlan(p.id)} className="crumb-link" data-testid="report-plan-link" title={p.periodLabel}>
+            {p.periodLabel.split(' ')[0]!.slice(0, 3)}
+          </Link>
+        ))}
+      </span>
     );
 
   return (

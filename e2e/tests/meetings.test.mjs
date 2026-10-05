@@ -1,9 +1,9 @@
-// Meeting calendar (CD-130): creating a meeting from the week view, seeing it in Day, Week, Month
-// and Table, its page (edit, held, cancel, restore), the deal's timeline entries, filters kept in
+// Meeting calendar (CD-130): creating a meeting from the week view (quick create → More options),
+// seeing it in Day, Week, Month and Table, its page (edited in place, held, cancel, restore), the deal's timeline entries, filters kept in
 // the URL, "Show all" from a company, scheduling from the deal's Composer, and phones.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, RUN, setValue, steps, text, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, eventually, newUserWithWorkspace, RUN, setValue, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
 
 const TZ = 'Europe/Belgrade'; // new workspaces use it
 const PHONE = { width: 375, height: 812, isMobile: true, hasTouch: true };
@@ -42,15 +42,20 @@ describe('meeting calendar', () => {
     deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Acme showroom lights', funnelId: funnels[0].id, companyId: company.id, primaryContactId: contact.id }) });
   });
 
-  step('creates a meeting by clicking 10:00 in the week view', async () => {
+  step('creates a meeting by clicking 10:00 in the week view, then "More options"', async () => {
     await page.goto(`${BASE_URL}/calendar?view=week&date=${DAY}`, { waitUntil: 'networkidle0' });
     await page.waitForSelector(`.cal-col[data-day="${DAY}"]`);
     const at = await page.evaluate((day) => {
       const r = document.querySelector(`.cal-col[data-day="${day}"]`).getBoundingClientRect();
       return { x: r.left + r.width / 2, y: r.top + 10 * 48 + 12 };
     }, DAY);
+    // A click draws an hour from the half hour and opens the quick-create popover (CD-212).
     await page.mouse.click(at.x, at.y);
+    await page.waitForSelector('[data-testid=quick-create]');
+    assert.equal(await page.$eval('[data-testid=cal-draft-time]', (el) => el.textContent.trim()), '10:00–11:00');
+    await click(page, '[data-testid=quick-more]');
     await page.waitForSelector('.modal [data-testid=meeting-form]');
+    assert.equal(await page.$('[data-testid=quick-create]'), null, 'the popover gave way to the dialog');
     assert.equal(await page.$eval('[data-testid=meeting-date]', (el) => el.value), DAY);
     assert.equal(await page.$eval('[data-testid=meeting-start]', (el) => el.value), '10:00');
     assert.equal(await page.$eval('[data-testid=meeting-end]', (el) => el.value), '11:00', 'an hour by default');
@@ -112,22 +117,20 @@ describe('meeting calendar', () => {
     await click(page, `.table-row[data-meeting-id="${meetingId}"]`);
     await page.waitForFunction((id) => location.pathname === `/meetings/${id}`, {}, meetingId);
     await page.waitForSelector('[data-testid=meeting-page]');
-    assert.equal(await page.$eval('[data-testid=meeting-page-title]', (el) => el.innerText.trim()), `Meeting with ${COMPANY}`);
+    assert.equal(await page.$eval('[data-testid=meeting-title-input]', (el) => el.value), `Meeting with ${COMPANY}`);
+    assert.equal(await page.$('[data-testid=meeting-edit]'), null, 'no Edit button: fields are edited in place');
     assert.equal(await statusOf(), 'Planned');
     assert.equal(await page.$eval('[data-testid=meeting-held]', (el) => el.disabled), true);
-    const body = await text(page);
-    assert.ok(body.includes('Acme showroom lights'), 'the deal is listed');
-    assert.ok(body.includes('Mia Meetings'), 'the organizer is listed');
+    const picked = (selector) => page.$eval(selector, (el) => el.selectedOptions[0]?.textContent ?? '');
+    assert.equal(await picked('[data-testid=meeting-field-deal]'), 'Acme showroom lights', 'the deal is shown');
+    assert.equal(await picked('[data-testid=meeting-field-organizer]'), 'Mia Meetings', 'the organizer is shown');
   });
 
-  step('edits the title', async () => {
-    await click(page, '[data-testid=meeting-edit]');
-    await page.waitForSelector('.modal [data-testid=meeting-form]');
-    await setValue(page, '[data-testid=meeting-title]', 'Showroom walkthrough');
-    await click(page, '[data-testid=meeting-save]');
-    await page.waitForFunction(() => !document.querySelector('.modal [data-testid=meeting-form]'), { timeout: 10_000 });
-    await page.waitForFunction(() => document.querySelector('[data-testid=meeting-page-title]')?.innerText.trim() === 'Showroom walkthrough');
-    assert.equal((await api(page, `/crm/meetings/${meetingId}`)).title, 'Showroom walkthrough');
+  step('edits the title in place (CD-212)', async () => {
+    await setValue(page, '[data-testid=meeting-title-input]', 'Showroom walkthrough');
+    assert.ok(await eventually(async () => (await api(page, `/crm/meetings/${meetingId}`)).title === 'Showroom walkthrough'), 'saved after the typing pause');
+    await page.reload({ waitUntil: 'networkidle0' });
+    await page.waitForFunction(() => document.querySelector('[data-testid=meeting-title-input]')?.value === 'Showroom walkthrough');
   });
 
   step('marks it held once it has started; the deal timeline says so', async () => {
@@ -153,7 +156,8 @@ describe('meeting calendar', () => {
     await click(page, '[data-testid=cancel-confirm]');
     await page.waitForFunction(() => document.querySelector('[data-testid=meeting-status]')?.innerText.trim() === 'Cancelled');
     assert.match(await page.$eval('[data-testid=meeting-cancelled]', (el) => el.innerText), /Customer moved it/);
-    assert.equal(await page.$('[data-testid=meeting-edit]'), null, 'a cancelled meeting is read-only');
+    assert.equal(await page.$('[data-testid=meeting-title-input]'), null, 'a cancelled meeting is read-only');
+    assert.equal(await page.$eval('[data-testid=meeting-field-type]', (el) => el.disabled), true);
     await waitForToastToClear(page).catch(() => {});
     await click(page, '[data-testid=meeting-restore]');
     await page.waitForFunction(() => document.querySelector('[data-testid=meeting-status]')?.innerText.trim() === 'Planned');

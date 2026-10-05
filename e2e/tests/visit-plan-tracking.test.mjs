@@ -3,7 +3,7 @@
 // without a reload (1 held, 50%); Reports → Visit-plan completion shows the same, and its count
 // opens the Calendar's table with exactly the meetings behind it (CD-211); the Overview card
 // agrees; the member sees their own card and no Reports; the company card shows the month's and
-// the quarter's visits.
+// the quarter's visits (the quarter adds up its monthly plans, CD-212).
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
 import { api, BASE_URL, click, clickButton, createWorkspace, email, eventually, finishOnboarding, signIn, steps, useBrowser } from '../lib/harness.mjs';
@@ -155,10 +155,16 @@ describe('visit plan tracking', () => {
   });
 
   step('the company page says how many of this month’s and this quarter’s planned visits were held', async () => {
+    // Plans are monthly (CD-212): the quarter adds up its months. Another month of this quarter plans one more visit.
     const quarter = await api(olga, '/crm/visit-plans/progress-summary?periodType=quarter');
+    const next = (iso) => {
+      const [y, m] = iso.split('-').map(Number);
+      return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+    };
+    const other = quarter.periodStart === period.periodStart ? next(period.periodStart) : quarter.periodStart;
     await api(olga, '/crm/visit-plans', {
       method: 'POST',
-      body: JSON.stringify({ salespersonUserId: miaId, periodType: 'quarter', periodStart: quarter.periodStart, lines: [{ companyId: alphaId, plannedVisits: 3 }] }),
+      body: JSON.stringify({ salespersonUserId: miaId, periodType: 'month', periodStart: other, lines: [{ companyId: alphaId, plannedVisits: 1 }] }),
     });
     await olga.goto(`${BASE_URL}/companies/${alphaId}`, { waitUntil: 'networkidle0' });
     await olga.waitForFunction(() => document.querySelector('[data-testid=company-visits-this-month]')?.textContent.trim() === 'Visits this month: 1 / 2');

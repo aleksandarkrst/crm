@@ -1,7 +1,7 @@
 /**
  * Customer visit plans (CD-134): owners and admins create, change and delete plans for any member;
- * members see only their own plans, read-only; one plan per salesperson and period; quarters
- * follow the fiscal year; lines are validated; a company in a plan can't be deleted; the
+ * members see only their own plans, read-only; one plan per salesperson and month; plans are
+ * monthly only (CD-212); lines are validated; a company in a plan can't be deleted; the
  * salesperson is emailed when someone else saves their plan; changes are in the history; tenants
  * are isolated.
  */
@@ -103,7 +103,7 @@ describe('visit plans', () => {
     const dup = await call('POST', '/crm/visit-plans', { ...as(admin), body: monthly(seller.userId, '2026-11-01', [['Beta', 1]]) });
     expect(dup.status).toBe(409);
     expect(dup.body.message).toBe(`${seller.name} already has a plan for November 2026. Open that plan and change it instead.`);
-    // Another person, or a quarter starting the same day, is fine.
+    // Another person for the same month is fine.
     await plan(owner, monthly(other.userId, '2026-11-01', [['Beta', 1]]));
     const december = await plan(owner, monthly(seller.userId, '2026-12-01', [['Beta', 1]]));
     const moved = await call('PATCH', `/crm/visit-plans/${december.id}`, { ...as(owner), body: { periodStart: '2026-11-01' } });
@@ -139,21 +139,17 @@ describe('visit plans', () => {
     expect((await call('DELETE', `/crm/visit-plans/${mine.id}`, as(seller))).status).toBe(403);
   });
 
-  it('quarters follow the fiscal year start', async () => {
-    await ok('PATCH', '/workspace', { ...as(owner), body: { fiscalYearStartMonth: 7 } });
-    try {
-      const q = await plan(owner, { salespersonUserId: seller.userId, periodType: 'quarter', periodStart: '2026-10-01', lines: [{ companyId: companies.Alpha, plannedVisits: 6 }] });
-      expect(q).toMatchObject({ periodStart: '2026-10-01', periodEnd: '2027-01-01', periodLabel: 'Q2 FY2027 (Oct–Dec 2026)' });
-      // A month that doesn't start a fiscal quarter, and a day that doesn't start a month.
-      const bad = await call('POST', '/crm/visit-plans', { ...as(owner), body: { salespersonUserId: seller.userId, periodType: 'quarter', periodStart: '2026-11-01', lines: [{ companyId: companies.Alpha, plannedVisits: 1 }] } });
-      expect(bad.status).toBe(400);
-      expect(bad.body.message).toContain('quarter');
-      await plan(owner, monthly(seller.userId, '2026-10-15', [['Alpha', 1]]), 400);
-    } finally {
-      await ok('PATCH', '/workspace', { ...as(owner), body: { fiscalYearStartMonth: 1 } });
-    }
-    const calendar = await plan(owner, { salespersonUserId: other.userId, periodType: 'quarter', periodStart: '2026-10-01', lines: [{ companyId: companies.Beta, plannedVisits: 3 }] });
-    expect(calendar.periodLabel).toBe('Q4 2026');
+  it('plans are monthly: a quarterly plan is refused, on create and on change (CD-212)', async () => {
+    const quarterly = await call('POST', '/crm/visit-plans', { ...as(owner), body: { salespersonUserId: seller.userId, periodType: 'quarter', periodStart: '2026-10-01', lines: [{ companyId: companies.Alpha, plannedVisits: 6 }] } });
+    expect(quarterly.status).toBe(400);
+    expect(quarterly.body.message).toBe("Visit plans are monthly. A quarter's progress is the sum of its three monthly plans.");
+    // Without a period type it is a month; a day that doesn't start a month is refused.
+    const month = await plan(owner, { salespersonUserId: other.userId, periodStart: '2028-02-01', lines: [{ companyId: companies.Beta, plannedVisits: 3 }] });
+    expect(month).toMatchObject({ periodType: 'month', periodStart: '2028-02-01', periodEnd: '2028-03-01', periodLabel: 'February 2028' });
+    await plan(owner, monthly(seller.userId, '2026-10-15', [['Alpha', 1]]), 400);
+    const toQuarter = await call('PATCH', `/crm/visit-plans/${month.id}`, { ...as(owner), body: { periodType: 'quarter', periodStart: '2028-01-01' } });
+    expect(toQuarter.status).toBe(400);
+    expect((await ok<Plan>('GET', `/crm/visit-plans/${month.id}`, as(owner))).periodType).toBe('month');
   });
 
   it('validates the lines and the salesperson', async () => {

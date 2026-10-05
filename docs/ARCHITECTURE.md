@@ -614,7 +614,9 @@ still in the queue), and skips deals that were deleted or given to someone else 
 ## Visit plans (CD-134)
 
 A visit plan says how many customer visits one salesperson should make to which companies in one
-month or fiscal quarter. Counting the visits actually held is "Visit plan tracking (CD-135)" below.
+month. Plans are **monthly only** (CD-212): a fiscal quarter's progress is the sum of its three
+monthly plans (see "Monthly plans, quarters add up" below). Counting the visits actually held is
+"Visit plan tracking (CD-135)" below.
 
 - **Tables** (crm module, RLS in `drizzle/0032_visit_plans_rls.sql`): `visit_plans` (salesperson,
   `period_type` `month`|`quarter`, `period_start` = first day, `period_end` = first day after,
@@ -651,8 +653,9 @@ month or fiscal quarter. Counting the visits actually held is "Visit plan tracki
 - **UI**: sidebar "Visit plans" (after Today and Calendar), `/visit-plans` (list with period and,
   for owners and admins, salesperson filters; "New plan") and `/visit-plans/:id` (customers with
   planned visits, edited in place by owners and admins and saved as you go; "Copy to next period";
-  Delete; note; History). "New plan" has "Copy from previous period": the same salesperson's plan
-  of the same type for the period before fills the customers, which can be changed before saving.
+  Delete; note; History). "New plan" (salesperson, month, customers, note; no period type since
+  CD-212) has "Copy from previous period": the same salesperson's plan for the month before fills
+  the customers, which can be changed before saving.
   "Schedule visit" opens New meeting prefilled with the company, Customer visit and the salesperson
   as organizer (`meetings.openDialog`). The store keeps the plans in
   `s.visitPlans` (loaded with the workspace).
@@ -712,12 +715,35 @@ unplanned, shared visits).
   (`lib/csv.ts`: BOM, formula guard). Overview has a "Visit-plan progress" card with its own month/quarter
   selector (members: their own, "Open my plan"; owners and admins: the team or one salesperson,
   "Open the report" with the same choice). The company page's Meetings card says "Visits this
-  month: held / planned" (held uncapped) when the company is in a plan of this month, summed over
-  every plan the viewer can see (all for owners and admins, their own for members).
-- **Daily digest**: `DigestService` counts the member's plans whose period contains today (month
-  and quarter) with `progressOfPlans` and adds "Visit plan progress": "Visits planned this period
-  (October 2026): N of M held" (N = held counted toward the plan). The section never makes the
-  digest go out on its own.
+  month: held / planned" (held uncapped) when the company is in a plan of this month, and "Visits
+  this quarter" when it is in a monthly plan of this fiscal quarter, summed over every plan the
+  viewer can see (all for owners and admins, their own for members).
+- **Daily digest**: `DigestService` counts the member's plan for this month, and this fiscal
+  quarter as the sum of its monthly plans (`planGroupsOf` + `progressOfGroups`), and adds "Visit
+  plan progress": "Visits planned this period (October 2026): N of M held" (N = held counted toward
+  the plan). The section never makes the digest go out on its own.
+
+### Monthly plans, quarters add up (CD-212)
+
+Nobody makes quarterly plans any more: a quarter is tracked as the sum of its three months.
+
+- **Writes**: `POST /visit-plans` makes a monthly plan (`periodType` may be left out; `'quarter'` is
+  400 "Visit plans are monthly. A quarter's progress is the sum of its three monthly plans.").
+  `PATCH` refuses `periodType: 'quarter'`, and refuses any change to a quarterly plan saved before
+  (400, `QUARTERLY_READ_ONLY`); those stay readable (their page shows a note, no editing, no "Copy
+  to next period") and can be deleted. No migration: the column and its values stay.
+- **Counting a period** (`visit-progress.service.ts`): `planGroupsOf(tx, period, salesperson?)`
+  gives one group per salesperson: for a month, their monthly plan; for a fiscal quarter, their
+  monthly plans starting in it. Old quarterly plans are left out of Reports, Overview and the
+  company card. `progressOfGroups` sums each group's lines per company (planned visits added up)
+  and counts them with `countVisits` over the whole quarter: held, upcoming and not closed across
+  the three months, completion capped per company at the quarter's sum (so a third visit in
+  November counts toward a customer planned once in October and twice in November).
+  `progressOfPlans` is the one-plan case (plan pages, the list).
+- **API shape**: report rows carry `plans: [{ id, periodStart, periodLabel }]` (one for a month, up
+  to three for a quarter; `planId` is the first) and the summary's `plans` list the monthly plans
+  with their month. Reports and the Overview card keep their Month / Quarter choice; a quarter
+  row links each of its months.
 
 ## Working together: live updates, conflicts, change history
 
@@ -1216,11 +1242,18 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`; the deal rules (CD
   Not closed and missing-minutes filters). The view, period and filters live in the URL
   (`view`, `date` or `from`/`to`, `user`, `type`, `status`, `company`, `deal`, `contact`,
   `notClosed`, `missingMinutes`, `sort`); switching views keeps them. Salesperson defaults to "Me"
-  for members and "Everyone" for owners and admins; status to Planned and Held. Clicking an empty
-  slot opens New meeting at that time (month: 09:00); planned meetings the user may edit can be
-  dragged to another time or day and resized by their lower edge (15-minute steps, saved with
-  If-Match; put back with the reason when refused). On phones Day is the default and Week is a
-  list by day; dragging is off there. `?new=1&companyId=…&dealId=…&contactId=…&type=…&organizer=…&start=…`
+  for members and "Everyone" for owners and admins; status to Planned and Held. Making a meeting
+  works like Google Calendar (CD-212): on Day and Week, pressing an empty slot and dragging draws a
+  placeholder in 15-minute steps (a click makes an hour from the half hour); the placeholder can be
+  moved and resized by its lower edge, and the **quick-create popover** (`calendar/QuickCreate.tsx`)
+  opens next to it with title, type, company, deal (required), date and times, "Save" and "More
+  options" (the full dialog, prefilled through `MeetingDialogSeed.title/end`). Escape or a press
+  outside discards it (that press doesn't start another one). Month: a click on a day opens the
+  popover at 09:00. The Calendar owns the draft (`CalendarDraft`, kept per view and date) and
+  passes the filters as the new meeting's seed. Planned meetings the user may edit can be dragged
+  to another time or day and resized by their lower edge (15-minute steps, saved with If-Match; put
+  back with the reason when refused; a click on the edge does nothing). On phones Day is the
+  default and Week is a list by day; a tap opens the New meeting dialog and dragging is off. `?new=1&companyId=…&dealId=…&contactId=…&type=…&organizer=…&start=…`
   opens a prefilled New meeting dialog. The Table loads 500 rows at a time ("Load more" reads the
   next page with `offset`, CD-211), so a wide range works. **`ids=`** (CD-211) shows exactly those
   meetings (≤ 200) in the Table, whatever the other filters, with the removable chip "N meetings
@@ -1233,19 +1266,28 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`; the deal rules (CD
   "Meeting with <company>", Customer visit, start + 60 minutes, the company's HQ for a visit, the
   company's only open deal, organizer = you, the deal's primary contact or the contact the dialog
   was opened from). Warns about colleagues' overlapping meetings and about a Customer visit
-  without external participants (the second click saves). The contact picker lists the meeting
-  company's contacts first and marks those without an email "No email"; its "+ Add new contact"
-  (CD-131) opens a small form (name from the search, email, job title) that creates a contact of
+  without external participants (the second click saves). The contact picker lists only the
+  meeting company's contacts (CD-212; before a company is picked it says to pick one, and
+  changing the company drops contacts of the old one) and marks those without an email "No
+  email"; its "+ Add new contact" (CD-131) opens a small form (name from the search, email, job title) that creates a contact of
   the meeting's company with the store's `createContact` (which returns the new id) and adds them.
 - **Meeting page** (`/meetings/:id`, `screens/Meeting.tsx`): header with type, status, time and
   location (a link when it is a URL), Mark as held (disabled before the start; a timer enables it
   when the start passes while the page is open), Cancel (optional
-  reason), Edit, Undo held, Restore, and Delete for owners and admins. Tabs: Internal minutes and
+  reason), Undo held, Restore, and Delete for owners and admins. There is no Edit button (CD-212):
+  every field is edited in place like on the deal page (`screens/meeting/MeetingFields.tsx`):
+  the title in the header, type, start and end, location, company and deal (another company is
+  saved once one of its deals is picked, or made with "+ New deal"), organizer (owners and admins),
+  internal and external participants (the company's contacts, "+ Add new contact") and the agenda.
+  `useField` shows an edit at once and saves it after a 600 ms typing pause (pickers at once, on
+  blur too) through `meetings.saveField`, with If-Match on the version shown; a refused save
+  (conflict or error) says why and shows the saved value. Read-only for people who can't change
+  the meeting and while it is cancelled. Tabs: Internal minutes and
   External minutes (`screens/meeting/*`, CD-132/CD-133) and History (`ChangeHistory`, entity
   `meeting`). Who may change a meeting: `canEditMeeting` (owners, admins, organizer, internal
   participants). Former members show as "<name> (former member)", deleted contacts as
-  "<name> (deleted)"; without an organizer it says "Organizer left", with **Pick new organizer**
-  for owners and admins (CD-131).
+  "<name> (deleted)"; without an organizer it says "Organizer left", and owners and admins pick a
+  new one in the Organizer field (CD-131, CD-212).
 - **Elsewhere**: a Meetings card on company, contact (as external participant) and deal pages
   (`components/MeetingsCard.tsx`: next three, "Show all" → Table filtered to the record from
   2000-01-01 to five years ahead, "+ Meeting" prefilled; on a company "Visits this month" and

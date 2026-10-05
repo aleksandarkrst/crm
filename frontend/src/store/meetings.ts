@@ -71,6 +71,10 @@ export interface MeetingDialogSeed {
   organizerUserId?: string | null;
   /** ISO instant. */
   start?: string | null;
+  /** ISO instant; without it the meeting lasts an hour. */
+  end?: string | null;
+  /** From the calendar's quick create ("More options", CD-212). */
+  title?: string | null;
 }
 
 /** The key of a query (its fields in a fixed order), so equal queries share one list. */
@@ -352,6 +356,24 @@ export function meetingActions(ctx: Ctx) {
       throw conflict ? new Error(conflict) : err;
     }
   };
+  /**
+   * An inline edit on the meeting page (CD-212), as on the deal page: based on the version shown
+   * (If-Match), so a field someone else changed meanwhile is a conflict. false (after saying why,
+   * and reading the meeting again) when it wasn't saved.
+   */
+  const saveField = async (id: string, input: MeetingInput, what: string): Promise<boolean> => {
+    const m = cur().meetings[id];
+    if (!m) return false;
+    try {
+      after(await crmApi.meetings.patch(id, input, m.updatedAt), [m.dealId]);
+      return true;
+    } catch (err) {
+      const conflict = ctx.conflictText(err);
+      flash(conflict ?? `Not saved: ${what} (${ctx.errText(err)}). It was reset to the saved value.`, conflict ? 10_000 : 7000);
+      void fetchOne(id).catch(() => undefined);
+      return false;
+    }
+  };
   /** Drag to another time or day, or a new end (calendar). Shown at once; put back if refused. */
   const reschedule = async (id: string, startsAt: string, endsAt: string) => {
     const m = cur().meetings[id];
@@ -526,6 +548,7 @@ export function meetingActions(ctx: Ctx) {
     refreshAll,
     create,
     update,
+    saveField,
     reschedule,
     markHeld: (id: string) => status(id, () => crmApi.meetings.held(id), 'Marked as held'),
     cancel: (id: string, reason: string) => status(id, () => crmApi.meetings.cancel(id, reason.trim() || null), 'Meeting cancelled'),

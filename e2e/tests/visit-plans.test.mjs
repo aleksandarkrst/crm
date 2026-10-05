@@ -1,7 +1,7 @@
 // Customer visit plans (CD-134): an owner makes a monthly plan for a member with two customers,
 // changes a number on the plan page, copies it to the next period (and "Copy from previous period"
 // fills a new plan from it); the member sees their plan read-only and schedules a visit from it,
-// also on a phone; a quarterly plan follows a fiscal year that starts in July.
+// also on a phone; plans are monthly and a quarter in Reports adds up its months (CD-212).
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
 import { api, BASE_URL, click, clickButton, createWorkspace, email, eventually, finishOnboarding, setValue, signIn, steps, text, useBrowser } from '../lib/harness.mjs';
@@ -152,30 +152,41 @@ describe('visit plans', () => {
     assert.equal(meetings[0].organizerUserId, miaId);
   });
 
-  step('a quarterly plan follows a fiscal year that starts in July', async () => {
-    await api(olga, '/workspace', { method: 'PATCH', body: JSON.stringify({ fiscalYearStartMonth: 7 }) });
+  step('plans are monthly; Reports adds up a quarter from its monthly plans (CD-212)', async () => {
     await olga.goto(`${BASE_URL}/visit-plans`, { waitUntil: 'networkidle0' });
     await olga.waitForSelector('[data-testid=visit-plan-row]');
     await clickButton(olga, 'New plan');
-    await setValue(olga, '[data-testid=plan-salesperson]', miaId);
-    await setValue(olga, '[data-testid=plan-period-type]', 'quarter');
-    await olga.waitForFunction(() => /^Q[1-4] FY\d{4} \(/.test(document.querySelector('[data-testid=plan-period]')?.selectedOptions[0]?.textContent ?? ''));
-    const label = await selected(olga, '[data-testid=plan-period]');
-    const start = await olga.$eval('[data-testid=plan-period]', (el) => el.value);
-    const month = Number(start.slice(5, 7));
-    assert.equal((month - 7 + 12) % 3, 0, `${start} starts a fiscal quarter`);
-    const quarter = Math.floor(((month - 7 + 12) % 12) / 3) + 1;
-    const fiscalYear = Number(start.slice(0, 4)) + (month >= 7 ? 1 : 0);
-    assert.ok(label.startsWith(`Q${quarter} FY${fiscalYear} (`), label);
-    await addCustomer(olga, 'Alpha Visits');
-    await click(olga, '[data-testid=plan-save]');
-    await olga.waitForFunction(() => /^\/visit-plans\/[0-9a-f-]{36}$/.test(location.pathname));
-    await olga.waitForSelector('[data-testid=visit-plan-period]');
-    assert.equal(await olga.$eval('[data-testid=visit-plan-period]', (el) => el.textContent), label);
-    const saved = await api(olga, `/crm/visit-plans/${olga.url().split('/visit-plans/')[1]}`);
-    assert.equal(saved.periodType, 'quarter');
-    assert.equal(saved.periodStart, start);
-    assert.equal(saved.periodEnd, shiftMonths(start, 3));
-    assert.equal(saved.periodLabel, label);
+    await olga.waitForSelector('[data-testid=plan-period]');
+    assert.equal(await olga.$('[data-testid=plan-period-type]'), null, 'no period type to choose');
+    const labels = await olga.$$eval('[data-testid=plan-period] option', (options) => options.map((o) => o.textContent));
+    assert.ok(labels.every((l) => /^[A-Z][a-z]+ \d{4}$/.test(l)), `only months: ${labels.join(', ')}`);
+    await clickButton(olga, 'Cancel');
+
+    // The API refuses a quarterly plan.
+    const refused = await olga.evaluate(async (miaId) => {
+      const res = await fetch('/api/crm/visit-plans', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + localStorage.getItem('crm.devToken'), 'X-Tenant-Id': localStorage.getItem('crm.tenantId') ?? '', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ salespersonUserId: miaId, periodType: 'quarter', periodStart: '2027-01-01', lines: [] }),
+      });
+      return res.status;
+    }, miaId);
+    assert.equal(refused, 400);
+
+    // This quarter in Reports: the member's planned visits are the sum of her monthly plans in it.
+    const quarter = await api(olga, '/crm/visit-plans/progress-summary?periodType=quarter');
+    const end = shiftMonths(quarter.periodStart, 3);
+    const months = (await api(olga, '/crm/visit-plans')).plans.filter((p) => p.salespersonUserId === miaId && p.periodType === 'month' && p.periodStart >= quarter.periodStart && p.periodStart < end);
+    assert.ok(months.length >= 1, 'a monthly plan in this quarter');
+    const planned = months.reduce((n, p) => n + p.totalPlanned, 0);
+    await olga.goto(`${BASE_URL}/reports/visit-plans?periodType=quarter&periodStart=${quarter.periodStart}`, { waitUntil: 'networkidle0' });
+    await olga.waitForSelector(`[data-testid=report-row][data-user-id="${miaId}"]`);
+    await olga.waitForFunction(
+      (miaId, planned) => document.querySelector(`[data-testid=report-row][data-user-id="${miaId}"] [data-testid=report-planned]`)?.textContent.trim() === String(planned),
+      { timeout: 10_000 },
+      miaId,
+      planned,
+    );
+    assert.equal((await olga.$$(`[data-testid=report-row][data-user-id="${miaId}"] [data-testid=report-plan-link]`)).length, months.length, 'a link to each monthly plan');
   });
 });

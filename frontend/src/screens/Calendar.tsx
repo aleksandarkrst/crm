@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Screen } from '../components/Layout';
 import { XIcon } from '../components/ui';
@@ -7,13 +7,14 @@ import { paths } from '../lib/paths';
 import { DEFAULT_STATUSES, isMeetingStatus, isMeetingType, MEETING_STATUSES, MEETING_TYPES, STATUS_LABEL } from '../store/meetings';
 import { allPeople, companyLabels, companyRecords, memberLabels } from '../store/selectors';
 import { useStore } from '../store/store';
-import { addDays, addMonths, dateLabel, datesBetween, datesRange, dayRange, daysBetween, isIsoDate, monthGridRange, monthLabel, monthRange, todayIn, weekRange } from '../store/time';
+import { addDays, addMonths, dateLabel, datesBetween, datesRange, dayRange, daysBetween, instantToZoned, isIsoDate, monthGridRange, monthLabel, monthRange, todayIn, weekRange, zonedToInstant } from '../store/time';
 import { useMeetingList } from '../store/useMeetings';
 import { MAX_LINK_IDS } from '../store/visitPlans';
 import { DayList } from './calendar/DayList';
 import { MeetingTable } from './calendar/MeetingTable';
 import { MonthGrid } from './calendar/MonthGrid';
-import { TimeGrid } from './calendar/TimeGrid';
+import { QuickCreate } from './calendar/QuickCreate';
+import { type CalendarDraft, TimeGrid } from './calendar/TimeGrid';
 
 type View = 'day' | 'week' | 'month' | 'table';
 const VIEWS: { value: View; label: string }[] = [
@@ -46,6 +47,10 @@ function usePhone(): boolean {
  * The Calendar (CD-130): every meeting in Day, Week, Month and Table views. The view, the period
  * and the filters live in the URL, so a link shows the same meetings; switching views keeps the
  * filters and the period. Times are in the workspace time zone.
+ *
+ * Making a meeting (CD-212): on Day and Week, a click or a drag over empty slots draws a
+ * placeholder and opens the quick-create popover next to it; on Month, a click on a day opens it
+ * at 09:00. On phones a tap opens the New meeting dialog.
  */
 export function Calendar() {
   const store = useStore();
@@ -193,18 +198,42 @@ export function Calendar() {
 
   // ------------------------------------------------------------ meetings
   const open = useCallback((id: string) => navigate(paths.meeting(id)), [navigate]);
-  const create = useCallback(
-    (start: string) =>
-      openDialog({
-        start,
-        companyId: company || null,
-        dealId: deal || null,
-        contactId: contact || null,
-        type: types.length === 1 ? types[0] : undefined,
-        organizerUserId: user !== 'all' && user !== 'me' ? user : null,
-      }),
+  // What a new meeting starts with: the filters (company, deal, contact, a single type, a salesperson).
+  const seed = useMemo(
+    () => ({
+      companyId: company || null,
+      dealId: deal || null,
+      contactId: contact || null,
+      type: types.length === 1 ? types[0] : undefined,
+      organizerUserId: user !== 'all' && user !== 'me' ? user : null,
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the filters decide
     [company, deal, contact, types.join(','), user],
+  );
+
+  // The meeting being made (CD-212): it belongs to the view and period it was started in.
+  const scope = `${view}:${date}`;
+  const [drafting, setDrafting] = useState<{ scope: string; draft: CalendarDraft } | null>(null);
+  const draft = drafting?.scope === scope && !phone && !idList ? drafting.draft : null;
+  const setDraft = useCallback((d: CalendarDraft | null) => setDrafting(d ? { scope, draft: d } : null), [scope]);
+  // A press outside the popover only closes it: the click that follows doesn't start another.
+  const closedAt = useRef(0);
+  const closeDraft = useCallback((outside?: boolean) => {
+    if (outside) closedAt.current = Date.now();
+    setDrafting(null);
+  }, []);
+
+  const justClosed = useCallback(() => Date.now() - closedAt.current < 500, []);
+  const create = useCallback(
+    (start: string) => {
+      if (phone) return openDialog({ ...seed, start });
+      if (justClosed()) return;
+      // Month: the day at 09:00, for an hour, next to the day.
+      const day = instantToZoned(start, tz).date;
+      const at = zonedToInstant(day, 9 * 60, tz);
+      setDraft({ start: at, end: at + 3_600_000, anchor: `.cal-cell[data-day="${day}"]` });
+    },
+    [phone, seed, openDialog, tz, setDraft, justClosed],
   );
   const canEdit = actions.canEdit;
   const canDrag = useCallback((m: ApiMeeting) => !phone && m.status === 'planned' && canEdit(m), [phone, canEdit]);
@@ -254,7 +283,7 @@ export function Calendar() {
               </button>
             ))}
           </div>
-          <button type="button" className="btn btn-primary" data-testid="cal-new" onClick={() => openDialog({ companyId: company || null, dealId: deal || null, contactId: contact || null })}>
+          <button type="button" className="btn btn-primary" data-testid="cal-new" onClick={() => openDialog({ companyId: company || null, dealId: deal || null, contactId: contact || null, type: seed.type, organizerUserId: seed.organizerUserId })}>
             + New meeting
           </button>
         </div>
@@ -355,12 +384,26 @@ export function Calendar() {
         {view === 'table' ? (
           <MeetingTable meetings={shown} sort={sort} onSort={() => update({ sort: sort === 'asc' ? 'desc' : 'asc' })} onOpen={open} more={more} onMore={loadMore} />
         ) : view === 'month' ? (
-          <MonthGrid days={days} month={date.slice(0, 7)} meetings={shown} tz={tz} onOpen={open} onCreate={create} onDay={openDay} canDrag={canDrag} onReschedule={onReschedule} />
+          <MonthGrid days={days} month={date.slice(0, 7)} meetings={shown} tz={tz} onOpen={open} onCreate={create} onDay={openDay} canDrag={canDrag} onReschedule={onReschedule} draftDay={draft ? instantToZoned(draft.start, tz).date : null} />
         ) : view === 'week' && phone ? (
           <DayList days={days} meetings={shown} tz={tz} onOpen={open} onCreate={create} />
         ) : (
-          <TimeGrid key={view} days={days} meetings={shown} tz={tz} onOpen={open} onCreate={create} canDrag={canDrag} onReschedule={onReschedule} onDay={view === 'week' ? openDay : undefined} />
+          <TimeGrid
+            key={view}
+            days={days}
+            meetings={shown}
+            tz={tz}
+            onOpen={open}
+            onCreate={create}
+            draft={draft}
+            onDraft={phone ? undefined : setDraft}
+            justClosed={justClosed}
+            canDrag={canDrag}
+            onReschedule={onReschedule}
+            onDay={view === 'week' ? openDay : undefined}
+          />
         )}
+        {draft && <QuickCreate key={drafting!.scope + ':' + draft.anchor} draft={draft} seed={seed} onChange={setDraft} onClose={closeDraft} />}
       </div>
     </Screen>
   );

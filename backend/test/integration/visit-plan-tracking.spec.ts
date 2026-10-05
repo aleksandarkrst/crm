@@ -185,3 +185,49 @@ describe('the Overview summary', () => {
     expect(delta).toMatchObject({ planned: 0, plans: [] });
   });
 });
+
+describe('a quarter is the sum of its monthly plans (CD-212)', () => {
+  /** The first day of PAST's calendar quarter (the workspace's fiscal year starts in January), and another month of it. */
+  const month = Number(PAST.slice(5, 7));
+  const QUARTER = `${PAST.slice(0, 5)}${String(month - ((month - 1) % 3)).padStart(2, '0')}-01`;
+  const OTHER = QUARTER === PAST ? `${PAST.slice(0, 5)}${String(month + 1).padStart(2, '0')}-01` : QUARTER;
+  let otherPlan: Json;
+
+  beforeAll(async () => {
+    otherPlan = await ok('POST', '/crm/visit-plans', {
+      ...as(owner),
+      body: { salespersonUserId: seller.userId, periodStart: OTHER, lines: [{ companyId: companies.Alpha, plannedVisits: 1 }, { companyId: companies.Delta, plannedVisits: 1 }] },
+    });
+    await held(seller, (await visit(seller, 'Alpha other month', 'Alpha', dayAt(OTHER, 9))).id);
+  });
+
+  it('adds up planned visits per customer and caps each customer at the quarter’s sum', async () => {
+    const monthRow = (await ok('GET', `/crm/visit-plans/report?periodType=month&periodStart=${PAST}&salespersonUserId=${seller.userId}`, as(owner))).rows[0];
+    const q = await ok('GET', `/crm/visit-plans/report?periodType=quarter&periodStart=${QUARTER}&salespersonUserId=${seller.userId}`, as(owner));
+    expect(q.periodStart).toBe(QUARTER);
+    const row = q.rows.find((r: Json) => r.salespersonUserId === seller.userId);
+    expect(row.plans.map((p: Json) => p.id).sort()).toEqual([pastPlan.id, otherPlan.id].sort());
+    // Alpha: 2 + 1 planned, 4 held (3 counted, 1 over plan); Delta is planned in the other month, so its visit counts.
+    expect(row.planned).toBe(monthRow.planned + 2);
+    expect(row.heldCapped).toBe(monthRow.heldCapped + 2);
+    expect(row.unplanned).toBe(monthRow.unplanned - 1);
+    expect(row.completion).toBeCloseTo(row.heldCapped / row.planned);
+
+    const alpha = await ok('GET', `/crm/visit-plans/report?periodType=quarter&periodStart=${QUARTER}&companyId=${companies.Alpha}`, as(owner));
+    expect(alpha.rows.find((r: Json) => r.salespersonUserId === seller.userId)).toMatchObject({ planned: 3, held: 4, heldCapped: 3, overPlan: 1, completion: 1 });
+    const delta = await ok('GET', `/crm/visit-plans/report?periodType=quarter&periodStart=${QUARTER}&companyId=${companies.Delta}`, as(owner));
+    expect(delta.rows.find((r: Json) => r.salespersonUserId === seller.userId)).toMatchObject({ planned: 1, held: 1, heldCapped: 1, unplanned: 0 });
+  });
+
+  it('the Overview and company card summaries count the quarter the same way', async () => {
+    const report = await ok('GET', `/crm/visit-plans/report?periodType=quarter&periodStart=${QUARTER}&salespersonUserId=${seller.userId}`, as(owner));
+    const own = await ok('GET', `/crm/visit-plans/progress-summary?periodType=quarter&periodStart=${QUARTER}`, as(seller));
+    expect(own).toMatchObject({ planned: report.rows[0].planned, heldCapped: report.rows[0].heldCapped, completion: report.rows[0].completion });
+    expect(own.plans.map((p: Json) => p.id).sort()).toEqual([pastPlan.id, otherPlan.id].sort());
+    const delta = await ok('GET', `/crm/visit-plans/progress-summary?periodType=quarter&periodStart=${QUARTER}&all=1&companyId=${companies.Delta}`, as(owner));
+    expect(delta).toMatchObject({ planned: 1, held: 1, heldCapped: 1 });
+    // A month still counts only its own plan.
+    const past = await ok('GET', `/crm/visit-plans/progress-summary?periodType=month&periodStart=${PAST}&all=1&companyId=${companies.Delta}`, as(owner));
+    expect(past).toMatchObject({ planned: 0, plans: [] });
+  });
+});

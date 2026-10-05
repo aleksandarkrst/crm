@@ -65,7 +65,7 @@ export function VisitPlans() {
           <EmptyState
             testId="visit-plans-empty"
             title="No visit plans yet"
-            text="A visit plan says which customers a salesperson should visit in a month or quarter, and how often. The salesperson gets an email with their plan."
+            text="A visit plan says which customers a salesperson should visit in a month, and how often. A quarter adds up its three months. The salesperson gets an email with their plan."
             action={{ label: 'New plan', onClick: () => setCreating(true) }}
           />
         ) : (

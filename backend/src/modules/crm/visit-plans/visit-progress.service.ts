@@ -6,7 +6,7 @@ import { DatabaseService, type Tx } from '../../../shared/database/database.serv
 import { companies, deals, type MeetingStatus, meetingParticipants, meetings, tenants, users, VISIT_PLAN_PERIOD_TYPES, visitPlanLines, visitPlans } from '../../../shared/database/schema';
 import { zonedDayStart, zonedParts } from '../../../shared/time/zoned-time';
 import { IdList } from '../../../shared/validation/common';
-import { periodLabel, periodOf, periodStartOf } from './periods';
+import { periodLabel, periodOf, periodStartOf, shiftPeriod } from './periods';
 import {
   type CountedMeeting,
   countVisits,
@@ -82,11 +82,16 @@ export interface VisitRowMeetings {
 export interface VisitReportRow extends VisitRow {
   salespersonUserId: string;
   salespersonName: string;
-  /** null: no plan for this period, only unplanned visits. */
+  /** null: no plan for this period, only unplanned visits. For a quarter: its first monthly plan. */
   planId: string | null;
+  /** The monthly plans counted (a quarter has up to three), with their month. */
+  plans: { id: string; periodStart: string; periodLabel: string }[];
 }
 
 const isManager = (ctx: TenantContext) => ctx.role !== 'member';
+
+/** A group's monthly plans with their month's label ("October 2026"). */
+const monthsOf = (g: PlanGroup, fiscal: number) => g.plans.map((p) => ({ id: p.id, periodStart: p.periodStart, periodLabel: periodLabel('month', p.periodStart, shiftPeriod('month', p.periodStart, 1), fiscal) }));
 
 /** The workspace's time zone and fiscal-year start (tenants has no RLS: filter by tenant). */
 async function workspaceOf(tx: Tx, tenantId: string): Promise<{ timeZone: string; fiscal: number }> {
@@ -142,31 +147,99 @@ async function linesOf(tx: Tx, planIds: string[]): Promise<PlanLine[]> {
 }
 
 /**
- * The progress of each plan (by plan id), counted with countVisits from one query for the lines
- * and one for the meetings of all their periods. The daily digest uses it too.
+ * What one salesperson is counted against for a period: one monthly plan, or for a quarter
+ * (CD-212) the monthly plans of its three months, their lines summed per customer.
  */
+export interface PlanGroup {
+  salespersonUserId: string;
+  periodStart: string;
+  periodEnd: string;
+  plans: Pick<PlanRow, 'id' | 'periodStart'>[];
+}
+
+/** Lines of the group's plans, one per customer: the planned visits added up. */
+function mergeLines(lines: readonly PlanLine[], planIds: readonly string[], key: string): PlanLine[] {
+  const ids = new Set(planIds);
+  const byCompany = new Map<string, PlanLine>();
+  for (const l of lines) {
+    if (!ids.has(l.planId)) continue;
+    const had = byCompany.get(l.companyId);
+    byCompany.set(l.companyId, had ? { ...had, plannedVisits: had.plannedVisits + l.plannedVisits } : { ...l, planId: key });
+  }
+  return [...byCompany.values()];
+}
+
+/**
+ * The progress of each group (same order), counted with countVisits from one query for the lines
+ * and one for the meetings of all their periods. A quarter counts like a month: held, upcoming
+ * and not closed over the whole quarter, completion capped per customer at the quarter's sum.
+ */
+export async function progressOfGroups(
+  tx: Tx,
+  groups: readonly PlanGroup[],
+  timeZone: string,
+  now: Date,
+): Promise<{ lines: PlanLine[]; progress: VisitProgress; meetings: VisitMeeting[] }[]> {
+  const lines = await linesOf(
+    tx,
+    groups.flatMap((g) => g.plans.map((p) => p.id)),
+  );
+  const visits = await loadVisits(
+    tx,
+    groups.map((g) => ({ start: g.periodStart, end: g.periodEnd })),
+    timeZone,
+  );
+  return groups.map((g) => {
+    const own = mergeLines(
+      lines,
+      g.plans.map((p) => p.id),
+      g.plans[0]?.id ?? '',
+    );
+    const progress = countVisits({ salespersonUserId: g.salespersonUserId, periodStart: g.periodStart, periodEnd: g.periodEnd, lines: own }, visits, now, timeZone);
+    return { lines: own, progress, meetings: visits };
+  });
+}
+
+/** The progress of each plan (by plan id), on its own period. The daily digest uses it too. */
 export async function progressOfPlans(
   tx: Tx,
   plans: readonly Pick<PlanRow, 'id' | 'salespersonUserId' | 'periodStart' | 'periodEnd'>[],
   timeZone: string,
   now: Date,
 ): Promise<Map<string, { lines: PlanLine[]; progress: VisitProgress; meetings: VisitMeeting[] }>> {
-  const lines = await linesOf(
+  const counted = await progressOfGroups(
     tx,
-    plans.map((p) => p.id),
-  );
-  const visits = await loadVisits(
-    tx,
-    plans.map((p) => ({ start: p.periodStart, end: p.periodEnd })),
+    plans.map((p) => ({ salespersonUserId: p.salespersonUserId, periodStart: p.periodStart, periodEnd: p.periodEnd, plans: [p] })),
     timeZone,
+    now,
   );
-  const out = new Map<string, { lines: PlanLine[]; progress: VisitProgress; meetings: VisitMeeting[] }>();
-  for (const p of plans) {
-    const own = lines.filter((l) => l.planId === p.id);
-    const progress = countVisits({ salespersonUserId: p.salespersonUserId, periodStart: p.periodStart, periodEnd: p.periodEnd, lines: own }, visits, now, timeZone);
-    out.set(p.id, { lines: own, progress, meetings: visits });
+  return new Map(plans.map((p, i) => [p.id, counted[i]!]));
+}
+
+/**
+ * The plans counted for a period, one group per salesperson: a month's monthly plans, or the
+ * monthly plans of a quarter's three months (CD-212). Quarterly plans saved before CD-212 are
+ * left out: they only show on their own page.
+ */
+export async function planGroupsOf(tx: Tx, period: { type: PlanRow['periodType']; start: string; end: string }, salespersonUserId?: string): Promise<PlanGroup[]> {
+  const rows = await tx
+    .select({ id: visitPlans.id, salespersonUserId: visitPlans.salespersonUserId, periodStart: visitPlans.periodStart })
+    .from(visitPlans)
+    .where(
+      and(
+        eq(visitPlans.periodType, 'month'),
+        period.type === 'month' ? eq(visitPlans.periodStart, period.start) : and(gte(visitPlans.periodStart, period.start), lt(visitPlans.periodStart, period.end)),
+        salespersonUserId ? eq(visitPlans.salespersonUserId, salespersonUserId) : undefined,
+      ),
+    )
+    .orderBy(asc(visitPlans.periodStart));
+  const groups = new Map<string, PlanGroup>();
+  for (const r of rows) {
+    const g = groups.get(r.salespersonUserId) ?? { salespersonUserId: r.salespersonUserId, periodStart: period.start, periodEnd: period.end, plans: [] };
+    g.plans.push({ id: r.id, periodStart: r.periodStart });
+    groups.set(r.salespersonUserId, g);
   }
-  return out;
+  return [...groups.values()];
 }
 
 /** A row's numbers from a plan's progress; with `companyId`, only that customer's. */
@@ -292,19 +365,19 @@ export class VisitProgressService {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const { timeZone, fiscal } = await workspaceOf(tx, ctx.tenantId);
       const period = this.period(query.periodType, query.periodStart, fiscal, timeZone, now);
-      const plans = await this.plansOf(tx, query.periodType, period.start, query.salespersonUserId);
-      const counted = await progressOfPlans(tx, plans, timeZone, now);
+      const groups = await planGroupsOf(tx, period, query.salespersonUserId);
+      const counted = await progressOfGroups(tx, groups, timeZone, now);
       const expectedPace = periodShare(period.start, period.end, now, timeZone);
 
       const rows: Omit<VisitReportRow, 'salespersonName'>[] = [];
-      for (const p of plans) {
-        const c = counted.get(p.id)!;
-        if (query.companyId && !c.lines.some((l) => l.companyId === query.companyId) && !c.progress.unplanned.some((u) => u.companyId === query.companyId)) continue;
-        rows.push({ salespersonUserId: p.salespersonUserId, planId: p.id, ...rowOf(c.progress, query.companyId, period.start, now, timeZone) });
-      }
+      groups.forEach((g, i) => {
+        const c = counted[i]!;
+        if (query.companyId && !c.lines.some((l) => l.companyId === query.companyId) && !c.progress.unplanned.some((u) => u.companyId === query.companyId)) return;
+        rows.push({ salespersonUserId: g.salespersonUserId, planId: g.plans[0]?.id ?? null, plans: monthsOf(g, fiscal), ...rowOf(c.progress, query.companyId, period.start, now, timeZone) });
+      });
       // Held visits credited to someone without a plan for this period still show (all unplanned).
-      const visits = plans.length ? [...counted.values()][0]!.meetings : await loadVisits(tx, [period], timeZone);
-      const withPlan = new Set(plans.map((p) => p.salespersonUserId));
+      const visits = counted.length ? counted[0]!.meetings : await loadVisits(tx, [period], timeZone);
+      const withPlan = new Set(groups.map((g) => g.salespersonUserId));
       const others = new Set<string>();
       for (const m of visits) {
         const who = creditedSalesperson(m);
@@ -315,7 +388,7 @@ export class VisitProgressService {
       }
       for (const who of others) {
         const progress = countVisits({ salespersonUserId: who, periodStart: period.start, periodEnd: period.end, lines: [] }, visits, now, timeZone);
-        if (progress.totals.unplanned) rows.push({ salespersonUserId: who, planId: null, ...rowOf(progress, query.companyId, period.start, now, timeZone) });
+        if (progress.totals.unplanned) rows.push({ salespersonUserId: who, planId: null, plans: [], ...rowOf(progress, query.companyId, period.start, now, timeZone) });
       }
 
       const names = await this.namesOf(
@@ -337,21 +410,22 @@ export class VisitProgressService {
 
   /**
    * The Overview card (and the company card, with `companyId`): the period's totals over the
-   * plans of one salesperson, or of everyone (`all=1`, the default for owners and admins).
-   * Members always get their own.
+   * plans of one salesperson, or of everyone (`all=1`, the default for owners and admins). A
+   * quarter adds up the monthly plans of its three months (CD-212). Members always get their own.
    */
   summary(ctx: TenantContext, query: ProgressSummaryQuery, now = new Date()) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const { timeZone, fiscal } = await workspaceOf(tx, ctx.tenantId);
       const period = this.period(query.periodType, query.periodStart, fiscal, timeZone, now);
       const salesperson = !isManager(ctx) ? ctx.userId : query.all ? undefined : query.salespersonUserId;
-      let plans = await this.plansOf(tx, query.periodType, period.start, salesperson);
-      const counted = await progressOfPlans(tx, plans, timeZone, now);
-      if (query.companyId) plans = plans.filter((p) => counted.get(p.id)!.lines.some((l) => l.companyId === query.companyId));
-      const rows = plans.map((p) => rowOf(counted.get(p.id)!.progress, query.companyId, period.start, now, timeZone));
+      const all = await planGroupsOf(tx, period, salesperson);
+      const allCounted = await progressOfGroups(tx, all, timeZone, now);
+      const keep = allCounted.map((c) => !query.companyId || c.lines.some((l) => l.companyId === query.companyId));
+      const groups = all.filter((_, i) => keep[i]);
+      const rows = allCounted.filter((_, i) => keep[i]).map((c) => rowOf(c.progress, query.companyId, period.start, now, timeZone));
       const names = await this.namesOf(
         tx,
-        plans.map((p) => p.salespersonUserId),
+        groups.map((g) => g.salespersonUserId),
       );
       return {
         periodType: query.periodType,
@@ -360,7 +434,7 @@ export class VisitProgressService {
         periodLabel: period.label,
         salespersonUserId: salesperson ?? null,
         ...sumRows(rows, periodShare(period.start, period.end, now, timeZone), period.start, now, timeZone),
-        plans: plans.map((p) => ({ id: p.id, salespersonUserId: p.salespersonUserId, salespersonName: names.get(p.salespersonUserId) ?? 'Former member' })),
+        plans: groups.flatMap((g) => monthsOf(g, fiscal).map((p) => ({ ...p, salespersonUserId: g.salespersonUserId, salespersonName: names.get(g.salespersonUserId) ?? 'Former member' }))),
       };
     });
   }
@@ -371,13 +445,6 @@ export class VisitProgressService {
     const period = periodOf(type, first, fiscal);
     if (!period) throw new BadRequestException(type === 'month' ? 'A month starts on its first day' : "A quarter starts on the first day of a quarter of the workspace's fiscal year");
     return period;
-  }
-
-  private plansOf(tx: Tx, type: PlanRow['periodType'], start: string, salespersonUserId?: string) {
-    return tx
-      .select()
-      .from(visitPlans)
-      .where(and(eq(visitPlans.periodType, type), eq(visitPlans.periodStart, start), salespersonUserId ? eq(visitPlans.salespersonUserId, salespersonUserId) : undefined));
   }
 
   private async namesOf(tx: Tx, ids: string[]): Promise<Map<string, string>> {
