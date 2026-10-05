@@ -59,7 +59,6 @@ describe('module and workspace switcher', () => {
       [
         ['planning', 'Coming soon'],
         ['projects', 'Coming soon'],
-        ['workforce', 'Coming soon'],
       ],
     );
   });
@@ -70,6 +69,12 @@ describe('module and workspace switcher', () => {
     await closed();
     await click(page, LOGO);
     assert.equal((await modules()).find((m) => m.current)?.id, 'overview');
+    // Workforce opens the Org structure page (CD-137) and is the current module there.
+    await click(page, `${POP} [data-module=workforce]`);
+    await page.waitForFunction(() => location.pathname === '/org');
+    await closed();
+    await click(page, LOGO);
+    assert.equal((await modules()).find((m) => m.current)?.id, 'workforce');
     await click(page, `${POP} [data-module=reporting]`);
     await page.waitForFunction(() => location.pathname.startsWith('/reports/'));
     await closed();
@@ -78,7 +83,7 @@ describe('module and workspace switcher', () => {
   step('locked modules are not clickable', async () => {
     await click(page, LOGO);
     await click(page, `${POP} [data-module=planning]`);
-    await click(page, `${POP} [data-module=workforce]`);
+    await click(page, `${POP} [data-module=projects]`);
     assert.ok(await page.$(POP), 'still open');
     assert.ok(new URL(page.url()).pathname.startsWith('/reports/'), 'still on Reports');
   });

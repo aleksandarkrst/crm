@@ -1622,7 +1622,8 @@ Audit entries for employees list the changed field names only, never values.
 ### Org structure page (CD-137)
 
 `/org` (`screens/OrgStructure.tsx`, parts in `screens/org/`), sidebar "Org structure" after Products
-(under "More" on phones), for every member.
+(under "More" on phones), for every member. In the module switcher (CD-214) it is Workforce
+(`components/modules.ts`, current on `/org` and `/people/…`).
 
 - **Data**: the store's people slice (`store/people.ts`, `s.people`) reads `GET /people/access`, then
   the whole directory (inactive too for HR), departments and teams, when a screen watches it
