@@ -6,7 +6,7 @@
 // Reports, a member neither.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, clickButton, createWorkspace, email, eventually, finishOnboarding, signIn, steps, text, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, createWorkspace, email, eventually, finishOnboarding, setValue, signIn, steps, text, useBrowser } from '../lib/harness.mjs';
 
 describe('roles and permissions', () => {
   const browser = useBrowser();
@@ -87,18 +87,18 @@ describe('roles and permissions', () => {
   step('Settings → Employees saves its settings; members have no such tab', async () => {
     await olga.goto(`${BASE_URL}/settings/employees`, { waitUntil: 'networkidle0' });
     await olga.waitForSelector('[data-testid=employee-default-hours]');
-    await olga.click('[data-testid=employee-default-hours]', { clickCount: 3 });
-    await olga.type('[data-testid=employee-default-hours]', '38');
+    await setValue(olga, '[data-testid=employee-default-hours]', '38');
     await click(olga, '[data-setting=number-required] [role=switch]');
+    await olga.waitForSelector('[data-setting=number-required] [role=switch][aria-checked=true]');
     await click(olga, '[data-setting=self-edit-bank] [role=switch]');
+    await olga.waitForSelector('[data-setting=self-edit-bank] [role=switch][aria-checked=false]');
     const saved = await eventually(async () => {
       const ws = await api(olga, '/workspace');
       return ws.employeeDefaultWeeklyHours === 38 && ws.employeeNumberRequired === true && ws.employeeSelfEditBank === false && ws;
     });
-    assert.ok(saved, 'saved');
+    assert.ok(saved, `saved: ${JSON.stringify(await api(olga, '/workspace'))}`);
     // Out of range is not saved.
-    await olga.click('[data-testid=employee-default-hours]', { clickCount: 3 });
-    await olga.type('[data-testid=employee-default-hours]', '0');
+    await setValue(olga, '[data-testid=employee-default-hours]', '0');
     assert.ok((await text(olga)).includes('Between 1 and 60 hours.'));
     await olga.reload({ waitUntil: 'networkidle0' });
     await olga.waitForSelector('[data-testid=employee-default-hours]');
