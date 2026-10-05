@@ -102,7 +102,11 @@ describe('org structure', () => {
     assert.equal((await listNames())[0], 'Ana Petrović');
     await click(page, '[data-testid=org-sort-jobTitle]');
     await page.waitForFunction(() => new URLSearchParams(location.search).get('sort') === 'jobTitle');
-    assert.deepEqual((await listNames()).slice(0, 2), ['Ana Petrović', 'Marko Ilić']);
+    // By job title: CEO first, then the others in order (the owner's title comes from onboarding).
+    const titles = await page.$$eval('[data-testid=org-row] .org-cell[data-col=jobTitle]', (els) => els.map((e) => e.textContent.trim()));
+    assert.equal((await listNames())[0], 'Ana Petrović');
+    const filled = titles.filter(Boolean);
+    assert.deepEqual(filled, [...filled].sort((x, y) => x.localeCompare(y, undefined, { sensitivity: 'base' })));
     // Owners see the HR columns; there is no Roles value for an owner but Admin.
     const headers = await page.$$eval('.org-list-head .sort-btn span:first-child, .org-list-head .th', (els) => els.map((e) => e.textContent));
     assert.deepEqual(headers, ['Name', 'Job title', 'Department', 'Team', 'Reports to', 'Work email', 'Work phone', 'Start date', 'Employment type', 'Status', 'Account', 'Roles']);
