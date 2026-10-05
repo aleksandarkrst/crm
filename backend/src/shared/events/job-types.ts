@@ -38,6 +38,17 @@ export interface JobPayloads {
   'identity.invitation-email': { tenantId: string; invitationId: string };
   /** Sent by identity when someone creates an account with email; the worker emails the confirmation link (CD-114). */
   'identity.signup-email': { requestId: string };
+  /**
+   * Sent by people when an employee's IBAN or foreign currency IBAN is added, changed or removed,
+   * by anyone (milestone 13, spec 10.2). The people worker emails the employee (sign-in email if
+   * linked, else work email) the masked numbers and who changed them. Masks only, never a number.
+   */
+  'people.bank-account-changed-email': {
+    tenantId: string;
+    employeeId: string;
+    actorUserId: string | null;
+    changes: { account: 'iban' | 'fxIban'; kind: 'added' | 'changed' | 'removed'; masked: string }[];
+  };
   /** Cron (every 15 minutes): queues the daily digests of workspaces where it is morning now. */
   'notifications.digest-tick': Record<string, never>;
   /** One member's daily digest for one workspace and local date. `force` skips the "once a day" and "turned on" checks (dev trigger). */
@@ -60,8 +71,9 @@ export const JOB_NAMES = [
   'identity.signup-email',
   'notifications.digest-tick',
   'notifications.daily-digest',
+  'people.bank-account-changed-email',
   'reporting.nightly',
 ] as const satisfies readonly JobName[];
 
 /** Jobs that send email: retried MAIL_RETRY_LIMIT times with backoff from MAIL_RETRY_DELAY_SECONDS. */
-export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest']);
+export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email']);
