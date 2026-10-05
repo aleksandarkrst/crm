@@ -98,15 +98,16 @@ describe('org structure', () => {
     await openOrg('?tab=list');
     assert.deepEqual(await listNames(), ['Marko Ilić', 'Ivan Jović', 'Mila Kostić', 'Petar Lukić', 'Sara Nikolić', 'Olga Owner', 'Ana Petrović']);
     await click(page, '[data-testid=org-sort-name]');
-    await page.waitForFunction(() => new URLSearchParams(location.search).get('dir') === 'desc');
-    assert.equal((await listNames())[0], 'Ana Petrović');
+    // The URL changes first; the rows follow in the same navigation (a transition): wait for them.
+    await page.waitForFunction(() => document.querySelector('[data-testid=org-row] .org-cell[data-col=name] .org-cell-ellipsis')?.textContent === 'Ana Petrović');
     await click(page, '[data-testid=org-sort-jobTitle]');
     await page.waitForFunction(() => new URLSearchParams(location.search).get('sort') === 'jobTitle');
-    // By job title: CEO first, then the others in order (the owner's title comes from onboarding).
-    const titles = await page.$$eval('[data-testid=org-row] .org-cell[data-col=jobTitle]', (els) => els.map((e) => e.textContent.trim()));
+    // By job title (the owner's title comes from onboarding): wait until the rows are in that order.
+    await page.waitForFunction(() => {
+      const titles = [...document.querySelectorAll('[data-testid=org-row] .org-cell[data-col=jobTitle]')].map((e) => e.textContent.trim()).filter(Boolean);
+      return titles.length >= 6 && titles.every((t, i) => i === 0 || titles[i - 1].localeCompare(t, undefined, { sensitivity: 'base' }) <= 0);
+    });
     assert.equal((await listNames())[0], 'Ana Petrović');
-    const filled = titles.filter(Boolean);
-    assert.deepEqual(filled, [...filled].sort((x, y) => x.localeCompare(y, undefined, { sensitivity: 'base' })));
     // Owners see the HR columns; there is no Roles value for an owner but Admin.
     const headers = await page.$$eval('.org-list-head .sort-btn span:first-child, .org-list-head .th', (els) => els.map((e) => e.textContent));
     assert.deepEqual(headers, ['Name', 'Job title', 'Department', 'Team', 'Reports to', 'Work email', 'Work phone', 'Start date', 'Employment type', 'Status', 'Account', 'Roles']);
