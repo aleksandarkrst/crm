@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CsvError, detectDelimiter, parseCsv, unguardCell } from '../src/modules/crm/import/csv';
+import { CsvError, detectDelimiter, parseCsv, unguardCell } from '../src/shared/import/csv';
 import { guessMapping, IMPORT_FIELDS, templateCsv } from '../src/modules/crm/import/import-fields';
 import { normalizeAmount, normalizeDate } from '../src/modules/crm/import/import.service';
 

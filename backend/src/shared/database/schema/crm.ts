@@ -845,7 +845,8 @@ export type HistoryEntityType = (typeof HISTORY_ENTITY_TYPES)[number];
  */
 export const PEOPLE_HISTORY_ENTITY_TYPES = ['employee', 'department', 'team'] as const;
 export type PeopleHistoryEntityType = (typeof PEOPLE_HISTORY_ENTITY_TYPES)[number];
-export const RECORD_CHANGE_ACTIONS = ['created', 'updated', 'deleted', 'line_added', 'line_changed', 'line_removed', 'participant_added', 'participant_removed'] as const;
+/** `imported`: a record created by the employee import (CD-141), in place of `created` (drizzle/0040). */
+export const RECORD_CHANGE_ACTIONS = ['created', 'imported', 'updated', 'deleted', 'line_added', 'line_changed', 'line_removed', 'participant_added', 'participant_removed'] as const;
 export type RecordChangeAction = (typeof RECORD_CHANGE_ACTIONS)[number];
 
 /**

@@ -1,34 +1,26 @@
 import { randomUUID } from 'node:crypto';
-import { BadRequestException, HttpException, Injectable, PayloadTooLargeException } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { asc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
-import { mapDbError } from '../../../shared/database/errors';
 import { activities, BILLING_FREQUENCIES, type BillingFrequency, BUYER_ROLES, companies, contacts, dealStageHistory, deals, funnels, funnelStages, memberships, products, tenants, users } from '../../../shared/database/schema';
 import { CreateCompany } from '../companies/companies.service';
 import { CreateContact } from '../contacts/contacts.service';
 import { CreateDeal } from '../deals/deals.service';
 import { CreateProduct } from '../products/products.service';
 import { StageHistoryService } from '../deals/stage-history.service';
-import { CsvError, type CsvRow, parseCsv, unguardCell } from './csv';
-import { type ColumnMapping, guessMapping, IMPORT_FIELDS, type ImportType } from './import-fields';
+import type { CsvRow } from '../../../shared/import/csv';
+import { ColumnMappingSchema, failureReason as reasonOf, IMPORT_BATCH_SIZE as BATCH_SIZE, normalizeDate, prepareImport, PREVIEW_PROBLEMS, PREVIEW_ROWS, valuesOf } from '../../../shared/import/import-file';
+import { type ColumnMapping, IMPORT_FIELDS, type ImportType } from './import-fields';
 
-/** Limits: the file as UTF-8 bytes, and data rows (the header doesn't count). */
-export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
-export const MAX_IMPORT_ROWS = 5000;
-/** Rows per transaction on commit. */
-const BATCH_SIZE = 200;
-/** Rows shown in the preview table. */
-const PREVIEW_ROWS = 20;
-/** Invalid rows listed in the preview (the counts cover every row). */
-const PREVIEW_PROBLEMS = 100;
+export { MAX_IMPORT_BYTES, MAX_IMPORT_ROWS, normalizeDate } from '../../../shared/import/import-file';
 
 export const ImportRequest = z.object({
   csv: z.string().min(1, 'The file is empty'),
   /** Field key → column index; omitted on the first preview, which guesses it from the headers. */
-  mapping: z.record(z.string(), z.number().int().min(0).nullable()).optional(),
+  mapping: ColumnMappingSchema.optional(),
   /** What to do with a row that matches an existing record (companies by name, contacts by email). */
   duplicates: z.enum(['skip', 'update']).default('skip'),
   /** Deals: the funnel for rows without a Funnel column value (default: the first funnel). */
@@ -104,12 +96,6 @@ export function normalizeAmount(raw: string): string {
   if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(v)) return v.replace(/\./g, '').replace(',', '.');
   if (/^\d+,\d{1,2}$/.test(v)) return v.replace(',', '.');
   return v;
-}
-
-/** ISO dates stay; DD.MM.YYYY (and D.M.YYYY) become ISO. Other formats are left for zod to reject. */
-export function normalizeDate(raw: string): string {
-  const m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?$/.exec(raw.trim());
-  return m ? `${m[3]}-${m[2]!.padStart(2, '0')}-${m[1]!.padStart(2, '0')}` : raw.trim();
 }
 
 /** Only the values that are present, so an update never blanks a field the file left empty. */
@@ -262,45 +248,12 @@ export class ImportService {
   // ------------------------------------------------------------------ parsing and lookups
 
   private prepare(type: ImportType, req: ImportRequest): Prepared {
-    if (Buffer.byteLength(req.csv, 'utf8') > MAX_IMPORT_BYTES) {
-      throw new PayloadTooLargeException(`The file is larger than ${MAX_IMPORT_BYTES / 1024 / 1024} MB. Split it into smaller files.`);
-    }
-    let parsed;
-    try {
-      parsed = parseCsv(req.csv);
-    } catch (err) {
-      if (err instanceof CsvError) throw new BadRequestException(`The file can't be read as CSV. ${err.message}`);
-      throw err;
-    }
-    if (parsed.rows.length === 0) throw new BadRequestException('The file has a header row but no data rows');
-    if (parsed.rows.length > MAX_IMPORT_ROWS) {
-      throw new BadRequestException(`The file has ${parsed.rows.length.toLocaleString('en-US')} rows; the limit is ${MAX_IMPORT_ROWS.toLocaleString('en-US')}. Split it into smaller files.`);
-    }
-    const fields = IMPORT_FIELDS[type];
-    const mapping = req.mapping ? { ...req.mapping } : guessMapping(type, parsed.headers);
-    for (const [field, idx] of Object.entries(mapping)) {
-      if (!fields.some((f) => f.key === field)) throw new BadRequestException(`Unknown field "${field}" for ${type}`);
-      if (idx !== null && idx >= parsed.headers.length) throw new BadRequestException(`Column ${idx + 1} doesn't exist (the file has ${parsed.headers.length})`);
-    }
-    for (const f of fields) mapping[f.key] ??= null;
-    const warnings: string[] = [];
-    if (req.csv.includes('�')) warnings.push('Some characters could not be read. Save the file as UTF-8 (in Excel: "CSV UTF-8") and upload it again.');
-    return {
-      type,
-      headers: parsed.headers,
-      delimiter: parsed.delimiter,
-      rows: parsed.rows,
-      mapping,
-      missingRequired: fields.filter((f) => f.required && mapping[f.key] === null).map((f) => f.label),
-      warnings,
-    };
+    return { type, ...prepareImport(IMPORT_FIELDS[type], type, req.csv, req.mapping) };
   }
 
   /** The mapped cells of a row by field key, trimmed, with the export's formula guard removed. */
   private valuesOf(prep: Prepared, row: CsvRow): Record<string, string> {
-    const values: Record<string, string> = {};
-    for (const [field, idx] of Object.entries(prep.mapping)) values[field] = idx === null ? '' : unguardCell(row.cells[idx] ?? '').trim();
-    return values;
+    return valuesOf(prep.mapping, row);
   }
 
   private async loadLookups(tx: Tx, ctx: TenantContext, type: ImportType): Promise<Lookups> {
@@ -693,12 +646,3 @@ function restoreLookups(lk: Lookups, saved: ReturnType<typeof cloneLookups>) {
   lk.productFrequency = saved.productFrequency;
 }
 
-/** A short reason for a row that failed to save. */
-function reasonOf(err: unknown): string {
-  try {
-    mapDbError(err);
-  } catch (mapped) {
-    if (mapped instanceof HttpException) return mapped.message;
-  }
-  return err instanceof Error && err.message ? err.message.split('\n')[0]!.slice(0, 200) : 'Could not be saved';
-}

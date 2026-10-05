@@ -49,6 +49,13 @@ export interface JobPayloads {
     actorUserId: string | null;
     changes: { account: 'iban' | 'fxIban'; kind: 'added' | 'changed' | 'removed'; masked: string }[];
   };
+  /**
+   * Sent by people when an Admin imports employees with "Invite imported employees to Pultly"
+   * (CD-141, spec 8.6). Identity's worker invites each new employee that has a work email as a
+   * Member (invitation linked to the employee, `identity.invitation-email` queued), skipping those
+   * already members, invited, linked or inactive. Only while the actor is still an owner or admin.
+   */
+  'people.import-invite': { tenantId: string; actorUserId: string; employeeIds: string[] };
   /** Cron (every 15 minutes): queues the daily digests of workspaces where it is morning now. */
   'notifications.digest-tick': Record<string, never>;
   /** One member's daily digest for one workspace and local date. `force` skips the "once a day" and "turned on" checks (dev trigger). */
@@ -72,6 +79,7 @@ export const JOB_NAMES = [
   'notifications.digest-tick',
   'notifications.daily-digest',
   'people.bank-account-changed-email',
+  'people.import-invite',
   'reporting.nightly',
 ] as const satisfies readonly JobName[];
 
