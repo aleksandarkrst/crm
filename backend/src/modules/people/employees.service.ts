@@ -446,7 +446,7 @@ export class EmployeesService {
     await tx
       .insert(employeePersonal)
       .values({ tenantId: ctx.tenantId, employeeId, ...set })
-      .onConflictDoUpdate({ target: employeePersonal.employeeId, set });
+      .onConflictDoUpdate({ target: [employeePersonal.tenantId, employeePersonal.employeeId], set });
     return changes;
   }
 

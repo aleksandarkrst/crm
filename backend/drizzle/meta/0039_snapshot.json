@@ -1,6 +1,6 @@
 {
-  "id": "212fdca2-0d1f-488f-8ffe-76329e7a3421",
-  "prevId": "0b977949-5fbe-4fd9-aace-bedc9a896316",
+  "id": "77153d57-d6cb-4753-af75-c4e9f363999e",
+  "prevId": "675784d4-8b6b-4dbf-9d3d-4612b9af0d95",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -5464,7 +5464,7 @@
         "employee_id": {
           "name": "employee_id",
           "type": "uuid",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
         },
         "date_of_birth": {
@@ -5646,17 +5646,16 @@
           "onDelete": "cascade"
         }
       },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "employee_personal_tenant_employee_uq": {
-          "name": "employee_personal_tenant_employee_uq",
+      "compositePrimaryKeys": {
+        "employee_personal_pk": {
+          "name": "employee_personal_pk",
           "columns": [
             "tenant_id",
             "employee_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

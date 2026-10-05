@@ -36,10 +36,10 @@ describe('the migration (people_create_member_employee for every membership)', (
       await admin.query(`insert into tenants (id, name, slug) values ($1, 'Old', $2)`, [t, `old-${t.slice(0, 8)}`]);
       await admin.query(
         `insert into users (id, auth_subject, email, display_name, job_title, phone) values
-          ($1, $1, 'Ana.Petrovic@old.test', 'Ana Marija Petrović', 'CEO', '+381 11 123'),
-          ($2, $2, 'marko@old.test', 'Marko', null, null),
-          ($3, $3, 'ivan@old.test', null, null, null)`,
-        [u1, u2, u3],
+          ($1, $4, 'Ana.Petrovic@old.test', 'Ana Marija Petrović', 'CEO', '+381 11 123'),
+          ($2, $5, 'marko@old.test', 'Marko', null, null),
+          ($3, $6, 'ivan@old.test', null, null, null)`,
+        [u1, u2, u3, `test|${u1}`, `test|${u2}`, `test|${u3}`],
       );
       await admin.query(`insert into memberships (tenant_id, user_id, role) values ($1, $2, 'owner'), ($1, $3, 'member'), ($1, $4, 'member')`, [t, u1, u2, u3]);
       // The same loop as drizzle/0039_people_rls.sql.

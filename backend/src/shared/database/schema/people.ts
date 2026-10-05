@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, date, foreignKey, index, numeric, pgTable, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, date, foreignKey, index, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { tenants, users } from './platform';
 
 /**
@@ -160,7 +160,7 @@ export const employeePersonal = pgTable(
   'employee_personal',
   {
     tenantId: tenantId(),
-    employeeId: uuid('employee_id').primaryKey(),
+    employeeId: uuid('employee_id').notNull(),
     dateOfBirth: date('date_of_birth'),
     privateEmail: text('private_email'),
     privatePhone: text('private_phone'),
@@ -187,7 +187,8 @@ export const employeePersonal = pgTable(
     ...timestamps,
   },
   (t) => [
-    unique('employee_personal_tenant_employee_uq').on(t.tenantId, t.employeeId),
+    // Keyed by workspace and employee, so another workspace's insert fails on the foreign key, not on a duplicate key.
+    primaryKey({ columns: [t.tenantId, t.employeeId], name: 'employee_personal_pk' }),
     foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'employee_personal_employee_fk' }).onDelete('cascade'),
   ],
 );

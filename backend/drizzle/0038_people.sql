@@ -13,7 +13,7 @@ CREATE TABLE "departments" (
 --> statement-breakpoint
 CREATE TABLE "employee_personal" (
 	"tenant_id" uuid NOT NULL,
-	"employee_id" uuid PRIMARY KEY NOT NULL,
+	"employee_id" uuid NOT NULL,
 	"date_of_birth" date,
 	"private_email" text,
 	"private_phone" text,
@@ -38,7 +38,7 @@ CREATE TABLE "employee_personal" (
 	"fx_bank_address" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "employee_personal_tenant_employee_uq" UNIQUE("tenant_id","employee_id")
+	CONSTRAINT "employee_personal_pk" PRIMARY KEY("tenant_id","employee_id")
 );
 --> statement-breakpoint
 CREATE TABLE "employee_roles" (
