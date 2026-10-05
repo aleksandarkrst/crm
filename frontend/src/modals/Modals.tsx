@@ -59,6 +59,8 @@ function NewDealModal() {
   const contact = contactPick && contactOptions.includes(contactPick) ? contactPick : contactOptions[0]!;
   const funnel = s.funnels[type];
   const [custom, setCustom] = useState<CustomFieldPatch>({});
+  // From the meeting form (CD-213): the meeting's company stays, and the dialog shows above the meeting's.
+  const forMeeting = s.newLeadForMeeting && !!s.newLeadCompanyId && company === s.newLeadCompanyId;
 
   const create = async () => {
     const fields = customFieldsForCreate(customFieldsOf(s, 'deal'), custom);
@@ -77,12 +79,12 @@ function NewDealModal() {
   };
 
   return (
-    <Modal maxWidth={560} gap={18}>
+    <Modal maxWidth={560} gap={18} z={s.newLeadForMeeting ? 50 : undefined}>
       <ModalHeader title="New deal" sub="Pick the customer type and the funnel, activities and documents come with it." />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <label className="form-label">
           Company
-          <select className="form-input" value={company} onChange={(e) => { setCompany(e.target.value); setContactPick(null); }}>
+          <select className="form-input" data-testid="new-deal-company" value={company} disabled={forMeeting} onChange={(e) => { setCompany(e.target.value); setContactPick(null); }}>
             {[...companies, { value: NEW_CO, label: NEW_CO }].map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -115,10 +117,10 @@ function NewDealModal() {
         Assigns the {funnel.stages.length}-stage funnel. First task: {funnel.stages[0]?.activity}.
       </div>
       <div className="modal-actions">
-        <button type="button" className="btn btn-secondary" onClick={() => set({ newLeadOpen: false, newLeadCompanyId: null, newLeadContactId: null })}>
+        <button type="button" className="btn btn-secondary" onClick={() => set({ newLeadOpen: false, newLeadCompanyId: null, newLeadContactId: null, newLeadForMeeting: false })}>
           Cancel
         </button>
-        <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void create()}>
+        <button type="button" className="btn btn-primary" data-testid="new-deal-create" disabled={busy} onClick={() => void create()}>
           {busy ? 'Creating…' : <>Create &amp; start funnel</>}
         </button>
       </div>

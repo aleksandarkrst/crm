@@ -18,6 +18,7 @@ describe('visit plan tracking', () => {
   let planId;
   let period;
   let meetingId;
+  let alphaDealId;
 
   const textOf = (page, selector) => page.$eval(selector, (el) => el.textContent.trim());
 
@@ -27,6 +28,9 @@ describe('visit plan tracking', () => {
     await signIn(olga, email('track-olga'), 'Olga Owner');
     await createWorkspace(olga, 'Tracking Co');
     alphaId = (await api(olga, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Alpha Track' }) })).id;
+    // Its one open deal (Olga's): the meeting dialog picks it (a meeting needs a deal, CD-213).
+    const funnels = await api(olga, '/crm/funnels');
+    alphaDealId = (await api(olga, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Alpha deal', funnelId: funnels[0].id, companyId: alphaId }) })).id;
     const { token } = await api(olga, '/team/invitations', { method: 'POST', body: JSON.stringify({ email: email('track-mia'), role: 'member' }) });
     mia = await browser.person('mia');
     await mia.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
@@ -50,6 +54,7 @@ describe('visit plan tracking', () => {
     await mia.waitForFunction(() => document.querySelector('[data-testid=visit-plan-held]')?.textContent.trim() === '0');
     await click(mia, '[data-testid=visit-plan-schedule]');
     await mia.waitForSelector('.modal [data-testid=meeting-form]');
+    await mia.waitForFunction((id) => document.querySelector('[data-testid=meeting-deal]')?.value === id, {}, alphaDealId);
     await click(mia, '[data-testid=meeting-save]');
     await mia.waitForSelector('[data-testid=meeting-no-external]');
     await click(mia, '[data-testid=meeting-save]');
@@ -111,7 +116,7 @@ describe('visit plan tracking', () => {
     const start = new Date(Date.now() - 90_000);
     const own = await api(olga, '/crm/meetings', {
       method: 'POST',
-      body: JSON.stringify({ title: 'Olga visits', type: 'visit', companyId: alphaId, startsAt: start.toISOString(), endsAt: new Date(start.getTime() + 1_800_000).toISOString(), internalUserIds: [miaId] }),
+      body: JSON.stringify({ title: 'Olga visits', type: 'visit', companyId: alphaId, dealId: alphaDealId, startsAt: start.toISOString(), endsAt: new Date(start.getTime() + 1_800_000).toISOString(), internalUserIds: [miaId] }),
     });
     await api(olga, `/crm/meetings/${own.id}/held`, { method: 'POST' });
     assert.deepEqual((await api(olga, `/crm/visit-plans/report?periodType=month&periodStart=${period.periodStart}`)).rows.find((r) => r.salespersonUserId === miaId).meetingIds.held, [meetingId]);

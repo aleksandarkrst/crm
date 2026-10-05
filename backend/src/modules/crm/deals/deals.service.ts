@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, not, or, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, not, or, type SQL } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import { StorageService } from '../../../infrastructure/storage/storage.service';
@@ -7,7 +7,7 @@ import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, dealDocuments, type DealOutcome, deals, funnels, funnelStages, LOST_REASONS, tenants } from '../../../shared/database/schema';
+import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, dealDocuments, type DealOutcome, deals, funnels, funnelStages, LOST_REASONS, meetings, tenants } from '../../../shared/database/schema';
 import { JobsService } from '../../../shared/events/jobs.service';
 import { ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { currencyCode } from '../currency';
@@ -330,11 +330,20 @@ export class DealsService {
 
   /**
    * Deleting a deal also deletes its lines, to-dos, activities, contact links and generated
-   * documents (FK cascade); the documents' files are removed once that has committed.
+   * documents (FK cascade); the documents' files are removed once that has committed. A deal with
+   * meetings can't be deleted (409, CD-213): every meeting needs a deal, so they have to be deleted
+   * or moved to another deal first (the foreign key backs this up).
    */
   async remove(ctx: TenantContext, id: string) {
     const files = await this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        const [deal] = await tx.select({ title: deals.title }).from(deals).where(eq(deals.id, id));
+        if (!deal) throw new NotFoundException('Deal not found');
+        const [booked] = await tx.select({ n: count() }).from(meetings).where(eq(meetings.dealId, id));
+        if (booked && booked.n > 0) {
+          const what = booked.n === 1 ? '1 meeting' : `${booked.n} meetings`;
+          throw new ConflictException(`${deal.title} has ${what}. Delete them or move them to another deal first.`);
+        }
         const docs = await tx.select({ key: dealDocuments.storageKey }).from(dealDocuments).where(eq(dealDocuments.dealId, id));
         const [row] = await tx.delete(deals).where(eq(deals.id, id)).returning({ id: deals.id });
         if (!row) throw new NotFoundException('Deal not found');

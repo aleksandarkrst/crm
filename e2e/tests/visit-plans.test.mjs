@@ -36,7 +36,11 @@ describe('visit plans', () => {
     await olga.goto(BASE_URL, { waitUntil: 'networkidle0' });
     await signIn(olga, email('plans-olga'), 'Olga Owner');
     await createWorkspace(olga, 'Plans Co');
-    for (const name of ['Alpha Visits', 'Bravo Visits']) await api(olga, '/crm/companies', { method: 'POST', body: JSON.stringify({ name }) });
+    const ids = [];
+    for (const name of ['Alpha Visits', 'Bravo Visits']) ids.push((await api(olga, '/crm/companies', { method: 'POST', body: JSON.stringify({ name }) })).id);
+    // Alpha's one open deal: "Schedule visit" picks it (a meeting needs a deal, CD-213).
+    const funnels = await api(olga, '/crm/funnels');
+    await api(olga, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Alpha deal', funnelId: funnels[0].id, companyId: ids[0] }) });
     const { token } = await api(olga, '/team/invitations', { method: 'POST', body: JSON.stringify({ email: email('plans-mia'), role: 'member' }) });
 
     mia = await browser.person('mia');
@@ -133,6 +137,7 @@ describe('visit plans', () => {
     assert.equal(await mia.$eval('[data-testid=meeting-company]', (el) => el.value), alphaId);
     assert.equal(await mia.$eval('[data-testid=meeting-type]', (el) => el.value), 'visit');
     assert.equal(await mia.$eval('[data-testid=meeting-organizer]', (el) => el.value), miaId);
+    assert.equal(await selected(mia, '[data-testid=meeting-deal]'), 'Alpha deal');
     // A customer visit without anyone from the customer warns first; the second click saves.
     await click(mia, '[data-testid=meeting-save]');
     await mia.waitForSelector('[data-testid=meeting-no-external]');

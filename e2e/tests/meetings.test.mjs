@@ -238,6 +238,53 @@ describe('meeting calendar', () => {
     await page.waitForFunction(() => !document.querySelector('[data-testid=no-next-step]'), { timeout: 10_000 });
   });
 
+  step('a meeting needs a deal: a company without one gets "+ New deal", which is picked after creating it', async () => {
+    const other = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: `Nodeal Works ${RUN}` }) });
+    const start = new Date(Math.ceil((Date.now() + 9 * 86_400_000) / 3_600_000) * 3_600_000).toISOString();
+    const openNew = async () => {
+      await page.goto(`${BASE_URL}/calendar?new=1&companyId=${other.id}&type=online&start=${encodeURIComponent(start)}`, { waitUntil: 'networkidle0' });
+      await page.waitForSelector('.modal [data-testid=meeting-form]');
+    };
+    await openNew();
+    assert.match(await page.$eval('[data-testid=meeting-no-deals]', (el) => el.innerText), /This company has no deals yet/);
+    // Saving is blocked until there is a deal.
+    await click(page, '[data-testid=meeting-save]');
+    await page.waitForSelector('[data-testid=meeting-errors]');
+    assert.match(await page.$eval('[data-testid=meeting-errors]', (el) => el.innerText), /no deals yet/);
+    assert.ok(await page.$('.modal [data-testid=meeting-form]'), 'still open');
+    assert.deepEqual((await api(page, `/crm/meetings?companyId=${other.id}`)).meetings, []);
+
+    // "+ New deal": the New deal dialog for this company, above the meeting; creating stays here and picks it.
+    await click(page, '[data-testid=meeting-new-deal]');
+    await page.waitForSelector('[data-testid=new-deal-create]');
+    assert.equal(await page.$eval('[data-testid=new-deal-company]', (el) => el.value), other.id);
+    assert.equal(await page.$eval('[data-testid=new-deal-company]', (el) => el.disabled), true);
+    await click(page, '[data-testid=new-deal-create]');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=new-deal-create]'), { timeout: 10_000 });
+    const made = await eventually(async () => (await api(page, '/crm/deals')).find((r) => r.deal.companyId === other.id)?.deal);
+    assert.ok(made, 'the deal was created');
+    await page.waitForFunction((id) => document.querySelector('[data-testid=meeting-deal]')?.value === id, { timeout: 10_000 }, made.id);
+    assert.equal(new URL(page.url()).pathname, '/calendar', 'stays on the meeting');
+    await click(page, '[data-testid=meeting-save]');
+    await page.waitForFunction(() => !document.querySelector('.modal [data-testid=meeting-form]'), { timeout: 10_000 });
+    const saved = await eventually(async () => (await api(page, `/crm/meetings?companyId=${other.id}`)).meetings[0]);
+    assert.equal(saved.dealId, made.id);
+    await waitForToastToClear(page).catch(() => {});
+
+    // With two open deals nothing is picked for you: saving asks for one.
+    const funnels = await api(page, '/crm/funnels');
+    const second = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Nodeal second deal', funnelId: funnels[0].id, companyId: other.id }) });
+    await openNew();
+    assert.equal(await page.$eval('[data-testid=meeting-deal]', (el) => el.value), '');
+    await click(page, '[data-testid=meeting-save]');
+    await page.waitForSelector('[data-testid=meeting-errors]');
+    assert.match(await page.$eval('[data-testid=meeting-errors]', (el) => el.innerText), /Pick the deal this meeting is for/);
+    await setValue(page, '[data-testid=meeting-deal]', second.id);
+    await click(page, '[data-testid=meeting-save]');
+    await page.waitForFunction(() => !document.querySelector('.modal [data-testid=meeting-form]'), { timeout: 10_000 });
+    assert.ok(await eventually(async () => (await api(page, `/crm/meetings?dealId=${second.id}`)).meetings.length === 1), 'saved on the picked deal');
+  });
+
   step('on a phone: Day by default, Week as a list, nothing scrolls sideways', async () => {
     await page.setViewport(PHONE);
     const sideways = () => page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth);

@@ -250,11 +250,6 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
             + Add next step
           </button>
         )}
-        {!m.dealId && draft.nextSteps.length > 0 && (
-          <div className="meeting-muted" data-testid="minutes-no-deal">
-            Link a deal to create tasks from the next steps.
-          </div>
-        )}
       </div>
 
       {stored.updatedByName && stored.updatedAt && <div className="meeting-muted">Last changed by {stored.updatedByName}.</div>}

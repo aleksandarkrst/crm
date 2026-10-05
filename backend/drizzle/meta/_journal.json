@@ -260,6 +260,13 @@
       "when": 1791166072717,
       "tag": "0036_meeting_minutes_sends_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1791182055274,
+      "tag": "0037_meeting_deal_required",
+      "breakpoints": true
     }
   ]
 }

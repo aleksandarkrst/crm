@@ -177,4 +177,21 @@ describe('sample data', () => {
     expect((await ok('POST', '/onboarding/sample-data', as(admin, t2))).sampleData.loaded).toBe(true);
     expect((await ok('DELETE', '/onboarding/sample-data', as(admin, t2), 200)).removed.deal).toBe(6);
   });
+
+  it('keeps a sample deal with a meeting, and its company and contact (CD-213)', async () => {
+    const t3 = await createTenant(owner, 'Sample meetings');
+    await ok('POST', '/onboarding/sample-data', as(owner, t3));
+    const sampleDeal = (await list('/crm/deals', owner, t3)).find((r) => r.deal.outcome === 'open')!.deal;
+    const m = await ok('POST', '/crm/meetings', {
+      ...as(owner, t3),
+      body: { title: 'Visit on a sample deal', type: 'visit', startsAt: '2026-11-10T09:00:00.000Z', endsAt: '2026-11-10T10:00:00.000Z', companyId: sampleDeal.companyId, dealId: sampleDeal.id },
+    });
+
+    const res = await ok('DELETE', '/onboarding/sample-data', as(owner, t3), 200);
+    expect(res.removed.deal).toBe(5);
+    expect(res.kept).toMatchObject({ deal: 1, company: 1, contact: 1 });
+    expect((await list('/crm/deals', owner, t3)).map((r) => r.deal.id)).toEqual([sampleDeal.id]);
+    expect((await list('/crm/companies', owner, t3)).map((c) => c.id)).toEqual([sampleDeal.companyId]);
+    expect((await ok('GET', `/crm/meetings/${m.id}`, as(owner, t3))).dealId).toBe(sampleDeal.id);
+  });
 });

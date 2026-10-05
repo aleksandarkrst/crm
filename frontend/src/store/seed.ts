@@ -145,6 +145,8 @@ export function initialState(): State {
     productEditId: null,
     newLeadCompanyId: null,
     newLeadContactId: null,
+    newLeadForMeeting: false,
+    newLeadMade: null,
     paletteOpen: false,
     dealProductsId: null,
     drill: null,

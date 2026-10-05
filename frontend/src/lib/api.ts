@@ -693,6 +693,7 @@ export interface ApiMeeting {
   agenda: string | null;
   companyId: string;
   companyName: string;
+  /** Every meeting has a deal (CD-213); null only on meetings saved without one before that ("No deal"). */
   dealId: string | null;
   dealTitle: string | null;
   dealOwnerUserId: string | null;
@@ -727,7 +728,8 @@ export interface MeetingInput {
   location?: string | null;
   agenda?: string | null;
   companyId?: string;
-  dealId?: string | null;
+  /** Required on create, and a change can't clear it (CD-213). */
+  dealId?: string;
   organizerUserId?: string;
   /** Replace the sets (the organizer is always kept). */
   internalUserIds?: string[];

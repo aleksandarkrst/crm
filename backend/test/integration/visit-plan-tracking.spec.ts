@@ -13,6 +13,7 @@ let seller: Session; // member with plans
 let other: Session; // member without a plan, credited with a shared visit
 let tenant: string;
 const companies: Record<string, string> = {};
+const companyDeals: Record<string, string> = {}; // a meeting needs a deal (CD-213)
 const as = (s: Session) => ({ token: s.token, tenant });
 
 /** The first day of the month `offset` months from now (UTC), YYYY-MM-DD. */
@@ -33,7 +34,7 @@ let futurePlan: Json;
 const meetingIds: Record<string, string> = {};
 
 async function visit(s: Session, name: string, company: string, start: string, over: Record<string, unknown> = {}) {
-  const m = await ok('POST', '/crm/meetings', { ...as(s), body: { title: name, type: 'visit', startsAt: start, endsAt: hourAfter(start), companyId: companies[company], ...over } });
+  const m = await ok('POST', '/crm/meetings', { ...as(s), body: { title: name, type: 'visit', startsAt: start, endsAt: hourAfter(start), companyId: companies[company], dealId: companyDeals[company], ...over } });
   meetingIds[name] = m.id;
   return m;
 }
@@ -48,6 +49,9 @@ beforeAll(async () => {
   await addMember(owner, tenant, other, 'member');
   for (const name of ['Alpha', 'Beta', 'Gamma', 'Delta']) companies[name] = (await ok('POST', '/crm/companies', { ...as(owner), body: { name: `${name} Track` } })).id;
   const funnel = await firstFunnel(owner, tenant);
+  for (const name of Object.keys(companies)) {
+    companyDeals[name] = (await ok('POST', '/crm/deals', { ...as(owner), body: { title: `${name} owner deal`, funnelId: funnel.id, companyId: companies[name] } })).id;
+  }
   const gammaDeal = await ok('POST', '/crm/deals', { ...as(owner), body: { title: 'Gamma deal', funnelId: funnel.id, companyId: companies.Gamma, ownerUserId: other.userId } });
 
   pastPlan = await ok('POST', '/crm/visit-plans', {

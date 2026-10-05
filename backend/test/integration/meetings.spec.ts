@@ -1,7 +1,8 @@
 /**
  * Meetings (CD-130): create, read, filter and change meetings; validation (AC 6); who may change
  * and delete them; status changes; the deal timeline and last contact; deleting companies, deals
- * and contacts; tenant isolation; change history; live updates; the daily digest sections.
+ * and contacts; tenant isolation; change history; live updates; the daily digest sections. Every
+ * meeting has a deal of its company (CD-213).
  */
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { addMember, call, createTenant, firstFunnel, type Funnel, type Json, ok, type Session, signIn } from './helpers';
@@ -23,7 +24,7 @@ const company = (name: string) => ok('POST', '/crm/companies', { ...as(owner), b
 const deal = (title: string, companyId: string | null) => ok('POST', '/crm/deals', { ...as(owner), body: { title, funnelId: funnel.id, companyId } });
 const contact = (fullName: string, companyId: string, email: string | null = null) => ok('POST', '/crm/contacts', { ...as(owner), body: { fullName, companyId, email } });
 
-/** A meeting body with every required field; `over` replaces some. */
+/** A meeting body with the required fields but the deal; `over` replaces or adds some. */
 const body = (companyId: string, over: Record<string, unknown> = {}) => ({
   title: 'Quarterly review',
   type: 'visit',
@@ -32,7 +33,14 @@ const body = (companyId: string, over: Record<string, unknown> = {}) => ({
   companyId,
   ...over,
 });
-const create = (s: Session, companyId: string, over: Record<string, unknown> = {}) => ok('POST', '/crm/meetings', { ...as(s), body: body(companyId, over) });
+/** One deal per company for the meetings that don't name theirs (a meeting needs a deal, CD-213). */
+const companyDeals = new Map<string, Promise<Json>>();
+const dealOf = (companyId: string) => {
+  if (!companyDeals.has(companyId)) companyDeals.set(companyId, deal('Meetings deal', companyId));
+  return companyDeals.get(companyId)!;
+};
+const create = async (s: Session, companyId: string, over: Record<string, unknown> = {}) =>
+  ok('POST', '/crm/meetings', { ...as(s), body: body(companyId, { dealId: 'dealId' in over ? over.dealId : (await dealOf(companyId)).id, ...over }) });
 const list = async (query: string, s = owner) => ok<{ meetings: Json[]; more: boolean }>('GET', `/crm/meetings?${query}`, as(s));
 const titles = (r: { meetings: Json[] }) => r.meetings.map((m: Json) => m.title);
 
@@ -117,14 +125,16 @@ describe('validation (AC 6)', () => {
   let acme: Json;
   let other: Json;
   let otherDeal: Json;
+  let acmeDeal: Json;
   beforeAll(async () => {
     acme = await company('Validation Co');
     other = await company('Validation Other');
     otherDeal = await deal('Other deal', other.id);
+    acmeDeal = await deal('Acme validation deal', acme.id);
   });
 
   const refused = async (over: Record<string, unknown>, drop: string[] = []) => {
-    const b: Record<string, unknown> = body(acme.id, over);
+    const b: Record<string, unknown> = body(acme.id, { dealId: acmeDeal.id, ...over });
     for (const k of drop) delete b[k];
     const res = await call('POST', '/crm/meetings', { ...as(owner), body: b });
     expect(res.status, JSON.stringify(res.body)).toBe(400);
@@ -132,14 +142,28 @@ describe('validation (AC 6)', () => {
   };
 
   it('refuses a meeting without its required fields or with bad values', async () => {
-    for (const field of ['title', 'type', 'startsAt', 'endsAt', 'companyId']) await refused({}, [field]);
+    for (const field of ['title', 'type', 'startsAt', 'endsAt', 'companyId', 'dealId']) await refused({}, [field]);
     await refused({ title: '   ' });
     await refused({ title: 'x'.repeat(201) });
     await refused({ type: 'lunch' });
     await refused({ startsAt: 'tomorrow' });
     await refused({ location: 'x'.repeat(301) });
     await refused({ agenda: 'x'.repeat(5001) });
-    expect((await call('POST', '/crm/meetings', { ...as(owner), body: body(acme.id, { title: 'x'.repeat(200), location: 'x'.repeat(300), agenda: 'x'.repeat(5000) }) })).status).toBe(201);
+    expect((await call('POST', '/crm/meetings', { ...as(owner), body: body(acme.id, { dealId: acmeDeal.id, title: 'x'.repeat(200), location: 'x'.repeat(300), agenda: 'x'.repeat(5000) }) })).status).toBe(201);
+  });
+
+  it('needs a deal (CD-213): on create, and a change can never clear it', async () => {
+    expect(JSON.stringify(await refused({}, ['dealId']))).toMatch(/Pick a deal/);
+    expect(JSON.stringify(await refused({ dealId: null }))).toMatch(/Pick a deal/);
+    expect((await refused({ dealId: '00000000-0000-4000-8000-000000000000' })).message).toBe('Deal not found');
+    const m = await create(owner, acme.id, { dealId: acmeDeal.id });
+    const cleared = await call('PATCH', `/crm/meetings/${m.id}`, { ...as(owner), body: { dealId: null } });
+    expect(cleared.status).toBe(400);
+    expect(JSON.stringify(cleared.body)).toMatch(/Pick a deal/);
+    expect((await ok('GET', `/crm/meetings/${m.id}`, as(owner))).dealId).toBe(acmeDeal.id);
+    // Another deal of the same company is fine.
+    const second = await deal('Acme second deal', acme.id);
+    expect((await ok('PATCH', `/crm/meetings/${m.id}`, { ...as(owner), body: { dealId: second.id } })).dealId).toBe(second.id);
   });
 
   it('refuses an end that is not after the start, also when only one of them changes', async () => {
@@ -156,10 +180,13 @@ describe('validation (AC 6)', () => {
     expect((await refused({ organizerUserId: outsider.userId })).message).toMatch(/organizer must be a member/);
     expect((await refused({ internalUserIds: [outsider.userId] })).message).toMatch(/members of this workspace/);
     await refused({ externalContactIds: ['00000000-0000-4000-8000-000000000000'] });
-    // Moving a meeting to another company with the old company's deal is refused too.
+    // Moving a meeting to another company keeping the old company's deal is refused: the deal changes with it.
     const d = await deal('Validation deal', acme.id);
     const m = await create(owner, acme.id, { dealId: d.id });
-    expect((await call('PATCH', `/crm/meetings/${m.id}`, { ...as(owner), body: { companyId: other.id } })).status).toBe(400);
+    const kept = await call('PATCH', `/crm/meetings/${m.id}`, { ...as(owner), body: { companyId: other.id } });
+    expect(kept.status).toBe(400);
+    expect(kept.body.message).toMatch(/another company/);
+    expect((await call('PATCH', `/crm/meetings/${m.id}`, { ...as(owner), body: { companyId: other.id, dealId: d.id } })).status).toBe(400);
     const moved = await ok('PATCH', `/crm/meetings/${m.id}`, { ...as(owner), body: { companyId: other.id, dealId: otherDeal.id } });
     expect(moved).toMatchObject({ companyId: other.id, companyName: 'Validation Other', dealId: otherDeal.id });
     expect((await call('PATCH', `/crm/meetings/${m.id}`, { ...as(owner), body: {} })).status).toBe(400);
@@ -312,7 +339,7 @@ describe('status changes', () => {
 });
 
 describe('related records', () => {
-  it('refuses to delete a company with meetings; deleting the deal or a contact keeps the meeting', async () => {
+  it('refuses to delete a company or a deal with meetings; deleting a contact keeps the meeting', async () => {
     const co = await company('Delete Co');
     const d = await deal('Delete deal', co.id);
     const c = await contact('Dana Deleted', co.id, 'dana@example.test');
@@ -323,13 +350,24 @@ describe('related records', () => {
     const afterContact = await ok('GET', `/crm/meetings/${m.id}`, as(owner));
     expect(afterContact.participants.find((p: Json) => p.kind === 'external')).toMatchObject({ contactId: null, name: 'Dana Deleted', deleted: true, email: 'dana@example.test' });
 
-    await ok('DELETE', `/crm/deals/${d.id}`, as(owner));
-    expect(await ok('GET', `/crm/meetings/${m.id}`, as(owner))).toMatchObject({ dealId: null, dealTitle: null, dealOwnerUserId: null });
+    // A meeting needs its deal (CD-213): the deal stays until its meetings are deleted or moved.
+    const second = await create(owner, co.id, { dealId: d.id, title: 'Second' });
+    const dealRefused = await call('DELETE', `/crm/deals/${d.id}`, as(owner));
+    expect(dealRefused.status).toBe(409);
+    expect(dealRefused.body.message).toBe('Delete deal has 2 meetings. Delete them or move them to another deal first.');
+    const other = await deal('Delete other deal', co.id);
+    await ok('PATCH', `/crm/meetings/${second.id}`, { ...as(owner), body: { dealId: other.id } });
+    expect((await call('DELETE', `/crm/deals/${d.id}`, as(owner))).body.message).toBe('Delete deal has 1 meeting. Delete them or move them to another deal first.');
+    expect(await ok('GET', `/crm/meetings/${m.id}`, as(owner))).toMatchObject({ dealId: d.id, dealTitle: 'Delete deal' });
 
+    // The company keeps its deals and meetings: deals first in the message.
     const refused = await call('DELETE', `/crm/companies/${co.id}`, as(owner));
     expect(refused.status).toBe(409);
-    expect(refused.body.message).toBe('Delete Co has 1 meeting. Delete them or move them to another company first.');
+    expect(refused.body.message).toBe('Delete Co has 2 deals. Delete them or move them to another company first.');
     await ok('DELETE', `/crm/meetings/${m.id}`, as(owner));
+    await ok('DELETE', `/crm/meetings/${second.id}`, as(owner));
+    await ok('DELETE', `/crm/deals/${d.id}`, as(owner));
+    await ok('DELETE', `/crm/deals/${other.id}`, as(owner));
     await ok('DELETE', `/crm/companies/${co.id}`, as(owner));
   });
 });
@@ -342,7 +380,7 @@ describe('tenant isolation', () => {
     expect((await call('GET', `/crm/meetings/${m.id}`, { token: outsider.token, tenant: otherTenant })).status).toBe(404);
     const theirs = await ok<{ meetings: Json[] }>('GET', `/crm/meetings?ids=${m.id}`, { token: outsider.token, tenant: otherTenant });
     expect(theirs.meetings).toEqual([]);
-    expect((await call('POST', '/crm/meetings', { token: outsider.token, tenant: otherTenant, body: body(co.id) })).status).toBe(400);
+    expect((await call('POST', '/crm/meetings', { token: outsider.token, tenant: otherTenant, body: body(co.id, { dealId: (await dealOf(co.id)).id }) })).status).toBe(400);
     expect((await call('PATCH', `/crm/meetings/${m.id}`, { token: outsider.token, tenant: otherTenant, body: { title: 'Mine now' } })).status).toBe(404);
     expect((await call('DELETE', `/crm/meetings/${m.id}`, { token: outsider.token, tenant: otherTenant })).status).toBe(404);
   });
@@ -351,8 +389,9 @@ describe('tenant isolation', () => {
 describe('change history and conflicts', () => {
   it('records creation, field changes with readable names, and people added and removed', async () => {
     const co = await company('History Meet Co');
+    const first = await deal('History first deal', co.id);
     const d = await deal('History meet deal', co.id);
-    const m = await create(owner, co.id, { title: 'History meeting' });
+    const m = await create(owner, co.id, { title: 'History meeting', dealId: first.id });
     await ok('PATCH', `/crm/meetings/${m.id}`, { ...as(owner), body: { title: 'History meeting v2', dealId: d.id, organizerUserId: ana.userId, startsAt: '2026-11-10T08:30:00Z' } });
     await ok('PATCH', `/crm/meetings/${m.id}`, { ...as(ana), body: { internalUserIds: [bo.userId] } });
     await ok('POST', `/crm/meetings/${m.id}/cancel`, as(ana), 200);
@@ -361,7 +400,7 @@ describe('change history and conflicts', () => {
     const find = (action: string, field?: string) => entries.find((e: Json) => e.action === action && (field === undefined || e.field === field));
     expect(find('created')).toMatchObject({ label: 'History meeting', actor: { userId: owner.userId, name: owner.name } });
     expect(find('updated', 'title')).toMatchObject({ oldValue: 'History meeting', newValue: 'History meeting v2' });
-    expect(find('updated', 'dealId')).toMatchObject({ oldValue: null, newValue: d.id, newLabel: 'History meet deal' });
+    expect(find('updated', 'dealId')).toMatchObject({ oldValue: first.id, oldLabel: 'History first deal', newValue: d.id, newLabel: 'History meet deal' });
     expect(find('updated', 'organizerUserId')).toMatchObject({ oldLabel: owner.name, newLabel: ana.name });
     expect(new Date(find('updated', 'startsAt').newValue).toISOString()).toBe('2026-11-10T08:30:00.000Z');
     expect(find('updated', 'status')).toMatchObject({ oldValue: 'planned', newValue: 'cancelled', actor: { userId: ana.userId, name: ana.name } });
