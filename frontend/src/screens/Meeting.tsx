@@ -75,7 +75,17 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
   const canEdit = meetings.canEdit(m);
   // Minutes went to the customer (CD-133): the meeting stays held and can't be deleted.
   const sent = m.externalDelivery !== 'not_sent';
-  const started = Date.parse(m.startsAt) <= Date.now();
+  const startMs = Date.parse(m.startsAt);
+  const [tick, setTick] = useState(0);
+  // "Mark as held" enables itself when the start passes while the page is open.
+  useEffect(() => {
+    const wait = startMs - Date.now();
+    if (!(wait > 0)) return;
+    // setTimeout holds at most ~24.8 days; a later start re-arms after the first wake-up.
+    const timer = setTimeout(() => setTick((n) => n + 1), Math.min(wait + 50, 2 ** 31 - 1));
+    return () => clearTimeout(timer);
+  }, [startMs, tick]);
+  const started = startMs <= Date.now();
   const url = locationUrl(m.location);
   const internal = m.participants.filter((p) => p.kind === 'internal');
   const external = m.participants.filter((p) => p.kind === 'external');

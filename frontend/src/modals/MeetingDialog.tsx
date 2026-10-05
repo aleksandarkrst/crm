@@ -58,6 +58,9 @@ export function MeetingForm({ seed, onDone, onCancel, submitLabel }: { seed: Mee
   }, [s]);
   const members = useMemo(() => [...memberLabels(s)].map(([id, name]) => ({ id, name })), [s]);
 
+  // Picking another organizer of a saved meeting (e.g. after "Organizer left") is for owners and admins (spec 5.3).
+  const organizerLocked = !!editing && session.tenant.role !== 'owner' && session.tenant.role !== 'admin';
+
   const [d, setD] = useState<Draft>(() => initialDraft());
   function initialDraft(): Draft {
     if (editing) {
@@ -200,7 +203,7 @@ export function MeetingForm({ seed, onDone, onCancel, submitLabel }: { seed: Mee
   if (!d.date || !d.time || !Number.isFinite(startMs)) errors.time = 'Pick a start date and time.';
   else if (d.duration <= 0) errors.time = 'The end must be after the start.';
   if (!d.companyId) errors.company = 'Pick the customer company.';
-  if (!d.organizer) errors.organizer = 'Pick an organizer.';
+  if (!d.organizer && !organizerLocked) errors.organizer = 'Pick an organizer.';
   if (chosenDeal && chosenDeal.companyId !== d.companyId) errors.deal = 'That deal belongs to another company.';
   if (d.location.length > 300) errors.location = 'The location can be at most 300 characters.';
   if (d.agenda.length > 5000) errors.agenda = 'The agenda can be at most 5,000 characters.';
@@ -320,8 +323,15 @@ export function MeetingForm({ seed, onDone, onCancel, submitLabel }: { seed: Mee
         </label>
         <label className="form-label">
           Organizer
-          <select className="form-input" data-testid="meeting-organizer" value={d.organizer} onChange={(e) => patch({ organizer: e.target.value, internal: d.internal.filter((id) => id !== e.target.value) })}>
-            {!d.organizer && <option value="">Organizer left · pick a new one</option>}
+          <select
+            className="form-input"
+            data-testid="meeting-organizer"
+            value={d.organizer}
+            disabled={organizerLocked}
+            title={organizerLocked ? 'Only admins and owners can change the organizer' : undefined}
+            onChange={(e) => patch({ organizer: e.target.value, internal: d.internal.filter((id) => id !== e.target.value) })}
+          >
+            {!d.organizer && <option value="">{organizerLocked ? 'Organizer left · an admin picks a new one' : 'Organizer left · pick a new one'}</option>}
             {organizerOptions.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}

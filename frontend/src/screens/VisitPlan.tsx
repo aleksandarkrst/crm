@@ -9,12 +9,12 @@ import { paths } from '../lib/paths';
 import { VisitPlanDialog, type PlanDraft } from '../modals/VisitPlanDialog';
 import { companyRecords, curOf, initialsOf, memberName } from '../store/selectors';
 import { useStore } from '../store/store';
-import { dateLabel, instantToZoned, todayIn } from '../store/time';
+import { dateLabel, instantToZoned } from '../store/time';
 import { useVisitProgress } from '../store/useVisitProgress';
 import { completionLabel, paceOf, shiftPeriod, type VisitCount, visitsInCalendar } from '../store/visitPlans';
 
 const COLS = 'minmax(0,2fr) 0.8fr 0.7fr 0.8fr 0.8fr minmax(150px,auto)';
-const COUNT_LABEL: Record<VisitCount, string> = { held: 'Held visits', upcoming: 'Upcoming visits', notClosed: 'Not closed visits' };
+const COUNT_LABEL: Record<VisitCount, string> = { held: 'Held visits', upcoming: 'Upcoming visits', notClosed: 'Not closed visits', unplanned: 'Unplanned visits' };
 
 /** A number of visits that opens the meetings behind it (0 is plain text). */
 function CountButton({ n, open, onClick, testId, label }: { n: number | undefined; open: boolean; onClick: () => void; testId: string; label: string }) {
@@ -111,17 +111,16 @@ export function VisitPlan() {
   const { data: progress } = useVisitProgress(plan ? 'plan:' + plan.id : null, () => crmApi.visitPlanProgress(id));
   if (!plan) return <Navigate to={paths.visitPlans} replace />;
   const tz = s.workspace.timezone;
-  const today = todayIn(tz);
   const lineOf = (companyId: string) => progress?.lines.find((l) => l.companyId === companyId);
   const totals = progress?.totals;
   const toggle = (key: string) => setDrill((d) => (d === key ? null : key));
-  const calendarFor = (kind: VisitCount, companyId: string) => visitsInCalendar(kind, plan, { userId: plan.salespersonUserId, companyId }, today);
+  const calendarFor = (kind: VisitCount, ids: string[], companyId: string) => visitsInCalendar(kind, ids, plan, { userId: plan.salespersonUserId, companyId });
   const drillFor = (companyId: string) => {
     const line = lineOf(companyId);
     const kind = (['held', 'upcoming', 'notClosed'] as const).find((k) => drill === `${companyId}:${k}`);
     if (!progress || !line || !kind) return null;
     const ids = kind === 'held' ? line.heldMeetingIds : kind === 'upcoming' ? line.upcomingMeetingIds : line.notClosedMeetingIds;
-    return <MeetingsBehind title={COUNT_LABEL[kind]} ids={ids} progress={progress} calendar={calendarFor(kind, companyId)} tz={tz} />;
+    return <MeetingsBehind title={COUNT_LABEL[kind]} ids={ids} progress={progress} calendar={calendarFor(kind, ids, companyId)} tz={tz} />;
   };
   const exportCsv = () => {
     if (!progress) return;
@@ -377,7 +376,7 @@ export function VisitPlan() {
                       </Link>
                       <CountButton n={u.held} label="Held visits" testId="visit-plan-unplanned-held" open={drill === `${u.companyId}:unplanned`} onClick={() => toggle(`${u.companyId}:unplanned`)} />
                     </div>
-                    {drill === `${u.companyId}:unplanned` && <MeetingsBehind title="Held visits" ids={u.meetingIds} progress={progress} calendar={calendarFor('held', u.companyId)} tz={tz} />}
+                    {drill === `${u.companyId}:unplanned` && <MeetingsBehind title="Held visits" ids={u.meetingIds} progress={progress} calendar={calendarFor('unplanned', u.meetingIds, u.companyId)} tz={tz} />}
                   </div>
                 ))}
               </div>

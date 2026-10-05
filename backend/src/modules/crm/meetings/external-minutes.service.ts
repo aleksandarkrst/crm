@@ -149,16 +149,18 @@ export class ExternalMinutesService {
   ) {}
 
   /**
-   * The external text. The first time anyone opens it, it is filled from the template (and that is
-   * remembered); after that nothing is copied from the internal minutes automatically.
+   * The external text. The first time someone who may change the meeting opens it once the meeting
+   * is held, it is filled from the template (and that is remembered); after that nothing is copied
+   * from the internal minutes automatically. A read-only viewer, or a read before the meeting is
+   * held, gets the text as it is (empty, not prefilled) and fixes nothing in place.
    */
   getExternal(ctx: TenantContext, meetingId: string): Promise<ApiExternalMinutes> {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
-        const [meeting] = await tx.select({ id: meetings.id }).from(meetings).where(eq(meetings.id, meetingId));
+        const [meeting] = await tx.select({ id: meetings.id, status: meetings.status, organizerUserId: meetings.organizerUserId }).from(meetings).where(eq(meetings.id, meetingId));
         if (!meeting) throw new NotFoundException('Meeting not found');
         const [existing] = await tx.select({ prefilledAt: meetingMinutes.externalPrefilledAt }).from(meetingMinutes).where(eq(meetingMinutes.meetingId, meetingId));
-        if (!existing?.prefilledAt) {
+        if (!existing?.prefilledAt && meeting.status === 'held' && (await this.meetings.mayChange(tx, ctx, meeting))) {
           if (!existing) await tx.insert(meetingMinutes).values({ tenantId: ctx.tenantId, meetingId }).onConflictDoNothing({ target: [meetingMinutes.tenantId, meetingMinutes.meetingId] });
           const row = await this.lockMinutes(tx, meetingId);
           if (row && !row.externalPrefilledAt) {

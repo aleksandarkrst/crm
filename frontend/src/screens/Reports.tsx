@@ -1,7 +1,7 @@
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { Screen } from '../components/Layout';
 import { FilterBar } from '../components/ui';
-import { type ApiVisitReport, type ApiVisitReportRow, type ApiVisitTotals, crmApi, type VisitPlanPeriodType } from '../lib/api';
+import { type ApiVisitReport, type ApiVisitReportRow, type ApiVisitRowTotals, type ApiVisitTotals, crmApi, type VisitPlanPeriodType } from '../lib/api';
 import { datedName, downloadText, toCsv } from '../lib/csv';
 import { paths } from '../lib/paths';
 import { companyLabels, companyRecords, memberLabels } from '../store/selectors';
@@ -20,7 +20,7 @@ const ANY_CUSTOMER = 'Customer';
  * or fiscal quarter, the planned visits, the held ones (completion caps each customer at its plan),
  * upcoming, not closed, unplanned and over-plan visits; filtered by salesperson and customer (the
  * customer filter shows how often that customer was visited, across salespeople). Every count opens
- * the Calendar's table with the same filters; plans open their page. The filters live in the URL,
+ * the Calendar's table with exactly the meetings behind it (CD-211); plans open their page. The filters live in the URL,
  * and the filtered table exports as CSV. Numbers come from the same counting as the plan pages.
  */
 export function Reports() {
@@ -124,23 +124,23 @@ export function Reports() {
       />
       {error && !shown && <div className="empty-state">{error}</div>}
       {!error && !shown && <div className="empty-state">Counting visits…</div>}
-      {shown && <VisitReportTable report={shown} today={today} companyId={company || null} />}
+      {shown && <VisitReportTable report={shown} companyId={company || null} />}
     </Screen>
   );
 }
 
-function VisitReportTable({ report, today, companyId }: { report: ApiVisitReport; today: string; companyId: string | null }) {
-  const count = (kind: VisitCount, n: number, userId: string | null, testId: string) =>
+function VisitReportTable({ report, companyId }: { report: ApiVisitReport; companyId: string | null }) {
+  const count = (kind: VisitCount, n: number, r: ApiVisitRowTotals, userId: string | null, testId: string, text: string = String(n)) =>
     n === 0 ? (
       <span style={{ color: 'var(--muted)' }} data-testid={testId}>
-        0
+        {text}
       </span>
     ) : (
-      <Link to={visitsInCalendar(kind, report, { userId, companyId }, today)} className="vp-count" data-testid={testId}>
-        {n}
+      <Link to={visitsInCalendar(kind, r.meetingIds[kind], report, { userId, companyId })} className="vp-count" data-testid={testId}>
+        {text}
       </Link>
     );
-  const numbers = (r: ApiVisitTotals, userId: string | null) => {
+  const numbers = (r: ApiVisitRowTotals, userId: string | null) => {
     const pace = paceOf(r);
     return (
       <>
@@ -148,13 +148,13 @@ function VisitReportTable({ report, today, companyId }: { report: ApiVisitReport
           {r.planned}
         </span>
         <span className="vp-cell" data-label="Held" title={r.overPlan ? `${r.heldCapped} counted toward the plan` : undefined}>
-          {count('held', r.held, userId, 'report-held')}
+          {count('held', r.held, r, userId, 'report-held')}
         </span>
         <span className="vp-cell" data-label="Upcoming">
-          {count('upcoming', r.upcoming, userId, 'report-upcoming')}
+          {count('upcoming', r.upcoming, r, userId, 'report-upcoming')}
         </span>
         <span className="vp-cell" data-label="Not closed">
-          {count('notClosed', r.notClosed, userId, 'report-not-closed')}
+          {count('notClosed', r.notClosed, r, userId, 'report-not-closed')}
         </span>
         <span className="vp-cell" data-label="Completion">
           {r.planned ? (
@@ -165,8 +165,8 @@ function VisitReportTable({ report, today, companyId }: { report: ApiVisitReport
             <span style={{ color: 'var(--muted)' }}>—</span>
           )}
         </span>
-        <span className="vp-cell" data-label="Unplanned" data-testid="report-unplanned">
-          {r.unplanned}
+        <span className="vp-cell" data-label="Unplanned">
+          {count('unplanned', r.unplanned, r, userId, 'report-unplanned')}
         </span>
         <span className="vp-cell" data-label="Over plan" data-testid="report-over">
           {r.overPlan ? `+${r.overPlan}` : 0}
