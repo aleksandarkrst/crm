@@ -89,7 +89,8 @@ describe('module and workspace switcher', () => {
     assert.equal(await focused(), 'module-switcher');
     await click(page, LOGO);
     await page.waitForSelector(POP);
-    await page.click('h1');
+    // The popover covers the header's title: click the empty part of the sidebar instead.
+    await page.mouse.click(48, 1050);
     await closed();
   });
 
