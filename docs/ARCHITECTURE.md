@@ -937,6 +937,50 @@ milestones on lines); `drizzle/0022_products_deal_billing.sql` converts existing
   products dialog), **Discovery** and **Fit score**. The activity composer no longer has a
   Products tab.
 
+## Meetings: screens (CD-130)
+
+- **Store** (`store/meetings.ts`, `store/useMeetings.ts`): meetings aren't part of the workspace
+  load. Screens ask for a query (`useMeetingList`: a date range plus filters, or a company, deal or
+  contact) and the store keeps every meeting read in `s.meetings` (by id) and each query's ids in
+  `s.meetingLists` (by query key). Saves put the API's answer in the cache and fix every loaded list
+  with `matchesQuery` (the same filters as the API), so all views update at once. A `meeting` live
+  hint re-reads those ids (`?ids=`); one without ids re-runs the lists on screen. Writes that touch
+  a deal's timeline re-read the deal and its timeline (this tab gets no hint for its own change).
+  The planned meetings of the coming year stay loaded, so "No next step" knows that a deal with
+  an upcoming planned meeting has one (`needsNextStep`).
+- **Times** are shown and entered in the workspace time zone (`store/time.ts`: `zonedToInstant`,
+  `instantToZoned`, day/week/month ranges via Intl, DST-safe; weeks run Monday to Sunday).
+- **Calendar** (`/calendar`, `screens/Calendar.tsx` + `screens/calendar/*`): Day and Week (a
+  24-hour grid that opens on 07:00–20:00, overlapping meetings side by side, meetings across
+  midnight on both days, the "now" line), Month (three meetings a day and "+N more") and Table
+  (start, title, company, organizer, type, status, internal and external minutes; sort by start;
+  Not closed and missing-minutes filters). The view, period and filters live in the URL
+  (`view`, `date` or `from`/`to`, `user`, `type`, `status`, `company`, `deal`, `contact`,
+  `notClosed`, `missingMinutes`, `sort`); switching views keeps them. Salesperson defaults to "Me"
+  for members and "Everyone" for owners and admins; status to Planned and Held. Clicking an empty
+  slot opens New meeting at that time (month: 09:00); planned meetings the user may edit can be
+  dragged to another time or day and resized by their lower edge (15-minute steps, saved with
+  If-Match; put back with the reason when refused). On phones Day is the default and Week is a
+  list by day; dragging is off there. `?new=1&companyId=…&dealId=…&contactId=…&type=…&organizer=…&start=…`
+  opens a prefilled New meeting dialog.
+- **New / Edit meeting** (`modals/MeetingDialog.tsx`, `meetings.openDialog(seed)`; `MeetingForm`
+  is also the deal Composer's Meeting tab, "Schedule meeting"): defaults per spec 4.2 (title
+  "Meeting with <company>", Customer visit, start + 60 minutes, the company's HQ for a visit, the
+  company's only open deal, organizer = you, the deal's primary contact or the contact the dialog
+  was opened from). Warns about colleagues' overlapping meetings and about a Customer visit
+  without external participants (the second click saves).
+- **Meeting page** (`/meetings/:id`, `screens/Meeting.tsx`): header with type, status, time and
+  location (a link when it is a URL), Mark as held (disabled before the start), Cancel (optional
+  reason), Edit, Undo held, Restore, and Delete for owners and admins. Tabs: Internal minutes and
+  External minutes (`screens/meeting/*`, CD-132/CD-133) and History (`ChangeHistory`, entity
+  `meeting`). Who may change a meeting: `canEditMeeting` (owners, admins, organizer, internal
+  participants).
+- **Elsewhere**: a Meetings card on company, contact (as external participant) and deal pages
+  (`components/MeetingsCard.tsx`: next three, "Show all" → Table filtered to the record,
+  "+ Meeting" prefilled), "Meetings today" on Today, Calendar in the sidebar (after Today; under
+  "More" on phones), "Meeting" (M) in the "+" menu and the command palette. Type colors are CSS
+  variables in the CD-130 block of `styles/global.css`.
+
 ## Onboarding after sign-up (CD-115)
 
 After the first sign-up (email or Google), a new user goes through onboarding before the app
