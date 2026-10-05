@@ -80,7 +80,7 @@ deploy (step 4 below) and on demand: Actions → **E2E tests** → **Run workflo
 them that way before asking for review when a change touches the flows the e2e tests cover.
 
 The image build can also be checked before merging. Run **CI / CD** from the Actions tab against
-the branch and enable **Build both Docker images without publishing them**. The four checks run
+the branch and enable **Build both Docker images without publishing them**. The checks (`backend`, `frontend`, `website`, `integration`) run
 first, followed by `images`; verification never pushes an image or starts `deploy`, even on `main`. See [image verification](DEPLOYMENT.md#verify-docker-images-before-merging) for dispatch steps and the default-branch prerequisite.
 
 ## 5. Review
