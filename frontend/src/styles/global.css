@@ -514,6 +514,13 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
   .meeting-detail-label { flex-basis: 76px; }
 }
 
+/* ---- meeting participants (CD-131) ---- */
+.meeting-picker-add { display: block; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--border); background: transparent; color: var(--brand); font: inherit; font-size: 13px; font-weight: 600; padding: 9px 8px 5px; margin-top: 4px; cursor: pointer; text-transform: none; letter-spacing: 0; }
+.meeting-picker-add:hover { background: var(--chip); border-radius: 7px; }
+.meeting-new-contact { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-soft); text-transform: none; letter-spacing: 0; font-weight: 400; }
+.meeting-new-contact-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.meeting-new-contact-actions .meeting-muted { flex: 1 1 160px; }
+
 /* ---- visit plans (CD-134) ---- */
 .vp-form-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 12px; }
 .vp-draft-lines { display: flex; flex-direction: column; gap: 6px; }

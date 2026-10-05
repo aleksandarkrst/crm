@@ -1393,8 +1393,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           flash('Not saved: ' + errText(err));
         }
       },
-      /** New contact at the company of the chosen lead, linked to that lead; or at `companyId` with no deal. */
-      createContact: async (draft: NewContactDraft, leadId: string | undefined, customFields?: CustomFieldPatch, companyId?: string) => {
+      /**
+       * New contact at the company of the chosen lead, linked to that lead; or at `companyId` with no
+       * deal. Returns its id (the meeting dialog adds it as a participant, CD-131), or null if not saved.
+       */
+      createContact: async (draft: NewContactDraft, leadId: string | undefined, customFields?: CustomFieldPatch, companyId?: string): Promise<string | null> => {
         const lead = companyId ? undefined : leadById(cur(), leadId);
         try {
           const c = await crmApi.createContact({
@@ -1412,8 +1415,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           await reload();
           set({ contactOpen: false, contactCompanyId: null, newContact: EMPTY_CONTACT });
           flash(draft.name + (lead ? ' added to ' + lead.company : ' added'));
+          return c.id;
         } catch (err) {
           flash('Not saved: ' + errText(err));
+          return null;
         }
       },
 
