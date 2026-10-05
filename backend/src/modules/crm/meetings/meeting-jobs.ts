@@ -1,13 +1,14 @@
 import { Inject, Injectable, Logger, Module, type OnApplicationBootstrap } from '@nestjs/common';
-import { and, eq, gt, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, sql } from 'drizzle-orm';
 import { ENV, type Env } from '../../../infrastructure/config/config.module';
 import { Mailer } from '../../../infrastructure/mail/mailer';
 import { DatabaseService } from '../../../shared/database/database.service';
-import { companies, deals, meetingParticipants, meetings, memberships, tenants, users } from '../../../shared/database/schema';
+import { companies, deals, meetingMinutesRecipients, meetingMinutesSends, meetingParticipants, meetings, memberships, tenants, users } from '../../../shared/database/schema';
 import type { JobPayloads } from '../../../shared/events/job-types';
-import { JobsService } from '../../../shared/events/jobs.service';
+import { type JobAttempt, JobsService } from '../../../shared/events/jobs.service';
 import { userNameOf } from '../owner';
 import { meetingInviteEmail } from './meeting-invite';
+import { minutesEmail, minutesMailMessage } from './minutes-email';
 
 /**
  * Worker side of meeting participants (CD-131):
@@ -34,6 +35,72 @@ export class MeetingJobs implements OnApplicationBootstrap {
   async onApplicationBootstrap(): Promise<void> {
     await this.jobs.work('crm.meeting-invite', (data) => this.sendInvites(data));
     await this.jobs.work('identity.member-removed', (data) => this.memberRemoved(data));
+    await this.jobs.work('crm.meeting-minutes-email', (data, attempt) => this.sendMinutes(data, attempt));
+  }
+
+  /**
+   * "crm.meeting-minutes-email" (CD-133): one email with the send's exact text to its recipients
+   * still queued (contacts in To, members in Cc; on a retry only the ones that failed), from the
+   * sender's name at the platform's address, replies to the sender. Each recipient becomes sent,
+   * or failed with the reason: an address the server refused fails alone; a send that fails as a
+   * whole keeps them queued while pg-boss retries it (MAIL_JOBS) and fails them on the last attempt.
+   */
+  async sendMinutes({ tenantId, sendId }: JobPayloads['crm.meeting-minutes-email'], attempt: Pick<JobAttempt, 'lastAttempt'> = { lastAttempt: true }): Promise<void> {
+    const found = await this.database.withTenant(tenantId, async (tx) => {
+      const [send] = await tx.select().from(meetingMinutesSends).where(eq(meetingMinutesSends.id, sendId));
+      if (!send) return null;
+      const queued = await tx
+        .select()
+        .from(meetingMinutesRecipients)
+        .where(and(eq(meetingMinutesRecipients.sendId, sendId), eq(meetingMinutesRecipients.status, 'queued')))
+        .orderBy(asc(meetingMinutesRecipients.createdAt), asc(meetingMinutesRecipients.name));
+      return { send, queued };
+    });
+    if (!found?.queued.length) return;
+    const { send, queued } = found;
+    const settle = (ids: string[], set: { status: 'sent' | 'failed'; error: string | null; sentAt?: Date }) =>
+      ids.length
+        ? this.database.withTenant(tenantId, (tx) =>
+            tx
+              .update(meetingMinutesRecipients)
+              .set({ ...set, updatedAt: new Date() })
+              .where(and(inArray(meetingMinutesRecipients.id, ids), eq(meetingMinutesRecipients.status, 'queued'))),
+          )
+        : Promise.resolve();
+    const all = queued.map((r) => r.id);
+    if (this.mailer.notDelivered) {
+      await settle(all, { status: 'failed', error: this.mailer.notDelivered });
+      return;
+    }
+
+    // tenants is a platform table without RLS: read by id.
+    const [workspace] = await this.database.db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, tenantId));
+    const sender = { name: send.senderName, email: send.senderEmail };
+    const people = (kind: 'to' | 'cc') => queued.filter((r) => r.kind === kind).map((r) => ({ name: r.name, email: r.email }));
+    const email = minutesEmail({
+      language: send.language,
+      subject: send.subject,
+      body: send.body,
+      workspaceName: workspace?.name ?? 'Pultly',
+      sender,
+      mailFrom: this.env.MAIL_FROM,
+      to: people('to'),
+      cc: people('cc'),
+    });
+    let rejected: Set<string>;
+    try {
+      const result = await this.mailer.send(minutesMailMessage(email, sender));
+      rejected = new Set(result.rejected.map((a) => a.trim().toLowerCase()));
+    } catch (err) {
+      if (attempt.lastAttempt) await settle(all, { status: 'failed', error: (err instanceof Error ? err.message : String(err)).slice(0, 500) });
+      throw err;
+    }
+    const refused = queued.filter((r) => rejected.has(r.email.trim().toLowerCase())).map((r) => r.id);
+    await settle(refused, { status: 'failed', error: 'The mail server refused this address.' });
+    await settle(
+      all.filter((id) => !refused.includes(id)),
+      { status: 'sent', error: null, sentAt: new Date() },
+    );
   }
 
   async sendInvites({ tenantId, meetingId, userIds, actorUserId, kind }: JobPayloads['crm.meeting-invite']): Promise<void> {

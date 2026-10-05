@@ -16,6 +16,8 @@ import {
   type MeetingStatus,
   type MeetingType,
   meetingMinutes,
+  meetingMinutesRecipients,
+  meetingMinutesSends,
   meetingParticipants,
   meetings,
   memberships,
@@ -57,6 +59,18 @@ const meetingFields = {
 const END_AFTER_START = 'The end must be after the start';
 /** The meeting's internal minutes have a summary (CD-132): the calendar's "Recorded", else "Missing". */
 const minutesRecorded = sql`exists (select 1 from ${meetingMinutes} mm where mm.meeting_id = ${meetings.id} and btrim(coalesce(mm.summary, '')) <> '')`;
+/**
+ * The external minutes' delivery (CD-133): the latest send's recipients, failed when any failed,
+ * queued while any is queued, else sent; not_sent before the first send.
+ */
+const externalDelivery = sql<'not_sent' | 'queued' | 'sent' | 'failed'>`(select case when count(*) = 0 then 'not_sent' when bool_or(r.status = 'failed') then 'failed' when bool_or(r.status = 'queued') then 'queued' else 'sent' end
+  from ${meetingMinutesRecipients} r
+  where r.send_id = (select s.id from ${meetingMinutesSends} s where s.meeting_id = ${meetings.id} order by s.created_at desc, s.id desc limit 1))`;
+/** The last change of any send's delivery: an open External minutes tab reads the send log again when it moves. */
+const sendsUpdatedAt = sql<Date | null>`(select max(r.updated_at) from ${meetingMinutesRecipients} r where r.meeting_id = ${meetings.id})`.mapWith(meetingMinutesRecipients.updatedAt);
+/** External minutes were sent: the meeting stays held and can't be deleted (spec 4.3, 4.5). */
+const SENT_HOLDS = 'Minutes were sent to the customer, so this meeting stays held.';
+const SENT_KEEPS = "Minutes were sent to the customer for this meeting, so it can't be deleted: the send log stays with it.";
 
 
 export const CreateMeeting = z
@@ -141,8 +155,10 @@ export interface ApiMeeting {
   internalMinutes: 'missing' | 'recorded';
   /** The version of the minutes (null before anyone wrote them): an open minutes tab re-reads them when it changes. */
   minutesUpdatedAt: Date | null;
-  /** CD-133 fills this in; until then nothing is sent. */
+  /** The external minutes' latest send (CD-133): failed when any recipient failed, queued while any is queued. */
   externalDelivery: 'not_sent' | 'queued' | 'sent' | 'failed';
+  /** The last change of a send's delivery (null before the first send): an open send log reads again when it moves. */
+  sendsUpdatedAt: Date | null;
   createdByUserId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -157,6 +173,8 @@ interface ListedRow {
   organizerName: string | null;
   minutesRecorded: boolean;
   minutesUpdatedAt: Date | null;
+  externalDelivery: ApiMeeting['externalDelivery'];
+  sendsUpdatedAt: Date | null;
 }
 
 /** Who a meeting's people are, checked against the workspace (members, contacts). */
@@ -333,9 +351,11 @@ export class MeetingsService {
     });
   }
 
-  /** Held → planned ("Undo held"). CD-133 refuses it once external minutes were sent. */
+  /** Held → planned ("Undo held"). Refused (409) once external minutes were sent (CD-133). */
   undoHeld(ctx: TenantContext, id: string): Promise<ApiMeeting> {
-    return this.changeStatus(ctx, id, 'undo-held', { status: 'planned', heldAt: null });
+    return this.changeStatus(ctx, id, 'undo-held', { status: 'planned', heldAt: null }, undefined, async (tx) => {
+      if (await this.minutesSent(tx, id)) throw new ConflictException(SENT_HOLDS);
+    });
   }
 
   /** Cancelled → planned ("Restore"). The participants' calendars get it back (an update). */
@@ -345,10 +365,14 @@ export class MeetingsService {
     });
   }
 
-  /** Owners and admins only (the route says so). Participants go with the meeting. */
+  /**
+   * Owners and admins only (the route says so). Participants and minutes go with the meeting; a
+   * meeting whose external minutes were sent stays (409, CD-133; the foreign key backs it up).
+   */
   remove(ctx: TenantContext, id: string): Promise<void> {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        if (await this.minutesSent(tx, id)) throw new ConflictException(SENT_KEEPS);
         const [row] = await tx.delete(meetings).where(eq(meetings.id, id)).returning({ id: meetings.id, title: meetings.title });
         if (!row) throw new NotFoundException('Meeting not found');
         await this.audit.record(tx, ctx, { action: 'meeting.deleted', entityType: 'meeting', entityId: id, data: { title: row.title } });
@@ -364,10 +388,12 @@ export class MeetingsService {
     change: Exclude<MeetingChange, 'edit'>,
     set: PgUpdateSetSource<typeof meetings>,
     after?: (tx: Tx, meeting: MeetingRow) => Promise<void>,
+    check?: (tx: Tx) => Promise<void>,
   ): Promise<ApiMeeting> {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         await this.lockForChange(tx, ctx, id, change);
+        await check?.(tx);
         const [row] = await tx.update(meetings).set(set).where(eq(meetings.id, id)).returning();
         await after?.(tx, row!);
         await this.audit.record(tx, ctx, { action: `meeting.${change}`, entityType: 'meeting', entityId: id, data: set.cancelReason ? { reason: set.cancelReason } : undefined });
@@ -390,6 +416,12 @@ export class MeetingsService {
     const error = meetingChangeError(change, meeting, new Date());
     if (error) throw new ConflictException(error);
     return meeting;
+  }
+
+  /** Whether the meeting's external minutes were ever sent (CD-133). */
+  private async minutesSent(tx: Tx, meetingId: string): Promise<boolean> {
+    const [sent] = await tx.select({ id: meetingMinutesSends.id }).from(meetingMinutesSends).where(eq(meetingMinutesSends.meetingId, meetingId)).limit(1);
+    return !!sent;
   }
 
   /** The members on the meeting (organizer included). */
@@ -494,13 +526,16 @@ export class MeetingsService {
         organizerName: userNameOf(meetings.organizerUserId),
         minutesRecorded: sql<boolean>`${minutesRecorded}`,
         minutesUpdatedAt: sql<Date | null>`(select mm.updated_at from ${meetingMinutes} mm where mm.meeting_id = ${meetings.id})`.mapWith(meetingMinutes.updatedAt),
+        externalDelivery,
+        sendsUpdatedAt,
       })
       .from(meetings)
       .innerJoin(companies, eq(companies.id, meetings.companyId))
       .leftJoin(deals, eq(deals.id, meetings.dealId));
   }
 
-  private async load(tx: Tx, ctx: TenantContext, id: string): Promise<ApiMeeting> {
+  /** One meeting as the API returns it (404 when it doesn't exist), inside a transaction. */
+  async load(tx: Tx, ctx: TenantContext, id: string): Promise<ApiMeeting> {
     const rows = await this.select(tx).where(eq(meetings.id, id));
     if (!rows.length) throw new NotFoundException('Meeting not found');
     return (await this.present(tx, ctx, rows, new Date()))[0]!;
@@ -540,7 +575,7 @@ export class MeetingsService {
       });
       byMeeting.set(p.meetingId, list);
     }
-    return rows.map(({ meeting: m, companyName, dealTitle, dealOwnerUserId, organizerName, minutesRecorded: recorded, minutesUpdatedAt }) => {
+    return rows.map(({ meeting: m, companyName, dealTitle, dealOwnerUserId, organizerName, minutesRecorded: recorded, minutesUpdatedAt, externalDelivery: delivery, sendsUpdatedAt: sendsAt }) => {
       const rank = (p: ApiMeetingParticipant) => (p.kind === 'external' ? 2 : p.userId && p.userId === m.organizerUserId ? 0 : 1);
       const participants = (byMeeting.get(m.id) ?? []).sort((a, b) => rank(a) - rank(b));
       return {
@@ -566,7 +601,8 @@ export class MeetingsService {
         participants,
         internalMinutes: recorded ? 'recorded' : 'missing',
         minutesUpdatedAt,
-        externalDelivery: 'not_sent',
+        externalDelivery: delivery ?? 'not_sent',
+        sendsUpdatedAt: sendsAt,
         createdByUserId: m.createdByUserId,
         createdAt: m.createdAt,
         updatedAt: m.updatedAt,

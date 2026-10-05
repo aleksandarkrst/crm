@@ -16,7 +16,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { tenants, users } from './platform';
+import { CUSTOMER_EMAIL_LANGUAGES, tenants, users } from './platform';
 
 /**
  * CRM tables (owned by the crm module). Every table carries tenant_id and is protected by
@@ -692,6 +692,10 @@ export const meetingMinutes = pgTable(
     externalSubject: text('external_subject'),
     externalBody: text('external_body'),
     externalPrefilledAt: timestamp('external_prefilled_at', { withTimezone: true }),
+    // The version of the external text alone (If-Match of its editor, CD-133) and who last
+    // changed it: saving the customer text doesn't change who last wrote the internal minutes.
+    externalUpdatedAt: timestamp('external_updated_at', { withTimezone: true }),
+    externalUpdatedByUserId: uuid('external_updated_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     updatedByUserId: uuid('updated_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     ...timestamps,
   },
@@ -700,6 +704,74 @@ export const meetingMinutes = pgTable(
     unique('meeting_minutes_meeting_uq').on(t.tenantId, t.meetingId),
     foreignKey({ columns: [t.tenantId, t.meetingId], foreignColumns: [meetings.tenantId, meetings.id], name: 'meeting_minutes_meeting_fk' }).onDelete('cascade'),
     check('meeting_minutes_length_ck', sql`coalesce(char_length(${t.summary}), 0) <= 10000 and coalesce(char_length(${t.agreements}), 0) <= 5000 and coalesce(char_length(${t.externalBody}), 0) <= 10000`),
+  ],
+);
+
+export const MINUTES_RECIPIENT_KINDS = ['to', 'cc'] as const;
+export type MinutesRecipientKind = (typeof MINUTES_RECIPIENT_KINDS)[number];
+export const MINUTES_DELIVERY_STATUSES = ['queued', 'sent', 'failed'] as const;
+export type MinutesDeliveryStatus = (typeof MINUTES_DELIVERY_STATUSES)[number];
+
+/**
+ * One sending of a meeting's external minutes to the customer (CD-133): an exact copy of what was
+ * sent (subject, body, the chrome's language) and who sent it (name and email kept, so the log
+ * reads the same after they left). Never deleted: a meeting with sends can't be deleted (no
+ * cascade; MeetingsService says "cancel it instead").
+ */
+export const meetingMinutesSends = pgTable(
+  'meeting_minutes_sends',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    meetingId: uuid('meeting_id').notNull(),
+    senderUserId: uuid('sender_user_id').references(() => users.id, { onDelete: 'set null' }),
+    senderName: text('sender_name').notNull(),
+    senderEmail: text('sender_email').notNull(),
+    subject: text('subject').notNull(),
+    body: text('body').notNull(),
+    language: text('language', { enum: CUSTOMER_EMAIL_LANGUAGES }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique('meeting_minutes_sends_tenant_id_uq').on(t.tenantId, t.id),
+    index('meeting_minutes_sends_tenant_meeting_idx').on(t.tenantId, t.meetingId, t.createdAt),
+    foreignKey({ columns: [t.tenantId, t.meetingId], foreignColumns: [meetings.tenantId, meetings.id], name: 'meeting_minutes_sends_meeting_fk' }),
+    check('meeting_minutes_sends_language_ck', sql`${t.language} in ('en', 'sr')`),
+    check('meeting_minutes_sends_length_ck', sql`char_length(${t.subject}) <= 300 and char_length(${t.body}) <= 10000`),
+  ],
+);
+
+/**
+ * The people one send went to: contacts (`to`) and members (`cc`), with the name and address used,
+ * and the delivery status of each (queued → sent | failed with the error). `meeting_id` is the
+ * send's meeting, so live-update hints name the meeting.
+ */
+export const meetingMinutesRecipients = pgTable(
+  'meeting_minutes_recipients',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    sendId: uuid('send_id').notNull(),
+    meetingId: uuid('meeting_id').notNull(),
+    kind: text('kind', { enum: MINUTES_RECIPIENT_KINDS }).notNull(),
+    contactId: uuid('contact_id'),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    name: text('name').notNull(),
+    email: text('email').notNull(),
+    status: text('status', { enum: MINUTES_DELIVERY_STATUSES }).notNull().default('queued'),
+    error: text('error'),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    unique('meeting_minutes_recipients_tenant_id_uq').on(t.tenantId, t.id),
+    index('meeting_minutes_recipients_tenant_send_idx').on(t.tenantId, t.sendId),
+    index('meeting_minutes_recipients_tenant_meeting_idx').on(t.tenantId, t.meetingId),
+    index('meeting_minutes_recipients_tenant_contact_idx').on(t.tenantId, t.contactId),
+    foreignKey({ columns: [t.tenantId, t.sendId], foreignColumns: [meetingMinutesSends.tenantId, meetingMinutesSends.id], name: 'meeting_minutes_recipients_send_fk' }).onDelete('cascade'),
+    foreignKey({ columns: [t.tenantId, t.meetingId], foreignColumns: [meetings.tenantId, meetings.id], name: 'meeting_minutes_recipients_meeting_fk' }),
+    check('meeting_minutes_recipients_kind_ck', sql`${t.kind} in ('to', 'cc') and (${t.kind} = 'cc' or ${t.userId} is null) and (${t.kind} = 'to' or ${t.contactId} is null)`),
+    check('meeting_minutes_recipients_status_ck', sql`${t.status} in ('queued', 'sent', 'failed')`),
   ],
 );
 

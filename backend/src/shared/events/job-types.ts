@@ -21,6 +21,12 @@ export interface JobPayloads {
    * part and want "Meeting invitations" (CD-131).
    */
   'crm.meeting-invite': { tenantId: string; meetingId: string; userIds: string[]; actorUserId: string; kind: 'added' | 'updated' | 'cancelled' };
+  /**
+   * Sent by CRM when someone sends a meeting's external minutes to the customer, or retries the
+   * recipients that failed (CD-133). The CRM worker sends one email to the send's recipients still
+   * queued (to: contacts, cc: members) and records each one's status.
+   */
+  'crm.meeting-minutes-email': { tenantId: string; sendId: string };
   /** Sent by identity when someone removes a member or a member leaves; CRM takes them off future meetings (CD-131). */
   'identity.member-removed': { tenantId: string; userId: string };
   /** Sent by identity when an invitation is created or resent; identity's worker handler emails it (CD-7). */
@@ -42,6 +48,7 @@ export const JOB_NAMES = [
   'crm.deal-assigned',
   'crm.generate-document',
   'crm.meeting-invite',
+  'crm.meeting-minutes-email',
   'identity.invitation-email',
   'identity.member-removed',
   'identity.signup-email',
@@ -51,4 +58,4 @@ export const JOB_NAMES = [
 ] as const satisfies readonly JobName[];
 
 /** Jobs that send email: retried MAIL_RETRY_LIMIT times with backoff from MAIL_RETRY_DELAY_SECONDS. */
-export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest']);
+export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest']);

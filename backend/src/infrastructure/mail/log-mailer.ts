@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { type MailMessage, Mailer, type SentMail } from './mailer';
+import { fromHeader, type MailMessage, type MailResult, Mailer, recipientsOf, type SentMail } from './mailer';
 
 const KEEP = 200;
 
@@ -12,7 +12,8 @@ const KEEP = 200;
  * processes, so the dev-only GET /api/dev/mail reads the file, not this process's memory.
  *
  * Addresses at the reserved ".invalid" top-level domain (RFC 2606) are refused, so a failed send
- * (and its retries) can be seen without a real provider.
+ * (and its retries) can be seen without a real provider: refused recipients are reported (the
+ * others get the message), and when every recipient is refused the send fails.
  */
 export class LogMailer extends Mailer {
   private readonly logger = new Logger('Mail');
@@ -29,18 +30,24 @@ export class LogMailer extends Mailer {
     this.notDelivered = notDelivered;
   }
 
-  async send(message: MailMessage): Promise<void> {
-    if (/\.invalid$/i.test(message.to.trim())) throw new Error(`Mailbox unavailable: ${message.to} (the log driver refuses .invalid addresses)`);
-    const mail: SentMail = { ...message, from: this.from, sentAt: new Date().toISOString() };
+  async send(message: MailMessage): Promise<MailResult> {
+    // Like an SMTP server: refused recipients are reported and the others get the message; when
+    // nobody can get it, the send fails.
+    const all = recipientsOf(message);
+    const rejected = all.filter((a) => /\.invalid$/i.test(a.trim()));
+    if (rejected.length === all.length) throw new Error(`Mailbox unavailable: ${rejected.join(', ')} (the log driver refuses .invalid addresses)`);
+    const mail: SentMail = { ...message, from: fromHeader(message, this.from), sentAt: new Date().toISOString(), ...(rejected.length ? { rejected } : {}) };
     this.sent.push(mail);
     if (this.sent.length > KEEP) this.sent.splice(0, this.sent.length - KEEP);
     const files = message.attachments?.length ? ` [${message.attachments.map((a) => a.filename).join(', ')}]` : '';
-    this.logger.log(`Email to ${message.to}: ${message.subject}${files}`);
+    const cc = message.cc?.length ? ` (cc ${message.cc.join(', ')})` : '';
+    this.logger.log(`Email to ${all.slice(0, all.length - (message.cc?.length ?? 0)).join(', ')}${cc}: ${message.subject}${files}`);
     this.logger.debug(message.text);
     if (this.outboxFile) {
       await mkdir(dirname(this.outboxFile), { recursive: true });
       await appendFile(this.outboxFile, JSON.stringify(mail) + '\n', 'utf8');
     }
+    return { rejected };
   }
 }
 
