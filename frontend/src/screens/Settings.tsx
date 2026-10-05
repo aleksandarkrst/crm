@@ -6,7 +6,7 @@ import { paths } from '../lib/paths';
 import { canManageTemplates } from '../store/documents';
 import { ACTIVITIES, CHANNEL_LABELS, CHANNELS, CURRENCIES, DOCS, FIELD_TYPES, TEAM_ROLES } from '../store/seed';
 import { currencySymbol, curOf, customFieldsOf, funnelOptions, initialsOf, salesPeople } from '../store/selectors';
-import type { CustomFieldDef } from '../store/types';
+import type { CustomFieldDef, Workspace } from '../store/types';
 import type { CustomFieldEntity } from '../lib/api';
 import { useStore } from '../store/store';
 import { TemplatesTab } from './DocumentTemplates';
@@ -21,8 +21,6 @@ const TABS = [
   { k: 'fields', label: 'Customize Fields' },
   { k: 'bonuses', label: 'Sales bonuses' },
   { k: 'notifications', label: 'Notifications' },
-  { k: 'integrations', label: 'Integrations' },
-  { k: 'billing', label: 'Billing' },
 ] as const;
 type Tab = (typeof TABS)[number]['k'];
 
@@ -89,8 +87,6 @@ export function Settings() {
       {current === 'fields' && <FieldsTab />}
       {current === 'bonuses' && <BonusesTab />}
       {current === 'notifications' && <NotificationsTab />}
-      {current === 'integrations' && <IntegrationsTab />}
-      {current === 'billing' && <BillingTab />}
       {inviteOpen && <InviteModal onClose={() => setInviteOpen(false)} />}
     </Screen>
   );
@@ -108,6 +104,10 @@ function ComingSoonButton({ label }: { label: string }) {
   );
 }
 
+const CUSTOMER_EMAIL_LANGUAGES = [
+  { value: 'en', label: 'English' },
+  { value: 'sr', label: 'Srpski' },
+];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((label, i) => ({ value: String(i + 1), label }));
 /** Every IANA time zone the browser knows. */
 const TIME_ZONES = (() => {
@@ -137,6 +137,16 @@ function WorkspaceTab() {
       <FieldRow label="Fiscal year starts">
         <GhostSelect value={String(w.fiscalMonth)} disabled={ro} onChange={(e) => setWorkspace({ fiscalMonth: Number(e.target.value) })} options={MONTHS} />
       </FieldRow>
+      <FieldRow label="Customer email language">
+        <GhostSelect
+          aria-label="Customer email language"
+          value={w.customerEmailLanguage}
+          disabled={ro}
+          onChange={(e) => setWorkspace({ customerEmailLanguage: e.target.value as Workspace['customerEmailLanguage'] })}
+          options={CUSTOMER_EMAIL_LANGUAGES}
+        />
+      </FieldRow>
+      <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>Language of the fixed text in emails to customers, such as meeting minutes.</span>
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 8 }}>
         {ro ? 'Only owners and admins can change the workspace settings.' : 'Changes are saved as you make them.'}
       </span>
@@ -785,8 +795,8 @@ function BonusesTab() {
 }
 
 /**
- * Your own notification settings for this workspace (CD-16), saved on your membership. Only what
- * the worker can deliver can be switched; the rest is marked "Coming soon".
+ * Your own notification settings for this workspace (CD-16, CD-207), saved on your membership.
+ * Only what the app actually sends is listed.
  */
 function NotificationsTab() {
   const { s, session, patchProfile } = useStore();
@@ -800,10 +810,14 @@ function NotificationsTab() {
       toggle: () => patchProfile({ digest: !p.digest }),
     },
     { id: 'assigned', label: 'Deal assigned to you', desc: 'An email when someone else makes you the owner of a deal.', on: p.dealAssigned, toggle: () => patchProfile({ dealAssigned: !p.dealAssigned }) },
-  ];
-  const soon = [
-    { id: 'documents', label: 'Document activity', desc: 'Alert when a proposal or contract is opened or signed' },
-    { id: 'weekly', label: 'Weekly pipeline report', desc: 'Monday email with stage conversion and open value' },
+    {
+      id: 'meetings',
+      label: 'Meeting invitations',
+      desc: "An email with a calendar file when someone else adds you to a meeting, or changes or cancels one you're in.",
+      on: p.meetingInvites,
+      toggle: () => patchProfile({ meetingInvites: !p.meetingInvites }),
+    },
+    { id: 'visit-plans', label: 'Visit plans', desc: 'An email when someone else creates or changes your visit plan.', on: p.visitPlans, toggle: () => patchProfile({ visitPlans: !p.visitPlans }) },
   ];
   const row = { display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--divider)' } as const;
   return (
@@ -817,82 +831,9 @@ function NotificationsTab() {
           <Switch on={n.on} onClick={n.toggle} label={n.label} />
         </div>
       ))}
-      {soon.map((n) => (
-        <div key={n.id} data-notification={n.id} style={row}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-2)' }}>{n.label}</span>
-            <span style={{ fontSize: 12, color: 'var(--muted)' }}>{n.desc}</span>
-          </div>
-          <span className="caps-muted">Coming soon</span>
-        </div>
-      ))}
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 12 }}>
         Emails go to {p.email || 'your sign-in address'}. These settings are yours and apply to {session.tenant.name} only; changes are saved as you make them.
       </span>
-    </div>
-  );
-}
-
-function IntegrationsTab() {
-  const { s, set } = useStore();
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12 }}>
-      {s.integrations.map((i) => (
-        <div key={i.id} className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <span style={{ fontSize: 13.5, fontWeight: 600 }}>{i.name}</span>
-          <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45, flex: 1 }}>{i.desc}</span>
-          <button
-            type="button"
-            onClick={() => set((x) => ({ integrations: x.integrations.map((y) => (y.id === i.id ? { ...y, on: !y.on } : y)) }))}
-            style={{ alignSelf: 'flex-start', cursor: 'pointer', border: '1px solid #14503C', background: i.on ? '#FFFFFF' : '#14503C', color: i.on ? '#14503C' : '#F5F7F6', fontSize: 12.5, fontWeight: 500, padding: '7px 12px', borderRadius: 7 }}
-          >
-            {i.on ? 'Connected' : 'Connect'}
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function BillingTab() {
-  const { s } = useStore();
-  const seats = s.team.length;
-  const invoices = [
-    { id: 'INV-0148', date: '01 Sep 2026', amount: '€116', state: 'Paid' },
-    { id: 'INV-0139', date: '01 Aug 2026', amount: '€116', state: 'Paid' },
-    { id: 'INV-0131', date: '01 Jul 2026', amount: '€87', state: 'Paid' },
-  ];
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div className="card-title" style={{ marginBottom: 8 }}>
-          Plan
-        </div>
-        <FieldRow label="Current plan">
-          <span style={{ fontSize: 13.5 }}>Studio · €29 per seat / month</span>
-        </FieldRow>
-        <FieldRow label="Seats in use">
-          <span style={{ fontSize: 13.5 }}>
-            {seats} · €{seats * 29} / month
-          </span>
-        </FieldRow>
-        <FieldRow label="Renews">
-          <span style={{ fontSize: 13.5 }}>12 Oct 2026</span>
-        </FieldRow>
-      </div>
-      <div className="card card-pad">
-        <div className="card-title" style={{ marginBottom: 6 }}>
-          Invoices
-        </div>
-        {invoices.map((inv) => (
-          <div key={inv.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid var(--divider)', fontSize: 13 }}>
-            <span style={{ flex: 1 }}>{inv.id}</span>
-            <span style={{ color: 'var(--text-2)' }}>{inv.date}</span>
-            <span>{inv.amount}</span>
-            <span className="badge badge-brand">{inv.state}</span>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

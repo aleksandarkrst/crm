@@ -50,7 +50,24 @@ describe('notification settings', () => {
     await ok('PATCH', '/profile', { ...as(owner), body: { dailyDigest: true, notifyDealAssigned: true } });
   });
 
+  it('include meeting invitations and visit plans, on by default (CD-207)', async () => {
+    const all = { notifyMeetingInvites: true, notifyVisitPlans: true };
+    expect(await ok('GET', '/profile', as(member))).toMatchObject(all);
+
+    const saved = await ok('PATCH', '/profile', { ...as(member), body: { notifyMeetingInvites: false } });
+    expect(saved).toMatchObject({ notifyMeetingInvites: false, notifyVisitPlans: true, notifyDealAssigned: true, dailyDigest: true });
+    expect(await ok('PATCH', '/profile', { ...as(member), body: { notifyVisitPlans: false } })).toMatchObject({ notifyMeetingInvites: false, notifyVisitPlans: false });
+    expect(await ok('GET', '/profile', as(member))).toMatchObject({ notifyMeetingInvites: false, notifyVisitPlans: false });
+    // Each member changes only their own.
+    expect(await ok('GET', '/profile', as(owner))).toMatchObject(all);
+
+    await ok('PATCH', '/profile', { ...as(member), body: all });
+    expect(await ok('GET', '/profile', as(member))).toMatchObject(all);
+  });
+
   it('reject values that are not booleans', async () => {
+    const meetings = await ok('PATCH', '/profile', { ...as(member), body: { notifyMeetingInvites: 'no' } }, 400);
+    expect(JSON.stringify(meetings)).toMatch(/notifyMeetingInvites/);
     const res = await ok('PATCH', '/profile', { ...as(member), body: { notifyDealAssigned: 'yes' } }, 400);
     expect(JSON.stringify(res)).toMatch(/notifyDealAssigned/);
   });

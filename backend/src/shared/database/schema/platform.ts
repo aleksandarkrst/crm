@@ -6,6 +6,8 @@ import { boolean, check, index, jsonb, pgTable, primaryKey, smallint, text, time
  * they are how we figure out which tenants a user may access in the first place.
  */
 
+export const CUSTOMER_EMAIL_LANGUAGES = ['en', 'sr'] as const;
+
 export const tenants = pgTable(
   'tenants',
   {
@@ -16,9 +18,14 @@ export const tenants = pgTable(
     currency: text('currency').notNull().default('EUR'), // ISO 4217 code
     timezone: text('timezone').notNull().default('Europe/Belgrade'), // IANA time zone
     fiscalYearStartMonth: smallint('fiscal_year_start_month').notNull().default(1), // 1 = January
+    // Language of the fixed text in emails to customers, e.g. external meeting minutes (CD-208).
+    customerEmailLanguage: text('customer_email_language', { enum: CUSTOMER_EMAIL_LANGUAGES }).notNull().default('en'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [check('tenants_fiscal_month_ck', sql`${t.fiscalYearStartMonth} between 1 and 12`)],
+  (t) => [
+    check('tenants_fiscal_month_ck', sql`${t.fiscalYearStartMonth} between 1 and 12`),
+    check('tenants_customer_email_language_ck', sql`${t.customerEmailLanguage} in ('en', 'sr')`),
+  ],
 );
 
 export const PROFILE_LANGUAGES = ['en', 'sr', 'de'] as const;
@@ -71,6 +78,10 @@ export const memberships = pgTable(
     dailyDigest: boolean('daily_digest').notNull().default(true),
     // Email me when someone else makes me the owner of a deal (CD-16).
     notifyDealAssigned: boolean('notify_deal_assigned').notNull().default(true),
+    // Email me (with an .ics) when someone else adds me to a meeting, or changes or cancels it (CD-207).
+    notifyMeetingInvites: boolean('notify_meeting_invites').notNull().default(true),
+    // Email me when someone else creates or changes my visit plan (CD-207).
+    notifyVisitPlans: boolean('notify_visit_plans').notNull().default(true),
     /** The getting-started checklist (CD-68) is dismissed per user, so each admin decides for themselves. */
     onboardingDismissedAt: timestamp('onboarding_dismissed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
