@@ -808,3 +808,11 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .role-badge[data-role='manager'] { background: var(--brand-soft); border-color: var(--brand-soft-2); color: var(--brand-dark); }
 .role-toggles { display: flex; flex-direction: column; gap: 10px; }
 .role-toggle-row { display: flex; align-items: center; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--divider); }
+
+/* ---------------------------------------------------------------- import dialog (CD-64, CD-141) */
+.import-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.import-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 560px) {
+  .import-fields { grid-template-columns: 1fr; }
+  .import-summary { grid-template-columns: repeat(2, 1fr); }
+}

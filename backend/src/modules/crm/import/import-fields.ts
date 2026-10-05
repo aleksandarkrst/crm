@@ -1,19 +1,11 @@
+import { type ColumnMapping, guessMappingOf, type ImportField, templateCsvOf } from '../../../shared/import/import-file';
+
 /** What each import type can read from a CSV, how headers are guessed, and the template files. */
 
 export const IMPORT_TYPES = ['companies', 'contacts', 'deals', 'products'] as const;
 export type ImportType = (typeof IMPORT_TYPES)[number];
 
-export interface ImportField {
-  key: string;
-  label: string;
-  required: boolean;
-  /** Other header names that map to this field (compared without case, spaces or punctuation). */
-  aliases: string[];
-  /** Shown in the dialog next to the field. */
-  hint?: string;
-  /** Value in the template's example row. */
-  example: string;
-}
+export type { ColumnMapping, ImportField };
 
 const owner: ImportField = {
   key: 'ownerEmail',
@@ -70,43 +62,8 @@ export const IMPORT_FIELDS: Record<ImportType, ImportField[]> = {
   ],
 };
 
-/** A field → column index map (null or absent means "not imported"). */
-export type ColumnMapping = Record<string, number | null>;
-
-const norm = (v: string) => v.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
-
-/**
- * Guesses the mapping from the header names: a header matches a field when it equals the field's
- * key, label or one of its aliases, ignoring case, spaces and punctuation. Each column is used once;
- * exact labels win over aliases, so "Company" and "Company name" in one file both find a home.
- */
-export function guessMapping(type: ImportType, headers: string[]): ColumnMapping {
-  const fields = IMPORT_FIELDS[type];
-  const normalized = headers.map(norm);
-  const used = new Set<number>();
-  const mapping: ColumnMapping = {};
-  const pass = (names: (f: ImportField) => string[]) => {
-    for (const f of fields) {
-      if (mapping[f.key] !== undefined) continue;
-      const wanted = new Set(names(f).map(norm));
-      const idx = normalized.findIndex((h, i) => !used.has(i) && wanted.has(h));
-      if (idx >= 0) {
-        mapping[f.key] = idx;
-        used.add(idx);
-      }
-    }
-  };
-  pass((f) => [f.key, f.label]);
-  pass((f) => f.aliases);
-  for (const f of fields) mapping[f.key] ??= null;
-  return mapping;
-}
-
-/** Quotes a template cell when needed (the templates are plain, but keep them valid CSV). */
-const cell = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+/** The mapping guessed from the header names (shared/import: label, key or alias; case, accents and punctuation ignored). */
+export const guessMapping = (type: ImportType, headers: string[]): ColumnMapping => guessMappingOf(IMPORT_FIELDS[type], headers);
 
 /** Header row with the field labels plus one example row, UTF-8 with a BOM so Excel reads it right. */
-export function templateCsv(type: ImportType): string {
-  const fields = IMPORT_FIELDS[type];
-  return '\uFEFF' + [fields.map((f) => cell(f.label)).join(','), fields.map((f) => cell(f.example)).join(',')].join('\r\n') + '\r\n';
-}
+export const templateCsv = (type: ImportType): string => templateCsvOf(IMPORT_FIELDS[type]);
