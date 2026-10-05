@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, ne, type SQL } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
@@ -9,9 +9,11 @@ import { mapDbError } from '../../../shared/database/errors';
 import { companies, memberships, tenants, VISIT_PLAN_PERIOD_TYPES, visitPlanLines, visitPlans } from '../../../shared/database/schema';
 import { JobsService } from '../../../shared/events/jobs.service';
 import { IdList, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
+import { PeopleAccess } from '../../people';
 import { RecordHistoryService } from '../history/record-history.service';
 import { userNameOf } from '../owner';
 import { periodLabel, periodOf } from './periods';
+import { VisitScope } from './visit-scope';
 
 const PlanLine = z.object({
   companyId: z.uuid(),
@@ -57,12 +59,12 @@ export interface VisitPlanView {
   note: string | null;
   lines: { id: string; companyId: string; companyName: string; plannedVisits: number }[];
   totalPlanned: number;
+  /** The caller may change and delete it (Admins: all; managers: their direct reports'). */
+  canEdit: boolean;
   createdByUserId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
-
-const isManager = (ctx: TenantContext) => ctx.role !== 'member';
 
 /**
  * Visit plans are monthly only (CD-212): a quarter's progress is the sum of its three monthly
@@ -70,12 +72,15 @@ const isManager = (ctx: TenantContext) => ctx.role !== 'member';
  * deleted, but no new ones are made and the old ones aren't changed.
  */
 export const QUARTERLY_REFUSED = "Visit plans are monthly. A quarter's progress is the sum of its three monthly plans.";
+export const MANAGE_REFUSED = "Only Admins and the salesperson's manager can create, change or delete their visit plans";
 export const QUARTERLY_READ_ONLY = 'Quarterly plans can no longer be changed. Make monthly plans instead: a quarter adds up its three months.';
 
 /**
  * Customer visit plans (CD-134): per salesperson and month, which companies to visit how often
- * (monthly only since CD-212; old quarterly plans are read-only). Owners and admins see and manage every plan (the controller allows writes to
- * them only); members see their own plans, read-only, and other plans don't exist for them (404).
+ * (monthly only since CD-212; old quarterly plans are read-only). Who sees and manages which plans
+ * follows the permission matrix (VisitScope, CD-142): owners and admins all; managers see their
+ * reports' plans at any depth and manage their direct reports'; everyone sees their own. Plans the
+ * caller may not see don't exist for them (404); seen but not theirs to change is 403.
  * The salesperson gets an email (job "crm.visit-plan-email", same transaction) when someone else
  * creates or changes their plan. Counting the visits held is CD-135.
  */
@@ -86,31 +91,43 @@ export class VisitPlansService {
     private readonly audit: AuditService,
     private readonly jobs: JobsService,
     private readonly changes: RecordHistoryService,
+    private readonly access: PeopleAccess,
   ) {}
 
-  /** Newest period first, then by salesperson. Members get only their own plans, whatever they ask for. */
+  /** Whose plans the caller sees and manages (permission matrix + org scope), for this request. */
+  async scope(ctx: TenantContext, tx?: Tx): Promise<VisitScope> {
+    return new VisitScope(await this.access.of(ctx, tx));
+  }
+
+  /** For the store: `{ all, manageAll, seesTeam, visibleUserIds, manageableUserIds }` (null = everyone). */
+  async scopeView(ctx: TenantContext) {
+    return (await this.scope(ctx)).toJSON();
+  }
+
+  /** Newest period first, then by salesperson. Only the plans the caller sees, whatever they ask for. */
   list(ctx: TenantContext, query: VisitPlansQuery) {
-    const filters: (SQL | undefined)[] = [
-      query.periodType ? eq(visitPlans.periodType, query.periodType) : undefined,
-      query.periodStart ? eq(visitPlans.periodStart, query.periodStart) : undefined,
-      query.salespersonUserId ? eq(visitPlans.salespersonUserId, query.salespersonUserId) : undefined,
-      query.ids ? inArray(visitPlans.id, query.ids) : undefined,
-      isManager(ctx) ? undefined : eq(visitPlans.salespersonUserId, ctx.userId),
-    ];
     return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const scope = await this.scope(ctx, tx);
+      const filters: (SQL | undefined)[] = [
+        query.periodType ? eq(visitPlans.periodType, query.periodType) : undefined,
+        query.periodStart ? eq(visitPlans.periodStart, query.periodStart) : undefined,
+        query.salespersonUserId ? eq(visitPlans.salespersonUserId, query.salespersonUserId) : undefined,
+        query.ids ? inArray(visitPlans.id, query.ids) : undefined,
+        scope.filter ? inArray(visitPlans.salespersonUserId, scope.filter) : undefined,
+      ];
       const rows = await tx
         .select()
         .from(visitPlans)
         .where(and(...filters))
         .orderBy(desc(visitPlans.periodStart), asc(visitPlans.periodType), asc(userNameOf(visitPlans.salespersonUserId)));
-      return { plans: await this.present(tx, ctx, rows) };
+      return { plans: await this.present(tx, ctx, rows, scope) };
     });
   }
 
   get(ctx: TenantContext, id: string) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const plan = await this.visible(tx, ctx, id);
-      return (await this.present(tx, ctx, [plan]))[0]!;
+      return (await this.present(tx, ctx, [plan], await this.scope(ctx, tx)))[0]!;
     });
   }
 
@@ -118,6 +135,8 @@ export class VisitPlansService {
     if (input.periodType === 'quarter') throw new BadRequestException(QUARTERLY_REFUSED);
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        const scope = await this.scope(ctx, tx);
+        if (!scope.canManage(input.salespersonUserId)) throw new ForbiddenException(MANAGE_REFUSED);
         await this.assertSalesperson(tx, ctx, input.salespersonUserId);
         const period = await this.period(tx, ctx, 'month', input.periodStart);
         await this.assertNoDuplicate(tx, input.salespersonUserId, 'month', period.start, period.label);
@@ -137,7 +156,7 @@ export class VisitPlansService {
         await tx.insert(visitPlanLines).values(input.lines.map((l) => ({ tenantId: ctx.tenantId, planId: plan!.id, companyId: l.companyId, plannedVisits: l.plannedVisits })));
         await this.audit.record(tx, ctx, { action: 'visit_plan.created', entityType: 'visit_plan', entityId: plan!.id, data: input });
         await this.notify(tx, ctx, plan!, 'created');
-        return (await this.present(tx, ctx, [plan!]))[0]!;
+        return (await this.present(tx, ctx, [plan!], scope))[0]!;
       })
       .catch(mapDbError);
   }
@@ -147,8 +166,10 @@ export class VisitPlansService {
     if (input.periodType === 'quarter') throw new BadRequestException(QUARTERLY_REFUSED);
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        const scope = await this.scope(ctx, tx);
         const [current] = await tx.select().from(visitPlans).where(eq(visitPlans.id, id)).for('update');
-        if (!current) throw new NotFoundException('Visit plan not found');
+        if (!current || !scope.canSee(current.salespersonUserId)) throw new NotFoundException('Visit plan not found');
+        if (!scope.canManage(current.salespersonUserId)) throw new ForbiddenException(MANAGE_REFUSED);
         if (current.periodType === 'quarter') throw new BadRequestException(QUARTERLY_READ_ONLY);
         const { lines, ...fields } = input;
         await this.changes.assertNoConflict(tx, ctx, 'visit_plan', current, fields, version);
@@ -158,6 +179,7 @@ export class VisitPlansService {
         const periodStart = input.periodStart ?? current.periodStart;
         const patch: PgUpdateSetSource<typeof visitPlans> = {};
         if (salespersonUserId !== current.salespersonUserId) {
+          if (!scope.canManage(salespersonUserId)) throw new ForbiddenException(MANAGE_REFUSED);
           await this.assertSalesperson(tx, ctx, salespersonUserId);
           patch.salespersonUserId = salespersonUserId;
         }
@@ -183,7 +205,7 @@ export class VisitPlansService {
           // A plan handed to another salesperson is new to them.
           await this.notify(tx, ctx, row!, patch.salespersonUserId ? 'created' : 'changed');
         }
-        return (await this.present(tx, ctx, [row!]))[0]!;
+        return (await this.present(tx, ctx, [row!], scope))[0]!;
       })
       .catch(mapDbError);
   }
@@ -192,6 +214,8 @@ export class VisitPlansService {
   remove(ctx: TenantContext, id: string) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        const plan = await this.visible(tx, ctx, id);
+        if (!(await this.scope(ctx, tx)).canManage(plan.salespersonUserId)) throw new ForbiddenException(MANAGE_REFUSED);
         const deleted = await tx.delete(visitPlans).where(eq(visitPlans.id, id)).returning({ id: visitPlans.id });
         if (!deleted.length) throw new NotFoundException('Visit plan not found');
         await this.audit.record(tx, ctx, { action: 'visit_plan.deleted', entityType: 'visit_plan', entityId: id });
@@ -199,10 +223,10 @@ export class VisitPlansService {
       .catch(mapDbError);
   }
 
-  /** The plan, if the caller may see it: managers see all, members their own (others are "not found"). */
+  /** The plan, if the caller may see it (VisitScope); others are "not found". */
   async visible(tx: Tx, ctx: TenantContext, id: string): Promise<PlanRow> {
     const [plan] = await tx.select().from(visitPlans).where(eq(visitPlans.id, id));
-    if (!plan || (!isManager(ctx) && plan.salespersonUserId !== ctx.userId)) throw new NotFoundException('Visit plan not found');
+    if (!plan || !(await this.scope(ctx, tx)).canSee(plan.salespersonUserId)) throw new NotFoundException('Visit plan not found');
     return plan;
   }
 
@@ -287,7 +311,7 @@ export class VisitPlansService {
   }
 
   /** Plans as the API returns them: with the salesperson's name, the period's label and the lines (by company name). */
-  private async present(tx: Tx, ctx: TenantContext, rows: PlanRow[]): Promise<VisitPlanView[]> {
+  private async present(tx: Tx, ctx: TenantContext, rows: PlanRow[], scope: VisitScope): Promise<VisitPlanView[]> {
     if (rows.length === 0) return [];
     const fiscal = await this.fiscalStartMonth(tx, ctx);
     const names = await tx
@@ -314,6 +338,7 @@ export class VisitPlansService {
         note: r.note,
         lines: own,
         totalPlanned: own.reduce((sum, l) => sum + l.plannedVisits, 0),
+        canEdit: scope.canManage(r.salespersonUserId),
         createdByUserId: r.createdByUserId,
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,

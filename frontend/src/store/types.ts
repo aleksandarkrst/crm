@@ -1,4 +1,4 @@
-import type { ApiCustomerEmailLanguage, ApiCustomField, ApiDateFormat, ApiLanguage, ApiOnboarding, ApiStageChange, ApiStartPage, CustomFieldEntity, CustomFieldValues, DealOutcome, LostReason } from '../lib/api';
+import type { ApiCustomerEmailLanguage, ApiCustomField, ApiDateFormat, ApiLanguage, ApiOnboarding, ApiStageChange, ApiStartPage, CustomFieldEntity, CustomFieldValues, DealOutcome, LostReason, ApiVisitScope } from '../lib/api';
 import type { DealDoc, DocTemplate } from './documents';
 import type { MeetingDialogSeed, MeetingList } from './meetings';
 import type { ApiInternalMinutes, ApiMeeting } from '../lib/api';
@@ -258,6 +258,11 @@ export interface Workspace {
   fiscalMonth: number;
   /** Language of the fixed text in emails to customers (CD-208). */
   customerEmailLanguage: ApiCustomerEmailLanguage;
+  /** Settings → Employees (CD-215): weekly hours new employees start with, 1–60. */
+  employeeDefaultWeeklyHours: number;
+  employeeNumberRequired: boolean;
+  /** Employees change their own bank account. */
+  employeeSelfEditBank: boolean;
 }
 
 /** The signed-in user's profile (see ApiProfile). */
@@ -277,6 +282,8 @@ export interface Profile {
   dealAssigned: boolean;
   meetingInvites: boolean;
   visitPlans: boolean;
+  /** "New manager" / "New direct report" emails (milestone 13). */
+  orgChanges: boolean;
 }
 
 export interface BonusRule {
@@ -364,6 +371,8 @@ export interface State {
   onboarding: ApiOnboarding | null;
   /** Customer visit plans (CD-134) this user may see (members: their own), newest period first. */
   visitPlans: VisitPlan[];
+  /** Whose visit plans this user sees and manages (CD-142): Admins all, managers their reports'. */
+  visitScope: ApiVisitScope;
   /**
    * Sales bonus rules by user id (CD-17), saved in the workspace. null for members: the API
    * doesn't show them the rules, and the UI hides the bonus tab and the Overview card.
@@ -441,4 +450,6 @@ export interface State {
   visitRev: number;
   /** Employees, departments and teams (milestone 13; see store/people.ts), read when a screen needs them. */
   people: PeopleState;
+  /** Goes up on every employee and role change (live hints, resync): people lists re-read (CD-142). */
+  peopleRev: number;
 }

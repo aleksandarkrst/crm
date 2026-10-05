@@ -49,6 +49,12 @@ export interface JobPayloads {
     actorUserId: string | null;
     changes: { account: 'iban' | 'fxIban'; kind: 'added' | 'changed' | 'removed'; masked: string }[];
   };
+  /**
+   * Sent by people when an Admin gives an employee Administration or Payroll, or takes it away
+   * (CD-142, spec 10.2). The people worker emails the employee (sign-in email if linked, else work
+   * email) "Role granted" or "Role removed". Can't be turned off; no personal details.
+   */
+  'people.role-changed-email': { tenantId: string; employeeId: string; role: 'administration' | 'payroll'; kind: 'granted' | 'removed'; actorUserId: string };
   /** Cron (every 15 minutes): queues the daily digests of workspaces where it is morning now. */
   'notifications.digest-tick': Record<string, never>;
   /** One member's daily digest for one workspace and local date. `force` skips the "once a day" and "turned on" checks (dev trigger). */
@@ -72,8 +78,9 @@ export const JOB_NAMES = [
   'notifications.digest-tick',
   'notifications.daily-digest',
   'people.bank-account-changed-email',
+  'people.role-changed-email',
   'reporting.nightly',
 ] as const satisfies readonly JobName[];
 
 /** Jobs that send email: retried MAIL_RETRY_LIMIT times with backoff from MAIL_RETRY_DELAY_SECONDS. */
-export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email']);
+export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.role-changed-email']);

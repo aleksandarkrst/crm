@@ -4,7 +4,7 @@ import { Modal, ModalHeader, Picker, PickerRow, RemoveButton, usePicker } from '
 import { paths } from '../lib/paths';
 import { companyRecords, initialsOf, memberLabels, todayIso } from '../store/selectors';
 import { useStore } from '../store/store';
-import { periodLabel, periodOptions, periodStartOf, previousPlan, shiftPeriod } from '../store/visitPlans';
+import { managesPlansOf, periodLabel, periodOptions, periodStartOf, previousPlan, shiftPeriod } from '../store/visitPlans';
 
 export interface PlanDraft {
   salespersonUserId: string;
@@ -18,7 +18,7 @@ export interface PlanDraft {
 const validVisits = (v: string) => /^\d+$/.test(v.trim()) && Number(v) >= 1 && Number(v) <= 99;
 
 /**
- * "New plan" (CD-134, owners and admins): a salesperson, a month, the customers with their planned
+ * "New plan" (CD-134; owners and admins, managers for their direct reports): a salesperson, a month, the customers with their planned
  * visits, and a note. Plans are monthly (CD-212): a quarter's progress adds up its three months.
  * "Copy from previous period" fills the customers from the same salesperson's plan for the month before; everything can be changed before saving. Opened
  * from the Visit plans list, and prefilled by "Copy to next period" on a plan.
@@ -29,7 +29,8 @@ export function VisitPlanDialog({ initial, onClose }: { initial?: Partial<PlanDr
   const fiscal = s.workspace.fiscalMonth || 1;
   const today = todayIso(s.workspace.timezone);
   const labels = memberLabels(s);
-  const members = s.team.filter((m) => m.status === 'Active');
+  // Admins plan for anyone, managers for their direct reports (CD-142).
+  const members = s.team.filter((m) => m.status === 'Active' && managesPlansOf(s.visitScope, m.id));
   const [d, setD] = useState<PlanDraft>(() => ({
     salespersonUserId: initial?.salespersonUserId ?? '',
     periodStart: initial?.periodStart ?? periodStartOf('month', today, fiscal),

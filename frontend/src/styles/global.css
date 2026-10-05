@@ -786,3 +786,25 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
   .org-stub-fields { grid-template-columns: 1fr; gap: 2px; }
   .org-stub-fields dd { margin-bottom: 8px; }
 }
+
+/* ---- roles and permissions (CD-142), employee settings (CD-215) ---- */
+.perm-module-head { display: grid; gap: 12px; padding: 12px 16px 8px; background: var(--brand-tint); border-bottom: 1px solid var(--divider); font-size: 13px; }
+.perm-row { padding: 10px 16px; }
+.perm-row.soon { color: var(--text-2); }
+.perm-cell { justify-self: center; text-align: center; font-size: 12px; line-height: 1.35; padding: 3px 8px; border-radius: 6px; }
+.perm-cell.none { color: var(--muted); }
+.perm-cell.own { background: var(--chip); color: var(--ink); }
+.perm-cell.some { background: var(--brand-soft); color: var(--brand-dark); }
+.perm-cell.all { background: var(--brand); color: var(--white); }
+.perm-row.soon .perm-cell.all { background: var(--brand-soft-2); color: var(--brand-dark); }
+.role-descriptions { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 18px; padding: 6px 16px 14px; }
+.role-description { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.role-holder-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 18px; margin-top: 12px; }
+.role-holder-list { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.role-holder-head { display: flex; flex-direction: column; gap: 1px; padding-bottom: 6px; border-bottom: 1px solid var(--divider); margin-bottom: 4px; }
+.role-holder { display: flex; align-items: center; gap: 10px; padding: 6px 0; min-width: 0; }
+.role-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: var(--chip); border: 1px solid var(--border); font-size: 11.5px; font-weight: 500; color: var(--ink); }
+.role-badge[data-role='admin'] { background: var(--brand); border-color: var(--brand); color: var(--white); }
+.role-badge[data-role='manager'] { background: var(--brand-soft); border-color: var(--brand-soft-2); color: var(--brand-dark); }
+.role-toggles { display: flex; flex-direction: column; gap: 10px; }
+.role-toggle-row { display: flex; align-items: center; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--divider); }
