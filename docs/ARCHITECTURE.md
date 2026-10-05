@@ -574,10 +574,13 @@ that local date. The window lets a worker that was down at 8:00 catch up, withou
 retried), loads the digest inside `withTenant` and:
 
 - sends it when it has something: the member's tasks that aren't done and are due before today
-  (overdue) or today, by the workspace's date, on deals that aren't lost; and their open deals
-  (not won, not lost) with no open task from the "New task" dialog, i.e. the Pipeline's "No next
-  step" flag. Each section lists up to 20 items linking to `/deals/<id>`;
-- records `skipped` without sending when all three are empty;
+  (overdue) or today, by the workspace's date, on deals that aren't lost; their open deals
+  (not won, not lost) with no open task from the "New task" dialog and no planned meeting still
+  ahead, i.e. the Pipeline's "No next step" flag; the meetings starting today that they organize
+  or take part in (planned or held, CD-130); and the planned meetings they organize that ended
+  more than 24 hours ago ("Not closed"). Each section lists up to 20 items linking to
+  `/deals/<id>` or `/meetings/<id>`;
+- records `skipped` without sending when all sections are empty;
 - records `failed` with the error when the send throws; pg-boss retries it.
 
 `daily_digests` (tenant-scoped, RLS in `drizzle/0018_daily_digests_rls.sql`) holds one row per
@@ -638,14 +641,15 @@ card) is CD-135; until then the screens show "—" in the Held, Upcoming and Com
   Delete; note; History). "New plan" has "Copy from previous period": the same salesperson's plan
   of the same type for the period before fills the customers, which can be changed before saving.
   "Schedule visit" opens New meeting prefilled with the company, Customer visit and the salesperson
-  as organizer (through the Calendar's `?new=1&…` prefill). The store keeps the plans in
+  as organizer (`meetings.openDialog`). The store keeps the plans in
   `s.visitPlans` (loaded with the workspace).
 
 ## Working together: live updates, conflicts, change history
 
 ### Change history (CD-69)
 
-`record_changes` has one row per changed field of a deal, company or contact: `entity_type`,
+`record_changes` has one row per changed field of a deal, company, contact or meeting (CD-130, see
+"Meetings"): `entity_type`,
 `entity_id`, `action` (`created`, `updated`, `deleted`, and for deals `line_added`, `line_changed`,
 `line_removed`), `field` (the API's name: `title`, `stageId`, `ownerUserId`, `lostReason`, …),
 `old_value` / `new_value` (jsonb), a `label` (the record's name on created/deleted, the product's
@@ -702,7 +706,8 @@ increasing per row, and the same moment as the history rows of that change.
 ### Live updates (CD-20)
 
 - **Database**: statement-level triggers on deals, companies, contacts, deal contacts, deal lines,
-  deal tasks (tasks and to-dos), activities, products, funnels and stages send `pg_notify` on
+  deal tasks (tasks and to-dos), activities, products, funnels and stages, meetings and their
+  participants (CD-130) send `pg_notify` on
   channel `crm_changes` when the transaction commits: `{ t: tenant, type, op, ids, dealIds,
   client }`, one per statement and tenant, ids only (null when more than 50 rows changed, e.g. an
   import: "re-read the list"). A rolled-back change sends nothing.
@@ -987,6 +992,64 @@ milestones on lines); `drizzle/0022_products_deal_billing.sql` converts existing
   LinkedIn value that is a web address (`linkedin.com/in/…` or http(s)), gets an **Open** link next
   to the field, like Email and Call; other text stays plain. Only http(s) links are made.
 
+## Meetings (CD-130)
+
+`meetings` (crm module, `modules/crm/meetings/`) are meetings with a customer company: title,
+type (`visit` Customer visit, `online`, `office` Meeting at our office, `phone`), `starts_at` /
+`ends_at` (instants; `ends_at > starts_at` is a check), location, agenda, the company (required),
+an optional deal of that company, the organizer and the status (`planned`, `held`, `cancelled`,
+with `held_at`, `cancelled_at` and `cancel_reason`). `meeting_participants` has one row per member
+(`internal`, `user_id`) or contact (`external`, `contact_id`), with the person's name (and the
+contact's email) saved on the row. RLS, the foreign keys that null one column, the triggers and
+the live-update hints are in `drizzle/0029_meetings_rls.sql`.
+
+- **Times** are stored as instants and shown in the workspace time zone. Timeline entries format
+  them with `shared/time/zoned-time.ts` ("Tue 10 Nov 2026, 10:00–11:00", both days when a meeting
+  crosses midnight), daylight saving included.
+- **API** (`/api/crm/meetings`, any member): `GET ?from=&to=` returns the meetings overlapping
+  `[from, to)` (a meeting crossing midnight is on both days), with `userId` (organizer or
+  internal participant), `companyId`, `dealId`, `contactId` (external participant), `type` and
+  `status` (comma lists), `notClosed=1`, `missingMinutes=1` (held; CD-132 adds "without a
+  summary"), `ids=` (≤ 200, for live updates), `sort=asc|desc` by start, `limit` (≤ 1000, default
+  500) and `offset`: `{ meetings, more }`. Without a period it needs one of companyId, dealId,
+  contactId or ids. `GET/POST/PATCH /:id`, `POST /:id/held | cancel ({ reason? }) | undo-held |
+  restore`, and `DELETE /:id` (owners and admins). A meeting comes with its company and deal
+  names, the deal's owner, the organizer's name ("Organizer left" when null), its participants
+  (`deleted` when the contact was deleted or the member left), `notClosed`, and placeholders for
+  the minutes (`internalMinutes: 'missing'`, `externalDelivery: 'not_sent'`) until CD-132/133.
+- **Rules** (`meeting-rules.ts`, pure and unit-tested): owners, admins, the organizer and the
+  internal participants change a meeting (403 otherwise); held only from the start time on and
+  only when planned; cancel only when planned; "Undo held" (held → planned) and "Restore"
+  (cancelled → planned); a cancelled meeting is read-only (409) until restored, a held one can be
+  corrected. "Not closed" = planned and ended more than 24 hours ago.
+- **Validation** (400): title 1–200, location ≤ 300, agenda ≤ 5,000 characters, end after start
+  (also when a PATCH sends only one of them), an existing company, a deal of that company,
+  organizer and internal participants who are members of the workspace, existing contacts.
+  Duplicate people are dropped; the organizer is always an internal participant (the service
+  adds them). `internalUserIds` / `externalContactIds` in a PATCH replace the sets; rows of
+  deleted contacts and former members are kept.
+- **Deal timeline** (only with a deal), in the same transaction: creating writes "Meeting
+  scheduled · <title>" (MT) with the time and place, marking as held "Meeting held · <title>" at
+  the meeting's start and moves the deal's last contact there (never back in time,
+  `ActivitiesService.record`), cancelling "Meeting cancelled · <title>" with the reason.
+  Scheduling doesn't count as contact.
+- **Related records**: a company with meetings can't be deleted (409, like deals; "Remove sample
+  data" keeps a sample company that has meetings); deleting a deal unlinks its meetings
+  (`ON DELETE SET NULL (deal_id)`); deleting a contact keeps their row on the meeting with the
+  saved name (`ON DELETE SET NULL (contact_id)`). Removing people from upcoming meetings when a
+  contact is deleted or a member leaves is CD-131.
+- **Conflicts and history**: `updated_at` is the If-Match version (`crm_touch_version`) and PATCH
+  checks field-level conflicts as deals do. `record_changes` gets `entity_type = 'meeting'`: the
+  fields (`title`, `type`, `startsAt`, `endsAt`, `location`, `agenda`, `companyId`, `dealId`,
+  `organizerUserId`, `status`, `cancelReason`) and `participant_added` / `participant_removed`
+  (field `participants`, the person's name as `label`; the people a meeting is created with are
+  part of its `created` row). `GET /api/crm/history?entityType=meeting` names the company, deal
+  and organizer. A change of people alone also moves the meeting's version.
+- **Live updates**: both tables send `crm_changes` hints of type `meeting`; participant rows report
+  their meeting's id (`crm_notify_changes` takes the id column as an optional second argument).
+- **Daily digest**: see "Daily digest" above (meetings today, not closed, and a planned meeting
+  ahead counts as a next step).
+
 ## Deal page (CD-83)
 
 - The header shows the funnel and stage ("SMB → Proposal"), the deal name (editable), the owner,
@@ -998,6 +1061,50 @@ milestones on lines); `drizzle/0022_products_deal_billing.sql` converts existing
   quantity, amount and billing, the installments when there are any, and a pencil to open the
   products dialog), **Discovery** and **Fit score**. The activity composer no longer has a
   Products tab.
+
+## Meetings: screens (CD-130)
+
+- **Store** (`store/meetings.ts`, `store/useMeetings.ts`): meetings aren't part of the workspace
+  load. Screens ask for a query (`useMeetingList`: a date range plus filters, or a company, deal or
+  contact) and the store keeps every meeting read in `s.meetings` (by id) and each query's ids in
+  `s.meetingLists` (by query key). Saves put the API's answer in the cache and fix every loaded list
+  with `matchesQuery` (the same filters as the API), so all views update at once. A `meeting` live
+  hint re-reads those ids (`?ids=`); one without ids re-runs the lists on screen. Writes that touch
+  a deal's timeline re-read the deal and its timeline (this tab gets no hint for its own change).
+  The planned meetings of the coming year stay loaded, so "No next step" knows that a deal with
+  an upcoming planned meeting has one (`needsNextStep`).
+- **Times** are shown and entered in the workspace time zone (`store/time.ts`: `zonedToInstant`,
+  `instantToZoned`, day/week/month ranges via Intl, DST-safe; weeks run Monday to Sunday).
+- **Calendar** (`/calendar`, `screens/Calendar.tsx` + `screens/calendar/*`): Day and Week (a
+  24-hour grid that opens on 07:00–20:00, overlapping meetings side by side, meetings across
+  midnight on both days, the "now" line), Month (three meetings a day and "+N more") and Table
+  (start, title, company, organizer, type, status, internal and external minutes; sort by start;
+  Not closed and missing-minutes filters). The view, period and filters live in the URL
+  (`view`, `date` or `from`/`to`, `user`, `type`, `status`, `company`, `deal`, `contact`,
+  `notClosed`, `missingMinutes`, `sort`); switching views keeps them. Salesperson defaults to "Me"
+  for members and "Everyone" for owners and admins; status to Planned and Held. Clicking an empty
+  slot opens New meeting at that time (month: 09:00); planned meetings the user may edit can be
+  dragged to another time or day and resized by their lower edge (15-minute steps, saved with
+  If-Match; put back with the reason when refused). On phones Day is the default and Week is a
+  list by day; dragging is off there. `?new=1&companyId=…&dealId=…&contactId=…&type=…&organizer=…&start=…`
+  opens a prefilled New meeting dialog.
+- **New / Edit meeting** (`modals/MeetingDialog.tsx`, `meetings.openDialog(seed)`; `MeetingForm`
+  is also the deal Composer's Meeting tab, "Schedule meeting"): defaults per spec 4.2 (title
+  "Meeting with <company>", Customer visit, start + 60 minutes, the company's HQ for a visit, the
+  company's only open deal, organizer = you, the deal's primary contact or the contact the dialog
+  was opened from). Warns about colleagues' overlapping meetings and about a Customer visit
+  without external participants (the second click saves).
+- **Meeting page** (`/meetings/:id`, `screens/Meeting.tsx`): header with type, status, time and
+  location (a link when it is a URL), Mark as held (disabled before the start), Cancel (optional
+  reason), Edit, Undo held, Restore, and Delete for owners and admins. Tabs: Internal minutes and
+  External minutes (`screens/meeting/*`, CD-132/CD-133) and History (`ChangeHistory`, entity
+  `meeting`). Who may change a meeting: `canEditMeeting` (owners, admins, organizer, internal
+  participants).
+- **Elsewhere**: a Meetings card on company, contact (as external participant) and deal pages
+  (`components/MeetingsCard.tsx`: next three, "Show all" → Table filtered to the record,
+  "+ Meeting" prefilled), "Meetings today" on Today, Calendar in the sidebar (after Today; under
+  "More" on phones), "Meeting" (M) in the "+" menu and the command palette. Type colors are CSS
+  variables in the CD-130 block of `styles/global.css`.
 
 ## Onboarding after sign-up (CD-115)
 

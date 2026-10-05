@@ -37,11 +37,25 @@ const FIELD_LABELS: Record<string, string> = {
   phone: 'Phone',
   linkedin: 'LinkedIn',
   buyerRole: 'Buyer role',
+  // Meetings (CD-130)
+  type: 'Type',
+  startsAt: 'Start',
+  endsAt: 'End',
+  location: 'Location',
+  agenda: 'Agenda',
+  dealId: 'Deal',
+  organizerUserId: 'Organizer',
+  status: 'Status',
+  cancelReason: 'Cancellation reason',
+  participants: 'Participants',
+  // Visit plans (CD-134)
   salespersonUserId: 'Salesperson',
   periodType: 'Period type',
   periodStart: 'Period starts',
   note: 'Note',
 };
+const MEETING_TEXT: Record<string, string> = { visit: 'Customer visit', online: 'Online meeting', office: 'Meeting at our office', phone: 'Phone call', planned: 'Planned', held: 'Held', cancelled: 'Cancelled' };
+const MOMENT_FIELDS = new Set(['startsAt', 'endsAt', 'heldAt', 'cancelledAt']);
 const LINE_LABELS: Record<string, string> = {
   productId: 'product',
   quantity: 'quantity',
@@ -58,7 +72,7 @@ const FREQUENCY_TEXT: Record<string, string> = { one_time: 'One time', weekly: '
 const TAX_TEXT: Record<string, string> = { exclusive: 'Tax exclusive', inclusive: 'Tax inclusive', none: 'No tax' };
 const DATE_FIELDS = new Set(['closeDate', 'discoveryDate', 'startDate', 'periodStart']);
 const PERIOD_TEXT: Record<string, string> = { month: 'Month', quarter: 'Quarter' };
-const NOUN: Record<HistoryEntity, string> = { deal: 'deal', company: 'company', contact: 'contact', visit_plan: 'visit plan' };
+const NOUN: Record<HistoryEntity, string> = { deal: 'deal', company: 'company', contact: 'contact', meeting: 'meeting', visit_plan: 'visit plan' };
 const PAGE = 30;
 
 const empty = <span style={{ color: 'var(--muted)' }}>empty</span>;
@@ -118,6 +132,8 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
     if (field === 'amount' || field === 'unitPrice') return money(Number(v), cur);
     if (field === 'vatRate') return `${Number(v)}%`;
     if (DATE_FIELDS.has(field) && typeof v === 'string') return dateText(v);
+    if (MOMENT_FIELDS.has(field) && typeof v === 'string') return when(v);
+    if ((field === 'type' || field === 'status') && entity === 'meeting' && typeof v === 'string') return MEETING_TEXT[v] ?? v;
     if (field === 'billingFrequency' && typeof v === 'string') return FREQUENCY_TEXT[v] ?? v;
     if (field === 'taxMode' && typeof v === 'string') return TAX_TEXT[v] ?? v;
     if (field === 'periodType' && typeof v === 'string') return PERIOD_TEXT[v] ?? v;
@@ -143,6 +159,12 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
     return `${name} · ${Number(v.quantity)} × ${money(Number(v.unitPrice), cur)}`;
   };
 
+  /** A meeting participant (CD-130): "Ana Kovač (internal)". */
+  const person = (e: ApiHistoryEntry) => {
+    const v = ((e.action === 'participant_added' ? e.newValue : e.oldValue) ?? {}) as { kind?: string; name?: string };
+    const name = e.label ?? v.name ?? 'someone';
+    return `${name} (${v.kind === 'external' ? 'external' : 'internal'})`;
+  };
   /** One change in words; null for a row folded into another (the note of a loss). */
   const describe = (e: ApiHistoryEntry, all: ApiHistoryEntry[]) => {
     if (entity === 'visit_plan') {
@@ -167,6 +189,9 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
         return <>Added a product line: {line(e.newValue as Record<string, unknown>, e.label)}</>;
       case 'line_removed':
         return <>Removed a product line: {line(e.oldValue as Record<string, unknown>, e.label)}</>;
+      case 'participant_added':
+      case 'participant_removed':
+        return <>{e.action === 'participant_added' ? 'Added' : 'Removed'} {person(e)}</>;
       case 'line_changed': {
         const before = (e.oldValue ?? {}) as Record<string, unknown>;
         const after = (e.newValue ?? {}) as Record<string, unknown>;

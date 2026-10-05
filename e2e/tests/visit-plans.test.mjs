@@ -1,6 +1,6 @@
 // Customer visit plans (CD-134): an owner makes a monthly plan for a member with two customers,
 // changes a number on the plan page, copies it to the next period (and "Copy from previous period"
-// fills a new plan from it); the member sees their plan read-only and can schedule a visit from it,
+// fills a new plan from it); the member sees their plan read-only and schedules a visit from it,
 // also on a phone; a quarterly plan follows a fiscal year that starts in July.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
@@ -127,23 +127,24 @@ describe('visit plans', () => {
     assert.ok(await mia.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'the plan fits 375 px');
 
     // "Schedule visit" opens New meeting prefilled with the company, Customer visit and the salesperson.
-    // (Until the Calendar is on main, this checks the address the button opens; CD-130 adds the page.)
-    await mia.evaluate(() => {
-      window.__pushed = [];
-      const push = history.pushState.bind(history);
-      history.pushState = (state, unused, url) => {
-        window.__pushed.push(String(url));
-        return push(state, unused, url);
-      };
-    });
+    const alphaId = plan.lines.find((l) => l.companyName === 'Alpha Visits').companyId;
     await click(mia, '[data-testid=visit-plan-schedule]');
-    const pushed = await eventually(() => mia.evaluate(() => window.__pushed.find((u) => u.startsWith('/calendar'))));
-    assert.ok(pushed, 'opens the Calendar');
-    const url = new URL(pushed, BASE_URL);
-    assert.equal(url.searchParams.get('new'), '1');
-    assert.equal(url.searchParams.get('type'), 'visit');
-    assert.equal(url.searchParams.get('organizer'), miaId);
-    assert.equal(url.searchParams.get('companyId'), plan.lines.find((l) => l.companyName === 'Alpha Visits').companyId);
+    await mia.waitForSelector('.modal [data-testid=meeting-form]');
+    assert.equal(await mia.$eval('[data-testid=meeting-company]', (el) => el.value), alphaId);
+    assert.equal(await mia.$eval('[data-testid=meeting-type]', (el) => el.value), 'visit');
+    assert.equal(await mia.$eval('[data-testid=meeting-organizer]', (el) => el.value), miaId);
+    // A customer visit without anyone from the customer warns first; the second click saves.
+    await click(mia, '[data-testid=meeting-save]');
+    await mia.waitForSelector('[data-testid=meeting-no-external]');
+    await click(mia, '[data-testid=meeting-save]');
+    await mia.waitForFunction(() => !document.querySelector('.modal [data-testid=meeting-form]'), { timeout: 10_000 });
+    const meetings = await eventually(async () => {
+      const { meetings } = await api(mia, `/crm/meetings?companyId=${alphaId}`);
+      return meetings.length === 1 && meetings;
+    });
+    assert.ok(meetings, 'the visit was scheduled');
+    assert.equal(meetings[0].type, 'visit');
+    assert.equal(meetings[0].organizerUserId, miaId);
   });
 
   step('a quarterly plan follows a fiscal year that starts in July', async () => {

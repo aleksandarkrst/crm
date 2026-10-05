@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { requestActor } from '../../../shared/database/request-context';
-import { companies, contacts, funnels, funnelStages, HISTORY_ENTITY_TYPES, type HistoryEntityType, memberships, products, recordChanges, users, visitPlans } from '../../../shared/database/schema';
+import { companies, contacts, deals, funnels, funnelStages, HISTORY_ENTITY_TYPES, type HistoryEntityType, memberships, products, recordChanges, users, visitPlans } from '../../../shared/database/schema';
 
 export const HistoryQuery = z.object({
   entityType: z.enum(HISTORY_ENTITY_TYPES),
@@ -17,9 +17,9 @@ export type HistoryQuery = z.infer<typeof HistoryQuery>;
 type ChangeRow = typeof recordChanges.$inferSelect;
 
 /** Fields whose values are ids; the history shows the name instead. */
-const ID_FIELDS = new Set(['stageId', 'funnelId', 'companyId', 'primaryContactId', 'ownerUserId', 'salespersonUserId']);
+const ID_FIELDS = new Set(['stageId', 'funnelId', 'companyId', 'primaryContactId', 'ownerUserId', 'dealId', 'organizerUserId', 'salespersonUserId']);
 /** Id fields that name a member. */
-const USER_FIELDS = new Set(['ownerUserId', 'salespersonUserId']);
+const USER_FIELDS = new Set(['ownerUserId', 'organizerUserId', 'salespersonUserId']);
 
 /** How a conflict message names a field ("Your change to the closing date wasn't saved"). */
 const FIELD_NAMES: Record<string, string> = {
@@ -50,12 +50,23 @@ const FIELD_NAMES: Record<string, string> = {
   phone: 'the phone',
   linkedin: 'the LinkedIn profile',
   buyerRole: 'the buyer role',
+  // meetings (CD-130)
+  type: 'the type',
+  startsAt: 'the start',
+  endsAt: 'the end',
+  location: 'the location',
+  agenda: 'the agenda',
+  dealId: 'the deal',
+  organizerUserId: 'the organizer',
+  status: 'the status',
+  cancelReason: 'the cancellation reason',
+  // visit plans (CD-134)
   salespersonUserId: 'the salesperson',
   periodType: 'the period type',
   periodStart: 'the period',
   note: 'the note',
 };
-const ENTITY_NAMES: Record<HistoryEntityType, string> = { deal: 'deal', company: 'company', contact: 'contact', visit_plan: 'visit plan' };
+const ENTITY_NAMES: Record<HistoryEntityType, string> = { deal: 'deal', company: 'company', contact: 'contact', meeting: 'meeting', visit_plan: 'visit plan' };
 
 /** A patch field → the history field it changes (the fit score is stored from the CHAMP scores). */
 const historyField = (field: string) => (field === 'champ' ? 'fitScore' : field);
@@ -66,7 +77,7 @@ export interface HistoryEntry {
   field: string | null;
   oldValue: unknown;
   newValue: unknown;
-  /** Names for id values (stage, funnel, company, contact, owner), null otherwise. */
+  /** Names for id values (stage, funnel, company, contact, deal, owner, organizer), null otherwise. */
   oldLabel: string | null;
   newLabel: string | null;
   /** The record's name (created, deleted) or the product of a deal line, as it was then. */
@@ -89,7 +100,7 @@ export function parseVersion(header: string | undefined): Date | undefined {
 }
 
 /**
- * Change history of deals, companies, contacts and visit plans (CD-69, CD-134). Triggers write it
+ * Change history of deals, companies, contacts, meetings and visit plans (CD-69, CD-130, CD-134). Triggers write it
  * (drizzle/0020_record_changes_rls.sql); this reads it with readable names, and uses it to decide
  * whether an update conflicts with a change made since the client's version (CD-20).
  */
@@ -179,14 +190,22 @@ export class RecordHistoryService {
 
   /** Adds readable names: members by name ("Former member" once they left), ids as names. */
   private async present(tx: Tx, ctx: TenantContext, rows: ChangeRow[]): Promise<HistoryEntry[]> {
-    const ids = { stageId: new Set<string>(), funnelId: new Set<string>(), companyId: new Set<string>(), primaryContactId: new Set<string>(), user: new Set<string>(), product: new Set<string>() };
+    const ids = {
+      stageId: new Set<string>(),
+      funnelId: new Set<string>(),
+      companyId: new Set<string>(),
+      primaryContactId: new Set<string>(),
+      dealId: new Set<string>(),
+      user: new Set<string>(),
+      product: new Set<string>(),
+    };
     for (const r of rows) {
       if (r.actorUserId) ids.user.add(r.actorUserId);
       if (r.field && ID_FIELDS.has(r.field)) {
         for (const v of [r.oldValue, r.newValue]) {
           if (typeof v !== 'string') continue;
           if (USER_FIELDS.has(r.field)) ids.user.add(v);
-          else ids[r.field as 'stageId' | 'funnelId' | 'companyId' | 'primaryContactId'].add(v);
+          else ids[r.field as 'stageId' | 'funnelId' | 'companyId' | 'primaryContactId' | 'dealId'].add(v);
         }
       }
       // Lines keep the product's name from when they changed; a change of product needs both names.
@@ -204,6 +223,7 @@ export class RecordHistoryService {
     await load(ids.funnelId, (list) => tx.select({ id: funnels.id, name: funnels.label }).from(funnels).where(inArray(funnels.id, list)));
     await load(ids.companyId, (list) => tx.select({ id: companies.id, name: companies.name }).from(companies).where(inArray(companies.id, list)));
     await load(ids.primaryContactId, (list) => tx.select({ id: contacts.id, name: contacts.fullName }).from(contacts).where(inArray(contacts.id, list)));
+    await load(ids.dealId, (list) => tx.select({ id: deals.id, name: deals.title }).from(deals).where(inArray(deals.id, list)));
     await load(ids.product, (list) => tx.select({ id: products.id, name: products.name }).from(products).where(inArray(products.id, list)));
     // users is global: only people who are members of this workspace now are named.
     await load(ids.user, (list) =>
@@ -216,7 +236,15 @@ export class RecordHistoryService {
 
     const labelOf = (field: string | null, value: unknown): string | null => {
       if (!field || !ID_FIELDS.has(field) || typeof value !== 'string') return null;
-      const fallback = USER_FIELDS.has(field) ? FORMER_MEMBER : field === 'companyId' ? 'Deleted company' : field === 'primaryContactId' ? 'Deleted contact' : 'Deleted';
+      const fallback = USER_FIELDS.has(field)
+        ? FORMER_MEMBER
+        : field === 'companyId'
+          ? 'Deleted company'
+          : field === 'primaryContactId'
+            ? 'Deleted contact'
+            : field === 'dealId'
+              ? 'Deleted deal'
+              : 'Deleted';
       return names.get(value) ?? fallback;
     };
     return rows.map((r) => ({

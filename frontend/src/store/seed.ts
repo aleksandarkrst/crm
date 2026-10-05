@@ -150,5 +150,8 @@ export function initialState(): State {
     drill: null,
     lostLeadId: null,
     stageHistory: null,
+    meetings: {},
+    meetingLists: {},
+    meetingDialog: null,
   };
 }

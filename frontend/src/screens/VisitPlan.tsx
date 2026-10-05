@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import { ChangeHistory } from '../components/ChangeHistory';
 import { Screen } from '../components/Layout';
 import { Picker, PickerRow, RemoveButton, usePicker } from '../components/ui';
@@ -10,14 +10,6 @@ import { useStore } from '../store/store';
 import { shiftPeriod } from '../store/visitPlans';
 
 const COLS = 'minmax(0,2fr) 0.8fr 0.6fr 0.8fr minmax(150px,auto)';
-
-/**
- * "Schedule visit": the New meeting dialog with the company, type Customer visit and the
- * salesperson as organizer.
- * CD-130: once modals/MeetingDialog.tsx is on main, open the dialog here instead of the Calendar's
- * URL prefill (`/calendar?new=1&…`, which the Calendar turns into the same dialog).
- */
-const scheduleVisitUrl = (companyId: string, organizer: string) => '/calendar?' + new URLSearchParams({ new: '1', companyId, type: 'visit', organizer }).toString();
 
 /**
  * Planned visits of one customer, 1–99. A number is saved as it is typed; an emptied or invalid
@@ -53,14 +45,14 @@ function PlannedInput({ company, value, onChange }: { company: string; value: nu
 /**
  * One visit plan (CD-134): its customers with the planned visits, the note and the change history.
  * Owners and admins change it in place (add a customer, change a number, remove one; saved as you
- * go), copy it to the next period and delete it. Members see their own plans read-only and
+ * go), copy it to the next period and delete it. "Schedule visit" opens New meeting with the company, Customer visit and the
+ * salesperson as organizer. Members see their own plans read-only and
  * schedule visits from them. Held and upcoming visits per customer come with visit tracking (CD-135).
  */
 export function VisitPlan() {
   const store = useStore();
   const { s, canDelete: canManage } = store;
   const { id = '' } = useParams();
-  const navigate = useNavigate();
   const picker = usePicker();
   const [copying, setCopying] = useState<Partial<PlanDraft> | null>(null);
   const plan = s.visitPlans.find((p) => p.id === id);
@@ -153,7 +145,7 @@ export function VisitPlan() {
                     —
                   </span>
                   <span className="vp-plan-actions">
-                    <button type="button" className="btn-outline" data-testid="visit-plan-schedule" onClick={() => navigate(scheduleVisitUrl(l.companyId, plan.salespersonUserId))}>
+                    <button type="button" className="btn-outline" data-testid="visit-plan-schedule" onClick={() => store.meetings.openDialog({ companyId: l.companyId, type: 'visit', organizerUserId: plan.salespersonUserId })}>
                       Schedule visit
                     </button>
                     {canManage && <RemoveButton title={`Remove ${l.companyName}`} onClick={() => removeLine(l.companyId, l.companyName)} />}

@@ -8,11 +8,13 @@ import { paths } from './lib/paths';
 import { useStore } from './store/store';
 
 // Screens load on first visit (CD-24), so the first page doesn't wait for all of them.
+const Calendar = lazy(() => import('./screens/Calendar').then((m) => ({ default: m.Calendar })));
 const Companies = lazy(() => import('./screens/Companies').then((m) => ({ default: m.Companies })));
 const Company = lazy(() => import('./screens/Company').then((m) => ({ default: m.Company })));
 const Contact = lazy(() => import('./screens/Contact').then((m) => ({ default: m.Contact })));
 const Contacts = lazy(() => import('./screens/Contacts').then((m) => ({ default: m.Contacts })));
 const Dashboard = lazy(() => import('./screens/Dashboard').then((m) => ({ default: m.Dashboard })));
+const Meeting = lazy(() => import('./screens/Meeting').then((m) => ({ default: m.Meeting })));
 const LeadScreen = lazy(() => import('./screens/lead/LeadScreen').then((m) => ({ default: m.LeadScreen })));
 const Pipeline = lazy(() => import('./screens/Pipeline').then((m) => ({ default: m.Pipeline })));
 const Products = lazy(() => import('./screens/Products').then((m) => ({ default: m.Products })));
@@ -96,6 +98,8 @@ function AppRoutes() {
           <Route path="overview" element={<Dashboard />} />
           <Route path="pipeline" element={<Pipeline />} />
           <Route path="today" element={<Today />} />
+          <Route path="calendar" element={<Calendar />} />
+          <Route path="meetings/:id" element={<Meeting />} />
           <Route path="visit-plans" element={<VisitPlans />} />
           <Route path="visit-plans/:id" element={<VisitPlan />} />
           <Route path="companies" element={<Companies />} />

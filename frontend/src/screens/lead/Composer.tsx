@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { CHANNEL_LABELS, OBJECTIONS } from '../../store/seed';
-import { initialsOf, script, stageOf, todayIso, todayLabel } from '../../store/selectors';
+import { initialsOf, script, stageOf, todayLabel } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
+import { MeetingForm } from '../../modals/MeetingDialog';
 import { DealDocuments } from './DealDocuments';
 
 const TABS = [
@@ -15,7 +16,7 @@ const TABS = [
 ] as const;
 type TabKey = (typeof TABS)[number]['k'];
 const DEFAULT_TAB: Record<string, TabKey> = { EM: 'email', WA: 'whatsapp', LI: 'linkedin', MT: 'meeting' };
-const SEND_LABEL: Partial<Record<TabKey, string>> = { email: 'Send & log', whatsapp: 'Send on WhatsApp', linkedin: 'Send on LinkedIn', meeting: 'Schedule & send invite', note: 'Save note' };
+const SEND_LABEL: Partial<Record<TabKey, string>> = { email: 'Send & log', whatsapp: 'Send on WhatsApp', linkedin: 'Send on LinkedIn', note: 'Save note' };
 
 /** "Next best action": the stage's playbook step, with a composer per channel. */
 export function Composer({ lead }: { lead: Lead }) {
@@ -27,6 +28,8 @@ export function Composer({ lead }: { lead: Lead }) {
   const tab = picked ?? def; // follows the stage until the user picks a tab
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [objectionsOpen, setObjectionsOpen] = useState(false);
+  /** A new form after each meeting scheduled here. */
+  const [meetingForm, setMeetingForm] = useState(0);
 
   const tdef = TABS.find((t) => t.k === tab)!;
   const get = (k: string, v: string) => drafts[tab + '.' + k] ?? v;
@@ -39,13 +42,7 @@ export function Composer({ lead }: { lead: Lead }) {
   const isMessage = tab === 'email' || tab === 'whatsapp' || tab === 'linkedin';
   const playbookScript = tdef.ch === stage.channel ? script(stage.activity, lead) : '';
   const body = get('body', playbookScript || (isMessage ? `Hi ${first},\n\n` : ''));
-  const today = todayIso(s.workspace.timezone);
   const subject = get('subject', `${stage.activity} · ${lead.company}`);
-  const mTitle = get('title', (stage.channel === 'MT' ? stage.activity : 'Meeting') + ' · ' + lead.company);
-  const mDate = get('date', today);
-  const mTime = get('time', '10:00');
-  const mDur = get('dur', '30 min');
-  const mWhere = get('where', 'Google Meet');
 
   const send = () => {
     const short = (body || '').trim().slice(0, 180);
@@ -53,9 +50,8 @@ export function Composer({ lead }: { lead: Lead }) {
       email: { channel: 'EM', title: 'Email sent · ' + subject, detail: short },
       whatsapp: { channel: 'WA', title: 'WhatsApp message sent', detail: short },
       linkedin: { channel: 'LI', title: 'LinkedIn message sent', detail: short },
-      meeting: { channel: 'MT', title: 'Meeting scheduled · ' + mTitle, detail: `${mDate} ${mTime} · ${mDur} · ${mWhere}` },
       note: { channel: 'NT', title: 'Note', detail: short },
-    }[tab as 'email' | 'whatsapp' | 'linkedin' | 'meeting' | 'note'];
+    }[tab as 'email' | 'whatsapp' | 'linkedin' | 'note'];
     if (!entry) return;
     if ((tab === 'note' || isMessage) && !short) return store.flash('Write something first.');
     store.pushLog(lead.id, { date: todayLabel(s.workspace.timezone), ...entry });
@@ -129,48 +125,20 @@ export function Composer({ lead }: { lead: Lead }) {
           </div>
         )}
 
-        {tab === 'meeting' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <input className="box-input" style={{ fontWeight: 500 }} placeholder="Meeting title" value={mTitle} onChange={setDraft('title')} />
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 10 }}>
-              <label className="form-label" style={{ minWidth: 0 }}>
-                Date
-                <input type="date" className="box-input" value={mDate} onChange={setDraft('date')} />
-              </label>
-              <label className="form-label" style={{ minWidth: 0 }}>
-                Time
-                <input type="time" className="box-input" value={mTime} onChange={setDraft('time')} />
-              </label>
-              <label className="form-label" style={{ minWidth: 0 }}>
-                Duration
-                <select className="box-input" value={mDur} onChange={setDraft('dur')}>
-                  {['15 min', '30 min', '45 min', '60 min', '90 min'].map((o) => (
-                    <option key={o}>{o}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="form-label" style={{ minWidth: 0 }}>
-                Where
-                <select className="box-input" value={mWhere} onChange={setDraft('where')}>
-                  {['Google Meet', 'Zoom', 'Microsoft Teams', 'In person', 'Phone'].map((o) => (
-                    <option key={o}>{o}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
-              Invite goes to {lead.contact} · {lead.email}
-            </div>
-            <textarea className="box-input" rows={4} placeholder="Agenda" value={body} onChange={setDraft('body')} />
-          </div>
-        )}
+        {tab === 'meeting' &&
+          (lead.companyId ? (
+            // A real meeting on the calendar (CD-130): with the deal, its company and primary contact.
+            <MeetingForm key={meetingForm} seed={{ dealId: lead.id, companyId: lead.companyId, contactId: lead.contactId }} submitLabel="Schedule meeting" onDone={() => setMeetingForm((n) => n + 1)} />
+          ) : (
+            <div className="hint-box">Every meeting belongs to a customer company. Pick this deal's company in Summary first.</div>
+          ))}
 
         {tab === 'note' && <textarea className="box-input" rows={5} placeholder="Write a note about this deal. Only your team sees it." value={body} onChange={setDraft('body')} style={{ background: 'var(--note)' }} />}
 
 
         {tab === 'docs' && <DealDocuments lead={lead} />}
 
-        {tab !== 'docs' && (
+        {tab !== 'docs' && tab !== 'meeting' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <button type="button" className="btn btn-primary" onClick={send}>
               {SEND_LABEL[tab]}

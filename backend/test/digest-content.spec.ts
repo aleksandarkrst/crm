@@ -5,6 +5,7 @@ import {
   DIGEST_SECTION_LIMIT,
   digestEmail,
   digestItemCount,
+  type DigestMeetingRow,
   type DigestTaskRow,
   isDigestHour,
   isEmptyDigest,
@@ -29,6 +30,56 @@ describe('buildDigest', () => {
   it('leaves out tasks due later (the loader only asks up to today, but the builder is strict too)', () => {
     const d = buildDigest('2026-09-24', [task('x', '2026-09-25')], []);
     expect(isEmptyDigest(d)).toBe(true);
+  });
+});
+
+const meeting = (id: string, startsAt: string, endsAt: string, over: Partial<DigestMeetingRow> = {}): DigestMeetingRow => ({
+  id,
+  title: `Meeting ${id}`,
+  startsAt,
+  endsAt,
+  company: 'Acme',
+  status: 'planned',
+  ...over,
+});
+
+describe('buildDigest: meetings (CD-130)', () => {
+  const now = new Date('2026-10-25T06:00:00Z'); // 07:00 in Belgrade, the day clocks go back
+  const opts = (today: DigestMeetingRow[], notClosed: DigestMeetingRow[] = []) => ({ today, notClosed, timeZone: 'Europe/Belgrade', now });
+
+  it('lists the planned and held meetings starting today on the workspace clock, earliest first', () => {
+    const d = buildDigest('2026-10-25', [], [], opts([
+      meeting('late', '2026-10-25T15:00:00Z', '2026-10-25T16:00:00Z'),
+      meeting('early', '2026-10-24T22:30:00Z', '2026-10-24T23:30:00Z', { status: 'held' }), // 00:30 CEST on the 25th
+      meeting('yesterday', '2026-10-24T21:30:00Z', '2026-10-24T23:30:00Z'), // 23:30 on the 24th, crossing midnight
+      meeting('cancelled', '2026-10-25T09:00:00Z', '2026-10-25T10:00:00Z', { status: 'cancelled' }),
+    ]));
+    expect(d.meetingsToday.map((m) => m.id)).toEqual(['early', 'late']);
+    expect(d.timeZone).toBe('Europe/Belgrade');
+    expect(digestItemCount(d)).toBe(2);
+  });
+
+  it('lists planned meetings that ended more than 24 hours ago as not closed', () => {
+    const d = buildDigest('2026-10-25', [], [], opts([], [
+      meeting('old', '2026-10-20T08:00:00Z', '2026-10-20T09:00:00Z'),
+      meeting('recent', '2026-10-24T08:00:00Z', '2026-10-24T09:00:00Z'), // ended 21 hours ago
+      meeting('held', '2026-10-20T08:00:00Z', '2026-10-20T09:00:00Z', { status: 'held' }),
+    ]));
+    expect(d.notClosed.map((m) => m.id)).toEqual(['old']);
+    expect(isEmptyDigest(d)).toBe(false);
+  });
+
+  it('puts the meetings in the email with times in the workspace zone and links to the meetings', () => {
+    const d = buildDigest('2026-10-25', [], [], opts(
+      [meeting('m1', '2026-10-25T09:00:00Z', '2026-10-25T10:30:00Z', { title: 'Visit <Globex>', company: 'Globex' })],
+      [meeting('m2', '2026-10-20T08:00:00Z', '2026-10-20T09:00:00Z', { title: 'Demo' })],
+    ));
+    const mail = digestEmail({ to: 'bo@example.com', memberName: 'Bo', workspaceName: 'Acme Studio', appUrl: 'https://app.example.com', digest: d });
+    expect(mail.subject).toBe('Your day in Acme Studio: 1 meeting today, 1 meeting not closed');
+    // 09:00Z is 10:00 CET after the change (it would be 11:00 in summer time).
+    expect(mail.text).toContain('Meetings today (1)\n- 10:00–11:30 Visit <Globex> · Globex\n  https://app.example.com/meetings/m1');
+    expect(mail.text).toContain('Not closed meetings (1)\n- Demo · Acme (20 Oct)\n  https://app.example.com/meetings/m2');
+    expect(mail.html).toContain('Visit &lt;Globex&gt;');
   });
 });
 

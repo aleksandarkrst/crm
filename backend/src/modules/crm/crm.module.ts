@@ -18,6 +18,8 @@ import { DocumentsController } from './documents/documents.controller';
 import { DocumentsService } from './documents/documents.service';
 import { StageHistoryService } from './deals/stage-history.service';
 import { FunnelsController } from './funnels/funnels.controller';
+import { MeetingsController } from './meetings/meetings.controller';
+import { MeetingsService } from './meetings/meetings.service';
 import { HistoryController } from './history/history.controller';
 import { RecordHistoryService } from './history/record-history.service';
 import { FunnelsService } from './funnels/funnels.service';
@@ -37,11 +39,11 @@ import { VisitPlansService } from './visit-plans/visit-plans.service';
  * CSV import of companies, contacts and deals lives in import/ (CD-64); document templates and
  * generated documents in documents/ (CD-13). Custom fields (CD-15) are in custom-fields/, sales
  * bonus rules (CD-17) in bonuses/, and the getting-started checklist and sample data in
- * onboarding/ (CD-68). Customer visit plans (CD-134) are in visit-plans/.
+ * onboarding/ (CD-68). Meetings with customers (CD-130) are in meetings/, customer visit plans (CD-134) in visit-plans/.
  */
 @Module({
-  controllers: [CompaniesController, ContactsController, FunnelsController, DealsController, DealWorkController, ProductsController, ImportController, CustomFieldsController, BonusRulesController, DocumentsController, HistoryController, OnboardingController, VisitPlansController],
-  providers: [CompaniesService, ContactsService, FunnelsService, DealsService, ActivitiesService, DealLinesService, DealTasksService, StageHistoryService, ProductsService, ImportService, CustomFieldsService, BonusRulesService, DocumentsService, DocumentGenerator, RecordHistoryService, OnboardingService, VisitPlansService],
+  controllers: [CompaniesController, ContactsController, FunnelsController, DealsController, DealWorkController, ProductsController, ImportController, CustomFieldsController, BonusRulesController, DocumentsController, HistoryController, OnboardingController, MeetingsController, VisitPlansController],
+  providers: [CompaniesService, ContactsService, FunnelsService, DealsService, ActivitiesService, DealLinesService, DealTasksService, StageHistoryService, ProductsService, ImportService, CustomFieldsService, BonusRulesService, DocumentsService, DocumentGenerator, RecordHistoryService, OnboardingService, MeetingsService, VisitPlansService],
   exports: [DealsService],
 })
 export class CrmModule {}
