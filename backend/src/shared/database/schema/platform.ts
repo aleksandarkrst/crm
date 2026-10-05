@@ -7,6 +7,7 @@ import { boolean, check, index, jsonb, pgTable, primaryKey, smallint, text, time
  */
 
 export const CUSTOMER_EMAIL_LANGUAGES = ['en', 'sr'] as const;
+export type CustomerEmailLanguage = (typeof CUSTOMER_EMAIL_LANGUAGES)[number];
 
 export const tenants = pgTable(
   'tenants',

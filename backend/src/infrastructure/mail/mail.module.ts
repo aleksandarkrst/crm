@@ -2,7 +2,7 @@ import { Controller, Get, Global, Inject, Logger, Module, Query } from '@nestjs/
 import { join, resolve } from 'node:path';
 import { ENV, type Env } from '../config/config.module';
 import { LogMailer, readOutbox } from './log-mailer';
-import { Mailer } from './mailer';
+import { Mailer, recipientsOf, type SentMail } from './mailer';
 import { SmtpMailer } from './smtp-mailer';
 
 /** Where the log driver keeps messages outside production, so tests and developers can read them. */
@@ -28,7 +28,7 @@ export class MailModule {}
 
 /**
  * Development only (registered when AUTH_MODE=dev, which production refuses): the messages the
- * log driver "sent", newest first, optionally only those to one address. Any signed-in user can
+ * log driver "sent", newest first, optionally only those to (or copying) one address. Any signed-in user can
  * read them, which is fine where anyone can sign in as anyone.
  */
 @Controller('dev/mail')
@@ -40,7 +40,9 @@ export class DevMailController {
     const file = outboxFileOf(this.env);
     const mails = file ? await readOutbox(file) : [];
     const wanted = to?.trim().toLowerCase();
-    return mails.filter((m) => !wanted || m.to.toLowerCase() === wanted).reverse();
+    // To or cc; not an address the driver refused.
+    const reached = (m: SentMail) => recipientsOf(m).some((a) => a.toLowerCase() === wanted && !m.rejected?.some((r) => r.toLowerCase() === wanted));
+    return mails.filter((m) => !wanted || reached(m)).reverse();
   }
 }
 

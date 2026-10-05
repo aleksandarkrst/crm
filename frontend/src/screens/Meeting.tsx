@@ -73,6 +73,8 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
   }, [menu]);
 
   const canEdit = meetings.canEdit(m);
+  // Minutes went to the customer (CD-133): the meeting stays held and can't be deleted.
+  const sent = m.externalDelivery !== 'not_sent';
   const started = Date.parse(m.startsAt) <= Date.now();
   const url = locationUrl(m.location);
   const internal = m.participants.filter((p) => p.kind === 'internal');
@@ -152,7 +154,7 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
                 </button>
               </>
             )}
-            {canEdit && m.status === 'held' && (
+            {canEdit && m.status === 'held' && !sent && (
               <button type="button" className="btn btn-secondary" data-testid="meeting-undo-held" disabled={busy} onClick={() => void run(() => meetings.undoHeld(m.id))}>
                 Undo held
               </button>
@@ -167,7 +169,7 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
                 Edit
               </button>
             )}
-            {meetings.canDelete && (
+            {meetings.canDelete && !sent && (
               <div ref={menuRef} style={{ position: 'relative' }}>
                 <button type="button" className="btn btn-secondary" aria-label="More actions" data-testid="meeting-menu" aria-expanded={menu} onClick={() => setMenu((x) => !x)} style={{ padding: '10px 12px' }}>
                   ⋯

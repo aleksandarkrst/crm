@@ -246,6 +246,20 @@
       "when": 1791165331012,
       "tag": "0034_meeting_minutes_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1791166070206,
+      "tag": "0035_meeting_minutes_sends",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791166072717,
+      "tag": "0036_meeting_minutes_sends_rls",
+      "breakpoints": true
     }
   ]
 }

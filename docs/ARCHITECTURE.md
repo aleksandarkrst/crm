@@ -509,6 +509,7 @@ be retried. Modules register their own handlers through a worker module exported
 | `crm.deal-won` | CRM, deal enters the won stage | worker placeholder (future projects handover) |
 | `crm.deal-assigned` | CRM, someone else becomes a deal's owner (create or change) | notifications: "deal assigned to you" email |
 | `crm.meeting-invite` | CRM, someone else adds a member to a planned meeting, or moves, cancels or restores one (one job per member) | CRM worker (`CrmWorkerModule`): the meeting email with an .ics |
+| `crm.meeting-minutes-email` | CRM, someone sends a meeting's external minutes, or retries the failed recipients | CRM worker: one email to the send's queued recipients, status per recipient |
 | `identity.member-removed` | identity, a member is removed or leaves | CRM worker: off future planned meetings, "Organizer left" where they organized |
 | `crm.visit-plan-email` | CRM, someone else creates or changes a salesperson's visit plan (CD-134) | notifications: "your visit plan" email |
 | `identity.invitation-email` | identity, invitation created or resent | identity: the invitation email |
@@ -534,6 +535,10 @@ picks:
 A message may carry text attachments (`attachments: [{ filename, contentType, content }]`, CD-131,
 used for the meeting .ics): the smtp driver hands them to nodemailer; the log driver logs their
 names and keeps them, content included, in memory and the outbox, so tests can read them.
+A message may also go to several addresses (`to: string[]`), copy people (`cc`), name a
+`replyTo`, and carry a `fromName` shown with the `MAIL_FROM` address (CD-133). `send` returns
+`{ rejected }`, the addresses the server refused while the others got it; `/api/dev/mail?to=`
+matches To and Cc.
 
 Mail jobs (`MAIL_JOBS` in `job-types.ts`) are retried `MAIL_RETRY_LIMIT` times (default 4) with
 exponential backoff from `MAIL_RETRY_DELAY_SECONDS` (default 30). Emails are plain text plus a
@@ -1083,8 +1088,8 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`.
   restore`, and `DELETE /:id` (owners and admins). A meeting comes with its company and deal
   names, the deal's owner, the organizer's name ("Organizer left" when null), its participants
   (`deleted` when the contact was deleted or the member left), `notClosed`, the internal minutes'
-  status and version (`internalMinutes`, `minutesUpdatedAt`, CD-132), and a placeholder for the
-  external minutes (`externalDelivery: 'not_sent'`) until CD-133.
+  status and version (`internalMinutes`, `minutesUpdatedAt`, CD-132), and the external minutes'
+  delivery (`externalDelivery`, `sendsUpdatedAt`, CD-133).
 - **Rules** (`meeting-rules.ts`, pure and unit-tested): owners, admins, the organizer and the
   internal participants change a meeting (403 otherwise); held only from the start time on and
   only when planned; cancel only when planned; "Undo held" (held → planned) and "Restore"
@@ -1270,6 +1275,71 @@ hints are in `drizzle/0034_meeting_minutes_rls.sql`.
   each based on the version the previous one returned; "Saving…" / "Saved" next to the heading.
   A conflict shows the API's message and replaces the editor with the minutes read again.
   Read-only for people who can't change the meeting and for cancelled meetings.
+
+### External minutes (CD-133)
+
+A separate text for the customer (`meeting_minutes.external_subject`, `external_body` ≤ 10,000,
+with its own version `external_updated_at` / `external_updated_by_user_id`), sent by email.
+`meeting_minutes_sends` keeps every send (an exact copy of subject, body and the chrome language,
+the sender's name and email); `meeting_minutes_recipients` one row per person (`to`: a contact,
+`cc`: a member; name and address used; `status` queued → sent | failed with `error`, `sent_at`).
+A meeting with sends can't be deleted (no cascade). RLS, the contact foreign key
+(`ON DELETE SET NULL (contact_id)`) and the live-update hints (type `meeting`, the meeting's id,
+on every send and every status change) are in `drizzle/0036_meeting_minutes_sends_rls.sql`.
+Service `meetings/external-minutes.service.ts`, email builder `meetings/minutes-email.ts`.
+
+- **API** (`/api/crm/meetings/:id/minutes`): `GET external` →
+  `{ subject, body, prefilled, updatedAt, updatedByName, language, lastSend, changedSinceLastSend }`.
+  The first read ever (`external_prefilled_at` null) fills in the template (spec 7.1: title, date
+  and time, location, both sides' participants, the agreements and the next steps with their due
+  dates but without owners; subject "Minutes: <title>, <date>"; in the customer email language)
+  and remembers it; after that nothing is copied automatically. `PUT external { subject?, body? }`
+  (If-Match = `updatedAt`, the epoch before the first save; 409 when someone else changed a part
+  sent here since). `POST external/copy-internal` returns `{ subject, body }` of the template from
+  the internal minutes as they are now (nothing saved; the browser replaces the text after a
+  confirmation). `POST preview` and `POST send` take `{ subject, body, toContactIds, ccUserIds }`
+  (strict: unknown fields such as typed addresses are a 400); preview answers the exact email
+  `{ from, replyTo, to, cc, subject, text, html }`, send answers 202 with the send. `GET sends`
+  (newest first, with recipients) and `POST sends/:sendId/retry` (202; only the failed recipients
+  are queued again; 409 when none failed).
+- **Rules**: writing, previewing, sending and retrying take the people who may change the meeting
+  (403); the text can be written while planned or held (a cancelled meeting is read-only, 409);
+  sending only for a **held** meeting (409). `to` = external participants of this meeting whose
+  contact has an email (400 otherwise, at least one), `cc` = members of the workspace (400). The
+  sender needs an email (the Reply-To). Once anything was sent, **Undo held** and **DELETE** are
+  409 (spec 4.3, 4.5); the text stays editable and can be sent again (each send is a new entry).
+- **One transaction per send**: the send and its recipient rows (queued), the deal timeline's
+  `EM` activity "Minutes sent · <title>" (recipients and subject in the detail) with the deal's
+  last contact moved to now (only with a deal), and the job `crm.meeting-minutes-email`
+  `{ tenantId, sendId }` (a mail job: retried with backoff).
+- **The worker** (`MeetingJobs.sendMinutes`) sends **one email per send** to the recipients still
+  queued: contacts in To, members in Cc, From `"<sender name>" <MAIL_FROM address>`, Reply-To the
+  sender. `Mailer.send` reports the addresses the server refused (`{ rejected }`): those fail
+  ("The mail server refused this address."), the others are sent. When the whole send fails, the
+  recipients stay queued while pg-boss retries it and fail with the error on the last attempt.
+  Retry queues only the failed ones, so the next email goes only to them (nobody gets it twice).
+  The log driver refuses `.invalid` addresses one by one (all refused = the send fails). In
+  production without a provider (`notDelivered`) they fail with that reason.
+- **Delivery on the meeting**: `externalDelivery` = the latest send's recipients: `failed` if any
+  failed, `queued` while any is queued, else `sent`; `not_sent` without a send. `sendsUpdatedAt`
+  moves with every status change. The calendar's Table shows `externalDelivery`.
+- **The email** (`minutesEmail`, pure and unit-tested): the workspace name, a heading, the minutes
+  rendered from the Markdown subset (every piece escaped, then bold, bullets and http(s) links;
+  a plain-text version too), "Sent by <sender>, <workspace>.", a reply hint and a footer. The fixed
+  text is in `tenants.customer_email_language` (CD-208): English, or Serbian Latin ("Zapisnik sa
+  sastanka", "Poslao/la: …", "Odgovorite na ovu poruku …"). Its input has no field for the internal
+  minutes; the integration test writes a marker into the internal minutes and checks that it is in
+  no part of the preview, the email or the send log.
+- **Screen** (`screens/meeting/ExternalMinutes.tsx`, store `meetings.loadExternal / saveExternal /
+  copyInternal / previewMinutes / sendMinutes / loadSends / retrySend`): subject and body (the
+  internal minutes' editor with its toolbar), autosave with "Saved", "Copy from internal minutes"
+  (asks before replacing text). Once held: To (the external participants with an email ticked;
+  "No email" and deleted ones disabled) and Cc (the internal participants, "+ Copy another member").
+  **Send…** opens the preview (from, reply-to, to, cc, subject, and the HTML in a sandboxed
+  iframe); **Send** there sends. Under the editor: "Minutes sent to <names> on <date>", "Changed
+  since last send" while the text differs from the last send, each recipient's status with the
+  error, and **Retry failed**. The meeting page hides Undo held and Delete once sent; the History
+  tab lists every send (time, sender, recipients with status, subject, the exact text).
 
 ## Onboarding after sign-up (CD-115)
 
