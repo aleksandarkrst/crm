@@ -1,5 +1,5 @@
 {
-  "id": "fc642b20-06f4-4383-ac0d-c4149af68404",
+  "id": "e9bab492-1faf-43d2-a340-c47765433491",
   "prevId": "9a093c3e-1c73-47e7-b124-f725f07ec944",
   "version": "7",
   "dialect": "postgresql",
@@ -329,6 +329,20 @@
           "notNull": true,
           "default": true
         },
+        "notify_meeting_invites": {
+          "name": "notify_meeting_invites",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "notify_visit_plans": {
+          "name": "notify_visit_plans",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
         "onboarding_dismissed_at": {
           "name": "onboarding_dismissed_at",
           "type": "timestamp with time zone",
@@ -534,6 +548,13 @@
           "notNull": true,
           "default": 1
         },
+        "customer_email_language": {
+          "name": "customer_email_language",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'en'"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -559,6 +580,10 @@
         "tenants_fiscal_month_ck": {
           "name": "tenants_fiscal_month_ck",
           "value": "\"tenants\".\"fiscal_year_start_month\" between 1 and 12"
+        },
+        "tenants_customer_email_language_ck": {
+          "name": "tenants_customer_email_language_ck",
+          "value": "\"tenants\".\"customer_email_language\" in ('en', 'sr')"
         }
       },
       "isRLSEnabled": false
@@ -3163,526 +3188,6 @@
       },
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.meeting_participants": {
-      "name": "meeting_participants",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "tenant_id": {
-          "name": "tenant_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "meeting_id": {
-          "name": "meeting_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "contact_id": {
-          "name": "contact_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "email": {
-          "name": "email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "meeting_participants_tenant_meeting_idx": {
-          "name": "meeting_participants_tenant_meeting_idx",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "meeting_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "meeting_participants_tenant_user_idx": {
-          "name": "meeting_participants_tenant_user_idx",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "meeting_participants_tenant_contact_idx": {
-          "name": "meeting_participants_tenant_contact_idx",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "contact_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "meeting_participants_user_uq": {
-          "name": "meeting_participants_user_uq",
-          "columns": [
-            {
-              "expression": "meeting_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"meeting_participants\".\"user_id\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "meeting_participants_contact_uq": {
-          "name": "meeting_participants_contact_uq",
-          "columns": [
-            {
-              "expression": "meeting_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "contact_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"meeting_participants\".\"contact_id\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "meeting_participants_tenant_id_tenants_id_fk": {
-          "name": "meeting_participants_tenant_id_tenants_id_fk",
-          "tableFrom": "meeting_participants",
-          "tableTo": "tenants",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "meeting_participants_user_id_users_id_fk": {
-          "name": "meeting_participants_user_id_users_id_fk",
-          "tableFrom": "meeting_participants",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "meeting_participants_meeting_fk": {
-          "name": "meeting_participants_meeting_fk",
-          "tableFrom": "meeting_participants",
-          "tableTo": "meetings",
-          "columnsFrom": [
-            "tenant_id",
-            "meeting_id"
-          ],
-          "columnsTo": [
-            "tenant_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "meeting_participants_tenant_id_uq": {
-          "name": "meeting_participants_tenant_id_uq",
-          "nullsNotDistinct": false,
-          "columns": [
-            "tenant_id",
-            "id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "meeting_participants_kind_ck": {
-          "name": "meeting_participants_kind_ck",
-          "value": "\"meeting_participants\".\"kind\" in ('internal', 'external') and (\"meeting_participants\".\"kind\" = 'internal' or \"meeting_participants\".\"user_id\" is null) and (\"meeting_participants\".\"kind\" = 'external' or \"meeting_participants\".\"contact_id\" is null)"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.meetings": {
-      "name": "meetings",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "tenant_id": {
-          "name": "tenant_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "type": {
-          "name": "type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "starts_at": {
-          "name": "starts_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "ends_at": {
-          "name": "ends_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "location": {
-          "name": "location",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "agenda": {
-          "name": "agenda",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "company_id": {
-          "name": "company_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "deal_id": {
-          "name": "deal_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "organizer_user_id": {
-          "name": "organizer_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'planned'"
-        },
-        "cancel_reason": {
-          "name": "cancel_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "held_at": {
-          "name": "held_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cancelled_at": {
-          "name": "cancelled_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_by_user_id": {
-          "name": "created_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "meetings_tenant_starts_idx": {
-          "name": "meetings_tenant_starts_idx",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "starts_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "meetings_tenant_company_idx": {
-          "name": "meetings_tenant_company_idx",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "company_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "meetings_tenant_deal_idx": {
-          "name": "meetings_tenant_deal_idx",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "deal_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "meetings_tenant_organizer_idx": {
-          "name": "meetings_tenant_organizer_idx",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "organizer_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "meetings_tenant_id_tenants_id_fk": {
-          "name": "meetings_tenant_id_tenants_id_fk",
-          "tableFrom": "meetings",
-          "tableTo": "tenants",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "meetings_organizer_user_id_users_id_fk": {
-          "name": "meetings_organizer_user_id_users_id_fk",
-          "tableFrom": "meetings",
-          "tableTo": "users",
-          "columnsFrom": [
-            "organizer_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "meetings_created_by_user_id_users_id_fk": {
-          "name": "meetings_created_by_user_id_users_id_fk",
-          "tableFrom": "meetings",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "meetings_company_fk": {
-          "name": "meetings_company_fk",
-          "tableFrom": "meetings",
-          "tableTo": "companies",
-          "columnsFrom": [
-            "tenant_id",
-            "company_id"
-          ],
-          "columnsTo": [
-            "tenant_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "meetings_tenant_id_uq": {
-          "name": "meetings_tenant_id_uq",
-          "nullsNotDistinct": false,
-          "columns": [
-            "tenant_id",
-            "id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "meetings_time_ck": {
-          "name": "meetings_time_ck",
-          "value": "\"meetings\".\"ends_at\" > \"meetings\".\"starts_at\""
-        },
-        "meetings_type_ck": {
-          "name": "meetings_type_ck",
-          "value": "\"meetings\".\"type\" in ('visit', 'online', 'office', 'phone')"
-        },
-        "meetings_status_ck": {
-          "name": "meetings_status_ck",
-          "value": "\"meetings\".\"status\" in ('planned', 'held', 'cancelled')"
-        }
-      },
       "isRLSEnabled": false
     },
     "public.products": {

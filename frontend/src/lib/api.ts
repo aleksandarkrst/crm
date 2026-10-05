@@ -193,8 +193,11 @@ export interface ApiWorkspace {
   timezone: string;
   /** 1 = January. */
   fiscalYearStartMonth: number;
+  /** Language of the fixed text in emails to customers, e.g. meeting minutes (CD-208). */
+  customerEmailLanguage: ApiCustomerEmailLanguage;
 }
-export type WorkspaceInput = Partial<Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth'>>;
+export type ApiCustomerEmailLanguage = 'en' | 'sr';
+export type WorkspaceInput = Partial<Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth' | 'customerEmailLanguage'>>;
 export type ApiLanguage = 'en' | 'sr' | 'de';
 export type ApiDateFormat = 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
 export type ApiStartPage = 'pipeline' | 'overview' | 'today' | 'contacts';
@@ -212,6 +215,10 @@ export interface ApiProfile {
   dailyDigest: boolean;
   /** Email me when someone else makes me the owner of a deal (CD-16). */
   notifyDealAssigned: boolean;
+  /** Email me (with an .ics) when someone else adds me to a meeting, or changes or cancels it (CD-207). */
+  notifyMeetingInvites: boolean;
+  /** Email me when someone else creates or changes my visit plan (CD-207). */
+  notifyVisitPlans: boolean;
 }
 /**
  * Getting started (CD-68): the workspace's activation steps (CD-115), derived from its records.

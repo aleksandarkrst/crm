@@ -14,6 +14,8 @@ const PATHS = {
   phone: 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1z',
   note: 'M6 3h9l4 4v14H6zM9 11h7M9 15h7M9 7h3',
   pencil: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
+  globe: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.4 2.5 3.5 5.5 3.5 9s-1.1 6.5-3.5 9M12 3c-2.4 2.5-3.5 5.5-3.5 9s1.1 6.5 3.5 9',
+  linkedin: 'M4 4h16v16H4zM8 10.5V16M8 7.5v.01M12 16v-5.5M12 13a2.2 2.2 0 0 1 4.4 0V16',
 } as const;
 export type IconName = keyof typeof PATHS;
 

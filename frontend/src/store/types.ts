@@ -1,4 +1,4 @@
-import type { ApiCustomField, ApiDateFormat, ApiLanguage, ApiOnboarding, ApiStageChange, ApiStartPage, CustomFieldEntity, CustomFieldValues, DealOutcome, LostReason } from '../lib/api';
+import type { ApiCustomerEmailLanguage, ApiCustomField, ApiDateFormat, ApiLanguage, ApiOnboarding, ApiStageChange, ApiStartPage, CustomFieldEntity, CustomFieldValues, DealOutcome, LostReason } from '../lib/api';
 import type { DealDoc, DocTemplate } from './documents';
 
 /** A funnel's backend id (CD-10: any number of funnels, not just the two personas). */
@@ -51,6 +51,8 @@ export interface Lead {
   buyerRole?: string;
   /** Notes on the primary contact (from the New contact dialog or the contact screen). */
   contactNotes?: string;
+  /** The primary contact's LinkedIn (a URL or whatever was typed); '' when none. */
+  contactLinkedin?: string;
   /** Owner of the primary contact (user id, and last known name from the API). */
   contactOwnerId?: string | null;
   contactOwner?: string;
@@ -121,6 +123,9 @@ export interface CompanyExtra {
   hq: string;
   size: string;
   source: string;
+  /** Website domain, e.g. "acme.com" (CD-209); '' when none. */
+  domain: string;
+  notes: string;
   /** Last known name of the owner, from the API (see memberName). */
   owner: string;
   ownerId?: string | null;
@@ -235,14 +240,6 @@ export interface TeamMember {
   invite?: { emailStatus: 'queued' | 'sent' | 'failed' | null; emailSentAt: string | null; emailError: string | null; hasLink: boolean };
 }
 
-export interface ToggleRow {
-  id: string;
-  name?: string;
-  label?: string;
-  desc: string;
-  on: boolean;
-}
-
 /** A custom field of deals, companies or contacts (CD-15), as the API returns it. */
 export type CustomFieldDef = Omit<ApiCustomField, 'position'>;
 
@@ -255,6 +252,8 @@ export interface Workspace {
   timezone: string;
   /** Month the fiscal year starts, 1 = January. */
   fiscalMonth: number;
+  /** Language of the fixed text in emails to customers (CD-208). */
+  customerEmailLanguage: ApiCustomerEmailLanguage;
 }
 
 /** The signed-in user's profile (see ApiProfile). */
@@ -272,6 +271,8 @@ export interface Profile {
   /** Notification settings (Settings → Notifications, CD-16). Apply to this workspace only. */
   digest: boolean;
   dealAssigned: boolean;
+  meetingInvites: boolean;
+  visitPlans: boolean;
 }
 
 export interface BonusRule {
@@ -349,7 +350,6 @@ export interface State {
   /** Stage history of every deal, oldest first; null until Overview loads it (see refreshHistory). */
   stageHistory: StageChange[] | null;
   team: TeamMember[];
-  integrations: ToggleRow[];
   /** Custom field definitions (CD-15), in their order. */
   customFields: CustomFieldDef[];
   /** Custom field values by record type and record id (deal, company or contact id). */

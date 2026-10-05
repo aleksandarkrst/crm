@@ -1,6 +1,7 @@
 // CD-80: company and contact pages like the deal page: the header names the screen, the record
 // has its own header with owner, "+ Deal" (starting from this company or contact) and Delete in
-// the menu, and sections for its details, deals, contacts, tasks and history.
+// the menu, and sections for its details, deals, contacts, tasks and history. CD-209: the company's
+// domain (a link) and notes, and the contact's LinkedIn, edit in place and show in the history.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { api, BASE_URL, click, clickButton, eventually, newUserWithWorkspace, setByLabel, steps, text, useBrowser } from '../lib/harness.mjs';
@@ -38,6 +39,29 @@ describe('company and contact pages', () => {
     assert.ok(await eventually(async () => (await api(page, '/crm/companies/' + company.id)).hq === 'Beograd'), 'HQ saved');
   });
 
+  /** Opens the Changes view of the record's history and waits until it mentions `label`. */
+  const changesInclude = async (label) => {
+    await click(page, '[data-testid="history-changes"]');
+    await page.waitForFunction((label) => document.querySelector('[data-testid="change-history"]')?.innerText.includes(label), { timeout: 10_000 }, label);
+    return page.$eval('[data-testid="change-history"]', (el) => el.innerText);
+  };
+
+  step('the company page edits the domain (shown as a link) and multi-line notes (CD-209)', async () => {
+    assert.ok(await setByLabel(page, 'Domain', 'umbrella.test'), 'Domain field found');
+    assert.ok(await setByLabel(page, 'Notes', 'Two plants.\nBuys through the Niš office.', 'textarea'), 'Notes field found');
+    const saved = await eventually(async () => {
+      const c = await api(page, '/crm/companies/' + company.id);
+      return c.domain === 'umbrella.test' && c.notes === 'Two plants.\nBuys through the Niš office.' && c;
+    });
+    assert.ok(saved, 'domain and notes saved');
+    await page.reload({ waitUntil: 'networkidle0' });
+    await page.waitForFunction(() => document.querySelector('input[aria-label="Domain"]')?.value === 'umbrella.test');
+    assert.equal(await page.$eval('textarea[aria-label="Notes"]', (el) => el.value), 'Two plants.\nBuys through the Niš office.');
+    assert.equal(await page.$eval('a[aria-label="Open umbrella.test"]', (el) => el.getAttribute('href')), 'https://umbrella.test');
+    const changes = await changesInclude('Domain');
+    assert.ok(changes.includes('umbrella.test') && changes.includes('Notes'), changes);
+  });
+
   step('"+ Deal" starts the New deal dialog with this company', async () => {
     await click(page, '[data-testid=record-new-deal]');
     await page.waitForSelector('::-p-text(Create & start funnel)');
@@ -55,6 +79,38 @@ describe('company and contact pages', () => {
     assert.match(await page.$eval('[data-testid=record-deals]', (el) => el.innerText), /Umbrella rollout/);
     assert.ok(await setByLabel(page, 'Role', 'Chief Operating Officer'), 'Role field found');
     assert.ok(await eventually(async () => (await api(page, '/crm/contacts/' + contact.id)).jobTitle === 'Chief Operating Officer'), 'role saved');
+  });
+
+  step('the contact page edits LinkedIn, a link when it is a web address (CD-209)', async () => {
+    // Alice is the deal's primary contact, so this goes through the deal's copy of her too.
+    assert.ok(await setByLabel(page, 'LinkedIn', 'linkedin.com/in/alice-abernathy'), 'LinkedIn field found');
+    assert.ok(await eventually(async () => (await api(page, '/crm/contacts/' + contact.id)).linkedin === 'linkedin.com/in/alice-abernathy'), 'LinkedIn saved');
+    await page.reload({ waitUntil: 'networkidle0' });
+    await page.waitForFunction(() => document.querySelector('input[aria-label="LinkedIn"]')?.value === 'linkedin.com/in/alice-abernathy');
+    assert.equal(await page.$eval('a[aria-label="Open Alice Abernathy on LinkedIn"]', (el) => el.getAttribute('href')), 'https://linkedin.com/in/alice-abernathy');
+    assert.ok((await changesInclude('LinkedIn')).includes('alice-abernathy'));
+
+    // Anything else is kept as text, without a link.
+    assert.ok(await setByLabel(page, 'LinkedIn', 'Alice A. (ask for the profile)'));
+    assert.ok(await eventually(async () => (await api(page, '/crm/contacts/' + contact.id)).linkedin === 'Alice A. (ask for the profile)'), 'text saved');
+    assert.equal(await page.$('a[aria-label="Open Alice Abernathy on LinkedIn"]'), null);
+  });
+
+  step('the new fields fit a 375 px phone', async () => {
+    await page.setViewport({ width: 375, height: 812, isMobile: true, hasTouch: true });
+    for (const path of [`/companies/${company.id}`, `/contacts/${contact.id}`]) {
+      await page.goto(BASE_URL + path, { waitUntil: 'networkidle0' });
+      await page.waitForSelector('[data-testid=record-name]');
+      const sideways = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth);
+      assert.ok(sideways <= 0, `${path} scrolls sideways by ${sideways}px`);
+      const field = path.startsWith('/companies') ? 'Domain' : 'LinkedIn';
+      const box = await page.$eval(`input[aria-label="${field}"]`, (el) => {
+        const r = el.getBoundingClientRect();
+        return { left: r.left, right: r.right, width: r.width };
+      });
+      assert.ok(box.left >= 0 && box.right <= 375 && box.width > 60, `${field} fits: ${JSON.stringify(box)}`);
+    }
+    await page.setViewport({ width: 1400, height: 1100 });
   });
 
   step('a company without an owner shows "No owner", not the owner of its deal', async () => {
