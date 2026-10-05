@@ -645,3 +645,61 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .meeting-agenda-input { width: 100%; min-height: 84px; resize: vertical; line-height: 1.5; font-family: inherit; }
 .icon-row > select.ghost, .icon-row > input.ghost { flex: 1; min-width: 0; }
 .icon-row > select.ghost:disabled, .icon-row input.ghost:disabled { opacity: 1; color: var(--ink); cursor: default; background: transparent; }
+
+/* ---- departments & teams panel (CD-138) ---- */
+.org-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.org-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.org-dept + .org-dept { border-top: 1px solid var(--divider); }
+.org-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; min-height: 48px; }
+.org-expand { border: 0; background: transparent; cursor: pointer; color: var(--text-2); width: 24px; height: 24px; border-radius: 6px; font-size: 12px; flex: none; }
+.org-expand:hover { background: var(--bg-soft); }
+.org-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+.org-name { border: 0; background: transparent; padding: 2px 4px; margin-left: -4px; border-radius: 5px; font: inherit; font-size: 14px; font-weight: 500; color: var(--ink); cursor: text; text-align: left; }
+.org-name:hover { background: var(--bg-soft); }
+.org-name-input { padding: 5px 8px; font-size: 14px; width: 100%; max-width: 320px; }
+.org-meta { font-size: 12px; color: var(--muted-2); }
+.org-code { display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; color: var(--brand); background: var(--brand-soft); border-radius: 4px; padding: 1px 5px; margin-right: 6px; }
+.org-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px 10px; }
+.org-link { border: 0; background: transparent; padding: 4px 2px; font: inherit; font-size: 12.5px; color: var(--brand); cursor: pointer; white-space: nowrap; }
+.org-link:hover { text-decoration: underline; }
+.org-danger { color: var(--danger); }
+.org-danger-btn { background: var(--danger); }
+.org-danger-btn:hover { background: #8F1C13; }
+.org-teams { background: var(--panel); border-top: 1px solid var(--divider); padding: 4px 0 10px 34px; display: flex; flex-direction: column; }
+.org-team { padding-left: 0; }
+.org-team + .org-team { border-top: 1px solid var(--divider-2); }
+.org-noteam { font-size: 12px; color: var(--muted-2); min-height: 0; }
+.org-add-team { align-self: flex-start; margin-top: 6px; }
+.org-add-dept { align-self: flex-start; }
+.org-add-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px 10px 0; }
+.org-add-form > .form-input { flex: 1 1 180px; min-width: 0; }
+.org-add-form > .org-code-input { flex: 0 1 120px; }
+.org-form-actions { display: flex; gap: 8px; margin-left: auto; }
+.org-empty { padding: 14px 12px; font-size: 13px; color: var(--text-2); }
+.org-problem { font-size: 12.5px; color: var(--danger); background: var(--danger-soft); border-radius: 8px; padding: 9px 12px; line-height: 1.5; }
+.org-note { font-size: 12.5px; color: var(--text-2); background: var(--bg-soft); border-radius: 8px; padding: 9px 12px; line-height: 1.5; }
+.org-check { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--ink); cursor: pointer; line-height: 1.4; }
+.org-check input { margin-top: 2px; accent-color: var(--brand); }
+.org-check-sub { display: block; font-size: 12px; color: var(--text-2); margin-top: 2px; }
+.org-picked { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.org-picked-row { display: flex; flex-direction: column; gap: 6px; }
+.org-picked-row + .org-picked-row { border-top: 1px solid var(--divider-2); padding-top: 8px; }
+.org-picked-name { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13.5px; }
+.org-picked-name .org-link { margin-left: auto; }
+.org-reports { display: flex; align-items: center; gap: 8px; }
+.org-reports select { flex: 1; min-width: 0; padding: 7px 9px; }
+.org-candidates { display: flex; flex-direction: column; max-height: 280px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+.org-candidate { display: flex; align-items: center; gap: 10px; padding: 9px 12px; font-size: 13px; cursor: pointer; }
+.org-candidate + .org-candidate { border-top: 1px solid var(--divider-2); }
+.org-candidate:hover { background: var(--bg-soft); }
+.org-candidate input { accent-color: var(--brand); }
+.org-candidate-name { font-weight: 500; }
+@media (max-width: 700px) {
+  .org-row { flex-wrap: wrap; }
+  .org-main { flex-basis: calc(100% - 40px); }
+  .org-actions { width: 100%; justify-content: flex-start; padding-left: 34px; }
+  .org-teams { padding-left: 12px; }
+  .org-team .org-actions { padding-left: 0; }
+  .org-candidate { flex-wrap: wrap; }
+  .org-candidate .org-meta { flex-basis: 100%; padding-left: 26px; }
+}

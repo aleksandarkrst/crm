@@ -182,7 +182,8 @@ describe('"New manager" and "New direct report" emails (spec 10.2)', () => {
     expect((await subjects(emp)).filter((s) => s.startsWith('Your new manager in'))).toHaveLength(2);
     // pay (the new manager) still wanted theirs.
     await eventually(async () => (await subjects(pay)).some((s) => s.startsWith('New direct report in') && s.endsWith(`: ${emp.name}`)), 'direct report email to pay');
-    expect((await subjects(owner)).some((s) => s.startsWith('New direct report in'))).toBe(false);
+    // The owner made the bulk change themselves: no "New direct report" for emp or peer.
+    expect((await subjects(owner)).some((s) => s.startsWith('New direct report in') && (s.endsWith(`: ${emp.name}`) || s.endsWith(`: ${peer.name}`)))).toBe(false);
   });
 
   it('are queued only for in-app changes: a direct database write (like the import) sends nothing', async () => {

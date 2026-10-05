@@ -123,6 +123,9 @@ const conflictText = (err: unknown): string | null => {
   return `${body.message} ${now}`;
 };
 /** Which lists a live change hint means re-reading (see loadWorkspace). */
+/** Live hints of the people module (milestone 13): they change no CRM part, only `s.orgRev`. */
+const ORG_EVENTS = new Set(['employee', 'department', 'team', 'employee_role']);
+
 const PARTS_OF: Record<string, Part[]> = {
   // The getting-started checklist (CD-68, steps from CD-115) ticks itself from these records.
   deal: ['deals', 'onboarding'],
@@ -464,7 +467,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     const onLiveEvent = (e: LiveEvent) => {
       // Visit plan progress (CD-135) counts meetings: any meeting or plan change, also this tab's, recounts it.
       if (e.type === 'resync' || e.type === 'meeting' || e.type === 'visit_plan') set((x) => ({ visitRev: x.visitRev + 1 }));
+      // The org structure (CD-138) is read again by the screens showing it (store/org.ts).
+      if (e.type === 'resync' || ORG_EVENTS.has(e.type)) set((x) => ({ orgRev: x.orgRev + 1 }));
       if (e.type === 'resync') return refreshAll();
+      if (ORG_EVENTS.has(e.type)) return;
       if (e.client === CLIENT_ID) return; // this tab's own change: the screen has it already
       if (e.type === 'meeting') return meetings.onLive(e);
       const parts = PARTS_OF[e.type] ?? ALL_PARTS;
