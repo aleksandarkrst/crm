@@ -185,7 +185,8 @@ export class OnboardingService {
   /**
    * Deletes exactly the records the sample load created. Deals go with their lines, tasks,
    * activities and history. A sample company, contact or product that real records now use (a
-   * real deal or a meeting at a sample company, say) is kept, and becomes an ordinary record.
+   * real deal or a meeting at a sample company, say) is kept, and becomes an ordinary record. So is
+   * a sample deal with meetings (a meeting can't lose its deal, CD-213).
    */
   async removeSampleData(ctx: TenantContext) {
     const result = await this.database
@@ -194,7 +195,14 @@ export class OnboardingService {
         const ids = await this.sampleIds(tx);
         const removed = zeroCounts();
         const kept = zeroCounts();
-        if (ids.deal.length) removed.deal = (await tx.delete(deals).where(inArray(deals.id, ids.deal)).returning({ id: deals.id })).length;
+        if (ids.deal.length) {
+          // A meeting needs its deal (CD-213): a sample deal with meetings stays, and so do its company and contact.
+          const used = await tx.select({ id: meetings.dealId }).from(meetings).where(inArray(meetings.dealId, ids.deal));
+          const keep = new Set(used.flatMap((u) => (u.id ? [u.id] : [])));
+          const drop = ids.deal.filter((id) => !keep.has(id));
+          if (drop.length) removed.deal = (await tx.delete(deals).where(inArray(deals.id, drop)).returning({ id: deals.id })).length;
+          kept.deal = keep.size;
+        }
 
         if (ids.contact.length) {
           const used = await tx.select({ id: deals.primaryContactId }).from(deals).where(inArray(deals.primaryContactId, ids.contact));

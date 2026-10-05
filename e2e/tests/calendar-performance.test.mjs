@@ -24,13 +24,14 @@ describe('calendar performance', () => {
   const step = steps(browser, 'calendar-performance');
   let page;
   let companyId;
+  let dealId; // a meeting needs a deal (CD-213)
   // Far enough ahead that nothing else is there; 28 days fit every month.
   const MONTH = monthStart(14);
   const BEFORE = monthStart(13);
   /** Meeting `i`: one hour on day 1–28, between 07:00 and 14:00 UTC (the same day in Belgrade). */
   const meeting = (i, prefix = 'Load') => {
     const start = `${MONTH.slice(0, 8)}${String((i % 28) + 1).padStart(2, '0')}T${String(7 + (i % 8)).padStart(2, '0')}:00:00.000Z`;
-    return { title: `${prefix} ${i} ${RUN}`, type: 'visit', startsAt: start, endsAt: new Date(Date.parse(start) + 3_600_000).toISOString(), companyId };
+    return { title: `${prefix} ${i} ${RUN}`, type: 'visit', startsAt: start, endsAt: new Date(Date.parse(start) + 3_600_000).toISOString(), companyId, dealId };
   };
   async function seed(from, to, prefix) {
     for (let i = from; i < to; i += BATCH) {
@@ -52,6 +53,8 @@ describe('calendar performance', () => {
     page = await browser.person('perf');
     await newUserWithWorkspace(page, { label: 'calendar-perf', name: 'Pia Performance', workspace: 'Busy Co' });
     companyId = (await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: `Busy Customer ${RUN}` }) })).id;
+    const funnels = await api(page, '/crm/funnels');
+    dealId = (await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Busy deal', funnelId: funnels[0].id, companyId }) })).id;
     await seed(0, COUNT, 'Load');
     const { meetings, more } = await api(page, `/crm/meetings?companyId=${companyId}&limit=1000`);
     assert.equal(meetings.length, COUNT);

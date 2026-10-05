@@ -1379,7 +1379,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       deleteContact,
 
       // ---------------------------------------------------------- creating records
-      /** New deal; creates the company and the primary contact first when they are new. */
+      /**
+       * New deal; creates the company and the primary contact first when they are new. Opened from
+       * the meeting form (CD-213), it stays there and the form picks the new deal.
+       */
       createDeal: async (input: { company: { id?: string; name: string }; contact: { contactId?: string; name: string } | null; segment: SegKey; customFields?: CustomFieldPatch }) => {
         const funnelId = cur().funnels[input.segment]?.id;
         if (!funnelId) return;
@@ -1389,6 +1392,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           if (input.contact && !primaryContactId) primaryContactId = (await crmApi.createContact({ fullName: input.contact.name, companyId, buyerRole: 'Decision maker' })).id;
           const deal = await crmApi.createDeal({ title: input.company.name, funnelId, companyId, primaryContactId: primaryContactId ?? null, ...(input.customFields ? { customFields: input.customFields } : {}) });
           await reload();
+          if (cur().newLeadForMeeting) {
+            set({ newLeadOpen: false, newLeadCompanyId: null, newLeadContactId: null, newLeadForMeeting: false, newLeadMade: { companyId, dealId: deal.id }, segment: input.segment });
+            flash(input.company.name + ' added · picked for the meeting');
+            return;
+          }
           set({ newLeadOpen: false, newLeadCompanyId: null, newLeadContactId: null, segment: input.segment });
           navigate(paths.lead(deal.id));
           flash(input.company.name + ' added · funnel assigned · first task due today');

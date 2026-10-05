@@ -47,8 +47,8 @@ const meetingFields = {
   location: optionalText(300),
   agenda: optionalText(5000),
   companyId: z.uuid(),
-  /** Optional; when set it must be a deal of the meeting's company. */
-  dealId: z.uuid().nullish(),
+  /** Required (CD-213, spec 4.2): a deal of the meeting's company. A change can't clear it. */
+  dealId: z.uuid({ error: (issue) => (issue.input == null ? 'Pick a deal' : undefined) }),
   /** Defaults to the caller on create. Must be a member; always an internal participant. */
   organizerUserId: z.uuid().optional(),
   /** Members besides the organizer. On update the set is replaced (the organizer is always kept). */
@@ -186,8 +186,10 @@ interface People {
 /**
  * Meetings with customer companies (CD-130). Everyone in the workspace sees all meetings and can
  * create them; changing one takes an owner or admin, its organizer or an internal participant
- * (meeting-rules.ts). A meeting linked to a deal writes its timeline entries in the same
- * transaction: scheduled, held (which counts as contact with the customer) and cancelled.
+ * (meeting-rules.ts). Every meeting has a deal of its company (CD-213) and writes its timeline
+ * entries there in the same transaction: scheduled, held (which counts as contact with the
+ * customer) and cancelled. Meetings saved without a deal before that stay readable (the check
+ * constraint is NOT VALID), but any change to one needs a deal first ("Pick a deal", 400).
  *
  * Internal participants are emailed (with an .ics) by the worker, through "crm.meeting-invite" jobs
  * queued in the same transaction (CD-131): when someone else adds them to a planned meeting, and
@@ -248,7 +250,7 @@ export class MeetingsService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const organizerUserId = input.organizerUserId ?? ctx.userId;
-        await this.assertCompanyAndDeal(tx, input.companyId, input.dealId ?? null);
+        await this.assertCompanyAndDeal(tx, input.companyId, input.dealId);
         const internal = [...new Set([organizerUserId, ...(input.internalUserIds ?? [])])];
         const found = await this.people(tx, ctx, internal, input.externalContactIds ?? []);
         if (!found.members.has(organizerUserId)) throw new BadRequestException('The organizer must be a member of this workspace');
@@ -265,7 +267,7 @@ export class MeetingsService {
             location: input.location ?? null,
             agenda: input.agenda ?? null,
             companyId: input.companyId,
-            dealId: input.dealId ?? null,
+            dealId: input.dealId,
             organizerUserId,
             createdByUserId: ctx.userId,
           })
@@ -273,9 +275,7 @@ export class MeetingsService {
         const meeting = row!;
         const { addedUserIds } = await this.syncParticipants(tx, ctx, meeting.id, organizerUserId, found, internal, input.externalContactIds ?? []);
         await this.invite(tx, ctx, meeting.id, 'added', addedUserIds);
-        if (meeting.dealId) {
-          await this.activities.record(tx, ctx, meeting.dealId, { channel: 'MT', title: `Meeting scheduled · ${meeting.title}`, detail: await this.when(tx, ctx, meeting) });
-        }
+        await this.activities.record(tx, ctx, input.dealId, { channel: 'MT', title: `Meeting scheduled · ${meeting.title}`, detail: await this.when(tx, ctx, meeting) });
         await this.audit.record(tx, ctx, { action: 'meeting.created', entityType: 'meeting', entityId: meeting.id });
         return this.load(tx, ctx, meeting.id);
       })
@@ -297,8 +297,11 @@ export class MeetingsService {
         const endsAt = input.endsAt !== undefined ? new Date(input.endsAt) : current.endsAt;
         if (endsAt.getTime() <= startsAt.getTime()) throw new BadRequestException(END_AFTER_START);
         const companyId = input.companyId ?? current.companyId;
-        const dealId = input.dealId !== undefined ? input.dealId : current.dealId;
-        if (input.companyId !== undefined || input.dealId !== undefined) await this.assertCompanyAndDeal(tx, companyId, dealId ?? null);
+        const dealId = input.dealId ?? current.dealId;
+        // A meeting saved without a deal before CD-213 needs one with its next change.
+        if (!dealId) throw new BadRequestException('Pick a deal');
+        // Another company takes another deal: the current one belongs to the old company (400).
+        if (input.companyId !== undefined || input.dealId !== undefined) await this.assertCompanyAndDeal(tx, companyId, dealId);
         // Picking another organizer (e.g. after "Organizer left") is for owners and admins (spec 5.3).
         if (input.organizerUserId !== undefined && input.organizerUserId !== current.organizerUserId && ctx.role !== 'owner' && ctx.role !== 'admin') {
           throw new ForbiddenException('Only admins and owners can change the organizer');
@@ -335,10 +338,10 @@ export class MeetingsService {
       .catch(mapDbError);
   }
 
-  /** Planned → held, not before the start. On a deal: "Meeting held" at the start time, and last contact. */
+  /** Planned → held, not before the start. On the deal: "Meeting held" at the start time, and last contact. */
   markHeld(ctx: TenantContext, id: string): Promise<ApiMeeting> {
     return this.changeStatus(ctx, id, 'held', { status: 'held', heldAt: new Date() }, async (tx, m) => {
-      if (!m.dealId) return;
+      if (!m.dealId) return; // never after CD-213: the check constraint refuses to change a meeting without a deal
       const entry = { channel: 'MT' as const, title: `Meeting held · ${m.title}`, detail: await this.when(tx, ctx, m), occurredAt: m.startsAt };
       await this.activities.record(tx, ctx, m.dealId, entry, { countsAsContact: true });
     });
@@ -349,7 +352,7 @@ export class MeetingsService {
     const reason = input.reason ?? null;
     return this.changeStatus(ctx, id, 'cancel', { status: 'cancelled', cancelledAt: new Date(), cancelReason: reason, icsSequence: sql`${meetings.icsSequence} + 1` }, async (tx, m) => {
       await this.invite(tx, ctx, id, 'cancelled', await this.internalUserIds(tx, id));
-      if (!m.dealId) return;
+      if (!m.dealId) return; // as above
       const when = await this.when(tx, ctx, m);
       await this.activities.record(tx, ctx, m.dealId, { channel: 'MT', title: `Meeting cancelled · ${m.title}`, detail: reason ? `${when}\nReason: ${reason}` : when });
     });
@@ -453,11 +456,10 @@ export class MeetingsService {
     }
   }
 
-  /** The company must exist; a deal must exist and belong to that company (400 otherwise). */
-  private async assertCompanyAndDeal(tx: Tx, companyId: string, dealId: string | null) {
+  /** The company must exist; the deal must exist and belong to that company (400 otherwise). */
+  private async assertCompanyAndDeal(tx: Tx, companyId: string, dealId: string) {
     const [company] = await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId));
     if (!company) throw new BadRequestException('Company not found');
-    if (!dealId) return;
     const [deal] = await tx.select({ companyId: deals.companyId }).from(deals).where(eq(deals.id, dealId));
     if (!deal) throw new BadRequestException('Deal not found');
     if (deal.companyId !== companyId) throw new BadRequestException("The deal belongs to another company. Pick one of the meeting company's deals.");

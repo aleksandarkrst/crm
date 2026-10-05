@@ -6,7 +6,7 @@
  * meetings, "Organizer left" until an admin picks one); the calendar and contact filters.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, eventually, type Json, mailTo, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, eventually, firstFunnel, type Json, mailTo, ok, type Session, signIn } from './helpers';
 
 let owner: Session;
 let admin: Session;
@@ -14,6 +14,7 @@ let ana: Session;
 let bo: Session;
 let tenant: string;
 let companyId: string;
+let dealId: string; // a meeting needs a deal (CD-213)
 const as = (s: Session) => ({ token: s.token, tenant });
 
 const HOUR = 3_600_000;
@@ -21,7 +22,7 @@ const iso = (ms: number) => new Date(ms).toISOString();
 const future = (hours: number) => iso(Date.now() + hours * HOUR);
 
 const create = (s: Session, title: string, over: Record<string, unknown> = {}) =>
-  ok('POST', '/crm/meetings', { ...as(s), body: { title, type: 'online', startsAt: future(48), endsAt: future(49), companyId, ...over } });
+  ok('POST', '/crm/meetings', { ...as(s), body: { title, type: 'online', startsAt: future(48), endsAt: future(49), companyId, dealId, ...over } });
 const patch = (s: Session, id: string, body: Record<string, unknown>) => ok('PATCH', `/crm/meetings/${id}`, { ...as(s), body }, 200);
 const get = (s: Session, id: string) => ok('GET', `/crm/meetings/${id}`, as(s));
 
@@ -46,6 +47,8 @@ beforeAll(async () => {
   await addMember(owner, tenant, ana, 'member');
   await addMember(owner, tenant, bo, 'member');
   companyId = (await ok('POST', '/crm/companies', { ...as(owner), body: { name: 'Participants Co' } })).id;
+  const funnel = await firstFunnel(owner, tenant);
+  dealId = (await ok('POST', '/crm/deals', { ...as(owner), body: { title: 'Participants deal', funnelId: funnel.id, companyId } })).id;
 });
 
 describe('emails to internal participants', () => {

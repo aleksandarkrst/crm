@@ -117,14 +117,15 @@ export class MeetingMinutesService {
   /**
    * "Create task" on a next step: a task on the meeting's deal, in its current stage, as the "New
    * task" dialog makes them (no stage gate, channel Meeting, "Task added" on the timeline), with
-   * the step's text, owner (or the caller) and due date. The step then links to it. 409 without a
-   * deal, or when the step already has a task that still exists.
+   * the step's text, owner (or the caller) and due date. The step then links to it. 409 for an old
+   * meeting without a deal, or when the step already has a task that still exists.
    */
   createTask(ctx: TenantContext, meetingId: string, stepId: string) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const meeting = await this.meetings.lockForChange(tx, ctx, meetingId, 'edit');
-        if (!meeting.dealId) throw new ConflictException('Link a deal to this meeting to create tasks from its next steps.');
+        // Only a meeting saved without a deal before CD-213 (staging); editing it asks for one.
+        if (!meeting.dealId) throw new ConflictException('Pick a deal for this meeting (Edit) to create tasks from its next steps.');
         const current = await this.lockMinutes(tx, meetingId);
         const step = current?.nextSteps.find((s) => s.id === stepId);
         if (!current || !step) throw new NotFoundException('Next step not found');

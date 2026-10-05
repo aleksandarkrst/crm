@@ -455,6 +455,8 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 .meeting-form { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .meeting-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .meeting-when { display: flex; gap: 6px; min-width: 0; }
+.meeting-no-deals { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-height: 38px; }
+.meeting-no-deals .btn-plain { padding: 5px 10px; }
 .meeting-when > input[type="date"] { flex: 1 1 auto; min-width: 0; }
 .meeting-when > input[type="time"] { flex: 0 0 124px; min-width: 0; }
 .meeting-durations { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: -4px; }

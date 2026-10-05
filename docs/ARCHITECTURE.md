@@ -664,8 +664,9 @@ company card, both CSV exports and the daily digest) comes from **one pure funct
 unplanned, shared visits).
 
 - **Rules** (spec 9.1 with the Q5 decision): only `type = 'visit'`; cancelled never counts. A visit
-  counts for **one** salesperson (`creditedSalesperson`): the deal's owner when the meeting has a
-  deal and that owner is the organizer or an internal participant, else the organizer (nobody when
+  counts for **one** salesperson (`creditedSalesperson`): the deal's owner when that owner is the
+  organizer or an internal participant, else the organizer (also for an old meeting without a deal,
+  CD-213) (nobody when
   the organizer left and the deal owner wasn't there). It belongs to the period when its start date
   on the workspace clock is in [`period_start`, `period_end`). Held = status held; upcoming =
   planned and starting after now; not closed = planned and ended over 24 hours ago (a planned visit
@@ -1069,11 +1070,12 @@ milestones on lines); `drizzle/0022_products_deal_billing.sql` converts existing
 `meetings` (crm module, `modules/crm/meetings/`) are meetings with a customer company: title,
 type (`visit` Customer visit, `online`, `office` Meeting at our office, `phone`), `starts_at` /
 `ends_at` (instants; `ends_at > starts_at` is a check), location, agenda, the company (required),
-an optional deal of that company, the organizer and the status (`planned`, `held`, `cancelled`,
-with `held_at`, `cancelled_at` and `cancel_reason`). `meeting_participants` has one row per member
+a deal of that company (required, CD-213, spec 4.2), the organizer and the status (`planned`,
+`held`, `cancelled`, with `held_at`, `cancelled_at` and `cancel_reason`). `meeting_participants` has one row per member
 (`internal`, `user_id`) or contact (`external`, `contact_id`), with the person's name (and the
 contact's email) saved on the row. RLS, the foreign keys that null one column, the triggers and
-the live-update hints are in `drizzle/0029_meetings_rls.sql`.
+the live-update hints are in `drizzle/0029_meetings_rls.sql`; the deal rules (CD-213) in
+`drizzle/0037_meeting_deal_required.sql`.
 
 - **Times** are stored as instants and shown in the workspace time zone. Timeline entries format
   them with `shared/time/zoned-time.ts` ("Tue 10 Nov 2026, 10:00–11:00", both days when a meeting
@@ -1098,19 +1100,37 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`.
   (cancelled → planned); a cancelled meeting is read-only (409) until restored, a held one can be
   corrected. "Not closed" = planned and ended more than 24 hours ago.
 - **Validation** (400): title 1–200, location ≤ 300, agenda ≤ 5,000 characters, end after start
-  (also when a PATCH sends only one of them), an existing company, a deal of that company,
+  (also when a PATCH sends only one of them), an existing company, a deal of that company
+  (required: "Pick a deal" without one; a PATCH can change it but never to null, and one that
+  moves the meeting to another company must name a deal of that company too),
   organizer and internal participants who are members of the workspace, existing contacts.
   Duplicate people are dropped; the organizer is always an internal participant (the service
   adds them). `internalUserIds` / `externalContactIds` in a PATCH replace the sets; rows of
   deleted contacts and former members are kept.
-- **Deal timeline** (only with a deal), in the same transaction: creating writes "Meeting
+- **Deal required** (CD-213): the check `meetings_deal_required` (`deal_id is not null`) is added
+  `NOT VALID`, so it holds for every new and changed row while meetings saved without a deal
+  before (staging) stay readable: they show "No deal", the Edit dialog asks for one, and any change
+  to such a row (an edit, held, cancel) is refused until it has one (400 "Pick a deal", also from
+  `mapDbError`). Code that reads meetings stays null-safe for them (left joins to deals, visit
+  counting credits their organizer, the member-removed job leaves them alone).
+- **UI**: the meeting form (dialog and the deal's Composer) requires the deal: the company's
+  deals, open ones first (won and lost ones can be picked too), picked for you when the company
+  has exactly one open deal. A company without deals shows "This company has no deals yet" with
+  **+ New deal**: the New deal dialog for that company (`s.newLeadForMeeting`, above the meeting
+  dialog, company fixed); creating it stays on the meeting, which picks the new deal
+  (`s.newLeadMade`). Every entry point (calendar, "+" menu and command palette, company and contact
+  cards, Composer, "Schedule visit") uses this form.
+- **Deal timeline**, in the same transaction: creating writes "Meeting
   scheduled · <title>" (MT) with the time and place, marking as held "Meeting held · <title>" at
   the meeting's start and moves the deal's last contact there (never back in time,
   `ActivitiesService.record`), cancelling "Meeting cancelled · <title>" with the reason.
   Scheduling doesn't count as contact.
 - **Related records**: a company with meetings can't be deleted (409, like deals; "Remove sample
-  data" keeps a sample company that has meetings); deleting a deal unlinks its meetings
-  (`ON DELETE SET NULL (deal_id)`); deleting a contact keeps their row on the meeting with the
+  data" keeps a sample company that has meetings). Neither can a deal with meetings (CD-213): 409
+  "<deal> has N meetings. Delete them or move them to another deal first." from `DealsService`,
+  backed by the foreign key `meetings_deal_fk` (NO ACTION; `mapDbError` turns a racing violation
+  into a 409 too), and "Remove sample data" keeps a sample deal that has meetings, with its
+  company and primary contact (`kept.deal`). Deleting a contact keeps their row on the meeting with the
   saved name (`ON DELETE SET NULL (contact_id)`). For upcoming meetings see "Participants" below.
 - **Conflicts and history**: `updated_at` is the If-Match version (`crm_touch_version`) and PATCH
   checks field-level conflicts as deals do. `record_changes` gets `entity_type = 'meeting'`: the
@@ -1250,8 +1270,8 @@ hints are in `drizzle/0034_meeting_minutes_rls.sql`.
   step a deal task: `DealTasksService.insertExtra` in the same transaction, i.e. a "New task" task
   (off-playbook, `blocks_advance` false, "Task added" on the timeline) in the deal's current
   stage, channel `MT`, title = the step's text (cut to 200), assignee = the step's owner or the
-  caller, due date = the step's (or none). It answers `{ minutes, task }`; 409 without a deal or
-  when the step's task still exists (a deleted task can be made again), 400 for an empty step.
+  caller, due date = the step's (or none). It answers `{ minutes, task }`; 409 for an old meeting
+  without a deal (CD-213) or when the step's task still exists (a deleted task can be made again), 400 for an empty step.
 - **Who and when**: the same people who may change the meeting write the minutes and create tasks
   (`MeetingsService.lockForChange(…, 'edit')`: organizer, internal participants, admins, owners;
   403 otherwise), while it is planned (preparation) or held; a cancelled meeting's minutes are
@@ -1280,8 +1300,8 @@ hints are in `drizzle/0034_meeting_minutes_rls.sql`.
   createStepTask`, `s.meetingMinutes` by meeting id): Summary and Agreements are textareas with a
   small toolbar (Bold, Bullet list, Link) that inserts the Markdown subset; out of the editor (and
   read-only) they show formatted through `RichText`. Next steps: text, owner, due date, remove,
-  and "Create task" when the meeting has a deal (then a link to the deal; without a deal a hint
-  says to link one). Changes save after a 0.7 s pause (and on blur or leaving), one save at a time,
+  and "Create task" (then a link to the task's deal; nothing on an old meeting without a deal,
+  CD-213). Changes save after a 0.7 s pause (and on blur or leaving), one save at a time,
   each based on the version the previous one returned; "Saving…" / "Saved" next to the heading.
   A conflict shows the API's message and replaces the editor with the minutes read again.
   Read-only for people who can't change the meeting and for cancelled meetings.
@@ -1323,7 +1343,7 @@ Service `meetings/external-minutes.service.ts`, email builder `meetings/minutes-
   409 (spec 4.3, 4.5); the text stays editable and can be sent again (each send is a new entry).
 - **One transaction per send**: the send and its recipient rows (queued), the deal timeline's
   `EM` activity "Minutes sent · <title>" (recipients and subject in the detail) with the deal's
-  last contact moved to now (only with a deal), and the job `crm.meeting-minutes-email`
+  last contact moved to now (skipped for an old meeting without a deal), and the job `crm.meeting-minutes-email`
   `{ tenantId, sendId }` (a mail job: retried with backoff).
 - **The worker** (`MeetingJobs.sendMinutes`) sends **one email per send** to the recipients still
   queued: contacts in To, members in Cc, From `"<sender name>" <MAIL_FROM address>`, Reply-To the

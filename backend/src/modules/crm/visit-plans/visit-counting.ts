@@ -20,7 +20,7 @@ export interface CountedMeeting {
   companyId: string;
   companyName: string;
   organizerUserId: string | null;
-  /** Owner of the meeting's deal; null without a deal (or an unowned one). */
+  /** Owner of the meeting's deal; null for an unowned deal (or a meeting saved without one before CD-213). */
   dealOwnerUserId: string | null;
   /** Members at the meeting (internal participants; the organizer is one of them). */
   internalUserIds: readonly string[];
@@ -85,9 +85,10 @@ export interface VisitProgress {
 }
 
 /**
- * The one salesperson a visit counts for (the Q5 decision): the deal's owner when the meeting has
- * a deal and that owner was there (organizer or internal participant), else the organizer. null
- * when nobody (the organizer left the workspace and the deal owner wasn't there).
+ * The one salesperson a visit counts for (the Q5 decision): the deal's owner when that owner was
+ * there (organizer or internal participant), else the organizer. Every meeting has a deal since
+ * CD-213; an older one without a deal, or an unowned deal, counts for the organizer. null when
+ * nobody (the organizer left the workspace and the deal owner wasn't there).
  */
 export function creditedSalesperson(m: Pick<CountedMeeting, 'organizerUserId' | 'dealOwnerUserId' | 'internalUserIds'>): string | null {
   const owner = m.dealOwnerUserId;

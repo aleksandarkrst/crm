@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Module, type OnApplicationBootstrap } from '@nestjs/common';
-import { and, asc, eq, gt, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNotNull, sql } from 'drizzle-orm';
 import { ENV, type Env } from '../../../infrastructure/config/config.module';
 import { Mailer } from '../../../infrastructure/mail/mailer';
 import { DatabaseService } from '../../../shared/database/database.service';
@@ -180,10 +180,12 @@ export class MeetingJobs implements OnApplicationBootstrap {
         .from(meetings)
         .where(and(eq(meetings.status, 'planned'), gt(meetings.startsAt, now)));
       await tx.delete(meetingParticipants).where(and(eq(meetingParticipants.userId, userId), inArray(meetingParticipants.meetingId, upcoming)));
+      // A meeting saved without a deal before CD-213 can't change (meetings_deal_required), so it
+      // keeps the former member as its organizer rather than failing this job.
       await tx
         .update(meetings)
         .set({ organizerUserId: null })
-        .where(and(eq(meetings.organizerUserId, userId), eq(meetings.status, 'planned'), gt(meetings.startsAt, now)));
+        .where(and(eq(meetings.organizerUserId, userId), eq(meetings.status, 'planned'), gt(meetings.startsAt, now), isNotNull(meetings.dealId)));
     });
   }
 }

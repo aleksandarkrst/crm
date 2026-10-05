@@ -590,9 +590,11 @@ export type MeetingParticipantKind = (typeof MEETING_PARTICIPANT_KINDS)[number];
 
 /**
  * A meeting with a customer company (CD-130): times are instants, shown in the workspace time
- * zone. The company can't be deleted while it has meetings (no cascade); deleting the deal only
- * unlinks it (ON DELETE SET NULL (deal_id), in the custom migration because Drizzle can't express
- * a column list). organizer_user_id null means "Organizer left". updated_at is the If-Match version
+ * zone. The company can't be deleted while it has meetings (no cascade), and neither can the deal
+ * (CD-213): every meeting has a deal of its company. The deal's foreign key (meetings_deal_fk, NO
+ * ACTION) and the NOT VALID check meetings_deal_required live in custom migrations; deal_id stays
+ * nullable here because meetings saved without a deal before CD-213 may still exist.
+ * organizer_user_id null means "Organizer left". updated_at is the If-Match version
  * (crm_touch_version), like deals.
  */
 export const meetings = pgTable(

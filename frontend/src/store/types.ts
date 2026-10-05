@@ -391,6 +391,12 @@ export interface State {
   /** Company and contact the New deal dialog starts with (from a company or contact page, CD-80). */
   newLeadCompanyId: string | null;
   newLeadContactId: string | null;
+  /**
+   * The New deal dialog was opened from the meeting form (CD-213: a meeting needs a deal): it keeps
+   * the company, and creating stays on the meeting, which picks the new deal from `newLeadMade`.
+   */
+  newLeadForMeeting: boolean;
+  newLeadMade: { companyId: string; dealId: string } | null;
   /** The command palette (Ctrl/⌘ K, CD-80). */
   paletteOpen: boolean;
   taskOpen: boolean;

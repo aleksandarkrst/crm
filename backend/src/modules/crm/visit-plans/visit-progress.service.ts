@@ -118,6 +118,7 @@ export async function loadVisits(tx: Tx, periods: readonly { start: string; end:
     })
     .from(meetings)
     .innerJoin(companies, eq(companies.id, meetings.companyId))
+    // A left join still: meetings saved without a deal before CD-213 count too (for their organizer).
     .leftJoin(deals, eq(deals.id, meetings.dealId))
     .where(
       and(

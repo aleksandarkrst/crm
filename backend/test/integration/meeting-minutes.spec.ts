@@ -23,12 +23,19 @@ const EPOCH = '"1970-01-01T00:00:00.000Z"';
 
 const company = (name: string) => ok('POST', '/crm/companies', { ...as(owner), body: { name } });
 const deal = (title: string, companyId: string) => ok('POST', '/crm/deals', { ...as(owner), body: { title, funnelId: funnel.id, companyId } });
+/** One deal per company, for the meetings that don't name theirs (a meeting needs a deal, CD-213). */
+const companyDeals = new Map<string, Promise<Json>>();
+const dealOf = (companyId: string) => {
+  if (!companyDeals.has(companyId)) companyDeals.set(companyId, deal('Minutes company deal', companyId));
+  return companyDeals.get(companyId)!;
+};
 /** A meeting organized by the owner with ana taking part; it started `startedAgo` ms ago. */
 const meeting = async (companyId: string, over: Record<string, unknown> = {}, startedAgo = 2 * HOUR) => {
   const start = Date.now() - startedAgo;
+  const dealId = (await dealOf(companyId)).id;
   return ok('POST', '/crm/meetings', {
     ...as(owner),
-    body: { title: 'Minutes meeting', type: 'visit', startsAt: iso(start), endsAt: iso(start + HOUR), companyId, internalUserIds: [ana.userId], ...over },
+    body: { title: 'Minutes meeting', type: 'visit', startsAt: iso(start), endsAt: iso(start + HOUR), companyId, dealId, internalUserIds: [ana.userId], ...over },
   });
 };
 const minutesUrl = (id: string) => `/crm/meetings/${id}/minutes/internal`;
@@ -207,17 +214,10 @@ describe('next steps as deal tasks', () => {
     expect((await call('POST', `/crm/meetings/${m.id}/minutes/next-steps/${randomUUID()}/task`, as(ana))).status).toBe(404);
   });
 
-  it('refuses without a deal, and for an empty step', async () => {
-    const co = await company('Minutes No Deal Co');
+  it('refuses a task for an empty step', async () => {
+    const co = await company('Minutes Empty Step Co');
     const m = await meeting(co.id);
-    const s = step();
-    await save(ana, m.id, { nextSteps: [s, step({ id: randomUUID(), text: '' })] });
-    const res = await call('POST', `/crm/meetings/${m.id}/minutes/next-steps/${s.id}/task`, as(ana));
-    expect(res.status).toBe(409);
-    expect(res.body.message).toMatch(/Link a deal/);
-
-    const d = await deal('Minutes empty step deal', co.id);
-    await ok('PATCH', `/crm/meetings/${m.id}`, { ...as(owner), body: { dealId: d.id } });
+    await save(ana, m.id, { nextSteps: [step(), step({ id: randomUUID(), text: '' })] });
     const empty = (await ok('GET', minutesUrl(m.id), as(ana))).nextSteps[1];
     expect((await call('POST', `/crm/meetings/${m.id}/minutes/next-steps/${empty.id}/task`, as(ana))).status).toBe(400);
   });

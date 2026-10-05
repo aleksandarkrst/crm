@@ -17,7 +17,7 @@ export function MeetingDialog() {
   const editing = seed.id ? s.meetings[seed.id] : undefined;
   return (
     <Modal maxWidth={720} gap={16}>
-      <ModalHeader title={editing ? 'Edit meeting' : 'New meeting'} sub={editing ? `${editing.companyName} · changes are saved for everyone on the meeting.` : 'Every meeting belongs to a customer company. Times are in the workspace time zone (' + s.workspace.timezone + ').'} />
+      <ModalHeader title={editing ? 'Edit meeting' : 'New meeting'} sub={editing ? `${editing.companyName} · changes are saved for everyone on the meeting.` : 'Every meeting belongs to a customer company and one of its deals. Times are in the workspace time zone (' + s.workspace.timezone + ').'} />
       <MeetingForm seed={seed} onDone={() => meetings.closeDialog()} onCancel={() => meetings.closeDialog()} />
     </Modal>
   );
@@ -47,7 +47,7 @@ interface Draft {
  * `submitLabel` "Schedule meeting". `onDone` gets the saved meeting.
  */
 export function MeetingForm({ seed, onDone, onCancel, submitLabel }: { seed: MeetingDialogSeed; onDone: (m: ApiMeeting) => void; onCancel?: () => void; submitLabel?: string }) {
-  const { s, session, meetings, flash, createContact } = useStore();
+  const { s, set, session, meetings, flash, createContact } = useStore();
   const tz = s.workspace.timezone;
   const editing = seed.id ? s.meetings[seed.id] : undefined;
   const records = useMemo(() => companyRecords(s), [s]);
@@ -142,9 +142,19 @@ export function MeetingForm({ seed, onDone, onCancel, submitLabel }: { seed: Mee
   const startMs = d.date && d.time ? zonedToInstant(d.date, d.time, tz) : NaN;
   const endMs = startMs + d.duration * MINUTE;
   const end = Number.isFinite(endMs) ? instantToZoned(endMs, tz) : { date: d.date, time: '' };
+  // The company's deals, open ones first; won and lost ones can be picked too (CD-213).
   const deals = s.leads.filter((l) => l.companyId === d.companyId).sort((a, b) => Number(b.outcome === 'open') - Number(a.outcome === 'open'));
   const chosenDeal = s.leads.find((l) => l.id === d.dealId);
   const readOnly = editing?.status === 'cancelled';
+
+  // "+ New deal" (CD-213): the New deal dialog for this company; the deal made there is picked here.
+  const made = s.newLeadMade;
+  useEffect(() => {
+    if (!made) return;
+    if (made.companyId === d.companyId) setD((x) => ({ ...x, dealId: made.dealId }));
+    set({ newLeadMade: null });
+  }, [made, d.companyId, set]);
+  const newDeal = () => set({ newLeadOpen: true, newLeadCompanyId: d.companyId, newLeadContactId: d.external[0] ?? null, newLeadForMeeting: true, newLeadMade: null });
 
   const patch = (p: Partial<Draft>) => {
     setD((x) => ({ ...x, ...p }));
@@ -204,7 +214,8 @@ export function MeetingForm({ seed, onDone, onCancel, submitLabel }: { seed: Mee
   else if (d.duration <= 0) errors.time = 'The end must be after the start.';
   if (!d.companyId) errors.company = 'Pick the customer company.';
   if (!d.organizer && !organizerLocked) errors.organizer = 'Pick an organizer.';
-  if (chosenDeal && chosenDeal.companyId !== d.companyId) errors.deal = 'That deal belongs to another company.';
+  if (d.companyId && !d.dealId) errors.deal = deals.length ? 'Pick the deal this meeting is for.' : 'This company has no deals yet. Add one with + New deal.';
+  else if (chosenDeal && chosenDeal.companyId !== d.companyId) errors.deal = 'That deal belongs to another company.';
   if (d.location.length > 300) errors.location = 'The location can be at most 300 characters.';
   if (d.agenda.length > 5000) errors.agenda = 'The agenda can be at most 5,000 characters.';
   const invalid = Object.keys(errors).length > 0;
@@ -228,7 +239,7 @@ export function MeetingForm({ seed, onDone, onCancel, submitLabel }: { seed: Mee
       location: d.location.trim() || null,
       agenda: d.agenda.trim() || null,
       companyId: d.companyId,
-      dealId: d.dealId || null,
+      dealId: d.dealId,
       organizerUserId: d.organizer,
       internalUserIds: d.internal.filter((id) => id !== d.organizer),
       externalContactIds: d.external,
@@ -299,18 +310,33 @@ export function MeetingForm({ seed, onDone, onCancel, submitLabel }: { seed: Mee
           </select>
           {shown('company')}
         </label>
-        <label className="form-label">
-          Deal
-          <select className="form-input" data-testid="meeting-deal" value={d.dealId} onChange={(e) => patch({ dealId: e.target.value })} disabled={!d.companyId}>
-            <option value="">No deal</option>
-            {deals.map((l) => (
-              <option key={l.id} value={l.id}>
-                {(l.title || l.company) + (l.outcome === 'open' ? '' : l.outcome === 'won' ? ' · won' : ' · lost')}
+        {d.companyId && deals.length === 0 ? (
+          <div className="form-label">
+            Deal
+            <span className="meeting-no-deals" data-testid="meeting-no-deals">
+              <span className="meeting-muted">This company has no deals yet</span>
+              <button type="button" className="btn-plain" data-testid="meeting-new-deal" onClick={newDeal}>
+                + New deal
+              </button>
+            </span>
+            {shown('deal')}
+          </div>
+        ) : (
+          <label className="form-label">
+            Deal
+            <select className="form-input" data-testid="meeting-deal" value={d.dealId} onChange={(e) => patch({ dealId: e.target.value })} disabled={!d.companyId}>
+              <option value="" disabled>
+                {d.companyId ? 'Pick a deal…' : 'Pick a company first'}
               </option>
-            ))}
-          </select>
-          {shown('deal')}
-        </label>
+              {deals.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {(l.title || l.company) + (l.outcome === 'open' ? '' : l.outcome === 'won' ? ' · won' : ' · lost')}
+                </option>
+              ))}
+            </select>
+            {shown('deal')}
+          </label>
+        )}
         <label className="form-label">
           Type
           <select className="form-input" data-testid="meeting-type" value={d.type} onChange={(e) => setType(e.target.value as MeetingType)}>

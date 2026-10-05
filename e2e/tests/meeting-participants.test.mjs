@@ -22,6 +22,7 @@ describe('meeting participants', () => {
   let me;
   let nina;
   let company;
+  let deal; // a meeting needs a deal (CD-213)
   let meetingId;
   const COMPANY = `Kestrel Foods ${RUN}`;
   const TITLE = `Meeting with ${COMPANY}`;
@@ -37,6 +38,8 @@ describe('meeting participants', () => {
     const res = await fetch(`${BASE_URL}/api/invitations/${token}/accept`, { method: 'POST', headers: { authorization: 'Bearer ' + nina.token } });
     assert.equal(res.status, 200, 'accepted');
     company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: COMPANY }) });
+    const funnels = await api(page, '/crm/funnels');
+    deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Kestrel pilot', funnelId: funnels[0].id, companyId: company.id }) });
   });
 
   step('adds a colleague and a new contact made from the picker, then saves', async () => {
@@ -92,7 +95,7 @@ describe('meeting participants', () => {
   step('when the organizer leaves, the meeting shows "Organizer left" and an owner picks a new one', async () => {
     const theirs = await api(page, '/crm/meetings', {
       method: 'POST',
-      body: JSON.stringify({ title: `Nina's review ${RUN}`, type: 'online', startsAt: START, endsAt: new Date(Date.parse(START) + 3_600_000).toISOString(), companyId: company.id, organizerUserId: nina.id }),
+      body: JSON.stringify({ title: `Nina's review ${RUN}`, type: 'online', startsAt: START, endsAt: new Date(Date.parse(START) + 3_600_000).toISOString(), companyId: company.id, dealId: deal.id, organizerUserId: nina.id }),
     });
     await api(page, `/team/members/${nina.id}`, { method: 'DELETE' });
     const left = await eventually(async () => (await api(page, `/crm/meetings/${theirs.id}`)).organizerUserId === null, { timeout: 20_000 });

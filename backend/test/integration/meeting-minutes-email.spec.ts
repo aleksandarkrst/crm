@@ -28,7 +28,7 @@ const RUN = Date.now().toString(36);
 
 const ext = (id: string) => `/crm/meetings/${id}/minutes/external`;
 /** A meeting that ended an hour ago with Ana inside and the customer's people outside; held unless `planned`. */
-async function meeting(title: string, { planned = false, withDeal = true, contacts }: { planned?: boolean; withDeal?: boolean; contacts?: string[] } = {}) {
+async function meeting(title: string, { planned = false, contacts }: { planned?: boolean; contacts?: string[] } = {}) {
   const m = await ok('POST', '/crm/meetings', {
     ...as(owner),
     body: {
@@ -38,7 +38,7 @@ async function meeting(title: string, { planned = false, withDeal = true, contac
       endsAt: iso(Date.now() - HOUR),
       location: 'Bulevar 1',
       companyId,
-      dealId: withDeal ? dealId : null,
+      dealId,
       internalUserIds: [ana.userId],
       externalContactIds: contacts ?? [jovan.id, mara.id, noMail.id, bounce.id],
     },
@@ -205,7 +205,7 @@ describe('sending', () => {
   });
 
   it('tracks failure per recipient and retries only the failed ones', async () => {
-    const m = await meeting('Partly failing', { withDeal: false });
+    const m = await meeting('Partly failing');
     const subject = `Partly failing ${RUN}`;
     const res = await send(owner, m.id, { subject, toContactIds: [jovan.id, bounce.id] });
     expect(res.status).toBe(202);
