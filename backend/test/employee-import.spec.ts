@@ -64,7 +64,7 @@ describe('header mapping', () => {
 
   it('serves a template with the labels (no Full name) and an example row', () => {
     const csv = templateCsv();
-    expect(csv.startsWith('﻿')).toBe(true);
+    expect(csv.startsWith('\uFEFF')).toBe(true);
     const [header, example] = parseCsv(csv).headers.length ? [parseCsv(csv).headers, parseCsv(csv).rows[0]!.cells] : [[], []];
     expect(header.slice(0, 4)).toEqual(['First name', 'Last name', 'Work email', 'Employee number']);
     expect(header).not.toContain('Full name');

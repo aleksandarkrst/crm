@@ -11,7 +11,8 @@
     "test": "node --test --test-concurrency=1 --test-reporter=spec \"tests/*.test.mjs\""
   },
   "devDependencies": {
-    "puppeteer": "^25.12.0"
+    "puppeteer": "^25.12.0",
+    "write-excel-file": "^4.1.1"
   },
   "allowScripts": {
     "puppeteer@25.12.0": true

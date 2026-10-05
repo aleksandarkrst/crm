@@ -82,7 +82,7 @@ const cell = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` :
 /** Header row with the field labels plus one example row, UTF-8 with a BOM so Excel reads it right. */
 export function templateCsvOf(fields: readonly ImportField[]): string {
   const shown = fields.filter((f) => !f.notInTemplate);
-  return '﻿' + [shown.map((f) => cell(f.label)).join(','), shown.map((f) => cell(f.example)).join(',')].join('\r\n') + '\r\n';
+  return '\uFEFF' + [shown.map((f) => cell(f.label)).join(','), shown.map((f) => cell(f.example)).join(',')].join('\r\n') + '\r\n';
 }
 
 /** A file read and checked against the limits, with the mapping to use. */
