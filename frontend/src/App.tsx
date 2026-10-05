@@ -19,6 +19,8 @@ const Products = lazy(() => import('./screens/Products').then((m) => ({ default:
 const Profile = lazy(() => import('./screens/Profile').then((m) => ({ default: m.Profile })));
 const Settings = lazy(() => import('./screens/Settings').then((m) => ({ default: m.Settings })));
 const Today = lazy(() => import('./screens/Today').then((m) => ({ default: m.Today })));
+const VisitPlan = lazy(() => import('./screens/VisitPlan').then((m) => ({ default: m.VisitPlan })));
+const VisitPlans = lazy(() => import('./screens/VisitPlans').then((m) => ({ default: m.VisitPlans })));
 
 const START_PAGES: Record<ApiStartPage, string> = { pipeline: paths.pipeline, overview: paths.overview, today: paths.today, contacts: paths.contacts };
 
@@ -94,6 +96,8 @@ function AppRoutes() {
           <Route path="overview" element={<Dashboard />} />
           <Route path="pipeline" element={<Pipeline />} />
           <Route path="today" element={<Today />} />
+          <Route path="visit-plans" element={<VisitPlans />} />
+          <Route path="visit-plans/:id" element={<VisitPlan />} />
           <Route path="companies" element={<Companies />} />
           <Route path="companies/:id" element={<Company />} />
           <Route path="contacts" element={<Contacts />} />

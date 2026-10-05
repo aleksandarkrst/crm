@@ -345,3 +345,23 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
   .stage-chev.current { flex: 4 1 0; }
   .deal-title { font-size: 20px; }
 }
+
+/* ---- visit plans (CD-134) ---- */
+.vp-form-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 12px; }
+.vp-draft-lines { display: flex; flex-direction: column; gap: 6px; }
+.vp-draft-line { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--divider); }
+.vp-visits-input { width: 64px; padding: 7px 9px; text-align: right; }
+.vp-plan-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.vp-plan-total { background: var(--panel); }
+.vp-plan-add { padding: 8px 12px; border-top: 1px solid var(--divider); }
+@media (max-width: 700px) {
+  .vp-form-grid { grid-template-columns: 1fr; }
+  /* Lists become stacked rows: the name and period on top, the numbers below with their labels. */
+  .card > .table-head.vp-list-head, .card > .table-head.vp-plan-head { display: none; }
+  .card > .table-row.vp-list-row, .card > .table-row.vp-plan-row { min-width: 0; display: flex !important; flex-wrap: wrap; gap: 4px 14px; }
+  .vp-list-row .vp-cell-name, .vp-plan-row .vp-plan-company { flex: 1 1 100%; }
+  .vp-list-row .vp-cell-period { flex: 1 1 100%; color: var(--text-2); }
+  .vp-cell { display: inline-flex; align-items: center; gap: 6px; }
+  .vp-cell::before { content: attr(data-label); font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-2); }
+  .vp-plan-actions { flex: 1 1 100%; justify-content: flex-start; }
+}

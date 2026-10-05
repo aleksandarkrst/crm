@@ -3,8 +3,9 @@
  * a lead (deal) shows its company and primary contact inline, companies are derived from leads
  * plus companies without a deal, and people are primary contacts plus everyone else.
  */
-import { type ApiActivity, type ApiBonusRules, type ApiCompany, type ApiCustomField, type ApiDealLine, type ApiDealRow, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiInvitation, type ApiMember, type ApiProduct, type ApiProfile, type ApiStageChange, type ApiWorkspace, ApiError, crmApi } from '../lib/api';
+import { type ApiActivity, type ApiBonusRules, type ApiCompany, type ApiCustomField, type ApiDealLine, type ApiDealRow, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiInvitation, type ApiMember, type ApiProduct, type ApiProfile, type ApiStageChange, type ApiVisitPlan, type ApiWorkspace, ApiError, crmApi } from '../lib/api';
 import { initialsOf, localeFor, momentLabel, money, taskKey } from './selectors';
+import { sortPlans } from './visitPlans';
 import type { BonusRule, CatalogItem, CompanyExtra, CustomFieldDef, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, Profile, SegKey, StageChange, State, TeamMember, Workspace } from './types';
 
 export type WorkspaceData = Pick<
@@ -30,6 +31,7 @@ export type WorkspaceData = Pick<
   | 'bonusTrigger'
   | 'versions'
   | 'onboarding'
+  | 'visitPlans'
 >;
 
 export const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member' } as const;
@@ -166,6 +168,8 @@ const PARTS = {
   customFields: () => crmApi.customFields(),
   bonus: () => loadBonusRules(),
   onboarding: () => loadOnboarding(),
+  /** Customer visit plans (CD-134); members get only their own. */
+  visitPlans: () => crmApi.visitPlans(),
 };
 export type Part = keyof typeof PARTS;
 type Raw = { [K in Part]: Awaited<ReturnType<(typeof PARTS)[K]>> };
@@ -196,6 +200,7 @@ const BY_ID: Partial<Record<Part, Rows>> = {
   products: { fetch: (ids) => crmApi.products(ids), key: (r: ApiProduct) => r.id, order: (rows) => [...(rows as ApiProduct[])].sort((a, b) => a.name.localeCompare(b.name)) },
   lines: { fetch: (ids) => crmApi.dealLines(ids), key: (r: ApiDealLine) => r.dealId },
   tasks: { fetch: (ids) => crmApi.dealTasks(ids), key: (r: ApiDealTask) => r.dealId },
+  visitPlans: { fetch: (ids) => crmApi.visitPlans(ids), key: (r: ApiVisitPlan) => r.id, order: (rows) => sortPlans(rows as ApiVisitPlan[]) },
 };
 /** More ids than this and the whole list is read instead (the API takes at most 200). */
 const MAX_IDS = 200;
@@ -247,7 +252,7 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
     if (order && partial(k)) raw[k] = order(raw[k] as unknown[], raw as Raw);
   }
   lastRaw = raw as Raw;
-  const { funnels: apiFunnels, companies, contacts, deals: dealRows, products, lines: apiLines, tasks: apiTasks, team: apiTeam, workspace: apiWorkspace, profile: apiProfile, customFields: apiFields, bonus: apiBonus, onboarding } = lastRaw;
+  const { funnels: apiFunnels, companies, contacts, deals: dealRows, products, lines: apiLines, tasks: apiTasks, team: apiTeam, workspace: apiWorkspace, profile: apiProfile, customFields: apiFields, bonus: apiBonus, onboarding, visitPlans } = lastRaw;
 
   const team = mapTeam(apiTeam);
 
@@ -407,6 +412,7 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
   for (const { deal } of dealRows) versions['deal:' + deal.id] = deal.updatedAt;
   for (const c of companies) versions['company:' + c.id] = c.updatedAt;
   for (const c of contacts) versions['contact:' + c.id] = c.updatedAt;
+  for (const p of visitPlans) versions['visit_plan:' + p.id] = p.updatedAt;
 
   return {
     versions,
@@ -430,5 +436,6 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
     bonusRules: apiBonus ? mapBonusRules(apiBonus) : null,
     bonusTrigger: apiBonus?.trigger ?? 'On contract signed',
     onboarding,
+    visitPlans: sortPlans(visitPlans),
   };
 }

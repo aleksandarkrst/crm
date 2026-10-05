@@ -2,6 +2,8 @@ export const paths = {
   overview: '/overview',
   pipeline: '/pipeline',
   today: '/today',
+  visitPlans: '/visit-plans',
+  visitPlan: (id: string) => '/visit-plans/' + encodeURIComponent(id),
   companies: '/companies',
   company: (id: string) => '/companies/' + encodeURIComponent(id),
   contacts: '/contacts',
