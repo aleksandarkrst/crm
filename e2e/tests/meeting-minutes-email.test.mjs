@@ -5,7 +5,7 @@
 // log, and the meeting can no longer be set back to planned or deleted.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, RUN, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, eventually, newUserWithWorkspace, RUN, setValue, steps, useBrowser } from '../lib/harness.mjs';
 
 describe('external minutes by email', () => {
   const browser = useBrowser();
@@ -58,19 +58,18 @@ describe('external minutes by email', () => {
     await page.waitForSelector('[data-testid=external-body-view]');
     assert.match(await page.$eval('[data-testid=external-body-view]', (el) => el.innerText), /Initech/);
 
-    await page.click('[data-testid=external-subject]', { clickCount: 3 });
-    await page.keyboard.type(SUBJECT);
+    await setValue(page, '[data-testid=external-subject]', SUBJECT);
     await click(page, '[data-testid=external-body-view]');
     await page.waitForSelector('textarea[data-testid=external-body]');
-    await page.$eval('textarea[data-testid=external-body]', (el) => el.select());
-    await page.keyboard.press('Backspace');
-    await page.type('textarea[data-testid=external-body]', BODY);
+    await setValue(page, 'textarea[data-testid=external-body]', BODY);
     await page.waitForFunction(() => document.querySelector('[data-testid=external-save-state]')?.textContent === 'Saved', { timeout: 10_000 });
+    let last;
     const stored = await eventually(async () => {
-      const x = await api(page, `/crm/meetings/${meeting.id}/minutes/external`);
-      return x.subject === SUBJECT && x.body === BODY && x;
-    });
-    assert.ok(stored, 'the text was saved');
+      last = await api(page, `/crm/meetings/${meeting.id}/minutes/external`);
+      return last.subject === SUBJECT && last.body === BODY && last;
+    }).catch(() => null);
+    assert.ok(stored, `the text was saved (stored: ${JSON.stringify({ subject: last?.subject, body: last?.body })})`);
+    assert.equal(await page.$eval('[data-testid=external-subject]', (el) => el.value), SUBJECT, 'the editor keeps the text');
   });
 
   step('the preview shows the exact email; only people with an email can be picked', async () => {
