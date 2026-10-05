@@ -632,10 +632,18 @@ monthly plans (see "Monthly plans, quarters add up" below). Counting the visits 
   the first day of a period is 400. Plans keep their stored dates when the fiscal year setting
   changes later (their label then reads by months, "Oct–Dec 2026").
 - **API** (`/api/crm/visit-plans`): `GET ?periodType=&periodStart=&salespersonUserId=&ids=` →
-  `{ plans }` (with lines, company names, `totalPlanned`, `periodLabel`), `GET /:id`, and for owners
-  and admins `POST`, `PATCH /:id` (`lines` replaces the lines, matched by company; If-Match like
-  deals) and `DELETE /:id` (meetings are never touched). Members get only their own plans: the list
-  is forced to them, someone else's plan (and its history) is 404, and every write is 403. A second
+  `{ plans }` (with lines, company names, `totalPlanned`, `periodLabel`, `canEdit`), `GET /:id`,
+  `POST`, `PATCH /:id` (`lines` replaces the lines, matched by company; If-Match like deals) and
+  `DELETE /:id` (meetings are never touched). Who sees and changes which plans follows the permission
+  matrix (CD-142, `visit-plans/visit-scope.ts`, rows `crm.visit_plans.*`): owners and admins all;
+  managers see their own plans and their reports' at any depth (list, progress, report rows, Overview
+  summary) and create, change and delete only their **direct** reports' (not their own);
+  everyone else (Administration and Payroll included) sees only their own, read-only. A plan the
+  caller may not see is 404 (also its history), one they see but may not change is 403.
+  `GET /scope` → `{ all, manageAll, seesTeam, visibleUserIds, manageableUserIds }` (null = everyone)
+  for the store (`s.visitScope`: "New plan", the salesperson picker, Reports in the sidebar);
+  reporting lines come from PeopleAccess (`directReportUserIds`, `reportUserIds`), so reports
+  without an account have no plans. A second
   plan for the same person and period is 409 ("Mia already has a plan for October 2026…");
   duplicate companies in `lines`, numbers outside 1–99, no lines, unknown companies and a
   salesperson who isn't a member are 400.
@@ -691,14 +699,16 @@ unplanned, shared visits).
   overPlan, completion and the meeting ids behind each number; `unplanned`; `totals`; and
   `meetings` (title, start, status of those ids). `GET /progress?ids=` → `{ progress: [{ planId,
   totals }] }` for the list (others' plans left out for members). `GET /report?periodType=
-  &periodStart=&salespersonUserId=&companyId=` (owners and admins; 403 for members) → one row per
+  &periodStart=&salespersonUserId=&companyId=` (owners, admins and managers, CD-142, who get only
+  their own and their reports' rows; 403 for other members) → one row per
   salesperson with a plan for the period plus anyone credited with held visits there without one
   (`planId: null`, all unplanned), and `totals` (Σ capped / Σ planned again). With `companyId`
   each row is only that customer, so it shows how often it was visited across salespeople. Every
   row, the totals and the summary carry `meetingIds: { held, upcoming, notClosed, unplanned }`,
   the meetings behind each number (CD-211).
   `GET /progress-summary?periodType=&periodStart=[&salespersonUserId=|&all=1][&companyId=]` sums
-  the plans of the period for the Overview card (members always get their own, whatever they ask)
+  the plans of the period for the Overview card (members always get their own, whatever they ask;
+  managers their team: themselves and their reports, CD-142)
   and, with `companyId`, for the company card. A missing `periodStart` means the current period
   on the workspace clock; one that doesn't start a period is 400.
 - **Live**: the store's `s.visitRev` goes up on every `meeting` and `visit_plan` hint (this tab's own
@@ -1534,7 +1544,7 @@ Every endpoint of milestone 13 and later Workforce modules checks access through
   work fields, personal details and bank, not employment fields, department, team or manager.
   Others: on their own card only work phone, personal details and (setting on) bank. Nobody but an
   Admin makes themselves someone's manager.
-- `GET /api/people/access` returns the caller's `{ employeeId, roles, directReportIds, reportIds }`.
+- `GET /api/people/access` returns the caller's `{ employeeId, roles, directReportIds, reportIds, directReportUserIds, reportUserIds }` (the user ids: reports with an account, for CRM data kept per member).
 
 ### Approver rule (spec 7.4)
 
@@ -1605,6 +1615,51 @@ The database also refuses `manager_id = id`. Covered by a concurrent A → B / B
 
 Friendly messages for the unique constraints and the team rules are in `shared/database/errors.ts`.
 Audit entries for employees list the changed field names only, never values.
+
+### Roles and permissions (CD-142)
+
+- **One definition** (`people/permissions.ts`): the matrix of spec 9.3 as data, `PERMISSION_MODULES`
+  (`crm`, `org`, `projects`, `timesheet`, `time_off`, `travel`, `lateness`, `planning`, `settings`;
+  `live` false for the modules still to come). Each row has a stable id (`crm.visit_plans.manage`,
+  `org.bank`, …) and a cell per role: `scope` (`none`, `own`, `direct`, `indirect` = direct and
+  deeper, `all`) and the `label` the matrix shows ("If setting on", "All except own", …).
+  `relationsFor(rowId, roles)` is the union of the cells of the caller's roles (Employee always
+  counts: roles are additive) as relations `self`/`direct`/`indirect`/`other`; `allows(rowId, roles,
+  relation?)`. `CallerAccess.relationTo(employeeId)` / `relationToUser(userId)` give the relation.
+  A change of the matrix is a change of this file (and of the spec).
+- **Who uses it**: Settings → Roles & permissions renders it from `GET /api/people/permissions`
+  (`{ roles, modules }`), so the screen can't drift from the rules; the visit plan scope
+  (`VisitScope`, below) and role assignment check it; `test/integration/permissions-matrix.spec.ts`
+  is generated from it: for every row of the live modules and every role (plus Manager + Payroll)
+  it calls the API for the caller themselves, a direct report, an indirect report and someone else,
+  and expects exactly what the cell says. A new row fails the suite until it has a test (or an
+  `it.todo` naming the issue that builds its endpoint). Label conditions the generic rule can't
+  express (the bank setting, "All except own", inactive employees) have their own expectations.
+- **Assigning Administration and Payroll** (`roles.service.ts`, Admins only, row `org.roles`):
+  `PUT /api/people/employees/:id/roles/:role` → `{ employeeId, roles }` and `DELETE …` → 204 for
+  `administration` and `payroll` (anything else is 400: Admin is the workspace role, Manager comes
+  from reporting lines). Any employee, with or without an account; not someone who left. Granting
+  what they have, or removing what they don't, changes nothing and sends nothing. Each change writes
+  an employee history row (field `roles`, old and new lists), the audit entry
+  `employee.role_granted`/`role_removed`, and queues `people.role-changed-email` ("You now have the
+  Administration role in …" / "Your Payroll role in … was removed", to the sign-in email, else the
+  work email; can't be turned off; no personal details). It applies on the person's next request:
+  PeopleAccess reads `employee_roles` per request. The `employee_role` live hint updates the lists.
+- `GET /api/people/roles` (every member): `{ administration, payroll }` (active holders: employee
+  id, user id, name, job title, `hasAccount`, `grantedAt`), `admins` (workspace owners and admins,
+  with `workspaceRole`) and `managers` (employees with active direct reports, with `reports`).
+- **Workspace roles**: changing someone to admin in Settings → Team gives them Admin on their next
+  request (it is read from the membership); back to member takes it away.
+- **UI**: Settings → Roles & permissions (`screens/settings/RolesTab.tsx`) has the workspace roles'
+  matrix (unchanged), the functional roles' matrix grouped by module ("Coming with Timesheet"…), and
+  "Who has which role" with "Add person" (an employee picker) and remove for Admins.
+  `components/RoleToggles.tsx` is the employee card's Roles section: the person's roles as badges
+  and, for Admins, an Administration and a Payroll switch (`useSetEmployeeRole`, `store/roles.ts`).
+  `s.peopleRev` goes up on every `employee` and `employee_role` hint and on resync; the lists re-read.
+- **Settings → Employees** (CD-215, Admins; `screens/settings/EmployeesTab.tsx`): default weekly
+  hours (1–60), "Employee number required", "Employees can edit their own bank account", saved through
+  `PATCH /api/workspace` (owners and admins) like the other workspace settings. Settings →
+  Notifications has "Org changes" (`notifyOrgChanges`).
 
 ## Onboarding after sign-up (CD-115)
 
