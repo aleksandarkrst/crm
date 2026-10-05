@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { paths } from '../lib/paths';
 import { Modals } from '../modals/Modals';
@@ -7,7 +7,9 @@ import { useStore } from '../store/store';
 import { GettingStarted } from './GettingStarted';
 import { CommandPalette } from './CommandPalette';
 import { HeaderCenter, HeaderRight } from './HeaderTools';
-import { WorkspaceSwitcher } from './WorkspaceSwitcher';
+import { Icon } from './icons';
+import { Logo } from './Logo';
+import { ModuleSwitcher, SWITCHER_KEYS } from './ModuleSwitcher';
 
 const NAV = [
   // `phone`: in the bottom bar on phones; the others are under "More" there (CD-70).
@@ -63,16 +65,46 @@ function Sidebar() {
   // The profile name follows edits on the Profile screen; the session name is the signed-in user.
   const name = s.profile.name || session.userName;
   const overdue = overdueTasks(s).length;
+  const [switcher, setSwitcher] = useState(false);
+  const logo = useRef<HTMLButtonElement>(null);
+  // Closing hands focus back to the Pultly mark (when it's on screen: not on phones).
+  const closeSwitcher = useCallback(() => {
+    setSwitcher(false);
+    if (logo.current?.offsetParent) logo.current.focus();
+  }, []);
+  // ⌘J / Ctrl J opens (and closes) the module switcher from anywhere (CD-214).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setSwitcher((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   return (
     <aside className="app-sidebar" style={{ width: 96, flex: '0 0 96px', background: 'var(--forest)', color: '#F5F7F6', padding: '18px 8px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, position: 'sticky', top: 0, height: '100vh', zIndex: 10 }}>
       <div className="nav-desktop">
-        <WorkspaceSwitcher />
+        <button
+          ref={logo}
+          type="button"
+          className="ws-logo"
+          data-testid="module-switcher"
+          title={`${session.tenant.name} · modules and workspaces (${SWITCHER_KEYS})`}
+          aria-haspopup="dialog"
+          aria-expanded={switcher}
+          onClick={() => (switcher ? closeSwitcher() : setSwitcher(true))}
+        >
+          <Logo height={26} onDark wordmark={false} />
+        </button>
       </div>
+      {switcher && <ModuleSwitcher onClose={closeSwitcher} trigger={logo} />}
       <nav style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: '100%' }}>
         {navFor(session.tenant.role).map((n) => (
           <NavItem key={n.to} {...n} badge={n.to === paths.today ? overdue : undefined} />
         ))}
-        <MoreMenu name={name} />
+        <MoreMenu name={name} onModules={() => setSwitcher(true)} />
       </nav>
     </aside>
   );
@@ -80,9 +112,10 @@ function Sidebar() {
 
 /**
  * Phones only (CD-70): the bottom bar holds the four everyday screens; "More" opens a sheet with
- * the rest, the profile and the workspace switch. Hidden on wider screens by CSS.
+ * the rest, the profile, the module switcher (a bottom sheet there, CD-214) and the workspace
+ * switch. Hidden on wider screens by CSS.
  */
-function MoreMenu({ name }: { name: string }) {
+function MoreMenu({ name, onModules }: { name: string; onModules: () => void }) {
   const { session } = useStore();
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
@@ -112,6 +145,19 @@ function MoreMenu({ name }: { name: string }) {
                 <span className="menu-item-title">{n.label}</span>
               </NavLink>
             ))}
+            <button
+              type="button"
+              className="menu-item"
+              role="menuitem"
+              data-testid="more-modules"
+              onClick={() => {
+                setOpen(false);
+                onModules();
+              }}
+            >
+              <Icon name="apps" size={18} />
+              <span className="menu-item-title">Modules and workspaces</span>
+            </button>
             <div className="menu-divider" />
             <div className="caps-muted menu-label">Workspace · {session.tenant.name}</div>
             {others.map((t) => (

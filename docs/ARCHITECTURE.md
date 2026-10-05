@@ -1065,6 +1065,27 @@ milestones on lines); `drizzle/0022_products_deal_billing.sql` converts existing
   LinkedIn value that is a web address (`linkedin.com/in/…` or http(s)), gets an **Open** link next
   to the field, like Email and Call; other text stays plain. Only http(s) links are made.
 
+## Module and workspace switcher (CD-214)
+
+The Pultly mark at the top of the sidebar opens a 420px popover to its right
+(`components/ModuleSwitcher.tsx`, styles `.mod-*` in `styles/header.css`); ⌘J / Ctrl J opens it
+from anywhere. It replaces the workspace-only switcher of CD-23.
+
+- **Modules** (`components/modules.ts`, one list): Overview (`/overview`), CRM (`/pipeline`; the
+  current module on Pipeline, Today, Calendar, meetings, Visit plans, Companies, Contacts,
+  Products and deals), Planning, Projects, Workforce and Reporting (`/reports`). The current module
+  comes from the route (none on Settings and Profile). A module without a target is locked with
+  "Coming soon"; Reporting is locked for members ("Owners and admins"). The reason is a field
+  (`LockReason`), so "Not in your plan" can come with plans. Workforce goes to the Org structure
+  page (milestone 13): give it `to: '/org'` once that route exists.
+- **Workspaces**: with 2+ workspaces a row above the modules shows the current one ("Switch ›");
+  with one, its name sits next to "Modules". Either opens the list: each workspace with its member
+  count (`memberCount` in GET /me's `tenants`), the current one checked, and "New workspace".
+  Switching and creating reuse the session's `switchTenant` / `createTenant`.
+- Arrow keys move focus (two columns in the grid), every item has a focus ring, Escape or an
+  outside click closes it and focus goes back to the logo. On phones it opens from "More" as a
+  bottom sheet. Tested in `e2e/tests/module-switcher.test.mjs`.
+
 ## Meetings (CD-130)
 
 `meetings` (crm module, `modules/crm/meetings/`) are meetings with a customer company: title,
@@ -1441,8 +1462,8 @@ table instead.
 
 Media queries at the end of `styles/global.css` (≤1024px and ≤700px) adapt the desktop styles;
 the desktop layout is unchanged. On phones the sidebar becomes a bottom bar with Pipeline, Today,
-Companies, Contacts and **More** (a sheet with Overview, Products, Settings, Profile and the
-workspace switch). The header puts the title on its own row and keeps search and "New…" full
+Companies, Contacts and **More** (a sheet with Overview, Products, Settings, Profile, the
+module and workspace switcher as a bottom sheet, and the workspace switch). The header puts the title on its own row and keeps search and "New…" full
 width. Filter bars wrap two per row; tables scroll sideways inside their card; the pipeline board
 scrolls with snapping columns; dialogs are bottom sheets with their buttons always visible. On a
 deal, the composer and to-dos come before the details, and the stage line names only the current
