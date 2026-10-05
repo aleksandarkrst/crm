@@ -61,3 +61,4 @@ export async function unlinkMember(tx: Tx, tenantId: string, userId: string): Pr
     .set({ userId: null })
     .where(and(eq(employees.tenantId, tenantId), eq(employees.userId, userId)));
 }
+

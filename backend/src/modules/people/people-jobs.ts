@@ -191,9 +191,11 @@ export class DeactivateDueJob implements OnApplicationBootstrap {
 }
 
 /**
- * "people.bulk-invite" (spec 4.7, 5.4, 8.6): an invitation through identity for each employee that
- * is still Active or Leaving, has a work email, no account and no pending invitation, and whose
- * email isn't a member's already. Each in its own transaction, so one refusal doesn't stop the rest.
+ * "people.bulk-invite" (spec 4.7, 5.4, 8.6), for "Invite selected" and the import's "Invite imported
+ * employees": an invitation through identity for each employee that is still Active or Leaving,
+ * has a work email and no account, whose record has no pending invitation, whose email isn't a
+ * member's already and has no pending invitation either. Nothing is sent unless the person who
+ * asked is still an owner or admin. Each in its own transaction, so one refusal doesn't stop the rest.
  */
 @Injectable()
 export class BulkInviteJob implements OnApplicationBootstrap {
@@ -211,7 +213,15 @@ export class BulkInviteJob implements OnApplicationBootstrap {
   }
 
   async run({ tenantId, actorUserId, employeeIds, role }: JobPayloads['people.bulk-invite']): Promise<void> {
-    const ctx: TenantContext = { tenantId, userId: actorUserId, role: 'admin' };
+    const [actor] = await this.database.db
+      .select({ role: memberships.role })
+      .from(memberships)
+      .where(and(eq(memberships.tenantId, tenantId), eq(memberships.userId, actorUserId)));
+    if (actor?.role !== 'owner' && actor?.role !== 'admin') {
+      this.logger.warn(`Bulk invite in ${tenantId} not sent: the person who asked is no longer an owner or admin`);
+      return;
+    }
+    const ctx: TenantContext = { tenantId, userId: actorUserId, role: actor.role };
     let invited = 0;
     for (const id of employeeIds) {
       try {
@@ -228,6 +238,12 @@ export class BulkInviteJob implements OnApplicationBootstrap {
               ),
             );
           if (!e?.workEmail) return false;
+          const email = e.workEmail.toLowerCase();
+          // Already a member (link instead) or already invited (maybe from another record): skip.
+          const [taken] = await tx.execute<{ taken: boolean }>(sql`select
+            exists (select 1 from ${memberships} m join ${users} u on u.id = m.user_id where m.tenant_id = ${tenantId} and lower(u.email) = ${email})
+            or exists (select 1 from ${invitations} i where i.tenant_id = ${tenantId} and i.email = ${email} and i.accepted_at is null and i.revoked_at is null and i.expires_at > now()) as taken`).then((r) => r.rows);
+          if (taken?.taken) return false;
           await createInvitation(tx, { jobs: this.jobs, audit: this.audit, env: this.env }, ctx, { email: e.workEmail, role, employeeId: id });
           return true;
         });

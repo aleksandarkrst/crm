@@ -862,3 +862,11 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .role-toggles { display: flex; flex-direction: column; gap: 10px; }
 .role-toggle-row { display: flex; align-items: center; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--divider); }
 @media (min-width: 701px) { .emp-dialog-grid-even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+
+/* ---------------------------------------------------------------- import dialog (CD-64, CD-141) */
+.import-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.import-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 560px) {
+  .import-fields { grid-template-columns: 1fr; }
+  .import-summary { grid-template-columns: repeat(2, 1fr); }
+}
