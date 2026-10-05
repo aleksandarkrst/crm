@@ -645,3 +645,57 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .meeting-agenda-input { width: 100%; min-height: 84px; resize: vertical; line-height: 1.5; font-family: inherit; }
 .icon-row > select.ghost, .icon-row > input.ghost { flex: 1; min-width: 0; }
 .icon-row > select.ghost:disabled, .icon-row input.ghost:disabled { opacity: 1; color: var(--ink); cursor: default; background: transparent; }
+
+/* ---------------------------------------------------------------- employee card (CD-140) */
+.emp-page { display: flex; flex-direction: column; gap: 18px; }
+.emp-header { padding: 16px 20px; }
+.emp-header-top { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.emp-avatar { width: 48px; height: 48px; flex: 0 0 48px; font-size: 16px; font-weight: 600; }
+.emp-header-text { display: flex; flex-direction: column; gap: 5px; flex: 1 1 260px; min-width: 0; }
+.emp-name { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 500; letter-spacing: -0.03em; line-height: 1.2; overflow-wrap: anywhere; }
+.emp-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.emp-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.emp-narrow, .emp-menu .emp-narrow { display: none; }
+.emp-danger { border: 0; background: var(--danger); color: var(--white); font-weight: 500; }
+.emp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.emp-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.emp-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.emp-section-body { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--divider); }
+.emp-section-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.emp-edit { padding: 5px 11px; }
+.emp-row { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 10px; align-items: baseline; font-size: 13px; padding: 3px 0; }
+.emp-row-label { color: var(--text-2); font-size: 12.5px; }
+.emp-row-value { min-width: 0; overflow-wrap: anywhere; color: var(--ink); }
+.emp-row-value a { color: var(--brand); }
+.emp-input { width: 100%; padding: 7px 9px; }
+.emp-empty { color: var(--muted); }
+.emp-note { font-size: 12px; color: var(--text-2); line-height: 1.5; }
+.emp-warn { color: var(--warn); }
+.emp-error { font-size: 12.5px; color: var(--danger); background: var(--danger-soft); border-radius: 7px; padding: 8px 10px; line-height: 1.45; }
+.emp-subhead { font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-2); margin-top: 8px; }
+.emp-check { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.emp-list { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.emp-iban { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+.emp-iban-number { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+.emp-iban-edit { display: flex; flex-direction: column; gap: 4px; }
+.emp-links { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.emp-link { border: 0; background: none; padding: 0; cursor: pointer; font-size: 12px; font-weight: 500; color: var(--brand); }
+.emp-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; font-size: 13px; }
+.emp-history li { display: flex; flex-direction: column; gap: 1px; overflow-wrap: anywhere; }
+.emp-dialog-grid { display: grid; grid-template-columns: minmax(0, 1fr) 160px; gap: 12px; }
+.emp-pick-list { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
+.emp-pick { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 13px; }
+.emp-pick-off { opacity: 0.6; cursor: not-allowed; }
+.team-employee-link { font-size: 12.5px; color: var(--brand); }
+@media (max-width: 900px) {
+  .emp-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+  .emp-wide { display: none; }
+  .emp-narrow { display: block; }
+  .emp-menu .emp-narrow { display: block; }
+  .emp-header-actions { margin-left: auto; }
+  .emp-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .emp-name { font-size: 20px; }
+  .emp-dialog-grid { grid-template-columns: minmax(0, 1fr); }
+}

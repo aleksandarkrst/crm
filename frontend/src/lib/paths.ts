@@ -30,5 +30,7 @@ export const paths = {
   reports: (tab = 'visit-plans', params: Partial<Record<'periodType' | 'periodStart' | 'salesperson' | 'company', string | null | undefined>> = {}) => `/reports/${tab}` + query(params),
   settings: (tab = 'workspace') => '/settings/' + tab,
   profile: '/profile',
+  /** An employee card (CD-140); `deactivate` opens its Deactivate dialog. */
+  employee: (id: string, params?: { deactivate?: boolean }) => '/people/' + encodeURIComponent(id) + (params?.deactivate ? '?deactivate=1' : ''),
   lead: (id: string) => '/deals/' + encodeURIComponent(id),
 };

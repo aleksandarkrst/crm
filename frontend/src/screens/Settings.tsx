@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { FieldRow, GhostInput, GhostSelect, Modal, ModalHeader, RemoveButton, Switch } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
@@ -206,7 +206,9 @@ function GettingStartedCard() {
 
 function TeamTab() {
   const { s, session, setMemberRole, removeMember, revokeInvitation, resendInvitation, copyInvitationLink, refreshTeam } = useStore();
-  const cols = '1.4fr 1.4fr 0.9fr 0.7fr 40px';
+  const cols = '1.4fr 1.4fr 0.9fr 0.7fr 0.7fr 40px';
+  // Removing someone else asks whether they also left the company (spec 4.8).
+  const [removing, setRemoving] = useState<TeamMember | null>(null);
   const canManage = session.tenant.role !== 'member';
   const isOwner = session.tenant.role === 'owner';
   // While an invitation email is on its way, check back every few seconds (for up to 2 minutes).
@@ -227,6 +229,7 @@ function TeamTab() {
         <span>Email</span>
         <span>Role</span>
         <span>Status</span>
+        <span>Employee</span>
         <span />
       </div>
       {s.team.map((m) => {
@@ -280,14 +283,21 @@ function TeamTab() {
             <span className={invited ? 'badge badge-warn' : 'badge badge-brand'} style={{ justifySelf: 'start' }}>
               {m.status}
             </span>
+            {m.employeeId ? (
+              <Link className="team-employee-link" to={paths.employee(m.employeeId)} data-testid="team-employee-link">
+                Employee card
+              </Link>
+            ) : (
+              <span />
+            )}
             {removable ? (
               <RemoveButton
                 title={invited ? 'Withdraw invitation' : self ? 'Leave workspace' : 'Remove from workspace'}
                 style={{ justifySelf: 'end' }}
                 onClick={() => {
                   if (invited) return revokeInvitation(m.id);
-                  const question = self ? `Leave ${session.tenant.name}? You will need a new invitation to come back.` : `Remove ${m.name} from ${session.tenant.name}?`;
-                  if (window.confirm(question)) removeMember(m.id);
+                  if (!self) return setRemoving(m);
+                  if (window.confirm(`Leave ${session.tenant.name}? You will need a new invitation to come back.`)) removeMember(m.id);
                 }}
               />
             ) : (
@@ -296,7 +306,44 @@ function TeamTab() {
           </div>
         );
       })}
+      {removing && <RemoveMemberDialog member={removing} onClose={() => setRemoving(null)} />}
     </div>
+  );
+}
+
+/**
+ * "Remove from workspace" (spec 4.8): the employee record stays Active with "No account", unless
+ * they also left the company: then the employee card's Deactivate dialog takes over (it removes
+ * the membership too, and moves their reports).
+ */
+function RemoveMemberDialog({ member, onClose }: { member: TeamMember; onClose: () => void }) {
+  const { session, removeMember } = useStore();
+  const navigate = useNavigate();
+  const [left, setLeft] = useState(false);
+  const go = () => {
+    onClose();
+    if (left && member.employeeId) navigate(paths.employee(member.employeeId, { deactivate: true }));
+    else removeMember(member.id);
+  };
+  return (
+    <Modal maxWidth={480}>
+      <ModalHeader title={`Remove ${member.name}?`} sub={`They lose access to ${session.tenant.name}. Their employee record stays, with no account.`} />
+      {member.employeeId && (
+        <label className="emp-check" style={{ fontSize: 13 }}>
+          <input type="checkbox" name="alsoLeft" checked={left} onChange={(e) => setLeft(e.target.checked)} />
+          {member.name} also left the company
+        </label>
+      )}
+      {left && <div className="hint-box">Next, the employee card asks for their last working day and who their reports move to.</div>}
+      <div className="modal-actions">
+        <button type="button" className="btn btn-secondary" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className="btn btn-primary" onClick={go}>
+          {left ? 'Continue to Deactivate' : 'Remove'}
+        </button>
+      </div>
+    </Modal>
   );
 }
 

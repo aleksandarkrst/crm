@@ -1,7 +1,8 @@
 import type { ApiCustomerEmailLanguage, ApiCustomField, ApiDateFormat, ApiLanguage, ApiOnboarding, ApiStageChange, ApiStartPage, CustomFieldEntity, CustomFieldValues, DealOutcome, LostReason } from '../lib/api';
 import type { DealDoc, DocTemplate } from './documents';
 import type { MeetingDialogSeed, MeetingList } from './meetings';
-import type { ApiInternalMinutes, ApiMeeting } from '../lib/api';
+import type { ApiEmployeeCard, ApiInternalMinutes, ApiMeeting } from '../lib/api';
+import type { PeoplePickers } from './employeeCard';
 import type { VisitPlan } from './visitPlans';
 
 /** A funnel's backend id (CD-10: any number of funnels, not just the two personas). */
@@ -241,6 +242,8 @@ export interface TeamMember {
   status: 'Active' | 'Invited';
   /** Pending invitations only: where their email is (CD-7). */
   invite?: { emailStatus: 'queued' | 'sent' | 'failed' | null; emailSentAt: string | null; emailError: string | null; hasLink: boolean };
+  /** Members only: their employee record (milestone 13), for the link to the card. */
+  employeeId?: string | null;
 }
 
 /** A custom field of deals, companies or contacts (CD-15), as the API returns it. */
@@ -427,6 +430,12 @@ export interface State {
 
   /** Meetings read so far, by id (CD-130; see store/meetings.ts). */
   meetings: Record<string, ApiMeeting>;
+  /** Employee cards read so far, by id (CD-140; see store/employeeCard.ts). */
+  employeeCards: Record<string, ApiEmployeeCard>;
+  /** Active employees, departments and teams for the card's pickers; null until a card needs them. */
+  peoplePickers: PeoplePickers | null;
+  /** The signed-in member's own employee record (Profile → "My employee card"); undefined until read. */
+  myEmployeeId: string | null | undefined;
   /** Results of the meeting queries on screen, by query key. */
   meetingLists: Record<string, MeetingList>;
   /** Internal minutes read so far, by meeting id (CD-132). */
