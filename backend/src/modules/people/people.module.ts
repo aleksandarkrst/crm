@@ -9,6 +9,8 @@ import { EmployeesController } from './employees.controller';
 import { EmployeesService } from './employees.service';
 import { OrgController } from './org.controller';
 import { OrgService } from './org.service';
+import { LifecycleController } from './lifecycle.controller';
+import { EmployeeLifecycleService } from './lifecycle.service';
 import { PeopleAccess } from './people-access';
 import { PeopleController } from './people.controller';
 import { PeopleHistoryService } from './people-history.service';
@@ -22,11 +24,12 @@ import { RolesService } from './roles.service';
  * DEPARTMENT_USAGE with what uses a department.
  */
 @Module({
-  controllers: [EmployeesController, EmployeesBulkController, PeopleController, RolesController, OrgController, EmployeeImportController],
+  controllers: [LifecycleController, EmployeesController, EmployeesBulkController, PeopleController, RolesController, OrgController, EmployeeImportController],
   providers: [
     PeopleAccess,
     PeopleHistoryService,
     EmployeesService,
+    EmployeeLifecycleService,
     EmployeesBulkService,
     RolesService,
     OrgService,

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput } from '../lib/api';
 import { paths } from '../lib/paths';
 import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference } from './documents';
+import { employeeCardActions } from './employeeCard';
 import { connectLive, type LiveEvent } from './live';
 import { meetingActions, meetingKey, newMeetingRuntime, upcomingQuery } from './meetings';
 import { newPeopleRuntime, PEOPLE_HINTS, peopleActions } from './people';
@@ -468,6 +469,21 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       tasksChanged: (dealId) => queueRefresh(['tasks'], [dealId], [dealId], 100),
     });
 
+    // ------------------------------------------------------------ employee card (CD-140)
+    const employeeCard = employeeCardActions({
+      cur,
+      set,
+      flash,
+      errText,
+      conflictText,
+      refreshTeam: async () => {
+        try {
+          set({ team: mapTeam(await crmApi.team()) });
+        } catch {
+          // the next reload shows it
+        }
+      },
+    });
     // ------------------------------------------------------------ people (milestone 13)
     const people = peopleActions({ cur, set, flash, rt: peopleRt.current, errText });
 
@@ -475,6 +491,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     const refreshAll = () => {
       livePending.current.lastFull = Date.now();
       meetings.refreshAll();
+      employeeCard.onLive({ type: 'resync' });
       people.refresh();
       queueRefresh(ALL_PARTS, logRequested.current);
     };
@@ -488,6 +505,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       if (e.type === 'resync') return refreshAll();
       if (e.client === CLIENT_ID) return; // this tab's own change: the screen has it already
       if (e.type === 'meeting') return meetings.onLive(e);
+      // People (milestone 13): open employee cards and their pickers (store/employeeCard.ts) and the people lists.
+      if (PEOPLE_HINTS.has(e.type)) employeeCard.onLive(e);
       if (PEOPLE_HINTS.has(e.type)) {
         people.onLive(e);
         if (!PARTS_OF[e.type]?.length) return;
@@ -1239,6 +1258,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       live: { onEvent: onLiveEvent, refreshAll, onFocus },
       /** Meetings (CD-130): queries, saving and the meeting dialog (store/meetings.ts). */
       meetings,
+      /** The employee card (CD-140): reading, saving, invitations, linking, leaving (store/employeeCard.ts). */
+      employeeCard,
       /** Employees, departments and teams (milestone 13; store/people.ts). */
       people,
       /** A page of the change history of a deal, company or contact (CD-69), newest first. */

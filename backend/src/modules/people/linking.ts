@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { Tx } from '../../shared/database/database.service';
 import { employees, users } from '../../shared/database/schema';
 
@@ -62,14 +62,3 @@ export async function unlinkMember(tx: Tx, tenantId: string, userId: string): Pr
     .where(and(eq(employees.tenantId, tenantId), eq(employees.userId, userId)));
 }
 
-/**
- * The employees an invitation job may invite (identity's `people.import-invite` handler): id,
- * name, work email (lower case), whether they already have an account, and whether they left.
- */
-export function employeesToInvite(tx: Tx, employeeIds: string[]) {
-  if (!employeeIds.length) return Promise.resolve([]);
-  return tx
-    .select({ id: employees.id, fullName: employees.fullName, workEmail: employees.workEmail, userId: employees.userId, deactivatedAt: employees.deactivatedAt })
-    .from(employees)
-    .where(inArray(employees.id, employeeIds));
-}

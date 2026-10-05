@@ -115,6 +115,7 @@ export const auditLogs = pgTable(
 );
 
 export const INVITATION_ROLES = ['admin', 'member'] as const;
+export type InvitationRole = (typeof INVITATION_ROLES)[number];
 /** Where the invitation email is: queued (waiting for the worker or retrying), sent, or failed after its retries. */
 export const INVITATION_EMAIL_STATUSES = ['queued', 'sent', 'failed'] as const;
 

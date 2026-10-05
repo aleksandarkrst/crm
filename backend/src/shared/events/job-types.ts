@@ -50,12 +50,24 @@ export interface JobPayloads {
     changes: { account: 'iban' | 'fxIban'; kind: 'added' | 'changed' | 'removed'; masked: string }[];
   };
   /**
-   * Sent by people when an Admin imports employees with "Invite imported employees to Pultly"
-   * (CD-141, spec 8.6). Identity's worker invites each new employee that has a work email as a
-   * Member (invitation linked to the employee, `identity.invitation-email` queued), skipping those
-   * already members, invited, linked or inactive. Only while the actor is still an owner or admin.
+   * Cron (every 15 minutes, in UTC; milestone 13, spec 4.8): in each workspace where it is past
+   * 00:05 local time, applies the deactivations whose last working day is over (status Leaving →
+   * Inactive), with the choices stored in employees.deactivation_plan. `now` and `tenantId` are
+   * for the dev trigger (POST /api/dev/people/deactivate-due) only.
    */
-  'people.import-invite': { tenantId: string; actorUserId: string; employeeIds: string[] };
+  'people.deactivate-due': { now?: string; tenantId?: string };
+  /**
+   * Sent by people when an employee's deactivation is applied (now, or by people.deactivate-due):
+   * they are Inactive, their reports moved, their membership (if any, `userId`) removed. Other
+   * modules react: CRM takes `userId` off future planned meetings like identity.member-removed.
+   */
+  'people.employee-deactivated': { tenantId: string; employeeId: string; userId: string | null };
+  /**
+   * Sent by people for "Invite selected" (the list) and the import's "Invite imported employees"
+   * (spec 4.7, 5.4, 8.6): the people worker creates an invitation through identity for each
+   * employee that still has a work email, no account and no pending invitation.
+   */
+  'people.bulk-invite': { tenantId: string; actorUserId: string; employeeIds: string[]; role: 'admin' | 'member' };
   /**
    * Sent by people when an Admin gives an employee Administration or Payroll, or takes it away
    * (CD-142, spec 10.2). The people worker emails the employee (sign-in email if linked, else work
@@ -93,7 +105,9 @@ export const JOB_NAMES = [
   'notifications.digest-tick',
   'notifications.daily-digest',
   'people.bank-account-changed-email',
-  'people.import-invite',
+  'people.bulk-invite',
+  'people.deactivate-due',
+  'people.employee-deactivated',
   'people.role-changed-email',
   'people.reporting-line-changed',
   'reporting.nightly',

@@ -30,11 +30,11 @@ export const paths = {
   products: '/products',
   /** Org structure (CD-137): `tab` chart|list, `mode` department|reporting, and the filters (store/people.ts). */
   org: (params: OrgParams = {}) => '/org' + query(params),
-  /** An employee's card (CD-140). */
-  employee: (id: string) => '/people/' + encodeURIComponent(id),
   /** Reports (CD-135, owners and admins); `visit-plans` is the Visit-plan completion tab, with its filters. */
   reports: (tab = 'visit-plans', params: Partial<Record<'periodType' | 'periodStart' | 'salesperson' | 'company', string | null | undefined>> = {}) => `/reports/${tab}` + query(params),
   settings: (tab = 'workspace') => '/settings/' + tab,
   profile: '/profile',
+  /** An employee card (CD-140); `deactivate` opens its Deactivate dialog. */
+  employee: (id: string, params?: { deactivate?: boolean }) => '/people/' + encodeURIComponent(id) + (params?.deactivate ? '?deactivate=1' : ''),
   lead: (id: string) => '/deals/' + encodeURIComponent(id),
 };
