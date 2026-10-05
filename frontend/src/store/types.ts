@@ -1,7 +1,7 @@
 import type { ApiCustomerEmailLanguage, ApiCustomField, ApiDateFormat, ApiLanguage, ApiOnboarding, ApiStageChange, ApiStartPage, CustomFieldEntity, CustomFieldValues, DealOutcome, LostReason } from '../lib/api';
 import type { DealDoc, DocTemplate } from './documents';
 import type { MeetingDialogSeed, MeetingList } from './meetings';
-import type { ApiMeeting } from '../lib/api';
+import type { ApiInternalMinutes, ApiMeeting } from '../lib/api';
 
 /** A funnel's backend id (CD-10: any number of funnels, not just the two personas). */
 export type SegKey = string;
@@ -420,6 +420,8 @@ export interface State {
   meetings: Record<string, ApiMeeting>;
   /** Results of the meeting queries on screen, by query key. */
   meetingLists: Record<string, MeetingList>;
+  /** Internal minutes read so far, by meeting id (CD-132). */
+  meetingMinutes: Record<string, ApiInternalMinutes>;
   /** The New / Edit meeting dialog; null when closed. */
   meetingDialog: MeetingDialogSeed | null;
 }

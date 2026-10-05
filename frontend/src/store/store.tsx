@@ -113,8 +113,10 @@ const conflictText = (err: unknown): string | null => {
   const body = err instanceof ApiError && err.status === 409 ? (err.body as Partial<ApiConflict> | null) : null;
   if (!body?.conflicts?.length || !body.message) return null;
   const shown = (c: ApiConflict['conflicts'][number]) => {
+    // A list (a meeting's next steps) by its size; long text (minutes) shortened.
+    if (Array.isArray(c.value)) return c.value.length === 1 ? '1 item' : `${c.value.length} items`;
     const v = c.label ?? (c.value === null || c.value === undefined || c.value === '' ? 'empty' : String(c.value));
-    return v === 'empty' ? 'empty' : `“${v}”`;
+    return v === 'empty' ? 'empty' : `“${v.length > 80 ? v.slice(0, 78) + '…' : v}”`;
   };
   const now = body.conflicts.length === 1 ? `It now says ${shown(body.conflicts[0]!)}.` : `It now says ${body.conflicts.map(shown).join(', ')}.`;
   return `${body.message} ${now}`;
@@ -446,6 +448,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       conflictText,
       // A meeting write logged on the deal's timeline (and, marked as held, its last contact): read both again.
       dealChanged: (dealId) => queueRefresh(['deals'], [dealId], [dealId], 300, { deals: [dealId] }),
+      tasksChanged: (dealId) => queueRefresh(['tasks'], [dealId], [dealId], 100),
     });
 
     /** Everything this tab shows, after the stream was down (hints may be missing) or on focus. */

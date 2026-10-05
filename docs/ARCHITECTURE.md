@@ -576,8 +576,9 @@ retried), loads the digest inside `withTenant` and:
   (overdue) or today, by the workspace's date, on deals that aren't lost; their open deals
   (not won, not lost) with no open task from the "New task" dialog and no planned meeting still
   ahead, i.e. the Pipeline's "No next step" flag; the meetings starting today that they organize
-  or take part in (planned or held, CD-130); and the planned meetings they organize that ended
-  more than 24 hours ago ("Not closed"). Each section lists up to 20 items linking to
+  or take part in (planned or held, CD-130); the planned meetings they organize that ended
+  more than 24 hours ago ("Not closed"); and the held meetings they organize that started in the
+  last 7 days and have no summary in their internal minutes ("Minutes missing", CD-132). Each section lists up to 20 items linking to
   `/deals/<id>` or `/meetings/<id>`;
 - records `skipped` without sending when all sections are empty;
 - records `failed` with the error when the send throws; pg-boss retries it.
@@ -961,14 +962,15 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`.
 - **API** (`/api/crm/meetings`, any member): `GET ?from=&to=` returns the meetings overlapping
   `[from, to)` (a meeting crossing midnight is on both days), with `userId` (organizer or
   internal participant), `companyId`, `dealId`, `contactId` (external participant), `type` and
-  `status` (comma lists), `notClosed=1`, `missingMinutes=1` (held; CD-132 adds "without a
-  summary"), `ids=` (≤ 200, for live updates), `sort=asc|desc` by start, `limit` (≤ 1000, default
+  `status` (comma lists), `notClosed=1`, `missingMinutes=1` (held without a summary in the
+  internal minutes, CD-132), `ids=` (≤ 200, for live updates), `sort=asc|desc` by start, `limit` (≤ 1000, default
   500) and `offset`: `{ meetings, more }`. Without a period it needs one of companyId, dealId,
   contactId or ids. `GET/POST/PATCH /:id`, `POST /:id/held | cancel ({ reason? }) | undo-held |
   restore`, and `DELETE /:id` (owners and admins). A meeting comes with its company and deal
   names, the deal's owner, the organizer's name ("Organizer left" when null), its participants
-  (`deleted` when the contact was deleted or the member left), `notClosed`, and placeholders for
-  the minutes (`internalMinutes: 'missing'`, `externalDelivery: 'not_sent'`) until CD-132/133.
+  (`deleted` when the contact was deleted or the member left), `notClosed`, the internal minutes'
+  status and version (`internalMinutes`, `minutesUpdatedAt`, CD-132), and a placeholder for the
+  external minutes (`externalDelivery: 'not_sent'`) until CD-133.
 - **Rules** (`meeting-rules.ts`, pure and unit-tested): owners, admins, the organizer and the
   internal participants change a meeting (403 otherwise); held only from the start time on and
   only when planned; cancel only when planned; "Undo held" (held → planned) and "Restore"
@@ -1057,6 +1059,61 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`.
   "+ Meeting" prefilled), "Meetings today" on Today, Calendar in the sidebar (after Today; under
   "More" on phones), "Meeting" (M) in the "+" menu and the command palette. Type colors are CSS
   variables in the CD-130 block of `styles/global.css`.
+
+## Meeting minutes (CD-132)
+
+`meeting_minutes` (crm module, `modules/crm/meetings/meeting-minutes.service.ts`) has at most one
+row per meeting (`unique (tenant_id, meeting_id)`, cascades with the meeting), created by the first
+save. The internal part: `summary` (≤ 10,000 characters), `agreements` (≤ 5,000) and `next_steps`
+(jsonb, ≤ 50 items `{ id, text ≤ 500, ownerUserId | null, dueDate | null, taskId | null }`). The
+external part (`external_subject`, `external_body` ≤ 10,000, `external_prefilled_at`) belongs to
+CD-133 and is a separate text. RLS, the version trigger, the history trigger and the live-update
+hints are in `drizzle/0031_meeting_minutes_rls.sql`.
+
+- **API** (`/api/crm/meetings/:id/minutes`): `GET internal` (any member) →
+  `{ summary, agreements, nextSteps, updatedAt, updatedByName }`, empty strings and no steps
+  before anyone wrote them. `PUT internal` saves the parts sent (partial; blank text is stored as
+  empty, other text as written). `nextSteps` replaces the list; each step keeps the `taskId` the
+  server has for its id (the browser can't set or clear it, `mergeNextSteps`). Step owners set
+  anew must be members (owners who left since may stay). `POST next-steps/:stepId/task` makes the
+  step a deal task: `DealTasksService.insertExtra` in the same transaction, i.e. a "New task" task
+  (off-playbook, `blocks_advance` false, "Task added" on the timeline) in the deal's current
+  stage, channel `MT`, title = the step's text (cut to 200), assignee = the step's owner or the
+  caller, due date = the step's (or none). It answers `{ minutes, task }`; 409 without a deal or
+  when the step's task still exists (a deleted task can be made again), 400 for an empty step.
+- **Who and when**: the same people who may change the meeting write the minutes and create tasks
+  (`MeetingsService.lockForChange(…, 'edit')`: organizer, internal participants, admins, owners;
+  403 otherwise), while it is planned (preparation) or held; a cancelled meeting's minutes are
+  read-only (409). Every member reads them.
+- **Recorded / Missing**: a meeting's `internalMinutes` is `recorded` when the summary is not blank.
+  `GET /meetings?missingMinutes=1` = held and not recorded. `minutesUpdatedAt` on the meeting is
+  the minutes' version.
+- **Conflicts and history**: `updated_at` is the If-Match version (`crm_touch_version`). Before the
+  first save the browser sends the epoch, so a first save someone else made meanwhile conflicts.
+  The trigger writes `record_changes` rows on the **meeting** (`entity_type = 'meeting'`, the
+  meeting's id, fields `summary`, `agreements`, `nextSteps`; the first save counts as a change
+  from empty), so the meeting's History tab shows them and `RecordHistoryService.assertNoConflict`
+  checks them like meeting fields (lists compare by value). Two people saving the same part:
+  the usual 409 conflict message.
+- **Live updates**: minutes rows send `crm_changes` hints of type `meeting` with the meeting's id;
+  the browser re-reads the meeting, and an open minutes tab reads the minutes again when the
+  meeting's `minutesUpdatedAt` moved.
+- **Never in a customer email** (spec 6.2, AC 2): the internal minutes are read only by this
+  service and the digest (which lists meetings, not their text). The external minutes email
+  (CD-133) must be built from the external fields (`external_subject`, `external_body`) and the
+  meeting's facts only, never from `summary`, `agreements` or `next_steps`; "Copy from internal
+  minutes" copies text into the external body in the browser, explicitly. CD-133 adds the test on
+  its email builder that proves it.
+- **Digest**: "Minutes missing" (see "Daily digest").
+- **Screen** (`screens/meeting/InternalMinutes.tsx`, store `meetings.loadMinutes / saveMinutes /
+  createStepTask`, `s.meetingMinutes` by meeting id): Summary and Agreements are textareas with a
+  small toolbar (Bold, Bullet list, Link) that inserts the Markdown subset; out of the editor (and
+  read-only) they show formatted through `RichText`. Next steps: text, owner, due date, remove,
+  and "Create task" when the meeting has a deal (then a link to the deal; without a deal a hint
+  says to link one). Changes save after a 0.7 s pause (and on blur or leaving), one save at a time,
+  each based on the version the previous one returned; "Saving…" / "Saved" next to the heading.
+  A conflict shows the API's message and replaces the editor with the minutes read again.
+  Read-only for people who can't change the meeting and for cancelled meetings.
 
 ## Onboarding after sign-up (CD-115)
 
