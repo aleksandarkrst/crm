@@ -154,5 +154,6 @@ export function initialState(): State {
     meetingLists: {},
     meetingMinutes: {},
     meetingDialog: null,
+    visitRev: 0,
   };
 }

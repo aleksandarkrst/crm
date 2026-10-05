@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../shared/database/database.service';
-import { companies, deals, dealTasks, funnelStages, meetingMinutes, meetingParticipants, meetings, memberships, tenants, users } from '../../shared/database/schema';
+import { companies, deals, dealTasks, funnelStages, meetingMinutes, meetingParticipants, meetings, memberships, tenants, users, visitPlans } from '../../shared/database/schema';
+import { progressOfPlans, visitPlanPeriodLabel } from '../crm';
 import { buildDigest, type Digest, MINUTES_REMINDER_MS, NOT_CLOSED_AFTER_MS, zonedNow } from './digest-content';
 
 /**
@@ -12,7 +13,9 @@ import { buildDigest, type Digest, MINUTES_REMINDER_MS, NOT_CLOSED_AFTER_MS, zon
  *   the "No next step" flag;
  * - meetings (CD-130) starting today that they organize or take part in (planned or held), and
  *   the planned meetings they organize that ended more than 24 hours ago ("Not closed"), and the
- *   held ones they organize that started in the last 7 days without a summary ("Minutes missing", CD-132).
+ *   held ones they organize that started in the last 7 days without a summary ("Minutes missing", CD-132);
+ * - their visit plans for the current month and quarter, counted as the plan page counts them
+ *   (CD-135, "Visits planned this period: N of M held").
  * "Today" is the workspace's date (its time zone), as on the Today screen.
  */
 @Injectable()
@@ -46,7 +49,7 @@ export class DigestService {
   load(tenantId: string, userId: string, today: string, now: Date = new Date()): Promise<Digest> {
     return this.database.withTenant(tenantId, async (tx) => {
       // tenants is a platform table without RLS, so filter by the tenant explicitly.
-      const [workspace] = await tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, tenantId));
+      const [workspace] = await tx.select({ timezone: tenants.timezone, fiscal: tenants.fiscalYearStartMonth }).from(tenants).where(eq(tenants.id, tenantId));
       const timeZone = workspace?.timezone ?? 'UTC';
       const tasks = await tx
         .select({
@@ -123,8 +126,19 @@ export class DigestService {
         .orderBy(asc(meetings.startsAt))
         .limit(100);
 
+      const plans = await tx
+        .select()
+        .from(visitPlans)
+        .where(and(eq(visitPlans.salespersonUserId, userId), lte(visitPlans.periodStart, today), gt(visitPlans.periodEnd, today)));
+      const counted = await progressOfPlans(tx, plans, timeZone, now);
+      const planRows = plans.map((p) => {
+        const { totals } = counted.get(p.id)!.progress;
+        const periodLabel = visitPlanPeriodLabel(p.periodType, p.periodStart, p.periodEnd, workspace?.fiscal ?? 1);
+        return { planId: p.id, periodType: p.periodType, periodLabel, held: totals.heldCapped, planned: totals.planned };
+      });
+
       const iso = (rows: typeof meetingsToday) => rows.map((m) => ({ ...m, startsAt: m.startsAt.toISOString(), endsAt: m.endsAt.toISOString() }));
-      return buildDigest(today, tasks, stalled, { today: iso(meetingsToday), notClosed: iso(notClosed), minutesMissing: iso(minutesMissing), timeZone, now });
+      return buildDigest(today, tasks, stalled, { today: iso(meetingsToday), notClosed: iso(notClosed), minutesMissing: iso(minutesMissing), timeZone, now, visitPlans: planRows });
     });
   }
 }

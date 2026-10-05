@@ -67,3 +67,23 @@ export function formatTimeRange(start: Date, end: Date, timeZone: string): strin
   const endDay = e.year === s.year ? `${e.weekday} ${e.day} ${e.month}` : `${e.weekday} ${e.day} ${e.month} ${e.year}`;
   return `${startLabel} – ${endDay}, ${e.time}`;
 }
+
+/** How far the zone's clock is ahead of UTC at this instant, in milliseconds. */
+function offsetAt(at: Date, timeZone: string): number {
+  const p = zonedParts(at, timeZone);
+  const [hour, minute] = p.time.split(':').map(Number);
+  const [y, m, d] = p.date.split('-').map(Number);
+  return Date.UTC(y!, m! - 1, d!, hour!, minute!, at.getUTCSeconds(), at.getUTCMilliseconds()) - at.getTime();
+}
+
+/**
+ * The instant a day (`YYYY-MM-DD`) begins on the zone's clock (its 00:00), across daylight saving
+ * changes. Where a zone skips midnight itself, the first moment of that day after the jump.
+ */
+export function zonedDayStart(date: string, timeZone: string): Date {
+  const [y, m, d] = date.split('-').map(Number);
+  const midnightUtc = Date.UTC(y!, m! - 1, d!);
+  const first = midnightUtc - offsetAt(new Date(midnightUtc), timeZone);
+  // The offset can differ at the result (a change between the two moments): settle on that one.
+  return new Date(midnightUtc - offsetAt(new Date(first), timeZone));
+}

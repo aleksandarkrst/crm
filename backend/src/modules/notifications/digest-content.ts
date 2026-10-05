@@ -40,6 +40,15 @@ export interface DigestMeetingRow {
   status: 'planned' | 'held' | 'cancelled';
 }
 
+/** A salesperson's visit plan running today (CD-135): held visits (capped per customer) of the planned ones. */
+export interface DigestVisitPlanRow {
+  planId: string;
+  periodType: 'month' | 'quarter';
+  periodLabel: string;
+  held: number;
+  planned: number;
+}
+
 export interface Digest {
   date: string;
   /** The workspace time zone the dates and meeting times are in. */
@@ -52,6 +61,8 @@ export interface Digest {
   /** Meetings they organize, held in the last 7 days, whose internal minutes have no summary yet (CD-132). */
   minutesMissing: DigestMeetingRow[];
   noNextStep: DigestDealRow[];
+  /** Their visit plans for the current month and quarter. Shown when the digest goes out; never a reason to send it. */
+  visitPlans: DigestVisitPlanRow[];
 }
 
 /** A planned meeting is "Not closed" this long after its end (as in the CRM's meeting rules). */
@@ -68,6 +79,8 @@ export interface DigestMeetings {
   minutesMissing?: DigestMeetingRow[];
   timeZone?: string;
   now?: Date;
+  /** The member's visit plans running today, already counted (countVisits). */
+  visitPlans?: DigestVisitPlanRow[];
 }
 
 /**
@@ -95,6 +108,8 @@ export function buildDigest(today: string, tasks: DigestTaskRow[], dealsWithoutN
       })
       .sort(byStart),
     noNextStep: [...dealsWithoutNextStep].sort((a, b) => a.title.localeCompare(b.title)),
+    // The month's plan before the quarter's.
+    visitPlans: [...(meetings.visitPlans ?? [])].sort((a, b) => (a.periodType === b.periodType ? 0 : a.periodType === 'month' ? -1 : 1)),
   };
 }
 
@@ -171,6 +186,10 @@ export function digestEmail({ to, memberName, workspaceName, appUrl, digest }: D
       lines: digest.minutesMissing.map((m) => ({ text: `${m.title} · ${m.company} (held ${shortDay(clock(m.startsAt).date)})`, href: meetingUrl(m.id) })),
     },
     { title: 'Deals with no next step', lines: digest.noNextStep.map((d) => ({ text: `${onDeal(d.title, d.company)} · ${d.stage}`, href: dealUrl(d.id) })) },
+    {
+      title: 'Visit plan progress',
+      lines: digest.visitPlans.map((p) => ({ text: `Visits planned this period (${p.periodLabel}): ${p.held} of ${p.planned} held`, href: `${base}/visit-plans/${p.planId}` })),
+    },
   ].filter((s) => s.lines.length);
 
   const greeting = memberName ? `Good morning, ${memberName.split(' ')[0]}.` : 'Good morning.';

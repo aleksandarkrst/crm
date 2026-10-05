@@ -607,8 +607,7 @@ still in the queue), and skips deals that were deleted or given to someone else 
 ## Visit plans (CD-134)
 
 A visit plan says how many customer visits one salesperson should make to which companies in one
-month or fiscal quarter. Counting the visits actually held (planned vs. held, Reports, the Overview
-card) is CD-135; until then the screens show "—" in the Held, Upcoming and Completion columns.
+month or fiscal quarter. Counting the visits actually held is "Visit plan tracking (CD-135)" below.
 
 - **Tables** (crm module, RLS in `drizzle/0028_visit_plans_rls.sql`): `visit_plans` (salesperson,
   `period_type` `month`|`quarter`, `period_start` = first day, `period_end` = first day after,
@@ -650,6 +649,67 @@ card) is CD-135; until then the screens show "—" in the Held, Upcoming and Com
   "Schedule visit" opens New meeting prefilled with the company, Customer visit and the salesperson
   as organizer (`meetings.openDialog`). The store keeps the plans in
   `s.visitPlans` (loaded with the workspace).
+
+### Visit plan tracking (CD-135)
+
+Planned vs. held Customer visits. Every number (plan page, list, Reports, the Overview card, the
+company card, both CSV exports and the daily digest) comes from **one pure function**,
+`countVisits(plan, meetings, now, timeZone)` in `crm/visit-plans/visit-counting.ts`, unit-tested in
+`test/visit-counting.spec.ts` (period edges in Belgrade and New York, DST, statuses, capping,
+unplanned, shared visits).
+
+- **Rules** (spec 9.1 with the Q5 decision): only `type = 'visit'`; cancelled never counts. A visit
+  counts for **one** salesperson (`creditedSalesperson`): the deal's owner when the meeting has a
+  deal and that owner is the organizer or an internal participant, else the organizer (nobody when
+  the organizer left and the deal owner wasn't there). It belongs to the period when its start date
+  on the workspace clock is in [`period_start`, `period_end`). Held = status held; upcoming =
+  planned and starting after now; not closed = planned and ended over 24 hours ago (a planned visit
+  in between is neither). Its line is the meeting's company; held visits at other companies are
+  "unplanned" and don't count. Per line `heldCapped = min(held, planned)`, `overPlan = held −
+  heldCapped`; plan completion = Σ heldCapped / Σ planned. `expectedPace` is the share of the
+  period passed (0 before, 1 after; by the zone's midnights, `zonedDayStart` in
+  `shared/time/zoned-time.ts`); `pace` is `done` (100%), `notStarted`, `behind` (completion below
+  pace) or `onTrack`. The UI colours them green, grey, amber, plain.
+- **Loading** (`visit-progress.service.ts`): `progressOfPlans(tx, plans, timeZone, now)` reads the
+  lines of all the plans in one query and the visits of all their periods in another (planned and
+  held visits starting between the periods' zone midnights, with the deal owner and the internal
+  participants as an array subquery; uses `meetings_tenant_starts_idx`), then counts each plan. No
+  migration: the existing indexes cover it.
+- **API** (`/api/crm/visit-plans`, before `/:id`): `GET /:id/progress` (visibility as the plan:
+  members only their own, else 404) → per line planned, held, heldCapped, upcoming, notClosed,
+  overPlan, completion and the meeting ids behind each number; `unplanned`; `totals`; and
+  `meetings` (title, start, status of those ids). `GET /progress?ids=` → `{ progress: [{ planId,
+  totals }] }` for the list (others' plans left out for members). `GET /report?periodType=
+  &periodStart=&salespersonUserId=&companyId=` (owners and admins; 403 for members) → one row per
+  salesperson with a plan for the period plus anyone credited with held visits there without one
+  (`planId: null`, all unplanned), and `totals` (Σ capped / Σ planned again). With `companyId`
+  each row is only that customer, so it shows how often it was visited across salespeople.
+  `GET /progress-summary?periodType=&periodStart=[&salespersonUserId=|&all=1][&companyId=]` sums
+  the plans of the period for the Overview card (members always get their own, whatever they ask)
+  and, with `companyId`, for the company card. A missing `periodStart` means the current period
+  on the workspace clock; one that doesn't start a period is 400.
+- **Live**: the store's `s.visitRev` goes up on every `meeting` and `visit_plan` hint (this tab's own
+  included) and on resync; `useVisitProgress(key, load)` (`store/useVisitProgress.ts`) reloads the
+  numbers on screen 400 ms later, so marking a visit held updates every viewer without a reload.
+- **UI**: the list shows held (capped, "+N" over plan) and completion with its pace colour; the plan
+  page shows per customer held / upcoming / not closed (each number opens the meetings behind it,
+  with "Open in Calendar"), "+N over plan", totals, completion, "Unplanned visits", and "Export
+  CSV" for owners and admins. **Reports** (`/reports/visit-plans`, sidebar item after Products for
+  owners and admins; members are sent to `/`) has the tab "Visit-plan completion": filters plan
+  period (month/quarter and period), salesperson and customer in the URL, the table per spec 9.2,
+  counts linking to the Calendar table (`view=table`, `from`/`to` = the period's days, `user`,
+  `company`, `type=visit`, `status=held|planned`, `notClosed=1`; upcoming starts from today), plan
+  links, and CSV export (`lib/csv.ts`: BOM, formula guard). The Calendar's `user` filter is
+  "organizer or participant", so a shared visit credited to one salesperson can also show in the
+  other's list there. Overview has a "Visit-plan progress" card with its own month/quarter
+  selector (members: their own, "Open my plan"; owners and admins: the team or one salesperson,
+  "Open the report" with the same choice). The company page's Meetings card says "Visits this
+  month: held / planned" (held uncapped) when the company is in a plan of this month, summed over
+  every plan the viewer can see (all for owners and admins, their own for members).
+- **Daily digest**: `DigestService` counts the member's plans whose period contains today (month
+  and quarter) with `progressOfPlans` and adds "Visit plan progress": "Visits planned this period
+  (October 2026): N of M held" (N = held counted toward the plan). The section never makes the
+  digest go out on its own.
 
 ## Working together: live updates, conflicts, change history
 
