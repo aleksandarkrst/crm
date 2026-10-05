@@ -620,3 +620,28 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
   .ext-preview-head dd { margin-bottom: 6px; }
   .ext-preview-body { height: 300px; }
 }
+
+/* ---- calendar quick create, meeting page editing (CD-212) ---- */
+.cal-draft { z-index: 4; cursor: grab; touch-action: none; box-shadow: var(--shadow-pop); outline: 2px solid var(--mt); outline-offset: -1px; }
+.cal-draft .cal-block-title { font-weight: 500; }
+.cal-draft .cal-resize { height: 10px; }
+.cal-draft .cal-resize::after { content: ''; position: absolute; left: 50%; bottom: 2px; width: 18px; margin-left: -9px; height: 3px; border-radius: 2px; background: var(--mt); opacity: 0.7; }
+.cal-block.can-drag .cal-resize:hover { background: linear-gradient(transparent, rgba(13, 36, 28, 0.14)); }
+.cal-cell.drafting { background: var(--brand-soft); }
+.cal-quick { position: fixed; z-index: 44; width: 340px; max-width: calc(100vw - 16px); display: flex; flex-direction: column; gap: 10px; padding: 14px; background: var(--white); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-pop); animation: dcFade .14s ease-out both; }
+.cal-quick-head { display: flex; align-items: center; gap: 8px; }
+.cal-quick-title { flex: 1; min-width: 0; border: 0; border-bottom: 2px solid var(--brand); background: transparent; font: inherit; font-size: 17px; font-weight: 500; color: var(--ink); padding: 4px 2px; outline: none; }
+.cal-quick-types { display: flex; gap: 4px; flex-wrap: wrap; }
+.cal-quick-types .cal-pill { padding: 5px 9px; font-size: 12px; }
+.cal-quick-when { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; color: var(--text-2); }
+.cal-quick-when .form-input { padding: 7px 8px; }
+.cal-quick-when input[type='date'] { flex: 1 1 130px; }
+.cal-quick-when input[type='time'] { flex: 0 1 96px; }
+.cal-quick-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+.meeting-field-when { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; flex: 1; }
+.meeting-field-when .ghost { width: auto; flex: 0 1 auto; padding: 6px 6px; }
+.meeting-field-link { font-size: 12px; white-space: nowrap; color: var(--brand); }
+.meeting-title-input { min-width: 0; }
+.meeting-agenda-input { width: 100%; min-height: 84px; resize: vertical; line-height: 1.5; font-family: inherit; }
+.icon-row > select.ghost, .icon-row > input.ghost { flex: 1; min-width: 0; }
+.icon-row > select.ghost:disabled, .icon-row input.ghost:disabled { opacity: 1; color: var(--ink); cursor: default; background: transparent; }

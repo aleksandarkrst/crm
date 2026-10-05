@@ -110,6 +110,8 @@ export function VisitPlan() {
   const plan = s.visitPlans.find((p) => p.id === id);
   const { data: progress } = useVisitProgress(plan ? 'plan:' + plan.id : null, () => crmApi.visitPlanProgress(id));
   if (!plan) return <Navigate to={paths.visitPlans} replace />;
+  // Plans are monthly (CD-212): a quarterly plan saved before stays readable, not changeable.
+  const editable = canManage && plan.periodType === 'month';
   const tz = s.workspace.timezone;
   const lineOf = (companyId: string) => progress?.lines.find((l) => l.companyId === companyId);
   const totals = progress?.totals;
@@ -188,8 +190,7 @@ export function VisitPlan() {
   const copyToNext = () =>
     setCopying({
       salespersonUserId: plan.salespersonUserId,
-      periodType: plan.periodType,
-      periodStart: shiftPeriod(plan.periodType, plan.periodStart, 1),
+      periodStart: shiftPeriod('month', plan.periodStart, 1),
       note: plan.note ?? '',
       lines: plan.lines.map((l) => ({ companyId: l.companyId, plannedVisits: String(l.plannedVisits) })),
     });
@@ -226,15 +227,22 @@ export function VisitPlan() {
                 <button type="button" className="btn btn-secondary" data-testid="visit-plan-export" disabled={!progress} onClick={exportCsv}>
                   Export CSV
                 </button>
-                <button type="button" className="btn btn-secondary" data-testid="visit-plan-copy-next" onClick={copyToNext}>
-                  Copy to next period
-                </button>
+                {editable && (
+                  <button type="button" className="btn btn-secondary" data-testid="visit-plan-copy-next" onClick={copyToNext}>
+                    Copy to next period
+                  </button>
+                )}
                 <button type="button" className="btn btn-secondary" data-testid="visit-plan-delete" style={{ color: 'var(--danger)' }} onClick={onDelete}>
                   Delete
                 </button>
               </div>
             )}
           </div>
+          {plan.periodType === 'quarter' && (
+            <div className="hint-box" data-testid="visit-plan-quarterly" style={{ marginTop: 12 }}>
+              Visit plans are monthly now: a quarter adds up its three monthly plans. This quarterly plan is kept for reference and can't be changed.
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
@@ -260,7 +268,7 @@ export function VisitPlan() {
                         {l.companyName}
                       </Link>
                       <span className="vp-cell" data-label="Planned">
-                        {canManage ? (
+                        {editable ? (
                           <PlannedInput company={l.companyName} value={l.plannedVisits} onChange={(n) => setVisits(l.companyId, n)} />
                         ) : (
                           <span data-testid="visit-plan-planned" style={{ fontSize: 13.5 }}>
@@ -304,7 +312,7 @@ export function VisitPlan() {
                         >
                           Schedule visit
                         </button>
-                        {canManage && <RemoveButton title={`Remove ${l.companyName}`} onClick={() => removeLine(l.companyId, l.companyName)} />}
+                        {editable && <RemoveButton title={`Remove ${l.companyName}`} onClick={() => removeLine(l.companyId, l.companyName)} />}
                       </span>
                     </div>
                     {drillFor(l.companyId)}
@@ -334,7 +342,7 @@ export function VisitPlan() {
                 </span>
                 <span />
               </div>
-              {canManage && (
+              {editable && (
                 <div className="vp-plan-add" data-testid="visit-plan-add">
                   <Picker
                     picker={picker}
@@ -386,7 +394,7 @@ export function VisitPlan() {
           <div style={{ flex: '1 1 320px', maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
             <div className="card card-pad">
               <div className="card-title">Note</div>
-              {canManage ? (
+              {editable ? (
                 <textarea
                   className="form-input"
                   data-testid="visit-plan-note"
