@@ -111,6 +111,34 @@ const fields = {
 export const CreateEmployee = z.object(fields).partial().required({ firstName: true, lastName: true, employmentStartDate: true });
 export type CreateEmployee = z.infer<typeof CreateEmployee>;
 
+/**
+ * One row of the employee import (CD-141, spec 8.4): the create rules, but every field optional
+ * (the import checks names, the start date warning, the IBAN, department, team and manager itself).
+ */
+export const ImportedEmployee = z
+  .object(fields)
+  .pick({
+    firstName: true,
+    lastName: true,
+    workEmail: true,
+    employeeNumber: true,
+    jobTitle: true,
+    workPhone: true,
+    workLocation: true,
+    employmentStartDate: true,
+    employmentType: true,
+    weeklyHours: true,
+    dateOfBirth: true,
+    privateEmail: true,
+    privatePhone: true,
+    addressStreet: true,
+    addressPostalCode: true,
+    addressCity: true,
+    bankName: true,
+  })
+  .partial();
+export type ImportedEmployee = z.infer<typeof ImportedEmployee>;
+
 /** PATCH /api/people/employees/:id: any subset; who may change which field is checked per caller. */
 export const UpdateEmployee = nonEmptyPatch(z.object(fields).partial());
 export type UpdateEmployee = z.infer<typeof UpdateEmployee>;

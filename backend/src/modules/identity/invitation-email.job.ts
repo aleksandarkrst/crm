@@ -7,6 +7,7 @@ import { invitations, tenants, users } from '../../shared/database/schema';
 import type { JobPayloads } from '../../shared/events/job-types';
 import { type JobAttempt, JobsService } from '../../shared/events/jobs.service';
 import { invitationEmail, inviteLink, inviteLinkBox } from './invitation-email';
+import { EmployeeInviteJob } from './employee-invite.job';
 import { SignupEmailJob } from './signup-email.job';
 
 /**
@@ -98,5 +99,5 @@ export class InvitationEmailJob implements OnApplicationBootstrap {
 }
 
 /** Registered in the worker (WorkerModule). */
-@Module({ providers: [InvitationEmailJob, SignupEmailJob] })
+@Module({ providers: [InvitationEmailJob, SignupEmailJob, EmployeeInviteJob] })
 export class IdentityWorkerModule {}

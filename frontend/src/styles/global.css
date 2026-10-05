@@ -866,3 +866,11 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
   .dtp-candidate { flex-wrap: wrap; }
   .dtp-candidate .dtp-meta { flex-basis: 100%; padding-left: 26px; }
 }
+
+/* ---------------------------------------------------------------- import dialog (CD-64, CD-141) */
+.import-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.import-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 560px) {
+  .import-fields { grid-template-columns: 1fr; }
+  .import-summary { grid-template-columns: repeat(2, 1fr); }
+}

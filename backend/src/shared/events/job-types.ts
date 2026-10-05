@@ -50,6 +50,13 @@ export interface JobPayloads {
     changes: { account: 'iban' | 'fxIban'; kind: 'added' | 'changed' | 'removed'; masked: string }[];
   };
   /**
+   * Sent by people when an Admin imports employees with "Invite imported employees to Pultly"
+   * (CD-141, spec 8.6). Identity's worker invites each new employee that has a work email as a
+   * Member (invitation linked to the employee, `identity.invitation-email` queued), skipping those
+   * already members, invited, linked or inactive. Only while the actor is still an owner or admin.
+   */
+  'people.import-invite': { tenantId: string; actorUserId: string; employeeIds: string[] };
+  /**
    * Sent by people when an Admin gives an employee Administration or Payroll, or takes it away
    * (CD-142, spec 10.2). The people worker emails the employee (sign-in email if linked, else work
    * email) "Role granted" or "Role removed". Can't be turned off; no personal details.
@@ -86,6 +93,7 @@ export const JOB_NAMES = [
   'notifications.digest-tick',
   'notifications.daily-digest',
   'people.bank-account-changed-email',
+  'people.import-invite',
   'people.role-changed-email',
   'people.reporting-line-changed',
   'reporting.nightly',

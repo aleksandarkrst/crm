@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { XIcon } from '../components/ui';
+import { EmployeeImportDialog } from '../modals/ImportDialog';
 import { Screen } from '../components/Layout';
 import type { ApiEmployee, ApiEmployeeStatus } from '../lib/api';
 import { paths } from '../lib/paths';
@@ -40,7 +41,7 @@ const FILTER_PARAMS = ['q', 'dept', 'team', 'manager', 'scope', 'status', 'accou
 const toggle = <T,>(list: readonly T[], v: T): T[] => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 const employeesLabel = (n: number) => (n === 1 ? '1 employee' : `${n} employees`);
 
-type Dialog = { kind: 'org' } | { kind: 'manager' } | { kind: 'export'; selected: boolean } | { kind: 'move'; employee: ApiEmployee; target: DropTarget } | null;
+type Dialog = { kind: 'import' } | { kind: 'org' } | { kind: 'manager' } | { kind: 'export'; selected: boolean } | { kind: 'move'; employee: ApiEmployee; target: DropTarget } | null;
 
 /**
  * Org structure (CD-137, spec 5): the chart (by department or by reporting lines) and the list of
@@ -208,6 +209,11 @@ export function OrgStructure() {
           </span>
           <div className="org-actions">
             {/* Header buttons of the other lanes, by permission: "Add employee" (CD-140), "Import" (CD-141), "Departments & teams" (CD-138). */}
+            {hr && (
+              <button type="button" className="btn-plain" data-testid="employee-import" onClick={() => setDialog({ kind: 'import' })}>
+                Import
+              </button>
+            )}
             {hr && <DepartmentsPanelButton allowed />}
             {hr && tab === 'list' && (
               <button type="button" className="btn-plain" data-testid="org-export" disabled={!rows.length} onClick={() => setDialog({ kind: 'export', selected: false })}>
@@ -364,6 +370,7 @@ export function OrgStructure() {
           onSave={(managerId) => actions.bulkUpdate({ employeeIds: selectedRows.map((r) => r.id), managerId }, 'Manager set for {n}')}
         />
       )}
+      {dialog?.kind === 'import' && <EmployeeImportDialog onClose={() => setDialog(null)} onImported={() => void actions.load()} />}
       {dialog?.kind === 'export' && (
         <ExportDialog rows={dialog.selected ? selectedRows : rows} columns={columns} selected={dialog.selected} loadPersonal={actions.exportPersonal} onClose={() => setDialog(null)} onDone={(msg) => flash(msg)} />
       )}
