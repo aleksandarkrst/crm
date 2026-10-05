@@ -211,6 +211,13 @@
       "when": 1791159110783,
       "tag": "0029_meetings_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1791160446535,
+      "tag": "0030_meeting_ics_sequence",
+      "breakpoints": true
     }
   ]
 }

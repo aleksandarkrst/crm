@@ -8,7 +8,7 @@ import { Avatar, Modal, ModalHeader } from '../components/ui';
 import type { ApiMeeting, ApiMeetingParticipant } from '../lib/api';
 import { paths } from '../lib/paths';
 import { hasEmail, locationUrl } from '../store/meetings';
-import { initialsOf, memberName } from '../store/selectors';
+import { initialsOf, memberLabels, memberName } from '../store/selectors';
 import { useStore } from '../store/store';
 import { instantToZoned, spanLabel, timeLabel } from '../store/time';
 import { useMeeting } from '../store/useMeetings';
@@ -61,6 +61,7 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
   const tz = s.workspace.timezone;
   const [tab, setTab] = useState<Tab>('internal');
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [pickOrganizer, setPickOrganizer] = useState(false);
   const [menu, setMenu] = useState(false);
   const [busy, setBusy] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -198,7 +199,20 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
             </div>
             <div className="meeting-detail">
               <span className="meeting-detail-label">Organizer</span>
-              {m.organizerUserId ? <span>{memberName(s, m.organizerUserId, m.organizerName)}</span> : <span className="badge badge-warn">Organizer left</span>}
+              {m.organizerUserId ? (
+                <span>{memberName(s, m.organizerUserId, m.organizerName)}</span>
+              ) : (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span className="badge badge-warn" data-testid="meeting-organizer-left">
+                    Organizer left
+                  </span>
+                  {meetings.canDelete && m.status !== 'cancelled' && (
+                    <button type="button" className="btn btn-plain" data-testid="meeting-pick-organizer" style={{ padding: '4px 8px' }} onClick={() => setPickOrganizer(true)}>
+                      Pick new organizer
+                    </button>
+                  )}
+                </span>
+              )}
             </div>
           </Section>
           <Section title={`Internal participants (${internal.length})`} testId="meeting-internal-list">
@@ -234,12 +248,14 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
       </div>
 
       {cancelOpen && <CancelDialog m={m} onClose={() => setCancelOpen(false)} />}
+      {pickOrganizer && <OrganizerDialog m={m} onClose={() => setPickOrganizer(false)} />}
     </div>
   );
 }
 
 function Person({ p, label, external }: { p: ApiMeetingParticipant; label?: string; external?: boolean }) {
-  const name = p.deleted ? `${p.name} (deleted)` : p.name;
+  // A deleted contact, or a member who left the workspace (they stay on past meetings, CD-131).
+  const name = p.deleted ? `${p.name} (${p.kind === 'internal' ? 'former member' : 'deleted'})` : p.name;
   const body = (
     <>
       <Avatar initials={initialsOf(p.name)} size={26} font={10} />
@@ -256,6 +272,56 @@ function Person({ p, label, external }: { p: ApiMeetingParticipant; label?: stri
       </Link>
     );
   return <div className="meeting-person-row">{body}</div>;
+}
+
+/**
+ * The organizer left the workspace (CD-131, spec 5.3): an owner or admin picks a member to take
+ * the meeting over. They join it as an internal participant (and get the invitation email).
+ */
+function OrganizerDialog({ m, onClose }: { m: ApiMeeting; onClose: () => void }) {
+  const { s, meetings, flash } = useStore();
+  const members = [...memberLabels(s)].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  const [userId, setUserId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState('');
+  const save = async () => {
+    setBusy(true);
+    try {
+      await meetings.update(m.id, { organizerUserId: userId }, m.updatedAt);
+      flash(`${members.find((x) => x.id === userId)?.name ?? 'The new organizer'} now organizes ${m.title}`);
+      onClose();
+    } catch (err) {
+      setFailure(err instanceof Error ? err.message : String(err));
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal maxWidth={440} onBackdrop={onClose}>
+      <ModalHeader title="Pick a new organizer" sub={`${m.title}. Its organizer left the workspace.`} />
+      <label className="form-label">
+        Organizer
+        <select className="form-input" data-testid="new-organizer" value={userId} onChange={(e) => setUserId(e.target.value)}>
+          <option value="" disabled>
+            Pick a member…
+          </option>
+          {members.map((x) => (
+            <option key={x.id} value={x.id}>
+              {x.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {failure && <div className="meeting-error-box">Not saved: {failure}</div>}
+      <div className="modal-actions">
+        <button type="button" className="btn btn-secondary" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className="btn btn-primary" data-testid="new-organizer-save" disabled={!userId || busy} onClick={() => void save()}>
+          {busy ? 'Saving…' : 'Save organizer'}
+        </button>
+      </div>
+    </Modal>
+  );
 }
 
 /** Cancel with an optional reason (spec 4.3). */
