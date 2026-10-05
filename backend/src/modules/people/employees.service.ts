@@ -18,7 +18,7 @@ import { BANK_FIELDS, editableFields, type EmployeeField, EMPLOYMENT_FIELDS, lis
 import { domesticFromIban, formatIban, maskIban, type ParsedAccount, parseBankAccount, shortMaskIban } from './iban';
 import { PeopleAccess } from './people-access';
 import { PeopleHistoryService } from './people-history.service';
-import { assertValidManager, lockReportingLines } from './reporting-lines';
+import { assertValidManager, lockReportingLines, queueManagerEmails } from './reporting-lines';
 import { searchPattern } from './search';
 
 const managerRow = alias(employees, 'manager');
@@ -316,6 +316,7 @@ export class EmployeesService {
         const changes = await this.savePersonal(tx, ctx, id, input, undefined);
         await this.audit.record(tx, ctx, { action: 'employee.created', entityType: 'employee', entityId: id, data: { fields: sentFields(input) } });
         if (changes.length) await this.jobs.send('people.bank-account-changed-email', { tenantId: ctx.tenantId, employeeId: id, actorUserId: ctx.userId, changes }, tx);
+        if (input.managerId) await queueManagerEmails(this.jobs, tx, ctx.tenantId, ctx.userId, [{ employeeId: id, oldManagerId: null, newManagerId: input.managerId }]);
         return this.cardIn(tx, ctx, id);
       })
       .catch(mapDbError);
@@ -372,6 +373,9 @@ export class EmployeesService {
         }
         await this.audit.record(tx, ctx, { action: 'employee.updated', entityType: 'employee', entityId: id, data: { fields: sent } });
         if (changes.length) await this.jobs.send('people.bank-account-changed-email', { tenantId: ctx.tenantId, employeeId: id, actorUserId: ctx.userId, changes }, tx);
+        if (work.managerId !== undefined) {
+          await queueManagerEmails(this.jobs, tx, ctx.tenantId, ctx.userId, [{ employeeId: id, oldManagerId: current.managerId, newManagerId: work.managerId }]);
+        }
         return this.cardIn(tx, ctx, id);
       })
       .catch(mapDbError);
