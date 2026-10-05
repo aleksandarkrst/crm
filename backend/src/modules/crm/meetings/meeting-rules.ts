@@ -1,4 +1,4 @@
-import type { MeetingStatus, MembershipRole } from '../../../shared/database/schema';
+import type { MeetingNextStep, MeetingStatus, MembershipRole } from '../../../shared/database/schema';
 
 /**
  * The rules of meetings (spec 4.3 and 10.1) as pure functions, so they are unit-tested on their
@@ -48,4 +48,26 @@ export function meetingChangeError(change: MeetingChange, meeting: { status: Mee
     case 'restore':
       return status === 'cancelled' ? null : 'Only a cancelled meeting can be restored.';
   }
+}
+
+/** A next step as the browser sends it: the task link is the server's to set. */
+export type NextStepInput = Omit<MeetingNextStep, 'taskId'>;
+
+/** A next step with its keys in one order, so two lists compare by value (JSON) whatever order jsonb stored them in. */
+export const canonicalStep = (s: MeetingNextStep): MeetingNextStep => ({ id: s.id, text: s.text, ownerUserId: s.ownerUserId ?? null, dueDate: s.dueDate ?? null, taskId: s.taskId ?? null });
+
+/**
+ * The next steps after a save of the internal minutes (CD-132): the list sent replaces the list,
+ * in its order, but each step keeps the task created from it (matched by step id). A step that
+ * is removed takes its link along; the task itself stays on the deal.
+ */
+export function mergeNextSteps(sent: readonly NextStepInput[], existing: readonly MeetingNextStep[]): MeetingNextStep[] {
+  const tasks = new Map(existing.map((s) => [s.id, s.taskId ?? null]));
+  return sent.map((s) => canonicalStep({ ...s, taskId: tasks.get(s.id) ?? null }));
+}
+
+/** The owners a save sets anew (new steps, or another owner): they must be members. Unchanged ones may have left since. */
+export function newStepOwners(next: readonly MeetingNextStep[], existing: readonly MeetingNextStep[]): string[] {
+  const before = new Map(existing.map((s) => [s.id, s.ownerUserId ?? null]));
+  return [...new Set(next.flatMap((s) => (s.ownerUserId && before.get(s.id) !== s.ownerUserId ? [s.ownerUserId] : [])))];
 }
