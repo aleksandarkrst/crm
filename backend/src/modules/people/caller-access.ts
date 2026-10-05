@@ -1,4 +1,5 @@
 import type { AssignedRole, MembershipRole } from '../../shared/database/schema';
+import type { PermissionRelation } from './permissions';
 
 /**
  * The five functional roles (spec 9.1). Roles are additive. Employee: has an employee record.
@@ -19,6 +20,10 @@ export interface AccessData {
   directReportIds: readonly string[];
   /** Active employees below the caller at any depth (direct reports included). */
   reportIds: readonly string[];
+  /** The member accounts (user ids) of the direct reports that have one: CRM data is keyed by user. */
+  directReportUserIds?: readonly string[];
+  /** The member accounts of all reports that have one (direct ones included). */
+  reportUserIds?: readonly string[];
 }
 
 /**
@@ -34,6 +39,10 @@ export class CallerAccess {
   readonly roles: ReadonlySet<FunctionalRole>;
   readonly directReportIds: ReadonlySet<string>;
   readonly reportIds: ReadonlySet<string>;
+  /** User ids of the direct reports with an account (visit plans and other CRM data are per member). */
+  readonly directReportUserIds: ReadonlySet<string>;
+  /** User ids of all reports with an account, direct ones included. */
+  readonly reportUserIds: ReadonlySet<string>;
 
   constructor(data: AccessData) {
     this.tenantId = data.tenantId;
@@ -41,6 +50,8 @@ export class CallerAccess {
     this.employeeId = data.employeeId;
     this.directReportIds = new Set(data.directReportIds);
     this.reportIds = new Set([...data.reportIds, ...data.directReportIds]);
+    this.directReportUserIds = new Set(data.directReportUserIds ?? []);
+    this.reportUserIds = new Set([...(data.reportUserIds ?? []), ...this.directReportUserIds]);
     const roles = new Set<FunctionalRole>();
     if (data.employeeId) {
       roles.add('employee');
@@ -49,6 +60,19 @@ export class CallerAccess {
     }
     if (data.workspaceRole === 'owner' || data.workspaceRole === 'admin') roles.add('admin');
     this.roles = roles;
+  }
+
+  /** Who a person is to the caller, for the permission matrix (permissions.ts). */
+  relationTo(employeeId: string): PermissionRelation {
+    if (this.isSelf(employeeId)) return 'self';
+    if (this.isDirectReport(employeeId)) return 'direct';
+    return this.isReport(employeeId) ? 'indirect' : 'other';
+  }
+  /** The same for a member, by user id (CRM data such as visit plans is keyed by member). */
+  relationToUser(userId: string): PermissionRelation {
+    if (userId === this.userId) return 'self';
+    if (this.directReportUserIds.has(userId)) return 'direct';
+    return this.reportUserIds.has(userId) ? 'indirect' : 'other';
   }
 
   /** Workspace owner or admin: everything, including invitations, linking, roles and deleting. */
@@ -112,6 +136,8 @@ export class CallerAccess {
       roles: FUNCTIONAL_ROLES.filter((r) => this.roles.has(r)),
       directReportIds: [...this.directReportIds],
       reportIds: [...this.reportIds],
+      directReportUserIds: [...this.directReportUserIds],
+      reportUserIds: [...this.reportUserIds],
     };
   }
 }
