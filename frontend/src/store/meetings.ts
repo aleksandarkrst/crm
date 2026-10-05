@@ -11,8 +11,23 @@
  * Live updates (CD-20): a `meeting` change hint names meeting ids; they are read again by `ids=`
  * and merged the same way (a meeting the API no longer returns was deleted). A hint without ids
  * re-runs every list on screen.
+ *
+ * Internal minutes (CD-132) are read per meeting into `s.meetingMinutes` when its minutes tab
+ * opens. Their changes report the meeting (live hint `meeting`); its `minutesUpdatedAt` then
+ * tells the open tab to read them again.
  */
-import { type ApiMeeting, ApiError, type ApiRole, crmApi, type MeetingInput, type MeetingQuery, type MeetingStatus, type MeetingType } from '../lib/api';
+import {
+  type ApiInternalMinutes,
+  type ApiMeeting,
+  ApiError,
+  type ApiRole,
+  crmApi,
+  type InternalMinutesInput,
+  type MeetingInput,
+  type MeetingQuery,
+  type MeetingStatus,
+  type MeetingType,
+} from '../lib/api';
 import type { LiveEvent } from './live';
 import type { State } from './types';
 
@@ -144,6 +159,8 @@ interface Ctx {
   conflictText: (err: unknown) => string | null;
   /** The deal's timeline (and last contact) changed on the server. */
   dealChanged: (dealId: string) => void;
+  /** A task was added to the deal (a meeting's next step, CD-132): its tasks and timeline. */
+  tasksChanged: (dealId: string) => void;
 }
 
 /** Puts fresh meetings in the cache and in (or out of) every loaded list; `gone` were deleted. */
@@ -343,6 +360,52 @@ export function meetingActions(ctx: Ctx) {
     return true;
   };
 
+  // ------------------------------------------------------------ internal minutes (CD-132)
+  const minutesLoaded = (id: string, minutes: ApiInternalMinutes) => {
+    set((s) => ({ meetingMinutes: { ...s.meetingMinutes, [id]: minutes } }));
+    // The meeting's "Recorded"/"Missing" and version follow at once (lists, the calendar table).
+    const m = cur().meetings[id];
+    const internalMinutes = minutes.summary.trim() ? 'recorded' : 'missing';
+    if (m && (m.minutesUpdatedAt !== minutes.updatedAt || m.internalMinutes !== internalMinutes)) put([{ ...m, internalMinutes, minutesUpdatedAt: minutes.updatedAt }]);
+  };
+  /** Reads a meeting's internal minutes; throws when they can't be read. */
+  const loadMinutes = async (id: string): Promise<ApiInternalMinutes> => {
+    const minutes = await crmApi.meetings.minutes(id);
+    minutesLoaded(id, minutes);
+    return minutes;
+  };
+  /**
+   * Saves parts of the minutes, based on `version` (what the editor started from). Returns the
+   * saved minutes; `{ conflict }` when someone else changed the same part (the message is shown,
+   * and `conflict` is the minutes read again, null if that failed); null for another failure (shown).
+   */
+  const saveMinutes = async (id: string, input: InternalMinutesInput, version: string | null): Promise<{ saved: ApiInternalMinutes } | { conflict: ApiInternalMinutes | null } | null> => {
+    try {
+      const saved = await crmApi.meetings.saveMinutes(id, input, version);
+      minutesLoaded(id, saved);
+      return { saved };
+    } catch (err) {
+      const conflict = ctx.conflictText(err);
+      flash(conflict ?? `Not saved: the minutes (${ctx.errText(err)}).`, conflict ? 10_000 : 7000);
+      if (!conflict) return null;
+      return { conflict: await loadMinutes(id).catch(() => null) };
+    }
+  };
+  /** "Create task" on a next step: a task on the meeting's deal. null (after saying why) when refused. */
+  const createStepTask = async (id: string, stepId: string) => {
+    try {
+      const res = await crmApi.meetings.stepTask(id, stepId);
+      minutesLoaded(id, res.minutes);
+      ctx.tasksChanged(res.task.dealId);
+      flash('Task created on the deal');
+      return res;
+    } catch (err) {
+      flash('Task not created: ' + ctx.errText(err), 7000);
+      if (err instanceof ApiError && err.status === 409) void loadMinutes(id).catch(() => undefined);
+      return null;
+    }
+  };
+
   /**
    * Other meetings of these members that overlap the time (the dialog's warning, spec 4.4). It
    * never blocks saving.
@@ -374,6 +437,9 @@ export function meetingActions(ctx: Ctx) {
     restore: (id: string) => status(id, () => crmApi.meetings.restore(id), 'Meeting restored'),
     remove,
     findOverlaps,
+    loadMinutes,
+    saveMinutes,
+    createStepTask,
     /** Opens the New meeting dialog (prefilled), or the dialog editing a meeting (`seed.id`). */
     openDialog: (seed: MeetingDialogSeed = {}) => set({ meetingDialog: seed }),
     closeDialog: () => set({ meetingDialog: null }),

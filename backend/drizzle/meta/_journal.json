@@ -232,6 +232,20 @@
       "when": 1791164325422,
       "tag": "0032_visit_plans_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1791165328098,
+      "tag": "0033_meeting_minutes",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1791165331012,
+      "tag": "0034_meeting_minutes_rls",
+      "breakpoints": true
     }
   ]
 }

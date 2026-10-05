@@ -696,7 +696,10 @@ export interface ApiMeeting {
   /** Planned and ended more than 24 hours ago. */
   notClosed: boolean;
   participants: ApiMeetingParticipant[];
+  /** Recorded once the internal minutes have a summary (CD-132). */
   internalMinutes: 'missing' | 'recorded';
+  /** The minutes' version, null before anyone wrote them: an open minutes tab reads them again when it changes. */
+  minutesUpdatedAt: string | null;
   externalDelivery: 'not_sent' | 'queued' | 'sent' | 'failed';
   createdByUserId: string | null;
   createdAt: string;
@@ -716,6 +719,30 @@ export interface MeetingInput {
   /** Replace the sets (the organizer is always kept). */
   internalUserIds?: string[];
   externalContactIds?: string[];
+}
+/** A next step of the internal minutes (CD-132); `taskId` is the deal task made from it. */
+export interface ApiMeetingNextStep {
+  id: string;
+  text: string;
+  ownerUserId: string | null;
+  /** yyyy-mm-dd */
+  dueDate: string | null;
+  taskId: string | null;
+}
+/** The internal minutes of a meeting (CD-132): empty strings and no steps before anyone wrote them. */
+export interface ApiInternalMinutes {
+  summary: string;
+  agreements: string;
+  nextSteps: ApiMeetingNextStep[];
+  /** The version (If-Match); null before the first save. */
+  updatedAt: string | null;
+  updatedByName: string | null;
+}
+/** The parts sent replace the stored ones; the steps' task links stay as the server has them. */
+export interface InternalMinutesInput {
+  summary?: string;
+  agreements?: string;
+  nextSteps?: Omit<ApiMeetingNextStep, 'taskId'>[];
 }
 /** GET /crm/meetings: meetings overlapping [from, to), or by record or ids. */
 export interface MeetingQuery {
@@ -873,5 +900,11 @@ export const crmApi = {
     undoHeld: (id: string) => api<ApiMeeting>(`/crm/meetings/${id}/undo-held`, { method: 'POST' }),
     restore: (id: string) => api<ApiMeeting>(`/crm/meetings/${id}/restore`, { method: 'POST' }),
     delete: (id: string) => api(`/crm/meetings/${id}`, { method: 'DELETE' }),
+    /** Internal minutes (CD-132). */
+    minutes: (id: string) => api<ApiInternalMinutes>(`/crm/meetings/${id}/minutes/internal`),
+    /** `version` is the minutes' updatedAt; before the first save, the epoch (so a save someone made meanwhile conflicts). */
+    saveMinutes: (id: string, input: InternalMinutesInput, version: string | null) =>
+      api<ApiInternalMinutes>(`/crm/meetings/${id}/minutes/internal`, { method: 'PUT', json: input, headers: ifMatch(version ?? '1970-01-01T00:00:00.000Z') }),
+    stepTask: (id: string, stepId: string) => api<{ minutes: ApiInternalMinutes; task: ApiDealTask }>(`/crm/meetings/${id}/minutes/next-steps/${stepId}/task`, { method: 'POST' }),
   },
 };

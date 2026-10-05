@@ -152,6 +152,7 @@ export function initialState(): State {
     stageHistory: null,
     meetings: {},
     meetingLists: {},
+    meetingMinutes: {},
     meetingDialog: null,
     visitRev: 0,
   };

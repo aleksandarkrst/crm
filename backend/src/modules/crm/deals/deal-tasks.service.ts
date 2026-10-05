@@ -107,22 +107,23 @@ export class DealTasksService {
    * dialog: it gets a title, owner, due date and channel, and its creation goes on the timeline.
    */
   createExtra(ctx: TenantContext, dealId: string, input: CreateExtraTask) {
+    return this.database.withTenant(ctx.tenantId, (tx) => this.insertExtra(tx, ctx, dealId, input)).catch(mapDbError);
+  }
+
+  /** createExtra inside the caller's transaction (a meeting's next step becomes a task, CD-132). */
+  async insertExtra(tx: Tx, ctx: TenantContext, dealId: string, input: CreateExtraTask) {
     const { done, ...rest } = input;
-    return this.database
-      .withTenant(ctx.tenantId, async (tx) => {
-        if (rest.blocksAdvance === false && !rest.label) throw new BadRequestException('A task needs a title');
-        const owner = rest.assigneeUserId ? await assertMember(tx, ctx, rest.assigneeUserId) : null;
-        const [row] = await tx
-          .insert(dealTasks)
-          .values({ ...rest, ...doneFields(ctx, done), tenantId: ctx.tenantId, dealId, offPlaybook: true })
-          .returning();
-        if (rest.blocksAdvance === false) {
-          const detail = [rest.dueDate && 'Due ' + rest.dueDate, owner && 'Owner ' + owner, rest.note].filter(Boolean).join(' · ');
-          await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId, actorUserId: ctx.userId, channel: 'RS', title: 'Task added: ' + rest.label, detail: detail || null });
-        }
-        return row!;
-      })
-      .catch(mapDbError);
+    if (rest.blocksAdvance === false && !rest.label) throw new BadRequestException('A task needs a title');
+    const owner = rest.assigneeUserId ? await assertMember(tx, ctx, rest.assigneeUserId) : null;
+    const [row] = await tx
+      .insert(dealTasks)
+      .values({ ...rest, ...doneFields(ctx, done), tenantId: ctx.tenantId, dealId, offPlaybook: true })
+      .returning();
+    if (rest.blocksAdvance === false) {
+      const detail = [rest.dueDate && 'Due ' + rest.dueDate, owner && 'Owner ' + owner, rest.note].filter(Boolean).join(' · ');
+      await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId, actorUserId: ctx.userId, channel: 'RS', title: 'Task added: ' + rest.label, detail: detail || null });
+    }
+    return row!;
   }
 
   update(ctx: TenantContext, id: string, input: UpdateTask) {

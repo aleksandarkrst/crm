@@ -1,9 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../shared/database/database.service';
-import { companies, deals, dealTasks, funnelStages, meetingParticipants, meetings, memberships, tenants, users, visitPlans } from '../../shared/database/schema';
+import { companies, deals, dealTasks, funnelStages, meetingMinutes, meetingParticipants, meetings, memberships, tenants, users, visitPlans } from '../../shared/database/schema';
 import { progressOfPlans, visitPlanPeriodLabel } from '../crm';
-import { buildDigest, type Digest, NOT_CLOSED_AFTER_MS, zonedNow } from './digest-content';
+import { buildDigest, type Digest, MINUTES_REMINDER_MS, NOT_CLOSED_AFTER_MS, zonedNow } from './digest-content';
 
 /**
  * Loads a member's daily digest from the CRM tables (read only), inside withTenant so RLS applies:
@@ -12,7 +12,8 @@ import { buildDigest, type Digest, NOT_CLOSED_AFTER_MS, zonedNow } from './diges
  * - their open deals (not won, not lost) without an open task or a planned meeting still ahead:
  *   the "No next step" flag;
  * - meetings (CD-130) starting today that they organize or take part in (planned or held), and
- *   the planned meetings they organize that ended more than 24 hours ago ("Not closed");
+ *   the planned meetings they organize that ended more than 24 hours ago ("Not closed"), and the
+ *   held ones they organize that started in the last 7 days without a summary ("Minutes missing", CD-132);
  * - their visit plans for the current month and quarter, counted as the plan page counts them
  *   (CD-135, "Visits planned this period: N of M held").
  * "Today" is the workspace's date (its time zone), as on the Today screen.
@@ -109,6 +110,21 @@ export class DigestService {
         .where(and(eq(meetings.organizerUserId, userId), eq(meetings.status, 'planned'), lt(meetings.endsAt, new Date(now.getTime() - NOT_CLOSED_AFTER_MS))))
         .orderBy(asc(meetings.startsAt))
         .limit(100);
+      const minutesMissing = await tx
+        .select(meetingRow)
+        .from(meetings)
+        .innerJoin(companies, eq(companies.id, meetings.companyId))
+        .where(
+          and(
+            eq(meetings.organizerUserId, userId),
+            eq(meetings.status, 'held'),
+            gte(meetings.startsAt, new Date(now.getTime() - MINUTES_REMINDER_MS)),
+            lte(meetings.startsAt, now),
+            sql`not exists (select 1 from ${meetingMinutes} mm where mm.meeting_id = ${meetings.id} and btrim(coalesce(mm.summary, '')) <> '')`,
+          ),
+        )
+        .orderBy(asc(meetings.startsAt))
+        .limit(100);
 
       const plans = await tx
         .select()
@@ -122,7 +138,7 @@ export class DigestService {
       });
 
       const iso = (rows: typeof meetingsToday) => rows.map((m) => ({ ...m, startsAt: m.startsAt.toISOString(), endsAt: m.endsAt.toISOString() }));
-      return buildDigest(today, tasks, stalled, { today: iso(meetingsToday), notClosed: iso(notClosed), timeZone, now, visitPlans: planRows });
+      return buildDigest(today, tasks, stalled, { today: iso(meetingsToday), notClosed: iso(notClosed), minutesMissing: iso(minutesMissing), timeZone, now, visitPlans: planRows });
     });
   }
 }

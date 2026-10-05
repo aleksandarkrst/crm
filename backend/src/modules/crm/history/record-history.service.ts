@@ -60,6 +60,10 @@ const FIELD_NAMES: Record<string, string> = {
   organizerUserId: 'the organizer',
   status: 'the status',
   cancelReason: 'the cancellation reason',
+  // meeting minutes (CD-132)
+  summary: 'the summary',
+  agreements: 'the agreements',
+  nextSteps: 'the next steps',
   // visit plans (CD-134)
   salespersonUserId: 'the salesperson',
   periodType: 'the period type',
@@ -277,6 +281,8 @@ function sameValue(field: string, current: Record<string, unknown>, patch: Recor
   const a = current[field];
   const b = patch[field];
   if (field === 'amount') return Number(a) === Number(b);
+  // Lists and objects (a meeting's next steps) compare by value.
+  if ((a !== null && typeof a === 'object') || (b !== null && typeof b === 'object')) return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
   return (a ?? null) === (b ?? null) || String(a ?? '') === String(b ?? '');
 }
 

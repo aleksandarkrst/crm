@@ -48,6 +48,10 @@ const FIELD_LABELS: Record<string, string> = {
   status: 'Status',
   cancelReason: 'Cancellation reason',
   participants: 'Participants',
+  // Internal minutes (CD-132)
+  summary: 'Minutes summary',
+  agreements: 'Agreements',
+  nextSteps: 'Next steps',
   // Visit plans (CD-134)
   salespersonUserId: 'Salesperson',
   periodType: 'Period type',
@@ -140,6 +144,7 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
     if (field === 'discountKind') return v === 'percent' ? 'percent' : 'amount';
     if (field === 'discounts' && Array.isArray(v)) return `${v.length} discount${v.length === 1 ? '' : 's'}`;
     if (field === 'installments' && Array.isArray(v)) return `${v.length} installment${v.length === 1 ? '' : 's'}`;
+    if (field === 'nextSteps' && Array.isArray(v)) return v.length ? `${v.length} step${v.length === 1 ? '' : 's'}` : empty;
     if (typeof v === 'string') return `“${clip(v)}”`;
     return String(v);
   };

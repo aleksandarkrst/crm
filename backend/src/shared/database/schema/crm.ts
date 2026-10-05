@@ -663,6 +663,46 @@ export const meetingParticipants = pgTable(
   ],
 );
 
+/** A next step of the internal minutes (CD-132). `taskId` is the deal task created from it, if any. */
+export interface MeetingNextStep {
+  id: string;
+  text: string;
+  ownerUserId: string | null;
+  /** yyyy-mm-dd */
+  dueDate: string | null;
+  taskId: string | null;
+}
+
+/**
+ * The minutes of a meeting, one row per meeting, created when someone first writes them. The
+ * internal part (CD-132: summary, agreements, next steps) stays in the team; the external part
+ * (CD-133: subject and body of the email to the customer) is a separate text and never copied
+ * from the internal one automatically. updated_at is the If-Match version (crm_touch_version);
+ * changes of the internal part are history of the meeting (custom migration).
+ */
+export const meetingMinutes = pgTable(
+  'meeting_minutes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    meetingId: uuid('meeting_id').notNull(),
+    summary: text('summary'),
+    agreements: text('agreements'),
+    nextSteps: jsonb('next_steps').$type<MeetingNextStep[]>().notNull().default([]),
+    externalSubject: text('external_subject'),
+    externalBody: text('external_body'),
+    externalPrefilledAt: timestamp('external_prefilled_at', { withTimezone: true }),
+    updatedByUserId: uuid('updated_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (t) => [
+    unique('meeting_minutes_tenant_id_uq').on(t.tenantId, t.id),
+    unique('meeting_minutes_meeting_uq').on(t.tenantId, t.meetingId),
+    foreignKey({ columns: [t.tenantId, t.meetingId], foreignColumns: [meetings.tenantId, meetings.id], name: 'meeting_minutes_meeting_fk' }).onDelete('cascade'),
+    check('meeting_minutes_length_ck', sql`coalesce(char_length(${t.summary}), 0) <= 10000 and coalesce(char_length(${t.agreements}), 0) <= 5000 and coalesce(char_length(${t.externalBody}), 0) <= 10000`),
+  ],
+);
+
 // ---------------------------------------------------------------- visit plans (CD-134)
 
 export const VISIT_PLAN_PERIOD_TYPES = ['month', 'quarter'] as const;
