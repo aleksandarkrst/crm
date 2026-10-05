@@ -1585,6 +1585,83 @@ The database also refuses `manager_id = id`. Covered by a concurrent A → B / B
 Friendly messages for the unique constraints and the team rules are in `shared/database/errors.ts`.
 Audit entries for employees list the changed field names only, never values.
 
+### App access and leaving (CD-140, spec 4.6–4.8)
+
+`lifecycle.service.ts` (API), `lifecycle.ts` (shared with the worker), `lifecycle.controller.ts`.
+People reaches identity only through `modules/identity/index.ts`: `createInvitation`,
+`withdrawEmployeeInvitations`, `removeMembership`, `keepAnOwner`, `membershipRole`
+(`identity/membership.ts`, plain functions taking the open transaction, so the worker can use them;
+`TeamService` uses the same ones). Every action returns the card.
+
+- `POST /employees/:id/invite { role }` (Admin): an invitation to the work email with
+  `employee_id`, so accepting links to this record (linking rule 1). Needs a work email, an
+  active or leaving record and no account. A member with that email: 409 `code: 'linked_elsewhere'`
+  ("… already has an account linked to <name>") when their own record holds data, else 409
+  `code: 'link_instead'` with `userId` (the dialog offers "Link instead of invite"). Returns
+  `{ invitation, token, card }`. Resend, Copy link and Withdraw are the Team endpoints.
+- Changing the **work email** (PATCH) withdraws the record's pending invitations.
+- `POST /employees/invite { employeeIds, role }` (Admin, "Invite selected"; also for the import's
+  option): 202 `{ queued, skipped }`; the job **`people.bulk-invite`** invites each row that still
+  has a work email, no account and no pending invitation, one transaction each.
+- **Link to member** (Admin): `GET /employees/:id/link-candidates` → members with `mergeable` and
+  `blockers`; `POST /employees/:id/link { userId }` deletes the member's own record and links this
+  one. A record with data of its own (department, manager, reports, a team it leads or department
+  it heads, HR roles, personal details or bank account; `mergeBlockers`, Workforce modules add
+  theirs) is never merged (409). `POST /employees/:id/unlink`: "No account"; the member gets a new
+  automatic record (`people_create_member_employee`).
+- **Deactivate** `POST /employees/:id/deactivate { lastWorkingDay, reason?, reportsManagerId?,
+  teamLeads?, departmentHeads? }` (Administration and Admin; on their own record only an Admin,
+  and not the only Admin). Last working day at most 90 days ago in the workspace's time zone. With
+  active direct reports `reportsManagerId` is required (null = "No manager"; the dialog defaults
+  to the skip level); the loop rule applies to every report, and a report picked as the new
+  manager goes to the skip level. The last owner can't go ("Make someone else an owner first").
+  - Today or earlier: applied now (`applyDeactivation`, under the reporting-line lock): end date,
+    reason, `deactivated_at`; reports moved; team leads and department heads replaced or cleared;
+    pending invitations withdrawn; the membership removed through identity (audit
+    `member.deactivated`); job **`people.employee-deactivated`** `{ tenantId, employeeId, userId }`.
+    CRM handles it like `identity.member-removed` (off future planned meetings).
+  - Later: status Leaving (`employment_end_date` set), the choices in `employees.deactivation_plan`
+    (jsonb). The cron job **`people.deactivate-due`** (`5,20,35,50 * * * *` UTC) applies, in each
+    workspace where it is 00:05 or later, the plans whose last working day is before the local
+    date, leniently: a chosen manager or replacement who left meanwhile (or would now close a
+    loop) falls back to the skip level, else nobody. One that can't apply (last owner) stays
+    Leaving and is logged. Dev auth: `POST /api/dev/people/deactivate-due { now? }` runs it for
+    the caller's workspace.
+  - TODO: the "New manager" email per moved report is `people.reporting-line-changed` (CD-139).
+- **Reactivate** `POST /employees/:id/reactivate { employmentStartDate? }` (Administration, Admin):
+  Inactive → Active with the new start date (required), no account until invited; Leaving →
+  cancels the plan.
+- The card's `permissions` add `canInvite`, `canLink`, `canUnlink` (Admin), `canDeactivate`,
+  `canReactivate` (HR); `appAccess.invitation` has `emailStatus` and `hasLink`.
+- `GET /api/team` members carry `employeeId` (Settings → Team links to the card).
+
+### Employee card screen (CD-140)
+
+`/people/:id` (`screens/EmployeeCard.tsx`, `screens/employee/*`), store slice
+`store/employeeCard.ts` (`useStore().employeeCard`, cards in `s.employeeCards`, pickers in
+`s.peoplePickers`, `s.myEmployeeId`), hook `useEmployeeCard(id)`, API client `peopleCardApi` in
+`lib/api.ts`.
+
+- Header: initials, name, job, status (Active, Leaving on …, Inactive since …), account and role
+  badges; Invite to Pultly, Deactivate or Reactivate / Cancel leaving, and a "⋯" menu (Link to
+  member, Delete or "Deactivate instead"). Below 700 px every action is in the menu.
+- Sections: Work (with employment fields when returned, "Leads team", "Heads department"),
+  Reporting ("Approvals go to" from `GET /employees/:id/approvers`), Roles (read-only badges; the
+  `data-slot="role-toggles"` is for CD-142), Personal details and Bank account only when the API
+  returned them, App access, History (`GET /people/history`). Two columns, one below 900 px.
+- Each section edits in place with Save and Cancel and sends only the changed fields the card's
+  `permissions.editableFields` allows, with If-Match; a 409 shows the conflict and the card as it
+  is now.
+- Bank account: masked; "Show" and "Copy" call the reveal endpoint (audited). The IBAN input
+  previews what will be saved (`lib/iban.ts`, the server's rules): a domestic number shows its
+  IBAN, a foreign one "Foreign account". The full number never comes back with the card, so the
+  input starts empty ("Keep RS35 …") and "Remove IBAN" clears it.
+- Live hints `employee`, `department`, `team`, `employee_role` re-read the open cards and the
+  pickers only (not the CRM lists).
+- Profile → "My employee card"; Settings → Team: "Employee card" column, and removing someone asks
+  "<name> also left the company", which opens the card's Deactivate dialog (`?deactivate=1`)
+  instead of removing the membership directly.
+
 ## Onboarding after sign-up (CD-115)
 
 After the first sign-up (email or Google), a new user goes through onboarding before the app
