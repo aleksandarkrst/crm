@@ -1,6 +1,5 @@
 import { ConflictException, HttpStatus, Injectable } from '@nestjs/common';
 import { and, asc, eq, ne, sql } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
 import { randomBytes } from 'node:crypto';
 import type { AuthUser } from '../../shared/authorization';
 import { DatabaseService } from '../../shared/database/database.service';
@@ -89,14 +88,13 @@ export class IdentityService {
 
   /** The user's workspaces with their member counts (the sidebar switcher shows them, CD-214). */
   async listTenants(userId: string) {
-    const members = alias(memberships, 'members');
     return this.database.db
       .select({
         id: tenants.id,
         name: tenants.name,
         slug: tenants.slug,
         role: memberships.role,
-        memberCount: sql<number>`(select count(*)::int from ${members} where ${members.tenantId} = ${tenants.id})`,
+        memberCount: sql<number>`(select count(*)::int from memberships m where m.tenant_id = ${tenants.id})`,
       })
       .from(memberships)
       .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
