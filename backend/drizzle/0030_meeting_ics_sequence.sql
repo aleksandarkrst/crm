@@ -1,0 +1,1 @@
+ALTER TABLE "meetings" ADD COLUMN "ics_sequence" integer DEFAULT 0 NOT NULL;

@@ -194,7 +194,8 @@ describe('meeting calendar', () => {
 
     await click(page, '[data-testid=chip-deal] button');
     await page.waitForFunction(() => !new URL(location.href).searchParams.has('deal'));
-    assert.equal(await page.$('[data-testid=chip-deal]'), null);
+    // The URL changes first; the chip goes with the next render.
+    await page.waitForFunction(() => !document.querySelector('[data-testid=chip-deal]'), { timeout: 5_000 });
   });
 
   step('"Show all" on the company opens the table filtered to it', async () => {

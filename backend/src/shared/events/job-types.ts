@@ -15,6 +15,15 @@ export interface JobPayloads {
    */
   'crm.deal-assigned': { tenantId: string; dealId: string; assigneeUserId: string; actorUserId: string };
   /**
+   * Sent by CRM when a member is added to a meeting by someone else, or a planned meeting's time or
+   * place changes, or it is cancelled (or restored). The CRM worker emails each of `userIds` (one
+   * job per member, so a retry doesn't email the others again) with an .ics, if they still take
+   * part and want "Meeting invitations" (CD-131).
+   */
+  'crm.meeting-invite': { tenantId: string; meetingId: string; userIds: string[]; actorUserId: string; kind: 'added' | 'updated' | 'cancelled' };
+  /** Sent by identity when someone removes a member or a member leaves; CRM takes them off future meetings (CD-131). */
+  'identity.member-removed': { tenantId: string; userId: string };
+  /**
    * Sent by CRM when someone other than the salesperson creates or changes their visit plan
    * (CD-134). The notifications module emails the salesperson if they want that.
    */
@@ -37,8 +46,10 @@ export const JOB_NAMES = [
   'crm.deal-won',
   'crm.deal-assigned',
   'crm.generate-document',
+  'crm.meeting-invite',
   'crm.visit-plan-email',
   'identity.invitation-email',
+  'identity.member-removed',
   'identity.signup-email',
   'notifications.digest-tick',
   'notifications.daily-digest',
@@ -46,4 +57,4 @@ export const JOB_NAMES = [
 ] as const satisfies readonly JobName[];
 
 /** Jobs that send email: retried MAIL_RETRY_LIMIT times with backoff from MAIL_RETRY_DELAY_SECONDS. */
-export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest']);
+export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest']);
