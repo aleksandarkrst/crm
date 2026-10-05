@@ -151,7 +151,7 @@ export function TimeGrid({
                 return (
                   <div
                     key={m.id}
-                    className={blockClass(m, 'cal-block') + (dragging && drag.moved ? ' is-dragging' : '') + (draggable ? ' can-drag' : '')}
+                    className={blockClass(m, 'cal-block') + (seg.bottom - seg.top < 45 ? ' compact' : '') + (dragging && drag.moved ? ' is-dragging' : '') + (draggable ? ' can-drag' : '')}
                     data-meeting-id={m.id}
                     title={blockTitle(m, tz)}
                     role="button"

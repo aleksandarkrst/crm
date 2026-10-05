@@ -365,7 +365,7 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 .mt-dot { display: inline-block; flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--mt, var(--muted)); }
 .mt-type { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; white-space: nowrap; }
 .mt-check { color: var(--brand); font-weight: 700; margin-right: 3px; }
-.mt-not-closed { font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--warn); background: var(--warn-soft); border-radius: 4px; padding: 1px 4px; margin-right: 4px; }
+.mt-not-closed { white-space: nowrap; font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--warn); background: var(--warn-soft); border-radius: 4px; padding: 1px 4px; margin-right: 4px; }
 .mt-missing { color: var(--warn); font-weight: 500; }
 
 /* Calendar: toolbar and filters */
@@ -412,6 +412,8 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 .cal-block-time { font-size: 10.5px; color: var(--text-2); white-space: nowrap; }
 .cal-block-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cal-block-sub { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-block.compact { flex-direction: row; align-items: baseline; gap: 5px; padding-top: 2px; }
+.cal-block.compact .cal-block-title { min-width: 0; }
 .cal-resize { position: absolute; left: 0; right: 0; bottom: 0; height: 7px; cursor: ns-resize; }
 
 /* Month */
@@ -442,7 +444,7 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 .cal-list-empty { font-size: 12.5px; color: var(--muted); padding: 2px 0 4px; }
 .cal-list-item { display: flex; align-items: flex-start; gap: 10px; text-align: left; border: 1px solid var(--border); border-left: 3px solid var(--mt); background: var(--white); border-radius: 8px; padding: 9px 11px; cursor: pointer; color: var(--ink); font-size: 13px; min-width: 0; }
 .cal-list-item.is-not-closed { background: var(--warn-soft); }
-.cal-list-time { font-size: 12px; color: var(--text-2); white-space: nowrap; padding-top: 1px; }
+.cal-list-time { min-width: 84px; font-size: 12px; color: var(--text-2); white-space: nowrap; padding-top: 1px; }
 .cal-list-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 
 /* Table */
@@ -454,7 +456,7 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 .meeting-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .meeting-when { display: flex; gap: 6px; min-width: 0; }
 .meeting-when > input[type="date"] { flex: 1 1 auto; min-width: 0; }
-.meeting-when > input[type="time"] { flex: 0 0 104px; min-width: 0; }
+.meeting-when > input[type="time"] { flex: 0 0 124px; min-width: 0; }
 .meeting-durations { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: -4px; }
 .meeting-durations .choice-pill { padding: 6px 11px; }
 .meeting-error { font-size: 12px; font-weight: 500; color: var(--danger); text-transform: none; letter-spacing: 0; }
