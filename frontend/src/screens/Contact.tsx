@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { CustomFieldRows } from '../components/CustomFields';
 import { IconRow } from '../components/icons';
+import { MeetingsCard } from '../components/MeetingsCard';
 import { Screen } from '../components/Layout';
 import { DealsSection, FocusTasks, RecordHeader, RecordHistory, Section } from '../components/RecordParts';
 import { GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
@@ -148,6 +149,8 @@ export function Contact() {
             )}
 
             <DealsSection leads={deals} onAdd={newDeal} />
+
+            {p.contactId && <MeetingsCard record={{ contactId: p.contactId }} seed={{ contactId: p.contactId, companyId: companyRec?.id ?? null }} />}
 
             <Section title="Documents">
               {docs.length === 0 && <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>Nothing generated yet. Documents generated for {company} will appear here.</span>}

@@ -33,15 +33,21 @@ export const ICONS = {
   document: 'M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6',
   bell: 'M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9zM10 19.5a2 2 0 0 0 4 0',
   logout: 'M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11',
+  calendar: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
 } as const;
 export type IconPath = keyof typeof ICONS;
 
 export function useCommands(): Command[] {
-  const { s, set, addCompany } = useStore();
+  const { s, set, addCompany, meetings } = useStore();
   const navigate = useNavigate();
   // On a deal's screen, a new task or contact starts out linked to that deal.
   const dealId = useMatch('/deals/:id')?.params.id;
   const onDeal = dealId && s.leads.some((l) => l.id === dealId) ? dealId : undefined;
+  // A new meeting starts out with the record that is open (CD-130).
+  const companyId = useMatch('/companies/:id')?.params.id;
+  const contactId = useMatch('/contacts/:id')?.params.id;
+  const deal = s.leads.find((l) => l.id === onDeal);
+  const meetingSeed = deal ? { dealId: deal.id, companyId: deal.companyId, contactId: deal.contactId } : companyId ? { companyId } : contactId ? { contactId } : {};
   const go = (to: string) => () => navigate(to);
 
   const create: Command[] = [
@@ -49,12 +55,14 @@ export function useCommands(): Command[] {
     { id: 'new-contact', group: 'Create', label: 'Contact', hint: 'A person at a company', key: 'P', icon: 'contact', keywords: 'new create add person people', run: () => set(onDeal ? { contactOpen: true, contactCompany: onDeal } : { contactOpen: true }) },
     { id: 'new-company', group: 'Create', label: 'Company', hint: 'Opens the new record', key: 'O', icon: 'company', keywords: 'new create add organization organisation', run: addCompany },
     { id: 'new-task', group: 'Create', label: 'Task', hint: 'Shows in Today', key: 'T', icon: 'task', keywords: 'new create add activity to-do todo call meeting', run: () => set(onDeal ? { taskOpen: true, taskLeadId: onDeal } : { taskOpen: true }) },
+    { id: 'new-meeting', group: 'Create', label: 'Meeting', hint: 'On the calendar', key: 'M', icon: 'calendar', keywords: 'new create add meeting visit call schedule calendar', run: () => meetings.openDialog(meetingSeed) },
     { id: 'new-product', group: 'Create', label: 'Product', hint: 'Adds to the catalog', key: 'R', icon: 'product', keywords: 'new create add service catalog', run: () => set({ productOpen: true, productEditId: null }) },
   ];
   const goTo: Command[] = [
     { id: 'go-overview', group: 'Go to', label: 'Overview', hint: 'Numbers and forecasts', icon: 'overview', keywords: 'dashboard reports', run: go(paths.overview) },
     { id: 'go-pipeline', group: 'Go to', label: 'Pipeline', hint: 'Deals by stage', icon: 'pipeline', keywords: 'deals board funnel', run: go(paths.pipeline) },
     { id: 'go-today', group: 'Go to', label: 'Today', hint: 'Tasks due and overdue', icon: 'task', keywords: 'tasks agenda', run: go(paths.today) },
+    { id: 'go-calendar', group: 'Go to', label: 'Calendar', hint: 'Meetings by day, week and month', icon: 'calendar', keywords: 'meetings visits schedule agenda', run: go(paths.calendar()) },
     { id: 'go-companies', group: 'Go to', label: 'Companies', hint: 'Every company', icon: 'company', keywords: 'organizations', run: go(paths.companies) },
     { id: 'go-contacts', group: 'Go to', label: 'Contacts', hint: 'Every person', icon: 'contact', keywords: 'people persons', run: go(paths.contacts) },
     { id: 'go-products', group: 'Go to', label: 'Products', hint: 'The catalog', icon: 'product', keywords: 'services catalog prices', run: go(paths.products) },

@@ -212,7 +212,8 @@ export function meetingActions(ctx: Ctx) {
       rt.watchers.delete(key);
       // Not on screen any more: forget the list (the meetings stay cached), so it loads fresh next time.
       set((s) => {
-        const { [key]: _gone, ...rest } = s.meetingLists;
+        const rest = { ...s.meetingLists };
+        delete rest[key];
         return { meetingLists: rest };
       });
     };

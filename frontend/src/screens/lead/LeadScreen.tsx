@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { Icon } from '../../components/icons';
 import { Screen } from '../../components/Layout';
+import { MeetingsCard } from '../../components/MeetingsCard';
 import { paths } from '../../lib/paths';
 import { champTotal, leadById, memberLabels, memberName, momentLabel, stageOf, stagesFor } from '../../store/selectors';
 import { useStore } from '../../store/store';
@@ -38,6 +39,7 @@ export function LeadScreen() {
           <div className="lead-side" style={{ flex: '1 1 400px', maxWidth: 540, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
             <Summary lead={lead} />
             <CompanySection lead={lead} />
+            <MeetingsCard record={{ dealId: lead.id }} seed={{ dealId: lead.id, companyId: lead.companyId, contactId: lead.contactId }} />
             <DealProducts lead={lead} />
             <Discovery lead={lead} />
             <div className="card" style={{ padding: 18 }}>
