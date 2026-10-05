@@ -31,6 +31,7 @@ backend/src/
     identity/                   users, tenants, memberships, auth guard
     realtime/                   GET /api/events: live change hints (LISTEN/NOTIFY → SSE)
     crm/                        companies, contacts, funnels, deals (+activities), products, documents
+    people/                     employees, departments, teams, functional roles, PeopleAccess (milestone 13)
     health/
   shared/                       cross-cutting, domain-free
     database/                   schema/, DatabaseService.withTenant(), migrate.ts, errors
@@ -513,6 +514,7 @@ be retried. Modules register their own handlers through a worker module exported
 | `identity.member-removed` | identity, a member is removed or leaves | CRM worker: off future planned meetings, "Organizer left" where they organized |
 | `crm.visit-plan-email` | CRM, someone else creates or changes a salesperson's visit plan (CD-134) | notifications: "your visit plan" email |
 | `identity.invitation-email` | identity, invitation created or resent | identity: the invitation email |
+| `people.bank-account-changed-email` | people, an employee's IBAN added, changed or removed | people worker (`PeopleWorkerModule`): "Bank account changed" |
 | `notifications.digest-tick` | cron, every 15 minutes | notifications: queues the digests that are due |
 | `notifications.daily-digest` | the tick (or `POST /api/dev/digest`) | notifications: one member's digest |
 | `reporting.nightly` | cron, 02:00 UTC | placeholder |
@@ -1436,6 +1438,173 @@ Service `meetings/external-minutes.service.ts`, email builder `meetings/minutes-
   since last send" while the text differs from the last send, each recipient's status with the
   error, and **Retry failed**. The meeting page hides Undo held and Delete once sent; the History
   tab lists every send (time, sender, recipients with status, subject, the exact text).
+
+## People: employees and org structure (milestone 13)
+
+Who works in the company, how it is organised, and who may see and do what. The foundation for
+every Workforce module (timesheets, time off, travel, lateness, planning). Backend: CD-140
+(`backend/src/modules/people/`); screens, departments and teams, managers, import and roles build on
+it (CD-137, CD-138, CD-139, CD-141, CD-142). Spec: Linear "Functional spec: Employees and org
+structure".
+
+### Model
+
+Tables in `shared/database/schema/people.ts`; RLS, the one-column `SET NULL` foreign keys, triggers
+and the backfill in `drizzle/0039_people_rls.sql`.
+
+- **`employees`**: a person who works for the company, with or without an app account. Work fields
+  (first/last name, `full_name` generated, work email stored lower-case, employee number, job
+  title, department, team, `manager_id`, work phone and location), employment fields (start date,
+  type `permanent|fixed_term|contractor|student`, weekly hours 1–60, timesheet required, attendance
+  tracked, end date, `deactivated_at`, `leaving_reason`), `user_id` (the linked member, unique per
+  workspace) and `first_linked_at`.
+  - **Status** is derived: `inactive` when `deactivated_at` is set, `leaving` when an end date is
+    set but not applied yet, else `active` (`statusOf`). "Active employee" in queries means
+    `deactivated_at is null`.
+  - **Account**: `linked` (`user_id`), `invited` (a pending invitation with `invitations.employee_id`),
+    `none`.
+  - **Search**: `search_text` = accent-free lower case of name, job title and work email, kept by a
+    trigger with `people_fold()`. Query with `search_text like '%' || people_fold(q) || '%'`, so
+    "petrovic" finds "Petrović". `normalizeForSearch` (TS) has the same mapping for in-memory search.
+- **`employee_personal`** (1:1, own table so lists never read it): date of birth, private email and
+  phone, address (country shown as "Serbia" when empty), emergency contact, and the bank account:
+  `iban_sealed` (SecretBox, purpose `employee-iban`, key from `APP_SECRET`), `iban_last4`,
+  `iban_country`, `iban_masked` (`RS35 •••• 1379`), bank name, and the foreign currency account
+  (`fx_same_as_iban`, `fx_iban_*` likewise, SWIFT/BIC, bank name and address). The plain IBAN is
+  never stored. Losing `APP_SECRET` loses the IBANs.
+- **`departments`** (name unique per workspace, lower+trim; code unique; `head_employee_id`) and
+  **`teams`** (in one department; name unique within it; `lead_employee_id`). Deleting a
+  department with teams is refused by the FK; its employees lose the department.
+- **Team-in-department** is a foreign key: `(tenant_id, department_id, team_id) → teams(tenant_id,
+  department_id, id)`, `ON UPDATE CASCADE` (moving a team to another department moves its members
+  in the same statement) and `ON DELETE SET NULL (team_id)` (deleting a team keeps its members in
+  the department). A team without a department is a check violation.
+- **`employee_roles`**: `administration` and `payroll`, assigned by an Admin (CD-142 adds the
+  endpoints). Manager and Admin are derived, never stored.
+- `invitations.employee_id` (the card an invitation was sent from), `tenants.employee_default_weekly_hours`
+  (40), `employee_number_required` (off), `employee_self_edit_bank` (on), all in `GET/PATCH
+  /api/workspace`; `memberships.notify_org_changes` (on) in `/api/profile`.
+- **History**: `record_changes` with entity types `employee`, `department`, `team`
+  (`crm_record_changes`). Personal details and bank fields are rows of their employee
+  (`people_record_personal_changes`): field names as in the API, IBANs only as the short mask.
+  Linking is the `userId` field. Served only by `GET /api/people/history`; the CRM history endpoint
+  rejects these types.
+- **Versions**: one per card, `employees.updated_at` (If-Match). Saving personal details or the bank
+  account touches the employee row.
+- **Live updates** on `crm_changes`, ids only: `employee` (employees), `department`, `team`,
+  `employee_role` (ids are employee ids). The browser re-reads through the API, which applies the
+  access rules.
+
+### Every member is an employee (linking, spec 4.6)
+
+`linking.ts`, called by identity through `modules/people/index.ts` inside its own transaction:
+
+- **Creating a workspace**: the creator gets a record (`IdentityService.createTenant`).
+- **Joining** (`TeamService.join`, only when the membership is new), first rule that applies:
+  1. the invitation's `employee_id`, if that record is active and has no account;
+  2. an active employee without an account whose work email is the member's sign-in email;
+  3. a new record from the profile: `people_create_member_employee(tenant, user)` (SQL, the same
+     function the migration's backfill used): display name split at the last space (one word = last
+     name, first name = email's local part), work email = sign-in email unless taken, job title and
+     phone from the profile, Permanent, weekly hours from the setting, no department, manager or
+     start date.
+- **Removing a member** (or leaving): `unlinkMember` clears `user_id`; the employee stays Active
+  with "No account". Deactivation is a separate step.
+- The migration created a linked record for every existing membership.
+
+### Access: `PeopleAccess` (spec 9)
+
+Every endpoint of milestone 13 and later Workforce modules checks access through it (import
+`PeopleAccess` from `modules/people`; `PeopleModule` exports it):
+
+- `await access.of(ctx)` → `CallerAccess`: `employeeId`, `roles` (`employee`, `manager` = has an
+  active direct report, `administration`, `payroll`, `admin` = workspace owner or admin),
+  `directReportIds`, `reportIds` (all active reports at any depth). One recursive query on
+  `manager_id` (index `(tenant_id, manager_id)`), cached per request (keyed by the request's
+  `TenantContext`). Pass `tx` to read inside an open transaction.
+- Checks (pure, `caller-access.ts`): `isAdmin`, `isAdministration`, `isPayroll`, `isManager`,
+  `isHr` (Administration or Admin), `isSelf(id)`, `isDirectReport(id)` ("Direct" in the matrix),
+  `isReport(id)` ("Indirect"), `canSeeEmployment(id)` (self, managers above, HR), `canSeePersonal(id)`
+  and `canSeeBank(id)` (self, HR; never managers or Payroll), `canSeeHistory(id)` (self, HR),
+  `canSeeLeavingReason` and `canSeeInactive` (HR).
+- `access.reportIdsOf(tx, managerId, direct?)`: anyone's subtree. `access.employeeForUser(tenantId,
+  userId)`: a member's record.
+- Which card fields a caller may change: `editableFields(access, employeeId, selfEditBank)`
+  (`field-rules.ts`). Admin: all, own card included. Administration: all on others; on their own,
+  work fields, personal details and bank, not employment fields, department, team or manager.
+  Others: on their own card only work phone, personal details and (setting on) bank. Nobody but an
+  Admin makes themselves someone's manager.
+- `GET /api/people/access` returns the caller's `{ employeeId, roles, directReportIds, reportIds }`.
+
+### Approver rule (spec 7.4)
+
+`access.approversFor(tenantId, employeeId, date, tx?)` → `{ kind: 'manager'|'admins'|'self',
+reason: 'manager'|'no_manager'|'manager_inactive'|'manager_no_account'|'manager_absent', approvers:
+[{ userId, employeeId }], selfApproved }`. The manager if active, linked to a member and not absent;
+otherwise every workspace owner and admin except the requester; the requester alone when they are
+the only Admin (`selfApproved`, shown "Self-approved (no other Admin)"). Resolved when someone looks
+or acts, never stored. The rule itself is `resolveApprovers` (pure, table-tested). Absence comes from
+the `ABSENCE_SOURCE` provider (`AbsenceSource.absentOn(tx, tenantId, employeeIds, date)`); the stub
+says nobody is absent until Time off (16) provides it.
+
+### Reporting lines
+
+Every change of a manager (card, bulk actions, team-lead dialogs, deactivation, import):
+
+1. `await lockReportingLines(tx, tenantId)`: `pg_advisory_xact_lock` per workspace, **before**
+   locking employee rows (two crossing changes then queue instead of deadlocking);
+2. `await assertValidManager(tx, employeeId, managerId)`: not yourself (400), an active employee of
+   the workspace (400), and no loop: it walks up from the proposed manager; reaching the employee is
+   409 `{ code: 'reporting_loop', message: 'This would create a loop: Ana Petrović → Marko Ilić → Ivan
+   Jović → Ana Petrović' }`;
+3. write in the same transaction.
+
+The database also refuses `manager_id = id`. Covered by a concurrent A → B / B → A test.
+
+### API (`/api/people`, any member; rules per caller)
+
+- `GET /employees?departmentIds=&teamIds=&managerId=&managerScope=direct|indirect&status=active,leaving,inactive&account=linked,invited,none&issues=no_manager,no_start_date,no_department,manager_no_account,no_employee_number&q=&ids=`
+  → `{ employees, total }`, sorted by last name, all rows in one response. Default status: active
+  and leaving; `inactive` is HR only (403 otherwise), `account` Admin only, `issues` HR only. `q`
+  searches name, job title and work email (employee number too for HR). Each row has the directory
+  fields (`id, userId, firstName, lastName, fullName, jobTitle, departmentId, departmentName, teamId,
+  teamName, managerId, managerName, workEmail, workPhone, workLocation, status`), plus `employment`
+  (`employeeNumber, startDate, endDate, type, weeklyHours, timesheetRequired, attendanceTracked,
+  deactivatedAt`, and `leavingReason` for HR) only for rows in the caller's scope, `hr: { account,
+  dataIssues }` for HR and `roles` for Admins. Never personal details or bank accounts. Someone
+  leaving shows as `active` to callers who may not see employment dates.
+- `GET /employees/:id` → the card: the directory fields, `version` (send as If-Match), `account`,
+  `roles`, `manager` (with `hasAccount` and their own manager), `directReports`, `leadsTeams`,
+  `headsDepartments`, `approvals` (with names), `permissions: { editableFields, canRevealBank,
+  canSeeHistory, canDelete }`; and only when allowed: `employment`, `hr: { dataIssues }`, `personal`,
+  `bank` (`iban: { masked: 'RS35 •••• •••• •••• ••13 79', last4, country, foreign }`, `bankName`,
+  `fxSameAsIban`, `fxIban`, `swiftBic`, `fxBankName`, `fxBankAddress`), `appAccess` (Admin: sign-in
+  email, workspace role, pending invitation). A section the caller may not see is absent, not empty.
+  Inactive employees are 404 for non-HR.
+- `POST /employees` (HR) and `PATCH /employees/:id` (field rules above; If-Match like CRM, 409
+  naming who changed which field) take the work, employment, personal and bank fields and return
+  the card. Validation: names ≤ 100 (Serbian and Cyrillic letters), emails, start date required on
+  create and at most a year ahead, weekly hours 1–60, age 15–100, the employee number when the
+  setting requires it. Choosing a team sets its department; a team of another department is 400;
+  changing the department drops a team that isn't in it.
+- **IBAN** input: an IBAN in any spacing or a Serbian domestic number (`260-0056010016113-79`,
+  converted to `RS35…`); foreign IBANs by country length and mod 97 (`iban.ts`). Anything else is
+  400 "This is not a valid IBAN or Serbian account number". Adding, changing or removing an IBAN (or
+  FX IBAN) queues `people.bank-account-changed-email`: masks and who changed it, to the sign-in email
+  if linked, else the work email. It can't be turned off.
+- `POST /employees/:id/bank/reveal { account: 'iban'|'fxIban' }` → `{ iban, formatted, domestic,
+  foreign }` for self and HR (403 otherwise); audit `employee.iban_viewed` each time.
+- `DELETE /employees/:id`: Admin; only a record that never had an account (409 "Deactivate
+  instead"). Workforce modules add their "has data" checks there.
+- `GET /employees/:id/approvers?date=yyyy-mm-dd`: the approver rule with names.
+- `GET /history?entityType=employee|department|team&entityId=&limit=&offset=` → `{ entries, more }`:
+  an employee's history for self and HR (403 otherwise), without `leavingReason` for non-HR; fields
+  the caller may not see are filtered out; ids come with names (employees as "Name (left)" once
+  inactive). Departments and teams: HR only.
+- `GET /departments`, `GET /teams`: read only, with `activeEmployees`; CRUD is CD-138.
+
+Friendly messages for the unique constraints and the team rules are in `shared/database/errors.ts`.
+Audit entries for employees list the changed field names only, never values.
 
 ## Onboarding after sign-up (CD-115)
 

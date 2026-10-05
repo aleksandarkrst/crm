@@ -267,6 +267,20 @@
       "when": 1791182055274,
       "tag": "0037_meeting_deal_required",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1791198607428,
+      "tag": "0038_people",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1791198621530,
+      "tag": "0039_people_rls",
+      "breakpoints": true
     }
   ]
 }

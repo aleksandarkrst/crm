@@ -1,9 +1,10 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { and, desc, eq, gt, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { requestActor } from '../../../shared/database/request-context';
+import { parseVersion } from '../../../shared/validation/version';
 import { companies, contacts, deals, funnels, funnelStages, HISTORY_ENTITY_TYPES, type HistoryEntityType, memberships, products, recordChanges, users, visitPlans } from '../../../shared/database/schema';
 
 export const HistoryQuery = z.object({
@@ -15,6 +16,9 @@ export const HistoryQuery = z.object({
 export type HistoryQuery = z.infer<typeof HistoryQuery>;
 
 type ChangeRow = typeof recordChanges.$inferSelect;
+
+/** Moved to shared/validation/version.ts (the people module uses it too); kept here for the CRM controllers. */
+export { parseVersion };
 
 /** Fields whose values are ids; the history shows the name instead. */
 const ID_FIELDS = new Set(['stageId', 'funnelId', 'companyId', 'primaryContactId', 'ownerUserId', 'dealId', 'organizerUserId', 'salespersonUserId']);
@@ -89,18 +93,6 @@ export interface HistoryEntry {
   /** Who made the change: null for the system (imports without a user, jobs). */
   actor: { userId: string | null; name: string } | null;
   changedAt: Date;
-}
-
-/**
- * The version a client edited, from `If-Match` (the record's `updatedAt`, quoted or not, as an
- * ETag). No header, or `*`, means "no version": the update is last-write-wins, as before CD-20.
- */
-export function parseVersion(header: string | undefined): Date | undefined {
-  const raw = header?.trim().replace(/^W\//, '').replace(/^"|"$/g, '');
-  if (!raw || raw === '*') return undefined;
-  const at = new Date(raw);
-  if (Number.isNaN(at.getTime())) throw new BadRequestException("If-Match must be the record's updatedAt, e.g. \"2026-09-24T10:15:00.123Z\"");
-  return at;
 }
 
 /**

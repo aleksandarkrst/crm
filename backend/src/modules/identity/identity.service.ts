@@ -5,6 +5,7 @@ import type { AuthUser } from '../../shared/authorization';
 import { DatabaseService } from '../../shared/database/database.service';
 import { memberships, type MembershipRole, tenants, users } from '../../shared/database/schema';
 import { TenantProvisioning } from '../../shared/events/tenant-provisioning';
+import { linkNewMember } from '../people';
 import { signInMethod } from './signup-email';
 import type { VerifiedIdentity } from './token.service';
 
@@ -104,7 +105,8 @@ export class IdentityService {
 
   /**
    * Creates a tenant (a customer organisation) with the caller as its owner, then lets other
-   * modules seed their defaults (e.g. CRM funnels) in the same transaction.
+   * modules seed their defaults (e.g. CRM funnels) in the same transaction. The creator gets their
+   * employee record (people, spec 4.6).
    */
   async createTenant(userId: string, name: string, currency?: string, timezone?: string) {
     return this.database.db.transaction(async (tx) => {
@@ -112,6 +114,7 @@ export class IdentityService {
       await tx.insert(memberships).values({ tenantId: tenant!.id, userId, role: 'owner' });
       await tx.execute(sql`select set_config('app.tenant_id', ${tenant!.id}, true)`);
       await this.provisioning.run(tx, tenant!.id);
+      await linkNewMember(tx, { tenantId: tenant!.id, userId });
       return { id: tenant!.id, name: tenant!.name, slug: tenant!.slug, role: 'owner' as const, memberCount: 1 };
     });
   }

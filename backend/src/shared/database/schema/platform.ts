@@ -21,11 +21,17 @@ export const tenants = pgTable(
     fiscalYearStartMonth: smallint('fiscal_year_start_month').notNull().default(1), // 1 = January
     // Language of the fixed text in emails to customers, e.g. external meeting minutes (CD-208).
     customerEmailLanguage: text('customer_email_language', { enum: CUSTOMER_EMAIL_LANGUAGES }).notNull().default('en'),
+    // Settings → Employees (milestone 13, spec 10.3): prefill of new employees' weekly hours, whether
+    // an employee number is required, and whether employees may change their own bank account.
+    employeeDefaultWeeklyHours: smallint('employee_default_weekly_hours').notNull().default(40),
+    employeeNumberRequired: boolean('employee_number_required').notNull().default(false),
+    employeeSelfEditBank: boolean('employee_self_edit_bank').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     check('tenants_fiscal_month_ck', sql`${t.fiscalYearStartMonth} between 1 and 12`),
     check('tenants_customer_email_language_ck', sql`${t.customerEmailLanguage} in ('en', 'sr')`),
+    check('tenants_employee_weekly_hours_ck', sql`${t.employeeDefaultWeeklyHours} between 1 and 60`),
   ],
 );
 
@@ -83,6 +89,8 @@ export const memberships = pgTable(
     notifyMeetingInvites: boolean('notify_meeting_invites').notNull().default(true),
     // Email me when someone else creates or changes my visit plan (CD-207).
     notifyVisitPlans: boolean('notify_visit_plans').notNull().default(true),
+    // Email me about org changes: a new manager, a new direct report (milestone 13, spec 10.2).
+    notifyOrgChanges: boolean('notify_org_changes').notNull().default(true),
     /** The getting-started checklist (CD-68) is dismissed per user, so each admin decides for themselves. */
     onboardingDismissedAt: timestamp('onboarding_dismissed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -133,9 +141,15 @@ export const invitations = pgTable(
     emailStatus: text('email_status', { enum: INVITATION_EMAIL_STATUSES }),
     emailSentAt: timestamp('email_sent_at', { withTimezone: true }),
     emailError: text('email_error'),
+    /**
+     * The employee record the invitation was sent from (milestone 13, spec 4.7): accepting it links
+     * the new member to that record. The foreign key (tenant_id, employee_id) → employees is in
+     * drizzle/0039_people_rls.sql (ON DELETE SET NULL (employee_id)).
+     */
+    employeeId: uuid('employee_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('invitations_tenant_idx').on(t.tenantId)],
+  (t) => [index('invitations_tenant_idx').on(t.tenantId), index('invitations_employee_idx').on(t.employeeId)],
 );
 
 /**
