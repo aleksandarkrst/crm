@@ -31,6 +31,10 @@ export const UpdateWorkspace = z
     timezone: z.string().trim().refine(isIanaTimeZone, 'Must be an IANA time zone, e.g. Europe/Belgrade'),
     fiscalYearStartMonth: z.number().int().min(1).max(12),
     customerEmailLanguage: z.enum(CUSTOMER_EMAIL_LANGUAGES),
+    // Settings → Employees (milestone 13, spec 10.3).
+    employeeDefaultWeeklyHours: z.number().int().min(1).max(60),
+    employeeNumberRequired: z.boolean(),
+    employeeSelfEditBank: z.boolean(),
   })
   .partial()
   .refine(atLeastOne, 'Nothing to update');
@@ -60,6 +64,7 @@ export const UpdateProfile = z
     notifyDealAssigned: z.boolean(),
     notifyMeetingInvites: z.boolean(),
     notifyVisitPlans: z.boolean(),
+    notifyOrgChanges: z.boolean(),
   })
   .partial()
   .refine(atLeastOne, 'Nothing to update');

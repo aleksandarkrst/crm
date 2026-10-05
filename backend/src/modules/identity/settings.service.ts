@@ -15,6 +15,9 @@ const workspaceColumns = {
   timezone: tenants.timezone,
   fiscalYearStartMonth: tenants.fiscalYearStartMonth,
   customerEmailLanguage: tenants.customerEmailLanguage,
+  employeeDefaultWeeklyHours: tenants.employeeDefaultWeeklyHours,
+  employeeNumberRequired: tenants.employeeNumberRequired,
+  employeeSelfEditBank: tenants.employeeSelfEditBank,
 };
 
 /**
@@ -63,6 +66,7 @@ export class SettingsService {
         notifyDealAssigned: memberships.notifyDealAssigned,
         notifyMeetingInvites: memberships.notifyMeetingInvites,
         notifyVisitPlans: memberships.notifyVisitPlans,
+        notifyOrgChanges: memberships.notifyOrgChanges,
       })
       .from(users)
       .innerJoin(memberships, and(eq(memberships.userId, users.id), eq(memberships.tenantId, ctx.tenantId)))
@@ -76,8 +80,8 @@ export class SettingsService {
    * (`dailyDigest`, `notifyDealAssigned`, CD-16; `notifyMeetingInvites`, `notifyVisitPlans`, CD-207) apply to this workspace only.
    */
   async updateProfile(ctx: TenantContext, user: AuthUser, input: UpdateProfile) {
-    const { defaultFunnelId, dailyDigest, notifyDealAssigned, notifyMeetingInvites, notifyVisitPlans, ...own } = input;
-    const workspaceOnly = { defaultFunnelId, dailyDigest, notifyDealAssigned, notifyMeetingInvites, notifyVisitPlans };
+    const { defaultFunnelId, dailyDigest, notifyDealAssigned, notifyMeetingInvites, notifyVisitPlans, notifyOrgChanges, ...own } = input;
+    const workspaceOnly = { defaultFunnelId, dailyDigest, notifyDealAssigned, notifyMeetingInvites, notifyVisitPlans, notifyOrgChanges };
     await this.database.withTenant(ctx.tenantId, async (tx) => {
       if (defaultFunnelId) {
         // RLS is on, so a funnel of another workspace is simply not found.

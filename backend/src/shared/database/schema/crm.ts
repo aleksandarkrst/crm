@@ -836,8 +836,15 @@ export const visitPlanLines = pgTable(
 
 // ---------------------------------------------------------------- change history (CD-69)
 
+/** CRM records whose history GET /api/crm/history serves. */
 export const HISTORY_ENTITY_TYPES = ['deal', 'company', 'contact', 'meeting', 'visit_plan'] as const;
 export type HistoryEntityType = (typeof HISTORY_ENTITY_TYPES)[number];
+/**
+ * People records (milestone 13). Their history is served only by GET /api/people/history, with the
+ * employee card's rules; the CRM history endpoint never reads them.
+ */
+export const PEOPLE_HISTORY_ENTITY_TYPES = ['employee', 'department', 'team'] as const;
+export type PeopleHistoryEntityType = (typeof PEOPLE_HISTORY_ENTITY_TYPES)[number];
 export const RECORD_CHANGE_ACTIONS = ['created', 'updated', 'deleted', 'line_added', 'line_changed', 'line_removed', 'participant_added', 'participant_removed'] as const;
 export type RecordChangeAction = (typeof RECORD_CHANGE_ACTIONS)[number];
 
@@ -854,7 +861,7 @@ export const recordChanges = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     tenantId: tenantId(),
-    entityType: text('entity_type', { enum: HISTORY_ENTITY_TYPES }).notNull(),
+    entityType: text('entity_type', { enum: [...HISTORY_ENTITY_TYPES, ...PEOPLE_HISTORY_ENTITY_TYPES] }).notNull(),
     entityId: uuid('entity_id').notNull(),
     action: text('action', { enum: RECORD_CHANGE_ACTIONS }).notNull(),
     field: text('field'),

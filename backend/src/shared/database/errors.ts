@@ -12,6 +12,23 @@ interface PgError {
  */
 const RULES_WITH_MESSAGES = new Set(['deals_lost_not_won', 'deals_stage_not_deleted']);
 
+/** Unique constraints whose violation the people module explains (milestone 13). */
+const UNIQUE_MESSAGES: Record<string, string> = {
+  employees_work_email_uq: 'Another employee already has this work email',
+  employees_number_uq: 'Another employee already has this employee number',
+  employees_user_uq: 'This member is already linked to another employee',
+  departments_name_uq: 'A department with this name already exists',
+  departments_code_uq: 'A department with this code already exists',
+  teams_name_uq: 'This department already has a team with this name',
+};
+
+/** Rules about employees' org fields that the database enforces as a last line (people). */
+const PEOPLE_RULES: Record<string, string> = {
+  employees_team_fk: 'The team belongs to another department',
+  employees_team_needs_department_ck: 'A team needs its department',
+  employees_not_own_manager_ck: "An employee can't report to themselves",
+};
+
 function pgError(err: unknown): PgError | undefined {
   // drizzle wraps driver errors; the pg error is on `cause`.
   const e = err as { code?: string; cause?: PgError };
@@ -25,8 +42,10 @@ export function mapDbError(err: unknown): never {
   const pg = pgError(err);
   switch (pg?.code) {
     case '23505':
+      if (pg.constraint && UNIQUE_MESSAGES[pg.constraint]) throw new ConflictException(UNIQUE_MESSAGES[pg.constraint]);
       throw new ConflictException(`Already exists (${pg.constraint ?? 'unique constraint'})`);
     case '23503':
+      if (pg.constraint && PEOPLE_RULES[pg.constraint]) throw new BadRequestException(PEOPLE_RULES[pg.constraint]);
       // A deal with meetings (CD-213): the service says so first; this covers a race with a new meeting.
       if (pg.constraint === 'meetings_deal_fk' && pg.message?.startsWith('update or delete')) {
         throw new ConflictException('This deal has meetings. Delete them or move them to another deal first.');
@@ -35,6 +54,7 @@ export function mapDbError(err: unknown): never {
     case '23514':
       if (pg.constraint && RULES_WITH_MESSAGES.has(pg.constraint)) throw new ConflictException(pg.message);
       if (pg.constraint === 'meetings_deal_required') throw new BadRequestException('Pick a deal');
+      if (pg.constraint && PEOPLE_RULES[pg.constraint]) throw new BadRequestException(PEOPLE_RULES[pg.constraint]);
       throw err;
     case '22P02':
       throw new BadRequestException('Invalid identifier');
