@@ -37,7 +37,20 @@ const FIELD_LABELS: Record<string, string> = {
   phone: 'Phone',
   linkedin: 'LinkedIn',
   buyerRole: 'Buyer role',
+  // Meetings (CD-130)
+  type: 'Type',
+  startsAt: 'Start',
+  endsAt: 'End',
+  location: 'Location',
+  agenda: 'Agenda',
+  dealId: 'Deal',
+  organizerUserId: 'Organizer',
+  status: 'Status',
+  cancelReason: 'Cancellation reason',
+  participants: 'Participants',
 };
+const MEETING_TEXT: Record<string, string> = { visit: 'Customer visit', online: 'Online meeting', office: 'Meeting at our office', phone: 'Phone call', planned: 'Planned', held: 'Held', cancelled: 'Cancelled' };
+const MOMENT_FIELDS = new Set(['startsAt', 'endsAt', 'heldAt', 'cancelledAt']);
 const LINE_LABELS: Record<string, string> = {
   productId: 'product',
   quantity: 'quantity',
@@ -53,7 +66,7 @@ const LINE_LABELS: Record<string, string> = {
 const FREQUENCY_TEXT: Record<string, string> = { one_time: 'One time', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly', annually: 'Annually' };
 const TAX_TEXT: Record<string, string> = { exclusive: 'Tax exclusive', inclusive: 'Tax inclusive', none: 'No tax' };
 const DATE_FIELDS = new Set(['closeDate', 'discoveryDate', 'startDate']);
-const NOUN: Record<HistoryEntity, string> = { deal: 'deal', company: 'company', contact: 'contact' };
+const NOUN: Record<HistoryEntity, string> = { deal: 'deal', company: 'company', contact: 'contact', meeting: 'meeting' };
 const PAGE = 30;
 
 const empty = <span style={{ color: 'var(--muted)' }}>empty</span>;
@@ -113,6 +126,8 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
     if (field === 'amount' || field === 'unitPrice') return money(Number(v), cur);
     if (field === 'vatRate') return `${Number(v)}%`;
     if (DATE_FIELDS.has(field) && typeof v === 'string') return dateText(v);
+    if (MOMENT_FIELDS.has(field) && typeof v === 'string') return when(v);
+    if ((field === 'type' || field === 'status') && entity === 'meeting' && typeof v === 'string') return MEETING_TEXT[v] ?? v;
     if (field === 'billingFrequency' && typeof v === 'string') return FREQUENCY_TEXT[v] ?? v;
     if (field === 'taxMode' && typeof v === 'string') return TAX_TEXT[v] ?? v;
     if (field === 'discountKind') return v === 'percent' ? 'percent' : 'amount';

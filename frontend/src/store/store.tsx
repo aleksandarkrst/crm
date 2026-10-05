@@ -4,6 +4,7 @@ import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant,
 import { paths } from '../lib/paths';
 import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference } from './documents';
 import { connectLive, type LiveEvent } from './live';
+import { meetingActions, meetingKey, newMeetingRuntime, upcomingQuery } from './meetings';
 import { type Changed, loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type Part, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
 import {
@@ -130,6 +131,8 @@ const PARTS_OF: Record<string, Part[]> = {
   product: ['products', 'onboarding'],
   funnel: ['funnels', 'onboarding'],
   activity: [],
+  // Meetings (CD-130) aren't part of the workspace load: the meeting slice re-reads them.
+  meeting: [],
 };
 /**
  * Which rows of each list a change hint names (CD-98), so a live update re-reads just those: by id,
@@ -205,6 +208,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
   const pendingTasks = useRef(new Map<string, TaskInput>());
   /** Live updates (CD-20): lists to re-read and deals whose timeline to re-read, gathered over a short pause. */
   // rows: per list, the rows to re-read (CD-98); null = the whole list.
+  /** The meeting slice's bookkeeping (CD-130). */
+  const meetingRt = useRef(newMeetingRuntime());
   const livePending = useRef({ parts: new Set<Part>(), rows: new Map<Part, Set<string> | null>(), logs: new Set<string>(), touched: new Set<string>(), timer: undefined as ReturnType<typeof setTimeout> | undefined, running: false, lastFull: 0 });
 
   const set = useCallback((u: Updater) => setState((prev) => ({ ...prev, ...(typeof u === 'function' ? u(prev) : u) })), []);
@@ -429,14 +434,30 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         if (p.parts.size || p.logs.size) queueRefresh([], [], [], retryLater ? 3000 : 300);
       }
     };
+    // ------------------------------------------------------------ meetings (CD-130)
+    const meetings = meetingActions({
+      cur,
+      set,
+      flash,
+      rt: meetingRt.current,
+      me: session.userId,
+      role: session.tenant.role,
+      errText,
+      conflictText,
+      // A meeting write logged on the deal's timeline (and, marked as held, its last contact): read both again.
+      dealChanged: (dealId) => queueRefresh(['deals'], [dealId], [dealId], 300, { deals: [dealId] }),
+    });
+
     /** Everything this tab shows, after the stream was down (hints may be missing) or on focus. */
     const refreshAll = () => {
       livePending.current.lastFull = Date.now();
+      meetings.refreshAll();
       queueRefresh(ALL_PARTS, logRequested.current);
     };
     const onLiveEvent = (e: LiveEvent) => {
       if (e.type === 'resync') return refreshAll();
       if (e.client === CLIENT_ID) return; // this tab's own change: the screen has it already
+      if (e.type === 'meeting') return meetings.onLive(e);
       const parts = PARTS_OF[e.type] ?? ALL_PARTS;
       const dealIds = [...(e.dealIds ?? []), ...(e.type === 'deal' ? (e.ids ?? []) : [])];
       const logs = e.dealIds === null ? [...logRequested.current] : dealIds.filter((id) => logRequested.current.has(id));
@@ -1143,6 +1164,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       reload,
       /** Live updates (CD-20), wired up below. */
       live: { onEvent: onLiveEvent, refreshAll, onFocus },
+      /** Meetings (CD-130): queries, saving and the meeting dialog (store/meetings.ts). */
+      meetings,
       /** A page of the change history of a deal, company or contact (CD-69), newest first. */
       loadChanges: (entity: HistoryEntity, id: string, offset = 0) => crmApi.history(entity, id, offset),
       ensureLog,
@@ -1633,6 +1656,14 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       window.removeEventListener('focus', live.onFocus);
       document.removeEventListener('visibilitychange', onVisible);
     };
+  }, []);
+
+  // The planned meetings of the coming year stay loaded: a deal with one has a next step (CD-130).
+  const watchMeetings = useRef(actions.meetings.watch);
+  watchMeetings.current = actions.meetings.watch;
+  useEffect(() => {
+    const q = upcomingQuery();
+    return watchMeetings.current(meetingKey(q), q);
   }, []);
 
   return { s, ...actions };

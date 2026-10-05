@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { CustomFieldRows } from '../components/CustomFields';
 import { IconRow } from '../components/icons';
+import { MeetingsCard } from '../components/MeetingsCard';
 import { Screen } from '../components/Layout';
 import { AddButton, DealsSection, FocusTasks, RecordHeader, RecordHistory, Section } from '../components/RecordParts';
 import { GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
@@ -118,6 +119,8 @@ export function Company() {
             </Section>
 
             <DealsSection leads={rec.leads} onAdd={newDeal} />
+
+            <MeetingsCard record={{ companyId: rec.id }} seed={{ companyId: rec.id }} />
 
             <Section
               title={`Contacts (${people.length})`}
