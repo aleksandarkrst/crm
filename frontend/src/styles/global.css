@@ -594,6 +594,7 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 @media (max-width: 700px) {
   .vp-plan-line > .table-row.vp-plan-row { min-width: 0; display: flex !important; flex-wrap: wrap; gap: 4px 14px; }
   .vp-plan-line > .vp-drill { margin: 0 8px 10px; }
+}
 
 /* ---- external minutes (CD-133) ---- */
 .ext-last { display: flex; flex-direction: column; gap: 8px; font-size: 13px; background: var(--bg-soft); border-radius: 8px; padding: 10px 12px; overflow-wrap: anywhere; }
@@ -651,7 +652,7 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .org-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .org-dept + .org-dept { border-top: 1px solid var(--divider); }
 .org-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; min-height: 48px; }
-.org-expand { border: 0; background: transparent; cursor: pointer; color: var(--text-2); width: 24px; height: 24px; border-radius: 6px; font-size: 12px; flex: none; }
+.org-expand { border: 0; background: transparent; cursor: pointer; color: var(--text-2); width: 24px; height: 24px; border-radius: 6px; font-size: 15px; line-height: 1; flex: none; }
 .org-expand:hover { background: var(--bg-soft); }
 .org-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
 .org-name { border: 0; background: transparent; padding: 2px 4px; margin-left: -4px; border-radius: 5px; font: inherit; font-size: 14px; font-weight: 500; color: var(--ink); cursor: text; text-align: left; }
