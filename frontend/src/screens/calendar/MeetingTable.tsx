@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { ApiMeeting } from '../../lib/api';
 import { memberName } from '../../store/selectors';
 import { useStore } from '../../store/store';
@@ -10,10 +11,17 @@ const DELIVERY = { not_sent: 'Not sent', queued: 'Queued', sent: 'Sent', failed:
 
 /**
  * The Table view (CD-130): one row per meeting in the date range, past and upcoming, sorted by
- * start (the header toggles the order). Rows open the meeting's page.
+ * start (the header toggles the order). Rows open the meeting's page. A long range loads a page
+ * at a time: "Load more" adds the next (CD-211).
  */
-export function MeetingTable({ meetings, sort, onSort, onOpen, more }: { meetings: ApiMeeting[]; sort: 'asc' | 'desc'; onSort: () => void; onOpen: (id: string) => void; more: boolean }) {
+export function MeetingTable({ meetings, sort, onSort, onOpen, more, onMore }: { meetings: ApiMeeting[]; sort: 'asc' | 'desc'; onSort: () => void; onOpen: (id: string) => void; more: boolean; onMore: () => Promise<void> }) {
   const { s } = useStore();
+  const [busy, setBusy] = useState(false);
+  const loadMore = async () => {
+    setBusy(true);
+    await onMore();
+    setBusy(false);
+  };
   const tz = s.workspace.timezone;
   return (
     <div className="card meeting-table" data-testid="meeting-table">
@@ -48,7 +56,13 @@ export function MeetingTable({ meetings, sort, onSort, onOpen, more }: { meeting
         );
       })}
       {meetings.length === 0 && <div className="empty-state">No meetings in this period with these filters.</div>}
-      {more && <div className="empty-state">Showing the first {meetings.length}. Narrow the dates or filters to see the rest.</div>}
+      {more && (
+        <div className="empty-state">
+          <button type="button" className="btn btn-secondary" data-testid="meeting-table-more" disabled={busy} onClick={() => void loadMore()}>
+            {busy ? 'Loading…' : 'Load more'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

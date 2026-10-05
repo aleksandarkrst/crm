@@ -1,6 +1,10 @@
-/** The Calendar's state in its URL (CD-130): view, period, filters, and a prefilled New meeting dialog. */
+/**
+ * The Calendar's state in its URL (CD-130): view, period, filters, and a prefilled New meeting dialog.
+ * `ids` (CD-211): exactly these meetings in the table (a report's number); `report=N`: the filter
+ * stands in for a report's N meetings, too many to list by id.
+ */
 export type CalendarParams = Partial<
-  Record<'view' | 'date' | 'from' | 'to' | 'user' | 'type' | 'status' | 'company' | 'deal' | 'contact' | 'notClosed' | 'missingMinutes' | 'sort' | 'new' | 'companyId' | 'dealId' | 'contactId' | 'organizer' | 'start', string | null | undefined>
+  Record<'view' | 'date' | 'from' | 'to' | 'ids' | 'report' | 'user' | 'type' | 'status' | 'company' | 'deal' | 'contact' | 'notClosed' | 'missingMinutes' | 'sort' | 'new' | 'companyId' | 'dealId' | 'contactId' | 'organizer' | 'start', string | null | undefined>
 >;
 const query = (params: Partial<Record<string, string | null | undefined>> = {}) => {
   const q = new URLSearchParams();

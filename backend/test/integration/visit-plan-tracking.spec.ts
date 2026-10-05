@@ -131,6 +131,11 @@ describe('Reports → Visit-plan completion', () => {
     // The shared Gamma visit counts for its deal owner, who has no plan: all unplanned.
     expect(r.rows.find((x: Json) => x.salespersonUserId === other.userId)).toMatchObject({ planId: null, planned: 0, held: 0, unplanned: 1 });
     expect(r.totals).toMatchObject({ planned: 4, heldCapped: 2, unplanned: 2, completion: 0.5 });
+    // The meetings behind each number (CD-211): a link opens exactly these in the Calendar.
+    expect(row.meetingIds).toEqual({ held: [meetingIds['Alpha 3'], meetingIds['Alpha 10'], meetingIds['Alpha 17']], upcoming: [], notClosed: [meetingIds['Beta open']], unplanned: [meetingIds.Delta] });
+    expect(r.rows.find((x: Json) => x.salespersonUserId === other.userId).meetingIds.unplanned).toEqual([meetingIds['Gamma shared']]);
+    expect([...r.totals.meetingIds.unplanned].sort()).toEqual([meetingIds.Delta, meetingIds['Gamma shared']].sort());
+    expect(r.totals.meetingIds.held).toHaveLength(r.totals.held);
     expect(r.periodLabel).toBe(pastPlan.periodLabel);
   });
 
@@ -144,6 +149,8 @@ describe('Reports → Visit-plan completion', () => {
     const alpha = await ok('GET', `/crm/visit-plans/report?periodType=month&periodStart=${PAST}&companyId=${companies.Alpha}`, as(owner));
     expect(alpha.rows).toHaveLength(1);
     expect(alpha.rows[0]).toMatchObject({ planned: 2, held: 3, heldCapped: 2, overPlan: 1, completion: 1 });
+    expect(alpha.rows[0].meetingIds.held).toEqual([meetingIds['Alpha 3'], meetingIds['Alpha 10'], meetingIds['Alpha 17']]);
+    expect(byPerson[other.userId].meetingIds.unplanned).toEqual([meetingIds['Gamma shared']]);
   });
 
   it('refuses a period start that does not begin a period', async () => {

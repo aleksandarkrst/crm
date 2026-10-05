@@ -14,9 +14,14 @@ import { AddButton, Section } from './RecordParts';
  * "Meetings" on a company, contact or deal page (CD-130, spec 4.6): the next three upcoming
  * meetings, "Show all" (the Calendar's table filtered to the record) and "+ Meeting" prefilled
  * with the record. On a contact, the meetings where they are an external participant. On a
- * company in this month's visit plans, "Visits this month: held / planned" (CD-135), summed over
- * the plans the viewer can see (everyone's for owners and admins, their own for members).
+ * company in this month's visit plans, "Visits this month: held / planned" (CD-135), and in this
+ * fiscal quarter's plans "Visits this quarter: held / planned" (CD-211), summed over the plans the
+ * viewer can see (everyone's for owners and admins, their own for members). "Show all" covers every
+ * meeting of the record, from SHOW_ALL_FROM to five years ahead (the table loads it page by page).
  */
+/** "Show all" starts here: before any meeting a workspace can have. */
+const SHOW_ALL_FROM = '2000-01-01';
+
 export function MeetingsCard({ record, seed }: { record: { companyId: string } | { dealId: string } | { contactId: string }; seed: MeetingDialogSeed }) {
   const { s, meetings } = useStore();
   const tz = s.workspace.timezone;
@@ -26,9 +31,10 @@ export function MeetingsCard({ record, seed }: { record: { companyId: string } |
   const { meetings: rows, loading, error } = useMeetingList(query);
   const today = todayIn(tz);
   const filter = 'companyId' in record ? { company: record.companyId } : 'dealId' in record ? { deal: record.dealId } : { contact: record.contactId };
-  const all = paths.calendar({ view: 'table', user: 'all', from: addDays(today, -365), to: addDays(today, 365), ...filter });
+  const all = paths.calendar({ view: 'table', user: 'all', from: SHOW_ALL_FROM, to: addDays(today, 5 * 366), ...filter });
   const companyId = 'companyId' in record ? record.companyId : null;
   const { data: visits } = useVisitProgress(companyId ? 'company-visits:' + companyId : null, () => crmApi.visitSummary({ periodType: 'month', companyId: companyId!, all: true }));
+  const { data: quarter } = useVisitProgress(companyId ? 'company-visits-quarter:' + companyId : null, () => crmApi.visitSummary({ periodType: 'quarter', companyId: companyId!, all: true }));
 
   return (
     <Section
@@ -46,6 +52,15 @@ export function MeetingsCard({ record, seed }: { record: { companyId: string } |
       {visits && visits.plans.length > 0 && (
         <span className="vp-company-visits" data-testid="company-visits-this-month" title={`Customer visits held this month for the visit plans of ${visits.plans.map((p) => p.salespersonName).join(', ')}`}>
           Visits this month: {visits.held} / {visits.planned}
+        </span>
+      )}
+      {quarter && quarter.plans.length > 0 && (
+        <span
+          className="vp-company-visits"
+          data-testid="company-visits-this-quarter"
+          title={`Customer visits held in ${quarter.periodLabel} for the visit plans of ${quarter.plans.map((p) => p.salespersonName).join(', ')}`}
+        >
+          Visits this quarter: {quarter.held} / {quarter.planned}
         </span>
       )}
       {loading && rows.length === 0 && <span className="meeting-muted">Loading…</span>}

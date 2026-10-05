@@ -9,6 +9,7 @@ import { allPeople, companyLabels, companyRecords, memberLabels } from '../store
 import { useStore } from '../store/store';
 import { addDays, addMonths, dateLabel, datesBetween, datesRange, dayRange, daysBetween, isIsoDate, monthGridRange, monthLabel, monthRange, todayIn, weekRange } from '../store/time';
 import { useMeetingList } from '../store/useMeetings';
+import { MAX_LINK_IDS } from '../store/visitPlans';
 import { DayList } from './calendar/DayList';
 import { MeetingTable } from './calendar/MeetingTable';
 import { MonthGrid } from './calendar/MonthGrid';
@@ -21,6 +22,9 @@ const VIEWS: { value: View; label: string }[] = [
   { value: 'month', label: 'Month' },
   { value: 'table', label: 'Table' },
 ];
+/** Rows per page of the Table view ("Load more" fetches the next). */
+const TABLE_PAGE = 500;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** The New meeting dialog's prefill in the URL (`?new=1&companyId=…`), read once and removed. */
 const NEW_PARAMS = ['new', 'companyId', 'dealId', 'contactId', 'type', 'organizer', 'start'];
 
@@ -54,8 +58,15 @@ export function Calendar() {
   const admin = session.tenant.role === 'owner' || session.tenant.role === 'admin';
 
   // ------------------------------------------------------------ state from the URL
+  // `ids=…`: exactly these meetings (a report's or plan's number, CD-211), in the table, whatever the filters.
+  const idsParam = params.get('ids') ?? '';
+  const idList = useMemo(() => {
+    const list = idsParam.split(',').filter((id) => UUID.test(id));
+    return list.length ? [...new Set(list)].slice(0, MAX_LINK_IDS) : null;
+  }, [idsParam]);
+  const reportCount = Number(params.get('report')) || 0;
   const raw = params.get('view');
-  const view: View = raw === 'day' || raw === 'week' || raw === 'month' || raw === 'table' ? raw : phone ? 'day' : 'week';
+  const view: View = idList ? 'table' : raw === 'day' || raw === 'week' || raw === 'month' || raw === 'table' ? raw : phone ? 'day' : 'week';
   const date = isIsoDate(params.get('date')) ? params.get('date')! : today;
   const fromParam = params.get('from');
   const toParam = params.get('to');
@@ -114,9 +125,9 @@ export function Calendar() {
     if (view === 'month') return monthGridRange(date, tz);
     return datesRange(tableFrom, tableTo, tz);
   }, [view, date, tableFrom, tableTo, tz]);
-  const days = useMemo(() => datesBetween(range.first, range.last), [range]);
+  const days = useMemo(() => (view === 'table' ? [] : datesBetween(range.first, range.last)), [view, range]);
 
-  const query: MeetingQuery = {
+  const filtered: MeetingQuery = {
     from: new Date(range.from).toISOString(),
     to: new Date(range.to).toISOString(),
     userId: user === 'all' ? undefined : user === 'me' ? session.userId : user,
@@ -128,10 +139,12 @@ export function Calendar() {
     notClosed: view === 'table' && notClosed ? true : undefined,
     missingMinutes: view === 'table' && missingMinutes ? true : undefined,
     sort: view === 'table' ? sort : 'asc',
-    limit: 1000,
+    // The table pages through long ranges ("Load more"); the calendar views load a period at once.
+    limit: view === 'table' ? TABLE_PAGE : 1000,
   };
-  const noStatus = statuses.length === 0;
-  const { meetings: rows, loading, more, error } = useMeetingList(noStatus ? null : query);
+  const query: MeetingQuery = idList ? { ids: idList, sort, limit: 1000 } : filtered;
+  const noStatus = !idList && statuses.length === 0;
+  const { meetings: rows, loading, more, error, loadMore } = useMeetingList(noStatus ? null : query);
   const shown = noStatus ? [] : rows;
 
   // ------------------------------------------------------------ navigation
@@ -152,6 +165,7 @@ export function Calendar() {
   /** Switching views keeps the period: the table takes the visible days; a calendar view the table's first day. */
   const setView = (v: View) => {
     if (v === view) return;
+    if (idList) update({ ids: null, report: null });
     if (v === 'table') update({ view: v, from: view === 'month' ? monthRange(date, tz).first : range.first, to: view === 'month' ? monthRange(date, tz).last : range.last });
     else update({ view: v, date: view === 'table' ? tableFrom : date, from: null, to: null });
   };
@@ -175,7 +189,7 @@ export function Calendar() {
   }, [records]);
   const dealLabel = deal ? (s.leads.find((l) => l.id === deal)?.title || s.leads.find((l) => l.id === deal)?.company || rows.find((m) => m.dealId === deal)?.dealTitle || 'Deal') : '';
   const contactLabel = contact ? (allPeople(s).find((p) => p.contactId === contact)?.name ?? 'Contact') : '';
-  const dirty = user !== (admin ? 'all' : 'me') || types.length > 0 || params.has('status') || !!company || !!deal || !!contact || notClosed || missingMinutes;
+  const dirty = reportCount > 0 || user !== (admin ? 'all' : 'me') || types.length > 0 || params.has('status') || !!company || !!deal || !!contact || notClosed || missingMinutes;
 
   // ------------------------------------------------------------ meetings
   const open = useCallback((id: string) => navigate(paths.meeting(id)), [navigate]);
@@ -203,6 +217,12 @@ export function Calendar() {
       <div className="cal" data-testid="calendar" data-view={view}>
         <div className="cal-toolbar">
           <div className="cal-nav">
+            {idList ? (
+              <h2 className="cal-title" data-testid="cal-title">
+                Meetings from report
+              </h2>
+            ) : (
+              <>
             <button type="button" className="btn-plain" data-testid="cal-today" onClick={goToday}>
               Today
             </button>
@@ -224,6 +244,8 @@ export function Calendar() {
             <h2 className="cal-title" data-testid="cal-title">
               {title}
             </h2>
+              </>
+            )}
           </div>
           <div className="cal-views" role="tablist" aria-label="View">
             {VIEWS.map((v) => (
@@ -238,6 +260,15 @@ export function Calendar() {
         </div>
 
         <div className="cal-filters" data-testid="cal-filters">
+          {idList ? (
+            <span className="cal-chip-filter" data-testid="chip-ids">
+              {idList.length} meeting{idList.length === 1 ? '' : 's'} from report
+              <button type="button" aria-label="Show the whole period instead" onClick={() => update({ ids: null, report: null })}>
+                <XIcon size={11} />
+              </button>
+            </span>
+          ) : (
+            <>
           <select className="cal-select" aria-label="Salesperson" data-testid="filter-user" value={user} onChange={(e) => update({ user: e.target.value })}>
             <option value="me">Me</option>
             <option value="all">Everyone</option>
@@ -301,10 +332,20 @@ export function Calendar() {
               </button>
             </span>
           )}
+          {reportCount > 0 && (
+            <span className="cal-chip-filter" data-testid="chip-report" title="Too many meetings to list one by one: the closest filters are shown. A shared visit can show for each salesperson at it.">
+              {reportCount} meetings from report · showing the matching filters
+              <button type="button" aria-label="Remove the report note" onClick={() => update({ report: null })}>
+                <XIcon size={11} />
+              </button>
+            </span>
+          )}
           {dirty && (
-            <button type="button" className="btn-plain" data-testid="filter-clear" onClick={() => update({ user: null, type: null, status: null, company: null, deal: null, contact: null, notClosed: null, missingMinutes: null })}>
+            <button type="button" className="btn-plain" data-testid="filter-clear" onClick={() => update({ user: null, type: null, status: null, company: null, deal: null, contact: null, notClosed: null, missingMinutes: null, report: null })}>
               Clear filters
             </button>
+          )}
+            </>
           )}
           <span className="cal-meta" aria-live="polite">
             {loading ? 'Loading…' : error ? 'Could not load the meetings: ' + error : `${shown.length} meeting${shown.length === 1 ? '' : 's'}${more ? ' (more not shown)' : ''}`}
@@ -312,7 +353,7 @@ export function Calendar() {
         </div>
 
         {view === 'table' ? (
-          <MeetingTable meetings={shown} sort={sort} onSort={() => update({ sort: sort === 'asc' ? 'desc' : 'asc' })} onOpen={open} more={more} />
+          <MeetingTable meetings={shown} sort={sort} onSort={() => update({ sort: sort === 'asc' ? 'desc' : 'asc' })} onOpen={open} more={more} onMore={loadMore} />
         ) : view === 'month' ? (
           <MonthGrid days={days} month={date.slice(0, 7)} meetings={shown} tz={tz} onOpen={open} onCreate={create} onDay={openDay} canDrag={canDrag} onReschedule={onReschedule} />
         ) : view === 'week' && phone ? (

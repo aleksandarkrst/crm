@@ -614,7 +614,7 @@ still in the queue), and skips deals that were deleted or given to someone else 
 A visit plan says how many customer visits one salesperson should make to which companies in one
 month or fiscal quarter. Counting the visits actually held is "Visit plan tracking (CD-135)" below.
 
-- **Tables** (crm module, RLS in `drizzle/0028_visit_plans_rls.sql`): `visit_plans` (salesperson,
+- **Tables** (crm module, RLS in `drizzle/0032_visit_plans_rls.sql`): `visit_plans` (salesperson,
   `period_type` `month`|`quarter`, `period_start` = first day, `period_end` = first day after,
   note ≤ 2,000) with unique (tenant, salesperson, period type, period start); `visit_plan_lines`
   (plan → cascade, company, `planned_visits` 1–99, unique per plan and company). The company FK
@@ -688,7 +688,9 @@ unplanned, shared visits).
   &periodStart=&salespersonUserId=&companyId=` (owners and admins; 403 for members) → one row per
   salesperson with a plan for the period plus anyone credited with held visits there without one
   (`planId: null`, all unplanned), and `totals` (Σ capped / Σ planned again). With `companyId`
-  each row is only that customer, so it shows how often it was visited across salespeople.
+  each row is only that customer, so it shows how often it was visited across salespeople. Every
+  row, the totals and the summary carry `meetingIds: { held, upcoming, notClosed, unplanned }`,
+  the meetings behind each number (CD-211).
   `GET /progress-summary?periodType=&periodStart=[&salespersonUserId=|&all=1][&companyId=]` sums
   the plans of the period for the Overview card (members always get their own, whatever they ask)
   and, with `companyId`, for the company card. A missing `periodStart` means the current period
@@ -702,11 +704,9 @@ unplanned, shared visits).
   CSV" for owners and admins. **Reports** (`/reports/visit-plans`, sidebar item after Products for
   owners and admins; members are sent to `/`) has the tab "Visit-plan completion": filters plan
   period (month/quarter and period), salesperson and customer in the URL, the table per spec 9.2,
-  counts linking to the Calendar table (`view=table`, `from`/`to` = the period's days, `user`,
-  `company`, `type=visit`, `status=held|planned`, `notClosed=1`; upcoming starts from today), plan
-  links, and CSV export (`lib/csv.ts`: BOM, formula guard). The Calendar's `user` filter is
-  "organizer or participant", so a shared visit credited to one salesperson can also show in the
-  other's list there. Overview has a "Visit-plan progress" card with its own month/quarter
+  counts (held, upcoming, not closed, unplanned; rows and totals) linking to the Calendar table
+  with exactly the meetings behind them (`ids=`, CD-211; see Calendar), plan links, and CSV export
+  (`lib/csv.ts`: BOM, formula guard). Overview has a "Visit-plan progress" card with its own month/quarter
   selector (members: their own, "Open my plan"; owners and admins: the team or one salesperson,
   "Open the report" with the same choice). The company page's Meetings card says "Visits this
   month: held / planned" (held uncapped) when the company is in a plan of this month, summed over
@@ -1091,7 +1091,9 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`.
   status and version (`internalMinutes`, `minutesUpdatedAt`, CD-132), and the external minutes'
   delivery (`externalDelivery`, `sendsUpdatedAt`, CD-133).
 - **Rules** (`meeting-rules.ts`, pure and unit-tested): owners, admins, the organizer and the
-  internal participants change a meeting (403 otherwise); held only from the start time on and
+  internal participants change a meeting (403 otherwise); only owners and admins change its
+  organizer on a PATCH (403 for members, spec 5.3; CD-211; the Edit dialog disables the field for
+  them), while anyone creating a meeting may name another member as organizer; held only from the start time on and
   only when planned; cancel only when planned; "Undo held" (held → planned) and "Restore"
   (cancelled → planned); a cancelled meeting is read-only (409) until restored, a held one can be
   corrected. "Not closed" = planned and ended more than 24 hours ago.
@@ -1197,7 +1199,13 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`.
   dragged to another time or day and resized by their lower edge (15-minute steps, saved with
   If-Match; put back with the reason when refused). On phones Day is the default and Week is a
   list by day; dragging is off there. `?new=1&companyId=…&dealId=…&contactId=…&type=…&organizer=…&start=…`
-  opens a prefilled New meeting dialog.
+  opens a prefilled New meeting dialog. The Table loads 500 rows at a time ("Load more" reads the
+  next page with `offset`, CD-211), so a wide range works. **`ids=`** (CD-211) shows exactly those
+  meetings (≤ 200) in the Table, whatever the other filters, with the removable chip "N meetings
+  from report": every count on a plan page and in Reports (rows, totals, unplanned) links this way
+  (`visitsInCalendar` in `store/visitPlans.ts`), so "Held 3" opens 3 rows. Over 200 meetings the
+  link falls back to the closest filters (period, salesperson as organizer or participant,
+  customer, Customer visit, status) plus `report=N`, and the chip says so.
 - **New / Edit meeting** (`modals/MeetingDialog.tsx`, `meetings.openDialog(seed)`; `MeetingForm`
   is also the deal Composer's Meeting tab, "Schedule meeting"): defaults per spec 4.2 (title
   "Meeting with <company>", Customer visit, start + 60 minutes, the company's HQ for a visit, the
@@ -1208,7 +1216,8 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`.
   (CD-131) opens a small form (name from the search, email, job title) that creates a contact of
   the meeting's company with the store's `createContact` (which returns the new id) and adds them.
 - **Meeting page** (`/meetings/:id`, `screens/Meeting.tsx`): header with type, status, time and
-  location (a link when it is a URL), Mark as held (disabled before the start), Cancel (optional
+  location (a link when it is a URL), Mark as held (disabled before the start; a timer enables it
+  when the start passes while the page is open), Cancel (optional
   reason), Edit, Undo held, Restore, and Delete for owners and admins. Tabs: Internal minutes and
   External minutes (`screens/meeting/*`, CD-132/CD-133) and History (`ChangeHistory`, entity
   `meeting`). Who may change a meeting: `canEditMeeting` (owners, admins, organizer, internal
@@ -1216,8 +1225,9 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`.
   "<name> (deleted)"; without an organizer it says "Organizer left", with **Pick new organizer**
   for owners and admins (CD-131).
 - **Elsewhere**: a Meetings card on company, contact (as external participant) and deal pages
-  (`components/MeetingsCard.tsx`: next three, "Show all" → Table filtered to the record,
-  "+ Meeting" prefilled), "Meetings today" on Today, Calendar in the sidebar (after Today; under
+  (`components/MeetingsCard.tsx`: next three, "Show all" → Table filtered to the record from
+  2000-01-01 to five years ahead, "+ Meeting" prefilled; on a company "Visits this month" and
+  "Visits this quarter" when the current month's or fiscal quarter's plans include it), "Meetings today" on Today, Calendar in the sidebar (after Today; under
   "More" on phones), "Meeting" (M) in the "+" menu and the command palette. Type colors are CSS
   variables in the CD-130 block of `styles/global.css`.
 
@@ -1290,10 +1300,13 @@ Service `meetings/external-minutes.service.ts`, email builder `meetings/minutes-
 
 - **API** (`/api/crm/meetings/:id/minutes`): `GET external` →
   `{ subject, body, prefilled, updatedAt, updatedByName, language, lastSend, changedSinceLastSend }`.
-  The first read ever (`external_prefilled_at` null) fills in the template (spec 7.1: title, date
+  The first read by someone who may change the meeting once it is held (`external_prefilled_at`
+  null; CD-211) fills in the template (spec 7.1: title, date
   and time, location, both sides' participants, the agreements and the next steps with their due
   dates but without owners; subject "Minutes: <title>, <date>"; in the customer email language)
-  and remembers it; after that nothing is copied automatically. `PUT external { subject?, body? }`
+  and remembers it; after that nothing is copied automatically. A read-only viewer, or a read
+  before the meeting is held, gets the text as it is (empty, `prefilled: false`) and fixes nothing;
+  the open tab reads it again when the meeting's status changes. `PUT external { subject?, body? }`
   (If-Match = `updatedAt`, the epoch before the first save; 409 when someone else changed a part
   sent here since). `POST external/copy-internal` returns `{ subject, body }` of the template from
   the internal minutes as they are now (nothing saved; the browser replaces the text after a

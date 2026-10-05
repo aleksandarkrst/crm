@@ -88,7 +88,7 @@ export function paceOf(t: Pick<ApiVisitTotals, 'pace' | 'expectedPace'>): { clas
   }
 }
 
-export type VisitCount = 'held' | 'upcoming' | 'notClosed';
+export type VisitCount = 'held' | 'upcoming' | 'notClosed' | 'unplanned';
 
 /** `YYYY-MM-DD` moved by whole days. */
 function shiftDay(date: string, days: number): string {
@@ -97,23 +97,30 @@ function shiftDay(date: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** The most meetings a Calendar link lists by id (the API's `ids=` limit). */
+export const MAX_LINK_IDS = 200;
+
 /**
- * The Calendar's table with the meetings behind a number: the period's Customer visits of a
- * salesperson and customer, held, upcoming (planned, from today) or not closed. The Calendar's
- * salesperson filter is "organizer or participant", while a visit counts for one of them (the
- * deal owner who was there, else the organizer), so a shared visit can show for both there.
+ * The Calendar's table with exactly the meetings behind a number (CD-211): their ids in the URL
+ * (`ids=`, shown as the chip "N meetings from report"), so "Held 3" opens those 3 rows. The
+ * counts credit one salesperson per visit and the Calendar's own filters can't say that.
+ *
+ * Over MAX_LINK_IDS meetings the link falls back to the closest filter: the period's Customer
+ * visits of the salesperson (organizer or participant) and customer, held or planned; `report=N`
+ * makes the chip say the list is approximate.
  */
-export function visitsInCalendar(kind: VisitCount, period: { periodStart: string; periodEnd: string }, filter: { userId?: string | null; companyId?: string | null }, today: string): string {
+export function visitsInCalendar(kind: VisitCount, ids: readonly string[], period: { periodStart: string; periodEnd: string }, filter: { userId?: string | null; companyId?: string | null }): string {
   const last = shiftDay(period.periodEnd, -1);
-  const from = kind === 'upcoming' && today > period.periodStart ? (today > last ? last : today) : period.periodStart;
+  if (ids.length <= MAX_LINK_IDS) return paths.calendar({ view: 'table', from: period.periodStart, to: last, ids: ids.join(',') });
   return paths.calendar({
     view: 'table',
-    from,
+    from: period.periodStart,
     to: last,
     user: filter.userId || 'all',
     company: filter.companyId || undefined,
     type: 'visit',
-    status: kind === 'held' ? 'held' : 'planned',
+    status: kind === 'held' || kind === 'unplanned' ? 'held' : 'planned',
     notClosed: kind === 'notClosed' ? '1' : undefined,
+    report: String(ids.length),
   });
 }

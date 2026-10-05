@@ -566,7 +566,17 @@ export interface ApiVisitPlanProgress {
   totals: ApiVisitTotals;
   meetings: Record<string, { id: string; title: string; startsAt: string; endsAt: string; status: MeetingStatus; companyName: string }>;
 }
-export interface ApiVisitReportRow extends ApiVisitTotals {
+/** The meetings behind a report row's numbers (CD-211), for the Calendar's `ids=` link. */
+export interface ApiVisitRowMeetings {
+  held: string[];
+  upcoming: string[];
+  notClosed: string[];
+  unplanned: string[];
+}
+export interface ApiVisitRowTotals extends ApiVisitTotals {
+  meetingIds: ApiVisitRowMeetings;
+}
+export interface ApiVisitReportRow extends ApiVisitRowTotals {
   salespersonUserId: string;
   salespersonName: string;
   /** null: no plan for the period, only unplanned visits. */
@@ -581,9 +591,9 @@ interface ApiVisitPeriod {
 export interface ApiVisitReport extends ApiVisitPeriod {
   companyId: string | null;
   rows: ApiVisitReportRow[];
-  totals: ApiVisitTotals;
+  totals: ApiVisitRowTotals;
 }
-export interface ApiVisitSummary extends ApiVisitPeriod, ApiVisitTotals {
+export interface ApiVisitSummary extends ApiVisitPeriod, ApiVisitRowTotals {
   salespersonUserId: string | null;
   plans: { id: string; salespersonUserId: string; salespersonName: string }[];
 }

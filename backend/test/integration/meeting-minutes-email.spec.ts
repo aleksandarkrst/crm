@@ -82,7 +82,9 @@ describe('the external text', () => {
       ...as(ana),
       body: { agreements: 'Pilot in Belgrade', nextSteps: [{ id: crypto.randomUUID(), text: 'Send the offer', ownerUserId: bo.userId, dueDate: null }] },
     });
-    const first = await ok('GET', ext(m.id), as(bo));
+    // A read-only viewer (Bo isn't at the meeting) doesn't fill it in (CD-211).
+    expect(await ok('GET', ext(m.id), as(bo))).toMatchObject({ prefilled: false, subject: '', body: '', updatedAt: null });
+    const first = await ok('GET', ext(m.id), as(ana));
     expect(first.prefilled).toBe(true);
     expect(first.subject).toMatch(/^Minutes: Template review, \d+ \w{3} \d{4}$/);
     expect(first.body).toContain('**Template review**');
@@ -103,6 +105,15 @@ describe('the external text', () => {
     const copy = await ok('POST', `/crm/meetings/${m.id}/minutes/external/copy-internal`, as(ana), 200);
     expect(copy.body).toContain('Pilot in Novi Sad');
     expect((await ok('GET', ext(m.id), as(owner))).body).toBe(first.body);
+  });
+
+  it('is filled in only once the meeting is held (CD-211)', async () => {
+    const m = await meeting('Too early', { planned: true });
+    expect(await ok('GET', ext(m.id), as(owner))).toMatchObject({ prefilled: false, subject: '', body: '' });
+    await ok('POST', `/crm/meetings/${m.id}/held`, as(owner), 200);
+    const held = await ok('GET', ext(m.id), as(ana));
+    expect(held.prefilled).toBe(true);
+    expect(held.body).toContain('**Too early**');
   });
 
   it('is saved by the people who may change the meeting, with conflicts caught', async () => {

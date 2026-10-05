@@ -68,6 +68,15 @@ export interface VisitRow {
   completion: number;
   expectedPace: number;
   pace: VisitPace;
+  /** The meetings behind each number, so a link opens exactly them (the Calendar's `ids=`). */
+  meetingIds: VisitRowMeetings;
+}
+
+export interface VisitRowMeetings {
+  held: string[];
+  upcoming: string[];
+  notClosed: string[];
+  unplanned: string[];
 }
 
 export interface VisitReportRow extends VisitRow {
@@ -163,10 +172,17 @@ export async function progressOfPlans(
 function rowOf(progress: VisitProgress, companyId: string | undefined, start: string, now: Date, timeZone: string): VisitRow {
   if (!companyId) {
     const { pace, ...t } = progress.totals;
-    return { ...t, pace };
+    const meetingIds = {
+      held: progress.lines.flatMap((l) => l.heldMeetingIds),
+      upcoming: progress.lines.flatMap((l) => l.upcomingMeetingIds),
+      notClosed: progress.lines.flatMap((l) => l.notClosedMeetingIds),
+      unplanned: progress.unplanned.flatMap((u) => u.meetingIds),
+    };
+    return { ...t, pace, meetingIds };
   }
   const line = progress.lines.find((l) => l.companyId === companyId);
-  const unplanned = progress.unplanned.find((u) => u.companyId === companyId)?.held ?? 0;
+  const outside = progress.unplanned.find((u) => u.companyId === companyId);
+  const unplanned = outside?.held ?? 0;
   const completion = line ? line.completion : 0;
   const expectedPace = progress.totals.expectedPace;
   return {
@@ -180,6 +196,7 @@ function rowOf(progress: VisitProgress, companyId: string | undefined, start: st
     completion,
     expectedPace,
     pace: paceOf(completion, expectedPace, now, start, timeZone),
+    meetingIds: { held: line?.heldMeetingIds ?? [], upcoming: line?.upcomingMeetingIds ?? [], notClosed: line?.notClosedMeetingIds ?? [], unplanned: outside?.meetingIds ?? [] },
   };
 }
 
@@ -200,6 +217,12 @@ function sumRows(rows: readonly VisitRow[], expectedPace: number, start: string,
     completion,
     expectedPace,
     pace: paceOf(completion, expectedPace, now, start, timeZone),
+    meetingIds: {
+      held: rows.flatMap((r) => r.meetingIds.held),
+      upcoming: rows.flatMap((r) => r.meetingIds.upcoming),
+      notClosed: rows.flatMap((r) => r.meetingIds.notClosed),
+      unplanned: rows.flatMap((r) => r.meetingIds.unplanned),
+    },
   };
 }
 

@@ -299,6 +299,10 @@ export class MeetingsService {
         const companyId = input.companyId ?? current.companyId;
         const dealId = input.dealId !== undefined ? input.dealId : current.dealId;
         if (input.companyId !== undefined || input.dealId !== undefined) await this.assertCompanyAndDeal(tx, companyId, dealId ?? null);
+        // Picking another organizer (e.g. after "Organizer left") is for owners and admins (spec 5.3).
+        if (input.organizerUserId !== undefined && input.organizerUserId !== current.organizerUserId && ctx.role !== 'owner' && ctx.role !== 'admin') {
+          throw new ForbiddenException('Only admins and owners can change the organizer');
+        }
         const organizerUserId = input.organizerUserId ?? current.organizerUserId;
 
         const newMembers = [...(input.organizerUserId ? [input.organizerUserId] : []), ...(input.internalUserIds ?? [])];
@@ -422,6 +426,11 @@ export class MeetingsService {
   private async minutesSent(tx: Tx, meetingId: string): Promise<boolean> {
     const [sent] = await tx.select({ id: meetingMinutesSends.id }).from(meetingMinutesSends).where(eq(meetingMinutesSends.meetingId, meetingId)).limit(1);
     return !!sent;
+  }
+
+  /** Whether the caller may change this meeting (and write its minutes): see canManageMeeting. */
+  async mayChange(tx: Tx, ctx: TenantContext, meeting: { id: string; organizerUserId: string | null }): Promise<boolean> {
+    return canManageMeeting(ctx, { organizerUserId: meeting.organizerUserId, internalUserIds: await this.internalUserIds(tx, meeting.id) });
   }
 
   /** The members on the meeting (organizer included). */

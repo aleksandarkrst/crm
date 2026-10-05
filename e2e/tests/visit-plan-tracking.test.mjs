@@ -1,8 +1,9 @@
 // Visit plan tracking (CD-135): an owner plans two visits at a customer for a member this month;
 // the member schedules one from the plan and marks it held; the owner's open plan page counts it
 // without a reload (1 held, 50%); Reports → Visit-plan completion shows the same, and its count
-// opens the Calendar's table with the right filters; the Overview card agrees; the member sees
-// their own card and no Reports.
+// opens the Calendar's table with exactly the meetings behind it (CD-211); the Overview card
+// agrees; the member sees their own card and no Reports; the company card shows the month's and
+// the quarter's visits.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
 import { api, BASE_URL, click, clickButton, createWorkspace, email, eventually, finishOnboarding, signIn, steps, useBrowser } from '../lib/harness.mjs';
@@ -89,7 +90,7 @@ describe('visit plan tracking', () => {
     await mia.waitForFunction(() => document.querySelector('[data-testid=visit-plan-completion]')?.textContent.trim() === '50%');
   });
 
-  step('Reports shows the same numbers, and a count opens the Calendar table with its filters', async () => {
+  step('Reports shows the same numbers, and a count opens the Calendar table with exactly its meetings', async () => {
     await olga.goto(`${BASE_URL}/overview`, { waitUntil: 'networkidle0' });
     await olga.waitForSelector('a[href^="/reports"]');
     await click(olga, 'a[href^="/reports"]');
@@ -106,16 +107,27 @@ describe('visit plan tracking', () => {
     const mine = report.rows.find((r) => r.salespersonUserId === miaId);
     assert.deepEqual([mine.planned, mine.heldCapped, mine.completion], [progress.totals.planned, progress.totals.heldCapped, progress.totals.completion]);
 
+    // Olga has a visit of her own at the customer this month: the Calendar's filters would show it too.
+    const start = new Date(Date.now() - 90_000);
+    const own = await api(olga, '/crm/meetings', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Olga visits', type: 'visit', companyId: alphaId, startsAt: start.toISOString(), endsAt: new Date(start.getTime() + 1_800_000).toISOString(), internalUserIds: [miaId] }),
+    });
+    await api(olga, `/crm/meetings/${own.id}/held`, { method: 'POST' });
+    assert.deepEqual((await api(olga, `/crm/visit-plans/report?periodType=month&periodStart=${period.periodStart}`)).rows.find((r) => r.salespersonUserId === miaId).meetingIds.held, [meetingId]);
+
     await click(olga, `${row} a[data-testid=report-held]`);
     await olga.waitForFunction(() => location.pathname === '/calendar');
     const q = new URL(olga.url()).searchParams;
     assert.equal(q.get('view'), 'table');
-    assert.equal(q.get('user'), miaId);
-    assert.equal(q.get('type'), 'visit');
-    assert.equal(q.get('status'), 'held');
-    assert.equal(q.get('from'), period.periodStart);
-    assert.ok(q.get('to') < period.periodEnd && q.get('to').slice(0, 7) === period.periodStart.slice(0, 7), 'to: the last day of the month');
+    assert.equal(q.get('ids'), meetingId);
     await olga.waitForSelector(`[data-testid=meeting-table] [data-meeting-id="${meetingId}"]`);
+    assert.equal(await textOf(olga, '[data-testid=chip-ids]'), '1 meeting from report');
+    assert.equal(await olga.$$eval('[data-testid=meeting-table] .table-row', (rows) => rows.length), 1, '"Held 1" opens one row');
+    // Removing the chip shows the period with the usual filters (Olga's own visit too).
+    await click(olga, '[data-testid=chip-ids] button');
+    await olga.waitForSelector(`[data-testid=meeting-table] [data-meeting-id="${own.id}"]`);
+    assert.equal(new URL(olga.url()).searchParams.get('ids'), null);
   });
 
   step('the Overview card agrees, for the team and for the member', async () => {
@@ -137,9 +149,19 @@ describe('visit plan tracking', () => {
     await mia.waitForFunction(() => !location.pathname.startsWith('/reports'));
   });
 
-  step('the company page says how many of this month’s planned visits were held', async () => {
+  step('the company page says how many of this month’s and this quarter’s planned visits were held', async () => {
+    const quarter = await api(olga, '/crm/visit-plans/progress-summary?periodType=quarter');
+    await api(olga, '/crm/visit-plans', {
+      method: 'POST',
+      body: JSON.stringify({ salespersonUserId: miaId, periodType: 'quarter', periodStart: quarter.periodStart, lines: [{ companyId: alphaId, plannedVisits: 3 }] }),
+    });
     await olga.goto(`${BASE_URL}/companies/${alphaId}`, { waitUntil: 'networkidle0' });
     await olga.waitForFunction(() => document.querySelector('[data-testid=company-visits-this-month]')?.textContent.trim() === 'Visits this month: 1 / 2');
+    await olga.waitForFunction(() => document.querySelector('[data-testid=company-visits-this-quarter]')?.textContent.trim() === 'Visits this quarter: 1 / 3');
+    // "Show all" covers every meeting of the customer, not only a year around today.
+    const all = new URL(BASE_URL + (await olga.$eval('[data-testid=meetings-show-all]', (a) => a.getAttribute('href'))));
+    assert.equal(all.searchParams.get('from'), '2000-01-01');
+    assert.ok(all.searchParams.get('to') > `${new Date().getUTCFullYear() + 4}`, 'five years ahead');
   });
 });
 
