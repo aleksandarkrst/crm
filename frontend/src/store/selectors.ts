@@ -2,6 +2,7 @@
 import { CHAMP, CHAMP_LEVELS, SCRIPTS } from './seed';
 import type { CustomFieldEntity, CustomValue } from '../lib/api';
 import { billingDates, type DealTotals, dealTotals } from './dealMath';
+import { dealsWithUpcomingMeeting } from './meetings';
 import type { CatalogItem, Champ, CustomFieldDef, DealLine, Lead, LeadTask, LogEntry, Person, SegKey, Stage, State, TaskState } from './types';
 
 export const num = (v: unknown): number => Number(String(v ?? '').replace(/[^0-9.]/g, '')) || 0;
@@ -410,8 +411,12 @@ export const overdueTasks = (s: State): LeadTask[] => {
   const today = todayIso(s.workspace.timezone);
   return s.leadTasks.filter((t) => isOverdue(t, today) && s.leads.some((l) => l.id === t.leadId));
 };
-/** An open deal with no open task from "New task": nobody has planned what happens next. */
-export const needsNextStep = (s: State, lead: Lead): boolean => lead.outcome === 'open' && !s.leadTasks.some((t) => t.leadId === lead.id && !t.done);
+/**
+ * An open deal with no open task from "New task" and no planned meeting still to come (CD-130):
+ * nobody has planned what happens next. The store keeps the coming year's planned meetings loaded.
+ */
+export const needsNextStep = (s: State, lead: Lead): boolean =>
+  lead.outcome === 'open' && !s.leadTasks.some((t) => t.leadId === lead.id && !t.done) && !dealsWithUpcomingMeeting(s.meetings).has(lead.id);
 
 // ---------------------------------------------------------------- sales bonuses
 

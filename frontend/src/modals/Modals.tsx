@@ -9,6 +9,7 @@ import { useStore } from '../store/store';
 import type { ChannelCode, Lead } from '../store/types';
 import { GenerationModal, NewTemplateModal } from './DocumentModals';
 import { DealProductsDialog } from './DealProductsDialog';
+import { MeetingDialog } from './MeetingDialog';
 import { ProductModal } from './ProductModal';
 import { ProposalDoc } from './ProposalDoc';
 
@@ -29,6 +30,7 @@ export function Modals() {
       {s.productOpen && <ProductModal />}
       {s.dealProductsId && <DealProductsDialog />}
       {s.lostLeadId && <MarkLostModal />}
+      {s.meetingDialog && <MeetingDialog />}
     </>
   );
 }

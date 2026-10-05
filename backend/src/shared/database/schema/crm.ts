@@ -578,11 +578,93 @@ export const dealDocuments = pgTable(
   ],
 );
 
+// ---------------------------------------------------------------- meetings (CD-130)
+
+/** Customer visit, online meeting, meeting at our office, phone call. Only visits count toward visit plans. */
+export const MEETING_TYPES = ['visit', 'online', 'office', 'phone'] as const;
+export type MeetingType = (typeof MEETING_TYPES)[number];
+export const MEETING_STATUSES = ['planned', 'held', 'cancelled'] as const;
+export type MeetingStatus = (typeof MEETING_STATUSES)[number];
+export const MEETING_PARTICIPANT_KINDS = ['internal', 'external'] as const;
+export type MeetingParticipantKind = (typeof MEETING_PARTICIPANT_KINDS)[number];
+
+/**
+ * A meeting with a customer company (CD-130): times are instants, shown in the workspace time
+ * zone. The company can't be deleted while it has meetings (no cascade); deleting the deal only
+ * unlinks it (ON DELETE SET NULL (deal_id), in the custom migration because Drizzle can't express
+ * a column list). organizer_user_id null means "Organizer left". updated_at is the If-Match version
+ * (crm_touch_version), like deals.
+ */
+export const meetings = pgTable(
+  'meetings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    title: text('title').notNull(),
+    type: text('type', { enum: MEETING_TYPES }).notNull(),
+    startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
+    endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
+    location: text('location'),
+    agenda: text('agenda'),
+    companyId: uuid('company_id').notNull(),
+    dealId: uuid('deal_id'),
+    organizerUserId: uuid('organizer_user_id').references(() => users.id, { onDelete: 'set null' }),
+    status: text('status', { enum: MEETING_STATUSES }).notNull().default('planned'),
+    cancelReason: text('cancel_reason'),
+    heldAt: timestamp('held_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (t) => [
+    unique('meetings_tenant_id_uq').on(t.tenantId, t.id),
+    index('meetings_tenant_starts_idx').on(t.tenantId, t.startsAt),
+    index('meetings_tenant_company_idx').on(t.tenantId, t.companyId),
+    index('meetings_tenant_deal_idx').on(t.tenantId, t.dealId),
+    index('meetings_tenant_organizer_idx').on(t.tenantId, t.organizerUserId),
+    foreignKey({ columns: [t.tenantId, t.companyId], foreignColumns: [companies.tenantId, companies.id], name: 'meetings_company_fk' }),
+    check('meetings_time_ck', sql`${t.endsAt} > ${t.startsAt}`),
+    check('meetings_type_ck', sql`${t.type} in ('visit', 'online', 'office', 'phone')`),
+    check('meetings_status_ck', sql`${t.status} in ('planned', 'held', 'cancelled')`),
+  ],
+);
+
+/**
+ * The people at a meeting: members (internal, user_id) and contacts (external, contact_id). The
+ * organizer is always an internal participant (MeetingsService keeps it so). `name` and `email`
+ * are snapshots, so a deleted contact still shows as "<name> (deleted)": deleting the contact sets
+ * contact_id to null (ON DELETE SET NULL (contact_id), in the custom migration).
+ */
+export const meetingParticipants = pgTable(
+  'meeting_participants',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    meetingId: uuid('meeting_id').notNull(),
+    kind: text('kind', { enum: MEETING_PARTICIPANT_KINDS }).notNull(),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    contactId: uuid('contact_id'),
+    name: text('name').notNull(),
+    email: text('email'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique('meeting_participants_tenant_id_uq').on(t.tenantId, t.id),
+    index('meeting_participants_tenant_meeting_idx').on(t.tenantId, t.meetingId),
+    index('meeting_participants_tenant_user_idx').on(t.tenantId, t.userId),
+    index('meeting_participants_tenant_contact_idx').on(t.tenantId, t.contactId),
+    uniqueIndex('meeting_participants_user_uq').on(t.meetingId, t.userId).where(sql`${t.userId} is not null`),
+    uniqueIndex('meeting_participants_contact_uq').on(t.meetingId, t.contactId).where(sql`${t.contactId} is not null`),
+    foreignKey({ columns: [t.tenantId, t.meetingId], foreignColumns: [meetings.tenantId, meetings.id], name: 'meeting_participants_meeting_fk' }).onDelete('cascade'),
+    check('meeting_participants_kind_ck', sql`${t.kind} in ('internal', 'external') and (${t.kind} = 'internal' or ${t.userId} is null) and (${t.kind} = 'external' or ${t.contactId} is null)`),
+  ],
+);
+
 // ---------------------------------------------------------------- change history (CD-69)
 
-export const HISTORY_ENTITY_TYPES = ['deal', 'company', 'contact'] as const;
+export const HISTORY_ENTITY_TYPES = ['deal', 'company', 'contact', 'meeting'] as const;
 export type HistoryEntityType = (typeof HISTORY_ENTITY_TYPES)[number];
-export const RECORD_CHANGE_ACTIONS = ['created', 'updated', 'deleted', 'line_added', 'line_changed', 'line_removed'] as const;
+export const RECORD_CHANGE_ACTIONS = ['created', 'updated', 'deleted', 'line_added', 'line_changed', 'line_removed', 'participant_added', 'participant_removed'] as const;
 export type RecordChangeAction = (typeof RECORD_CHANGE_ACTIONS)[number];
 
 /**

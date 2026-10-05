@@ -468,7 +468,8 @@ export interface ApiInvitePreview {
 /** One change of a deal, company or contact (CD-69), newest first from GET /crm/history. */
 export interface ApiHistoryEntry {
   id: string;
-  action: 'created' | 'updated' | 'deleted' | 'line_added' | 'line_changed' | 'line_removed';
+  /** participant_*: a meeting's participant (CD-130); `label` is the name, the value `{ kind, userId, contactId, name }`. */
+  action: 'created' | 'updated' | 'deleted' | 'line_added' | 'line_changed' | 'line_removed' | 'participant_added' | 'participant_removed';
   /** The API's field name (title, ownerUserId, stageId, …); "line" for deal lines. */
   field: string | null;
   oldValue: unknown;
@@ -482,7 +483,7 @@ export interface ApiHistoryEntry {
   actor: { userId: string | null; name: string } | null;
   changedAt: string;
 }
-export type HistoryEntity = 'deal' | 'company' | 'contact';
+export type HistoryEntity = 'deal' | 'company' | 'contact' | 'meeting';
 /** The body of a 409 from an update with If-Match: someone changed these fields meanwhile. */
 export interface ApiConflict {
   message: string;
@@ -536,6 +537,109 @@ export type TaskInput = Partial<{
   channel: Channel | null;
 }>;
 export type StageInput = Partial<Pick<ApiFunnelStage, 'name' | 'activity' | 'channel' | 'documentOnEntry' | 'winProbability' | 'checklistItems'>>;
+
+// ---------------------------------------------------------------- meetings (CD-130)
+/** visit = Customer visit (the only type that counts toward visit plans); office = at our office. */
+export type MeetingType = 'visit' | 'online' | 'office' | 'phone';
+export type MeetingStatus = 'planned' | 'held' | 'cancelled';
+export interface ApiMeetingParticipant {
+  id: string;
+  kind: 'internal' | 'external';
+  userId: string | null;
+  contactId: string | null;
+  /** The person's name when they were added (kept for "(deleted)"). */
+  name: string;
+  email: string | null;
+  /** An external contact that was deleted, or a member no longer in the workspace. */
+  deleted: boolean;
+}
+export interface ApiMeeting {
+  id: string;
+  title: string;
+  type: MeetingType;
+  /** ISO instants. */
+  startsAt: string;
+  endsAt: string;
+  location: string | null;
+  agenda: string | null;
+  companyId: string;
+  companyName: string;
+  dealId: string | null;
+  dealTitle: string | null;
+  dealOwnerUserId: string | null;
+  /** null: the organizer left the workspace ("Organizer left"). */
+  organizerUserId: string | null;
+  organizerName: string | null;
+  status: MeetingStatus;
+  cancelReason: string | null;
+  heldAt: string | null;
+  cancelledAt: string | null;
+  /** Planned and ended more than 24 hours ago. */
+  notClosed: boolean;
+  participants: ApiMeetingParticipant[];
+  internalMinutes: 'missing' | 'recorded';
+  externalDelivery: 'not_sent' | 'queued' | 'sent' | 'failed';
+  createdByUserId: string | null;
+  createdAt: string;
+  /** The version: send it back as If-Match when changing the meeting. */
+  updatedAt: string;
+}
+export interface MeetingInput {
+  title?: string;
+  type?: MeetingType;
+  startsAt?: string;
+  endsAt?: string;
+  location?: string | null;
+  agenda?: string | null;
+  companyId?: string;
+  dealId?: string | null;
+  organizerUserId?: string;
+  /** Replace the sets (the organizer is always kept). */
+  internalUserIds?: string[];
+  externalContactIds?: string[];
+}
+/** GET /crm/meetings: meetings overlapping [from, to), or by record or ids. */
+export interface MeetingQuery {
+  from?: string;
+  to?: string;
+  /** Organizer or internal participant. */
+  userId?: string;
+  companyId?: string;
+  dealId?: string;
+  /** External participant. */
+  contactId?: string;
+  type?: MeetingType[];
+  status?: MeetingStatus[];
+  notClosed?: boolean;
+  /** Held without a summary (CD-132). */
+  missingMinutes?: boolean;
+  ids?: readonly string[];
+  sort?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+}
+const meetingSearch = (q: MeetingQuery): string => {
+  const p = new URLSearchParams();
+  const add = (k: string, v: string | number | undefined) => {
+    if (v !== undefined && v !== '') p.set(k, String(v));
+  };
+  add('from', q.from);
+  add('to', q.to);
+  add('userId', q.userId);
+  add('companyId', q.companyId);
+  add('dealId', q.dealId);
+  add('contactId', q.contactId);
+  if (q.type?.length) add('type', q.type.join(','));
+  if (q.status?.length) add('status', q.status.join(','));
+  if (q.notClosed) add('notClosed', 1);
+  if (q.missingMinutes) add('missingMinutes', 1);
+  if (q.ids) add('ids', q.ids.join(','));
+  add('sort', q.sort);
+  add('limit', q.limit);
+  add('offset', q.offset);
+  const s = p.toString();
+  return s ? '?' + s : '';
+};
 
 export const crmApi = {
   me: () => api<ApiMe>('/me'),
@@ -627,4 +731,16 @@ export const crmApi = {
   putBonusRule: (userId: string, rule: { rate: number; floor: number; fixed: number }) => api<ApiBonusRules>(`/crm/bonus-rules/${userId}`, { method: 'PUT', json: rule }),
   history: (entityType: HistoryEntity, entityId: string, offset = 0, limit = 30) =>
     api<{ entries: ApiHistoryEntry[]; more: boolean }>(`/crm/history?entityType=${entityType}&entityId=${entityId}&limit=${limit}&offset=${offset}`),
+
+  meetings: {
+    list: (q: MeetingQuery) => api<{ meetings: ApiMeeting[]; more: boolean }>('/crm/meetings' + meetingSearch(q)),
+    get: (id: string) => api<ApiMeeting>(`/crm/meetings/${id}`),
+    create: (input: MeetingInput & { title: string; type: MeetingType; startsAt: string; endsAt: string; companyId: string }) => api<ApiMeeting>('/crm/meetings', { method: 'POST', json: input }),
+    patch: (id: string, input: MeetingInput, version?: string) => api<ApiMeeting>(`/crm/meetings/${id}`, { method: 'PATCH', json: input, headers: ifMatch(version) }),
+    held: (id: string) => api<ApiMeeting>(`/crm/meetings/${id}/held`, { method: 'POST' }),
+    cancel: (id: string, reason: string | null) => api<ApiMeeting>(`/crm/meetings/${id}/cancel`, { method: 'POST', json: reason ? { reason } : {} }),
+    undoHeld: (id: string) => api<ApiMeeting>(`/crm/meetings/${id}/undo-held`, { method: 'POST' }),
+    restore: (id: string) => api<ApiMeeting>(`/crm/meetings/${id}/restore`, { method: 'POST' }),
+    delete: (id: string) => api(`/crm/meetings/${id}`, { method: 'DELETE' }),
+  },
 };
