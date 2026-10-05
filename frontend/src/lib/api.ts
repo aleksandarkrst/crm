@@ -483,7 +483,40 @@ export interface ApiHistoryEntry {
   actor: { userId: string | null; name: string } | null;
   changedAt: string;
 }
-export type HistoryEntity = 'deal' | 'company' | 'contact' | 'meeting';
+export type HistoryEntity = 'deal' | 'company' | 'contact' | 'meeting' | 'visit_plan';
+
+/** Customer visit plans (CD-134): per salesperson and month or fiscal quarter, the visits planned per company. */
+export type VisitPlanPeriodType = 'month' | 'quarter';
+export interface ApiVisitPlanLine {
+  id: string;
+  companyId: string;
+  companyName: string;
+  plannedVisits: number;
+}
+export interface ApiVisitPlan {
+  id: string;
+  salespersonUserId: string;
+  salespersonName: string;
+  periodType: VisitPlanPeriodType;
+  /** First day of the period (YYYY-MM-DD); periodEnd is the first day after it. */
+  periodStart: string;
+  periodEnd: string;
+  /** "October 2026", "Q4 2026", "Q1 FY2027 (Oct–Dec 2026)". */
+  periodLabel: string;
+  note: string | null;
+  lines: ApiVisitPlanLine[];
+  totalPlanned: number;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface VisitPlanInput {
+  salespersonUserId: string;
+  periodType: VisitPlanPeriodType;
+  periodStart: string;
+  note?: string | null;
+  lines: { companyId: string; plannedVisits: number }[];
+}
 /** The body of a 409 from an update with If-Match: someone changed these fields meanwhile. */
 export interface ApiConflict {
   message: string;
@@ -756,6 +789,11 @@ export const crmApi = {
   bonusRules: () => api<ApiBonusRules>('/crm/bonus-rules'),
   updateBonusSettings: (trigger: string) => api<ApiBonusRules>('/crm/bonus-rules', { method: 'PATCH', json: { trigger } }),
   putBonusRule: (userId: string, rule: { rate: number; floor: number; fixed: number }) => api<ApiBonusRules>(`/crm/bonus-rules/${userId}`, { method: 'PUT', json: rule }),
+  visitPlans: (ids?: readonly string[]) => api<{ plans: ApiVisitPlan[] }>(only('/crm/visit-plans', 'ids', ids)).then((r) => r.plans),
+  createVisitPlan: (input: VisitPlanInput) => api<ApiVisitPlan>('/crm/visit-plans', { method: 'POST', json: input }),
+  /** `lines` replaces the plan's lines. */
+  updateVisitPlan: (id: string, input: Partial<VisitPlanInput>, version?: string) => api<ApiVisitPlan>(`/crm/visit-plans/${id}`, { method: 'PATCH', json: input, headers: ifMatch(version) }),
+  deleteVisitPlan: (id: string) => api(`/crm/visit-plans/${id}`, { method: 'DELETE' }),
   history: (entityType: HistoryEntity, entityId: string, offset = 0, limit = 30) =>
     api<{ entries: ApiHistoryEntry[]; more: boolean }>(`/crm/history?entityType=${entityType}&entityId=${entityId}&limit=${limit}&offset=${offset}`),
 

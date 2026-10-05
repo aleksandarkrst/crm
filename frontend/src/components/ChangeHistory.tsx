@@ -52,6 +52,11 @@ const FIELD_LABELS: Record<string, string> = {
   summary: 'Minutes summary',
   agreements: 'Agreements',
   nextSteps: 'Next steps',
+  // Visit plans (CD-134)
+  salespersonUserId: 'Salesperson',
+  periodType: 'Period type',
+  periodStart: 'Period starts',
+  note: 'Note',
 };
 const MEETING_TEXT: Record<string, string> = { visit: 'Customer visit', online: 'Online meeting', office: 'Meeting at our office', phone: 'Phone call', planned: 'Planned', held: 'Held', cancelled: 'Cancelled' };
 const MOMENT_FIELDS = new Set(['startsAt', 'endsAt', 'heldAt', 'cancelledAt']);
@@ -69,8 +74,9 @@ const LINE_LABELS: Record<string, string> = {
 };
 const FREQUENCY_TEXT: Record<string, string> = { one_time: 'One time', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly', annually: 'Annually' };
 const TAX_TEXT: Record<string, string> = { exclusive: 'Tax exclusive', inclusive: 'Tax inclusive', none: 'No tax' };
-const DATE_FIELDS = new Set(['closeDate', 'discoveryDate', 'startDate']);
-const NOUN: Record<HistoryEntity, string> = { deal: 'deal', company: 'company', contact: 'contact', meeting: 'meeting' };
+const DATE_FIELDS = new Set(['closeDate', 'discoveryDate', 'startDate', 'periodStart']);
+const PERIOD_TEXT: Record<string, string> = { month: 'Month', quarter: 'Quarter' };
+const NOUN: Record<HistoryEntity, string> = { deal: 'deal', company: 'company', contact: 'contact', meeting: 'meeting', visit_plan: 'visit plan' };
 const PAGE = 30;
 
 const empty = <span style={{ color: 'var(--muted)' }}>empty</span>;
@@ -78,7 +84,7 @@ const dateText = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString
 const clip = (t: string) => (t.length > 90 ? t.slice(0, 88) + '…' : t);
 
 /**
- * Change history of a deal, company or contact (CD-69): who changed which field, when, from what
+ * Change history of a deal, company, contact or visit plan (CD-69, CD-134): who changed which field, when, from what
  * to what, newest first, a page at a time. It re-reads when the record changes, here or elsewhere
  * (a live update, CD-20).
  */
@@ -134,6 +140,7 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
     if ((field === 'type' || field === 'status') && entity === 'meeting' && typeof v === 'string') return MEETING_TEXT[v] ?? v;
     if (field === 'billingFrequency' && typeof v === 'string') return FREQUENCY_TEXT[v] ?? v;
     if (field === 'taxMode' && typeof v === 'string') return TAX_TEXT[v] ?? v;
+    if (field === 'periodType' && typeof v === 'string') return PERIOD_TEXT[v] ?? v;
     if (field === 'discountKind') return v === 'percent' ? 'percent' : 'amount';
     if (field === 'discounts' && Array.isArray(v)) return `${v.length} discount${v.length === 1 ? '' : 's'}`;
     if (field === 'installments' && Array.isArray(v)) return `${v.length} installment${v.length === 1 ? '' : 's'}`;
@@ -146,6 +153,11 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
       {value(field, e.oldValue, e.oldLabel)} → {value(field, e.newValue, e.newLabel)}
     </>
   );
+  /** A visit plan's line (CD-134): the company (its name at the time) and the planned visits. */
+  const visits = (v: Record<string, unknown> | null) => {
+    const n = Number(v?.plannedVisits);
+    return n === 1 ? '1 visit' : `${n} visits`;
+  };
   const line = (v: Record<string, unknown> | null, product: string | null) => {
     if (!v) return product ?? 'a product';
     const name = product ?? (v.productName as string | null) ?? 'No product';
@@ -160,6 +172,19 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
   };
   /** One change in words; null for a row folded into another (the note of a loss). */
   const describe = (e: ApiHistoryEntry, all: ApiHistoryEntry[]) => {
+    if (entity === 'visit_plan') {
+      const company = e.label ?? 'a company';
+      switch (e.action) {
+        case 'created':
+          return <>Created the visit plan</>;
+        case 'line_added':
+          return <>Added {company}: {visits(e.newValue as Record<string, unknown>)}</>;
+        case 'line_removed':
+          return <>Removed {company} ({visits(e.oldValue as Record<string, unknown>)})</>;
+        case 'line_changed':
+          return <>Planned visits at {company}: {visits(e.oldValue as Record<string, unknown>)} → {visits(e.newValue as Record<string, unknown>)}</>;
+      }
+    }
     switch (e.action) {
       case 'created':
         return <>Created the {NOUN[entity]}{e.label ? <> “{clip(e.label)}”</> : null}</>;

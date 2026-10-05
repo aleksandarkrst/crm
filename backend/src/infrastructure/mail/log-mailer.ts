@@ -6,9 +6,9 @@ import { type MailMessage, Mailer, type SentMail } from './mailer';
 const KEEP = 200;
 
 /**
- * MAIL_DRIVER=log: nothing leaves the machine. Each message is logged (recipient and subject at
- * info, the text at debug) and kept: the last messages in memory, and, when an outbox file is
- * given (outside production), appended to it as JSON lines. The API and the worker are separate
+ * MAIL_DRIVER=log: nothing leaves the machine. Each message is logged (recipient, subject and
+ * attachment names at info, the text at debug) and kept, attachments included: the last messages
+ * in memory, and, when an outbox file is given (outside production), appended to it as JSON lines. The API and the worker are separate
  * processes, so the dev-only GET /api/dev/mail reads the file, not this process's memory.
  *
  * Addresses at the reserved ".invalid" top-level domain (RFC 2606) are refused, so a failed send
@@ -34,7 +34,8 @@ export class LogMailer extends Mailer {
     const mail: SentMail = { ...message, from: this.from, sentAt: new Date().toISOString() };
     this.sent.push(mail);
     if (this.sent.length > KEEP) this.sent.splice(0, this.sent.length - KEEP);
-    this.logger.log(`Email to ${message.to}: ${message.subject}`);
+    const files = message.attachments?.length ? ` [${message.attachments.map((a) => a.filename).join(', ')}]` : '';
+    this.logger.log(`Email to ${message.to}: ${message.subject}${files}`);
     this.logger.debug(message.text);
     if (this.outboxFile) {
       await mkdir(dirname(this.outboxFile), { recursive: true });

@@ -502,12 +502,15 @@ The worker fetches up to 10 jobs of a queue at a time (and again straight away w
 back full) and settles each job on its own, so one failing email doesn't retry the others. A
 handler gets `{ retryCount, retryLimit, lastAttempt }` to tell a final failure from one that will
 be retried. Modules register their own handlers through a worker module exported from their
-`index.ts` (`IdentityWorkerModule`, `NotificationsWorkerModule`).
+`index.ts` (`CrmWorkerModule`, `IdentityWorkerModule`, `NotificationsWorkerModule`).
 
 | Job | Sent by | Handled by |
 |---|---|---|
 | `crm.deal-won` | CRM, deal enters the won stage | worker placeholder (future projects handover) |
 | `crm.deal-assigned` | CRM, someone else becomes a deal's owner (create or change) | notifications: "deal assigned to you" email |
+| `crm.meeting-invite` | CRM, someone else adds a member to a planned meeting, or moves, cancels or restores one (one job per member) | CRM worker (`CrmWorkerModule`): the meeting email with an .ics |
+| `identity.member-removed` | identity, a member is removed or leaves | CRM worker: off future planned meetings, "Organizer left" where they organized |
+| `crm.visit-plan-email` | CRM, someone else creates or changes a salesperson's visit plan (CD-134) | notifications: "your visit plan" email |
 | `identity.invitation-email` | identity, invitation created or resent | identity: the invitation email |
 | `notifications.digest-tick` | cron, every 15 minutes | notifications: queues the digests that are due |
 | `notifications.daily-digest` | the tick (or `POST /api/dev/digest`) | notifications: one member's digest |
@@ -527,6 +530,10 @@ picks:
   `notDelivered`, and the jobs record invitations and digests as failed instead of sent (CD-84).
 - `smtp`: nodemailer with `SMTP_URL` (e.g. `smtps://USER:PASSWORD@smtp.postmarkapp.com:465`) and
   `MAIL_FROM`; any provider with SMTP works (Postmark, Resend, SES, Mailgun).
+
+A message may carry text attachments (`attachments: [{ filename, contentType, content }]`, CD-131,
+used for the meeting .ics): the smtp driver hands them to nodemailer; the log driver logs their
+names and keeps them, content included, in memory and the outbox, so tests can read them.
 
 Mail jobs (`MAIL_JOBS` in `job-types.ts`) are retried `MAIL_RETRY_LIMIT` times (default 4) with
 exponential backoff from `MAIL_RETRY_DELAY_SECONDS` (default 30). Emails are plain text plus a
@@ -596,6 +603,53 @@ isn't the person making the change: a new deal created for someone else, or an o
 Saving the same owner again or taking a deal yourself sends nothing, and neither does the CSV
 import. The worker checks the assignee's setting when it sends (so switching it off stops emails
 still in the queue), and skips deals that were deleted or given to someone else again meanwhile.
+
+## Visit plans (CD-134)
+
+A visit plan says how many customer visits one salesperson should make to which companies in one
+month or fiscal quarter. Counting the visits actually held (planned vs. held, Reports, the Overview
+card) is CD-135; until then the screens show "—" in the Held, Upcoming and Completion columns.
+
+- **Tables** (crm module, RLS in `drizzle/0028_visit_plans_rls.sql`): `visit_plans` (salesperson,
+  `period_type` `month`|`quarter`, `period_start` = first day, `period_end` = first day after,
+  note ≤ 2,000) with unique (tenant, salesperson, period type, period start); `visit_plan_lines`
+  (plan → cascade, company, `planned_visits` 1–99, unique per plan and company). The company FK
+  has no cascade: deleting a company that is in a plan is refused with 409 ("… is in 1 visit
+  plan. Remove it from the plans first."), like a company with deals; "Remove sample data" keeps
+  such a company.
+- **Periods** (`visit-plans/periods.ts`, pure, unit-tested; the frontend has the same rules in
+  `store/visitPlans.ts`): a quarter starts 0, 3, 6 or 9 months after `tenants.fiscal_year_start_month`
+  and the fiscal year is named after the calendar year it ends in. Labels: "October 2026";
+  "Q4 2026" for a January fiscal year, else "Q1 FY2027 (Oct–Dec 2026)". A `periodStart` that isn't
+  the first day of a period is 400. Plans keep their stored dates when the fiscal year setting
+  changes later (their label then reads by months, "Oct–Dec 2026").
+- **API** (`/api/crm/visit-plans`): `GET ?periodType=&periodStart=&salespersonUserId=&ids=` →
+  `{ plans }` (with lines, company names, `totalPlanned`, `periodLabel`), `GET /:id`, and for owners
+  and admins `POST`, `PATCH /:id` (`lines` replaces the lines, matched by company; If-Match like
+  deals) and `DELETE /:id` (meetings are never touched). Members get only their own plans: the list
+  is forced to them, someone else's plan (and its history) is 404, and every write is 403. A second
+  plan for the same person and period is 409 ("Mia already has a plan for October 2026…");
+  duplicate companies in `lines`, numbers outside 1–99, no lines, unknown companies and a
+  salesperson who isn't a member are 400.
+- **History and live updates**: `record_changes` rows with `entity_type = 'visit_plan'`
+  (salesperson, period type, period start, note; lines as `line_added` / `line_changed` /
+  `line_removed` labelled with the company's name, like deal lines). Both tables send `crm_changes`
+  hints of type `visit_plan` whose ids are plan ids (lines report their plan), and the store
+  re-reads those plans (`?ids=`). Saving lines touches the plan, so its version moves.
+- **Email**: when someone other than the salesperson creates a plan, changes it, or hands it to
+  another salesperson, `VisitPlansService` queues `crm.visit-plan-email` in the same transaction.
+  The notifications worker sends "Your visit plan for October 2026" (or "… was changed") with the
+  customers, numbers, note and a link to `/visit-plans/<id>` (`notifications/visit-plan-email.ts`).
+  It reads the salesperson's `memberships.notify_visit_plans` (CD-207) when sending and skips
+  deleted plans and plans that are now the actor's own.
+- **UI**: sidebar "Visit plans" (after Today and Calendar), `/visit-plans` (list with period and,
+  for owners and admins, salesperson filters; "New plan") and `/visit-plans/:id` (customers with
+  planned visits, edited in place by owners and admins and saved as you go; "Copy to next period";
+  Delete; note; History). "New plan" has "Copy from previous period": the same salesperson's plan
+  of the same type for the period before fills the customers, which can be changed before saving.
+  "Schedule visit" opens New meeting prefilled with the company, Customer visit and the salesperson
+  as organizer (`meetings.openDialog`). The store keeps the plans in
+  `s.visitPlans` (loaded with the workspace).
 
 ## Working together: live updates, conflicts, change history
 
@@ -990,8 +1044,7 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`.
 - **Related records**: a company with meetings can't be deleted (409, like deals; "Remove sample
   data" keeps a sample company that has meetings); deleting a deal unlinks its meetings
   (`ON DELETE SET NULL (deal_id)`); deleting a contact keeps their row on the meeting with the
-  saved name (`ON DELETE SET NULL (contact_id)`). Removing people from upcoming meetings when a
-  contact is deleted or a member leaves is CD-131.
+  saved name (`ON DELETE SET NULL (contact_id)`). For upcoming meetings see "Participants" below.
 - **Conflicts and history**: `updated_at` is the If-Match version (`crm_touch_version`) and PATCH
   checks field-level conflicts as deals do. `record_changes` gets `entity_type = 'meeting'`: the
   fields (`title`, `type`, `startsAt`, `endsAt`, `location`, `agenda`, `companyId`, `dealId`,
@@ -1003,6 +1056,44 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`.
   their meeting's id (`crm_notify_changes` takes the id column as an optional second argument).
 - **Daily digest**: see "Daily digest" above (meetings today, not closed, and a planned meeting
   ahead counts as a next step).
+
+### Participants and meeting emails (CD-131)
+
+- **Who**: members (internal; the organizer always, and can't be removed) and contacts (external).
+  People can be added and removed while a meeting is planned or held, not while cancelled. A
+  meeting is on the calendar of everyone internal (`userId` filter) and on the contact page of
+  everyone external (`contactId`).
+- **Emails go to internal participants only** (decision on CD-131: customers get no invitations;
+  the external minutes, CD-133, are the only email to them). `MeetingsService` queues
+  `crm.meeting-invite` `{ tenantId, meetingId, userIds: [one member], actorUserId, kind }` in the
+  same transaction, never for the person making the change:
+  - `added`: members someone else adds to a planned meeting (on create: everyone but the creator,
+    the organizer included when that is someone else; on PATCH: the newly added ones, e.g. a new
+    organizer). Subject "You were added to a meeting: <title>".
+  - `updated`: a planned meeting's start, end or location changed (other fields send nothing), and
+    Restore; to the internal participants not just added. "Meeting changed: <title>".
+  - `cancelled`: Cancel, to all internal participants. "Meeting cancelled: <title>".
+  `meetings.ics_sequence` goes up with every `updated` and `cancelled`, in the same update.
+- **The worker** (`meetings/meeting-jobs.ts`, `CrmWorkerModule`) reads everything again when it
+  sends: an `added`/`updated` email goes only while the meeting is planned, `cancelled` only while
+  it is cancelled; the member must still be on the meeting, in the workspace, have an email and
+  "Meeting invitations" on (`memberships.notify_meeting_invites`). One job per member, so a retry
+  never emails the others twice. Body: date and time in the workspace time zone, location,
+  company, deal, organizer and a link to `APP_URL/meetings/<id>`.
+- **The .ics** (`meetings/meeting-invite.ts`, pure and unit-tested): `meeting.ics` with content type
+  `text/calendar; charset=utf-8; method=REQUEST|CANCEL`; one VEVENT with `UID:meeting-<id>@pultly.com`,
+  `SEQUENCE` = `ics_sequence`, DTSTART/DTEND/DTSTAMP in UTC, SUMMARY, LOCATION, DESCRIPTION
+  (company, deal, link), URL, ORGANIZER (the organizer's name with the `MAIL_FROM` address) and the
+  recipient as ATTENDEE (`RSVP=FALSE`); a cancellation is `METHOD:CANCEL` + `STATUS:CANCELLED`.
+  Text is escaped and lines folded at 75 octets (RFC 5545), so Google Calendar and Outlook take it.
+- **Deleting a contact** removes their rows from planned meetings that start in the future, in the
+  contact's delete transaction; held, past and cancelled meetings keep them as "<name> (deleted)".
+- **A member leaving** (removed, or leaving themselves): `TeamService.removeMember` queues
+  `identity.member-removed` `{ tenantId, userId }`; the CRM worker takes them off planned meetings
+  that start in the future and sets `organizer_user_id = null` where they organized one ("Organizer
+  left"). Past meetings keep them (`deleted: true`, shown as "(former member)"). Nothing happens if
+  they rejoined before the job ran. Owners and admins see **Pick new organizer** on the meeting page
+  (a PATCH of `organizerUserId`; the new organizer gets the `added` email).
 
 ## Deal page (CD-83)
 
@@ -1047,13 +1138,18 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`.
   "Meeting with <company>", Customer visit, start + 60 minutes, the company's HQ for a visit, the
   company's only open deal, organizer = you, the deal's primary contact or the contact the dialog
   was opened from). Warns about colleagues' overlapping meetings and about a Customer visit
-  without external participants (the second click saves).
+  without external participants (the second click saves). The contact picker lists the meeting
+  company's contacts first and marks those without an email "No email"; its "+ Add new contact"
+  (CD-131) opens a small form (name from the search, email, job title) that creates a contact of
+  the meeting's company with the store's `createContact` (which returns the new id) and adds them.
 - **Meeting page** (`/meetings/:id`, `screens/Meeting.tsx`): header with type, status, time and
   location (a link when it is a URL), Mark as held (disabled before the start), Cancel (optional
   reason), Edit, Undo held, Restore, and Delete for owners and admins. Tabs: Internal minutes and
   External minutes (`screens/meeting/*`, CD-132/CD-133) and History (`ChangeHistory`, entity
   `meeting`). Who may change a meeting: `canEditMeeting` (owners, admins, organizer, internal
-  participants).
+  participants). Former members show as "<name> (former member)", deleted contacts as
+  "<name> (deleted)"; without an organizer it says "Organizer left", with **Pick new organizer**
+  for owners and admins (CD-131).
 - **Elsewhere**: a Meetings card on company, contact (as external participant) and deal pages
   (`components/MeetingsCard.tsx`: next three, "Show all" → Table filtered to the record,
   "+ Meeting" prefilled), "Meetings today" on Today, Calendar in the sidebar (after Today; under
@@ -1068,7 +1164,7 @@ save. The internal part: `summary` (≤ 10,000 characters), `agreements` (≤ 5,
 (jsonb, ≤ 50 items `{ id, text ≤ 500, ownerUserId | null, dueDate | null, taskId | null }`). The
 external part (`external_subject`, `external_body` ≤ 10,000, `external_prefilled_at`) belongs to
 CD-133 and is a separate text. RLS, the version trigger, the history trigger and the live-update
-hints are in `drizzle/0031_meeting_minutes_rls.sql`.
+hints are in `drizzle/0034_meeting_minutes_rls.sql`.
 
 - **API** (`/api/crm/meetings/:id/minutes`): `GET internal` (any member) →
   `{ summary, agreements, nextSteps, updatedAt, updatedByName }`, empty strings and no steps

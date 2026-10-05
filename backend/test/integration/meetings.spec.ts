@@ -308,7 +308,8 @@ describe('related records', () => {
     const co = await company('Delete Co');
     const d = await deal('Delete deal', co.id);
     const c = await contact('Dana Deleted', co.id, 'dana@example.test');
-    const m = await create(owner, co.id, { dealId: d.id, externalContactIds: [c.id] });
+    // A past meeting keeps a deleted contact (future planned ones drop them: meeting-participants.spec.ts).
+    const m = await create(owner, co.id, { dealId: d.id, externalContactIds: [c.id], startsAt: iso(Date.now() - 48 * HOUR), endsAt: iso(Date.now() - 47 * HOUR) });
 
     await ok('DELETE', `/crm/contacts/${c.id}`, as(owner));
     const afterContact = await ok('GET', `/crm/meetings/${m.id}`, as(owner));

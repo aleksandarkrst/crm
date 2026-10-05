@@ -1,9 +1,20 @@
-/** One email: plain text plus a simple HTML version of the same content. */
+/**
+ * A file sent with an email, as text (calendar invitations, CD-131). `contentType` is the full
+ * header value, e.g. "text/calendar; charset=utf-8; method=REQUEST".
+ */
+export interface MailAttachment {
+  filename: string;
+  contentType: string;
+  content: string;
+}
+
+/** One email: plain text plus a simple HTML version of the same content, and optional attachments. */
 export interface MailMessage {
   to: string;
   subject: string;
   text: string;
   html: string;
+  attachments?: MailAttachment[];
 }
 
 /** A message as the log driver recorded it. */

@@ -1,10 +1,10 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { and, desc, eq, gt, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { requestActor } from '../../../shared/database/request-context';
-import { companies, contacts, deals, funnels, funnelStages, HISTORY_ENTITY_TYPES, type HistoryEntityType, memberships, products, recordChanges, users } from '../../../shared/database/schema';
+import { companies, contacts, deals, funnels, funnelStages, HISTORY_ENTITY_TYPES, type HistoryEntityType, memberships, products, recordChanges, users, visitPlans } from '../../../shared/database/schema';
 
 export const HistoryQuery = z.object({
   entityType: z.enum(HISTORY_ENTITY_TYPES),
@@ -17,9 +17,9 @@ export type HistoryQuery = z.infer<typeof HistoryQuery>;
 type ChangeRow = typeof recordChanges.$inferSelect;
 
 /** Fields whose values are ids; the history shows the name instead. */
-const ID_FIELDS = new Set(['stageId', 'funnelId', 'companyId', 'primaryContactId', 'ownerUserId', 'dealId', 'organizerUserId']);
+const ID_FIELDS = new Set(['stageId', 'funnelId', 'companyId', 'primaryContactId', 'ownerUserId', 'dealId', 'organizerUserId', 'salespersonUserId']);
 /** Id fields that name a member. */
-const USER_FIELDS = new Set(['ownerUserId', 'organizerUserId']);
+const USER_FIELDS = new Set(['ownerUserId', 'organizerUserId', 'salespersonUserId']);
 
 /** How a conflict message names a field ("Your change to the closing date wasn't saved"). */
 const FIELD_NAMES: Record<string, string> = {
@@ -64,8 +64,13 @@ const FIELD_NAMES: Record<string, string> = {
   summary: 'the summary',
   agreements: 'the agreements',
   nextSteps: 'the next steps',
+  // visit plans (CD-134)
+  salespersonUserId: 'the salesperson',
+  periodType: 'the period type',
+  periodStart: 'the period',
+  note: 'the note',
 };
-const ENTITY_NAMES: Record<HistoryEntityType, string> = { deal: 'deal', company: 'company', contact: 'contact', meeting: 'meeting' };
+const ENTITY_NAMES: Record<HistoryEntityType, string> = { deal: 'deal', company: 'company', contact: 'contact', meeting: 'meeting', visit_plan: 'visit plan' };
 
 /** A patch field → the history field it changes (the fit score is stored from the CHAMP scores). */
 const historyField = (field: string) => (field === 'champ' ? 'fitScore' : field);
@@ -99,7 +104,7 @@ export function parseVersion(header: string | undefined): Date | undefined {
 }
 
 /**
- * Change history of deals, companies, contacts and meetings (CD-69, CD-130). Triggers write it
+ * Change history of deals, companies, contacts, meetings and visit plans (CD-69, CD-130, CD-134). Triggers write it
  * (drizzle/0020_record_changes_rls.sql); this reads it with readable names, and uses it to decide
  * whether an update conflicts with a change made since the client's version (CD-20).
  */
@@ -107,9 +112,16 @@ export function parseVersion(header: string | undefined): Date | undefined {
 export class RecordHistoryService {
   constructor(private readonly database: DatabaseService) {}
 
-  /** Newest first. `more` says whether older entries exist beyond this page. */
+  /**
+   * Newest first. `more` says whether older entries exist beyond this page. A member reads the
+   * history of their own visit plans only (CD-134); other plans are "not found", as on the API.
+   */
   list(ctx: TenantContext, query: HistoryQuery) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
+      if (query.entityType === 'visit_plan' && ctx.role === 'member') {
+        const [plan] = await tx.select({ salespersonUserId: visitPlans.salespersonUserId }).from(visitPlans).where(eq(visitPlans.id, query.entityId));
+        if (plan?.salespersonUserId !== ctx.userId) throw new NotFoundException('Visit plan not found');
+      }
       const rows = await tx
         .select()
         .from(recordChanges)

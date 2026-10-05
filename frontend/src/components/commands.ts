@@ -34,6 +34,7 @@ export const ICONS = {
   bell: 'M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9zM10 19.5a2 2 0 0 0 4 0',
   logout: 'M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11',
   calendar: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
+  visitPlan: 'M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11ZM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z',
 } as const;
 export type IconPath = keyof typeof ICONS;
 
@@ -63,6 +64,7 @@ export function useCommands(): Command[] {
     { id: 'go-pipeline', group: 'Go to', label: 'Pipeline', hint: 'Deals by stage', icon: 'pipeline', keywords: 'deals board funnel', run: go(paths.pipeline) },
     { id: 'go-today', group: 'Go to', label: 'Today', hint: 'Tasks due and overdue', icon: 'task', keywords: 'tasks agenda', run: go(paths.today) },
     { id: 'go-calendar', group: 'Go to', label: 'Calendar', hint: 'Meetings by day, week and month', icon: 'calendar', keywords: 'meetings visits schedule agenda', run: go(paths.calendar()) },
+    { id: 'go-visit-plans', group: 'Go to', label: 'Visit plans', hint: 'Customer visits per salesperson', icon: 'visitPlan', keywords: 'visits targets plan customers', run: go(paths.visitPlans) },
     { id: 'go-companies', group: 'Go to', label: 'Companies', hint: 'Every company', icon: 'company', keywords: 'organizations', run: go(paths.companies) },
     { id: 'go-contacts', group: 'Go to', label: 'Contacts', hint: 'Every person', icon: 'contact', keywords: 'people persons', run: go(paths.contacts) },
     { id: 'go-products', group: 'Go to', label: 'Products', hint: 'The catalog', icon: 'product', keywords: 'services catalog prices', run: go(paths.products) },

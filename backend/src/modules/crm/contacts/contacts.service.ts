@@ -1,12 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, eq, getTableColumns, ilike, inArray, or, type SQL } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns, gt, ilike, inArray, or, type SQL } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { BUYER_ROLES, contacts, deals } from '../../../shared/database/schema';
+import { BUYER_ROLES, contacts, deals, meetingParticipants, meetings } from '../../../shared/database/schema';
 import { ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
 import { RecordHistoryService } from '../history/record-history.service';
@@ -118,9 +118,23 @@ export class ContactsService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const cleared = await tx.update(deals).set({ primaryContactId: null }).where(eq(deals.primaryContactId, id)).returning({ id: deals.id });
+        // Off the meetings still to come (CD-131); held and past meetings keep them as "<name> (deleted)".
+        const upcoming = tx
+          .select({ id: meetings.id })
+          .from(meetings)
+          .where(and(eq(meetings.status, 'planned'), gt(meetings.startsAt, new Date())));
+        const leftMeetings = await tx
+          .delete(meetingParticipants)
+          .where(and(eq(meetingParticipants.contactId, id), inArray(meetingParticipants.meetingId, upcoming)))
+          .returning({ meetingId: meetingParticipants.meetingId });
         const [row] = await tx.delete(contacts).where(eq(contacts.id, id)).returning({ id: contacts.id });
         if (!row) throw new NotFoundException('Contact not found');
-        await this.audit.record(tx, ctx, { action: 'contact.deleted', entityType: 'contact', entityId: id, data: { clearedPrimaryOnDeals: cleared.map((d) => d.id) } });
+        await this.audit.record(tx, ctx, {
+          action: 'contact.deleted',
+          entityType: 'contact',
+          entityId: id,
+          data: { clearedPrimaryOnDeals: cleared.map((d) => d.id), removedFromMeetings: leftMeetings.map((m) => m.meetingId) },
+        });
       })
       .catch(mapDbError);
   }
