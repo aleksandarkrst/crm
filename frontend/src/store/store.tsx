@@ -138,6 +138,9 @@ const PARTS_OF: Record<string, Part[]> = {
   // Meetings (CD-130) aren't part of the workspace load: the meeting slice re-reads them.
   meeting: [],
   visit_plan: ['visitPlans'],
+  // Reporting lines and roles decide whose visit plans a manager sees (CD-142).
+  employee: ['visitScope', 'visitPlans'],
+  employee_role: ['visitScope'],
 };
 /**
  * Which rows of each list a change hint names (CD-98), so a live update re-reads just those: by id,
@@ -168,7 +171,7 @@ function rowsOf(e: LiveEvent): Partial<Record<Part, readonly string[] | null>> {
       return {};
   }
 }
-const ALL_PARTS: Part[] = ['funnels', 'companies', 'contacts', 'deals', 'products', 'lines', 'tasks', 'team', 'customFields', 'bonus', 'onboarding', 'visitPlans'];
+const ALL_PARTS: Part[] = ['funnels', 'companies', 'contacts', 'deals', 'products', 'lines', 'tasks', 'team', 'customFields', 'bonus', 'onboarding', 'visitPlans', 'visitScope'];
 const EMPTY_CONTACT: NewContactDraft = { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer', notes: '' };
 const DISCOVERY_FIELDS = ['headline', 'need', 'constraint', 'decisionMaker', 'discoveryDate'] as const satisfies readonly (keyof Lead & keyof DealInput)[];
 /** Workspace settings as the API names them. */
@@ -178,6 +181,9 @@ const WORKSPACE_FIELDS: Partial<Record<keyof Workspace, keyof WorkspaceInput>> =
   timezone: 'timezone',
   fiscalMonth: 'fiscalYearStartMonth',
   customerEmailLanguage: 'customerEmailLanguage',
+  employeeDefaultWeeklyHours: 'employeeDefaultWeeklyHours',
+  employeeNumberRequired: 'employeeNumberRequired',
+  employeeSelfEditBank: 'employeeSelfEditBank',
 };
 /** Profile fields as the API names them. */
 const PROFILE_FIELDS: Partial<Record<keyof Profile, keyof ProfileInput>> = {
@@ -192,6 +198,7 @@ const PROFILE_FIELDS: Partial<Record<keyof Profile, keyof ProfileInput>> = {
   dealAssigned: 'notifyDealAssigned',
   meetingInvites: 'notifyMeetingInvites',
   visitPlans: 'notifyVisitPlans',
+  orgChanges: 'notifyOrgChanges',
 };
 
 function useStoreImpl(data: WorkspaceData, session: Session) {
@@ -482,6 +489,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     const onLiveEvent = (e: LiveEvent) => {
       // Visit plan progress (CD-135) counts meetings: any meeting or plan change, also this tab's, recounts it.
       if (e.type === 'resync' || e.type === 'meeting' || e.type === 'visit_plan') set((x) => ({ visitRev: x.visitRev + 1 }));
+      // People lists (Roles & permissions, CD-142) re-read on any employee or role change, this tab's own included.
+      if (e.type === 'resync' || e.type === 'employee' || e.type === 'employee_role') set((x) => ({ peopleRev: x.peopleRev + 1 }));
       if (e.type === 'resync') return refreshAll();
       if (e.client === CLIENT_ID) return; // this tab's own change: the screen has it already
       if (e.type === 'meeting') return meetings.onLive(e);

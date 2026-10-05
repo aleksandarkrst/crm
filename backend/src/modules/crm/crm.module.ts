@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PeopleModule } from '../people';
 import { BonusRulesController } from './bonuses/bonus-rules.controller';
 import { BonusRulesService } from './bonuses/bonus-rules.service';
 import { CompaniesController } from './companies/companies.controller';
@@ -47,6 +48,7 @@ import { VisitProgressService } from './visit-plans/visit-progress.service';
  * onboarding/ (CD-68). Meetings with customers (CD-130) and their minutes (CD-132, CD-133) are in meetings/, customer visit plans (CD-134) in visit-plans/.
  */
 @Module({
+  imports: [PeopleModule],
   controllers: [CompaniesController, ContactsController, FunnelsController, DealsController, DealWorkController, ProductsController, ImportController, CustomFieldsController, BonusRulesController, DocumentsController, HistoryController, OnboardingController, MeetingsController, MeetingMinutesController, ExternalMinutesController, VisitPlansController],
   providers: [CompaniesService, ContactsService, FunnelsService, DealsService, ActivitiesService, DealLinesService, DealTasksService, StageHistoryService, ProductsService, ImportService, CustomFieldsService, BonusRulesService, DocumentsService, DocumentGenerator, RecordHistoryService, OnboardingService, MeetingsService, MeetingMinutesService, ExternalMinutesService, VisitPlansService, VisitProgressService],
   exports: [DealsService],

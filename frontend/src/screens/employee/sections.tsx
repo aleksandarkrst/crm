@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import type { ApiApprovals, ApiEmployeeCard, ApiPeopleHistoryEntry, EmployeePatch, EmploymentType } from '../../lib/api';
 import { formatIban, INVALID_ACCOUNT_MESSAGE, isSwiftBic, parseBankAccount } from '../../lib/iban';
 import { paths } from '../../lib/paths';
-import { DERIVED_ROLE_HINT, EMPLOYMENT_TYPE_LABEL, LEAVING_REASON_LABEL, ROLE_LABEL } from '../../store/employeeCard';
+import { RoleToggles } from '../../components/RoleToggles';
+import { EMPLOYMENT_TYPE_LABEL, LEAVING_REASON_LABEL } from '../../store/employeeCard';
 import { useStore } from '../../store/store';
 import { CheckField, dateLabel, defaultPatch, type Draft, EditableSection, FIELD_LABEL, Row, SelectField, TextField, Val } from './parts';
 
@@ -538,16 +539,8 @@ export function RolesSection({ card }: { card: ApiEmployeeCard }) {
         <span style={{ fontSize: 15, fontWeight: 600 }}>Roles</span>
       </div>
       <div className="emp-section-body">
-        <span className="emp-badges">
-          {card.roles.map((r) => (
-            <span key={r} className={r === 'employee' ? 'badge badge-neutral' : 'badge badge-brand'} title={DERIVED_ROLE_HINT[r]}>
-              {ROLE_LABEL[r]}
-            </span>
-          ))}
-        </span>
-        {/* Administration and Payroll toggles for Admins come here (CD-142). */}
-        <div data-slot="role-toggles" />
-        <span className="emp-note">Manager comes from reporting lines and Admin from the workspace role (owner or admin).</span>
+        {/* Badges for everyone; Administration and Payroll switches for Admins (CD-142). */}
+        <RoleToggles employeeId={card.id} name={card.fullName} roles={card.roles} inactive={card.status === 'inactive'} />
       </div>
     </div>
   );

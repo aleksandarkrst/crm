@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { and, asc, eq, gte, inArray, lt, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { TenantContext } from '../../../shared/authorization';
@@ -87,8 +87,6 @@ export interface VisitReportRow extends VisitRow {
   /** The monthly plans counted (a quarter has up to three), with their month. */
   plans: { id: string; periodStart: string; periodLabel: string }[];
 }
-
-const isManager = (ctx: TenantContext) => ctx.role !== 'member';
 
 /** A group's monthly plans with their month's label ("October 2026"). */
 const monthsOf = (g: PlanGroup, fiscal: number) => g.plans.map((p) => ({ id: p.id, periodStart: p.periodStart, periodLabel: periodLabel('month', p.periodStart, shiftPeriod('month', p.periodStart, 1), fiscal) }));
@@ -303,8 +301,9 @@ function sumRows(rows: readonly VisitRow[], expectedPace: number, start: string,
 /**
  * Visit plan tracking (CD-135): planned vs. held Customer visits, for a plan page, the list,
  * Reports → Visit-plan completion, the Overview card and the company card. Every number comes from
- * countVisits (visit-counting.ts). Plans are visible as in VisitPlansService: members only their
- * own; the report is for owners and admins (the controller checks the role).
+ * countVisits (visit-counting.ts). Plans are visible as in VisitPlansService (VisitScope, CD-142):
+ * everyone their own, managers their reports' at any depth, owners and admins all. The report is
+ * for those who see others' plans (Admins and managers), each seeing only their rows.
  */
 @Injectable()
 export class VisitProgressService {
@@ -346,10 +345,11 @@ export class VisitProgressService {
   /** The totals of several plans (the list's completion column); plans the caller can't see are left out. */
   batch(ctx: TenantContext, ids: string[], now = new Date()) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const scope = await this.plans.scope(ctx, tx);
       const rows = await tx
         .select()
         .from(visitPlans)
-        .where(and(inArray(visitPlans.id, ids), isManager(ctx) ? undefined : eq(visitPlans.salespersonUserId, ctx.userId)));
+        .where(and(inArray(visitPlans.id, ids), scope.filter ? inArray(visitPlans.salespersonUserId, scope.filter) : undefined));
       const { timeZone } = await workspaceOf(tx, ctx.tenantId);
       const counted = await progressOfPlans(tx, rows, timeZone, now);
       return { progress: rows.map((p) => ({ planId: p.id, totals: counted.get(p.id)!.progress.totals })) };
@@ -357,15 +357,18 @@ export class VisitProgressService {
   }
 
   /**
-   * Reports → Visit-plan completion (owners and admins): one row per salesperson with a plan for
-   * the period, plus anyone credited with held visits there without a plan (all unplanned). With
+   * Reports → Visit-plan completion (owners, admins and managers): one row per salesperson with a
+   * plan for the period, plus anyone credited with held visits there without a plan (all
+   * unplanned). Managers get their own row and their reports' (any depth), nobody else's. With
    * `companyId`, each row is that customer only: how often it was visited, across salespeople.
    */
   report(ctx: TenantContext, query: VisitReportQuery, now = new Date()) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const scope = await this.plans.scope(ctx, tx);
+      if (!scope.seesTeam) throw new ForbiddenException('Reports are for owners, admins and managers');
       const { timeZone, fiscal } = await workspaceOf(tx, ctx.tenantId);
       const period = this.period(query.periodType, query.periodStart, fiscal, timeZone, now);
-      const groups = await planGroupsOf(tx, period, query.salespersonUserId);
+      const groups = (await planGroupsOf(tx, period, query.salespersonUserId)).filter((g) => scope.canSee(g.salespersonUserId));
       const counted = await progressOfGroups(tx, groups, timeZone, now);
       const expectedPace = periodShare(period.start, period.end, now, timeZone);
 
@@ -383,6 +386,7 @@ export class VisitProgressService {
         const who = creditedSalesperson(m);
         if (m.status !== 'held' || !who || withPlan.has(who)) continue;
         if (query.salespersonUserId && who !== query.salespersonUserId) continue;
+        if (!scope.canSee(who)) continue;
         if (query.companyId && m.companyId !== query.companyId) continue;
         others.add(who);
       }
@@ -410,15 +414,19 @@ export class VisitProgressService {
 
   /**
    * The Overview card (and the company card, with `companyId`): the period's totals over the
-   * plans of one salesperson, or of everyone (`all=1`, the default for owners and admins). A
-   * quarter adds up the monthly plans of its three months (CD-212). Members always get their own.
+   * plans of one salesperson, or of everyone the caller sees (`all=1`, the default): the whole
+   * team for owners and admins, themselves and their reports for managers. A quarter adds up the
+   * monthly plans of its three months (CD-212). Members (and a salesperson the caller may not see)
+   * get their own.
    */
   summary(ctx: TenantContext, query: ProgressSummaryQuery, now = new Date()) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const scope = await this.plans.scope(ctx, tx);
       const { timeZone, fiscal } = await workspaceOf(tx, ctx.tenantId);
       const period = this.period(query.periodType, query.periodStart, fiscal, timeZone, now);
-      const salesperson = !isManager(ctx) ? ctx.userId : query.all ? undefined : query.salespersonUserId;
-      const all = await planGroupsOf(tx, period, salesperson);
+      const asked = query.all ? undefined : query.salespersonUserId;
+      const salesperson = !scope.seesTeam ? ctx.userId : asked && !scope.canSee(asked) ? ctx.userId : asked;
+      const all = (await planGroupsOf(tx, period, salesperson)).filter((g) => scope.canSee(g.salespersonUserId));
       const allCounted = await progressOfGroups(tx, all, timeZone, now);
       const keep = allCounted.map((c) => !query.companyId || c.lines.some((l) => l.companyId === query.companyId));
       const groups = all.filter((_, i) => keep[i]);

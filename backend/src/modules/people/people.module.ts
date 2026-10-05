@@ -7,6 +7,8 @@ import { EmployeeLifecycleService } from './lifecycle.service';
 import { PeopleAccess } from './people-access';
 import { PeopleController } from './people.controller';
 import { PeopleHistoryService } from './people-history.service';
+import { RolesController } from './roles.controller';
+import { RolesService } from './roles.service';
 
 /**
  * People (milestone 13): employees, departments, teams, functional roles, access and the approver
@@ -14,8 +16,8 @@ import { PeopleHistoryService } from './people-history.service';
  * Milestone 16 replaces ABSENCE_SOURCE with the real time-off source.
  */
 @Module({
-  controllers: [LifecycleController, EmployeesController, PeopleController],
-  providers: [PeopleAccess, PeopleHistoryService, EmployeesService, EmployeeLifecycleService, { provide: ABSENCE_SOURCE, useValue: nobodyAbsent }],
+  controllers: [LifecycleController, EmployeesController, PeopleController, RolesController],
+  providers: [PeopleAccess, PeopleHistoryService, EmployeesService, EmployeeLifecycleService, RolesService, { provide: ABSENCE_SOURCE, useValue: nobodyAbsent }],
   exports: [PeopleAccess],
 })
 export class PeopleModule {}

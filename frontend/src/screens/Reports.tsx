@@ -8,7 +8,7 @@ import { companyLabels, companyRecords, memberLabels } from '../store/selectors'
 import { useStore } from '../store/store';
 import { todayIn } from '../store/time';
 import { useVisitProgress } from '../store/useVisitProgress';
-import { completionLabel, paceOf, periodOptions, periodStartOf, type VisitCount, visitsInCalendar } from '../store/visitPlans';
+import { completionLabel, paceOf, periodOptions, periodStartOf, seesPlansOf, type VisitCount, visitsInCalendar } from '../store/visitPlans';
 
 const TABS = [{ value: 'visit-plans', label: 'Visit-plan completion' }] as const;
 const COLS = 'minmax(0,1.5fr) minmax(0,1.2fr) 0.7fr 0.7fr 0.8fr 0.8fr 0.9fr 0.8fr 0.8fr';
@@ -24,7 +24,9 @@ const ANY_CUSTOMER = 'Customer';
  * and the filtered table exports as CSV. Numbers come from the same counting as the plan pages.
  */
 export function Reports() {
-  const { s, canDelete: isManager } = useStore();
+  const { s } = useStore();
+  // Owners and admins: everyone; managers: themselves and their reports (CD-142).
+  const isManager = s.visitScope.seesTeam;
   const { tab = 'visit-plans' } = useParams();
   const [params, setParams] = useSearchParams();
   const today = todayIn(s.workspace.timezone);
@@ -55,7 +57,7 @@ export function Reports() {
       { replace: true },
     );
 
-  const people = [...memberLabels(s)].sort((a, b) => a[1].localeCompare(b[1]));
+  const people = [...memberLabels(s)].filter(([id]) => seesPlansOf(s.visitScope, id)).sort((a, b) => a[1].localeCompare(b[1]));
   const records = companyRecords(s);
   const companyNames = companyLabels(records);
   const customers = records.map((c) => ({ value: c.id, label: companyNames.get(c.id) ?? c.name })).sort((a, b) => a.label.localeCompare(b.label));

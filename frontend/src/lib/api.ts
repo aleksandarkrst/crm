@@ -156,6 +156,8 @@ export interface ApiTenant {
   name: string;
   slug: string;
   role: ApiRole;
+  /** In GET /me's list (the sidebar switcher, CD-214). */
+  memberCount?: number;
 }
 export interface ApiMe {
   user: { id: string; email: string | null; displayName: string | null };
@@ -195,9 +197,17 @@ export interface ApiWorkspace {
   fiscalYearStartMonth: number;
   /** Language of the fixed text in emails to customers, e.g. meeting minutes (CD-208). */
   customerEmailLanguage: ApiCustomerEmailLanguage;
+  /** Settings → Employees (CD-215): prefills new employees and imports, 1–60. */
+  employeeDefaultWeeklyHours: number;
+  /** Create, edit and import require an employee number. */
+  employeeNumberRequired: boolean;
+  /** Employees change their own bank account (else only Administration and Admins). */
+  employeeSelfEditBank: boolean;
 }
 export type ApiCustomerEmailLanguage = 'en' | 'sr';
-export type WorkspaceInput = Partial<Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth' | 'customerEmailLanguage'>>;
+export type WorkspaceInput = Partial<
+  Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth' | 'customerEmailLanguage' | 'employeeDefaultWeeklyHours' | 'employeeNumberRequired' | 'employeeSelfEditBank'>
+>;
 export type ApiLanguage = 'en' | 'sr' | 'de';
 export type ApiDateFormat = 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
 export type ApiStartPage = 'pipeline' | 'overview' | 'today' | 'contacts';
@@ -219,6 +229,8 @@ export interface ApiProfile {
   notifyMeetingInvites: boolean;
   /** Email me when someone else creates or changes my visit plan (CD-207). */
   notifyVisitPlans: boolean;
+  /** Email me "New manager" / "New direct report" when someone changes reporting lines (milestone 13). */
+  notifyOrgChanges: boolean;
 }
 /**
  * Getting started (CD-68): the workspace's activation steps (CD-115), derived from its records.
@@ -512,9 +524,20 @@ export interface ApiVisitPlan {
   note: string | null;
   lines: ApiVisitPlanLine[];
   totalPlanned: number;
+  /** The caller may change and delete it (Admins: every plan; managers: their direct reports', CD-142). */
+  canEdit: boolean;
   createdByUserId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+/** Whose visit plans the caller sees and manages (CD-142); null lists mean everyone. */
+export interface ApiVisitScope {
+  all: boolean;
+  manageAll: boolean;
+  /** Sees others' plans (Admins, managers): Reports and the team summary. */
+  seesTeam: boolean;
+  visibleUserIds: string[] | null;
+  manageableUserIds: string[] | null;
 }
 export interface VisitPlanInput {
   salespersonUserId: string;
@@ -962,6 +985,7 @@ export const crmApi = {
   /** `lines` replaces the plan's lines. */
   updateVisitPlan: (id: string, input: Partial<VisitPlanInput>, version?: string) => api<ApiVisitPlan>(`/crm/visit-plans/${id}`, { method: 'PATCH', json: input, headers: ifMatch(version) }),
   deleteVisitPlan: (id: string) => api(`/crm/visit-plans/${id}`, { method: 'DELETE' }),
+  visitPlanScope: () => api<ApiVisitScope>('/crm/visit-plans/scope'),
   visitPlanProgress: (id: string) => api<ApiVisitPlanProgress>(`/crm/visit-plans/${id}/progress`),
   /** The totals of several plans (≤200), for the list. */
   visitPlansProgress: (ids: readonly string[]) => api<{ progress: { planId: string; totals: ApiVisitTotals }[] }>(`/crm/visit-plans/progress?ids=${ids.join(',')}`).then((r) => r.progress),
@@ -1004,7 +1028,6 @@ export const crmApi = {
 
 export type EmployeeStatus = 'active' | 'leaving' | 'inactive';
 export type EmployeeAccount = 'linked' | 'invited' | 'none';
-export type FunctionalRole = 'employee' | 'manager' | 'administration' | 'payroll' | 'admin';
 export type EmploymentType = 'permanent' | 'fixed_term' | 'contractor' | 'student';
 export type LeavingReason = 'resigned' | 'contract_ended' | 'dismissed' | 'retired' | 'other';
 
@@ -1231,4 +1254,57 @@ export const peopleCardApi = {
   deactivate: (id: string, input: DeactivateInput) => api<ApiEmployeeCard>(`/people/employees/${id}/deactivate`, { method: 'POST', json: input }),
   reactivate: (id: string, employmentStartDate?: string) => api<ApiEmployeeCard>(`/people/employees/${id}/reactivate`, { method: 'POST', json: employmentStartDate ? { employmentStartDate } : {} }),
   remove: (id: string) => api(`/people/employees/${id}`, { method: 'DELETE' }),
+};
+
+/** The five functional roles (spec 9.1), in the matrix's column order. */
+export type FunctionalRole = 'employee' | 'manager' | 'administration' | 'payroll' | 'admin';
+/** Assigned by an Admin; the other three are derived. */
+export type AssignedRole = 'administration' | 'payroll';
+export type PermissionScope = 'none' | 'own' | 'direct' | 'indirect' | 'all';
+/** The permission matrix the server checks against (GET /people/permissions, CD-142). */
+export interface ApiPermissionMatrix {
+  roles: { id: FunctionalRole; label: string; who: string; given: string }[];
+  modules: {
+    id: string;
+    name: string;
+    milestone: number | null;
+    /** Not live: "Coming with <name>". */
+    live: boolean;
+    rows: { id: string; action: string; cells: Record<FunctionalRole, { scope: PermissionScope; label: string }> }[];
+  }[];
+}
+export interface ApiRoleHolder {
+  employeeId: string | null;
+  userId: string | null;
+  name: string;
+  jobTitle: string | null;
+  hasAccount: boolean;
+}
+/** "Who has which role" (GET /people/roles). */
+export interface ApiRoleHolders {
+  administration: (ApiRoleHolder & { employeeId: string; grantedAt: string })[];
+  payroll: (ApiRoleHolder & { employeeId: string; grantedAt: string })[];
+  admins: (ApiRoleHolder & { workspaceRole: 'owner' | 'admin' })[];
+  managers: (ApiRoleHolder & { employeeId: string; reports: number })[];
+}
+/** A directory row, as the employee picker needs it. */
+export interface ApiDirectoryEmployee {
+  id: string;
+  userId: string | null;
+  fullName: string;
+  jobTitle: string | null;
+  departmentName: string | null;
+  status: 'active' | 'leaving' | 'inactive';
+}
+
+/** Functional roles and permissions (CD-142). */
+export const rolesApi = {
+  permissions: () => api<ApiPermissionMatrix>('/people/permissions'),
+  holders: () => api<ApiRoleHolders>('/people/roles'),
+  /** Admin only. */
+  grant: (employeeId: string, role: AssignedRole) => api<{ employeeId: string; roles: AssignedRole[] }>(`/people/employees/${employeeId}/roles/${role}`, { method: 'PUT' }),
+  /** Admin only. */
+  remove: (employeeId: string, role: AssignedRole) => api(`/people/employees/${employeeId}/roles/${role}`, { method: 'DELETE' }),
+  /** The directory (active employees), for "Add person". */
+  employees: () => api<{ employees: ApiDirectoryEmployee[]; total: number }>('/people/employees').then((r) => r.employees),
 };

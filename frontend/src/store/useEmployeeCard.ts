@@ -22,6 +22,13 @@ export function useEmployeeCard(id: string): ApiEmployeeCard | null | undefined 
       alive = false;
     };
   }, [id]);
+  // Any employee or role change (also this tab's own, e.g. a role switch on this card): read it again.
+  const rev = s.peopleRev;
+  const firstRev = useRef(rev);
+  useEffect(() => {
+    if (rev === firstRev.current) return;
+    void load.current(id).catch(() => undefined);
+  }, [rev, id]);
   const card = s.employeeCards[id];
   if (card) return card;
   if (result.id !== id || result.state === 'loading') return undefined;

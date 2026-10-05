@@ -42,11 +42,6 @@ export interface PeoplePickers {
 export const EMPLOYMENT_TYPE_LABEL: Record<EmploymentType, string> = { permanent: 'Permanent', fixed_term: 'Fixed term', contractor: 'Contractor', student: 'Student or intern' };
 export const LEAVING_REASON_LABEL: Record<LeavingReason, string> = { resigned: 'Resigned', contract_ended: 'Contract ended', dismissed: 'Dismissed', retired: 'Retired', other: 'Other' };
 export const ROLE_LABEL: Record<FunctionalRole, string> = { employee: 'Employee', manager: 'Manager', administration: 'Administration', payroll: 'Payroll', admin: 'Admin' };
-/** Why Manager and Admin can't be toggled (spec 9.1). */
-export const DERIVED_ROLE_HINT: Partial<Record<FunctionalRole, string>> = {
-  manager: 'Has at least one active direct report (from reporting lines)',
-  admin: 'Workspace owner or admin (Settings → Team)',
-};
 
 /** What a save, invite or other card action answers. */
 export type CardResult = { card: ApiEmployeeCard } | { error: string; conflict?: boolean };
