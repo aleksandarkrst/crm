@@ -1613,8 +1613,69 @@ The database also refuses `manager_id = id`. Covered by a concurrent A → B / B
   inactive). Departments and teams: HR only.
 - `GET /departments`, `GET /teams`: read only, with `activeEmployees`; CRUD is CD-138.
 
+- `POST /employees/bulk { employeeIds (≤5,000), departmentId?, teamId?, managerId? }` → `{ updated }`
+  (CD-137, the list's "Set department and team" / "Set manager" and the chart's drag): Administration
+  and Admin, one transaction, all or nothing. Every row passes the card's field rules (Administration
+  can't include their own row) and the reporting-line rules: the lock first, then one walk up from
+  the new manager decides loops for the whole selection, refused with the foundation's
+  `assertValidManager` message (409 `reporting_loop`). Department and team go together (a team brings
+  its department; a department alone clears the team; both null = No department). Only rows that
+  change are written; one audit entry `employee.bulk_updated` with the fields and the count, history
+  per employee from the triggers.
+- `POST /employees/export { employeeIds }` → `{ employees: [{ id, personal, bank }] }`: the export's
+  "Include personal details and bank accounts" (Administration, Admin; 403 otherwise), with full
+  IBANs (formatted). Every call writes the audit entry `employee.personal_exported` with the row count.
+
 Friendly messages for the unique constraints and the team rules are in `shared/database/errors.ts`.
 Audit entries for employees list the changed field names only, never values.
+
+### Org structure page (CD-137)
+
+`/org` (`screens/OrgStructure.tsx`, parts in `screens/org/`), sidebar "Org structure" after Products
+(under "More" on phones), for every member. In the module switcher (CD-214) it is Workforce
+(`components/modules.ts`, current on `/org` and `/people/…`).
+
+- **Data**: the store's people slice (`store/people.ts`, `s.people`) reads `GET /people/access`, then
+  the whole directory (inactive too for HR), departments and teams, when a screen watches it
+  (`people.watch()`; Ctrl/⌘K calls `people.ensure()`). Live hints `employee`, `department`, `team`,
+  `employee_role` read it again (debounced); they don't reload the CRM lists. Everything else
+  (filters, search, sort, both charts) runs in the browser on that copy, with the API's rules
+  mirrored in pure functions (`filterEmployees`, `reportIdsBelow`, `departmentChart`,
+  `reportingTree`). The UI never assumes `employment`, `hr` or `roles` exist on a row: an empty cell
+  is what the caller may not see.
+- **URL state**: `?tab=chart|list&mode=department|reporting&q=&dept=&team=&manager=&scope=indirect&status=&account=&issues=&sort=&dir=desc`
+  (`paths.org(...)`). The search box updates the URL 150 ms after typing stops.
+- **Search**: name, job title, work email (and employee number for HR), accent- and case-free
+  (`foldName`: "petrovic" finds Petrović, đ → d, and "dj" works too). Ctrl/⌘K lists up to five
+  employees ("Employees") and opens their card (`paths.employee(id)` = `/people/:id`).
+- **Filters** (both tabs): departments, teams (within the chosen departments), manager (direct, or
+  including indirect), status (Active and Leaving by default; Inactive for HR), account (Admin), data
+  issues (HR). "Me" sets the manager filter for managers. Phones fold them under "Filters".
+- **Chart** (`ChartFrame`): scrolls inside its card, never the page; Fit / 100% / − / + zoom (CSS
+  transform, the box takes the scaled size) and pan by dragging the background. Inactive people
+  never appear.
+  - *By department*: a column per department by name (head on top), a box per team (lead first,
+    then by name), "No team", and "No department" last. Filters hide; without filters empty
+    departments and teams show. HR on desktop can drag a person onto a team or department box; a
+    dialog confirms, then `POST /employees/bulk` with that one id.
+  - *Reporting lines*: a tree from `managerId` drawn with CSS connectors; roots side by side,
+    biggest first. Two levels open by default; a node's reports fold. Reports that have no reports
+    of their own stack in a column (keeps wide teams narrow). Filters dim instead of hiding; the
+    search opens the path to every hit, highlights them and scrolls to the first.
+  - Phones (≤700px): an indented, foldable list (department → team → people, or manager → reports).
+- **List** (`EmployeeList`): virtualised (fixed row height, only rows on screen in the page; tested
+  with 5,000), sticky header, sortable columns, default by last name. Columns by caller
+  (`screens/org/columns.tsx`): directory columns for all; Start date and Employment type for
+  managers and HR; Status and Account for HR; Roles for Admins. Phones get cards (name, job title,
+  team).
+- **Bulk actions** (HR, ticked rows): Set department and team, Set manager (the server's loop message
+  shows in the dialog), Export selected; "Invite selected" is CD-140's (a slot in the bar). **Export
+  CSV** (HR): the filtered rows with the visible columns (`lib/csv.ts`); "Include personal details and
+  bank accounts" adds them from `POST /employees/export` (audited).
+- Until CD-140's card lands, `/people/:id` is a stand-in (`screens/org/EmployeeCardStub.tsx`) with the
+  directory fields.
+- Measured with a mock API and a production build: 1,000 employees open the department chart in
+  ~0.6–1.1 s and the list in ~0.4 s (page load included); 5,000 rows in the list ~0.5 s.
 
 ### Roles and permissions (CD-142)
 

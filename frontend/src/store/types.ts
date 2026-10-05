@@ -2,6 +2,7 @@ import type { ApiCustomerEmailLanguage, ApiCustomField, ApiDateFormat, ApiLangua
 import type { DealDoc, DocTemplate } from './documents';
 import type { MeetingDialogSeed, MeetingList } from './meetings';
 import type { ApiInternalMinutes, ApiMeeting } from '../lib/api';
+import type { PeopleState } from './people';
 import type { VisitPlan } from './visitPlans';
 
 /** A funnel's backend id (CD-10: any number of funnels, not just the two personas). */
@@ -447,6 +448,8 @@ export interface State {
    * plan progress on screen (CD-135) is counted again (store/useVisitProgress.ts).
    */
   visitRev: number;
+  /** Employees, departments and teams (milestone 13; see store/people.ts), read when a screen needs them. */
+  people: PeopleState;
   /** Goes up on every employee and role change (live hints, resync): people lists re-read (CD-142). */
   peopleRev: number;
 }

@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { paths } from '../lib/paths';
+import { searchEmployees } from '../store/people';
 import { fold, searchWorkspace } from '../store/search';
 import { useStore } from '../store/store';
 import { type Command, ICONS, useCommands } from './commands';
@@ -8,7 +11,7 @@ import '../styles/header.css';
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 export const SEARCH_SHORTCUT = IS_MAC ? '⌘K' : 'Ctrl K';
 
-type Row = { kind: 'command'; command: Command } | { kind: 'record'; record: 'deal' | 'company' | 'contact'; id: string; title: string; subtitle: string; initials: string };
+type Row = { kind: 'command'; command: Command } | { kind: 'record'; record: 'deal' | 'company' | 'contact' | 'employee'; id: string; title: string; subtitle: string; initials: string };
 interface Section {
   label: string;
   rows: Row[];
@@ -24,11 +27,13 @@ function commandScore(c: Command, words: string[]): number {
 
 /**
  * The command palette (CD-80): Ctrl K / ⌘K from anywhere, or the header search. It finds deals,
- * companies and contacts (by name, email or phone) and the app's actions: create a record, go to
- * a screen or a setting. Arrows move, Enter runs, Escape closes.
+ * companies and contacts (by name, email or phone), employees (by name, job title or email,
+ * CD-137; their card opens) and the app's actions: create a record, go to a screen or a setting.
+ * Arrows move, Enter runs, Escape closes.
  */
 export function CommandPalette() {
-  const { s, set, openLead, openCompany, openContact } = useStore();
+  const { s, set, openLead, openCompany, openContact, people } = useStore();
+  const navigate = useNavigate();
   const commands = useCommands();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -37,6 +42,9 @@ export function CommandPalette() {
   const close = () => set({ paletteOpen: false });
 
   useEffect(() => input.current?.focus(), []);
+  // The directory isn't part of the workspace load: read it once for the Employees group.
+  const ensurePeople = people.ensure;
+  useEffect(() => ensurePeople(), [ensurePeople]);
 
   const sections = useMemo<Section[]>(() => {
     const q = query.trim();
@@ -54,7 +62,8 @@ export function CommandPalette() {
       .sort((a, b) => b.score - a.score)
       .slice(0, 8)
       .map(({ c }) => ({ kind: 'command' as const, command: c }));
-    return [...records, ...(actions.length ? [{ label: 'Actions', rows: actions }] : [])];
+    const employees = searchEmployees(s.people.employees, q).map((h) => ({ kind: 'record' as const, record: 'employee' as const, id: h.id, title: h.title, subtitle: h.subtitle, initials: h.initials }));
+    return [...records, ...(employees.length ? [{ label: 'Employees', rows: employees }] : []), ...(actions.length ? [{ label: 'Actions', rows: actions }] : [])];
   }, [query, s, commands]);
   const flat = sections.flatMap((x) => x.rows);
   const current = Math.min(active, Math.max(flat.length - 1, 0));
@@ -68,6 +77,7 @@ export function CommandPalette() {
     if (row.kind === 'command') row.command.run();
     else if (row.record === 'deal') openLead(row.id);
     else if (row.record === 'company') openCompany(row.id);
+    else if (row.record === 'employee') navigate(paths.employee(row.id));
     else openContact(row.id);
   };
 
@@ -98,8 +108,8 @@ export function CommandPalette() {
             ref={input}
             data-testid="palette-input"
             type="search"
-            placeholder="Search deals, companies, contacts and actions…"
-            aria-label="Search deals, companies, contacts and actions"
+            placeholder="Search deals, companies, contacts, people and actions…"
+            aria-label="Search deals, companies, contacts, people and actions"
             role="combobox"
             aria-expanded
             aria-controls="palette-results"
@@ -141,7 +151,7 @@ export function CommandPalette() {
                         </svg>
                       </span>
                     ) : (
-                      <Avatar initials={row.initials} size={24} font={9.5} square={row.record !== 'contact'} />
+                      <Avatar initials={row.initials} size={24} font={9.5} square={row.record !== 'contact' && row.record !== 'employee'} />
                     )}
                     <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 8 }}>
                       <span className="search-item-title">{row.kind === 'command' ? (row.command.group === 'Create' ? 'Create ' + row.command.label.toLowerCase() : row.command.label) : row.title}</span>
