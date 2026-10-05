@@ -1,5 +1,5 @@
 /*
- * Header search, the "New" menu and the sidebar workspace switcher (CD-63, CD-66, CD-23).
+ * Header search, the "New" menu and the sidebar module and workspace switcher (CD-63, CD-66, CD-214).
  * Built from the design tokens in global.css; kept in its own file so the shared sheet stays as
  * the handoff had it.
  */
@@ -36,17 +36,69 @@
 .menu-item-sub { font-size: 11.5px; color: var(--muted-2); margin-left: auto; }
 .menu-divider { height: 1px; background: var(--divider); margin: 5px 3px; }
 
-/* ---------------------------------------------------------------- sidebar workspace switcher */
+/* ---------------------------------------------------------------- module switcher (CD-214) */
+/* The Pultly mark opens it: a 420px popover right of the sidebar (a bottom sheet on phones) with
+   the workspace row, the modules grid and the workspace list. */
 
 .ws-logo { width: 46px; height: 40px; border-radius: 10px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
 .ws-logo:hover, .ws-logo[aria-expanded="true"] { background: rgba(255, 255, 255, 0.06); box-shadow: 0 0 0 3px rgba(198, 241, 106, 0.28); }
 .ws-logo:focus-visible { outline: 2px solid var(--brand-soft-2); outline-offset: 2px; }
-.ws-pop { top: 0; left: calc(100% + 14px); width: 260px; }
-.ws-item .menu-item-sub { margin-left: 0; }
 .ws-item.current { background: var(--brand-tint); }
 .ws-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ws-initial { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 7px; background: var(--segment); color: var(--text-2); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
 .ws-item.current .ws-initial { background: var(--brand); color: var(--bg-soft); }
+
+.mod-backdrop { display: none; }
+.mod-pop { position: absolute; top: 12px; left: calc(100% + 10px); width: 420px; max-height: calc(100vh - 24px); overflow-y: auto; background: var(--white); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-pop); padding: 6px; z-index: 30; color: var(--ink); text-align: left; animation: dcFade .14s ease-out both; }
+:where(.mod-pop button) { font: inherit; color: inherit; text-align: left; border: 0; background: transparent; cursor: pointer; }
+.mod-pop [data-nav]:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--brand); }
+.mod-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mod-name { font-size: 13.5px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mod-desc { font-size: 12px; color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 4px; }
+
+.mod-ws-row { display: flex; align-items: center; gap: 11px; width: 100%; padding: 10px 12px 10px 8px; border-radius: 9px; background: var(--bg-soft); }
+.mod-ws-row:hover { background: var(--chip); }
+.mod-ws-initial { flex-basis: 30px; width: 30px; height: 30px; border-radius: 8px; font-size: 13px; }
+.mod-ws-row .mod-ws-initial { background: var(--brand); color: var(--bg-soft); }
+.mod-caption { font-size: 11.5px; color: var(--muted-2); }
+.mod-ws-name { font-size: 14px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mod-switch { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.mod-ws-row:hover .mod-switch { color: var(--brand); }
+
+.mod-label { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 8px 6px; }
+.mod-label-ws { font-size: 12px; color: var(--muted-2); padding: 2px 6px; border-radius: 6px; max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mod-label-ws:hover { color: var(--brand); background: var(--chip); }
+
+.mod-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 4px; }
+.mod-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: 9px; }
+.mod-item:hover { background: var(--chip); }
+.mod-tile { flex: 0 0 34px; width: 34px; height: 34px; border-radius: 9px; background: var(--chip); color: var(--text-2); display: flex; align-items: center; justify-content: center; }
+.mod-item.current { background: var(--brand-tint); }
+.mod-item.current .mod-tile { background: var(--forest); color: var(--lime); }
+.mod-item.locked { cursor: default; }
+.mod-item.locked:hover { background: transparent; }
+.mod-item.locked .mod-tile, .mod-item.locked .mod-name { opacity: 0.55; }
+.mod-item.locked .mod-desc { color: var(--muted); }
+
+.mod-foot { display: flex; align-items: center; gap: 9px; margin-top: 6px; padding: 9px 8px 4px; border-top: 1px solid var(--divider); font-size: 12.5px; color: var(--text-2); }
+
+.mod-list-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 8px 6px 4px; }
+.mod-back { font-size: 13px; color: var(--text-2); padding: 4px 6px; border-radius: 6px; }
+.mod-back:hover { color: var(--brand); background: var(--chip); }
+.mod-ws-item { display: flex; align-items: center; gap: 11px; width: 100%; padding: 9px 12px 9px 8px; border-radius: 9px; }
+.mod-ws-item:hover { background: var(--chip); }
+.mod-ws-item.current { background: var(--brand-tint); }
+.mod-check { color: var(--brand); display: flex; }
+.mod-list-foot { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--divider); }
+.mod-new { display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 8px; border-radius: 9px; font-size: 13px; color: var(--ink); }
+.mod-new:hover { background: var(--chip); }
+.mod-new-form { display: flex; flex-direction: column; gap: 8px; padding: 6px; }
+
+@media (max-width: 700px) {
+  .mod-backdrop { display: block; position: fixed; inset: 0; background: rgba(13, 36, 28, 0.35); z-index: 41; }
+  .mod-pop { position: fixed; top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 85vh; border-radius: 14px 14px 0 0; padding: 8px 8px calc(10px + env(safe-area-inset-bottom)); z-index: 42; }
+  .mod-foot { display: none; }
+}
 
 /* ---------------------------------------------------------------- header layout (CD-80) */
 /* The screen's name on the left, search and "+" in the middle, notifications and account right. */
