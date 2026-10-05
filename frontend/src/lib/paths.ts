@@ -6,6 +6,8 @@
 export type CalendarParams = Partial<
   Record<'view' | 'date' | 'from' | 'to' | 'ids' | 'report' | 'user' | 'type' | 'status' | 'company' | 'deal' | 'contact' | 'notClosed' | 'missingMinutes' | 'sort' | 'new' | 'companyId' | 'dealId' | 'contactId' | 'organizer' | 'start', string | null | undefined>
 >;
+/** The Org structure page's state in its URL (CD-137), so a link shows the same view. */
+export type OrgParams = Partial<Record<'tab' | 'mode' | 'q' | 'dept' | 'team' | 'manager' | 'scope' | 'status' | 'account' | 'issues' | 'sort' | 'dir', string | null | undefined>>;
 const query = (params: Partial<Record<string, string | null | undefined>> = {}) => {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
@@ -26,6 +28,10 @@ export const paths = {
   contacts: '/contacts',
   contact: (id: string) => '/contacts/' + encodeURIComponent(id),
   products: '/products',
+  /** Org structure (CD-137): `tab` chart|list, `mode` department|reporting, and the filters (store/people.ts). */
+  org: (params: OrgParams = {}) => '/org' + query(params),
+  /** An employee's card (CD-140). */
+  employee: (id: string) => '/people/' + encodeURIComponent(id),
   /** Reports (CD-135, owners and admins); `visit-plans` is the Visit-plan completion tab, with its filters. */
   reports: (tab = 'visit-plans', params: Partial<Record<'periodType' | 'periodStart' | 'salesperson' | 'company', string | null | undefined>> = {}) => `/reports/${tab}` + query(params),
   settings: (tab = 'workspace') => '/settings/' + tab,

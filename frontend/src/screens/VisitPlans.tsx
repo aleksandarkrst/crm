@@ -8,7 +8,7 @@ import { paths } from '../lib/paths';
 import { VisitPlanDialog } from '../modals/VisitPlanDialog';
 import { memberName } from '../store/selectors';
 import { useStore } from '../store/store';
-import { completionLabel, paceOf } from '../store/visitPlans';
+import { canCreatePlans, completionLabel, paceOf } from '../store/visitPlans';
 import { useVisitProgress } from '../store/useVisitProgress';
 
 const ANY_PERIOD = 'Period';
@@ -25,11 +25,13 @@ async function loadTotals(ids: string[]): Promise<Map<string, ApiVisitTotals>> {
 
 /**
  * Customer visit plans (CD-134): one row per plan. Owners and admins see everyone's and make new
- * ones; members see their own. Held visits (counted toward the plan: at most the planned number
+ * ones; managers see their reports' and make their direct reports' (CD-142); members see their own. Held visits (counted toward the plan: at most the planned number
  * per customer) and completion, coloured by pace (CD-135, spec 9.2), stay current as visits are held.
  */
 export function VisitPlans() {
-  const { s, canDelete: canManage } = useStore();
+  const { s } = useStore();
+  const seesTeam = s.visitScope.seesTeam;
+  const canCreate = canCreatePlans(s.visitScope);
   const navigate = useNavigate();
   const [period, setPeriod] = useState(ANY_PERIOD);
   const [person, setPerson] = useState(ANY_PERSON);
@@ -50,7 +52,7 @@ export function VisitPlans() {
         chips={[
           { value: period, options: [ANY_PERIOD, ...[...periods].map(([value, label]) => ({ value, label }))], onChange: setPeriod },
           // Members only have their own plans: no salesperson to pick.
-          ...(canManage ? [{ value: person, options: [ANY_PERSON, ...[...people].sort((a, b) => a[1].localeCompare(b[1])).map(([value, label]) => ({ value, label }))], onChange: setPerson }] : []),
+          ...(seesTeam ? [{ value: person, options: [ANY_PERSON, ...[...people].sort((a, b) => a[1].localeCompare(b[1])).map(([value, label]) => ({ value, label }))], onChange: setPerson }] : []),
         ]}
         dirty={period !== ANY_PERIOD || person !== ANY_PERSON}
         onClear={() => {
@@ -58,10 +60,10 @@ export function VisitPlans() {
           setPerson(ANY_PERSON);
         }}
         meta={rows.length === 1 ? '1 plan' : `${rows.length} plans`}
-        action={canManage ? { label: 'New plan', onClick: () => setCreating(true) } : undefined}
+        action={canCreate ? { label: 'New plan', onClick: () => setCreating(true) } : undefined}
       />
       {s.visitPlans.length === 0 ? (
-        canManage ? (
+        canCreate ? (
           <EmptyState
             testId="visit-plans-empty"
             title="No visit plans yet"
@@ -69,7 +71,7 @@ export function VisitPlans() {
             action={{ label: 'New plan', onClick: () => setCreating(true) }}
           />
         ) : (
-          <EmptyState testId="visit-plans-empty" title="No visit plans for you yet" text="When an owner or admin makes a visit plan for you, it shows here, and you get an email with it." />
+          <EmptyState testId="visit-plans-empty" title="No visit plans for you yet" text="When your manager, an owner or an admin makes a visit plan for you, it shows here, and you get an email with it." />
         )
       ) : (
         <div className="card vp-list">

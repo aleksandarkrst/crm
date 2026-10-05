@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ABSENCE_SOURCE, nobodyAbsent } from './approvers';
 import { DEPARTMENT_USAGE, nothingUsesDepartments } from './department-usage';
+import { EmployeesBulkController } from './employees-bulk.controller';
+import { EmployeesBulkService } from './employees-bulk.service';
 import { EmployeesController } from './employees.controller';
 import { EmployeesService } from './employees.service';
 import { OrgController } from './org.controller';
@@ -8,6 +10,8 @@ import { OrgService } from './org.service';
 import { PeopleAccess } from './people-access';
 import { PeopleController } from './people.controller';
 import { PeopleHistoryService } from './people-history.service';
+import { RolesController } from './roles.controller';
+import { RolesService } from './roles.service';
 
 /**
  * People (milestone 13): employees, departments, teams, functional roles, access and the approver
@@ -16,11 +20,13 @@ import { PeopleHistoryService } from './people-history.service';
  * DEPARTMENT_USAGE with what uses a department.
  */
 @Module({
-  controllers: [EmployeesController, PeopleController, OrgController],
+  controllers: [EmployeesController, EmployeesBulkController, PeopleController, RolesController, OrgController],
   providers: [
     PeopleAccess,
     PeopleHistoryService,
     EmployeesService,
+    EmployeesBulkService,
+    RolesService,
     OrgService,
     { provide: ABSENCE_SOURCE, useValue: nobodyAbsent },
     { provide: DEPARTMENT_USAGE, useValue: nothingUsesDepartments },

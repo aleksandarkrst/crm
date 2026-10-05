@@ -6,7 +6,7 @@ import { memberLabels } from '../store/selectors';
 import { useStore } from '../store/store';
 import { todayIn } from '../store/time';
 import { useVisitProgress } from '../store/useVisitProgress';
-import { completionLabel, paceOf, periodOptions, periodStartOf } from '../store/visitPlans';
+import { completionLabel, paceOf, periodOptions, periodStartOf, seesPlansOf } from '../store/visitPlans';
 
 const selectStyle = { border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '7px 10px', fontSize: 12.5, color: 'var(--ink)' };
 
@@ -17,7 +17,9 @@ const selectStyle = { border: '1px solid var(--border)', background: 'var(--whit
  * salesperson and open the report with the same choice. Same numbers as the plan pages and Reports.
  */
 export function VisitProgressCard() {
-  const { s, canDelete: isManager } = useStore();
+  const { s } = useStore();
+  // Owners, admins and managers (their reports, CD-142) see the team; members their own.
+  const isManager = s.visitScope.seesTeam;
   const today = todayIn(s.workspace.timezone);
   const fiscal = s.workspace.fiscalMonth;
   const [periodType, setPeriodType] = useState<VisitPlanPeriodType>('month');
@@ -28,7 +30,7 @@ export function VisitProgressCard() {
     crmApi.visitSummary({ periodType, periodStart, all: who === 'all', salespersonUserId: who !== 'all' && who !== 'me' ? who : undefined }),
   );
   const shown = data && data.periodStart === periodStart && data.periodType === periodType ? data : undefined;
-  const people = [...memberLabels(s)].sort((a, b) => a[1].localeCompare(b[1]));
+  const people = [...memberLabels(s)].filter(([id]) => seesPlansOf(s.visitScope, id)).sort((a, b) => a[1].localeCompare(b[1]));
   const pace = shown ? paceOf(shown) : null;
   // A quarter adds up monthly plans (CD-212): "Open my plan" opens this month's, else the first.
   const thisMonth = periodStartOf('month', today, fiscal);

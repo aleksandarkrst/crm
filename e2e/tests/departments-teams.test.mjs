@@ -21,12 +21,12 @@ describe('departments and teams', () => {
     await clickButton(page, 'Departments & teams');
     await page.waitForSelector('[data-testid=departments-list]');
   };
-  const inRow = (testId, label) => click(page, `[data-testid="${testId}"] > .org-row button::-p-text(${label})`);
+  const inRow = (testId, label) => click(page, `[data-testid="${testId}"] > .dtp-row button::-p-text(${label})`);
 
   step('an Admin with four employees opens the panel from the Org structure page', async () => {
     page = await browser.person('dora');
     await page.goto(BASE_URL, { waitUntil: 'networkidle0' });
-    await signIn(page, email('org-dora'), 'Dora Director');
+    await signIn(page, email('dtp-dora'), 'Dora Director');
     await createWorkspace(page, 'Org Co');
     id.head = await person('Hana', 'Head');
     id.lead = await person('Luka', 'Lead');
@@ -50,7 +50,7 @@ describe('departments and teams', () => {
     await click(page, 'button[type=submit]::-p-text(Add team)');
     await page.waitForSelector('[data-testid="team-Service Belgrade"]');
 
-    await click(page, '.org-name::-p-text(Service Belgrade)');
+    await click(page, '.dtp-name::-p-text(Service Belgrade)');
     await page.waitForSelector('input[aria-label="Team name"]');
     await page.$eval('input[aria-label="Team name"]', (el) => el.select());
     await page.type('input[aria-label="Team name"]', 'Service BG');
@@ -65,8 +65,8 @@ describe('departments and teams', () => {
     await click(page, '[data-testid="team-Service BG"] button::-p-text(Add people)');
     await page.waitForSelector('input[aria-label="Search people"]');
     await page.type('input[aria-label="Search people"]', 'tech');
-    await click(page, 'label.org-candidate::-p-text(Ana Tech)');
-    await click(page, 'label.org-candidate::-p-text(Bojan Tech)');
+    await click(page, 'label.dtp-candidate::-p-text(Ana Tech)');
+    await click(page, 'label.dtp-candidate::-p-text(Bojan Tech)');
     await page.waitForSelector('select[aria-label="Reports to for Ana Tech"]');
     await page.waitForSelector('select[aria-label="Reports to for Bojan Tech"]');
     assert.equal(await page.$eval('select[aria-label="Reports to for Ana Tech"]', (s) => s.value), id.head, 'prefilled: the team has no lead, so the head');
@@ -87,9 +87,9 @@ describe('departments and teams', () => {
     await click(page, '[data-testid="team-Service BG"] button::-p-text(Set lead)');
     await page.waitForSelector('select[aria-label="Team lead"]');
     await setValue(page, 'select[aria-label="Team lead"]', id.lead);
-    await page.waitForSelector('label.org-check::-p-text(Make team members report to Luka Lead)');
-    assert.equal(await page.$eval('label.org-check input', (c) => c.checked), true, 'ticked by default');
-    assert.match(await page.$eval('label.org-check', (el) => el.textContent), /Bojan Tech has no manager or reported to the previous lead/);
+    await page.waitForSelector('label.dtp-check::-p-text(Make team members report to Luka Lead)');
+    assert.equal(await page.$eval('label.dtp-check input', (c) => c.checked), true, 'ticked by default');
+    assert.match(await page.$eval('label.dtp-check', (el) => el.textContent), /Bojan Tech has no manager or reported to the previous lead/);
     await clickButton(page, 'Save');
     await page.waitForFunction(() => document.querySelectorAll('.modal').length === 1);
     assert.equal((await employee(id.bojan)).manager?.id, id.lead, 'Bojan had no manager: now the lead');
@@ -102,8 +102,8 @@ describe('departments and teams', () => {
     await page.waitForSelector('[data-testid="department-Sales"]');
 
     await click(page, '[data-testid="team-Service BG"] button::-p-text(Move)');
-    await page.waitForSelector('.org-note');
-    assert.equal(await page.$eval('.org-note', (el) => el.textContent), '2 employees move to Sales: Ana Tech and Bojan Tech.');
+    await page.waitForSelector('.dtp-note');
+    assert.equal(await page.$eval('.dtp-note', (el) => el.textContent), '2 employees move to Sales: Ana Tech and Bojan Tech.');
     await clickButton(page, 'Move to Sales');
     await page.waitForFunction(() => document.querySelectorAll('.modal').length === 1);
     const departments = await api(page, '/people/departments');
@@ -140,7 +140,7 @@ describe('departments and teams', () => {
     await openPanel();
     await page.waitForSelector('[data-testid="department-Sales"]');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'no sideways scrolling at 375 px');
-    const box = await page.$eval('[data-testid="department-Sales"] .org-actions', (el) => el.getBoundingClientRect().right);
+    const box = await page.$eval('[data-testid="department-Sales"] .dtp-actions', (el) => el.getBoundingClientRect().right);
     assert.ok(box <= 376, 'the actions wrap inside the screen');
     await page.setViewport({ width: 1400, height: 1100 });
   });

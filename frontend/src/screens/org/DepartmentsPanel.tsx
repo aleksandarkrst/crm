@@ -21,10 +21,12 @@ function names(people: { fullName: string }[], max = 6): string {
 }
 
 /** The header button that opens the panel; shown to Administration and Admins only. */
-export function DepartmentsPanelButton({ className = 'btn btn-plain' }: { className?: string }) {
+export function DepartmentsPanelButton({ className = 'btn-plain', allowed: known }: { className?: string; /** The host already knows the caller is Administration or Admin. */ allowed?: boolean }) {
   const [open, setOpen] = useState(false);
-  const [allowed, setAllowed] = useState(false);
+  const [checked, setAllowed] = useState(false);
+  const allowed = known ?? checked;
   useEffect(() => {
+    if (known !== undefined) return;
     let alive = true;
     orgApi.access().then(
       (a) => alive && setAllowed(canManageOrg(a)),
@@ -33,7 +35,7 @@ export function DepartmentsPanelButton({ className = 'btn btn-plain' }: { classN
     return () => {
       alive = false;
     };
-  }, []);
+  }, [known]);
   if (!allowed) return null;
   return (
     <>
@@ -94,7 +96,7 @@ export function DepartmentsPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal maxWidth={760} onBackdrop={dialog ? undefined : onClose}>
-      <div className="org-panel-head">
+      <div className="dtp-panel-head">
         <ModalHeader
           title="Departments & teams"
           sub={data ? `${plural(data.departments.length, 'department')} · ${plural(data.teams.length, 'team')}${without ? ` · ${plural(without, 'employee')} without a department` : ''}` : 'Loading…'}
@@ -103,41 +105,41 @@ export function DepartmentsPanel({ onClose }: { onClose: () => void }) {
           Close
         </button>
       </div>
-      {error && <div className="org-problem">{error}</div>}
+      {error && <div className="dtp-problem">{error}</div>}
       {problem && (
-        <div className="org-problem" role="alert">
+        <div className="dtp-problem" role="alert">
           {problem}
         </div>
       )}
-      {data && !manage && <div className="org-problem">Only Administration and Admins change departments and teams.</div>}
+      {data && !manage && <div className="dtp-problem">Only Administration and Admins change departments and teams.</div>}
       {data && manage && (
         <>
-          <div className="org-list" data-testid="departments-list">
-            {data.departments.length === 0 && adding !== 'department' && <div className="org-empty">No departments yet. Add the first one, for example Sales or Service.</div>}
+          <div className="dtp-list" data-testid="departments-list">
+            {data.departments.length === 0 && adding !== 'department' && <div className="dtp-empty">No departments yet. Add the first one, for example Sales or Service.</div>}
             {data.departments.map((d) => {
               const teams = teamsOf(d.id);
               const inTeams = teams.reduce((n, t) => n + t.activeEmployees, 0);
               const open = expanded.has(d.id);
               return (
-                <div key={d.id} className="org-dept" data-testid={`department-${d.name}`}>
-                  <div className="org-row">
-                    <button type="button" className="org-expand" aria-expanded={open} aria-label={open ? `Collapse ${d.name}` : `Expand ${d.name}`} onClick={() => toggle(d.id)}>
+                <div key={d.id} className="dtp-dept" data-testid={`department-${d.name}`}>
+                  <div className="dtp-row">
+                    <button type="button" className="dtp-expand" aria-expanded={open} aria-label={open ? `Collapse ${d.name}` : `Expand ${d.name}`} onClick={() => toggle(d.id)}>
                       {open ? '▾' : '▸'}
                     </button>
-                    <div className="org-main">
+                    <div className="dtp-main">
                       <InlineName value={d.name} label="Department name" onSave={(name) => run(() => orgApi.updateDepartment(d.id, { name }), 'Department renamed')} />
-                      <span className="org-meta">
-                        {d.code && <span className="org-code">{d.code}</span>}
+                      <span className="dtp-meta">
+                        {d.code && <span className="dtp-code">{d.code}</span>}
                         {d.headName ? `Head: ${d.headName}` : 'No head'} · {plural(d.activeEmployees, 'person', 'people')} · {plural(d.teams, 'team')}
                       </span>
                     </div>
-                    <div className="org-actions">
-                      <button type="button" className="org-link" onClick={() => setDialog({ kind: 'addPeople', department: d, team: null })}>
+                    <div className="dtp-actions">
+                      <button type="button" className="dtp-link" onClick={() => setDialog({ kind: 'addPeople', department: d, team: null })}>
                         Add people
                       </button>
                       <button
                         type="button"
-                        className="org-link"
+                        className="dtp-link"
                         onClick={() => {
                           setExpanded((x) => new Set(x).add(d.id));
                           setAdding(d.id);
@@ -145,41 +147,41 @@ export function DepartmentsPanel({ onClose }: { onClose: () => void }) {
                       >
                         Add team
                       </button>
-                      <button type="button" className="org-link" onClick={() => setDialog({ kind: 'editDepartment', department: d })}>
+                      <button type="button" className="dtp-link" onClick={() => setDialog({ kind: 'editDepartment', department: d })}>
                         Edit
                       </button>
-                      <button type="button" className="org-link org-danger" onClick={() => setDialog({ kind: 'deleteDepartment', department: d })}>
+                      <button type="button" className="dtp-link dtp-danger" onClick={() => setDialog({ kind: 'deleteDepartment', department: d })}>
                         Delete
                       </button>
                     </div>
                   </div>
                   {open && (
-                    <div className="org-teams">
+                    <div className="dtp-teams">
                       {teams.map((t) => (
-                        <div key={t.id} className="org-row org-team" data-testid={`team-${t.name}`}>
-                          <div className="org-main">
+                        <div key={t.id} className="dtp-row dtp-team" data-testid={`team-${t.name}`}>
+                          <div className="dtp-main">
                             <InlineName value={t.name} label="Team name" onSave={(name) => run(() => orgApi.updateTeam(t.id, { name }), 'Team renamed')} />
-                            <span className="org-meta">
+                            <span className="dtp-meta">
                               {t.leadName ? `Lead: ${t.leadName}${t.leadOutside ? ' (lead, not a member)' : ''}` : 'No lead'} · {plural(t.activeEmployees, 'person', 'people')}
                             </span>
                           </div>
-                          <div className="org-actions">
-                            <button type="button" className="org-link" onClick={() => setDialog({ kind: 'addPeople', department: d, team: t })}>
+                          <div className="dtp-actions">
+                            <button type="button" className="dtp-link" onClick={() => setDialog({ kind: 'addPeople', department: d, team: t })}>
                               Add people
                             </button>
-                            <button type="button" className="org-link" onClick={() => setDialog({ kind: 'lead', team: t })}>
+                            <button type="button" className="dtp-link" onClick={() => setDialog({ kind: 'lead', team: t })}>
                               Set lead
                             </button>
-                            <button type="button" className="org-link" onClick={() => setDialog({ kind: 'moveTeam', team: t })}>
+                            <button type="button" className="dtp-link" onClick={() => setDialog({ kind: 'moveTeam', team: t })}>
                               Move
                             </button>
-                            <button type="button" className="org-link org-danger" onClick={() => setDialog({ kind: 'deleteTeam', team: t })}>
+                            <button type="button" className="dtp-link dtp-danger" onClick={() => setDialog({ kind: 'deleteTeam', team: t })}>
                               Delete
                             </button>
                           </div>
                         </div>
                       ))}
-                      {d.activeEmployees > inTeams && <div className="org-row org-team org-noteam">{plural(d.activeEmployees - inTeams, 'person', 'people')} in no team</div>}
+                      {d.activeEmployees > inTeams && <div className="dtp-row dtp-team dtp-noteam">{plural(d.activeEmployees - inTeams, 'person', 'people')} in no team</div>}
                       {adding === d.id ? (
                         <AddForm
                           what="team"
@@ -188,7 +190,7 @@ export function DepartmentsPanel({ onClose }: { onClose: () => void }) {
                           onSave={(name, person) => run(() => orgApi.createTeam({ departmentId: d.id, name, leadEmployeeId: person }), `Team ${name} added`).then((ok) => ok && setAdding(null))}
                         />
                       ) : (
-                        <button type="button" className="btn-dashed org-add-team" onClick={() => setAdding(d.id)}>
+                        <button type="button" className="btn-dashed dtp-add-team" onClick={() => setAdding(d.id)}>
                           + Add team
                         </button>
                       )}
@@ -206,7 +208,7 @@ export function DepartmentsPanel({ onClose }: { onClose: () => void }) {
               onSave={(name, person, code) => run(() => orgApi.createDepartment({ name, code: code || null, headEmployeeId: person }), `Department ${name} added`).then((ok) => ok && setAdding(null))}
             />
           ) : (
-            <button type="button" className="btn btn-primary org-add-dept" onClick={() => setAdding('department')}>
+            <button type="button" className="btn btn-primary dtp-add-dept" onClick={() => setAdding('department')}>
               Add department
             </button>
           )}
@@ -222,7 +224,7 @@ function InlineName({ value, label, onSave }: { value: string; label: string; on
   const [draft, setDraft] = useState<string | null>(null);
   if (draft === null) {
     return (
-      <button type="button" className="org-name" title="Rename" onClick={() => setDraft(value)}>
+      <button type="button" className="dtp-name" title="Rename" onClick={() => setDraft(value)}>
         {value}
       </button>
     );
@@ -239,7 +241,7 @@ function InlineName({ value, label, onSave }: { value: string; label: string; on
       setDraft(null);
     }
   };
-  return <input className="form-input org-name-input" aria-label={label} value={draft} maxLength={100} autoFocus onChange={(e) => setDraft(e.target.value)} onKeyDown={onKey} onBlur={() => void save()} />;
+  return <input className="form-input dtp-name-input" aria-label={label} value={draft} maxLength={100} autoFocus onChange={(e) => setDraft(e.target.value)} onKeyDown={onKey} onBlur={() => void save()} />;
 }
 
 /** Active employees to pick from, by name. */
@@ -265,16 +267,16 @@ function AddForm({ what, employees, onSave, onCancel }: { what: 'department' | '
   const ok = name.trim().length > 0;
   return (
     <form
-      className="org-add-form"
+      className="dtp-add-form"
       onSubmit={(e) => {
         e.preventDefault();
         if (ok) onSave(name.trim(), person, code.trim());
       }}
     >
       <input className="form-input" aria-label={what === 'team' ? 'Team name' : 'Department name'} placeholder={what === 'team' ? 'Team name, e.g. Service Belgrade' : 'Department name, e.g. Service'} value={name} maxLength={100} autoFocus onChange={(e) => setName(e.target.value)} />
-      {what === 'department' && <input className="form-input org-code-input" aria-label="Code" placeholder="Code (optional)" value={code} maxLength={20} onChange={(e) => setCode(e.target.value)} />}
+      {what === 'department' && <input className="form-input dtp-code-input" aria-label="Code" placeholder="Code (optional)" value={code} maxLength={20} onChange={(e) => setCode(e.target.value)} />}
       <PersonSelect value={person} onChange={setPerson} employees={employees} none={what === 'team' ? 'No team lead' : 'No department head'} label={what === 'team' ? 'Team lead' : 'Department head'} />
-      <div className="org-form-actions">
+      <div className="dtp-form-actions">
         <button type="button" className="btn btn-secondary" onClick={onCancel}>
           Cancel
         </button>
@@ -374,7 +376,7 @@ function EditDepartment({ department, data, onClose, run }: { department: ApiDep
         Department head
         <PersonSelect value={head} onChange={setHead} employees={data.employees} none="No department head" label="Department head" />
       </label>
-      {problem && <div className="org-problem">{problem}</div>}
+      {problem && <div className="dtp-problem">{problem}</div>}
     </Sheet>
   );
 }
@@ -402,14 +404,14 @@ function DeleteDepartment({ department, onClose, run }: { department: ApiDepartm
             {blocked ? 'Close' : 'Cancel'}
           </button>
           {usage && !blocked && (
-            <button type="button" className="btn btn-primary org-danger-btn" disabled={busy} onClick={() => void go(() => orgApi.deleteDepartment(department.id), `Department ${department.name} deleted`)}>
+            <button type="button" className="btn btn-primary dtp-danger-btn" disabled={busy} onClick={() => void go(() => orgApi.deleteDepartment(department.id), `Department ${department.name} deleted`)}>
               {busy ? 'Deleting…' : 'Delete department'}
             </button>
           )}
         </>
       }
     >
-      {problem && <div className="org-problem">{problem}</div>}
+      {problem && <div className="dtp-problem">{problem}</div>}
     </Sheet>
   );
 }
@@ -431,13 +433,13 @@ function DeleteTeam({ team, data, onClose, run }: { team: ApiTeam; data: OrgStru
           <button type="button" className="btn btn-secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className="btn btn-primary org-danger-btn" disabled={busy} onClick={() => void go(() => orgApi.deleteTeam(team.id), `Team ${team.name} deleted`)}>
+          <button type="button" className="btn btn-primary dtp-danger-btn" disabled={busy} onClick={() => void go(() => orgApi.deleteTeam(team.id), `Team ${team.name} deleted`)}>
             {busy ? 'Deleting…' : 'Delete team'}
           </button>
         </>
       }
     >
-      {problem && <div className="org-problem">{problem}</div>}
+      {problem && <div className="dtp-problem">{problem}</div>}
     </Sheet>
   );
 }
@@ -478,8 +480,8 @@ function MoveTeam({ team, data, onClose, run }: { team: ApiTeam; data: OrgStruct
           </select>
         </label>
       )}
-      {target && <div className="org-note">{members.length ? `${plural(members.length, 'employee')} move to ${target.name}: ${names(members)}.` : 'No employees move: the team has no members.'}</div>}
-      {problem && <div className="org-problem">{problem}</div>}
+      {target && <div className="dtp-note">{members.length ? `${plural(members.length, 'employee')} move to ${target.name}: ${names(members)}.` : 'No employees move: the team has no members.'}</div>}
+      {problem && <div className="dtp-problem">{problem}</div>}
     </Sheet>
   );
 }
@@ -530,18 +532,18 @@ function TeamLead({ team, data, onClose, run }: { team: ApiTeam; data: OrgStruct
         <PersonSelect value={lead} onChange={setLead} employees={data.employees} none="No team lead" label="Team lead" />
       </label>
       {offer && (
-        <label className="org-check">
+        <label className="dtp-check">
           <input type="checkbox" checked={report} onChange={(e) => setReport(e.target.checked)} />
           <span>
             Make team members report to {leadName}
-            <span className="org-check-sub">
+            <span className="dtp-check-sub">
               {names(shown!.members)} {shown!.members.length === 1 ? 'has' : 'have'} no manager or reported to the previous lead.
             </span>
           </span>
         </label>
       )}
       {shown && shown.loops.length > 0 && (
-        <div className="org-note">
+        <div className="dtp-note">
           {shown.loops.map((l) => (
             <div key={l.id}>
               {l.fullName} keeps their manager: {l.message.replace(/^This would create/, 'reporting to the lead would create')}.
@@ -549,7 +551,7 @@ function TeamLead({ team, data, onClose, run }: { team: ApiTeam; data: OrgStruct
           ))}
         </div>
       )}
-      {problem && <div className="org-problem">{problem}</div>}
+      {problem && <div className="dtp-problem">{problem}</div>}
     </Sheet>
   );
 }
@@ -620,23 +622,23 @@ function AddPeople({ department, team, data, onClose, run }: { department: ApiDe
       }
     >
       {picked.length > 0 && (
-        <div className="org-picked" data-testid="picked">
+        <div className="dtp-picked" data-testid="picked">
           {picked.map((id) => {
             const row = rows[id];
             const person = byId.get(id);
             const from = row?.moves ? (row.teamName ?? (row.departmentId ? data.departments.find((d) => d.id === row.departmentId)?.name : null)) : null;
             return (
-              <div key={id} className="org-picked-row">
-                <div className="org-picked-name">
+              <div key={id} className="dtp-picked-row">
+                <div className="dtp-picked-name">
                   <span>{person?.fullName ?? row?.fullName}</span>
-                  {from && <span className="org-meta">moves from {from}</span>}
-                  <button type="button" className="org-link" onClick={() => togglePick(id)} aria-label={`Remove ${person?.fullName ?? ''}`}>
+                  {from && <span className="dtp-meta">moves from {from}</span>}
+                  <button type="button" className="dtp-link" onClick={() => togglePick(id)} aria-label={`Remove ${person?.fullName ?? ''}`}>
                     Remove
                   </button>
                 </div>
                 {row && !row.managerId && (
-                  <label className="org-reports">
-                    <span className="org-meta">Reports to</span>
+                  <label className="dtp-reports">
+                    <span className="dtp-meta">Reports to</span>
                     <PersonSelect value={managers[id] ?? null} onChange={(m) => setManagers((x) => ({ ...x, [id]: m }))} employees={data.employees.filter((e) => e.id !== id)} none="No manager" label={`Reports to for ${row.fullName}`} />
                   </label>
                 )}
@@ -646,17 +648,17 @@ function AddPeople({ department, team, data, onClose, run }: { department: ApiDe
         </div>
       )}
       <input className="form-input" placeholder="Search people" aria-label="Search people" value={search} autoFocus onChange={(e) => setSearch(e.target.value)} />
-      <div className="org-candidates">
-        {candidates.length === 0 && <div className="org-empty">{search ? 'Nobody matches.' : 'Everybody is here already.'}</div>}
+      <div className="dtp-candidates">
+        {candidates.length === 0 && <div className="dtp-empty">{search ? 'Nobody matches.' : 'Everybody is here already.'}</div>}
         {candidates.slice(0, 200).map((e) => (
-          <label key={e.id} className="org-candidate">
+          <label key={e.id} className="dtp-candidate">
             <input type="checkbox" checked={picked.includes(e.id)} onChange={() => togglePick(e.id)} />
-            <span className="org-candidate-name">{e.fullName}</span>
-            <span className="org-meta">{[e.jobTitle, e.teamName ?? e.departmentName].filter(Boolean).join(' · ')}</span>
+            <span className="dtp-candidate-name">{e.fullName}</span>
+            <span className="dtp-meta">{[e.jobTitle, e.teamName ?? e.departmentName].filter(Boolean).join(' · ')}</span>
           </label>
         ))}
       </div>
-      {problem && <div className="org-problem">{problem}</div>}
+      {problem && <div className="dtp-problem">{problem}</div>}
     </Sheet>
   );
 }

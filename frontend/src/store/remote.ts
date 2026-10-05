@@ -32,6 +32,7 @@ export type WorkspaceData = Pick<
   | 'versions'
   | 'onboarding'
   | 'visitPlans'
+  | 'visitScope'
 >;
 
 export const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member' } as const;
@@ -99,7 +100,16 @@ const loadBonusRules = () => crmApi.bonusRules().catch((err: unknown) => (err in
 const loadOnboarding = () => crmApi.onboarding().catch((err: unknown) => (err instanceof ApiError && err.status === 403 ? null : Promise.reject(err)));
 
 /** Workspace settings. */
-export const mapWorkspace = (w: ApiWorkspace): Workspace => ({ name: w.name, currency: w.currency, timezone: w.timezone, fiscalMonth: w.fiscalYearStartMonth, customerEmailLanguage: w.customerEmailLanguage });
+export const mapWorkspace = (w: ApiWorkspace): Workspace => ({
+  name: w.name,
+  currency: w.currency,
+  timezone: w.timezone,
+  fiscalMonth: w.fiscalYearStartMonth,
+  customerEmailLanguage: w.customerEmailLanguage,
+  employeeDefaultWeeklyHours: w.employeeDefaultWeeklyHours,
+  employeeNumberRequired: w.employeeNumberRequired,
+  employeeSelfEditBank: w.employeeSelfEditBank,
+});
 
 export const mapProfile = (p: ApiProfile): Profile => ({
   name: p.displayName ?? p.email ?? '',
@@ -114,6 +124,7 @@ export const mapProfile = (p: ApiProfile): Profile => ({
   dealAssigned: p.notifyDealAssigned,
   meetingInvites: p.notifyMeetingInvites,
   visitPlans: p.notifyVisitPlans,
+  orgChanges: p.notifyOrgChanges,
 });
 
 /** Members, then pending invitations with their email status. */
@@ -172,6 +183,8 @@ const PARTS = {
   onboarding: () => loadOnboarding(),
   /** Customer visit plans (CD-134); members get only their own. */
   visitPlans: () => crmApi.visitPlans(),
+  /** Whose plans this user sees and manages (CD-142). */
+  visitScope: () => crmApi.visitPlanScope(),
 };
 export type Part = keyof typeof PARTS;
 type Raw = { [K in Part]: Awaited<ReturnType<(typeof PARTS)[K]>> };
@@ -254,7 +267,7 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
     if (order && partial(k)) raw[k] = order(raw[k] as unknown[], raw as Raw);
   }
   lastRaw = raw as Raw;
-  const { funnels: apiFunnels, companies, contacts, deals: dealRows, products, lines: apiLines, tasks: apiTasks, team: apiTeam, workspace: apiWorkspace, profile: apiProfile, customFields: apiFields, bonus: apiBonus, onboarding, visitPlans } = lastRaw;
+  const { funnels: apiFunnels, companies, contacts, deals: dealRows, products, lines: apiLines, tasks: apiTasks, team: apiTeam, workspace: apiWorkspace, profile: apiProfile, customFields: apiFields, bonus: apiBonus, onboarding, visitPlans, visitScope } = lastRaw;
 
   const team = mapTeam(apiTeam);
 
@@ -442,5 +455,6 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
     bonusTrigger: apiBonus?.trigger ?? 'On contract signed',
     onboarding,
     visitPlans: sortPlans(visitPlans),
+    visitScope,
   };
 }

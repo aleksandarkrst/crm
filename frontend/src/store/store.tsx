@@ -5,6 +5,7 @@ import { paths } from '../lib/paths';
 import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference } from './documents';
 import { connectLive, type LiveEvent } from './live';
 import { meetingActions, meetingKey, newMeetingRuntime, upcomingQuery } from './meetings';
+import { newPeopleRuntime, PEOPLE_HINTS, peopleActions } from './people';
 import { type Changed, loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type Part, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
 import {
@@ -123,9 +124,6 @@ const conflictText = (err: unknown): string | null => {
   return `${body.message} ${now}`;
 };
 /** Which lists a live change hint means re-reading (see loadWorkspace). */
-/** Live hints of the people module (milestone 13): they change no CRM part, only `s.orgRev`. */
-const ORG_EVENTS = new Set(['employee', 'department', 'team', 'employee_role']);
-
 const PARTS_OF: Record<string, Part[]> = {
   // The getting-started checklist (CD-68, steps from CD-115) ticks itself from these records.
   deal: ['deals', 'onboarding'],
@@ -140,6 +138,12 @@ const PARTS_OF: Record<string, Part[]> = {
   // Meetings (CD-130) aren't part of the workspace load: the meeting slice re-reads them.
   meeting: [],
   visit_plan: ['visitPlans'],
+  // People (milestone 13) aren't part of the workspace load: the people slice re-reads them. Reporting
+  // lines and roles also decide whose visit plans a manager sees (CD-142).
+  employee: ['visitScope', 'visitPlans'],
+  employee_role: ['visitScope'],
+  department: [],
+  team: [],
 };
 /**
  * Which rows of each list a change hint names (CD-98), so a live update re-reads just those: by id,
@@ -170,7 +174,7 @@ function rowsOf(e: LiveEvent): Partial<Record<Part, readonly string[] | null>> {
       return {};
   }
 }
-const ALL_PARTS: Part[] = ['funnels', 'companies', 'contacts', 'deals', 'products', 'lines', 'tasks', 'team', 'customFields', 'bonus', 'onboarding', 'visitPlans'];
+const ALL_PARTS: Part[] = ['funnels', 'companies', 'contacts', 'deals', 'products', 'lines', 'tasks', 'team', 'customFields', 'bonus', 'onboarding', 'visitPlans', 'visitScope'];
 const EMPTY_CONTACT: NewContactDraft = { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer', notes: '' };
 const DISCOVERY_FIELDS = ['headline', 'need', 'constraint', 'decisionMaker', 'discoveryDate'] as const satisfies readonly (keyof Lead & keyof DealInput)[];
 /** Workspace settings as the API names them. */
@@ -180,6 +184,9 @@ const WORKSPACE_FIELDS: Partial<Record<keyof Workspace, keyof WorkspaceInput>> =
   timezone: 'timezone',
   fiscalMonth: 'fiscalYearStartMonth',
   customerEmailLanguage: 'customerEmailLanguage',
+  employeeDefaultWeeklyHours: 'employeeDefaultWeeklyHours',
+  employeeNumberRequired: 'employeeNumberRequired',
+  employeeSelfEditBank: 'employeeSelfEditBank',
 };
 /** Profile fields as the API names them. */
 const PROFILE_FIELDS: Partial<Record<keyof Profile, keyof ProfileInput>> = {
@@ -194,6 +201,7 @@ const PROFILE_FIELDS: Partial<Record<keyof Profile, keyof ProfileInput>> = {
   dealAssigned: 'notifyDealAssigned',
   meetingInvites: 'notifyMeetingInvites',
   visitPlans: 'notifyVisitPlans',
+  orgChanges: 'notifyOrgChanges',
 };
 
 function useStoreImpl(data: WorkspaceData, session: Session) {
@@ -219,6 +227,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
   // rows: per list, the rows to re-read (CD-98); null = the whole list.
   /** The meeting slice's bookkeeping (CD-130). */
   const meetingRt = useRef(newMeetingRuntime());
+  /** The people slice's bookkeeping (milestone 13). */
+  const peopleRt = useRef(newPeopleRuntime());
   const livePending = useRef({ parts: new Set<Part>(), rows: new Map<Part, Set<string> | null>(), logs: new Set<string>(), touched: new Set<string>(), timer: undefined as ReturnType<typeof setTimeout> | undefined, running: false, lastFull: 0 });
 
   const set = useCallback((u: Updater) => setState((prev) => ({ ...prev, ...(typeof u === 'function' ? u(prev) : u) })), []);
@@ -458,21 +468,30 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       tasksChanged: (dealId) => queueRefresh(['tasks'], [dealId], [dealId], 100),
     });
 
+    // ------------------------------------------------------------ people (milestone 13)
+    const people = peopleActions({ cur, set, flash, rt: peopleRt.current, errText });
+
     /** Everything this tab shows, after the stream was down (hints may be missing) or on focus. */
     const refreshAll = () => {
       livePending.current.lastFull = Date.now();
       meetings.refreshAll();
+      people.refresh();
       queueRefresh(ALL_PARTS, logRequested.current);
     };
     const onLiveEvent = (e: LiveEvent) => {
       // Visit plan progress (CD-135) counts meetings: any meeting or plan change, also this tab's, recounts it.
       if (e.type === 'resync' || e.type === 'meeting' || e.type === 'visit_plan') set((x) => ({ visitRev: x.visitRev + 1 }));
       // The org structure (CD-138) is read again by the screens showing it (store/org.ts).
-      if (e.type === 'resync' || ORG_EVENTS.has(e.type)) set((x) => ({ orgRev: x.orgRev + 1 }));
+      if (e.type === 'resync' || PEOPLE_HINTS.has(e.type)) set((x) => ({ orgRev: x.orgRev + 1 }));
+      // People lists (Roles & permissions, CD-142) re-read on any employee or role change, this tab's own included.
+      if (e.type === 'resync' || e.type === 'employee' || e.type === 'employee_role') set((x) => ({ peopleRev: x.peopleRev + 1 }));
       if (e.type === 'resync') return refreshAll();
-      if (ORG_EVENTS.has(e.type)) return;
       if (e.client === CLIENT_ID) return; // this tab's own change: the screen has it already
       if (e.type === 'meeting') return meetings.onLive(e);
+      if (PEOPLE_HINTS.has(e.type)) {
+        people.onLive(e);
+        if (!PARTS_OF[e.type]?.length) return;
+      }
       const parts = PARTS_OF[e.type] ?? ALL_PARTS;
       const dealIds = [...(e.dealIds ?? []), ...(e.type === 'deal' ? (e.ids ?? []) : [])];
       const logs = e.dealIds === null ? [...logRequested.current] : dealIds.filter((id) => logRequested.current.has(id));
@@ -1220,6 +1239,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       live: { onEvent: onLiveEvent, refreshAll, onFocus },
       /** Meetings (CD-130): queries, saving and the meeting dialog (store/meetings.ts). */
       meetings,
+      /** Employees, departments and teams (milestone 13; store/people.ts). */
+      people,
       /** A page of the change history of a deal, company or contact (CD-69), newest first. */
       loadChanges: (entity: HistoryEntity, id: string, offset = 0) => crmApi.history(entity, id, offset),
       ensureLog,

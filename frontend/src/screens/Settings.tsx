@@ -10,12 +10,15 @@ import type { CustomFieldDef, Workspace } from '../store/types';
 import type { CustomFieldEntity } from '../lib/api';
 import { useStore } from '../store/store';
 import { TemplatesTab } from './DocumentTemplates';
+import { EmployeesTab } from './settings/EmployeesTab';
+import { RolesTab } from './settings/RolesTab';
 import type { TeamMember } from '../store/types';
 
 const TABS = [
   { k: 'workspace', label: 'Workspace' },
   { k: 'team', label: 'Team' },
   { k: 'roles', label: 'Roles & permissions' },
+  { k: 'employees', label: 'Employees' },
   { k: 'funnel', label: 'Funnel builder' },
   { k: 'templates', label: 'Document templates' },
   { k: 'fields', label: 'Customize Fields' },
@@ -27,10 +30,11 @@ type Tab = (typeof TABS)[number]['k'];
 export function Settings() {
   const { tab = 'workspace' } = useParams();
   const navigate = useNavigate();
-  const { s, set, session, flash, canEditFields, canSeeBonuses } = useStore();
+  const { s, set, session, flash, canEditFields, canSeeBonuses, canEditWorkspace } = useStore();
   const [inviteOpen, setInviteOpen] = useState(false);
   // Members don't see the sales bonus rules (CD-17): no tab, and its route goes back to Settings.
-  const tabs = TABS.filter((t) => t.k !== 'bonuses' || canSeeBonuses);
+  // Settings → Employees (CD-215) is for Admins (workspace owners and admins).
+  const tabs = TABS.filter((t) => (t.k !== 'bonuses' || canSeeBonuses) && (t.k !== 'employees' || canEditWorkspace));
   if (!tabs.some((t) => t.k === tab)) return <Navigate to={paths.settings()} replace />;
   const current = tab as Tab;
 
@@ -82,6 +86,7 @@ export function Settings() {
       {current === 'workspace' && <GettingStartedCard />}
       {current === 'team' && <TeamTab />}
       {current === 'roles' && <RolesTab />}
+      {current === 'employees' && <EmployeesTab />}
       {current === 'funnel' && <FunnelBuilder />}
       {current === 'templates' && <TemplatesTab />}
       {current === 'fields' && <FieldsTab />}
@@ -296,52 +301,6 @@ function TeamTab() {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-/** What each role may do. Enforced by the API; roles are fixed for now. */
-const ROLE_RULES: { label: string; roles: (typeof TEAM_ROLES)[number][] }[] = [
-  { label: 'View and edit deals, companies, contacts and products', roles: ['Owner', 'Admin', 'Member'] },
-  { label: 'Delete deals, companies, contacts and products', roles: ['Owner', 'Admin'] },
-  { label: 'Edit funnels and stages', roles: ['Owner', 'Admin'] },
-  { label: 'Define custom fields (everyone fills them in)', roles: ['Owner', 'Admin'] },
-  { label: 'See and set sales bonus rules and bonus figures', roles: ['Owner', 'Admin'] },
-  { label: 'Invite members and change their roles', roles: ['Owner', 'Admin'] },
-  { label: 'Make someone an owner or remove an owner', roles: ['Owner'] },
-];
-
-function RolesTab() {
-  const cols = '1.8fr repeat(3, 90px)';
-  return (
-    <div className="card" style={{ overflowX: 'auto' }}>
-      <div style={{ minWidth: 560 }}>
-        <div className="table-head th" style={{ gridTemplateColumns: cols }}>
-          <span>Permission</span>
-          {TEAM_ROLES.map((r) => (
-            <span key={r} style={{ justifySelf: 'center' }}>
-              {r}
-            </span>
-          ))}
-        </div>
-        {ROLE_RULES.map((p) => (
-          <div key={p.label} className="table-row" style={{ gridTemplateColumns: cols, padding: '11px 16px' }}>
-            <span>{p.label}</span>
-            {TEAM_ROLES.map((r) => {
-              const on = p.roles.includes(r);
-              return (
-                <span
-                  key={r}
-                  style={{ justifySelf: 'center', width: 20, height: 20, borderRadius: 5, border: `1.5px solid ${on ? '#14503C' : '#CAD3CE'}`, background: on ? '#14503C' : '#FFFFFF', color: '#F5F7F6', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  {on ? '✓' : ''}
-                </span>
-              );
-            })}
-          </div>
-        ))}
-        <div style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-2)' }}>Every workspace keeps at least one owner. Anyone can leave a workspace from the Team tab.</div>
-      </div>
     </div>
   );
 }
@@ -818,6 +777,13 @@ function NotificationsTab() {
       toggle: () => patchProfile({ meetingInvites: !p.meetingInvites }),
     },
     { id: 'visit-plans', label: 'Visit plans', desc: 'An email when someone else creates or changes your visit plan.', on: p.visitPlans, toggle: () => patchProfile({ visitPlans: !p.visitPlans }) },
+    {
+      id: 'org-changes',
+      label: 'Org changes',
+      desc: 'An email when someone else changes who you report to, or gives you a new direct report.',
+      on: p.orgChanges,
+      toggle: () => patchProfile({ orgChanges: !p.orgChanges }),
+    },
   ];
   const row = { display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--divider)' } as const;
   return (

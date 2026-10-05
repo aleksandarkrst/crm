@@ -9,3 +9,4 @@ export { assertValidManager, lockReportingLines, loopMessage, type ManagerChange
 export { DEPARTMENT_USAGE, type DepartmentUsage } from './department-usage';
 export { domesticFromIban, formatIban, maskIban, parseBankAccount, type ParsedAccount, shortMaskIban } from './iban';
 export { cleanName, normalizeForSearch } from './search';
+export { allows, PERMISSION_MODULES, type PermissionRelation, type PermissionScope, permissionRow, relationsFor } from './permissions';

@@ -39,7 +39,14 @@ export class PeopleAccess {
   }
 
   private async load(tx: Tx, ctx: TenantContext): Promise<CallerAccess> {
-    const { rows } = await tx.execute<{ employee_id: string | null; roles: AssignedRole[] | null; direct: string[] | null; reports: string[] | null }>(sql`
+    const { rows } = await tx.execute<{
+      employee_id: string | null;
+      roles: AssignedRole[] | null;
+      direct: string[] | null;
+      reports: string[] | null;
+      direct_users: string[] | null;
+      report_users: string[] | null;
+    }>(sql`
       with recursive me as (
         select id from employees where user_id = ${ctx.userId}
       ), tree(id, depth) as (
@@ -51,7 +58,9 @@ export class PeopleAccess {
       select (select id::text from me) as employee_id,
         (select array_agg(r.role::text) from employee_roles r join me on r.employee_id = me.id) as roles,
         (select array_agg(distinct id::text) from tree where depth = 1) as direct,
-        (select array_agg(distinct id::text) from tree) as reports`);
+        (select array_agg(distinct id::text) from tree) as reports,
+        (select array_agg(distinct e.user_id::text) from tree t join employees e on e.id = t.id where t.depth = 1 and e.user_id is not null) as direct_users,
+        (select array_agg(distinct e.user_id::text) from tree t join employees e on e.id = t.id where e.user_id is not null) as report_users`);
     const row = rows[0];
     return new CallerAccess({
       tenantId: ctx.tenantId,
@@ -61,6 +70,8 @@ export class PeopleAccess {
       assignedRoles: row?.roles ?? [],
       directReportIds: row?.direct ?? [],
       reportIds: row?.reports ?? [],
+      directReportUserIds: row?.direct_users ?? [],
+      reportUserIds: row?.report_users ?? [],
     });
   }
 

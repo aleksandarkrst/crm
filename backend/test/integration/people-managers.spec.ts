@@ -186,6 +186,14 @@ describe('"New manager" and "New direct report" emails (spec 10.2)', () => {
     expect((await subjects(owner)).some((s) => s.startsWith('New direct report in') && (s.endsWith(`: ${emp.name}`) || s.endsWith(`: ${peer.name}`)))).toBe(false);
   });
 
+  it("are sent by the list's bulk \"Set manager\" too", async () => {
+    const count = async () => (await subjects(peer)).filter((s) => s.startsWith('Your new manager in')).length;
+    const before = await count();
+    await ok('POST', '/people/employees/bulk', { ...as(hr), body: { employeeIds: [id.peer], managerId: id.owner } }, 200);
+    await eventually(async () => (await count()) === before + 1, 'bulk "New manager" to peer');
+    await eventually(async () => (await subjects(owner)).some((s) => s.startsWith('New direct report in') && s.endsWith(`: ${peer.name}`)), '"New direct report" to the owner');
+  });
+
   it('are queued only for in-app changes: a direct database write (like the import) sends nothing', async () => {
     const before = (await subjects(peer)).length;
     await asTenantSql(tenant, `update employees set manager_id = $2 where id = $1`, [id.peer, id.pay]);
