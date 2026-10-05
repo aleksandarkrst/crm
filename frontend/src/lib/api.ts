@@ -455,6 +455,8 @@ export interface ApiMember {
   displayName: string | null;
   role: ApiRole;
   joinedAt: string;
+  /** Their employee record (milestone 13): Settings → Team links to the card. */
+  employeeId: string | null;
 }
 export interface ApiInvitation {
   id: string;
@@ -1199,4 +1201,216 @@ export const rolesApi = {
   remove: (employeeId: string, role: AssignedRole) => api(`/people/employees/${employeeId}/roles/${role}`, { method: 'DELETE' }),
   /** The directory (active employees), for "Add person". */
   employees: () => api<{ employees: ApiDirectoryEmployee[]; total: number }>('/people/employees').then((r) => r.employees),
+};
+
+// ------------------------------------------------------------------ people: the employee card (milestone 13, CD-140)
+
+export type EmployeeStatus = 'active' | 'leaving' | 'inactive';
+export type EmployeeAccount = 'linked' | 'invited' | 'none';
+export type EmploymentType = 'permanent' | 'fixed_term' | 'contractor' | 'student';
+export type LeavingReason = 'resigned' | 'contract_ended' | 'dismissed' | 'retired' | 'other';
+
+/** The fields of an employee card the API takes (PATCH /people/employees/:id) and names in history and `editableFields`. */
+export type EmployeeField =
+  | 'firstName'
+  | 'lastName'
+  | 'workEmail'
+  | 'jobTitle'
+  | 'workPhone'
+  | 'workLocation'
+  | 'employeeNumber'
+  | 'employmentStartDate'
+  | 'employmentType'
+  | 'weeklyHours'
+  | 'timesheetRequired'
+  | 'attendanceTracked'
+  | 'departmentId'
+  | 'teamId'
+  | 'managerId'
+  | 'dateOfBirth'
+  | 'privateEmail'
+  | 'privatePhone'
+  | 'addressStreet'
+  | 'addressPostalCode'
+  | 'addressCity'
+  | 'addressCountry'
+  | 'emergencyContactName'
+  | 'emergencyContactPhone'
+  | 'iban'
+  | 'bankName'
+  | 'fxSameAsIban'
+  | 'fxIban'
+  | 'swiftBic'
+  | 'fxBankName'
+  | 'fxBankAddress';
+
+export interface ApiMaskedIban {
+  /** "RS35 •••• •••• •••• ••13 79". */
+  masked: string;
+  last4: string | null;
+  country: string | null;
+  foreign: boolean;
+}
+
+export interface ApiApprovals {
+  kind: 'manager' | 'admins' | 'self';
+  reason: 'manager' | 'no_manager' | 'manager_inactive' | 'manager_no_account' | 'manager_absent';
+  approvers: { userId: string; employeeId: string | null; fullName: string }[];
+  selfApproved: boolean;
+}
+
+/**
+ * GET /people/employees/:id: the card. Sections the caller may not see are absent (not empty):
+ * `employment` (self, managers above, HR), `personal` and `bank` (self, HR), `appAccess` (Admin).
+ */
+export interface ApiEmployeeCard {
+  id: string;
+  userId: string | null;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  jobTitle: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  teamId: string | null;
+  teamName: string | null;
+  managerId: string | null;
+  managerName: string | null;
+  workEmail: string | null;
+  workPhone: string | null;
+  workLocation: string | null;
+  status: EmployeeStatus;
+  /** Send back as If-Match. */
+  version: string;
+  account: EmployeeAccount;
+  roles: FunctionalRole[];
+  manager: { id: string; fullName: string; hasAccount: boolean; manager: { id: string; fullName: string } | null } | null;
+  directReports: { id: string; fullName: string; jobTitle: string | null }[];
+  leadsTeams: { id: string; name: string }[];
+  headsDepartments: { id: string; name: string }[];
+  approvals: ApiApprovals | null;
+  employment?: {
+    employeeNumber: string | null;
+    startDate: string | null;
+    endDate: string | null;
+    type: EmploymentType;
+    weeklyHours: number;
+    timesheetRequired: boolean;
+    attendanceTracked: boolean;
+    deactivatedAt: string | null;
+    leavingReason?: LeavingReason | null;
+  };
+  hr?: { dataIssues: string[] };
+  personal?: {
+    dateOfBirth: string | null;
+    privateEmail: string | null;
+    privatePhone: string | null;
+    addressStreet: string | null;
+    addressPostalCode: string | null;
+    addressCity: string | null;
+    addressCountry: string | null;
+    emergencyContactName: string | null;
+    emergencyContactPhone: string | null;
+  };
+  bank?: {
+    iban: ApiMaskedIban | null;
+    bankName: string | null;
+    fxSameAsIban: boolean;
+    fxIban: ApiMaskedIban | null;
+    swiftBic: string | null;
+    fxBankName: string | null;
+    fxBankAddress: string | null;
+  };
+  appAccess?: {
+    signInEmail: string | null;
+    workspaceRole: ApiRole | null;
+    invitation: { id: string; email: string; role: 'admin' | 'member'; expiresAt: string; emailStatus: ApiInvitation['emailStatus']; emailSentAt: string | null; emailError: string | null; hasLink: boolean } | null;
+  };
+  permissions: {
+    editableFields: EmployeeField[];
+    canRevealBank: boolean;
+    canSeeHistory: boolean;
+    canDelete: boolean;
+    canInvite: boolean;
+    canLink: boolean;
+    canUnlink: boolean;
+    canDeactivate: boolean;
+    canReactivate: boolean;
+  };
+}
+
+/** A row of the directory (GET /people/employees), as the card's pickers use it. */
+export interface ApiEmployeeRow {
+  id: string;
+  userId: string | null;
+  fullName: string;
+  jobTitle: string | null;
+  departmentId: string | null;
+  teamId: string | null;
+  managerId: string | null;
+  status: EmployeeStatus;
+}
+
+/** PATCH /people/employees/:id: any subset; '' or null clears a text field. */
+export type EmployeePatch = Partial<Record<EmployeeField, string | number | boolean | null>>;
+
+/** One change of an employee (GET /people/history), newest first; IBANs only as their mask. */
+export interface ApiPeopleHistoryEntry {
+  id: string;
+  action: 'created' | 'updated' | 'deleted';
+  field: string | null;
+  oldValue: unknown;
+  newValue: unknown;
+  oldLabel: string | null;
+  newLabel: string | null;
+  label: string | null;
+  actor: { userId: string | null; name: string } | null;
+  changedAt: string;
+}
+
+/** "Link to member": a member and whether their own record can be merged into this one. */
+export interface ApiLinkCandidate {
+  userId: string;
+  name: string;
+  email: string | null;
+  employeeId: string | null;
+  employeeName: string | null;
+  mergeable: boolean;
+  blockers: string[];
+}
+
+export interface DeactivateInput {
+  lastWorkingDay: string;
+  reason?: LeavingReason | null;
+  /** Required (null = "No manager") when they have direct reports. */
+  reportsManagerId?: string | null;
+  teamLeads?: { teamId: string; employeeId: string | null }[];
+  departmentHeads?: { departmentId: string; employeeId: string | null }[];
+}
+
+/** The employee card's calls (CD-140); the Org structure page has its own client. */
+export const peopleCardApi = {
+  access: () => api<ApiPeopleAccess>('/people/access'),
+  card: (id: string) => api<ApiEmployeeCard>(`/people/employees/${id}`),
+  /** "Add employee" (Administration, Admin): first and last name and the start date are required. */
+  create: (input: EmployeePatch) => api<ApiEmployeeCard>('/people/employees', { method: 'POST', json: input }),
+  update: (id: string, patch: EmployeePatch, version?: string) => api<ApiEmployeeCard>(`/people/employees/${id}`, { method: 'PATCH', json: patch, headers: ifMatch(version) }),
+  reveal: (id: string, account: 'iban' | 'fxIban') =>
+    api<{ account: 'iban' | 'fxIban'; iban: string; formatted: string; domestic: string | null; foreign: boolean }>(`/people/employees/${id}/bank/reveal`, { method: 'POST', json: { account } }),
+  history: (id: string, offset = 0, limit = 30) => api<{ entries: ApiPeopleHistoryEntry[]; more: boolean }>(`/people/history?entityType=employee&entityId=${id}&limit=${limit}&offset=${offset}`),
+  /** "Approvals go to" (spec 7.4) for `date` (default today). */
+  approvers: (id: string, date?: string) => api<ApiApprovals>(`/people/employees/${id}/approvers${date ? `?date=${date}` : ''}`),
+  /** Active employees, departments and teams for the card's pickers. */
+  directory: () => api<{ employees: ApiEmployeeRow[]; total: number }>('/people/employees'),
+  departments: () => api<ApiDepartment[]>('/people/departments'),
+  teams: () => api<ApiTeam[]>('/people/teams'),
+  invite: (id: string, role: 'admin' | 'member') => api<{ invitation: ApiInvitation; token: string; card: ApiEmployeeCard }>(`/people/employees/${id}/invite`, { method: 'POST', json: { role } }),
+  /** "Invite selected": `{ queued, skipped }`; a job creates the invitations. */
+  bulkInvite: (employeeIds: string[], role: 'admin' | 'member' = 'member') => api<{ queued: number; skipped: number }>('/people/employees/invite', { method: 'POST', json: { employeeIds, role } }),
+  linkCandidates: (id: string) => api<ApiLinkCandidate[]>(`/people/employees/${id}/link-candidates`),
+  link: (id: string, userId: string) => api<ApiEmployeeCard>(`/people/employees/${id}/link`, { method: 'POST', json: { userId } }),
+  unlink: (id: string) => api<ApiEmployeeCard>(`/people/employees/${id}/unlink`, { method: 'POST' }),
+  deactivate: (id: string, input: DeactivateInput) => api<ApiEmployeeCard>(`/people/employees/${id}/deactivate`, { method: 'POST', json: input }),
+  reactivate: (id: string, employmentStartDate?: string) => api<ApiEmployeeCard>(`/people/employees/${id}/reactivate`, { method: 'POST', json: employmentStartDate ? { employmentStartDate } : {} }),
+  remove: (id: string) => api(`/people/employees/${id}`, { method: 'DELETE' }),
 };

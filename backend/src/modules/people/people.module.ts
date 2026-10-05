@@ -6,6 +6,8 @@ import { EmployeesBulkController } from './employees-bulk.controller';
 import { EmployeesBulkService } from './employees-bulk.service';
 import { EmployeesController } from './employees.controller';
 import { EmployeesService } from './employees.service';
+import { LifecycleController } from './lifecycle.controller';
+import { EmployeeLifecycleService } from './lifecycle.service';
 import { PeopleAccess } from './people-access';
 import { PeopleController } from './people.controller';
 import { PeopleHistoryService } from './people-history.service';
@@ -18,8 +20,8 @@ import { RolesService } from './roles.service';
  * Milestone 16 replaces ABSENCE_SOURCE with the real time-off source.
  */
 @Module({
-  controllers: [EmployeesController, EmployeesBulkController, PeopleController, RolesController, EmployeeImportController],
-  providers: [PeopleAccess, PeopleHistoryService, EmployeesService, EmployeesBulkService, RolesService, EmployeeImportService, { provide: ABSENCE_SOURCE, useValue: nobodyAbsent }],
+  controllers: [LifecycleController, EmployeesController, EmployeesBulkController, PeopleController, RolesController, EmployeeImportController],
+  providers: [PeopleAccess, PeopleHistoryService, EmployeesService, EmployeeLifecycleService, EmployeesBulkService, RolesService, EmployeeImportService, { provide: ABSENCE_SOURCE, useValue: nobodyAbsent }],
   exports: [PeopleAccess],
 })
 export class PeopleModule {}

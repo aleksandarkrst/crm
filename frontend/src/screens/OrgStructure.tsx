@@ -29,6 +29,7 @@ import { useStore } from '../store/store';
 import { ExportDialog, MoveDialog, SetManagerDialog, SetOrgDialog } from './org/BulkDialogs';
 import { listColumns } from './org/columns';
 import { DepartmentChart, DepartmentList, type DropTarget } from './org/DepartmentChart';
+import { AddEmployeeDialog } from './employee/AddEmployeeDialog';
 import { EmployeeList } from './org/EmployeeList';
 import { EmployeePicker, MultiSelect, usePhone } from './org/parts';
 import { ReportingChart, ReportingList, type TreeView } from './org/ReportingChart';
@@ -40,7 +41,7 @@ const FILTER_PARAMS = ['q', 'dept', 'team', 'manager', 'scope', 'status', 'accou
 const toggle = <T,>(list: readonly T[], v: T): T[] => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 const employeesLabel = (n: number) => (n === 1 ? '1 employee' : `${n} employees`);
 
-type Dialog = { kind: 'import' } | { kind: 'org' } | { kind: 'manager' } | { kind: 'export'; selected: boolean } | { kind: 'move'; employee: ApiEmployee; target: DropTarget } | null;
+type Dialog = { kind: 'add' } | { kind: 'import' } | { kind: 'org' } | { kind: 'manager' } | { kind: 'export'; selected: boolean } | { kind: 'move'; employee: ApiEmployee; target: DropTarget } | null;
 
 /**
  * Org structure (CD-137, spec 5): the chart (by department or by reporting lines) and the list of
@@ -49,7 +50,7 @@ type Dialog = { kind: 'import' } | { kind: 'org' } | { kind: 'manager' } | { kin
  * and Admin also get data issues, inactive people, bulk actions, export and drag-to-move.
  */
 export function OrgStructure() {
-  const { s, people: actions, flash } = useStore();
+  const { s, people: actions, flash, employeeCard } = useStore();
   const { employees, departments, teams, access, loaded, loading, error } = s.people;
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -177,6 +178,16 @@ export function OrgStructure() {
   }, [employees, filters.managerId]);
   const statusChoices: ApiEmployeeStatus[] = hr ? ['active', 'leaving', 'inactive'] : ['active', 'leaving'];
 
+  /** "Invite selected" (Admin, spec 5.4): only rows with a work email and no account; the confirmation says how many. */
+  const inviteSelected = async () => {
+    const eligible = selectedRows.filter((r) => r.workEmail && r.hr?.account === 'none' && r.status !== 'inactive');
+    if (!eligible.length) return flash('None of the selected employees can be invited: they need a work email and no account or invitation yet.', 7000);
+    const others = selectedRows.length - eligible.length;
+    const question = `Invite ${eligible.length === 1 ? eligible[0]!.fullName : `${eligible.length} employees`} to Pultly as Members?` + (others ? ` ${others} of the selected ${others === 1 ? 'is' : 'are'} skipped (no work email, or already has an account or an invitation).` : '');
+    if (!window.confirm(question)) return;
+    if (await employeeCard.bulkInvite(eligible.map((r) => r.id))) setSelected(new Set());
+  };
+
   const setDepartments = (ids: string[]) => {
     // Teams only within the chosen departments (spec 5.2).
     const keep = filters.teamIds.filter((t) => !ids.length || ids.includes(teams.find((x) => x.id === t)?.departmentId ?? ''));
@@ -207,7 +218,12 @@ export function OrgStructure() {
             {loaded ? employeesLabel(count) : loading ? 'Loading…' : ''}
           </span>
           <div className="org-actions">
-            {/* Header buttons of the other lanes, by permission: "Add employee" (CD-140), "Import" (CD-141), "Departments & teams" (CD-138). */}
+            {/* Header buttons of the other lanes, by permission: "Departments & teams" (CD-138). */}
+            {hr && (
+              <button type="button" className="btn-plain" data-testid="org-add-employee" onClick={() => setDialog({ kind: 'add' })}>
+                Add employee
+              </button>
+            )}
             {hr && (
               <button type="button" className="btn-plain" data-testid="employee-import" onClick={() => setDialog({ kind: 'import' })}>
                 Import
@@ -316,7 +332,11 @@ export function OrgStructure() {
             <button type="button" className="btn-plain" data-testid="org-bulk-export" onClick={() => setDialog({ kind: 'export', selected: true })}>
               Export selected
             </button>
-            {/* "Invite selected" (Admin, CD-140 lane B): only rows with a work email and no account; the confirmation says how many. */}
+            {admin && (
+              <button type="button" className="btn-plain" data-testid="org-bulk-invite" onClick={() => void inviteSelected()}>
+                Invite selected
+              </button>
+            )}
             <button type="button" className="btn-plain org-bulk-clear" onClick={() => setSelected(new Set())}>
               Clear selection
             </button>
@@ -350,6 +370,7 @@ export function OrgStructure() {
         )}
       </div>
 
+      {dialog?.kind === 'add' && <AddEmployeeDialog onClose={() => setDialog(null)} />}
       {dialog?.kind === 'org' && (
         <SetOrgDialog
           count={selectedRows.length}

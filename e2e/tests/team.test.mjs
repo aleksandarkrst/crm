@@ -124,6 +124,9 @@ describe('team and invitations', () => {
   step('the owner removes the member, who loses access', async () => {
     await owner.waitForFunction(() => document.body.innerText.includes('Bob Builder'));
     assert.ok(await clickInRow(owner, 'Bob Builder', 'button[title="Remove from workspace"]'), 'remove button found');
+    // The dialog asks whether they also left the company (CD-140); here they only lose access.
+    await owner.waitForSelector('.modal input[name=alsoLeft]');
+    await click(owner, '.modal .modal-actions button::-p-text(Remove)');
     const removed = await eventually(async () => (await api(owner, '/team')).members.length === 1);
     assert.ok(removed, 'only the owner is left');
     assert.equal((await api(bob, '/me')).tenants.length, 0);
