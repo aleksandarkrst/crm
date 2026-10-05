@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Env } from '../src/infrastructure/config/env';
 import { SecretBox } from '../src/infrastructure/crypto/secret-box';
 import { escapeHtml } from '../src/infrastructure/mail/html';
@@ -39,6 +39,15 @@ describe('LogMailer', () => {
     expect(mailer.sent).toHaveLength(0);
   });
 
+  it('keeps attachments with the message and in the outbox (CD-131)', async () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'mail-')), 'dev-mail', 'outbox.jsonl');
+    const mailer = new LogMailer('x@example.com', file);
+    const ics = { filename: 'meeting.ics', contentType: 'text/calendar; charset=utf-8; method=REQUEST', content: 'BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n' };
+    await mailer.send({ ...message, attachments: [ics] });
+    expect(mailer.sent[0]!.attachments).toEqual([ics]);
+    expect((await readOutbox(file))[0]!.attachments).toEqual([ics]);
+  });
+
   it('reads a missing outbox as empty', async () => {
     expect(await readOutbox(join(tmpdir(), 'no-such-dir-' + Date.now(), 'outbox.jsonl'))).toEqual([]);
   });
@@ -59,6 +68,19 @@ describe('createMailer', () => {
   it('keeps an outbox file only outside production', () => {
     expect(outboxFileOf(env({}))).toMatch(/dev-mail[\\/]outbox\.jsonl$/);
     expect(outboxFileOf(env({ NODE_ENV: 'production' }))).toBeNull();
+  });
+});
+
+describe('SmtpMailer', () => {
+  it('passes attachments to nodemailer with their file name and content type (CD-131)', async () => {
+    const mailer = new SmtpMailer('smtp://user:pass@localhost:2525', 'Pultly <no-reply@example.com>');
+    const sendMail = vi.fn().mockResolvedValue({});
+    Object.assign(mailer, { transport: { sendMail } });
+    const ics = { filename: 'meeting.ics', contentType: 'text/calendar; charset=utf-8; method=CANCEL', content: 'BEGIN:VCALENDAR\r\n' };
+    await mailer.send({ ...message, attachments: [ics] });
+    expect(sendMail).toHaveBeenCalledWith({ from: 'Pultly <no-reply@example.com>', to: 'ana@example.com', subject: 'Hello', text: 'Plain text', html: '<p>Hi</p>', attachments: [ics] });
+    await mailer.send(message);
+    expect(sendMail.mock.calls[1]![0].attachments).toBeUndefined();
   });
 });
 

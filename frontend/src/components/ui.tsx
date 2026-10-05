@@ -147,11 +147,14 @@ export function Picker({
   children,
   placeholder,
   items,
+  footer,
 }: {
   picker: ReturnType<typeof usePicker>;
   children?: ReactNode;
   placeholder?: string;
   items: ReactNode;
+  /** Shown under the items while open, e.g. "Add new contact". */
+  footer?: ReactNode;
 }) {
   return (
     <div ref={picker.ref} style={{ flex: 1, minWidth: 0, position: 'relative' }}>
@@ -173,7 +176,12 @@ export function Picker({
           <Chevron />
         </button>
       </div>
-      {picker.open && <div className="picker-pop">{items}</div>}
+      {picker.open && (
+        <div className="picker-pop">
+          {items}
+          {footer}
+        </div>
+      )}
     </div>
   );
 }

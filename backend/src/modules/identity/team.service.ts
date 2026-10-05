@@ -172,7 +172,7 @@ export class TeamService {
     });
   }
 
-  /** Admins remove members; anyone may remove themselves (leave). */
+  /** Admins remove members; anyone may remove themselves (leave). Their future meetings are updated by a job. */
   removeMember(ctx: TenantContext, userId: string) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const self = userId === ctx.userId;
@@ -184,6 +184,8 @@ export class TeamService {
       }
       await tx.delete(memberships).where(and(eq(memberships.tenantId, ctx.tenantId), eq(memberships.userId, userId)));
       await this.audit.record(tx, ctx, { action: self ? 'member.left' : 'member.removed', entityType: 'user', entityId: userId });
+      // CRM takes them off future meetings (CD-131), only if this commits.
+      await this.jobs.send('identity.member-removed', { tenantId: ctx.tenantId, userId }, tx);
     });
   }
 

@@ -613,6 +613,9 @@ export const meetings = pgTable(
     cancelReason: text('cancel_reason'),
     heldAt: timestamp('held_at', { withTimezone: true }),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    // The .ics SEQUENCE (RFC 5545): raised with each update or cancellation emailed to the
+    // internal participants, so their calendars take the newest version (CD-131).
+    icsSequence: integer('ics_sequence').notNull().default(0),
     createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     ...timestamps,
   },
