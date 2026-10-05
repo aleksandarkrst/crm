@@ -38,6 +38,8 @@ describe('accepting', () => {
     const joined = await ok('POST', `/invitations/${token}/accept`, { token: invitee.token }, 200);
     expect(joined).toMatchObject({ id: tenant, role: 'admin' });
     expect((await ok('GET', '/me', { token: invitee.token })).tenants.map((t: { id: string; role: string }) => [t.id, t.role])).toEqual([[tenant, 'admin']]);
+    // The workspace list counts the members, the new one included (the sidebar switcher, CD-214).
+    expect((await ok('GET', '/me', { token: invitee.token })).tenants[0].memberCount).toBe(2);
     expect((await call('GET', '/crm/deals', { token: invitee.token, tenant })).status).toBe(200);
 
     // Single use.

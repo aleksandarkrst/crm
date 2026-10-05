@@ -87,9 +87,16 @@ export class IdentityService {
     return row?.role ?? null;
   }
 
+  /** The user's workspaces with their member counts (the sidebar switcher shows them, CD-214). */
   async listTenants(userId: string) {
     return this.database.db
-      .select({ id: tenants.id, name: tenants.name, slug: tenants.slug, role: memberships.role })
+      .select({
+        id: tenants.id,
+        name: tenants.name,
+        slug: tenants.slug,
+        role: memberships.role,
+        memberCount: sql<number>`(select count(*)::int from memberships m where m.tenant_id = ${tenants.id})`,
+      })
       .from(memberships)
       .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
       .where(eq(memberships.userId, userId))
@@ -108,7 +115,7 @@ export class IdentityService {
       await tx.execute(sql`select set_config('app.tenant_id', ${tenant!.id}, true)`);
       await this.provisioning.run(tx, tenant!.id);
       await linkNewMember(tx, { tenantId: tenant!.id, userId });
-      return { id: tenant!.id, name: tenant!.name, slug: tenant!.slug, role: 'owner' as const };
+      return { id: tenant!.id, name: tenant!.name, slug: tenant!.slug, role: 'owner' as const, memberCount: 1 };
     });
   }
 }

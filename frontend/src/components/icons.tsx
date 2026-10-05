@@ -1,4 +1,4 @@
-/** Small line icons for the deal summary (CD-83): each field shows an icon instead of a label. */
+/** Small line icons: the deal summary (CD-83) shows one per field instead of a label; the module switcher (CD-214) one per module. */
 const PATHS = {
   value: 'M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3 2 2.6 4.5 3 4.5 1.3 4.5 3-2 3-4.5 3-4.5-1.3-4.5-3',
   contacts: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1M17 3.5a4 4 0 0 1 0 7.5M22 21v-1a6 6 0 0 0-4-5.6',
@@ -16,6 +16,17 @@ const PATHS = {
   pencil: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
   globe: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.4 2.5 3.5 5.5 3.5 9s-1.1 6.5-3.5 9M12 3c-2.4 2.5-3.5 5.5-3.5 9s1.1 6.5 3.5 9',
   linkedin: 'M4 4h16v16H4zM8 10.5V16M8 7.5v.01M12 16v-5.5M12 13a2.2 2.2 0 0 1 4.4 0V16',
+  // The module switcher (CD-214).
+  overview: 'M4 19V5M4 19h16M8 16v-4M12 16V8M16 16v-6',
+  crm: 'M5 5h5v14H5zM14 5h5v9h-5z',
+  planning: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h5M8 17h3',
+  projects: 'M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z',
+  workforce: 'M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2.5 20c.7-3 2.8-4.8 5.5-4.8s4.8 1.8 5.5 4.8M13.6 15.6c.7-.3 1.5-.4 2.4-.4 2.7 0 4.8 1.8 5.5 4.8',
+  reports: 'M6 3h8l4 4v14H6zM14 3v4h4M9.5 17v-3M12 17v-6M14.5 17v-2',
+  apps: 'M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM10 10h4v4h-4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z',
+  lock: 'M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3',
+  check: 'm5 12.5 4.5 4.5L19 7.5',
+  plus: 'M12 5v14M5 12h14',
 } as const;
 export type IconName = keyof typeof PATHS;
 
