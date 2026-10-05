@@ -9,6 +9,7 @@ import { type AuthUser, hasRole, type TenantContext } from '../../shared/authori
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { INVITATION_ROLES, invitations, MEMBERSHIP_ROLES, memberships, tenants, users } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
+import { linkNewMember, unlinkMember } from '../people';
 import { inviteLinkBox } from './invitation-email';
 
 const INVITE_TTL_DAYS = 7;
@@ -183,6 +184,8 @@ export class TeamService {
         await this.keepAnOwner(tx, ctx.tenantId);
       }
       await tx.delete(memberships).where(and(eq(memberships.tenantId, ctx.tenantId), eq(memberships.userId, userId)));
+      // Their employee record stays, Active with "No account" (spec 4.8).
+      await unlinkMember(tx, ctx.tenantId, userId);
       await this.audit.record(tx, ctx, { action: self ? 'member.left' : 'member.removed', entityType: 'user', entityId: userId });
       // CRM takes them off future meetings (CD-131), only if this commits.
       await this.jobs.send('identity.member-removed', { tenantId: ctx.tenantId, userId }, tx);
@@ -225,8 +228,15 @@ export class TeamService {
         .where(and(eq(invitations.id, row.id), pending()))
         .returning({ id: invitations.id });
       if (!claimed) throw new GoneException('This invitation was already used or withdrawn');
-      // Someone who is already a member keeps their current role.
-      await tx.insert(memberships).values({ tenantId: row.tenantId, userId: user.id, role: row.role }).onConflictDoNothing();
+      // Someone who is already a member keeps their current role (and their employee record).
+      const [joined] = await tx
+        .insert(memberships)
+        .values({ tenantId: row.tenantId, userId: user.id, role: row.role })
+        .onConflictDoNothing()
+        .returning({ userId: memberships.userId });
+      // The new member's employee record (spec 4.6): the one the invitation was sent from, else
+      // one with their email, else a new one.
+      if (joined) await linkNewMember(tx, { tenantId: row.tenantId, userId: user.id, invitedEmployeeId: row.employeeId });
       const role = (await this.memberRole(tx, row.tenantId, user.id))!;
       await this.audit.record(tx, ctx, { action: 'invitation.accepted', entityType: 'invitation', entityId: row.id });
       return { id: row.tenantId, name: row.tenantName, slug: row.tenantSlug, role };
@@ -247,6 +257,7 @@ export class TeamService {
         email: invitations.email,
         role: invitations.role,
         invitedByUserId: invitations.invitedByUserId,
+        employeeId: invitations.employeeId,
         expiresAt: invitations.expiresAt,
         acceptedAt: invitations.acceptedAt,
         revokedAt: invitations.revokedAt,
