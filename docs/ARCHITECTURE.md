@@ -1613,7 +1613,7 @@ The database also refuses `manager_id = id`. Covered by a concurrent A → B / B
   an employee's history for self and HR (403 otherwise), without `leavingReason` for non-HR; fields
   the caller may not see are filtered out; ids come with names (employees as "Name (left)" once
   inactive). Departments and teams: HR only.
-- `GET /departments`, `GET /teams`: read only, with `activeEmployees`; CRUD is CD-138.
+- `GET /departments`, `GET /teams`: every member; see "Departments, teams and reporting lines" below.
 
 - `POST /employees/bulk { employeeIds (≤5,000), departmentId?, teamId?, managerId? }` → `{ updated }`
   (CD-137, the list's "Set department and team" / "Set manager" and the chart's drag): Administration
@@ -1630,6 +1630,86 @@ The database also refuses `manager_id = id`. Covered by a concurrent A → B / B
 
 Friendly messages for the unique constraints and the team rules are in `shared/database/errors.ts`.
 Audit entries for employees list the changed field names only, never values.
+
+### Departments, teams and reporting lines (CD-138, CD-139)
+
+`org.controller.ts` / `org.service.ts`. Reading is for every member; every change is for
+Administration and Admin (403 otherwise). Nobody but an Admin puts themselves in a department or
+team, changes their own manager, or makes themselves someone's manager.
+
+- `GET /departments` → `{ id, name, code, headEmployeeId, headName, version, teams, activeEmployees }[]`
+  by name; `GET /teams` → `{ id, departmentId, name, leadEmployeeId, leadName, leadOutside, version,
+  activeEmployees }[]` by department and name (`leadOutside`: the lead isn't a member, the chart shows
+  them on top with "(lead)").
+- `POST /departments { name, code?, headEmployeeId? }`, `PATCH /departments/:id` (rename, code,
+  head). Name ≤ 100 (trimmed, unique in any case), code ≤ 20 (unique, `''` clears it); a head or
+  lead must be an active employee (400). Renaming changes the one row, so the new name shows
+  everywhere; the history keeps the old one. Setting a head or a lead never changes a manager.
+- `DELETE /departments/:id`: 409 while it has teams ("Logistics has 2 teams (Trucks, Warehouse).
+  Delete them or move them to another department first.") or another module uses it; otherwise its
+  members end up with no department. "Used by" comes from the `DEPARTMENT_USAGE` provider
+  (`department-usage.ts`, `usedBy(tx, tenantId, departmentId) → ['2 strategic initiatives']`):
+  nothing until Projects (14) and Planning (21) provide it, like `ABSENCE_SOURCE`.
+  `GET /departments/:id/usage` → `{ teams, usedBy, members }` for the confirmation.
+- `POST /teams { departmentId, name, leadEmployeeId? }`; `PATCH /teams/:id { name?, departmentId?,
+  leadEmployeeId?, makeMembersReport? }` → `{ team, moved, reassigned, loops }`:
+  - **Moving** (`departmentId`) updates the team row; the team-in-department foreign key's `ON UPDATE
+    CASCADE` moves its members' department in the same statement. `moved` counts the active ones (the
+    confirmation, `GET /teams/:id/usage` → `{ members }`, names them). A name clash in the target is
+    409 and nothing moves.
+  - **Lead** with `makeMembersReport: true` ("Make team members report to <lead>", ticked by default
+    in the dialog): members with no manager or reporting to the previous lead now report to the lead,
+    under the reporting-line lock; someone for whom it would close a loop keeps their manager and is
+    listed in `loops` with the message; an Administration caller's own record is left alone. Without
+    it, nobody's manager changes. `GET /teams/:id/lead-preview?leadEmployeeId=` → `{ members, loops }`
+    shows the dialog who would change, without saving.
+- `DELETE /teams/:id`: always allowed; members stay in the department without a team.
+- **Add people**: `POST /assignments/preview { departmentId, teamId?, employeeIds }` → per employee
+  where they are now (`moves`, `teamName`) and, if they have no manager, the suggested Reports to
+  (`suggestedManagerId`): the team's active lead, else the department's active head, never themselves
+  or a loop. `POST /assignments { departmentId, teamId?, employeeIds, managers?: { [employeeId]:
+  managerId|null } }` puts them in the department and team (out of any other team; adding to a
+  department alone keeps a team of that department) and sets the managers the user left in the
+  dialog, in one transaction → `{ updated, managersChanged }`.
+- **Set manager** (one or many): `POST /reporting-lines { employeeIds, managerId|null }` →
+  `{ changed }`. All or nothing: one loop refuses the whole change (409 naming it). People who left
+  are 400.
+- Lists of the panel and the dialogs use `GET /employees` (directory).
+
+**Changing managers in code** (`reporting-lines.ts`, exported from `modules/people`):
+`setManagers(tx, tenantId, [{ employeeId, managerId }])` takes the reporting-line lock (take it
+yourself first if you lock other rows before), locks each row, checks each change against the
+lines already changed (so a bulk change can't build a loop step by step) and returns the
+`ManagerChange[]` (`employeeId, oldManagerId, newManagerId`) it wrote. Then
+`queueManagerEmails(jobs, tx, tenantId, actorUserId, changes, { employee?, manager? })` queues
+`people.reporting-line-changed` in the same transaction: one job per change and recipient, "New
+manager" to the employee and "New direct report" to the new manager. Every in-app change calls it
+(the card's PATCH and create, `/reporting-lines`, `/assignments`, the list's `POST /employees/bulk`, the team-lead dialog); the import
+doesn't; deactivation's reassignment passes `{ manager: false }` (one "New manager" per moved
+report). Removing a manager emails nobody.
+
+**The emails** (`org-email.ts`, worker `ReportingLineEmailJob` in `people-jobs.ts`): sent only if
+the line is still as it was changed and both people are active, to a member (sign-in email) who
+isn't the one who made the change and has "Org changes" on (`memberships.notify_org_changes`, read
+when sending, so switching it off stops queued emails). Names and job titles only, a link to the
+other person's card. Retried like every email job.
+
+**"Manager has no account"**: the data issue `manager_no_account` (list filter `issues=`, card
+`hr.dataIssues`) while an active employee's manager has no linked member; approvals then go to the
+Admins (`approvals.reason = 'manager_no_account'`).
+
+**Screens**: the "Departments & teams" panel (`screens/org/DepartmentsPanel.tsx`), opened by
+`<DepartmentsPanelButton/>` in the Org structure header (`.org-actions`, shown to Administration and Admins; the panel's CSS classes are `dtp-*`). A list
+of departments, expandable to their teams, with head or lead and counts of active employees; add and
+rename inline; Edit (name, code, head); Move a team (names how many employees move); Delete with
+confirmations naming the members (a department with teams says which to delete or move first); Add
+people (searchable multi-select, "moves from <team>", Reports to prefilled with the suggestion and
+changeable); Set lead with "Make team members report to <lead>" listing who changes and who keeps
+their manager because of a loop. Data: `store/org.ts` `useOrgStructure()` reads departments, teams,
+the directory and the caller's access through `lib/orgApi.ts`, and again ~300 ms after any
+`employee`, `department`, `team` or `employee_role` hint (`s.orgRev`), so other viewers' changes
+show without a reload. Works at 375 px (actions wrap under the name).
+
 
 ### App access and leaving (CD-140, spec 4.6–4.8)
 
@@ -1674,7 +1754,7 @@ People reaches identity only through `modules/identity/index.ts`: `createInvitat
     loop) falls back to the skip level, else nobody. One that can't apply (last owner) stays
     Leaving and is logged. Dev auth: `POST /api/dev/people/deactivate-due { now? }` runs it for
     the caller's workspace.
-  - TODO: the "New manager" email per moved report is `people.reporting-line-changed` (CD-139).
+  - Each moved report gets one "New manager" email (`people.reporting-line-changed`, CD-139).
 - **Reactivate** `POST /employees/:id/reactivate { employmentStartDate? }` (Administration, Admin):
   Inactive → Active with the new start date (required), no account until invited; Leaving →
   cancels the plan.

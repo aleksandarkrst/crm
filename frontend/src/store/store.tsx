@@ -498,6 +498,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     const onLiveEvent = (e: LiveEvent) => {
       // Visit plan progress (CD-135) counts meetings: any meeting or plan change, also this tab's, recounts it.
       if (e.type === 'resync' || e.type === 'meeting' || e.type === 'visit_plan') set((x) => ({ visitRev: x.visitRev + 1 }));
+      // The org structure (CD-138) is read again by the screens showing it (store/org.ts).
+      if (e.type === 'resync' || PEOPLE_HINTS.has(e.type)) set((x) => ({ orgRev: x.orgRev + 1 }));
       // People lists (Roles & permissions, CD-142) re-read on any employee or role change, this tab's own included.
       if (e.type === 'resync' || e.type === 'employee' || e.type === 'employee_role') set((x) => ({ peopleRev: x.peopleRev + 1 }));
       if (e.type === 'resync') return refreshAll();

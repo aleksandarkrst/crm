@@ -7,12 +7,13 @@ import { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
+import { JobsService } from '../../shared/events/jobs.service';
 import { departments, employeePersonal, employees, teams } from '../../shared/database/schema';
 import { employeeIbanBox } from './bank-email';
 import { editableFields, listFields } from './field-rules';
 import { formatIban } from './iban';
 import { PeopleAccess } from './people-access';
-import { assertValidManager, lockReportingLines } from './reporting-lines';
+import { assertValidManager, lockReportingLines, queueManagerEmails } from './reporting-lines';
 
 /** At most this many rows per bulk action or export (the list shows up to 5,000, spec 5.4). */
 export const MAX_BULK = 5000;
@@ -54,6 +55,7 @@ export class EmployeesBulkService {
     private readonly database: DatabaseService,
     private readonly access: PeopleAccess,
     private readonly audit: AuditService,
+    private readonly jobs: JobsService,
     @Inject(ENV) env: Env,
   ) {
     this.box = employeeIbanBox(env);
@@ -102,6 +104,11 @@ export class EmployeesBulkService {
             .set({ ...(org ?? {}), ...(setsManager ? { managerId } : {}) })
             .where(inArray(employees.id, changed.map((r) => r.id)));
           await this.audit.record(tx, ctx, { action: 'employee.bulk_updated', entityType: 'employee', data: { fields, count: changed.length } });
+          // "New manager" / "New direct report" for the rows whose manager changed (CD-139).
+          if (setsManager) {
+            const moved = changed.filter((r) => r.managerId !== managerId).map((r) => ({ employeeId: r.id, oldManagerId: r.managerId, newManagerId: managerId }));
+            await queueManagerEmails(this.jobs, tx, ctx.tenantId, ctx.userId, moved);
+          }
         }
         return { updated: changed.length };
       })

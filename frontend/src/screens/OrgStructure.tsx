@@ -29,6 +29,7 @@ import { useStore } from '../store/store';
 import { ExportDialog, MoveDialog, SetManagerDialog, SetOrgDialog } from './org/BulkDialogs';
 import { listColumns } from './org/columns';
 import { DepartmentChart, DepartmentList, type DropTarget } from './org/DepartmentChart';
+import { DepartmentsPanelButton } from './org/DepartmentsPanel';
 import { AddEmployeeDialog } from './employee/AddEmployeeDialog';
 import { EmployeeList } from './org/EmployeeList';
 import { EmployeePicker, MultiSelect, usePhone } from './org/parts';
@@ -229,6 +230,7 @@ export function OrgStructure() {
                 Import
               </button>
             )}
+            {hr && <DepartmentsPanelButton allowed />}
             {hr && tab === 'list' && (
               <button type="button" className="btn-plain" data-testid="org-export" disabled={!rows.length} onClick={() => setDialog({ kind: 'export', selected: false })}>
                 Export CSV

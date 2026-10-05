@@ -6,7 +6,7 @@ import type { Tx } from '../../shared/database/database.service';
 import { type DeactivationPlan, departments, employeePersonal, employeeRoles, employees, type LeavingReason, teams, tenants } from '../../shared/database/schema';
 import type { JobsService } from '../../shared/events/jobs.service';
 import { removeMembership, withdrawEmployeeInvitations } from '../identity';
-import { assertValidManager } from './reporting-lines';
+import { assertValidManager, type ManagerChange, queueManagerEmails } from './reporting-lines';
 
 /**
  * Leaving and linking (spec 4.6, 4.8): the parts the API (EmployeeLifecycleService) and the worker
@@ -126,6 +126,7 @@ export async function applyDeactivation(tx: Tx, deps: LifecycleDeps, ctx: Tenant
     if (!input.lenient) throw new BadRequestException('The new manager must be an active employee other than the person leaving');
     chosen = skipLevel;
   }
+  const moved: ManagerChange[] = [];
   for (const r of reports) {
     const candidates = [r.id === chosen ? skipLevel : chosen, ...(input.lenient ? [skipLevel, null] : [])];
     let done = false;
@@ -137,13 +138,14 @@ export async function applyDeactivation(tx: Tx, deps: LifecycleDeps, ctx: Tenant
         throw err;
       }
       await tx.update(employees).set({ managerId: target }).where(eq(employees.id, r.id));
+      moved.push({ employeeId: r.id, oldManagerId: e.id, newManagerId: target });
       done = true;
       break;
     }
     if (!done) await tx.update(employees).set({ managerId: null }).where(eq(employees.id, r.id));
   }
-  // TODO(CD-139): one "New manager" email per moved report (people.reporting-line-changed, lane C)
-  // once that job type is on main.
+  // One "New manager" email per moved report; the new manager isn't told (spec 10.2).
+  await queueManagerEmails(deps.jobs, tx, ctx.tenantId, ctx.userId, moved, { manager: false });
 
   // Team leads and department heads they hold: the replacement, or nobody.
   const leads = await tx.select({ id: teams.id }).from(teams).where(eq(teams.leadEmployeeId, e.id));

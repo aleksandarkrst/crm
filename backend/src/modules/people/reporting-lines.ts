@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import { eq, sql } from 'drizzle-orm';
 import type { Tx } from '../../shared/database/database.service';
 import { employees } from '../../shared/database/schema';
+import type { JobsService } from '../../shared/events/jobs.service';
 
 /**
  * Reporting lines (spec 7.2): one manager per employee, never yourself, never a loop. Every change
@@ -11,6 +12,8 @@ import { employees } from '../../shared/database/schema';
  *      locking employee rows (otherwise the two edits can deadlock on each other's rows);
  *   2. `await assertValidManager(tx, employeeId, managerId)` for each change, after the lock;
  *   3. write, in the same transaction.
+ * `setManagers` does all three for a list of changes; `queueManagerEmails` then queues the "New
+ * manager" / "New direct report" emails of changes made in the app (not the import).
  */
 
 /** Takes the workspace's reporting-line lock until the transaction ends (pg_advisory_xact_lock). */
@@ -50,4 +53,64 @@ export async function assertValidManager(tx: Tx, employeeId: string, managerId: 
     code: 'reporting_loop',
     message: loopMessage([self?.name ?? 'This employee', ...rows.slice(0, at + 1).map((r) => r.name)]),
   });
+}
+
+/** A loop refusal of assertValidManager (409 `reporting_loop`), as opposed to other refusals. */
+export function isLoopError(err: unknown): err is ConflictException {
+  if (!(err instanceof ConflictException)) return false;
+  const body = err.getResponse();
+  return typeof body === 'object' && body !== null && (body as { code?: unknown }).code === 'reporting_loop';
+}
+
+/** One manager change that was written: who, from whom, to whom. */
+export interface ManagerChange {
+  employeeId: string;
+  oldManagerId: string | null;
+  newManagerId: string | null;
+}
+
+/**
+ * Sets the manager of each employee in `changes`, one after the other, so a bulk change is checked
+ * against the lines it has already changed (A and B → C, then C → A is a loop). Takes the
+ * reporting-line lock itself (a no-op when the transaction already holds it), locks each row,
+ * skips employees whose manager doesn't change, and refuses the whole change on the first invalid
+ * manager or loop. Returns what changed, for `queueManagerEmails`. Who may do it is the caller's
+ * check.
+ */
+export async function setManagers(tx: Tx, tenantId: string, changes: readonly { employeeId: string; managerId: string | null }[]): Promise<ManagerChange[]> {
+  if (!changes.length) return [];
+  await lockReportingLines(tx, tenantId);
+  const done: ManagerChange[] = [];
+  for (const { employeeId, managerId } of changes) {
+    const [current] = await tx.select({ managerId: employees.managerId }).from(employees).where(eq(employees.id, employeeId)).for('no key update');
+    if (!current) throw new BadRequestException('Employee not found');
+    if (current.managerId === managerId) continue;
+    await assertValidManager(tx, employeeId, managerId);
+    await tx.update(employees).set({ managerId }).where(eq(employees.id, employeeId));
+    done.push({ employeeId, oldManagerId: current.managerId, newManagerId: managerId });
+  }
+  return done;
+}
+
+/**
+ * Queues the "New manager" (to the employee) and "New direct report" (to the new manager) emails
+ * of manager changes made in the app (spec 10.2), in the same transaction. The worker sends them
+ * only to members who didn't make the change themselves and have "Org changes" on. Removing a
+ * manager emails nobody. The import never calls this; deactivation passes `{ manager: false }`
+ * (one "New manager" per moved report).
+ */
+export async function queueManagerEmails(
+  jobs: JobsService,
+  tx: Tx,
+  tenantId: string,
+  actorUserId: string | null,
+  changes: readonly ManagerChange[],
+  recipients: { employee?: boolean; manager?: boolean } = {},
+): Promise<void> {
+  for (const c of changes) {
+    if (!c.newManagerId || c.newManagerId === c.oldManagerId) continue;
+    const base = { tenantId, employeeId: c.employeeId, managerId: c.newManagerId, actorUserId };
+    if (recipients.employee !== false) await jobs.send('people.reporting-line-changed', { ...base, recipient: 'employee' }, tx);
+    if (recipients.manager !== false) await jobs.send('people.reporting-line-changed', { ...base, recipient: 'manager' }, tx);
+  }
 }

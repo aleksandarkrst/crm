@@ -457,6 +457,11 @@ export interface State {
    * plan progress on screen (CD-135) is counted again (store/useVisitProgress.ts).
    */
   visitRev: number;
+  /**
+   * Goes up on every employee, department or team change (live hints, this tab's own included):
+   * the org structure on screen is read again (store/org.ts, CD-138).
+   */
+  orgRev: number;
   /** Employees, departments and teams (milestone 13; see store/people.ts), read when a screen needs them. */
   people: PeopleState;
   /** Goes up on every employee and role change (live hints, resync): people lists re-read (CD-142). */

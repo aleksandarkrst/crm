@@ -863,6 +863,64 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .role-toggle-row { display: flex; align-items: center; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--divider); }
 @media (min-width: 701px) { .emp-dialog-grid-even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
 
+/* ---- departments & teams panel (CD-138, classes dtp-*) ---- */
+.dtp-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.dtp-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.dtp-dept + .dtp-dept { border-top: 1px solid var(--divider); }
+.dtp-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; min-height: 48px; }
+.dtp-expand { border: 0; background: transparent; cursor: pointer; color: var(--text-2); width: 24px; height: 24px; border-radius: 6px; font-size: 15px; line-height: 1; flex: none; }
+.dtp-expand:hover { background: var(--bg-soft); }
+.dtp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+.dtp-name { border: 0; background: transparent; padding: 2px 4px; margin-left: -4px; border-radius: 5px; font: inherit; font-size: 14px; font-weight: 500; color: var(--ink); cursor: text; text-align: left; }
+.dtp-name:hover { background: var(--bg-soft); }
+.dtp-name-input { padding: 5px 8px; font-size: 14px; width: 100%; max-width: 320px; }
+.dtp-meta { font-size: 12px; color: var(--muted-2); }
+.dtp-code { display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; color: var(--brand); background: var(--brand-soft); border-radius: 4px; padding: 1px 5px; margin-right: 6px; }
+.dtp-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px 10px; }
+.dtp-link { border: 0; background: transparent; padding: 4px 2px; font: inherit; font-size: 12.5px; color: var(--brand); cursor: pointer; white-space: nowrap; }
+.dtp-link:hover { text-decoration: underline; }
+.dtp-danger { color: var(--danger); }
+.dtp-danger-btn { background: var(--danger); }
+.dtp-danger-btn:hover { background: #8F1C13; }
+.dtp-teams { background: var(--panel); border-top: 1px solid var(--divider); padding: 4px 0 10px 34px; display: flex; flex-direction: column; }
+.dtp-team { padding-left: 0; }
+.dtp-team + .dtp-team { border-top: 1px solid var(--divider-2); }
+.dtp-noteam { font-size: 12px; color: var(--muted-2); min-height: 0; }
+.dtp-add-team { align-self: flex-start; margin-top: 6px; }
+.dtp-add-dept { align-self: flex-start; }
+.dtp-add-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px 10px 0; }
+.dtp-add-form > .form-input { flex: 1 1 180px; min-width: 0; }
+.dtp-add-form > .dtp-code-input { flex: 0 1 120px; }
+.dtp-form-actions { display: flex; gap: 8px; margin-left: auto; }
+.dtp-empty { padding: 14px 12px; font-size: 13px; color: var(--text-2); }
+.dtp-problem { font-size: 12.5px; color: var(--danger); background: var(--danger-soft); border-radius: 8px; padding: 9px 12px; line-height: 1.5; }
+.dtp-note { font-size: 12.5px; color: var(--text-2); background: var(--bg-soft); border-radius: 8px; padding: 9px 12px; line-height: 1.5; }
+.dtp-check { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--ink); cursor: pointer; line-height: 1.4; }
+.dtp-check input { margin-top: 2px; accent-color: var(--brand); }
+.dtp-check-sub { display: block; font-size: 12px; color: var(--text-2); margin-top: 2px; }
+.dtp-picked { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.dtp-picked-row { display: flex; flex-direction: column; gap: 6px; }
+.dtp-picked-row + .dtp-picked-row { border-top: 1px solid var(--divider-2); padding-top: 8px; }
+.dtp-picked-name { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13.5px; }
+.dtp-picked-name .dtp-link { margin-left: auto; }
+.dtp-reports { display: flex; align-items: center; gap: 8px; }
+.dtp-reports select { flex: 1; min-width: 0; padding: 7px 9px; }
+.dtp-candidates { display: flex; flex-direction: column; max-height: 280px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+.dtp-candidate { display: flex; align-items: center; gap: 10px; padding: 9px 12px; font-size: 13px; cursor: pointer; }
+.dtp-candidate + .dtp-candidate { border-top: 1px solid var(--divider-2); }
+.dtp-candidate:hover { background: var(--bg-soft); }
+.dtp-candidate input { accent-color: var(--brand); }
+.dtp-candidate-name { font-weight: 500; }
+@media (max-width: 700px) {
+  .dtp-row { flex-wrap: wrap; }
+  .dtp-main { flex-basis: calc(100% - 40px); }
+  .dtp-actions { width: 100%; justify-content: flex-start; padding-left: 34px; }
+  .dtp-teams { padding-left: 12px; }
+  .dtp-team .dtp-actions { padding-left: 0; }
+  .dtp-candidate { flex-wrap: wrap; }
+  .dtp-candidate .dtp-meta { flex-basis: 100%; padding-left: 26px; }
+}
+
 /* ---------------------------------------------------------------- import dialog (CD-64, CD-141) */
 .import-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .import-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
