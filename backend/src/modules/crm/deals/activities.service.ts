@@ -62,7 +62,7 @@ export class ActivitiesService {
     if (countsAsContact) {
       await tx
         .update(deals)
-        .set({ lastContactAt: sql`greatest(coalesce(${deals.lastContactAt}, ${occurredAt}), ${occurredAt})` })
+        .set({ lastContactAt: sql`greatest(coalesce(${deals.lastContactAt}, ${occurredAt}::timestamptz), ${occurredAt}::timestamptz)` })
         .where(eq(deals.id, dealId));
     }
   }

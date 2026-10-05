@@ -566,10 +566,13 @@ that local date. The window lets a worker that was down at 8:00 catch up, withou
 retried), loads the digest inside `withTenant` and:
 
 - sends it when it has something: the member's tasks that aren't done and are due before today
-  (overdue) or today, by the workspace's date, on deals that aren't lost; and their open deals
-  (not won, not lost) with no open task from the "New task" dialog, i.e. the Pipeline's "No next
-  step" flag. Each section lists up to 20 items linking to `/deals/<id>`;
-- records `skipped` without sending when all three are empty;
+  (overdue) or today, by the workspace's date, on deals that aren't lost; their open deals
+  (not won, not lost) with no open task from the "New task" dialog and no planned meeting still
+  ahead, i.e. the Pipeline's "No next step" flag; the meetings starting today that they organize
+  or take part in (planned or held, CD-130); and the planned meetings they organize that ended
+  more than 24 hours ago ("Not closed"). Each section lists up to 20 items linking to
+  `/deals/<id>` or `/meetings/<id>`;
+- records `skipped` without sending when all sections are empty;
 - records `failed` with the error when the send throws; pg-boss retries it.
 
 `daily_digests` (tenant-scoped, RLS in `drizzle/0018_daily_digests_rls.sql`) holds one row per
@@ -590,7 +593,8 @@ still in the queue), and skips deals that were deleted or given to someone else 
 
 ### Change history (CD-69)
 
-`record_changes` has one row per changed field of a deal, company or contact: `entity_type`,
+`record_changes` has one row per changed field of a deal, company, contact or meeting (CD-130, see
+"Meetings"): `entity_type`,
 `entity_id`, `action` (`created`, `updated`, `deleted`, and for deals `line_added`, `line_changed`,
 `line_removed`), `field` (the API's name: `title`, `stageId`, `ownerUserId`, `lostReason`, …),
 `old_value` / `new_value` (jsonb), a `label` (the record's name on created/deleted, the product's
@@ -647,7 +651,8 @@ increasing per row, and the same moment as the history rows of that change.
 ### Live updates (CD-20)
 
 - **Database**: statement-level triggers on deals, companies, contacts, deal contacts, deal lines,
-  deal tasks (tasks and to-dos), activities, products, funnels and stages send `pg_notify` on
+  deal tasks (tasks and to-dos), activities, products, funnels and stages, meetings and their
+  participants (CD-130) send `pg_notify` on
   channel `crm_changes` when the transaction commits: `{ t: tenant, type, op, ids, dealIds,
   client }`, one per statement and tenant, ids only (null when more than 50 rows changed, e.g. an
   import: "re-read the list"). A rolled-back change sends nothing.
@@ -924,6 +929,64 @@ milestones on lines); `drizzle/0022_products_deal_billing.sql` converts existing
   their share and value), the company's contacts or the contact's company and documents; on the
   right Focus (open tasks on their deals) and History (activity on their deals, and changes).
   Companies and contacts can now be handed to another owner there.
+
+## Meetings (CD-130)
+
+`meetings` (crm module, `modules/crm/meetings/`) are meetings with a customer company: title,
+type (`visit` Customer visit, `online`, `office` Meeting at our office, `phone`), `starts_at` /
+`ends_at` (instants; `ends_at > starts_at` is a check), location, agenda, the company (required),
+an optional deal of that company, the organizer and the status (`planned`, `held`, `cancelled`,
+with `held_at`, `cancelled_at` and `cancel_reason`). `meeting_participants` has one row per member
+(`internal`, `user_id`) or contact (`external`, `contact_id`), with the person's name (and the
+contact's email) saved on the row. RLS, the foreign keys that null one column, the triggers and
+the live-update hints are in `drizzle/0028_meetings_rls.sql`.
+
+- **Times** are stored as instants and shown in the workspace time zone. Timeline entries format
+  them with `shared/time/zoned-time.ts` ("Tue 10 Nov 2026, 10:00–11:00", both days when a meeting
+  crosses midnight), daylight saving included.
+- **API** (`/api/crm/meetings`, any member): `GET ?from=&to=` returns the meetings overlapping
+  `[from, to)` (a meeting crossing midnight is on both days), with `userId` (organizer or
+  internal participant), `companyId`, `dealId`, `contactId` (external participant), `type` and
+  `status` (comma lists), `notClosed=1`, `missingMinutes=1` (held; CD-132 adds "without a
+  summary"), `ids=` (≤ 200, for live updates), `sort=asc|desc` by start, `limit` (≤ 1000, default
+  500) and `offset`: `{ meetings, more }`. Without a period it needs one of companyId, dealId,
+  contactId or ids. `GET/POST/PATCH /:id`, `POST /:id/held | cancel ({ reason? }) | undo-held |
+  restore`, and `DELETE /:id` (owners and admins). A meeting comes with its company and deal
+  names, the deal's owner, the organizer's name ("Organizer left" when null), its participants
+  (`deleted` when the contact was deleted or the member left), `notClosed`, and placeholders for
+  the minutes (`internalMinutes: 'missing'`, `externalDelivery: 'not_sent'`) until CD-132/133.
+- **Rules** (`meeting-rules.ts`, pure and unit-tested): owners, admins, the organizer and the
+  internal participants change a meeting (403 otherwise); held only from the start time on and
+  only when planned; cancel only when planned; "Undo held" (held → planned) and "Restore"
+  (cancelled → planned); a cancelled meeting is read-only (409) until restored, a held one can be
+  corrected. "Not closed" = planned and ended more than 24 hours ago.
+- **Validation** (400): title 1–200, location ≤ 300, agenda ≤ 5,000 characters, end after start
+  (also when a PATCH sends only one of them), an existing company, a deal of that company,
+  organizer and internal participants who are members of the workspace, existing contacts.
+  Duplicate people are dropped; the organizer is always an internal participant (the service
+  adds them). `internalUserIds` / `externalContactIds` in a PATCH replace the sets; rows of
+  deleted contacts and former members are kept.
+- **Deal timeline** (only with a deal), in the same transaction: creating writes "Meeting
+  scheduled · <title>" (MT) with the time and place, marking as held "Meeting held · <title>" at
+  the meeting's start and moves the deal's last contact there (never back in time,
+  `ActivitiesService.record`), cancelling "Meeting cancelled · <title>" with the reason.
+  Scheduling doesn't count as contact.
+- **Related records**: a company with meetings can't be deleted (409, like deals; "Remove sample
+  data" keeps a sample company that has meetings); deleting a deal unlinks its meetings
+  (`ON DELETE SET NULL (deal_id)`); deleting a contact keeps their row on the meeting with the
+  saved name (`ON DELETE SET NULL (contact_id)`). Removing people from upcoming meetings when a
+  contact is deleted or a member leaves is CD-131.
+- **Conflicts and history**: `updated_at` is the If-Match version (`crm_touch_version`) and PATCH
+  checks field-level conflicts as deals do. `record_changes` gets `entity_type = 'meeting'`: the
+  fields (`title`, `type`, `startsAt`, `endsAt`, `location`, `agenda`, `companyId`, `dealId`,
+  `organizerUserId`, `status`, `cancelReason`) and `participant_added` / `participant_removed`
+  (field `participants`, the person's name as `label`; the people a meeting is created with are
+  part of its `created` row). `GET /api/crm/history?entityType=meeting` names the company, deal
+  and organizer. A change of people alone also moves the meeting's version.
+- **Live updates**: both tables send `crm_changes` hints of type `meeting`; participant rows report
+  their meeting's id (`crm_notify_changes` takes the id column as an optional second argument).
+- **Daily digest**: see "Daily digest" above (meetings today, not closed, and a planned meeting
+  ahead counts as a next step).
 
 ## Deal page (CD-83)
 

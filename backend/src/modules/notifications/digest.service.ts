@@ -97,7 +97,7 @@ export class DigestService {
         .select(meetingRow)
         .from(meetings)
         .innerJoin(companies, eq(companies.id, meetings.companyId))
-        .where(and(takesPart, inArray(meetings.status, ['planned', 'held']), sql`(${meetings.startsAt} at time zone ${timeZone})::date = ${today}::date`))
+        .where(and(takesPart, inArray(meetings.status, ['planned', 'held']), sql`(${meetings.startsAt} at time zone ${timeZone}::text)::date = ${today}::date`))
         .orderBy(asc(meetings.startsAt));
       const notClosed = await tx
         .select(meetingRow)
