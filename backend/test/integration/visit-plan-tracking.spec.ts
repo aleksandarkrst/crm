@@ -37,7 +37,7 @@ async function visit(s: Session, name: string, company: string, start: string, o
   meetingIds[name] = m.id;
   return m;
 }
-const held = (s: Session, id: string) => ok('POST', `/crm/meetings/${id}/held`, as(s));
+const held = (s: Session, id: string) => ok('POST', `/crm/meetings/${id}/held`, as(s), 200);
 
 beforeAll(async () => {
   owner = await signIn('track-owner');
@@ -71,7 +71,7 @@ beforeAll(async () => {
   // Alpha: three held visits, one over plan.
   for (const day of [3, 10, 17]) await held(seller, (await visit(seller, `Alpha ${day}`, 'Alpha', dayAt(PAST, day))).id);
   // Beta: a cancelled visit, and a planned one never closed.
-  await ok('POST', `/crm/meetings/${(await visit(seller, 'Beta cancelled', 'Beta', dayAt(PAST, 4))).id}/cancel`, { ...as(seller), body: { reason: 'Ill' } });
+  await ok('POST', `/crm/meetings/${(await visit(seller, 'Beta cancelled', 'Beta', dayAt(PAST, 4))).id}/cancel`, { ...as(seller), body: { reason: 'Ill' } }, 200);
   await visit(seller, 'Beta open', 'Beta', dayAt(PAST, 5));
   // Gamma: an online meeting (never a visit), and a shared visit that counts for the deal owner who was there.
   await held(seller, (await visit(seller, 'Gamma online', 'Gamma', dayAt(PAST, 6), { type: 'online' })).id);
@@ -105,7 +105,7 @@ describe('a plan’s progress', () => {
     await held(seller, meetingIds['Beta open']!);
     const p = await ok('GET', `/crm/visit-plans/${pastPlan.id}/progress`, as(seller));
     expect(p.totals).toMatchObject({ heldCapped: 3, held: 4, notClosed: 0, completion: 0.75 });
-    await ok('POST', `/crm/meetings/${meetingIds['Beta open']}/undo-held`, as(seller));
+    await ok('POST', `/crm/meetings/${meetingIds['Beta open']}/undo-held`, as(seller), 200);
   });
 
   it("is hidden from other members like the plan itself; the list's totals leave their plans out", async () => {
