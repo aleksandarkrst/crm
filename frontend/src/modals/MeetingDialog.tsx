@@ -206,7 +206,9 @@ export function MeetingForm({ seed, onDone, onCancel, submitLabel }: { seed: Mee
   if (d.agenda.length > 5000) errors.agenda = 'The agenda can be at most 5,000 characters.';
   const invalid = Object.keys(errors).length > 0;
   const shown = (k: keyof typeof errors) => (tried && errors[k] ? <span className="meeting-error">{errors[k]}</span> : null);
-  const needsExternalWarning = d.type === 'visit' && d.external.length === 0 && !noExternalOk;
+  // A Customer visit without anyone from the customer: warn once on saving. An edit that leaves it as it was saved doesn't warn again.
+  const keptAsSaved = !!editing && editing.type === 'visit' && !editing.participants.some((p) => p.kind === 'external' && !p.deleted);
+  const needsExternalWarning = d.type === 'visit' && d.external.length === 0 && !noExternalOk && !keptAsSaved;
 
   const save = async () => {
     setTried(true);
