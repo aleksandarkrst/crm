@@ -160,7 +160,8 @@ describe('the plan', () => {
     expect(p.newDepartments).toEqual(['Prodaja']);
     expect(p.newTeams).toEqual([{ department: 'Prodaja', name: 'Teren BG' }]);
     expect(p.at(2).manager).toMatchObject({ kind: 'row' });
-    expect(p.at(2).manager?.kind === 'row' && p.at(2).manager.row.line).toBe(4);
+    const manager = p.at(2).manager;
+    expect(manager?.kind === 'row' ? manager.row.line : null).toBe(4);
     expect(p.at(4).work).toMatchObject({ firstName: 'Marko', employmentStartDate: '2024-03-01', weeklyHours: 40, workEmail: 'marko@wbm.rs' });
   });
 

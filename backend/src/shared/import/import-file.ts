@@ -151,5 +151,8 @@ export function failureReason(err: unknown): string {
   } catch (mapped) {
     if (mapped instanceof HttpException) return mapped.message;
   }
-  return err instanceof Error && err.message ? err.message.split('\n')[0]!.slice(0, 200) : 'Could not be saved';
+  // drizzle wraps the driver's error ("Failed query: …"); the database's own message is on `cause`.
+  const cause = (err as { cause?: unknown }).cause;
+  const source = cause instanceof Error && cause.message ? cause : err;
+  return source instanceof Error && source.message ? source.message.split('\n')[0]!.slice(0, 200) : 'Could not be saved';
 }
