@@ -102,7 +102,7 @@ function PlannedInput({ company, value, onChange }: { company: string; value: nu
  */
 export function VisitPlan() {
   const store = useStore();
-  const { s, canDelete: canManage } = store;
+  const { s, canDelete: isAdmin } = store;
   const { id = '' } = useParams();
   const picker = usePicker();
   const [copying, setCopying] = useState<Partial<PlanDraft> | null>(null);
@@ -111,6 +111,8 @@ export function VisitPlan() {
   const { data: progress } = useVisitProgress(plan ? 'plan:' + plan.id : null, () => crmApi.visitPlanProgress(id));
   if (!plan) return <Navigate to={paths.visitPlans} replace />;
   // Plans are monthly (CD-212): a quarterly plan saved before stays readable, not changeable.
+  // Admins change every plan, managers their direct reports' (CD-142; the API says so per plan).
+  const canManage = plan.canEdit;
   const editable = canManage && plan.periodType === 'month';
   const tz = s.workspace.timezone;
   const lineOf = (companyId: string) => progress?.lines.find((l) => l.companyId === companyId);
@@ -222,19 +224,23 @@ export function VisitPlan() {
                 </span>
               )}
             </div>
-            {canManage && (
+            {(canManage || isAdmin) && (
               <div className="deal-actions">
-                <button type="button" className="btn btn-secondary" data-testid="visit-plan-export" disabled={!progress} onClick={exportCsv}>
-                  Export CSV
-                </button>
+                {isAdmin && (
+                  <button type="button" className="btn btn-secondary" data-testid="visit-plan-export" disabled={!progress} onClick={exportCsv}>
+                    Export CSV
+                  </button>
+                )}
                 {editable && (
                   <button type="button" className="btn btn-secondary" data-testid="visit-plan-copy-next" onClick={copyToNext}>
                     Copy to next period
                   </button>
                 )}
-                <button type="button" className="btn btn-secondary" data-testid="visit-plan-delete" style={{ color: 'var(--danger)' }} onClick={onDelete}>
-                  Delete
-                </button>
+                {canManage && (
+                  <button type="button" className="btn btn-secondary" data-testid="visit-plan-delete" style={{ color: 'var(--danger)' }} onClick={onDelete}>
+                    Delete
+                  </button>
+                )}
               </div>
             )}
           </div>

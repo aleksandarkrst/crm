@@ -20,8 +20,7 @@ export interface ModuleDef {
 
 /**
  * The modules in the switcher (CD-214), in grid order. Workforce goes to the Org structure page
- * (milestone 13): give it `to: '/org'` once that route is in App.tsx; until then it shows as
- * "Coming soon".
+ * (milestone 13, CD-137); its employee cards (/people/…) belong to it too.
  */
 export const MODULES: ModuleDef[] = [
   { id: 'overview', name: 'Overview', description: 'Numbers across modules', icon: 'overview', to: paths.overview, screens: ['/overview'] },
@@ -35,7 +34,7 @@ export const MODULES: ModuleDef[] = [
   },
   { id: 'planning', name: 'Planning', description: 'Budgets and targets', icon: 'planning', screens: [] },
   { id: 'projects', name: 'Projects', description: 'Tasks and deadlines', icon: 'projects', screens: [] },
-  { id: 'workforce', name: 'Workforce', description: 'People and capacity', icon: 'workforce', screens: ['/org'] },
+  { id: 'workforce', name: 'Workforce', description: 'People and capacity', icon: 'workforce', to: paths.org(), screens: ['/org', '/people'] },
   { id: 'reporting', name: 'Reporting', description: 'Reports and exports', icon: 'reports', to: paths.reports(), screens: ['/reports'], managers: true },
 ];
 

@@ -21,11 +21,13 @@ const NAV = [
   { to: paths.companies, label: 'Companies', icon: 'M4 20V6.5L11 4v16M11 20h9V10h-9M14.5 13h2M14.5 16.5h2M7 8.5h1M7 12h1M7 15.5h1', phone: true },
   { to: paths.contacts, label: 'Contacts', icon: 'M12 11a3.3 3.3 0 1 0 0-6.6 3.3 3.3 0 0 0 0 6.6ZM5 20c1.2-3.1 4-4.7 7-4.7s5.8 1.6 7 4.7', phone: true },
   { to: paths.products, label: 'Products', icon: 'M20 8.5 12 4 4 8.5v7L12 20l8-4.5v-7ZM4 8.5 12 13m0 0 8-4.5M12 13v7' },
+  // Everyone (milestone 13, CD-137); under "More" on phones.
+  { to: paths.org(), label: 'Org structure', icon: 'M9.5 3.5h5v4h-5zM3.5 16.5h5v4h-5zM15.5 16.5h5v4h-5zM12 7.5v4.5M6 16.5v-2.5h12v2.5' },
   // Owners and admins only (CD-135).
   { to: paths.reports(), label: 'Reports', icon: 'M5 20V10M10 20V4M15 20v-7M20 20v-4M3 20h18', managers: true },
 ];
-/** The sidebar items this person sees: Reports is for owners and admins. */
-const navFor = (role: string) => NAV.filter((n) => !('managers' in n) || role === 'owner' || role === 'admin');
+/** The sidebar items this person sees: Reports is for owners, admins and managers (CD-142). */
+const navFor = (role: string, seesTeam = false) => NAV.filter((n) => !('managers' in n) || seesTeam || role === 'owner' || role === 'admin');
 const NAV_BOTTOM = [
   {
     to: '/settings',
@@ -101,7 +103,7 @@ function Sidebar() {
       </div>
       {switcher && <ModuleSwitcher onClose={closeSwitcher} trigger={logo} />}
       <nav style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: '100%' }}>
-        {navFor(session.tenant.role).map((n) => (
+        {navFor(session.tenant.role, s.visitScope.seesTeam).map((n) => (
           <NavItem key={n.to} {...n} badge={n.to === paths.today ? overdue : undefined} />
         ))}
         <MoreMenu name={name} onModules={() => setSwitcher(true)} />
@@ -116,10 +118,10 @@ function Sidebar() {
  * switch. Hidden on wider screens by CSS.
  */
 function MoreMenu({ name, onModules }: { name: string; onModules: () => void }) {
-  const { session } = useStore();
+  const { s, session } = useStore();
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
-  const more = [...navFor(session.tenant.role).filter((n) => !('phone' in n && n.phone)), ...NAV_BOTTOM, { to: paths.profile, label: `Profile · ${name}`, icon: 'M12 11a3.3 3.3 0 1 0 0-6.6 3.3 3.3 0 0 0 0 6.6ZM5 20c1.2-3.1 4-4.7 7-4.7s5.8 1.6 7 4.7' }];
+  const more = [...navFor(session.tenant.role, s.visitScope.seesTeam).filter((n) => !('phone' in n && n.phone)), ...NAV_BOTTOM, { to: paths.profile, label: `Profile · ${name}`, icon: 'M12 11a3.3 3.3 0 1 0 0-6.6 3.3 3.3 0 0 0 0 6.6ZM5 20c1.2-3.1 4-4.7 7-4.7s5.8 1.6 7 4.7' }];
   const active = more.some((n) => pathname.startsWith(n.to));
   const fg = active || open ? '#F5F7F6' : '#93A39B';
   const others = session.tenants.filter((t) => t.id !== session.tenant.id);

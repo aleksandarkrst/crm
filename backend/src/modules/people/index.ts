@@ -8,3 +8,4 @@ export { employeesToInvite, linkNewMember, type NewMember, unlinkMember } from '
 export { assertValidManager, lockReportingLines, loopMessage } from './reporting-lines';
 export { domesticFromIban, formatIban, maskIban, parseBankAccount, type ParsedAccount, shortMaskIban } from './iban';
 export { cleanName, normalizeForSearch } from './search';
+export { allows, PERMISSION_MODULES, type PermissionRelation, type PermissionScope, permissionRow, relationsFor } from './permissions';

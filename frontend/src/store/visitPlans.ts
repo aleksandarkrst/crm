@@ -4,10 +4,17 @@
  * the backend (modules/crm/visit-plans/periods.ts): a month, or a quarter of the workspace's fiscal
  * year (`s.workspace.fiscalMonth`, 1 = January). Dates are calendar dates (YYYY-MM-DD).
  */
-import type { ApiVisitPlan, ApiVisitTotals, VisitPlanPeriodType } from '../lib/api';
+import type { ApiVisitPlan, ApiVisitScope, ApiVisitTotals, VisitPlanPeriodType } from '../lib/api';
 import { paths } from '../lib/paths';
 
 export type VisitPlan = ApiVisitPlan;
+
+/** Whether this user may make a plan for anyone (Admins; managers for their direct reports, CD-142). */
+export const canCreatePlans = (scope: ApiVisitScope) => scope.manageAll || (scope.manageableUserIds?.length ?? 0) > 0;
+/** Whether this user sees `userId`'s plans (and numbers). */
+export const seesPlansOf = (scope: ApiVisitScope, userId: string) => scope.all || (scope.visibleUserIds ?? []).includes(userId);
+/** Whether this user makes and changes `userId`'s plans. */
+export const managesPlansOf = (scope: ApiVisitScope, userId: string) => scope.manageAll || (scope.manageableUserIds ?? []).includes(userId);
 export type PeriodType = VisitPlanPeriodType;
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];

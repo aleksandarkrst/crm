@@ -14,8 +14,10 @@ const Company = lazy(() => import('./screens/Company').then((m) => ({ default: m
 const Contact = lazy(() => import('./screens/Contact').then((m) => ({ default: m.Contact })));
 const Contacts = lazy(() => import('./screens/Contacts').then((m) => ({ default: m.Contacts })));
 const Dashboard = lazy(() => import('./screens/Dashboard').then((m) => ({ default: m.Dashboard })));
+const EmployeeCardStub = lazy(() => import('./screens/org/EmployeeCardStub').then((m) => ({ default: m.EmployeeCardStub })));
 const Meeting = lazy(() => import('./screens/Meeting').then((m) => ({ default: m.Meeting })));
 const LeadScreen = lazy(() => import('./screens/lead/LeadScreen').then((m) => ({ default: m.LeadScreen })));
+const OrgStructure = lazy(() => import('./screens/OrgStructure').then((m) => ({ default: m.OrgStructure })));
 const Pipeline = lazy(() => import('./screens/Pipeline').then((m) => ({ default: m.Pipeline })));
 const Products = lazy(() => import('./screens/Products').then((m) => ({ default: m.Products })));
 const Profile = lazy(() => import('./screens/Profile').then((m) => ({ default: m.Profile })));
@@ -109,6 +111,9 @@ function AppRoutes() {
           <Route path="contacts/:id" element={<Contact />} />
           <Route path="deals/:id" element={<LeadScreen />} />
           <Route path="products" element={<Products />} />
+          <Route path="org" element={<OrgStructure />} />
+          {/* The employee card (CD-140) replaces this stand-in. */}
+          <Route path="people/:id" element={<EmployeeCardStub />} />
           <Route path="reports" element={<Navigate to={paths.reports()} replace />} />
           <Route path="reports/:tab" element={<Reports />} />
           <Route path="settings" element={<Navigate to={paths.settings()} replace />} />
