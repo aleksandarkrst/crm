@@ -97,7 +97,7 @@ const loadBonusRules = () => crmApi.bonusRules().catch((err: unknown) => (err in
 const loadOnboarding = () => crmApi.onboarding().catch((err: unknown) => (err instanceof ApiError && err.status === 403 ? null : Promise.reject(err)));
 
 /** Workspace settings. */
-export const mapWorkspace = (w: ApiWorkspace): Workspace => ({ name: w.name, currency: w.currency, timezone: w.timezone, fiscalMonth: w.fiscalYearStartMonth });
+export const mapWorkspace = (w: ApiWorkspace): Workspace => ({ name: w.name, currency: w.currency, timezone: w.timezone, fiscalMonth: w.fiscalYearStartMonth, customerEmailLanguage: w.customerEmailLanguage });
 
 export const mapProfile = (p: ApiProfile): Profile => ({
   name: p.displayName ?? p.email ?? '',
@@ -110,6 +110,8 @@ export const mapProfile = (p: ApiProfile): Profile => ({
   defaultFunnelId: p.defaultFunnelId ?? '',
   digest: p.dailyDigest,
   dealAssigned: p.notifyDealAssigned,
+  meetingInvites: p.notifyMeetingInvites,
+  visitPlans: p.notifyVisitPlans,
 });
 
 /** Members, then pending invitations with their email status. */
@@ -283,6 +285,7 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
       phone: ct?.phone ?? '—',
       buyerRole: ct?.buyerRole,
       contactNotes: ct?.notes ?? '',
+      contactLinkedin: ct?.linkedin ?? '',
       contactOwnerId: ct?.ownerUserId,
       contactOwner: ct?.ownerName ?? undefined,
       owner: ownerName ?? undefined,
@@ -324,6 +327,8 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
     hq: c.hq ?? '',
     size: c.teamSize ?? '',
     source: c.source ?? '',
+    domain: c.domain ?? '',
+    notes: c.notes ?? '',
     owner: c.ownerName ?? '',
     ownerId: c.ownerUserId,
   }));

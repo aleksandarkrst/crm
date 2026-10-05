@@ -36,11 +36,23 @@ describe('settings and discovery fields', () => {
     assert.ok(await setByLabel(page, 'Currency', 'RSD', 'select'));
     assert.ok(await setByLabel(page, 'Time zone', 'Europe/London', 'select'));
     assert.ok(await setByLabel(page, 'Fiscal year starts', '4', 'select'));
+    assert.ok(await setByLabel(page, 'Customer email language', 'sr', 'select'));
+    assert.ok((await text(page)).includes('Language of the fixed text in emails to customers'), 'hint under the language');
     const saved = await eventually(async () => {
       const ws = await api(page, '/workspace');
-      return ws.name === workspaceName && ws.currency === 'RSD' && ws.timezone === 'Europe/London' && ws.fiscalYearStartMonth === 4 && ws;
+      return ws.name === workspaceName && ws.currency === 'RSD' && ws.timezone === 'Europe/London' && ws.fiscalYearStartMonth === 4 && ws.customerEmailLanguage === 'sr' && ws;
     });
     assert.ok(saved, 'workspace settings saved');
+  });
+
+  step('has no Integrations or Billing tab, and their old links go back to Settings (CD-207)', async () => {
+    const tabs = await page.$$eval('button', (els) => els.map((b) => b.textContent.trim()));
+    assert.ok(tabs.includes('Notifications'), 'the tab bar is there');
+    assert.ok(!tabs.includes('Integrations') && !tabs.includes('Billing'), 'no placeholder tabs');
+    for (const tab of ['integrations', 'billing']) {
+      await page.goto(`${BASE_URL}/settings/${tab}`, { waitUntil: 'networkidle0' });
+      await page.waitForFunction(() => location.pathname === '/settings/workspace' && document.body.innerText.includes('Fiscal year starts'));
+    }
   });
 
   step('shows the saved workspace settings after a reload, and the new name in the session', async () => {
@@ -50,6 +62,7 @@ describe('settings and discovery fields', () => {
     assert.equal(await valueByLabel(page, 'Currency', 'select'), 'RSD');
     assert.equal(await valueByLabel(page, 'Time zone', 'select'), 'Europe/London');
     assert.equal(await valueByLabel(page, 'Fiscal year starts', 'select'), '4');
+    assert.equal(await valueByLabel(page, 'Customer email language', 'select'), 'sr');
     await page.goto(`${BASE_URL}/profile`, { waitUntil: 'networkidle0' });
     await page.waitForFunction((name) => document.body.innerText.includes(name), {}, workspaceName);
   });

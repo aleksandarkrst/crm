@@ -553,8 +553,15 @@ on your membership, read and saved through `GET/PATCH /api/profile` like the res
 - **Daily digest email** (`memberships.daily_digest`, the setting the profile already had since
   CD-12; the Profile screen shows the same switch).
 - **Deal assigned to you** (`memberships.notify_deal_assigned`, on by default).
-- "Document activity" and "Weekly pipeline report" are listed as **Coming soon**: nothing sends
-  them yet. The old browser-only "Stalled lead nudges" and "Task reminders" became the digest.
+- **Meeting invitations** (`memberships.notify_meeting_invites`, on by default, CD-207): the email
+  with an .ics when someone else adds you to a meeting, or changes or cancels one you're in.
+- **Visit plans** (`memberships.notify_visit_plans`, on by default, CD-207): the email when someone
+  else creates or changes your visit plan.
+
+The API names them `dailyDigest`, `notifyDealAssigned`, `notifyMeetingInvites` and
+`notifyVisitPlans`; the store's `s.profile` calls them `digest`, `dealAssigned`, `meetingInvites`
+and `visitPlans`. The tab lists only what is actually sent (the "Coming soon" rows were removed in
+CD-207). The old browser-only "Stalled lead nudges" and "Task reminders" became the digest.
 
 ### Daily digest
 
@@ -758,6 +765,9 @@ the store is the one place that talks to the backend.
   fiscal-year start month are columns on `tenants` (`GET/PATCH /api/workspace`). Every member reads
   them; only owners and admins change them (members see the fields disabled; the API returns 403).
   A rename updates the session, so the workspace switcher shows the new name.
+  - **Customer email language** (`tenants.customer_email_language`, `'en'` or `'sr'`, default
+    `'en'`, CD-208): the language of the fixed text (footer, "sent by …", reply hint) in emails that
+    go to customers, today only the external meeting minutes. Internal emails stay in English.
   - **Currency**: a new deal takes the workspace currency unless `POST /api/crm/deals` names one
     (`deals.currency`); existing deals keep theirs when the workspace currency changes. The UI
     writes amounts with `Intl.NumberFormat` in the deal's currency (`money`, `curOf` in
@@ -789,9 +799,9 @@ the store is the one place that talks to the backend.
   columns on `deals`. They are edited in the deal's **Discovery** card and merged into the proposal
   view, which shows fields that are still empty as bracketed gaps.
 
-Still browser-only (seeded from `store/seed.ts`, lost on reload), because the backend doesn't have
-them yet:
-- integration settings (CD-79)
+Settings has no Integrations or Billing tab: both were placeholders that saved nothing and were
+removed in CD-207 (`/settings/integrations` and `/settings/billing` go to Settings like any unknown
+tab). They come back when a real integration (CD-79) or billing exists.
 
 ## Custom fields (CD-15)
 
@@ -924,6 +934,10 @@ milestones on lines); `drizzle/0022_products_deal_billing.sql` converts existing
   their share and value), the company's contacts or the contact's company and documents; on the
   right Focus (open tasks on their deals) and History (activity on their deals, and changes).
   Companies and contacts can now be handed to another owner there.
+- The company's **Domain** and **Notes** and the contact's **LinkedIn** (CD-209) edit in place there
+  like the other fields (saved after a pause, with If-Match). A domain such as `acme.com`, or a
+  LinkedIn value that is a web address (`linkedin.com/in/…` or http(s)), gets an **Open** link next
+  to the field, like Email and Call; other text stays plain. Only http(s) links are made.
 
 ## Deal page (CD-83)
 

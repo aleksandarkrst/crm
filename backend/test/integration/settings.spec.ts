@@ -29,7 +29,7 @@ const as = (s: Session, t = tenant) => ({ token: s.token, tenant: t });
 describe('workspace settings', () => {
   it('start with defaults every member can read', async () => {
     const ws = await ok('GET', '/workspace', as(member));
-    expect(ws).toMatchObject({ id: tenant, currency: 'EUR', timezone: 'Europe/Belgrade', fiscalYearStartMonth: 1 });
+    expect(ws).toMatchObject({ id: tenant, currency: 'EUR', timezone: 'Europe/Belgrade', fiscalYearStartMonth: 1, customerEmailLanguage: 'en' });
     expect(ws.name).toContain('Settings');
   });
 
@@ -42,6 +42,13 @@ describe('workspace settings', () => {
     expect(me.tenants.find((t: { id: string }) => t.id === tenant).name).toBe(name);
 
     expect(await ok('PATCH', '/workspace', { ...as(admin), body: { timezone: 'UTC' } })).toMatchObject({ timezone: 'UTC', currency: 'RSD' });
+  });
+
+  it('owners and admins set the language of customer emails (CD-208)', async () => {
+    expect(await ok('PATCH', '/workspace', { ...as(admin), body: { customerEmailLanguage: 'sr' } })).toMatchObject({ customerEmailLanguage: 'sr', currency: 'RSD' });
+    expect(await ok('GET', '/workspace', as(member))).toMatchObject({ customerEmailLanguage: 'sr' });
+    expect((await call('PATCH', '/workspace', { ...as(member), body: { customerEmailLanguage: 'en' } })).status).toBe(403);
+    expect(await ok('PATCH', '/workspace', { ...as(owner), body: { customerEmailLanguage: 'en' } })).toMatchObject({ customerEmailLanguage: 'en' });
   });
 
   it("members can't change them", async () => {
@@ -60,6 +67,7 @@ describe('workspace settings', () => {
     ['a fractional month', { fiscalYearStartMonth: 1.5 }],
     ['an empty name', { name: '   ' }],
     ['a name over 100 characters', { name: 'x'.repeat(101) }],
+    ['an unsupported customer email language', { customerEmailLanguage: 'de' }],
     ['an empty body', {}],
   ])('rejects %s with 400', async (_label, body) => {
     const res = await call('PATCH', '/workspace', { ...as(owner), body });
@@ -70,7 +78,7 @@ describe('workspace settings', () => {
     expect((await call('GET', '/workspace', as(owner, otherTenant))).status).toBe(403);
     expect((await call('PATCH', '/workspace', { ...as(owner, otherTenant), body: { name: 'Taken over' } })).status).toBe(403);
     // The other tenant's own view is untouched by changes here.
-    expect(await ok('GET', '/workspace', as(outsider, otherTenant))).toMatchObject({ id: otherTenant, currency: 'EUR', fiscalYearStartMonth: 1 });
+    expect(await ok('GET', '/workspace', as(outsider, otherTenant))).toMatchObject({ id: otherTenant, currency: 'EUR', fiscalYearStartMonth: 1, customerEmailLanguage: 'en' });
   });
 });
 

@@ -103,20 +103,12 @@ export function initialState(): State {
     versions: {},
     changedAt: {},
     team: [], // loaded from the API
-    integrations: [
-      { id: 'i1', name: 'Gmail', desc: 'Sync email threads onto lead timelines', on: true },
-      { id: 'i2', name: 'Google Calendar', desc: 'Push discovery calls and follow-ups', on: true },
-      { id: 'i3', name: 'WhatsApp Business', desc: 'Log WhatsApp check-ins as activity', on: false },
-      { id: 'i4', name: 'LinkedIn', desc: 'Capture LinkedIn touches from Sales Navigator', on: false },
-      { id: 'i5', name: 'Slack', desc: 'Post won deals to #sales', on: true },
-      { id: 'i6', name: 'Google Drive', desc: 'Store generated documents', on: true },
-    ],
     // Replaced by the saved custom fields and values when the workspace loads (store/remote.ts).
     customFields: [],
     customValues: { deal: {}, company: {}, contact: {} },
     // Replaced by the saved settings when the workspace loads (store/remote.ts).
-    workspace: { name: '', currency: 'EUR', timezone: 'Europe/Belgrade', fiscalMonth: 1 },
-    profile: { name: '', title: '', email: '', phone: '', language: 'en', dateFormat: 'DD.MM.YYYY', startPage: 'pipeline', defaultFunnelId: '', digest: true, dealAssigned: true },
+    workspace: { name: '', currency: 'EUR', timezone: 'Europe/Belgrade', fiscalMonth: 1, customerEmailLanguage: 'en' },
+    profile: { name: '', title: '', email: '', phone: '', language: 'en', dateFormat: 'DD.MM.YYYY', startPage: 'pipeline', defaultFunnelId: '', digest: true, dealAssigned: true, meetingInvites: true, visitPlans: true },
     onboarding: null,
     bonusRules: null,
     bonusTrigger: 'On contract signed',

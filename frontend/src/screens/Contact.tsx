@@ -13,6 +13,13 @@ import { useStore } from '../store/store';
 import type { Person } from '../store/types';
 import { docState, docStateClass } from './lead/docs';
 
+/** A LinkedIn value that is a web address (with or without https://); '' otherwise. */
+function linkedinHref(value: string): string {
+  const v = value.trim();
+  if (/^https?:\/\/\S+$/i.test(v)) return v;
+  return /^(www\.)?linkedin\.com\/\S+$/i.test(v) ? 'https://' + v : '';
+}
+
 /** A contact (CD-80): header like a deal's, how to reach them, their company, deals, tasks and history. */
 export function Contact() {
   const store = useStore();
@@ -37,6 +44,7 @@ export function Contact() {
   // Tap to email or call (CD-70); "—" stands for a missing value.
   const mailto = /^[^\s@]+@[^\s@]+$/.test(p.email.trim()) ? `mailto:${p.email.trim()}` : '';
   const tel = /\d/.test(p.phone) ? `tel:${p.phone.replace(/[^\d+]/g, '')}` : '';
+  const linkedin = linkedinHref(p.linkedin ?? '');
   const setField = (key: keyof Person) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => store.patchPerson(p.id, { [key]: e.target.value });
   const q = picker.search.toLowerCase().trim();
   const companyOptions = s.leads.filter((l) => l.id !== p.leadId).filter((l) => !q || l.company.toLowerCase().includes(q));
@@ -87,6 +95,16 @@ export function Contact() {
                   {tel && (
                     <a className="contact-action" href={tel} aria-label={`Call ${p.name}`}>
                       Call
+                    </a>
+                  )}
+                </span>
+              </IconRow>
+              <IconRow icon="linkedin" label="LinkedIn">
+                <span className="contact-field">
+                  <GhostInput aria-label="LinkedIn" placeholder="linkedin.com/in/…" value={p.linkedin ?? ''} onChange={setField('linkedin')} />
+                  {linkedin && (
+                    <a className="contact-action" href={linkedin} target="_blank" rel="noopener noreferrer" aria-label={`Open ${p.name} on LinkedIn`}>
+                      Open
                     </a>
                   )}
                 </span>

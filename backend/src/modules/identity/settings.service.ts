@@ -14,6 +14,7 @@ const workspaceColumns = {
   currency: tenants.currency,
   timezone: tenants.timezone,
   fiscalYearStartMonth: tenants.fiscalYearStartMonth,
+  customerEmailLanguage: tenants.customerEmailLanguage,
 };
 
 /**
@@ -60,6 +61,8 @@ export class SettingsService {
         defaultFunnelId: memberships.defaultFunnelId,
         dailyDigest: memberships.dailyDigest,
         notifyDealAssigned: memberships.notifyDealAssigned,
+        notifyMeetingInvites: memberships.notifyMeetingInvites,
+        notifyVisitPlans: memberships.notifyVisitPlans,
       })
       .from(users)
       .innerJoin(memberships, and(eq(memberships.userId, users.id), eq(memberships.tenantId, ctx.tenantId)))
@@ -70,10 +73,11 @@ export class SettingsService {
 
   /**
    * Updates the caller's own profile; `defaultFunnelId` and the notification settings
-   * (`dailyDigest`, `notifyDealAssigned`, CD-16) apply to this workspace only.
+   * (`dailyDigest`, `notifyDealAssigned`, CD-16; `notifyMeetingInvites`, `notifyVisitPlans`, CD-207) apply to this workspace only.
    */
   async updateProfile(ctx: TenantContext, user: AuthUser, input: UpdateProfile) {
-    const { defaultFunnelId, dailyDigest, notifyDealAssigned, ...own } = input;
+    const { defaultFunnelId, dailyDigest, notifyDealAssigned, notifyMeetingInvites, notifyVisitPlans, ...own } = input;
+    const workspaceOnly = { defaultFunnelId, dailyDigest, notifyDealAssigned, notifyMeetingInvites, notifyVisitPlans };
     await this.database.withTenant(ctx.tenantId, async (tx) => {
       if (defaultFunnelId) {
         // RLS is on, so a funnel of another workspace is simply not found.
@@ -86,10 +90,10 @@ export class SettingsService {
           .set({ ...own, ...(own.displayName !== undefined ? { displayNameCustom: true } : {}) })
           .where(eq(users.id, ctx.userId));
       }
-      if (defaultFunnelId !== undefined || dailyDigest !== undefined || notifyDealAssigned !== undefined) {
+      if (Object.values(workspaceOnly).some((v) => v !== undefined)) {
         await tx
           .update(memberships)
-          .set({ defaultFunnelId, dailyDigest, notifyDealAssigned })
+          .set(workspaceOnly)
           .where(and(eq(memberships.tenantId, ctx.tenantId), eq(memberships.userId, ctx.userId)));
       }
     });

@@ -12,6 +12,13 @@ import { allPeople, companyOfPerson, companyRecords, contactsForLead, curOf, ini
 import { useStore } from '../store/store';
 import type { Person } from '../store/types';
 
+/** The website of a domain such as "acme.com" (or a full http(s) address); '' when it isn't one. */
+function websiteHref(value: string): string {
+  const v = value.trim();
+  if (/^https?:\/\/\S+$/i.test(v)) return v;
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(v) ? 'https://' + v : '';
+}
+
 /** A company (CD-80): header like a deal's, its details, deals and contacts, open tasks and history. */
 export function Company() {
   const store = useStore();
@@ -47,7 +54,9 @@ export function Company() {
   const target = rec.leads[0];
 
   const activities = rec.leads.flatMap((l) => timelineFor(s, l.id)).slice(0, 30);
-  const setField = (key: 'name' | 'industry' | 'hq' | 'size' | 'source') => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => store.setCompanyField(rec.id, key, e.target.value);
+  const setField = (key: 'name' | 'industry' | 'hq' | 'size' | 'source' | 'domain' | 'notes') => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => store.setCompanyField(rec.id, key, e.target.value);
+  const domain = extra?.domain ?? '';
+  const website = websiteHref(domain);
   const newDeal = () => set({ newLeadOpen: true, newLeadCompanyId: rec.id, newLeadContactId: null });
 
   /** Deals keep a company, so a company with deals can't be deleted; its contacts are kept. */
@@ -92,6 +101,19 @@ export function Company() {
               </IconRow>
               <IconRow icon="source" label="Source">
                 <GhostSelect chevron aria-label="Source" value={rec.source} onChange={setField('source')} options={SOURCES} />
+              </IconRow>
+              <IconRow icon="globe" label="Domain">
+                <span className="contact-field">
+                  <GhostInput aria-label="Domain" placeholder="acme.com" value={domain} onChange={setField('domain')} />
+                  {website && (
+                    <a className="contact-action" href={website} target="_blank" rel="noopener noreferrer" aria-label={`Open ${domain.trim()}`}>
+                      Open
+                    </a>
+                  )}
+                </span>
+              </IconRow>
+              <IconRow icon="note" label="Notes">
+                <textarea className="ghost" aria-label="Notes" rows={2} value={extra?.notes ?? ''} onChange={setField('notes')} placeholder="What to know about this company" style={{ resize: 'vertical', lineHeight: 1.5, flex: 1 }} />
               </IconRow>
               <CustomFieldRows entity="company" recordId={rec.id} />
             </Section>
@@ -140,7 +162,7 @@ export function Company() {
 
           <div className="lead-main" style={{ flex: '999 1 480px', display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
             <FocusTasks leadIds={rec.leads.map((l) => l.id)} />
-            <RecordHistory entries={activities} entity="company" id={rec.id} cur={curOf(s)} rev={JSON.stringify([rec.name, rec.industry, rec.hq, rec.size, rec.source, extra?.ownerId])} />
+            <RecordHistory entries={activities} entity="company" id={rec.id} cur={curOf(s)} rev={JSON.stringify([rec.name, rec.industry, rec.hq, rec.size, rec.source, extra?.ownerId, extra?.domain, extra?.notes])} />
           </div>
         </div>
       </div>
