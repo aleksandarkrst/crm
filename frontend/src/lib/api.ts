@@ -487,7 +487,11 @@ export interface ApiHistoryEntry {
 }
 export type HistoryEntity = 'deal' | 'company' | 'contact' | 'meeting' | 'visit_plan';
 
-/** Customer visit plans (CD-134): per salesperson and month or fiscal quarter, the visits planned per company. */
+/**
+ * Customer visit plans (CD-134): per salesperson and month, the visits planned per company. Plans
+ * are monthly (CD-212); 'quarter' is only on plans saved before, and in tracking, where a quarter
+ * adds up its three monthly plans.
+ */
 export type VisitPlanPeriodType = 'month' | 'quarter';
 export interface ApiVisitPlanLine {
   id: string;
@@ -514,7 +518,8 @@ export interface ApiVisitPlan {
 }
 export interface VisitPlanInput {
   salespersonUserId: string;
-  periodType: VisitPlanPeriodType;
+  /** Always 'month' (the API refuses 'quarter', CD-212). */
+  periodType: 'month';
   periodStart: string;
   note?: string | null;
   lines: { companyId: string; plannedVisits: number }[];
@@ -581,8 +586,10 @@ export interface ApiVisitRowTotals extends ApiVisitTotals {
 export interface ApiVisitReportRow extends ApiVisitRowTotals {
   salespersonUserId: string;
   salespersonName: string;
-  /** null: no plan for the period, only unplanned visits. */
+  /** null: no plan for the period, only unplanned visits. For a quarter: its first monthly plan. */
   planId: string | null;
+  /** The monthly plans counted: one for a month, up to three for a quarter (CD-212). */
+  plans: { id: string; periodStart: string; periodLabel: string }[];
 }
 interface ApiVisitPeriod {
   periodType: VisitPlanPeriodType;
@@ -597,7 +604,8 @@ export interface ApiVisitReport extends ApiVisitPeriod {
 }
 export interface ApiVisitSummary extends ApiVisitPeriod, ApiVisitRowTotals {
   salespersonUserId: string | null;
-  plans: { id: string; salespersonUserId: string; salespersonName: string }[];
+  /** The monthly plans counted (a quarter's three months, CD-212). */
+  plans: { id: string; salespersonUserId: string; salespersonName: string; periodStart: string; periodLabel: string }[];
 }
 export interface VisitPeriodQuery {
   periodType: VisitPlanPeriodType;

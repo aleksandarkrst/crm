@@ -101,13 +101,14 @@ export function MeetingForm({ seed, onDone, onCancel, submitLabel }: { seed: Mee
     }
     const type = seed.type ?? 'visit';
     const co = records.find((c) => c.id === companyId);
+    const seededEnd = seed.start && seed.end ? Math.round((Date.parse(seed.end) - Date.parse(seed.start)) / MINUTE) : 0;
     return {
-      title: co ? `Meeting with ${co.name}` : '',
-      titleTouched: false,
+      title: seed.title?.trim() || (co ? `Meeting with ${co.name}` : ''),
+      titleTouched: !!seed.title?.trim(),
       type,
       date,
       time,
-      duration: 60,
+      duration: seededEnd > 0 ? seededEnd : 60,
       location: type === 'visit' ? hqOf(co?.hq) : '',
       locationTouched: false,
       companyId,
@@ -167,6 +168,8 @@ export function MeetingForm({ seed, onDone, onCancel, submitLabel }: { seed: Mee
       ...x,
       companyId,
       dealId: open.length === 1 ? open[0]!.id : '',
+      // External participants are the company's people (CD-212): another company's go.
+      external: x.external.filter((id) => companyOfContact(id) === companyId),
       title: x.titleTouched ? x.title : co ? `Meeting with ${co.name}` : '',
       location: x.locationTouched || x.type !== 'visit' ? x.location : hqOf(co?.hq),
     }));
@@ -275,14 +278,18 @@ export function MeetingForm({ seed, onDone, onCancel, submitLabel }: { seed: Mee
     }
   };
 
-  // External participants: the company's contacts first, then everyone (spec 5.2).
+  // External participants: only the meeting company's contacts (CD-212); "+ Add new contact" makes one there.
   const q = contactPicker.search.trim().toLowerCase();
   const candidates = people
-    .filter((p) => !d.external.includes(p.contactId!))
+    .filter((p) => !!d.companyId && companyIdOfPerson(s, p) === d.companyId && !d.external.includes(p.contactId!))
     .filter((p) => !q || p.name.toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q))
-    .sort((a, b) => Number(companyIdOfPerson(s, b) === d.companyId) - Number(companyIdOfPerson(s, a) === d.companyId) || a.name.localeCompare(b.name))
+    .sort((a, b) => a.name.localeCompare(b.name))
     .slice(0, 60);
   const personOf = (contactId: string) => people.find((p) => p.contactId === contactId);
+  function companyOfContact(contactId: string): string | null {
+    const p = personOf(contactId);
+    return p ? companyIdOfPerson(s, p) : null;
+  }
   const companies = records.map((c) => ({ value: c.id, label: labels.get(c.id) ?? c.name })).sort((a, b) => a.label.localeCompare(b.label));
   const organizerOptions = [...members];
   const deletedExternal = editing?.participants.filter((p) => p.kind === 'external' && p.deleted) ?? [];
@@ -442,31 +449,37 @@ export function MeetingForm({ seed, onDone, onCancel, submitLabel }: { seed: Mee
             </span>
           ))}
         </div>
-        <div className="meeting-picker">
-          <Picker
-            picker={contactPicker}
-            placeholder="Add a contact…"
-            items={
-              candidates.length ? (
-                candidates.map((p) => (
-                  <PickerRow
-                    key={p.contactId}
-                    initials={p.initials || initialsOf(p.name)}
-                    title={p.name}
-                    subtitle={[p.company, p.role].filter((x) => x && x !== '—').join(' · ') || ' '}
-                    trailing={!hasEmail(p.email) ? <span className="badge badge-neutral">No email</span> : undefined}
-                    onPick={() => {
-                      patch({ external: [...d.external, p.contactId!] });
-                      contactPicker.close();
-                    }}
-                  />
-                ))
-              ) : (
-                <div style={{ padding: 8, fontSize: 12.5, color: 'var(--muted)', textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>No contacts match.</div>
-              )
-            }
-            footer={
-              d.companyId ? (
+        {!d.companyId ? (
+          <span className="meeting-muted" data-testid="meeting-external-hint">
+            Pick the company first: its contacts can join the meeting.
+          </span>
+        ) : (
+          <div className="meeting-picker">
+            <Picker
+              picker={contactPicker}
+              placeholder="Add a contact…"
+              items={
+                candidates.length ? (
+                  candidates.map((p) => (
+                    <PickerRow
+                      key={p.contactId}
+                      initials={p.initials || initialsOf(p.name)}
+                      title={p.name}
+                      subtitle={[p.company, p.role].filter((x) => x && x !== '—').join(' · ') || ' '}
+                      trailing={!hasEmail(p.email) ? <span className="badge badge-neutral">No email</span> : undefined}
+                      onPick={() => {
+                        patch({ external: [...d.external, p.contactId!] });
+                        contactPicker.close();
+                      }}
+                    />
+                  ))
+                ) : (
+                  <div style={{ padding: 8, fontSize: 12.5, color: 'var(--muted)', textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>
+                    {q ? `No contact of ${company?.name ?? 'this company'} matches.` : `No more contacts at ${company?.name ?? 'this company'}.`}
+                  </div>
+                )
+              }
+              footer={
                 <button
                   type="button"
                   className="meeting-picker-add"
@@ -478,10 +491,10 @@ export function MeetingForm({ seed, onDone, onCancel, submitLabel }: { seed: Mee
                 >
                   + Add new contact{company ? ` at ${company.name}` : ''}
                 </button>
-              ) : undefined
-            }
-          />
-        </div>
+              }
+            />
+          </div>
+        )}
         {newContact && (
           <div className="meeting-new-contact" data-testid="meeting-new-contact-form">
             <div className="meeting-form-grid">

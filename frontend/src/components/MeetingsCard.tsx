@@ -15,10 +15,12 @@ import { AddButton, Section } from './RecordParts';
  * meetings, "Show all" (the Calendar's table filtered to the record) and "+ Meeting" prefilled
  * with the record. On a contact, the meetings where they are an external participant. On a
  * company in this month's visit plans, "Visits this month: held / planned" (CD-135), and in this
- * fiscal quarter's plans "Visits this quarter: held / planned" (CD-211), summed over the plans the
- * viewer can see (everyone's for owners and admins, their own for members). "Show all" covers every
+ * fiscal quarter's monthly plans "Visits this quarter: held / planned" (CD-211; the quarter adds up
+ * its three months, CD-212), summed over the plans the viewer can see (everyone's for owners and admins, their own for members). "Show all" covers every
  * meeting of the record, from SHOW_ALL_FROM to five years ahead (the table loads it page by page).
  */
+/** The salespeople of some plans, each once ("Ana, Marko"). */
+const namesOf = (plans: { salespersonName: string }[]) => [...new Set(plans.map((p) => p.salespersonName))].join(', ');
 /** "Show all" starts here: before any meeting a workspace can have. */
 const SHOW_ALL_FROM = '2000-01-01';
 
@@ -50,7 +52,7 @@ export function MeetingsCard({ record, seed }: { record: { companyId: string } |
       }
     >
       {visits && visits.plans.length > 0 && (
-        <span className="vp-company-visits" data-testid="company-visits-this-month" title={`Customer visits held this month for the visit plans of ${visits.plans.map((p) => p.salespersonName).join(', ')}`}>
+        <span className="vp-company-visits" data-testid="company-visits-this-month" title={`Customer visits held this month for the visit plans of ${namesOf(visits.plans)}`}>
           Visits this month: {visits.held} / {visits.planned}
         </span>
       )}
@@ -58,7 +60,7 @@ export function MeetingsCard({ record, seed }: { record: { companyId: string } |
         <span
           className="vp-company-visits"
           data-testid="company-visits-this-quarter"
-          title={`Customer visits held in ${quarter.periodLabel} for the visit plans of ${quarter.plans.map((p) => p.salespersonName).join(', ')}`}
+          title={`Customer visits held in ${quarter.periodLabel} for the monthly visit plans of ${namesOf(quarter.plans)}`}
         >
           Visits this quarter: {quarter.held} / {quarter.planned}
         </span>

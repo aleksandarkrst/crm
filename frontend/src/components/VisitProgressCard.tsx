@@ -30,14 +30,19 @@ export function VisitProgressCard() {
   const shown = data && data.periodStart === periodStart && data.periodType === periodType ? data : undefined;
   const people = [...memberLabels(s)].sort((a, b) => a[1].localeCompare(b[1]));
   const pace = shown ? paceOf(shown) : null;
-  const ownPlan = shown?.plans[0];
+  // A quarter adds up monthly plans (CD-212): "Open my plan" opens this month's, else the first.
+  const thisMonth = periodStartOf('month', today, fiscal);
+  const ownPlan = shown?.plans.find((p) => p.periodStart === thisMonth) ?? shown?.plans[0];
 
   return (
     <div className="card" data-testid="visit-progress-card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           <span className="card-title">Visit-plan progress</span>
-          <span className="card-sub">Held Customer visits against the visit plans{isManager ? '' : ' you have'}</span>
+          <span className="card-sub">
+            Held Customer visits against the visit plans{isManager ? '' : ' you have'}
+            {periodType === 'quarter' ? ' (the sum of the monthly plans)' : ''}
+          </span>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <select

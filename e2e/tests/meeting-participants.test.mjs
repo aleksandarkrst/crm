@@ -1,7 +1,7 @@
 // Meeting participants (CD-131): a colleague and a brand-new contact (made from the picker,
 // without leaving the dialog) join a meeting; the colleague gets the invitation email with an .ics;
 // when the organizer leaves the workspace the meeting shows "Organizer left" and an owner picks a
-// new one.
+// new one on the meeting page.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
 import { api, BASE_URL, click, email, eventually, newUserWithWorkspace, RUN, setValue, steps, text, useBrowser } from '../lib/harness.mjs';
@@ -103,11 +103,10 @@ describe('meeting participants', () => {
 
     await page.goto(`${BASE_URL}/meetings/${theirs.id}`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=meeting-organizer-left]');
-    await click(page, '[data-testid=meeting-pick-organizer]');
-    await setValue(page, '[data-testid=new-organizer]', me.id);
-    await click(page, '[data-testid=new-organizer-save]');
+    // The organizer is picked in place on the meeting page (CD-212), by owners and admins.
+    await setValue(page, '[data-testid=meeting-field-organizer]', me.id);
     await page.waitForFunction(() => !document.querySelector('[data-testid=meeting-organizer-left]'), { timeout: 10_000 });
-    assert.ok((await page.$eval('[data-testid=meeting-details]', (el) => el.innerText)).includes('Olga Organizer'));
+    assert.equal(await page.$eval('[data-testid=meeting-field-organizer]', (el) => el.value), me.id);
     assert.equal((await api(page, `/crm/meetings/${theirs.id}`)).organizerUserId, me.id);
 
     // The first meeting (still to come) lost Nina; the page says nothing about a former member.

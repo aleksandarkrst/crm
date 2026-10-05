@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../shared/database/database.service';
-import { companies, deals, dealTasks, funnelStages, meetingMinutes, meetingParticipants, meetings, memberships, tenants, users, visitPlans } from '../../shared/database/schema';
-import { progressOfPlans, visitPlanPeriodLabel } from '../crm';
+import { companies, deals, dealTasks, funnelStages, meetingMinutes, meetingParticipants, meetings, memberships, tenants, users } from '../../shared/database/schema';
+import { planGroupsOf, progressOfGroups, visitPeriodOf, visitPeriodStartOf } from '../crm';
 import { buildDigest, type Digest, MINUTES_REMINDER_MS, NOT_CLOSED_AFTER_MS, zonedNow } from './digest-content';
 
 /**
@@ -14,8 +14,8 @@ import { buildDigest, type Digest, MINUTES_REMINDER_MS, NOT_CLOSED_AFTER_MS, zon
  * - meetings (CD-130) starting today that they organize or take part in (planned or held), and
  *   the planned meetings they organize that ended more than 24 hours ago ("Not closed"), and the
  *   held ones they organize that started in the last 7 days without a summary ("Minutes missing", CD-132);
- * - their visit plans for the current month and quarter, counted as the plan page counts them
- *   (CD-135, "Visits planned this period: N of M held").
+ * - their visit plan for the current month, and the quarter as the sum of its monthly plans
+ *   (CD-212), counted as the plan page counts them (CD-135, "Visits planned this period: N of M held").
  * "Today" is the workspace's date (its time zone), as on the Today screen.
  */
 @Injectable()
@@ -126,15 +126,21 @@ export class DigestService {
         .orderBy(asc(meetings.startsAt))
         .limit(100);
 
-      const plans = await tx
-        .select()
-        .from(visitPlans)
-        .where(and(eq(visitPlans.salespersonUserId, userId), lte(visitPlans.periodStart, today), gt(visitPlans.periodEnd, today)));
-      const counted = await progressOfPlans(tx, plans, timeZone, now);
-      const planRows = plans.map((p) => {
-        const { totals } = counted.get(p.id)!.progress;
-        const periodLabel = visitPlanPeriodLabel(p.periodType, p.periodStart, p.periodEnd, workspace?.fiscal ?? 1);
-        return { planId: p.id, periodType: p.periodType, periodLabel, held: totals.heldCapped, planned: totals.planned };
+      // The current month's plan, and the quarter as the sum of its monthly plans (CD-212).
+      const fiscal = workspace?.fiscal ?? 1;
+      const periods = (['month', 'quarter'] as const).map((type) => visitPeriodOf(type, visitPeriodStartOf(type, today, fiscal), fiscal)!);
+      const shown = (await Promise.all(periods.map(async (period) => ({ period, group: (await planGroupsOf(tx, period, userId))[0] })))).filter((x) => !!x.group);
+      const counted = await progressOfGroups(
+        tx,
+        shown.map((x) => x.group!),
+        timeZone,
+        now,
+      );
+      const planRows = shown.map(({ period, group }, i) => {
+        const { totals } = counted[i]!.progress;
+        // A quarter links to this month's plan when there is one.
+        const plan = group!.plans.find((p) => p.periodStart === periods[0]!.start) ?? group!.plans[0]!;
+        return { planId: plan.id, periodType: period.type, periodLabel: period.label, held: totals.heldCapped, planned: totals.planned };
       });
 
       const iso = (rows: typeof meetingsToday) => rows.map((m) => ({ ...m, startsAt: m.startsAt.toISOString(), endsAt: m.endsAt.toISOString() }));

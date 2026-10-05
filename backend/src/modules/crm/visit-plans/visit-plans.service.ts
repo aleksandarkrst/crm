@@ -25,8 +25,9 @@ const PlanLines = z
 
 export const CreateVisitPlan = z.object({
   salespersonUserId: z.uuid(),
-  periodType: z.enum(VISIT_PLAN_PERIOD_TYPES),
-  /** The first day of the month, or of the fiscal quarter. */
+  /** Plans are monthly (CD-212); 'month' when left out. 'quarter' is refused (400), see QUARTERLY_REFUSED. */
+  periodType: z.enum(VISIT_PLAN_PERIOD_TYPES).optional(),
+  /** The first day of the month. */
   periodStart: z.iso.date(),
   note: optionalText(2000),
   lines: PlanLines,
@@ -64,8 +65,16 @@ export interface VisitPlanView {
 const isManager = (ctx: TenantContext) => ctx.role !== 'member';
 
 /**
- * Customer visit plans (CD-134): per salesperson and month or fiscal quarter, which companies to
- * visit how often. Owners and admins see and manage every plan (the controller allows writes to
+ * Visit plans are monthly only (CD-212): a quarter's progress is the sum of its three monthly
+ * plans (VisitProgressService). Quarterly plans saved before that stay readable, and can be
+ * deleted, but no new ones are made and the old ones aren't changed.
+ */
+export const QUARTERLY_REFUSED = "Visit plans are monthly. A quarter's progress is the sum of its three monthly plans.";
+export const QUARTERLY_READ_ONLY = 'Quarterly plans can no longer be changed. Make monthly plans instead: a quarter adds up its three months.';
+
+/**
+ * Customer visit plans (CD-134): per salesperson and month, which companies to visit how often
+ * (monthly only since CD-212; old quarterly plans are read-only). Owners and admins see and manage every plan (the controller allows writes to
  * them only); members see their own plans, read-only, and other plans don't exist for them (404).
  * The salesperson gets an email (job "crm.visit-plan-email", same transaction) when someone else
  * creates or changes their plan. Counting the visits held is CD-135.
@@ -106,18 +115,19 @@ export class VisitPlansService {
   }
 
   create(ctx: TenantContext, input: CreateVisitPlan) {
+    if (input.periodType === 'quarter') throw new BadRequestException(QUARTERLY_REFUSED);
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         await this.assertSalesperson(tx, ctx, input.salespersonUserId);
-        const period = await this.period(tx, ctx, input.periodType, input.periodStart);
-        await this.assertNoDuplicate(tx, input.salespersonUserId, input.periodType, period.start, period.label);
+        const period = await this.period(tx, ctx, 'month', input.periodStart);
+        await this.assertNoDuplicate(tx, input.salespersonUserId, 'month', period.start, period.label);
         await this.assertCompanies(tx, input.lines);
         const [plan] = await tx
           .insert(visitPlans)
           .values({
             tenantId: ctx.tenantId,
             salespersonUserId: input.salespersonUserId,
-            periodType: input.periodType,
+            periodType: 'month',
             periodStart: period.start,
             periodEnd: period.end,
             note: input.note ?? null,
@@ -134,10 +144,12 @@ export class VisitPlansService {
 
   /** With a `version` (If-Match), a field someone else changed since then is a 409 conflict (CD-20). */
   update(ctx: TenantContext, id: string, input: UpdateVisitPlan, version?: Date) {
+    if (input.periodType === 'quarter') throw new BadRequestException(QUARTERLY_REFUSED);
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const [current] = await tx.select().from(visitPlans).where(eq(visitPlans.id, id)).for('update');
         if (!current) throw new NotFoundException('Visit plan not found');
+        if (current.periodType === 'quarter') throw new BadRequestException(QUARTERLY_READ_ONLY);
         const { lines, ...fields } = input;
         await this.changes.assertNoConflict(tx, ctx, 'visit_plan', current, fields, version);
 
