@@ -31,6 +31,7 @@ import { ProductsController } from './products/products.controller';
 import { ProductsService } from './products/products.service';
 import { VisitPlansController } from './visit-plans/visit-plans.controller';
 import { VisitPlansService } from './visit-plans/visit-plans.service';
+import { VisitProgressService } from './visit-plans/visit-progress.service';
 
 /**
  * CRM domain: companies, contacts, funnels (playbooks), deals with their lines (products and
@@ -43,7 +44,7 @@ import { VisitPlansService } from './visit-plans/visit-plans.service';
  */
 @Module({
   controllers: [CompaniesController, ContactsController, FunnelsController, DealsController, DealWorkController, ProductsController, ImportController, CustomFieldsController, BonusRulesController, DocumentsController, HistoryController, OnboardingController, MeetingsController, VisitPlansController],
-  providers: [CompaniesService, ContactsService, FunnelsService, DealsService, ActivitiesService, DealLinesService, DealTasksService, StageHistoryService, ProductsService, ImportService, CustomFieldsService, BonusRulesService, DocumentsService, DocumentGenerator, RecordHistoryService, OnboardingService, MeetingsService, VisitPlansService],
+  providers: [CompaniesService, ContactsService, FunnelsService, DealsService, ActivitiesService, DealLinesService, DealTasksService, StageHistoryService, ProductsService, ImportService, CustomFieldsService, BonusRulesService, DocumentsService, DocumentGenerator, RecordHistoryService, OnboardingService, MeetingsService, VisitPlansService, VisitProgressService],
   exports: [DealsService],
 })
 export class CrmModule {}

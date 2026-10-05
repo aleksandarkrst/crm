@@ -11,6 +11,7 @@ import {
   isEmptyDigest,
   zonedNow,
 } from '../src/modules/notifications/digest-content';
+import { countVisits } from '../src/modules/crm/visit-plans/visit-counting';
 
 const task = (id: string, dueDate: string, over: Partial<DigestTaskRow> = {}): DigestTaskRow => ({ id, title: `Task ${id}`, dueDate, dealId: `deal-${id}`, dealTitle: `Deal ${id}`, company: 'Acme', ...over });
 
@@ -80,6 +81,66 @@ describe('buildDigest: meetings (CD-130)', () => {
     expect(mail.text).toContain('Meetings today (1)\n- 10:00–11:30 Visit <Globex> · Globex\n  https://app.example.com/meetings/m1');
     expect(mail.text).toContain('Not closed meetings (1)\n- Demo · Acme (20 Oct)\n  https://app.example.com/meetings/m2');
     expect(mail.html).toContain('Visit &lt;Globex&gt;');
+  });
+});
+
+describe('buildDigest: visit plan progress (CD-135)', () => {
+  const now = new Date('2026-10-15T07:00:00Z');
+  const visit = (id: string, startsAt: string, companyId: string) => ({
+    id,
+    type: 'visit' as const,
+    status: 'held' as const,
+    startsAt: new Date(startsAt),
+    endsAt: new Date(new Date(startsAt).getTime() + 3600_000),
+    companyId,
+    companyName: companyId,
+    organizerUserId: 'ana',
+    dealOwnerUserId: null,
+    internalUserIds: ['ana'],
+  });
+
+  it('says "N of M held" per running plan, counted as the plan page counts (capped per customer), month first', () => {
+    const lines = [
+      { companyId: 'acme', plannedVisits: 2 },
+      { companyId: 'beta', plannedVisits: 3 },
+    ];
+    // Three visits at Acme (one over plan), none at Beta, one unplanned at Gamma: 2 of 5.
+    const visits = [visit('1', '2026-10-02T08:00:00Z', 'acme'), visit('2', '2026-10-05T08:00:00Z', 'acme'), visit('3', '2026-10-06T08:00:00Z', 'acme'), visit('4', '2026-10-07T08:00:00Z', 'gamma')];
+    const month = countVisits({ salespersonUserId: 'ana', periodStart: '2026-10-01', periodEnd: '2026-11-01', lines }, visits, now, 'Europe/Belgrade').totals;
+    const quarter = countVisits({ salespersonUserId: 'ana', periodStart: '2026-10-01', periodEnd: '2027-01-01', lines: [{ companyId: 'acme', plannedVisits: 6 }] }, visits, now, 'Europe/Belgrade').totals;
+    const d = buildDigest('2026-10-15', [task('a', '2026-10-15')], [], {
+      timeZone: 'Europe/Belgrade',
+      now,
+      visitPlans: [
+        { planId: 'q', periodType: 'quarter', periodLabel: 'Q4 2026', held: quarter.heldCapped, planned: quarter.planned },
+        { planId: 'm', periodType: 'month', periodLabel: 'October 2026', held: month.heldCapped, planned: month.planned },
+      ],
+    });
+    expect(d.visitPlans.map((p) => p.planId)).toEqual(['m', 'q']);
+    const mail = digestEmail({ to: 'ana@example.com', memberName: 'Ana', workspaceName: 'Acme Studio', appUrl: 'https://app.example.com/', digest: d });
+    expect(mail.text).toContain(
+      [
+        'Visit plan progress (2)',
+        '- Visits planned this period (October 2026): 2 of 5 held',
+        '  https://app.example.com/visit-plans/m',
+        '- Visits planned this period (Q4 2026): 3 of 6 held',
+        '  https://app.example.com/visit-plans/q',
+      ].join('\n'),
+    );
+    expect(mail.html).toContain('Visits planned this period (October 2026): 2 of 5 held');
+    // The plan doesn't change the subject's counts.
+    expect(mail.subject).toBe('Your day in Acme Studio: 1 due today');
+  });
+
+  it('is never a reason to send the digest on its own', () => {
+    const d = buildDigest('2026-10-15', [], [], { visitPlans: [{ planId: 'm', periodType: 'month', periodLabel: 'October 2026', held: 0, planned: 4 }] });
+    expect(isEmptyDigest(d)).toBe(true);
+  });
+
+  it('has no section without a running plan', () => {
+    const d = buildDigest('2026-10-15', [task('a', '2026-10-15')], []);
+    expect(d.visitPlans).toEqual([]);
+    expect(digestEmail({ to: 'a@example.com', memberName: null, workspaceName: 'W', appUrl: 'https://x', digest: d }).text).not.toContain('Visit plan progress');
   });
 });
 

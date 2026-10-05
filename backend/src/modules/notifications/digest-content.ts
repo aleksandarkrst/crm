@@ -40,6 +40,15 @@ export interface DigestMeetingRow {
   status: 'planned' | 'held' | 'cancelled';
 }
 
+/** A salesperson's visit plan running today (CD-135): held visits (capped per customer) of the planned ones. */
+export interface DigestVisitPlanRow {
+  planId: string;
+  periodType: 'month' | 'quarter';
+  periodLabel: string;
+  held: number;
+  planned: number;
+}
+
 export interface Digest {
   date: string;
   /** The workspace time zone the dates and meeting times are in. */
@@ -50,6 +59,8 @@ export interface Digest {
   /** Meetings they organize that are still planned more than 24 hours after their end. */
   notClosed: DigestMeetingRow[];
   noNextStep: DigestDealRow[];
+  /** Their visit plans for the current month and quarter. Shown when the digest goes out; never a reason to send it. */
+  visitPlans: DigestVisitPlanRow[];
 }
 
 /** A planned meeting is "Not closed" this long after its end (as in the CRM's meeting rules). */
@@ -62,6 +73,8 @@ export interface DigestMeetings {
   notClosed?: DigestMeetingRow[];
   timeZone?: string;
   now?: Date;
+  /** The member's visit plans running today, already counted (countVisits). */
+  visitPlans?: DigestVisitPlanRow[];
 }
 
 /**
@@ -82,6 +95,8 @@ export function buildDigest(today: string, tasks: DigestTaskRow[], dealsWithoutN
     dueToday: tasks.filter((t) => t.dueDate === today).sort(byDue),
     notClosed: (meetings.notClosed ?? []).filter((m) => m.status === 'planned' && new Date(m.endsAt).getTime() < now.getTime() - NOT_CLOSED_AFTER_MS).sort(byStart),
     noNextStep: [...dealsWithoutNextStep].sort((a, b) => a.title.localeCompare(b.title)),
+    // The month's plan before the quarter's.
+    visitPlans: [...(meetings.visitPlans ?? [])].sort((a, b) => (a.periodType === b.periodType ? 0 : a.periodType === 'month' ? -1 : 1)),
   };
 }
 
@@ -116,7 +131,7 @@ export interface DigestEmailInput {
   digest: Digest;
 }
 
-/** The digest email: a short summary line, then up to five sections with links to the deals and meetings. */
+/** The digest email: a short summary line, then up to six sections with links to the deals and meetings. */
 export function digestEmail({ to, memberName, workspaceName, appUrl, digest }: DigestEmailInput): MailMessage {
   const base = appUrl.replace(/\/+$/, '');
   const dealUrl = (id: string) => `${base}/deals/${id}`;
@@ -152,6 +167,10 @@ export function digestEmail({ to, memberName, workspaceName, appUrl, digest }: D
       lines: digest.notClosed.map((m) => ({ text: `${m.title} · ${m.company} (${shortDay(clock(m.startsAt).date)})`, href: meetingUrl(m.id) })),
     },
     { title: 'Deals with no next step', lines: digest.noNextStep.map((d) => ({ text: `${onDeal(d.title, d.company)} · ${d.stage}`, href: dealUrl(d.id) })) },
+    {
+      title: 'Visit plan progress',
+      lines: digest.visitPlans.map((p) => ({ text: `Visits planned this period (${p.periodLabel}): ${p.held} of ${p.planned} held`, href: `${base}/visit-plans/${p.planId}` })),
+    },
   ].filter((s) => s.lines.length);
 
   const greeting = memberName ? `Good morning, ${memberName.split(' ')[0]}.` : 'Good morning.';
