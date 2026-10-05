@@ -156,6 +156,8 @@ export interface ApiTenant {
   name: string;
   slug: string;
   role: ApiRole;
+  /** In GET /me's list (the sidebar switcher, CD-214). */
+  memberCount?: number;
 }
 export interface ApiMe {
   user: { id: string; email: string | null; displayName: string | null };
