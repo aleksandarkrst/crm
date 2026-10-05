@@ -74,10 +74,10 @@ When the checks pass, open a pull request to `main`:
   when the branch name or title contains the issue ID).
 
 **GitHub CI** then runs three checks on the pull request: `backend`, `frontend` and `integration`.
-All three must be green before merging. The `e2e` browser tests (about 16 minutes) don't run on
-pull requests (CD-218). They run on every push to `main`, where `images` and the deploys wait for
-them, and on demand: Actions → **CI / CD** → **Run workflow** on the branch. Run them that way
-before asking for review when a change touches the flows the e2e tests cover.
+All three must be green before merging. The `e2e` browser tests (about 16 minutes, workflow
+`e2e.yml`) don't run on pull requests or on `main` (CD-218). They run before every production
+deploy (step 4 below) and on demand: Actions → **E2E tests** → **Run workflow** on the branch. Run
+them that way before asking for review when a change touches the flows the e2e tests cover.
 
 The image build can also be checked before merging. Run **CI / CD** from the Actions tab against
 the branch and enable **Build both Docker images without publishing them**. The four checks run
@@ -117,8 +117,9 @@ After every merge, CI runs again on `main` and then:
    same server, own database) and runs the smoke test there.
 3. **Check it on staging**: whoever merged opens staging and tries the change.
 4. **Promote to production**: Actions → *Promote to production* → Run workflow (or
-   `gh workflow run promote.yml`). It deploys the commit staging runs now and smoke-tests
-   production. Only commits that passed staging can be promoted.
+   `gh workflow run promote.yml`). It first runs the e2e browser tests on the commit staging runs
+   now (about 16 minutes); only if they pass does it deploy that commit and smoke-test production.
+   Only commits that passed staging can be promoted.
 
 Setup and details: [DEPLOYMENT.md, Staging](DEPLOYMENT.md#9-staging). Until
 `STAGING_DEPLOY_ENABLED` is `true`, step 1 is followed by a direct production deploy instead
@@ -164,8 +165,8 @@ settings on GitHub, not in the code:
   - **Require a pull request before merging** (required approvals: 0 while you are the only
     reviewer; GitHub doesn't let you approve your own pull request)
   - **Require status checks to pass**, with **Require branches to be up to date before merging**;
-    add the checks `backend`, `frontend` and `integration` (`e2e` is skipped on pull requests,
-    CD-218; don't add it, it would never report on a pull request)
+    add the checks `backend`, `frontend` and `integration` (`e2e` runs only before production
+    deploys, CD-218; don't add it, it would never report on a pull request)
   - **Block force pushes**
 - Bypass list: leave empty, so the rules apply to everyone.
 

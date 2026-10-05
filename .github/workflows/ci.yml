@@ -89,82 +89,11 @@ jobs:
       - run: npm run db:migrate
       - run: npm run test:integration
 
-  # The UI in a real browser against the API and PostgreSQL. Not on pull requests (CD-218, ~16
-  # minutes each): it runs on main before images and the deploys, and on demand (Run workflow).
-  e2e:
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env: { POSTGRES_USER: app_admin, POSTGRES_PASSWORD: ci_admin_password, POSTGRES_DB: app }
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U app_admin -d app" --health-interval 2s --health-timeout 5s --health-retries 30
-    env:
-      PGHOST: localhost
-      PGPASSWORD: ci_admin_password
-      POSTGRES_USER: app_admin
-      POSTGRES_DB: app
-      APP_DB_USER: app_runtime
-      APP_DB_PASSWORD: ci_runtime_password
-      MIGRATION_DATABASE_URL: postgres://app_admin:ci_admin_password@localhost:5432/app
-      DATABASE_URL: postgres://app_runtime:ci_runtime_password@localhost:5432/app
-      AUTH_MODE: dev
-      DEV_JWT_SECRET: ci-only-dev-secret-at-least-32-characters
-      LOG_LEVEL: warn
-      PORT: 3000
-      # The browser tests sign in many users from one address (CD-18).
-      RATE_LIMIT_ENABLED: 'false'
-      APP_URL: http://localhost:4173
-      VITE_API_PROXY: http://127.0.0.1:3000
-      E2E_BASE_URL: http://localhost:4173
-      E2E_ARTIFACTS_DIR: ${{ github.workspace }}/e2e/artifacts
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: |
-            backend/package-lock.json
-            frontend/package-lock.json
-            e2e/package-lock.json
-      - name: Create the runtime role and pgboss schema
-        run: sh infra/postgres/init/01-roles.sh
-      - name: Install
-        run: |
-          npm ci --prefix backend
-          npm ci --prefix frontend
-          npm ci --prefix e2e
-      - name: Build and migrate
-        run: |
-          npm run build --prefix backend
-          npm run db:migrate --prefix backend
-          npm run build --prefix frontend
-      - name: Start the API, the worker (documents, emails) and the UI (vite preview, proxying /api to the API)
-        run: |
-          mkdir -p e2e/artifacts
-          (cd backend && nohup node dist/main.js > ../e2e/artifacts/api.log 2>&1 &)
-          (cd backend && nohup node dist/worker.js > ../e2e/artifacts/worker.log 2>&1 &)
-          (cd frontend && nohup npx vite preview --port 4173 --strictPort > ../e2e/artifacts/ui.log 2>&1 &)
-          for i in $(seq 60); do
-            curl -fsS http://localhost:4173/api/health/ready && curl -fsS -o /dev/null http://localhost:4173/ && exit 0
-            sleep 1
-          done
-          echo "API or UI did not start"; cat e2e/artifacts/api.log e2e/artifacts/ui.log; exit 1
-      - name: Run the browser tests
-        run: npm test --prefix e2e
-      - name: Upload screenshots and server logs
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with: { name: e2e-artifacts, path: e2e/artifacts, if-no-files-found: ignore }
-
   images:
     if: >-
       (github.ref == 'refs/heads/main' && github.event_name != 'pull_request') ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/') && inputs.verify_images)
-    needs: [backend, frontend, website, integration, e2e]
+    needs: [backend, frontend, website, integration]
     runs-on: ubuntu-latest
     permissions: { contents: read, packages: write }
     steps:

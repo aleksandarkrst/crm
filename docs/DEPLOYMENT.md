@@ -246,7 +246,7 @@ The first deploy: merge an approved pull request to `main`, or run the workflow 
 
 On the CD-34 branch, open **Actions → CI / CD → Run workflow**, select that branch, and
 check **Build both Docker images without publishing them** (`verify_images=true`). The
-`backend`, `frontend`, `integration`, and `e2e` jobs must pass before `images` builds both
+`backend`, `frontend`, `website` and `integration` jobs must pass before `images` builds both
 Dockerfiles with the configured frontend OIDC build arguments. Confirm both builds pass and
 `deploy` is skipped. This verifies image builds; it does not run a production stack.
 
@@ -517,7 +517,8 @@ containers: Compose prefixes every network and volume with the project name (`cr
    `<sha>-staging`, for staging), deploys to staging and runs `scripts/verify-production.sh` there.
 2. Check the change on https://staging.pultly.com.
 3. **Actions → Promote to production → Run workflow** (or `gh workflow run promote.yml`). It
-   deploys the commit that staging runs now to production, then runs the smoke test there. It only
+   runs the e2e browser tests (`e2e.yml`) on the commit that staging runs now, and only when they
+   pass deploys it to production and runs the smoke test there (CD-218). It only
    accepts commits whose staging deploy succeeded; to promote an older one, give its SHA.
 
 Production is no longer deployed on every merge while `STAGING_DEPLOY_ENABLED=true`. Merges that

@@ -1,0 +1,90 @@
+# Browser tests (e2e): the UI in a real browser against the API, the worker and PostgreSQL.
+# CD-218: they don't run on pull requests or on main. They run
+#   - before every production deploy (promote.yml calls this workflow with the promoted commit);
+#   - on demand: Actions → E2E tests → Run workflow, on any branch (optionally another commit).
+# ~16 minutes.
+name: E2E tests
+
+on:
+  workflow_call:
+    inputs:
+      ref: { type: string, required: true, description: 'the commit to test' }
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit to test (empty = the branch you run it on)
+        required: false
+        default: ''
+
+permissions: { contents: read }
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: { POSTGRES_USER: app_admin, POSTGRES_PASSWORD: ci_admin_password, POSTGRES_DB: app }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U app_admin -d app" --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      PGHOST: localhost
+      PGPASSWORD: ci_admin_password
+      POSTGRES_USER: app_admin
+      POSTGRES_DB: app
+      APP_DB_USER: app_runtime
+      APP_DB_PASSWORD: ci_runtime_password
+      MIGRATION_DATABASE_URL: postgres://app_admin:ci_admin_password@localhost:5432/app
+      DATABASE_URL: postgres://app_runtime:ci_runtime_password@localhost:5432/app
+      AUTH_MODE: dev
+      DEV_JWT_SECRET: ci-only-dev-secret-at-least-32-characters
+      LOG_LEVEL: warn
+      PORT: 3000
+      # The browser tests sign in many users from one address (CD-18).
+      RATE_LIMIT_ENABLED: 'false'
+      APP_URL: http://localhost:4173
+      VITE_API_PROXY: http://127.0.0.1:3000
+      E2E_BASE_URL: http://localhost:4173
+      E2E_ARTIFACTS_DIR: ${{ github.workspace }}/e2e/artifacts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { ref: "${{ inputs.ref || github.sha }}" }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+            e2e/package-lock.json
+      - name: Create the runtime role and pgboss schema
+        run: sh infra/postgres/init/01-roles.sh
+      - name: Install
+        run: |
+          npm ci --prefix backend
+          npm ci --prefix frontend
+          npm ci --prefix e2e
+      - name: Build and migrate
+        run: |
+          npm run build --prefix backend
+          npm run db:migrate --prefix backend
+          npm run build --prefix frontend
+      - name: Start the API, the worker (documents, emails) and the UI (vite preview, proxying /api to the API)
+        run: |
+          mkdir -p e2e/artifacts
+          (cd backend && nohup node dist/main.js > ../e2e/artifacts/api.log 2>&1 &)
+          (cd backend && nohup node dist/worker.js > ../e2e/artifacts/worker.log 2>&1 &)
+          (cd frontend && nohup npx vite preview --port 4173 --strictPort > ../e2e/artifacts/ui.log 2>&1 &)
+          for i in $(seq 60); do
+            curl -fsS http://localhost:4173/api/health/ready && curl -fsS -o /dev/null http://localhost:4173/ && exit 0
+            sleep 1
+          done
+          echo "API or UI did not start"; cat e2e/artifacts/api.log e2e/artifacts/ui.log; exit 1
+      - name: Run the browser tests
+        run: npm test --prefix e2e
+      - name: Upload screenshots and server logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with: { name: e2e-artifacts, path: e2e/artifacts, if-no-files-found: ignore }
+
