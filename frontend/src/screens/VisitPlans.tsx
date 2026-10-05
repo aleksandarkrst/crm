@@ -3,19 +3,30 @@ import { useNavigate } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Layout';
 import { FilterBar } from '../components/ui';
+import { type ApiVisitTotals, crmApi } from '../lib/api';
 import { paths } from '../lib/paths';
 import { VisitPlanDialog } from '../modals/VisitPlanDialog';
 import { memberName } from '../store/selectors';
 import { useStore } from '../store/store';
+import { completionLabel, paceOf } from '../store/visitPlans';
+import { useVisitProgress } from '../store/useVisitProgress';
 
 const ANY_PERIOD = 'Period';
 const ANY_PERSON = 'Salesperson';
 const COLS = 'minmax(0,1.4fr) minmax(0,1.4fr) 0.8fr 0.9fr 0.7fr 0.8fr';
 
+/** The totals of these plans, by plan id (in requests of up to 200 plans). */
+async function loadTotals(ids: string[]): Promise<Map<string, ApiVisitTotals>> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += 200) chunks.push(ids.slice(i, i + 200));
+  const parts = await Promise.all(chunks.map((c) => crmApi.visitPlansProgress(c)));
+  return new Map(parts.flat().map((p) => [p.planId, p.totals]));
+}
+
 /**
  * Customer visit plans (CD-134): one row per plan. Owners and admins see everyone's and make new
- * ones; members see their own. Held visits and completion come with visit tracking (CD-135) and
- * show "—" until then.
+ * ones; members see their own. Held visits (counted toward the plan: at most the planned number
+ * per customer) and completion, coloured by pace (CD-135, spec 9.2), stay current as visits are held.
  */
 export function VisitPlans() {
   const { s, canDelete: canManage } = useStore();
@@ -30,6 +41,8 @@ export function VisitPlans() {
   for (const p of s.visitPlans) people.set(p.salespersonUserId, memberName(s, p.salespersonUserId, p.salespersonName));
   const rows = s.visitPlans.filter((p) => (period === ANY_PERIOD || `${p.periodType}:${p.periodStart}` === period) && (person === ANY_PERSON || p.salespersonUserId === person));
   const open = (id: string) => navigate(paths.visitPlan(id));
+  const ids = rows.map((p) => p.id);
+  const { data: totals } = useVisitProgress(ids.length ? 'list:' + [...ids].sort().join(',') : null, () => loadTotals(ids));
 
   return (
     <Screen title="Visit plans">
@@ -91,18 +104,42 @@ export function VisitPlans() {
               <span className="vp-cell" data-label="Planned" style={{ fontSize: 13 }} data-testid="visit-plan-total">
                 {p.totalPlanned}
               </span>
-              {/* CD-135: held visits and completion % come with visit tracking. */}
-              <span className="vp-cell" data-label="Held" style={{ fontSize: 13, color: 'var(--muted)' }} title="Counted once visit tracking is on">
-                —
-              </span>
-              <span className="vp-cell" data-label="Completion" style={{ fontSize: 13, color: 'var(--muted)' }} title="Counted once visit tracking is on">
-                —
-              </span>
+              <PlanTotals totals={totals?.get(p.id)} />
             </div>
           ))}
         </div>
       )}
       {creating && <VisitPlanDialog onClose={() => setCreating(false)} />}
     </Screen>
+  );
+}
+
+/** Held visits and completion of one plan in the list; "…" while counting. */
+function PlanTotals({ totals: t }: { totals: ApiVisitTotals | undefined }) {
+  if (!t) {
+    return (
+      <>
+        <span className="vp-cell" data-label="Held" style={{ fontSize: 13, color: 'var(--muted)' }}>
+          …
+        </span>
+        <span className="vp-cell" data-label="Completion" style={{ fontSize: 13, color: 'var(--muted)' }}>
+          …
+        </span>
+      </>
+    );
+  }
+  const pace = paceOf(t);
+  return (
+    <>
+      <span className="vp-cell" data-label="Held" style={{ fontSize: 13 }} data-testid="visit-plan-held" title={t.overPlan ? `${t.held} held, ${t.overPlan} over plan` : undefined}>
+        {t.heldCapped}
+        {t.overPlan > 0 && <span className="vp-over"> +{t.overPlan}</span>}
+      </span>
+      <span className="vp-cell" data-label="Completion" style={{ fontSize: 13 }}>
+        <span className={pace.className} title={pace.title} data-testid="visit-plan-completion" data-pace={t.pace}>
+          {completionLabel(t.completion)}
+        </span>
+      </span>
+    </>
   );
 }

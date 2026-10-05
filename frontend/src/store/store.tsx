@@ -462,6 +462,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       queueRefresh(ALL_PARTS, logRequested.current);
     };
     const onLiveEvent = (e: LiveEvent) => {
+      // Visit plan progress (CD-135) counts meetings: any meeting or plan change, also this tab's, recounts it.
+      if (e.type === 'resync' || e.type === 'meeting' || e.type === 'visit_plan') set((x) => ({ visitRev: x.visitRev + 1 }));
       if (e.type === 'resync') return refreshAll();
       if (e.client === CLIENT_ID) return; // this tab's own change: the screen has it already
       if (e.type === 'meeting') return meetings.onLive(e);

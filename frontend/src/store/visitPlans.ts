@@ -4,7 +4,8 @@
  * the backend (modules/crm/visit-plans/periods.ts): a month, or a quarter of the workspace's fiscal
  * year (`s.workspace.fiscalMonth`, 1 = January). Dates are calendar dates (YYYY-MM-DD).
  */
-import type { ApiVisitPlan, VisitPlanPeriodType } from '../lib/api';
+import type { ApiVisitPlan, ApiVisitTotals, VisitPlanPeriodType } from '../lib/api';
+import { paths } from '../lib/paths';
 
 export type VisitPlan = ApiVisitPlan;
 export type PeriodType = VisitPlanPeriodType;
@@ -67,3 +68,52 @@ export function previousPlan(plans: VisitPlan[], salespersonUserId: string, type
 /** Plans as lists show them: newest period first, then months before quarters, then by salesperson. */
 export const sortPlans = (plans: VisitPlan[]): VisitPlan[] =>
   [...plans].sort((a, b) => b.periodStart.localeCompare(a.periodStart) || a.periodType.localeCompare(b.periodType) || a.salespersonName.localeCompare(b.salespersonName));
+
+// ------------------------------------------------------------ tracking (CD-135)
+
+/** Completion as a whole percentage, rounded down: 100% only when the plan is done. */
+export const completionLabel = (completion: number): string => Math.floor(completion * 100 + 1e-9) + '%';
+
+/** The colour class and explanation of a plan's pace (spec 9.2): green done, amber behind, grey before the period. */
+export function paceOf(t: Pick<ApiVisitTotals, 'pace' | 'expectedPace'>): { className: string; title: string } {
+  switch (t.pace) {
+    case 'done':
+      return { className: 'vp-pace vp-pace-done', title: 'Every planned visit is held' };
+    case 'behind':
+      return { className: 'vp-pace vp-pace-behind', title: `Behind pace: ${Math.round(t.expectedPace * 100)}% of the period has passed` };
+    case 'notStarted':
+      return { className: 'vp-pace vp-pace-not-started', title: "The period hasn't started yet" };
+    default:
+      return { className: 'vp-pace', title: `On pace: ${Math.round(t.expectedPace * 100)}% of the period has passed` };
+  }
+}
+
+export type VisitCount = 'held' | 'upcoming' | 'notClosed';
+
+/** `YYYY-MM-DD` moved by whole days. */
+function shiftDay(date: string, days: number): string {
+  const d = new Date(date + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * The Calendar's table with the meetings behind a number: the period's Customer visits of a
+ * salesperson and customer, held, upcoming (planned, from today) or not closed. The Calendar's
+ * salesperson filter is "organizer or participant", while a visit counts for one of them (the
+ * deal owner who was there, else the organizer), so a shared visit can show for both there.
+ */
+export function visitsInCalendar(kind: VisitCount, period: { periodStart: string; periodEnd: string }, filter: { userId?: string | null; companyId?: string | null }, today: string): string {
+  const last = shiftDay(period.periodEnd, -1);
+  const from = kind === 'upcoming' && today > period.periodStart ? (today > last ? last : today) : period.periodStart;
+  return paths.calendar({
+    view: 'table',
+    from,
+    to: last,
+    user: filter.userId || 'all',
+    company: filter.companyId || undefined,
+    type: 'visit',
+    status: kind === 'held' ? 'held' : 'planned',
+    notClosed: kind === 'notClosed' ? '1' : undefined,
+  });
+}

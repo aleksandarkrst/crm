@@ -2,7 +2,7 @@
 export type CalendarParams = Partial<
   Record<'view' | 'date' | 'from' | 'to' | 'user' | 'type' | 'status' | 'company' | 'deal' | 'contact' | 'notClosed' | 'missingMinutes' | 'sort' | 'new' | 'companyId' | 'dealId' | 'contactId' | 'organizer' | 'start', string | null | undefined>
 >;
-const query = (params: CalendarParams = {}) => {
+const query = (params: Partial<Record<string, string | null | undefined>> = {}) => {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
   const s = q.toString();
@@ -22,6 +22,8 @@ export const paths = {
   contacts: '/contacts',
   contact: (id: string) => '/contacts/' + encodeURIComponent(id),
   products: '/products',
+  /** Reports (CD-135, owners and admins); `visit-plans` is the Visit-plan completion tab, with its filters. */
+  reports: (tab = 'visit-plans', params: Partial<Record<'periodType' | 'periodStart' | 'salesperson' | 'company', string | null | undefined>> = {}) => `/reports/${tab}` + query(params),
   settings: (tab = 'workspace') => '/settings/' + tab,
   profile: '/profile',
   lead: (id: string) => '/deals/' + encodeURIComponent(id),
