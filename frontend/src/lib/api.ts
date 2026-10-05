@@ -997,3 +997,129 @@ export const crmApi = {
     retrySend: (id: string, sendId: string) => api<ApiMinutesSend>(`/crm/meetings/${id}/minutes/sends/${sendId}/retry`, { method: 'POST' }),
   },
 };
+
+// ---------------------------------------------------------------- people (milestone 13)
+// Employees, departments and teams (backend modules/people, docs/ARCHITECTURE.md "People"). What
+// a row carries depends on the caller (spec 9): directory fields always; `employment` only for rows
+// in their scope; `hr` for Administration and Admin; `roles` for Admins. Never assume the optional
+// parts exist.
+
+export type ApiFunctionalRole = 'employee' | 'manager' | 'administration' | 'payroll' | 'admin';
+export type ApiEmployeeStatus = 'active' | 'leaving' | 'inactive';
+export type ApiAccountState = 'linked' | 'invited' | 'none';
+export type ApiDataIssue = 'no_manager' | 'no_start_date' | 'no_department' | 'manager_no_account' | 'no_employee_number';
+export type ApiEmploymentType = 'permanent' | 'fixed_term' | 'contractor' | 'student';
+
+/** The caller's place in the org: `GET /api/people/access`. */
+export interface ApiPeopleAccess {
+  employeeId: string | null;
+  roles: ApiFunctionalRole[];
+  directReportIds: string[];
+  reportIds: string[];
+}
+
+export interface ApiEmployment {
+  employeeNumber: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  type: ApiEmploymentType;
+  weeklyHours: number;
+  timesheetRequired: boolean;
+  attendanceTracked: boolean;
+  deactivatedAt: string | null;
+  /** Administration and Admin only. */
+  leavingReason?: string | null;
+}
+
+/** One row of the directory (`GET /api/people/employees`). */
+export interface ApiEmployee {
+  id: string;
+  userId: string | null;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  jobTitle: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  teamId: string | null;
+  teamName: string | null;
+  managerId: string | null;
+  managerName: string | null;
+  workEmail: string | null;
+  workPhone: string | null;
+  workLocation: string | null;
+  status: ApiEmployeeStatus;
+  /** Self, managers above them, Administration, Admin. */
+  employment?: ApiEmployment;
+  /** Administration and Admin. */
+  hr?: { account: ApiAccountState; dataIssues: ApiDataIssue[] };
+  /** Admins. */
+  roles?: ApiFunctionalRole[];
+}
+
+export interface ApiEmployeeQuery {
+  status?: ApiEmployeeStatus[];
+  ids?: readonly string[];
+}
+
+export interface ApiDepartment {
+  id: string;
+  name: string;
+  code: string | null;
+  headEmployeeId: string | null;
+  version: string;
+  activeEmployees: number;
+}
+
+export interface ApiTeam {
+  id: string;
+  departmentId: string;
+  name: string;
+  leadEmployeeId: string | null;
+  version: string;
+  activeEmployees: number;
+}
+
+/** "Set department and team" (together: a team brings its department) or "Set manager" for several employees. */
+export interface BulkEmployeesInput {
+  employeeIds: string[];
+  departmentId?: string | null;
+  teamId?: string | null;
+  managerId?: string | null;
+}
+
+/** "Include personal details and bank accounts" (Administration, Admin; every export is audited). */
+export interface ApiEmployeePersonalExport {
+  id: string;
+  personal: {
+    dateOfBirth: string | null;
+    privateEmail: string | null;
+    privatePhone: string | null;
+    addressStreet: string | null;
+    addressPostalCode: string | null;
+    addressCity: string | null;
+    addressCountry: string | null;
+    emergencyContactName: string | null;
+    emergencyContactPhone: string | null;
+  };
+  bank: { iban: string | null; bankName: string | null; fxIban: string | null; fxSameAsIban: boolean; swiftBic: string | null; fxBankName: string | null; fxBankAddress: string | null };
+}
+
+const employeeSearch = (q: ApiEmployeeQuery) => {
+  const p = new URLSearchParams();
+  if (q.status?.length) p.set('status', q.status.join(','));
+  if (q.ids) p.set('ids', q.ids.join(','));
+  const s = p.toString();
+  return s ? '?' + s : '';
+};
+
+export const peopleApi = {
+  access: () => api<ApiPeopleAccess>('/people/access'),
+  /** The whole directory in one response (sorted by last name); `ids` (≤200) for live updates. */
+  employees: (q: ApiEmployeeQuery = {}) => api<{ employees: ApiEmployee[]; total: number }>('/people/employees' + employeeSearch(q)).then((r) => r.employees),
+  departments: () => api<ApiDepartment[]>('/people/departments'),
+  teams: () => api<ApiTeam[]>('/people/teams'),
+  /** All or nothing: `{ updated }` is how many actually changed. */
+  bulkUpdate: (input: BulkEmployeesInput) => api<{ updated: number }>('/people/employees/bulk', { method: 'POST', json: input }),
+  exportPersonal: (employeeIds: string[]) => api<{ employees: ApiEmployeePersonalExport[] }>('/people/employees/export', { method: 'POST', json: { employeeIds } }).then((r) => r.employees),
+};

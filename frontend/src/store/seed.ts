@@ -2,6 +2,7 @@
  * Reference data from the Mini CRM v2 design (pick lists, labels, sales scripts) and the store's
  * starting state. No demo records: deals, funnels and products come from the API (CD-103).
  */
+import { emptyPeople } from './people';
 import type { Filters, State } from './types';
 
 export const ACTIVITIES = ['Qualify & research', 'Personalized email', 'LinkedIn touch', 'WhatsApp check-in', 'Discovery call', 'Discovery workshop', 'Multi-thread to stakeholders', 'Send proposal + walkthrough', 'Procurement follow-up', 'Negotiation call', 'Kickoff scheduling'];
@@ -157,5 +158,6 @@ export function initialState(): State {
     meetingMinutes: {},
     meetingDialog: null,
     visitRev: 0,
+    people: emptyPeople(),
   };
 }
