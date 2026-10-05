@@ -156,6 +156,8 @@ describe('module and workspace switcher', () => {
     await click(page, '[data-testid=nav-more]');
     await click(page, '[data-testid=more-modules]');
     await page.waitForSelector(POP);
+    // Once its slide-in animation is done.
+    await page.waitForFunction((sel) => document.querySelector(sel)?.getAnimations().every((a) => a.playState === 'finished'), {}, POP);
     const box = await page.$eval(POP, (el) => {
       const r = el.getBoundingClientRect();
       return { left: Math.round(r.left), right: Math.round(r.right), bottom: Math.round(r.bottom) };
