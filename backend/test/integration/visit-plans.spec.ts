@@ -217,12 +217,17 @@ describe('visit plans', () => {
     await ok('PATCH', `/crm/visit-plans/${p.id}`, { ...as(admin), body: { lines: [{ companyId: companies.Alpha, plannedVisits: 1 }] } });
     await eventually(async () => (await subjects(seller)).includes('Your visit plan for June 2027 was changed'), 'plan changed email');
 
-    // The admin's own plan: no email to them. Then a marker to the seller: the worker takes jobs
-    // in order, so once it has arrived the one before it has run.
+    // The admin's own plan sends nothing; neither does a plan for a salesperson who turned it off.
+    // A marker to the admin comes last: the worker takes jobs in order, so then the others have run.
     await plan(admin, monthly(admin.userId, '2027-06-01', [['Alpha', 1]]));
-    await plan(owner, monthly(seller.userId, '2027-07-01', [['Alpha', 1]]));
-    await eventually(async () => (await subjects(seller)).includes('Your visit plan for July 2027'), 'marker email');
-    expect((await subjects(admin)).some((s) => s.startsWith('Your visit plan'))).toBe(false);
+    // The salesperson turned "Visit plans" off (read when the email would be sent).
+    await ok('PATCH', '/profile', { ...as(seller), body: { notifyVisitPlans: false } });
+    await plan(owner, monthly(seller.userId, '2027-09-01', [['Alpha', 1]]));
+    await plan(owner, monthly(admin.userId, '2027-07-01', [['Alpha', 1]]));
+    await eventually(async () => (await subjects(admin)).includes('Your visit plan for July 2027'), 'marker email');
+    await ok('PATCH', '/profile', { ...as(seller), body: { notifyVisitPlans: true } });
+    expect((await subjects(admin)).filter((s) => s.startsWith('Your visit plan'))).toEqual(['Your visit plan for July 2027']);
+    expect((await subjects(seller)).some((s) => s.includes('September 2027'))).toBe(false);
   });
 
   it('is isolated per workspace', async () => {

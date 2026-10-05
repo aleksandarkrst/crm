@@ -163,12 +163,11 @@ export class NotificationJobs implements OnApplicationBootstrap {
     // Deleted meanwhile, or now the actor's own plan: nothing to tell.
     if (!plan || plan.salespersonUserId === actorUserId) return;
     // The setting is read when sending, so switching it off stops emails still in the queue.
-    // CD-207 adds memberships.notify_visit_plans; until it exists this reads null, i.e. "on".
     const [salesperson] = await this.database.db
       .select({
         email: users.email,
         name: users.displayName,
-        wants: sql<boolean | null>`(to_jsonb(${memberships}) ->> 'notify_visit_plans')::boolean`,
+        wants: memberships.notifyVisitPlans,
         workspaceName: tenants.name,
         fiscal: tenants.fiscalYearStartMonth,
       })
@@ -176,7 +175,7 @@ export class NotificationJobs implements OnApplicationBootstrap {
       .innerJoin(users, eq(users.id, memberships.userId))
       .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
       .where(and(eq(memberships.tenantId, tenantId), eq(memberships.userId, plan.salespersonUserId)));
-    if (!salesperson?.email || salesperson.wants === false) return;
+    if (!salesperson?.email || !salesperson.wants) return;
     const lines = await this.database.withTenant(tenantId, (tx) =>
       tx
         .select({ companyName: companies.name, plannedVisits: visitPlanLines.plannedVisits })
