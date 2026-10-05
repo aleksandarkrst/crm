@@ -3,8 +3,11 @@ import type { ApiMeeting } from '../../lib/api';
 import { curOf } from '../../store/selectors';
 import { useStore } from '../../store/store';
 
-/** Who changed which field of the meeting (CD-69 history, entity "meeting"); CD-133 adds the send log. */
+/**
+ * Who changed which field of the meeting (CD-69 history, entity "meeting"), its internal minutes
+ * included (CD-132); CD-133 adds the send log.
+ */
 export function MeetingHistory({ meeting }: { meeting: ApiMeeting }) {
   const { s } = useStore();
-  return <ChangeHistory entity="meeting" id={meeting.id} cur={curOf(s)} rev={meeting.updatedAt} />;
+  return <ChangeHistory entity="meeting" id={meeting.id} cur={curOf(s)} rev={`${meeting.updatedAt}|${meeting.minutesUpdatedAt ?? ''}`} />;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canManageMeeting, isNotClosed, meetingChangeError } from '../src/modules/crm/meetings/meeting-rules';
+import { canManageMeeting, isNotClosed, meetingChangeError, mergeNextSteps, newStepOwners } from '../src/modules/crm/meetings/meeting-rules';
 import { formatTimeRange, zonedParts } from '../src/shared/time/zoned-time';
 
 const now = new Date('2026-10-05T12:00:00Z');
@@ -92,5 +92,29 @@ describe('meeting times in the workspace time zone', () => {
   it('reads the date of an instant on the zone clock, and treats an unknown zone as UTC', () => {
     expect(zonedParts(new Date('2026-10-05T22:30:00Z'), 'Europe/Belgrade')).toMatchObject({ date: '2026-10-06', time: '00:30', weekday: 'Tue' });
     expect(zonedParts(new Date('2026-10-05T22:30:00Z'), 'Not/AZone')).toMatchObject({ date: '2026-10-05', time: '22:30' });
+  });
+});
+
+describe('next steps of the internal minutes (CD-132)', () => {
+  const step = (id: string, over: Record<string, unknown> = {}) => ({ id, text: `Step ${id}`, ownerUserId: null, dueDate: null, ...over });
+
+  it('replaces the list in the order sent, keeping each step’s task by id (the browser cannot set or clear it)', () => {
+    const existing = [
+      { ...step('a'), taskId: 'task-a' },
+      { ...step('b'), taskId: null },
+      { ...step('c'), taskId: 'task-c' },
+    ];
+    const sent = [step('b', { text: 'Changed' }), { ...step('a'), taskId: 'forged' } as never, step('new')];
+    expect(mergeNextSteps(sent, existing)).toEqual([
+      { id: 'b', text: 'Changed', ownerUserId: null, dueDate: null, taskId: null },
+      { id: 'a', text: 'Step a', ownerUserId: null, dueDate: null, taskId: 'task-a' },
+      { id: 'new', text: 'Step new', ownerUserId: null, dueDate: null, taskId: null },
+    ]);
+  });
+
+  it('checks only owners set anew, so a step whose owner has left can still be saved', () => {
+    const existing = [{ ...step('a', { ownerUserId: 'gone' }), taskId: null }, { ...step('b', { ownerUserId: 'u1' }), taskId: null }];
+    const next = mergeNextSteps([step('a', { ownerUserId: 'gone' }), step('b', { ownerUserId: 'u2' }), step('c', { ownerUserId: 'u2' }), step('d')], existing);
+    expect(newStepOwners(next, existing)).toEqual(['u2']);
   });
 });

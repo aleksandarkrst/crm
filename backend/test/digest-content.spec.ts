@@ -83,6 +83,40 @@ describe('buildDigest: meetings (CD-130)', () => {
   });
 });
 
+describe('buildDigest: minutes missing (CD-132)', () => {
+  const now = new Date('2026-10-25T06:00:00Z');
+  const held = (id: string, startsAt: string, over: Partial<DigestMeetingRow> = {}) =>
+    meeting(id, startsAt, new Date(new Date(startsAt).getTime() + 3_600_000).toISOString(), { status: 'held', ...over });
+
+  it('lists held meetings without a summary that started in the last 7 days, oldest first', () => {
+    const d = buildDigest('2026-10-25', [], [], {
+      minutesMissing: [
+        held('yesterday', '2026-10-24T09:00:00Z'),
+        held('six-days', '2026-10-19T09:00:00Z'),
+        held('edge', '2026-10-18T06:00:00Z'), // exactly 7 days before now: still listed
+        held('eight-days', '2026-10-17T09:00:00Z'),
+        held('planned', '2026-10-24T09:00:00Z', { status: 'planned' }),
+        held('cancelled', '2026-10-24T09:00:00Z', { status: 'cancelled' }),
+      ],
+      timeZone: 'Europe/Belgrade',
+      now,
+    });
+    expect(d.minutesMissing.map((m) => m.id)).toEqual(['edge', 'six-days', 'yesterday']);
+    expect(digestItemCount(d)).toBe(3);
+    expect(isEmptyDigest(buildDigest('2026-10-25', [], [], { minutesMissing: [held('old', '2026-10-01T09:00:00Z')], now }))).toBe(true);
+  });
+
+  it('puts a "Minutes missing" section in the email, linking to the meetings', () => {
+    const d = buildDigest('2026-10-25', [], [], { minutesMissing: [held('m3', '2026-10-23T08:00:00Z', { title: 'Visit <Initech>', company: 'Initech' })], timeZone: 'Europe/Belgrade', now });
+    const mail = digestEmail({ to: 'bo@example.com', memberName: 'Bo', workspaceName: 'Acme Studio', appUrl: 'https://app.example.com', digest: d });
+    expect(mail.subject).toBe('Your day in Acme Studio: 1 meeting without minutes');
+    expect(mail.text).toContain('Minutes missing (1)\n- Visit <Initech> · Initech (held 23 Oct)\n  https://app.example.com/meetings/m3');
+    expect(mail.html).toContain('Minutes missing');
+    expect(mail.html).toContain('Visit &lt;Initech&gt;');
+    expect(mail.html).toContain('href="https://app.example.com/meetings/m3"');
+  });
+});
+
 describe('zonedNow and the digest hour', () => {
   const at = new Date('2026-09-24T06:30:00Z');
   it('reads the date and hour on the workspace clock', () => {

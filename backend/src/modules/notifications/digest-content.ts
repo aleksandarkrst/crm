@@ -49,17 +49,23 @@ export interface Digest {
   dueToday: DigestTaskRow[];
   /** Meetings they organize that are still planned more than 24 hours after their end. */
   notClosed: DigestMeetingRow[];
+  /** Meetings they organize, held in the last 7 days, whose internal minutes have no summary yet (CD-132). */
+  minutesMissing: DigestMeetingRow[];
   noNextStep: DigestDealRow[];
 }
 
 /** A planned meeting is "Not closed" this long after its end (as in the CRM's meeting rules). */
 export const NOT_CLOSED_AFTER_MS = 24 * 60 * 60 * 1000;
+/** A held meeting without a summary is listed as "Minutes missing" for this long after its start (spec 6.2). */
+export const MINUTES_REMINDER_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface DigestMeetings {
   /** Meetings starting today or so; only the planned and held ones starting today count. */
   today?: DigestMeetingRow[];
   /** Candidates for "Not closed"; only planned ones that ended over 24 hours before `now` count. */
   notClosed?: DigestMeetingRow[];
+  /** Candidates for "Minutes missing" (held, no summary); only those that started in the 7 days before `now` count. */
+  minutesMissing?: DigestMeetingRow[];
   timeZone?: string;
   now?: Date;
 }
@@ -67,7 +73,8 @@ export interface DigestMeetings {
 /**
  * Sorts a member's open tasks (due today or earlier) into overdue and due today, and lists their
  * open deals without a next step, as the Today screen and the Pipeline flags do. Meetings: the
- * ones starting today (workspace date), and their planned meetings that were never closed.
+ * ones starting today (workspace date), their planned meetings that were never closed, and their
+ * held meetings of the last 7 days still without minutes.
  */
 export function buildDigest(today: string, tasks: DigestTaskRow[], dealsWithoutNextStep: DigestDealRow[], meetings: DigestMeetings = {}): Digest {
   const timeZone = meetings.timeZone ?? 'UTC';
@@ -81,11 +88,18 @@ export function buildDigest(today: string, tasks: DigestTaskRow[], dealsWithoutN
     overdue: tasks.filter((t) => t.dueDate < today).sort(byDue),
     dueToday: tasks.filter((t) => t.dueDate === today).sort(byDue),
     notClosed: (meetings.notClosed ?? []).filter((m) => m.status === 'planned' && new Date(m.endsAt).getTime() < now.getTime() - NOT_CLOSED_AFTER_MS).sort(byStart),
+    minutesMissing: (meetings.minutesMissing ?? [])
+      .filter((m) => {
+        const start = new Date(m.startsAt).getTime();
+        return m.status === 'held' && start <= now.getTime() && start >= now.getTime() - MINUTES_REMINDER_MS;
+      })
+      .sort(byStart),
     noNextStep: [...dealsWithoutNextStep].sort((a, b) => a.title.localeCompare(b.title)),
   };
 }
 
-export const digestItemCount = (d: Digest): number => d.meetingsToday.length + d.overdue.length + d.dueToday.length + d.notClosed.length + d.noNextStep.length;
+export const digestItemCount = (d: Digest): number =>
+  d.meetingsToday.length + d.overdue.length + d.dueToday.length + d.notClosed.length + d.minutesMissing.length + d.noNextStep.length;
 export const isEmptyDigest = (d: Digest): boolean => digestItemCount(d) === 0;
 
 /** The current date and time on the clock of an IANA time zone. */
@@ -116,7 +130,7 @@ export interface DigestEmailInput {
   digest: Digest;
 }
 
-/** The digest email: a short summary line, then up to five sections with links to the deals and meetings. */
+/** The digest email: a short summary line, then up to six sections with links to the deals and meetings. */
 export function digestEmail({ to, memberName, workspaceName, appUrl, digest }: DigestEmailInput): MailMessage {
   const base = appUrl.replace(/\/+$/, '');
   const dealUrl = (id: string) => `${base}/deals/${id}`;
@@ -127,6 +141,7 @@ export function digestEmail({ to, memberName, workspaceName, appUrl, digest }: D
     digest.overdue.length ? `${digest.overdue.length} overdue` : null,
     digest.dueToday.length ? `${digest.dueToday.length} due today` : null,
     digest.notClosed.length ? plural(digest.notClosed.length, 'meeting') + ' not closed' : null,
+    digest.minutesMissing.length ? plural(digest.minutesMissing.length, 'meeting') + ' without minutes' : null,
     digest.noNextStep.length ? plural(digest.noNextStep.length, 'deal') + ' without a next step' : null,
   ].filter(Boolean);
   const subject = `Your day in ${workspaceName}: ${counts.join(', ')}`;
@@ -150,6 +165,10 @@ export function digestEmail({ to, memberName, workspaceName, appUrl, digest }: D
     {
       title: 'Not closed meetings',
       lines: digest.notClosed.map((m) => ({ text: `${m.title} · ${m.company} (${shortDay(clock(m.startsAt).date)})`, href: meetingUrl(m.id) })),
+    },
+    {
+      title: 'Minutes missing',
+      lines: digest.minutesMissing.map((m) => ({ text: `${m.title} · ${m.company} (held ${shortDay(clock(m.startsAt).date)})`, href: meetingUrl(m.id) })),
     },
     { title: 'Deals with no next step', lines: digest.noNextStep.map((d) => ({ text: `${onDeal(d.title, d.company)} · ${d.stage}`, href: dealUrl(d.id) })) },
   ].filter((s) => s.lines.length);

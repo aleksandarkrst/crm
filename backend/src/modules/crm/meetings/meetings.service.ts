@@ -15,6 +15,7 @@ import {
   MEETING_TYPES,
   type MeetingStatus,
   type MeetingType,
+  meetingMinutes,
   meetingParticipants,
   meetings,
   memberships,
@@ -54,6 +55,9 @@ const meetingFields = {
   externalContactIds: people.optional(),
 };
 const END_AFTER_START = 'The end must be after the start';
+/** The meeting's internal minutes have a summary (CD-132): the calendar's "Recorded", else "Missing". */
+const minutesRecorded = sql`exists (select 1 from ${meetingMinutes} mm where mm.meeting_id = ${meetings.id} and btrim(coalesce(mm.summary, '')) <> '')`;
+
 
 export const CreateMeeting = z
   .object(meetingFields)
@@ -133,8 +137,11 @@ export interface ApiMeeting {
   cancelledAt: Date | null;
   notClosed: boolean;
   participants: ApiMeetingParticipant[];
-  /** CD-132 fills these in; until then nothing is recorded or sent. */
+  /** Recorded once the internal minutes have a summary (CD-132). */
   internalMinutes: 'missing' | 'recorded';
+  /** The version of the minutes (null before anyone wrote them): an open minutes tab re-reads them when it changes. */
+  minutesUpdatedAt: Date | null;
+  /** CD-133 fills this in; until then nothing is sent. */
   externalDelivery: 'not_sent' | 'queued' | 'sent' | 'failed';
   createdByUserId: string | null;
   createdAt: Date;
@@ -148,6 +155,8 @@ interface ListedRow {
   dealTitle: string | null;
   dealOwnerUserId: string | null;
   organizerName: string | null;
+  minutesRecorded: boolean;
+  minutesUpdatedAt: Date | null;
 }
 
 /** Who a meeting's people are, checked against the workspace (members, contacts). */
@@ -196,8 +205,8 @@ export class MeetingsService {
     if (query.type) filters.push(inArray(meetings.type, query.type));
     if (query.status) filters.push(inArray(meetings.status, query.status));
     if (query.notClosed) filters.push(eq(meetings.status, 'planned'), lt(meetings.endsAt, new Date(now.getTime() - NOT_CLOSED_AFTER_MS)));
-    // Held without internal minutes. Minutes come with CD-132; until then every held meeting lacks them.
-    if (query.missingMinutes) filters.push(eq(meetings.status, 'held'));
+    // Held without internal minutes: no summary written yet (CD-132).
+    if (query.missingMinutes) filters.push(eq(meetings.status, 'held'), sql`not ${minutesRecorded}`);
     if (query.ids) filters.push(inArray(meetings.id, query.ids));
     const order = query.sort === 'desc' ? [desc(meetings.startsAt), desc(meetings.id)] : [asc(meetings.startsAt), asc(meetings.id)];
 
@@ -367,8 +376,11 @@ export class MeetingsService {
       .catch(mapDbError);
   }
 
-  /** Locks the meeting, then checks who is changing it (403) and that its status allows the change (409). */
-  private async lockForChange(tx: Tx, ctx: TenantContext, id: string, change: MeetingChange): Promise<MeetingRow> {
+  /**
+   * Locks the meeting, then checks who is changing it (403) and that its status allows the change
+   * (409). The minutes (MeetingMinutesService) use it too: same people, read-only when cancelled.
+   */
+  async lockForChange(tx: Tx, ctx: TenantContext, id: string, change: MeetingChange): Promise<MeetingRow> {
     const [meeting] = await tx.select().from(meetings).where(eq(meetings.id, id)).for('update');
     if (!meeting) throw new NotFoundException('Meeting not found');
     const internalUserIds = await this.internalUserIds(tx, id);
@@ -480,6 +492,8 @@ export class MeetingsService {
         dealTitle: deals.title,
         dealOwnerUserId: deals.ownerUserId,
         organizerName: userNameOf(meetings.organizerUserId),
+        minutesRecorded: sql<boolean>`${minutesRecorded}`,
+        minutesUpdatedAt: sql<Date | null>`(select mm.updated_at from ${meetingMinutes} mm where mm.meeting_id = ${meetings.id})`.mapWith(meetingMinutes.updatedAt),
       })
       .from(meetings)
       .innerJoin(companies, eq(companies.id, meetings.companyId))
@@ -526,7 +540,7 @@ export class MeetingsService {
       });
       byMeeting.set(p.meetingId, list);
     }
-    return rows.map(({ meeting: m, companyName, dealTitle, dealOwnerUserId, organizerName }) => {
+    return rows.map(({ meeting: m, companyName, dealTitle, dealOwnerUserId, organizerName, minutesRecorded: recorded, minutesUpdatedAt }) => {
       const rank = (p: ApiMeetingParticipant) => (p.kind === 'external' ? 2 : p.userId && p.userId === m.organizerUserId ? 0 : 1);
       const participants = (byMeeting.get(m.id) ?? []).sort((a, b) => rank(a) - rank(b));
       return {
@@ -550,7 +564,8 @@ export class MeetingsService {
         cancelledAt: m.cancelledAt,
         notClosed: isNotClosed(m, now),
         participants,
-        internalMinutes: 'missing',
+        internalMinutes: recorded ? 'recorded' : 'missing',
+        minutesUpdatedAt,
         externalDelivery: 'not_sent',
         createdByUserId: m.createdByUserId,
         createdAt: m.createdAt,
