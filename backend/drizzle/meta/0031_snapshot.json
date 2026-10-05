@@ -1,5 +1,5 @@
 {
-  "id": "db8780c1-4a6f-4a38-8d27-dbfdfdf463ac",
+  "id": "d5130134-42b7-4c00-9173-9d3f59b73f0a",
   "prevId": "f383fab4-b257-417c-8700-394cbacea4ab",
   "version": "7",
   "dialect": "postgresql",
@@ -3190,159 +3190,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.meeting_minutes": {
-      "name": "meeting_minutes",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "tenant_id": {
-          "name": "tenant_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "meeting_id": {
-          "name": "meeting_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "summary": {
-          "name": "summary",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "agreements": {
-          "name": "agreements",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "next_steps": {
-          "name": "next_steps",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "external_subject": {
-          "name": "external_subject",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "external_body": {
-          "name": "external_body",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "external_prefilled_at": {
-          "name": "external_prefilled_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_by_user_id": {
-          "name": "updated_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "meeting_minutes_tenant_id_tenants_id_fk": {
-          "name": "meeting_minutes_tenant_id_tenants_id_fk",
-          "tableFrom": "meeting_minutes",
-          "tableTo": "tenants",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "meeting_minutes_updated_by_user_id_users_id_fk": {
-          "name": "meeting_minutes_updated_by_user_id_users_id_fk",
-          "tableFrom": "meeting_minutes",
-          "tableTo": "users",
-          "columnsFrom": [
-            "updated_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "meeting_minutes_meeting_fk": {
-          "name": "meeting_minutes_meeting_fk",
-          "tableFrom": "meeting_minutes",
-          "tableTo": "meetings",
-          "columnsFrom": [
-            "tenant_id",
-            "meeting_id"
-          ],
-          "columnsTo": [
-            "tenant_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "meeting_minutes_tenant_id_uq": {
-          "name": "meeting_minutes_tenant_id_uq",
-          "nullsNotDistinct": false,
-          "columns": [
-            "tenant_id",
-            "id"
-          ]
-        },
-        "meeting_minutes_meeting_uq": {
-          "name": "meeting_minutes_meeting_uq",
-          "nullsNotDistinct": false,
-          "columns": [
-            "tenant_id",
-            "meeting_id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "meeting_minutes_length_ck": {
-          "name": "meeting_minutes_length_ck",
-          "value": "coalesce(char_length(\"meeting_minutes\".\"summary\"), 0) <= 10000 and coalesce(char_length(\"meeting_minutes\".\"agreements\"), 0) <= 5000 and coalesce(char_length(\"meeting_minutes\".\"external_body\"), 0) <= 10000"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.meeting_participants": {
       "name": "meeting_participants",
       "schema": "",
@@ -4385,6 +4232,318 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.visit_plan_lines": {
+      "name": "visit_plan_lines",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plan_id": {
+          "name": "plan_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "company_id": {
+          "name": "company_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "planned_visits": {
+          "name": "planned_visits",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "visit_plan_lines_tenant_company_idx": {
+          "name": "visit_plan_lines_tenant_company_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "visit_plan_lines_tenant_id_tenants_id_fk": {
+          "name": "visit_plan_lines_tenant_id_tenants_id_fk",
+          "tableFrom": "visit_plan_lines",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "visit_plan_lines_plan_fk": {
+          "name": "visit_plan_lines_plan_fk",
+          "tableFrom": "visit_plan_lines",
+          "tableTo": "visit_plans",
+          "columnsFrom": [
+            "tenant_id",
+            "plan_id"
+          ],
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "visit_plan_lines_company_fk": {
+          "name": "visit_plan_lines_company_fk",
+          "tableFrom": "visit_plan_lines",
+          "tableTo": "companies",
+          "columnsFrom": [
+            "tenant_id",
+            "company_id"
+          ],
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "visit_plan_lines_tenant_id_uq": {
+          "name": "visit_plan_lines_tenant_id_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "tenant_id",
+            "id"
+          ]
+        },
+        "visit_plan_lines_company_uq": {
+          "name": "visit_plan_lines_company_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "plan_id",
+            "company_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "visit_plan_lines_planned_ck": {
+          "name": "visit_plan_lines_planned_ck",
+          "value": "\"visit_plan_lines\".\"planned_visits\" between 1 and 99"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.visit_plans": {
+      "name": "visit_plans",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "salesperson_user_id": {
+          "name": "salesperson_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_type": {
+          "name": "period_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_start": {
+          "name": "period_start",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_end": {
+          "name": "period_end",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by_user_id": {
+          "name": "created_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "visit_plans_tenant_period_idx": {
+          "name": "visit_plans_tenant_period_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "period_start",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "visit_plans_tenant_id_tenants_id_fk": {
+          "name": "visit_plans_tenant_id_tenants_id_fk",
+          "tableFrom": "visit_plans",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "visit_plans_salesperson_user_id_users_id_fk": {
+          "name": "visit_plans_salesperson_user_id_users_id_fk",
+          "tableFrom": "visit_plans",
+          "tableTo": "users",
+          "columnsFrom": [
+            "salesperson_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "visit_plans_created_by_user_id_users_id_fk": {
+          "name": "visit_plans_created_by_user_id_users_id_fk",
+          "tableFrom": "visit_plans",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "visit_plans_tenant_id_uq": {
+          "name": "visit_plans_tenant_id_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "tenant_id",
+            "id"
+          ]
+        },
+        "visit_plans_period_uq": {
+          "name": "visit_plans_period_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "tenant_id",
+            "salesperson_user_id",
+            "period_type",
+            "period_start"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "visit_plans_period_type_ck": {
+          "name": "visit_plans_period_type_ck",
+          "value": "\"visit_plans\".\"period_type\" in ('month', 'quarter')"
+        },
+        "visit_plans_period_ck": {
+          "name": "visit_plans_period_ck",
+          "value": "\"visit_plans\".\"period_end\" > \"visit_plans\".\"period_start\""
+        }
+      },
       "isRLSEnabled": false
     },
     "public.daily_digests": {

@@ -1,6 +1,6 @@
 {
-  "id": "3bc12643-3cb0-4ea2-92f8-b129f7d026d6",
-  "prevId": "5f27cd3c-d8fb-49a6-9c11-25aba727ce05",
+  "id": "f6eeeccc-f7a7-45c4-aca7-7fba3f554234",
+  "prevId": "137f5810-24f6-45cf-a832-149c119d3a74",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3250,6 +3250,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "external_updated_at": {
+          "name": "external_updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "external_updated_by_user_id": {
+          "name": "external_updated_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "updated_by_user_id": {
           "name": "updated_by_user_id",
           "type": "uuid",
@@ -3284,6 +3296,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "meeting_minutes_external_updated_by_user_id_users_id_fk": {
+          "name": "meeting_minutes_external_updated_by_user_id_users_id_fk",
+          "tableFrom": "meeting_minutes",
+          "tableTo": "users",
+          "columnsFrom": [
+            "external_updated_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "meeting_minutes_updated_by_user_id_users_id_fk": {
@@ -3339,6 +3364,409 @@
         "meeting_minutes_length_ck": {
           "name": "meeting_minutes_length_ck",
           "value": "coalesce(char_length(\"meeting_minutes\".\"summary\"), 0) <= 10000 and coalesce(char_length(\"meeting_minutes\".\"agreements\"), 0) <= 5000 and coalesce(char_length(\"meeting_minutes\".\"external_body\"), 0) <= 10000"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.meeting_minutes_recipients": {
+      "name": "meeting_minutes_recipients",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "send_id": {
+          "name": "send_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "meeting_id": {
+          "name": "meeting_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contact_id": {
+          "name": "contact_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'queued'"
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sent_at": {
+          "name": "sent_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "meeting_minutes_recipients_tenant_send_idx": {
+          "name": "meeting_minutes_recipients_tenant_send_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "send_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "meeting_minutes_recipients_tenant_meeting_idx": {
+          "name": "meeting_minutes_recipients_tenant_meeting_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "meeting_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "meeting_minutes_recipients_tenant_contact_idx": {
+          "name": "meeting_minutes_recipients_tenant_contact_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "contact_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "meeting_minutes_recipients_tenant_id_tenants_id_fk": {
+          "name": "meeting_minutes_recipients_tenant_id_tenants_id_fk",
+          "tableFrom": "meeting_minutes_recipients",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "meeting_minutes_recipients_user_id_users_id_fk": {
+          "name": "meeting_minutes_recipients_user_id_users_id_fk",
+          "tableFrom": "meeting_minutes_recipients",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "meeting_minutes_recipients_send_fk": {
+          "name": "meeting_minutes_recipients_send_fk",
+          "tableFrom": "meeting_minutes_recipients",
+          "tableTo": "meeting_minutes_sends",
+          "columnsFrom": [
+            "tenant_id",
+            "send_id"
+          ],
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "meeting_minutes_recipients_meeting_fk": {
+          "name": "meeting_minutes_recipients_meeting_fk",
+          "tableFrom": "meeting_minutes_recipients",
+          "tableTo": "meetings",
+          "columnsFrom": [
+            "tenant_id",
+            "meeting_id"
+          ],
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "meeting_minutes_recipients_tenant_id_uq": {
+          "name": "meeting_minutes_recipients_tenant_id_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "tenant_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "meeting_minutes_recipients_kind_ck": {
+          "name": "meeting_minutes_recipients_kind_ck",
+          "value": "\"meeting_minutes_recipients\".\"kind\" in ('to', 'cc') and (\"meeting_minutes_recipients\".\"kind\" = 'cc' or \"meeting_minutes_recipients\".\"user_id\" is null) and (\"meeting_minutes_recipients\".\"kind\" = 'to' or \"meeting_minutes_recipients\".\"contact_id\" is null)"
+        },
+        "meeting_minutes_recipients_status_ck": {
+          "name": "meeting_minutes_recipients_status_ck",
+          "value": "\"meeting_minutes_recipients\".\"status\" in ('queued', 'sent', 'failed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.meeting_minutes_sends": {
+      "name": "meeting_minutes_sends",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "meeting_id": {
+          "name": "meeting_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sender_user_id": {
+          "name": "sender_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sender_name": {
+          "name": "sender_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sender_email": {
+          "name": "sender_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subject": {
+          "name": "subject",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "language": {
+          "name": "language",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "meeting_minutes_sends_tenant_meeting_idx": {
+          "name": "meeting_minutes_sends_tenant_meeting_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "meeting_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "meeting_minutes_sends_tenant_id_tenants_id_fk": {
+          "name": "meeting_minutes_sends_tenant_id_tenants_id_fk",
+          "tableFrom": "meeting_minutes_sends",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "meeting_minutes_sends_sender_user_id_users_id_fk": {
+          "name": "meeting_minutes_sends_sender_user_id_users_id_fk",
+          "tableFrom": "meeting_minutes_sends",
+          "tableTo": "users",
+          "columnsFrom": [
+            "sender_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "meeting_minutes_sends_meeting_fk": {
+          "name": "meeting_minutes_sends_meeting_fk",
+          "tableFrom": "meeting_minutes_sends",
+          "tableTo": "meetings",
+          "columnsFrom": [
+            "tenant_id",
+            "meeting_id"
+          ],
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "meeting_minutes_sends_tenant_id_uq": {
+          "name": "meeting_minutes_sends_tenant_id_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "tenant_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "meeting_minutes_sends_language_ck": {
+          "name": "meeting_minutes_sends_language_ck",
+          "value": "\"meeting_minutes_sends\".\"language\" in ('en', 'sr')"
+        },
+        "meeting_minutes_sends_length_ck": {
+          "name": "meeting_minutes_sends_length_ck",
+          "value": "char_length(\"meeting_minutes_sends\".\"subject\") <= 300 and char_length(\"meeting_minutes_sends\".\"body\") <= 10000"
         }
       },
       "isRLSEnabled": false

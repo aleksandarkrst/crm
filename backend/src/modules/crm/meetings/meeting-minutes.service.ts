@@ -70,7 +70,7 @@ const blankToNull = (v: string | null | undefined) => (v === undefined ? undefin
  *
  * Saving with If-Match (the minutes' updatedAt; the epoch when there were none yet) refuses a
  * field someone else changed since, with the usual conflict message: the minutes' changes are
- * history rows of the meeting (drizzle/0031_meeting_minutes_rls.sql).
+ * history rows of the meeting (drizzle/0034_meeting_minutes_rls.sql).
  */
 @Injectable()
 export class MeetingMinutesService {

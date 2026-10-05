@@ -29,6 +29,11 @@ export interface JobPayloads {
   'crm.meeting-minutes-email': { tenantId: string; sendId: string };
   /** Sent by identity when someone removes a member or a member leaves; CRM takes them off future meetings (CD-131). */
   'identity.member-removed': { tenantId: string; userId: string };
+  /**
+   * Sent by CRM when someone other than the salesperson creates or changes their visit plan
+   * (CD-134). The notifications module emails the salesperson if they want that.
+   */
+  'crm.visit-plan-email': { tenantId: string; planId: string; actorUserId: string; kind: 'created' | 'changed' };
   /** Sent by identity when an invitation is created or resent; identity's worker handler emails it (CD-7). */
   'identity.invitation-email': { tenantId: string; invitationId: string };
   /** Sent by identity when someone creates an account with email; the worker emails the confirmation link (CD-114). */
@@ -49,6 +54,7 @@ export const JOB_NAMES = [
   'crm.generate-document',
   'crm.meeting-invite',
   'crm.meeting-minutes-email',
+  'crm.visit-plan-email',
   'identity.invitation-email',
   'identity.member-removed',
   'identity.signup-email',
@@ -58,4 +64,4 @@ export const JOB_NAMES = [
 ] as const satisfies readonly JobName[];
 
 /** Jobs that send email: retried MAIL_RETRY_LIMIT times with backoff from MAIL_RETRY_DELAY_SECONDS. */
-export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest']);
+export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest']);

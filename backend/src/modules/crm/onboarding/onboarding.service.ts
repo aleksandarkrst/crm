@@ -25,6 +25,7 @@ import {
   type SampleKind,
   sampleRecords,
   tenants,
+  visitPlanLines,
 } from '../../../shared/database/schema';
 import { StageHistoryService } from '../deals/stage-history.service';
 import { SAMPLE_COMPANIES, SAMPLE_CONTACTS, SAMPLE_DEALS, SAMPLE_PRODUCTS, SAMPLE_SOURCE, type SampleDeal } from './sample-data';
@@ -209,7 +210,8 @@ export class OnboardingService {
           const usedByDeals = await tx.select({ id: deals.companyId }).from(deals).where(inArray(deals.companyId, ids.company));
           const usedByContacts = await tx.select({ id: contacts.companyId }).from(contacts).where(inArray(contacts.companyId, ids.company));
           const usedByMeetings = await tx.select({ id: meetings.companyId }).from(meetings).where(inArray(meetings.companyId, ids.company));
-          const keep = new Set([...usedByDeals, ...usedByContacts, ...usedByMeetings].map((u) => u.id));
+          const usedByPlans = await tx.select({ id: visitPlanLines.companyId }).from(visitPlanLines).where(inArray(visitPlanLines.companyId, ids.company));
+          const keep = new Set([...usedByDeals, ...usedByContacts, ...usedByMeetings, ...usedByPlans].map((u) => u.id));
           const drop = ids.company.filter((id) => !keep.has(id));
           if (drop.length) removed.company = (await tx.delete(companies).where(inArray(companies.id, drop)).returning({ id: companies.id })).length;
           kept.company = keep.size;

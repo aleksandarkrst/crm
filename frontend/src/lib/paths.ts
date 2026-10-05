@@ -15,6 +15,8 @@ export const paths = {
   today: '/today',
   calendar: (params?: CalendarParams) => '/calendar' + query(params),
   meeting: (id: string) => '/meetings/' + encodeURIComponent(id),
+  visitPlans: '/visit-plans',
+  visitPlan: (id: string) => '/visit-plans/' + encodeURIComponent(id),
   companies: '/companies',
   company: (id: string) => '/companies/' + encodeURIComponent(id),
   contacts: '/contacts',
