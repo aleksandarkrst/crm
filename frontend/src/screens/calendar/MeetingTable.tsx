@@ -16,7 +16,7 @@ export function MeetingTable({ meetings, sort, onSort, onOpen, more }: { meeting
   const { s } = useStore();
   const tz = s.workspace.timezone;
   return (
-    <div className="card" style={{ overflow: 'hidden' }} data-testid="meeting-table">
+    <div className="card meeting-table" data-testid="meeting-table">
       <div className="table-head" style={{ gridTemplateColumns: COLS }}>
         <button type="button" className="sort-btn" data-testid="sort-start" onClick={onSort} style={{ color: 'var(--ink)' }}>
           <span>Start</span>
