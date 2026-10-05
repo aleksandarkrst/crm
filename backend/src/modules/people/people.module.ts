@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ABSENCE_SOURCE, nobodyAbsent } from './approvers';
+import { EmployeesBulkController } from './employees-bulk.controller';
+import { EmployeesBulkService } from './employees-bulk.service';
 import { EmployeesController } from './employees.controller';
 import { EmployeesService } from './employees.service';
 import { PeopleAccess } from './people-access';
@@ -12,8 +14,8 @@ import { PeopleHistoryService } from './people-history.service';
  * Milestone 16 replaces ABSENCE_SOURCE with the real time-off source.
  */
 @Module({
-  controllers: [EmployeesController, PeopleController],
-  providers: [PeopleAccess, PeopleHistoryService, EmployeesService, { provide: ABSENCE_SOURCE, useValue: nobodyAbsent }],
+  controllers: [EmployeesController, EmployeesBulkController, PeopleController],
+  providers: [PeopleAccess, PeopleHistoryService, EmployeesService, EmployeesBulkService, { provide: ABSENCE_SOURCE, useValue: nobodyAbsent }],
   exports: [PeopleAccess],
 })
 export class PeopleModule {}
