@@ -517,6 +517,92 @@ export interface VisitPlanInput {
   note?: string | null;
   lines: { companyId: string; plannedVisits: number }[];
 }
+/**
+ * Visit plan tracking (CD-135): planned vs. held Customer visits, all counted by the backend's one
+ * counting function (visit-counting.ts). `pace`: done at 100%, behind below the share of the
+ * period passed (`expectedPace`), notStarted before the period, onTrack otherwise.
+ */
+export type VisitPace = 'done' | 'behind' | 'notStarted' | 'onTrack';
+export interface ApiVisitTotals {
+  planned: number;
+  /** Held visits counted toward completion: at most the planned number per customer. */
+  heldCapped: number;
+  /** Held visits at the plan's customers, uncapped. */
+  held: number;
+  upcoming: number;
+  notClosed: number;
+  /** Held visits at customers outside the plan. */
+  unplanned: number;
+  overPlan: number;
+  /** 0..1 */
+  completion: number;
+  /** 0..1, the share of the period that has passed. */
+  expectedPace: number;
+  pace: VisitPace;
+}
+export interface ApiVisitLineProgress {
+  companyId: string;
+  companyName: string;
+  planned: number;
+  held: number;
+  heldCapped: number;
+  upcoming: number;
+  notClosed: number;
+  overPlan: number;
+  completion: number;
+  heldMeetingIds: string[];
+  upcomingMeetingIds: string[];
+  notClosedMeetingIds: string[];
+}
+export interface ApiVisitPlanProgress {
+  planId: string;
+  salespersonUserId: string;
+  periodType: VisitPlanPeriodType;
+  periodStart: string;
+  periodEnd: string;
+  periodLabel: string;
+  lines: ApiVisitLineProgress[];
+  unplanned: { companyId: string; companyName: string; held: number; meetingIds: string[] }[];
+  totals: ApiVisitTotals;
+  meetings: Record<string, { id: string; title: string; startsAt: string; endsAt: string; status: MeetingStatus; companyName: string }>;
+}
+export interface ApiVisitReportRow extends ApiVisitTotals {
+  salespersonUserId: string;
+  salespersonName: string;
+  /** null: no plan for the period, only unplanned visits. */
+  planId: string | null;
+}
+interface ApiVisitPeriod {
+  periodType: VisitPlanPeriodType;
+  periodStart: string;
+  periodEnd: string;
+  periodLabel: string;
+}
+export interface ApiVisitReport extends ApiVisitPeriod {
+  companyId: string | null;
+  rows: ApiVisitReportRow[];
+  totals: ApiVisitTotals;
+}
+export interface ApiVisitSummary extends ApiVisitPeriod, ApiVisitTotals {
+  salespersonUserId: string | null;
+  plans: { id: string; salespersonUserId: string; salespersonName: string }[];
+}
+export interface VisitPeriodQuery {
+  periodType: VisitPlanPeriodType;
+  periodStart?: string;
+  salespersonUserId?: string;
+  companyId?: string;
+  all?: boolean;
+}
+const visitQuery = (q: VisitPeriodQuery) => {
+  const p = new URLSearchParams({ periodType: q.periodType });
+  if (q.periodStart) p.set('periodStart', q.periodStart);
+  if (q.salespersonUserId) p.set('salespersonUserId', q.salespersonUserId);
+  if (q.companyId) p.set('companyId', q.companyId);
+  if (q.all) p.set('all', '1');
+  return '?' + p.toString();
+};
+
 /** The body of a 409 from an update with If-Match: someone changed these fields meanwhile. */
 export interface ApiConflict {
   message: string;
@@ -767,6 +853,13 @@ export const crmApi = {
   /** `lines` replaces the plan's lines. */
   updateVisitPlan: (id: string, input: Partial<VisitPlanInput>, version?: string) => api<ApiVisitPlan>(`/crm/visit-plans/${id}`, { method: 'PATCH', json: input, headers: ifMatch(version) }),
   deleteVisitPlan: (id: string) => api(`/crm/visit-plans/${id}`, { method: 'DELETE' }),
+  visitPlanProgress: (id: string) => api<ApiVisitPlanProgress>(`/crm/visit-plans/${id}/progress`),
+  /** The totals of several plans (≤200), for the list. */
+  visitPlansProgress: (ids: readonly string[]) => api<{ progress: { planId: string; totals: ApiVisitTotals }[] }>(`/crm/visit-plans/progress?ids=${ids.join(',')}`).then((r) => r.progress),
+  /** Reports → Visit-plan completion (owners and admins). */
+  visitReport: (q: VisitPeriodQuery) => api<ApiVisitReport>('/crm/visit-plans/report' + visitQuery(q)),
+  /** The Overview card and the company card; members always get their own. */
+  visitSummary: (q: VisitPeriodQuery) => api<ApiVisitSummary>('/crm/visit-plans/progress-summary' + visitQuery(q)),
   history: (entityType: HistoryEntity, entityId: string, offset = 0, limit = 30) =>
     api<{ entries: ApiHistoryEntry[]; more: boolean }>(`/crm/history?entityType=${entityType}&entityId=${entityId}&limit=${limit}&offset=${offset}`),
 

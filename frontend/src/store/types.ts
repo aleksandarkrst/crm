@@ -425,4 +425,9 @@ export interface State {
   meetingLists: Record<string, MeetingList>;
   /** The New / Edit meeting dialog; null when closed. */
   meetingDialog: MeetingDialogSeed | null;
+  /**
+   * Goes up on every meeting or visit plan change (live hints, this tab's own included): visit
+   * plan progress on screen (CD-135) is counted again (store/useVisitProgress.ts).
+   */
+  visitRev: number;
 }
