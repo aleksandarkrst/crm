@@ -332,7 +332,10 @@ export class EmployeesService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const access = await this.access.of(ctx, tx);
-        const [current] = await tx.select().from(employees).where(eq(employees.id, id)).for('update');
+        // A manager change takes the workspace's reporting-line lock before any row lock, so two
+        // crossing changes (A → B, B → A) queue instead of deadlocking on each other's rows.
+        if (input.managerId !== undefined) await lockReportingLines(tx, ctx.tenantId);
+        const [current] = await tx.select().from(employees).where(eq(employees.id, id)).for('no key update');
         if (!current || (current.deactivatedAt && !access.canSeeInactive)) throw new NotFoundException('Employee not found');
         const settings = await this.settings(tx, ctx.tenantId);
 
@@ -340,7 +343,7 @@ export class EmployeesService {
         const allowed = new Set<string>(editableFields(access, id, settings.selfEditBank));
         const refused = sent.filter((f) => !allowed.has(f));
         if (refused.length) throw new ForbiddenException(refusal(access, id, refused, settings.selfEditBank));
-        if (input.managerId && input.managerId === access.employeeId && !access.isAdmin) throw new ForbiddenException("Only an Admin can make themselves someone's manager");
+        if (input.managerId && input.managerId !== current.managerId && input.managerId === access.employeeId && !access.isAdmin) throw new ForbiddenException("Only an Admin can make themselves someone's manager");
         if (settings.numberRequired && input.employeeNumber === null) throw new BadRequestException('The employee number is required in this workspace');
 
         const [currentPersonal] = await tx.select().from(employeePersonal).where(eq(employeePersonal.employeeId, id));
@@ -356,7 +359,6 @@ export class EmployeesService {
           Object.assign(work, await this.resolveOrg(tx, { departmentId: current.departmentId, teamId: current.teamId }, input));
         }
         if (input.managerId !== undefined && input.managerId !== current.managerId) {
-          await lockReportingLines(tx, ctx.tenantId);
           await assertValidManager(tx, id, input.managerId);
           work.managerId = input.managerId;
         }

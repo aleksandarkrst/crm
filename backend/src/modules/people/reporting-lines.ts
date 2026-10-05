@@ -7,7 +7,8 @@ import { employees } from '../../shared/database/schema';
  * Reporting lines (spec 7.2): one manager per employee, never yourself, never a loop. Every change
  * of a manager (the card, bulk actions, team-lead dialogs, deactivation, import) must:
  *   1. `await lockReportingLines(tx, tenantId)` — a per-workspace transaction lock, so two
- *      simultaneous edits (A → B and B → A) can't both pass the check;
+ *      simultaneous edits (A → B and B → A) can't both pass the check. Take it first, before
+ *      locking employee rows (otherwise the two edits can deadlock on each other's rows);
  *   2. `await assertValidManager(tx, employeeId, managerId)` for each change, after the lock;
  *   3. write, in the same transaction.
  */
