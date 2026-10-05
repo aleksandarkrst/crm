@@ -129,6 +129,18 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
       return result;
     },
 
+    /** "Add employee": the new card, or why not. */
+    create: async (input: EmployeePatch): Promise<CardResult> => {
+      try {
+        const card = await peopleCardApi.create(input);
+        put(card);
+        void loadPickers();
+        return { card };
+      } catch (err) {
+        return { error: errText(err) };
+      }
+    },
+
     /** The full IBAN ("Show" and "Copy"); the server writes "IBAN viewed" to the audit log each time. */
     reveal: async (id: string, account: 'iban' | 'fxIban') => {
       try {

@@ -127,6 +127,19 @@ describe('employee card', () => {
     await olga.waitForFunction(() => /Deactivated/.test(document.querySelector('[data-testid=emp-history]')?.textContent ?? ''));
   });
 
+  step('"Add employee" on the Org structure page opens the new card', async () => {
+    await olga.goto(`${BASE_URL}/org?tab=list`, { waitUntil: 'networkidle0' });
+    await click(olga, '[data-testid=org-add-employee]');
+    await olga.waitForSelector('.modal input[name=firstName]');
+    await olga.type('.modal input[name=firstName]', 'Nova');
+    await olga.type('.modal input[name=lastName]', 'Zaposlena');
+    await olga.type('.modal input[name=workEmail]', email('card-nova'));
+    await click(olga, '[data-testid=add-employee-save]');
+    await olga.waitForFunction(() => /^\/people\/[0-9a-f-]{36}$/.test(location.pathname));
+    await olga.waitForFunction(() => document.querySelector('[data-testid=emp-name]')?.textContent === 'Nova Zaposlena');
+    assert.equal(await textOf(olga, '[data-testid=emp-account]'), 'No account');
+  });
+
   step('on a phone the card fits and its actions are in the menu', async () => {
     await mia.setViewport(PHONE);
     await mia.goto(`${BASE_URL}/people/${miaEmployee}`, { waitUntil: 'networkidle0' });

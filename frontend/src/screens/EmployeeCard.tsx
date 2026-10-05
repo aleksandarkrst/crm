@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Screen } from '../components/Layout';
 import type { ApiEmployeeCard } from '../lib/api';
+import { paths } from '../lib/paths';
 import { ROLE_LABEL } from '../store/employeeCard';
 import { initialsOf } from '../store/selectors';
 import { useStore } from '../store/store';
@@ -11,7 +12,7 @@ import { dateLabel } from './employee/parts';
 import { AppAccessSection, BankSection, HistorySection, PersonalSection, ReportingSection, RolesSection, WorkSection } from './employee/sections';
 
 /** The Org structure page (CD-137). */
-const ORG = '/org';
+const ORG = paths.org();
 
 type Dialog = 'invite' | 'link' | 'deactivate' | 'reactivate' | null;
 

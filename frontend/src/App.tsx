@@ -17,6 +17,7 @@ const EmployeeCard = lazy(() => import('./screens/EmployeeCard').then((m) => ({ 
 const Dashboard = lazy(() => import('./screens/Dashboard').then((m) => ({ default: m.Dashboard })));
 const Meeting = lazy(() => import('./screens/Meeting').then((m) => ({ default: m.Meeting })));
 const LeadScreen = lazy(() => import('./screens/lead/LeadScreen').then((m) => ({ default: m.LeadScreen })));
+const OrgStructure = lazy(() => import('./screens/OrgStructure').then((m) => ({ default: m.OrgStructure })));
 const Pipeline = lazy(() => import('./screens/Pipeline').then((m) => ({ default: m.Pipeline })));
 const Products = lazy(() => import('./screens/Products').then((m) => ({ default: m.Products })));
 const Profile = lazy(() => import('./screens/Profile').then((m) => ({ default: m.Profile })));
@@ -110,6 +111,7 @@ function AppRoutes() {
           <Route path="contacts/:id" element={<Contact />} />
           <Route path="deals/:id" element={<LeadScreen />} />
           <Route path="products" element={<Products />} />
+          <Route path="org" element={<OrgStructure />} />
           <Route path="people/:id" element={<EmployeeCard />} />
           <Route path="reports" element={<Navigate to={paths.reports()} replace />} />
           <Route path="reports/:tab" element={<Reports />} />
