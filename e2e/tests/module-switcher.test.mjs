@@ -52,7 +52,7 @@ describe('module and workspace switcher', () => {
     assert.deepEqual(rows.find((m) => m.current)?.id, 'crm');
     // One workspace: no workspace row, its name next to "Modules".
     assert.equal(await page.$(`${POP} .mod-ws-row`), null);
-    assert.equal(await page.$eval(`${POP} .mod-label-ws`, (el) => el.textContent.includes(firstWorkspace)), true);
+    assert.ok((await page.$eval(`${POP} .mod-label-ws`, (el) => el.textContent)).includes(firstWorkspace));
     // An owner opens Reporting; modules that aren't built yet are locked.
     assert.deepEqual(
       rows.filter((m) => m.locked).map((m) => [m.id, m.sub]),
