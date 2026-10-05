@@ -9,7 +9,7 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 /**
  * The Month view (CD-130): whole weeks, each day with up to three meetings and "+N more" (which
- * opens the day). Clicking a day's empty space starts a meeting at 09:00; a planned meeting the
+ * opens the day). Clicking a day's empty space starts a meeting at 09:00 (the quick-create popover, CD-212); a planned meeting the
  * user may edit can be dragged to another day (same time).
  */
 export function MonthGrid({
@@ -22,6 +22,7 @@ export function MonthGrid({
   onDay,
   canDrag,
   onReschedule,
+  draftDay,
 }: {
   days: string[];
   /** "2026-10": days outside it are dimmed. */
@@ -33,6 +34,8 @@ export function MonthGrid({
   onDay: (date: string) => void;
   canDrag: (m: ApiMeeting) => boolean;
   onReschedule: (m: ApiMeeting, startsAt: string, endsAt: string) => void;
+  /** The day a meeting is being made on (the quick-create popover sits next to it, CD-212). */
+  draftDay?: string | null;
 }) {
   const byDay = useMemo(() => bucketByDay(days, meetings, tz), [days, meetings, tz]);
   const today = todayIn(tz);
@@ -63,7 +66,7 @@ export function MonthGrid({
           return (
             <div
               key={d}
-              className={'cal-cell' + (d.startsWith(month) ? '' : ' other') + (d === today ? ' today' : '') + (over === d ? ' over' : '')}
+              className={'cal-cell' + (d.startsWith(month) ? '' : ' other') + (d === today ? ' today' : '') + (over === d ? ' over' : '') + (draftDay === d ? ' drafting' : '')}
               data-day={d}
               onClick={(e) => e.target === e.currentTarget && onCreate(new Date(zonedToInstant(d, 9 * 60, tz)).toISOString())}
               onDragOver={(e) => {
