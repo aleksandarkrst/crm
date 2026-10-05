@@ -147,6 +147,12 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
     return `${name} · ${Number(v.quantity)} × ${money(Number(v.unitPrice), cur)}`;
   };
 
+  /** A meeting participant (CD-130): "Ana Kovač (internal)". */
+  const person = (e: ApiHistoryEntry) => {
+    const v = ((e.action === 'participant_added' ? e.newValue : e.oldValue) ?? {}) as { kind?: string; name?: string };
+    const name = e.label ?? v.name ?? 'someone';
+    return `${name} (${v.kind === 'external' ? 'external' : 'internal'})`;
+  };
   /** One change in words; null for a row folded into another (the note of a loss). */
   const describe = (e: ApiHistoryEntry, all: ApiHistoryEntry[]) => {
     switch (e.action) {
@@ -158,6 +164,9 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
         return <>Added a product line: {line(e.newValue as Record<string, unknown>, e.label)}</>;
       case 'line_removed':
         return <>Removed a product line: {line(e.oldValue as Record<string, unknown>, e.label)}</>;
+      case 'participant_added':
+      case 'participant_removed':
+        return <>{e.action === 'participant_added' ? 'Added' : 'Removed'} {person(e)}</>;
       case 'line_changed': {
         const before = (e.oldValue ?? {}) as Record<string, unknown>;
         const after = (e.newValue ?? {}) as Record<string, unknown>;

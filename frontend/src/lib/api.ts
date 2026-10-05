@@ -468,7 +468,8 @@ export interface ApiInvitePreview {
 /** One change of a deal, company or contact (CD-69), newest first from GET /crm/history. */
 export interface ApiHistoryEntry {
   id: string;
-  action: 'created' | 'updated' | 'deleted' | 'line_added' | 'line_changed' | 'line_removed';
+  /** participant_*: a meeting's participant (CD-130); `label` is the name, the value `{ kind, userId, contactId, name }`. */
+  action: 'created' | 'updated' | 'deleted' | 'line_added' | 'line_changed' | 'line_removed' | 'participant_added' | 'participant_removed';
   /** The API's field name (title, ownerUserId, stageId, …); "line" for deal lines. */
   field: string | null;
   oldValue: unknown;
