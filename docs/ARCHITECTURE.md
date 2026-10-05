@@ -502,12 +502,14 @@ The worker fetches up to 10 jobs of a queue at a time (and again straight away w
 back full) and settles each job on its own, so one failing email doesn't retry the others. A
 handler gets `{ retryCount, retryLimit, lastAttempt }` to tell a final failure from one that will
 be retried. Modules register their own handlers through a worker module exported from their
-`index.ts` (`IdentityWorkerModule`, `NotificationsWorkerModule`).
+`index.ts` (`CrmWorkerModule`, `IdentityWorkerModule`, `NotificationsWorkerModule`).
 
 | Job | Sent by | Handled by |
 |---|---|---|
 | `crm.deal-won` | CRM, deal enters the won stage | worker placeholder (future projects handover) |
 | `crm.deal-assigned` | CRM, someone else becomes a deal's owner (create or change) | notifications: "deal assigned to you" email |
+| `crm.meeting-invite` | CRM, someone else adds a member to a planned meeting, or moves, cancels or restores one (one job per member) | CRM worker (`CrmWorkerModule`): the meeting email with an .ics |
+| `identity.member-removed` | identity, a member is removed or leaves | CRM worker: off future planned meetings, "Organizer left" where they organized |
 | `identity.invitation-email` | identity, invitation created or resent | identity: the invitation email |
 | `notifications.digest-tick` | cron, every 15 minutes | notifications: queues the digests that are due |
 | `notifications.daily-digest` | the tick (or `POST /api/dev/digest`) | notifications: one member's digest |
@@ -527,6 +529,10 @@ picks:
   `notDelivered`, and the jobs record invitations and digests as failed instead of sent (CD-84).
 - `smtp`: nodemailer with `SMTP_URL` (e.g. `smtps://USER:PASSWORD@smtp.postmarkapp.com:465`) and
   `MAIL_FROM`; any provider with SMTP works (Postmark, Resend, SES, Mailgun).
+
+A message may carry text attachments (`attachments: [{ filename, contentType, content }]`, CD-131,
+used for the meeting .ics): the smtp driver hands them to nodemailer; the log driver logs their
+names and keeps them, content included, in memory and the outbox, so tests can read them.
 
 Mail jobs (`MAIL_JOBS` in `job-types.ts`) are retried `MAIL_RETRY_LIMIT` times (default 4) with
 exponential backoff from `MAIL_RETRY_DELAY_SECONDS` (default 30). Emails are plain text plus a
@@ -988,8 +994,7 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`.
 - **Related records**: a company with meetings can't be deleted (409, like deals; "Remove sample
   data" keeps a sample company that has meetings); deleting a deal unlinks its meetings
   (`ON DELETE SET NULL (deal_id)`); deleting a contact keeps their row on the meeting with the
-  saved name (`ON DELETE SET NULL (contact_id)`). Removing people from upcoming meetings when a
-  contact is deleted or a member leaves is CD-131.
+  saved name (`ON DELETE SET NULL (contact_id)`). For upcoming meetings see "Participants" below.
 - **Conflicts and history**: `updated_at` is the If-Match version (`crm_touch_version`) and PATCH
   checks field-level conflicts as deals do. `record_changes` gets `entity_type = 'meeting'`: the
   fields (`title`, `type`, `startsAt`, `endsAt`, `location`, `agenda`, `companyId`, `dealId`,
@@ -1001,6 +1006,44 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`.
   their meeting's id (`crm_notify_changes` takes the id column as an optional second argument).
 - **Daily digest**: see "Daily digest" above (meetings today, not closed, and a planned meeting
   ahead counts as a next step).
+
+### Participants and meeting emails (CD-131)
+
+- **Who**: members (internal; the organizer always, and can't be removed) and contacts (external).
+  People can be added and removed while a meeting is planned or held, not while cancelled. A
+  meeting is on the calendar of everyone internal (`userId` filter) and on the contact page of
+  everyone external (`contactId`).
+- **Emails go to internal participants only** (decision on CD-131: customers get no invitations;
+  the external minutes, CD-133, are the only email to them). `MeetingsService` queues
+  `crm.meeting-invite` `{ tenantId, meetingId, userIds: [one member], actorUserId, kind }` in the
+  same transaction, never for the person making the change:
+  - `added`: members someone else adds to a planned meeting (on create: everyone but the creator,
+    the organizer included when that is someone else; on PATCH: the newly added ones, e.g. a new
+    organizer). Subject "You were added to a meeting: <title>".
+  - `updated`: a planned meeting's start, end or location changed (other fields send nothing), and
+    Restore; to the internal participants not just added. "Meeting changed: <title>".
+  - `cancelled`: Cancel, to all internal participants. "Meeting cancelled: <title>".
+  `meetings.ics_sequence` goes up with every `updated` and `cancelled`, in the same update.
+- **The worker** (`meetings/meeting-jobs.ts`, `CrmWorkerModule`) reads everything again when it
+  sends: an `added`/`updated` email goes only while the meeting is planned, `cancelled` only while
+  it is cancelled; the member must still be on the meeting, in the workspace, have an email and
+  "Meeting invitations" on (`memberships.notify_meeting_invites`). One job per member, so a retry
+  never emails the others twice. Body: date and time in the workspace time zone, location,
+  company, deal, organizer and a link to `APP_URL/meetings/<id>`.
+- **The .ics** (`meetings/meeting-invite.ts`, pure and unit-tested): `meeting.ics` with content type
+  `text/calendar; charset=utf-8; method=REQUEST|CANCEL`; one VEVENT with `UID:meeting-<id>@pultly.com`,
+  `SEQUENCE` = `ics_sequence`, DTSTART/DTEND/DTSTAMP in UTC, SUMMARY, LOCATION, DESCRIPTION
+  (company, deal, link), URL, ORGANIZER (the organizer's name with the `MAIL_FROM` address) and the
+  recipient as ATTENDEE (`RSVP=FALSE`); a cancellation is `METHOD:CANCEL` + `STATUS:CANCELLED`.
+  Text is escaped and lines folded at 75 octets (RFC 5545), so Google Calendar and Outlook take it.
+- **Deleting a contact** removes their rows from planned meetings that start in the future, in the
+  contact's delete transaction; held, past and cancelled meetings keep them as "<name> (deleted)".
+- **A member leaving** (removed, or leaving themselves): `TeamService.removeMember` queues
+  `identity.member-removed` `{ tenantId, userId }`; the CRM worker takes them off planned meetings
+  that start in the future and sets `organizer_user_id = null` where they organized one ("Organizer
+  left"). Past meetings keep them (`deleted: true`, shown as "(former member)"). Nothing happens if
+  they rejoined before the job ran. Owners and admins see **Pick new organizer** on the meeting page
+  (a PATCH of `organizerUserId`; the new organizer gets the `added` email).
 
 ## Deal page (CD-83)
 
@@ -1045,13 +1088,18 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`.
   "Meeting with <company>", Customer visit, start + 60 minutes, the company's HQ for a visit, the
   company's only open deal, organizer = you, the deal's primary contact or the contact the dialog
   was opened from). Warns about colleagues' overlapping meetings and about a Customer visit
-  without external participants (the second click saves).
+  without external participants (the second click saves). The contact picker lists the meeting
+  company's contacts first and marks those without an email "No email"; its "+ Add new contact"
+  (CD-131) opens a small form (name from the search, email, job title) that creates a contact of
+  the meeting's company with the store's `createContact` (which returns the new id) and adds them.
 - **Meeting page** (`/meetings/:id`, `screens/Meeting.tsx`): header with type, status, time and
   location (a link when it is a URL), Mark as held (disabled before the start), Cancel (optional
   reason), Edit, Undo held, Restore, and Delete for owners and admins. Tabs: Internal minutes and
   External minutes (`screens/meeting/*`, CD-132/CD-133) and History (`ChangeHistory`, entity
   `meeting`). Who may change a meeting: `canEditMeeting` (owners, admins, organizer, internal
-  participants).
+  participants). Former members show as "<name> (former member)", deleted contacts as
+  "<name> (deleted)"; without an organizer it says "Organizer left", with **Pick new organizer**
+  for owners and admins (CD-131).
 - **Elsewhere**: a Meetings card on company, contact (as external participant) and deal pages
   (`components/MeetingsCard.tsx`: next three, "Show all" → Table filtered to the record,
   "+ Meeting" prefilled), "Meetings today" on Today, Calendar in the sidebar (after Today; under

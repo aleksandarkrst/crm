@@ -47,7 +47,7 @@ interface Draft {
  * `submitLabel` "Schedule meeting". `onDone` gets the saved meeting.
  */
 export function MeetingForm({ seed, onDone, onCancel, submitLabel }: { seed: MeetingDialogSeed; onDone: (m: ApiMeeting) => void; onCancel?: () => void; submitLabel?: string }) {
-  const { s, session, meetings, flash } = useStore();
+  const { s, session, meetings, flash, createContact } = useStore();
   const tz = s.workspace.timezone;
   const editing = seed.id ? s.meetings[seed.id] : undefined;
   const records = useMemo(() => companyRecords(s), [s]);
@@ -122,6 +122,18 @@ export function MeetingForm({ seed, onDone, onCancel, submitLabel }: { seed: Mee
   const [noExternalOk, setNoExternalOk] = useState(false);
   const [overlaps, setOverlaps] = useState<string[]>([]);
   const contactPicker = usePicker();
+  // "Add new contact" (spec 5.2): a contact of the meeting's company, made without leaving the dialog.
+  const [newContact, setNewContact] = useState<{ name: string; email: string; role: string } | null>(null);
+  const [addingContact, setAddingContact] = useState(false);
+  const addContact = async () => {
+    if (!newContact?.name.trim() || !d.companyId) return;
+    setAddingContact(true);
+    const id = await createContact({ name: newContact.name.trim(), email: newContact.email.trim(), role: newContact.role.trim(), phone: '', linkedin: '', buyerRole: 'Influencer', notes: '' }, undefined, undefined, d.companyId);
+    setAddingContact(false);
+    if (!id) return; // the store said why
+    setNewContact(null);
+    setD((x) => ({ ...x, external: x.external.includes(id) ? x.external : [...x.external, id] }));
+  };
 
   const company = records.find((c) => c.id === d.companyId);
   const startMs = d.date && d.time ? zonedToInstant(d.date, d.time, tz) : NaN;
@@ -415,8 +427,50 @@ export function MeetingForm({ seed, onDone, onCancel, submitLabel }: { seed: Mee
                 <div style={{ padding: 8, fontSize: 12.5, color: 'var(--muted)', textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>No contacts match.</div>
               )
             }
+            footer={
+              d.companyId ? (
+                <button
+                  type="button"
+                  className="meeting-picker-add"
+                  data-testid="meeting-new-contact"
+                  onClick={() => {
+                    setNewContact({ name: contactPicker.search.trim(), email: '', role: '' });
+                    contactPicker.close();
+                  }}
+                >
+                  + Add new contact{company ? ` at ${company.name}` : ''}
+                </button>
+              ) : undefined
+            }
           />
         </div>
+        {newContact && (
+          <div className="meeting-new-contact" data-testid="meeting-new-contact-form">
+            <div className="meeting-form-grid">
+              <label className="form-label">
+                Full name
+                <input className="form-input" data-testid="new-contact-name" autoFocus value={newContact.name} maxLength={200} onChange={(e) => setNewContact({ ...newContact, name: e.target.value })} />
+              </label>
+              <label className="form-label">
+                Email
+                <input className="form-input" type="email" data-testid="new-contact-email" value={newContact.email} placeholder="Optional" onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} />
+              </label>
+              <label className="form-label">
+                Job title
+                <input className="form-input" data-testid="new-contact-role" value={newContact.role} maxLength={120} placeholder="Optional" onChange={(e) => setNewContact({ ...newContact, role: e.target.value })} />
+              </label>
+            </div>
+            <div className="meeting-new-contact-actions">
+              <span className="meeting-muted">Saved as a contact of {company?.name ?? 'the company'}.</span>
+              <button type="button" className="btn btn-secondary" onClick={() => setNewContact(null)}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-primary" data-testid="new-contact-save" disabled={!newContact.name.trim() || addingContact} onClick={() => void addContact()}>
+                {addingContact ? 'Adding…' : 'Add contact'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <label className="form-label">
