@@ -12,6 +12,8 @@ import type { JobsService } from '../../shared/events/jobs.service';
  *      locking employee rows (otherwise the two edits can deadlock on each other's rows);
  *   2. `await assertValidManager(tx, employeeId, managerId)` for each change, after the lock;
  *   3. write, in the same transaction.
+ * `setManagers` does all three for a list of changes; `queueManagerEmails` then queues the "New
+ * manager" / "New direct report" emails of changes made in the app (not the import).
  */
 
 /** Takes the workspace's reporting-line lock until the transaction ends (pg_advisory_xact_lock). */
