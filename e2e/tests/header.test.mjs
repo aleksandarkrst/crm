@@ -1,9 +1,9 @@
 // The header and sidebar tools: the command palette with Ctrl+K, its search and keyboard
-// navigation (CD-63, CD-80), the "+" menu on any screen (CD-66, CD-80), the account menu and the
-// workspace switcher in the sidebar (CD-23).
+// navigation (CD-63, CD-80), the "+" menu on any screen (CD-66, CD-80) and the account menu. The
+// sidebar's module and workspace switcher is in module-switcher.test.mjs (CD-214).
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, clickButton, createDealInUi, newUserWithWorkspace, RUN, setValue, steps, text, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, createDealInUi, newUserWithWorkspace, RUN, setValue, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
 
 /** The search results as { group, title, selected } rows, in screen order. */
 const results = (page) =>
@@ -25,11 +25,10 @@ async function search(page, query) {
   return results(page);
 }
 
-describe('command palette, + menu, account menu and workspace switcher', () => {
+describe('command palette, + menu and account menu', () => {
   const browser = useBrowser();
   const step = steps(browser, 'header');
   const firstWorkspace = `Header Studio ${RUN}`;
-  const secondWorkspace = `Second Studio ${RUN}`;
   let page;
   let northwindId;
 
@@ -141,38 +140,6 @@ describe('command palette, + menu, account menu and workspace switcher', () => {
     await page.waitForFunction(() => location.pathname.startsWith('/deals/'));
     const dealId = page.url().split('/deals/')[1];
     assert.equal((await api(page, '/crm/deals/' + dealId)).title, 'Menu Made d.o.o.');
-  });
-
-  step('the sidebar switcher lists the workspace and creates a second one', async () => {
-    await waitForToastToClear(page);
-    await click(page, '[data-testid=workspace-switcher]');
-    await page.waitForSelector('[data-testid=workspace-menu]');
-    const items = await page.$$eval('[data-testid=workspace-menu] [role=menuitemradio]', (els) => els.map((el) => ({ name: el.querySelector('.ws-name').textContent, current: el.getAttribute('aria-checked') === 'true' })));
-    assert.deepEqual(items, [{ name: firstWorkspace, current: true }]);
-    await clickButton(page, '+ New workspace');
-    await page.type('input[placeholder="Workspace name"]', secondWorkspace);
-    await clickButton(page, 'Create workspace');
-    await page.waitForFunction((name) => document.querySelector('[data-testid=workspace-switcher]')?.title.includes(name), {}, secondWorkspace);
-    const me = await api(page, '/me');
-    assert.equal(me.tenants.length, 2);
-    await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
-    assert.ok(!(await text(page)).includes('Northwind'), 'the new workspace is empty');
-  });
-
-  step('switches back to the first workspace from the sidebar', async () => {
-    await click(page, '[data-testid=workspace-switcher]');
-    const items = await page.$$eval('[data-testid=workspace-menu] [role=menuitemradio]', (els) => els.map((el) => ({ name: el.querySelector('.ws-name').textContent, current: el.getAttribute('aria-checked') === 'true' })));
-    assert.deepEqual(
-      items.sort((a, b) => a.name.localeCompare(b.name)),
-      [
-        { name: firstWorkspace, current: false },
-        { name: secondWorkspace, current: true },
-      ].sort((a, b) => a.name.localeCompare(b.name)),
-    );
-    await click(page, `[data-testid=workspace-menu] [role=menuitemradio]::-p-text(${firstWorkspace})`);
-    await page.waitForFunction((name) => document.querySelector('[data-testid=workspace-switcher]')?.title.includes(name), {}, firstWorkspace);
-    await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
-    await page.waitForFunction(() => document.body.innerText.includes('Northwind d.o.o.'));
   });
 
   it('throws no uncaught errors in the page', () => {
