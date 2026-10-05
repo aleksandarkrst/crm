@@ -281,6 +281,13 @@
       "when": 1791198621530,
       "tag": "0039_people_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1791201011597,
+      "tag": "0040_employee_deactivation_plan",
+      "breakpoints": true
     }
   ]
 }

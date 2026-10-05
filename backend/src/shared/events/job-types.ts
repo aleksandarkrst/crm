@@ -49,6 +49,25 @@ export interface JobPayloads {
     actorUserId: string | null;
     changes: { account: 'iban' | 'fxIban'; kind: 'added' | 'changed' | 'removed'; masked: string }[];
   };
+  /**
+   * Cron (every 15 minutes, in UTC; milestone 13, spec 4.8): in each workspace where it is past
+   * 00:05 local time, applies the deactivations whose last working day is over (status Leaving →
+   * Inactive), with the choices stored in employees.deactivation_plan. `now` and `tenantId` are
+   * for the dev trigger (POST /api/dev/people/deactivate-due) only.
+   */
+  'people.deactivate-due': { now?: string; tenantId?: string };
+  /**
+   * Sent by people when an employee's deactivation is applied (now, or by people.deactivate-due):
+   * they are Inactive, their reports moved, their membership (if any, `userId`) removed. Other
+   * modules react: CRM takes `userId` off future planned meetings like identity.member-removed.
+   */
+  'people.employee-deactivated': { tenantId: string; employeeId: string; userId: string | null };
+  /**
+   * Sent by people for "Invite selected" (the list) and the import's "Invite imported employees"
+   * (spec 4.7, 5.4, 8.6): the people worker creates an invitation through identity for each
+   * employee that still has a work email, no account and no pending invitation.
+   */
+  'people.bulk-invite': { tenantId: string; actorUserId: string; employeeIds: string[]; role: 'admin' | 'member' };
   /** Cron (every 15 minutes): queues the daily digests of workspaces where it is morning now. */
   'notifications.digest-tick': Record<string, never>;
   /** One member's daily digest for one workspace and local date. `force` skips the "once a day" and "turned on" checks (dev trigger). */
@@ -72,6 +91,9 @@ export const JOB_NAMES = [
   'notifications.digest-tick',
   'notifications.daily-digest',
   'people.bank-account-changed-email',
+  'people.bulk-invite',
+  'people.deactivate-due',
+  'people.employee-deactivated',
   'reporting.nightly',
 ] as const satisfies readonly JobName[];
 

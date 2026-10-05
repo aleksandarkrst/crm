@@ -10,6 +10,7 @@ import { DatabaseService, type Tx } from '../../shared/database/database.service
 import { mapDbError } from '../../shared/database/errors';
 import { departments, employeePersonal, employees, invitations, memberships, teams, tenants, users } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
+import { withdrawEmployeeInvitations } from '../identity';
 import type { ApproverResult } from './approvers';
 import { type BankAccountChange, employeeIbanBox } from './bank-email';
 import { type CallerAccess, FUNCTIONAL_ROLES, type FunctionalRole } from './caller-access';
@@ -175,7 +176,8 @@ export class EmployeesService {
     return this.database.withTenant(ctx.tenantId, (tx) => this.cardIn(tx, ctx, id));
   }
 
-  private async cardIn(tx: Tx, ctx: TenantContext, id: string) {
+  /** The card inside an open transaction (the lifecycle actions return it too). */
+  async cardIn(tx: Tx, ctx: TenantContext, id: string) {
     const access = await this.access.of(ctx, tx);
     const [r] = await this.rows(tx, eq(employees.id, id));
     if (!r || (r.deactivatedAt && !access.canSeeInactive)) throw new NotFoundException('Employee not found');
@@ -228,6 +230,13 @@ export class EmployeesService {
       canRevealBank: access.canSeeBank(id),
       canSeeHistory: access.canSeeHistory(id),
       canDelete: access.isAdmin && !r.userId && !r.firstLinkedAt,
+      // App access (spec 4.6, 4.7): Admins only.
+      canInvite: access.isAdmin && !r.userId && !r.deactivatedAt,
+      canLink: access.isAdmin && !r.userId && !r.deactivatedAt,
+      canUnlink: access.isAdmin && !!r.userId,
+      // Leaving (spec 4.8): Administration and Admins; only an Admin on their own card.
+      canDeactivate: access.isHr && !r.deactivatedAt && (!access.isSelf(id) || access.isAdmin),
+      canReactivate: access.isHr && (!!r.deactivatedAt || !!r.employmentEndDate),
     };
     return card;
   }
@@ -251,7 +260,16 @@ export class EmployeesService {
   private async appAccess(tx: Tx, ctx: TenantContext, r: EmployeeRow) {
     const [user] = r.userId ? await tx.select({ email: users.email }).from(users).where(eq(users.id, r.userId)) : [];
     const [invitation] = await tx
-      .select({ id: invitations.id, email: invitations.email, role: invitations.role, expiresAt: invitations.expiresAt, emailStatus: invitations.emailStatus })
+      .select({
+        id: invitations.id,
+        email: invitations.email,
+        role: invitations.role,
+        expiresAt: invitations.expiresAt,
+        emailStatus: invitations.emailStatus,
+        emailSentAt: invitations.emailSentAt,
+        emailError: invitations.emailError,
+        hasLink: sql<boolean>`${invitations.tokenSealed} is not null`,
+      })
       .from(invitations)
       .where(and(eq(invitations.tenantId, ctx.tenantId), eq(invitations.employeeId, r.id), isNull(invitations.acceptedAt), isNull(invitations.revokedAt), sql`${invitations.expiresAt} > now()`))
       .limit(1);
@@ -364,6 +382,8 @@ export class EmployeesService {
         }
 
         const changes = await this.savePersonal(tx, ctx, id, input, currentPersonal);
+        // A pending invitation went to the old work email: withdrawn, the card asks to invite again (spec 4.7).
+        if (input.workEmail !== undefined && (input.workEmail ?? null) !== (current.workEmail ?? null)) await withdrawEmployeeInvitations(tx, ctx.tenantId, id);
         if (Object.keys(work).length) {
           await tx.update(employees).set(work).where(eq(employees.id, id));
         } else {
