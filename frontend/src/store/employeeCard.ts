@@ -2,15 +2,15 @@
  * The employee card (CD-140, milestone 13): the store's slice for `/people/:id`. Cards are read when
  * the page opens and kept by id in `s.employeeCards`; every action (saving,
  * deactivating) returns the card as the server now has it, which replaces the cached one. The
- * pickers (active employees, departments, teams) are read when a card needs them
+ * pickers (active employees, org levels and units) are read when a card needs them
  * (`s.peoplePickers`), and again once the org changed since (`s.orgRev`, CD-225).
  *
  * Saving (CD-225: one Save for the whole card) sends the changed fields with the card's version
  * (If-Match): when someone else changed one of them meanwhile, the API answers 409, the card is
  * read again and the card shows the conflict message, keeping what was typed. Fields the caller
  * may not change are never sent: the card's `permissions.editableFields` (the server's own rules)
- * decides what is an input. Moving a department head or team lead elsewhere asks first
- * (lib/headMoves.ts).
+ * decides what is an input. Moving a unit's lead elsewhere asks first (lib/headMoves.ts). The
+ * unit and manager follow the org rules on the server (CD-226).
  *
  * After every change the Org structure page's directory is read again (`refreshPeople`), so the
  * chart, the list and Ctrl/⌘K show it at once (CD-225).
@@ -19,12 +19,12 @@
  * hint without ids) are read again, and the pickers too when they are loaded.
  */
 import {
-  type ApiDepartment,
   type ApiEmployeeCard,
   type ApiEmployeeRow,
   ApiError,
+  type ApiOrgLevel,
+  type ApiOrgUnit,
   type ApiPeopleHistoryEntry,
-  type ApiTeam,
   crmApi,
   type DeactivateInput,
   type EmployeePatch,
@@ -40,8 +40,8 @@ import type { State } from './types';
 export interface PeoplePickers {
   /** Active (and leaving) employees, by last name. */
   employees: ApiEmployeeRow[];
-  departments: ApiDepartment[];
-  teams: ApiTeam[];
+  levels: ApiOrgLevel[];
+  units: ApiOrgUnit[];
 }
 
 export const EMPLOYMENT_TYPE_LABEL: Record<EmploymentType, string> = { permanent: 'Permanent', fixed_term: 'Fixed term', contractor: 'Contractor', student: 'Student or intern' };
@@ -108,12 +108,12 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
   };
 
   let pickersLoading: Promise<void> | null = null;
-  /** The org revision the pickers were read at: a newer one (a department added anywhere) reads them again. */
+  /** The org revision the pickers were read at: a newer one (a unit added anywhere) reads them again. */
   let pickersRev = -1;
   const loadPickers = () => {
     pickersRev = cur().orgRev;
-    pickersLoading ??= Promise.all([peopleCardApi.directory(), peopleCardApi.departments(), peopleCardApi.teams()])
-      .then(([directory, departments, teams]) => set({ peoplePickers: { employees: directory.employees, departments, teams } }))
+    pickersLoading ??= Promise.all([peopleCardApi.directory(), peopleCardApi.levels(), peopleCardApi.units()])
+      .then(([directory, levels, units]) => set({ peoplePickers: { employees: directory.employees, levels, units } }))
       .catch(() => undefined)
       .finally(() => (pickersLoading = null));
     return pickersLoading;
@@ -128,8 +128,8 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
     ensurePickers: () => (cur().peoplePickers && pickersRev === cur().orgRev ? Promise.resolve() : loadPickers()),
 
     /**
-     * Saves the card's changes (only the fields that changed). Moving a department head or team
-     * lead elsewhere asks first ("… removes them as head. Continue?"); `cancelled` when they said
+     * Saves the card's changes (only the fields that changed). Moving a unit's lead elsewhere asks
+     * first ("… removes them as lead of Sales. Continue?"); `cancelled` when they said
      * no. A pending invitation went to the old work email: the server withdrew it, and the toast
      * says to invite the new address in Settings → Team.
      */
@@ -247,7 +247,7 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
     /**
      * Live updates: re-read the open cards a hint names (all of them without ids), and the pickers.
      * `own`: this tab made the change (CD-225): the saved card is current already, so only the
-     * pickers (a new department, a new head) are read again. Hints come in bursts: one read after
+     * pickers (a new unit, a new lead) are read again. Hints come in bursts: one read after
      * a short pause.
      */
     onLive: (e: LiveEvent, own = false) => {

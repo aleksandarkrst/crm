@@ -444,7 +444,7 @@ export interface State {
   meetings: Record<string, ApiMeeting>;
   /** Employee cards read so far, by id (CD-140; see store/employeeCard.ts). */
   employeeCards: Record<string, ApiEmployeeCard>;
-  /** Active employees, departments and teams for the card's pickers; null until a card needs them. */
+  /** Active employees, org levels and units for the card's pickers; null until a card needs them. */
   peoplePickers: PeoplePickers | null;
   /** The signed-in member's own employee record (Profile → "My employee card"); undefined until read. */
   myEmployeeId: string | null | undefined;
@@ -464,7 +464,7 @@ export interface State {
    * the org structure on screen is read again (store/org.ts, CD-138).
    */
   orgRev: number;
-  /** Employees, departments and teams (milestone 13; see store/people.ts), read when a screen needs them. */
+  /** Employees, org levels and units (milestone 13; see store/people.ts), read when a screen needs them. */
   people: PeopleState;
   /** Goes up on every employee and role change (live hints, resync): people lists re-read (CD-142). */
   peopleRev: number;

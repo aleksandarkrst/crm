@@ -30,12 +30,14 @@ export function DeactivateDialog({ card, onClose }: { card: ApiEmployeeCard; onC
   const ensure = employeeCard.ensurePickers;
   useEffect(() => void ensure(), [ensure]);
   const people = (s.peoplePickers?.employees ?? []).filter((e) => e.id !== card.id && e.status !== 'inactive');
+  // A person leads at most one unit: those who lead another aren't offered as the new lead.
+  const leads = new Set((s.peoplePickers?.units ?? []).map((u) => u.leadEmployeeId).filter(Boolean));
   const [lastDay, setLastDay] = useState(todayIso());
   const [reason, setReason] = useState<LeavingReason | ''>('');
   // Default: the leaving person's own manager (skip level), else nobody.
   const [manager, setManager] = useState<string>(card.manager?.id ?? '');
-  const [leads, setLeads] = useState<Record<string, string>>({});
-  const [heads, setHeads] = useState<Record<string, string>>({});
+  // The new lead of the unit they lead (CD-226); the people who lead nothing else.
+  const [newLead, setNewLead] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const future = lastDay > todayIso();
@@ -51,8 +53,7 @@ export function DeactivateDialog({ card, onClose }: { card: ApiEmployeeCard; onC
       lastWorkingDay: lastDay,
       reason: reason || null,
       ...(card.directReports.length ? { reportsManagerId: manager || null } : {}),
-      teamLeads: card.leadsTeams.map((t) => ({ teamId: t.id, employeeId: leads[t.id] || null })),
-      departmentHeads: card.headsDepartments.map((d) => ({ departmentId: d.id, employeeId: heads[d.id] || null })),
+      ...(card.leadsUnit ? { unitLeads: [{ unitId: card.leadsUnit.id, employeeId: newLead || null }] } : {}),
     });
     setBusy(false);
     if ('error' in r) setError(r.error);
@@ -88,24 +89,21 @@ export function DeactivateDialog({ card, onClose }: { card: ApiEmployeeCard; onC
           </select>
         </label>
       )}
-      {card.leadsTeams.map((t) => (
-        <label key={t.id} className="form-label">
-          New team lead of {t.name}
-          <select className="form-input" value={leads[t.id] ?? ''} onChange={(e) => setLeads((x) => ({ ...x, [t.id]: e.target.value }))}>
+      {card.leadsUnit && (
+        <label className="form-label">
+          New lead of {card.leadsUnit.name}
+          <select className="form-input" name="newLead" value={newLead} onChange={(e) => setNewLead(e.target.value)}>
             <option value="">Nobody</option>
-            {options}
+            {people
+              .filter((p) => !leads.has(p.id))
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.jobTitle ? `${p.fullName} · ${p.jobTitle}` : p.fullName}
+                </option>
+              ))}
           </select>
         </label>
-      ))}
-      {card.headsDepartments.map((d) => (
-        <label key={d.id} className="form-label">
-          New head of {d.name}
-          <select className="form-input" value={heads[d.id] ?? ''} onChange={(e) => setHeads((x) => ({ ...x, [d.id]: e.target.value }))}>
-            <option value="">Nobody</option>
-            {options}
-          </select>
-        </label>
-      ))}
+      )}
       <div className="hint-box">
         {future
           ? `${card.fullName} keeps access and stays the manager of their reports until then. The changes apply at 00:05 the day after the last working day.`

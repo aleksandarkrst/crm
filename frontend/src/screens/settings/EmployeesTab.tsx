@@ -1,13 +1,179 @@
-import { useState } from 'react';
+import { type KeyboardEvent, useCallback, useEffect, useState } from 'react';
 import { FieldRow, Switch } from '../../components/ui';
+import { type ApiOrgLevel, orgApi } from '../../lib/orgApi';
+import { orgError } from '../../store/org';
 import { useStore } from '../../store/store';
+
+/** At most this many levels (the API's limit, CD-226). */
+const MAX_LEVELS = 5;
+
+/**
+ * "Organization levels" (CD-226): the named levels of the org structure top-down (Department and
+ * Team by default). Rename inline, add (at the bottom, then move), remove (only a level without
+ * units), and reorder by dragging a row or with the arrows. A unit's parent must be of a higher
+ * level, so a reorder that breaks that is refused with the API's message. Read again on every
+ * org change (`s.orgRev`).
+ */
+function OrgLevels() {
+  const { s, flash, people } = useStore();
+  const rev = s.orgRev;
+  const [levels, setLevels] = useState<ApiOrgLevel[] | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [adding, setAdding] = useState('');
+  const [dragging, setDragging] = useState<string | null>(null);
+  const load = useCallback(() => orgApi.levels().then(setLevels, (err) => setProblem(orgError(err))), []);
+  useEffect(() => void load(), [load, rev]);
+
+  const run = async (action: () => Promise<ApiOrgLevel[]>, done: string) => {
+    setProblem(null);
+    try {
+      setLevels(await action());
+      people.refresh(0);
+      flash(done);
+      return true;
+    } catch (err) {
+      setProblem(orgError(err));
+      void load();
+      return false;
+    }
+  };
+  const move = (from: number, to: number) => {
+    if (!levels || to < 0 || to >= levels.length || from === to) return;
+    const ids = levels.map((l) => l.id);
+    const [id] = ids.splice(from, 1);
+    ids.splice(to, 0, id!);
+    void run(() => orgApi.reorderLevels(ids), 'Levels reordered');
+  };
+  const add = () => {
+    const name = adding.trim();
+    if (!name) return;
+    void run(() => orgApi.createLevel(name), `Level ${name} added`).then((ok) => ok && setAdding(''));
+  };
+  const row = { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--divider)' } as const;
+  return (
+    <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 4 }} data-testid="org-levels">
+      <div className="card-title">Organization levels</div>
+      <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5, marginBottom: 6 }}>
+        How the company is organized, top-down: for example Sector, Department and Team. Units are created on the Org structure page; a unit sits inside a unit of a higher level. Every unit's
+        leader is its Lead.
+      </span>
+      {problem && (
+        <div className="dtp-problem" role="alert" data-testid="org-levels-problem">
+          {problem}
+        </div>
+      )}
+      {!levels && !problem && <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Loading…</span>}
+      {levels?.map((l, i) => (
+        <div
+          key={l.id}
+          style={{ ...row, opacity: dragging === l.id ? 0.5 : 1 }}
+          data-testid="org-level-row"
+          data-name={l.name}
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.setData('text/x-level', l.id);
+            setDragging(l.id);
+          }}
+          onDragEnd={() => setDragging(null)}
+          onDragOver={(e) => e.dataTransfer.types.includes('text/x-level') && e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            const id = e.dataTransfer.getData('text/x-level');
+            setDragging(null);
+            move(levels.findIndex((x) => x.id === id), i);
+          }}
+        >
+          <span aria-hidden style={{ cursor: 'grab', color: 'var(--muted)', width: 14 }}>
+            ⋮⋮
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--muted-2)', width: 18 }}>{i + 1}.</span>
+          <LevelName level={l} onSave={(name) => run(() => orgApi.renameLevel(l.id, name), `Level renamed to ${name}`)} />
+          <span style={{ fontSize: 12, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{l.units === 1 ? '1 unit' : `${l.units} units`}</span>
+          <button type="button" className="btn-plain" aria-label={`Move ${l.name} up`} data-testid="org-level-up" disabled={i === 0} onClick={() => move(i, i - 1)}>
+            ↑
+          </button>
+          <button type="button" className="btn-plain" aria-label={`Move ${l.name} down`} data-testid="org-level-down" disabled={i === levels.length - 1} onClick={() => move(i, i + 1)}>
+            ↓
+          </button>
+          <button
+            type="button"
+            className="btn-plain"
+            data-testid="org-level-remove"
+            disabled={l.units > 0 || levels.length === 1}
+            title={l.units > 0 ? 'Only a level without units can be removed' : levels.length === 1 ? 'Keep at least one level' : undefined}
+            onClick={() => window.confirm(`Remove the level ${l.name}?`) && void run(() => orgApi.deleteLevel(l.id), `Level ${l.name} removed`)}
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      {levels && levels.length < MAX_LEVELS && (
+        <form
+          style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            add();
+          }}
+        >
+          <input className="form-input" style={{ flex: '1 1 200px', minWidth: 0 }} aria-label="New level" data-testid="org-level-new" placeholder="New level, e.g. Sector" value={adding} maxLength={50} onChange={(e) => setAdding(e.target.value)} />
+          <button type="submit" className={adding.trim() ? 'btn btn-secondary' : 'btn btn-disabled'} data-testid="org-level-add" disabled={!adding.trim()}>
+            Add level
+          </button>
+        </form>
+      )}
+      {levels && levels.length >= MAX_LEVELS && <span style={{ fontSize: 12, color: 'var(--text-2)' }}>A workspace has at most {MAX_LEVELS} levels.</span>}
+    </div>
+  );
+}
+
+/** The level's name as an input: Enter or leaving the field saves, Escape goes back. */
+function LevelName({ level, onSave }: { level: ApiOrgLevel; onSave: (name: string) => Promise<boolean> }) {
+  const [draft, setDraft] = useState(level.name);
+  const [seen, setSeen] = useState(level.name);
+  if (seen !== level.name) {
+    setSeen(level.name);
+    setDraft(level.name);
+  }
+  const save = async () => {
+    const name = draft.trim();
+    if (!name || name === level.name) return setDraft(level.name);
+    if (!(await onSave(name))) setDraft(level.name);
+  };
+  const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+    if (e.key === 'Escape') setDraft(level.name);
+  };
+  return (
+    <input
+      className="form-input"
+      style={{ flex: 1, minWidth: 0, padding: '6px 9px' }}
+      aria-label={`Name of level ${level.position}`}
+      data-testid="org-level-name"
+      value={draft}
+      maxLength={50}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={onKey}
+      onBlur={() => void save()}
+    />
+  );
+}
 
 /**
  * Settings → Employees (CD-215, spec 10.3), Admins only: the weekly hours new employees and
  * imports start with, whether an employee number is required, and whether employees change their
- * own bank account. Saved per workspace as you change them (PATCH /workspace).
+ * own bank account, saved per workspace as you change them (PATCH /workspace); and the
+ * organization levels (CD-226, their own endpoints).
  */
 export function EmployeesTab() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <EmployeeSettings />
+      <OrgLevels />
+    </div>
+  );
+}
+
+function EmployeeSettings() {
   const { s, setWorkspace } = useStore();
   const w = s.workspace;
   const [hours, setHours] = useState(String(w.employeeDefaultWeeklyHours));
@@ -61,7 +227,7 @@ export function EmployeesTab() {
         </div>
         <Switch on={w.employeeSelfEditBank} onClick={() => setWorkspace({ employeeSelfEditBank: !w.employeeSelfEditBank })} label="Employees can edit their own bank account" />
       </div>
-      <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 4 }}>Changes are saved as you make them. Only owners and admins edit employees, departments, teams and managers.</span>
+      <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 4 }}>Changes are saved as you make them. Only owners and admins edit employees, units and managers.</span>
     </div>
   );
 }

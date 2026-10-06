@@ -4,9 +4,9 @@ import type { ApiApprovals, ApiEmployeeCard, ApiPeopleHistoryEntry, EmployeePatc
 import { formatIban, INVALID_ACCOUNT_MESSAGE, isSwiftBic, parseBankAccount } from '../../lib/iban';
 import { paths } from '../../lib/paths';
 import { EMPLOYMENT_TYPE_LABEL, LEAVING_REASON_LABEL } from '../../store/employeeCard';
+import { managerForUnit, unitForManager, unitPathLabel, unitTree } from '../../store/orgChart';
 import { useStore } from '../../store/store';
 import { type Draft, patchOf } from '../../store/cardDraft';
-import type { PeoplePickers } from '../../store/employeeCard';
 import { CheckField, dateLabel, EditableSection, FIELD_LABEL, Row, SelectField, TextField, Val } from './parts';
 
 const str = (v: string | number | null | undefined) => (v === null || v === undefined ? '' : String(v));
@@ -32,8 +32,7 @@ export function cardInitial(card: ApiEmployeeCard): Draft {
     workEmail: str(card.workEmail),
     workPhone: str(card.workPhone),
     workLocation: str(card.workLocation),
-    departmentId: str(card.departmentId),
-    teamId: str(card.teamId),
+    unitId: str(card.unitId),
     ...(e
       ? {
           employeeNumber: str(e.employeeNumber),
@@ -52,7 +51,7 @@ export function cardInitial(card: ApiEmployeeCard): Draft {
 }
 
 /** The changed fields as the API takes them, or why they can't be saved. */
-export function cardPatch(changed: Draft, pickers: PeoplePickers | null): EmployeePatch | string {
+export function cardPatch(changed: Draft): EmployeePatch | string {
   const patch = patchOf(changed) as EmployeePatch;
   if ('weeklyHours' in changed) {
     const hours = Number(String(changed.weeklyHours).replace(',', '.'));
@@ -61,11 +60,6 @@ export function cardPatch(changed: Draft, pickers: PeoplePickers | null): Employ
   }
   if (patch.firstName === null || patch.lastName === null) return 'First and last name are required';
   if ('employmentStartDate' in changed && !changed.employmentStartDate) return 'The employment start date is required';
-  // Choosing a team sets its department (the server checks it too).
-  if (typeof patch.teamId === 'string' && pickers) {
-    const team = pickers.teams.find((t) => t.id === patch.teamId);
-    if (team) patch.departmentId = team.departmentId;
-  }
   for (const key of ['iban', 'fxIban'] as const) {
     const v = changed[key];
     if (typeof v === 'string' && v.trim() && !parseBankAccount(v)) return `${FIELD_LABEL[key]}: ${INVALID_ACCOUNT_MESSAGE}`;
@@ -79,31 +73,32 @@ export function WorkSection({ card }: { card: ApiEmployeeCard }) {
   const pickers = s.peoplePickers;
   const e = card.employment;
   const ensure = employeeCard.ensurePickers;
-  const editsOrg = card.permissions.editableFields.includes('departmentId');
-  // Read again when the org changed since (a department added in the panel shows at once, CD-225).
+  const editsOrg = card.permissions.editableFields.includes('unitId');
+  // Read again when the org changed since (a unit added in the panel shows at once, CD-225).
   const orgRev = s.orgRev;
   useEffect(() => {
     if (editsOrg) void ensure();
   }, [editsOrg, ensure, orgRev]);
-  const departments = [{ value: '', label: 'No department' }, ...(pickers?.departments ?? []).map((d) => ({ value: d.id, label: d.name }))];
-  if (card.departmentId && !departments.some((d) => d.value === card.departmentId)) departments.push({ value: card.departmentId, label: card.departmentName ?? 'Department' });
+  // One "Unit" select with the tree's paths (CD-226: "Sales › Field sales").
+  const allUnits = pickers?.units ?? [];
+  const units = [{ value: '', label: 'No unit' }, ...unitTree(allUnits).map(({ unit }) => ({ value: unit.id, label: unitPathLabel(allUnits, unit.id) }))];
+  if (card.unitId && !units.some((u) => u.value === card.unitId)) units.push({ value: card.unitId, label: card.unitName ?? 'Unit' });
+  const unitLabel = card.unitId ? unitPathLabel(allUnits, card.unitId, card.unitName) : null;
 
   return (
     <EditableSection
       title="Work"
       testId="emp-work"
-      fields={['firstName', 'lastName', 'jobTitle', 'workEmail', 'workPhone', 'workLocation', 'departmentId', 'teamId', 'employeeNumber', 'employmentStartDate', 'employmentType', 'weeklyHours']}
+      fields={['firstName', 'lastName', 'jobTitle', 'workEmail', 'workPhone', 'workLocation', 'unitId', 'employeeNumber', 'employmentStartDate', 'employmentType', 'weeklyHours']}
       view={
         <>
           <Row label="Job title">
             <Val v={card.jobTitle} />
           </Row>
-          <Row label="Department">
-            <Val v={card.departmentName} hint="No department" />
+          <Row label="Unit" testId="emp-unit">
+            <Val v={unitLabel} hint="No unit" />
           </Row>
-          <Row label="Team">
-            <Val v={card.teamName} hint="No team" />
-          </Row>
+          {card.leadsUnit && <Row label="Leads">{card.leadsUnit.name}</Row>}
           <Row label="Work email" testId="emp-work-email">
             {card.workEmail ? <a href={`mailto:${card.workEmail}`}>{card.workEmail}</a> : <Val v={null} />}
           </Row>
@@ -113,8 +108,6 @@ export function WorkSection({ card }: { card: ApiEmployeeCard }) {
           <Row label="Work location">
             <Val v={card.workLocation} />
           </Row>
-          {card.leadsTeams.length > 0 && <Row label="Leads team">{card.leadsTeams.map((t) => t.name).join(', ')}</Row>}
-          {card.headsDepartments.length > 0 && <Row label="Heads department">{card.headsDepartments.map((d) => d.name).join(', ')}</Row>}
           {e && (
             <>
               <Row label="Employee number">
@@ -133,31 +126,13 @@ export function WorkSection({ card }: { card: ApiEmployeeCard }) {
         </>
       }
       edit={(draft, setField, can) => {
-        const teams = [
-          { value: '', label: 'No team' },
-          ...(pickers?.teams ?? [])
-            .filter((t) => !draft.departmentId || t.departmentId === draft.departmentId)
-            .map((t) => ({ value: t.id, label: pickers!.departments.length > 1 && !draft.departmentId ? `${t.name} (${pickers!.departments.find((d) => d.id === t.departmentId)?.name ?? ''})` : t.name })),
-        ];
-        if (card.teamId && draft.teamId === card.teamId && !teams.some((t) => t.value === card.teamId)) teams.push({ value: card.teamId, label: card.teamName ?? 'Team' });
         return (
           <>
             <TextField field="firstName" draft={draft} setField={setField} can={can} maxLength={100} />
             <TextField field="lastName" draft={draft} setField={setField} can={can} maxLength={100} />
             <TextField field="jobTitle" draft={draft} setField={setField} can={can} maxLength={100} />
-            <SelectField
-              field="departmentId"
-              draft={draft}
-              setField={(k, v) => {
-                setField(k, v);
-                // A team of another department can't stay.
-                const team = pickers?.teams.find((t) => t.id === draft.teamId);
-                if (team && team.departmentId !== v) setField('teamId', '');
-              }}
-              can={can}
-              options={departments}
-            />
-            <SelectField field="teamId" draft={draft} setField={setField} can={can} options={teams} />
+            <SelectField field="unitId" draft={draft} setField={setField} can={can} options={units} />
+            {card.leadsUnit && <Row label="Leads">{card.leadsUnit.name}</Row>}
             <TextField field="workEmail" type="email" draft={draft} setField={setField} can={can} maxLength={254} />
             <TextField field="workPhone" type="tel" draft={draft} setField={setField} can={can} maxLength={40} />
             <TextField field="workLocation" draft={draft} setField={setField} can={can} maxLength={100} placeholder="e.g. Belgrade HQ" />
@@ -172,8 +147,6 @@ export function WorkSection({ card }: { card: ApiEmployeeCard }) {
                 {e.leavingReason && <Row label="Reason for leaving">{LEAVING_REASON_LABEL[e.leavingReason]}</Row>}
               </>
             )}
-            {card.leadsTeams.length > 0 && <Row label="Leads team">{card.leadsTeams.map((t) => t.name).join(', ')}</Row>}
-            {card.headsDepartments.length > 0 && <Row label="Heads department">{card.headsDepartments.map((d) => d.name).join(', ')}</Row>}
             {card.account === 'invited' && can('workEmail') && <div className="emp-note">Changing the work email withdraws the pending invitation.</div>}
           </>
         );
@@ -218,6 +191,28 @@ export function ReportingSection({ card }: { card: ApiEmployeeCard }) {
     ...(pickers?.employees ?? []).filter((x) => x.id !== card.id && x.status !== 'inactive').map((x) => ({ value: x.id, label: x.jobTitle ? `${x.fullName} · ${x.jobTitle}` : x.fullName })),
   ];
   if (card.managerId && !managers.some((m) => m.value === card.managerId)) managers.push({ value: card.managerId, label: card.managerName ?? 'Manager' });
+  const ceoId = s.workspace.ceoEmployeeId;
+  const nameOf = (id: string | null) => (id ? (pickers?.employees.find((x) => x.id === id)?.fullName ?? null) : null);
+  /**
+   * What saving will do to the other field (CD-226): a new unit brings its lead as manager, a new
+   * manager their unit; when both change, both stay as chosen. The server decides (and skips loops).
+   */
+  const derived = (draft: { unitId?: unknown; managerId?: unknown }): string | null => {
+    const unitId = typeof draft.unitId === 'string' ? draft.unitId : (card.unitId ?? '');
+    const managerId = typeof draft.managerId === 'string' ? draft.managerId : (card.managerId ?? '');
+    const unitChanged = unitId !== (card.unitId ?? '');
+    const managerChanged = managerId !== (card.managerId ?? '');
+    if (!pickers || unitChanged === managerChanged) return null;
+    if (unitChanged && unitId) {
+      const next = managerForUnit(pickers.units, unitId, card.id, ceoId);
+      return next && next !== card.managerId ? `Saving makes ${nameOf(next) ?? 'the unit\'s lead'} their manager.` : null;
+    }
+    if (managerChanged && managerId && !card.leadsUnit) {
+      const next = unitForManager(pickers.units, pickers.employees, managerId);
+      return next && next !== card.unitId ? `Saving moves them to ${unitPathLabel(pickers.units, next)}.` : null;
+    }
+    return null;
+  };
 
   return (
     <EditableSection
@@ -265,6 +260,11 @@ export function ReportingSection({ card }: { card: ApiEmployeeCard }) {
       edit={(draft, setField, can) => (
         <>
           <SelectField field="managerId" draft={draft} setField={setField} can={can} options={managers} />
+          {derived(draft) && (
+            <div className="emp-note" data-testid="emp-derived">
+              {derived(draft)}
+            </div>
+          )}
           <Row label="Direct reports">
             {card.directReports.length ? (
               <span className="emp-list">

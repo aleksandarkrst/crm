@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import type { ApiDepartment, ApiEmployee, ApiEmployeePersonalExport, ApiTeam } from '../../lib/api';
+import type { ApiEmployee, ApiEmployeePersonalExport, ApiOrgUnit } from '../../lib/api';
 import { type CsvColumn, datedName, downloadText, toCsv } from '../../lib/csv';
 import { Modal, ModalHeader } from '../../components/ui';
+import { unitPathLabel, unitTree } from '../../store/people';
 import type { Column } from './columns';
 import { EmployeePicker } from './parts';
 
@@ -42,38 +43,25 @@ function useSave(run: () => Promise<string | null>, onDone: () => void) {
   return { busy, error, save };
 }
 
-/** "Set department and team" (spec 5.4): a department, and a team of it or "No team". */
-export function SetOrgDialog({ count, departments, teams, onSave, onClose }: { count: number; departments: ApiDepartment[]; teams: ApiTeam[]; onSave: (departmentId: string | null, teamId: string | null) => Promise<string | null>; onClose: () => void }) {
-  const [departmentId, setDepartmentId] = useState('');
-  const [teamId, setTeamId] = useState('');
-  const own = teams.filter((t) => t.departmentId === departmentId);
-  const { busy, error, save } = useSave(() => onSave(departmentId || null, teamId || null), onClose);
+/** "Set unit" (spec 5.4, CD-226): one unit (shown with its path) or "No unit". Managers follow the org rules. */
+export function SetUnitDialog({ count, units, onSave, onClose }: { count: number; units: ApiOrgUnit[]; onSave: (unitId: string | null) => Promise<string | null>; onClose: () => void }) {
+  const [unitId, setUnitId] = useState('');
+  const { busy, error, save } = useSave(() => onSave(unitId || null), onClose);
   return (
     <Modal maxWidth={460} onBackdrop={onClose}>
-      <ModalHeader title="Set department and team" sub={`For ${people(count)}. People in another team move to this one.`} />
+      <ModalHeader title="Set unit" sub={`For ${people(count)}. Each gets the unit's lead as manager (else the nearest lead above, else the CEO).`} />
       <label className="form-label">
-        Department
-        <select className="form-input" data-testid="org-set-department" value={departmentId} onChange={(e) => (setDepartmentId(e.target.value), setTeamId(''))}>
-          <option value="">No department</option>
-          {departments.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
+        Unit
+        <select className="form-input" data-testid="org-set-unit" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
+          <option value="">No unit</option>
+          {unitTree(units).map(({ unit }) => (
+            <option key={unit.id} value={unit.id}>
+              {unitPathLabel(units, unit.id)}
             </option>
           ))}
         </select>
       </label>
-      <label className="form-label">
-        Team
-        <select className="form-input" data-testid="org-set-team" value={teamId} disabled={!departmentId} onChange={(e) => setTeamId(e.target.value)}>
-          <option value="">No team</option>
-          {own.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <Footer busy={busy} error={error} onCancel={onClose} onSave={save} save="Save" testId="org-set-org-save" />
+      <Footer busy={busy} error={error} onCancel={onClose} onSave={save} save="Save" testId="org-set-unit-save" />
     </Modal>
   );
 }
@@ -97,13 +85,31 @@ export function SetManagerDialog({ count, employees, exclude, onSave, onClose }:
   );
 }
 
-/** A person dropped on a team or department box (spec 6.3): asks before moving them. */
-export function MoveDialog({ employee, target, onSave, onClose }: { employee: ApiEmployee; target: string; onSave: () => Promise<string | null>; onClose: () => void }) {
+/**
+ * A person dropped on a unit box (spec 6.3, CD-226): asks before moving them, saying who becomes
+ * their manager (the org rules: the unit's lead, else the nearest lead above, else the CEO).
+ */
+export function MoveDialog({ employee, target, from, manager, onSave, onClose }: { employee: ApiEmployee; target: string; from: string; manager: string | null; onSave: () => Promise<string | null>; onClose: () => void }) {
+  const { busy, error, save } = useSave(onSave, onClose);
+  const managerText = manager ? ` ${manager} becomes their manager.` : ' Their manager stays the same.';
+  return (
+    <Modal maxWidth={440} onBackdrop={onClose}>
+      <ModalHeader title={`Move ${employee.fullName}?`} sub={`From ${from || 'no unit'} to ${target}.${managerText}`} />
+      <Footer busy={busy} error={error} onCancel={onClose} onSave={save} save="Move" testId="org-move-save" />
+    </Modal>
+  );
+}
+
+/**
+ * A person dropped on another person (CD-226, both charts): asks before making the second one the
+ * manager, saying which unit the person moves to (the one the manager leads, else the manager's own).
+ */
+export function ManagerDropDialog({ employee, manager, unit, onSave, onClose }: { employee: ApiEmployee; manager: ApiEmployee; unit: string | null; onSave: () => Promise<string | null>; onClose: () => void }) {
   const { busy, error, save } = useSave(onSave, onClose);
   return (
     <Modal maxWidth={440} onBackdrop={onClose}>
-      <ModalHeader title={`Move ${employee.fullName}?`} sub={`From ${[employee.departmentName, employee.teamName].filter(Boolean).join(', ') || 'no department'} to ${target}. Their manager stays the same.`} />
-      <Footer busy={busy} error={error} onCancel={onClose} onSave={save} save="Move" testId="org-move-save" />
+      <ModalHeader title={`Make ${manager.fullName} the manager of ${employee.fullName}?`} sub={unit ? `${employee.fullName} moves to ${unit}.` : `${employee.fullName} stays in their unit.`} />
+      <Footer busy={busy} error={error} onCancel={onClose} onSave={save} save="Set manager" testId="org-boss-save" />
     </Modal>
   );
 }

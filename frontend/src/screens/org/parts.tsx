@@ -32,9 +32,13 @@ export function IssueIcons({ e }: { e: ApiEmployee }) {
   );
 }
 
+/** Dragging a person on the chart (spec 6.3, CD-226): the employee id travels as this type. */
+export const DRAG_TYPE = 'text/x-employee';
+
 /**
- * One person on the chart: initials, name, job title (and team, on the reporting tree), warnings for
- * HR. A button: clicking opens the card. Draggable when the caller may move people (spec 6.3).
+ * One person on the chart: initials, name, job title (and unit, on the reporting tree), warnings
+ * for HR. A button: clicking opens the card. Draggable when the caller may move people (spec 6.3);
+ * with `onDropPerson`, another person dropped on it makes this person their manager (CD-226).
  */
 export function PersonBox({
   e,
@@ -46,6 +50,7 @@ export function PersonBox({
   hit,
   draggable,
   extra,
+  onDropPerson,
 }: {
   e: ApiEmployee;
   onOpen: (id: string) => void;
@@ -56,15 +61,38 @@ export function PersonBox({
   hit?: boolean;
   draggable?: boolean;
   extra?: ReactNode;
+  /** Someone was dropped on this person: make this person their manager (the caller confirms). */
+  onDropPerson?: (draggedId: string) => void;
 }) {
+  const [over, setOver] = useState(false);
+  const drop = onDropPerson
+    ? {
+        onDragOver: (ev: React.DragEvent) => {
+          if (!ev.dataTransfer.types.includes(DRAG_TYPE)) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          ev.dataTransfer.dropEffect = 'move';
+          if (!over) setOver(true);
+        },
+        onDragLeave: () => setOver(false),
+        onDrop: (ev: React.DragEvent) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          setOver(false);
+          const id = ev.dataTransfer.getData(DRAG_TYPE);
+          if (id && id !== e.id) onDropPerson(id);
+        },
+      }
+    : {};
   return (
     <button
       type="button"
-      className={'org-person' + (dim ? ' is-dim' : '') + (hit ? ' is-hit' : '')}
+      className={'org-person' + (dim ? ' is-dim' : '') + (hit ? ' is-hit' : '') + (over ? ' is-over' : '')}
       data-testid="org-person"
       data-id={e.id}
       draggable={draggable}
-      onDragStart={draggable ? (ev) => ev.dataTransfer.setData('text/x-employee', e.id) : undefined}
+      onDragStart={draggable ? (ev) => ev.dataTransfer.setData(DRAG_TYPE, e.id) : undefined}
+      {...drop}
       onClick={() => onOpen(e.id)}
       title={e.fullName}
     >
@@ -82,7 +110,10 @@ export function PersonBox({
   );
 }
 
-/** A dropdown of checkboxes ("Department: Sales +1"), for the filters that take several values. */
+/**
+ * A dropdown of checkboxes ("Unit: Sales +1"), for the filters that take several values. Options
+ * with a `group` show under its heading (the units by level, CD-226); `depth` indents them.
+ */
 export function MultiSelect({
   label,
   options,
@@ -93,12 +124,12 @@ export function MultiSelect({
   emptyAction,
 }: {
   label: string;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; group?: string; depth?: number }[];
   value: string[];
   onChange: (v: string[]) => void;
   testId: string;
   empty?: string;
-  /** Shown under `empty` when there are no options at all, e.g. "Add department" (CD-224). */
+  /** Shown under `empty` when there are no options at all, e.g. "Create a unit" (CD-224). */
   emptyAction?: (close: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -126,11 +157,14 @@ export function MultiSelect({
           {options.length > 8 && <input className="form-input org-multi-search" placeholder="Search…" value={search} onChange={(ev) => setSearch(ev.target.value)} autoFocus />}
           {shown.length === 0 && <div className="org-multi-empty">{options.length ? 'Nothing matches' : (empty ?? 'Nothing to pick')}</div>}
           {options.length === 0 && emptyAction?.(() => setOpen(false))}
-          {shown.map((o) => (
-            <label key={o.value} className="org-multi-item">
-              <input type="checkbox" checked={value.includes(o.value)} onChange={() => onChange(value.includes(o.value) ? value.filter((v) => v !== o.value) : [...value, o.value])} />
-              <span>{o.label}</span>
-            </label>
+          {shown.map((o, i) => (
+            <div key={o.value} className="org-multi-entry">
+              {o.group && o.group !== shown[i - 1]?.group && <div className="org-multi-group">{o.group}</div>}
+              <label className="org-multi-item" style={o.depth ? { paddingLeft: 10 + o.depth * 14 } : undefined}>
+                <input type="checkbox" checked={value.includes(o.value)} onChange={() => onChange(value.includes(o.value) ? value.filter((v) => v !== o.value) : [...value, o.value])} />
+                <span>{o.label}</span>
+              </label>
+            </div>
           ))}
           {chosen.length > 0 && (
             <button type="button" className="org-multi-clear" onClick={() => onChange([])}>

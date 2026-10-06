@@ -1031,7 +1031,7 @@ export const crmApi = {
 };
 
 // ---------------------------------------------------------------- people (milestone 13)
-// Employees, departments and teams (backend modules/people, docs/ARCHITECTURE.md "People"). What
+// Employees, org levels and units (backend modules/people, docs/ARCHITECTURE.md "People"). What
 // a row carries depends on the caller (spec 9): directory fields always; `employment` only for rows
 // in their scope; `hr` and `roles` for Admins (the only ones doing HR work since CD-225). Never assume the optional
 // parts exist.
@@ -1039,7 +1039,7 @@ export const crmApi = {
 export type ApiFunctionalRole = 'employee' | 'manager' | 'admin';
 export type ApiEmployeeStatus = 'active' | 'leaving' | 'inactive';
 export type ApiAccountState = 'linked' | 'invited' | 'none';
-export type ApiDataIssue = 'no_manager' | 'no_start_date' | 'no_department' | 'manager_no_account' | 'no_employee_number';
+export type ApiDataIssue = 'no_manager' | 'no_start_date' | 'no_unit' | 'manager_no_account' | 'no_employee_number';
 export type ApiEmploymentType = 'permanent' | 'fixed_term' | 'contractor' | 'student';
 
 /** The caller's place in the org: `GET /api/people/access`. */
@@ -1071,10 +1071,9 @@ export interface ApiEmployee {
   lastName: string;
   fullName: string;
   jobTitle: string | null;
-  departmentId: string | null;
-  departmentName: string | null;
-  teamId: string | null;
-  teamName: string | null;
+  /** The org unit (CD-226; departments and teams before). */
+  unitId: string | null;
+  unitName: string | null;
   managerId: string | null;
   managerName: string | null;
   workEmail: string | null;
@@ -1094,32 +1093,42 @@ export interface ApiEmployeeQuery {
   ids?: readonly string[];
 }
 
-export interface ApiDepartment {
+/** A named level of the org structure (CD-226), top-down by `position` (Department, Team by default). */
+export interface ApiOrgLevel {
   id: string;
+  name: string;
+  position: number;
+  version: string;
+  /** Units of this level. */
+  units: number;
+}
+
+/** A unit of the org structure (CD-226): of a level, inside a unit of a higher level or under the company. */
+export interface ApiOrgUnit {
+  id: string;
+  levelId: string;
+  parentId: string | null;
   name: string;
   code: string | null;
-  headEmployeeId: string | null;
-  version: string;
-  activeEmployees: number;
-}
-
-export interface ApiTeam {
-  id: string;
-  departmentId: string;
-  name: string;
   leadEmployeeId: string | null;
+  leadName: string | null;
   version: string;
-  activeEmployees: number;
+  /** Active members (not counting units inside). */
+  members: number;
+  /** Units right inside it. */
+  units: number;
 }
 
-/** "Set department and team" (together: a team brings its department) or "Set manager" for several employees. */
+/**
+ * "Set unit" or "Set manager" for several employees, and the chart's drag. The org rules apply
+ * (CD-226): a unit brings its lead as manager, a manager their unit, unless both are sent.
+ */
 export interface BulkEmployeesInput {
   employeeIds: string[];
-  departmentId?: string | null;
-  teamId?: string | null;
+  unitId?: string | null;
   managerId?: string | null;
-  /** Confirms moving department heads and team leads elsewhere (CD-225). */
-  clearHeadRoles?: boolean;
+  /** Confirms moving unit leads elsewhere (CD-225, CD-226). */
+  clearLeadRoles?: boolean;
 }
 
 /** "Include personal details and bank accounts" (Admins; every export is audited). */
@@ -1151,8 +1160,8 @@ export const peopleApi = {
   access: () => api<ApiPeopleAccess>('/people/access'),
   /** The whole directory in one response (sorted by last name); `ids` (≤200) for live updates. */
   employees: (q: ApiEmployeeQuery = {}) => api<{ employees: ApiEmployee[]; total: number }>('/people/employees' + employeeSearch(q)).then((r) => r.employees),
-  departments: () => api<ApiDepartment[]>('/people/departments'),
-  teams: () => api<ApiTeam[]>('/people/teams'),
+  levels: () => api<ApiOrgLevel[]>('/people/org-levels'),
+  units: () => api<ApiOrgUnit[]>('/people/org-units'),
   /** All or nothing: `{ updated }` is how many actually changed. */
   bulkUpdate: (input: BulkEmployeesInput) => api<{ updated: number }>('/people/employees/bulk', { method: 'POST', json: input }),
   exportPersonal: (employeeIds: string[]) => api<{ employees: ApiEmployeePersonalExport[] }>('/people/employees/export', { method: 'POST', json: { employeeIds } }).then((r) => r.employees),
@@ -1182,8 +1191,7 @@ export type EmployeeField =
   | 'weeklyHours'
   | 'timesheetRequired'
   | 'attendanceTracked'
-  | 'departmentId'
-  | 'teamId'
+  | 'unitId'
   | 'managerId'
   | 'dateOfBirth'
   | 'privateEmail'
@@ -1228,10 +1236,8 @@ export interface ApiEmployeeCard {
   lastName: string;
   fullName: string;
   jobTitle: string | null;
-  departmentId: string | null;
-  departmentName: string | null;
-  teamId: string | null;
-  teamName: string | null;
+  unitId: string | null;
+  unitName: string | null;
   managerId: string | null;
   managerName: string | null;
   workEmail: string | null;
@@ -1244,8 +1250,8 @@ export interface ApiEmployeeCard {
   roles: FunctionalRole[];
   manager: { id: string; fullName: string; hasAccount: boolean; manager: { id: string; fullName: string } | null } | null;
   directReports: { id: string; fullName: string; jobTitle: string | null }[];
-  leadsTeams: { id: string; name: string }[];
-  headsDepartments: { id: string; name: string }[];
+  /** The unit they lead (CD-226: at most one). */
+  leadsUnit: { id: string; name: string } | null;
   approvals: ApiApprovals | null;
   employment?: {
     employeeNumber: string | null;
@@ -1303,8 +1309,7 @@ export interface ApiEmployeeRow {
   userId: string | null;
   fullName: string;
   jobTitle: string | null;
-  departmentId: string | null;
-  teamId: string | null;
+  unitId: string | null;
   managerId: string | null;
   status: EmployeeStatus;
 }
@@ -1331,26 +1336,26 @@ export interface DeactivateInput {
   reason?: LeavingReason | null;
   /** Required (null = "No manager") when they have direct reports. */
   reportsManagerId?: string | null;
-  teamLeads?: { teamId: string; employeeId: string | null }[];
-  departmentHeads?: { departmentId: string; employeeId: string | null }[];
+  /** The new lead of the unit they lead (CD-226); none when left out. */
+  unitLeads?: { unitId: string; employeeId: string | null }[];
 }
 
 /** The employee card's calls (CD-140); the Org structure page has its own client. */
 export const peopleCardApi = {
   access: () => api<ApiPeopleAccess>('/people/access'),
   card: (id: string) => api<ApiEmployeeCard>(`/people/employees/${id}`),
-  /** `clearHeadRoles`: confirms moving a department head or team lead elsewhere (CD-225; 409 `heads_department` otherwise). */
-  update: (id: string, patch: EmployeePatch, version?: string, clearHeadRoles = false) =>
-    api<ApiEmployeeCard>(`/people/employees/${id}`, { method: 'PATCH', json: clearHeadRoles ? { ...patch, clearHeadRoles } : patch, headers: ifMatch(version) }),
+  /** `clearLeadRoles`: confirms moving a unit's lead elsewhere (CD-225, CD-226; 409 `heads_unit` otherwise). */
+  update: (id: string, patch: EmployeePatch, version?: string, clearLeadRoles = false) =>
+    api<ApiEmployeeCard>(`/people/employees/${id}`, { method: 'PATCH', json: clearLeadRoles ? { ...patch, clearLeadRoles } : patch, headers: ifMatch(version) }),
   reveal: (id: string, account: 'iban' | 'fxIban') =>
     api<{ account: 'iban' | 'fxIban'; iban: string; formatted: string; domestic: string | null; foreign: boolean }>(`/people/employees/${id}/bank/reveal`, { method: 'POST', json: { account } }),
   history: (id: string, offset = 0, limit = 30) => api<{ entries: ApiPeopleHistoryEntry[]; more: boolean }>(`/people/history?entityType=employee&entityId=${id}&limit=${limit}&offset=${offset}`),
   /** "Approvals go to" (spec 7.4) for `date` (default today). */
   approvers: (id: string, date?: string) => api<ApiApprovals>(`/people/employees/${id}/approvers${date ? `?date=${date}` : ''}`),
-  /** Active employees, departments and teams for the card's pickers. */
+  /** Active employees, levels and units for the card's pickers. */
   directory: () => api<{ employees: ApiEmployeeRow[]; total: number }>('/people/employees'),
-  departments: () => api<ApiDepartment[]>('/people/departments'),
-  teams: () => api<ApiTeam[]>('/people/teams'),
+  levels: () => api<ApiOrgLevel[]>('/people/org-levels'),
+  units: () => api<ApiOrgUnit[]>('/people/org-units'),
   deactivate: (id: string, input: DeactivateInput) => api<ApiEmployeeCard>(`/people/employees/${id}/deactivate`, { method: 'POST', json: input }),
   reactivate: (id: string, employmentStartDate?: string) => api<ApiEmployeeCard>(`/people/employees/${id}/reactivate`, { method: 'POST', json: employmentStartDate ? { employmentStartDate } : {} }),
   remove: (id: string) => api(`/people/employees/${id}`, { method: 'DELETE' }),

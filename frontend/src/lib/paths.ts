@@ -9,7 +9,7 @@ export type CalendarParams = Partial<
 /** The New meeting page's prefill (CD-221): ISO `start`/`end`, ids, the type and the title. */
 export type NewMeetingParams = Partial<Record<'companyId' | 'dealId' | 'contactId' | 'type' | 'organizer' | 'start' | 'end' | 'title', string | null | undefined>>;
 /** The Org structure page's state in its URL (CD-137), so a link shows the same view. */
-export type OrgParams = Partial<Record<'tab' | 'mode' | 'q' | 'dept' | 'team' | 'manager' | 'scope' | 'status' | 'account' | 'issues' | 'sort' | 'dir' | 'new', string | null | undefined>>;
+export type OrgParams = Partial<Record<'tab' | 'mode' | 'q' | 'unit' | 'dept' | 'team' | 'manager' | 'scope' | 'status' | 'account' | 'issues' | 'sort' | 'dir' | 'new', string | null | undefined>>;
 const query = (params: Partial<Record<string, string | null | undefined>> = {}) => {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
