@@ -75,9 +75,10 @@ When the checks pass, open a pull request to `main`:
 
 **GitHub CI** then runs three checks on the pull request: `backend`, `frontend` and `integration`.
 All three must be green before merging. The `e2e` browser tests (about 16 minutes, workflow
-`e2e.yml`) don't run on pull requests or on `main` (CD-218). They run before every production
-deploy (step 4 below) and on demand: Actions → **E2E tests** → **Run workflow** on the branch. Run
-them that way before asking for review when a change touches the flows the e2e tests cover.
+`e2e.yml`) don't run on pull requests or on `main` (CD-218). They run only before a production
+deploy (step 4 below). Don't start them for a pull request or after a merge to staging; a change
+that touches the flows the e2e tests cover updates or adds tests in `e2e/`, and the run before
+production checks them (CD-227).
 
 The image build can also be checked before merging. Run **CI / CD** from the Actions tab against
 the branch and enable **Build both Docker images without publishing them**. The checks (`backend`, `frontend`, `website`, `integration`) run
