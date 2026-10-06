@@ -108,6 +108,19 @@ describe('command palette, + menu and account menu', () => {
     await page.waitForFunction(() => !document.querySelector('.modal'));
   });
 
+  step('"Go to" reaches pages of other modules: Org structure (Workforce) and Reports', async () => {
+    const rows = await search(page, 'org structure');
+    assert.equal(rows[0].title, 'Org structure', JSON.stringify(rows));
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => location.pathname === '/org');
+    await page.waitForFunction(() => document.querySelector('[data-testid=module-switcher]')?.getAttribute('data-current-module') === 'workforce');
+    const reports = await search(page, 'reports');
+    assert.equal(reports[0].title, 'Reports', JSON.stringify(reports));
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => location.pathname.startsWith('/reports/'));
+    await page.waitForFunction(() => document.querySelector('[data-testid=module-switcher]')?.getAttribute('data-current-module') === 'crm');
+  });
+
   step('the + menu runs an item by its letter', async () => {
     await click(page, '[data-testid=new-menu]');
     await page.waitForSelector('[data-testid=new-task]');
@@ -122,6 +135,9 @@ describe('command palette, + menu and account menu', () => {
     await page.waitForSelector('[data-testid=notifications-pop]');
     assert.match(await page.$eval('[data-testid=notifications-pop]', (el) => el.innerText), /Nothing overdue or due today|Overdue|Today/);
     await click(page, '[data-testid=account-menu]');
+    // Team is a tab of the workspace settings, not in the account menu (CD-223).
+    const items = await page.$$eval('.header-right .menu-pop [role=menuitem]', (els) => els.map((el) => el.textContent.trim()));
+    assert.deepEqual(items, ['Personal preferences', 'Workspace settings', 'Sign out']);
     await clickButton(page, 'Personal preferences');
     await page.waitForFunction(() => location.pathname === '/profile');
   });

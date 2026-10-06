@@ -10,12 +10,10 @@ import type { Profile as ProfileT } from '../store/types';
 const selectStyle = { width: '100%' } as const;
 const note = { fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 } as const;
 
-const LANGUAGES = [
-  { value: 'en', label: 'English' },
-  { value: 'sr', label: 'Srpski' },
-  { value: 'de', label: 'Deutsch' },
-];
-const DATE_FORMATS = ['DD.MM.YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'];
+// Language (en, sr, de) and date format (DD.MM.YYYY, MM/DD/YYYY, YYYY-MM-DD) are still in the
+// profile and its API, but aren't shown (CD-223): nothing applies them yet, so offering them would
+// promise something the app doesn't do. Bring the two rows back once the app is translated and
+// formats dates by them.
 const START_PAGES = [
   { value: 'pipeline', label: 'Pipeline' },
   { value: 'overview', label: 'Overview' },
@@ -77,13 +75,6 @@ export function Profile() {
           <div className="card-title" style={{ marginBottom: 8 }}>
             Preferences
           </div>
-          <FieldRow label="Language">
-            <GhostSelect style={selectStyle} value={p.language} onChange={setP('language')} options={LANGUAGES} />
-          </FieldRow>
-          <FieldRow label="Date format">
-            <GhostSelect style={selectStyle} value={p.dateFormat} onChange={setP('dateFormat')} options={DATE_FORMATS} />
-          </FieldRow>
-          <span style={{ ...note, margin: '2px 0 6px' }}>Language and date format are saved for later: the app is in English with its own date style for now.</span>
           <FieldRow label="Start page">
             <GhostSelect style={selectStyle} value={p.startPage} onChange={setP('startPage')} options={START_PAGES} />
           </FieldRow>

@@ -1,13 +1,18 @@
-// The module and workspace switcher behind the Pultly mark (CD-214): it opens from the logo and
-// with Ctrl+J, marks the current module, navigates on a pick, ignores locked modules, closes on
-// Escape and an outside click, switches and creates workspaces, and is a bottom sheet on phones.
+// The module and workspace switcher (CD-214) and modules as separate apps (CD-223): the button under
+// the Pultly mark shows the module you're in and opens the switcher (also with Ctrl+J); each module
+// has its own sidebar, Settings keeps the last one; picking navigates, locked modules do nothing;
+// Escape and an outside click close it; it switches and creates workspaces; pages that don't fit a
+// short window go under "More"; on phones it is a bottom sheet.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { api, BASE_URL, click, clickButton, newUserWithWorkspace, RUN, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
 
 const POP = '[data-testid=module-switcher-pop]';
 const LOGO = '[data-testid=module-switcher]';
+const MORE = '[data-testid=sidebar-more]';
+const MORE_POP = '[data-testid=sidebar-more-pop]';
 const PHONE = { width: 390, height: 844, isMobile: true, hasTouch: true };
+const CRM_PAGES = ['Overview', 'Pipeline', 'Today', 'Calendar', 'Visit plans', 'Companies', 'Contacts', 'Products', 'Reports'];
 
 describe('module and workspace switcher', () => {
   const browser = useBrowser();
@@ -26,6 +31,13 @@ describe('module and workspace switcher', () => {
         sub: el.querySelector('.mod-desc').textContent.trim(),
       })),
     );
+  /** The module the sidebar's switcher button shows, and the sidebar's pages on screen. */
+  const sidebar = () =>
+    page.evaluate(() => ({
+      module: document.querySelector('[data-testid=module-switcher]')?.getAttribute('data-current-module') ?? null,
+      pages: [...document.querySelectorAll('.app-sidebar nav .nav-item')].filter((el) => el.getClientRects().length > 0).map((el) => el.querySelector('.nav-label').textContent),
+    }));
+  const inModule = (id) => page.waitForFunction((id) => document.querySelector('[data-testid=module-switcher]')?.getAttribute('data-current-module') === id, {}, id);
   const closed = () => page.waitForFunction((sel) => !document.querySelector(sel), {}, POP);
   const focused = () => page.evaluate(() => document.activeElement?.getAttribute('data-module') ?? document.activeElement?.getAttribute('data-testid'));
   const ctrlJ = async () => {
@@ -39,21 +51,24 @@ describe('module and workspace switcher', () => {
     await newUserWithWorkspace(page, { label: 'modsw', name: 'Maja Modules', workspace: firstWorkspace });
   });
 
-  step('the logo opens it with CRM marked as the current module', async () => {
+  step('the button under the logo shows CRM and its pages; it opens the switcher with CRM marked', async () => {
     await page.goto(BASE_URL + '/companies', { waitUntil: 'networkidle0' });
     await waitForToastToClear(page);
+    assert.deepEqual(await sidebar(), { module: 'crm', pages: CRM_PAGES });
+    assert.equal((await page.$eval(LOGO, (el) => el.textContent)).trim(), 'CRM');
+    assert.ok(await page.$('.app-sidebar a[href="/settings"]'), 'Settings at the bottom');
     await click(page, LOGO);
     await page.waitForSelector(POP);
     const rows = await modules();
     assert.deepEqual(
       rows.map((m) => m.id),
-      ['overview', 'crm', 'planning', 'projects', 'workforce', 'reporting'],
+      ['planning', 'crm', 'projects', 'workforce'],
     );
     assert.deepEqual(rows.find((m) => m.current)?.id, 'crm');
     // One workspace: no workspace row, its name next to "Modules".
     assert.equal(await page.$(`${POP} .mod-ws-row`), null);
     assert.ok((await page.$eval(`${POP} .mod-label-ws`, (el) => el.textContent)).includes(firstWorkspace));
-    // An owner opens Reporting; modules that aren't built yet are locked.
+    // Modules that aren't built yet are locked.
     assert.deepEqual(
       rows.filter((m) => m.locked).map((m) => [m.id, m.sub]),
       [
@@ -63,21 +78,38 @@ describe('module and workspace switcher', () => {
     );
   });
 
-  step('picking a module navigates and closes it', async () => {
-    await click(page, `${POP} [data-module=overview]`);
-    await page.waitForFunction(() => location.pathname === '/overview');
-    await closed();
-    await click(page, LOGO);
-    assert.equal((await modules()).find((m) => m.current)?.id, 'overview');
-    // Workforce opens the Org structure page (CD-137) and is the current module there.
+  step('picking Workforce opens Org structure with only its own page in the sidebar', async () => {
     await click(page, `${POP} [data-module=workforce]`);
     await page.waitForFunction(() => location.pathname === '/org');
     await closed();
+    await inModule('workforce');
+    assert.deepEqual(await sidebar(), { module: 'workforce', pages: ['Org structure'] });
+    assert.equal((await page.$eval(LOGO, (el) => el.textContent)).trim(), 'Workforce');
     await click(page, LOGO);
     assert.equal((await modules()).find((m) => m.current)?.id, 'workforce');
-    await click(page, `${POP} [data-module=reporting]`);
-    await page.waitForFunction(() => location.pathname.startsWith('/reports/'));
+    await click(page, `${POP} [data-module=crm]`);
+    await page.waitForFunction(() => location.pathname === '/pipeline');
     await closed();
+    assert.deepEqual(await sidebar(), { module: 'crm', pages: CRM_PAGES });
+  });
+
+  step('an employee card is Workforce; Settings and the profile keep the last module', async () => {
+    const { employeeId } = await api(page, '/people/access');
+    assert.ok(employeeId, 'the owner has an employee card');
+    await page.goto(`${BASE_URL}/people/${employeeId}`, { waitUntil: 'networkidle0' });
+    await inModule('workforce');
+    await click(page, '.app-sidebar a[href="/settings"]');
+    await page.waitForFunction(() => location.pathname.startsWith('/settings/'));
+    assert.deepEqual(await sidebar(), { module: 'workforce', pages: ['Org structure'] });
+    // Remembered in this browser: still Workforce after a reload.
+    await page.reload({ waitUntil: 'networkidle0' });
+    await inModule('workforce');
+    // Back in the CRM, the profile shows the CRM.
+    await page.goto(BASE_URL + '/today', { waitUntil: 'networkidle0' });
+    await inModule('crm');
+    await page.goto(BASE_URL + '/profile', { waitUntil: 'networkidle0' });
+    await inModule('crm');
+    assert.deepEqual((await sidebar()).pages, CRM_PAGES);
   });
 
   step('locked modules are not clickable', async () => {
@@ -85,18 +117,19 @@ describe('module and workspace switcher', () => {
     await click(page, `${POP} [data-module=planning]`);
     await click(page, `${POP} [data-module=projects]`);
     assert.ok(await page.$(POP), 'still open');
-    assert.ok(new URL(page.url()).pathname.startsWith('/reports/'), 'still on Reports');
+    assert.equal(new URL(page.url()).pathname, '/profile', 'still on the profile');
   });
 
-  step('Escape closes it and gives focus back to the logo; an outside click closes it', async () => {
+  step('Escape closes it and gives focus back to the switcher button; an outside click closes it', async () => {
     await page.keyboard.press('Escape');
     await closed();
     assert.equal(await focused(), 'module-switcher');
     await click(page, LOGO);
     await page.waitForSelector(POP);
-    // The popover covers the header's title: click the empty part of the sidebar instead.
-    await page.mouse.click(48, 1050);
+    // The popover covers the header's title: click the empty part of the sidebar, below its pages.
+    await page.mouse.click(48, 950);
     await closed();
+    assert.equal(new URL(page.url()).pathname, '/profile');
   });
 
   step('Ctrl+J opens it; arrow keys move between the modules', async () => {
@@ -104,19 +137,55 @@ describe('module and workspace switcher', () => {
     await page.click('h1');
     await ctrlJ();
     await page.waitForSelector(POP);
-    assert.equal(await focused(), 'overview', 'the current module has focus');
-    await page.keyboard.press('ArrowRight');
-    assert.equal(await focused(), 'crm');
-    await page.keyboard.press('ArrowDown');
-    assert.equal(await focused(), 'projects');
+    assert.equal(await focused(), 'crm', 'the current module has focus');
     await page.keyboard.press('ArrowLeft');
     assert.equal(await focused(), 'planning');
+    await page.keyboard.press('ArrowDown');
+    assert.equal(await focused(), 'projects');
     await page.keyboard.press('Enter');
     assert.ok(await page.$(POP), 'a locked module does nothing on Enter');
-    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await focused(), 'workforce');
     await page.keyboard.press('Enter');
-    await page.waitForFunction(() => location.pathname === '/overview');
+    await page.waitForFunction(() => location.pathname === '/org');
     await closed();
+  });
+
+  step('in a short window the pages that do not fit are under "More", which works with the keyboard', async () => {
+    await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
+    assert.equal(await page.$(MORE), null, 'everything fits at 1400×1100');
+    await page.setViewport({ width: 1280, height: 600 });
+    await page.waitForSelector(MORE, { visible: true });
+    const shown = (await sidebar()).pages;
+    assert.ok(shown.length > 0 && shown.length < CRM_PAGES.length, `${shown.length} pages shown`);
+    // Nothing is cut off: the last page shown and "More" sit above Settings.
+    const fits = await page.evaluate(() => {
+      const more = document.querySelector('[data-testid=sidebar-more]').getBoundingClientRect();
+      const settings = document.querySelector('.app-sidebar a[href="/settings"]').getBoundingClientRect();
+      return more.bottom <= settings.top && settings.bottom <= window.innerHeight;
+    });
+    assert.ok(fits, '"More" and Settings fit');
+    await click(page, MORE);
+    await page.waitForSelector(MORE_POP);
+    const rest = await page.$$eval(`${MORE_POP} [role=menuitem]`, (els) => els.map((el) => el.textContent.trim()));
+    assert.deepEqual([...shown, ...rest], CRM_PAGES);
+    // The first page has focus; arrows move; Escape closes and gives focus back to "More".
+    assert.equal(await page.evaluate(() => document.activeElement?.textContent.trim()), rest[0]);
+    await page.keyboard.press('ArrowUp');
+    assert.equal(await page.evaluate(() => document.activeElement?.textContent.trim()), 'Reports');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction((sel) => !document.querySelector(sel), {}, MORE_POP);
+    assert.equal(await focused(), 'sidebar-more');
+    // Enter opens it again; End and Enter go to Reports.
+    await page.keyboard.press('Enter');
+    await page.waitForSelector(MORE_POP);
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => location.pathname.startsWith('/reports/'));
+    await page.waitForFunction((sel) => !document.querySelector(sel), {}, MORE_POP);
+    await page.setViewport({ width: 1400, height: 1100 });
+    await page.waitForFunction((sel) => !document.querySelector(sel), {}, MORE);
+    assert.deepEqual((await sidebar()).pages, CRM_PAGES);
   });
 
   step('creates a second workspace from the switcher', async () => {
@@ -170,9 +239,12 @@ describe('module and workspace switcher', () => {
     assert.deepEqual(box, { left: 0, right: 390, bottom: 844 });
     const sideways = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth);
     assert.ok(sideways <= 0, `scrolls sideways by ${sideways}px`);
-    await click(page, `${POP} [data-module=overview]`);
-    await page.waitForFunction(() => location.pathname === '/overview');
+    await click(page, `${POP} [data-module=workforce]`);
+    await page.waitForFunction(() => location.pathname === '/org');
     await closed();
+    // Workforce's bottom bar: Org structure and "More".
+    assert.deepEqual((await sidebar()).pages, ['Org structure']);
+    assert.ok(await page.$eval('[data-testid=nav-more]', (el) => el.getClientRects().length > 0), '"More" in the bar');
     // The backdrop closes it, too.
     await click(page, '[data-testid=nav-more]');
     await click(page, '[data-testid=more-modules]');
