@@ -2,7 +2,9 @@
  * Departments and teams (CD-138, spec 6): who may change them (AC 6.4.1), uniqueness and delete
  * rules, an employee never in a team of another department (AC 6.4.2), moving a team moves its
  * members in the same transaction (AC 6.4.3), "Add people" with the prefilled manager, the team-lead
- * dialog "Make team members report to <lead>" (AC 6.4.4) and live updates (AC 6.4.5).
+ * dialog "Make team members report to <lead>" (AC 6.4.4), heads and leads placed where they head
+ * (CD-225) and live updates (AC 6.4.5). `hr` is a workspace admin (only Admins do HR work since
+ * CD-225); `pay` holds a leftover Payroll row, which gives nothing.
  */
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { call, createTenant, ok, type Session, signIn } from './helpers';
@@ -29,20 +31,23 @@ beforeAll(async () => {
   [owner, hr, pay, mgr, emp] = (await Promise.all(['dt-owner', 'dt-hr', 'dt-pay', 'dt-mgr', 'dt-emp'].map((l) => signIn(l)))) as [Session, Session, Session, Session, Session];
   tenant = await createTenant(owner, 'Departments');
   id.owner = (await ok('GET', '/people/access', as(owner))).employeeId;
-  for (const [key, s] of [['hr', hr], ['pay', pay], ['mgr', mgr], ['emp', emp]] as const) id[key] = await joinAsEmployee(owner, tenant, s);
-  await grantRole(tenant, id.hr, 'administration');
+  id.hr = await joinAsEmployee(owner, tenant, hr, 'admin');
+  for (const [key, s] of [['pay', pay], ['mgr', mgr], ['emp', emp]] as const) id[key] = await joinAsEmployee(owner, tenant, s);
   await grantRole(tenant, id.pay, 'payroll');
   await ok('POST', '/people/reporting-lines', { ...as(), body: { employeeIds: [id.emp], managerId: id.mgr } }, 200);
 });
 
 describe('who changes departments and teams (AC 6.4.1)', () => {
-  it('Administration and Admins add, rename and delete; history keeps the old name', async () => {
+  it('Admins add, rename and delete; history keeps the old name', async () => {
     const d = await ok('POST', '/people/departments', { ...as(hr), body: { name: '  Service ', code: 'SRV', headEmployeeId: id.mgr } });
-    expect(d).toMatchObject({ name: 'Service', code: 'SRV', headEmployeeId: id.mgr, headName: mgr.name, teams: 0, activeEmployees: 0 });
+    // The head is put in the department (CD-225).
+    expect(d).toMatchObject({ name: 'Service', code: 'SRV', headEmployeeId: id.mgr, headName: mgr.name, teams: 0, activeEmployees: 1 });
     const renamed = await ok('PATCH', `/people/departments/${d.id}`, { ...as(owner), body: { name: 'Field service', code: '' } });
     expect(renamed).toMatchObject({ name: 'Field service', code: null });
     const t = await ok('POST', '/people/teams', { ...as(owner), body: { departmentId: d.id, name: 'Service Belgrade', leadEmployeeId: id.mgr } });
-    expect(t).toMatchObject({ team: { name: 'Service Belgrade', departmentId: d.id, leadEmployeeId: id.mgr, leadName: mgr.name, leadOutside: true }, moved: 0 });
+    // The lead is put in the team; as the department's head they stay its head.
+    expect(t).toMatchObject({ team: { name: 'Service Belgrade', departmentId: d.id, leadEmployeeId: id.mgr, leadName: mgr.name, leadOutside: false }, moved: 0 });
+    expect(await row(id.mgr)).toMatchObject({ department_id: d.id, team_id: t.team.id });
     expect((await ok('PATCH', `/people/teams/${t.team.id}`, { ...as(hr), body: { name: 'Service BG' } })).team.name).toBe('Service BG');
     // Everyone reads them, with the counts.
     expect((await ok('GET', '/people/departments', as(emp))).find((x: { id: string }) => x.id === d.id)).toMatchObject({ name: 'Field service', teams: 1 });
@@ -56,7 +61,7 @@ describe('who changes departments and teams (AC 6.4.1)', () => {
     expect((await ok('GET', '/people/departments', as(hr))).some((x: { id: string }) => x.id === d.id)).toBe(false);
   });
 
-  it('Employees, Managers and Payroll get 403 for every change', async () => {
+  it('Employees, Managers and a leftover Payroll row get 403 for every change', async () => {
     const d = await department('Locked');
     const t = await team(d, 'Locked team');
     const target = await person('Target', 'Person');
@@ -80,11 +85,13 @@ describe('who changes departments and teams (AC 6.4.1)', () => {
     expect((await row(target)).department_id).toBeNull();
   });
 
-  it('Administration cannot put themselves in a department or team; an Admin can', async () => {
+  it('only Admins put people, themselves included, in a department or team', async () => {
     const d = await department('Own dept');
-    expect((await call('POST', '/people/assignments', { ...as(hr), body: { departmentId: d, employeeIds: [id.hr] } })).status).toBe(403);
+    expect((await call('POST', '/people/assignments', { ...as(pay), body: { departmentId: d, employeeIds: [id.pay] } })).status).toBe(403);
+    await ok('POST', '/people/assignments', { ...as(hr), body: { departmentId: d, employeeIds: [id.hr] } }, 200);
     await ok('POST', '/people/assignments', { ...as(owner), body: { departmentId: d, employeeIds: [id.owner] } }, 200);
     expect((await row(id.owner)).department_id).toBe(d);
+    expect((await row(id.hr)).department_id).toBe(d);
   });
 });
 
@@ -263,19 +270,21 @@ describe('team lead: "Make team members report to <lead>" (AC 6.4.4)', () => {
     await ok('POST', '/people/reporting-lines', { ...as(hr), body: { employeeIds: [ofOther], managerId: id.mgr } }, 200);
     await ok('POST', '/people/reporting-lines', { ...as(hr), body: { employeeIds: [lead], managerId: boss } }, 200);
 
+    // The previous lead was put in the team (CD-225) and has no manager, so they would report to the new lead too.
+    expect(await row(previous)).toMatchObject({ department_id: d, team_id: t });
     const preview = await ok('GET', `/people/teams/${t}/lead-preview?leadEmployeeId=${lead}`, as(hr));
-    expect(preview.members.map((m: { id: string }) => m.id).sort()).toEqual([none, ofPrevious].sort());
+    expect(preview.members.map((m: { id: string }) => m.id).sort()).toEqual([none, ofPrevious, previous].sort());
     expect(preview.loops).toEqual([{ id: boss, fullName: 'Big Boss', message: 'This would create a loop: Big Boss → New Lead → Big Boss' }]);
 
     // Setting a lead alone changes nobody's manager.
-    const quiet = await ok('PATCH', `/people/teams/${t}`, { ...as(hr), body: { leadEmployeeId: id.owner } });
+    const quiet = await ok('PATCH', `/people/teams/${t}`, { ...as(hr), body: { leadEmployeeId: ofOther } });
     expect(quiet.reassigned).toEqual([]);
     expect((await row(none)).manager_id).toBeNull();
     await ok('PATCH', `/people/teams/${t}`, { ...as(hr), body: { leadEmployeeId: previous } });
 
     const saved = await ok('PATCH', `/people/teams/${t}`, { ...as(hr), body: { leadEmployeeId: lead, makeMembersReport: true } });
     expect(saved.team).toMatchObject({ leadEmployeeId: lead, leadOutside: false });
-    expect(saved.reassigned.sort()).toEqual([none, ofPrevious].sort());
+    expect(saved.reassigned.sort()).toEqual([none, ofPrevious, previous].sort());
     expect(saved.loops.map((l: { id: string }) => l.id)).toEqual([boss]);
     expect((await row(none)).manager_id).toBe(lead);
     expect((await row(ofPrevious)).manager_id).toBe(lead);
@@ -285,17 +294,72 @@ describe('team lead: "Make team members report to <lead>" (AC 6.4.4)', () => {
     expect((await row(outsider)).manager_id).toBeNull();
   });
 
-  it("Administration can't make themselves the members' manager that way; an Admin can", async () => {
+  it("only Admins set a lead; an Admin may make themselves the members' manager that way", async () => {
     const d = await department('Self lead dept');
     const t = await team(d, 'Self lead team');
     const member = await person('Team', 'Member');
     await ok('POST', '/people/assignments', { ...as(hr), body: { departmentId: d, teamId: t, employeeIds: [member] } }, 200);
-    expect((await call('PATCH', `/people/teams/${t}`, { ...as(hr), body: { leadEmployeeId: id.hr, makeMembersReport: true } })).status).toBe(403);
+    expect((await call('PATCH', `/people/teams/${t}`, { ...as(pay), body: { leadEmployeeId: id.pay, makeMembersReport: true } })).status).toBe(403);
     expect((await row(member)).manager_id).toBeNull();
-    // Without the reporting change, Administration may lead the team.
-    await ok('PATCH', `/people/teams/${t}`, { ...as(hr), body: { leadEmployeeId: id.hr } });
-    await ok('PATCH', `/people/teams/${t}`, { ...as(owner), body: { leadEmployeeId: id.owner, makeMembersReport: true } });
-    expect((await row(member)).manager_id).toBe(id.owner);
+    await ok('PATCH', `/people/teams/${t}`, { ...as(hr), body: { leadEmployeeId: id.hr, makeMembersReport: true } });
+    expect((await row(member)).manager_id).toBe(id.hr);
+    expect(await row(id.hr)).toMatchObject({ department_id: d, team_id: t });
+  });
+});
+
+describe('heads and leads belong where they head (CD-225)', () => {
+  it('making someone head puts them in the department; a lead in the team and its department', async () => {
+    const sales = await department('Head sales');
+    const other = await department('Head other');
+    const otherTeam = await team(other, 'Head other team');
+    const ana = await person('Ana', 'Header', { departmentId: other, teamId: otherTeam });
+    await ok('PATCH', `/people/departments/${sales}`, { ...as(hr), body: { headEmployeeId: ana } });
+    expect(await row(ana)).toMatchObject({ department_id: sales, team_id: null });
+    const { entries } = await ok('GET', `/people/history?entityType=employee&entityId=${ana}`, as(hr));
+    expect(entries.map((e: { field: string | null }) => e.field)).toEqual(expect.arrayContaining(['departmentId', 'teamId']));
+
+    const bo = await person('Bo', 'Leader');
+    const created = await ok('POST', '/people/teams', { ...as(hr), body: { departmentId: sales, name: 'Head south', leadEmployeeId: bo } });
+    expect(created.team.leadOutside).toBe(false);
+    expect(await row(bo)).toMatchObject({ department_id: sales, team_id: created.team.id });
+
+    const cy = await person('Cy', 'Founder');
+    const fresh = await ok('POST', '/people/departments', { ...as(hr), body: { name: 'Head new', headEmployeeId: cy } });
+    expect(fresh.activeEmployees).toBe(1);
+    expect((await row(cy)).department_id).toBe(fresh.id);
+    // The head is shown once: in the department, not in a team box (the chart reads team_id).
+    expect((await ok('GET', '/people/employees', as(emp))).employees.find((e: { id: string }) => e.id === cy)).toMatchObject({ departmentId: fresh.id, teamId: null });
+  });
+
+  it('moving a head or lead elsewhere is a 409 heads_department until confirmed with clearHeadRoles', async () => {
+    const service = await department('Move service');
+    const sales = await department('Move sales');
+    const st = await team(sales, 'Move sales team');
+    const ana = await person('Ana', 'Mover');
+    await ok('PATCH', `/people/departments/${sales}`, { ...as(hr), body: { headEmployeeId: ana } });
+
+    // The card.
+    const refused = await call('PATCH', `/people/employees/${ana}`, { ...as(hr), body: { departmentId: service } });
+    expect(refused.status).toBe(409);
+    expect(refused.body).toMatchObject({ code: 'heads_department', message: 'Ana Mover is head of Move sales. Moving them to Move service removes them as head of Move sales.' });
+    expect((await row(ana)).department_id).toBe(sales);
+    // Within the department (into one of its teams) they stay its head.
+    await ok('PATCH', `/people/employees/${ana}`, { ...as(hr), body: { teamId: st } });
+    const moved = await ok('PATCH', `/people/employees/${ana}`, { ...as(hr), body: { departmentId: service, clearHeadRoles: true } });
+    expect(moved).toMatchObject({ departmentId: service, teamId: null, headsDepartments: [] });
+    expect((await ok('GET', '/people/departments', as(hr))).find((x: { id: string }) => x.id === sales).headEmployeeId).toBeNull();
+
+    // "Add people" and heading another department ask the same way.
+    const bo = await person('Bo', 'Mover');
+    await ok('PATCH', `/people/teams/${st}`, { ...as(hr), body: { leadEmployeeId: bo } });
+    expect(await row(bo)).toMatchObject({ department_id: sales, team_id: st });
+    const assign = await call('POST', '/people/assignments', { ...as(hr), body: { departmentId: service, employeeIds: [bo] } });
+    expect(assign).toMatchObject({ status: 409, body: { code: 'heads_department', message: 'Bo Mover is lead of Move sales team. Moving them to Move service removes them as lead of Move sales team.' } });
+    expect((await call('PATCH', `/people/departments/${service}`, { ...as(hr), body: { headEmployeeId: bo } })).status).toBe(409);
+    expect((await row(bo)).team_id).toBe(st);
+    await ok('PATCH', `/people/departments/${service}`, { ...as(hr), body: { headEmployeeId: bo, clearHeadRoles: true } });
+    expect(await row(bo)).toMatchObject({ department_id: service, team_id: null });
+    expect((await ok('GET', '/people/teams', as(hr))).find((x: { id: string }) => x.id === st).leadEmployeeId).toBeNull();
   });
 });
 

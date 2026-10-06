@@ -2,7 +2,9 @@
  * An employee's app access and leaving (milestone 13, CD-140, spec 4.6–4.8): Invite to Pultly from
  * the card and in bulk, the invitation's conflicts, a changed work email withdrawing it, Link to
  * member (merging the automatic record) and Unlink, Deactivate now and on a future date (the daily
- * job in the workspace's time zone), reassignments, guards, Reactivate, Delete and who may do what.
+ * job in the workspace's time zone), reassignments, guards, Reactivate, Delete (only once
+ * deactivated, CD-225) and who may do what. `hr` holds a leftover Administration row, which gives
+ * nothing since CD-225 (only Admins do HR work).
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, createTenant, eventually, ok, type Session, signIn } from './helpers';
@@ -56,7 +58,7 @@ describe('Invite to Pultly (spec 4.7)', () => {
     expect((await call('POST', `/people/employees/${noEmail}/invite`, { ...as(), body: {} })).status).toBe(400);
     expect((await call('POST', `/people/employees/${memberEmployee}/invite`, { ...as(), body: {} })).status).toBe(409);
     const target = await create({ firstName: 'Pera', lastName: 'Perić', workEmail: 'pera-invite@example.test' });
-    // Administration can't invite (decision Q1); a member neither.
+    // A member can't invite, with a leftover Administration row neither.
     expect((await call('POST', `/people/employees/${target}/invite`, { ...as(hr), body: {} })).status).toBe(403);
     expect((await call('POST', `/people/employees/${target}/invite`, { ...as(member), body: {} })).status).toBe(403);
     expect((await call('POST', '/people/employees/invite', { ...as(hr), body: { employeeIds: [target] } })).status).toBe(403);
@@ -177,9 +179,10 @@ describe('Deactivate and reactivate (spec 4.8)', () => {
     // Access ended.
     expect((await membersOf()).some((m) => m.userId === leaver.userId)).toBe(false);
     expect((await call('GET', '/people/access', { token: leaver.token, tenant })).status).toBe(403);
-    // Hidden from members, visible to HR.
+    // Hidden from members, visible to Admins.
     expect((await call('GET', `/people/employees/${leaving}`, as(member))).status).toBe(404);
-    expect((await card(leaving, hr)).status).toBe('inactive');
+    expect((await call('GET', `/people/employees/${leaving}`, as(hr))).status).toBe(404);
+    expect((await card(leaving)).status).toBe('inactive');
     // Not again.
     expect((await call('POST', `/people/employees/${leaving}/deactivate`, { ...as(), body: { lastWorkingDay: lastDay } })).status).toBe(409);
   });
@@ -195,7 +198,7 @@ describe('Deactivate and reactivate (spec 4.8)', () => {
     const done = await ok(
       'POST',
       `/people/employees/${leaving}/deactivate`,
-      { ...as(hr), body: { lastWorkingDay: todayIn('Europe/Belgrade'), reason: 'resigned', reportsManagerId: successor, teamLeads: [{ teamId: team, employeeId: successor }] } },
+      { ...as(), body: { lastWorkingDay: todayIn('Europe/Belgrade'), reason: 'resigned', reportsManagerId: successor, teamLeads: [{ teamId: team, employeeId: successor }] } },
       200,
     );
     expect(done.status).toBe('inactive');
@@ -267,7 +270,8 @@ describe('Deactivate and reactivate (spec 4.8)', () => {
     expect((await call('POST', `/people/employees/${leaving}/invite`, { ...as(), body: {} })).status).toBe(409);
     expect((await call('POST', `/people/employees/${leaving}/reactivate`, { ...as(), body: {} })).status).toBe(400);
     expect((await call('POST', `/people/employees/${leaving}/reactivate`, { ...as(member), body: { employmentStartDate: restart } })).status).toBe(403);
-    const back = await ok('POST', `/people/employees/${leaving}/reactivate`, { ...as(hr), body: { employmentStartDate: restart } }, 200);
+    expect((await call('POST', `/people/employees/${leaving}/reactivate`, { ...as(hr), body: { employmentStartDate: restart } })).status).toBe(403);
+    const back = await ok('POST', `/people/employees/${leaving}/reactivate`, { ...as(), body: { employmentStartDate: restart } }, 200);
     expect(back).toMatchObject({ status: 'active', account: 'none', workEmail: 'rehire-life@example.test' });
     expect(back.employment).toMatchObject({ startDate: restart, endDate: null, deactivatedAt: null, leavingReason: null });
   });
@@ -279,32 +283,54 @@ describe('Deactivate and reactivate (spec 4.8)', () => {
     const self = await call('POST', `/people/employees/${ownerEmployee}/deactivate`, { ...as(), body: { lastWorkingDay: today, reportsManagerId: null } });
     expect(self.status).toBe(409);
     expect(self.body.message).toContain('only Admin');
-    // Administration may not remove the last owner either.
-    const last = await call('POST', `/people/employees/${ownerEmployee}/deactivate`, { ...as(hr), body: { lastWorkingDay: today, reportsManagerId: null } });
-    expect(last.status).toBe(409);
-    expect(last.body.message).toContain('Make someone else an owner first');
-    // A future date is checked the same way when it is scheduled.
-    expect((await call('POST', `/people/employees/${ownerEmployee}/deactivate`, { ...as(hr), body: { lastWorkingDay: addDays(today, 10), reportsManagerId: null } })).status).toBe(409);
-
     const someone = await create({ firstName: 'Neko', lastName: 'Treći' });
     expect((await call('POST', `/people/employees/${someone}/deactivate`, { ...as(), body: { lastWorkingDay: addDays(today, -91) } })).status).toBe(400);
+    // Only Admins deactivate: a member, with a leftover Administration row too, gets 403, and nobody's own card offers it but an Admin's.
     expect((await call('POST', `/people/employees/${someone}/deactivate`, { ...as(member), body: { lastWorkingDay: today } })).status).toBe(403);
-    // Administration can't deactivate themselves; nobody's own card offers it but an Admin's.
     expect((await call('POST', `/people/employees/${hrEmployee}/deactivate`, { ...as(hr), body: { lastWorkingDay: today } })).status).toBe(403);
     expect((await card(hrEmployee, hr)).permissions.canDeactivate).toBe(false);
     expect((await card(someone, member)).permissions).toMatchObject({ canDeactivate: false, canInvite: false, canLink: false, canDelete: false });
+
+    // Another Admin may not remove the last owner either.
+    await ok('PATCH', `/team/members/${hr.userId}`, { ...as(), body: { role: 'admin' } }, 200);
+    try {
+      const last = await call('POST', `/people/employees/${ownerEmployee}/deactivate`, { ...as(hr), body: { lastWorkingDay: today, reportsManagerId: null } });
+      expect(last.status).toBe(409);
+      expect(last.body.message).toContain('Make someone else an owner first');
+      // A future date is checked the same way when it is scheduled.
+      expect((await call('POST', `/people/employees/${ownerEmployee}/deactivate`, { ...as(hr), body: { lastWorkingDay: addDays(today, 10), reportsManagerId: null } })).status).toBe(409);
+      // With another Admin left, an Admin's own card offers it.
+      expect((await card(hrEmployee, hr)).permissions.canDeactivate).toBe(true);
+    } finally {
+      await ok('PATCH', `/team/members/${hr.userId}`, { ...as(), body: { role: 'member' } }, 200);
+    }
   });
 });
 
-describe('Delete (spec 4.8)', () => {
-  it('only an Admin, only a record that never had an account', async () => {
+describe('Delete (spec 4.8, CD-225)', () => {
+  it('only an Admin, only once deactivated, former app users included; history keeps a "deleted" row', async () => {
+    const today = todayIn('Europe/Belgrade');
     const wrong = await create({ firstName: 'Pogrešan', lastName: 'Red' });
+    expect((await card(wrong)).permissions.canDelete).toBe(false);
+    const active = await call('DELETE', `/people/employees/${wrong}`, as());
+    expect(active.status).toBe(409);
+    expect(active.body.message).toBe('Pogrešan Red is still active. Deactivate first, then delete.');
+    await ok('POST', `/people/employees/${wrong}/deactivate`, { ...as(), body: { lastWorkingDay: today } }, 200);
     expect((await card(wrong)).permissions.canDelete).toBe(true);
     expect((await call('DELETE', `/people/employees/${wrong}`, as(hr))).status).toBe(403);
     expect((await call('DELETE', `/people/employees/${wrong}`, as(member))).status).toBe(403);
     await ok('DELETE', `/people/employees/${wrong}`, as());
     expect((await call('GET', `/people/employees/${wrong}`, as())).status).toBe(404);
+
+    // A former app user: deactivating ended their membership, then the record can go too.
     expect((await card(memberEmployee)).permissions.canDelete).toBe(false);
     expect((await call('DELETE', `/people/employees/${memberEmployee}`, as())).status).toBe(409);
+    const leaver = await signIn('life-delete');
+    const leaverEmployee = await joinAsEmployee(owner, tenant, leaver);
+    await ok('POST', `/people/employees/${leaverEmployee}/deactivate`, { ...as(), body: { lastWorkingDay: today } }, 200);
+    await ok('DELETE', `/people/employees/${leaverEmployee}`, as());
+    expect((await call('GET', `/people/employees/${leaverEmployee}`, as())).status).toBe(404);
+    const history = await ok('GET', `/people/history?entityType=employee&entityId=${leaverEmployee}`, as());
+    expect(history.entries[0]).toMatchObject({ action: 'deleted' });
   });
 });

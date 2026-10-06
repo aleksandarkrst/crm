@@ -35,6 +35,8 @@ export const UpdateWorkspace = z
     employeeDefaultWeeklyHours: z.number().int().min(1).max(60),
     employeeNumberRequired: z.boolean(),
     employeeSelfEditBank: z.boolean(),
+    // The CEO on the org chart's company node (CD-225): an active employee, or null for nobody.
+    ceoEmployeeId: z.uuid().nullable(),
   })
   .partial()
   .refine(atLeastOne, 'Nothing to update');

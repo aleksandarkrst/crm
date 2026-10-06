@@ -43,8 +43,8 @@ export interface PeopleHistoryEntry {
 /**
  * History of employees, departments and teams (record_changes, written by the triggers of
  * drizzle/0039_people_rls.sql), read with the employee card's rules (spec 9.3, 9.4): an employee's
- * history by the employee themselves (without the reason for leaving), Administration and Admin;
- * departments' and teams' by Administration and Admin. Rows of fields the caller may not see are
+ * history by the employee themselves (without the reason for leaving), Admins;
+ * departments' and teams' by Admins. Rows of fields the caller may not see are
  * left out. Also the If-Match conflict check of employee updates.
  */
 @Injectable()
@@ -61,9 +61,9 @@ export class PeopleHistoryService {
         const [employee] = await tx.select({ id: employees.id }).from(employees).where(eq(employees.id, query.entityId));
         // The record may be gone (deleted): its history stays readable for HR.
         if (!employee && !access.isHr) throw new NotFoundException('Employee not found');
-        if (!access.canSeeHistory(query.entityId)) throw new ForbiddenException("Only the employee, Administration and Admins see an employee's history");
+        if (!access.canSeeHistory(query.entityId)) throw new ForbiddenException("Only the employee and Admins see an employee's history");
       } else if (!access.isHr) {
-        throw new ForbiddenException(`Only Administration and Admins see the history of a ${ENTITY_NAMES[query.entityType]}`);
+        throw new ForbiddenException(`Only Admins see the history of a ${ENTITY_NAMES[query.entityType]}`);
       }
       // Hidden fields are filtered in the query, so pages stay full.
       const hidden = query.entityType === 'employee' ? hiddenFields(access, query.entityId) : [];

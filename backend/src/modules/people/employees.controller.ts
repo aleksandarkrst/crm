@@ -3,7 +3,7 @@ import { RequireTenant, Tenant, type TenantContext } from '../../shared/authoriz
 import { UuidParam } from '../../shared/validation/common';
 import { parseVersion } from '../../shared/validation/version';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
-import { ApproversQuery, CreateEmployee, EmployeeListQuery, RevealBankAccount, UpdateEmployee } from './employees.schemas';
+import { ApproversQuery, CreateEmployee, EmployeeListQuery, RevealBankAccount, UpdateEmployeeBody } from './employees.schemas';
 import { EmployeesService } from './employees.service';
 
 /**
@@ -33,31 +33,36 @@ export class EmployeesController {
     return this.employees.approvers(ctx, id, query.date);
   }
 
-  /** Administration and Admin. Returns the card. */
+  /** Admins. Returns the card. */
   @Post()
   create(@Tenant() ctx: TenantContext, @Body(new ZodPipe(CreateEmployee)) body: CreateEmployee) {
     return this.employees.create(ctx, body);
   }
 
-  /** `If-Match: <version>` (the card's `version`): a field someone else changed since is a 409. Returns the card. */
+  /**
+   * `If-Match: <version>` (the card's `version`): a field someone else changed since is a 409.
+   * Moving a head or lead elsewhere needs `clearHeadRoles: true` (409 `heads_department` otherwise).
+   * Returns the card.
+   */
   @Patch(':id')
   update(
     @Tenant() ctx: TenantContext,
     @Param('id', new ZodPipe(UuidParam)) id: string,
-    @Body(new ZodPipe(UpdateEmployee)) body: UpdateEmployee,
+    @Body(new ZodPipe(UpdateEmployeeBody)) body: UpdateEmployeeBody,
     @Headers('if-match') ifMatch?: string,
   ) {
-    return this.employees.update(ctx, id, body, parseVersion(ifMatch));
+    const { clearHeadRoles, ...fields } = body;
+    return this.employees.update(ctx, id, fields, parseVersion(ifMatch), !!clearHeadRoles);
   }
 
-  /** The full IBAN ("Show", "Copy"): self, Administration, Admin. Audited as "IBAN viewed". */
+  /** The full IBAN ("Show", "Copy"): self, Admin. Audited as "IBAN viewed". */
   @Post(':id/bank/reveal')
   @HttpCode(200)
   reveal(@Tenant() ctx: TenantContext, @Param('id', new ZodPipe(UuidParam)) id: string, @Body(new ZodPipe(RevealBankAccount)) body: RevealBankAccount) {
     return this.employees.reveal(ctx, id, body.account);
   }
 
-  /** Admin; only an employee that never had an account. */
+  /** Admin; only an employee who was deactivated first (409 otherwise). */
   @Delete(':id')
   @HttpCode(204)
   remove(@Tenant() ctx: TenantContext, @Param('id', new ZodPipe(UuidParam)) id: string) {

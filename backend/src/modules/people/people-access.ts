@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
-import { type AssignedRole, employees, memberships } from '../../shared/database/schema';
+import { employees, memberships } from '../../shared/database/schema';
 import { ABSENCE_SOURCE, type AbsenceSource, type ApproverResult, resolveApprovers } from './approvers';
 import { CallerAccess } from './caller-access';
 
@@ -41,7 +41,6 @@ export class PeopleAccess {
   private async load(tx: Tx, ctx: TenantContext): Promise<CallerAccess> {
     const { rows } = await tx.execute<{
       employee_id: string | null;
-      roles: AssignedRole[] | null;
       direct: string[] | null;
       reports: string[] | null;
       direct_users: string[] | null;
@@ -56,7 +55,6 @@ export class PeopleAccess {
         where e.deactivated_at is null and t.depth < 100 and e.id <> (select id from me)
       )
       select (select id::text from me) as employee_id,
-        (select array_agg(r.role::text) from employee_roles r join me on r.employee_id = me.id) as roles,
         (select array_agg(distinct id::text) from tree where depth = 1) as direct,
         (select array_agg(distinct id::text) from tree) as reports,
         (select array_agg(distinct e.user_id::text) from tree t join employees e on e.id = t.id where t.depth = 1 and e.user_id is not null) as direct_users,
@@ -67,7 +65,6 @@ export class PeopleAccess {
       userId: ctx.userId,
       workspaceRole: ctx.role,
       employeeId: row?.employee_id ?? null,
-      assignedRoles: row?.roles ?? [],
       directReportIds: row?.direct ?? [],
       reportIds: row?.reports ?? [],
       directReportUserIds: row?.direct_users ?? [],

@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { AuditService } from '../../shared/audit/audit.service';
 import type { AuthUser, TenantContext } from '../../shared/authorization';
 import { DatabaseService } from '../../shared/database/database.service';
-import { funnels, memberships, tenants, users } from '../../shared/database/schema';
+import { employees, funnels, memberships, tenants, users } from '../../shared/database/schema';
 import { IdentityService } from './identity.service';
 import type { UpdateProfile, UpdateWorkspace } from './settings.schemas';
 
@@ -18,6 +18,7 @@ const workspaceColumns = {
   employeeDefaultWeeklyHours: tenants.employeeDefaultWeeklyHours,
   employeeNumberRequired: tenants.employeeNumberRequired,
   employeeSelfEditBank: tenants.employeeSelfEditBank,
+  ceoEmployeeId: tenants.ceoEmployeeId,
 };
 
 /**
@@ -40,9 +41,15 @@ export class SettingsService {
     return row;
   }
 
-  /** Owners and admins only (enforced by the route). */
+  /** Owners and admins only (enforced by the route). The CEO must be an active employee of the workspace. */
   updateWorkspace(ctx: TenantContext, input: UpdateWorkspace) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
+      if (input.ceoEmployeeId) {
+        // RLS is on, so an employee of another workspace is simply not found.
+        const [ceo] = await tx.select({ deactivatedAt: employees.deactivatedAt }).from(employees).where(eq(employees.id, input.ceoEmployeeId));
+        if (!ceo) throw new BadRequestException('The CEO must be an employee of this workspace');
+        if (ceo.deactivatedAt) throw new BadRequestException('The CEO must be an active employee');
+      }
       const [row] = await tx.update(tenants).set(input).where(eq(tenants.id, ctx.tenantId)).returning(workspaceColumns);
       if (!row) throw new NotFoundException('Workspace not found');
       await this.audit.record(tx, ctx, { action: 'workspace.updated', entityType: 'tenant', entityId: ctx.tenantId, data: input });

@@ -4,6 +4,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, createTenant, ok, type Session, signIn } from './helpers';
+import { asTenantSql } from './people-helpers';
 
 let owner: Session;
 let tenant: string;
@@ -73,31 +74,28 @@ describe('accepting', () => {
   });
 });
 
-describe('functional roles on the invitation (CD-224)', () => {
-  it("gives the ticked Administration and Payroll roles to the new member's employee record on acceptance", async () => {
+describe('invitations without functional roles (CD-225)', () => {
+  it('an invitation carries no roles: a sent list is ignored and the new member is an Employee', async () => {
     const invitee = await signIn('inv-roles');
     const { token, invitation } = await ok('POST', '/team/invitations', { ...as(), body: { email: invitee.email, role: 'member', roles: ['administration', 'payroll'] } });
-    expect(invitation.assignedRoles).toEqual(['administration', 'payroll']);
-    expect((await ok('GET', '/team', as())).invitations.find((i: { id: string }) => i.id === invitation.id).assignedRoles).toEqual(['administration', 'payroll']);
-
+    expect(invitation).not.toHaveProperty('assignedRoles');
+    expect((await ok('GET', '/team', as())).invitations.find((i: { id: string }) => i.id === invitation.id)).not.toHaveProperty('assignedRoles');
     await ok('POST', `/invitations/${token}/accept`, { token: invitee.token }, 200);
     const access = await ok('GET', '/people/access', { token: invitee.token, tenant });
-    expect(access.roles).toEqual(expect.arrayContaining(['administration', 'payroll']));
-    // The employee history says the inviting owner gave the roles.
+    expect(access.roles).toEqual(['employee']);
     const history = await ok('GET', `/people/history?entityType=employee&entityId=${access.employeeId}`, as());
-    const change = history.entries.find((e: { field: string | null }) => e.field === 'roles');
-    expect(change).toMatchObject({ newValue: ['administration', 'payroll'] });
-    expect(change.actor?.userId).toBe(owner.userId);
+    expect(history.entries.some((e: { field: string | null }) => e.field === 'roles')).toBe(false);
   });
 
-  it('an invitation without roles gives none, and unknown roles are refused', async () => {
-    const invitee = await signIn('inv-noroles');
-    const { token } = await invite(invitee.email);
+  it('roles ticked on an older invitation (CD-224) are not given on acceptance', async () => {
+    const invitee = await signIn('inv-oldroles');
+    const { token, invitation } = await invite(invitee.email);
+    await asTenantSql(tenant, `update invitations set assigned_roles = array['administration', 'payroll'] where id = $1`, [invitation.id]);
     await ok('POST', `/invitations/${token}/accept`, { token: invitee.token }, 200);
     const access = await ok('GET', '/people/access', { token: invitee.token, tenant });
-    expect(access.roles).not.toContain('administration');
-    expect(access.roles).not.toContain('payroll');
-    expect((await call('POST', '/team/invitations', { ...as(), body: { email: `bad-role-${Date.now()}@example.test`, roles: ['admin'] } })).status).toBe(400);
+    expect(access.roles).toEqual(['employee']);
+    const [held] = await asTenantSql<{ n: number }>(tenant, `select count(*)::int as n from employee_roles where employee_id = $1`, [access.employeeId]);
+    expect(held!.n).toBe(0);
   });
 });
 

@@ -12,7 +12,7 @@ const Id = new ZodPipe(UuidParam);
 /**
  * An employee's app access and leaving (milestone 13, spec 4.6–4.8). Who may do what is checked in
  * EmployeeLifecycleService through PeopleAccess: invitations, linking and unlinking are for Admins,
- * deactivating and reactivating for Administration and Admins.
+ * deactivating and reactivating for Admins.
  */
 @Controller('people/employees')
 @RequireTenant('member')

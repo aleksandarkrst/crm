@@ -1,5 +1,5 @@
 /**
- * Employee import (CD-141, spec 8): who may import (Administration and Admins; 403 for the rest),
+ * Employee import (CD-141, spec 8): who may import (Admins since CD-225; 403 for the rest),
  * the template, a WBM-like file with Serbian headers, departments, teams and managers listed after
  * their reports, every error type with its line and field, preview == commit, re-import with Skip
  * and Update, no reporting loops (in the file and with existing employees), a manager whose row
@@ -39,37 +39,36 @@ beforeAll(async () => {
   const hrId = await joinAsEmployee(owner, tenant, hr);
   const payId = await joinAsEmployee(owner, tenant, pay);
   await joinAsEmployee(owner, tenant, member);
+  // Rows of the removed Administration and Payroll roles (CD-225) give nothing.
   await grantRole(tenant, hrId, 'administration');
   await grantRole(tenant, payId, 'payroll');
 });
 
 describe('who can import', () => {
-  it('Administration and Admins; Payroll, members and outsiders get 403 on every route', async () => {
+  it('Admins; members (leftover Administration and Payroll rows included) and outsiders get 403 on every route', async () => {
     const csv = `Ime,Prezime,Email\nRole,Check,${mail('role', tag())}\n`;
-    for (const s of [member, pay]) {
+    for (const s of [member, pay, hr]) {
       expect((await call('POST', '/people/import/preview', { ...as(s), body: { csv } })).status).toBe(403);
       expect((await call('POST', '/people/import/commit', { ...as(s), body: { csv } })).status).toBe(403);
       expect((await call('GET', '/people/import/template', as(s))).status).toBe(403);
     }
     const outsider = await signIn('pimp-outsider');
     expect((await call('POST', '/people/import/preview', { token: outsider.token, tenant, body: { csv } })).status).toBe(403);
-    expect((await preview({ csv }, hr)).counts.create).toBe(1);
     expect((await preview({ csv }, wsAdmin)).counts.create).toBe(1);
-    expect((await commit({ csv }, hr)).created).toBe(1);
+    expect((await commit({ csv }, wsAdmin)).created).toBe(1);
   });
 
-  it('only Admins may ask for invitations', async () => {
+  it('every importer is an Admin, so every importer may ask for invitations', async () => {
     const csv = `Ime,Prezime,Email\nInvite,Check,${mail('inv', tag())}\n`;
     expect((await call('POST', '/people/import/preview', { ...as(hr), body: { csv, invite: true } })).status).toBe(403);
-    expect((await call('POST', '/people/import/commit', { ...as(hr), body: { csv, invite: true } })).status).toBe(403);
-    expect((await preview({ csv }, hr)).canInvite).toBe(false);
+    expect((await preview({ csv }, wsAdmin)).canInvite).toBe(true);
     expect((await preview({ csv }, owner)).canInvite).toBe(true);
   });
 });
 
 describe('template', () => {
   it('is a CSV with a BOM, the column labels and an example row', async () => {
-    const res = await fetch(`${inject('apiUrl')}/api/people/import/template`, { headers: { authorization: `Bearer ${hr.token}`, 'x-tenant-id': tenant } });
+    const res = await fetch(`${inject('apiUrl')}/api/people/import/template`, { headers: { authorization: `Bearer ${wsAdmin.token}`, 'x-tenant-id': tenant } });
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toMatch(/^text\/csv/);
     expect(res.headers.get('content-disposition')).toContain('pultly-employees-template.csv');

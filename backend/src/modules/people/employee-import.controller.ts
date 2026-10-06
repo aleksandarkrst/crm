@@ -7,7 +7,7 @@ import { EmployeeImportRequest, EmployeeImportService } from './employee-import.
 
 /**
  * Employee import (CD-141, spec 8): the CSV import's three routes for the type "employees", for
- * Administration and Admins (others get 403 from the service, which knows the functional roles).
+ * Admins (others get 403 from the service, which knows the functional roles).
  * The client sends the file's text as JSON (`{ csv, mapping?, duplicates?, invite? }`); an .xlsx is
  * converted to CSV text in the browser. main.ts gives these routes the import's larger body limit.
  */

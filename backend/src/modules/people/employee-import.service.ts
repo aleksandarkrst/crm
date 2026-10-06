@@ -33,7 +33,7 @@ const TYPE = 'employees';
 /**
  * Employee import (CD-141, spec 8): the CSV import's pipeline (shared/import) with the type
  * "employees". An .xlsx is read in the browser and arrives here as CSV text, so there is one server
- * path with one set of limits. Administration and Admins only.
+ * path with one set of limits. Admins only.
  *
  * `preview` plans the whole file (employee-import-plan.ts) and writes nothing. `commit` plans it
  * again (the server never trusts the preview) and saves it:
@@ -223,10 +223,10 @@ export class EmployeeImportService {
 
   // ------------------------------------------------------------------ access and lookups
 
-  /** Administration and Admin import (spec 9.3); only Admins invite (Q1). */
+  /** Admins import (spec 9.3); only Admins invite (Q1). */
   private async assertAllowed(tx: Tx, ctx: TenantContext, invite: boolean) {
     const access = await this.access.of(ctx, tx);
-    if (!access.isHr) throw new ForbiddenException('Only Administration and Admins import employees');
+    if (!access.isHr) throw new ForbiddenException('Only Admins import employees');
     if (invite && !access.isAdmin) throw new ForbiddenException('Only Admins invite employees to Pultly');
     return { canInvite: access.isAdmin };
   }

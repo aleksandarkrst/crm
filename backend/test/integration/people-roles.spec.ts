@@ -1,6 +1,7 @@
 /**
  * Who sees and changes what about an employee (milestone 13, spec 4.5, 9.3–9.5): response shapes per
- * role (Employee, Manager, Administration, Payroll, Admin), personal data and IBANs never reaching
+ * role (Employee, Manager, Admin; `hr` and `pay` hold leftover Administration / Payroll rows, which
+ * CD-225 made meaningless), personal data and IBANs never reaching
  * anyone else (AC 4.9.3, 9.7.5), the IBAN sealed at rest and masked in history, the reveal audit,
  * the "Bank account changed" email and the limits of editing your own card.
  */
@@ -42,9 +43,10 @@ beforeAll(async () => {
   id.owner = (await ok('GET', '/people/access', as(owner))).employeeId;
   id.wsAdmin = await joinAsEmployee(owner, tenant, wsAdmin, 'admin');
   for (const [key, s] of [['hr', hr], ['pay', pay], ['mgr', mgr], ['emp', emp], ['other', other]] as const) id[key] = await joinAsEmployee(owner, tenant, s);
+  // Rows of the removed roles (CD-225) stay in the table but give nothing.
   await grantRole(tenant, id.hr, 'administration');
   await grantRole(tenant, id.pay, 'payroll');
-  // emp reports to mgr; other reports to pay (Payroll + Manager: roles are additive).
+  // emp reports to mgr; other reports to pay (a Manager).
   await ok('PATCH', `/people/employees/${id.emp}`, { ...as(owner), body: { managerId: id.mgr, employmentStartDate: START } }, 200);
   await ok('PATCH', `/people/employees/${id.other}`, { ...as(owner), body: { managerId: id.pay } }, 200);
   await ok(
@@ -71,8 +73,9 @@ describe('access', () => {
   it('derives each caller’s roles and scope', async () => {
     expect((await ok('GET', '/people/access', as(owner))).roles).toEqual(['employee', 'admin']);
     expect((await ok('GET', '/people/access', as(wsAdmin))).roles).toEqual(['employee', 'admin']);
-    expect((await ok('GET', '/people/access', as(hr))).roles).toEqual(['employee', 'administration']);
-    expect((await ok('GET', '/people/access', as(pay))).roles).toEqual(['employee', 'manager', 'payroll']);
+    // Administration and Payroll were removed (CD-225): leftover rows don't count.
+    expect((await ok('GET', '/people/access', as(hr))).roles).toEqual(['employee']);
+    expect((await ok('GET', '/people/access', as(pay))).roles).toEqual(['employee', 'manager']);
     expect((await ok('GET', '/people/access', as(emp))).roles).toEqual(['employee']);
     const m = await ok('GET', '/people/access', as(mgr));
     expect(m).toMatchObject({ employeeId: id.mgr, roles: ['employee', 'manager'], directReportIds: [id.emp], reportIds: [id.emp] });
@@ -136,11 +139,11 @@ describe('the card per role (sections absent, never empty)', () => {
     expect(c.permissions).toMatchObject({ editableFields: [], canRevealBank: false, canSeeHistory: false });
   });
 
-  it('Payroll sees neither employment fields outside their reports, nor personal details, nor the IBAN (Q2)', async () => {
+  it('a manager with a leftover Payroll row sees neither employment fields outside their reports, nor personal details, nor the IBAN', async () => {
     const c = await card(pay, id.emp);
     for (const section of ['employment', 'personal', 'bank', 'hr', 'appAccess']) expect(c).not.toHaveProperty(section);
     expect(JSON.stringify(c)).not.toContain(PRIVATE_EMAIL);
-    // Payroll + Manager: the Manager part shows their report's employment fields, still no personal data.
+    // The Manager role shows their report's employment fields, still no personal data.
     const report = await card(pay, id.other);
     expect(report).toHaveProperty('employment');
     expect(report).not.toHaveProperty('personal');
@@ -152,17 +155,17 @@ describe('the card per role (sections absent, never empty)', () => {
     expect(c).toMatchObject({ id: id.emp, workEmail: emp.email, managerId: id.mgr, status: 'active' });
   });
 
-  it('Administration sees everything but app access; Admins (owner or admin) everything', async () => {
+  it('a leftover Administration row gives nothing (CD-225); Admins (owner or admin) see everything', async () => {
     const h = await card(hr, id.emp);
-    expect(h).toHaveProperty('personal.privateEmail', PRIVATE_EMAIL);
-    expect(h).toHaveProperty('bank.iban.last4', '1379');
-    expect(h).toHaveProperty('employment.leavingReason');
-    expect(h).toHaveProperty('hr.dataIssues');
-    expect(h).not.toHaveProperty('appAccess');
+    for (const section of ['employment', 'personal', 'bank', 'hr', 'appAccess']) expect(h).not.toHaveProperty(section);
+    expect(JSON.stringify(h)).not.toContain(PRIVATE_EMAIL);
     for (const s of [owner, wsAdmin]) {
       const c = await card(s, id.emp);
       expect(c).toHaveProperty('personal.privateEmail', PRIVATE_EMAIL);
+      expect(c).toHaveProperty('employment.leavingReason');
+      expect(c).toHaveProperty('hr.dataIssues');
       expect(c.appAccess).toMatchObject({ signInEmail: emp.email, workspaceRole: 'member', invitation: null });
+      // Delete only once deactivated (CD-225).
       expect(c.permissions.canDelete).toBe(false);
     }
   });
@@ -193,29 +196,31 @@ describe('the list per role', () => {
     expect(await rowOf(mgr, id.emp)).toHaveProperty('employment');
     expect(await rowOf(mgr, id.other)).not.toHaveProperty('employment');
     expect(await rowOf(pay, id.emp)).not.toHaveProperty('employment');
-    expect(await rowOf(hr, id.other)).toHaveProperty('employment');
-    // Account state and data issues for HR; roles for Admins.
-    expect(await rowOf(hr, id.emp)).toMatchObject({ hr: { account: 'linked' } });
-    expect(await rowOf(hr, id.emp)).not.toHaveProperty('roles');
-    expect(await rowOf(owner, id.pay)).toMatchObject({ roles: ['employee', 'manager', 'payroll'] });
+    expect(await rowOf(hr, id.other)).not.toHaveProperty('employment');
+    expect(await rowOf(wsAdmin, id.other)).toHaveProperty('employment');
+    // Account state, data issues and roles for Admins only.
+    expect(await rowOf(hr, id.emp)).not.toHaveProperty('hr');
+    expect(await rowOf(wsAdmin, id.emp)).toMatchObject({ hr: { account: 'linked' } });
+    expect(await rowOf(owner, id.pay)).toMatchObject({ roles: ['employee', 'manager'] });
     expect(await rowOf(emp, id.emp)).not.toHaveProperty('hr');
   });
 
-  it('inactive employees: hidden from everyone but HR; filtering on them is HR only', async () => {
+  it('inactive employees: hidden from everyone but Admins; filtering on them is Admin only', async () => {
     const gone = await ok('POST', '/people/employees', { ...as(owner), body: { firstName: 'Gone', lastName: 'Away', employmentStartDate: START } });
     await asTenantSql(tenant, `update employees set employment_end_date = '2026-01-31', deactivated_at = now() where id = $1`, [gone.id]);
     expect((await call('GET', `/people/employees/${gone.id}`, as(emp))).status).toBe(404);
     expect((await call('GET', '/people/employees?status=inactive', as(emp))).status).toBe(403);
-    expect((await ok('GET', `/people/employees/${gone.id}`, as(hr))).status).toBe('inactive');
-    const inactive = await ok('GET', '/people/employees?status=inactive', as(hr));
+    expect((await call('GET', '/people/employees?status=inactive', as(hr))).status).toBe(403);
+    expect((await ok('GET', `/people/employees/${gone.id}`, as(wsAdmin))).status).toBe('inactive');
+    const inactive = await ok('GET', '/people/employees?status=inactive', as(wsAdmin));
     expect(inactive.employees.map((e: { id: string }) => e.id)).toEqual([gone.id]);
     expect((await list(emp)).employees.some((e: { id: string }) => e.id === gone.id)).toBe(false);
   });
 });
 
 describe('revealing the IBAN', () => {
-  it('returns the full number to the employee, Administration and Admins, audited', async () => {
-    for (const s of [emp, hr, owner]) {
+  it('returns the full number to the employee and Admins, audited', async () => {
+    for (const s of [emp, wsAdmin, owner]) {
       const r = await ok('POST', `/people/employees/${id.emp}/bank/reveal`, { ...as(s), body: { account: 'iban' } }, 200);
       expect(r).toEqual({ account: 'iban', iban: IBAN, formatted: 'RS35 2600 0560 1001 6113 79', domestic: DOMESTIC, foreign: false });
     }
@@ -223,8 +228,8 @@ describe('revealing the IBAN', () => {
     expect(audit!.n).toBe(3);
   });
 
-  it('is refused to managers, Payroll and other employees', async () => {
-    for (const s of [mgr, pay, other]) {
+  it('is refused to managers and other employees, leftover Administration rows included', async () => {
+    for (const s of [mgr, pay, hr, other]) {
       const r = await call('POST', `/people/employees/${id.emp}/bank/reveal`, { ...as(s), body: {} });
       expect(r.status).toBe(403);
       expect(JSON.stringify(r.body)).not.toContain('2600');
@@ -243,13 +248,13 @@ describe('history', () => {
     expect(mine.entries.find((e: { field: string }) => e.field === 'iban')).toMatchObject({ newValue: IBAN_MASK });
     expect(mine.entries.find((e: { field: string }) => e.field === 'managerId')).toMatchObject({ newLabel: 'Roles-mgr Tester' });
 
-    const theirs = await ok('GET', `/people/history?entityType=employee&entityId=${id.emp}`, as(hr));
+    const theirs = await ok('GET', `/people/history?entityType=employee&entityId=${id.emp}`, as(wsAdmin));
     expect(theirs.entries.map((e: { field: string | null }) => e.field)).toContain('leavingReason');
     await asTenantSql(tenant, `update employees set leaving_reason = null where id = $1`, [id.emp]);
   });
 
-  it('is refused to managers, Payroll and colleagues; the CRM history endpoint never serves it', async () => {
-    for (const s of [mgr, pay, other]) expect((await call('GET', `/people/history?entityType=employee&entityId=${id.emp}`, as(s))).status).toBe(403);
+  it('is refused to managers and colleagues; the CRM history endpoint never serves it', async () => {
+    for (const s of [mgr, pay, hr, other]) expect((await call('GET', `/people/history?entityType=employee&entityId=${id.emp}`, as(s))).status).toBe(403);
     expect((await call('GET', `/crm/history?entityType=employee&entityId=${id.emp}`, as(owner))).status).toBe(400);
   });
 });
@@ -269,32 +274,32 @@ describe('editing your own card (spec 4.5)', () => {
     expect(c.permissions.editableFields).not.toContain('jobTitle');
   });
 
-  it("nobody edits someone else's card without an HR role; managers neither", async () => {
+  it("nobody but an Admin edits someone else's card; managers neither", async () => {
     expect((await patch(emp, id.other, { workPhone: '1' })).status).toBe(403);
     expect((await patch(mgr, id.emp, { workPhone: '1' })).status).toBe(403);
     expect((await patch(pay, id.other, { workPhone: '1' })).status).toBe(403);
+    const r = await patch(hr, id.emp, { jobTitle: 'Technician' });
+    expect(r.status).toBe(403);
+    expect(r.body.message).toBe('Only Admins edit other employees');
   });
 
-  it('Administration edits others, not their own employment fields, department, team or manager', async () => {
-    expect((await patch(hr, id.emp, { jobTitle: 'Technician', weeklyHours: 32 })).status).toBe(200);
+  it('only Admins do HR work (CD-225): others, their own card, departments and managers', async () => {
+    expect((await patch(wsAdmin, id.emp, { jobTitle: 'Technician', weeklyHours: 32 })).status).toBe(200);
     expect((await patch(hr, id.hr, { managerId: id.mgr })).status).toBe(403);
-    expect((await patch(hr, id.hr, { weeklyHours: 30 })).status).toBe(403);
-    expect((await patch(hr, id.hr, { jobTitle: 'HR lead' })).status).toBe(200);
-    // Nobody but an Admin makes themselves someone's manager.
-    const self = await patch(hr, id.other, { managerId: id.hr });
-    expect(self.status).toBe(403);
-    expect(self.body.message).toBe("Only an Admin can make themselves someone's manager");
+    expect((await patch(hr, id.hr, { jobTitle: 'HR lead' })).status).toBe(403);
     // An Admin changes their own card freely.
     expect((await patch(owner, id.owner, { jobTitle: 'CEO', weeklyHours: 45 })).status).toBe(200);
+    expect((await patch(wsAdmin, id.wsAdmin, { managerId: id.owner })).status).toBe(200);
   });
 
-  it('the bank account only while the workspace allows it; Administration always', async () => {
+  it('the bank account only while the workspace allows it; Admins always', async () => {
     await ok('PATCH', '/workspace', { ...as(owner), body: { employeeSelfEditBank: false } }, 200);
     try {
       const r = await patch(emp, id.emp, { iban: 'DE89370400440532013000' });
       expect(r.status).toBe(403);
-      expect(r.body.message).toBe('In this workspace, only Administration and Admins change bank accounts');
-      expect((await patch(hr, id.hr, { iban: IBAN })).status).toBe(200);
+      expect(r.body.message).toBe('In this workspace, only Admins change bank accounts');
+      expect((await patch(hr, id.hr, { iban: IBAN })).status).toBe(403);
+      expect((await patch(wsAdmin, id.wsAdmin, { iban: IBAN })).status).toBe(200);
     } finally {
       await ok('PATCH', '/workspace', { ...as(owner), body: { employeeSelfEditBank: true } }, 200);
     }

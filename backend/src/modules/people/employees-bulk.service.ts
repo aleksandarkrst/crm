@@ -11,6 +11,7 @@ import { JobsService } from '../../shared/events/jobs.service';
 import { departments, employeePersonal, employees, teams } from '../../shared/database/schema';
 import { employeeIbanBox } from './bank-email';
 import { editableFields, listFields } from './field-rules';
+import { checkHeadMoves } from './heads';
 import { formatIban } from './iban';
 import { PeopleAccess } from './people-access';
 import { assertValidManager, lockReportingLines, queueManagerEmails } from './reporting-lines';
@@ -34,6 +35,8 @@ export const BulkUpdateEmployees = z
     departmentId: z.uuid().nullish(),
     teamId: z.uuid().nullish(),
     managerId: z.uuid().nullish(),
+    /** Confirms moving department heads and team leads elsewhere, which ends that role (CD-225). */
+    clearHeadRoles: z.boolean().optional(),
   })
   .refine((b) => b.departmentId !== undefined || b.teamId !== undefined || b.managerId !== undefined, 'Nothing to change: send departmentId and teamId, or managerId');
 export type BulkUpdateEmployees = z.infer<typeof BulkUpdateEmployees>;
@@ -44,7 +47,7 @@ export type ExportEmployees = z.infer<typeof ExportEmployees>;
 
 /**
  * Bulk actions and the personal-details export of the Org structure list (spec 5.4), for
- * Administration and Admin. Bulk changes are one transaction: every row passes the card's field
+ * Admins. Bulk changes are one transaction: every row passes the card's field
  * rules (field-rules.ts) and the reporting-line rules (lock, no loops) or nothing is saved.
  */
 @Injectable()
@@ -66,7 +69,7 @@ export class EmployeesBulkService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const access = await this.access.of(ctx, tx);
-        if (!access.isHr) throw new ForbiddenException('Only Administration and Admins change employees in bulk');
+        if (!access.isHr) throw new ForbiddenException('Only Admins change employees in bulk');
         const ids = input.employeeIds;
         const setsOrg = input.departmentId !== undefined || input.teamId !== undefined;
         const setsManager = input.managerId !== undefined;
@@ -80,7 +83,7 @@ export class EmployeesBulkService {
           .for('no key update');
         if (rows.length !== ids.length || rows.some((r) => r.deactivatedAt)) throw new BadRequestException('Only active employees of this workspace can be changed');
 
-        // The card's rules, row by row: Administration doesn't change their own department, team or manager.
+        // The card's rules, row by row (only Admins change department, team and manager).
         const fields = [...(setsOrg ? (['departmentId', 'teamId'] as const) : []), ...(setsManager ? (['managerId'] as const) : [])];
         for (const r of rows) {
           const allowed = new Set<string>(editableFields(access, r.id, true));
@@ -98,6 +101,10 @@ export class EmployeesBulkService {
         const changed = rows.filter(
           (r) => (org && (r.departmentId !== org.departmentId || r.teamId !== org.teamId)) || (setsManager && r.managerId !== managerId),
         );
+        if (org) {
+          const moving = changed.filter((r) => r.departmentId !== org.departmentId || r.teamId !== org.teamId);
+          await checkHeadMoves(tx, moving.map((r) => ({ employeeId: r.id, fullName: r.fullName, from: r, to: org })), !!input.clearHeadRoles);
+        }
         if (changed.length) {
           await tx
             .update(employees)
@@ -116,14 +123,14 @@ export class EmployeesBulkService {
   }
 
   /**
-   * "Include personal details and bank accounts" (spec 5.4, 9.5): Administration and Admin only.
+   * "Include personal details and bank accounts" (spec 5.4, 9.5): Admins only.
    * Full IBANs, so every export writes the audit entry "employee.personal_exported" with how many
    * rows were exported (the actor is the caller).
    */
   exportPersonal(ctx: TenantContext, input: ExportEmployees) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const access = await this.access.of(ctx, tx);
-      if (!access.isHr) throw new ForbiddenException('Only Administration and Admins export personal details and bank accounts');
+      if (!access.isHr) throw new ForbiddenException('Only Admins export personal details and bank accounts');
       const rows = await tx
         .select({ id: employees.id, p: employeePersonal })
         .from(employees)

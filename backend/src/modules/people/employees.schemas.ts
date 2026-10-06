@@ -104,7 +104,7 @@ const fields = {
 };
 
 /**
- * POST /api/people/employees (Administration, Admin). First and last name and the employment
+ * POST /api/people/employees (Admin). First and last name and the employment
  * start date are required (an import may leave the date empty; the API's create form may not).
  * Weekly hours default to the workspace setting, the type to Permanent.
  */
@@ -142,6 +142,9 @@ export type ImportedEmployee = z.infer<typeof ImportedEmployee>;
 /** PATCH /api/people/employees/:id: any subset; who may change which field is checked per caller. */
 export const UpdateEmployee = nonEmptyPatch(z.object(fields).partial());
 export type UpdateEmployee = z.infer<typeof UpdateEmployee>;
+/** The PATCH body: the fields, plus `clearHeadRoles` to confirm moving a head or lead elsewhere (CD-225). */
+export const UpdateEmployeeBody = UpdateEmployee.and(z.object({ clearHeadRoles: z.boolean().optional() }));
+export type UpdateEmployeeBody = z.infer<typeof UpdateEmployeeBody>;
 
 export const EMPLOYEE_STATUSES = ['active', 'leaving', 'inactive'] as const;
 export type EmployeeStatus = (typeof EMPLOYEE_STATUSES)[number];
@@ -163,13 +166,13 @@ export const EmployeeListQuery = z.object({
   managerId: z.uuid().optional(),
   /** With managerId: direct reports only (default) or everyone below them. */
   managerScope: z.enum(['direct', 'indirect']).default('direct'),
-  /** Default: active and leaving. Inactive: Administration and Admin only. */
+  /** Default: active and leaving. Inactive: Admins only. */
   status: csvOf(EMPLOYEE_STATUSES).optional(),
   /** Admin only. */
   account: csvOf(ACCOUNT_STATES).optional(),
-  /** Administration and Admin only; rows with any of these issues. */
+  /** Admins only; rows with any of these issues. */
   issues: csvOf(DATA_ISSUES).optional(),
-  /** Name, job title, work email (accent and case insensitive); employee number for Administration and Admin. */
+  /** Name, job title, work email (accent and case insensitive); employee number for Admins. */
   q: z.string().trim().min(1).max(200).optional(),
   /** Just these rows (live updates), at most 200. Rows that are gone or hidden are not returned. */
   ids: IdList.optional(),
