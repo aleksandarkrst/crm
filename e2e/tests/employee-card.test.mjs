@@ -10,7 +10,7 @@
 // the screen.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, createWorkspace, email, eventually, finishOnboarding, setValue, signIn, steps, text, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, confirmInApp, createWorkspace, email, eventually, finishOnboarding, setValue, signIn, steps, text, useBrowser } from '../lib/harness.mjs';
 
 const PHONE = { width: 375, height: 812, isMobile: true, hasTouch: true };
 const DOMESTIC = '260-0056010016113-79';
@@ -26,8 +26,6 @@ describe('employee card', () => {
   let leaver;
   let report;
   let nova;
-  /** Messages of the browser dialogs each page showed (the harness accepts them all). */
-  const dialogs = { olga: [], mia: [] };
 
   /** The text of an element. */
   const textOf = (page, selector) => page.$eval(selector, (el) => el.textContent);
@@ -62,13 +60,11 @@ describe('employee card', () => {
 
   step('an owner and a member share a workspace', async () => {
     olga = await browser.person('olga');
-    olga.on('dialog', (d) => dialogs.olga.push(d.message()));
     await olga.goto(BASE_URL, { waitUntil: 'networkidle0' });
     await signIn(olga, email('card-olga'), 'Olga Owner');
     await createWorkspace(olga, 'Card Co');
     const { token } = await api(olga, '/team/invitations', { method: 'POST', body: JSON.stringify({ email: email('card-mia'), role: 'member' }) });
     mia = await browser.person('mia');
-    mia.on('dialog', (d) => dialogs.mia.push(d.message()));
     await mia.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
     await signIn(mia, email('card-mia'), 'Mia Member');
     await click(mia, 'button::-p-text(Accept and join)');
@@ -131,10 +127,9 @@ describe('employee card', () => {
   step('leaving the card with unsaved changes asks "Discard your changes?"', async () => {
     await setValue(mia, '[data-testid=emp-work] input[name=workPhone]', '+381 64 000 0000');
     await mia.waitForSelector('[data-testid=emp-save][data-dirty]');
-    const before = dialogs.mia.length;
     await click(mia, 'a.header-parent');
+    assert.equal(await confirmInApp(mia), 'Discard your changes?');
     await mia.waitForFunction(() => location.pathname === '/org');
-    assert.deepEqual(dialogs.mia.slice(before), ['Discard your changes?']);
     // Discarded: nothing was saved.
     assert.equal((await api(mia, `/people/employees/${miaEmployee}`)).workPhone, '+381 64 123 4567');
   });
@@ -219,8 +214,8 @@ describe('employee card', () => {
     const items = await menuItems(olga);
     assert.ok(items.includes('Delete') && items.includes('Reactivate') && !items.includes('Deactivate'), items.join(', '));
     await menu(olga, 'Delete');
+    assert.equal(await confirmInApp(olga), 'Delete Rade Odlazić?');
     await olga.waitForFunction(() => location.pathname === '/org');
-    assert.ok(dialogs.olga.some((m) => m.startsWith('Delete Rade Odlazić?')), dialogs.olga.join(' | '));
     await assert.rejects(api(olga, `/people/employees/${leaver}`), /404/, 'the record is gone');
     const list = await api(olga, '/people/employees?status=active,leaving,inactive');
     assert.ok(!list.employees.some((e) => e.id === leaver), 'not in the directory');
@@ -231,8 +226,8 @@ describe('employee card', () => {
     await olga.goto(`${BASE_URL}/people/${gone}`, { waitUntil: 'networkidle0' });
     await olga.waitForSelector('[data-testid=emp-menu]');
     await menu(olga, 'Withdraw invitation');
+    assert.equal(await confirmInApp(olga), 'Withdraw the invitation to Vera Povučena?');
     await olga.waitForFunction(() => location.pathname === '/org');
-    assert.ok(dialogs.olga.some((m) => m.startsWith('Withdraw the invitation to Vera Povučena?')), dialogs.olga.join(' | '));
     await assert.rejects(api(olga, `/people/employees/${gone}`), /404/, 'the record went with the invitation');
     const list = await api(olga, '/people/employees');
     assert.ok(!list.employees.some((e) => e.id === gone), 'not in the directory');

@@ -44,6 +44,7 @@ export function PersonBox({
   e,
   onOpen,
   badge,
+  tone,
   sub,
   hr,
   dim,
@@ -55,6 +56,8 @@ export function PersonBox({
   e: ApiEmployee;
   onOpen: (id: string) => void;
   badge?: string;
+  /** Leads (and the CEO) and managers stand out from employees (CD-228). */
+  tone?: 'lead' | 'manager';
   sub?: string | null;
   hr: boolean;
   dim?: boolean;
@@ -87,7 +90,7 @@ export function PersonBox({
   return (
     <button
       type="button"
-      className={'org-person' + (dim ? ' is-dim' : '') + (hit ? ' is-hit' : '') + (over ? ' is-over' : '')}
+      className={'org-person' + (tone ? ` is-${tone}` : '') + (dim ? ' is-dim' : '') + (hit ? ' is-hit' : '') + (over ? ' is-over' : '')}
       data-testid="org-person"
       data-id={e.id}
       draggable={draggable}
@@ -100,7 +103,7 @@ export function PersonBox({
       <span className="org-person-text">
         <span className="org-person-name">
           {e.fullName}
-          {badge && <span className="org-badge">{badge}</span>}
+          {badge && <span className={'org-badge' + (tone ? ` is-${tone}` : '')}>{badge}</span>}
         </span>
         {(e.jobTitle || sub) && <span className="org-person-sub">{[e.jobTitle, sub].filter(Boolean).join(' · ')}</span>}
       </span>

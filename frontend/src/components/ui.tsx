@@ -1,4 +1,5 @@
 import { type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 // ---------------------------------------------------------------- icons
 
@@ -343,13 +344,29 @@ export function FilterBar({
 
 // ---------------------------------------------------------------- modal
 
+/** Open modals; while any is open the page behind them does not scroll. */
+let openModals = 0;
+
+/**
+ * A dialog over the whole screen. It renders into `document.body`, never where it is used: a modal
+ * opened from inside another one (or any element with a transform, such as the fade-in animation)
+ * would otherwise be positioned and clipped by that element, and scrolling it showed the page with
+ * no backdrop (CD-228).
+ */
 export function Modal({ children, maxWidth, z = 45, gap = 16, onBackdrop }: { children: ReactNode; maxWidth: number; z?: number; gap?: number; onBackdrop?: () => void }) {
-  return (
+  useEffect(() => {
+    if (++openModals === 1) document.documentElement.classList.add('modal-open');
+    return () => {
+      if (--openModals === 0) document.documentElement.classList.remove('modal-open');
+    };
+  }, []);
+  return createPortal(
     <div className="overlay" style={{ zIndex: z }} onClick={onBackdrop}>
       <div className="modal" style={{ maxWidth, gap }} onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

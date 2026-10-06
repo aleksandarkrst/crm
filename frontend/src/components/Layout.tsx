@@ -6,6 +6,7 @@ import { overdueTasks } from '../store/selectors';
 import { useStore } from '../store/store';
 import { GettingStarted } from './GettingStarted';
 import { CommandPalette } from './CommandPalette';
+import { ConfirmHost } from './ConfirmDialog';
 import { HeaderCenter, HeaderRight } from './HeaderTools';
 import { Icon } from './icons';
 import { Logo } from './Logo';
@@ -329,6 +330,7 @@ export function Layout() {
       <Modals />
       {s.paletteOpen && <CommandPalette />}
       {s.toast && <div className="toast">{s.toast}</div>}
+      <ConfirmHost />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { askConfirm } from '../components/ConfirmDialog';
 import { ApiError } from './api';
 
 /**
@@ -15,8 +16,8 @@ export function headMoveMessage(err: unknown): string | null {
 
 /**
  * Sends a change that may move a lead (the card, "Add people", drag and drop, a new lead): when the
- * API refuses, asks "<message> Continue?" and sends it again with `clearLeadRoles`. Resolves to the
- * answer, or null when the person said no. Other errors throw.
+ * API refuses, asks in the app's confirm dialog (CD-228: not the browser's) and sends it again with
+ * `clearLeadRoles`. Resolves to the answer, or null when the person said no. Other errors throw.
  */
 export async function withHeadConfirm<T>(send: (clearLeadRoles: boolean) => Promise<T>): Promise<T | null> {
   try {
@@ -24,7 +25,7 @@ export async function withHeadConfirm<T>(send: (clearLeadRoles: boolean) => Prom
   } catch (err) {
     const message = headMoveMessage(err);
     if (!message) throw err;
-    if (!window.confirm(`${message} Continue?`)) return null;
+    if (!(await askConfirm({ title: 'Change the lead?', message, confirmLabel: 'Continue' }))) return null;
     return send(true);
   }
 }

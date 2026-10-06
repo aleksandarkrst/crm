@@ -27,14 +27,15 @@ import {
   unitForManager,
   unitPathLabel,
 } from '../store/people';
+import { useOrgStructure } from '../store/org';
 import { useStore } from '../store/store';
 import { ExportDialog, ManagerDropDialog, MoveDialog, SetManagerDialog, SetUnitDialog } from './org/BulkDialogs';
 import { listColumns } from './org/columns';
 import { EmployeeList } from './org/EmployeeList';
 import { EmployeePicker, MultiSelect, usePhone } from './org/parts';
 import { ReportingChart, ReportingList, type TreeView } from './org/ReportingChart';
-import { type CompanyNode, type DropTarget, UnitChart, UnitList } from './org/UnitChart';
-import { CreateUnitDialog, UnitsPanel } from './org/UnitsPanel';
+import { type CompanyNode, type DropTarget, UnitChart, UnitList, type UnitManage } from './org/UnitChart';
+import { CreateUnitDialog, type UnitAction, UnitDialog } from './org/UnitDialogs';
 
 type Tab = 'chart' | 'list';
 type Mode = 'department' | 'reporting';
@@ -45,8 +46,7 @@ const toggle = <T,>(list: readonly T[], v: T): T[] => (list.includes(v) ? list.f
 const employeesLabel = (n: number) => (n === 1 ? '1 employee' : `${n} employees`);
 
 type Dialog =
-  | { kind: 'units' }
-  | { kind: 'create'; level: ApiOrgLevel }
+  | { kind: 'unit'; action: UnitAction }
   | { kind: 'org' }
   | { kind: 'manager' }
   | { kind: 'export'; selected: boolean }
@@ -54,7 +54,7 @@ type Dialog =
   | { kind: 'boss'; employee: ApiEmployee; manager: ApiEmployee }
   | null;
 
-/** The header's "Create" (Admins, CD-226): "New <level>" for each organization level. */
+/** The header's "Create" (Admins, CD-226): "New <level>" for each organization level, in the design system's menu (CD-228). */
 function CreateMenu({ levels, onPick }: { levels: ApiOrgLevel[]; onPick: (level: ApiOrgLevel) => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -72,20 +72,20 @@ function CreateMenu({ levels, onPick }: { levels: ApiOrgLevel[]; onPick: (level:
         Create
       </button>
       {open && (
-        <div className="org-multi-pop org-create-pop" role="menu">
+        <div className="menu-pop org-create-pop" role="menu">
           {levels.map((l) => (
             <button
               key={l.id}
               type="button"
               role="menuitem"
-              className="org-picker-item"
+              className="menu-item"
               data-testid={'org-create-' + l.name}
               onClick={() => {
                 setOpen(false);
                 onPick(l);
               }}
             >
-              New {l.name.toLowerCase()}
+              <span className="menu-item-title">New {l.name.toLowerCase()}</span>
             </button>
           ))}
         </div>
@@ -100,8 +100,9 @@ function CreateMenu({ levels, onPick }: { levels: ApiOrgLevel[]; onPick: (level:
  * list's sort live in the URL, so links can be shared. Everyone sees the directory; Admins also get
  * data issues, inactive people, bulk actions, export and drag and drop (CD-225: only Admins do HR
  * work). "By unit" hangs the organization's units below a company node with the CEO (CD-225,
- * CD-226); Admins create units from the header's Create menu, and drag a person onto a unit (move
- * them) or onto another person (make them the manager) in both charts.
+ * CD-226); Admins create units from the header's Create menu and set each one up on the chart (its
+ * lead, Add person, its menu: CD-228, no separate Organization panel), and drag a person onto a
+ * unit (move them) or onto another person (make them the manager) in both charts.
  *
  * Only members and people with a pending invitation are shown (CD-226: the API leaves out the
  * rest): people join by invitation from Settings → Team, so there is no Add employee or Import.
@@ -190,7 +191,12 @@ export function OrgStructure() {
     ceo,
     setCeo: admin && canEditWorkspace ? (id) => setWorkspace({ ceoEmployeeId: id }) : null,
     employees: chartPeople,
+    summary: [units.length === 1 ? '1 unit' : `${units.length} units`, chartPeople.length === 1 ? '1 person' : `${chartPeople.length} people`].join(' · '),
   };
+  // Who someone reports to: "Manager" on the chart, so managers and employees are told apart (CD-228).
+  const managerIds = useMemo(() => new Set(chartPeople.flatMap((e) => (e.managerId ? [e.managerId] : []))), [chartPeople]);
+  // Admins set the units up on the chart (CD-228): the levels and the directory for the dialogs.
+  const org = useOrgStructure(hr && tab === 'chart' && mode === 'department');
   const q = filters.q.trim();
   const hits = useMemo(() => (q ? new Set(chartPeople.filter((e) => matchesText(e, q, hr)).map((e) => e.id)) : null), [q, chartPeople, hr]);
   const searchPath = useMemo(() => (hits ? pathsTo(chartPeople, hits) : new Set<string>()), [hits, chartPeople]);
@@ -242,12 +248,18 @@ export function OrgStructure() {
     if (!employee || !manager || id === managerId || employee.managerId === managerId) return;
     setDialog({ kind: 'boss', employee, manager });
   }
+  const newUnit = (level: ApiOrgLevel) => setDialog({ kind: 'unit', action: { kind: 'create', level, parentId: null } });
+  const closeUnitDialog = () => {
+    setDialog(null);
+    void org.reload();
+  };
+  const manage: UnitManage | null = hr && org.data ? { levels: org.data.levels, employees: org.data.employees, act: (action) => setDialog({ kind: 'unit', action }) } : null;
   const nameOf = (id: string | null) => (id ? (employees.find((e) => e.id === id)?.fullName ?? null) : null);
   // `?new=unit` (a link to "Create"): the dialog for the top level.
   const wantsNew = params.get('new') === 'unit';
   useEffect(() => {
     if (!wantsNew || !hr || !levels.length) return;
-    setDialog({ kind: 'create', level: levels[0]! });
+    setDialog({ kind: 'unit', action: { kind: 'create', level: levels[0]!, parentId: null } });
     update({ new: null });
   }, [wantsNew, hr, levels, update]);
 
@@ -296,13 +308,8 @@ export function OrgStructure() {
             {loaded ? employeesLabel(count) : loading ? 'Loading…' : ''}
           </span>
           <div className="org-actions">
-            {/* Admins: the units (CD-226) and Create ("New <level>"). */}
-            {hr && (
-              <button type="button" className="btn-plain" data-testid="org-units" onClick={() => setDialog({ kind: 'units' })}>
-                Organization
-              </button>
-            )}
-            {hr && <CreateMenu levels={[...levels].sort((a, b) => a.position - b.position)} onPick={(level) => setDialog({ kind: 'create', level })} />}
+            {/* Admins: Create ("New <level>"); the units themselves are set up on the chart (CD-228). */}
+            {hr && <CreateMenu levels={[...levels].sort((a, b) => a.position - b.position)} onPick={(level) => newUnit(level)} />}
             {hr && tab === 'list' && (
               <button type="button" className="btn-plain" data-testid="org-export" disabled={!rows.length} onClick={() => setDialog({ kind: 'export', selected: false })}>
                 Export CSV
@@ -346,7 +353,7 @@ export function OrgStructure() {
                       data-testid="org-filter-add-unit"
                       onClick={() => {
                         close();
-                        setDialog({ kind: 'create', level: [...levels].sort((a, b) => a.position - b.position)[0]! });
+                        newUnit([...levels].sort((a, b) => a.position - b.position)[0]!);
                       }}
                     >
                       Create a unit
@@ -449,15 +456,15 @@ export function OrgStructure() {
             {hr && !dirty && units.length === 0 && levels.length > 0 && (
               <div className="hint-box" data-testid="org-no-units" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
                 <span style={{ flex: 1, minWidth: 200 }}>No units yet. Group people into {levels[0]!.name.toLowerCase()}s such as Sales or Service.</span>
-                <button type="button" className="btn btn-primary" data-testid="org-add-unit" onClick={() => setDialog({ kind: 'create', level: levels[0]! })}>
+                <button type="button" className="btn btn-primary" data-testid="org-add-unit" onClick={() => newUnit(levels[0]!)}>
                   New {levels[0]!.name.toLowerCase()}
                 </button>
               </div>
             )}
             {phone ? (
-              <UnitList company={company} chart={chart} onOpen={open} hr={hr} />
+              <UnitList company={company} chart={chart} onOpen={open} hr={hr} managers={managerIds} manage={manage} />
             ) : (
-              <UnitChart company={company} chart={chart} onOpen={open} hr={hr} canDrag={canDrag} onDrop={onDrop} onDropOnPerson={onDropOnPerson} />
+              <UnitChart company={company} chart={chart} onOpen={open} hr={hr} canDrag={canDrag} onDrop={onDrop} onDropOnPerson={onDropOnPerson} managers={managerIds} manage={manage} />
             )}
           </>
         ) : phone ? (
@@ -467,8 +474,12 @@ export function OrgStructure() {
         )}
       </div>
 
-      {dialog?.kind === 'units' && <UnitsPanel onClose={() => setDialog(null)} />}
-      {dialog?.kind === 'create' && <CreateUnitDialog level={dialog.level} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'unit' &&
+        (dialog.action.kind === 'create' ? (
+          <CreateUnitDialog level={dialog.action.level} parentId={dialog.action.parentId} onClose={closeUnitDialog} />
+        ) : (
+          org.data && <UnitDialog action={dialog.action} data={org.data} onClose={closeUnitDialog} />
+        ))}
       {dialog?.kind === 'org' && (
         <SetUnitDialog count={selectedRows.length} units={units} onClose={() => setDialog(null)} onSave={(unitId) => actions.bulkUpdate({ employeeIds: selectedRows.map((r) => r.id), unitId }, 'Unit set for {n}')} />
       )}

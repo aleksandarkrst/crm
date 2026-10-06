@@ -194,6 +194,18 @@ export async function signIn(page, address, name) {
   await click(page, 'button[type=submit]');
 }
 
+/**
+ * The app's own confirm dialog (CD-228: not the browser's `window.confirm`): waits for it, presses
+ * its confirm button (or Cancel with `ok: false`) and resolves to its title.
+ */
+export async function confirmInApp(page, { ok = true } = {}) {
+  await page.waitForSelector('[data-testid=confirm-dialog]');
+  const title = await page.$eval('[data-testid=confirm-dialog] .modal-title', (e) => e.textContent);
+  await click(page, ok ? '[data-testid=confirm-ok]' : '[data-testid=confirm-cancel]');
+  await page.waitForFunction(() => !document.querySelector('[data-testid=confirm-dialog]'));
+  return title;
+}
+
 /** Creates the first workspace of a newly signed-in user, finishes onboarding and waits for the pipeline. */
 export async function createWorkspace(page, name, currency) {
   await page.waitForSelector('input[placeholder="e.g. Pultly Studio"]');
