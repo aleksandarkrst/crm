@@ -402,10 +402,11 @@ export class EmployeesService {
         for (const f of ['firstName', 'lastName', 'workEmail', 'jobTitle', 'workPhone', 'workLocation', ...EMPLOYMENT_FIELDS] as const) {
           if (input[f] !== undefined) (work as Record<string, unknown>)[f] = input[f];
         }
+        let orgChanged = false;
         if (changesOrg) {
           const unit = input.unitId !== undefined && input.unitId !== current.unitId ? { unitId: input.unitId } : {};
           const manager = input.managerId !== undefined && input.managerId !== current.managerId ? { managerId: input.managerId } : {};
-          await changeOrg(tx, ctx.tenantId, [{ employeeId: id, ...unit, ...manager }], { jobs: this.jobs, actorUserId: ctx.userId, clearLeadRoles });
+          orgChanged = (await changeOrg(tx, ctx.tenantId, [{ employeeId: id, ...unit, ...manager }], { jobs: this.jobs, actorUserId: ctx.userId, clearLeadRoles })).changed.length > 0;
         }
 
         const changes = await this.savePersonal(tx, ctx, id, input, currentPersonal);
@@ -413,7 +414,7 @@ export class EmployeesService {
         if (input.workEmail !== undefined && (input.workEmail ?? null) !== (current.workEmail ?? null)) await withdrawEmployeeInvitations(tx, ctx.tenantId, id);
         if (Object.keys(work).length) {
           await tx.update(employees).set(work).where(eq(employees.id, id));
-        } else if (!changesOrg) {
+        } else if (!orgChanged) {
           // Personal details only: move the card's version (one version per card).
           await tx.execute(sql`update employees set updated_at = updated_at where id = ${id}`);
         }
