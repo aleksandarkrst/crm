@@ -265,7 +265,7 @@ describe('editing your own card (spec 4.5)', () => {
   it('an employee changes their work phone, personal details and bank account, nothing else', async () => {
     expect((await patch(emp, id.emp, { workPhone: '+381 11 222' })).status).toBe(200);
     expect((await patch(emp, id.emp, { privatePhone: '+381 64 999', addressCity: 'Novi Sad' })).status).toBe(200);
-    for (const body of [{ jobTitle: 'Boss' }, { managerId: null }, { departmentId: null }, { employmentType: 'contractor' }, { weeklyHours: 20 }, { firstName: 'X' }]) {
+    for (const body of [{ jobTitle: 'Boss' }, { managerId: null }, { unitId: null }, { employmentType: 'contractor' }, { weeklyHours: 20 }, { firstName: 'X' }]) {
       const r = await patch(emp, id.emp, body);
       expect(r.status, JSON.stringify(body)).toBe(403);
     }

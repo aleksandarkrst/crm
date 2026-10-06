@@ -4,9 +4,9 @@ import { inject } from 'vitest';
 import { addMember, ok, type Session } from './helpers';
 
 /**
- * Helpers for the people tests (milestone 13). Departments, teams and assigned roles have no API in
- * CD-140 (CD-138 and CD-142 add it), so tests create them in SQL as the runtime role, with the
- * tenant set like DatabaseService.withTenant (RLS applies).
+ * Helpers for the people tests (milestone 13). Org units and leftover assigned roles are made in
+ * SQL as the runtime role where a test only needs them to exist, with the tenant set like
+ * DatabaseService.withTenant (RLS applies).
  */
 
 /** Runs SQL as the runtime role in one committed transaction with app.tenant_id = tenant. */
@@ -27,15 +27,40 @@ export async function asTenantSql<T = Record<string, unknown>>(tenant: string, t
   }
 }
 
-export async function createDepartment(tenant: string, name: string, code: string | null = null): Promise<string> {
-  const [row] = await asTenantSql<{ id: string }>(tenant, `insert into departments (tenant_id, name, code) values ($1, $2, $3) returning id`, [tenant, name, code]);
+/**
+ * The workspace's level at `position` (1 = top), making the default levels Department and Team
+ * first when it has none (as GET /people/org-levels does).
+ */
+export async function levelAt(tenant: string, position: number): Promise<string> {
+  await asTenantSql(
+    tenant,
+    `insert into org_levels (tenant_id, position, name)
+       select $1, p, n from (values (1, 'Department'), (2, 'Team')) v(p, n)
+       where not exists (select 1 from org_levels where tenant_id = $1)`,
+    [tenant],
+  );
+  const [row] = await asTenantSql<{ id: string }>(tenant, `select id from org_levels where tenant_id = $1 order by position offset $2 limit 1`, [tenant, position - 1]);
   return row!.id;
 }
 
-export async function createTeam(tenant: string, departmentId: string, name: string): Promise<string> {
-  const [row] = await asTenantSql<{ id: string }>(tenant, `insert into teams (tenant_id, department_id, name) values ($1, $2, $3) returning id`, [tenant, departmentId, name]);
+/** An org unit (CD-226) made in SQL: of the level at `level`, inside `parentId` when given. */
+export async function createUnit(tenant: string, name: string, opts: { level?: number; parentId?: string | null; code?: string | null } = {}): Promise<string> {
+  const levelId = await levelAt(tenant, opts.level ?? 1);
+  const [row] = await asTenantSql<{ id: string }>(tenant, `insert into org_units (tenant_id, level_id, parent_id, name, code) values ($1, $2, $3, $4, $5) returning id`, [
+    tenant,
+    levelId,
+    opts.parentId ?? null,
+    name,
+    opts.code ?? null,
+  ]);
   return row!.id;
 }
+
+/** A unit of the top level (Department by default). */
+export const createDepartment = (tenant: string, name: string, code: string | null = null) => createUnit(tenant, name, { level: 1, code });
+
+/** A unit of the second level (Team by default) inside `departmentId`. */
+export const createTeam = (tenant: string, departmentId: string, name: string) => createUnit(tenant, name, { level: 2, parentId: departmentId });
 
 export async function grantRole(tenant: string, employeeId: string, role: 'administration' | 'payroll') {
   await asTenantSql(tenant, `insert into employee_roles (tenant_id, employee_id, role) values ($1, $2, $3)`, [tenant, employeeId, role]);

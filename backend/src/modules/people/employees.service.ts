@@ -354,7 +354,7 @@ export class EmployeesService {
         if (changes.length) await this.jobs.send('people.bank-account-changed-email', { tenantId: ctx.tenantId, employeeId: id, actorUserId: ctx.userId, changes }, tx);
         // The unit and manager by the org rules (CD-226): a unit brings its lead as manager, a manager their unit.
         if (input.unitId || input.managerId) {
-          await changeOrg(tx, ctx.tenantId, [{ employeeId: id, ...(input.unitId ? { unitId: input.unitId } : {}), ...(input.managerId ? { managerId: input.managerId } : {}) }], {
+          await changeOrg(tx, ctx.tenantId, [{ employeeId: id, ...(input.unitId !== undefined ? { unitId: input.unitId } : {}), ...(input.managerId ? { managerId: input.managerId } : {}) }], {
             jobs: this.jobs,
             actorUserId: ctx.userId,
             clearLeadRoles: false,

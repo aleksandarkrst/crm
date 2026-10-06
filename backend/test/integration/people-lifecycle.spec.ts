@@ -78,9 +78,9 @@ describe('Invite to Pultly (spec 4.7)', () => {
     expect(linkInstead.status).toBe(409);
     expect(linkInstead.body).toMatchObject({ code: 'link_instead', userId: prober.userId });
 
-    // Once the prober's record holds data (a department), it is "linked to <name>".
+    // Once the prober's record holds data (a unit), it is "linked to <name>".
     const department = await createDepartment(tenant, 'Life dept');
-    await ok('PATCH', `/people/employees/${proberEmployee}`, { ...as(), body: { departmentId: department } });
+    await ok('PATCH', `/people/employees/${proberEmployee}`, { ...as(), body: { unitId: department } });
     const elsewhere = await call('POST', `/people/employees/${target}/invite`, { ...as(), body: {} });
     expect(elsewhere.status).toBe(409);
     expect(elsewhere.body).toMatchObject({ code: 'linked_elsewhere' });
@@ -149,8 +149,8 @@ describe('Deactivate and reactivate (spec 4.8)', () => {
     const report = await create({ firstName: 'Direktni', lastName: 'Izveštaj', managerId: leaving });
     const department = await createDepartment(tenant, 'Leaving dept');
     const team = await createTeam(tenant, department, 'Leaving team');
-    await asTenantSql(tenant, `update teams set lead_employee_id = $1 where id = $2`, [leaving, team]);
-    await asTenantSql(tenant, `update departments set head_employee_id = $1 where id = $2`, [leaving, department]);
+    await asTenantSql(tenant, `update org_units set lead_employee_id = $1 where id = $2`, [leaving, team]);
+    await asTenantSql(tenant, `update employees set unit_id = $2 where id = $1`, [leaving, team]);
     const before = await card(leaving);
     expect(before.permissions).toMatchObject({ canDeactivate: true, canReactivate: false });
 
@@ -163,10 +163,8 @@ describe('Deactivate and reactivate (spec 4.8)', () => {
     expect(loop.body).toMatchObject({ status: 'inactive', account: 'none', userId: null });
     expect(loop.body.employment).toMatchObject({ endDate: lastDay, leavingReason: null });
     expect((await card(report)).manager.id).toBe(boss);
-    const teams = await ok('GET', '/people/teams', as());
-    expect(teams.find((t: { id: string }) => t.id === team).leadEmployeeId).toBeNull();
-    const departments = await ok('GET', '/people/departments', as());
-    expect(departments.find((d: { id: string }) => d.id === department).headEmployeeId).toBeNull();
+    const units = await ok('GET', '/people/org-units', as());
+    expect(units.find((u: { id: string }) => u.id === team).leadEmployeeId).toBeNull();
     // Access ended.
     expect((await membersOf()).some((m) => m.userId === leaver.userId)).toBe(false);
     expect((await call('GET', '/people/access', { token: leaver.token, tenant })).status).toBe(403);
@@ -185,18 +183,20 @@ describe('Deactivate and reactivate (spec 4.8)', () => {
     const successor = await create({ firstName: 'Naslednik', lastName: 'Novi' });
     const department = await createDepartment(tenant, 'Succession dept');
     const team = await createTeam(tenant, department, 'Succession team');
-    await asTenantSql(tenant, `update teams set lead_employee_id = $1 where id = $2`, [leaving, team]);
+    await asTenantSql(tenant, `update org_units set lead_employee_id = $1 where id = $2`, [leaving, team]);
     const done = await ok(
       'POST',
       `/people/employees/${leaving}/deactivate`,
-      { ...as(), body: { lastWorkingDay: todayIn('Europe/Belgrade'), reason: 'resigned', reportsManagerId: successor, teamLeads: [{ teamId: team, employeeId: successor }] } },
+      { ...as(), body: { lastWorkingDay: todayIn('Europe/Belgrade'), reason: 'resigned', reportsManagerId: successor, unitLeads: [{ unitId: team, employeeId: successor }] } },
       200,
     );
     expect(done.status).toBe('inactive');
     expect(done.employment.leavingReason).toBe('resigned');
     expect((await card(r1)).manager.id).toBe(successor);
     expect((await card(r2)).manager.id).toBe(successor);
-    expect((await ok('GET', '/people/teams', as())).find((t: { id: string }) => t.id === team).leadEmployeeId).toBe(successor);
+    expect((await ok('GET', '/people/org-units', as())).find((u: { id: string }) => u.id === team).leadEmployeeId).toBe(successor);
+    // The new lead joined the unit (CD-226).
+    expect((await card(successor)).unitId).toBe(team);
     // History records it (who left, when).
     const { entries } = await ok('GET', `/people/history?entityType=employee&entityId=${leaving}`, as());
     expect(entries.map((e: { field: string | null }) => e.field)).toEqual(expect.arrayContaining(['deactivatedAt', 'employmentEndDate', 'leavingReason']));

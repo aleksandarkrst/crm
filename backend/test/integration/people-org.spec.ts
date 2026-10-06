@@ -1,12 +1,12 @@
 /**
  * The org structure's rules (milestone 13): workspace isolation of every new table, reporting loops
- * (also under concurrent requests), uniqueness, team-in-department, filters on a four-level tree,
+ * (also under concurrent requests), uniqueness, unit filters (with the units inside), a four-level tree,
  * accent-free search, If-Match conflicts, the approver rule, delete and the Employees settings.
  */
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { call, createTenant, ok, type Session, signIn } from './helpers';
-import { accessOf, addEmployee, asTenantSql, createDepartment, createTeam, grantRole, IBAN, joinAsEmployee, START } from './people-helpers';
+import { accessOf, addEmployee, asTenantSql, createDepartment, createTeam, grantRole, IBAN, joinAsEmployee, levelAt, START } from './people-helpers';
 
 let owner: Session;
 let member: Session;
@@ -31,7 +31,7 @@ describe('workspace isolation of the people tables', () => {
     otherTenant = await createTenant(other, 'Org other');
     a.department = await createDepartment(tenant, 'Isolated dept');
     a.team = await createTeam(tenant, a.department, 'Isolated team');
-    a.employee = await create({ firstName: 'Secret', lastName: 'Person', departmentId: a.department, teamId: a.team, privateEmail: 'secret@example.test', iban: IBAN });
+    a.employee = await create({ firstName: 'Secret', lastName: 'Person', unitId: a.team, privateEmail: 'secret@example.test', iban: IBAN });
     await grantRole(tenant, a.employee, 'payroll');
   });
 
@@ -43,14 +43,15 @@ describe('workspace isolation of the people tables', () => {
     expect((await call('DELETE', `/people/employees/${a.employee}`, asB)).status).toBe(404);
     const { employees } = await ok('GET', '/people/employees', asB);
     expect(employees.map((e: { firstName: string }) => e.firstName)).toEqual(['Org-other']);
-    expect(await ok('GET', '/people/departments', asB)).toEqual([]);
-    expect(await ok('GET', '/people/teams', asB)).toEqual([]);
+    expect(await ok('GET', '/people/org-units', asB)).toEqual([]);
+    // The other workspace has its own default levels.
+    expect((await ok('GET', '/people/org-levels', asB)).map((l: { name: string }) => l.name)).toEqual(['Department', 'Team']);
     expect(await ok('GET', `/people/history?entityType=employee&entityId=${a.employee}`, asB)).toEqual({ entries: [], more: false });
     // A non-member can't use the workspace's id at all.
     expect((await call('GET', '/people/employees', { token: other.token, tenant })).status).toBe(403);
     // Ids of the other workspace can't be referenced.
     const own = (await accessOf(other, otherTenant)).employeeId;
-    const refs = await call('PATCH', `/people/employees/${own}`, { ...asB, body: { departmentId: a.department } });
+    const refs = await call('PATCH', `/people/employees/${own}`, { ...asB, body: { unitId: a.department } });
     expect(refs.status).toBe(400);
     expect((await call('PATCH', `/people/employees/${own}`, { ...asB, body: { managerId: a.employee } })).status).toBe(400);
   });
@@ -64,7 +65,7 @@ describe('workspace isolation of the people tables', () => {
     afterAll(async () => {
       await db?.end();
     });
-    const tables = ['employees', 'employee_personal', 'employee_roles', 'departments', 'teams'];
+    const tables = ['employees', 'employee_personal', 'employee_roles', 'departments', 'teams', 'org_levels', 'org_units'];
 
     it('sees no rows of any people table without a tenant, and none of the other workspace', async () => {
       await db.query('begin');
@@ -74,13 +75,19 @@ describe('workspace isolation of the people tables', () => {
         for (const table of tables) expect((await db.query(`select count(*)::int as n from ${table} where tenant_id = $1`, [tenant])).rows[0].n, table).toBe(0);
         expect((await db.query(`update employees set job_title = 'x' where id = $1`, [a.employee])).rowCount).toBe(0);
         expect((await db.query(`delete from departments where id = $1`, [a.department])).rowCount).toBe(0);
+        expect((await db.query(`delete from org_units where id = $1`, [a.team])).rowCount).toBe(0);
       } finally {
         await db.query('rollback');
       }
     });
 
     it("refuses rows for the other workspace and references to the other workspace's rows", async () => {
+      const level = await levelAt(tenant, 1);
       const attempts: [string, unknown[]][] = [
+        [`insert into org_units (tenant_id, level_id, name) values ($1, $2, 'Sneaky')`, [tenant, level]],
+        [`insert into org_levels (tenant_id, position, name) values ($1, 3, 'Sneaky')`, [tenant]],
+        [`insert into org_units (tenant_id, level_id, name) values ($2, $1, 'Sneaky')`, [level, otherTenant]],
+        [`insert into employees (tenant_id, first_name, last_name, unit_id) values ($2, 'Sneaky', 'Person', $1)`, [a.team, otherTenant]],
         [`insert into departments (tenant_id, name) values ($1, 'Sneaky')`, [tenant]],
         [`insert into employees (tenant_id, first_name, last_name) values ($1, 'Sneaky', 'Person')`, [tenant]],
         [`insert into employee_roles (tenant_id, employee_id, role) values ($1, $2, 'administration')`, [tenant, a.employee]],
@@ -156,13 +163,14 @@ describe('the directory: filters and search', () => {
     sales = await createDepartment(tenant, 'Sales', 'SLS');
     service = await createDepartment(tenant, 'Service', 'SRV');
     north = await createTeam(tenant, service, 'North');
-    // Four levels: ceo → vp → lead → tech, tech2; side reports to the ceo.
-    t.ceo = await create({ firstName: 'Dragan', lastName: 'Ćirić', departmentId: sales });
-    t.vp = await create({ firstName: 'Jovana', lastName: 'Petrović', managerId: t.ceo, departmentId: service });
-    t.lead = await create({ firstName: 'Lazar', lastName: 'Đorđević', managerId: t.vp, teamId: north });
-    t.tech = await create({ firstName: 'Tara', lastName: 'Šarić', managerId: t.lead, teamId: north, jobTitle: 'Serviser' });
-    t.tech2 = await create({ firstName: 'Uroš', lastName: 'Žikić', managerId: t.lead, departmentId: service });
-    t.side = await create({ firstName: 'Vesna', lastName: 'Side', managerId: t.ceo });
+    // Four levels: ceo → vp → lead → tech, tech2; side reports to the ceo (no unit). Unit and manager
+    // both given: the explicit choice wins over the org rules (CD-226).
+    t.ceo = await create({ firstName: 'Dragan', lastName: 'Ćirić', unitId: sales });
+    t.vp = await create({ firstName: 'Jovana', lastName: 'Petrović', managerId: t.ceo, unitId: service });
+    t.lead = await create({ firstName: 'Lazar', lastName: 'Đorđević', managerId: t.vp, unitId: north });
+    t.tech = await create({ firstName: 'Tara', lastName: 'Šarić', managerId: t.lead, unitId: north, jobTitle: 'Serviser' });
+    t.tech2 = await create({ firstName: 'Uroš', lastName: 'Žikić', managerId: t.lead, unitId: service });
+    t.side = await create({ firstName: 'Vesna', lastName: 'Side', managerId: t.ceo, unitId: null });
   });
 
   const ids = async (query: string, s: Session = owner) => (await ok('GET', `/people/employees?${query}`, as(s))).employees.map((e: { id: string }) => e.id).sort();
@@ -174,18 +182,15 @@ describe('the directory: filters and search', () => {
     expect(await ids(`managerId=${t.tech}&managerScope=indirect`)).toEqual([]);
   });
 
-  it('by department and team; choosing a team sets its department', async () => {
-    expect(await ids(`departmentIds=${service}`)).toEqual([t.vp, t.lead, t.tech, t.tech2].sort());
-    expect(await ids(`teamIds=${north}`)).toEqual([t.lead, t.tech].sort());
+  it('by unit, with the units inside it (CD-226)', async () => {
+    expect(await ids(`unitIds=${service}`)).toEqual([t.vp, t.lead, t.tech, t.tech2].sort());
+    expect(await ids(`unitIds=${north}`)).toEqual([t.lead, t.tech].sort());
+    expect(await ids(`unitIds=${north},${sales}`)).toEqual([t.ceo, t.lead, t.tech].sort());
     const lead = await ok('GET', `/people/employees/${t.lead}`, as());
-    expect(lead).toMatchObject({ departmentId: service, departmentName: 'Service', teamId: north, teamName: 'North' });
-    // A team of another department is refused.
-    const wrong = await call('PATCH', `/people/employees/${t.lead}`, { ...as(), body: { departmentId: sales, teamId: north } });
+    expect(lead).toMatchObject({ unitId: north, unitName: 'North', leadsUnit: null });
+    // An unknown unit is refused.
+    const wrong = await call('PATCH', `/people/employees/${t.lead}`, { ...as(), body: { unitId: '00000000-0000-4000-8000-000000000000' } });
     expect(wrong.status).toBe(400);
-    // Changing the department alone drops a team that isn't in it.
-    const moved = await ok('PATCH', `/people/employees/${t.tech}`, { ...as(), body: { departmentId: sales } }, 200);
-    expect(moved).toMatchObject({ departmentId: sales, teamId: null });
-    await ok('PATCH', `/people/employees/${t.tech}`, { ...as(), body: { teamId: north } }, 200);
   });
 
   it('searches without accents or case, by name, job title and email', async () => {
@@ -197,7 +202,7 @@ describe('the directory: filters and search', () => {
   });
 
   it('data issues for HR; the manager scope of the caller', async () => {
-    const issues = await ok('GET', `/people/employees?issues=no_department&managerId=${t.ceo}&managerScope=indirect`, as());
+    const issues = await ok('GET', `/people/employees?issues=no_unit&managerId=${t.ceo}&managerScope=indirect`, as());
     expect(issues.employees.map((e: { id: string }) => e.id)).toEqual([t.side]);
     expect((await call('GET', '/people/employees?issues=no_manager', as(member))).status).toBe(403);
     expect((await call('GET', '/people/employees?account=none', as(member))).status).toBe(403);
@@ -235,7 +240,7 @@ describe('uniqueness', () => {
     expect(number.body.message).toBe('Another employee already has this employee number');
   });
 
-  it('department names (trimmed, any case) and codes; team names within a department', async () => {
+  it('unit names (trimmed, any case) within their parent, and codes', async () => {
     const code = (p: Promise<unknown>) =>
       p.then(
         () => null,

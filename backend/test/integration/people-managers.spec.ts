@@ -67,7 +67,8 @@ describe('loops (AC 7.6.1)', () => {
   });
 
   it('holds under concurrent bulk and team-lead changes: never both directions', async () => {
-    const dept = (await ok('POST', '/people/departments', { ...as(hr), body: { name: 'Race dept' } })).id as string;
+    const [deptLevel, teamLevel] = (await ok('GET', '/people/org-levels', as(hr))).map((l: { id: string }) => l.id) as [string, string];
+    const dept = (await ok('POST', '/people/org-units', { ...as(hr), body: { levelId: deptLevel, name: 'Race dept' } })).unit.id as string;
     for (let round = 0; round < 3; round++) {
       // Bulk vs bulk.
       const p = await person('Race', `P${round}`);
@@ -76,14 +77,14 @@ describe('loops (AC 7.6.1)', () => {
       expect(bulk.map((r) => r.status).sort()).toEqual([200, 409]);
       expect([await managerOf(p), await managerOf(q)].filter(Boolean)).toHaveLength(1);
 
-      // Bulk vs the team-lead dialog: x → y in bulk while y's team gets lead x with "report to the lead".
+      // Bulk vs a new team lead: x → y in bulk while y's team gets lead x (its members report to the lead, CD-226).
       const x = await person('Lead', `X${round}`);
       const y = await person('Member', `Y${round}`);
-      const team = (await ok('POST', '/people/teams', { ...as(hr), body: { departmentId: dept, name: `Race team ${round}` } })).team.id as string;
-      await ok('POST', '/people/assignments', { ...as(hr), body: { departmentId: dept, teamId: team, employeeIds: [y] } }, 200);
+      const team = (await ok('POST', '/people/org-units', { ...as(hr), body: { levelId: teamLevel, parentId: dept, name: `Race team ${round}` } })).unit.id as string;
+      await ok('POST', '/people/assignments', { ...as(hr), body: { unitId: team, employeeIds: [y] } }, 200);
       const [viaBulk, viaLead] = await Promise.all([
         setManager([x], y),
-        call('PATCH', `/people/teams/${team}`, { ...as(owner), body: { leadEmployeeId: x, makeMembersReport: true } }),
+        call('PATCH', `/people/org-units/${team}`, { ...as(owner), body: { leadEmployeeId: x } }),
       ]);
       expect(viaLead.status).toBe(200);
       const [mx, my] = [await managerOf(x), await managerOf(y)];

@@ -403,7 +403,7 @@ export class OrgService {
   setReportingLines(ctx: TenantContext, input: SetReportingLines) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
-        await this.hr(tx, ctx);
+        await this.hr(tx, ctx, 'Only Admins change reporting lines');
         const ids = [...new Set(input.employeeIds)];
         const written = await changeOrg(
           tx,
@@ -422,9 +422,9 @@ export class OrgService {
   // ------------------------------------------------------------------ helpers
 
   /** Admins only (CD-225), or 403. */
-  private async hr(tx: Tx, ctx: TenantContext): Promise<CallerAccess> {
+  private async hr(tx: Tx, ctx: TenantContext, refusal = 'Only Admins change the org structure'): Promise<CallerAccess> {
     const access = await this.access.of(ctx, tx);
-    if (!access.isHr) throw new ForbiddenException('Only Admins change the org structure');
+    if (!access.isHr) throw new ForbiddenException(refusal);
     return access;
   }
 

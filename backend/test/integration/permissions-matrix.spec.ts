@@ -12,7 +12,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { allows, type PermissionRelation, PERMISSION_MODULES, permissionMatrix, permissionRow } from '../../src/modules/people/permissions';
 import type { FunctionalRole } from '../../src/modules/people/caller-access';
 import { call, createTenant, firstFunnel, ok, type Session, signIn } from './helpers';
-import { asTenantSql, createDepartment, grantRole, IBAN, joinAsEmployee, START } from './people-helpers';
+import { asTenantSql, createDepartment, grantRole, IBAN, joinAsEmployee, levelAt, START } from './people-helpers';
 
 type Caller = 'employee' | 'manager' | 'admin';
 /** `legacy` holds leftover Administration and Payroll rows (CD-225 removed the roles). */
@@ -40,6 +40,7 @@ let tenant: string;
 let companyId: string;
 let dealId: string;
 let departmentId: string;
+let topLevelId: string;
 const plans = {} as Record<Person, string>;
 const as = (p: Person) => ({ token: who[p].token, tenant });
 /** Who `target` is to `caller`. */
@@ -70,6 +71,7 @@ beforeAll(async () => {
     await ok('PATCH', `/people/employees/${emp[p]}`, { ...as('admin'), body: { employmentStartDate: START, privateEmail: privateEmail(p), iban: IBAN } }, 200);
   }
   departmentId = await createDepartment(tenant, 'Sales');
+  topLevelId = await levelAt(tenant, 1);
   const funnel = await firstFunnel(who.admin, tenant);
   companyId = (await ok('POST', '/crm/companies', { ...as('admin'), body: { name: 'Matrix Co' } })).id;
   dealId = (await ok('POST', '/crm/deals', { ...as('admin'), body: { title: 'Matrix deal', funnelId: funnel.id, companyId } })).id;
@@ -247,8 +249,8 @@ const CASES: Record<string, Case> = {
   },
   'org.reporting': {
     probe: async (c, t) => {
-      const r = await call('PATCH', `/people/employees/${emp[t]}`, { ...as(c), body: { departmentId } });
-      if (r.status === 200) await ok('PATCH', `/people/employees/${emp[t]}`, { ...as('admin'), body: { departmentId: null } }, 200);
+      const r = await call('PATCH', `/people/employees/${emp[t]}`, { ...as(c), body: { unitId: departmentId } });
+      if (r.status === 200) await ok('PATCH', `/people/employees/${emp[t]}`, { ...as('admin'), body: { unitId: null } }, 200);
       const m = await call('PATCH', `/people/employees/${emp[t]}`, { ...as(c), body: { managerId: null } });
       expect(allowedBy(m.status, 200), `${c} → ${t}: manager agrees with department`).toBe(r.status === 200);
       return allowedBy(r.status, 200);
@@ -257,8 +259,8 @@ const CASES: Record<string, Case> = {
   'org.structure': {
     relations: ['other'],
     probe: async (c) => {
-      const r = await call('POST', '/people/departments', { ...as(c), body: { name: `Dept by ${c} ${Date.now()}` } });
-      if (r.status === 201) await ok('DELETE', `/people/departments/${r.body.id}`, as('admin'));
+      const r = await call('POST', '/people/org-units', { ...as(c), body: { levelId: topLevelId, name: `Unit by ${c} ${Date.now()}` } });
+      if (r.status === 201) await ok('DELETE', `/people/org-units/${r.body.unit.id}`, as('admin'));
       return allowedBy(r.status, 201);
     },
   },
@@ -367,9 +369,9 @@ describe('Administration and Payroll are gone (CD-225)', () => {
       expect((await call('POST', '/people/employees', { ...as(c), body: { firstName: 'No', lastName: 'Way', employmentStartDate: START } })).status, c).toBe(403);
       expect((await call('PATCH', `/people/employees/${emp.other}`, { ...as(c), body: { jobTitle: 'Nope' } })).status, c).toBe(403);
       expect((await call('PATCH', `/people/employees/${emp.other}`, { ...as(c), body: { managerId: emp.manager } })).status, c).toBe(403);
-      expect((await call('PATCH', `/people/employees/${emp.other}`, { ...as(c), body: { departmentId } })).status, c).toBe(403);
+      expect((await call('PATCH', `/people/employees/${emp.other}`, { ...as(c), body: { unitId: departmentId } })).status, c).toBe(403);
       expect((await call('POST', '/people/reporting-lines', { ...as(c), body: { employeeIds: [emp.other], managerId: emp.manager } })).status, c).toBe(403);
-      expect((await call('POST', '/people/assignments', { ...as(c), body: { departmentId, employeeIds: [emp.other] } })).status, c).toBe(403);
+      expect((await call('POST', '/people/assignments', { ...as(c), body: { unitId: departmentId, employeeIds: [emp.other] } })).status, c).toBe(403);
       expect((await call('POST', '/people/employees/export', { ...as(c), body: { employeeIds: [emp.other] } })).status, c).toBe(403);
       expect((await call('POST', `/people/employees/${emp.other}/deactivate`, { ...as(c), body: { lastWorkingDay: '2031-01-01' } })).status, c).toBe(403);
     }
