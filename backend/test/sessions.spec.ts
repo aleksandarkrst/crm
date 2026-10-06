@@ -1,9 +1,11 @@
+import { SignJWT } from 'jose';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Auth0Accounts } from '../src/modules/identity/accounts';
 import { readCookie, sessionProblem } from '../src/modules/identity/session.controller';
 import { Auth0Sessions, createSessionProvider, DevSessions, NoSessions, pkce, type SessionError } from '../src/modules/identity/sessions';
 import { noPasswordEmail, passwordResetEmail, resetLink } from '../src/modules/identity/signup-email';
 import { providerUserId } from '../src/modules/identity/signup.service';
+import { claim } from '../src/modules/identity/token.service';
 import type { Env } from '../src/infrastructure/config/config.module';
 import type { Request } from 'express';
 
@@ -92,6 +94,39 @@ describe('signing in with Auth0 behind Pultly\'s own pages (CD-114)', () => {
     expect(
       createSessionProvider(env({ OIDC_ISSUER: 'https://i', OIDC_AUDIENCE: 'a', AUTH0_LOGIN_CLIENT_ID: 'c', AUTH0_LOGIN_CLIENT_SECRET: 's' }), issue),
     ).toBeInstanceOf(Auth0Sessions);
+  });
+
+  it("takes the person's email and name from the ID token, which Auth0's access tokens lack (CD-222)", async () => {
+    const idToken = (claims: Record<string, unknown>) =>
+      new SignJWT(claims).setProtectedHeader({ alg: 'HS256' }).setIssuer('https://login.example.test/').setSubject('google-oauth2|123').sign(new TextEncoder().encode('k'.repeat(32)));
+    const reply = { body: {} as Record<string, unknown> };
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, reply.body)));
+
+    reply.body = { access_token: 'at', refresh_token: 'rt', expires_in: 600, id_token: await idToken({ email: 'gina@example.test', email_verified: true, name: 'Gina Google' }) };
+    expect((await auth0().exchangeCode({ code: 'c', verifier: 'v', redirectUri: 'https://app.example.test/api/auth/callback' })).identity).toEqual({
+      subject: 'https://login.example.test/|google-oauth2|123',
+      email: 'gina@example.test',
+      name: 'Gina Google',
+    });
+    // A renewal brings it too, so people who signed in before get their address on the next one.
+    expect((await auth0().refresh('rt')).identity?.email).toBe('gina@example.test');
+    // An address the provider hasn't verified is left out; a reply without an ID token has no identity.
+    reply.body = { access_token: 'at', id_token: await idToken({ email: 'gina@example.test', email_verified: false }) };
+    expect((await auth0().refresh('rt')).identity).toEqual({ subject: 'https://login.example.test/|google-oauth2|123', email: null, name: null });
+    reply.body = { access_token: 'at', id_token: 'not a jwt' };
+    expect((await auth0().refresh('rt')).identity).toBeUndefined();
+  });
+
+  it('dev sessions name who signed in like the dev token does', async () => {
+    const dev = new DevSessions('x'.repeat(32), async () => 'at');
+    expect((await dev.passwordLogin('Ana@Example.test')).identity).toEqual({ subject: 'crm-dev|ana@example.test', email: 'Ana@Example.test', name: 'Ana' });
+  });
+
+  it('reads plain and namespaced claims of an access token', () => {
+    expect(claim({ email: ' ana@example.test ' }, 'email')).toBe('ana@example.test');
+    expect(claim({ 'https://pultly.com/email': 'ana@example.test' }, 'email')).toBe('ana@example.test');
+    expect(claim({ 'https://pultly.com/email_verified': 'yes', other_email: 'x@example.test' }, 'email')).toBeNull();
+    expect(claim({ email: '' }, 'email')).toBeNull();
   });
 
   it('reads the session cookie among others', () => {

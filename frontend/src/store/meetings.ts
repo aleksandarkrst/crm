@@ -486,6 +486,15 @@ export function meetingActions(ctx: Ctx) {
       return null;
     }
   };
+  /** "Update from meeting" (CD-222): the meeting's date, place and people in the text as they are now; null (after saying why) when refused. */
+  const updateFromMeeting = async (id: string): Promise<ApiExternalMinutes | null> => {
+    try {
+      return await crmApi.meetings.updateFromMeeting(id);
+    } catch (err) {
+      flash('Not updated: ' + ctx.errText(err), 7000);
+      return null;
+    }
+  };
   /** The exact email; throws an Error with the API's reason (the dialog shows it). */
   const previewMinutes = async (id: string, input: MinutesEmailInput): Promise<ApiMinutesEmail> => {
     try {
@@ -562,6 +571,7 @@ export function meetingActions(ctx: Ctx) {
     loadExternal,
     saveExternal,
     copyInternal,
+    updateFromMeeting,
     previewMinutes,
     sendMinutes,
     loadSends,

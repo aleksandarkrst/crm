@@ -8,6 +8,10 @@ import type { Filters, State } from './types';
 export const ACTIVITIES = ['Qualify & research', 'Personalized email', 'LinkedIn touch', 'WhatsApp check-in', 'Discovery call', 'Discovery workshop', 'Multi-thread to stakeholders', 'Send proposal + walkthrough', 'Procurement follow-up', 'Negotiation call', 'Kickoff scheduling'];
 export const CHANNELS = ['RS', 'EM', 'LI', 'WA', 'MT'] as const;
 export const CHANNEL_LABELS: Record<string, string> = { RS: 'Research task', EM: 'Email', LI: 'LinkedIn message', WA: 'WhatsApp message', MT: 'Meeting', PH: 'Call', NT: 'Note' };
+/** A timeline entry without a channel (deal created, stage moves, a task removed): the app wrote it, nobody talked to anyone (CD-222). */
+export const SYSTEM_CHANNEL = 'SY';
+/** The badge of a timeline entry. */
+export const activityChannelLabel = (channel: string) => (channel === SYSTEM_CHANNEL ? 'System' : CHANNEL_LABELS[channel] || channel);
 export const DOCS = ['None', 'Proposal', 'Quote', 'Contract', 'Invoice'];
 export const BUYER_ROLES = ['Decision maker', 'Economic buyer', 'Champion', 'Influencer', 'Gatekeeper', 'End user'];
 /** Custom field types (CD-15) and how they are labelled. */

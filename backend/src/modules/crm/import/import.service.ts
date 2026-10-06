@@ -553,7 +553,7 @@ export class ImportService {
         const now = new Date();
         q.deals.push({ ...input, ...refs, id, ownerUserId: input.ownerUserId ?? ctx.userId, tenantId, stageId: stage.id, stageEnteredAt: now, closedAt: stage.isWon ? now : null, createdAt: now, updatedAt: now });
         q.history.push({ tenantId, dealId: id, kind: 'created', fromStageId: null, toStageId: stage.id, outcome: stage.isWon ? 'won' : 'open', changedAt: now, changedByUserId: ctx.userId });
-        q.activities.push({ tenantId, dealId: id, actorUserId: ctx.userId, channel: 'RS', title: 'Deal created', detail: importedDetail(input.source) });
+        q.activities.push({ tenantId, dealId: id, actorUserId: ctx.userId, channel: null, title: 'Deal created', detail: importedDetail(input.source) });
         return id;
       },
       createProduct: async (input) => {
@@ -603,7 +603,7 @@ export class ImportService {
           .returning({ id: deals.id, createdAt: deals.createdAt });
         const outcome = stage.isWon ? 'won' : 'open';
         await this.history.record(tx, ctx, { dealId: row!.id, kind: 'created', fromStageId: null, toStageId: stage.id, outcome }, row!.createdAt);
-        await tx.insert(activities).values({ tenantId, dealId: row!.id, actorUserId: ctx.userId, channel: 'RS', title: 'Deal created', detail: importedDetail(input.source) });
+        await tx.insert(activities).values({ tenantId, dealId: row!.id, actorUserId: ctx.userId, channel: null, title: 'Deal created', detail: importedDetail(input.source) });
         return row!.id;
       },
       createProduct: async (input) => {

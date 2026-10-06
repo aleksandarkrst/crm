@@ -116,6 +116,38 @@ describe('the external text', () => {
     expect(held.body).toContain('**Too early**');
   });
 
+  it('follows the meeting when it moves, until someone changes the text (CD-222)', async () => {
+    const m = await meeting('Moved visit');
+    const first = await ok('GET', ext(m.id), as(ana));
+    expect(first).toMatchObject({ prefilled: true, meetingChanged: null });
+    const moveBy = async (ms: number) => {
+      const current = await ok('GET', `/crm/meetings/${m.id}`, as(owner));
+      const start = new Date(current.startsAt).getTime() + ms;
+      await ok('PATCH', `/crm/meetings/${m.id}`, { ...as(owner), body: { startsAt: iso(start), endsAt: iso(start + HOUR) } });
+    };
+
+    // Moved, and nobody changed the text: it follows the meeting.
+    await moveBy(-HOUR);
+    const moved = await ok('GET', ext(m.id), as(ana));
+    expect(moved.body).not.toBe(first.body);
+    expect(moved.meetingChanged).toBeNull();
+
+    // Someone wrote in it, then the meeting moved again: their text stays, and the app says so.
+    const edited = await ok('PUT', ext(m.id), { ...as(ana), body: { body: `${moved.body}\nThank you for your time!` } });
+    await moveBy(-HOUR);
+    const stale = await ok('GET', ext(m.id), as(ana));
+    expect(stale.body).toBe(edited.body);
+    expect(stale.meetingChanged).toBe('time');
+
+    // "Update from meeting": the meeting lines as they are now, the rest kept.
+    expect((await call('POST', `${ext(m.id)}/update-from-meeting`, as(bo))).status).toBe(403);
+    const updated = await ok('POST', `${ext(m.id)}/update-from-meeting`, as(ana), 200);
+    expect(updated).toMatchObject({ meetingChanged: null, updatedByName: ana.name });
+    expect(updated.body).not.toBe(edited.body);
+    expect(updated.body.endsWith('\nThank you for your time!')).toBe(true);
+    expect((await ok('GET', ext(m.id), as(owner))).body).toBe(updated.body);
+  });
+
   it('is saved by the people who may change the meeting, with conflicts caught', async () => {
     const m = await meeting('Saving text');
     const base = await ok('GET', ext(m.id), as(ana));

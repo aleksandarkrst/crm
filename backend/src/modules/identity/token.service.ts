@@ -12,6 +12,19 @@ const DEV_ISSUER = 'crm-dev';
 const DEV_AUDIENCE = 'crm-api';
 
 /**
+ * A string claim, plain (`email`) or namespaced the way Auth0 Actions add custom claims to access
+ * tokens (`https://pultly.com/email`), so a tenant that adds one fills users.email lazily (CD-222).
+ */
+export function claim(payload: JWTPayload, name: string): string | null {
+  const plain = payload[name];
+  if (typeof plain === 'string' && plain.trim()) return plain.trim();
+  for (const [key, value] of Object.entries(payload)) {
+    if (key.endsWith(`/${name}`) && /^https?:\/\//.test(key) && typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+/**
  * Verifies bearer tokens.
  * - AUTH_MODE=oidc: tokens from an external identity provider, checked against its JWKS.
  * - AUTH_MODE=dev:  HS256 tokens minted by /api/auth/dev-login. Never enabled in production.
@@ -35,8 +48,8 @@ export class TokenService {
     if (!payload.sub || !payload.iss) throw new UnauthorizedException('Token missing sub/iss');
     return {
       subject: `${payload.iss}|${payload.sub}`,
-      email: typeof payload.email === 'string' ? payload.email : null,
-      name: typeof payload.name === 'string' ? payload.name : null,
+      email: claim(payload, 'email'),
+      name: claim(payload, 'name'),
     };
   }
 

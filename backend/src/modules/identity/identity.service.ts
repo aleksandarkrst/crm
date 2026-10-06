@@ -1,4 +1,4 @@
-import { ConflictException, HttpStatus, Injectable } from '@nestjs/common';
+import { ConflictException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { and, asc, eq, ne, sql } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import type { AuthUser } from '../../shared/authorization';
@@ -13,6 +13,7 @@ const USER_CACHE_TTL_MS = 60_000;
 
 @Injectable()
 export class IdentityService {
+  private readonly logger = new Logger(IdentityService.name);
   private readonly userCache = new Map<string, { user: AuthUser; expires: number }>();
 
   constructor(
@@ -26,13 +27,35 @@ export class IdentityService {
     if (cached && cached.expires > Date.now()) return cached.user;
     await this.refuseSecondAccount(identity);
 
+    return this.upsert(identity);
+  }
+
+  /**
+   * Saves who signed in, from the provider's ID token, when signing in or renewing the session
+   * (CD-222): a Google user's address only arrives there. Fills or updates users.email, but never
+   * with an address another account already has (one account per email, CD-114): that sign-in is
+   * refused on its first API call instead. Never throws, so signing in can't fail on it.
+   */
+  async rememberProfile(identity: VerifiedIdentity): Promise<void> {
+    try {
+      await this.refuseSecondAccount(identity);
+      await this.upsert(identity);
+    } catch (err) {
+      if (!(err instanceof ConflictException)) this.logger.warn(`Couldn't save the profile of ${identity.subject}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  private async upsert(identity: VerifiedIdentity): Promise<AuthUser> {
     const [row] = await this.database.db
       .insert(users)
       .values({ authSubject: identity.subject, email: identity.email, displayName: identity.name })
       .onConflictDoUpdate({
         target: users.authSubject,
         set: {
-          email: sql`coalesce(excluded.email, ${users.email})`,
+          // A new address replaces the old one, unless another account has it (CD-222).
+          email: sql`case when excluded.email is not null and not exists (
+            select 1 from ${users} u where lower(u.email) = lower(excluded.email) and u.auth_subject <> excluded.auth_subject
+          ) then excluded.email else ${users.email} end`,
           // A name the user set in their profile wins over the one in the token.
           displayName: sql`case when ${users.displayNameCustom} then ${users.displayName} else coalesce(excluded.display_name, ${users.displayName}) end`,
         },

@@ -333,6 +333,9 @@ describe('status changes', () => {
     const restored = await ok('POST', `/crm/meetings/${future.id}/restore`, as(owner), 200);
     expect(restored).toMatchObject({ status: 'planned', cancelReason: null, cancelledAt: null });
     expect((await call('POST', `/crm/meetings/${future.id}/restore`, as(owner))).status).toBe(409);
+    // Restoring is on the deal's timeline too, like cancelling (CD-222).
+    const afterRestore = await ok('GET', `/crm/deals/${d.id}/activities`, as(owner));
+    expect(afterRestore.find((a: Json) => a.title === 'Meeting restored · Future')).toMatchObject({ channel: 'MT' });
     // Cancelling without a body is fine.
     expect((await ok('POST', `/crm/meetings/${future.id}/cancel`, as(owner), 200)).cancelReason).toBeNull();
   });

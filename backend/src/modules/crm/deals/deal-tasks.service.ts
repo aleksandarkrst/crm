@@ -121,7 +121,7 @@ export class DealTasksService {
       .returning();
     if (rest.blocksAdvance === false) {
       const detail = [rest.dueDate && 'Due ' + rest.dueDate, owner && 'Owner ' + owner, rest.note].filter(Boolean).join(' · ');
-      await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId, actorUserId: ctx.userId, channel: 'RS', title: 'Task added: ' + rest.label, detail: detail || null });
+      await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId, actorUserId: ctx.userId, channel: rest.channel ?? null, title: 'Task added: ' + rest.label, detail: detail || null });
     }
     return row!;
   }
@@ -155,7 +155,7 @@ export class DealTasksService {
         .returning({ dealId: dealTasks.dealId, label: dealTasks.label, offPlaybook: dealTasks.offPlaybook, blocksAdvance: dealTasks.blocksAdvance });
       if (!row) throw new NotFoundException('To-do not found');
       if (row.offPlaybook && !row.blocksAdvance)
-        await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId: row.dealId, actorUserId: ctx.userId, channel: 'RS', title: 'Task removed: ' + row.label, detail: null });
+        await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId: row.dealId, actorUserId: ctx.userId, channel: null, title: 'Task removed: ' + row.label, detail: null });
     });
   }
 }
