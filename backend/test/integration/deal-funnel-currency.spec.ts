@@ -31,7 +31,7 @@ describe('funnel change on the timeline', () => {
     const deal = await ok('POST', '/crm/deals', { ...as(), body: { title: 'Switcher', funnelId: smb.id } });
     await ok('PATCH', `/crm/deals/${deal.id}`, { ...as(), body: { funnelId: ent.id } });
     const [latest] = await activitiesOf(deal.id);
-    expect(latest).toMatchObject({ title: `Moved to funnel ${ent.label}`, channel: 'NT' });
+    expect(latest).toMatchObject({ title: `Moved to funnel ${ent.label}`, channel: null }); // a system entry (CD-222)
     expect(latest!.detail).toContain(`Restarted at ${ent.stages[0]!.name}`);
   });
 

@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import type { HistoryEntity } from '../lib/api';
-import { CHANNEL_LABELS } from '../store/seed';
+import { activityChannelLabel } from '../store/seed';
 import { type Cur, isOverdue, isoLabel, memberLabels, memberName, stageOf, todayIso, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Lead, LogEntry } from '../store/types';
@@ -243,7 +243,7 @@ export function RecordHistory({ entries, entity, id, cur, rev }: { entries: LogE
                 <span style={{ fontSize: 13, fontWeight: 500 }}>{e.title}</span>
                 <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45, whiteSpace: 'pre-line' }}>{e.detail}</div>
               </div>
-              <span className="badge badge-neutral">{CHANNEL_LABELS[e.channel] || e.channel}</span>
+              <span className="badge badge-neutral">{activityChannelLabel(e.channel)}</span>
             </div>
           ))}
         </>

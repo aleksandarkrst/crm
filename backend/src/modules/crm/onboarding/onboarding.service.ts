@@ -317,8 +317,8 @@ export class OnboardingService {
 
     const log = (channel: (typeof activities.$inferInsert)['channel'], title: string, detail: string | null, occurredAt: Date) =>
       tx.insert(activities).values({ tenantId: ctx.tenantId, dealId, actorUserId: ctx.userId, channel, title, detail, occurredAt });
-    await log('RS', 'Deal created', `Source: ${SAMPLE_SOURCE}`, created);
-    if (refs.stage.id !== refs.first.id) await log('NT', `Moved to ${refs.stage.name}`, null, moved);
+    await log(null, 'Deal created', `Source: ${SAMPLE_SOURCE}`, created);
+    if (refs.stage.id !== refs.first.id) await log(null, `Moved to ${refs.stage.name}`, null, moved);
     if (d.activity) await log(d.activity.channel, d.activity.title, d.activity.detail, at(d.activity.daysAgo));
     if (d.lost) await log('NT', `Marked as lost: ${d.lost.reason}`, d.lost.note, at(d.lastContactDays));
     if (d.task) {
@@ -334,7 +334,7 @@ export class OnboardingService {
         assigneeUserId: ctx.userId,
         channel: d.task.channel,
       });
-      await log('RS', 'Task added: ' + d.task.label, 'Due ' + dueDate, created);
+      await log(d.task.channel, 'Task added: ' + d.task.label, 'Due ' + dueDate, created);
     }
     return dealId;
   }

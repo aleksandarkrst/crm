@@ -62,6 +62,13 @@ export interface ApiInternalMinutes {
 
 const blankToNull = (v: string | null | undefined) => (v === undefined ? undefined : v === null || v.trim() === '' ? null : v);
 
+/** Whether a saved part of the minutes is what is stored already (next steps compare as their canonical JSON). */
+function sameMinutesValue(field: string, stored: unknown, next: unknown): boolean {
+  if (field !== 'nextSteps') return (stored ?? null) === (next ?? null);
+  const json = (steps: unknown) => JSON.stringify(((steps as MeetingNextStep[] | null) ?? []).map(canonicalStep));
+  return json(stored) === json(next);
+}
+
 /**
  * The internal minutes of a meeting (CD-132): summary, agreements and next steps. Every member
  * reads them; the people who may change the meeting write them (organizer, internal participants,
@@ -106,9 +113,13 @@ export class MeetingMinutesService {
           const stored = { id: meetingId, updatedAt: current.updatedAt, summary: current.summary, agreements: current.agreements, nextSteps: existing.map(canonicalStep) };
           await this.changes.assertNoConflict(tx, ctx, 'meeting', stored, fields, version);
         }
-        if (current) await tx.update(meetingMinutes).set({ ...fields, updatedByUserId: ctx.userId }).where(eq(meetingMinutes.id, current.id));
-        else await tx.insert(meetingMinutes).values({ ...fields, tenantId: ctx.tenantId, meetingId, updatedByUserId: ctx.userId });
-        await this.audit.record(tx, ctx, { action: 'meeting.minutes_updated', entityType: 'meeting', entityId: meetingId, data: { fields: Object.keys(fields) } });
+        // Only what really changed is written (CD-222): a save that changes nothing keeps the
+        // version, and the meeting's history gets no "1 step → 1 step".
+        const changed = current ? Object.fromEntries(Object.entries(fields).filter(([k, v]) => !sameMinutesValue(k, current[k as 'summary' | 'agreements' | 'nextSteps'], v))) : fields;
+        if (!Object.keys(changed).length && current) return this.load(tx, meetingId);
+        if (current) await tx.update(meetingMinutes).set({ ...changed, updatedByUserId: ctx.userId }).where(eq(meetingMinutes.id, current.id));
+        else await tx.insert(meetingMinutes).values({ ...changed, tenantId: ctx.tenantId, meetingId, updatedByUserId: ctx.userId });
+        await this.audit.record(tx, ctx, { action: 'meeting.minutes_updated', entityType: 'meeting', entityId: meetingId, data: { fields: Object.keys(changed) } });
         return this.load(tx, meetingId);
       })
       .catch(mapDbError);

@@ -1,32 +1,33 @@
-import { lazy, Suspense, useEffect } from 'react';
-import { Navigate, Outlet, Route, Routes, useNavigate } from 'react-router-dom';
+import { Component, lazy, Suspense, useEffect, type ReactNode } from 'react';
+import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { SessionGate } from './components/SessionGate';
 import type { ApiStartPage } from './lib/api';
 import { POPUP_MESSAGE, rememberSignInProblem } from './lib/auth';
+import { isChunkLoadError, loadChunk } from './lib/chunks';
 import { paths } from './lib/paths';
 import { useStore } from './store/store';
 
 // Screens load on first visit (CD-24), so the first page doesn't wait for all of them.
-const Calendar = lazy(() => import('./screens/Calendar').then((m) => ({ default: m.Calendar })));
-const Companies = lazy(() => import('./screens/Companies').then((m) => ({ default: m.Companies })));
-const Company = lazy(() => import('./screens/Company').then((m) => ({ default: m.Company })));
-const Contact = lazy(() => import('./screens/Contact').then((m) => ({ default: m.Contact })));
-const Contacts = lazy(() => import('./screens/Contacts').then((m) => ({ default: m.Contacts })));
-const EmployeeCard = lazy(() => import('./screens/EmployeeCard').then((m) => ({ default: m.EmployeeCard })));
-const Dashboard = lazy(() => import('./screens/Dashboard').then((m) => ({ default: m.Dashboard })));
-const Meeting = lazy(() => import('./screens/Meeting').then((m) => ({ default: m.Meeting })));
-const NewMeeting = lazy(() => import('./screens/NewMeeting').then((m) => ({ default: m.NewMeeting })));
-const LeadScreen = lazy(() => import('./screens/lead/LeadScreen').then((m) => ({ default: m.LeadScreen })));
-const OrgStructure = lazy(() => import('./screens/OrgStructure').then((m) => ({ default: m.OrgStructure })));
-const Pipeline = lazy(() => import('./screens/Pipeline').then((m) => ({ default: m.Pipeline })));
-const Products = lazy(() => import('./screens/Products').then((m) => ({ default: m.Products })));
-const Profile = lazy(() => import('./screens/Profile').then((m) => ({ default: m.Profile })));
-const Settings = lazy(() => import('./screens/Settings').then((m) => ({ default: m.Settings })));
-const Reports = lazy(() => import('./screens/Reports').then((m) => ({ default: m.Reports })));
-const Today = lazy(() => import('./screens/Today').then((m) => ({ default: m.Today })));
-const VisitPlan = lazy(() => import('./screens/VisitPlan').then((m) => ({ default: m.VisitPlan })));
-const VisitPlans = lazy(() => import('./screens/VisitPlans').then((m) => ({ default: m.VisitPlans })));
+const Calendar = lazy(() => loadChunk(() => import('./screens/Calendar')).then((m) => ({ default: m.Calendar })));
+const Companies = lazy(() => loadChunk(() => import('./screens/Companies')).then((m) => ({ default: m.Companies })));
+const Company = lazy(() => loadChunk(() => import('./screens/Company')).then((m) => ({ default: m.Company })));
+const Contact = lazy(() => loadChunk(() => import('./screens/Contact')).then((m) => ({ default: m.Contact })));
+const Contacts = lazy(() => loadChunk(() => import('./screens/Contacts')).then((m) => ({ default: m.Contacts })));
+const EmployeeCard = lazy(() => loadChunk(() => import('./screens/EmployeeCard')).then((m) => ({ default: m.EmployeeCard })));
+const Dashboard = lazy(() => loadChunk(() => import('./screens/Dashboard')).then((m) => ({ default: m.Dashboard })));
+const Meeting = lazy(() => loadChunk(() => import('./screens/Meeting')).then((m) => ({ default: m.Meeting })));
+const NewMeeting = lazy(() => loadChunk(() => import('./screens/NewMeeting')).then((m) => ({ default: m.NewMeeting })));
+const LeadScreen = lazy(() => loadChunk(() => import('./screens/lead/LeadScreen')).then((m) => ({ default: m.LeadScreen })));
+const OrgStructure = lazy(() => loadChunk(() => import('./screens/OrgStructure')).then((m) => ({ default: m.OrgStructure })));
+const Pipeline = lazy(() => loadChunk(() => import('./screens/Pipeline')).then((m) => ({ default: m.Pipeline })));
+const Products = lazy(() => loadChunk(() => import('./screens/Products')).then((m) => ({ default: m.Products })));
+const Profile = lazy(() => loadChunk(() => import('./screens/Profile')).then((m) => ({ default: m.Profile })));
+const Settings = lazy(() => loadChunk(() => import('./screens/Settings')).then((m) => ({ default: m.Settings })));
+const Reports = lazy(() => loadChunk(() => import('./screens/Reports')).then((m) => ({ default: m.Reports })));
+const Today = lazy(() => loadChunk(() => import('./screens/Today')).then((m) => ({ default: m.Today })));
+const VisitPlan = lazy(() => loadChunk(() => import('./screens/VisitPlan')).then((m) => ({ default: m.VisitPlan })));
+const VisitPlans = lazy(() => loadChunk(() => import('./screens/VisitPlans')).then((m) => ({ default: m.VisitPlans })));
 
 const START_PAGES: Record<ApiStartPage, string> = { pipeline: paths.pipeline, overview: paths.overview, today: paths.today, contacts: paths.contacts };
 
@@ -48,11 +49,44 @@ function ScreenLoading() {
   );
 }
 
+/**
+ * A screen that fails to load or render shows a message with a way out instead of a blank page
+ * (CD-220). After a deploy that's normally handled by loadChunk's reload; this is what's left when
+ * that didn't help. Keyed by the path, so going to another screen tries again.
+ */
+class ScreenErrorBoundary extends Component<{ children: ReactNode }, { error: unknown }> {
+  state = { error: null as unknown };
+
+  static getDerivedStateFromError(error: unknown) {
+    return { error };
+  }
+
+  render() {
+    const { error } = this.state;
+    if (!error) return this.props.children;
+    const newVersion = isChunkLoadError(error);
+    return (
+      <div role="alert" style={{ flex: 1, minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24, textAlign: 'center', background: 'var(--white)' }}>
+        <span style={{ fontSize: 16, fontWeight: 600 }}>{newVersion ? 'A new version of Pultly is available' : 'This page could not be shown'}</span>
+        <span style={{ fontSize: 13, color: 'var(--text-2)', maxWidth: 420 }}>
+          {newVersion ? 'Reload the page to continue. Your saved work is kept.' : 'Reload the page to try again. If it keeps happening, let us know.'}
+        </span>
+        <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>
+          Reload
+        </button>
+      </div>
+    );
+  }
+}
+
 function LazyScreens() {
+  const { pathname } = useLocation();
   return (
-    <Suspense fallback={<ScreenLoading />}>
-      <Outlet />
-    </Suspense>
+    <ScreenErrorBoundary key={pathname}>
+      <Suspense fallback={<ScreenLoading />}>
+        <Outlet />
+      </Suspense>
+    </ScreenErrorBoundary>
   );
 }
 
