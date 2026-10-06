@@ -459,6 +459,13 @@ and admins can resend or copy it later.
 
 - An invitation is for one email address, expires after 7 days, and works once. Re-inviting the
   same address replaces the pending invitation.
+- **Functional roles on the invitation** (CD-224): the invite dialog has optional "Administration"
+  and "Payroll" checkboxes (`roles` in the request, kept in `invitations.assigned_roles`, a checked
+  `text[]`). When the invitation is accepted and the new member's employee record is linked,
+  identity calls people's `grantInvitedRoles` (through its index) in the same transaction: the
+  record gets the roles in the inviting Admin's name (history row field `roles`, audit
+  `employee.role_granted`), without the "Role granted" email. Only Admins invite, and Admins are
+  the ones who assign these roles (row `org.roles`). Someone who was already a member keeps their roles.
 - Accepting (`POST /api/invitations/:token/accept`) requires a signed-in user with that email,
   so a forwarded link is useless to anyone else. Onboarding also offers the invitations pending for
   the user's email without the link (`POST /api/me/invitations/:id/accept`, CD-115).
@@ -755,7 +762,16 @@ Nobody makes quarterly plans any more: a quarter is tracked as the sum of its th
 - **API shape**: report rows carry `plans: [{ id, periodStart, periodLabel }]` (one for a month, up
   to three for a quarter; `planId` is the first) and the summary's `plans` list the monthly plans
   with their month. Reports and the Overview card keep their Month / Quarter choice; a quarter
-  row links each of its months.
+  row links each of its months and names the months without a plan ("Oct Nov · no December plan",
+  CD-224), so a quarter total that is missing a month doesn't look complete.
+- **Pace tooltip** (CD-224): the completion badge's title says the expected pace in visits:
+  "Behind pace: 3 of 5 visits expected by today, 1 held (60% of the period has passed)", where the
+  expected number is the plan times the share of the period passed, rounded down
+  (`expectedVisits`, `store/visitPlans.ts`).
+- **New plan dialog** (CD-224): a wrong number marks its own row ("A whole number from 1 to 99",
+  after leaving the field or saving; 100 is shown as an error, not cut to 10) and the save error
+  names the customer; a customer search with no match offers "Clear search"; with one member to
+  plan for, they are preselected; the month list reaches 12 months ahead.
 
 ## Working together: live updates, conflicts, change history
 
@@ -1077,6 +1093,20 @@ milestones on lines); `drizzle/0022_products_deal_billing.sql` converts existing
   "Total with tax".
 
 ## Header, command palette and record pages (CD-80)
+
+CD-224 additions: the "+" menu has **Employee** (key E) for workspace owners and admins, and for
+Administration once the people access is loaded; it opens `/org?new=employee`, where the Org page
+opens Add employee (and drops the parameter). Contact pages are addressed by the backend contact id:
+`openContact` resolves a person id ("<deal id>:p" for a deal's primary contact) to it, and an old
+`/contacts/<deal id>:p` link redirects. Company **Domain** and contact **LinkedIn** are checked when
+the field is left (`components/ui.tsx` `CheckedInput`, `lib/validate.ts`): a domain is a host name
+(letters, digits, hyphens, dots, a top-level domain; a pasted address keeps only its host, "Saved as
+acme.com"), LinkedIn is a linkedin.com address or a profile path ("in/ana" is saved as
+"linkedin.com/in/ana"); an invalid value shows an inline message and is not saved. The Org page's
+empty states point to the next step: "Add employee" and "Import" when nobody is there, "Clear
+filters" when the filters hide everyone, and "Add department" on the department chart and in the
+empty Department filter (opens Departments & teams with the new department's form). The deal
+composer's WhatsApp and LinkedIn tabs are commented out until those integrations exist.
 
 - **Header** (`Screen` in `components/Layout.tsx`): the screen's name on the left ("Companies /
   Company" on a record, the parent is a link), search and the "+" menu in the middle,
@@ -1585,6 +1615,11 @@ The database also refuses `manager_id = id`. Covered by a concurrent A → B / B
   deactivatedAt`, and `leavingReason` for HR) only for rows in the caller's scope, `hr: { account,
   dataIssues }` for HR and `roles` for Admins. Never personal details or bank accounts. Someone
   leaving shows as `active` to callers who may not see employment dates.
+  **Data issues**: `no_manager`, `no_start_date`, `no_department`, `manager_no_account`,
+  `no_employee_number` (when the setting requires it); none for inactive people. "No manager" leaves
+  out the top of the organisation (CD-224): when exactly one active employee has no manager, that
+  person is the top and not an issue; when several have none, every one of them is flagged (nobody
+  can tell which of them is the top).
 - `GET /employees/:id` → the card: the directory fields, `version` (send as If-Match), `account`,
   `roles`, `manager` (with `hasAccount` and their own manager), `directReports`, `leadsTeams`,
   `headsDepartments`, `approvals` (with names), `permissions: { editableFields, canRevealBank,
@@ -1828,10 +1863,13 @@ owned by the people module (`employee-import*.ts`). Administration and Admins on
   yourself), and reporting loops in the final tree (existing lines with the file's changes): every
   row of a loop is an error ("Reporting loop: lines 5 → 9 → 5", or "line 5 → Marko Ilić → line 5"
   with existing employees), checked again after taking them out. Warnings: no start date, no work
-  email, an IBAN converted from an account number, a manager whose row has errors (imported
-  without manager). Duplicates are matched by work email (active or inactive); Skip (default) or
-  Update: only non-empty cells, never the email, never (re)activation ("Inactive: not
-  reactivated"). Departments are matched by name (case-insensitive) and teams by name within the
+  email, an IBAN converted from an account number, a manager whose row has errors ("Manager is on
+  line 3, which has errors: imported without a manager"; the manager's row is found by its email as
+  written even when its fields didn't parse, CD-224). Duplicates are matched by work email (active
+  or inactive); Skip (default) or Update: only non-empty cells, never the email, never
+  (re)activation ("Inactive: not reactivated"). The dialog shows the Skip it / Update it choice only
+  when the preview has rows matching existing records, and its Cancel asks before discarding a file
+  whose columns were read and mapped (CD-224). Departments are matched by name (case-insensitive) and teams by name within the
   row's department, created if new.
 - **Preview** returns the CRM preview's shape plus `counts.warnings / newDepartments / newTeams /
   invitations`, `newDepartments`, `newTeams` ("Sales / Field"), `canInvite` (Admins) and each row's
@@ -1947,9 +1985,11 @@ owned by the people module (`employee-import*.ts`). Administration and Admins on
   with `workspaceRole`) and `managers` (employees with active direct reports, with `reports`).
 - **Workspace roles**: changing someone to admin in Settings → Team gives them Admin on their next
   request (it is read from the membership); back to member takes it away.
-- **UI**: Settings → Roles & permissions (`screens/settings/RolesTab.tsx`) has the workspace roles'
-  matrix (unchanged), the functional roles' matrix grouped by module ("Coming with Timesheet"…), and
-  "Who has which role" with "Add person" (an employee picker) and remove for Admins.
+- **UI**: Settings → Roles & permissions (`screens/settings/RolesTab.tsx`) shows the workspace roles'
+  matrix. The functional roles' matrix and "Who has which role" are hidden since CD-224 (commented
+  out, the components stay; the product owner may bring them back): Administration and Payroll are
+  given in the Team tab's invite dialog (see "Teams and invitations") and on the employee card.
+  The matrix's labels are product text: no open spec questions such as "(Q1)" (a unit test checks it).
   `components/RoleToggles.tsx` is the employee card's Roles section: the person's roles as badges
   and, for Admins, an Administration and a Payroll switch (`useSetEmployeeRole`, `store/roles.ts`).
   `s.peopleRev` goes up on every `employee` and `employee_role` hint and on resync; the lists re-read.

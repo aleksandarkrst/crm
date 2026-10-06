@@ -123,6 +123,26 @@ describe('command palette, + menu and account menu', () => {
     await page.waitForFunction(() => !document.querySelector('.modal'));
   });
 
+  step('"Employee" in the + menu opens Add employee on the Org structure page (CD-224)', async () => {
+    await click(page, '[data-testid=new-menu]');
+    await click(page, '[data-testid=new-employee]');
+    await page.waitForFunction(() => location.pathname === '/org');
+    await page.waitForSelector('::-p-text(Department, manager, personal details)');
+    assert.ok(!new URL(page.url()).searchParams.has('new'), 'the one-off parameter is gone');
+    await clickButton(page, 'Cancel');
+    await page.waitForFunction(() => !document.querySelector('.modal'));
+    // No departments yet: the chart and the Department filter offer to add one.
+    await page.waitForSelector('[data-testid=org-no-departments]');
+    await click(page, '[data-testid=org-filter-department]');
+    await click(page, '[data-testid=org-filter-add-department]');
+    await page.waitForSelector('[data-testid=departments-list]');
+    // It opens with the new department's form, not the "Add department" button.
+    await page.waitForSelector('.modal input');
+    assert.equal(await page.$('.dtp-add-dept'), null);
+    await clickButton(page, 'Close');
+    await page.waitForFunction(() => !document.querySelector('.modal'));
+  });
+
   step('the account menu opens personal preferences; the bell lists your tasks due', async () => {
     await click(page, '[data-testid=notifications]');
     await page.waitForSelector('[data-testid=notifications-pop]');

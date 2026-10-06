@@ -85,6 +85,8 @@ describe('Employee import from Excel', () => {
     assert.match(counts, /2 new departments/);
     assert.match(counts, /1 new team/);
     assert.doesNotMatch(counts, /errors/);
+    // No row matches an existing employee: no Skip it / Update it choice (CD-224).
+    assert.equal(await page.$('[data-testid=import-duplicates]'), null);
     const org = await page.$eval('[data-testid=import-new-org]', (el) => el.innerText);
     assert.match(org, new RegExp(`New departments: ${sales}, ${office}`));
     assert.match(org, new RegExp(`New teams: ${sales} / Teren BG`));
@@ -118,6 +120,26 @@ describe('Employee import from Excel', () => {
     assert.equal(ana.employment.type, 'permanent');
     assert.equal(ivan.employment.type, 'fixed_term');
     assert.equal(jelena.employment.type, 'contractor');
+  });
+
+  step('the same file again offers Skip or Update; Cancel after mapping asks first (CD-224)', async () => {
+    await page.goto(BASE_URL + '/org', { waitUntil: 'networkidle0' });
+    await click(page, '[data-testid=employee-import]');
+    const input = await page.waitForSelector('.modal input[type=file]');
+    await input.uploadFile(await workbook());
+    await page.waitForSelector('[data-testid=import-sheet]');
+    await setValue(page, '[data-testid=import-sheet]', '1');
+    await clickButton(page, 'Use this sheet');
+    await page.waitForSelector('.modal select[data-field]');
+    await clickButton(page, 'Preview');
+    await page.waitForSelector('[data-testid=import-duplicates]');
+    const asked = [];
+    const record = (d) => asked.push(d.message());
+    page.on('dialog', record);
+    await click(page, '[data-testid=import-cancel]');
+    await page.waitForFunction(() => !document.querySelector('.modal'));
+    page.off('dialog', record);
+    assert.ok(asked.some((m) => m.startsWith('Discard this import?')), asked.join(' | '));
   });
 
   step('refuses an old .xls file with a clear message', async () => {

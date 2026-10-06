@@ -1,7 +1,6 @@
-// Roles and permissions (CD-142) and employee settings (CD-215): the owner sees the workspace and
-// functional roles' matrices (the server's definition, later modules marked) and who has which role,
-// gives a member Administration through "Add person" and takes it away; the member sees the tab
-// read-only; Settings → Employees saves its three settings and is for Admins only; "Org changes"
+// Roles and permissions (CD-142) and employee settings (CD-215): the owner sees the workspace roles
+// (the functional matrix and "Who has which role" are hidden since CD-224) and invites someone with
+// Administration from the Team tab, which they have once they join; Settings → Employees saves its three settings and is for Admins only; "Org changes"
 // is a notification toggle; a manager makes visit plans only for their direct report and sees
 // Reports, a member neither.
 import assert from 'node:assert/strict';
@@ -24,7 +23,6 @@ describe('roles and permissions', () => {
     await finishOnboarding(page);
     return (await api(page, '/people/access')).employeeId;
   }
-  const holderNames = (page, testId) => page.$$eval(`[data-testid=${testId}] [data-testid=role-holder]`, (rows) => rows.map((r) => r.textContent));
 
   step('an owner, a manager and their report share a workspace', async () => {
     olga = await browser.person('olga');
@@ -38,50 +36,41 @@ describe('roles and permissions', () => {
     await api(olga, `/people/employees/${ids.mia}`, { method: 'PATCH', body: JSON.stringify({ managerId: ids.max }) });
   });
 
-  step('the owner sees both matrices and who has which role', async () => {
+  step('the owner sees the workspace roles; the functional matrix and "Who has which role" are hidden (CD-224)', async () => {
     await olga.goto(`${BASE_URL}/settings/roles`, { waitUntil: 'networkidle0' });
-    await olga.waitForSelector('[data-testid=perm-row]');
+    await olga.waitForSelector('[data-testid=workspace-roles]');
     const body = await text(olga);
     assert.ok(body.includes('Workspace roles') && body.includes('Make someone an owner or remove an owner'), 'workspace roles kept');
-    assert.ok(body.includes('Functional roles') && body.includes('Assign Administration and Payroll'), 'functional matrix');
-    // The same rows as the server's definition, later modules marked.
+    assert.equal(await olga.$('[data-testid=functional-roles]'), null);
+    assert.equal(await olga.$('[data-testid=role-holders]'), null);
+    // The server still defines the matrix, without open spec questions in its labels (B16).
     const matrix = await api(olga, '/people/permissions');
-    const rows = await olga.$$eval('[data-testid=perm-row]', (els) => els.map((e) => e.dataset.row));
-    assert.deepEqual(rows, matrix.modules.flatMap((m) => m.rows.map((r) => r.id)));
-    const coming = await olga.$$eval('[data-testid=perm-coming]', (els) => els.map((e) => e.textContent));
-    assert.ok(coming.includes('Coming with Timesheet') && !coming.some((c) => c.includes('CRM')), coming.join(', '));
-    const cell = await olga.$eval('[data-row="crm.visit_plans.manage"] [data-role=manager]', (el) => el.textContent);
-    assert.equal(cell, 'Direct');
-    await olga.waitForFunction(() => document.querySelector('[data-testid=holders-manager]')?.textContent.includes('Max Manager'));
-    assert.ok((await holderNames(olga, 'holders-manager')).some((r) => r.includes('Max Manager') && r.includes('1 report')));
-    assert.ok((await holderNames(olga, 'holders-admin')).some((r) => r.includes('Olga Owner')));
+    const labels = matrix.modules.flatMap((m) => m.rows.flatMap((r) => Object.values(r.cells).map((c) => c.label)));
+    assert.ok(!labels.some((l) => /\(Q\d+\)/.test(l)), labels.filter((l) => /\(Q/.test(l)).join(', '));
   });
 
-  step('the owner gives the member Administration with "Add person"; it applies at once', async () => {
-    await click(olga, '[data-testid=add-administration]');
-    await click(olga, '[data-testid=add-administration-picker] .picker-search');
-    await olga.type('[data-testid=add-administration-picker] .picker-search', 'Mia');
-    await click(olga, '.picker-item::-p-text(Mia Member)');
-    await olga.waitForFunction(() => document.querySelector('[data-testid=holders-administration]')?.textContent.includes('Mia Member'));
-    const access = await eventually(async () => {
-      const a = await api(mia, '/people/access');
-      return a.roles.includes('administration') && a;
-    });
+  step('the Team tab invites with Administration; the new member has it once they join', async () => {
+    const hana = await browser.person('hana');
+    await olga.goto(`${BASE_URL}/settings/team`, { waitUntil: 'networkidle0' });
+    await clickButton(olga, 'Invite member');
+    await olga.type('input[placeholder="name@company.com"]', email('roles-hana'));
+    await click(olga, '[data-testid=invite-roles] input[name=invite-role-administration]');
+    await clickButton(olga, 'Send invitation');
+    const link = await (await olga.waitForSelector('input[readonly]')).evaluate((el) => el.value);
+    await clickButton(olga, 'Done');
+    const invitation = (await api(olga, '/team')).invitations.find((i) => i.email === email('roles-hana'));
+    assert.deepEqual(invitation.assignedRoles, ['administration']);
+
+    await hana.goto(link, { waitUntil: 'networkidle0' });
+    await signIn(hana, email('roles-hana'), 'Hana Admin');
+    await clickButton(hana, 'Accept and join');
+    await finishOnboarding(hana);
+    const access = await api(hana, '/people/access');
     assert.deepEqual(access.roles, ['employee', 'administration']);
-  });
-
-  step('the member sees the tab read-only, with herself under Administration', async () => {
-    await mia.goto(`${BASE_URL}/settings/roles`, { waitUntil: 'networkidle0' });
-    await mia.waitForFunction(() => document.querySelector('[data-testid=holders-administration]')?.textContent.includes('Mia Member'));
-    assert.equal(await mia.$$eval('[data-testid^=add-]', (els) => els.length), 0, 'no Add person');
-    assert.equal(await mia.$$eval('[data-testid=role-holders] button[title^=Remove]', (els) => els.length), 0, 'no remove');
-  });
-
-  step('the owner removes the role again; the member’s list follows live', async () => {
-    await click(olga, '[data-testid=holders-administration] button[title="Remove Mia Member"]');
-    await olga.waitForFunction(() => !document.querySelector('[data-testid=holders-administration]')?.textContent.includes('Mia Member'));
-    await mia.waitForFunction(() => !document.querySelector('[data-testid=holders-administration]')?.textContent.includes('Mia Member'), { timeout: 15_000 });
-    assert.deepEqual((await api(mia, '/people/access')).roles, ['employee']);
+    ids.hana = access.employeeId;
+    // An Admin takes it away on the API (the card's Roles section); it applies at once.
+    await api(olga, `/people/employees/${ids.hana}/roles/administration`, { method: 'DELETE' });
+    assert.deepEqual((await api(hana, '/people/access')).roles, ['employee']);
   });
 
   step('Settings → Employees saves its settings; members have no such tab', async () => {

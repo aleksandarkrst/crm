@@ -7,7 +7,7 @@ export type CalendarParams = Partial<
   Record<'view' | 'date' | 'from' | 'to' | 'ids' | 'report' | 'user' | 'type' | 'status' | 'company' | 'deal' | 'contact' | 'notClosed' | 'missingMinutes' | 'sort' | 'new' | 'companyId' | 'dealId' | 'contactId' | 'organizer' | 'start', string | null | undefined>
 >;
 /** The Org structure page's state in its URL (CD-137), so a link shows the same view. */
-export type OrgParams = Partial<Record<'tab' | 'mode' | 'q' | 'dept' | 'team' | 'manager' | 'scope' | 'status' | 'account' | 'issues' | 'sort' | 'dir', string | null | undefined>>;
+export type OrgParams = Partial<Record<'tab' | 'mode' | 'q' | 'dept' | 'team' | 'manager' | 'scope' | 'status' | 'account' | 'issues' | 'sort' | 'dir' | 'new', string | null | undefined>>;
 const query = (params: Partial<Record<string, string | null | undefined>> = {}) => {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
