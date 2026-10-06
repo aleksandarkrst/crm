@@ -83,7 +83,24 @@ export function PersonBox({
 }
 
 /** A dropdown of checkboxes ("Department: Sales +1"), for the filters that take several values. */
-export function MultiSelect({ label, options, value, onChange, testId, empty }: { label: string; options: { value: string; label: string }[]; value: string[]; onChange: (v: string[]) => void; testId: string; empty?: string }) {
+export function MultiSelect({
+  label,
+  options,
+  value,
+  onChange,
+  testId,
+  empty,
+  emptyAction,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  value: string[];
+  onChange: (v: string[]) => void;
+  testId: string;
+  empty?: string;
+  /** Shown under `empty` when there are no options at all, e.g. "Add department" (CD-224). */
+  emptyAction?: (close: () => void) => ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
@@ -108,6 +125,7 @@ export function MultiSelect({ label, options, value, onChange, testId, empty }: 
         <div className="org-multi-pop" role="listbox" aria-multiselectable>
           {options.length > 8 && <input className="form-input org-multi-search" placeholder="Search…" value={search} onChange={(ev) => setSearch(ev.target.value)} autoFocus />}
           {shown.length === 0 && <div className="org-multi-empty">{options.length ? 'Nothing matches' : (empty ?? 'Nothing to pick')}</div>}
+          {options.length === 0 && emptyAction?.(() => setOpen(false))}
           {shown.map((o) => (
             <label key={o.value} className="org-multi-item">
               <input type="checkbox" checked={value.includes(o.value)} onChange={() => onChange(value.includes(o.value) ? value.filter((v) => v !== o.value) : [...value, o.value])} />

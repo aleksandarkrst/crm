@@ -1,0 +1,2 @@
+ALTER TABLE "invitations" ADD COLUMN "assigned_roles" text[] DEFAULT '{}'::text[] NOT NULL;--> statement-breakpoint
+ALTER TABLE "invitations" ADD CONSTRAINT "invitations_assigned_roles_ck" CHECK ("invitations"."assigned_roles" <@ array['administration', 'payroll']::text[]);

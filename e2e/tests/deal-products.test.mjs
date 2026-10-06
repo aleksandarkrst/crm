@@ -58,6 +58,8 @@ describe('products and the deal page', () => {
     assert.ok(await page.$('[data-testid=stage-bar] .stage-chev.current'), 'the stage bar marks the current stage');
     const tabs = await page.$$eval('.composer-tab', (els) => els.map((el) => el.textContent.trim()));
     assert.ok(!tabs.some((t) => t.startsWith('Products')), JSON.stringify(tabs));
+    // No WhatsApp or LinkedIn tabs until those integrations exist (CD-224).
+    assert.ok(!tabs.some((t) => t.startsWith('WhatsApp') || t.startsWith('LinkedIn')), JSON.stringify(tabs));
     assert.ok(!(await text(page)).includes('Delete deal'), 'Delete deal is in the menu, not on the page');
     assert.ok(await page.$('[data-testid=company-section]'));
   });

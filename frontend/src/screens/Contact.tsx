@@ -5,7 +5,8 @@ import { IconRow } from '../components/icons';
 import { MeetingsCard } from '../components/MeetingsCard';
 import { Screen } from '../components/Layout';
 import { DealsSection, FocusTasks, RecordHeader, RecordHistory, Section } from '../components/RecordParts';
-import { GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
+import { CheckedInput, GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
+import { checkLinkedin } from '../lib/validate';
 import { paths } from '../lib/paths';
 import { BUYER_ROLES } from '../store/seed';
 import { allPeople, companyOfPerson, companyRecords, contactsForLead, curOf, initialsOf, leadById, personById, timelineFor } from '../store/selectors';
@@ -17,7 +18,7 @@ import { docState, docStateClass } from './lead/docs';
 function linkedinHref(value: string): string {
   const v = value.trim();
   if (/^https?:\/\/\S+$/i.test(v)) return v;
-  return /^(www\.)?linkedin\.com\/\S+$/i.test(v) ? 'https://' + v : '';
+  return /^([a-z]{2,3}\.|www\.)?linkedin\.com\/\S+$/i.test(v) ? 'https://' + v : '';
 }
 
 /** A contact (CD-80): header like a deal's, how to reach them, their company, deals, tasks and history. */
@@ -38,6 +39,8 @@ export function Contact() {
     if (leadId) ensureDocs(leadId);
   }, [dealIds, leadId, ensureLog, ensureDocs]);
   if (!p) return <Navigate to={paths.contacts} replace />;
+  // Old links by person id ("<deal>:p", "%3Ap" in the address bar) go to the contact's own id (CD-224).
+  if (p.contactId && p.contactId !== id) return <Navigate to={paths.contact(p.contactId)} replace />;
   const company = companyOfPerson(s, p);
   const companyRec = companyRecords(s).find((r) => r.id === (p.companyId ?? c?.companyId));
 
@@ -101,7 +104,7 @@ export function Contact() {
               </IconRow>
               <IconRow icon="linkedin" label="LinkedIn">
                 <span className="contact-field">
-                  <GhostInput aria-label="LinkedIn" placeholder="linkedin.com/in/…" value={p.linkedin ?? ''} onChange={setField('linkedin')} />
+                  <CheckedInput aria-label="LinkedIn" placeholder="linkedin.com/in/name" value={p.linkedin ?? ''} check={checkLinkedin} onSave={(v) => store.patchPerson(p.id, { linkedin: v })} />
                   {linkedin && (
                     <a className="contact-action" href={linkedin} target="_blank" rel="noopener noreferrer" aria-label={`Open ${p.name} on LinkedIn`}>
                       Open

@@ -5,7 +5,8 @@ import { IconRow } from '../components/icons';
 import { MeetingsCard } from '../components/MeetingsCard';
 import { Screen } from '../components/Layout';
 import { AddButton, DealsSection, FocusTasks, RecordHeader, RecordHistory, Section } from '../components/RecordParts';
-import { GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
+import { CheckedInput, GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
+import { checkDomain } from '../lib/validate';
 import { paths } from '../lib/paths';
 import { INDUSTRIES, SOURCES, TEAM_SIZES } from '../store/seed';
 import { allPeople, companyOfPerson, companyRecords, contactsForLead, curOf, initialsOf, timelineFor } from '../store/selectors';
@@ -104,7 +105,7 @@ export function Company() {
               </IconRow>
               <IconRow icon="globe" label="Domain">
                 <span className="contact-field">
-                  <GhostInput aria-label="Domain" placeholder="acme.com" value={domain} onChange={setField('domain')} />
+                  <CheckedInput aria-label="Domain" placeholder="acme.com" value={domain} check={checkDomain} onSave={(v) => store.setCompanyField(rec.id, 'domain', v)} />
                   {website && (
                     <a className="contact-action" href={website} target="_blank" rel="noopener noreferrer" aria-label={`Open ${domain.trim()}`}>
                       Open

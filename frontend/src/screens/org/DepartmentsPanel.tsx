@@ -55,11 +55,12 @@ type Dialog =
   | { kind: 'lead'; team: ApiTeam }
   | { kind: 'addPeople'; department: ApiDepartment; team: ApiTeam | null };
 
-export function DepartmentsPanel({ onClose }: { onClose: () => void }) {
+/** `startAdding`: opens with the new department's name field (the Org page's "Add department", CD-224). */
+export function DepartmentsPanel({ onClose, startAdding = false }: { onClose: () => void; startAdding?: boolean }) {
   const { data, error, reload } = useOrgStructure(true);
   const { flash } = useStore();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [adding, setAdding] = useState<'department' | string | null>(null); // 'department', or a department id (add team)
+  const [adding, setAdding] = useState<'department' | string | null>(startAdding ? 'department' : null); // 'department', or a department id (add team)
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 

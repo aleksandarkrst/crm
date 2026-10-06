@@ -67,6 +67,11 @@ interface PeopleSettings {
   numberRequired: boolean;
   selfEditBank: boolean;
   workspaceName: string;
+  /**
+   * The top of the organisation (CD-224, B15): the one active employee without a manager, when
+   * exactly one has none. They are not a "No manager" data issue; with several, all are.
+   */
+  topEmployeeId: string | null;
 }
 
 export const statusOf = (r: { deactivatedAt: Date | null; employmentEndDate: string | null }): EmployeeStatus =>
@@ -549,7 +554,13 @@ export class EmployeesService {
       })
       .from(tenants)
       .where(eq(tenants.id, tenantId));
-    return t ?? { defaultWeeklyHours: 40, numberRequired: false, selfEditBank: true, workspaceName: '' };
+    const tops = await tx
+      .select({ id: employees.id })
+      .from(employees)
+      .where(and(isNull(employees.managerId), isNull(employees.deactivatedAt)))
+      .limit(2);
+    const topEmployeeId = tops.length === 1 ? tops[0]!.id : null;
+    return { ...(t ?? { defaultWeeklyHours: 40, numberRequired: false, selfEditBank: true, workspaceName: '' }), topEmployeeId };
   }
 }
 
@@ -632,11 +643,14 @@ function personal(p: typeof employeePersonal.$inferSelect | undefined) {
   };
 }
 
-/** Data issues (spec 5.2, 7.5, 10.3), for the Administration and Admin filter and warnings. */
+/**
+ * Data issues (spec 5.2, 7.5, 10.3), for the Administration and Admin filter and warnings. "No
+ * manager" leaves out the top of the organisation: the only active employee without a manager.
+ */
 function dataIssues(r: EmployeeRow, settings: PeopleSettings): DataIssue[] {
   if (r.deactivatedAt) return [];
   const issues: DataIssue[] = [];
-  if (!r.managerId) issues.push('no_manager');
+  if (!r.managerId && r.id !== settings.topEmployeeId) issues.push('no_manager');
   if (!r.employmentStartDate) issues.push('no_start_date');
   if (!r.departmentId) issues.push('no_department');
   if (r.managerId && !r.managerUserId) issues.push('manager_no_account');

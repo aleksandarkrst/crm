@@ -6,7 +6,7 @@
 - Every tenant-scoped query goes through `DatabaseService.withTenant()`. New tenant tables need RLS policies in a custom migration (see docs/ARCHITECTURE.md). Never connect the app as the table owner.
 - The pg-boss schema is pre-created by `infra/postgres/init`. Keep `createSchema: false` in JobsService, because the runtime role has no CREATE on the database.
 - Cross-module effects go through jobs (`shared/events/job-types.ts`), not direct table writes. ESLint blocks deep imports into other modules.
-- The frontend is a port of the Claude Design handoff "Mini CRM v2.dc.html". Keep its tokens and spacing (`src/styles/global.css`). Screens only use `useStore()`. The store loads from the API (`store/remote.ts`) and saves in its actions (`store/store.tsx`). Features without a backend yet stay browser-only (see docs/ARCHITECTURE.md).
+- The frontend is a port of the Claude Design handoff "Mini CRM v2.dc.html". Keep its tokens and spacing (`src/styles/global.css`). Screens only use `useStore()`. The store loads from the API (`store/remote.ts`) and saves in its actions (`store/store.tsx`). Features without a backend yet stay browser-only (see docs/ARCHITECTURE.md). Button labels are plain text: no trailing "…", "..." or similar (a busy state such as "Saving…" is a status, not a label).
 - Tasks and bugs live in Linear (team Coding, project CRM, IDs `CD-…`), not in the repo. Mention the issue ID in branch names and commit messages.
 - Every piece of work gets its own branch on GitHub, so anyone can review it:
   - Before the first change, create a branch from the latest `origin/main`, named after the issue (Linear's branch name, e.g. `aleksandar/cd-20-…`, or `cd-20-short-description`). One branch per agent or lane; never work on `main`.

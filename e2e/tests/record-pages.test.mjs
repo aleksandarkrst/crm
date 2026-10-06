@@ -39,6 +39,15 @@ describe('company and contact pages', () => {
     assert.ok(await eventually(async () => (await api(page, '/crm/companies/' + company.id)).hq === 'Beograd'), 'HQ saved');
   });
 
+  /** Types into a field checked when it is left (CD-224: Domain, LinkedIn) and leaves it with Tab. */
+  const typeAndLeave = async (label, value) => {
+    await page.click(`input[aria-label="${label}"]`);
+    await page.$eval(`input[aria-label="${label}"]`, (el) => el.select());
+    await page.keyboard.press('Backspace');
+    await page.keyboard.type(value);
+    await page.keyboard.press('Tab');
+  };
+
   /** Opens the Changes view of the record's history and waits until it mentions `label`. */
   const changesInclude = async (label) => {
     await click(page, '[data-testid="history-changes"]');
@@ -47,7 +56,13 @@ describe('company and contact pages', () => {
   };
 
   step('the company page edits the domain (shown as a link) and multi-line notes (CD-209)', async () => {
-    assert.ok(await setByLabel(page, 'Domain', 'umbrella.test'), 'Domain field found');
+    // CD-224: an invalid domain shows an error and is not saved; a pasted address keeps its host.
+    await typeAndLeave('Domain', 'not a domain!!');
+    await page.waitForFunction(() => document.querySelector('[data-testid=field-error]')?.textContent.includes('acme.com'));
+    assert.ok(!(await api(page, '/crm/companies/' + company.id)).domain, 'an invalid domain is not saved');
+    await typeAndLeave('Domain', 'https://Umbrella.test/about');
+    await page.waitForFunction(() => document.querySelector('[data-testid=field-hint]')?.textContent === 'Saved as umbrella.test');
+    assert.equal(await page.$eval('input[aria-label="Domain"]', (el) => el.value), 'umbrella.test');
     assert.ok(await setByLabel(page, 'Notes', 'Two plants.\nBuys through the Niš office.', 'textarea'), 'Notes field found');
     const saved = await eventually(async () => {
       const c = await api(page, '/crm/companies/' + company.id);
@@ -83,17 +98,19 @@ describe('company and contact pages', () => {
 
   step('the contact page edits LinkedIn, a link when it is a web address (CD-209)', async () => {
     // Alice is the deal's primary contact, so this goes through the deal's copy of her too.
-    assert.ok(await setByLabel(page, 'LinkedIn', 'linkedin.com/in/alice-abernathy'), 'LinkedIn field found');
+    // A profile path is saved as a linkedin.com address (CD-224).
+    await typeAndLeave('LinkedIn', 'in/alice-abernathy');
     assert.ok(await eventually(async () => (await api(page, '/crm/contacts/' + contact.id)).linkedin === 'linkedin.com/in/alice-abernathy'), 'LinkedIn saved');
     await page.reload({ waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.querySelector('input[aria-label="LinkedIn"]')?.value === 'linkedin.com/in/alice-abernathy');
     assert.equal(await page.$eval('a[aria-label="Open Alice Abernathy on LinkedIn"]', (el) => el.getAttribute('href')), 'https://linkedin.com/in/alice-abernathy');
     assert.ok((await changesInclude('LinkedIn')).includes('alice-abernathy'));
 
-    // Anything else is kept as text, without a link.
-    assert.ok(await setByLabel(page, 'LinkedIn', 'Alice A. (ask for the profile)'));
-    assert.ok(await eventually(async () => (await api(page, '/crm/contacts/' + contact.id)).linkedin === 'Alice A. (ask for the profile)'), 'text saved');
-    assert.equal(await page.$('a[aria-label="Open Alice Abernathy on LinkedIn"]'), null);
+    // Anything else shows an error when the field is left and is not saved (CD-224).
+    await typeAndLeave('LinkedIn', 'not a url');
+    await page.waitForFunction(() => document.querySelector('[data-testid=field-error]')?.textContent.includes('linkedin.com/in/name'));
+    await new Promise((r) => setTimeout(r, 1500));
+    assert.equal((await api(page, '/crm/contacts/' + contact.id)).linkedin, 'linkedin.com/in/alice-abernathy');
   });
 
   step('the new fields fit a 375 px phone', async () => {

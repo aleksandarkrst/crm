@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput } from '../lib/api';
+import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type AssignedRole, type Channel, clearTenantId, CLIENT_ID, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput } from '../lib/api';
 import { paths } from '../lib/paths';
 import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference } from './documents';
 import { employeeCardActions } from './employeeCard';
@@ -1282,7 +1282,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         flash('Funnel reassigned · lead moved to the first stage');
       },
       openLead: (id: string) => navigate(paths.lead(id)),
-      openContact: (id: string) => navigate(paths.contact(id)),
+      /** By the backend contact id when there is one (CD-224): a clean URL, not the person id "<deal>:p". */
+      openContact: (id: string) => navigate(paths.contact(personById(cur(), id)?.contactId ?? id)),
       openCompany: (id: string) => navigate(paths.company(id)),
       loadTemplates,
       ensureDocs,
@@ -1514,9 +1515,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
 
       // ---------------------------------------------------------- team
       /** Creates an invitation, which the worker emails (CD-7), and returns its link to copy as a fallback. */
-      inviteMember: async (email: string, role: 'admin' | 'member'): Promise<string | null> => {
+      inviteMember: async (email: string, role: 'admin' | 'member', roles: AssignedRole[] = []): Promise<string | null> => {
         try {
-          const { token } = await crmApi.invite(email, role);
+          const { token } = await crmApi.invite(email, role, roles);
           await reload();
           return `${window.location.origin}/invite/${token}`;
         } catch (err) {

@@ -76,6 +76,62 @@ export function GhostInput({ className = '', ...props }: InputHTMLAttributes<HTM
   return <input className={`ghost ${className}`} {...props} />;
 }
 
+/**
+ * A ghost input checked when it is left (CD-224, B10): a valid value is saved cleaned up (with a
+ * hint when it changed, e.g. "Saved as acme.com"), an invalid one shows its error under the field
+ * and is not saved. Typing clears the message; the stored value comes back in when it changes elsewhere.
+ */
+export function CheckedInput({
+  value,
+  check,
+  onSave,
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'onBlur'> & {
+  value: string;
+  check: (v: string) => { ok: true; value: string; hint?: string } | { ok: false; error: string };
+  onSave: (v: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    if (!focused && !message?.error) setDraft(value);
+  }, [value, focused, message?.error]);
+  const commit = () => {
+    setFocused(false);
+    const r = check(draft);
+    if (!r.ok) return setMessage({ text: r.error, error: true });
+    setDraft(r.value);
+    setMessage(r.hint ? { text: r.hint, error: false } : null);
+    if (r.value !== value) onSave(r.value);
+  };
+  return (
+    <span style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+      <input
+        className="ghost"
+        {...props}
+        value={draft}
+        aria-invalid={message?.error || undefined}
+        onFocus={() => setFocused(true)}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          setMessage(null);
+        }}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+        }}
+        style={message?.error ? { color: 'var(--danger)' } : undefined}
+      />
+      {message && (
+        <span role={message.error ? 'alert' : 'status'} data-testid={message.error ? 'field-error' : 'field-hint'} style={{ fontSize: 12, color: message.error ? 'var(--danger)' : 'var(--muted)', padding: '2px 0 0' }}>
+          {message.text}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export type Opt = string | { value: string; label: string };
 const optValue = (o: Opt) => (typeof o === 'string' ? o : o.value);
 const optLabel = (o: Opt) => (typeof o === 'string' ? o : o.label);

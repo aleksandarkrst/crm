@@ -913,7 +913,8 @@ export const crmApi = {
   removeSampleData: () => api<ApiSampleRemoval>('/onboarding/sample-data', { method: 'DELETE' }),
 
   team: () => api<{ members: ApiMember[]; invitations: ApiInvitation[] }>('/team'),
-  invite: (email: string, role: 'admin' | 'member') => api<{ invitation: ApiInvitation; token: string }>('/team/invitations', { method: 'POST', json: { email, role } }),
+  /** `roles`: Administration / Payroll their employee record gets when they accept (CD-224). */
+  invite: (email: string, role: 'admin' | 'member', roles: AssignedRole[] = []) => api<{ invitation: ApiInvitation; token: string }>('/team/invitations', { method: 'POST', json: { email, role, roles } }),
   revokeInvitation: (id: string) => api(`/team/invitations/${id}`, { method: 'DELETE' }),
   resendInvitation: (id: string) => api<ApiInvitation>(`/team/invitations/${id}/resend`, { method: 'POST' }),
   invitationLink: (id: string) => api<{ token: string }>(`/team/invitations/${id}/link`),

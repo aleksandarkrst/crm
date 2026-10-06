@@ -8,7 +8,7 @@ import { companyLabels, companyRecords, memberLabels } from '../store/selectors'
 import { useStore } from '../store/store';
 import { todayIn } from '../store/time';
 import { useVisitProgress } from '../store/useVisitProgress';
-import { completionLabel, paceOf, periodOptions, periodStartOf, seesPlansOf, type VisitCount, visitsInCalendar } from '../store/visitPlans';
+import { completionLabel, joinOr, missingMonths, paceOf, periodOptions, periodStartOf, seesPlansOf, type VisitCount, visitsInCalendar } from '../store/visitPlans';
 
 const TABS = [{ value: 'visit-plans', label: 'Visit-plan completion' }] as const;
 const COLS = 'minmax(0,1.5fr) minmax(0,1.2fr) 0.7fr 0.7fr 0.8fr 0.8fr 0.9fr 0.8fr 0.8fr';
@@ -185,12 +185,18 @@ function VisitReportTable({ report, companyId }: { report: ApiVisitReport; compa
         {report.periodLabel}
       </Link>
     ) : (
-      <span style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}>
+      <span style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap', alignItems: 'baseline' }}>
         {r.plans.map((p) => (
           <Link key={p.id} to={paths.visitPlan(p.id)} className="crumb-link" data-testid="report-plan-link" title={p.periodLabel}>
             {p.periodLabel.split(' ')[0]!.slice(0, 3)}
           </Link>
         ))}
+        {/* The quarter's months without a plan (CD-224, B18), so the total doesn't look complete. */}
+        {missingMonths(report.periodStart, r.plans).length > 0 && (
+          <span style={{ color: 'var(--muted)', fontSize: 12 }} data-testid="report-plan-missing">
+            · no {joinOr(missingMonths(report.periodStart, r.plans))} plan
+          </span>
+        )}
       </span>
     );
 

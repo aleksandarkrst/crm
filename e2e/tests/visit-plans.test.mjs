@@ -65,7 +65,22 @@ describe('visit plans', () => {
     await setValue(olga, '[data-testid=plan-salesperson]', miaId);
     assert.equal(await olga.$eval('[data-testid=plan-copy-previous]', (b) => b.disabled), true, 'nothing to copy yet');
     await addCustomer(olga, 'Alpha Visits');
+    // CD-224: 100 is an error on its own row, not silently 10; the save says which customer.
+    await setValue(olga, 'input[aria-label="Planned visits at Alpha Visits"]', '100');
+    await olga.waitForSelector('[data-testid=plan-draft-line][data-invalid] [data-testid=plan-line-error]');
+    assert.equal(await olga.$eval('input[aria-label="Planned visits at Alpha Visits"]', (el) => el.value), '100');
+    await click(olga, '[data-testid=plan-save]');
+    await olga.waitForFunction(() => document.querySelector('.modal [role=alert]')?.textContent.includes('Check Alpha Visits'));
     await setValue(olga, 'input[aria-label="Planned visits at Alpha Visits"]', '3');
+    assert.equal(await olga.$('[data-testid=plan-line-error]'), null);
+    // A search with no match says so and can be cleared.
+    await click(olga, '[data-testid=plan-add-company] .picker-search');
+    await olga.type('[data-testid=plan-add-company] .picker-search', 'Zzz');
+    await click(olga, '[data-testid=plan-clear-search]');
+    assert.equal(await olga.$eval('[data-testid=plan-add-company] .picker-search', (el) => el.value), '');
+    // The month list reaches a year ahead, as far as the quarters do.
+    const monthOptions = await olga.$$eval('[data-testid=plan-period] option', (options) => options.map((o) => o.value));
+    assert.equal(monthOptions[0], shiftMonths(await olga.$eval('[data-testid=plan-period]', (el) => el.value), 12), `months: ${monthOptions.join(', ')}`);
     await addCustomer(olga, 'Bravo Visits');
     const label = await selected(olga, '[data-testid=plan-period]');
     assert.match(label, /^[A-Z][a-z]+ \d{4}$/, 'a month');
@@ -209,5 +224,12 @@ describe('visit plans', () => {
       planned,
     );
     assert.equal((await olga.$$(`[data-testid=report-row][data-user-id="${miaId}"] [data-testid=report-plan-link]`)).length, months.length, 'a link to each monthly plan');
+    // The quarter's months without a plan are named (CD-224).
+    const missing = await olga.$eval(`[data-testid=report-row][data-user-id="${miaId}"]`, (el) => el.querySelector('[data-testid=report-plan-missing]')?.textContent ?? '');
+    if (months.length < 3) assert.match(missing, /^· no [A-Z][a-z]+( or [A-Z][a-z]+)?(, [A-Z][a-z]+ or [A-Z][a-z]+)? plan$/);
+    else assert.equal(missing, '');
+    // The completion's tooltip says the expected pace in visits.
+    const title = await olga.$eval(`[data-testid=report-row][data-user-id="${miaId}"] [data-testid=report-completion]`, (el) => el.title);
+    assert.match(title, /of \d+ visits? expected by today|Every planned visit is held/);
   });
 });

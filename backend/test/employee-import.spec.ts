@@ -220,7 +220,15 @@ describe('the plan', () => {
     expect(p.at(4).messages).toEqual(['Reporting loop: lines 4 → 2 → 3 → 4']);
     // D's manager (line 2) isn't imported, so D comes in without a manager.
     expect(p.at(5).status).toBe('create');
-    expect(p.at(5).warnings).toContain("Imported without manager: the manager's row (line 2) has errors");
+    expect(p.at(5).warnings).toContain('Manager is on line 2, which has errors: imported without a manager');
+  });
+
+  it("points at the manager's line when that row has errors, even when its fields didn't parse (CD-224)", () => {
+    const p = plan([HEADER, 'Lead,Person,qa.lead@example.com,,,,15.13.2026', 'Rep,Person,rep@example.com,qa.lead@example.com,,,'].join('\n'));
+    expect(p.at(2).status).toBe('invalid');
+    expect(p.at(3).status).toBe('create');
+    expect(p.at(3).messages).toEqual([]);
+    expect(p.at(3).warnings).toContain('Manager is on line 2, which has errors: imported without a manager');
   });
 
   it('refuses loops together with existing employees (update)', () => {

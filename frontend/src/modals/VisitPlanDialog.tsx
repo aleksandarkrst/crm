@@ -16,6 +16,7 @@ export interface PlanDraft {
 }
 
 const validVisits = (v: string) => /^\d+$/.test(v.trim()) && Number(v) >= 1 && Number(v) <= 99;
+const VISITS_RULE = 'A whole number from 1 to 99';
 
 /**
  * "New plan" (CD-134; owners and admins, managers for their direct reports): a salesperson, a month, the customers with their planned
@@ -32,13 +33,16 @@ export function VisitPlanDialog({ initial, onClose }: { initial?: Partial<PlanDr
   // Admins plan for anyone, managers for their direct reports (CD-142).
   const members = s.team.filter((m) => m.status === 'Active' && managesPlansOf(s.visitScope, m.id));
   const [d, setD] = useState<PlanDraft>(() => ({
-    salespersonUserId: initial?.salespersonUserId ?? '',
+    // With one member to plan for, they are the salesperson (CD-224).
+    salespersonUserId: initial?.salespersonUserId ?? (members.length === 1 ? members[0]!.id : ''),
     periodStart: initial?.periodStart ?? periodStartOf('month', today, fiscal),
     note: initial?.note ?? '',
     lines: initial?.lines ?? [],
   }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  /** Rows whose planned visits were left (blur) or submitted: their errors show. */
+  const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
   const picker = usePicker();
 
   const companies = companyRecords(s);
@@ -47,7 +51,8 @@ export function VisitPlanDialog({ initial, onClose }: { initial?: Partial<PlanDr
   const q = picker.search.trim().toLowerCase();
   const available = companies.filter((c) => !chosen.has(c.id) && (!q || c.name.toLowerCase().includes(q))).slice(0, 50);
 
-  const options = periodOptions('month', today, fiscal, 12, 6);
+  // As far ahead as the quarters elsewhere reach: a year (CD-224).
+  const options = periodOptions('month', today, fiscal, 12, 12);
   if (!options.some((o) => o.value === d.periodStart)) options.push({ value: d.periodStart, label: periodLabel('month', d.periodStart, fiscal) });
   const label = periodLabel('month', d.periodStart, fiscal);
   const previous = d.salespersonUserId ? previousPlan(s.visitPlans, d.salespersonUserId, 'month', d.periodStart) : undefined;
@@ -65,7 +70,12 @@ export function VisitPlanDialog({ initial, onClose }: { initial?: Partial<PlanDr
     if (!d.salespersonUserId) return setError('Pick the salesperson.');
     if (existing) return setError(`${existing.salespersonName} already has a plan for ${label}.`);
     if (!d.lines.length) return setError('Add at least one customer.');
-    if (d.lines.some((l) => !validVisits(l.plannedVisits))) return setError('Planned visits are whole numbers from 1 to 99.');
+    const wrong = d.lines.filter((l) => !validVisits(l.plannedVisits));
+    if (wrong.length) {
+      setChecked(new Set(d.lines.map((l) => l.companyId)));
+      const names = wrong.map((l) => nameOf.get(l.companyId) ?? 'a customer');
+      return setError(`Planned visits are whole numbers from 1 to 99. Check ${names.length === 1 ? names[0] : `${names.length} customers`}.`);
+    }
     setBusy(true);
     const result = await createVisitPlan({
       salespersonUserId: d.salespersonUserId,
@@ -133,20 +143,34 @@ export function VisitPlanDialog({ initial, onClose }: { initial?: Partial<PlanDr
           </button>
         </span>
         <div className="vp-draft-lines" style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>
-          {d.lines.map((l) => (
-            <div key={l.companyId} className="vp-draft-line" data-testid="plan-draft-line">
-              <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nameOf.get(l.companyId) ?? 'Company'}</span>
-              <input
-                className="form-input vp-visits-input"
-                inputMode="numeric"
-                aria-label={`Planned visits at ${nameOf.get(l.companyId) ?? 'company'}`}
-                value={l.plannedVisits}
-                onChange={(e) => setLine(l.companyId, e.target.value.replace(/[^\d]/g, '').slice(0, 2))}
-                style={{ borderColor: validVisits(l.plannedVisits) ? undefined : 'var(--danger)' }}
-              />
-              <RemoveButton title="Remove" onClick={() => setD((x) => ({ ...x, lines: x.lines.filter((y) => y.companyId !== l.companyId) }))} />
-            </div>
-          ))}
+          {d.lines.map((l) => {
+            // The wrong row says so itself (CD-224): "100" is an error, not silently "10".
+            const invalid = !validVisits(l.plannedVisits) && (checked.has(l.companyId) || l.plannedVisits.length > 2);
+            return (
+              <div key={l.companyId} className="vp-draft-line" data-testid="plan-draft-line" data-invalid={invalid || undefined} style={{ flexWrap: 'wrap' }}>
+                <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nameOf.get(l.companyId) ?? 'Company'}</span>
+                <input
+                  className="form-input vp-visits-input"
+                  inputMode="numeric"
+                  aria-label={`Planned visits at ${nameOf.get(l.companyId) ?? 'company'}`}
+                  aria-invalid={invalid || undefined}
+                  value={l.plannedVisits}
+                  onChange={(e) => {
+                    setLine(l.companyId, e.target.value.replace(/[^\d]/g, '').slice(0, 4));
+                    if (error) setError('');
+                  }}
+                  onBlur={() => setChecked((x) => new Set(x).add(l.companyId))}
+                  style={{ borderColor: invalid ? 'var(--danger)' : undefined }}
+                />
+                <RemoveButton title="Remove" onClick={() => setD((x) => ({ ...x, lines: x.lines.filter((y) => y.companyId !== l.companyId) }))} />
+                {invalid && (
+                  <span data-testid="plan-line-error" style={{ flexBasis: '100%', fontSize: 12, color: 'var(--danger)', textAlign: 'right' }}>
+                    {VISITS_RULE}
+                  </span>
+                )}
+              </div>
+            );
+          })}
           {d.lines.length === 0 && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>No customers yet.</span>}
           <div style={{ border: '1px solid var(--border)', borderRadius: 7 }} data-testid="plan-add-company">
             <Picker
@@ -167,6 +191,14 @@ export function VisitPlanDialog({ initial, onClose }: { initial?: Partial<PlanDr
                       }}
                     />
                   ))
+                ) : q ? (
+                  // Nothing matches the search: say so and offer to clear it (CD-224), instead of "No more companies".
+                  <div style={{ padding: 8, fontSize: 12.5, color: 'var(--muted)', display: 'flex', gap: 10, alignItems: 'center' }}>
+                    No company matches “{picker.search.trim()}”.
+                    <button type="button" className="crumb-link" data-testid="plan-clear-search" style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 0 }} onClick={() => picker.setSearch('')}>
+                      Clear search
+                    </button>
+                  </div>
                 ) : (
                   <div style={{ padding: 8, fontSize: 12.5, color: 'var(--muted)' }}>No more companies.</div>
                 )

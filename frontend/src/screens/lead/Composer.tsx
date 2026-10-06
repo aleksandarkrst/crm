@@ -8,14 +8,16 @@ import { DealDocuments } from './DealDocuments';
 
 const TABS = [
   { k: 'email', label: 'Email', ch: 'EM' },
-  { k: 'whatsapp', label: 'WhatsApp', ch: 'WA' },
-  { k: 'linkedin', label: 'LinkedIn', ch: 'LI' },
+  // Hidden per CD-224 until the WhatsApp and LinkedIn integrations exist; the product owner may bring them back.
+  // { k: 'whatsapp', label: 'WhatsApp', ch: 'WA' },
+  // { k: 'linkedin', label: 'LinkedIn', ch: 'LI' },
   { k: 'meeting', label: 'Meeting', ch: 'MT' },
   { k: 'note', label: 'Note', ch: 'NT' },
   { k: 'docs', label: 'Documents', ch: 'DOC' },
 ] as const;
-type TabKey = (typeof TABS)[number]['k'];
-const DEFAULT_TAB: Record<string, TabKey> = { EM: 'email', WA: 'whatsapp', LI: 'linkedin', MT: 'meeting' };
+type TabKey = (typeof TABS)[number]['k'] | 'whatsapp' | 'linkedin';
+// WhatsApp and LinkedIn steps open the Note tab while their tabs are hidden (CD-224).
+const DEFAULT_TAB: Record<string, TabKey> = { EM: 'email', /* WA: 'whatsapp', LI: 'linkedin', */ MT: 'meeting' };
 const SEND_LABEL: Partial<Record<TabKey, string>> = { email: 'Send & log', whatsapp: 'Send on WhatsApp', linkedin: 'Send on LinkedIn', note: 'Save note' };
 
 /** "Next best action": the stage's playbook step, with a composer per channel. */
@@ -31,7 +33,7 @@ export function Composer({ lead }: { lead: Lead }) {
   /** A new form after each meeting scheduled here. */
   const [meetingForm, setMeetingForm] = useState(0);
 
-  const tdef = TABS.find((t) => t.k === tab)!;
+  const tdef = TABS.find((t) => t.k === tab) ?? TABS[0];
   const get = (k: string, v: string) => drafts[tab + '.' + k] ?? v;
   const setDraft = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const v = e.target.value;

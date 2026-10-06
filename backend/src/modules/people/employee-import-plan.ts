@@ -272,8 +272,13 @@ export function planImport(rows: CsvRow[], mapping: ColumnMapping, duplicates: '
   });
 
   // ---------------------------------------------------------------- pass 2: managers
+  // A row with errors may have no checked email (its fields didn't parse): its email as written
+  // still finds it, so the message points at that line, not "Manager not found" (CD-224, B14).
   const rowByEmail = new Map<string, RowPlan>();
-  for (const p of plans) if (p.email && !rowByEmail.has(p.email)) rowByEmail.set(p.email, p);
+  for (const p of plans) {
+    const email = p.email ?? p.values.workEmail?.trim().toLowerCase();
+    if (email && !rowByEmail.has(email)) rowByEmail.set(email, p);
+  }
   for (const p of plans) {
     const managerEmail = p.values.managerEmail?.toLowerCase();
     if (!managerEmail || p.status === 'invalid' || p.status === 'skip') continue;
@@ -303,7 +308,7 @@ export function planImport(rows: CsvRow[], mapping: ColumnMapping, duplicates: '
   for (const p of plans) {
     if ((p.status === 'create' || p.status === 'update') && p.manager?.kind === 'row' && p.manager.row.status !== 'create') {
       const line = p.manager.row.line;
-      p.warnings.push(p.status === 'create' ? `Imported without manager: the manager's row (line ${line}) has errors` : `Manager not changed: the manager's row (line ${line}) has errors`);
+      p.warnings.push(p.status === 'create' ? `Manager is on line ${line}, which has errors: imported without a manager` : `Manager is on line ${line}, which has errors: manager not changed`);
     }
   }
 

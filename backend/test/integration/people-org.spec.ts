@@ -322,3 +322,30 @@ describe('deleting an employee', () => {
     expect(linked.body.message).toContain('Deactivate instead');
   });
 });
+
+describe('the top of the organisation (CD-224, B15)', () => {
+  let boss: Session;
+  let ws: string;
+  const asBoss = () => ({ token: boss.token, tenant: ws });
+  const issuesOf = async (id: string) => (await ok('GET', `/people/employees/${id}`, asBoss())).hr.dataIssues as string[];
+  const noManagerIds = async () => (await ok('GET', '/people/employees?issues=no_manager', asBoss())).employees.map((e: { id: string }) => e.id).sort();
+
+  beforeAll(async () => {
+    boss = await signIn('org-top');
+    ws = await createTenant(boss, 'Org top');
+  });
+
+  it('the only active employee without a manager is not a "No manager" issue; with several, all are', async () => {
+    const top = (await accessOf(boss, ws)).employeeId as string;
+    expect(await issuesOf(top)).not.toContain('no_manager');
+    expect(await noManagerIds()).toEqual([]);
+
+    const second = (await ok('POST', '/people/employees', { ...asBoss(), body: { firstName: 'Second', lastName: 'Top', employmentStartDate: START } })).id as string;
+    expect(await noManagerIds()).toEqual([top, second].sort());
+    expect(await issuesOf(top)).toContain('no_manager');
+
+    await ok('PATCH', `/people/employees/${second}`, { ...asBoss(), body: { managerId: top } }, 200);
+    expect(await noManagerIds()).toEqual([]);
+    expect(await issuesOf(second)).not.toContain('no_manager');
+  });
+});

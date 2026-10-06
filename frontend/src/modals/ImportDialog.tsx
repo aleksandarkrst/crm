@@ -314,8 +314,9 @@ export function ImportDialog({ initialType, onClose, onImported }: { initialType
               {!!preview.newTeams?.length && <div>New teams: {preview.newTeams.join(', ')}</div>}
             </div>
           )}
-          {type !== 'deals' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {/* Only when some row matches an existing record (CD-224): otherwise there is nothing to skip or update. */}
+          {type !== 'deals' && preview.counts.update + preview.counts.skip > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }} data-testid="import-duplicates">
               <span className="caps">{DUPLICATE_LABEL[type]}</span>
               {(['skip', 'update'] as DuplicateMode[]).map((d) => (
                 <button
@@ -468,7 +469,16 @@ export function ImportDialog({ initialType, onClose, onImported }: { initialType
           </>
         ) : (
           <>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              data-testid="import-cancel"
+              onClick={() => {
+                // After the file was read, its columns are mapped: ask before throwing that away (CD-224).
+                if (step !== 'File' && !window.confirm('Discard this import? The file and the column mapping are not kept.')) return;
+                onClose();
+              }}
+            >
               Cancel
             </button>
             {step === 'Columns' && (

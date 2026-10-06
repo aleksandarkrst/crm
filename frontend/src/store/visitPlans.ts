@@ -82,18 +82,33 @@ export const sortPlans = (plans: VisitPlan[]): VisitPlan[] =>
 export const completionLabel = (completion: number): string => Math.floor(completion * 100 + 1e-9) + '%';
 
 /** The colour class and explanation of a plan's pace (spec 9.2): green done, amber behind, grey before the period. */
-export function paceOf(t: Pick<ApiVisitTotals, 'pace' | 'expectedPace'>): { className: string; title: string } {
+export function paceOf(t: Pick<ApiVisitTotals, 'pace' | 'expectedPace' | 'planned' | 'heldCapped'>): { className: string; title: string } {
+  // The expected pace in visits (CD-224): "3 of 5 visits expected by today, 1 held".
+  const expected = `${expectedVisits(t)} of ${t.planned} ${t.planned === 1 ? 'visit' : 'visits'} expected by today, ${t.heldCapped} held (${Math.round(t.expectedPace * 100)}% of the period has passed)`;
   switch (t.pace) {
     case 'done':
       return { className: 'vp-pace vp-pace-done', title: 'Every planned visit is held' };
     case 'behind':
-      return { className: 'vp-pace vp-pace-behind', title: `Behind pace: ${Math.round(t.expectedPace * 100)}% of the period has passed` };
+      return { className: 'vp-pace vp-pace-behind', title: `Behind pace: ${expected}` };
     case 'notStarted':
-      return { className: 'vp-pace vp-pace-not-started', title: "The period hasn't started yet" };
+      return { className: 'vp-pace vp-pace-not-started', title: `The period hasn't started yet: 0 of ${t.planned} ${t.planned === 1 ? 'visit' : 'visits'} expected by today` };
     default:
-      return { className: 'vp-pace', title: `On pace: ${Math.round(t.expectedPace * 100)}% of the period has passed` };
+      return { className: 'vp-pace', title: `On pace: ${expected}` };
   }
 }
+
+/** The visits that should be held by now at an even pace: the plan times the share of the period passed, rounded down. */
+export const expectedVisits = (t: Pick<ApiVisitTotals, 'expectedPace' | 'planned'>): number => Math.floor(t.planned * t.expectedPace + 1e-9);
+
+/** The months of the quarter starting on `quarterStart` that have no monthly plan, as month names (CD-224, B18). */
+export function missingMonths(quarterStart: string, plans: readonly { periodStart: string }[]): string[] {
+  const { year, month } = parts(quarterStart);
+  const have = new Set(plans.map((p) => p.periodStart.slice(0, 7)));
+  return [0, 1, 2].map((i) => addMonths(year, month, i)).filter((start) => !have.has(start.slice(0, 7))).map((start) => MONTHS[parts(start).month - 1]!);
+}
+
+/** "December", "November or December", "October, November or December". */
+export const joinOr = (names: readonly string[]): string => (names.length <= 1 ? (names[0] ?? '') : names.slice(0, -1).join(', ') + ' or ' + names[names.length - 1]);
 
 export type VisitCount = 'held' | 'upcoming' | 'notClosed' | 'unplanned';
 

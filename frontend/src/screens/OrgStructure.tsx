@@ -29,7 +29,7 @@ import { useStore } from '../store/store';
 import { ExportDialog, MoveDialog, SetManagerDialog, SetOrgDialog } from './org/BulkDialogs';
 import { listColumns } from './org/columns';
 import { DepartmentChart, DepartmentList, type DropTarget } from './org/DepartmentChart';
-import { DepartmentsPanelButton } from './org/DepartmentsPanel';
+import { DepartmentsPanel, DepartmentsPanelButton } from './org/DepartmentsPanel';
 import { AddEmployeeDialog } from './employee/AddEmployeeDialog';
 import { EmployeeList } from './org/EmployeeList';
 import { EmployeePicker, MultiSelect, usePhone } from './org/parts';
@@ -42,7 +42,7 @@ const FILTER_PARAMS = ['q', 'dept', 'team', 'manager', 'scope', 'status', 'accou
 const toggle = <T,>(list: readonly T[], v: T): T[] => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 const employeesLabel = (n: number) => (n === 1 ? '1 employee' : `${n} employees`);
 
-type Dialog = { kind: 'add' } | { kind: 'import' } | { kind: 'org' } | { kind: 'manager' } | { kind: 'export'; selected: boolean } | { kind: 'move'; employee: ApiEmployee; target: DropTarget } | null;
+type Dialog = { kind: 'add' } | { kind: 'import' } | { kind: 'departments' } | { kind: 'org' } | { kind: 'manager' } | { kind: 'export'; selected: boolean } | { kind: 'move'; employee: ApiEmployee; target: DropTarget } | null;
 
 /**
  * Org structure (CD-137, spec 5): the chart (by department or by reporting lines) and the list of
@@ -155,6 +155,14 @@ export function OrgStructure() {
       }
     : null;
   const [dialog, setDialog] = useState<Dialog>(null);
+  // "Employee" in the header's Create menu comes here with ?new=employee (CD-224).
+  const wantsNew = params.get('new') === 'employee';
+  useEffect(() => {
+    if (!wantsNew || !loaded) return;
+    if (hr) setDialog({ kind: 'add' });
+    else flash('Only Administration and Admins add employees.');
+    update({ new: null });
+  }, [wantsNew, loaded, hr, flash, update]);
   // Phones: the filters fold under a button (the search stays).
   const [filtersOpen, setFiltersOpen] = useState(false);
   const activeFilters = [filters.departmentIds.length, filters.teamIds.length, filters.managerId, filters.accounts.length, filters.issues.length, filters.statuses.join() !== DEFAULT_STATUSES.join()].filter(Boolean).length;
@@ -258,7 +266,31 @@ export function OrgStructure() {
           )}
           {(!phone || filtersOpen) && (
             <>
-          <MultiSelect label="Department" testId="org-filter-department" options={departmentOptions} value={filters.departmentIds} onChange={setDepartments} empty="No departments yet" />
+          <MultiSelect
+            label="Department"
+            testId="org-filter-department"
+            options={departmentOptions}
+            value={filters.departmentIds}
+            onChange={setDepartments}
+            empty="No departments yet"
+            emptyAction={
+              hr
+                ? (close) => (
+                    <button
+                      type="button"
+                      className="org-multi-clear"
+                      data-testid="org-filter-add-department"
+                      onClick={() => {
+                        close();
+                        setDialog({ kind: 'departments' });
+                      }}
+                    >
+                      Add department
+                    </button>
+                  )
+                : undefined
+            }
+          />
           <MultiSelect label="Team" testId="org-filter-team" options={teamOptions} value={filters.teamIds} onChange={(ids) => update({ team: ids.join(',') })} empty="No teams yet" />
           <div className="org-manager-filter">
             <EmployeePicker employees={managers} value={filters.managerId} onChange={(id) => update({ manager: id })} placeholder="Manager" testId="org-filter-manager" none="Any manager" />
@@ -357,14 +389,47 @@ export function OrgStructure() {
           </div>
         ) : !loaded ? (
           <div className="empty-state">Loading…</div>
+        ) : count === 0 ? (
+          // Empty states point to the next step (CD-224).
+          <div className="empty-block" data-testid="org-empty">
+            <div className="empty-block-title">{dirty ? 'Nobody matches these filters' : 'No employees yet'}</div>
+            <div className="empty-block-text">{dirty ? 'Change or clear the filters to see more people.' : hr ? 'Add employees one by one, or import them from Excel.' : 'Administration and Admins add the employees.'}</div>
+            <div className="empty-block-actions">
+              {dirty && (
+                <button type="button" className="btn btn-secondary" onClick={() => update(Object.fromEntries(FILTER_PARAMS.map((k) => [k, null])))}>
+                  Clear filters
+                </button>
+              )}
+              {hr && !dirty && (
+                <>
+                  <button type="button" className="btn btn-primary" onClick={() => setDialog({ kind: 'add' })}>
+                    Add employee
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setDialog({ kind: 'import' })}>
+                    Import
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         ) : tab === 'list' ? (
           <EmployeeList rows={rows} columns={columns} sort={{ key: sortKey, dir: sortDir }} onSort={(k) => update({ sort: k === 'name' ? null : k, dir: k === sortKey && sortDir === 1 ? 'desc' : null })} onOpen={open} selection={selection} phone={phone} />
         ) : mode === 'department' ? (
-          phone ? (
+          <>
+            {hr && !dirty && departments.length === 0 && (
+              <div className="hint-box" data-testid="org-no-departments" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+                <span style={{ flex: 1, minWidth: 200 }}>No departments yet. Group people into departments such as Sales or Service.</span>
+                <button type="button" className="btn btn-primary" data-testid="org-add-department" onClick={() => setDialog({ kind: 'departments' })}>
+                  Add department
+                </button>
+              </div>
+            )}
+            {phone ? (
             <DepartmentList blocks={blocks} onOpen={open} hr={hr} />
           ) : (
             <DepartmentChart blocks={blocks} onOpen={open} hr={hr} canDrag={canDrag} onDrop={onDrop} />
-          )
+          )}
+          </>
         ) : phone ? (
           <ReportingList roots={roots} view={view} />
         ) : (
@@ -373,6 +438,7 @@ export function OrgStructure() {
       </div>
 
       {dialog?.kind === 'add' && <AddEmployeeDialog onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'departments' && <DepartmentsPanel startAdding onClose={() => setDialog(null)} />}
       {dialog?.kind === 'org' && (
         <SetOrgDialog
           count={selectedRows.length}

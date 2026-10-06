@@ -138,6 +138,12 @@ describe('employee card', () => {
     await olga.waitForFunction(() => /^\/people\/[0-9a-f-]{36}$/.test(location.pathname));
     await olga.waitForFunction(() => document.querySelector('[data-testid=emp-name]')?.textContent === 'Nova Zaposlena');
     assert.equal(await textOf(olga, '[data-testid=emp-account]'), 'No account');
+    // The owner edits someone else's card (CD-224: it looked read-only on an old build).
+    await click(olga, '[data-testid=emp-work] .emp-edit');
+    await olga.waitForSelector('[data-testid=emp-work] input[name=jobTitle]');
+    await olga.type('[data-testid=emp-work] input[name=jobTitle]', 'Office manager');
+    await click(olga, '[data-testid=emp-work] .emp-section-actions .btn-primary');
+    await olga.waitForFunction(() => document.querySelector('[data-testid=emp-work]')?.innerText.includes('Office manager') && !document.querySelector('[data-testid=emp-work] input[name=jobTitle]'));
   });
 
   step('on a phone the card fits and its actions are in the menu', async () => {

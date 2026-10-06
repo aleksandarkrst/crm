@@ -89,6 +89,12 @@ describe('command palette, + menu and account menu', () => {
     await page.waitForFunction(() => document.querySelector('[data-testid=record-name]')?.value === 'Ana Marković');
     // The header names the screen, not the record.
     assert.equal(await page.$eval('header h1', (el) => el.textContent), 'Contact');
+    // A clean contact id in the address, no "%3Ap" (CD-224); an old person-id link redirects to it.
+    const clean = await page.evaluate(() => location.pathname);
+    assert.match(clean, /^\/contacts\/[0-9a-f-]{36}$/);
+    // Ana is the primary contact of the Northwind deal: her old person id is "<deal id>:p".
+    await page.goto(`${BASE_URL}/contacts/${encodeURIComponent(northwindId + ':p')}`, { waitUntil: 'networkidle0' });
+    await page.waitForFunction((p) => location.pathname === p, {}, clean);
   });
 
   step('says so when nothing matches, and Escape closes the palette', async () => {
@@ -127,6 +133,26 @@ describe('command palette, + menu and account menu', () => {
     await page.keyboard.press('t');
     await page.waitForSelector('input[placeholder="e.g. Send revised scope to procurement"]');
     await clickButton(page, 'Cancel');
+    await page.waitForFunction(() => !document.querySelector('.modal'));
+  });
+
+  step('"Employee" in the + menu opens Add employee on the Org structure page (CD-224)', async () => {
+    await click(page, '[data-testid=new-menu]');
+    await click(page, '[data-testid=new-employee]');
+    await page.waitForFunction(() => location.pathname === '/org');
+    await page.waitForSelector('::-p-text(Department, manager, personal details)');
+    assert.ok(!new URL(page.url()).searchParams.has('new'), 'the one-off parameter is gone');
+    await clickButton(page, 'Cancel');
+    await page.waitForFunction(() => !document.querySelector('.modal'));
+    // No departments yet: the chart and the Department filter offer to add one.
+    await page.waitForSelector('[data-testid=org-no-departments]');
+    await click(page, '[data-testid=org-filter-department]');
+    await click(page, '[data-testid=org-filter-add-department]');
+    await page.waitForSelector('[data-testid=departments-list]');
+    // It opens with the new department's form, not the "Add department" button.
+    await page.waitForSelector('.modal input');
+    assert.equal(await page.$('.dtp-add-dept'), null);
+    await clickButton(page, 'Close');
     await page.waitForFunction(() => !document.querySelector('.modal'));
   });
 

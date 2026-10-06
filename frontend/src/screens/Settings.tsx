@@ -12,6 +12,8 @@ import { useStore } from '../store/store';
 import { TemplatesTab } from './DocumentTemplates';
 import { EmployeesTab } from './settings/EmployeesTab';
 import { RolesTab } from './settings/RolesTab';
+import { ASSIGNED_ROLE_LABELS } from '../store/roles';
+import type { AssignedRole } from '../lib/api';
 import type { TeamMember } from '../store/types';
 
 const TABS = [
@@ -359,12 +361,13 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   const { session, inviteMember } = useStore();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'member' | 'admin'>('member');
+  const [roles, setRoles] = useState<AssignedRole[]>([]);
   const [link, setLink] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const send = async () => {
     setBusy(true);
-    setLink(await inviteMember(email.trim(), role));
+    setLink(await inviteMember(email.trim(), role, roles));
     setBusy(false);
   };
   const copy = () =>
@@ -389,6 +392,19 @@ function InviteModal({ onClose }: { onClose: () => void }) {
                 <option value="admin">Admin</option>
               </select>
             </label>
+          </div>
+          {/* Functional roles (CD-224): given to their employee record when they accept. Only Admins invite. */}
+          <div className="form-label" data-testid="invite-roles">
+            Roles (optional)
+            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', fontWeight: 400 }}>
+              {(['administration', 'payroll'] as const).map((r) => (
+                <label key={r} style={{ display: 'flex', gap: 7, alignItems: 'center', fontSize: 13, color: 'var(--ink)' }}>
+                  <input type="checkbox" name={`invite-role-${r}`} checked={roles.includes(r)} onChange={(e) => setRoles((x) => (e.target.checked ? [...x, r] : x.filter((y) => y !== r)))} />
+                  {ASSIGNED_ROLE_LABELS[r]}
+                </label>
+              ))}
+            </div>
+            <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 400 }}>Administration sees and edits employee records; Payroll sees pay and bank details. Admins have both already.</span>
           </div>
           <div className="modal-actions">
             <button type="button" className="btn btn-secondary" onClick={onClose}>
