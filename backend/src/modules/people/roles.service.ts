@@ -102,23 +102,24 @@ export class RolesService {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const access = await this.access.of(ctx, tx);
       if (!allows('org.roles', access.roles)) throw new ForbiddenException('Only Admins assign Administration and Payroll');
-      return changeAssignedRole(tx, { audit: this.audit, jobs: this.jobs }, ctx, employeeId, role, kind, { email: true });
+      return changeAssignedRoles(tx, { audit: this.audit, jobs: this.jobs }, ctx, employeeId, [role], kind, { email: true });
     });
   }
 }
 
 /**
- * Gives or takes away one assigned role, in `tx` (app.tenant_id set), without checking the caller:
- * RolesService checks "org.roles" first, and an accepted invitation applies the roles an Admin
- * chose when inviting (grantInvitedRoles). Writes the employee history row (field `roles`) and the
- * audit entry, and queues the "Role granted" / "Role removed" email when `email` is set.
+ * Gives or takes away assigned roles, in `tx` (app.tenant_id set), without checking the caller:
+ * RolesService checks "org.roles" first (one role), and an accepted invitation applies the roles an
+ * Admin chose when inviting (grantInvitedRoles). Writes one employee history row (field `roles`,
+ * the lists before and after), an audit entry per role, and queues the "Role granted" / "Role
+ * removed" email per role when `email` is set. Roles they already have (or don't) change nothing.
  */
-async function changeAssignedRole(
+async function changeAssignedRoles(
   tx: Tx,
   deps: { audit: AuditService; jobs: JobsService },
   ctx: TenantContext,
   employeeId: string,
-  role: AssignedRole,
+  roles: readonly AssignedRole[],
   kind: 'granted' | 'removed',
   opts: { email: boolean },
 ) {
@@ -130,15 +131,16 @@ async function changeAssignedRole(
     .for('update');
   if (!employee) throw new NotFoundException('Employee not found');
   const before = await assignedOf(tx, employeeId);
+  const changing = ASSIGNED_ROLES.filter((r) => roles.includes(r) && (kind === 'granted' ? !before.includes(r) : before.includes(r)));
   if (kind === 'granted') {
     if (employee.deactivatedAt) throw new BadRequestException(`${employee.fullName} has left the company. Reactivate them first.`);
-    if (before.includes(role)) return { employeeId, roles: before };
-    await tx.insert(employeeRoles).values({ tenantId: ctx.tenantId, employeeId, role, grantedByUserId: ctx.userId });
+    if (!changing.length) return { employeeId, roles: before };
+    await tx.insert(employeeRoles).values(changing.map((role) => ({ tenantId: ctx.tenantId, employeeId, role, grantedByUserId: ctx.userId })));
   } else {
-    if (!before.includes(role)) return { employeeId, roles: before };
-    await tx.delete(employeeRoles).where(and(eq(employeeRoles.employeeId, employeeId), eq(employeeRoles.role, role)));
+    if (!changing.length) return { employeeId, roles: before };
+    await tx.delete(employeeRoles).where(and(eq(employeeRoles.employeeId, employeeId), inArray(employeeRoles.role, changing)));
   }
-  const after = ASSIGNED_ROLES.filter((r) => (r === role ? kind === 'granted' : before.includes(r)));
+  const after = ASSIGNED_ROLES.filter((r) => (changing.includes(r) ? kind === 'granted' : before.includes(r)));
   await tx.insert(recordChanges).values({
     tenantId: ctx.tenantId,
     entityType: 'employee',
@@ -150,8 +152,10 @@ async function changeAssignedRole(
     actorUserId: ctx.userId,
     clientId: requestActor.getStore()?.clientId ?? null,
   });
-  await deps.audit.record(tx, ctx, { action: kind === 'granted' ? 'employee.role_granted' : 'employee.role_removed', entityType: 'employee', entityId: employeeId, data: { role } });
-  if (opts.email) await deps.jobs.send('people.role-changed-email', { tenantId: ctx.tenantId, employeeId, role, kind, actorUserId: ctx.userId }, tx);
+  for (const role of changing) {
+    await deps.audit.record(tx, ctx, { action: kind === 'granted' ? 'employee.role_granted' : 'employee.role_removed', entityType: 'employee', entityId: employeeId, data: { role } });
+    if (opts.email) await deps.jobs.send('people.role-changed-email', { tenantId: ctx.tenantId, employeeId, role, kind, actorUserId: ctx.userId }, tx);
+  }
   return { employeeId, roles: after };
 }
 
@@ -162,11 +166,7 @@ async function changeAssignedRole(
  * person chose to join moments ago and the roles were part of the invitation they accepted.
  */
 export async function grantInvitedRoles(tx: Tx, deps: { audit: AuditService; jobs: JobsService }, ctx: TenantContext, employeeId: string, roles: readonly AssignedRole[]): Promise<AssignedRole[]> {
-  let current: AssignedRole[] = await assignedOf(tx, employeeId);
-  for (const role of ASSIGNED_ROLES.filter((r) => roles.includes(r))) {
-    current = (await changeAssignedRole(tx, deps, ctx, employeeId, role, 'granted', { email: false })).roles;
-  }
-  return current;
+  return (await changeAssignedRoles(tx, deps, ctx, employeeId, roles, 'granted', { email: false })).roles;
 }
 
 async function assignedOf(tx: Tx, employeeId: string): Promise<AssignedRole[]> {
