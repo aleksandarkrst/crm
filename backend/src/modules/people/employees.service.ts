@@ -26,6 +26,13 @@ import { searchPattern } from './search';
 const managerRow = alias(employees, 'manager');
 const pendingInvitation = (employeeId: SQL | typeof employees.id) =>
   sql`exists (select 1 from ${invitations} i where i.employee_id = ${employeeId} and i.accepted_at is null and i.revoked_at is null and i.expires_at > now())`;
+/**
+ * The people the app shows (CD-226): members, people with a pending invitation, and people who left
+ * (the Admins' Inactive view). Other records (added or imported before CD-226, members who were
+ * removed) stay in the database but aren't listed, and their card is 404.
+ */
+const shownEmployee = sql`(${employees.userId} is not null or ${employees.deactivatedAt} is not null or ${pendingInvitation(employees.id)})`;
+const isShown = (r: { userId: string | null; deactivatedAt: Date | null; invited: boolean }) => !!r.userId || !!r.deactivatedAt || r.invited;
 
 /** Directory and employment columns of the list and card (never personal details or bank accounts). */
 const rowColumns = {
@@ -129,6 +136,7 @@ export class EmployeesService {
       const rows = await this.rows(
         tx,
         and(
+          shownEmployee,
           statuses.has('inactive') ? undefined : isNull(employees.deactivatedAt),
           query.departmentIds ? inArray(employees.departmentId, query.departmentIds) : undefined,
           query.teamIds ? inArray(employees.teamId, query.teamIds) : undefined,
@@ -177,16 +185,19 @@ export class EmployeesService {
 
   // ------------------------------------------------------------------ card
 
-  /** The employee card (spec 4.5): sections the caller may not see are left out entirely. */
+  /**
+   * The employee card (spec 4.5): sections the caller may not see are left out entirely. A record
+   * the app doesn't show (no account, no pending invitation, not deactivated; CD-226) is 404.
+   */
   card(ctx: TenantContext, id: string) {
-    return this.database.withTenant(ctx.tenantId, (tx) => this.cardIn(tx, ctx, id));
+    return this.database.withTenant(ctx.tenantId, (tx) => this.cardIn(tx, ctx, id, true));
   }
 
   /** The card inside an open transaction (the lifecycle actions return it too). */
-  async cardIn(tx: Tx, ctx: TenantContext, id: string) {
+  async cardIn(tx: Tx, ctx: TenantContext, id: string, onlyShown = false) {
     const access = await this.access.of(ctx, tx);
     const [r] = await this.rows(tx, eq(employees.id, id));
-    if (!r || (r.deactivatedAt && !access.canSeeInactive)) throw new NotFoundException('Employee not found');
+    if (!r || (r.deactivatedAt && !access.canSeeInactive) || (onlyShown && !isShown(r))) throw new NotFoundException('Employee not found');
     const settings = await this.settings(tx, ctx.tenantId);
     const status = statusOf(r);
     const shown = status === 'leaving' && !access.canSeeEmployment(id) ? 'active' : status;
@@ -566,7 +577,7 @@ export class EmployeesService {
       const tops = await tx
         .select({ id: employees.id })
         .from(employees)
-        .where(and(isNull(employees.managerId), isNull(employees.deactivatedAt)))
+        .where(and(isNull(employees.managerId), isNull(employees.deactivatedAt), shownEmployee))
         .limit(2);
       topEmployeeId = tops.length === 1 ? tops[0]!.id : null;
     }

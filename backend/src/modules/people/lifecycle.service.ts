@@ -5,19 +5,17 @@ import { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
-import { type DeactivationPlan, departments, employees, invitations, memberships, teams, users } from '../../shared/database/schema';
+import { type DeactivationPlan, departments, employees, memberships, teams, users } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import { createInvitation, keepAnOwner, membershipRole, withdrawEmployeeInvitations } from '../identity';
 import { EmployeesService } from './employees.service';
 import { applyDeactivation, listBlockers, mergeBlockers, shiftDate, workspaceToday } from './lifecycle';
-import type { BulkInvite, DeactivateEmployee, InviteEmployee, LinkMember, ReactivateEmployee } from './lifecycle.schemas';
+import type { DeactivateEmployee, InviteEmployee, LinkMember, ReactivateEmployee } from './lifecycle.schemas';
 import { PeopleAccess } from './people-access';
 import { assertValidManager, lockReportingLines } from './reporting-lines';
 
-const pendingInvitation = sql`exists (select 1 from ${invitations} i where i.employee_id = ${employees.id} and i.accepted_at is null and i.revoked_at is null and i.expires_at > now())`;
-
 /**
- * An employee's app access and leaving (spec 4.6–4.8): Invite to Pultly (one or many), Link to
+ * An employee's app access and leaving (spec 4.6–4.8): Invite to Pultly, Link to
  * member and Unlink (Admin), Deactivate and Reactivate (Admin). Invitations and
  * membership removal go through identity's public API; the daily job for future last working
  * days is in people-jobs.ts. Every action returns the card, like PATCH.
@@ -76,27 +74,6 @@ export class EmployeeLifecycleService {
       userId: member.userId,
       memberName: member.name,
       message: `${email} already has an account (${member.name}). Link it to this record instead of inviting.`,
-    });
-  }
-
-  /**
-   * "Invite selected" (Admin, spec 5.4): queues one people.bulk-invite job for the rows that have a
-   * work email, no account and no pending invitation, and are Active or Leaving. Returns
-   * `{ queued, skipped }` for the confirmation.
-   */
-  bulkInvite(ctx: TenantContext, input: BulkInvite) {
-    return this.database.withTenant(ctx.tenantId, async (tx) => {
-      const access = await this.access.of(ctx, tx);
-      if (!access.isAdmin) throw new ForbiddenException('Only Admins invite people to Pultly');
-      const ids = [...new Set(input.employeeIds)];
-      const rows = await tx
-        .select({ id: employees.id })
-        .from(employees)
-        .where(and(inArray(employees.id, ids), isNull(employees.userId), isNull(employees.deactivatedAt), sql`${employees.workEmail} is not null`, sql`not ${pendingInvitation}`));
-      const eligible = rows.map((r) => r.id);
-      if (eligible.length) await this.jobs.send('people.bulk-invite', { tenantId: ctx.tenantId, actorUserId: ctx.userId, employeeIds: eligible, role: input.role }, tx);
-      await this.audit.record(tx, ctx, { action: 'employee.bulk_invited', entityType: 'employee', data: { queued: eligible.length, skipped: ids.length - eligible.length, role: input.role } });
-      return { queued: eligible.length, skipped: ids.length - eligible.length };
     });
   }
 

@@ -8,14 +8,14 @@ import { ROLE_LABEL } from '../store/employeeCard';
 import { initialsOf } from '../store/selectors';
 import { useStore } from '../store/store';
 import { useEmployeeCard } from '../store/useEmployeeCard';
-import { DeactivateDialog, InviteDialog, LinkDialog, ReactivateDialog } from './employee/dialogs';
+import { DeactivateDialog, ReactivateDialog } from './employee/dialogs';
 import { CardEditContext, dateLabel } from './employee/parts';
 import { BankSection, cardInitial, cardPatch, PersonalSection, ReportingSection, WorkSection } from './employee/sections';
 
 /** The Org structure page (CD-137). */
 const ORG = paths.org();
 
-type Dialog = 'invite' | 'link' | 'deactivate' | 'reactivate' | null;
+type Dialog = 'deactivate' | 'reactivate' | null;
 
 /**
  * The employee card (CD-140, spec 4.5; CD-225): `/people/:id`. Header with status, account and
@@ -57,8 +57,6 @@ export function EmployeeCard() {
   return (
     <Screen title="Employee" parent={{ label: 'Org structure', to: ORG }}>
       <CardBody key={card.id} card={card} open={setDialog} />
-      {dialog === 'invite' && <InviteDialog card={card} onClose={() => setDialog(null)} onLinkInstead={() => setDialog('link')} />}
-      {dialog === 'link' && <LinkDialog card={card} onClose={() => setDialog(null)} />}
       {dialog === 'deactivate' && <DeactivateDialog card={card} onClose={() => setDialog(null)} />}
       {dialog === 'reactivate' && <ReactivateDialog card={card} onClose={() => setDialog(null)} />}
     </Screen>
@@ -156,8 +154,10 @@ function statusBadge(card: ApiEmployeeCard): { label: string; className: string 
 const ACCOUNT_LABEL: Record<ApiEmployeeCard['account'], string> = { linked: 'Has account', invited: 'Invited', none: 'No account' };
 
 /**
- * Name, job, badges, Save and the "⋯" menu (CD-225): Invite to Pultly and the pending invitation,
- * Link to member and Unlink, Deactivate, Reactivate or Cancel leaving, and Delete once deactivated.
+ * Name, job, badges, Save and the "⋯" menu (CD-225): the pending invitation (Resend, Copy link,
+ * Withdraw), Deactivate, Reactivate or Cancel leaving, and Delete once deactivated. CD-226 took out
+ * Invite to Pultly, Link to member and Unlink: people join by invitation from Settings → Team, and
+ * Deactivate is how someone leaves.
  */
 function CardHeader({ card, open, canSave, dirty, busy, onSave }: { card: ApiEmployeeCard; open: (d: Dialog) => void; canSave: boolean; dirty: boolean; busy: boolean; onSave: () => void }) {
   const { employeeCard } = useStore();
@@ -177,20 +177,18 @@ function CardHeader({ card, open, canSave, dirty, busy, onSave }: { card: ApiEmp
     if (!window.confirm(`Delete ${card.fullName}? Their record goes for good; history shows them as a deleted employee.`)) return;
     if (await employeeCard.remove(card.id)) navigate(ORG);
   };
-  const unlink = async () => {
-    if (!window.confirm(`Unlink ${card.fullName}'s account? The record stays, with "No account"; the member gets a new record of their own.`)) return;
-    await employeeCard.unlink(card.id);
+  // Withdrawing takes the person off the Org structure (CD-226), so the card closes.
+  const withdraw = async (invitationId: string) => {
+    if (!window.confirm(`Withdraw the invitation to ${card.fullName}? They are taken off the org structure.`)) return;
+    if (await employeeCard.withdrawInvitation(card.id, invitationId)) navigate(ORG);
   };
 
   const actions: [string, () => void][] = [];
-  if (p.canInvite && card.account === 'none') actions.push(['Invite to Pultly', () => (card.workEmail ? open('invite') : window.alert('Add a work email first: the invitation goes there.'))]);
   if (invitation?.hasLink) {
     actions.push(['Resend invitation', () => void employeeCard.resendInvitation(card.id, invitation.id)]);
     actions.push(['Copy invite link', () => void employeeCard.copyInvitationLink(invitation.id)]);
   }
-  if (invitation) actions.push(['Withdraw invitation', () => void employeeCard.withdrawInvitation(card.id, invitation.id)]);
-  if (p.canLink) actions.push(['Link to member', () => open('link')]);
-  if (p.canUnlink) actions.push(['Unlink account', () => void unlink()]);
+  if (invitation) actions.push(['Withdraw invitation', () => void withdraw(invitation.id)]);
   if (p.canDeactivate && card.status !== 'leaving') actions.push(['Deactivate', () => open('deactivate')]);
   if (p.canReactivate) actions.push([card.status === 'inactive' ? 'Reactivate' : 'Cancel leaving', () => open('reactivate')]);
   // Only once deactivated (CD-225), then for anyone, former app users included.

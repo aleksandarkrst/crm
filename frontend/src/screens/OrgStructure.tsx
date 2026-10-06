@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { XIcon } from '../components/ui';
-import { EmployeeImportDialog } from '../modals/ImportDialog';
 import { Screen } from '../components/Layout';
 import type { ApiEmployee, ApiEmployeeStatus } from '../lib/api';
 import { paths } from '../lib/paths';
@@ -30,7 +29,6 @@ import { ExportDialog, MoveDialog, SetManagerDialog, SetOrgDialog } from './org/
 import { listColumns } from './org/columns';
 import { type CompanyNode, DepartmentChart, DepartmentList, type DropTarget } from './org/DepartmentChart';
 import { DepartmentsPanel, DepartmentsPanelButton } from './org/DepartmentsPanel';
-import { AddEmployeeDialog } from './employee/AddEmployeeDialog';
 import { EmployeeList } from './org/EmployeeList';
 import { EmployeePicker, MultiSelect, usePhone } from './org/parts';
 import { ReportingChart, ReportingList, type TreeView } from './org/ReportingChart';
@@ -42,7 +40,7 @@ const FILTER_PARAMS = ['q', 'dept', 'team', 'manager', 'scope', 'status', 'accou
 const toggle = <T,>(list: readonly T[], v: T): T[] => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 const employeesLabel = (n: number) => (n === 1 ? '1 employee' : `${n} employees`);
 
-type Dialog = { kind: 'add' } | { kind: 'import' } | { kind: 'departments' } | { kind: 'org' } | { kind: 'manager' } | { kind: 'export'; selected: boolean } | { kind: 'move'; employee: ApiEmployee; target: DropTarget } | null;
+type Dialog = { kind: 'departments' } | { kind: 'org' } | { kind: 'manager' } | { kind: 'export'; selected: boolean } | { kind: 'move'; employee: ApiEmployee; target: DropTarget } | null;
 
 /**
  * Org structure (CD-137, spec 5): the chart (by department or by reporting lines) and the list of
@@ -50,9 +48,12 @@ type Dialog = { kind: 'add' } | { kind: 'import' } | { kind: 'departments' } | {
  * list's sort live in the URL, so links can be shared. Everyone sees the directory; Admins also get
  * data issues, inactive people, bulk actions, export and drag-to-move (CD-225: only Admins do HR
  * work). "By department" hangs the departments below a company node with the CEO (CD-225).
+ *
+ * Only members and people with a pending invitation are shown (CD-226: the API leaves out the
+ * rest): people join by invitation from Settings → Team, so there is no Add employee or Import.
  */
 export function OrgStructure() {
-  const { s, people: actions, flash, employeeCard, session, setWorkspace, canEditWorkspace } = useStore();
+  const { s, people: actions, flash, session, setWorkspace, canEditWorkspace } = useStore();
   const { employees, departments, teams, access, loaded, loading, error } = s.people;
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -168,14 +169,6 @@ export function OrgStructure() {
       }
     : null;
   const [dialog, setDialog] = useState<Dialog>(null);
-  // "Employee" in the header's Create menu comes here with ?new=employee (CD-224).
-  const wantsNew = params.get('new') === 'employee';
-  useEffect(() => {
-    if (!wantsNew || !loaded) return;
-    if (hr) setDialog({ kind: 'add' });
-    else flash('Only Admins add employees.');
-    update({ new: null });
-  }, [wantsNew, loaded, hr, flash, update]);
   // Phones: the filters fold under a button (the search stays).
   const [filtersOpen, setFiltersOpen] = useState(false);
   const activeFilters = [filters.departmentIds.length, filters.teamIds.length, filters.managerId, filters.accounts.length, filters.issues.length, filters.statuses.join() !== DEFAULT_STATUSES.join()].filter(Boolean).length;
@@ -199,16 +192,6 @@ export function OrgStructure() {
     return employees.filter((e) => e.status !== 'inactive' && (byManager.has(e.id) || e.id === filters.managerId));
   }, [employees, filters.managerId]);
   const statusChoices: ApiEmployeeStatus[] = hr ? ['active', 'leaving', 'inactive'] : ['active', 'leaving'];
-
-  /** "Invite selected" (Admin, spec 5.4): only rows with a work email and no account; the confirmation says how many. */
-  const inviteSelected = async () => {
-    const eligible = selectedRows.filter((r) => r.workEmail && r.hr?.account === 'none' && r.status !== 'inactive');
-    if (!eligible.length) return flash('None of the selected employees can be invited: they need a work email and no account or invitation yet.', 7000);
-    const others = selectedRows.length - eligible.length;
-    const question = `Invite ${eligible.length === 1 ? eligible[0]!.fullName : `${eligible.length} employees`} to Pultly as Members?` + (others ? ` ${others} of the selected ${others === 1 ? 'is' : 'are'} skipped (no work email, or already has an account or an invitation).` : '');
-    if (!window.confirm(question)) return;
-    if (await employeeCard.bulkInvite(eligible.map((r) => r.id))) setSelected(new Set());
-  };
 
   const setDepartments = (ids: string[]) => {
     // Teams only within the chosen departments (spec 5.2).
@@ -241,16 +224,6 @@ export function OrgStructure() {
           </span>
           <div className="org-actions">
             {/* Header buttons of the other lanes, by permission: "Departments & teams" (CD-138). */}
-            {hr && (
-              <button type="button" className="btn-plain" data-testid="org-add-employee" onClick={() => setDialog({ kind: 'add' })}>
-                Add employee
-              </button>
-            )}
-            {hr && (
-              <button type="button" className="btn-plain" data-testid="employee-import" onClick={() => setDialog({ kind: 'import' })}>
-                Import
-              </button>
-            )}
             {hr && <DepartmentsPanelButton allowed />}
             {hr && tab === 'list' && (
               <button type="button" className="btn-plain" data-testid="org-export" disabled={!rows.length} onClick={() => setDialog({ kind: 'export', selected: false })}>
@@ -329,7 +302,7 @@ export function OrgStructure() {
             <MultiSelect
               label="Account"
               testId="org-filter-account"
-              options={(['linked', 'invited', 'none'] as const).map((a) => ({ value: a, label: ACCOUNT_LABEL[a] }))}
+              options={(['linked', 'invited'] as const).map((a) => ({ value: a, label: ACCOUNT_LABEL[a] }))}
               value={filters.accounts}
               onChange={(v) => update({ account: v.join(',') })}
             />
@@ -356,11 +329,6 @@ export function OrgStructure() {
             <button type="button" className="btn-plain" data-testid="org-bulk-export" onClick={() => setDialog({ kind: 'export', selected: true })}>
               Export selected
             </button>
-            {admin && (
-              <button type="button" className="btn-plain" data-testid="org-bulk-invite" onClick={() => void inviteSelected()}>
-                Invite selected
-              </button>
-            )}
             <button type="button" className="btn-plain org-bulk-clear" onClick={() => setSelected(new Set())}>
               Clear selection
             </button>
@@ -383,22 +351,17 @@ export function OrgStructure() {
           // Empty states point to the next step (CD-224).
           <div className="empty-block" data-testid="org-empty">
             <div className="empty-block-title">{dirty ? 'Nobody matches these filters' : 'No employees yet'}</div>
-            <div className="empty-block-text">{dirty ? 'Change or clear the filters to see more people.' : hr ? 'Add employees one by one, or import them from Excel.' : 'Admins add the employees.'}</div>
+            <div className="empty-block-text">{dirty ? 'Change or clear the filters to see more people.' : 'People appear here once they are invited in Settings → Team.'}</div>
             <div className="empty-block-actions">
               {dirty && (
                 <button type="button" className="btn btn-secondary" onClick={() => update(Object.fromEntries(FILTER_PARAMS.map((k) => [k, null])))}>
                   Clear filters
                 </button>
               )}
-              {hr && !dirty && (
-                <>
-                  <button type="button" className="btn btn-primary" onClick={() => setDialog({ kind: 'add' })}>
-                    Add employee
-                  </button>
-                  <button type="button" className="btn btn-secondary" onClick={() => setDialog({ kind: 'import' })}>
-                    Import
-                  </button>
-                </>
+              {admin && !dirty && (
+                <button type="button" className="btn btn-primary" onClick={() => navigate(paths.settings('team') + '?invite=1')}>
+                  Invite people
+                </button>
               )}
             </div>
           </div>
@@ -427,7 +390,6 @@ export function OrgStructure() {
         )}
       </div>
 
-      {dialog?.kind === 'add' && <AddEmployeeDialog onClose={() => setDialog(null)} />}
       {dialog?.kind === 'departments' && <DepartmentsPanel startAdding onClose={() => setDialog(null)} />}
       {dialog?.kind === 'org' && (
         <SetOrgDialog
@@ -447,7 +409,6 @@ export function OrgStructure() {
           onSave={(managerId) => actions.bulkUpdate({ employeeIds: selectedRows.map((r) => r.id), managerId }, 'Manager set for {n}')}
         />
       )}
-      {dialog?.kind === 'import' && <EmployeeImportDialog onClose={() => setDialog(null)} onImported={() => void actions.load()} />}
       {dialog?.kind === 'export' && (
         <ExportDialog rows={dialog.selected ? selectedRows : rows} columns={columns} selected={dialog.selected} loadPersonal={actions.exportPersonal} onClose={() => setDialog(null)} onDone={(msg) => flash(msg)} />
       )}

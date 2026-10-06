@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Modal, ModalHeader } from '../components/ui';
 import { ApiError } from '../lib/api';
-import { downloadBlob, downloadText } from '../lib/csv';
-import type { SheetRows } from '../lib/spreadsheet';
+import { downloadText } from '../lib/csv';
 import {
   currentFunnelId,
   type DuplicateMode,
@@ -39,7 +38,6 @@ const DUPLICATE_LABEL: Record<ImportType, string> = {
   contacts: 'Same email as an existing contact',
   deals: '',
   products: 'Same name as an existing product',
-  employees: 'Same work email as an existing employee',
 };
 
 /** The API's message, plus the first field problem when validation failed. */
@@ -49,32 +47,23 @@ const errText = (err: unknown) => {
   return issue?.message ? `${msg}: ${issue.path ? issue.path + ' ' : ''}${issue.message}` : msg;
 };
 const plural = (n: number, one: string, many = one + 's') => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
-const isExcel = (name: string) => /\.xlsx?$/i.test(name);
 
 /**
  * CSV import (CD-64): pick the type and a file, map columns to fields (guessed from the headers),
  * preview the rows with their errors and duplicates, import, then a summary with the failed rows
- * as a download. The server parses and validates; this dialog only shows what it says.
- *
- * Employees (CD-141) use the same steps from the Org structure page: an Excel workbook (.xlsx) is
- * read in the browser (lib/spreadsheet, loaded only then), the chosen sheet becomes CSV text for the
- * same API; the preview also lists new departments and teams and offers (Admins) to invite the new
- * employees. `onImported` lets the page re-read its lists (CRM types reload the workspace).
+ * as a download. The server parses and validates; this dialog only shows what it says. (The
+ * employee import of CD-141 was removed by CD-226: people join by invitation.)
  */
-export function ImportDialog({ initialType, onClose, onImported }: { initialType: ImportType; onClose: () => void; onImported?: () => void }) {
+export function ImportDialog({ initialType, onClose }: { initialType: ImportType; onClose: () => void }) {
   const { s, reload } = useStore();
   const funnels = funnelOptions(s);
   const [step, setStep] = useState<Step>('File');
   const [type, setType] = useState<ImportType>(initialType);
-  const employees = type === 'employees';
   const [funnelId, setFunnelId] = useState(() => currentFunnelId(s) ?? '');
   const [fileName, setFileName] = useState('');
-  const [sheets, setSheets] = useState<SheetRows[] | null>(null);
-  const [sheetIndex, setSheetIndex] = useState(0);
   const [csv, setCsv] = useState('');
   const [mapping, setMapping] = useState<Mapping>({});
   const [duplicates, setDuplicates] = useState<DuplicateMode>('skip');
-  const [invite, setInvite] = useState(false);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -85,7 +74,6 @@ export function ImportDialog({ initialType, onClose, onImported }: { initialType
     mapping: over.mapping,
     duplicates: over.duplicates ?? duplicates,
     funnelId: type === 'deals' && funnelId ? funnelId : undefined,
-    invite: employees ? invite : undefined,
   });
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -111,30 +99,12 @@ export function ImportDialog({ initialType, onClose, onImported }: { initialType
   const pickFile = (file: File | undefined) => {
     if (!file) return;
     setFileName(file.name);
-    setSheets(null);
-    if (employees && isExcel(file.name)) {
-      void run(async () => {
-        const xl = await import('../lib/spreadsheet');
-        const book = await xl.readWorkbook(file);
-        if (!book.some(xl.hasData)) throw new Error('No sheet of this workbook has a header row and data.');
-        setSheets(book);
-        setSheetIndex(0);
-        // With several sheets, ask which one (default: the first); otherwise go straight on.
-        if (book.length === 1) await start(xl.sheetToCsv(book[0]!));
-      });
-      return;
-    }
     if (file.size > MAX_IMPORT_BYTES) {
       setError(`The file is larger than ${MAX_IMPORT_BYTES / 1024 / 1024} MB. Split it into smaller files.`);
       return;
     }
     void run(async () => start(await file.text()));
   };
-  const chooseSheet = () =>
-    run(async () => {
-      const xl = await import('../lib/spreadsheet');
-      await start(xl.sheetToCsv(sheets![sheetIndex]!));
-    });
   const showPreview = (over: { mapping?: Mapping; duplicates?: DuplicateMode } = {}) =>
     run(async () => {
       const p = await importApi.preview(type, request({ mapping: over.mapping ?? mapping, duplicates: over.duplicates }));
@@ -146,20 +116,13 @@ export function ImportDialog({ initialType, onClose, onImported }: { initialType
       const r = await importApi.commit(type, request({ mapping }));
       setResult(r);
       setStep('Done');
-      if (onImported) onImported();
-      else await reload();
+      await reload();
     });
   const downloadTemplate = () => run(async () => downloadText(`pultly-${type}-template.csv`, await importApi.template(type)));
-  const downloadExcelTemplate = () =>
-    run(async () => {
-      const [text, xl] = await Promise.all([importApi.template(type), import('../lib/spreadsheet')]);
-      downloadBlob(`pultly-${type}-template.xlsx`, await xl.xlsxTemplate(text));
-    });
   const restart = () => {
     setStep('File');
     setCsv('');
     setFileName('');
-    setSheets(null);
     setPreview(null);
     setResult(null);
     setError('');
@@ -169,11 +132,8 @@ export function ImportDialog({ initialType, onClose, onImported }: { initialType
   const isMapped = (key: string | undefined) => !!key && (mapping[key] ?? null) !== null;
   const missing = fields.filter((f) => f.required && !isMapped(f.key) && !isMapped(f.alternative)).map((f) => f.label);
   const shownFields = fields.filter((f) => isMapped(f.key)).slice(0, 4);
-  const sheetName = sheets && sheets.length > 1 ? sheets[sheetIndex]?.name : undefined;
-  const title = employees ? 'Import employees' : `Import ${TYPES.find((t) => t.key === type)!.label.toLowerCase()}`;
-  const sub = employees
-    ? 'Upload an Excel workbook (.xlsx) or a CSV with a header row. Nothing is saved until you import.'
-    : 'Upload a CSV (UTF-8, comma or semicolon separated, with a header row). Nothing is saved until you import.';
+  const title = `Import ${TYPES.find((t) => t.key === type)!.label.toLowerCase()}`;
+  const sub = 'Upload a CSV (UTF-8, comma or semicolon separated, with a header row). Nothing is saved until you import.';
 
   return (
     <Modal maxWidth={760} gap={18}>
@@ -188,16 +148,14 @@ export function ImportDialog({ initialType, onClose, onImported }: { initialType
 
       {step === 'File' && (
         <>
-          {!employees && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 9 }}>
-              {TYPES.map((t) => (
-                <button key={t.key} type="button" className={t.key === type ? 'choice on' : 'choice'} onClick={() => setType(t.key)}>
-                  <span style={{ fontSize: 13.5, fontWeight: 600 }}>{t.label}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.4 }}>{t.sub}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 9 }}>
+            {TYPES.map((t) => (
+              <button key={t.key} type="button" className={t.key === type ? 'choice on' : 'choice'} onClick={() => setType(t.key)}>
+                <span style={{ fontSize: 13.5, fontWeight: 600 }}>{t.label}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.4 }}>{t.sub}</span>
+              </button>
+            ))}
+          </div>
           {type === 'deals' && (
             <label className="form-label" style={{ maxWidth: 360 }}>
               Funnel
@@ -211,52 +169,16 @@ export function ImportDialog({ initialType, onClose, onImported }: { initialType
             </label>
           )}
           <label className="form-label">
-            {employees ? 'Excel or CSV file' : 'CSV file'}
-            <input
-              className="form-input"
-              type="file"
-              accept={employees ? '.xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : '.csv,text/csv,text/plain'}
-              disabled={busy}
-              onChange={(e) => pickFile(e.target.files?.[0])}
-            />
+            CSV file
+            <input className="form-input" type="file" accept=".csv,text/csv,text/plain" disabled={busy} onChange={(e) => pickFile(e.target.files?.[0])} />
           </label>
-          {sheets && sheets.length > 1 && (
-            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-              <label className="form-label" style={{ flex: '1 1 220px' }}>
-                Sheet
-                <select className="form-input" data-testid="import-sheet" value={sheetIndex} onChange={(e) => setSheetIndex(Number(e.target.value))}>
-                  {sheets.map((sh, i) => (
-                    <option key={sh.name + i} value={i}>
-                      {sh.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void chooseSheet()}>
-                {busy ? 'Reading…' : 'Use this sheet'}
-              </button>
-            </div>
-          )}
           <div className="hint-box">
-            {employees ? 'Up to 5,000 rows; 5 MB for an Excel file, 2 MB for a CSV. ' : 'Up to 5,000 rows and 2 MB per file. '}
+            Up to 5,000 rows and 2 MB per file.{' '}
             {type === 'deals' ? 'Rows without a funnel or stage go to the funnel above, in its first stage; companies are matched by name and created if new. ' : ''}
-            {employees ? 'Departments and teams are matched by name and created if new; managers by their work email, also when they come later in the file. ' : ''}
             Not sure about the columns?{' '}
-            {employees ? (
-              <>
-                Download the template:{' '}
-                <button type="button" className="btn-plain" style={{ padding: '3px 8px', fontSize: 12 }} onClick={() => void downloadExcelTemplate()}>
-                  Excel (.xlsx)
-                </button>{' '}
-                <button type="button" className="btn-plain" style={{ padding: '3px 8px', fontSize: 12 }} onClick={() => void downloadTemplate()}>
-                  CSV
-                </button>
-              </>
-            ) : (
-              <button type="button" className="btn-plain" style={{ padding: '3px 8px', fontSize: 12 }} onClick={() => void downloadTemplate()}>
-                Download the {type} template
-              </button>
-            )}
+            <button type="button" className="btn-plain" style={{ padding: '3px 8px', fontSize: 12 }} onClick={() => void downloadTemplate()}>
+              Download the {type} template
+            </button>
           </div>
         </>
       )}
@@ -264,9 +186,7 @@ export function ImportDialog({ initialType, onClose, onImported }: { initialType
       {step === 'Columns' && preview && (
         <>
           <div style={{ fontSize: 13, color: 'var(--text-2)' }}>
-            {fileName}
-            {sheetName ? ` · sheet “${sheetName}”` : ''} · {plural(preview.counts.rows, 'row')}
-            {isExcel(fileName) ? '' : ` · ${preview.delimiter === ';' ? 'semicolon' : 'comma'} separated`}. We matched the columns we recognised; check them below.
+            {fileName} · {plural(preview.counts.rows, 'row')} · {preview.delimiter === ';' ? 'semicolon' : 'comma'} separated. We matched the columns we recognised; check them below.
           </div>
           <div className="import-fields">
             {fields.map((f) => (
@@ -302,18 +222,9 @@ export function ImportDialog({ initialType, onClose, onImported }: { initialType
             {preview.counts.update > 0 && <span className="badge badge-warn">{preview.counts.update} to update</span>}
             {preview.counts.skip > 0 && <span className="badge badge-neutral">{preview.counts.skip} to skip</span>}
             {preview.counts.invalid > 0 && <span className="badge badge-danger">{plural(preview.counts.invalid, 'row')} with errors</span>}
-            {!!preview.counts.warnings && <span className="badge badge-warn">{plural(preview.counts.warnings, 'row')} with warnings</span>}
             {!!preview.counts.newCompanies && <span className="badge badge-neutral">{plural(preview.counts.newCompanies, 'new company', 'new companies')}</span>}
             {!!preview.counts.newContacts && <span className="badge badge-neutral">{plural(preview.counts.newContacts, 'new contact')}</span>}
-            {!!preview.counts.newDepartments && <span className="badge badge-neutral">{plural(preview.counts.newDepartments, 'new department')}</span>}
-            {!!preview.counts.newTeams && <span className="badge badge-neutral">{plural(preview.counts.newTeams, 'new team')}</span>}
           </div>
-          {(!!preview.newDepartments?.length || !!preview.newTeams?.length) && (
-            <div className="hint-box" data-testid="import-new-org">
-              {!!preview.newDepartments?.length && <div>New departments: {preview.newDepartments.join(', ')}</div>}
-              {!!preview.newTeams?.length && <div>New teams: {preview.newTeams.join(', ')}</div>}
-            </div>
-          )}
           {/* Only when some row matches an existing record (CD-224): otherwise there is nothing to skip or update. */}
           {type !== 'deals' && preview.counts.update + preview.counts.skip > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }} data-testid="import-duplicates">
@@ -333,19 +244,6 @@ export function ImportDialog({ initialType, onClose, onImported }: { initialType
                 </button>
               ))}
             </div>
-          )}
-          {employees && preview.canInvite && (
-            <label style={{ display: 'flex', gap: 9, alignItems: 'flex-start', fontSize: 13, cursor: 'pointer' }}>
-              <input type="checkbox" data-testid="import-invite" checked={invite} onChange={(e) => setInvite(e.target.checked)} style={{ marginTop: 3 }} />
-              <span>
-                Invite imported employees to Pultly
-                <span style={{ display: 'block', fontSize: 12, color: 'var(--text-2)' }}>
-                  {preview.counts.invitations
-                    ? `${plural(preview.counts.invitations, 'new employee')} with a work email will get an invitation as Member.`
-                    : 'No new employee in this file has a work email to invite.'}
-                </span>
-              </span>
-            </label>
           )}
           {preview.warnings.map((w) => (
             <div key={w} className="hint-box">
@@ -375,10 +273,7 @@ export function ImportDialog({ initialType, onClose, onImported }: { initialType
                       {r.values[f.key]}
                     </span>
                   ))}
-                  <span style={{ lineHeight: 1.4 }}>
-                    <span style={{ color: r.status === 'invalid' ? 'var(--danger)' : 'var(--text-2)' }}>{[...r.messages, ...r.notes].join(' · ')}</span>
-                    {!!r.warnings?.length && <span style={{ display: 'block', color: 'var(--warn)' }}>{r.warnings.join(' · ')}</span>}
-                  </span>
+                  <span style={{ lineHeight: 1.4, color: r.status === 'invalid' ? 'var(--danger)' : 'var(--text-2)' }}>{[...r.messages, ...r.notes].join(' · ')}</span>
                 </div>
               ))}
             </div>
@@ -419,23 +314,6 @@ export function ImportDialog({ initialType, onClose, onImported }: { initialType
           {(!!result.newCompanies || !!result.newContacts) && (
             <div style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
               Also created {[result.newCompanies ? plural(result.newCompanies, 'company', 'companies') : '', result.newContacts ? plural(result.newContacts, 'contact') : ''].filter(Boolean).join(' and ')} for the rows.
-            </div>
-          )}
-          {(!!result.newDepartments?.length || !!result.newTeams?.length) && (
-            <div style={{ fontSize: 12.5, color: 'var(--text-2)' }} data-testid="import-new-org">
-              {!!result.newDepartments?.length && <div>New departments: {result.newDepartments.join(', ')}</div>}
-              {!!result.newTeams?.length && <div>New teams: {result.newTeams.join(', ')}</div>}
-            </div>
-          )}
-          {!!result.invitationsQueued && <div style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{plural(result.invitationsQueued, 'invitation')} queued; they are sent in the background.</div>}
-          {!!result.withoutManager?.length && (
-            <div className="hint-box" data-testid="import-without-manager">
-              {result.withoutManager.slice(0, 10).map((w) => (
-                <div key={w.line}>
-                  Line {w.line}: {w.reason}
-                </div>
-              ))}
-              {result.withoutManager.length > 10 ? <div>…and {result.withoutManager.length - 10} more</div> : null}
             </div>
           )}
           {result.failed > 0 && (
@@ -506,12 +384,4 @@ export function ImportDialog({ initialType, onClose, onImported }: { initialType
       </div>
     </Modal>
   );
-}
-
-/**
- * "Import" on the Org structure page (CD-137 mounts it): the employee import of CD-141 for
- * Admins. `onImported` re-reads the page's lists after an import.
- */
-export function EmployeeImportDialog({ onClose, onImported }: { onClose: () => void; onImported?: () => void }) {
-  return <ImportDialog initialType="employees" onClose={onClose} onImported={onImported} />;
 }

@@ -14,7 +14,7 @@ import { inviteLinkBox } from './invitation-email';
  * Identity's public API for other modules (through index.ts): inviting someone and removing a
  * membership inside the caller's transaction (app.tenant_id set). TeamService uses the same
  * functions, so Settings → Team and the people module (spec 4.7, 4.8) follow one set of rules.
- * Plain functions, not a service: the worker (people.bulk-invite, people.deactivate-due) has no
+ * Plain functions, not a service: the worker (people.deactivate-due) has no
  * IdentityModule.
  */
 

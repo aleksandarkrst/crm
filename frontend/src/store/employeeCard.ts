@@ -1,6 +1,6 @@
 /**
  * The employee card (CD-140, milestone 13): the store's slice for `/people/:id`. Cards are read when
- * the page opens and kept by id in `s.employeeCards`; every action (saving, inviting, linking,
+ * the page opens and kept by id in `s.employeeCards`; every action (saving,
  * deactivating) returns the card as the server now has it, which replaces the cached one. The
  * pickers (active employees, departments, teams) are read when a card needs them
  * (`s.peoplePickers`), and again once the org changed since (`s.orgRev`, CD-225).
@@ -23,7 +23,6 @@ import {
   type ApiEmployeeCard,
   type ApiEmployeeRow,
   ApiError,
-  type ApiLinkCandidate,
   type ApiPeopleHistoryEntry,
   type ApiTeam,
   crmApi,
@@ -49,10 +48,8 @@ export const EMPLOYMENT_TYPE_LABEL: Record<EmploymentType, string> = { permanent
 export const LEAVING_REASON_LABEL: Record<LeavingReason, string> = { resigned: 'Resigned', contract_ended: 'Contract ended', dismissed: 'Dismissed', retired: 'Retired', other: 'Other' };
 export const ROLE_LABEL: Record<FunctionalRole, string> = { employee: 'Employee', manager: 'Manager', admin: 'Admin' };
 
-/** What a save, invite or other card action answers. */
+/** What a save or other card action answers. */
 export type CardResult = { card: ApiEmployeeCard } | { error: string; conflict?: boolean };
-/** "Invite to Pultly": the link to copy, or the offer to link the existing account instead. */
-export type InviteResult = { link: string; card: ApiEmployeeCard } | { linkInstead: { userId: string; memberName: string; message: string } } | { error: string };
 
 interface Deps {
   cur: () => State;
@@ -134,7 +131,7 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
      * Saves the card's changes (only the fields that changed). Moving a department head or team
      * lead elsewhere asks first ("… removes them as head. Continue?"); `cancelled` when they said
      * no. A pending invitation went to the old work email: the server withdrew it, and the toast
-     * says to invite again.
+     * says to invite the new address in Settings → Team.
      */
     save: async (id: string, patch: EmployeePatch): Promise<CardResult | { cancelled: true }> => {
       const before = cur().employeeCards[id];
@@ -154,21 +151,8 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
         if (!window.confirm(`${ask} Continue?`)) return { cancelled: true };
         result = await act(id, () => send(true), 'Not saved');
       }
-      if ('card' in result && before?.account === 'invited' && result.card.account === 'none') flash('The invitation was withdrawn because the work email changed. Invite them again.', 7000);
+      if ('card' in result && before?.account === 'invited' && result.card.account === 'none') flash('The invitation was withdrawn because the work email changed. Invite the new address in Settings → Team.', 7000);
       return result;
-    },
-
-    /** "Add employee": the new card, or why not. */
-    create: async (input: EmployeePatch): Promise<CardResult> => {
-      try {
-        const card = await peopleCardApi.create(input);
-        put(card);
-        void loadPickers();
-        refreshPeople();
-        return { card };
-      } catch (err) {
-        return { error: errText(err) };
-      }
     },
 
     /** The full IBAN ("Show" and "Copy"); the server writes "IBAN viewed" to the audit log each time. */
@@ -183,32 +167,6 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
 
     history: (id: string, offset = 0): Promise<{ entries: ApiPeopleHistoryEntry[]; more: boolean }> => peopleCardApi.history(id, offset),
     approvers: (id: string, date?: string) => peopleCardApi.approvers(id, date),
-
-    /** "Invite to Pultly" (spec 4.7). */
-    invite: async (id: string, role: 'admin' | 'member'): Promise<InviteResult> => {
-      try {
-        const { token, card } = await peopleCardApi.invite(id, role);
-        put(card);
-        void refreshTeam();
-        return { link: inviteLink(token), card };
-      } catch (err) {
-        const body = err instanceof ApiError ? (err.body as { code?: string; userId?: string; memberName?: string; message?: string } | null) : null;
-        if (body?.code === 'link_instead' && body.userId) return { linkInstead: { userId: body.userId, memberName: body.memberName ?? 'Member', message: body.message ?? '' } };
-        return { error: errText(err) };
-      }
-    },
-
-    /** "Invite selected" (Org structure list): `{ queued, skipped }`, or null when refused. */
-    bulkInvite: async (employeeIds: string[], role: 'admin' | 'member' = 'member') => {
-      try {
-        const result = await peopleCardApi.bulkInvite(employeeIds, role);
-        flash(`${result.queued} ${result.queued === 1 ? 'invitation' : 'invitations'} on the way` + (result.skipped ? ` · ${result.skipped} skipped (no work email, or already has an account or an invitation)` : ''), 7000);
-        return result;
-      } catch (err) {
-        flash('Not invited: ' + errText(err), 7000);
-        return null;
-      }
-    },
 
     resendInvitation: async (employeeId: string, invitationId: string) => {
       try {
@@ -231,35 +189,23 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
         flash('No link: ' + errText(err), 7000);
       }
     },
-    withdrawInvitation: async (employeeId: string, invitationId: string) => {
+    /**
+     * Withdraws the pending invitation; true when it went. The person leaves the Org structure with
+     * it (CD-226: a record made by the invitation is deleted, others are no longer shown), so the
+     * card goes from the cache and the directory is read again.
+     */
+    withdrawInvitation: async (employeeId: string, invitationId: string): Promise<boolean> => {
       try {
         await crmApi.revokeInvitation(invitationId);
         flash('Invitation withdrawn');
-        await load(employeeId);
+        drop(employeeId);
+        refreshPeople();
         void refreshTeam();
+        return true;
       } catch (err) {
         flash('Not withdrawn: ' + errText(err), 7000);
+        return false;
       }
-    },
-
-    /** "Link to member" (spec 4.6): members and whether their own record can be merged. */
-    linkCandidates: async (id: string): Promise<ApiLinkCandidate[] | null> => {
-      try {
-        return await peopleCardApi.linkCandidates(id);
-      } catch (err) {
-        flash('Members not loaded: ' + errText(err), 6000);
-        return null;
-      }
-    },
-    link: async (id: string, userId: string) => {
-      const result = await act(id, () => peopleCardApi.link(id, userId), 'Not linked');
-      if ('card' in result) void refreshTeam();
-      return result;
-    },
-    unlink: async (id: string) => {
-      const result = await act(id, () => peopleCardApi.unlink(id), 'Not unlinked');
-      if ('card' in result) void refreshTeam();
-      return result;
     },
 
     /** Deactivate (spec 4.8): now, or "Leaving on <date>" until the daily job applies it. */

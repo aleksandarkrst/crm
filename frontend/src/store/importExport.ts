@@ -1,13 +1,12 @@
 /**
  * CSV import (CD-64), next to the store: preview, commit and the template come from the API. For
- * owners and admins (the API returns 403 to members; the buttons are hidden for them). Employees
- * (CD-141) use the same calls on /api/people/import, for Admins.
+ * owners and admins (the API returns 403 to members; the buttons are hidden for them).
  */
 import { api, authorizedFetch } from '../lib/api';
 import { type CsvColumn, toCsv } from '../lib/csv';
 import type { Funnel, State } from './types';
 
-export type ImportType = 'companies' | 'contacts' | 'deals' | 'products' | 'employees';
+export type ImportType = 'companies' | 'contacts' | 'deals' | 'products';
 export type DuplicateMode = 'skip' | 'update';
 export type Mapping = Record<string, number | null>;
 
@@ -15,7 +14,7 @@ export interface ImportField {
   key: string;
   label: string;
   required: boolean;
-  /** Another field that can stand in for this required one (employees: Full name). */
+  /** Another field that can stand in for this required one. */
   alternative?: string;
   hint?: string;
 }
@@ -36,19 +35,9 @@ export interface ImportPreview {
     invalid: number;
     newCompanies?: number;
     newContacts?: number;
-    /** Employees: rows imported with warnings, new departments and teams, new employees with a work email. */
-    warnings?: number;
-    newDepartments?: number;
-    newTeams?: number;
-    invitations?: number;
   };
-  rows: { line: number; values: Record<string, string>; status: RowStatus; messages: string[]; notes: string[]; warnings?: string[] }[];
+  rows: { line: number; values: Record<string, string>; status: RowStatus; messages: string[]; notes: string[] }[];
   problems: { line: number; messages: string[] }[];
-  /** Employees: names of the departments and teams ("Sales / Field") the import creates. */
-  newDepartments?: string[];
-  newTeams?: string[];
-  /** Employees: the caller may invite (Admins). */
-  canInvite?: boolean;
 }
 export interface ImportResult {
   type: ImportType;
@@ -58,11 +47,6 @@ export interface ImportResult {
   failed: number;
   newCompanies?: number;
   newContacts?: number;
-  /** Employees (CD-141). */
-  newDepartments?: string[];
-  newTeams?: string[];
-  invitationsQueued?: number;
-  withoutManager?: { line: number; reason: string }[];
   headers: string[];
   failures: { line: number; reason: string; cells: string[] }[];
   skippedRows: { line: number; reason: string }[];
@@ -72,16 +56,13 @@ export interface ImportRequest {
   mapping?: Mapping;
   duplicates: DuplicateMode;
   funnelId?: string;
-  /** Employees, Admins only: invite the new employees with a work email. */
-  invite?: boolean;
 }
 
 /** The same limits as the API, checked before uploading. */
 export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 export const MAX_IMPORT_ROWS = 5000;
 
-/** Where each type's import lives: CRM types under /crm/import/:type, employees under /people/import. */
-const base = (type: ImportType) => (type === 'employees' ? '/people/import' : `/crm/import/${type}`);
+const base = (type: ImportType) => `/crm/import/${type}`;
 
 export const importApi = {
   preview: (type: ImportType, req: ImportRequest) => api<ImportPreview>(`${base(type)}/preview`, { method: 'POST', json: req }),
