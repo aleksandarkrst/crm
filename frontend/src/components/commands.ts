@@ -1,6 +1,7 @@
 import { useMatch, useNavigate } from 'react-router-dom';
 import { paths } from '../lib/paths';
 import { useStore } from '../store/store';
+import { DEFAULT_MODULE, navFor } from './modules';
 
 /**
  * What the "+" menu and the command palette can do (CD-80). One list, so both offer the same
@@ -34,12 +35,14 @@ export const ICONS = {
   bell: 'M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9zM10 19.5a2 2 0 0 0 4 0',
   logout: 'M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11',
   calendar: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
+  org: 'M9.5 3.5h5v4h-5zM3.5 16.5h5v4h-5zM15.5 16.5h5v4h-5zM12 7.5v4.5M6 16.5v-2.5h12v2.5',
+  reports: 'M5 20V10M10 20V4M15 20v-7M20 20v-4M3 20h18',
   visitPlan: 'M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11ZM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z',
 } as const;
 export type IconPath = keyof typeof ICONS;
 
 export function useCommands(): Command[] {
-  const { s, set, addCompany, meetings } = useStore();
+  const { s, set, addCompany, meetings, session } = useStore();
   const navigate = useNavigate();
   // On a deal's screen, a new task or contact starts out linked to that deal.
   const dealId = useMatch('/deals/:id')?.params.id;
@@ -68,9 +71,14 @@ export function useCommands(): Command[] {
     { id: 'go-companies', group: 'Go to', label: 'Companies', hint: 'Every company', icon: 'company', keywords: 'organizations', run: go(paths.companies) },
     { id: 'go-contacts', group: 'Go to', label: 'Contacts', hint: 'Every person', icon: 'contact', keywords: 'people persons', run: go(paths.contacts) },
     { id: 'go-products', group: 'Go to', label: 'Products', hint: 'The catalog', icon: 'product', keywords: 'services catalog prices', run: go(paths.products) },
+    // The role-gated page and the other modules' pages (CD-223): the sidebar shows one module at a time.
+    ...(navFor(DEFAULT_MODULE, session.tenant.role, s.visitScope.seesTeam).some((n) => n.to === paths.reports())
+      ? [{ id: 'go-reports', group: 'Go to' as const, label: 'Reports', hint: 'Visit-plan completion', icon: 'reports' as const, keywords: 'report visits completion targets', run: go(paths.reports()) }]
+      : []),
+    { id: 'go-org', group: 'Go to', label: 'Org structure', hint: 'Workforce · people and teams', icon: 'org', keywords: 'workforce people employees departments teams chart', run: go(paths.org()) },
   ];
   const settings: Command[] = [
-    { id: 'go-profile', group: 'Settings', label: 'Personal preferences', hint: 'Your profile', icon: 'profile', keywords: 'profile account language date format', run: go(paths.profile) },
+    { id: 'go-profile', group: 'Settings', label: 'Personal preferences', hint: 'Your profile', icon: 'profile', keywords: 'profile account start page', run: go(paths.profile) },
     { id: 'go-workspace', group: 'Settings', label: 'Workspace settings', hint: 'Name, currency, time zone', icon: 'settings', keywords: 'currency time zone fiscal year', run: go(paths.settings()) },
     { id: 'go-team', group: 'Settings', label: 'Team', hint: 'Members and invitations', icon: 'team', keywords: 'users invite members roles', run: go(paths.settings('team')) },
     { id: 'go-notifications', group: 'Settings', label: 'Notifications', hint: 'Emails you get', icon: 'bell', keywords: 'email digest', run: go(paths.settings('notifications')) },

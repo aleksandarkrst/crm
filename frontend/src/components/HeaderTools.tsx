@@ -128,7 +128,7 @@ function NavButton({ to, label, onDone }: { to: string; label: string; onDone: (
   );
 }
 
-/** Your avatar: personal preferences, workspace settings, team, and signing out. */
+/** Your avatar: personal preferences, workspace settings (Team is a tab there, CD-223), and signing out. */
 function AccountMenu() {
   const { s, session, canEditWorkspace } = useStore();
   const pop = usePopover();
@@ -146,7 +146,6 @@ function AccountMenu() {
           <div className="menu-divider" />
           <div className="caps-muted menu-label">Workspace · {session.tenant.name}</div>
           <NavButton to={paths.settings()} label={canEditWorkspace ? 'Workspace settings' : 'Settings'} onDone={close} />
-          <NavButton to={paths.settings('team')} label="Team" onDone={close} />
           <div className="menu-divider" />
           <button
             type="button"

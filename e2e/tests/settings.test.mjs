@@ -72,13 +72,14 @@ describe('settings and discovery fields', () => {
     assert.equal(await page.$$eval('input[type=password]', (els) => els.length), 0, 'no password fields');
     assert.ok(!/current password|update password/i.test(body), 'no password section');
     assert.ok(!body.includes('Save changes'), 'no fake save button');
+    // Language and date format aren't applied yet, so they aren't offered (CD-223).
+    assert.ok(!body.includes('Date format'), 'no date format');
+    assert.equal(await page.$$eval('span', (els) => els.filter((el) => el.textContent.trim() === 'Language').length), 0, 'no language');
     const funnels = await api(page, '/crm/funnels');
     const ent = funnels.find((f) => f.key === 'ent');
     assert.ok(await setByLabel(page, 'Full name', 'Olga Renamed'));
     assert.ok(await setByLabel(page, 'Job title', 'Head of sales'));
     assert.ok(await setByLabel(page, 'Phone', '+381 60 123 456'));
-    assert.ok(await setByLabel(page, 'Language', 'de', 'select'));
-    assert.ok(await setByLabel(page, 'Date format', 'YYYY-MM-DD', 'select'));
     assert.ok(await setByLabel(page, 'Start page', 'today', 'select'));
     assert.ok(await setByLabel(page, 'Default funnel', ent.id, 'select'));
     await page.click('.switch');
@@ -88,8 +89,6 @@ describe('settings and discovery fields', () => {
         p.displayName === 'Olga Renamed' &&
         p.jobTitle === 'Head of sales' &&
         p.phone === '+381 60 123 456' &&
-        p.language === 'de' &&
-        p.dateFormat === 'YYYY-MM-DD' &&
         p.startPage === 'today' &&
         p.defaultFunnelId === ent.id &&
         p.dailyDigest === false &&
@@ -105,8 +104,6 @@ describe('settings and discovery fields', () => {
     assert.equal(await valueByLabel(page, 'Full name'), 'Olga Renamed');
     assert.equal(await valueByLabel(page, 'Job title'), 'Head of sales');
     assert.equal(await valueByLabel(page, 'Phone'), '+381 60 123 456');
-    assert.equal(await valueByLabel(page, 'Language', 'select'), 'de');
-    assert.equal(await valueByLabel(page, 'Date format', 'select'), 'YYYY-MM-DD');
     assert.equal(await valueByLabel(page, 'Start page', 'select'), 'today');
     assert.equal(await page.$eval('.switch', (el) => el.classList.contains('on')), false);
   });

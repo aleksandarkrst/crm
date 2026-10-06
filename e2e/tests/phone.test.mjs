@@ -1,5 +1,5 @@
 // Tablets and phones (CD-70): no sideways page scroll at 390×844 or 768×1024, navigation stays
-// reachable (bottom bar and "More"), a deal's to-do can be ticked, and a contact can be called or
+// reachable (bottom bar with Calendar, CD-223, and "More"), a deal's to-do can be ticked, and a contact can be called or
 // emailed with one tap.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
@@ -49,10 +49,16 @@ describe('phones and tablets', () => {
       return { bottom: Math.round(r.bottom), width: Math.round(r.width) };
     });
     assert.deepEqual(bar, { bottom: 844, width: 390 });
+    // The CRM's everyday pages, Calendar included (CD-223), and "More".
+    const inBar = await page.$$eval('.app-sidebar nav .nav-item', (els) => els.filter((el) => el.getClientRects().length > 0).map((el) => el.querySelector('.nav-label').textContent));
+    assert.deepEqual(inBar, ['Pipeline', 'Today', 'Calendar', 'Companies']);
+    await click(page, '.app-sidebar a[href="/calendar"]');
+    await page.waitForFunction(() => location.pathname === '/calendar');
     await click(page, '.app-sidebar a[href="/today"]');
     await page.waitForFunction(() => location.pathname === '/today');
     for (const [label, path] of [
       ['Overview', '/overview'],
+      ['Contacts', '/contacts'],
       ['Products', '/products'],
       ['Settings', '/settings'],
     ]) {

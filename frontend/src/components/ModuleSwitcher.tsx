@@ -14,9 +14,9 @@ const initial = (name: string) => name.trim().charAt(0).toUpperCase() || '?';
 const members = (t: ApiTenant) => (t.memberCount === undefined ? null : `${t.memberCount} ${t.memberCount === 1 ? 'member' : 'members'}`);
 
 /**
- * The module and workspace switcher (CD-214), opened from the Pultly mark at the top of the
- * sidebar, with ⌘J / Ctrl J, or from "More" on phones (a bottom sheet there). Modules first: the
- * current one (from the route) is marked, locked ones can't be picked. With 2+ workspaces a row
+ * The module and workspace switcher (CD-214), opened from the button under the Pultly mark (it
+ * shows the module you're in, CD-223), with ⌘J / Ctrl J, or from "More" on phones (a bottom sheet
+ * there). Modules first: the current one is marked, locked ones can't be picked. With 2+ workspaces a row
  * above them shows the workspace and opens the list; with one, its name next to "Modules" does.
  * Switching reuses the session's `switchTenant`, which loads the other workspace from scratch.
  * Arrow keys move between items; Escape, an outside click or a pick closes it.
@@ -31,7 +31,7 @@ export function ModuleSwitcher({ onClose, trigger }: { onClose: () => void; trig
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const ref = useRef<HTMLDivElement>(null);
-  const current = currentModule(pathname);
+  const current = currentModule(pathname, session.userId);
   const tenants = [...session.tenants].sort((a, b) => a.name.localeCompare(b.name));
   const several = tenants.length > 1;
 
