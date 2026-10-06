@@ -859,6 +859,12 @@ increasing per row, and the same moment as the history rows of that change.
 The UI is a port of the Claude Design "Mini CRM v2" prototype. Screens read from `useStore()` only;
 the store is the one place that talks to the backend.
 
+- Screens are code split (`lazy` in `App.tsx`). A tab opened before a deploy still asks for the old
+  chunk file names, which the new build doesn't have (CD-220). `lib/chunks.ts` (`loadChunk`) then
+  reloads the page once, at most once a minute per tab, so the new version loads. Anything still
+  failing reaches `ScreenErrorBoundary`, which shows "A new version of Pultly is available" (or
+  "This page could not be shown") with **Reload**, instead of a blank page.
+
 - `components/SessionGate.tsx`: sign-in (dev login or OIDC), picking or creating a workspace, and
   loading it. The store is created per workspace.
 - `store/remote.ts`: loads funnels, deals, deal lines, stage to-dos, companies, contacts,
