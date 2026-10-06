@@ -8,7 +8,7 @@ import { useStore } from '../../store/store';
 import { todayIso } from './parts';
 
 /**
- * "Add employee" on the Org structure page (Administration and Admin, spec 4.2): the required
+ * "Add employee" on the Org structure page (Admins, spec 4.2): the required
  * fields and a few common ones; the rest is filled in on the card, which opens after saving.
  */
 export function AddEmployeeDialog({ onClose }: { onClose: () => void }) {

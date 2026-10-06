@@ -1,15 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useBlocker, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Screen } from '../components/Layout';
-import type { ApiEmployeeCard } from '../lib/api';
+import type { ApiEmployeeCard, EmployeeField } from '../lib/api';
 import { paths } from '../lib/paths';
+import { changedFields, type Draft, draftValues } from '../store/cardDraft';
 import { ROLE_LABEL } from '../store/employeeCard';
 import { initialsOf } from '../store/selectors';
 import { useStore } from '../store/store';
 import { useEmployeeCard } from '../store/useEmployeeCard';
 import { DeactivateDialog, InviteDialog, LinkDialog, ReactivateDialog } from './employee/dialogs';
-import { dateLabel } from './employee/parts';
-import { AppAccessSection, BankSection, HistorySection, PersonalSection, ReportingSection, RolesSection, WorkSection } from './employee/sections';
+import { CardEditContext, dateLabel } from './employee/parts';
+import { BankSection, cardInitial, cardPatch, PersonalSection, ReportingSection, WorkSection } from './employee/sections';
 
 /** The Org structure page (CD-137). */
 const ORG = paths.org();
@@ -17,11 +18,16 @@ const ORG = paths.org();
 type Dialog = 'invite' | 'link' | 'deactivate' | 'reactivate' | null;
 
 /**
- * The employee card (CD-140, spec 4.5): `/people/:id`. Header with status, account and roles and
- * the actions the caller may take; sections Work, Reporting, Personal details and Bank account
- * (only for people allowed to see them), App access, Roles and History. Each section edits in
- * place. `?deactivate=1` opens the Deactivate dialog (Settings → Team, "also left the company").
- * On phones the sections stack and the header's buttons move into its menu.
+ * The employee card (CD-140, spec 4.5; CD-225): `/people/:id`. Header with status, account and
+ * roles, one Save and a "⋯" menu with the actions the caller may take; sections Work, Reporting,
+ * Personal details and Bank account (only for people allowed to see them). Every field the caller
+ * may change is an input; Save sends what changed (highlighted when there is something to save),
+ * and leaving with unsaved changes asks "Discard your changes?". `?deactivate=1` opens the
+ * Deactivate dialog (Settings → Team, "also left the company"). On phones the sections stack.
+ *
+ * Not shown since CD-225: App access (its actions are in the menu; the sign-in email and workspace
+ * role are in Settings → Team), History (the API stays, sections.tsx) and Roles (Administration and
+ * Payroll were removed).
  */
 export function EmployeeCard() {
   const { id = '' } = useParams();
@@ -50,27 +56,94 @@ export function EmployeeCard() {
 
   return (
     <Screen title="Employee" parent={{ label: 'Org structure', to: ORG }}>
-      <div className="emp-page" data-testid="employee-card">
-        <CardHeader card={card} open={setDialog} />
-        <div className="emp-grid">
-          <div className="emp-col">
-            <WorkSection card={card} />
-            <ReportingSection card={card} />
-            <RolesSection card={card} />
-          </div>
-          <div className="emp-col">
-            {card.personal && <PersonalSection card={card} />}
-            {card.bank && <BankSection card={card} />}
-            <AppAccessSection card={card} onInvite={() => setDialog('invite')} onLink={() => setDialog('link')} />
-            {card.permissions.canSeeHistory && <HistorySection card={card} />}
-          </div>
-        </div>
-      </div>
+      <CardBody key={card.id} card={card} open={setDialog} />
       {dialog === 'invite' && <InviteDialog card={card} onClose={() => setDialog(null)} onLinkInstead={() => setDialog('link')} />}
       {dialog === 'link' && <LinkDialog card={card} onClose={() => setDialog(null)} />}
       {dialog === 'deactivate' && <DeactivateDialog card={card} onClose={() => setDialog(null)} />}
       {dialog === 'reactivate' && <ReactivateDialog card={card} onClose={() => setDialog(null)} />}
     </Screen>
+  );
+}
+
+const DISCARD = 'Discard your changes?';
+
+/** The card's one draft and Save (CD-225), the header and the sections. */
+function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => void }) {
+  const { s, employeeCard, flash } = useStore();
+  const initial = useMemo(() => cardInitial(card), [card]);
+  const editable = useMemo(() => new Set<string>(card.permissions.editableFields), [card.permissions.editableFields]);
+  const [edits, setEdits] = useState<Draft>({});
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<{ text: string; conflict: boolean } | null>(null);
+  const changed = changedFields(initial, edits, editable);
+  const dirty = Object.keys(changed).length > 0;
+
+  const setField = useCallback((key: string, value: string | boolean) => setEdits((e) => ({ ...e, [key]: value })), []);
+  const can = useCallback((f: EmployeeField) => editable.has(f), [editable]);
+  const edit = useMemo(() => ({ values: draftValues(initial, edits), setField, can }), [initial, edits, setField, can]);
+
+  const save = async () => {
+    const patch = cardPatch(changed, s.peoplePickers);
+    if (typeof patch === 'string') return setProblem({ text: patch, conflict: false });
+    setBusy(true);
+    setProblem(null);
+    const result = await employeeCard.save(card.id, patch);
+    setBusy(false);
+    if ('cancelled' in result) return;
+    if ('error' in result) return setProblem({ text: result.error, conflict: !!result.conflict });
+    setEdits({});
+    flash('Saved');
+  };
+  /** After a conflict: the card as it is now, without what was typed. */
+  const reload = () => {
+    setEdits({});
+    setProblem(null);
+    void employeeCard.load(card.id).catch(() => undefined);
+  };
+
+  // Leaving with unsaved changes asks first: another page of the app, or closing / reloading the tab.
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname);
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return;
+    if (window.confirm(DISCARD)) blocker.proceed();
+    else blocker.reset();
+  }, [blocker]);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+
+  return (
+    <CardEditContext.Provider value={edit}>
+      <div className="emp-page" data-testid="employee-card">
+        <CardHeader card={card} open={open} canSave={editable.size > 0} dirty={dirty} busy={busy} onSave={() => void save()} />
+        {problem && (
+          <div className="card card-pad emp-error emp-save-problem" role="alert" data-testid="emp-save-problem">
+            <span>{problem.text}</span>
+            {problem.conflict && (
+              <button type="button" className="btn btn-secondary" onClick={reload}>
+                Reload
+              </button>
+            )}
+          </div>
+        )}
+        <div className="emp-grid">
+          <div className="emp-col">
+            <WorkSection card={card} />
+            <ReportingSection card={card} />
+          </div>
+          <div className="emp-col">
+            {card.personal && <PersonalSection card={card} />}
+            {card.bank && <BankSection card={card} />}
+          </div>
+        </div>
+      </div>
+    </CardEditContext.Provider>
   );
 }
 
@@ -82,8 +155,11 @@ function statusBadge(card: ApiEmployeeCard): { label: string; className: string 
 
 const ACCOUNT_LABEL: Record<ApiEmployeeCard['account'], string> = { linked: 'Has account', invited: 'Invited', none: 'No account' };
 
-/** Name, job, badges and the actions; on phones every action is in the "⋯" menu. */
-function CardHeader({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => void }) {
+/**
+ * Name, job, badges, Save and the "⋯" menu (CD-225): Invite to Pultly and the pending invitation,
+ * Link to member and Unlink, Deactivate, Reactivate or Cancel leaving, and Delete once deactivated.
+ */
+function CardHeader({ card, open, canSave, dirty, busy, onSave }: { card: ApiEmployeeCard; open: (d: Dialog) => void; canSave: boolean; dirty: boolean; busy: boolean; onSave: () => void }) {
   const { employeeCard } = useStore();
   const navigate = useNavigate();
   const [menu, setMenu] = useState(false);
@@ -96,24 +172,29 @@ function CardHeader({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) =
   }, [menu]);
   const p = card.permissions;
   const status = statusBadge(card);
+  const invitation = card.appAccess?.invitation ?? null;
   const remove = async () => {
-    if (!window.confirm(`Delete ${card.fullName}? This is for records made by mistake; it can't be undone.`)) return;
+    if (!window.confirm(`Delete ${card.fullName}? Their record goes for good; history shows them as a deleted employee.`)) return;
     if (await employeeCard.remove(card.id)) navigate(ORG);
   };
-  const deleteInstead = () => {
-    window.alert(`${card.fullName} has or had an app account, so the record can't be deleted. Deactivate instead.`);
-    if (p.canDeactivate) open('deactivate');
+  const unlink = async () => {
+    if (!window.confirm(`Unlink ${card.fullName}'s account? The record stays, with "No account"; the member gets a new record of their own.`)) return;
+    await employeeCard.unlink(card.id);
   };
 
-  // [label, action, shown in the wide header too]
-  const actions: [string, () => void, boolean][] = [];
-  if (p.canInvite && card.account === 'none') actions.push(['Invite to Pultly', () => (card.workEmail ? open('invite') : window.alert('Add a work email first: the invitation goes there.')), true]);
-  if (p.canDeactivate && card.status !== 'leaving') actions.push(['Deactivate', () => open('deactivate'), true]);
-  if (p.canReactivate) actions.push([card.status === 'inactive' ? 'Reactivate' : 'Cancel leaving', () => open('reactivate'), true]);
-  if (p.canLink) actions.push(['Link to member', () => open('link'), false]);
-  // Admins (who see App access) always find Delete; a record that had an account says "Deactivate instead".
-  if (p.canDelete) actions.push(['Delete', () => void remove(), false]);
-  else if (card.appAccess) actions.push(['Delete', deleteInstead, false]);
+  const actions: [string, () => void][] = [];
+  if (p.canInvite && card.account === 'none') actions.push(['Invite to Pultly', () => (card.workEmail ? open('invite') : window.alert('Add a work email first: the invitation goes there.'))]);
+  if (invitation?.hasLink) {
+    actions.push(['Resend invitation', () => void employeeCard.resendInvitation(card.id, invitation.id)]);
+    actions.push(['Copy invite link', () => void employeeCard.copyInvitationLink(invitation.id)]);
+  }
+  if (invitation) actions.push(['Withdraw invitation', () => void employeeCard.withdrawInvitation(card.id, invitation.id)]);
+  if (p.canLink) actions.push(['Link to member', () => open('link')]);
+  if (p.canUnlink) actions.push(['Unlink account', () => void unlink()]);
+  if (p.canDeactivate && card.status !== 'leaving') actions.push(['Deactivate', () => open('deactivate')]);
+  if (p.canReactivate) actions.push([card.status === 'inactive' ? 'Reactivate' : 'Cancel leaving', () => open('reactivate')]);
+  // Only once deactivated (CD-225), then for anyone, former app users included.
+  if (p.canDelete) actions.push(['Delete', () => void remove()]);
 
   return (
     <div className="card emp-header" data-testid="emp-header">
@@ -140,38 +221,38 @@ function CardHeader({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) =
               ))}
           </span>
         </div>
-        {actions.length > 0 && (
+        {(canSave || actions.length > 0) && (
           <div className="emp-header-actions">
-            {actions
-              .filter(([, , wide]) => wide)
-              .map(([label, run]) => (
-                <button key={label} type="button" className={label === 'Deactivate' ? 'btn btn-secondary emp-wide' : 'btn btn-primary emp-wide'} onClick={run}>
-                  {label}
-                </button>
-              ))}
-            <div ref={menuRef} style={{ position: 'relative' }} className={actions.some(([, , wide]) => !wide) ? undefined : 'emp-narrow'}>
-              <button type="button" className="btn btn-secondary" aria-label="More actions" aria-expanded={menu} data-testid="emp-menu" onClick={() => setMenu((m) => !m)} style={{ padding: '10px 12px' }}>
-                ⋯
+            {canSave && (
+              <button type="button" className={dirty && !busy ? 'btn btn-primary' : 'btn btn-disabled'} disabled={!dirty || busy} data-testid="emp-save" data-dirty={dirty || undefined} onClick={onSave}>
+                {busy ? 'Saving' : 'Save'}
               </button>
-              {menu && (
-                <div className="deal-menu emp-menu" role="menu">
-                  {actions.map(([label, run, wide]) => (
-                    <button
-                      key={label}
-                      type="button"
-                      role="menuitem"
-                      className={wide ? 'emp-narrow' : undefined}
-                      onClick={() => {
-                        setMenu(false);
-                        run();
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
+            {actions.length > 0 && (
+              <div ref={menuRef} style={{ position: 'relative' }}>
+                <button type="button" className="btn btn-secondary" aria-label="More actions" aria-expanded={menu} data-testid="emp-menu" onClick={() => setMenu((m) => !m)} style={{ padding: '10px 12px' }}>
+                  ⋯
+                </button>
+                {menu && (
+                  <div className="deal-menu emp-menu" role="menu">
+                    {actions.map(([label, run]) => (
+                      <button
+                        key={label}
+                        type="button"
+                        role="menuitem"
+                        className={label === 'Delete' ? 'emp-menu-danger' : undefined}
+                        onClick={() => {
+                          setMenu(false);
+                          run();
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

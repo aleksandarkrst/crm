@@ -14,11 +14,13 @@
  * directory again (a rename or a new manager changes other rows' names too), after a short pause.
  */
 import { type ApiDataIssue, type ApiDepartment, type ApiEmployee, type ApiEmployeePersonalExport, type ApiEmployeeStatus, type ApiAccountState, type ApiPeopleAccess, type ApiTeam, type BulkEmployeesInput, peopleApi } from '../lib/api';
+import { withHeadConfirm } from '../lib/headMoves';
 import type { LiveEvent } from './live';
+import { collator } from './orgChart';
 import type { State } from './types';
 
 export interface PeopleState {
-  /** The directory as the API shows this caller: active and leaving, plus inactive for Administration and Admin. */
+  /** The directory as the API shows this caller: active and leaving, plus inactive for Admins. */
   employees: ApiEmployee[];
   departments: ApiDepartment[];
   teams: ApiTeam[];
@@ -36,8 +38,8 @@ export const PEOPLE_HINTS = new Set(['employee', 'department', 'team', 'employee
 // ---------------------------------------------------------------- who the caller is
 
 export const isAdminOf = (a: ApiPeopleAccess | null) => !!a?.roles.includes('admin');
-/** Administration or Admin: manages employees, sees inactive ones, data issues, bulk actions, export. */
-export const isHrOf = (a: ApiPeopleAccess | null) => !!a && (a.roles.includes('admin') || a.roles.includes('administration'));
+/** HR work (manages employees, sees inactive ones, data issues, bulk actions, export): Admins only since CD-225. */
+export const isHrOf = (a: ApiPeopleAccess | null) => isAdminOf(a);
 export const isManagerOf = (a: ApiPeopleAccess | null) => !!a?.roles.includes('manager');
 
 // ---------------------------------------------------------------- search
@@ -119,7 +121,7 @@ export const ISSUE_LABEL: Record<ApiDataIssue, string> = {
   no_employee_number: 'Employee number missing',
 };
 export const EMPLOYMENT_TYPE_LABEL: Record<string, string> = { permanent: 'Permanent', fixed_term: 'Fixed term', contractor: 'Contractor', student: 'Student' };
-export const ROLE_LABEL: Record<string, string> = { employee: 'Employee', manager: 'Manager', administration: 'Administration', payroll: 'Payroll', admin: 'Admin' };
+export const ROLE_LABEL: Record<string, string> = { employee: 'Employee', manager: 'Manager', admin: 'Admin' };
 
 const list = <T extends string>(v: string | null, allowed: readonly T[]): T[] => (v ?? '').split(',').filter((x): x is T => (allowed as readonly string[]).includes(x));
 const ids = (v: string | null) => (v ?? '').split(',').filter((x) => /^[0-9a-f-]{36}$/i.test(x));
@@ -194,7 +196,6 @@ export function filterEmployees(employees: readonly ApiEmployee[], f: PeopleFilt
 // ---------------------------------------------------------------- sorting (the list)
 
 export type SortKey = 'name' | 'jobTitle' | 'department' | 'team' | 'manager' | 'workEmail' | 'workPhone' | 'startDate' | 'type' | 'status' | 'account';
-const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
 const sortValue = (e: ApiEmployee, key: SortKey): string => {
   switch (key) {
     case 'name':
@@ -233,101 +234,7 @@ export function sortEmployees(employees: readonly ApiEmployee[], key: SortKey, d
 
 // ---------------------------------------------------------------- the charts (spec 5.3)
 
-export interface TeamBlock {
-  team: ApiTeam | null;
-  /** The lead first (when they are in the list), then members by name. */
-  people: ApiEmployee[];
-  leadId: string | null;
-}
-export interface DepartmentBlock {
-  department: ApiDepartment | null;
-  head: ApiEmployee | null;
-  teams: TeamBlock[];
-  /** People of the department in the blocks (the head is shown at the top, and in their team too). */
-  count: number;
-}
-
-const byName = (a: ApiEmployee, b: ApiEmployee) => collator.compare(a.lastName, b.lastName) || collator.compare(a.firstName, b.firstName);
-
-/**
- * "By department": one block per department by name (head on top), a box per team (lead first,
- * then members by name), "No team" for the department's people without one, and a last block
- * "No department". `people` is who to show; with `all`, empty departments and teams show too.
- */
-export function departmentChart(people: readonly ApiEmployee[], everyone: readonly ApiEmployee[], departments: readonly ApiDepartment[], teams: readonly ApiTeam[], all: boolean): DepartmentBlock[] {
-  const byId = new Map(everyone.map((e) => [e.id, e]));
-  const byDept = new Map<string | null, ApiEmployee[]>();
-  for (const e of people) {
-    const key = e.departmentId && departments.some((d) => d.id === e.departmentId) ? e.departmentId : null;
-    const at = byDept.get(key);
-    if (at) at.push(e);
-    else byDept.set(key, [e]);
-  }
-  const blocks: DepartmentBlock[] = [];
-  const sortedDepartments = [...departments].sort((a, b) => collator.compare(a.name, b.name));
-  for (const d of [...sortedDepartments, null]) {
-    const members = byDept.get(d?.id ?? null) ?? [];
-    if (!members.length && (!all || !d)) continue;
-    const ownTeams = d ? teams.filter((t) => t.departmentId === d.id).sort((a, b) => collator.compare(a.name, b.name)) : [];
-    const byTeam = new Map<string | null, ApiEmployee[]>();
-    for (const e of members) {
-      const key = e.teamId && ownTeams.some((t) => t.id === e.teamId) ? e.teamId : null;
-      const at = byTeam.get(key);
-      if (at) at.push(e);
-      else byTeam.set(key, [e]);
-    }
-    const boxes: TeamBlock[] = [];
-    for (const t of ownTeams) {
-      const inTeam = (byTeam.get(t.id) ?? []).sort(byName);
-      if (!inTeam.length && !all) continue;
-      const leadAt = inTeam.findIndex((e) => e.id === t.leadEmployeeId);
-      const ordered = leadAt > 0 ? [inTeam[leadAt]!, ...inTeam.slice(0, leadAt), ...inTeam.slice(leadAt + 1)] : inTeam;
-      boxes.push({ team: t, people: ordered, leadId: t.leadEmployeeId });
-    }
-    const noTeam = (byTeam.get(null) ?? []).sort(byName);
-    if (noTeam.length) boxes.push({ team: null, people: noTeam, leadId: null });
-    const head = d?.headEmployeeId ? (byId.get(d.headEmployeeId) ?? null) : null;
-    blocks.push({ department: d, head: head && head.status !== 'inactive' ? head : null, teams: boxes, count: members.length });
-  }
-  return blocks;
-}
-
-export interface TreeNode {
-  employee: ApiEmployee;
-  depth: number;
-  children: TreeNode[];
-  /** Everyone below, at any depth. */
-  size: number;
-}
-
-/**
- * "Reporting lines": a tree from "reports to". Roots are people without a manager (or whose
- * manager isn't shown, e.g. inactive); several roots stand side by side, the biggest first.
- * Children by name. Built from `people` (inactive people never appear).
- */
-export function reportingTree(people: readonly ApiEmployee[]): TreeNode[] {
-  const shown = new Map(people.map((e) => [e.id, e]));
-  const children = new Map<string, ApiEmployee[]>();
-  const roots: ApiEmployee[] = [];
-  for (const e of people) {
-    if (e.managerId && shown.has(e.managerId) && e.managerId !== e.id) {
-      const at = children.get(e.managerId);
-      if (at) at.push(e);
-      else children.set(e.managerId, [e]);
-    } else roots.push(e);
-  }
-  const seen = new Set<string>();
-  const build = (e: ApiEmployee, depth: number): TreeNode => {
-    seen.add(e.id);
-    const kids = (children.get(e.id) ?? []).filter((c) => !seen.has(c.id)).sort(byName);
-    const nodes = kids.map((c) => build(c, depth + 1));
-    return { employee: e, depth, children: nodes, size: nodes.reduce((n, c) => n + 1 + c.size, 0) };
-  };
-  const trees = roots.sort(byName).map((r) => build(r, 0));
-  // A loop the database forbids can't occur, but never lose anyone: what's left becomes a root.
-  for (const e of people) if (!seen.has(e.id)) trees.push(build(e, 0));
-  return trees.sort((a, b) => b.size - a.size || byName(a.employee, b.employee));
-}
+export { departmentChart, type DepartmentBlock, reportingTree, type TeamBlock, type TreeNode } from './orgChart';
 
 /** The ids of every ancestor of the matching people (to expand the path to them). */
 export function pathsTo(people: readonly ApiEmployee[], matches: ReadonlySet<string>): Set<string> {
@@ -413,11 +320,14 @@ export function peopleActions(ctx: Ctx) {
 
   /**
    * "Set department and team" / "Set manager" for the ticked rows (spec 5.4), and a drop on the
-   * chart (spec 6.3). All or nothing on the server. Returns an error message, or null when saved.
+   * chart (spec 6.3). All or nothing on the server. Moving a department head or team lead elsewhere
+   * asks first (CD-225). Returns an error message, or null when saved (or not confirmed).
    */
   const bulkUpdate = async (input: BulkEmployeesInput, done: string): Promise<string | null> => {
     try {
-      const { updated } = await peopleApi.bulkUpdate(input);
+      const saved = await withHeadConfirm((clear) => peopleApi.bulkUpdate(clear ? { ...input, clearHeadRoles: true } : input));
+      if (!saved) return null;
+      const { updated } = saved;
       await load();
       flash(updated === 0 ? 'Nothing to change: they already have these values' : done.replace('{n}', updated === 1 ? '1 employee' : `${updated} employees`));
       return null;

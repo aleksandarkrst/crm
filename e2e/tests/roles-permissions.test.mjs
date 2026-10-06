@@ -1,8 +1,8 @@
 // Roles and permissions (CD-142) and employee settings (CD-215): the owner sees the workspace roles
-// (the functional matrix and "Who has which role" are hidden since CD-224) and invites someone with
-// Administration from the Team tab, which they have once they join; Settings → Employees saves its three settings and is for Admins only; "Org changes"
-// is a notification toggle; a manager makes visit plans only for their direct report and sees
-// Reports, a member neither.
+// (the functional matrix and "Who has which role" went with Administration and Payroll, CD-225) and
+// invites someone from the Team tab without functional roles to tick; Settings → Employees saves
+// its three settings and is for Admins only; "Org changes" is a notification toggle; a manager
+// makes visit plans only for their direct report and sees Reports, a member neither.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
 import { api, BASE_URL, click, clickButton, createWorkspace, email, eventually, finishOnboarding, setValue, signIn, steps, text, useBrowser } from '../lib/harness.mjs';
@@ -36,41 +36,39 @@ describe('roles and permissions', () => {
     await api(olga, `/people/employees/${ids.mia}`, { method: 'PATCH', body: JSON.stringify({ managerId: ids.max }) });
   });
 
-  step('the owner sees the workspace roles; the functional matrix and "Who has which role" are hidden (CD-224)', async () => {
+  step('the owner sees the workspace roles; no functional matrix or "Who has which role" (CD-225)', async () => {
     await olga.goto(`${BASE_URL}/settings/roles`, { waitUntil: 'networkidle0' });
     await olga.waitForSelector('[data-testid=workspace-roles]');
     const body = await text(olga);
     assert.ok(body.includes('Workspace roles') && body.includes('Make someone an owner or remove an owner'), 'workspace roles kept');
     assert.equal(await olga.$('[data-testid=functional-roles]'), null);
     assert.equal(await olga.$('[data-testid=role-holders]'), null);
-    // The server still defines the matrix, without open spec questions in its labels (B16).
+    // The server still defines the matrix: Employee, Manager and Admin, without open spec questions in its labels (B16).
     const matrix = await api(olga, '/people/permissions');
+    assert.deepEqual(matrix.roles.map((r) => r.id), ['employee', 'manager', 'admin']);
     const labels = matrix.modules.flatMap((m) => m.rows.flatMap((r) => Object.values(r.cells).map((c) => c.label)));
     assert.ok(!labels.some((l) => /\(Q\d+\)/.test(l)), labels.filter((l) => /\(Q/.test(l)).join(', '));
   });
 
-  step('the Team tab invites with Administration; the new member has it once they join', async () => {
+  step('the Team tab invites without functional roles; the new member is an Employee', async () => {
     const hana = await browser.person('hana');
     await olga.goto(`${BASE_URL}/settings/team`, { waitUntil: 'networkidle0' });
     await clickButton(olga, 'Invite member');
     await olga.type('input[placeholder="name@company.com"]', email('roles-hana'));
-    await click(olga, '[data-testid=invite-roles] input[name=invite-role-administration]');
+    assert.equal(await olga.$('[data-testid=invite-roles]'), null, 'no Administration / Payroll checkboxes');
     await clickButton(olga, 'Send invitation');
     const link = await (await olga.waitForSelector('input[readonly]')).evaluate((el) => el.value);
     await clickButton(olga, 'Done');
     const invitation = (await api(olga, '/team')).invitations.find((i) => i.email === email('roles-hana'));
-    assert.deepEqual(invitation.assignedRoles, ['administration']);
+    assert.equal(invitation.assignedRoles, undefined);
 
     await hana.goto(link, { waitUntil: 'networkidle0' });
-    await signIn(hana, email('roles-hana'), 'Hana Admin');
+    await signIn(hana, email('roles-hana'), 'Hana Member');
     await clickButton(hana, 'Accept and join');
     await finishOnboarding(hana);
     const access = await api(hana, '/people/access');
-    assert.deepEqual(access.roles, ['employee', 'administration']);
+    assert.deepEqual(access.roles, ['employee']);
     ids.hana = access.employeeId;
-    // An Admin takes it away on the API (the card's Roles section); it applies at once.
-    await api(olga, `/people/employees/${ids.hana}/roles/administration`, { method: 'DELETE' });
-    assert.deepEqual((await api(hana, '/people/access')).roles, ['employee']);
   });
 
   step('Settings → Employees saves its settings; members have no such tab', async () => {

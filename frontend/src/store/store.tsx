@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type AssignedRole, type Channel, clearTenantId, CLIENT_ID, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput } from '../lib/api';
+import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput } from '../lib/api';
 import { paths } from '../lib/paths';
 import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference } from './documents';
 import { employeeCardActions } from './employeeCard';
@@ -188,6 +188,7 @@ const WORKSPACE_FIELDS: Partial<Record<keyof Workspace, keyof WorkspaceInput>> =
   employeeDefaultWeeklyHours: 'employeeDefaultWeeklyHours',
   employeeNumberRequired: 'employeeNumberRequired',
   employeeSelfEditBank: 'employeeSelfEditBank',
+  ceoEmployeeId: 'ceoEmployeeId',
 };
 /** Profile fields as the API names them. */
 const PROFILE_FIELDS: Partial<Record<keyof Profile, keyof ProfileInput>> = {
@@ -469,7 +470,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       tasksChanged: (dealId) => queueRefresh(['tasks'], [dealId], [dealId], 100),
     });
 
-    // ------------------------------------------------------------ employee card (CD-140)
+    // ------------------------------------------------------------ people (milestone 13) and the employee card (CD-140)
+    const people = peopleActions({ cur, set, flash, rt: peopleRt.current, errText });
     const employeeCard = employeeCardActions({
       cur,
       set,
@@ -483,9 +485,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           // the next reload shows it
         }
       },
+      refreshPeople: () => people.refresh(),
     });
-    // ------------------------------------------------------------ people (milestone 13)
-    const people = peopleActions({ cur, set, flash, rt: peopleRt.current, errText });
 
     /** Everything this tab shows, after the stream was down (hints may be missing) or on focus. */
     const refreshAll = () => {
@@ -503,14 +504,16 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       // People lists (Roles & permissions, CD-142) re-read on any employee or role change, this tab's own included.
       if (e.type === 'resync' || e.type === 'employee' || e.type === 'employee_role') set((x) => ({ peopleRev: x.peopleRev + 1 }));
       if (e.type === 'resync') return refreshAll();
-      if (e.client === CLIENT_ID) return; // this tab's own change: the screen has it already
-      if (e.type === 'meeting') return meetings.onLive(e);
-      // People (milestone 13): open employee cards and their pickers (store/employeeCard.ts) and the people lists.
-      if (PEOPLE_HINTS.has(e.type)) employeeCard.onLive(e);
+      // People (milestone 13): the directory (chart, list, Ctrl/⌘K), open employee cards and their
+      // pickers. This tab's own changes too (CD-225): a department added in the panel must show in
+      // the card's Department field, a new head on the chart. Both wait a moment (hints come in bursts).
       if (PEOPLE_HINTS.has(e.type)) {
         people.onLive(e);
+        employeeCard.onLive(e, e.client === CLIENT_ID);
         if (!PARTS_OF[e.type]?.length) return;
       }
+      if (e.client === CLIENT_ID) return; // this tab's own change: the screen has it already
+      if (e.type === 'meeting') return meetings.onLive(e);
       const parts = PARTS_OF[e.type] ?? ALL_PARTS;
       const dealIds = [...(e.dealIds ?? []), ...(e.type === 'deal' ? (e.ids ?? []) : [])];
       const logs = e.dealIds === null ? [...logRequested.current] : dealIds.filter((id) => logRequested.current.has(id));
@@ -1515,9 +1518,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
 
       // ---------------------------------------------------------- team
       /** Creates an invitation, which the worker emails (CD-7), and returns its link to copy as a fallback. */
-      inviteMember: async (email: string, role: 'admin' | 'member', roles: AssignedRole[] = []): Promise<string | null> => {
+      inviteMember: async (email: string, role: 'admin' | 'member'): Promise<string | null> => {
         try {
-          const { token } = await crmApi.invite(email, role, roles);
+          const { token } = await crmApi.invite(email, role);
           await reload();
           return `${window.location.origin}/invite/${token}`;
         } catch (err) {

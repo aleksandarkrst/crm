@@ -1,13 +1,16 @@
 /**
- * "Departments & teams" (CD-138, spec 6.3): Administration and Admins set up the departments and
+ * "Departments & teams" (CD-138, spec 6.3): Admins set up the departments and
  * teams of the company and put people into them. Opened from the Org structure header with
  * <DepartmentsPanelButton/>. A list of departments, each expandable to its teams, with counts of
  * active employees; add and rename inline; move a team; delete with confirmations that name the
  * members; "Add people" with the prefilled manager; the team-lead dialog "Make team members report
- * to <lead>" (CD-139). Changes by others show up through live updates (store/org.ts).
+ * to <lead>" (CD-139). Changes by others show up through live updates (store/org.ts). A new head or
+ * lead is put in their department or team; moving a head or lead away asks first (CD-225,
+ * lib/headMoves.ts). After every change the Org structure page and the card's pickers read again.
  */
 import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Modal, ModalHeader } from '../../components/ui';
+import { withHeadConfirm } from '../../lib/headMoves';
 import { type ApiDepartment, type ApiDirectoryRow, type ApiOrgPerson, type ApiTeam, type AssignmentRow, type LoopSkip, orgApi } from '../../lib/orgApi';
 import { canManageOrg, type OrgStructure, orgError, useOrgStructure } from '../../store/org';
 import { fold } from '../../store/search';
@@ -20,8 +23,8 @@ function names(people: { fullName: string }[], max = 6): string {
   return `${people.slice(0, max).map((p) => p.fullName).join(', ')} and ${plural(people.length - max, 'other')}`;
 }
 
-/** The header button that opens the panel; shown to Administration and Admins only. */
-export function DepartmentsPanelButton({ className = 'btn-plain', allowed: known }: { className?: string; /** The host already knows the caller is Administration or Admin. */ allowed?: boolean }) {
+/** The header button that opens the panel; shown to Admins only. */
+export function DepartmentsPanelButton({ className = 'btn-plain', allowed: known }: { className?: string; /** The host already knows the caller is an Admin. */ allowed?: boolean }) {
   const [open, setOpen] = useState(false);
   const [checked, setAllowed] = useState(false);
   const allowed = known ?? checked;
@@ -58,7 +61,7 @@ type Dialog =
 /** `startAdding`: opens with the new department's name field (the Org page's "Add department", CD-224). */
 export function DepartmentsPanel({ onClose, startAdding = false }: { onClose: () => void; startAdding?: boolean }) {
   const { data, error, reload } = useOrgStructure(true);
-  const { flash } = useStore();
+  const { flash, people } = useStore();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState<'department' | string | null>(startAdding ? 'department' : null); // 'department', or a department id (add team)
   const [dialog, setDialog] = useState<Dialog | null>(null);
@@ -70,12 +73,17 @@ export function DepartmentsPanel({ onClose, startAdding = false }: { onClose: ()
     return () => window.removeEventListener('keydown', onKey);
   }, [dialog, onClose]);
 
-  /** Runs a change, shows the API's message when it is refused, and reads the structure again. */
-  const run = async (action: () => Promise<unknown>, done?: string): Promise<boolean> => {
+  /**
+   * Runs a change (asking first when it would move a head or lead away), shows the API's message
+   * when it is refused, and reads the structure and the Org structure page again.
+   */
+  const run = async (action: (clearHeadRoles: boolean) => Promise<unknown>, done?: string): Promise<boolean> => {
     setProblem(null);
     try {
-      await action();
+      if ((await withHeadConfirm(async (clear) => (await action(clear)) ?? true)) === null) return false;
       await reload();
+      // The Org structure page at once; the card's pickers follow the change's live hint (store.tsx).
+      people.refresh(0);
       if (done) flash(done);
       return true;
     } catch (err) {
@@ -112,7 +120,7 @@ export function DepartmentsPanel({ onClose, startAdding = false }: { onClose: ()
           {problem}
         </div>
       )}
-      {data && !manage && <div className="dtp-problem">Only Administration and Admins change departments and teams.</div>}
+      {data && !manage && <div className="dtp-problem">Only Admins change departments and teams.</div>}
       {data && manage && (
         <>
           <div className="dtp-list" data-testid="departments-list">
@@ -163,7 +171,7 @@ export function DepartmentsPanel({ onClose, startAdding = false }: { onClose: ()
                           <div className="dtp-main">
                             <InlineName value={t.name} label="Team name" onSave={(name) => run(() => orgApi.updateTeam(t.id, { name }), 'Team renamed')} />
                             <span className="dtp-meta">
-                              {t.leadName ? `Lead: ${t.leadName}${t.leadOutside ? ' (lead, not a member)' : ''}` : 'No lead'} · {plural(t.activeEmployees, 'person', 'people')}
+                              {t.leadName ? `Lead: ${t.leadName}` : 'No lead'} · {plural(t.activeEmployees, 'person', 'people')}
                             </span>
                           </div>
                           <div className="dtp-actions">
@@ -188,7 +196,7 @@ export function DepartmentsPanel({ onClose, startAdding = false }: { onClose: ()
                           what="team"
                           employees={data.employees}
                           onCancel={() => setAdding(null)}
-                          onSave={(name, person) => run(() => orgApi.createTeam({ departmentId: d.id, name, leadEmployeeId: person }), `Team ${name} added`).then((ok) => ok && setAdding(null))}
+                          onSave={(name, person) => run((clear) => orgApi.createTeam({ departmentId: d.id, name, leadEmployeeId: person, ...(clear ? { clearHeadRoles: true } : {}) }), `Team ${name} added`).then((ok) => ok && setAdding(null))}
                         />
                       ) : (
                         <button type="button" className="btn-dashed dtp-add-team" onClick={() => setAdding(d.id)}>
@@ -206,7 +214,7 @@ export function DepartmentsPanel({ onClose, startAdding = false }: { onClose: ()
               what="department"
               employees={data.employees}
               onCancel={() => setAdding(null)}
-              onSave={(name, person, code) => run(() => orgApi.createDepartment({ name, code: code || null, headEmployeeId: person }), `Department ${name} added`).then((ok) => ok && setAdding(null))}
+              onSave={(name, person, code) => run((clear) => orgApi.createDepartment({ name, code: code || null, headEmployeeId: person, ...(clear ? { clearHeadRoles: true } : {}) }), `Department ${name} added`).then((ok) => ok && setAdding(null))}
             />
           ) : (
             <button type="button" className="btn btn-primary dtp-add-dept" onClick={() => setAdding('department')}>
@@ -289,7 +297,7 @@ function AddForm({ what, employees, onSave, onCancel }: { what: 'department' | '
   );
 }
 
-type Run = (action: () => Promise<unknown>, done?: string) => Promise<boolean>;
+type Run = (action: (clearHeadRoles: boolean) => Promise<unknown>, done?: string) => Promise<boolean>;
 
 function OrgDialog({ dialog, data, onClose, run }: { dialog: Dialog; data: OrgStructure; onClose: () => void; run: Run }) {
   switch (dialog.kind) {
@@ -322,11 +330,15 @@ function Sheet({ title, sub, children, actions, onClose }: { title: string; sub:
 function useBusy(run: Run, onClose: () => void) {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const go = async (action: () => Promise<unknown>, done: string) => {
+  const go = async (action: (clearHeadRoles: boolean) => Promise<unknown>, done: string) => {
     setBusy(true);
     setProblem(null);
     try {
-      await action();
+      // Moving a head or lead away asks first (CD-225); "no" leaves the dialog open.
+      if ((await withHeadConfirm(async (clear) => (await action(clear)) ?? true)) === null) {
+        setBusy(false);
+        return;
+      }
     } catch (err) {
       setProblem(orgError(err));
       setBusy(false);
@@ -358,9 +370,9 @@ function EditDepartment({ department, data, onClose, run }: { department: ApiDep
             type="button"
             className={ok ? 'btn btn-primary' : 'btn btn-disabled'}
             disabled={!ok}
-            onClick={() => void go(() => orgApi.updateDepartment(department.id, { name: name.trim(), code: code.trim() || null, headEmployeeId: head }), 'Department saved')}
+            onClick={() => void go((clear) => orgApi.updateDepartment(department.id, { name: name.trim(), code: code.trim() || null, headEmployeeId: head, ...(clear ? { clearHeadRoles: true } : {}) }), 'Department saved')}
           >
-            {busy ? 'Saving…' : 'Save'}
+            {busy ? 'Saving' : 'Save'}
           </button>
         </>
       }
@@ -510,7 +522,7 @@ function TeamLead({ team, data, onClose, run }: { team: ApiTeam; data: OrgStruct
   const save = () => {
     const makeMembersReport = offer && report;
     const done = makeMembersReport ? `${leadName} leads ${team.name} · ${plural(shown!.members.length, 'person', 'people')} now report to them` : lead ? `${leadName} leads ${team.name}` : `${team.name} has no lead`;
-    void go(() => orgApi.updateTeam(team.id, { leadEmployeeId: lead, ...(makeMembersReport ? { makeMembersReport } : {}) }), done);
+    void go((clear) => orgApi.updateTeam(team.id, { leadEmployeeId: lead, ...(makeMembersReport ? { makeMembersReport } : {}), ...(clear ? { clearHeadRoles: true } : {}) }), done);
   };
   return (
     <Sheet
@@ -602,7 +614,10 @@ function AddPeople({ department, team, data, onClose, run }: { department: ApiDe
   const ready = picked.length > 0 && picked.every((id) => rows[id]) && !busy;
   const save = () => {
     const chosen = Object.fromEntries(picked.filter((id) => rows[id] && !rows[id]!.managerId && managers[id]).map((id) => [id, managers[id]!]));
-    void go(() => orgApi.assign({ departmentId: department.id, teamId: team?.id ?? null, employeeIds: picked, ...(Object.keys(chosen).length ? { managers: chosen } : {}) }), `${plural(picked.length, 'person', 'people')} added to ${team?.name ?? department.name}`);
+    void go(
+      (clear) => orgApi.assign({ departmentId: department.id, teamId: team?.id ?? null, employeeIds: picked, ...(Object.keys(chosen).length ? { managers: chosen } : {}), ...(clear ? { clearHeadRoles: true } : {}) }),
+      `${plural(picked.length, 'person', 'people')} added to ${team?.name ?? department.name}`,
+    );
   };
   const byId = new Map(data.employees.map((e) => [e.id, e]));
 

@@ -2,7 +2,9 @@
 // structure header, adds a department and a team, renames the team inline, adds people (the
 // manager is prefilled with the department head), sets a team lead with "Make team members report
 // to <lead>", moves the team, and deletes with confirmations that name the members. A change made
-// elsewhere shows up without a reload, and the panel works on a phone.
+// elsewhere shows up without a reload, and the panel works on a phone. CD-225: a head or lead is put
+// in their department or team; a department added in the panel is offered on a card at once; the
+// head shows once on the chart; moving the head elsewhere asks first.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
 import { api, BASE_URL, click, clickButton, createWorkspace, email, eventually, setValue, signIn, steps, text, useBrowser } from '../lib/harness.mjs';
@@ -12,6 +14,8 @@ describe('departments and teams', () => {
   const step = steps(browser, 'departments-teams');
   let page;
   const id = {};
+  /** Messages of the browser dialogs (the harness accepts them all). */
+  const dialogs = [];
 
   const person = async (firstName, lastName) =>
     (await api(page, '/people/employees', { method: 'POST', body: JSON.stringify({ firstName, lastName, employmentStartDate: '2024-03-01' }) })).id;
@@ -25,6 +29,7 @@ describe('departments and teams', () => {
 
   step('an Admin with four employees opens the panel from the Org structure page', async () => {
     page = await browser.person('dora');
+    page.on('dialog', (d) => dialogs.push(d.message()));
     await page.goto(BASE_URL, { waitUntil: 'networkidle0' });
     await signIn(page, email('dtp-dora'), 'Dora Director');
     await createWorkspace(page, 'Org Co');
@@ -43,7 +48,9 @@ describe('departments and teams', () => {
     await setValue(page, 'select[aria-label="Department head"]', id.head);
     await click(page, 'button[type=submit]::-p-text(Add department)');
     await page.waitForSelector('[data-testid="department-Service"]');
-    assert.match(await page.$eval('[data-testid="department-Service"]', (el) => el.textContent), /SRV.*Head: Hana Head · 0 people · 0 teams/);
+    // The head is put in the department (CD-225).
+    assert.match(await page.$eval('[data-testid="department-Service"]', (el) => el.textContent), /SRV.*Head: Hana Head · 1 person · 0 teams/);
+    assert.equal((await employee(id.head)).departmentName, 'Service');
 
     await inRow('department-Service', 'Add team');
     await page.type('input[aria-label="Team name"]', 'Service Belgrade');
@@ -94,7 +101,9 @@ describe('departments and teams', () => {
     await page.waitForFunction(() => document.querySelectorAll('.modal').length === 1);
     assert.equal((await employee(id.bojan)).manager?.id, id.lead, 'Bojan had no manager: now the lead');
     assert.equal((await employee(id.ana)).manager?.id, id.head, 'Ana reported to someone else: unchanged');
-    await page.waitForFunction(() => /Lead: Luka Lead \(lead, not a member\)/.test(document.querySelector('[data-testid="team-Service BG"]')?.textContent ?? ''));
+    // The lead is put in the team (CD-225).
+    await page.waitForFunction(() => /Lead: Luka Lead · 3 people/.test(document.querySelector('[data-testid="team-Service BG"]')?.textContent ?? ''));
+    assert.equal((await employee(id.lead)).teamId, id.team);
   });
 
   step('a department added elsewhere shows up without a reload; the team moves there with its members', async () => {
@@ -103,13 +112,13 @@ describe('departments and teams', () => {
 
     await click(page, '[data-testid="team-Service BG"] button::-p-text(Move)');
     await page.waitForSelector('.dtp-note');
-    assert.equal(await page.$eval('.dtp-note', (el) => el.textContent), '2 employees move to Sales: Ana Tech and Bojan Tech.');
+    assert.equal(await page.$eval('.dtp-note', (el) => el.textContent), '3 employees move to Sales: Luka Lead, Ana Tech and Bojan Tech.');
     await clickButton(page, 'Move to Sales');
     await page.waitForFunction(() => document.querySelectorAll('.modal').length === 1);
     const departments = await api(page, '/people/departments');
     const sales = departments.find((d) => d.name === 'Sales');
     assert.equal((await employee(id.ana)).departmentId, sales.id);
-    assert.ok(await eventually(async () => /2 people · 1 team/.test(await page.$eval('[data-testid="department-Sales"]', (el) => el.textContent))));
+    assert.ok(await eventually(async () => /3 people · 1 team/.test(await page.$eval('[data-testid="department-Sales"]', (el) => el.textContent))));
   });
 
   step('deleting: a department with teams says so; a team names its members, who stay in the department', async () => {
@@ -122,7 +131,7 @@ describe('departments and teams', () => {
     await inRow('department-Sales', 'Add team'); // expands it
     await click(page, '[data-testid="team-Service BG"] button::-p-text(Delete)');
     await page.waitForSelector('.modal-sub::-p-text(stay in Sales without a team)');
-    assert.match(await text(page), /Its 2 members stay in Sales without a team: Ana Tech and Bojan Tech\./);
+    assert.match(await text(page), /Its 3 members stay in Sales without a team: Luka Lead, Ana Tech and Bojan Tech\./);
     await clickButton(page, 'Delete team');
     await page.waitForFunction(() => !document.querySelector('[data-testid="team-Service BG"]'));
     const ana = await employee(id.ana);
@@ -130,9 +139,53 @@ describe('departments and teams', () => {
     assert.equal(ana.departmentName, 'Sales');
 
     await inRow('department-Service', 'Delete');
-    await page.waitForSelector('.modal-sub::-p-text(It has no members)');
+    await page.waitForSelector('.modal-sub::-p-text(will have no department)');
+    assert.match(await text(page), /Its 1 member will have no department: Hana Head\./);
     await clickButton(page, 'Delete department');
     await page.waitForFunction(() => !document.querySelector('[data-testid="department-Service"]'));
+  });
+
+  step("a department added in the panel is offered in a card's Department field at once", async () => {
+    await page.goto(`${BASE_URL}/org`, { waitUntil: 'networkidle0' });
+    // Open a card first (its pickers load), then come back without reloading the app.
+    await click(page, `[data-testid=org-person][data-id="${id.ana}"]`);
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-testid=emp-work] select[name=departmentId] option')].some((o) => o.textContent === 'Sales'));
+    await click(page, 'a.header-parent');
+    await page.waitForFunction(() => location.pathname === '/org');
+    await clickButton(page, 'Departments & teams');
+    await clickButton(page, 'Add department');
+    await page.type('input[aria-label="Department name"]', 'Field');
+    await setValue(page, 'select[aria-label="Department head"]', id.head);
+    await click(page, 'button[type=submit]::-p-text(Add department)');
+    await page.waitForSelector('[data-testid="department-Field"]');
+    await click(page, '.dtp-panel-head button::-p-text(Close)');
+    await click(page, `[data-testid=org-person][data-id="${id.ana}"]`);
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-testid=emp-work] select[name=departmentId] option')].some((o) => o.textContent === 'Field'));
+    id.field = (await api(page, '/people/departments')).find((d) => d.name === 'Field').id;
+  });
+
+  step('the head shows once, at the top of their department on the chart', async () => {
+    await click(page, 'a.header-parent');
+    await page.waitForSelector('[data-testid=org-chart-department]');
+    const field = `[data-testid=org-dept][data-dept="${id.field}"]`;
+    await page.waitForSelector(`${field} [data-testid=org-person][data-id="${id.head}"]`);
+    assert.equal((await page.$$(`${field} [data-testid=org-person][data-id="${id.head}"]`)).length, 1, 'Hana once');
+    assert.equal(await page.$eval(`${field} .org-dept-headperson .org-badge`, (e) => e.textContent), 'Head');
+    assert.equal(await page.$(`${field} [data-testid=org-team]`), null, 'no "No team" box just for the head');
+  });
+
+  step('moving the head to another department asks first, then removes them as head', async () => {
+    await click(page, `[data-testid=org-person][data-id="${id.head}"]`);
+    await page.waitForSelector('[data-testid=emp-work] select[name=departmentId]');
+    const sales = (await api(page, '/people/departments')).find((d) => d.name === 'Sales').id;
+    await page.waitForFunction((sales) => !!document.querySelector(`[data-testid=emp-work] select[name=departmentId] option[value="${sales}"]`), {}, sales);
+    await setValue(page, '[data-testid=emp-work] select[name=departmentId]', sales);
+    const before = dialogs.length;
+    await click(page, '[data-testid=emp-save]');
+    await page.waitForSelector('[data-testid=emp-save]:not([data-dirty])');
+    assert.deepEqual(dialogs.slice(before), ['Hana Head is head of Field. Moving them to Sales removes them as head of Field. Continue?']);
+    assert.equal((await employee(id.head)).departmentName, 'Sales');
+    assert.equal((await api(page, '/people/departments')).find((d) => d.name === 'Field').headEmployeeId, null);
   });
 
   step('the panel fits a phone', async () => {

@@ -1,7 +1,7 @@
 /**
  * CSV import (CD-64), next to the store: preview, commit and the template come from the API. For
  * owners and admins (the API returns 403 to members; the buttons are hidden for them). Employees
- * (CD-141) use the same calls on /api/people/import, for Administration and Admins.
+ * (CD-141) use the same calls on /api/people/import, for Admins.
  */
 import { api, authorizedFetch } from '../lib/api';
 import { type CsvColumn, toCsv } from '../lib/csv';

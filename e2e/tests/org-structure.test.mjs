@@ -1,7 +1,9 @@
-// Org structure (CD-137): an owner's org of four levels in both chart modes and in the list,
-// sorting, filters (department, team, manager direct and including indirect), the accent-free
-// search ("petrovic" finds Petrović), the bulk actions with the loop refused, Ctrl K opening an
-// employee's card, a member's narrower columns, and a phone without sideways scrolling.
+// Org structure (CD-137): an owner's org of four levels in both chart modes and in the list, the
+// company node with the CEO the owner sets (CD-225), sorting, filters as dropdowns (department,
+// team, manager direct and including indirect, status, data issues) that the URL restores, the
+// list header as wide as its columns, the accent-free search ("petrovic" finds Petrović), the bulk
+// actions with the loop refused, Ctrl K opening an employee's card, a member's narrower columns,
+// and a phone without sideways scrolling.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { describe } from 'node:test';
@@ -77,7 +79,39 @@ describe('org structure', () => {
     assert.ok((await page.$$('[data-testid=org-person][data-id="' + id.petar + '"] [data-testid=org-issue]')).length === 1);
   });
 
+  step('the company node shows the workspace; the owner sets the CEO, who sits there and not in a department', async () => {
+    await page.waitForSelector('[data-testid=org-company]');
+    assert.equal(await page.$eval('[data-testid=org-company-name]', (e) => e.textContent), 'Org Co');
+    assert.match(await page.$eval('[data-testid=org-company]', (e) => e.textContent), /No CEO set/);
+    // The departments hang below the company node.
+    const [company, firstDept] = await page.evaluate(() => [document.querySelector('[data-testid=org-company]').getBoundingClientRect().bottom, document.querySelector('[data-testid=org-dept]').getBoundingClientRect().top]);
+    assert.ok(firstDept > company, 'departments below the company');
+
+    await click(page, '[data-testid=org-set-ceo]');
+    await page.type('[data-testid=org-ceo-picker]', 'Ana');
+    await click(page, '[data-testid=org-picker-item]');
+    await page.waitForSelector(`[data-testid=org-company] [data-testid=org-person][data-id="${id.ana}"]`);
+    assert.match(await page.$eval('[data-testid=org-company]', (e) => e.textContent), /CEO/);
+    const sales = await page.$$eval('[data-testid=org-dept]:first-child [data-testid=org-person]', (els) => els.map((p) => p.dataset.id));
+    assert.ok(!sales.includes(id.ana), 'the CEO is not repeated in Sales');
+    // Saved as a workspace setting: still there after a reload, and the CEO is no "No manager" issue.
+    let saved = null;
+    for (let i = 0; i < 40 && !saved; i++) {
+      saved = (await api(page, '/workspace')).ceoEmployeeId === id.ana;
+      if (!saved) await new Promise((r) => setTimeout(r, 200));
+    }
+    assert.ok(saved, 'ceoEmployeeId saved');
+    assert.ok(!(await card(id.ana)).hr.dataIssues.includes('no_manager'));
+    await openOrg();
+    await page.waitForSelector(`[data-testid=org-company] [data-testid=org-person][data-id="${id.ana}"]`);
+    // Reporting lines: the CEO is the first root.
+    await openOrg('?mode=reporting');
+    await page.waitForSelector('[data-testid=org-chart-reporting]');
+    assert.equal(await page.$eval('[data-testid=org-chart-reporting] [data-testid=org-node]', (e) => e.dataset.id), id.ana);
+  });
+
   step('reporting lines: two levels open, expand and collapse, search opens the path', async () => {
+    await openOrg();
     await click(page, '[data-testid=org-mode-reporting]');
     await page.waitForSelector('[data-testid=org-chart-reporting]');
     assert.match(page.url(), /mode=reporting/);
@@ -116,6 +150,14 @@ describe('org structure', () => {
     // Owners see the HR columns; there is no Roles value for an owner but Admin.
     const headers = await page.$$eval('.org-list-head .sort-btn span:first-child, .org-list-head .th', (els) => els.map((e) => e.textContent));
     assert.deepEqual(headers, ['Name', 'Job title', 'Department', 'Team', 'Reports to', 'Work email', 'Work phone', 'Start date', 'Employment type', 'Status', 'Account', 'Roles']);
+    // The header's background spans every column, however wide the list scrolls (CD-225).
+    for (const width of [1400, 1000]) {
+      await page.setViewport({ width, height: 1100 });
+      await page.waitForSelector('.org-list-head');
+      const [head, scroll] = await page.evaluate(() => [document.querySelector('.org-list-head').getBoundingClientRect().width, document.querySelector('.org-list-scroll').scrollWidth]);
+      assert.ok(head >= scroll - 1, `header ${head}px, list ${scroll}px at ${width}px`);
+    }
+    await page.setViewport({ width: 1400, height: 1100 });
   });
 
   step('filters: department, team, manager direct and including indirect', async () => {
@@ -125,16 +167,32 @@ describe('org structure', () => {
     assert.deepEqual(await listNames(), ['Marko Ilić', 'Ivan Jović', 'Mila Kostić']);
     await openOrg(`?tab=list&manager=${id.marko}`);
     assert.deepEqual(await listNames(), ['Ivan Jović']);
-    await click(page, '[data-testid=org-scope-indirect]');
+    // The scope is a dropdown once a manager is chosen (CD-225).
+    await setValue(page, '[data-testid=org-filter-scope]', 'indirect');
     await page.waitForFunction(() => document.querySelector('[data-testid=org-count]').textContent === '3 employees');
     assert.deepEqual(await listNames(), ['Ivan Jović', 'Mila Kostić', 'Sara Nikolić']);
     // The same filter on the chart.
     await click(page, '[data-testid=org-tab-chart]');
     await page.waitForSelector('[data-testid=org-chart-department]');
     assert.equal(await count(), '3 employees');
-    // Data issues: no manager.
-    await openOrg('?tab=list&issues=no_manager');
-    assert.deepEqual(await listNames(), ['Petar Lukić', 'Olga Owner', 'Ana Petrović']);
+    // Data issues and Status are dropdowns too (CD-225); the URL restores them.
+    await openOrg('?tab=list');
+    await click(page, '[data-testid=org-filter-issues]');
+    await click(page, '.org-multi-item::-p-text(No manager)');
+    await page.waitForFunction(() => new URLSearchParams(location.search).get('issues') === 'no_manager');
+    // The CEO (Ana) is not "No manager".
+    await page.waitForFunction(() => document.querySelector('[data-testid=org-count]').textContent === '2 employees');
+    assert.deepEqual(await listNames(), ['Petar Lukić', 'Olga Owner']);
+    await click(page, '[data-testid=org-filter-status]');
+    await click(page, '.org-multi-item::-p-text(Inactive)');
+    await page.waitForFunction(() => new URLSearchParams(location.search).get('status') === 'active,leaving,inactive');
+    await page.reload({ waitUntil: 'networkidle0' });
+    await page.waitForFunction(() => document.querySelector('[data-testid=org-count]')?.textContent === '2 employees');
+    assert.equal(await page.$eval('[data-testid=org-filter-issues]', (e) => e.textContent), 'Data issues: No manager');
+    assert.equal(await page.$eval('[data-testid=org-filter-status]', (e) => e.textContent), 'Status: Active +2');
+    // No pill buttons left for these filters.
+    assert.equal(await page.$('[data-testid^=org-status-]'), null);
+    assert.equal(await page.$('[data-testid^=org-issue-]'), null);
     await click(page, '[data-testid=org-filter-clear]');
     await page.waitForFunction(() => document.querySelector('[data-testid=org-count]').textContent === '7 employees');
   });
@@ -206,8 +264,10 @@ describe('org structure', () => {
     assert.deepEqual(headers, ['Name', 'Job title', 'Department', 'Team', 'Reports to', 'Work email', 'Work phone']);
     assert.equal(await mia.$('[data-testid=org-select]'), null);
     assert.equal(await mia.$('[data-testid=org-export]'), null);
-    assert.equal(await mia.$('[data-testid=org-issue-no_manager]'), null);
-    assert.equal(await mia.$('[data-testid=org-status-inactive]'), null);
+    assert.equal(await mia.$('[data-testid=org-filter-issues]'), null);
+    await click(mia, '[data-testid=org-filter-status]');
+    const statuses = await mia.$$eval('.org-multi-item', (els) => els.map((e) => e.textContent.trim()));
+    assert.deepEqual(statuses, ['Active', 'Leaving']);
     assert.doesNotMatch(await text(mia), /Mar 2024|2024-03-01/, 'no start dates of others');
   });
 

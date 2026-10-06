@@ -127,7 +127,7 @@ const PERSONAL_COLUMNS: CsvColumn<ApiEmployeePersonalExport>[] = [
 ];
 
 /**
- * Export CSV (spec 5.4, Administration and Admin): the rows with the visible columns. "Include
+ * Export CSV (spec 5.4, Admins): the rows with the visible columns. "Include
  * personal details and bank accounts" reads them from the server, which writes an audit entry.
  */
 export function ExportDialog({ rows, columns, selected, loadPersonal, onClose, onDone }: { rows: ApiEmployee[]; columns: Column[]; selected: boolean; loadPersonal: (ids: string[]) => Promise<ApiEmployeePersonalExport[]>; onClose: () => void; onDone: (msg: string) => void }) {

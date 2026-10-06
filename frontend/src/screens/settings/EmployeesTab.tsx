@@ -57,11 +57,11 @@ export function EmployeesTab() {
       <div style={{ ...row, borderBottom: 0 }} data-setting="self-edit-bank">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: 13.5, fontWeight: 600 }}>Employees can edit their own bank account</span>
-          <span style={{ fontSize: 12, color: 'var(--text-2)' }}>When off, only Administration and Admins change bank accounts. The employee is emailed about every change either way.</span>
+          <span style={{ fontSize: 12, color: 'var(--text-2)' }}>When off, only Admins change bank accounts. The employee is emailed about every change either way.</span>
         </div>
         <Switch on={w.employeeSelfEditBank} onClick={() => setWorkspace({ employeeSelfEditBank: !w.employeeSelfEditBank })} label="Employees can edit their own bank account" />
       </div>
-      <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 4 }}>Changes are saved as you make them. Who has Administration and Payroll is in Roles & permissions.</span>
+      <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 4 }}>Changes are saved as you make them. Only owners and admins edit employees, departments, teams and managers.</span>
     </div>
   );
 }

@@ -201,12 +201,14 @@ export interface ApiWorkspace {
   employeeDefaultWeeklyHours: number;
   /** Create, edit and import require an employee number. */
   employeeNumberRequired: boolean;
-  /** Employees change their own bank account (else only Administration and Admins). */
+  /** Employees change their own bank account (else only Admins). */
   employeeSelfEditBank: boolean;
+  /** The CEO on the org chart's company node (CD-225), an active employee, or null. */
+  ceoEmployeeId: string | null;
 }
 export type ApiCustomerEmailLanguage = 'en' | 'sr';
 export type WorkspaceInput = Partial<
-  Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth' | 'customerEmailLanguage' | 'employeeDefaultWeeklyHours' | 'employeeNumberRequired' | 'employeeSelfEditBank'>
+  Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth' | 'customerEmailLanguage' | 'employeeDefaultWeeklyHours' | 'employeeNumberRequired' | 'employeeSelfEditBank' | 'ceoEmployeeId'>
 >;
 export type ApiLanguage = 'en' | 'sr' | 'de';
 export type ApiDateFormat = 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
@@ -913,8 +915,7 @@ export const crmApi = {
   removeSampleData: () => api<ApiSampleRemoval>('/onboarding/sample-data', { method: 'DELETE' }),
 
   team: () => api<{ members: ApiMember[]; invitations: ApiInvitation[] }>('/team'),
-  /** `roles`: Administration / Payroll their employee record gets when they accept (CD-224). */
-  invite: (email: string, role: 'admin' | 'member', roles: AssignedRole[] = []) => api<{ invitation: ApiInvitation; token: string }>('/team/invitations', { method: 'POST', json: { email, role, roles } }),
+  invite: (email: string, role: 'admin' | 'member') => api<{ invitation: ApiInvitation; token: string }>('/team/invitations', { method: 'POST', json: { email, role } }),
   revokeInvitation: (id: string) => api(`/team/invitations/${id}`, { method: 'DELETE' }),
   resendInvitation: (id: string) => api<ApiInvitation>(`/team/invitations/${id}/resend`, { method: 'POST' }),
   invitationLink: (id: string) => api<{ token: string }>(`/team/invitations/${id}/link`),
@@ -1032,10 +1033,10 @@ export const crmApi = {
 // ---------------------------------------------------------------- people (milestone 13)
 // Employees, departments and teams (backend modules/people, docs/ARCHITECTURE.md "People"). What
 // a row carries depends on the caller (spec 9): directory fields always; `employment` only for rows
-// in their scope; `hr` for Administration and Admin; `roles` for Admins. Never assume the optional
+// in their scope; `hr` and `roles` for Admins (the only ones doing HR work since CD-225). Never assume the optional
 // parts exist.
 
-export type ApiFunctionalRole = 'employee' | 'manager' | 'administration' | 'payroll' | 'admin';
+export type ApiFunctionalRole = 'employee' | 'manager' | 'admin';
 export type ApiEmployeeStatus = 'active' | 'leaving' | 'inactive';
 export type ApiAccountState = 'linked' | 'invited' | 'none';
 export type ApiDataIssue = 'no_manager' | 'no_start_date' | 'no_department' | 'manager_no_account' | 'no_employee_number';
@@ -1058,7 +1059,7 @@ export interface ApiEmployment {
   timesheetRequired: boolean;
   attendanceTracked: boolean;
   deactivatedAt: string | null;
-  /** Administration and Admin only. */
+  /** Admins only. */
   leavingReason?: string | null;
 }
 
@@ -1080,9 +1081,9 @@ export interface ApiEmployee {
   workPhone: string | null;
   workLocation: string | null;
   status: ApiEmployeeStatus;
-  /** Self, managers above them, Administration, Admin. */
+  /** Self, managers above them, Admins. */
   employment?: ApiEmployment;
-  /** Administration and Admin. */
+  /** Admins. */
   hr?: { account: ApiAccountState; dataIssues: ApiDataIssue[] };
   /** Admins. */
   roles?: ApiFunctionalRole[];
@@ -1117,9 +1118,11 @@ export interface BulkEmployeesInput {
   departmentId?: string | null;
   teamId?: string | null;
   managerId?: string | null;
+  /** Confirms moving department heads and team leads elsewhere (CD-225). */
+  clearHeadRoles?: boolean;
 }
 
-/** "Include personal details and bank accounts" (Administration, Admin; every export is audited). */
+/** "Include personal details and bank accounts" (Admins; every export is audited). */
 export interface ApiEmployeePersonalExport {
   id: string;
   personal: {
@@ -1155,58 +1158,8 @@ export const peopleApi = {
   exportPersonal: (employeeIds: string[]) => api<{ employees: ApiEmployeePersonalExport[] }>('/people/employees/export', { method: 'POST', json: { employeeIds } }).then((r) => r.employees),
 };
 
-/** The five functional roles (spec 9.1), in the matrix's column order. */
-export type FunctionalRole = 'employee' | 'manager' | 'administration' | 'payroll' | 'admin';
-/** Assigned by an Admin; the other three are derived. */
-export type AssignedRole = 'administration' | 'payroll';
-export type PermissionScope = 'none' | 'own' | 'direct' | 'indirect' | 'all';
-/** The permission matrix the server checks against (GET /people/permissions, CD-142). */
-export interface ApiPermissionMatrix {
-  roles: { id: FunctionalRole; label: string; who: string; given: string }[];
-  modules: {
-    id: string;
-    name: string;
-    milestone: number | null;
-    /** Not live: "Coming with <name>". */
-    live: boolean;
-    rows: { id: string; action: string; cells: Record<FunctionalRole, { scope: PermissionScope; label: string }> }[];
-  }[];
-}
-export interface ApiRoleHolder {
-  employeeId: string | null;
-  userId: string | null;
-  name: string;
-  jobTitle: string | null;
-  hasAccount: boolean;
-}
-/** "Who has which role" (GET /people/roles). */
-export interface ApiRoleHolders {
-  administration: (ApiRoleHolder & { employeeId: string; grantedAt: string })[];
-  payroll: (ApiRoleHolder & { employeeId: string; grantedAt: string })[];
-  admins: (ApiRoleHolder & { workspaceRole: 'owner' | 'admin' })[];
-  managers: (ApiRoleHolder & { employeeId: string; reports: number })[];
-}
-/** A directory row, as the employee picker needs it. */
-export interface ApiDirectoryEmployee {
-  id: string;
-  userId: string | null;
-  fullName: string;
-  jobTitle: string | null;
-  departmentName: string | null;
-  status: 'active' | 'leaving' | 'inactive';
-}
-
-/** Functional roles and permissions (CD-142). */
-export const rolesApi = {
-  permissions: () => api<ApiPermissionMatrix>('/people/permissions'),
-  holders: () => api<ApiRoleHolders>('/people/roles'),
-  /** Admin only. */
-  grant: (employeeId: string, role: AssignedRole) => api<{ employeeId: string; roles: AssignedRole[] }>(`/people/employees/${employeeId}/roles/${role}`, { method: 'PUT' }),
-  /** Admin only. */
-  remove: (employeeId: string, role: AssignedRole) => api(`/people/employees/${employeeId}/roles/${role}`, { method: 'DELETE' }),
-  /** The directory (active employees), for "Add person". */
-  employees: () => api<{ employees: ApiDirectoryEmployee[]; total: number }>('/people/employees').then((r) => r.employees),
-};
+/** The functional roles (spec 9.1; Administration and Payroll were removed by CD-225). */
+export type FunctionalRole = 'employee' | 'manager' | 'admin';
 
 // ------------------------------------------------------------------ people: the employee card (milestone 13, CD-140)
 
@@ -1397,9 +1350,11 @@ export interface DeactivateInput {
 export const peopleCardApi = {
   access: () => api<ApiPeopleAccess>('/people/access'),
   card: (id: string) => api<ApiEmployeeCard>(`/people/employees/${id}`),
-  /** "Add employee" (Administration, Admin): first and last name and the start date are required. */
+  /** "Add employee" (Admins): first and last name and the start date are required. */
   create: (input: EmployeePatch) => api<ApiEmployeeCard>('/people/employees', { method: 'POST', json: input }),
-  update: (id: string, patch: EmployeePatch, version?: string) => api<ApiEmployeeCard>(`/people/employees/${id}`, { method: 'PATCH', json: patch, headers: ifMatch(version) }),
+  /** `clearHeadRoles`: confirms moving a department head or team lead elsewhere (CD-225; 409 `heads_department` otherwise). */
+  update: (id: string, patch: EmployeePatch, version?: string, clearHeadRoles = false) =>
+    api<ApiEmployeeCard>(`/people/employees/${id}`, { method: 'PATCH', json: clearHeadRoles ? { ...patch, clearHeadRoles } : patch, headers: ifMatch(version) }),
   reveal: (id: string, account: 'iban' | 'fxIban') =>
     api<{ account: 'iban' | 'fxIban'; iban: string; formatted: string; domestic: string | null; foreign: boolean }>(`/people/employees/${id}/bank/reveal`, { method: 'POST', json: { account } }),
   history: (id: string, offset = 0, limit = 30) => api<{ entries: ApiPeopleHistoryEntry[]; more: boolean }>(`/people/history?entityType=employee&entityId=${id}&limit=${limit}&offset=${offset}`),
