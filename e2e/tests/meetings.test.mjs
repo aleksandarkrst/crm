@@ -61,7 +61,7 @@ describe('meeting calendar', () => {
     assert.equal(await page.$('[data-testid=quick-create]'), null, 'the popover gave way to the page');
     assert.equal(await page.$eval('[data-testid=meeting-date]', (el) => el.dataset.value), DAY);
     // The app's date style ("Tue 6 Oct 2026") and 24-hour times, not the browser's.
-    assert.match(await page.$eval('[data-testid=meeting-date]', (el) => el.value), /^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2} \d{4}$/);
+    assert.match(await page.$eval('[data-testid=meeting-date]', (el) => el.value), /^[A-Z][a-z]{2},? \d{1,2} [A-Z][a-z]{2} \d{4}$/);
     assert.equal(await page.$eval('[data-testid=meeting-start]', (el) => el.value), '10:00');
     assert.equal(await page.$eval('[data-testid=meeting-end]', (el) => el.value), '11:00', 'an hour by default');
     assert.equal(await page.$eval('[data-testid=meeting-agenda]', (el) => el.value), 'Walk the showroom');

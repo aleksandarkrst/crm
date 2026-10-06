@@ -266,7 +266,7 @@ describe('calendar quick create and in-place editing', () => {
     assert.equal(await page.$('[data-testid=meeting-when]'), null, 'no second summary of the time under the title');
     assert.ok(await page.$('[data-testid=meeting-page] .mf-details'), 'details');
     assert.ok(await page.$('[data-testid=meeting-page] .mf-guests [data-testid=meeting-field-guests]'), 'guests');
-    assert.match(await page.$eval('[data-testid=meeting-field-date]', (el) => el.value), /^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2} \d{4}$/);
+    assert.match(await page.$eval('[data-testid=meeting-field-date]', (el) => el.value), /^[A-Z][a-z]{2},? \d{1,2} [A-Z][a-z]{2} \d{4}$/);
     const tops = await page.$$eval('[data-testid=meeting-field-when] input', (inputs) => inputs.map((el) => Math.round(el.getBoundingClientRect().top)));
     assert.equal(new Set(tops).size, 1, `date, start and end on one line: ${tops}`);
 

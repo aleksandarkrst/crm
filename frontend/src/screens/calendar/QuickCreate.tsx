@@ -32,16 +32,18 @@ export function QuickCreate({ draft, seed, onChange, onClose }: { draft: Calenda
       const top = Math.max(8, Math.min(r.top, window.innerHeight - h - 8));
       setPos((p) => (p && p.top === top && p.left === left ? p : { top, left }));
     };
+    // Scrolling inside the popover itself doesn't move it (a click there would miss).
+    const onScroll = (e: Event) => !pop.current?.contains(e.target as Node) && place();
     place();
     window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
+    window.addEventListener('scroll', onScroll, true);
     // It grows with the guests and messages: still inside the window.
     const grow = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(place);
     if (pop.current) grow?.observe(pop.current);
     return () => {
       grow?.disconnect();
       window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('scroll', onScroll, true);
     };
   }, [draft.anchor, draft.start, draft.end]);
 
