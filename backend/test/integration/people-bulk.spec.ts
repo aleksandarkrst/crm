@@ -6,7 +6,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, createTenant, ok, type Session, signIn } from './helpers';
-import { asTenantSql, createDepartment, createTeam, grantRole, IBAN, joinAsEmployee, START } from './people-helpers';
+import { addEmployee, asTenantSql, createDepartment, createTeam, grantRole, IBAN, joinAsEmployee } from './people-helpers';
 
 let owner: Session;
 let hr: Session;
@@ -16,8 +16,7 @@ let emp: Session;
 let tenant: string;
 const id = {} as Record<'owner' | 'hr' | 'pay' | 'mgr' | 'emp', string>;
 const as = (s: Session = owner) => ({ token: s.token, tenant });
-const create = async (firstName: string, lastName: string, extra: Record<string, unknown> = {}) =>
-  (await ok('POST', '/people/employees', { ...as(), body: { firstName, lastName, employmentStartDate: START, ...extra } })).id as string;
+const create = (firstName: string, lastName: string, extra: Record<string, unknown> = {}) => addEmployee(owner, tenant, { firstName, lastName, ...extra });
 const bulk = (s: Session, body: Record<string, unknown>) => call('POST', '/people/employees/bulk', { ...as(s), body });
 const card = (who: string) => ok('GET', `/people/employees/${who}`, as());
 

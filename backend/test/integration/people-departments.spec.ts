@@ -8,7 +8,7 @@
  */
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { call, createTenant, ok, type Session, signIn } from './helpers';
-import { asTenantSql, grantRole, joinAsEmployee, START } from './people-helpers';
+import { addEmployee, asTenantSql, grantRole, joinAsEmployee, START } from './people-helpers';
 
 let owner: Session;
 let hr: Session;
@@ -19,8 +19,7 @@ let tenant: string;
 const id = {} as Record<'owner' | 'hr' | 'pay' | 'mgr' | 'emp', string>;
 const as = (s: Session = owner) => ({ token: s.token, tenant });
 
-const person = async (firstName: string, lastName: string, extra: Record<string, unknown> = {}) =>
-  (await ok('POST', '/people/employees', { ...as(), body: { firstName, lastName, employmentStartDate: START, ...extra } })).id as string;
+const person = (firstName: string, lastName: string, extra: Record<string, unknown> = {}) => addEmployee(owner, tenant, { firstName, lastName, ...extra });
 const department = async (name: string, extra: Record<string, unknown> = {}, s: Session = hr) => (await ok('POST', '/people/departments', { ...as(s), body: { name, ...extra } })).id as string;
 const team = async (departmentId: string, name: string, extra: Record<string, unknown> = {}, s: Session = hr) =>
   (await ok('POST', '/people/teams', { ...as(s), body: { departmentId, name, ...extra } })).team.id as string;

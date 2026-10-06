@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { Client } from 'pg';
 import { inject } from 'vitest';
 import { addMember, ok, type Session } from './helpers';
@@ -50,6 +51,27 @@ export async function joinAsEmployee(owner: Session, tenant: string, invitee: Se
   await addMember(owner, tenant, invitee, role);
   const access = await accessOf(invitee, tenant);
   return access.employeeId as string;
+}
+
+/**
+ * CD-226: the app shows only members, people with a pending invitation and people who left. A record
+ * made directly with POST /people/employees (the API stays; the UI is gone) gets a pending
+ * invitation here, so the list and the card show it (as Invited). No email is sent.
+ */
+export async function showInApp(tenant: string, employeeId: string): Promise<void> {
+  await asTenantSql(tenant, `insert into invitations (tenant_id, email, role, token_hash, expires_at, employee_id) values ($1, $2, 'member', $3, now() + interval '7 days', $4)`, [
+    tenant,
+    `shown-${employeeId}@example.test`,
+    randomBytes(32).toString('hex'),
+    employeeId,
+  ]);
+}
+
+/** POST /people/employees as `s` (start date filled in), shown in the app (`showInApp`); returns the id. */
+export async function addEmployee(s: Session, tenant: string, body: Record<string, unknown>): Promise<string> {
+  const { id } = await ok('POST', '/people/employees', { token: s.token, tenant, body: { employmentStartDate: START, ...body } });
+  await showInApp(tenant, id);
+  return id as string;
 }
 
 /** A valid start date (spec 4.2: required on create). */

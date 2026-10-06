@@ -6,13 +6,13 @@
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { call, createTenant, ok, type Session, signIn } from './helpers';
-import { accessOf, asTenantSql, createDepartment, createTeam, grantRole, IBAN, joinAsEmployee, START } from './people-helpers';
+import { accessOf, addEmployee, asTenantSql, createDepartment, createTeam, grantRole, IBAN, joinAsEmployee, START } from './people-helpers';
 
 let owner: Session;
 let member: Session;
 let tenant: string;
 const as = (s: Session = owner) => ({ token: s.token, tenant });
-const create = async (body: Record<string, unknown>) => (await ok('POST', '/people/employees', { ...as(), body: { employmentStartDate: START, ...body } })).id as string;
+const create = (body: Record<string, unknown>) => addEmployee(owner, tenant, body);
 const setManager = (who: string, managerId: string | null) => call('PATCH', `/people/employees/${who}`, { ...as(), body: { managerId } });
 
 beforeAll(async () => {
@@ -206,10 +206,15 @@ describe('the directory: filters and search', () => {
   it('keeps 1,000 employees fast enough to list in one response', async () => {
     const big = await signIn('org-big');
     const bigTenant = await createTenant(big, 'Org big');
+    // Invited, so the list shows them (CD-226).
     await asTenantSql(
       bigTenant,
-      `insert into employees (tenant_id, first_name, last_name, work_email, employment_start_date)
-         select $1, 'Person', 'Number ' || g, 'p' || g || '@big.test', date '2024-01-01' from generate_series(1, 1000) g`,
+      `with e as (
+         insert into employees (tenant_id, first_name, last_name, work_email, employment_start_date)
+           select $1, 'Person', 'Number ' || g, 'p' || g || '@big.test', date '2024-01-01' from generate_series(1, 1000) g
+           returning id, work_email)
+       insert into invitations (tenant_id, email, role, token_hash, expires_at, employee_id)
+         select $1, e.work_email, 'member', md5(e.id::text), now() + interval '7 days', e.id from e`,
       [bigTenant],
     );
     const started = Date.now();
@@ -341,7 +346,7 @@ describe('the top of the organisation (CD-224, B15)', () => {
     expect(await issuesOf(top)).not.toContain('no_manager');
     expect(await noManagerIds()).toEqual([]);
 
-    const second = (await ok('POST', '/people/employees', { ...asBoss(), body: { firstName: 'Second', lastName: 'Top', employmentStartDate: START } })).id as string;
+    const second = await addEmployee(boss, ws, { firstName: 'Second', lastName: 'Top' });
     expect(await noManagerIds()).toEqual([top, second].sort());
     expect(await issuesOf(top)).toContain('no_manager');
 
@@ -367,7 +372,7 @@ describe('the CEO (CD-225): a workspace setting, the top of the chart', () => {
 
   it('only an Admin sets it, to an active employee of the workspace; the CEO is never "No manager"', async () => {
     const top = (await accessOf(boss, ws)).employeeId as string;
-    const ceo = (await ok('POST', '/people/employees', { ...asBoss(), body: { firstName: 'Cora', lastName: 'Ceo', employmentStartDate: START } })).id as string;
+    const ceo = await addEmployee(boss, ws, { firstName: 'Cora', lastName: 'Ceo' });
     expect((await ok('GET', '/workspace', asBoss())).ceoEmployeeId).toBeNull();
     // Several without a manager and no CEO: all are flagged.
     expect((await noManagerIds()).length).toBeGreaterThan(1);

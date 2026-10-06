@@ -136,14 +136,11 @@ describe('command palette, + menu and account menu', () => {
     await page.waitForFunction(() => !document.querySelector('.modal'));
   });
 
-  step('"Employee" in the + menu opens Add employee on the Org structure page (CD-224)', async () => {
+  step('the + menu has no "Employee" (CD-226: people join by invitation); the Org structure offers to add a department', async () => {
     await click(page, '[data-testid=new-menu]');
-    await click(page, '[data-testid=new-employee]');
-    await page.waitForFunction(() => location.pathname === '/org');
-    await page.waitForSelector('::-p-text(Department, manager, personal details)');
-    assert.ok(!new URL(page.url()).searchParams.has('new'), 'the one-off parameter is gone');
-    await clickButton(page, 'Cancel');
-    await page.waitForFunction(() => !document.querySelector('.modal'));
+    await page.waitForSelector('[data-testid=new-task]');
+    assert.equal(await page.$('[data-testid=new-employee]'), null, 'no Employee in the + menu');
+    await page.goto(`${BASE_URL}/org`, { waitUntil: 'networkidle0' });
     // No departments yet: the chart and the Department filter offer to add one.
     await page.waitForSelector('[data-testid=org-no-departments]');
     await click(page, '[data-testid=org-filter-department]');

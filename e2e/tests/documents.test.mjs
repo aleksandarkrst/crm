@@ -104,6 +104,23 @@ describe('document templates and generated documents', () => {
     assert.match(await text(page), /Left empty:/);
   });
 
+  step("the built-in proposal preview's background reaches the end of the document (CD-226)", async () => {
+    await page.setViewport({ width: 1280, height: 640 });
+    await clickButton(page, 'Preview built-in proposal');
+    await page.waitForFunction(() => /Proposal — /.test(document.querySelector('.overlay')?.innerText ?? ''));
+    const bottom = await page.evaluate(() => {
+      const overlay = [...document.querySelectorAll('.overlay')].find((o) => /Proposal — /.test(o.innerText));
+      overlay.scrollTop = overlay.scrollHeight;
+      const sheet = overlay.firstElementChild.getBoundingClientRect();
+      return { scrolls: overlay.scrollHeight > overlay.clientHeight, sheetBottom: Math.round(sheet.bottom), overlayBottom: Math.round(overlay.getBoundingClientRect().bottom) };
+    });
+    assert.ok(bottom.scrolls, 'the preview is taller than the window');
+    // Scrolled to the end, the page (its --bg-soft background) still reaches the bottom of the window.
+    assert.ok(bottom.sheetBottom >= bottom.overlayBottom - 1, JSON.stringify(bottom));
+    await clickButton(page, 'Close');
+    await page.waitForFunction(() => !/Proposal — /.test(document.querySelector('.overlay')?.innerText ?? ''));
+  });
+
   step('throws no uncaught errors in the page', async () => {
     assert.deepEqual(browser.errors, []);
   });
