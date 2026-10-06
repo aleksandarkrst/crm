@@ -100,12 +100,14 @@ export function MeetingForm({
 
   const [d, setD] = useState<Draft>(() => {
     const deal = seed.dealId ? s.leads.find((l) => l.id === seed.dealId) : undefined;
-    const contactCompany = seed.contactId ? companyOfContactId(seed.contactId) : null;
+    // A contact page's id can be its person id ("…:p"): the contact behind it.
+    const contactId = seed.contactId ? (people.find((p) => p.contactId === seed.contactId || p.id === seed.contactId)?.contactId ?? null) : null;
+    const contactCompany = contactId ? companyOfContactId(contactId) : null;
     const companyId = seed.companyId || deal?.companyId || contactCompany || '';
     const dealId = deal && deal.companyId === companyId ? deal.id : onlyOpenDeal(companyId);
     const external = new Set<string>(seed.externalContactIds ?? []);
     if (!seed.externalContactIds) {
-      if (seed.contactId && contactCompany === companyId) external.add(seed.contactId);
+      if (contactId && contactCompany === companyId) external.add(contactId);
       const primary = dealId ? primaryContactOf(dealId, companyId) : null;
       if (primary) external.add(primary);
     }

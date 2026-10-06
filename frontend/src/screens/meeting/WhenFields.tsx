@@ -54,7 +54,10 @@ export function DateField({ value, onChange, label, testId, disabled }: { value:
         }}
         onChange={(e) => {
           setText(e.target.value);
-          if (isWholeDate(e.target.value)) commit(e.target.value.trim());
+          if (isWholeDate(e.target.value)) {
+            commit(e.target.value.trim());
+            setText(null);
+          }
         }}
         onBlur={(e) => {
           finish();
@@ -179,7 +182,10 @@ export function TimeField({
         }}
         onChange={(e) => {
           setText(e.target.value);
-          if (isWholeTime(e.target.value)) commit(parseTime(e.target.value));
+          if (isWholeTime(e.target.value)) {
+            commit(parseTime(e.target.value));
+            setText(null);
+          }
         }}
         onBlur={(e) => {
           finish();

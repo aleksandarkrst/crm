@@ -53,12 +53,21 @@ describe('meeting calendar', () => {
     await page.mouse.click(at.x, at.y);
     await page.waitForSelector('[data-testid=quick-create]');
     assert.equal(await page.$eval('[data-testid=cal-draft-time]', (el) => el.textContent.trim()), '10:00–11:00');
+    // An agenda typed in the popover comes along to the New meeting page (CD-221).
+    await setValue(page, '[data-testid=quick-create] [data-testid=meeting-agenda]', 'Walk the showroom');
     await click(page, '[data-testid=quick-more]');
-    await page.waitForSelector('.modal [data-testid=meeting-form]');
-    assert.equal(await page.$('[data-testid=quick-create]'), null, 'the popover gave way to the dialog');
-    assert.equal(await page.$eval('[data-testid=meeting-date]', (el) => el.value), DAY);
+    await page.waitForSelector('[data-testid=new-meeting] [data-testid=meeting-form]');
+    assert.equal(new URL(page.url()).pathname, '/meetings/new', 'More options is a page');
+    assert.equal(await page.$('[data-testid=quick-create]'), null, 'the popover gave way to the page');
+    assert.equal(await page.$eval('[data-testid=meeting-date]', (el) => el.dataset.value), DAY);
+    // The app's date style ("Tue 6 Oct 2026") and 24-hour times, not the browser's.
+    assert.match(await page.$eval('[data-testid=meeting-date]', (el) => el.value), /^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2} \d{4}$/);
     assert.equal(await page.$eval('[data-testid=meeting-start]', (el) => el.value), '10:00');
     assert.equal(await page.$eval('[data-testid=meeting-end]', (el) => el.value), '11:00', 'an hour by default');
+    assert.equal(await page.$eval('[data-testid=meeting-agenda]', (el) => el.value), 'Walk the showroom');
+    // Google Calendar's layout: details beside the guests.
+    assert.ok(await page.$('[data-testid=new-meeting] .mf-details'), 'the details column');
+    assert.ok(await page.$('[data-testid=new-meeting] .mf-guests [data-testid=meeting-guests]'), 'the guests column');
 
     // Company is required (AC 6).
     await click(page, '[data-testid=meeting-save]');
@@ -68,14 +77,38 @@ describe('meeting calendar', () => {
     await setValue(page, '[data-testid=meeting-company]', company.id);
     await page.waitForFunction((name) => document.querySelector('[data-testid=meeting-title]').value === `Meeting with ${name}`, {}, COMPANY);
     assert.equal(await page.$eval('[data-testid=meeting-deal]', (el) => el.value), deal.id, 'the company’s only open deal');
-    assert.equal(await page.$eval('[data-testid=meeting-type]', (el) => el.value), 'visit');
+    assert.equal(await page.$eval('[data-testid=meeting-type]', (el) => el.dataset.value), 'visit');
     assert.equal(await page.$eval('[data-testid=meeting-location]', (el) => el.value), 'Belgrade, Knez Mihailova 1', 'a visit is at the HQ');
+    // Picking the deal invites its primary contact (CD-221); this test wants a visit without one.
+    await page.waitForFunction(() => document.querySelector('[data-testid=meeting-guests-list]')?.innerText.includes('Petra Customer'));
+    await click(page, '[data-testid=meeting-guests-list] [data-kind=external] button[title^="Remove"]');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=meeting-guests-list]').innerText.includes('Petra Customer'));
+
+    // B1: an end before the start says so at once; Save keeps the meeting on screen and sends nothing.
+    await setValue(page, '[data-testid=meeting-end]', '09:00');
+    await page.waitForSelector('[data-testid=meeting-time-error]');
+    assert.match(await page.$eval('[data-testid=meeting-time-error]', (el) => el.innerText), /The end must be after the start/);
+    await click(page, '[data-testid=meeting-save]');
+    await page.waitForSelector('[data-testid=meeting-errors]');
+    assert.equal(new URL(page.url()).pathname, '/meetings/new', 'still on the page');
+    assert.equal(await page.$eval('[data-testid=meeting-title]', (el) => el.value), `Meeting with ${COMPANY}`, 'nothing typed is lost');
+    assert.deepEqual(await dealMeetings(), [], 'nothing saved');
+    // B7: moving the start keeps the length; a length that isn't valid becomes an hour.
+    await setValue(page, '[data-testid=meeting-start]', '12:00');
+    await page.waitForFunction(() => document.querySelector('[data-testid=meeting-end]').value === '13:00');
+    assert.equal(await page.$('[data-testid=meeting-time-error]'), null);
+    await setValue(page, '[data-testid=meeting-end]', '14:30');
+    await setValue(page, '[data-testid=meeting-start]', '10:00');
+    await page.waitForFunction(() => document.querySelector('[data-testid=meeting-end]').value === '12:30');
+    await setValue(page, '[data-testid=meeting-end]', '11:00');
+    await page.waitForFunction(() => document.querySelector('[data-testid=meeting-end]').value === '11:00');
 
     // A customer visit without anyone from the customer: a warning, then the second click saves.
     await click(page, '[data-testid=meeting-save]');
     await page.waitForSelector('[data-testid=meeting-no-external]');
     await click(page, '[data-testid=meeting-save]');
-    await page.waitForFunction(() => !document.querySelector('.modal [data-testid=meeting-form]'), { timeout: 10_000 });
+    await page.waitForFunction(() => !document.querySelector('[data-testid=meeting-form]'), { timeout: 10_000 });
+    await page.waitForFunction(() => location.pathname === '/calendar', { timeout: 10_000 });
     const rows = await eventually(async () => {
       const list = await dealMeetings();
       return list.length === 1 && list;
@@ -223,9 +256,14 @@ describe('meeting calendar', () => {
     await page.goto(`${BASE_URL}/deals/${deal.id}`, { waitUntil: 'networkidle0' });
     await click(page, '.composer-tab::-p-text(Meeting)');
     await page.waitForSelector('.lead-main [data-testid=meeting-form]');
+    // The same layout as the New meeting page (CD-221): title, date and time, details beside the guests.
+    assert.ok(await page.$('.lead-main .mf-inline .mf-details'), 'the details column');
+    assert.ok(await page.$('.lead-main .mf-inline .mf-guests'), 'the guests column');
+    assert.equal(await page.$('.lead-main input[type=time], .lead-main input[type=date]'), null, 'no browser date or time inputs');
     assert.equal(await page.$eval('.lead-main [data-testid=meeting-deal]', (el) => el.value), deal.id);
-    assert.match(await page.$eval('.lead-main [data-testid=meeting-external]', (el) => el.innerText), /Petra Customer/, 'the primary contact is invited');
+    assert.match(await page.$eval('.lead-main [data-testid=meeting-guests-list]', (el) => el.innerText), /Petra Customer/, 'the primary contact is invited');
     await setValue(page, '.lead-main [data-testid=meeting-date]', isoDay(3));
+    await page.waitForFunction((day) => document.querySelector('.lead-main [data-testid=meeting-date]').dataset.value === day, {}, isoDay(3));
     await setValue(page, '.lead-main [data-testid=meeting-start]', '14:00');
     assert.equal(await page.$eval('.lead-main [data-testid=meeting-save]', (el) => el.innerText.trim()), 'Schedule meeting');
     await click(page, '.lead-main [data-testid=meeting-save]');
@@ -247,7 +285,7 @@ describe('meeting calendar', () => {
     const start = new Date(Math.ceil((Date.now() + 9 * 86_400_000) / 3_600_000) * 3_600_000).toISOString();
     const openNew = async () => {
       await page.goto(`${BASE_URL}/calendar?new=1&companyId=${other.id}&type=online&start=${encodeURIComponent(start)}`, { waitUntil: 'networkidle0' });
-      await page.waitForSelector('.modal [data-testid=meeting-form]');
+      await page.waitForSelector('[data-testid=new-meeting] [data-testid=meeting-form]');
     };
     await openNew();
     assert.match(await page.$eval('[data-testid=meeting-no-deals]', (el) => el.innerText), /This company has no deals yet/);
@@ -255,7 +293,7 @@ describe('meeting calendar', () => {
     await click(page, '[data-testid=meeting-save]');
     await page.waitForSelector('[data-testid=meeting-errors]');
     assert.match(await page.$eval('[data-testid=meeting-errors]', (el) => el.innerText), /no deals yet/);
-    assert.ok(await page.$('.modal [data-testid=meeting-form]'), 'still open');
+    assert.ok(await page.$('[data-testid=new-meeting] [data-testid=meeting-form]'), 'still open');
     assert.deepEqual((await api(page, `/crm/meetings?companyId=${other.id}`)).meetings, []);
 
     // "+ New deal": the New deal dialog for this company, above the meeting; creating stays here and picks it.
@@ -268,9 +306,9 @@ describe('meeting calendar', () => {
     const made = await eventually(async () => (await api(page, '/crm/deals')).find((r) => r.deal.companyId === other.id)?.deal);
     assert.ok(made, 'the deal was created');
     await page.waitForFunction((id) => document.querySelector('[data-testid=meeting-deal]')?.value === id, { timeout: 10_000 }, made.id);
-    assert.equal(new URL(page.url()).pathname, '/calendar', 'stays on the meeting');
+    assert.equal(new URL(page.url()).pathname, '/meetings/new', 'stays on the meeting');
     await click(page, '[data-testid=meeting-save]');
-    await page.waitForFunction(() => !document.querySelector('.modal [data-testid=meeting-form]'), { timeout: 10_000 });
+    await page.waitForFunction(() => !document.querySelector('[data-testid=meeting-form]'), { timeout: 10_000 });
     const saved = await eventually(async () => (await api(page, `/crm/meetings?companyId=${other.id}`)).meetings[0]);
     assert.equal(saved.dealId, made.id);
     await waitForToastToClear(page).catch(() => {});
@@ -285,7 +323,7 @@ describe('meeting calendar', () => {
     assert.match(await page.$eval('[data-testid=meeting-errors]', (el) => el.innerText), /Pick the deal this meeting is for/);
     await setValue(page, '[data-testid=meeting-deal]', second.id);
     await click(page, '[data-testid=meeting-save]');
-    await page.waitForFunction(() => !document.querySelector('.modal [data-testid=meeting-form]'), { timeout: 10_000 });
+    await page.waitForFunction(() => !document.querySelector('[data-testid=meeting-form]'), { timeout: 10_000 });
     assert.ok(await eventually(async () => (await api(page, `/crm/meetings?dealId=${second.id}`)).meetings.length === 1), 'saved on the picked deal');
   });
 
@@ -295,11 +333,20 @@ describe('meeting calendar', () => {
     await page.goto(`${BASE_URL}/calendar`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=calendar][data-view=day]');
     assert.ok((await sideways()) <= 0, `/calendar scrolls sideways by ${await sideways()}px`);
-    for (const path of [`/calendar?view=week&date=${DAY}`, `/calendar?view=month&date=${DAY}`, `/calendar?view=table&from=${isoDay(-30)}&to=${isoDay(30)}`, `/meetings/${meetingId}`]) {
+    for (const path of [`/calendar?view=week&date=${DAY}`, `/calendar?view=month&date=${DAY}`, `/calendar?view=table&from=${isoDay(-30)}&to=${isoDay(30)}`, `/meetings/${meetingId}`, `/meetings/new?companyId=${company.id}`]) {
       await page.goto(BASE_URL + path, { waitUntil: 'networkidle0' });
       await page.waitForSelector('.screen-header');
       assert.ok((await sideways()) <= 0, `${path} scrolls sideways by ${await sideways()}px`);
     }
+    // On a phone "+ New meeting" opens the New meeting page (there is no popover on phones).
+    await page.goto(`${BASE_URL}/calendar?view=day&date=${DAY}`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('[data-testid=calendar][data-view=day]');
+    await click(page, '[data-testid=cal-new]');
+    await page.waitForSelector('[data-testid=new-meeting] [data-testid=meeting-form]');
+    assert.equal(await page.$('[data-testid=quick-create]'), null);
+    assert.ok((await sideways()) <= 0, `the New meeting page scrolls sideways by ${await sideways()}px`);
+    await click(page, '[data-testid=meeting-close]');
+    await page.waitForFunction(() => location.pathname === '/calendar');
     await page.goto(`${BASE_URL}/calendar?view=week&date=${isoDay(3)}`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=day-list]');
   });

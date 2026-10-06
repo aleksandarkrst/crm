@@ -1278,40 +1278,72 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`; the deal rules (CD
   for members and "Everyone" for owners and admins; status to Planned and Held. Making a meeting
   works like Google Calendar (CD-212): on Day and Week, pressing an empty slot and dragging draws a
   placeholder in 15-minute steps (a click makes an hour from the half hour); the placeholder can be
-  moved and resized by its lower edge, and the **quick-create popover** (`calendar/QuickCreate.tsx`)
-  opens next to it with title, type, company, deal (required), date and times, "Save" and "More
-  options" (the full dialog, prefilled through `MeetingDialogSeed.title/end`). Escape or a press
+  moved and resized by its lower edge, and the **quick-create popover** (`calendar/QuickCreate.tsx`,
+  the `quick` shape of `MeetingForm`, CD-221) opens next to it, laid out like Google Calendar's:
+  title, type chips, date and times on one row, Add guests, location, agenda, organizer, company
+  and deal (required), "More options" and Save. Its time belongs to the placeholder (`time` and
+  `onDraft` props), so dragging the placeholder and editing the fields stay in step. "More options"
+  opens the New meeting page with everything typed so far. Escape or a press
   outside discards it (that press doesn't start another one). Month: a click on a day opens the
   popover at 09:00. The Calendar owns the draft (`CalendarDraft`, kept per view and date) and
   passes the filters as the new meeting's seed. Planned meetings the user may edit can be dragged
   to another time or day and resized by their lower edge (15-minute steps, saved with If-Match; put
   back with the reason when refused; a click on the edge does nothing). On phones Day is the
-  default and Week is a list by day; a tap opens the New meeting dialog and dragging is off. `?new=1&companyId=…&dealId=…&contactId=…&type=…&organizer=…&start=…`
-  opens a prefilled New meeting dialog. The Table loads 500 rows at a time ("Load more" reads the
+  default and Week is a list by day; there is no popover (a tap opens the New meeting page) and dragging is off. `?new=1&companyId=…&dealId=…&contactId=…&type=…&organizer=…&start=…`
+  opens the prefilled New meeting page. The Table loads 500 rows at a time ("Load more" reads the
   next page with `offset`, CD-211), so a wide range works. **`ids=`** (CD-211) shows exactly those
   meetings (≤ 200) in the Table, whatever the other filters, with the removable chip "N meetings
   from report": every count on a plan page and in Reports (rows, totals, unplanned) links this way
   (`visitsInCalendar` in `store/visitPlans.ts`), so "Held 3" opens 3 rows. Over 200 meetings the
   link falls back to the closest filters (period, salesperson as organizer or participant,
   customer, Customer visit, status) plus `report=N`, and the chip says so.
-- **New / Edit meeting** (`modals/MeetingDialog.tsx`, `meetings.openDialog(seed)`; `MeetingForm`
-  is also the deal Composer's Meeting tab, "Schedule meeting"): defaults per spec 4.2 (title
-  "Meeting with <company>", Customer visit, start + 60 minutes, the company's HQ for a visit, the
-  company's only open deal, organizer = you, the deal's primary contact or the contact the dialog
-  was opened from). Warns about colleagues' overlapping meetings and about a Customer visit
-  without external participants (the second click saves). The contact picker lists only the
-  meeting company's contacts (CD-212; before a company is picked it says to pick one, and
-  changing the company drops contacts of the old one) and marks those without an email "No
-  email"; its "+ Add new contact" (CD-131) opens a small form (name from the search, email, job title) that creates a contact of
-  the meeting's company with the store's `createContact` (which returns the new id) and adds them.
-- **Meeting page** (`/meetings/:id`, `screens/Meeting.tsx`): header with type, status, time and
-  location (a link when it is a URL), Mark as held (disabled before the start; a timer enables it
+- **New meeting page** (`/meetings/new`, `screens/NewMeeting.tsx`, CD-221; "More options" and
+  every "New meeting": `meetings.openDialog(seed)` navigates there through `modals/MeetingDialog.tsx`,
+  a seed with an `id` opens that meeting instead). Laid out like Google Calendar's event page:
+  close, the title and Save on top, then date, start "to" end and end date on one row, the type,
+  and "Meeting details" (company, deal, location, organizer, agenda) beside "Guests". The URL holds
+  the prefill (`paths.newMeeting`: `companyId`, `dealId`, `contactId`, `type`, `organizer`,
+  `start`, `end`, `title`); guests, location and agenda from the popover come in the history state
+  (`meetingSeedOf`). Close and Save go back where it was opened from (opened from a link, Save
+  opens the meeting). The deal Composer's Meeting tab is the same form (`inline` shape, "Schedule
+  meeting"). `screens/meeting/MeetingForm.tsx` holds the rules for all three shapes: defaults per
+  spec 4.2 (title "Meeting with <company>", Customer visit, an hour, the company's HQ for a visit,
+  the company's only open deal, organizer = you, the contact it was opened from); **picking a
+  deal invites its primary contact** (also when the only open deal is picked for you); the
+  default start is the next full hour in working hours, else 09:00 on the next working day
+  (Monday to Friday, 09:00–17:00, B8); "Schedule visit" on a plan starts today if today is in the
+  plan's period, else on its first working day (B9). Moving the start keeps the length (a length
+  that isn't valid becomes an hour, B7); an end before the start is an error shown at once, and
+  Save then sends nothing and keeps everything typed (B1). Warns about colleagues' overlapping
+  meetings and about a Customer visit without external participants (the second click saves).
+  Those helpers are pure functions in `store/meetingTime.ts`, unit-tested by `npm test` in
+  frontend (`frontend/test/*.test.ts`, Node's test runner on the TypeScript as is).
+- **Dates and times** (CD-221, `screens/meeting/WhenFields.tsx`): meetings never use the browser's
+  date and time inputs (12-hour on some systems). `DateField` shows the app's date style ("Tue 6
+  Oct 2026", `dateLabel`), takes typed dates ("6.10.2026", "6 Oct", ISO) and has a month picker;
+  `TimeField` is 24-hour, with a quarter-hour list (the end's list shows the length and "next
+  day") and typed times ("930", "9:30", "21.15"). A whole value typed or set (ISO date, "HH:MM")
+  is taken at once; anything else when the field is left. `data-value` holds the ISO date.
+- **Guests** (`screens/meeting/Guests.tsx`, `GuestsField`): one "Add guests" search over the
+  workspace's members (internal participants) and the meeting company's contacts (external ones;
+  before a company is picked it says to pick one, and changing the company drops contacts of the
+  old one), contacts without an email marked "No email"; "+ Add new contact" (CD-131) opens a small
+  form (name from the search, email, job title) that creates a contact of the meeting's company
+  with the store's `createContact` and adds them. While the workspace has one member it offers
+  **Invite a colleague** (owners and admins), which opens Settings → Team with the Invite dialog
+  (`/settings/team?invite=1`).
+- **Meeting page** (`/meetings/:id`, `screens/Meeting.tsx`): a compact header (CD-221) with the
+  title, status, Mark as held (disabled before the start; a timer enables it
   when the start passes while the page is open), Cancel (optional
-  reason), Undo held, Restore, and Delete for owners and admins. There is no Edit button (CD-212):
+  reason), Undo held, Restore, and Delete for owners and admins, and the date, start and end on
+  one line under the title; below it the New meeting page's two columns, then the minutes tabs.
+  There is no Edit button (CD-212):
   every field is edited in place like on the deal page (`screens/meeting/MeetingFields.tsx`):
-  the title in the header, type, start and end, location, company and deal (another company is
-  saved once one of its deals is picked, or made with "+ New deal"), organizer (owners and admins),
-  internal and external participants (the company's contacts, "+ Add new contact") and the agenda.
+  the title, the time (`MeetingWhen`; a new start keeps the length, an end before the start is
+  refused), type, company and deal (another company is
+  saved once one of its deals is picked, or made with "+ New deal"), location (with "Open" when it
+  is a URL), organizer (owners and admins), the agenda (`MeetingDetails`) and the guests
+  (`MeetingGuests`, the same "Add guests").
   `useField` shows an edit at once and saves it after a 600 ms typing pause (pickers at once, on
   blur too) through `meetings.saveField`, with If-Match on the version shown; a refused save
   (conflict or error) says why and shows the saved value. Read-only for people who can't change
