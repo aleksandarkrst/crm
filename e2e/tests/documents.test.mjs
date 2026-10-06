@@ -106,8 +106,11 @@ describe('document templates and generated documents', () => {
 
   step("the built-in proposal preview's background reaches the end of the document (CD-226)", async () => {
     await page.setViewport({ width: 1280, height: 640 });
-    await clickButton(page, 'Preview built-in proposal');
-    await page.waitForFunction(() => /Proposal — /.test(document.querySelector('.overlay')?.innerText ?? ''));
+    // A DOM click: nothing on the deal page (a toast, the smaller window) may catch it.
+    const preview = await page.waitForSelector('button::-p-text(Preview built-in proposal)');
+    await preview.evaluate((button) => button.click());
+    const opened = () => [...document.querySelectorAll('.overlay')].some((o) => /Proposal — /.test(o.innerText));
+    await page.waitForFunction(opened);
     const bottom = await page.evaluate(() => {
       const overlay = [...document.querySelectorAll('.overlay')].find((o) => /Proposal — /.test(o.innerText));
       overlay.scrollTop = overlay.scrollHeight;
@@ -117,8 +120,8 @@ describe('document templates and generated documents', () => {
     assert.ok(bottom.scrolls, 'the preview is taller than the window');
     // Scrolled to the end, the page (its --bg-soft background) still reaches the bottom of the window.
     assert.ok(bottom.sheetBottom >= bottom.overlayBottom - 1, JSON.stringify(bottom));
-    await clickButton(page, 'Close');
-    await page.waitForFunction(() => !/Proposal — /.test(document.querySelector('.overlay')?.innerText ?? ''));
+    await click(page, '.overlay button.doc-btn::-p-text(Close)');
+    await page.waitForFunction(() => ![...document.querySelectorAll('.overlay')].some((o) => /Proposal — /.test(o.innerText)));
   });
 
   step('throws no uncaught errors in the page', async () => {
