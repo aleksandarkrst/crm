@@ -54,9 +54,11 @@ export async function mergeBlockers(tx: Tx, employeeId: string): Promise<string[
     .select({
       unitId: employees.unitId,
       managerId: employees.managerId,
-      reports: sql<number>`(select count(*)::int from ${employees} r where r.manager_id = ${employees.id})`,
-      leads: sql<number>`(select count(*)::int from ${orgUnits} u where u.lead_employee_id = ${employees.id})`,
-      personal: sql<boolean>`exists (select 1 from ${employeePersonal} p where p.employee_id = ${employees.id})`,
+      // Qualified by hand: a select from one table renders its columns without the table name,
+      // which inside these subqueries would name the subquery's own row.
+      reports: sql<number>`(select count(*)::int from ${employees} r where r.manager_id = "employees"."id")`,
+      leads: sql<number>`(select count(*)::int from ${orgUnits} u where u.lead_employee_id = "employees"."id")`,
+      personal: sql<boolean>`exists (select 1 from ${employeePersonal} p where p.employee_id = "employees"."id")`,
     })
     .from(employees)
     .where(eq(employees.id, employeeId));

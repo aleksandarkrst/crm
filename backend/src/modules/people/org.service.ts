@@ -27,7 +27,8 @@ const levelColumns = {
   name: orgLevels.name,
   position: orgLevels.position,
   version: orgLevels.updatedAt,
-  units: sql<number>`(select count(*)::int from ${orgUnits} u where u.level_id = ${orgLevels.id})`,
+  // Qualified by hand: a select from one table renders its columns without the table name.
+  units: sql<number>`(select count(*)::int from ${orgUnits} u where u.level_id = "org_levels"."id")`,
 };
 
 const unitColumns = {
