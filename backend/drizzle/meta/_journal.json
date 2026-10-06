@@ -295,13 +295,6 @@
       "when": 1791212894740,
       "tag": "0041_employee_deactivation_plan",
       "breakpoints": true
-    },
-    {
-      "idx": 42,
-      "version": "7",
-      "when": 1791266272791,
-      "tag": "0042_invitation_assigned_roles",
-      "breakpoints": true
     }
   ]
 }
