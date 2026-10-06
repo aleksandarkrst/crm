@@ -433,6 +433,16 @@ The access token lasts 2 hours, so:
 - **One account per email**: `IdentityService.resolveUser` refuses (409 `account_exists`) a sign-in
   subject it hasn't seen whose email already belongs to a user with another subject (e.g. Google
   after email and password). The app says how that account signs in and offers **Sign out**.
+- **The user's email** (CD-222): Auth0's access tokens carry no `email`, so a Google user's address
+  comes from the **ID token** of the token endpoint's answer (scope `openid profile email`, sent for
+  the password grant and Google alike; `SessionTokens.identity`, decoded without a signature check
+  because it comes straight from the token endpoint over TLS; an address marked
+  `email_verified: false` is left out). `SessionCookies.start` saves it on every sign-in **and every
+  renewal** (`IdentityService.rememberProfile`), so accounts made before get their address on their
+  next sign-in or refresh; Profile, Team and the external minutes' Reply-To read `users.email`. An
+  address another account already has is never taken (the one-account rule above), and saving
+  never makes a sign-in fail. An access token that does carry the address (`email`, or a namespaced
+  claim like `https://pultly.com/email` from an Auth0 Action) fills it in too, on any API call.
 - Covered by `backend/test/integration/signup.spec.ts` and `e2e/tests/signup.test.mjs` (dev mode).
 
 ### Teams and invitations
@@ -859,6 +869,12 @@ increasing per row, and the same moment as the history rows of that change.
 The UI is a port of the Claude Design "Mini CRM v2" prototype. Screens read from `useStore()` only;
 the store is the one place that talks to the backend.
 
+- Screens are code split (`lazy` in `App.tsx`). A tab opened before a deploy still asks for the old
+  chunk file names, which the new build doesn't have (CD-220). `lib/chunks.ts` (`loadChunk`) then
+  reloads the page once, at most once a minute per tab, so the new version loads. Anything still
+  failing reaches `ScreenErrorBoundary`, which shows "A new version of Pultly is available" (or
+  "This page could not be shown") with **Reload**, instead of a blank page.
+
 - `components/SessionGate.tsx`: sign-in (dev login or OIDC), picking or creating a workspace, and
   loading it. The store is created per workspace.
 - `store/remote.ts`: loads funnels, deals, deal lines, stage to-dos, companies, contacts,
@@ -914,8 +930,10 @@ the store is the one place that talks to the backend.
   false`) with a due date, a channel and an owner (`assignee_user_id`, which must be a member of the
   workspace). They show in Today (overdue / today / next up, with a done toggle) and on the lead's
   To-Do list, but don't count towards finishing a stage. Creating one logs "Task added" on the
-  deal's timeline and deleting one logs "Task removed" (the timeline is history, so the first entry
-  stays); ticking it off logs it like any completed to-do. The store keeps them in
+  deal's timeline with the task's channel and deleting one logs "Task removed" (the timeline is history, so the first entry
+  stays). **System entries** ("Deal created", "Moved to <stage>", "Moved to funnel", "Task
+  removed", and "Task added" without a channel) have `activities.channel` null and show the badge
+  "System", not "Research task" (CD-222; older rows were moved by `drizzle/0043_system_activities.sql`); ticking it off logs it like any completed to-do. The store keeps them in
   `leadTasks`; the other to-dos (`blocks_advance = true`) gate "Advance".
   - A task can take any of the seven channels (`CHANNELS`), labelled as on the timeline. Its
     title, owner, due date, channel and note can be edited (the same dialog, in edit mode, from
@@ -1209,8 +1227,8 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`; the deal rules (CD
 - **Deal timeline**, in the same transaction: creating writes "Meeting
   scheduled · <title>" (MT) with the time and place, marking as held "Meeting held · <title>" at
   the meeting's start and moves the deal's last contact there (never back in time,
-  `ActivitiesService.record`), cancelling "Meeting cancelled · <title>" with the reason.
-  Scheduling doesn't count as contact.
+  `ActivitiesService.record`), cancelling "Meeting cancelled · <title>" with the reason, restoring
+  "Meeting restored · <title>" with the time (CD-222). Scheduling doesn't count as contact.
 - **Related records**: a company with meetings can't be deleted (409, like deals; "Remove sample
   data" keeps a sample company that has meetings). Neither can a deal with meetings (CD-213): 409
   "<deal> has N meetings. Delete them or move them to another deal first." from `DealsService`,
@@ -1387,7 +1405,13 @@ hints are in `drizzle/0034_meeting_minutes_rls.sql`.
   meeting's id, fields `summary`, `agreements`, `nextSteps`; the first save counts as a change
   from empty), so the meeting's History tab shows them and `RecordHistoryService.assertNoConflict`
   checks them like meeting fields (lists compare by value). Two people saving the same part:
-  the usual 409 conflict message.
+  the usual 409 conflict message. Only real changes are written (CD-222): the service drops parts
+  equal to what is stored (next steps as their canonical JSON) and a save that changes nothing
+  keeps the version; the trigger compares next steps by id, trimmed text, owner and due date
+  (`crm_minutes_steps`, `drizzle/0044_minutes_history_real_changes.sql`), so linking a task to a
+  step ("Create task") is no history row. The History tab shows the steps' text and due dates.
+- **Past due dates** (CD-222): "Create task" on a step whose due date is before today (workspace
+  zone) asks "This date is in the past. Create anyway?" first; the API accepts it either way.
 - **Live updates**: minutes rows send `crm_changes` hints of type `meeting` with the meeting's id;
   the browser re-reads the meeting, and an open minutes tab reads the minutes again when the
   meeting's `minutesUpdatedAt` moved.
@@ -1426,7 +1450,16 @@ Service `meetings/external-minutes.service.ts`, email builder `meetings/minutes-
   null; CD-211) fills in the template (spec 7.1: title, date
   and time, location, both sides' participants, the agreements and the next steps with their due
   dates but without owners; subject "Minutes: <title>, <date>"; in the customer email language)
-  and remembers it; after that nothing is copied automatically. A read-only viewer, or a read
+  and remembers it, with what it was made from (`external_prefill`: the meeting's start and end,
+  the subject and body of the template from the meeting alone, and the text it filled in); after
+  that nothing is copied automatically. **When the meeting changes** (CD-222; `prefillCheck` in
+  `minutes-email.ts`): a later read by an editor compares the template of the meeting as it is now
+  with the one stored. A text nobody changed since and never sent is filled in again (a text from
+  before `external_prefill` existed, too, while nobody saved it); otherwise it stays and
+  `meetingChanged` is `'time'` (it moved) or `'details'` (title, place, people), and the tab shows
+  "The meeting time changed since this text was written" with **Update from meeting**
+  (`POST external/update-from-meeting`): the meeting lines at the top are replaced and the rest
+  kept, or the whole template comes back when those lines were edited; a subject someone changed stays. A read-only viewer, or a read
   before the meeting is held, gets the text as it is (empty, `prefilled: false`) and fixes nothing;
   the open tab reads it again when the meeting's status changes. `PUT external { subject?, body? }`
   (If-Match = `updatedAt`, the epoch before the first save; 409 when someone else changed a part
@@ -1437,7 +1470,7 @@ Service `meetings/external-minutes.service.ts`, email builder `meetings/minutes-
   `{ from, replyTo, to, cc, subject, text, html }`, send answers 202 with the send. `GET sends`
   (newest first, with recipients) and `POST sends/:sendId/retry` (202; only the failed recipients
   are queued again; 409 when none failed).
-- **Rules**: writing, previewing, sending and retrying take the people who may change the meeting
+- **Rules**: writing, previewing, sending, retrying and "Update from meeting" take the people who may change the meeting
   (403); the text can be written while planned or held (a cancelled meeting is read-only, 409);
   sending only for a **held** meeting (409). `to` = external participants of this meeting whose
   contact has an email (400 otherwise, at least one), `cc` = members of the workspace (400). The

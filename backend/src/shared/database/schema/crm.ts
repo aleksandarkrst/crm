@@ -305,7 +305,10 @@ export const dealContacts = pgTable(
   ],
 );
 
-/** Deal history: emails, meetings, calls, notes, completed to-dos, stage changes. */
+/**
+ * Deal history: emails, meetings, calls, notes, completed to-dos, stage changes. `channel` is null
+ * for system entries (deal created, stage moves, a task removed), which have no channel (CD-222).
+ */
 export const activities = pgTable(
   'activities',
   {
@@ -313,7 +316,7 @@ export const activities = pgTable(
     tenantId: tenantId(),
     dealId: uuid('deal_id').notNull(),
     actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
-    channel: text('channel', { enum: CHANNELS }).notNull(),
+    channel: text('channel', { enum: CHANNELS }),
     title: text('title').notNull(),
     detail: text('detail'),
     occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
@@ -675,6 +678,18 @@ export interface MeetingNextStep {
   taskId: string | null;
 }
 
+/** The template the external minutes were filled from (CD-222). */
+export interface ExternalPrefill {
+  startsAt: string;
+  endsAt: string;
+  /** The template's subject and body made from the meeting alone (no agreements, no next steps). */
+  headSubject: string;
+  headBody: string;
+  /** The text the template filled in. */
+  subject: string;
+  body: string;
+}
+
 /**
  * The minutes of a meeting, one row per meeting, created when someone first writes them. The
  * internal part (CD-132: summary, agreements, next steps) stays in the team; the external part
@@ -694,6 +709,9 @@ export const meetingMinutes = pgTable(
     externalSubject: text('external_subject'),
     externalBody: text('external_body'),
     externalPrefilledAt: timestamp('external_prefilled_at', { withTimezone: true }),
+    // What the template was filled from (CD-222): the meeting's time and the text it made, so a
+    // meeting moved afterwards refreshes a text nobody changed, or says so above one they did.
+    externalPrefill: jsonb('external_prefill').$type<ExternalPrefill>(),
     // The version of the external text alone (If-Match of its editor, CD-133) and who last
     // changed it: saving the customer text doesn't change who last wrote the internal minutes.
     externalUpdatedAt: timestamp('external_updated_at', { withTimezone: true }),

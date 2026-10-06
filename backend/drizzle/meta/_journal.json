@@ -295,6 +295,27 @@
       "when": 1791212894740,
       "tag": "0041_employee_deactivation_plan",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1791266458261,
+      "tag": "0042_meeting_fixes",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1791266478304,
+      "tag": "0043_system_activities",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1791266798810,
+      "tag": "0044_minutes_history_real_changes",
+      "breakpoints": true
     }
   ]
 }

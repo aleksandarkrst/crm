@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { ENV, type Env } from '../../infrastructure/config/config.module';
 import { Public } from '../../shared/authorization';
 import { RateLimit } from '../../shared/rate-limit';
+import { IdentityService } from './identity.service';
 import { pkce, SessionError, SessionProvider, type SessionTokens } from './sessions';
 
 /** The refresh token. httpOnly, so page scripts never see it; only sent to /api/auth. */
@@ -61,6 +62,7 @@ export class SessionCookies {
 
   constructor(
     private readonly sessions: SessionProvider,
+    private readonly identity: IdentityService,
     @Inject(ENV) env: Env,
   ) {
     this.secure = env.NODE_ENV === 'production' || env.APP_URL.startsWith('https:');
@@ -69,13 +71,15 @@ export class SessionCookies {
   /** Signs in with a password and sets the cookie. */
   async passwordLogin(req: Request, res: Response, email: string, password: string): Promise<SignedIn> {
     try {
-      return this.start(res, await this.sessions.passwordLogin(email, password, req.ip ?? req.socket.remoteAddress ?? ''));
+      return await this.start(res, await this.sessions.passwordLogin(email, password, req.ip ?? req.socket.remoteAddress ?? ''));
     } catch (err) {
       throw err instanceof SessionError ? sessionProblem(err) : err;
     }
   }
 
-  start(res: Response, tokens: SessionTokens): SignedIn {
+  /** Sets the cookie, and saves the person's email and name from the ID token (CD-222). */
+  async start(res: Response, tokens: SessionTokens): Promise<SignedIn> {
+    if (tokens.identity) await this.identity.rememberProfile(tokens.identity);
     if (tokens.refreshToken) {
       res.cookie(SESSION_COOKIE, tokens.refreshToken, { httpOnly: true, secure: this.secure, sameSite: 'strict', path: '/api/auth', maxAge: SESSION_DAYS * 86_400_000 });
     }
@@ -136,7 +140,7 @@ export class SessionController {
     const token = readCookie(req, SESSION_COOKIE);
     if (!token) throw sessionProblem(new SessionError('expired', 'Sign in to continue.'));
     try {
-      return this.cookies.start(res, await this.sessions.refresh(token));
+      return await this.cookies.start(res, await this.sessions.refresh(token));
     } catch (err) {
       if (!(err instanceof SessionError)) throw err;
       if (err.reason === 'expired') this.cookies.end(res);
@@ -178,7 +182,7 @@ export class SessionController {
     if (query.error) return done(query.error === 'access_denied' ? 'cancelled' : 'failed');
     if (!saved.success || !query.code || query.state !== saved.data.state) return done('failed');
     try {
-      this.cookies.start(res, await this.sessions.exchangeCode({ code: query.code, verifier: saved.data.verifier, redirectUri: this.redirectUri }));
+      await this.cookies.start(res, await this.sessions.exchangeCode({ code: query.code, verifier: saved.data.verifier, redirectUri: this.redirectUri }));
     } catch (err) {
       if (!(err instanceof SessionError)) throw err;
       return done('failed');
