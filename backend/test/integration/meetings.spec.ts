@@ -19,6 +19,11 @@ const as = (s: Session, headers?: Record<string, string>) => ({ token: s.token, 
 
 const HOUR = 3_600_000;
 const iso = (ms: number) => new Date(ms).toISOString();
+/** The instant local midnight began, in `timeZone`, on the local day that contains `at`. */
+const startOfDayIn = (timeZone: string, at: number) => {
+  const part = (type: string) => Number(new Intl.DateTimeFormat('en-GB', { timeZone, hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(at).find((p) => p.type === type)!.value);
+  return at - ((part('hour') * 60 + part('minute')) * 60 + part('second')) * 1000 - (at % 1000);
+};
 
 const company = (name: string) => ok('POST', '/crm/companies', { ...as(owner), body: { name } });
 const deal = (title: string, companyId: string | null) => ok('POST', '/crm/deals', { ...as(owner), body: { title, funnelId: funnel.id, companyId } });
@@ -333,6 +338,9 @@ describe('status changes', () => {
     const restored = await ok('POST', `/crm/meetings/${future.id}/restore`, as(owner), 200);
     expect(restored).toMatchObject({ status: 'planned', cancelReason: null, cancelledAt: null });
     expect((await call('POST', `/crm/meetings/${future.id}/restore`, as(owner))).status).toBe(409);
+    // Restoring is on the deal's timeline too, like cancelling (CD-222).
+    const afterRestore = await ok('GET', `/crm/deals/${d.id}/activities`, as(owner));
+    expect(afterRestore.find((a: Json) => a.title === 'Meeting restored · Future')).toMatchObject({ channel: 'MT' });
     // Cancelling without a body is fine.
     expect((await ok('POST', `/crm/meetings/${future.id}/cancel`, as(owner), 200)).cancelReason).toBeNull();
   });
@@ -487,7 +495,9 @@ describe('daily digest', () => {
     const withMeeting = await deal('Deal with a meeting ahead', co.id);
     const without = await deal('Deal without a next step', co.id);
     await create(owner, co.id, { title: 'Ahead', dealId: withMeeting.id, startsAt: iso(Date.now() + 48 * HOUR), endsAt: iso(Date.now() + 49 * HOUR) });
-    const now = Date.now() - 60_000; // started a minute ago: today, unless the test runs right after midnight
+    // Started a minute ago, but never before midnight in the workspace's time zone: right after
+    // midnight "a minute ago" is yesterday, which made this test fail at night (CD-220).
+    const now = Math.max(Date.now() - 60_000, startOfDayIn('Europe/Belgrade', Date.now()) + 1_000);
     const today = await create(ana, co.id, { title: 'Today with owner', startsAt: iso(now), endsAt: iso(now + HOUR), internalUserIds: [owner.userId] });
     const old = Date.now() - 72 * HOUR;
     const stale = await create(owner, co.id, { title: 'Never closed', startsAt: iso(old), endsAt: iso(old + HOUR) });

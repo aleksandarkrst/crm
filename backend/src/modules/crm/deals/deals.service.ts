@@ -157,7 +157,7 @@ export class DealsService {
           .values({ ownerUserId: ctx.userId, currency: workspace?.currency, ...fields, customFields: cf.set, tenantId: ctx.tenantId, stageId: first.id, closedAt: first.isWon ? new Date() : null })
           .returning();
         await this.history.record(tx, ctx, { dealId: row!.id, kind: 'created', fromStageId: null, toStageId: first.id, outcome: first.isWon ? 'won' : 'open' }, row!.createdAt);
-        await this.log(tx, ctx, row!.id, 'RS', 'Deal created', input.source ? `Source: ${input.source}` : null);
+        await this.log(tx, ctx, row!.id, null, 'Deal created', input.source ? `Source: ${input.source}` : null);
         await this.audit.record(tx, ctx, { action: 'deal.created', entityType: 'deal', entityId: row!.id });
         await this.notifyAssigned(tx, ctx, row!.id, null, row!.ownerUserId);
         return { ...row!, outcome: dealOutcome(row!, first.isWon) };
@@ -206,7 +206,7 @@ export class DealsService {
         if (funnelChange) {
           const { from, to, funnel, at } = funnelChange;
           await this.history.record(tx, ctx, { dealId: id, kind: 'funnel_changed', fromStageId: from, toStageId: to.id, outcome: to.isWon ? 'won' : 'open' }, at);
-          await this.log(tx, ctx, id, 'NT', `Moved to funnel ${funnel}`, `Restarted at ${to.name} · next activity: ${to.activity}`);
+          await this.log(tx, ctx, id, null, `Moved to funnel ${funnel}`, `Restarted at ${to.name} · next activity: ${to.activity}`);
         }
         if (before) await this.notifyAssigned(tx, ctx, id, before.ownerUserId, row.ownerUserId);
         await this.audit.record(tx, ctx, { action: 'deal.updated', entityType: 'deal', entityId: id, data: input });
@@ -248,7 +248,7 @@ export class DealsService {
           .where(eq(deals.id, id))
           .returning();
         await this.history.record(tx, ctx, { dealId: id, kind: 'moved', fromStageId: deal.stageId, toStageId: stage.id, outcome: stage.isWon ? 'won' : 'open' }, now);
-        await this.log(tx, ctx, id, stage.channel, `Moved to ${stage.name}`, `Next activity: ${stage.activity}`);
+        await this.log(tx, ctx, id, null, `Moved to ${stage.name}`, `Next activity: ${stage.activity}`);
         await this.audit.record(tx, ctx, { action: 'deal.stage_changed', entityType: 'deal', entityId: id, data: { from: deal.stageId, to: stage.id } });
         if (stage.isWon) await this.jobs.send('crm.deal-won', { tenantId: ctx.tenantId, dealId: id, actorUserId: ctx.userId }, tx);
         return { ...row!, outcome: dealOutcome(row!, stage.isWon) };

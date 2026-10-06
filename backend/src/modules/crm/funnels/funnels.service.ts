@@ -294,7 +294,7 @@ export class FunnelsService implements TenantProvisioner, OnModuleInit {
           for (const deal of inStage) {
             const outcome = deal.lostAt ? 'lost' : t.isWon ? 'won' : 'open';
             await this.history.record(tx, ctx, { dealId: deal.id, kind: 'moved', fromStageId: stageId, toStageId: t.id, outcome }, now);
-            await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId: deal.id, actorUserId: ctx.userId, channel: t.channel, title: `Moved to ${t.name}`, detail: `The stage ${stage.name} was deleted.` });
+            await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId: deal.id, actorUserId: ctx.userId, channel: null, title: `Moved to ${t.name}`, detail: `The stage ${stage.name} was deleted.` });
             if (outcome === 'won') await this.jobs.send('crm.deal-won', { tenantId: ctx.tenantId, dealId: deal.id, actorUserId: ctx.userId }, tx);
           }
         }

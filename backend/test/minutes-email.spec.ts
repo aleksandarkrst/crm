@@ -8,8 +8,10 @@ import {
   minutesEmail,
   minutesMailMessage,
   minutesTemplate,
+  prefillCheck,
   renderMinutesHtml,
   renderMinutesText,
+  updateFromMeeting,
 } from '../src/modules/crm/meetings/minutes-email';
 import { fromHeader, mailAddressOf } from '../src/infrastructure/mail/mailer';
 
@@ -166,5 +168,45 @@ describe('delivery and sender helpers', () => {
     expect(mailAddressOf('no-reply@pultly.com')).toBe('no-reply@pultly.com');
     expect(fromHeader({ fromName: 'Ana' }, 'Pultly <no-reply@pultly.com>')).toBe('"Ana" <no-reply@pultly.com>');
     expect(fromHeader({}, 'Pultly <no-reply@pultly.com>')).toBe('Pultly <no-reply@pultly.com>');
+  });
+});
+
+
+describe('external minutes that follow their meeting (CD-222)', () => {
+  const basis = (when: string, extra = '') => ({
+    startsAt: when,
+    endsAt: when,
+    headSubject: `Minutes: Visit, ${when}`,
+    headBody: `**Visit**\nDate: ${when}`,
+    subject: `Minutes: Visit, ${when}`,
+    body: `**Visit**\nDate: ${when}${extra}`,
+  });
+  const before = basis('09:30', '\n\n**Agreements**\nPilot');
+  const moved = basis('11:15', '\n\n**Agreements**\nPilot');
+  const text = (b: { subject: string; body: string }) => ({ subject: b.subject, body: b.body });
+
+  it('fills in again a text nobody changed when the meeting moved', () => {
+    expect(prefillCheck(text(before), before, before, { sent: false, untouched: false })).toBe('current');
+    expect(prefillCheck(text(before), before, moved, { sent: false, untouched: false })).toBe('refill');
+  });
+
+  it('keeps a text someone changed, or one that was sent, and says so', () => {
+    expect(prefillCheck({ ...text(before), body: before.body + '\nThanks!' }, before, moved, { sent: false, untouched: false })).toBe('stale');
+    expect(prefillCheck(text(before), before, moved, { sent: true, untouched: false })).toBe('stale');
+  });
+
+  it('fills in a text from before the basis was kept only while nobody changed it', () => {
+    expect(prefillCheck(text(before), null, moved, { sent: false, untouched: true })).toBe('refill');
+    expect(prefillCheck(text(moved), null, moved, { sent: false, untouched: true })).toBe('current');
+    expect(prefillCheck(text(before), null, moved, { sent: false, untouched: false })).toBe('current');
+    expect(prefillCheck(text(before), null, moved, { sent: true, untouched: true })).toBe('current');
+  });
+
+  it('"Update from meeting" replaces the meeting lines and keeps what was written below them', () => {
+    const edited = { subject: before.subject, body: before.body + '\nThanks!' };
+    expect(updateFromMeeting(edited, before, moved)).toEqual({ subject: moved.subject, body: '**Visit**\nDate: 11:15\n\n**Agreements**\nPilot\nThanks!' });
+    // Its own subject stays; changed meeting lines (or no basis) give the whole template again.
+    expect(updateFromMeeting({ subject: 'Our notes', body: 'Hello' }, before, moved)).toEqual({ subject: 'Our notes', body: moved.body });
+    expect(updateFromMeeting(edited, null, moved)).toEqual({ subject: moved.subject, body: moved.body });
   });
 });

@@ -365,10 +365,12 @@ export class MeetingsService {
     });
   }
 
-  /** Cancelled → planned ("Restore"). The participants' calendars get it back (an update). */
+  /** Cancelled → planned ("Restore"). The participants' calendars get it back (an update); "Meeting restored" on the deal (CD-222). */
   restore(ctx: TenantContext, id: string): Promise<ApiMeeting> {
-    return this.changeStatus(ctx, id, 'restore', { status: 'planned', cancelledAt: null, cancelReason: null, icsSequence: sql`${meetings.icsSequence} + 1` }, async (tx) => {
+    return this.changeStatus(ctx, id, 'restore', { status: 'planned', cancelledAt: null, cancelReason: null, icsSequence: sql`${meetings.icsSequence} + 1` }, async (tx, m) => {
       await this.invite(tx, ctx, id, 'updated', await this.internalUserIds(tx, id));
+      if (!m.dealId) return; // as above
+      await this.activities.record(tx, ctx, m.dealId, { channel: 'MT', title: `Meeting restored · ${m.title}`, detail: await this.when(tx, ctx, m) });
     });
   }
 

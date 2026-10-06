@@ -6,6 +6,7 @@
 import { type ApiActivity, type ApiBonusRules, type ApiCompany, type ApiCustomField, type ApiDealLine, type ApiDealRow, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiInvitation, type ApiMember, type ApiProduct, type ApiProfile, type ApiStageChange, type ApiVisitPlan, type ApiWorkspace, ApiError, crmApi } from '../lib/api';
 import { initialsOf, localeFor, momentLabel, money, taskKey } from './selectors';
 import { sortPlans } from './visitPlans';
+import { SYSTEM_CHANNEL } from './seed';
 import type { BonusRule, CatalogItem, CompanyExtra, CustomFieldDef, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, Profile, SegKey, StageChange, State, TeamMember, Workspace } from './types';
 
 export type WorkspaceData = Pick<
@@ -140,7 +141,7 @@ export const mapTeam = (apiTeam: { members: ApiMember[]; invitations: ApiInvitat
   })),
 ];
 
-export const mapActivity = (a: ApiActivity, tz?: string): LogEntry => ({ date: dateLabel(a.occurredAt, tz), channel: a.channel, title: a.title, detail: a.detail ?? '' });
+export const mapActivity = (a: ApiActivity, tz?: string): LogEntry => ({ date: dateLabel(a.occurredAt, tz), channel: a.channel ?? SYSTEM_CHANNEL, title: a.title, detail: a.detail ?? '' });
 
 export const mapStageChange = (c: ApiStageChange): StageChange => ({
   dealId: c.dealId,

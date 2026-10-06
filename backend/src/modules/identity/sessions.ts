@@ -1,13 +1,19 @@
 import { Logger } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
-import { jwtVerify, SignJWT } from 'jose';
+import { decodeJwt, jwtVerify, SignJWT } from 'jose';
 import type { Env } from '../../infrastructure/config/config.module';
+import type { VerifiedIdentity } from './token.service';
 
 /** A signed-in session: the access token for the API, and what renews it (kept in a cookie). */
 export interface SessionTokens {
   accessToken: string;
   expiresIn: number; // seconds
   refreshToken?: string; // absent when the provider keeps the old one
+  /**
+   * Who signed in, from the ID token (CD-222). Auth0's access tokens carry no email, so this is
+   * where a Google user's address comes from; saved on every sign-in and renewal.
+   */
+  identity?: VerifiedIdentity;
 }
 
 /** Why signing in didn't work. `message` is safe to show, and never says whether an account exists. */
@@ -58,6 +64,7 @@ const SCOPE = 'openid profile email offline_access';
 interface TokenReply {
   access_token?: string;
   refresh_token?: string;
+  id_token?: string;
   expires_in?: number;
   error?: string;
   error_description?: string;
@@ -163,9 +170,28 @@ export class Auth0Sessions extends SessionProvider {
       throw new SessionError('unavailable', UNAVAILABLE, { cause: err });
     });
     const body = ((await res.json().catch(() => null)) ?? {}) as TokenReply;
-    if (res.ok && body.access_token)
-      return { ok: true, tokens: { accessToken: body.access_token, expiresIn: body.expires_in ?? 3600, refreshToken: body.refresh_token } } as const;
+    if (res.ok && body.access_token) {
+      const identity = body.id_token ? this.idTokenIdentity(body.id_token) : undefined;
+      return { ok: true, tokens: { accessToken: body.access_token, expiresIn: body.expires_in ?? 3600, refreshToken: body.refresh_token, ...(identity ? { identity } : {}) } } as const;
+    }
     return { ok: false, status: res.status, body } as const;
+  }
+
+  /**
+   * The person in the ID token. Not signature-checked: it came straight from the provider's token
+   * endpoint over TLS, in answer to this app's client secret (OpenID Connect Core 3.1.3.7). An
+   * address the provider marks unverified is left out.
+   */
+  private idTokenIdentity(idToken: string): VerifiedIdentity | undefined {
+    try {
+      const claims = decodeJwt(idToken);
+      if (!claims.sub || !claims.iss) return undefined;
+      const email = typeof claims.email === 'string' && claims.email_verified !== false ? claims.email.trim() : null;
+      return { subject: `${claims.iss}|${claims.sub}`, email: email || null, name: typeof claims.name === 'string' ? claims.name : null };
+    } catch {
+      this.logger.warn('Auth0 sent an ID token that is not a JWT');
+      return undefined;
+    }
   }
 }
 
@@ -215,7 +241,8 @@ export class DevSessions extends SessionProvider {
       .setIssuedAt()
       .setExpirationTime('30d')
       .sign(this.key);
-    return { accessToken: await this.issueAccessToken(email, name), expiresIn: 12 * 3600, refreshToken };
+    const identity = { subject: `crm-dev|${email.toLowerCase()}`, email, name };
+    return { accessToken: await this.issueAccessToken(email, name), expiresIn: 12 * 3600, refreshToken, identity };
   }
 }
 

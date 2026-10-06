@@ -57,7 +57,8 @@ export function ExternalMinutes({ meeting }: { meeting: ApiMeeting }) {
     return () => {
       alive = false;
     };
-  }, [meeting.id, meeting.status, meeting.minutesUpdatedAt, meeting.sendsUpdatedAt]);
+    // The meeting's time, place and people too: the template follows them (CD-222).
+  }, [meeting.id, meeting.status, meeting.minutesUpdatedAt, meeting.sendsUpdatedAt, meeting.startsAt, meeting.endsAt, meeting.location, meeting.participants.length]);
 
   if (!stored) {
     return (
@@ -149,6 +150,19 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
   };
 
   const [copying, setCopying] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  /** "Update from meeting": after the edits waiting to be saved, so they are part of the text it updates. */
+  const updateFromMeeting = async () => {
+    setUpdating(true);
+    await flush();
+    const res = await actions.current.updateFromMeeting(m.id);
+    setUpdating(false);
+    if (!res) return;
+    setDraft({ subject: res.subject, body: res.body });
+    base.current = res.updatedAt;
+    onStored(res);
+  };
+
   const copy = async () => {
     setCopying(true);
     const text = await actions.current.copyInternal(m.id);
@@ -211,6 +225,15 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
       {allowed && m.status === 'planned' && (
         <div className="minutes-note" data-testid="external-not-held">
           You can prepare the text now. Sending is possible once the meeting is marked as held.
+        </div>
+      )}
+
+      {editable && stored.meetingChanged && (
+        <div className="minutes-note" data-testid="external-meeting-changed">
+          {stored.meetingChanged === 'time' ? 'The meeting time changed since this text was written.' : 'The meeting changed since this text was written.'}{' '}
+          <button type="button" className="btn-plain" data-testid="external-update-from-meeting" disabled={updating} onClick={() => void updateFromMeeting()}>
+            {updating ? 'Updating' : 'Update from meeting'}
+          </button>
         </div>
       )}
 
