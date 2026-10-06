@@ -51,7 +51,7 @@ export function QuickCreate({ draft, seed, onChange, onClose }: { draft: Calenda
   useEffect(() => {
     const down = (e: PointerEvent) => {
       const t = e.target as Element | null;
-      if (!t || pop.current?.contains(t) || t.closest?.('[data-testid=cal-draft]') || t.closest?.('.overlay')) return;
+      if (!t || pop.current?.contains(t) || t.closest?.('[data-testid=cal-draft]') || t.closest?.('.overlay') || t.closest?.('.toast')) return;
       onClose(true);
     };
     const key = (e: KeyboardEvent) => {

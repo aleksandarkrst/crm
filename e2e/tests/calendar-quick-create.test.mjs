@@ -9,7 +9,7 @@
 // place on one line.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, RUN, setValue, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, eventually, newUserWithWorkspace, RUN, setValue, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
 
 const TZ = 'Europe/Belgrade'; // new workspaces use it
 const HOUR = 48; // px per hour of the time grid
@@ -147,6 +147,8 @@ describe('calendar quick create and in-place editing', () => {
   });
 
   step('an end before the start is an error and loses nothing; moving the start keeps the length; Escape discards', async () => {
+    // The "… scheduled" toast would cover the popover's Save.
+    await waitForToastToClear(page).catch(() => {});
     const p = await at(15 * 60 + 5);
     await page.mouse.click(p.x, p.y);
     await page.waitForSelector(QUICK);
