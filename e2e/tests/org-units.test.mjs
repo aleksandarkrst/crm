@@ -6,7 +6,7 @@
 // from the company node; a level with units can't be removed; the panel fits a phone.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, email, setValue, signIn, createWorkspace, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, confirmInApp, email, setValue, signIn, createWorkspace, steps, useBrowser } from '../lib/harness.mjs';
 
 describe('org levels and units', () => {
   const browser = useBrowser();
@@ -97,6 +97,7 @@ describe('org levels and units', () => {
     await page.keyboard.press('Enter');
     await page.waitForSelector('[data-testid=org-level-row][data-name=Squad]');
     await click(page, '[data-testid=org-level-row][data-name=Squad] [data-testid=org-level-remove]');
+    assert.equal(await confirmInApp(page), 'Remove the level Squad?');
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=org-level-row]').length === 2);
     await page.type('[data-testid=org-level-new]', 'Team');
     await click(page, '[data-testid=org-level-add]');
@@ -149,22 +150,21 @@ describe('org levels and units', () => {
     await page.waitForSelector(`[data-testid=org-company] [data-testid=org-person][data-id="${id.ceo}"]`);
   });
 
-  step('Organization panel: setting a lead shows who they will report to, and applies it', async () => {
+  step('the chart: setting a lead shows who they will report to, and applies it', async () => {
     unit.service = (await api(page, '/people/org-units', { method: 'POST', body: JSON.stringify({ levelId: (await api(page, '/people/org-levels'))[1].id, name: 'Service' }) })).unit.id;
-    await click(page, '[data-testid=org-units]');
-    await page.waitForSelector('[data-testid=units-list] [data-testid="unit-Service"]');
-    await click(page, '[data-testid="unit-Service"] [data-testid=unit-set-lead]');
-    await page.waitForSelector(`[data-testid=unit-lead] option[value="${id.nina}"]`);
-    await setValue(page, '[data-testid=unit-lead]', id.nina);
+    // No separate Organization panel any more (CD-228): the units are set up on the chart.
+    assert.equal(await page.$('[data-testid=org-units]'), null);
+    const service = `[data-testid=org-unit][data-unit="${unit.service}"]`;
+    await page.waitForSelector(`${service} [data-testid=unit-lead-select] option[value="${id.nina}"]`);
+    await setValue(page, `${service} [data-testid=unit-lead-select]`, id.nina);
     await page.waitForSelector('[data-testid=unit-lead-preview]');
     assert.match(await page.$eval('[data-testid=unit-lead-preview]', (e) => e.textContent), /Nina Member will report to Cira Ceo\./);
     await click(page, '[data-testid=unit-lead-save]');
     await page.waitForFunction(() => !document.querySelector('[data-testid=unit-lead-save]'));
     const nina = await employee(id.nina);
     assert.deepEqual([nina.unitId, nina.managerId], [unit.service, id.ceo]);
-    await page.waitForFunction(() => /Lead: Nina Member/.test(document.querySelector('[data-testid="unit-Service"]')?.textContent ?? ''));
-    await click(page, '.dtp-panel-head button::-p-text(Close)');
-    await page.waitForFunction(() => !document.querySelector('.modal'));
+    await page.waitForSelector(`${service} .org-unit-lead [data-testid=org-person][data-id="${id.nina}"]`);
+    assert.equal(await page.$eval(`${service} .org-unit-lead .org-badge`, (e) => e.textContent), 'Lead');
   });
 
   step('dragging a person onto a person makes them the manager; the dialog shows the unit change', async () => {
@@ -227,11 +227,12 @@ describe('org levels and units', () => {
     assert.equal(await page.$eval('[data-testid=org-level-row][data-name=Team] [data-testid=org-level-remove]', (b) => b.disabled), true);
   });
 
-  step('the Organization panel fits a phone', async () => {
+  step('the units can be set up on a phone', async () => {
     await page.setViewport({ width: 375, height: 800 });
     await openOrg();
-    await click(page, '[data-testid=org-units]');
-    await page.waitForSelector('[data-testid="unit-Commercial"]');
+    await page.waitForSelector(`[data-testid=org-unit][data-unit="${unit.commercial}"] [data-testid=unit-menu]`);
+    await click(page, `[data-testid=org-unit][data-unit="${unit.commercial}"] [data-testid=unit-menu]`);
+    await page.waitForSelector('[data-testid=unit-menu-rename]');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'no sideways scrolling at 375 px');
     await page.setViewport({ width: 1400, height: 1100 });
   });

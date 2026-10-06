@@ -18,6 +18,7 @@
  * Live updates (CD-20): an `employee` hint names employee ids; open cards among them (or all, for a
  * hint without ids) are read again, and the pickers too when they are loaded.
  */
+import { askConfirm } from '../components/ConfirmDialog';
 import {
   type ApiEmployeeCard,
   type ApiEmployeeRow,
@@ -148,7 +149,7 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
         'Not saved',
       );
       if (ask) {
-        if (!window.confirm(`${ask} Continue?`)) return { cancelled: true };
+        if (!(await askConfirm({ title: 'Change the lead?', message: ask, confirmLabel: 'Continue' }))) return { cancelled: true };
         result = await act(id, () => send(true), 'Not saved');
       }
       if ('card' in result && before?.account === 'invited' && result.card.account === 'none') flash('The invitation was withdrawn because the work email changed. Invite the new address in Settings → Team.', 7000);

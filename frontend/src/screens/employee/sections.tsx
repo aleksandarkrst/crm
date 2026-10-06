@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { askConfirm } from '../../components/ConfirmDialog';
 import type { ApiApprovals, ApiEmployeeCard, ApiPeopleHistoryEntry, EmployeePatch, EmploymentType } from '../../lib/api';
 import { formatIban, INVALID_ACCOUNT_MESSAGE, isSwiftBic, parseBankAccount } from '../../lib/iban';
 import { paths } from '../../lib/paths';
@@ -480,7 +481,7 @@ function RemoveIban({ card }: { card: ApiEmployeeCard }) {
   const { employeeCard, flash } = useStore();
   if (!card.bank?.iban || !card.permissions.editableFields.includes('iban')) return null;
   const remove = async () => {
-    if (!window.confirm(`Remove the bank account ${card.bank!.iban!.masked}?`)) return;
+    if (!(await askConfirm({ title: 'Remove the bank account?', message: card.bank!.iban!.masked, confirmLabel: 'Remove', danger: true }))) return;
     const r = await employeeCard.save(card.id, { iban: null });
     if ('error' in r) flash(r.error, 7000);
   };

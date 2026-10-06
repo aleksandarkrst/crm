@@ -1,4 +1,5 @@
 import { type KeyboardEvent, useCallback, useEffect, useState } from 'react';
+import { askConfirm } from '../../components/ConfirmDialog';
 import { FieldRow, Switch } from '../../components/ui';
 import { type ApiOrgLevel, orgApi } from '../../lib/orgApi';
 import { orgError } from '../../store/org';
@@ -101,7 +102,7 @@ function OrgLevels() {
             data-testid="org-level-remove"
             disabled={l.units > 0 || levels.length === 1}
             title={l.units > 0 ? 'Only a level without units can be removed' : levels.length === 1 ? 'Keep at least one level' : undefined}
-            onClick={() => window.confirm(`Remove the level ${l.name}?`) && void run(() => orgApi.deleteLevel(l.id), `Level ${l.name} removed`)}
+            onClick={() => void askConfirm({ title: `Remove the level ${l.name}?`, confirmLabel: 'Remove', danger: true }).then((ok) => ok && run(() => orgApi.deleteLevel(l.id), `Level ${l.name} removed`))}
           >
             Remove
           </button>

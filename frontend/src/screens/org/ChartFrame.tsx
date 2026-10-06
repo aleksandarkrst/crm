@@ -51,7 +51,7 @@ export function ChartFrame({ children, label, focus }: { children: ReactNode; la
   const drag = useRef<{ x: number; y: number; left: number; top: number; id: number } | null>(null);
   const onPointerDown = (e: React.PointerEvent) => {
     const el = outer.current;
-    if (!el || e.button !== 0 || (e.target as HTMLElement).closest('button, a, input, [draggable="true"]')) return;
+    if (!el || e.button !== 0 || (e.target as HTMLElement).closest('button, a, input, select, [draggable="true"]')) return;
     drag.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop, id: e.pointerId };
     el.setPointerCapture?.(e.pointerId);
     el.classList.add('is-panning');

@@ -1919,17 +1919,28 @@ Admins (`approvals.reason = 'manager_no_account'`).
   (only without units; asks first), reorder by dragging a row or with ↑ ↓; the API's refusal shows
   under the title. Read again on every org change (`s.orgRev`).
 - **Org structure header** (Admins): **Create** (`data-testid=org-create`), a menu "New <level>" per
-  level that opens `CreateUnitDialog` (`screens/org/UnitsPanel.tsx`: name, "Inside" = a unit of a
-  higher level or "Directly under the company", lead); `?new=unit` opens it for the top level.
-  **Organization** opens the units panel (`UnitsPanel`, classes `dtp-*`): the units in tree order
-  with level, lead and counts; rename inline, "Add <lower level>", Set lead (the preview: "Nina will
-  report to Cira", who will report to the lead, who keeps their manager because of a loop, the unit
-  they stop leading), Move (to a unit of a higher level or under the company; the unit's people and
-  units go along), Delete (names the members; a unit with units inside says which), Add people
-  ("They will report to <lead>"). Data: `store/org.ts` `useOrgStructure()` reads levels, units, the
-  directory and the caller's access through `lib/orgApi.ts`, and again ~300 ms after any
-  `employee`, `org_unit`, `org_level` or `employee_role` hint (`s.orgRev`). Every change reads the
-  Org structure page's directory again. Works at 375 px.
+  level (the design system's `menu-pop` / `menu-item`) that opens `CreateUnitDialog`
+  (`screens/org/UnitDialogs.tsx`: name, "Inside" = a unit of a higher level or "Directly under the
+  company", lead); `?new=unit` opens it for the top level. There is no separate Organization panel
+  (CD-228): Admins set the units up on the **By unit** chart (`screens/org/UnitChart.tsx`). Each
+  unit is a column: a header card (name, level, people, **Lead** picker `unit-lead-select`, which
+  opens the lead dialog with the preview: "Nina will report to Cira", who will report to the lead,
+  who keeps their manager because of a loop, the unit they stop leading), the lead on top ("Lead"
+  badge), the unit's people hanging below the lead ("Manager" badge for anyone with direct
+  reports, no badge for employees), **Add person** ("They will report to <lead>") and the "⋯" menu
+  (`unit-menu`): Add <lower level>, Rename, Move (to a unit of a higher level or under the company;
+  the unit's people and units go along), Delete (names the members; a unit with units inside says
+  which). Phones get the same actions in the indented list. Data: `store/org.ts`
+  `useOrgStructure()` reads levels, units, the directory and the caller's access through
+  `lib/orgApi.ts`, and again ~300 ms after any `employee`, `org_unit`, `org_level` or
+  `employee_role` hint (`s.orgRev`). Every change reads the Org structure page's directory again.
+  Works at 375 px.
+- **Dialogs** (CD-228): `Modal` (`components/ui.tsx`) renders into `document.body` through a portal,
+  never inside the element that opens it, and locks the page's scroll while open. A dialog opened
+  from inside another dialog, a transformed or scrolling element would otherwise be positioned
+  and clipped by it (the backdrop disappeared when scrolling). Questions such as "Change the
+  lead?" or "Delete <name>?" use `askConfirm()` (`components/ConfirmDialog.tsx`, shown by
+  `<ConfirmHost />` in the Layout), not the browser's `window.confirm`.
 
 
 ### App access and leaving (CD-140, spec 4.6–4.8)

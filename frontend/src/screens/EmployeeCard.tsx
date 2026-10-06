@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { askConfirm } from '../components/ConfirmDialog';
 import { Screen } from '../components/Layout';
 import type { ApiEmployeeCard, EmployeeField } from '../lib/api';
 import { paths } from '../lib/paths';
@@ -103,8 +104,7 @@ function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => 
   const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname);
   useEffect(() => {
     if (blocker.state !== 'blocked') return;
-    if (window.confirm(DISCARD)) blocker.proceed();
-    else blocker.reset();
+    void askConfirm({ title: DISCARD, message: 'What you changed on this card is not saved yet.', confirmLabel: 'Discard', danger: true }).then((ok) => (ok ? blocker.proceed() : blocker.reset()));
   }, [blocker]);
   useEffect(() => {
     if (!dirty) return;
@@ -174,12 +174,12 @@ function CardHeader({ card, open, canSave, dirty, busy, onSave }: { card: ApiEmp
   const status = statusBadge(card);
   const invitation = card.appAccess?.invitation ?? null;
   const remove = async () => {
-    if (!window.confirm(`Delete ${card.fullName}? Their record goes for good; history shows them as a deleted employee.`)) return;
+    if (!(await askConfirm({ title: `Delete ${card.fullName}?`, message: 'Their record goes for good; history shows them as a deleted employee.', confirmLabel: 'Delete', danger: true }))) return;
     if (await employeeCard.remove(card.id)) navigate(ORG);
   };
   // Withdrawing takes the person off the Org structure (CD-226), so the card closes.
   const withdraw = async (invitationId: string) => {
-    if (!window.confirm(`Withdraw the invitation to ${card.fullName}? They are taken off the org structure.`)) return;
+    if (!(await askConfirm({ title: `Withdraw the invitation to ${card.fullName}?`, message: 'They are taken off the org structure.', confirmLabel: 'Withdraw', danger: true }))) return;
     if (await employeeCard.withdrawInvitation(card.id, invitationId)) navigate(ORG);
   };
 
