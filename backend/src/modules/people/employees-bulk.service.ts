@@ -1,20 +1,20 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { ENV, type Env } from '../../infrastructure/config/config.module';
 import type { SecretBox } from '../../infrastructure/crypto/secret-box';
 import { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
-import { DatabaseService, type Tx } from '../../shared/database/database.service';
+import { DatabaseService } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
 import { JobsService } from '../../shared/events/jobs.service';
-import { departments, employeePersonal, employees, teams } from '../../shared/database/schema';
+import { employeePersonal, employees } from '../../shared/database/schema';
 import { employeeIbanBox } from './bank-email';
 import { editableFields, listFields } from './field-rules';
-import { checkHeadMoves } from './heads';
 import { formatIban } from './iban';
 import { PeopleAccess } from './people-access';
-import { assertValidManager, lockReportingLines, queueManagerEmails } from './reporting-lines';
+import { changeOrg } from './org-changes';
+import { lockReportingLines } from './reporting-lines';
 
 /** At most this many rows per bulk action or export (the list shows up to 5,000, spec 5.4). */
 export const MAX_BULK = 5000;
@@ -25,20 +25,19 @@ const EmployeeIds = z
   .transform((ids) => [...new Set(ids)]);
 
 /**
- * POST /api/people/employees/bulk (spec 5.4, "Set department and team" and "Set manager"): the
- * same values for every listed employee. Department and team go together: a team sets its
- * department, a department alone clears the team, null for both is "No department".
+ * POST /api/people/employees/bulk (spec 5.4, "Set unit" and "Set manager"; the chart's drag): the
+ * same values for every listed employee. The org rules apply (org-rules.ts, CD-226): a unit brings
+ * its lead as manager, a manager their unit, unless the body sets both. `unitId` null is "No unit".
  */
 export const BulkUpdateEmployees = z
   .object({
     employeeIds: EmployeeIds,
-    departmentId: z.uuid().nullish(),
-    teamId: z.uuid().nullish(),
+    unitId: z.uuid().nullish(),
     managerId: z.uuid().nullish(),
-    /** Confirms moving department heads and team leads elsewhere, which ends that role (CD-225). */
-    clearHeadRoles: z.boolean().optional(),
+    /** Confirms moving unit leads elsewhere, which ends that role (CD-225, CD-226). */
+    clearLeadRoles: z.boolean().optional(),
   })
-  .refine((b) => b.departmentId !== undefined || b.teamId !== undefined || b.managerId !== undefined, 'Nothing to change: send departmentId and teamId, or managerId');
+  .refine((b) => b.unitId !== undefined || b.managerId !== undefined, 'Nothing to change: send unitId or managerId');
 export type BulkUpdateEmployees = z.infer<typeof BulkUpdateEmployees>;
 
 /** POST /api/people/employees/export: personal details and bank accounts of these employees. */
@@ -71,53 +70,34 @@ export class EmployeesBulkService {
         const access = await this.access.of(ctx, tx);
         if (!access.isHr) throw new ForbiddenException('Only Admins change employees in bulk');
         const ids = input.employeeIds;
-        const setsOrg = input.departmentId !== undefined || input.teamId !== undefined;
+        const setsUnit = input.unitId !== undefined;
         const setsManager = input.managerId !== undefined;
-        // The reporting-line lock comes before any row lock (reporting-lines.ts).
-        if (setsManager) await lockReportingLines(tx, ctx.tenantId);
+        // The reporting-line lock comes before anything else (reporting-lines.ts).
+        await lockReportingLines(tx, ctx.tenantId);
 
-        const rows = await tx
-          .select({ id: employees.id, fullName: employees.fullName, departmentId: employees.departmentId, teamId: employees.teamId, managerId: employees.managerId, deactivatedAt: employees.deactivatedAt })
-          .from(employees)
-          .where(inArray(employees.id, ids))
-          .for('no key update');
+        const rows = await tx.select({ id: employees.id, fullName: employees.fullName, deactivatedAt: employees.deactivatedAt }).from(employees).where(inArray(employees.id, ids));
         if (rows.length !== ids.length || rows.some((r) => r.deactivatedAt)) throw new BadRequestException('Only active employees of this workspace can be changed');
 
-        // The card's rules, row by row (only Admins change department, team and manager).
-        const fields = [...(setsOrg ? (['departmentId', 'teamId'] as const) : []), ...(setsManager ? (['managerId'] as const) : [])];
+        // The card's rules, row by row (only Admins change unit and manager).
+        const fields = [...(setsUnit ? (['unitId'] as const) : []), ...(setsManager ? (['managerId'] as const) : [])];
         for (const r of rows) {
           const allowed = new Set<string>(editableFields(access, r.id, true));
           const refused = fields.filter((f) => !allowed.has(f));
           if (refused.length) throw new ForbiddenException(`Only an Admin can change ${listFields(refused)} on their own card. Untick ${r.fullName}.`);
         }
-
-        const org = setsOrg ? await resolveOrg(tx, input.departmentId ?? null, input.teamId ?? null) : null;
         const managerId = input.managerId ?? null;
-        if (setsManager && managerId) {
-          if (managerId === access.employeeId && !access.isAdmin) throw new ForbiddenException("Only an Admin can make themselves someone's manager");
-          await assertNoLoops(tx, ids, managerId);
-        }
+        if (setsManager && managerId && managerId === access.employeeId && !access.isAdmin) throw new ForbiddenException("Only an Admin can make themselves someone's manager");
 
-        const changed = rows.filter(
-          (r) => (org && (r.departmentId !== org.departmentId || r.teamId !== org.teamId)) || (setsManager && r.managerId !== managerId),
+        const written = await changeOrg(
+          tx,
+          ctx.tenantId,
+          ids.map((employeeId) => ({ employeeId, ...(setsUnit ? { unitId: input.unitId ?? null } : {}), ...(setsManager ? { managerId } : {}) })),
+          { jobs: this.jobs, actorUserId: ctx.userId, clearLeadRoles: !!input.clearLeadRoles },
         );
-        if (org) {
-          const moving = changed.filter((r) => r.departmentId !== org.departmentId || r.teamId !== org.teamId);
-          await checkHeadMoves(tx, moving.map((r) => ({ employeeId: r.id, fullName: r.fullName, from: r, to: org })), !!input.clearHeadRoles);
+        if (written.changed.length) {
+          await this.audit.record(tx, ctx, { action: 'employee.bulk_updated', entityType: 'employee', data: { fields, count: written.changed.length } });
         }
-        if (changed.length) {
-          await tx
-            .update(employees)
-            .set({ ...(org ?? {}), ...(setsManager ? { managerId } : {}) })
-            .where(inArray(employees.id, changed.map((r) => r.id)));
-          await this.audit.record(tx, ctx, { action: 'employee.bulk_updated', entityType: 'employee', data: { fields, count: changed.length } });
-          // "New manager" / "New direct report" for the rows whose manager changed (CD-139).
-          if (setsManager) {
-            const moved = changed.filter((r) => r.managerId !== managerId).map((r) => ({ employeeId: r.id, oldManagerId: r.managerId, newManagerId: managerId }));
-            await queueManagerEmails(this.jobs, tx, ctx.tenantId, ctx.userId, moved);
-          }
-        }
-        return { updated: changed.length };
+        return { updated: written.changed.length };
       })
       .catch(mapDbError);
   }
@@ -167,40 +147,4 @@ export class EmployeesBulkService {
       return { employees: out };
     });
   }
-}
-
-/** The department and team every selected employee gets (spec 6.2): a team brings its department. */
-async function resolveOrg(tx: Tx, departmentId: string | null, teamId: string | null) {
-  if (teamId) {
-    const [t] = await tx.select({ departmentId: teams.departmentId }).from(teams).where(eq(teams.id, teamId));
-    if (!t) throw new BadRequestException('Team not found');
-    if (departmentId && departmentId !== t.departmentId) throw new BadRequestException('The team belongs to another department');
-    return { departmentId: t.departmentId, teamId };
-  }
-  if (departmentId) {
-    const [d] = await tx.select({ id: departments.id }).from(departments).where(eq(departments.id, departmentId));
-    if (!d) throw new BadRequestException('Department not found');
-  }
-  return { departmentId, teamId: null };
-}
-
-/**
- * Everyone in `ids` reporting to `managerId` must not close a loop (spec 7.2). The chain above
- * the manager doesn't change by these writes unless it contains one of them, so one walk up from
- * the manager decides it; the foundation's assertValidManager then refuses with its own message
- * (not yourself 400, an active employee 400, the loop named 409).
- */
-async function assertNoLoops(tx: Tx, ids: string[], managerId: string) {
-  await assertValidManager(tx, ids[0]!, managerId);
-  if (ids.includes(managerId)) await assertValidManager(tx, managerId, managerId);
-  const { rows } = await tx.execute<{ id: string }>(sql`
-    with recursive up(id, manager_id, depth) as (
-      select id, manager_id, 1 from employees where id = ${managerId}
-      union all
-      select e.id, e.manager_id, up.depth + 1 from employees e join up on e.id = up.manager_id where up.depth < 1000
-    )
-    select id::text as id from up`);
-  const selected = new Set(ids);
-  const inChain = rows.find((r) => selected.has(r.id));
-  if (inChain) await assertValidManager(tx, inChain.id, managerId);
 }

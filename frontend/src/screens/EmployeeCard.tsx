@@ -67,7 +67,7 @@ const DISCARD = 'Discard your changes?';
 
 /** The card's one draft and Save (CD-225), the header and the sections. */
 function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => void }) {
-  const { s, employeeCard, flash } = useStore();
+  const { employeeCard, flash } = useStore();
   const initial = useMemo(() => cardInitial(card), [card]);
   const editable = useMemo(() => new Set<string>(card.permissions.editableFields), [card.permissions.editableFields]);
   const [edits, setEdits] = useState<Draft>({});
@@ -81,7 +81,7 @@ function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => 
   const edit = useMemo(() => ({ values: draftValues(initial, edits), setField, can }), [initial, edits, setField, can]);
 
   const save = async () => {
-    const patch = cardPatch(changed, s.peoplePickers);
+    const patch = cardPatch(changed);
     if (typeof patch === 'string') return setProblem({ text: patch, conflict: false });
     setBusy(true);
     setProblem(null);
@@ -202,7 +202,7 @@ function CardHeader({ card, open, canSave, dirty, busy, onSave }: { card: ApiEmp
           <h2 className="emp-name" data-testid="emp-name">
             {card.fullName}
           </h2>
-          <span className="emp-note">{[card.jobTitle, card.departmentName, card.teamName].filter(Boolean).join(' · ') || 'No job title or department yet'}</span>
+          <span className="emp-note">{[card.jobTitle, card.unitName].filter(Boolean).join(' · ') || 'No job title or unit yet'}</span>
           <span className="emp-badges">
             <span className={status.className} data-testid="emp-status">
               {status.label}

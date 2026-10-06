@@ -3,7 +3,9 @@ import { and, eq } from 'drizzle-orm';
 import { AuditService } from '../../shared/audit/audit.service';
 import type { AuthUser, TenantContext } from '../../shared/authorization';
 import { DatabaseService } from '../../shared/database/database.service';
+import { JobsService } from '../../shared/events/jobs.service';
 import { employees, funnels, memberships, tenants, users } from '../../shared/database/schema';
+import { applyCeoRule } from '../people';
 import { IdentityService } from './identity.service';
 import type { UpdateProfile, UpdateWorkspace } from './settings.schemas';
 
@@ -33,6 +35,7 @@ export class SettingsService {
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
     private readonly identity: IdentityService,
+    private readonly jobs: JobsService,
   ) {}
 
   async getWorkspace(ctx: TenantContext) {
@@ -41,7 +44,11 @@ export class SettingsService {
     return row;
   }
 
-  /** Owners and admins only (enforced by the route). The CEO must be an active employee of the workspace. */
+  /**
+   * Owners and admins only (enforced by the route). The CEO must be an active employee of the
+   * workspace; a new CEO becomes the manager of the top units' leads who have none (people's
+   * `applyCeoRule`, CD-226).
+   */
   updateWorkspace(ctx: TenantContext, input: UpdateWorkspace) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       if (input.ceoEmployeeId) {
@@ -52,6 +59,7 @@ export class SettingsService {
       }
       const [row] = await tx.update(tenants).set(input).where(eq(tenants.id, ctx.tenantId)).returning(workspaceColumns);
       if (!row) throw new NotFoundException('Workspace not found');
+      if (input.ceoEmployeeId) await applyCeoRule(tx, this.jobs, ctx.tenantId, ctx.userId, input.ceoEmployeeId);
       await this.audit.record(tx, ctx, { action: 'workspace.updated', entityType: 'tenant', entityId: ctx.tenantId, data: input });
       return row;
     });

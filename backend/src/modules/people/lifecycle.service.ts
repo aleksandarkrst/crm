@@ -5,7 +5,7 @@ import { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
-import { type DeactivationPlan, departments, employees, memberships, teams, users } from '../../shared/database/schema';
+import { type DeactivationPlan, employees, memberships, orgUnits, users } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import { createInvitation, keepAnOwner, membershipRole, withdrawEmployeeInvitations } from '../identity';
 import { EmployeesService } from './employees.service';
@@ -188,10 +188,12 @@ export class EmployeeLifecycleService {
         if (reports.length && input.reportsManagerId === undefined) {
           throw new BadRequestException(`Choose a new manager for ${e.fullName}'s ${reports.length === 1 ? 'direct report' : `${reports.length} direct reports`}`);
         }
+        // teamLeads and departmentHeads stay (empty) for a rolled-back release (expand/contract, CD-226).
         const plan: DeactivationPlan = {
           reportsManagerId: input.reportsManagerId ?? null,
-          teamLeads: input.teamLeads,
-          departmentHeads: input.departmentHeads,
+          unitLeads: input.unitLeads,
+          teamLeads: [],
+          departmentHeads: [],
           byUserId: ctx.userId,
         };
         await this.validatePlan(tx, e, reports, plan);
@@ -233,15 +235,14 @@ export class EmployeeLifecycleService {
       // A report picked as the new manager goes to the leaving person's own manager instead.
       await assertValidManager(tx, r.id, r.id === plan.reportsManagerId ? e.managerId : plan.reportsManagerId);
     }
-    for (const t of plan.teamLeads) {
-      const [team] = await tx.select({ id: teams.id }).from(teams).where(and(eq(teams.id, t.teamId), eq(teams.leadEmployeeId, e.id)));
-      if (!team) throw new BadRequestException('That team is not led by the person leaving');
-      await activeOther(t.employeeId, 'new team lead');
-    }
-    for (const d of plan.departmentHeads) {
-      const [dep] = await tx.select({ id: departments.id }).from(departments).where(and(eq(departments.id, d.departmentId), eq(departments.headEmployeeId, e.id)));
-      if (!dep) throw new BadRequestException('That department is not headed by the person leaving');
-      await activeOther(d.employeeId, 'new department head');
+    for (const u of plan.unitLeads ?? []) {
+      const [unit] = await tx.select({ id: orgUnits.id }).from(orgUnits).where(and(eq(orgUnits.id, u.unitId), eq(orgUnits.leadEmployeeId, e.id)));
+      if (!unit) throw new BadRequestException('That unit is not led by the person leaving');
+      await activeOther(u.employeeId, 'new lead');
+      if (u.employeeId) {
+        const [other] = await tx.select({ name: orgUnits.name }).from(orgUnits).where(eq(orgUnits.leadEmployeeId, u.employeeId));
+        if (other) throw new BadRequestException(`The new lead already leads ${other.name}`);
+      }
     }
   }
 

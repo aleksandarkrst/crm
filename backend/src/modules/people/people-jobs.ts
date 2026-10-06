@@ -10,7 +10,7 @@ import type { JobPayloads } from '../../shared/events/job-types';
 import { JobsService } from '../../shared/events/jobs.service';
 import { bankAccountEmail } from './bank-email';
 import { reportingLineEmail } from './org-email';
-import { applyDeactivation, dueDeactivations, zonedParts } from './lifecycle';
+import { applyDeactivation, dueDeactivations, unitLeadsOf, zonedParts } from './lifecycle';
 import { dropUnusedInvitedEmployees } from './linking';
 import { lockReportingLines } from './reporting-lines';
 
@@ -126,7 +126,7 @@ export class DeactivateDueJob implements OnApplicationBootstrap {
               employeeId: d.id,
               lastWorkingDay: d.lastWorkingDay!,
               reason: d.reason,
-              plan: { reportsManagerId: d.plan?.reportsManagerId ?? null, teamLeads: d.plan?.teamLeads ?? [], departmentHeads: d.plan?.departmentHeads ?? [] },
+              plan: { reportsManagerId: d.plan?.reportsManagerId ?? null, unitLeads: d.plan ? unitLeadsOf(d.plan) : [], teamLeads: [], departmentHeads: [] },
               lenient: true,
             });
           });

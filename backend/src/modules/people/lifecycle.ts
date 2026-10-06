@@ -3,9 +3,11 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
 import type { Tx } from '../../shared/database/database.service';
-import { type DeactivationPlan, departments, employeePersonal, employees, type LeavingReason, teams, tenants } from '../../shared/database/schema';
+import { type DeactivationPlan, employeePersonal, employees, type LeavingReason, orgUnits, tenants } from '../../shared/database/schema';
 import type { JobsService } from '../../shared/events/jobs.service';
 import { removeMembership, withdrawEmployeeInvitations } from '../identity';
+import { loadOrgSnapshot, writeLead, writeOrgChanges } from './org-changes';
+import { planChanges, planLead, unitLedBy } from './org-rules';
 import { assertValidManager, type ManagerChange, queueManagerEmails } from './reporting-lines';
 
 /**
@@ -44,33 +46,33 @@ export async function workspaceToday(tx: Tx, tenantId: string, now = new Date())
 /**
  * Why a member's employee record can't be merged into another one by "Link to member" (spec 4.6):
  * it holds data of its own. Empty for a record made automatically when they joined (no
- * department, manager, reports, leads or personal details). Workforce modules (14–21) add
+ * unit, manager, reports, a unit they lead or personal details). Workforce modules (14–21) add
  * their data here as they ship.
  */
 export async function mergeBlockers(tx: Tx, employeeId: string): Promise<string[]> {
   const [e] = await tx
     .select({
-      departmentId: employees.departmentId,
+      unitId: employees.unitId,
       managerId: employees.managerId,
-      reports: sql<number>`(select count(*)::int from ${employees} r where r.manager_id = ${employees.id})`,
-      leads: sql<number>`(select count(*)::int from ${teams} t where t.lead_employee_id = ${employees.id})`,
-      heads: sql<number>`(select count(*)::int from ${departments} d where d.head_employee_id = ${employees.id})`,
-      personal: sql<boolean>`exists (select 1 from ${employeePersonal} p where p.employee_id = ${employees.id})`,
+      // Qualified by hand: a select from one table renders its columns without the table name,
+      // which inside these subqueries would name the subquery's own row.
+      reports: sql<number>`(select count(*)::int from ${employees} r where r.manager_id = "employees"."id")`,
+      leads: sql<number>`(select count(*)::int from ${orgUnits} u where u.lead_employee_id = "employees"."id")`,
+      personal: sql<boolean>`exists (select 1 from ${employeePersonal} p where p.employee_id = "employees"."id")`,
     })
     .from(employees)
     .where(eq(employees.id, employeeId));
   if (!e) return [];
   const out: string[] = [];
-  if (e.departmentId) out.push('a department');
+  if (e.unitId) out.push('a unit');
   if (e.managerId) out.push('a manager');
   if (e.reports) out.push('direct reports');
-  if (e.leads) out.push('a team they lead');
-  if (e.heads) out.push('a department they head');
+  if (e.leads) out.push('a unit they lead');
   if (e.personal) out.push('personal details or a bank account');
   return out;
 }
 
-/** "a department and a manager". */
+/** "a unit and a manager". */
 export const listBlockers = (b: string[]) => (b.length <= 1 ? (b[0] ?? '') : `${b.slice(0, -1).join(', ')} and ${b.at(-1)}`);
 
 export interface ApplyDeactivation {
@@ -93,8 +95,8 @@ export interface LifecycleDeps {
 
 /**
  * Applies a deactivation (spec 4.8), in `tx` under the reporting-line lock: status Inactive (end
- * date, reason), direct reports to the chosen manager, team leads and department heads replaced or
- * cleared, pending invitations withdrawn, the membership removed through identity (the last owner
+ * date, reason), direct reports to the chosen manager, the unit they lead gets the chosen new lead
+ * (who joins it and reports to the nearest lead above, CD-226) or none, pending invitations withdrawn, the membership removed through identity (the last owner
  * can't go: 409), and "people.employee-deactivated" for other modules. Returns how many reports moved.
  */
 export async function applyDeactivation(tx: Tx, deps: LifecycleDeps, ctx: TenantContext, input: ApplyDeactivation): Promise<{ movedReports: number }> {
@@ -145,20 +147,26 @@ export async function applyDeactivation(tx: Tx, deps: LifecycleDeps, ctx: Tenant
   // One "New manager" email per moved report; the new manager isn't told (spec 10.2).
   await queueManagerEmails(deps.jobs, tx, ctx.tenantId, ctx.userId, moved, { manager: false });
 
-  // Team leads and department heads they hold: the replacement, or nobody.
-  const leads = await tx.select({ id: teams.id }).from(teams).where(eq(teams.leadEmployeeId, e.id));
-  for (const t of leads) {
-    const pick = input.plan.teamLeads.find((x) => x.teamId === t.id)?.employeeId ?? null;
+  // The unit they lead: the replacement, or nobody (CD-226). The new lead joins the unit and
+  // reports to the nearest lead above, else the CEO; the members' managers were set above.
+  const led = await tx.select({ id: orgUnits.id }).from(orgUnits).where(eq(orgUnits.leadEmployeeId, e.id));
+  for (const u of led) {
+    const pick = unitLeadsOf(input.plan).find((x) => x.unitId === u.id)?.employeeId ?? null;
     const ok = await active(pick);
-    if (pick && !ok && !input.lenient) throw new BadRequestException('A new team lead must be an active employee other than the person leaving');
-    await tx.update(teams).set({ leadEmployeeId: ok ? pick : null }).where(eq(teams.id, t.id));
-  }
-  const heads = await tx.select({ id: departments.id }).from(departments).where(eq(departments.headEmployeeId, e.id));
-  for (const d of heads) {
-    const pick = input.plan.departmentHeads.find((x) => x.departmentId === d.id)?.employeeId ?? null;
-    const ok = await active(pick);
-    if (pick && !ok && !input.lenient) throw new BadRequestException('A new department head must be an active employee other than the person leaving');
-    await tx.update(departments).set({ headEmployeeId: ok ? pick : null }).where(eq(departments.id, d.id));
+    if (pick && !ok && !input.lenient) throw new BadRequestException('A new lead must be an active employee other than the person leaving');
+    await tx.update(orgUnits).set({ leadEmployeeId: null }).where(eq(orgUnits.id, u.id));
+    if (!ok) continue;
+    const s = await loadOrgSnapshot(tx, ctx.tenantId);
+    s.people.get(e.id)!.active = false;
+    const other = unitLedBy(s, pick!);
+    if (other) {
+      if (!input.lenient) throw new BadRequestException(`${s.people.get(pick!)?.fullName ?? 'The new lead'} already leads ${other.name}`);
+      continue;
+    }
+    const own = planLead(s, u.id, pick).changes.filter((c) => c.employeeId === pick);
+    const planned = planChanges(s, own);
+    await writeOrgChanges(tx, ctx.tenantId, s, planned, { jobs: deps.jobs, actorUserId: ctx.userId, clearLeadRoles: false });
+    await writeLead(tx, s, u.id, pick);
   }
 
   await tx
@@ -173,6 +181,16 @@ export async function applyDeactivation(tx: Tx, deps: LifecycleDeps, ctx: Tenant
   await deps.jobs.send('people.employee-deactivated', { tenantId: ctx.tenantId, employeeId: e.id, userId: e.userId }, tx);
   await deps.audit.record(tx, ctx, { action: 'employee.deactivated', entityType: 'employee', entityId: e.id, data: { lastWorkingDay: input.lastWorkingDay, movedReports: reports.length } });
   return { movedReports: reports.length };
+}
+
+/**
+ * The new leads a deactivation plan names: `unitLeads` (CD-226), or for a plan written before it
+ * (by a release rolled back to after drizzle/0049) its team leads and department heads, whose ids
+ * are the units' ids.
+ */
+export function unitLeadsOf(plan: Pick<DeactivationPlan, 'unitLeads' | 'teamLeads' | 'departmentHeads'>): { unitId: string; employeeId: string | null }[] {
+  if (plan.unitLeads) return plan.unitLeads;
+  return [...(plan.teamLeads ?? []).map((t) => ({ unitId: t.teamId, employeeId: t.employeeId })), ...(plan.departmentHeads ?? []).map((d) => ({ unitId: d.departmentId, employeeId: d.employeeId }))];
 }
 
 /** Employees whose scheduled deactivation is due on `localDate` (their last working day is over). */

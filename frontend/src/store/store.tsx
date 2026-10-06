@@ -1263,7 +1263,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       meetings,
       /** The employee card (CD-140): reading, saving, invitations, linking, leaving (store/employeeCard.ts). */
       employeeCard,
-      /** Employees, departments and teams (milestone 13; store/people.ts). */
+      /** Employees, org levels and units (milestone 13; store/people.ts). */
       people,
       /** A page of the change history of a deal, company or contact (CD-69), newest first. */
       loadChanges: (entity: HistoryEntity, id: string, offset = 0) => crmApi.history(entity, id, offset),

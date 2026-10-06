@@ -3,6 +3,8 @@ import { nonEmptyPatch } from '../../shared/validation/common';
 
 /** Spec 6.2: required, at most 100 characters, trimmed (uniqueness is case-insensitive, in the database). */
 const orgName = z.string().trim().min(1, 'Required').max(100, 'At most 100 characters');
+/** A level's name ("Department", "Sector"): at most 50 characters. */
+const levelName = z.string().trim().min(1, 'Required').max(50, 'At most 50 characters');
 /** Spec 6.2: optional, at most 20 characters, unique; empty clears it. */
 const code = z
   .string()
@@ -12,54 +14,45 @@ const code = z
   .nullish();
 
 /**
- * Moving a department head or team lead elsewhere ends that role: refused with 409
- * `heads_department` unless this is true, then the role is cleared (CD-225, heads.ts).
+ * Moving a unit's lead elsewhere ends that role: refused with 409 `heads_unit` unless this is true,
+ * then the role is cleared (heads.ts).
  */
-const clearHeadRoles = z.boolean().optional();
+const clearLeadRoles = z.boolean().optional();
 
-/** POST /api/people/departments. The head is put in the department (CD-225). */
-export const CreateDepartment = z.object({ name: orgName, code, headEmployeeId: z.uuid().nullish(), clearHeadRoles });
-export type CreateDepartment = z.infer<typeof CreateDepartment>;
+/** POST /api/people/org-levels (CD-226): a new level at `position` (1 = top; default: the bottom). */
+export const CreateLevel = z.object({ name: levelName, position: z.number().int().min(1).max(5).optional() });
+export type CreateLevel = z.infer<typeof CreateLevel>;
 
-/** PATCH /api/people/departments/:id. A new head is put in the department (CD-225). */
-export const UpdateDepartment = nonEmptyPatch(z.object({ name: orgName, code, headEmployeeId: z.uuid().nullable() }).partial()).and(z.object({ clearHeadRoles }));
-export type UpdateDepartment = z.infer<typeof UpdateDepartment>;
+/** PATCH /api/people/org-levels/:id: rename. */
+export const UpdateLevel = z.object({ name: levelName });
+export type UpdateLevel = z.infer<typeof UpdateLevel>;
 
-/** POST /api/people/teams. The lead is put in the team and its department (CD-225). */
-export const CreateTeam = z.object({ departmentId: z.uuid(), name: orgName, leadEmployeeId: z.uuid().nullish(), clearHeadRoles });
-export type CreateTeam = z.infer<typeof CreateTeam>;
+/** PUT /api/people/org-levels/order: every level's id, top-down. */
+export const ReorderLevels = z.object({ ids: z.array(z.uuid()).min(1).max(5) });
+export type ReorderLevels = z.infer<typeof ReorderLevels>;
 
-/**
- * PATCH /api/people/teams/:id. `departmentId` moves the team (its members move with it).
- * `makeMembersReport` with a new lead: "Make team members report to <lead>" (spec 6.3) for members
- * with no manager or who reported to the previous lead. Off unless sent: a lead alone never
- * changes anyone's manager. A new lead is put in the team and its department (CD-225).
- */
-export const UpdateTeam = nonEmptyPatch(
-  z.object({ name: orgName, departmentId: z.uuid(), leadEmployeeId: z.uuid().nullable(), makeMembersReport: z.boolean() }).partial(),
-)
-  .refine((v) => !v.makeMembersReport || v.leadEmployeeId !== undefined, { message: 'makeMembersReport needs leadEmployeeId' })
-  .and(z.object({ clearHeadRoles }));
-export type UpdateTeam = z.infer<typeof UpdateTeam>;
+/** POST /api/people/org-units: a unit of `levelId`, inside `parentId` (a unit of a higher level) or directly under the company. */
+export const CreateUnit = z.object({ levelId: z.uuid(), parentId: z.uuid().nullish(), name: orgName, code, leadEmployeeId: z.uuid().nullish(), clearLeadRoles });
+export type CreateUnit = z.infer<typeof CreateUnit>;
 
-/** GET /api/people/teams/:id/lead-preview?leadEmployeeId= */
+/** PATCH /api/people/org-units/:id: rename, code, move (`parentId`), lead. */
+export const UpdateUnit = nonEmptyPatch(z.object({ name: orgName, code, parentId: z.uuid().nullable(), leadEmployeeId: z.uuid().nullable() }).partial()).and(z.object({ clearLeadRoles }));
+export type UpdateUnit = z.infer<typeof UpdateUnit>;
+
+/** GET /api/people/org-units/:id/lead-preview?leadEmployeeId= */
 export const LeadPreviewQuery = z.object({ leadEmployeeId: z.uuid() });
 export type LeadPreviewQuery = z.infer<typeof LeadPreviewQuery>;
 
 const employeeIds = z.array(z.uuid()).min(1, 'Pick at least one employee').max(500, 'At most 500 employees at a time');
 
-/** POST /api/people/assignments/preview: who moves from where, and the suggested manager. */
-export const AssignmentPreview = z.object({ departmentId: z.uuid(), teamId: z.uuid().nullish(), employeeIds });
-export type AssignmentPreview = z.infer<typeof AssignmentPreview>;
-
 /**
- * POST /api/people/assignments ("Add people", "Set department and team"): puts the employees in the
- * department, and in the team when given (moving them out of any other team). `managers` sets
- * Reports to of some of them at the same time (the prefilled suggestion, as the user left it).
+ * POST /api/people/assignments ("Add people"): puts the employees in the unit (null: no unit). Their
+ * manager follows the rules (the unit's lead, else the nearest lead above, else the CEO), except
+ * for those in `managers`, which sets Reports to explicitly.
  */
-export const Assign = AssignmentPreview.extend({ managers: z.record(z.uuid(), z.uuid().nullable()).optional(), clearHeadRoles });
+export const Assign = z.object({ unitId: z.uuid().nullable(), employeeIds, managers: z.record(z.uuid(), z.uuid().nullable()).optional(), clearLeadRoles });
 export type Assign = z.infer<typeof Assign>;
 
 /** POST /api/people/reporting-lines ("Set manager" on one or many): `managerId` null removes it. */
-export const SetReportingLines = z.object({ employeeIds, managerId: z.uuid().nullable() });
+export const SetReportingLines = z.object({ employeeIds, managerId: z.uuid().nullable(), clearLeadRoles });
 export type SetReportingLines = z.infer<typeof SetReportingLines>;

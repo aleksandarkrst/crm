@@ -1,7 +1,7 @@
 /**
  * The Org structure list's bulk actions and personal-details export (CD-137, spec 5.4, 9.3, 9.5):
- * who may use them (Admins only since CD-225), department and team together, the reporting-line
- * rules (no loops, all or nothing), moving heads (CD-225), and the audit entry of every
+ * who may use them (Admins only since CD-225), setting a unit (CD-226), the reporting-line
+ * rules (no loops, all or nothing), moving leads (CD-225), and the audit entry of every
  * personal-details export. `hr` is a workspace admin; `pay` holds a leftover Payroll row.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -46,78 +46,77 @@ describe('who may use the bulk actions and the export', () => {
   it('refuses Employee, Manager and a leftover Payroll row; allows Admins', async () => {
     const target = await create('Bulk', 'Target');
     for (const s of [emp, mgr, pay]) {
-      expect((await bulk(s, { employeeIds: [target], departmentId: sales })).status).toBe(403);
+      expect((await bulk(s, { employeeIds: [target], unitId: sales })).status).toBe(403);
       expect((await call('POST', '/people/employees/export', { ...as(s), body: { employeeIds: [target] } })).status).toBe(403);
     }
-    expect((await card(target)).departmentId).toBeNull();
-    expect((await bulk(hr, { employeeIds: [target], departmentId: sales })).body).toEqual({ updated: 1 });
-    expect((await bulk(owner, { employeeIds: [target], departmentId: support })).body).toEqual({ updated: 1 });
-    expect((await card(target)).departmentName).toBe('Support');
+    expect((await card(target)).unitId).toBeNull();
+    expect((await bulk(hr, { employeeIds: [target], unitId: sales })).body).toEqual({ updated: 1 });
+    expect((await bulk(owner, { employeeIds: [target], unitId: support })).body).toEqual({ updated: 1 });
+    expect((await card(target)).unitName).toBe('Support');
   });
 
   it('validates the request', async () => {
     const target = await create('Bulk', 'Valid');
-    expect((await bulk(owner, { employeeIds: [], departmentId: sales })).status).toBe(400);
+    expect((await bulk(owner, { employeeIds: [], unitId: sales })).status).toBe(400);
     expect((await bulk(owner, { employeeIds: [target] })).status).toBe(400);
-    expect((await bulk(owner, { employeeIds: ['not-a-uuid'], departmentId: sales })).status).toBe(400);
+    expect((await bulk(owner, { employeeIds: ['not-a-uuid'], unitId: sales })).status).toBe(400);
     // An id of no employee here (another workspace's, or made up): nothing is changed.
-    const res = await bulk(owner, { employeeIds: [target, '00000000-0000-4000-8000-000000000000'], departmentId: sales });
+    const res = await bulk(owner, { employeeIds: [target, '00000000-0000-4000-8000-000000000000'], unitId: sales });
     expect(res.status).toBe(400);
-    expect((await card(target)).departmentId).toBeNull();
+    expect((await card(target)).unitId).toBeNull();
   });
 });
 
-describe('Set department and team', () => {
-  it('a team brings its department; a department alone clears the team; null is No department', async () => {
+describe('Set unit', () => {
+  it('moves everyone to the unit; null is No unit; the same values change nothing', async () => {
     const a = await create('Ana', 'Org');
-    const b = await create('Bora', 'Org', { departmentId: support, teamId: helpdesk });
-    expect((await bulk(hr, { employeeIds: [a, b], teamId: north })).body).toEqual({ updated: 2 });
-    for (const who of [a, b]) expect(await card(who)).toMatchObject({ departmentId: sales, teamId: north, teamName: 'North' });
+    const b = await create('Bora', 'Org', { unitId: helpdesk });
+    expect((await bulk(hr, { employeeIds: [a, b], unitId: north })).body).toEqual({ updated: 2 });
+    for (const who of [a, b]) expect(await card(who)).toMatchObject({ unitId: north, unitName: 'North' });
     // Same values again: nothing changes.
-    expect((await bulk(hr, { employeeIds: [a, b], departmentId: sales, teamId: north })).body).toEqual({ updated: 0 });
-    expect((await bulk(hr, { employeeIds: [a], departmentId: sales })).body).toEqual({ updated: 1 });
-    expect(await card(a)).toMatchObject({ departmentId: sales, teamId: null });
-    expect((await bulk(hr, { employeeIds: [a, b], departmentId: null, teamId: null })).body).toEqual({ updated: 2 });
-    expect(await card(b)).toMatchObject({ departmentId: null, teamId: null });
+    expect((await bulk(hr, { employeeIds: [a, b], unitId: north })).body).toEqual({ updated: 0 });
+    expect((await bulk(hr, { employeeIds: [a, b], unitId: null })).body).toEqual({ updated: 2 });
+    expect(await card(b)).toMatchObject({ unitId: null, unitName: null });
   });
 
-  it('refuses a team of another department and a missing team', async () => {
+  it('refuses a missing unit', async () => {
     const a = await create('Cira', 'Org');
-    expect((await bulk(hr, { employeeIds: [a], departmentId: support, teamId: south })).status).toBe(400);
-    expect((await bulk(hr, { employeeIds: [a], teamId: '00000000-0000-4000-8000-000000000000' })).status).toBe(400);
-    expect((await card(a)).departmentId).toBeNull();
+    expect((await bulk(hr, { employeeIds: [a], unitId: '00000000-0000-4000-8000-000000000000' })).status).toBe(400);
+    expect((await card(a)).unitId).toBeNull();
   });
 
   it('records the change in each employee’s history and one audit entry', async () => {
     const a = await create('Dara', 'History');
-    await bulk(owner, { employeeIds: [a], teamId: south });
+    await bulk(owner, { employeeIds: [a], unitId: south });
     const { entries } = await ok('GET', `/people/history?entityType=employee&entityId=${a}`, as());
-    expect(entries.map((e: { field: string | null }) => e.field)).toEqual(expect.arrayContaining(['departmentId', 'teamId']));
+    expect(entries.find((e: { field: string | null }) => e.field === 'unitId')).toMatchObject({ newValue: south, newLabel: 'South' });
     const [audit] = await asTenantSql<{ n: number }>(tenant, `select count(*)::int as n from audit_logs where action = 'employee.bulk_updated'`);
     expect(audit!.n).toBeGreaterThan(0);
   });
 
   it('an Admin includes their own row', async () => {
     const a = await create('Ema', 'Own');
-    expect((await bulk(hr, { employeeIds: [a, id.hr], departmentId: sales })).body).toEqual({ updated: 2 });
-    expect((await bulk(owner, { employeeIds: [a, id.owner], departmentId: sales })).body).toEqual({ updated: 1 });
+    expect((await bulk(hr, { employeeIds: [a, id.hr], unitId: sales })).body).toEqual({ updated: 2 });
+    expect((await bulk(owner, { employeeIds: [a, id.owner], unitId: sales })).body).toEqual({ updated: 1 });
   });
 
-  it('moving a department head elsewhere asks first (409 heads_department), then removes them as head (CD-225)', async () => {
-    const head = await create('Hana', 'Head', { departmentId: support });
-    await ok('PATCH', `/people/departments/${support}`, { ...as(), body: { headEmployeeId: head } });
+  it('moving a unit lead elsewhere asks first (409 heads_unit), then removes them as lead (CD-225, CD-226)', async () => {
+    const lead = await create('Hana', 'Lead');
+    await ok('PATCH', `/people/org-units/${support}`, { ...as(), body: { leadEmployeeId: lead } });
+    // The lead joined the unit.
+    expect((await card(lead)).unitId).toBe(support);
     const other = await create('Olga', 'Other');
-    const res = await bulk(hr, { employeeIds: [other, head], departmentId: sales });
+    const res = await bulk(hr, { employeeIds: [other, lead], unitId: sales });
     expect(res.status).toBe(409);
-    expect(res.body).toMatchObject({ code: 'heads_department', message: 'Hana Head is head of Support. Moving them to Sales removes them as head of Support.' });
-    expect(res.body.people).toEqual([{ employeeId: head, fullName: 'Hana Head', roles: [{ kind: 'department', id: support, name: 'Support' }] }]);
+    expect(res.body).toMatchObject({ code: 'heads_unit', message: 'Hana Lead is lead of Support. Moving them to Sales removes them as lead of Support.' });
+    expect(res.body.people).toEqual([{ employeeId: lead, fullName: 'Hana Lead', roles: [{ kind: 'unit', id: support, name: 'Support' }] }]);
     // Nothing changed.
-    expect((await card(head)).departmentId).toBe(support);
-    expect((await card(other)).departmentId).toBeNull();
-    expect((await bulk(hr, { employeeIds: [other, head], departmentId: sales, clearHeadRoles: true })).body).toEqual({ updated: 2 });
-    expect((await card(head)).departmentId).toBe(sales);
-    const departments = await ok('GET', '/people/departments', as());
-    expect(departments.find((d: { id: string }) => d.id === support).headEmployeeId).toBeNull();
+    expect((await card(lead)).unitId).toBe(support);
+    expect((await card(other)).unitId).toBeNull();
+    expect((await bulk(hr, { employeeIds: [other, lead], unitId: sales, clearLeadRoles: true })).body).toEqual({ updated: 2 });
+    expect((await card(lead)).unitId).toBe(sales);
+    const units = await ok('GET', '/people/org-units', as());
+    expect(units.find((u: { id: string }) => u.id === support).leadEmployeeId).toBeNull();
   });
 });
 
@@ -160,7 +159,7 @@ describe('Set manager', () => {
     await asTenantSql(tenant, `update employees set deactivated_at = now() where id = $1`, [gone]);
     expect((await bulk(owner, { employeeIds: [t.x], managerId: gone })).status).toBe(400);
     // An inactive employee can't be changed in bulk either.
-    expect((await bulk(owner, { employeeIds: [gone], departmentId: sales })).status).toBe(400);
+    expect((await bulk(owner, { employeeIds: [gone], unitId: sales })).status).toBe(400);
   });
 
   it("only an Admin makes themselves someone's manager", async () => {

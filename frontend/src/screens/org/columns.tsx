@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import type { ApiEmployee, ApiPeopleAccess } from '../../lib/api';
-import { ACCOUNT_LABEL, EMPLOYMENT_TYPE_LABEL, isAdminOf, isHrOf, isManagerOf, ROLE_LABEL, type SortKey, STATUS_LABEL } from '../../store/people';
+import type { ApiEmployee, ApiOrgUnit, ApiPeopleAccess } from '../../lib/api';
+import { ACCOUNT_LABEL, EMPLOYMENT_TYPE_LABEL, isAdminOf, isHrOf, isManagerOf, ROLE_LABEL, type SortKey, STATUS_LABEL, unitPathLabel } from '../../store/people';
 import { IssueIcons } from './parts';
 
 export interface Column {
@@ -24,11 +24,12 @@ export const shortDate = (iso: string | null | undefined) => {
 const muted = (v: ReactNode) => <span className="org-cell-muted">{v}</span>;
 
 /**
- * The list's columns (spec 5.4) for this caller. The directory columns for everyone; Start date and
+ * The list's columns (spec 5.4) for this caller. The directory columns for everyone (the unit with
+ * its path as a tooltip, CD-226); Start date and
  * Employment type for managers and Admins; Status, Account and Roles for Admins. A row the caller may not see a value of (the API left it out) shows
  * it empty.
  */
-export function listColumns(access: ApiPeopleAccess | null): Column[] {
+export function listColumns(access: ApiPeopleAccess | null, units: readonly ApiOrgUnit[] = []): Column[] {
   const hr = isHrOf(access);
   const cols: Column[] = [
     {
@@ -45,8 +46,14 @@ export function listColumns(access: ApiPeopleAccess | null): Column[] {
       text: (e) => e.fullName,
     },
     { key: 'jobTitle', label: 'Job title', width: 'minmax(130px, 1fr)', sortable: true, cell: (e) => muted(dash(e.jobTitle)), text: (e) => e.jobTitle },
-    { key: 'department', label: 'Department', width: 'minmax(110px, 0.9fr)', sortable: true, cell: (e) => dash(e.departmentName), text: (e) => e.departmentName },
-    { key: 'team', label: 'Team', width: 'minmax(110px, 0.9fr)', sortable: true, cell: (e) => dash(e.teamName), text: (e) => e.teamName },
+    {
+      key: 'unit',
+      label: 'Unit',
+      width: 'minmax(130px, 1fr)',
+      sortable: true,
+      cell: (e) => <span title={unitPathLabel(units, e.unitId, e.unitName) || undefined}>{dash(e.unitName)}</span>,
+      text: (e) => e.unitName,
+    },
     { key: 'manager', label: 'Reports to', width: 'minmax(130px, 1fr)', sortable: true, cell: (e) => muted(dash(e.managerName)), text: (e) => e.managerName },
     { key: 'workEmail', label: 'Work email', width: 'minmax(170px, 1.2fr)', sortable: true, cell: (e) => muted(dash(e.workEmail)), text: (e) => e.workEmail },
     { key: 'workPhone', label: 'Work phone', width: 'minmax(110px, 0.8fr)', sortable: true, cell: (e) => muted(dash(e.workPhone)), text: (e) => e.workPhone },

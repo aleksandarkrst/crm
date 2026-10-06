@@ -7,7 +7,8 @@ export { CallerAccess, FUNCTIONAL_ROLES, type FunctionalRole } from './caller-ac
 export { ABSENCE_SOURCE, type AbsenceSource, type Approver, type ApproverResult, resolveApprovers, SELF_APPROVED_LABEL } from './approvers';
 export { createInvitedEmployee, dropUnusedInvitedEmployees, linkNewMember, type NewMember, syncWorkEmail, unlinkMember } from './linking';
 export { assertValidManager, lockReportingLines, loopMessage, type ManagerChange, queueManagerEmails, setManagers } from './reporting-lines';
-export { DEPARTMENT_USAGE, type DepartmentUsage } from './department-usage';
+export { UNIT_USAGE, type UnitUsage } from './unit-usage';
+export { applyCeoRule } from './org.service';
 export { domesticFromIban, formatIban, maskIban, parseBankAccount, type ParsedAccount, shortMaskIban } from './iban';
 export { cleanName, normalizeForSearch } from './search';
 export { allows, PERMISSION_MODULES, type PermissionRelation, type PermissionScope, permissionRow, relationsFor } from './permissions';

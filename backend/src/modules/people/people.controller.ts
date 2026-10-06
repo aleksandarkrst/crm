@@ -6,8 +6,8 @@ import { PeopleHistoryQuery, PeopleHistoryService } from './people-history.servi
 
 /**
  * The rest of the people API for every member: the caller's own access and the history of
- * employees, departments and teams (with the card's rules). Departments, teams and reporting lines
- * are OrgController (CD-138, CD-139).
+ * employees and org units (and departments and teams before CD-226), with the card's rules. Levels,
+ * units and reporting lines are OrgController (CD-226).
  */
 @Controller('people')
 @RequireTenant('member')
@@ -23,7 +23,7 @@ export class PeopleController {
     return (await this.access.of(ctx)).toJSON();
   }
 
-  /** `?entityType=employee|department|team&entityId=…&limit=50&offset=0`, newest first: `{ entries, more }`. */
+  /** `?entityType=employee|org_unit|department|team&entityId=…&limit=50&offset=0`, newest first: `{ entries, more }`. */
   @Get('history')
   list(@Tenant() ctx: TenantContext, @Query(new ZodPipe(PeopleHistoryQuery)) query: PeopleHistoryQuery) {
     return this.history.list(ctx, query);

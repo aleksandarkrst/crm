@@ -1,30 +1,19 @@
 // Org structure (CD-137): an owner's org of four levels in both chart modes and in the list, the
-// company node with the CEO the owner sets (CD-225), sorting, filters as dropdowns (department,
-// team, manager direct and including indirect, status, data issues) that the URL restores, the
+// company node with the CEO the owner sets (CD-225), sorting, filters as dropdowns (unit with the
+// units inside it and old department/team links, manager direct and including indirect, status,
+// data issues) that the URL restores, the
 // list header as wide as its columns, the accent-free search ("petrovic" finds Petrović), the bulk
 // actions with the loop refused, Ctrl K opening an employee's card, a member's narrower columns,
 // and a phone without sideways scrolling. People join by invitation (CD-226): the page has no Add
 // employee, Import or "Invite selected".
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { describe } from 'node:test';
 import { api, BASE_URL, click, clickButton, email, finishOnboarding, newUserWithWorkspace, setValue, signIn, steps, text, useBrowser } from '../lib/harness.mjs';
-
-/**
- * Departments and teams have no API yet (CD-138 adds it), so they are made in SQL as the admin
- * role, like the backend's people tests do (CI sets PGHOST and PGPASSWORD for psql).
- */
-function sql(query) {
-  const user = process.env.POSTGRES_USER || 'app_admin';
-  const db = process.env.POSTGRES_DB || 'app';
-  return execFileSync('psql', ['-U', user, '-d', db, '-v', 'ON_ERROR_STOP=1', '-qtA', '-c', query], { encoding: 'utf8' }).trim();
-}
 
 describe('org structure', () => {
   const browser = useBrowser();
   const step = steps(browser, 'org-structure');
   let page;
-  let tenant;
   const id = {};
   const dept = {};
 
@@ -40,12 +29,13 @@ describe('org structure', () => {
   step('an owner sets up a four-level org', async () => {
     page = await browser.person('olga');
     await newUserWithWorkspace(page, { label: 'org-olga', name: 'Olga Owner', workspace: 'Org Co' });
-    tenant = await page.evaluate(() => localStorage.getItem('crm.tenantId'));
-    const ins = (table, cols, vals) => sql(`insert into ${table} (tenant_id, ${cols}) values ('${tenant}', ${vals}) returning id`);
-    dept.sales = ins('departments', 'name', `'Sales'`);
-    dept.service = ins('departments', 'name', `'Service'`);
-    dept.north = ins('teams', 'department_id, name', `'${dept.sales}', 'North'`);
-    dept.south = ins('teams', 'department_id, name', `'${dept.sales}', 'South'`);
+    // Units of the default levels Department and Team (CD-226), without leads.
+    const [department, team] = await api(page, '/people/org-levels');
+    const unit = async (levelId, name, parentId = null) => (await api(page, '/people/org-units', { method: 'POST', body: JSON.stringify({ levelId, name, parentId }) })).unit.id;
+    dept.sales = await unit(department.id, 'Sales');
+    dept.service = await unit(department.id, 'Service');
+    dept.north = await unit(team.id, 'North', dept.sales);
+    dept.south = await unit(team.id, 'South', dept.sales);
     // Invited in Settings → Team (the API), which creates their record (CD-226); then their details.
     let n = 0;
     const create = async (key, firstName, lastName, extra) => {
@@ -53,17 +43,18 @@ describe('org structure', () => {
       id[key] = invitation.employeeId;
       await api(page, `/people/employees/${id[key]}`, { method: 'PATCH', body: JSON.stringify({ firstName, lastName, employmentStartDate: '2024-03-01', ...extra }) });
     };
-    // Ana → Marko → Ivan → Mila and Sara; Petar without a manager in Service.
-    await create('ana', 'Ana', 'Petrović', { jobTitle: 'CEO', departmentId: dept.sales });
-    await create('marko', 'Marko', 'Ilić', { jobTitle: 'Sales director', teamId: dept.north, managerId: id.ana });
-    await create('ivan', 'Ivan', 'Jović', { jobTitle: 'Team lead', teamId: dept.north, managerId: id.marko });
-    await create('mila', 'Mila', 'Kostić', { jobTitle: 'Sales rep', teamId: dept.north, managerId: id.ivan });
-    await create('sara', 'Sara', 'Nikolić', { jobTitle: 'Sales rep', teamId: dept.south, managerId: id.ivan });
-    await create('petar', 'Petar', 'Lukić', { jobTitle: 'Technician', departmentId: dept.service });
+    // Ana → Marko → Ivan → Mila and Sara; Petar without a manager in Service. Unit and manager in
+    // one change: both stay as given (the org rules only fill in what a change leaves out).
+    await create('ana', 'Ana', 'Petrović', { jobTitle: 'CEO', unitId: dept.sales });
+    await create('marko', 'Marko', 'Ilić', { jobTitle: 'Sales director', unitId: dept.north, managerId: id.ana });
+    await create('ivan', 'Ivan', 'Jović', { jobTitle: 'Team lead', unitId: dept.north, managerId: id.marko });
+    await create('mila', 'Mila', 'Kostić', { jobTitle: 'Sales rep', unitId: dept.north, managerId: id.ivan });
+    await create('sara', 'Sara', 'Nikolić', { jobTitle: 'Sales rep', unitId: dept.south, managerId: id.ivan });
+    await create('petar', 'Petar', 'Lukić', { jobTitle: 'Technician', unitId: dept.service });
     id.olga = (await api(page, '/people/access')).employeeId;
   });
 
-  step('Workforce opens "Org structure", its sidebar page; the chart shows everyone by department', async () => {
+  step('Workforce opens "Org structure", its sidebar page; the chart shows everyone by unit', async () => {
     await page.goto(`${BASE_URL}/pipeline`, { waitUntil: 'networkidle0' });
     // Each module has its own sidebar (CD-223): Org structure is in Workforce's.
     assert.equal(await page.$('.app-sidebar a[href="/org"]'), null, 'not in the CRM sidebar');
@@ -71,16 +62,21 @@ describe('org structure', () => {
     await click(page, '[data-testid=module-switcher-pop] [data-module=workforce]');
     await page.waitForFunction(() => location.pathname === '/org');
     await page.waitForSelector('.app-sidebar a[href="/org"].active');
-    await page.waitForSelector('[data-testid=org-chart-department]');
+    await page.waitForSelector('[data-testid=org-chart-units]');
     await page.waitForFunction(() => document.querySelector('[data-testid=org-count]')?.textContent === '7 employees');
-    const columns = await page.$$eval('[data-testid=org-dept]', (els) => els.map((e) => [e.querySelector('.org-dept-name').textContent, [...e.querySelectorAll('[data-testid=org-person]')].map((p) => p.querySelector('.org-person-name').firstChild.textContent)]));
-    assert.deepEqual(columns, [
-      ['Sales', ['Marko Ilić', 'Ivan Jović', 'Mila Kostić', 'Sara Nikolić', 'Ana Petrović']],
+    // Each unit with its own people, then the units inside it (CD-226); "No unit" last.
+    const boxes = await page.$$eval('[data-testid=org-unit]', (els) =>
+      els.map((e) => [e.querySelector(':scope > .org-unit-box .org-unit-name').textContent, [...e.querySelectorAll(':scope > .org-unit-box [data-testid=org-person]')].map((p) => p.querySelector('.org-person-name').firstChild.textContent)]),
+    );
+    assert.deepEqual(boxes, [
+      ['Sales', ['Ana Petrović']],
+      ['North', ['Marko Ilić', 'Ivan Jović', 'Mila Kostić']],
+      ['South', ['Sara Nikolić']],
       ['Service', ['Petar Lukić']],
-      ['No department', ['Olga Owner']],
+      ['No unit', ['Olga Owner']],
     ]);
-    const teams = await page.$$eval('[data-testid=org-dept]:first-child [data-testid=org-team] .org-team-name', (els) => els.map((e) => e.textContent));
-    assert.deepEqual(teams, ['North', 'South', 'No team']);
+    // North and South hang inside Sales.
+    assert.ok(await page.$(`[data-testid=org-unit][data-unit="${dept.sales}"] > .org-unit-children > [data-testid=org-unit][data-unit="${dept.north}"]`));
     // Data issues for Admins: Petar and Ana have no manager.
     assert.ok((await page.$$('[data-testid=org-person][data-id="' + id.petar + '"] [data-testid=org-issue]')).length === 1);
   });
@@ -89,16 +85,16 @@ describe('org structure', () => {
     await page.waitForSelector('[data-testid=org-company]');
     assert.equal(await page.$eval('[data-testid=org-company-name]', (e) => e.textContent), 'Org Co');
     assert.match(await page.$eval('[data-testid=org-company]', (e) => e.textContent), /No CEO set/);
-    // The departments hang below the company node.
-    const [company, firstDept] = await page.evaluate(() => [document.querySelector('[data-testid=org-company]').getBoundingClientRect().bottom, document.querySelector('[data-testid=org-dept]').getBoundingClientRect().top]);
-    assert.ok(firstDept > company, 'departments below the company');
+    // The units branch from the company node.
+    const [company, firstUnit] = await page.evaluate(() => [document.querySelector('[data-testid=org-company]').getBoundingClientRect().bottom, document.querySelector('[data-testid=org-unit]').getBoundingClientRect().top]);
+    assert.ok(firstUnit > company, 'units below the company');
 
     await click(page, '[data-testid=org-set-ceo]');
     await page.type('[data-testid=org-ceo-picker]', 'Ana');
     await click(page, '[data-testid=org-picker-item]');
     await page.waitForSelector(`[data-testid=org-company] [data-testid=org-person][data-id="${id.ana}"]`);
     assert.match(await page.$eval('[data-testid=org-company]', (e) => e.textContent), /CEO/);
-    const sales = await page.$$eval('[data-testid=org-dept]:first-child [data-testid=org-person]', (els) => els.map((p) => p.dataset.id));
+    const sales = await page.$$eval(`[data-testid=org-unit][data-unit="${dept.sales}"] [data-testid=org-person]`, (els) => els.map((p) => p.dataset.id));
     assert.ok(!sales.includes(id.ana), 'the CEO is not repeated in Sales');
     // Saved as a workspace setting: still there after a reload, and the CEO is no "No manager" issue.
     let saved = null;
@@ -155,7 +151,7 @@ describe('org structure', () => {
     assert.equal((await listNames())[0], 'Ana Petrović');
     // Owners see the HR columns; there is no Roles value for an owner but Admin.
     const headers = await page.$$eval('.org-list-head .sort-btn span:first-child, .org-list-head .th', (els) => els.map((e) => e.textContent));
-    assert.deepEqual(headers, ['Name', 'Job title', 'Department', 'Team', 'Reports to', 'Work email', 'Work phone', 'Start date', 'Employment type', 'Status', 'Account', 'Roles']);
+    assert.deepEqual(headers, ['Name', 'Job title', 'Unit', 'Reports to', 'Work email', 'Work phone', 'Start date', 'Employment type', 'Status', 'Account', 'Roles']);
     // The header's background spans every column, however wide the list scrolls (CD-225).
     for (const width of [1400, 1000]) {
       await page.setViewport({ width, height: 1100 });
@@ -166,9 +162,17 @@ describe('org structure', () => {
     await page.setViewport({ width: 1400, height: 1100 });
   });
 
-  step('filters: department, team, manager direct and including indirect', async () => {
-    await openOrg(`?tab=list&dept=${dept.sales}`);
+  step('filters: unit (with the units inside it), old department links, manager direct and including indirect', async () => {
+    await openOrg(`?tab=list&unit=${dept.sales}`);
     assert.equal(await count(), '5 employees');
+    // The Unit filter: grouped by level, each unit with its path.
+    await click(page, '[data-testid=org-filter-unit]');
+    assert.deepEqual(await page.$$eval('.org-multi-group', (els) => els.map((e) => e.textContent)), ['Department', 'Team']);
+    await click(page, '.org-multi-item::-p-text(Sales › South)');
+    await page.waitForFunction((south) => new URLSearchParams(location.search).get('unit')?.includes(south), {}, dept.south);
+    assert.equal(await count(), '5 employees');
+    await click(page, '[data-testid=org-filter-clear]');
+    // Links from before CD-226 still work: departments and teams became units.
     await openOrg(`?tab=list&dept=${dept.sales}&team=${dept.north}`);
     assert.deepEqual(await listNames(), ['Marko Ilić', 'Ivan Jović', 'Mila Kostić']);
     await openOrg(`?tab=list&manager=${id.marko}`);
@@ -179,7 +183,7 @@ describe('org structure', () => {
     assert.deepEqual(await listNames(), ['Ivan Jović', 'Mila Kostić', 'Sara Nikolić']);
     // The same filter on the chart.
     await click(page, '[data-testid=org-tab-chart]');
-    await page.waitForSelector('[data-testid=org-chart-department]');
+    await page.waitForSelector('[data-testid=org-chart-units]');
     assert.equal(await count(), '3 employees');
     // Data issues and Status are dropdowns too (CD-225); the URL restores them.
     await openOrg('?tab=list');
@@ -211,7 +215,7 @@ describe('org structure', () => {
     assert.match(page.url(), /q=petrovic/);
   });
 
-  step('bulk: set department and team, set manager; a loop is refused and nothing changes', async () => {
+  step('bulk: set unit, set manager; a loop is refused and nothing changes', async () => {
     await openOrg('?tab=list');
     const tick = (who) => click(page, `[data-testid=org-row][data-id="${who}"] [data-testid=org-select]`);
     await tick(id.mila);
@@ -219,11 +223,12 @@ describe('org structure', () => {
     await page.waitForFunction(() => document.querySelector('.org-bulk-count')?.textContent === '2 selected');
     // People join by invitation (CD-226): no "Invite selected", Add employee or Import.
     for (const gone of ['org-bulk-invite', 'org-add-employee', 'employee-import']) assert.equal(await page.$(`[data-testid=${gone}]`), null, gone);
-    await click(page, '[data-testid=org-bulk-org]');
-    await setValue(page, '[data-testid=org-set-department]', dept.service);
-    await click(page, '[data-testid=org-set-org-save]');
-    await page.waitForFunction(() => !document.querySelector('[data-testid=org-set-org-save]'));
-    for (const who of [id.mila, id.sara]) assert.deepEqual([(await card(who)).departmentName, (await card(who)).teamName], ['Service', null]);
+    await click(page, '[data-testid=org-bulk-unit]');
+    await setValue(page, '[data-testid=org-set-unit]', dept.service);
+    await click(page, '[data-testid=org-set-unit-save]');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=org-set-unit-save]'));
+    // Service has no lead: the CEO (Ana) becomes their manager (CD-226).
+    for (const who of [id.mila, id.sara]) assert.deepEqual([(await card(who)).unitName, (await card(who)).managerId], ['Service', id.ana]);
 
     await click(page, '[data-testid=org-bulk-manager]');
     await page.type('[data-testid=org-set-manager]', 'Petar');
@@ -269,7 +274,7 @@ describe('org structure', () => {
     await mia.goto(`${BASE_URL}/org?tab=list`, { waitUntil: 'networkidle0' });
     await mia.waitForFunction(() => document.querySelector('[data-testid=org-count]')?.textContent === '8 employees');
     const headers = await mia.$$eval('.org-list-head .sort-btn span:first-child, .org-list-head .th', (els) => els.map((e) => e.textContent));
-    assert.deepEqual(headers, ['Name', 'Job title', 'Department', 'Team', 'Reports to', 'Work email', 'Work phone']);
+    assert.deepEqual(headers, ['Name', 'Job title', 'Unit', 'Reports to', 'Work email', 'Work phone']);
     assert.equal(await mia.$('[data-testid=org-select]'), null);
     assert.equal(await mia.$('[data-testid=org-export]'), null);
     assert.equal(await mia.$('[data-testid=org-filter-issues]'), null);

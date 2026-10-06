@@ -38,6 +38,7 @@ export const FIELD_LABEL: Record<string, string> = {
   employmentEndDate: 'Employment end date',
   deactivatedAt: 'Deactivated',
   leavingReason: 'Reason for leaving',
+  unitId: 'Unit',
   departmentId: 'Department',
   teamId: 'Team',
   managerId: 'Reports to',

@@ -48,7 +48,7 @@ interface Props {
 /**
  * The List tab (spec 5.4): every filtered employee without paging, virtualised (only the rows on
  * screen are in the page, so 5,000 rows stay fast). Sortable columns; the header stays on top while
- * the rows scroll. On phones each row is a card with name, job title and team.
+ * the rows scroll. On phones each row is a card with name, job title and unit.
  */
 export function EmployeeList(props: Props) {
   return props.phone ? <CardList {...props} /> : <Table {...props} />;
@@ -137,7 +137,7 @@ function CardList({ rows, onOpen }: Props) {
               <Avatar initials={initialsOfEmployee(e)} size={30} font={11} />
               <span className="org-person-text">
                 <span className="org-person-name">{e.fullName}</span>
-                <span className="org-person-sub">{[e.jobTitle, e.teamName ?? e.departmentName].filter(Boolean).join(' · ') || '—'}</span>
+                <span className="org-person-sub">{[e.jobTitle, e.unitName].filter(Boolean).join(' · ') || '—'}</span>
               </span>
             </button>
           ))}

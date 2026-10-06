@@ -337,6 +337,20 @@
       "when": 1791306607844,
       "tag": "0047_employee_created_from_invite",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1791310903393,
+      "tag": "0048_org_units",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1791310949327,
+      "tag": "0049_org_units_rls",
+      "breakpoints": true
     }
   ]
 }

@@ -3,37 +3,38 @@
  *
  * The directory isn't part of the workspace load. The first screen that needs it (the Org
  * structure page, Ctrl/⌘K) calls `people.watch()`; the whole directory then comes in one response
- * (the API sends all rows, up to a few thousand) with the departments, teams and the caller's own
- * access, and stays in `s.people`. Filters, search, sorting and both charts run in the browser on
+ * (the API sends all rows, up to a few thousand) with the org levels and units (CD-226) and the
+ * caller's own access, and stays in `s.people`. Filters, search, sorting and both charts run in the browser on
  * that copy, so they answer at once and agree with each other.
  *
  * What a row carries is the API's decision (spec 9): `employment`, `hr` and `roles` are present only
  * where the caller may see them. Nothing here assumes they exist.
  *
- * Live updates (CD-20): hints `employee`, `department`, `team` and `employee_role` read the
+ * Live updates (CD-20): hints `employee`, `org_unit`, `org_level` and `employee_role` read the
  * directory again (a rename or a new manager changes other rows' names too), after a short pause.
  */
-import { type ApiDataIssue, type ApiDepartment, type ApiEmployee, type ApiEmployeePersonalExport, type ApiEmployeeStatus, type ApiAccountState, type ApiPeopleAccess, type ApiTeam, type BulkEmployeesInput, peopleApi } from '../lib/api';
+import { type ApiDataIssue, type ApiEmployee, type ApiEmployeePersonalExport, type ApiEmployeeStatus, type ApiAccountState, type ApiOrgLevel, type ApiOrgUnit, type ApiPeopleAccess, type BulkEmployeesInput, peopleApi } from '../lib/api';
 import { withHeadConfirm } from '../lib/headMoves';
 import type { LiveEvent } from './live';
-import { collator } from './orgChart';
+import { collator, unitIdsFromParams, unitsBelow } from './orgChart';
 import type { State } from './types';
 
 export interface PeopleState {
   /** The directory as the API shows this caller: active and leaving, plus inactive for Admins. */
   employees: ApiEmployee[];
-  departments: ApiDepartment[];
-  teams: ApiTeam[];
+  /** The org levels top-down and every unit (CD-226). */
+  levels: ApiOrgLevel[];
+  units: ApiOrgUnit[];
   access: ApiPeopleAccess | null;
   /** Read at least once. */
   loaded: boolean;
   loading: boolean;
   error: string | null;
 }
-export const emptyPeople = (): PeopleState => ({ employees: [], departments: [], teams: [], access: null, loaded: false, loading: false, error: null });
+export const emptyPeople = (): PeopleState => ({ employees: [], levels: [], units: [], access: null, loaded: false, loading: false, error: null });
 
 /** The live hint types that mean "read the directory again". */
-export const PEOPLE_HINTS = new Set(['employee', 'department', 'team', 'employee_role']);
+export const PEOPLE_HINTS = new Set(['employee', 'org_unit', 'org_level', 'employee_role']);
 
 // ---------------------------------------------------------------- who the caller is
 
@@ -84,7 +85,7 @@ export function searchEmployees(employees: readonly ApiEmployee[], query: string
   return scored
     .sort((a, b) => b.score - a.score || collator.compare(a.e.fullName, b.e.fullName))
     .slice(0, limit)
-    .map(({ e }) => ({ id: e.id, title: e.fullName, subtitle: [e.jobTitle, e.teamName ?? e.departmentName].filter(Boolean).join(' · '), initials: initialsOfEmployee(e) }));
+    .map(({ e }) => ({ id: e.id, title: e.fullName, subtitle: [e.jobTitle, e.unitName].filter(Boolean).join(' · '), initials: initialsOfEmployee(e) }));
 }
 
 /** "AP" for Ana Petrović. */
@@ -95,8 +96,8 @@ export const initialsOfEmployee = (e: Pick<ApiEmployee, 'firstName' | 'lastName'
 export type ManagerScope = 'direct' | 'indirect';
 export interface PeopleFilters {
   q: string;
-  departmentIds: string[];
-  teamIds: string[];
+  /** People in these units or a unit inside them (CD-226). */
+  unitIds: string[];
   managerId: string | null;
   managerScope: ManagerScope;
   statuses: ApiEmployeeStatus[];
@@ -111,12 +112,12 @@ export const ACCOUNT_LABEL: Record<ApiAccountState, string> = { linked: 'Has acc
 export const ISSUE_FILTERS: { value: ApiDataIssue; label: string }[] = [
   { value: 'no_manager', label: 'No manager' },
   { value: 'no_start_date', label: 'Start date missing' },
-  { value: 'no_department', label: 'No department' },
+  { value: 'no_unit', label: 'No unit' },
 ];
 export const ISSUE_LABEL: Record<ApiDataIssue, string> = {
   no_manager: 'No manager',
   no_start_date: 'Start date missing',
-  no_department: 'No department',
+  no_unit: 'No unit',
   manager_no_account: 'Manager has no account',
   no_employee_number: 'Employee number missing',
 };
@@ -126,23 +127,25 @@ export const ROLE_LABEL: Record<string, string> = { employee: 'Employee', manage
 const list = <T extends string>(v: string | null, allowed: readonly T[]): T[] => (v ?? '').split(',').filter((x): x is T => (allowed as readonly string[]).includes(x));
 const ids = (v: string | null) => (v ?? '').split(',').filter((x) => /^[0-9a-f-]{36}$/i.test(x));
 
-/** The filters in the page's URL (`?q=&dept=&team=&manager=&scope=&status=&account=&issues=`). */
+/**
+ * The filters in the page's URL (`?q=&unit=&manager=&scope=&status=&account=&issues=`). Links from
+ * before CD-226 (`dept=`, `team=`) still work: departments and teams became units with the same ids.
+ */
 export function filtersFromParams(p: URLSearchParams): PeopleFilters {
   return {
     q: p.get('q') ?? '',
-    departmentIds: ids(p.get('dept')),
-    teamIds: ids(p.get('team')),
+    unitIds: unitIdsFromParams(p),
     managerId: ids(p.get('manager'))[0] ?? null,
     managerScope: p.get('scope') === 'indirect' ? 'indirect' : 'direct',
     statuses: p.has('status') ? list(p.get('status'), ['active', 'leaving', 'inactive'] as const) : DEFAULT_STATUSES,
     accounts: list(p.get('account'), ['linked', 'invited', 'none'] as const),
-    issues: list(p.get('issues'), ['no_manager', 'no_start_date', 'no_department', 'manager_no_account', 'no_employee_number'] as const),
+    issues: list(p.get('issues'), ['no_manager', 'no_start_date', 'no_unit', 'manager_no_account', 'no_employee_number'] as const),
   };
 }
 
 /** Whether any filter narrows the directory (the search included). */
 export const isFiltered = (f: PeopleFilters) =>
-  !!f.q.trim() || f.departmentIds.length > 0 || f.teamIds.length > 0 || !!f.managerId || f.accounts.length > 0 || f.issues.length > 0 || f.statuses.join() !== DEFAULT_STATUSES.join();
+  !!f.q.trim() || f.unitIds.length > 0 || !!f.managerId || f.accounts.length > 0 || f.issues.length > 0 || f.statuses.join() !== DEFAULT_STATUSES.join();
 
 /** Managers' reports by manager id (active and leaving only: inactive people report to nobody). */
 export function reportsByManager(employees: readonly ApiEmployee[]): Map<string, ApiEmployee[]> {
@@ -172,19 +175,17 @@ export function reportIdsBelow(byManager: Map<string, ApiEmployee[]>, managerId:
 
 /**
  * The employees that pass every filter (spec 5.2), in the directory's order. The rules match the
- * API's (`GET /api/people/employees`): teams only within the chosen departments, the manager's
- * direct or all reports, statuses as the caller sees them, accounts and data issues where present.
+ * API's (`GET /api/people/employees`): a unit with the units inside it, the manager's direct or
+ * all reports, statuses as the caller sees them, accounts and data issues where present.
  */
-export function filterEmployees(employees: readonly ApiEmployee[], f: PeopleFilters, access: ApiPeopleAccess | null): ApiEmployee[] {
+export function filterEmployees(employees: readonly ApiEmployee[], f: PeopleFilters, access: ApiPeopleAccess | null, units: readonly ApiOrgUnit[] = []): ApiEmployee[] {
   const hr = isHrOf(access);
-  const departments = new Set(f.departmentIds);
-  const teams = new Set(f.teamIds);
+  const inUnits = new Set(f.unitIds.flatMap((id) => [...unitsBelow(units, id)]));
   const below = f.managerId && f.managerScope === 'indirect' ? reportIdsBelow(reportsByManager(employees), f.managerId) : null;
   const statuses = new Set(f.statuses);
   return employees.filter((e) => {
     if (!statuses.has(e.status)) return false;
-    if (departments.size && !(e.departmentId && departments.has(e.departmentId))) return false;
-    if (teams.size && !(e.teamId && teams.has(e.teamId))) return false;
+    if (f.unitIds.length && !(e.unitId && inUnits.has(e.unitId))) return false;
     if (f.managerId && (below ? !below.has(e.id) : e.managerId !== f.managerId)) return false;
     if (f.accounts.length && !(e.hr && f.accounts.includes(e.hr.account))) return false;
     if (f.issues.length && !(e.hr && f.issues.some((i) => e.hr!.dataIssues.includes(i)))) return false;
@@ -195,17 +196,15 @@ export function filterEmployees(employees: readonly ApiEmployee[], f: PeopleFilt
 
 // ---------------------------------------------------------------- sorting (the list)
 
-export type SortKey = 'name' | 'jobTitle' | 'department' | 'team' | 'manager' | 'workEmail' | 'workPhone' | 'startDate' | 'type' | 'status' | 'account';
+export type SortKey = 'name' | 'jobTitle' | 'unit' | 'manager' | 'workEmail' | 'workPhone' | 'startDate' | 'type' | 'status' | 'account';
 const sortValue = (e: ApiEmployee, key: SortKey): string => {
   switch (key) {
     case 'name':
       return `${e.lastName}\u0000${e.firstName}`;
     case 'jobTitle':
       return e.jobTitle ?? '';
-    case 'department':
-      return e.departmentName ?? '';
-    case 'team':
-      return e.teamName ?? '';
+    case 'unit':
+      return e.unitName ?? '';
     case 'manager':
       return e.managerName ?? '';
     case 'workEmail':
@@ -234,7 +233,7 @@ export function sortEmployees(employees: readonly ApiEmployee[], key: SortKey, d
 
 // ---------------------------------------------------------------- the charts (spec 5.3)
 
-export { departmentChart, type DepartmentBlock, reportingTree, type TeamBlock, type TreeNode } from './orgChart';
+export { managerForUnit, reportingTree, type TreeNode, unitChart, type UnitChart, unitForManager, type UnitNode, unitPath, unitPathLabel, unitsBelow, unitTree } from './orgChart';
 
 /** The ids of every ancestor of the matching people (to expand the path to them). */
 export function pathsTo(people: readonly ApiEmployee[], matches: ReadonlySet<string>): Set<string> {
@@ -273,19 +272,19 @@ export function peopleActions(ctx: Ctx) {
   const { cur, set, flash, rt } = ctx;
   const patch = (p: Partial<PeopleState>) => set((s) => ({ people: { ...s.people, ...p } }));
 
-  /** Reads the caller's access, then the directory (inactive too for HR), departments and teams. */
+  /** Reads the caller's access, then the directory (inactive too for HR), the levels and units. */
   const load = async () => {
     const seq = ++rt.seq;
     patch({ loading: true });
     try {
       const access = await peopleApi.access();
-      const [employees, departments, teams] = await Promise.all([
+      const [employees, levels, units] = await Promise.all([
         peopleApi.employees(isHrOf(access) ? { status: ['active', 'leaving', 'inactive'] } : {}),
-        peopleApi.departments(),
-        peopleApi.teams(),
+        peopleApi.levels(),
+        peopleApi.units(),
       ]);
       if (seq !== rt.seq) return;
-      patch({ employees, departments, teams, access, loaded: true, loading: false, error: null });
+      patch({ employees, levels, units, access, loaded: true, loading: false, error: null });
     } catch (err) {
       if (seq !== rt.seq) return;
       patch({ loading: false, error: ctx.errText(err) });
@@ -319,13 +318,14 @@ export function peopleActions(ctx: Ctx) {
   };
 
   /**
-   * "Set department and team" / "Set manager" for the ticked rows (spec 5.4), and a drop on the
-   * chart (spec 6.3). All or nothing on the server. Moving a department head or team lead elsewhere
-   * asks first (CD-225). Returns an error message, or null when saved (or not confirmed).
+   * "Set unit" / "Set manager" for the ticked rows (spec 5.4), and a drop on the chart (a person on
+   * a unit or on a person, CD-226). All or nothing on the server, which applies the org rules.
+   * Moving a unit's lead elsewhere asks first (CD-225). Returns an error message, or null when
+   * saved (or not confirmed).
    */
   const bulkUpdate = async (input: BulkEmployeesInput, done: string): Promise<string | null> => {
     try {
-      const saved = await withHeadConfirm((clear) => peopleApi.bulkUpdate(clear ? { ...input, clearHeadRoles: true } : input));
+      const saved = await withHeadConfirm((clear) => peopleApi.bulkUpdate(clear ? { ...input, clearLeadRoles: true } : input));
       if (!saved) return null;
       const { updated } = saved;
       await load();

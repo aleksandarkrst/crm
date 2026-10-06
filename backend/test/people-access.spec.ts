@@ -104,8 +104,8 @@ describe('who may change which field (spec 4.5, 9.3)', () => {
     expect(editableFields(caller(), 'x', true)).toEqual([]);
     // A manager edits nothing on their reports' cards.
     expect(editableFields(caller({ directReportIds: ['a'], reportIds: ['a'] }), 'a', true)).toEqual([]);
-    // Nobody but an Admin sets a department, team or manager, not even on their own card (CD-225).
-    for (const f of ['managerId', 'departmentId', 'teamId', 'jobTitle', 'employmentStartDate']) expect(editableFields(caller(), 'me', true)).not.toContain(f);
+    // Nobody but an Admin sets a unit or manager, not even on their own card (CD-225, CD-226).
+    for (const f of ['managerId', 'unitId', 'jobTitle', 'employmentStartDate']) expect(editableFields(caller(), 'me', true)).not.toContain(f);
   });
 
   it('an Admin edits everything, their own card included', () => {

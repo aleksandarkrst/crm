@@ -13,6 +13,11 @@ export interface TreeView {
   hits: ReadonlySet<string> | null;
   onOpen: (id: string) => void;
   hr: boolean;
+  /**
+   * Desktop, Admins (CD-226): people can be dragged onto another person, who then becomes their
+   * manager (the page confirms). Null: dragging is off.
+   */
+  onDropOnPerson: ((employeeId: string, managerId: string) => void) | null;
 }
 
 const reportsLabel = (n: number) => (n === 1 ? '1 report' : `${n} reports`);
@@ -41,9 +46,11 @@ function Person({ node, view }: { node: TreeNode; view: TreeView }) {
       e={e}
       onOpen={view.onOpen}
       hr={view.hr}
-      sub={e.teamName}
+      sub={e.unitName}
       dim={!!view.matches && !view.matches.has(e.id)}
       hit={!!view.hits?.has(e.id)}
+      draggable={!!view.onDropOnPerson}
+      onDropPerson={view.onDropOnPerson ? (id) => view.onDropOnPerson!(id, e.id) : undefined}
       extra={node.children.length > 0 ? <span className="org-reports" title={reportsLabel(node.children.length)}>{node.children.length}</span> : undefined}
     />
   );
@@ -82,7 +89,10 @@ const Branch = memo(function Branch({ node, view }: { node: TreeNode; view: Tree
   );
 });
 
-/** "Reporting lines" (spec 5.3): the tree from "reports to", several roots side by side. */
+/**
+ * "Reporting lines" (spec 5.3): the tree from "reports to", several roots side by side. Admins on
+ * desktop drag a person onto another to make them their manager (CD-226).
+ */
 export function ReportingChart({ roots, view, focusKey }: { roots: TreeNode[]; view: TreeView; focusKey: string }) {
   if (!roots.length) return <div className="empty-state">Nobody to show.</div>;
   // The top of the tree in view, or the first search hit.

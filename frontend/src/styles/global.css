@@ -757,30 +757,35 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .org-chart-size { overflow: hidden; }
 .org-chart-content { width: max-content; padding: 18px; transform-origin: 0 0; }
 
-/* by department */
-.org-depts { display: flex; align-items: flex-start; gap: 14px; }
-/* the company node with the CEO on top, the departments hanging below it (CD-225) */
+/* by unit (CD-226): the company node with the CEO on top (CD-225), the units hanging below it,
+   each unit's own units nested below it with the same connector lines */
 .org-company-tree { display: flex; flex-direction: column; align-items: center; }
 .org-company { position: relative; width: 268px; display: flex; flex-direction: column; align-items: stretch; gap: 8px; background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 12px; cursor: default; margin-bottom: 36px; }
 .org-company-name { font-family: var(--font-display); font-size: 15px; font-weight: 600; text-align: center; overflow-wrap: anywhere; }
 .org-company-set { align-self: center; padding: 5px 10px; font-size: 12.5px; }
 .org-company-tree > .org-company::after { content: ''; position: absolute; left: 50%; bottom: -19px; height: 18px; border-left: 1px solid var(--dashed); }
 .org-company-tree > .empty-state { margin-top: -18px; }
-.org-depts-tree > .org-dept { position: relative; }
-.org-depts-tree > .org-dept::before { content: ''; position: absolute; top: -19px; left: 50%; height: 18px; border-left: 1px solid var(--dashed); }
-.org-depts-tree > .org-dept::after { content: ''; position: absolute; top: -19px; left: -8px; right: -8px; border-top: 1px solid var(--dashed); }
-.org-depts-tree > .org-dept:first-child::after { left: 50%; }
-.org-depts-tree > .org-dept:last-child::after { right: 50%; }
-.org-depts-tree > .org-dept:only-child::after { display: none; }
 .org-outline > .org-company { width: auto; margin: 0 0 6px; }
-.org-dept { width: 268px; flex: 0 0 268px; display: flex; flex-direction: column; gap: 10px; background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 12px; cursor: default; }
-.org-dept.is-none { background: var(--bg-soft); border-style: dashed; }
-.org-dept.is-over, .org-team.is-over { border-color: var(--brand); box-shadow: var(--ring); }
-.org-dept-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.org-dept-name { font-family: var(--font-display); font-weight: 500; letter-spacing: -0.02em; font-size: 15px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.org-team { display: flex; flex-direction: column; gap: 6px; background: var(--panel); border: 1px solid var(--divider); border-radius: 10px; padding: 8px; }
-.org-team-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 2px 2px; }
-.org-team-name { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); }
+.org-unit-children { display: flex; align-items: flex-start; justify-content: center; gap: 16px; position: relative; padding-top: 19px; }
+.org-units-top { padding-top: 0; }
+.org-unit { position: relative; display: flex; flex-direction: column; align-items: center; }
+.org-unit-children > .org-unit::before { content: ''; position: absolute; top: -19px; left: 50%; height: 18px; border-left: 1px solid var(--dashed); }
+.org-unit-children > .org-unit::after { content: ''; position: absolute; top: -19px; left: -8px; right: -8px; border-top: 1px solid var(--dashed); }
+.org-unit-children > .org-unit:first-child::after { left: 50%; }
+.org-unit-children > .org-unit:last-child::after { right: 50%; }
+.org-unit-children > .org-unit:only-child::after { display: none; }
+.org-unit > .org-unit-children::before { content: ''; position: absolute; top: 0; left: 50%; height: 19px; border-left: 1px solid var(--dashed); }
+.org-unit-box { width: 248px; display: flex; flex-direction: column; gap: 8px; background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 12px; cursor: default; }
+.org-unit-children .org-unit-children .org-unit-box { background: var(--panel); }
+.org-unit.is-none > .org-unit-box { background: var(--bg-soft); border-style: dashed; }
+.org-unit.is-over > .org-unit-box, .org-person.is-over { border-color: var(--brand); box-shadow: var(--ring); }
+.org-unit-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.org-unit-titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.org-unit-name { font-family: var(--font-display); font-weight: 500; letter-spacing: -0.02em; font-size: 15px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.org-unit-level { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); }
+.org-outline-toggle .org-unit-level { margin-left: 2px; }
+.org-multi-group { font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); padding: 8px 8px 2px; }
+.org-create-pop { left: auto; right: 0; min-width: 180px; }
 .org-empty-team { font-size: 12px; color: var(--muted); padding: 4px 2px; }
 
 /* reporting lines: a tree with connectors drawn by CSS */
@@ -881,7 +886,7 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .role-toggle-row { display: flex; align-items: center; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--divider); }
 @media (min-width: 701px) { .emp-dialog-grid-even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
 
-/* ---- departments & teams panel (CD-138, classes dtp-*) ---- */
+/* ---- the Organization panel (CD-138, CD-226; classes dtp-*) ---- */
 .dtp-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .dtp-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .dtp-dept + .dtp-dept { border-top: 1px solid var(--divider); }

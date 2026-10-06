@@ -1,10 +1,10 @@
-// Unit tests of the employee card's draft and the Org structure charts (CD-225): `npm test` in
+// Unit tests of the employee card's draft and the Org structure charts (CD-225, CD-226): `npm test` in
 // frontend (Node's test runner, TypeScript run as is by Node 24's type stripping).
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { ApiDepartment, ApiEmployee, ApiTeam } from '../src/lib/api.ts';
+import type { ApiEmployee, ApiOrgLevel, ApiOrgUnit } from '../src/lib/api.ts';
 import { changedFields, draftValues, isDirty, patchOf } from '../src/store/cardDraft.ts';
-import { departmentChart, reportingTree } from '../src/store/orgChart.ts';
+import { managerForUnit, reportingTree, unitChart, unitForManager, unitIdsFromParams, unitPathLabel, unitsBelow, unitTree } from '../src/store/orgChart.ts';
 
 describe('the card draft', () => {
   const initial = { firstName: 'Ana', jobTitle: '', weeklyHours: '40', timesheetRequired: true, iban: '' };
@@ -41,10 +41,8 @@ function person(firstName: string, extra: Partial<ApiEmployee> = {}): ApiEmploye
     lastName: 'Test',
     fullName: `${firstName} Test`,
     jobTitle: null,
-    departmentId: null,
-    departmentName: null,
-    teamId: null,
-    teamName: null,
+    unitId: null,
+    unitName: null,
     managerId: null,
     managerName: null,
     workEmail: null,
@@ -54,42 +52,83 @@ function person(firstName: string, extra: Partial<ApiEmployee> = {}): ApiEmploye
     ...extra,
   } as ApiEmployee;
 }
-const dept = (id: string, name: string, headEmployeeId: string | null = null) => ({ id, name, code: null, headEmployeeId, headName: null, teams: 0, activeEmployees: 0 }) as unknown as ApiDepartment;
-const team = (id: string, departmentId: string, name: string, leadEmployeeId: string | null = null) => ({ id, departmentId, name, leadEmployeeId, leadName: null, leadOutside: false, activeEmployees: 0 }) as unknown as ApiTeam;
+const level = (id: string, name: string, position: number) => ({ id, name, position, version: '', units: 0 }) as ApiOrgLevel;
+const unit = (id: string, levelId: string, name: string, parentId: string | null = null, leadEmployeeId: string | null = null) =>
+  ({ id, levelId, parentId, name, code: null, leadEmployeeId, leadName: null, version: '', members: 0, units: 0 }) as ApiOrgUnit;
 
-describe('departmentChart', () => {
-  const ana = person('Ana', { departmentId: 'sales' });
-  const bo = person('Bo', { departmentId: 'sales', teamId: 'north' });
-  const cy = person('Cy', { departmentId: 'sales', teamId: 'north' });
-  const dee = person('Dee', { departmentId: 'sales' });
-  const ceo = person('Ceo', { departmentId: 'sales' });
-  const people = [ana, bo, cy, dee, ceo];
-  const departments = [dept('sales', 'Sales', ana.id)];
-  const teams = [team('north', 'sales', 'North', cy.id)];
+describe('unitChart with three levels (CD-226)', () => {
+  // Sector "Commercial" → Department "Sales" (lead Ana) → Team "North" (lead Cy); Department "Service" (empty).
+  const levels = [level('team', 'Team', 3), level('sector', 'Sector', 1), level('dept', 'Department', 2)];
+  const ana = person('Ana', { unitId: 'sales' });
+  const bo = person('Bo', { unitId: 'north' });
+  const cy = person('Cy', { unitId: 'north' });
+  const dee = person('Dee', { unitId: 'sales' });
+  const eve = person('Eve', { unitId: 'commercial' });
+  const ceo = person('Ceo', { unitId: 'sales' });
+  const free = person('Free');
+  const people = [ana, bo, cy, dee, eve, ceo, free];
+  const units = [
+    unit('north', 'team', 'North', 'sales', cy.id),
+    unit('sales', 'dept', 'Sales', 'commercial', ana.id),
+    unit('commercial', 'sector', 'Commercial'),
+    unit('service', 'dept', 'Service', 'commercial'),
+    unit('ops', 'dept', 'Operations'),
+  ];
 
-  it('shows the head once, at the top: not in "No team" or a team box', () => {
-    const [sales] = departmentChart(people, people, departments, teams, true);
-    assert.equal(sales!.head?.id, ana.id);
-    const shown = sales!.teams.flatMap((t) => t.people.map((p) => p.id));
-    assert.ok(!shown.includes(ana.id), 'head not repeated');
-    assert.equal(new Set(shown).size, shown.length, 'nobody twice');
-    assert.equal(sales!.count, 5);
+  it('nests the units from the company down, by level and name, each lead once on top', () => {
+    const chart = unitChart(people, people, levels, units, true, ceo.id);
+    assert.deepEqual(
+      chart.roots.map((r) => r.unit.name),
+      ['Commercial', 'Operations'],
+    );
+    const commercial = chart.roots[0]!;
+    assert.equal(commercial.level?.name, 'Sector');
+    assert.deepEqual(commercial.members.map((p) => p.id), [eve.id]);
+    assert.deepEqual(commercial.children.map((c) => c.unit.name), ['Sales', 'Service']);
+    const sales = commercial.children[0]!;
+    assert.equal(sales.lead?.id, ana.id);
+    assert.deepEqual(sales.members.map((p) => p.id), [dee.id], 'the CEO and the lead are not members');
+    const north = sales.children[0]!;
+    assert.equal(north.lead?.id, cy.id);
+    assert.deepEqual(north.members.map((p) => p.id), [bo.id]);
+    assert.equal(sales.count, 4);
+    assert.equal(commercial.count, 5);
+    assert.deepEqual(chart.noUnit.map((p) => p.id), [free.id]);
+    const everyone = [chart.roots, chart.roots.flatMap((r) => r.children), [north]].flat().flatMap((n) => [n.lead, ...n.members].filter(Boolean).map((p) => p!.id));
+    assert.equal(new Set(everyone).size, everyone.length, 'nobody twice');
   });
 
-  it('puts the lead first in their team', () => {
-    const [sales] = departmentChart(people, people, departments, teams, true);
-    const north = sales!.teams.find((t) => t.team?.id === 'north')!;
-    assert.deepEqual(north.people.map((p) => p.id), [cy.id, bo.id]);
-    assert.equal(north.leadId, cy.id);
+  it('with a filter, shows only units with someone in them or below', () => {
+    const chart = unitChart([bo], people, levels, units, false, ceo.id);
+    assert.deepEqual(chart.roots.map((r) => r.unit.name), ['Commercial']);
+    assert.deepEqual(chart.roots[0]!.children.map((c) => c.unit.name), ['Sales']);
+    assert.equal(chart.roots[0]!.children[0]!.lead, null, 'a lead the filter leaves out is not shown');
+    assert.deepEqual(chart.noUnit, []);
   });
 
-  it('leaves the CEO out of the departments (they sit in the company node)', () => {
-    const [sales] = departmentChart(people, people, departments, teams, true, ceo.id);
-    assert.ok(!sales!.teams.some((t) => t.people.some((p) => p.id === ceo.id)));
-    assert.equal(sales!.count, 4);
-    // A CEO who also heads a department is not shown as its head.
-    const [headed] = departmentChart(people, people, [dept('sales', 'Sales', ceo.id)], teams, true, ceo.id);
-    assert.equal(headed!.head, null);
+  it('paths, units below, the tree order and the org rules the confirmations show', () => {
+    assert.equal(unitPathLabel(units, 'north'), 'Commercial › Sales › North');
+    assert.deepEqual([...unitsBelow(units, 'commercial')].sort(), ['commercial', 'north', 'sales', 'service']);
+    assert.deepEqual(
+      unitTree(units).map((t) => `${t.depth}:${t.unit.name}`),
+      ['0:Commercial', '1:Sales', '2:North', '1:Service', '0:Operations'],
+    );
+    // The unit's lead, else the nearest lead above, else the CEO; never the person.
+    assert.equal(managerForUnit(units, 'north', bo.id, ceo.id), cy.id);
+    assert.equal(managerForUnit(units, 'north', cy.id, ceo.id), ana.id);
+    assert.equal(managerForUnit(units, 'service', dee.id, ceo.id), ceo.id);
+    assert.equal(managerForUnit(units, 'ops', dee.id, null), null);
+    // A manager's unit: the one they lead, else their own.
+    assert.equal(unitForManager(units, people, ana.id), 'sales');
+    assert.equal(unitForManager(units, people, dee.id), 'sales');
+    assert.equal(unitForManager(units, people, free.id), null);
+  });
+
+  it('reads the unit filter from the URL, and old department and team links too', () => {
+    const id = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
+    assert.deepEqual(unitIdsFromParams(new URLSearchParams(`unit=${id(1)},${id(2)}`)), [id(1), id(2)]);
+    assert.deepEqual(unitIdsFromParams(new URLSearchParams(`dept=${id(3)}`)), [id(3)]);
+    assert.deepEqual(unitIdsFromParams(new URLSearchParams(`dept=${id(3)}&team=${id(4)}`)), [id(4)]);
   });
 });
 

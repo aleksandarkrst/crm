@@ -8,7 +8,7 @@ import { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
-import { departments, employeePersonal, employees, invitations, memberships, teams, tenants, users } from '../../shared/database/schema';
+import { employeePersonal, employees, invitations, memberships, orgUnits, tenants, users } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import { withdrawEmployeeInvitations } from '../identity';
 import type { ApproverResult } from './approvers';
@@ -17,10 +17,11 @@ import { type CallerAccess, FUNCTIONAL_ROLES, type FunctionalRole } from './call
 import type { AccountState, CreateEmployee, DataIssue, EmployeeListQuery, EmployeeStatus, UpdateEmployee } from './employees.schemas';
 import { BANK_FIELDS, editableFields, type EmployeeField, EMPLOYMENT_FIELDS, listFields, ORG_FIELDS, PERSONAL_FIELDS } from './field-rules';
 import { domesticFromIban, formatIban, maskIban, type ParsedAccount, parseBankAccount, shortMaskIban } from './iban';
-import { checkHeadMoves } from './heads';
 import { PeopleAccess } from './people-access';
 import { PeopleHistoryService } from './people-history.service';
-import { assertValidManager, lockReportingLines, queueManagerEmails } from './reporting-lines';
+import { changeOrg } from './org-changes';
+import { unitAndBelow } from './org-rules';
+import { lockReportingLines } from './reporting-lines';
 import { searchPattern } from './search';
 
 const managerRow = alias(employees, 'manager');
@@ -31,8 +32,8 @@ const pendingInvitation = (employeeId: SQL | typeof employees.id) =>
  * (the Admins' Inactive view). Other records (added or imported before CD-226, members who were
  * removed) stay in the database but aren't listed, and their card is 404.
  */
-const shownEmployee = sql`(${employees.userId} is not null or ${employees.deactivatedAt} is not null or ${pendingInvitation(employees.id)})`;
-const isShown = (r: { userId: string | null; deactivatedAt: Date | null; invited: boolean }) => !!r.userId || !!r.deactivatedAt || r.invited;
+export const shownEmployee = sql`(${employees.userId} is not null or ${employees.deactivatedAt} is not null or ${pendingInvitation(employees.id)})`;
+export const isShown = (r: { userId: string | null; deactivatedAt: Date | null; invited: boolean }) => !!r.userId || !!r.deactivatedAt || r.invited;
 
 /** Directory and employment columns of the list and card (never personal details or bank accounts). */
 const rowColumns = {
@@ -45,10 +46,8 @@ const rowColumns = {
   workEmail: employees.workEmail,
   workPhone: employees.workPhone,
   workLocation: employees.workLocation,
-  departmentId: employees.departmentId,
-  departmentName: departments.name,
-  teamId: employees.teamId,
-  teamName: teams.name,
+  unitId: employees.unitId,
+  unitName: orgUnits.name,
   managerId: employees.managerId,
   managerName: managerRow.fullName,
   managerUserId: managerRow.userId,
@@ -130,6 +129,8 @@ export class EmployeesService {
       if (query.issues && !access.isHr) throw new ForbiddenException('Only Admins filter by data issues');
       const settings = await this.settings(tx, ctx.tenantId);
 
+      // A unit includes the units inside it (CD-226).
+      const unitIds = query.unitIds ? await this.unitsBelow(tx, query.unitIds) : undefined;
       let managerScope: string[] | undefined;
       if (query.managerId && query.managerScope === 'indirect') managerScope = await this.access.reportIdsOf(tx, query.managerId);
       const q = query.q;
@@ -138,8 +139,7 @@ export class EmployeesService {
         and(
           shownEmployee,
           statuses.has('inactive') ? undefined : isNull(employees.deactivatedAt),
-          query.departmentIds ? inArray(employees.departmentId, query.departmentIds) : undefined,
-          query.teamIds ? inArray(employees.teamId, query.teamIds) : undefined,
+          unitIds ? (unitIds.length ? inArray(employees.unitId, unitIds) : sql`false`) : undefined,
           query.managerId ? (managerScope ? (managerScope.length ? inArray(employees.id, managerScope) : sql`false`) : eq(employees.managerId, query.managerId)) : undefined,
           query.ids ? inArray(employees.id, query.ids) : undefined,
           q
@@ -176,11 +176,19 @@ export class EmployeesService {
     return tx
       .select(rowColumns)
       .from(employees)
-      .leftJoin(departments, eq(departments.id, employees.departmentId))
-      .leftJoin(teams, eq(teams.id, employees.teamId))
+      .leftJoin(orgUnits, eq(orgUnits.id, employees.unitId))
       .leftJoin(managerRow, eq(managerRow.id, employees.managerId))
       .where(where)
       .orderBy(asc(employees.lastName), asc(employees.firstName), asc(employees.id));
+  }
+
+  /** The units and every unit inside them. */
+  private async unitsBelow(tx: Tx, ids: string[]): Promise<string[]> {
+    const units = await tx.select({ id: orgUnits.id, name: orgUnits.name, parentId: orgUnits.parentId, leadId: orgUnits.leadEmployeeId }).from(orgUnits);
+    const snapshot = { people: new Map(), units: new Map(units.map((u) => [u.id, u])), ceoId: null };
+    const out = new Set<string>();
+    for (const id of ids) if (snapshot.units.has(id)) for (const u of unitAndBelow(snapshot, id)) out.add(u);
+    return [...out];
   }
 
   // ------------------------------------------------------------------ card
@@ -216,8 +224,7 @@ export class EmployeesService {
       .from(employees)
       .where(and(eq(employees.managerId, id), isNull(employees.deactivatedAt)))
       .orderBy(asc(employees.lastName), asc(employees.firstName));
-    const leadsTeams = await tx.select({ id: teams.id, name: teams.name }).from(teams).where(eq(teams.leadEmployeeId, id)).orderBy(asc(teams.name));
-    const headsDepartments = await tx.select({ id: departments.id, name: departments.name }).from(departments).where(eq(departments.headEmployeeId, id)).orderBy(asc(departments.name));
+    const [leadsUnit] = await tx.select({ id: orgUnits.id, name: orgUnits.name }).from(orgUnits).where(eq(orgUnits.leadEmployeeId, id));
     const approvals = await this.access.approversFor(ctx.tenantId, id, new Date().toISOString().slice(0, 10), tx);
 
     const card: Record<string, unknown> = {
@@ -230,8 +237,8 @@ export class EmployeesService {
         ? { id: r.managerId, fullName: r.managerName, hasAccount: !!r.managerUserId, manager: managersManager ? { id: managersManager.id, fullName: managersManager.fullName } : null }
         : null,
       directReports,
-      leadsTeams,
-      headsDepartments,
+      /** The unit they lead (CD-226: at most one). */
+      leadsUnit: leadsUnit ?? null,
       approvals: approvals ? await this.presentApprovers(tx, approvals) : null,
     };
     if (access.canSeeEmployment(id)) card.employment = employment(r, access);
@@ -322,13 +329,9 @@ export class EmployeesService {
         if (!access.isHr) throw new ForbiddenException('Only Admins add employees');
         const settings = await this.settings(tx, ctx.tenantId);
         if (settings.numberRequired && !input.employeeNumber) throw new BadRequestException('The employee number is required in this workspace');
-        const org = await this.resolveOrg(tx, { departmentId: input.departmentId ?? null, teamId: input.teamId ?? null }, input);
         const id = randomUUID();
-        if (input.managerId) {
-          if (input.managerId === access.employeeId && !access.isAdmin) throw new ForbiddenException("Only an Admin can make themselves someone's manager");
-          await lockReportingLines(tx, ctx.tenantId);
-          await assertValidManager(tx, id, input.managerId);
-        }
+        if (input.managerId && input.managerId === access.employeeId && !access.isAdmin) throw new ForbiddenException("Only an Admin can make themselves someone's manager");
+        if (input.unitId || input.managerId) await lockReportingLines(tx, ctx.tenantId);
         await tx.insert(employees).values({
             id,
             tenantId: ctx.tenantId,
@@ -337,8 +340,6 @@ export class EmployeesService {
             workEmail: input.workEmail ?? null,
             employeeNumber: input.employeeNumber ?? null,
             jobTitle: input.jobTitle ?? null,
-            departmentId: org.departmentId,
-            teamId: org.teamId,
             workPhone: input.workPhone ?? null,
             workLocation: input.workLocation ?? null,
             employmentStartDate: input.employmentStartDate,
@@ -346,13 +347,19 @@ export class EmployeesService {
             weeklyHours: input.weeklyHours ?? settings.defaultWeeklyHours,
             timesheetRequired: input.timesheetRequired ?? true,
             attendanceTracked: input.attendanceTracked ?? false,
-            managerId: input.managerId ?? null,
             createdByUserId: ctx.userId,
           });
         const changes = await this.savePersonal(tx, ctx, id, input, undefined);
         await this.audit.record(tx, ctx, { action: 'employee.created', entityType: 'employee', entityId: id, data: { fields: sentFields(input) } });
         if (changes.length) await this.jobs.send('people.bank-account-changed-email', { tenantId: ctx.tenantId, employeeId: id, actorUserId: ctx.userId, changes }, tx);
-        if (input.managerId) await queueManagerEmails(this.jobs, tx, ctx.tenantId, ctx.userId, [{ employeeId: id, oldManagerId: null, newManagerId: input.managerId }]);
+        // The unit and manager by the org rules (CD-226): a unit brings its lead as manager, a manager their unit.
+        if (input.unitId || input.managerId) {
+          await changeOrg(tx, ctx.tenantId, [{ employeeId: id, ...(input.unitId !== undefined ? { unitId: input.unitId } : {}), ...(input.managerId ? { managerId: input.managerId } : {}) }], {
+            jobs: this.jobs,
+            actorUserId: ctx.userId,
+            clearLeadRoles: false,
+          });
+        }
         return this.cardIn(tx, ctx, id);
       })
       .catch(mapDbError);
@@ -362,16 +369,19 @@ export class EmployeesService {
    * Field by field (spec 4.5, 9.3, field-rules.ts): Admin everything; everyone else only their
    * own work phone, personal details and (when the workspace allows it) bank account. A manager
    * change takes the reporting-line lock and the loop check. With `version` (If-Match), a field
-   * someone else changed since is a 409. Moving a department head or team lead out of what they
-   * head is a 409 `heads_department` unless `clearHeadRoles` (heads.ts). Returns the card.
+   * someone else changed since is a 409. The unit and manager follow the org rules (org-rules.ts,
+   * CD-226: a new unit brings its lead as manager, a new manager their unit; what the body sets
+   * explicitly wins). Moving a unit's lead out of their unit is a 409 `heads_unit` unless
+   * `clearLeadRoles` (heads.ts). Returns the card.
    */
-  update(ctx: TenantContext, id: string, input: UpdateEmployee, version?: Date, clearHeadRoles = false) {
+  update(ctx: TenantContext, id: string, input: UpdateEmployee, version?: Date, clearLeadRoles = false) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const access = await this.access.of(ctx, tx);
         // A manager change takes the workspace's reporting-line lock before any row lock, so two
         // crossing changes (A → B, B → A) queue instead of deadlocking on each other's rows.
-        if (input.managerId !== undefined) await lockReportingLines(tx, ctx.tenantId);
+        const changesOrg = input.managerId !== undefined || input.unitId !== undefined;
+        if (changesOrg) await lockReportingLines(tx, ctx.tenantId);
         const [current] = await tx.select().from(employees).where(eq(employees.id, id)).for('no key update');
         if (!current || (current.deactivatedAt && !access.canSeeInactive)) throw new NotFoundException('Employee not found');
         const settings = await this.settings(tx, ctx.tenantId);
@@ -392,14 +402,11 @@ export class EmployeesService {
         for (const f of ['firstName', 'lastName', 'workEmail', 'jobTitle', 'workPhone', 'workLocation', ...EMPLOYMENT_FIELDS] as const) {
           if (input[f] !== undefined) (work as Record<string, unknown>)[f] = input[f];
         }
-        if (input.departmentId !== undefined || input.teamId !== undefined) {
-          const org = await this.resolveOrg(tx, { departmentId: current.departmentId, teamId: current.teamId }, input);
-          await checkHeadMoves(tx, [{ employeeId: id, fullName: current.fullName, from: current, to: org }], clearHeadRoles);
-          Object.assign(work, org);
-        }
-        if (input.managerId !== undefined && input.managerId !== current.managerId) {
-          await assertValidManager(tx, id, input.managerId);
-          work.managerId = input.managerId;
+        let orgChanged = false;
+        if (changesOrg) {
+          const unit = input.unitId !== undefined && input.unitId !== current.unitId ? { unitId: input.unitId } : {};
+          const manager = input.managerId !== undefined && input.managerId !== current.managerId ? { managerId: input.managerId } : {};
+          orgChanged = (await changeOrg(tx, ctx.tenantId, [{ employeeId: id, ...unit, ...manager }], { jobs: this.jobs, actorUserId: ctx.userId, clearLeadRoles })).changed.length > 0;
         }
 
         const changes = await this.savePersonal(tx, ctx, id, input, currentPersonal);
@@ -407,46 +414,15 @@ export class EmployeesService {
         if (input.workEmail !== undefined && (input.workEmail ?? null) !== (current.workEmail ?? null)) await withdrawEmployeeInvitations(tx, ctx.tenantId, id);
         if (Object.keys(work).length) {
           await tx.update(employees).set(work).where(eq(employees.id, id));
-        } else {
+        } else if (!orgChanged) {
           // Personal details only: move the card's version (one version per card).
           await tx.execute(sql`update employees set updated_at = updated_at where id = ${id}`);
         }
         await this.audit.record(tx, ctx, { action: 'employee.updated', entityType: 'employee', entityId: id, data: { fields: sent } });
         if (changes.length) await this.jobs.send('people.bank-account-changed-email', { tenantId: ctx.tenantId, employeeId: id, actorUserId: ctx.userId, changes }, tx);
-        if (work.managerId !== undefined) {
-          await queueManagerEmails(this.jobs, tx, ctx.tenantId, ctx.userId, [{ employeeId: id, oldManagerId: current.managerId, newManagerId: work.managerId }]);
-        }
         return this.cardIn(tx, ctx, id);
       })
       .catch(mapDbError);
-  }
-
-  /**
-   * Department and team together (spec 6.2): choosing a team sets its department; a department
-   * that doesn't hold the current team clears the team; a team of another department is refused.
-   */
-  private async resolveOrg(tx: Tx, current: { departmentId: string | null; teamId: string | null }, input: { departmentId?: string | null; teamId?: string | null }) {
-    let departmentId = input.departmentId !== undefined ? input.departmentId : current.departmentId;
-    let teamId = input.teamId !== undefined ? input.teamId : current.teamId;
-    if (departmentId && input.departmentId !== undefined) {
-      const [d] = await tx.select({ id: departments.id }).from(departments).where(eq(departments.id, departmentId));
-      if (!d) throw new BadRequestException('Department not found');
-    }
-    if (teamId) {
-      const [t] = await tx.select({ id: teams.id, departmentId: teams.departmentId }).from(teams).where(eq(teams.id, teamId));
-      if (!t) throw new BadRequestException('Team not found');
-      if (input.teamId !== undefined) {
-        if (input.departmentId !== undefined && input.departmentId !== null && input.departmentId !== t.departmentId) {
-          throw new BadRequestException('The team belongs to another department');
-        }
-        if (input.departmentId === null) throw new BadRequestException('A team needs its department: pick the department too, or no team');
-        departmentId = t.departmentId;
-      } else if (t.departmentId !== departmentId) {
-        // The department changed and the old team isn't in it.
-        teamId = null;
-      }
-    }
-    return { departmentId, teamId };
   }
 
   /**
@@ -622,10 +598,8 @@ function directory(r: EmployeeRow, status: EmployeeStatus) {
     lastName: r.lastName,
     fullName: r.fullName,
     jobTitle: r.jobTitle,
-    departmentId: r.departmentId,
-    departmentName: r.departmentName,
-    teamId: r.teamId,
-    teamName: r.teamName,
+    unitId: r.unitId,
+    unitName: r.unitName,
     managerId: r.managerId,
     managerName: r.managerName,
     workEmail: r.workEmail,
@@ -674,7 +648,7 @@ function dataIssues(r: EmployeeRow, settings: PeopleSettings): DataIssue[] {
   const issues: DataIssue[] = [];
   if (!r.managerId && r.id !== settings.topEmployeeId) issues.push('no_manager');
   if (!r.employmentStartDate) issues.push('no_start_date');
-  if (!r.departmentId) issues.push('no_department');
+  if (!r.unitId) issues.push('no_unit');
   if (r.managerId && !r.managerUserId) issues.push('manager_no_account');
   if (settings.numberRequired && !r.employeeNumber) issues.push('no_employee_number');
   return issues;

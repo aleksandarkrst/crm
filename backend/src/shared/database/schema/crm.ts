@@ -861,7 +861,7 @@ export type HistoryEntityType = (typeof HISTORY_ENTITY_TYPES)[number];
  * People records (milestone 13). Their history is served only by GET /api/people/history, with the
  * employee card's rules; the CRM history endpoint never reads them.
  */
-export const PEOPLE_HISTORY_ENTITY_TYPES = ['employee', 'department', 'team'] as const;
+export const PEOPLE_HISTORY_ENTITY_TYPES = ['employee', 'department', 'team', 'org_unit'] as const;
 export type PeopleHistoryEntityType = (typeof PEOPLE_HISTORY_ENTITY_TYPES)[number];
 /** `imported`: a record created by the employee import (CD-141), in place of `created` (drizzle/0040). */
 export const RECORD_CHANGE_ACTIONS = ['created', 'imported', 'updated', 'deleted', 'line_added', 'line_changed', 'line_removed', 'participant_added', 'participant_removed'] as const;

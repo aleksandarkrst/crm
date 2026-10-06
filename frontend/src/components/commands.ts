@@ -75,7 +75,7 @@ export function useCommands(): Command[] {
     ...(navFor(DEFAULT_MODULE, session.tenant.role, s.visitScope.seesTeam).some((n) => n.to === paths.reports())
       ? [{ id: 'go-reports', group: 'Go to' as const, label: 'Reports', hint: 'Visit-plan completion', icon: 'reports' as const, keywords: 'report visits completion targets', run: go(paths.reports()) }]
       : []),
-    { id: 'go-org', group: 'Go to', label: 'Org structure', hint: 'Workforce · people and teams', icon: 'org', keywords: 'workforce people employees departments teams chart', run: go(paths.org()) },
+    { id: 'go-org', group: 'Go to', label: 'Org structure', hint: 'Workforce · people and teams', icon: 'org', keywords: 'workforce people employees units departments teams chart', run: go(paths.org()) },
   ];
   const settings: Command[] = [
     { id: 'go-profile', group: 'Settings', label: 'Personal preferences', hint: 'Your profile', icon: 'profile', keywords: 'profile account start page', run: go(paths.profile) },

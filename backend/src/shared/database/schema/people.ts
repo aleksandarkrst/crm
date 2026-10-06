@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, date, foreignKey, index, jsonb, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, date, foreignKey, index, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { tenants, users } from './platform';
 
 /**
@@ -34,6 +34,12 @@ export type LeavingReason = (typeof LEAVING_REASONS)[number];
 export interface DeactivationPlan {
   /** New manager of the leaving person's direct reports ("No manager" = null). */
   reportsManagerId: string | null;
+  /** The new lead of the unit they lead (CD-226; drizzle/0048 converted older plans). */
+  unitLeads?: { unitId: string; employeeId: string | null }[];
+  /**
+   * Before CD-226. Still written (empty) so a rolled-back release can read new plans; a plan the
+   * previous release wrote after the migration is read through these (unit ids = their ids).
+   */
   teamLeads: { teamId: string; employeeId: string | null }[];
   departmentHeads: { departmentId: string; employeeId: string | null }[];
   /** Who scheduled it (the audit entry when the job applies it). */
@@ -43,8 +49,70 @@ export interface DeactivationPlan {
 export const ASSIGNED_ROLES = ['administration', 'payroll'] as const;
 export type AssignedRole = (typeof ASSIGNED_ROLES)[number];
 
+/** At most this many organization levels per workspace (CD-226). */
+export const MAX_ORG_LEVELS = 5;
+
 /**
- * The top level of the org structure. Name unique per workspace (case-insensitive, trimmed), code
+ * The named levels of the org structure (CD-226), top-down by `position` (1 = top): Department and
+ * Team by default (made by drizzle/0048 for existing workspaces and on first read for new ones).
+ * Admins rename, reorder and add them (up to 5); a level with units can't be removed. Positions are
+ * kept 1..n by OrgService (no unique index: a reorder rewrites several rows).
+ */
+export const orgLevels = pgTable(
+  'org_levels',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    position: integer('position').notNull(),
+    name: text('name').notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    unique('org_levels_tenant_id_uq').on(t.tenantId, t.id),
+    uniqueIndex('org_levels_name_uq').on(t.tenantId, sql`lower(btrim(${t.name}))`),
+    check('org_levels_name_ck', sql`length(btrim(${t.name})) between 1 and 50`),
+    check('org_levels_position_ck', sql`${t.position} between 1 and 20`),
+  ],
+);
+
+/**
+ * A unit of the org structure (CD-226): a department, team, sector… of one level, inside a unit of
+ * a higher level (`parent_id`) or directly under the company. Name unique within its parent, code
+ * unique when set. The parent's level must be higher (trigger `org_units_check_parent`, which also
+ * makes loops impossible). `lead_employee_id` is the unit's Lead: a member of the unit, leading at
+ * most one unit. Units of departments and teams kept their ids (drizzle/0048).
+ * Foreign keys that null one column (lead, employees.unit_id) are in the custom migration.
+ */
+export const orgUnits = pgTable(
+  'org_units',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    levelId: uuid('level_id').notNull(),
+    parentId: uuid('parent_id'),
+    name: text('name').notNull(),
+    code: text('code'),
+    leadEmployeeId: uuid('lead_employee_id'),
+    ...timestamps,
+  },
+  (t) => [
+    unique('org_units_tenant_id_uq').on(t.tenantId, t.id),
+    uniqueIndex('org_units_name_uq').on(t.tenantId, sql`coalesce(${t.parentId}, '00000000-0000-0000-0000-000000000000'::uuid)`, sql`lower(btrim(${t.name}))`),
+    uniqueIndex('org_units_code_uq').on(t.tenantId, sql`lower(${t.code})`).where(sql`${t.code} is not null`),
+    // A person leads at most one unit.
+    uniqueIndex('org_units_lead_uq').on(t.tenantId, t.leadEmployeeId).where(sql`${t.leadEmployeeId} is not null`),
+    index('org_units_tenant_parent_idx').on(t.tenantId, t.parentId),
+    foreignKey({ columns: [t.tenantId, t.levelId], foreignColumns: [orgLevels.tenantId, orgLevels.id], name: 'org_units_level_fk' }),
+    foreignKey({ columns: [t.tenantId, t.parentId], foreignColumns: [t.tenantId, t.id], name: 'org_units_parent_fk' }),
+    check('org_units_name_ck', sql`length(btrim(${t.name})) between 1 and 100`),
+    check('org_units_code_ck', sql`${t.code} is null or length(${t.code}) between 1 and 20`),
+    check('org_units_not_own_parent_ck', sql`${t.parentId} is null or ${t.parentId} <> ${t.id}`),
+  ],
+);
+
+/**
+ * The top level of the org structure before CD-226 (replaced by org_units; nothing reads or
+ * writes it since, a later migration drops it). Name unique per workspace (case-insensitive, trimmed), code
  * unique when set. Deleting one is refused while it has teams (teams_department_fk); its employees
  * then have no department (employees_department_fk, custom migration).
  */
@@ -68,7 +136,7 @@ export const departments = pgTable(
   ],
 );
 
-/** A group inside exactly one department. Name unique within its department. */
+/** A group inside exactly one department. Unused since CD-226 (org_units), like departments. */
 export const teams = pgTable(
   'teams',
   {
@@ -120,8 +188,11 @@ export const employees = pgTable(
     workEmail: text('work_email'), // stored lower-case
     employeeNumber: text('employee_number'),
     jobTitle: text('job_title'),
+    /** Before CD-226; unused since (unit_id), dropped by a later migration. */
     departmentId: uuid('department_id'),
     teamId: uuid('team_id'),
+    /** The org unit they belong to (CD-226; FK employees_unit_fk in the custom migration: ON DELETE SET NULL (unit_id)). */
+    unitId: uuid('unit_id'),
     managerId: uuid('manager_id'),
     workPhone: text('work_phone'),
     workLocation: text('work_location'),
@@ -162,6 +233,7 @@ export const employees = pgTable(
     // The scope query walks manager_id (PeopleAccess).
     index('employees_tenant_manager_idx').on(t.tenantId, t.managerId),
     index('employees_tenant_department_idx').on(t.tenantId, t.departmentId, t.teamId),
+    index('employees_tenant_unit_idx').on(t.tenantId, t.unitId),
     index('employees_tenant_last_name_idx').on(t.tenantId, t.lastName, t.firstName),
     check('employees_names_ck', sql`length(${t.firstName}) <= 100 and length(btrim(${t.lastName})) between 1 and 100`),
     check('employees_type_ck', sql`${t.employmentType} in ('permanent', 'fixed_term', 'contractor', 'student')`),

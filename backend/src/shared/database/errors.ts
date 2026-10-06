@@ -20,6 +20,10 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   departments_name_uq: 'A department with this name already exists',
   departments_code_uq: 'A department with this code already exists',
   teams_name_uq: 'This department already has a team with this name',
+  org_levels_name_uq: 'A level with this name already exists',
+  org_units_name_uq: 'A unit with this name already exists here',
+  org_units_code_uq: 'A unit with this code already exists',
+  org_units_lead_uq: 'This person already leads another unit',
 };
 
 /** Rules about employees' org fields that the database enforces as a last line (people). */
@@ -27,6 +31,10 @@ const PEOPLE_RULES: Record<string, string> = {
   employees_team_fk: 'The team belongs to another department',
   employees_team_needs_department_ck: 'A team needs its department',
   employees_not_own_manager_ck: "An employee can't report to themselves",
+  org_units_parent_level_ck: 'A unit can only be inside a unit of a higher level',
+  org_units_parent_fk: 'The parent unit was not found',
+  org_units_level_fk: 'The level was not found',
+  employees_unit_fk: 'The unit was not found',
 };
 
 function pgError(err: unknown): PgError | undefined {

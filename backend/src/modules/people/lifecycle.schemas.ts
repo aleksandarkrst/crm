@@ -17,15 +17,14 @@ export type LinkMember = z.infer<typeof LinkMember>;
 
 /**
  * POST /api/people/employees/:id/deactivate (Admin; spec 4.8). `reportsManagerId`
- * is required (null = "No manager") when the person has active direct reports. Team leads and
- * department heads they hold are cleared unless a replacement is named.
+ * is required (null = "No manager") when the person has active direct reports. The unit they lead
+ * gets no lead unless a replacement is named in `unitLeads` (CD-226).
  */
 export const DeactivateEmployee = z.object({
   lastWorkingDay: isoDate,
   reason: z.enum(LEAVING_REASONS).nullish(),
   reportsManagerId: z.uuid().nullish(),
-  teamLeads: z.array(z.object({ teamId: z.uuid(), employeeId: z.uuid().nullable() })).max(200).default([]),
-  departmentHeads: z.array(z.object({ departmentId: z.uuid(), employeeId: z.uuid().nullable() })).max(200).default([]),
+  unitLeads: z.array(z.object({ unitId: z.uuid(), employeeId: z.uuid().nullable() })).max(200).default([]),
 });
 export type DeactivateEmployee = z.infer<typeof DeactivateEmployee>;
 

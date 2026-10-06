@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../lib/api';
-import { type ApiDepartment, type ApiDirectoryRow, type ApiPeopleAccess, type ApiTeam, orgApi } from '../lib/orgApi';
+import { type ApiDirectoryRow, type ApiOrgLevel, type ApiOrgUnit, type ApiPeopleAccess, orgApi } from '../lib/orgApi';
 import { useStore } from './store';
 
 export interface OrgStructure {
-  departments: ApiDepartment[];
-  teams: ApiTeam[];
+  /** The org levels top-down and every unit (CD-226). */
+  levels: ApiOrgLevel[];
+  units: ApiOrgUnit[];
   /** Active employees of the directory, by last name. */
   employees: ApiDirectoryRow[];
   access: ApiPeopleAccess;
 }
 
-/** Admins only (CD-225): may change departments, teams and reporting lines (spec 9.3). */
+/** Admins only (CD-225): may change levels, units and reporting lines (spec 9.3). */
 export const canManageOrg = (access: ApiPeopleAccess | null | undefined): boolean => !!access && access.roles.includes('admin');
 
 /** The API's message (and the first field problem), for the panel's error lines. */
@@ -24,8 +25,8 @@ export function orgError(err: unknown): string {
 }
 
 /**
- * Departments, teams, the directory and the caller's access (CD-138), read when `enabled` turns on
- * and again shortly after any employee, department or team change (`s.orgRev`, raised by live
+ * Levels, units, the directory and the caller's access (CD-138, CD-226), read when `enabled` turns
+ * on and again shortly after any employee, level or unit change (`s.orgRev`, raised by live
  * hints, this tab's own included), so the panel shows what other viewers change without a reload.
  * `reload()` reads it at once (after this tab saves). The last data stays on screen while it loads.
  */
@@ -39,9 +40,9 @@ export function useOrgStructure(enabled: boolean): { data: OrgStructure | null; 
   const load = useCallback(async () => {
     const mine = ++seq.current;
     try {
-      const [departments, teams, employees, access] = await Promise.all([orgApi.departments(), orgApi.teams(), orgApi.directory(), orgApi.access()]);
+      const [levels, units, employees, access] = await Promise.all([orgApi.levels(), orgApi.units(), orgApi.directory(), orgApi.access()]);
       if (mine !== seq.current) return;
-      setData({ departments, teams, employees: employees.filter((e) => e.status !== 'inactive'), access });
+      setData({ levels, units, employees: employees.filter((e) => e.status !== 'inactive'), access });
       setError(null);
     } catch (err) {
       if (mine === seq.current) setError(orgError(err));
