@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChangeHistory } from '../../components/ChangeHistory';
-import { CHANNEL_LABELS } from '../../store/seed';
+import { activityChannelLabel } from '../../store/seed';
 import { curOf, timelineFor } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
@@ -61,7 +61,7 @@ export function History({ lead }: { lead: Lead }) {
               <span style={{ fontSize: 13, fontWeight: 500 }}>{e.title}</span>
               <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45, whiteSpace: 'pre-line' }}>{e.detail}</div>
             </div>
-            <span className="badge badge-neutral">{CHANNEL_LABELS[e.channel] || e.channel}</span>
+            <span className="badge badge-neutral">{activityChannelLabel(e.channel)}</span>
           </div>
         ))}
         {entries.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--muted)', padding: '16px 0' }}>Nothing here yet.</div>}

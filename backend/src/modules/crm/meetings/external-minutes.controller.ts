@@ -17,7 +17,7 @@ const Id = new ZodPipe(UuidParam);
 export class ExternalMinutesController {
   constructor(private readonly minutes: ExternalMinutesService) {}
 
-  /** `{ subject, body, prefilled, updatedAt, updatedByName, language, lastSend, changedSinceLastSend }`; the first read fills in the template. */
+  /** `{ subject, body, prefilled, updatedAt, updatedByName, language, lastSend, changedSinceLastSend, meetingChanged }`; the first read fills in the template. */
   @Get(':id/minutes/external')
   getExternal(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
     return this.minutes.getExternal(ctx, id);
@@ -34,6 +34,13 @@ export class ExternalMinutesController {
   @HttpCode(200)
   copyInternal(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
     return this.minutes.copyInternal(ctx, id);
+  }
+
+  /** "Update from meeting" (CD-222): the meeting's date, place and people in the text as they are now. Returns the text. */
+  @Post(':id/minutes/external/update-from-meeting')
+  @HttpCode(200)
+  updateFromMeeting(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.minutes.updateFromMeeting(ctx, id);
   }
 
   /** The exact email Send would send: `{ from, replyTo, to, cc, subject, text, html }`. */

@@ -140,6 +140,33 @@ describe('an email that already signs in another way', () => {
   });
 });
 
+describe('the email of people who sign in with Google (CD-222)', () => {
+  const emailOf = async (subject: string) => (await db.query('select email from users where auth_subject = $1', [subject])).rows[0]?.email ?? null;
+
+  it('is saved from the ID token on signing in, for accounts that have none', async () => {
+    // An account from before, without an address (Google's access token carries none). Dev sign-in
+    // hands over the identity like Auth0's ID token does.
+    const email = `google-later-${RUN}@example.test`;
+    const subject = `crm-dev|${email}`;
+    await db.query(`insert into users (auth_subject, email, display_name) values ($1, null, 'Gina Google')`, [subject]);
+    const login = await withCookie('/auth/login', { body: { email, password: 'any' } });
+    expect(login.status).toBe(200);
+    // Saved by the sign-in itself, before any API call.
+    expect(await emailOf(subject)).toBe(email);
+    // Profile and Team read it from there.
+    expect((await call('GET', '/me', { token: login.body.accessToken })).body.user).toMatchObject({ email });
+  });
+
+  it("never takes an address another account already has (one account per email)", async () => {
+    const email = `google-taken-${RUN}@example.test`;
+    const subject = `crm-dev|${email}`;
+    await db.query(`insert into users (auth_subject, email, display_name) values ($1, $2, 'Other Account')`, [`https://idp.example.test/|google-oauth2|taken-${RUN}`, email]);
+    await db.query(`insert into users (auth_subject, email, display_name) values ($1, null, 'No Address')`, [subject]);
+    expect((await withCookie('/auth/login', { body: { email, password: 'any' } })).status).toBe(200);
+    expect(await emailOf(subject)).toBeNull();
+  });
+});
+
 describe('signing in on Pultly\'s own pages', () => {
   it('keeps the session in a cookie that renews the access token, until signing out', async () => {
     const email = `session-${RUN}@example.test`;

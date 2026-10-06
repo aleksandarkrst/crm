@@ -6,6 +6,7 @@ import type { ApiInternalMinutes, ApiMeeting, ApiMeetingNextStep, InternalMinute
 import { paths } from '../../lib/paths';
 import { memberName } from '../../store/selectors';
 import { useStore } from '../../store/store';
+import { todayIn } from '../../store/time';
 
 /** Limits of the minutes (spec 6.1; the API checks them too). */
 const SUMMARY_MAX = 10_000;
@@ -159,6 +160,9 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
     setFocusStep(id);
   };
   const createTask = async (stepId: string) => {
+    // A due date in the past makes the task overdue at once: ask first (CD-222; the API allows it).
+    const due = draftRef.current.nextSteps.find((x) => x.id === stepId)?.dueDate;
+    if (due && due < todayIn(s.workspace.timezone) && !window.confirm('This date is in the past. Create anyway?')) return;
     setBusyStep(stepId);
     await flush();
     const res = await actions.current.createStepTask(m.id, stepId);

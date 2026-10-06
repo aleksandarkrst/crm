@@ -193,7 +193,9 @@ describe('next steps as deal tasks', () => {
     const tasks = await ok('GET', `/crm/deal-tasks?dealIds=${d.id}`, as(bo));
     expect(tasks.find((t: Json) => t.id === created.task.id)).toMatchObject({ assigneeUserId: bo.userId, assigneeName: bo.name, dueDate: '2026-12-01' });
     const timeline = await ok('GET', `/crm/deals/${d.id}/activities`, as(owner));
-    expect(timeline.find((a: Json) => a.title === 'Task added: Send the pilot contract')?.detail).toBe(`Due 2026-12-01 · Owner ${bo.name}`);
+    expect(timeline.find((a: Json) => a.title === 'Task added: Send the pilot contract')).toMatchObject({ channel: 'MT', detail: `Due 2026-12-01 · Owner ${bo.name}` });
+    // System entries have no channel, so they aren't labelled "Research task" (CD-222).
+    expect(timeline.find((a: Json) => a.title === 'Deal created')).toMatchObject({ channel: null });
 
     // Without an owner the caller gets it; without a due date it has none.
     const second = await ok('POST', `/crm/meetings/${m.id}/minutes/next-steps/${noOwner.id}/task`, as(ana));
@@ -255,6 +257,31 @@ describe('the missingMinutes filter and history', () => {
     ]);
     expect(of('agreements')[0]).toMatchObject({ oldValue: null, newValue: 'Deal' });
     expect(of('nextSteps')[0].newValue).toEqual([{ ...s, taskId: null }]);
+  });
+
+  it('records only real changes of the next steps (CD-222)', async () => {
+    const co = await company('Minutes Quiet History Co');
+    const m = await meeting(co.id);
+    const s = step({ dueDate: '2026-12-01' });
+    const first = (await save(ana, m.id, { nextSteps: [s] })).body;
+    // The same steps again (the text is trimmed): nothing is written, the version stays.
+    const same = await save(ana, m.id, { nextSteps: [{ ...s, text: `${s.text} ` }] });
+    expect(same.status, JSON.stringify(same.body)).toBe(200);
+    expect(same.body.updatedAt).toBe(first.updatedAt);
+    // A task made from a step links it; that isn't a change of the minutes either.
+    await ok('POST', `/crm/meetings/${m.id}/minutes/next-steps/${s.id}/task`, as(ana));
+    await save(ana, m.id, { summary: 'Only the summary changed', nextSteps: [s] });
+    const steps = async () => {
+      const { entries } = await ok('GET', `/crm/history?entityType=meeting&entityId=${m.id}`, as(bo));
+      return entries.filter((e: Json) => e.action === 'updated' && e.field === 'nextSteps');
+    };
+    expect(await steps()).toHaveLength(1);
+    expect((await steps())[0]).toMatchObject({ oldValue: [], actor: { name: ana.name } });
+
+    await save(ana, m.id, { nextSteps: [{ ...s, dueDate: '2026-12-02' }] });
+    const after = await steps();
+    expect(after).toHaveLength(2);
+    expect(after[0].newValue[0]).toMatchObject({ id: s.id, dueDate: '2026-12-02' });
   });
 });
 

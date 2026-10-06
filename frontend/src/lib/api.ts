@@ -354,7 +354,8 @@ export interface ApiDealRow {
 export interface ApiActivity {
   id: string;
   dealId: string;
-  channel: Channel;
+  /** null for system entries (deal created, stage moves, a task removed). */
+  channel: Channel | null;
   title: string;
   detail: string | null;
   occurredAt: string;
@@ -831,6 +832,8 @@ export interface ApiExternalMinutes {
   language: 'en' | 'sr';
   lastSend: ApiMinutesSend | null;
   changedSinceLastSend: boolean;
+  /** The meeting changed since the template filled in the text, which someone changed since (CD-222). */
+  meetingChanged: 'time' | 'details' | null;
 }
 /** Preview and send: contacts (external participants with an email) and members to copy. */
 export interface MinutesEmailInput {
@@ -1017,6 +1020,7 @@ export const crmApi = {
     saveExternal: (id: string, input: { subject?: string; body?: string }, version: string | null) =>
       api<ApiExternalMinutes>(`/crm/meetings/${id}/minutes/external`, { method: 'PUT', json: input, headers: ifMatch(version ?? '1970-01-01T00:00:00.000Z') }),
     copyInternal: (id: string) => api<{ subject: string; body: string }>(`/crm/meetings/${id}/minutes/external/copy-internal`, { method: 'POST' }),
+    updateFromMeeting: (id: string) => api<ApiExternalMinutes>(`/crm/meetings/${id}/minutes/external/update-from-meeting`, { method: 'POST' }),
     previewMinutes: (id: string, input: MinutesEmailInput) => api<ApiMinutesEmail>(`/crm/meetings/${id}/minutes/preview`, { method: 'POST', json: input }),
     sendMinutes: (id: string, input: MinutesEmailInput) => api<ApiMinutesSend>(`/crm/meetings/${id}/minutes/send`, { method: 'POST', json: input }),
     sends: (id: string) => api<ApiMinutesSend[]>(`/crm/meetings/${id}/minutes/sends`),

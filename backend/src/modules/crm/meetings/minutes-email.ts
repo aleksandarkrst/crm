@@ -1,6 +1,6 @@
 import { escapeHtml } from '../../../infrastructure/mail/html';
 import { fromHeader, type MailMessage } from '../../../infrastructure/mail/mailer';
-import type { CustomerEmailLanguage } from '../../../shared/database/schema';
+import type { CustomerEmailLanguage, ExternalPrefill } from '../../../shared/database/schema';
 import { formatTimeRange, zonedParts } from '../../../shared/time/zoned-time';
 
 /**
@@ -259,4 +259,34 @@ export function minutesTemplate(input: MinutesTemplateInput): { subject: string;
     for (const s of steps) lines.push(`- ${s.text.trim()}${s.dueDate ? ` (${w.due(dayLabel(s.dueDate, input.language))})` : ''}`);
   }
   return { subject: w.subject(m.title, date), body: lines.join('\n') };
+}
+
+/**
+ * External minutes filled from the template, against the template as the meeting is now (CD-222):
+ * - 'current': the meeting's time, place and people are what the text was made from;
+ * - 'refill': the meeting changed and nobody changed the text since: fill it in again;
+ * - 'stale': the meeting changed, but someone changed the text (or it was sent): keep it, and say so.
+ * Text filled before the basis was kept (`basis` null) is filled in again only while nobody changed
+ * it (`untouched`) and nothing was sent; otherwise there is nothing to compare with.
+ */
+export function prefillCheck(
+  text: { subject: string; body: string },
+  basis: ExternalPrefill | null,
+  now: ExternalPrefill,
+  opts: { sent: boolean; untouched: boolean },
+): 'current' | 'refill' | 'stale' {
+  if (!basis) return opts.untouched && !opts.sent && (text.subject !== now.subject || text.body !== now.body) ? 'refill' : 'current';
+  if (basis.headSubject === now.headSubject && basis.headBody === now.headBody) return 'current';
+  return !opts.sent && text.subject === basis.subject && text.body === basis.body ? 'refill' : 'stale';
+}
+
+/**
+ * "Update from meeting" (CD-222): the date, place and participants at the top of the text as the
+ * meeting is now, keeping what was written below them. When those lines were changed (or the text
+ * predates the basis), the whole text is the template again. A subject someone changed stays.
+ */
+export function updateFromMeeting(text: { subject: string; body: string }, basis: ExternalPrefill | null, now: ExternalPrefill): { subject: string; body: string } {
+  const subject = basis && text.subject !== basis.subject ? text.subject : now.subject;
+  const body = basis && text.body.startsWith(basis.headBody) ? now.headBody + text.body.slice(basis.headBody.length) : now.body;
+  return { subject, body };
 }
