@@ -26,7 +26,7 @@ const VIEWS: { value: View; label: string }[] = [
 /** Rows per page of the Table view ("Load more" fetches the next). */
 const TABLE_PAGE = 500;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** The New meeting dialog's prefill in the URL (`?new=1&companyId=…`), read once and removed. */
+/** A prefilled New meeting page from the URL (`?new=1&companyId=…`), read once and removed. */
 const NEW_PARAMS = ['new', 'companyId', 'dealId', 'contactId', 'type', 'organizer', 'start'];
 
 /** True on phones (≤700px, as the CSS): Day opens by default and Week becomes a list. */
@@ -50,7 +50,7 @@ function usePhone(): boolean {
  *
  * Making a meeting (CD-212): on Day and Week, a click or a drag over empty slots draws a
  * placeholder and opens the quick-create popover next to it; on Month, a click on a day opens it
- * at 09:00. On phones a tap opens the New meeting dialog.
+ * at 09:00. On phones a tap opens the New meeting page (CD-221).
  */
 export function Calendar() {
   const store = useStore();
@@ -106,7 +106,7 @@ export function Calendar() {
     [setParams],
   );
 
-  // ?new=1&companyId=…: open the prefilled New meeting dialog (from links, visit plans), once.
+  // ?new=1&companyId=…: open the prefilled New meeting page (from links), once.
   const openDialog = actions.openDialog;
   useEffect(() => {
     if (params.get('new') !== '1') return;

@@ -6,6 +6,8 @@
 export type CalendarParams = Partial<
   Record<'view' | 'date' | 'from' | 'to' | 'ids' | 'report' | 'user' | 'type' | 'status' | 'company' | 'deal' | 'contact' | 'notClosed' | 'missingMinutes' | 'sort' | 'new' | 'companyId' | 'dealId' | 'contactId' | 'organizer' | 'start', string | null | undefined>
 >;
+/** The New meeting page's prefill (CD-221): ISO `start`/`end`, ids, the type and the title. */
+export type NewMeetingParams = Partial<Record<'companyId' | 'dealId' | 'contactId' | 'type' | 'organizer' | 'start' | 'end' | 'title', string | null | undefined>>;
 /** The Org structure page's state in its URL (CD-137), so a link shows the same view. */
 export type OrgParams = Partial<Record<'tab' | 'mode' | 'q' | 'dept' | 'team' | 'manager' | 'scope' | 'status' | 'account' | 'issues' | 'sort' | 'dir', string | null | undefined>>;
 const query = (params: Partial<Record<string, string | null | undefined>> = {}) => {
@@ -21,6 +23,8 @@ export const paths = {
   today: '/today',
   calendar: (params?: CalendarParams) => '/calendar' + query(params),
   meeting: (id: string) => '/meetings/' + encodeURIComponent(id),
+  /** The New meeting page (CD-221), prefilled; the quick create's guests, location and agenda come in the history state. */
+  newMeeting: (params: NewMeetingParams = {}) => '/meetings/new' + query(params),
   visitPlans: '/visit-plans',
   visitPlan: (id: string) => '/visit-plans/' + encodeURIComponent(id),
   companies: '/companies',

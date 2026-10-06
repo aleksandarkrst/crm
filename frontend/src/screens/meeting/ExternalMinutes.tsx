@@ -248,7 +248,7 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
       <RichField label="Minutes for the customer" testId="external-body" value={draft.body} max={BODY_MAX} editable={editable} placeholder="What you want the customer to read" onChange={(v) => change('body', v)} onBlur={() => void flush()} />
       {editable && (
         <button type="button" className="btn-plain minutes-add" data-testid="external-copy-internal" disabled={copying} onClick={() => void copy()}>
-          {copying ? 'Copying…' : 'Copy from internal minutes'}
+          {copying ? 'Copying' : 'Copy from internal minutes'}
         </button>
       )}
 
@@ -297,7 +297,7 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
             ))}
             {others.length > 0 && (
               <select className="form-input ext-add-cc" data-testid="external-add-cc" aria-label="Copy another member" value="" onChange={(e) => e.target.value && setCc((c) => [...c, e.target.value])}>
-                <option value="">+ Copy another member…</option>
+                <option value="">+ Copy another member</option>
                 {others.map((x) => (
                   <option key={x.id} value={x.id}>
                     {x.name}
@@ -318,7 +318,7 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
             title={sendBlocked ?? 'Preview the email, then send it'}
             onClick={() => void openPreview()}
           >
-            {previewing ? 'Preparing…' : last ? 'Send again…' : 'Send…'}
+            {previewing ? 'Preparing' : last ? 'Send again' : 'Send'}
           </button>
           {sendBlocked && <span className="meeting-muted">{sendBlocked}</span>}
         </div>
@@ -371,7 +371,7 @@ export function SendStatus({ m, send, onRetried }: { m: ApiMeeting; send: ApiMin
             onRetried?.();
           }}
         >
-          {busy ? 'Retrying…' : 'Retry failed'}
+          {busy ? 'Retrying' : 'Retry failed'}
         </button>
       )}
     </div>
@@ -426,7 +426,7 @@ function PreviewDialog({ m, email, input, onClose, onSent }: { m: ApiMeeting; em
             }
           }}
         >
-          {busy ? 'Sending…' : 'Send'}
+          {busy ? 'Sending' : 'Send'}
         </button>
       </div>
     </Modal>

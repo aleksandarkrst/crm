@@ -53,12 +53,12 @@ describe('visit plan tracking', () => {
     await mia.waitForSelector('[data-testid=visit-plan-line]');
     await mia.waitForFunction(() => document.querySelector('[data-testid=visit-plan-held]')?.textContent.trim() === '0');
     await click(mia, '[data-testid=visit-plan-schedule]');
-    await mia.waitForSelector('.modal [data-testid=meeting-form]');
+    await mia.waitForSelector('[data-testid=new-meeting] [data-testid=meeting-form]');
     await mia.waitForFunction((id) => document.querySelector('[data-testid=meeting-deal]')?.value === id, {}, alphaDealId);
     await click(mia, '[data-testid=meeting-save]');
     await mia.waitForSelector('[data-testid=meeting-no-external]');
     await click(mia, '[data-testid=meeting-save]');
-    await mia.waitForFunction(() => !document.querySelector('.modal [data-testid=meeting-form]'), { timeout: 10_000 });
+    await mia.waitForFunction(() => !document.querySelector('[data-testid=meeting-form]'), { timeout: 10_000 });
     const meetings = await eventually(async () => {
       const { meetings } = await api(mia, `/crm/meetings?companyId=${alphaId}`);
       return meetings.length === 1 && meetings;

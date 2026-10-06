@@ -272,7 +272,7 @@ function StepTask({ m, st, task, editable, busy, onCreate }: { m: ApiMeeting; st
   if (!editable || !m.dealId) return null;
   return (
     <button type="button" className="btn-plain" data-testid="step-create-task" disabled={busy || !st.text.trim()} title={st.text.trim() ? 'Add this step as a task on the deal' : 'Write the step first'} onClick={onCreate}>
-      {busy ? 'Creating…' : 'Create task'}
+      {busy ? 'Creating' : 'Create task'}
     </button>
   );
 }

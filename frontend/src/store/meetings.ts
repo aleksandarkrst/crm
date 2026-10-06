@@ -36,6 +36,7 @@ import {
   type MeetingStatus,
   type MeetingType,
 } from '../lib/api';
+import type { NewMeetingParams } from '../lib/paths';
 import type { LiveEvent } from './live';
 import type { State } from './types';
 
@@ -61,7 +62,7 @@ export interface MeetingList {
   error: string | null;
 }
 
-/** What the New meeting dialog starts with; `id` edits that meeting instead. */
+/** What the New meeting page starts with (CD-221); `id` opens that meeting instead. */
 export interface MeetingDialogSeed {
   id?: string;
   companyId?: string | null;
@@ -75,6 +76,38 @@ export interface MeetingDialogSeed {
   end?: string | null;
   /** From the calendar's quick create ("More options", CD-212). */
   title?: string | null;
+  /** What the quick create already had ("More options", CD-221). */
+  location?: string | null;
+  agenda?: string | null;
+  internalUserIds?: string[];
+  externalContactIds?: string[];
+}
+
+/** A seed as the New meeting page's URL parameters (paths.newMeeting). */
+export const meetingSeedParams = (seed: MeetingDialogSeed): NewMeetingParams => ({
+  companyId: seed.companyId,
+  dealId: seed.dealId,
+  contactId: seed.contactId,
+  type: seed.type,
+  organizer: seed.organizerUserId,
+  start: seed.start,
+  end: seed.end,
+  title: seed.title,
+});
+/** The New meeting page's seed: its URL, with what came in the history state (guests, location, agenda). */
+export function meetingSeedOf(params: URLSearchParams, state: MeetingDialogSeed | null | undefined): MeetingDialogSeed {
+  const type = params.get('type');
+  return {
+    ...(state ?? {}),
+    companyId: params.get('companyId') ?? state?.companyId,
+    dealId: params.get('dealId') ?? state?.dealId,
+    contactId: params.get('contactId') ?? state?.contactId,
+    type: type && isMeetingType(type) ? type : state?.type,
+    organizerUserId: params.get('organizer') ?? state?.organizerUserId,
+    start: params.get('start') ?? state?.start,
+    end: params.get('end') ?? state?.end,
+    title: params.get('title') ?? state?.title,
+  };
 }
 
 /** The key of a query (its fields in a fixed order), so equal queries share one list. */

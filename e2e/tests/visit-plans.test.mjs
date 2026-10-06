@@ -5,6 +5,10 @@
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
 import { api, BASE_URL, click, clickButton, createWorkspace, email, eventually, finishOnboarding, setValue, signIn, steps, text, useBrowser } from '../lib/harness.mjs';
+// The app's own rule for where a visit from a plan starts (B9, unit-tested in frontend/test).
+import { startInPeriod } from '../../frontend/src/store/meetingTime.ts';
+
+const TZ = 'Europe/Belgrade'; // new workspaces use it
 
 /** The first day of the month `months` after the month of an ISO date. */
 const shiftMonths = (iso, months) => {
@@ -21,6 +25,7 @@ describe('visit plans', () => {
   let miaId;
   let planId;
   let plan;
+  let nextPlan;
 
   /** Adds a customer in the open New plan dialog through its company picker. */
   async function addCustomer(page, name) {
@@ -101,6 +106,7 @@ describe('visit plans', () => {
     assert.equal(next.periodStart, shiftMonths(plan.periodStart, 1));
     assert.equal(next.salespersonUserId, miaId);
     assert.equal(next.totalPlanned, 5);
+    nextPlan = next;
 
     // "Copy from previous period" in a new plan fills in that plan's customers.
     await olga.goto(`${BASE_URL}/visit-plans`, { waitUntil: 'networkidle0' });
@@ -130,19 +136,23 @@ describe('visit plans', () => {
     assert.ok((await text(mia)).includes('Alpha Visits'));
     assert.ok(await mia.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'the plan fits 375 px');
 
-    // "Schedule visit" opens New meeting prefilled with the company, Customer visit and the salesperson.
+    // "Schedule visit" opens the New meeting page prefilled with the company, Customer visit and the
+    // salesperson, in the plan's period (B9): today if it is in it, else its first working day.
     const alphaId = plan.lines.find((l) => l.companyName === 'Alpha Visits').companyId;
     await click(mia, '[data-testid=visit-plan-schedule]');
-    await mia.waitForSelector('.modal [data-testid=meeting-form]');
+    await mia.waitForSelector('[data-testid=new-meeting] [data-testid=meeting-form]');
     assert.equal(await mia.$eval('[data-testid=meeting-company]', (el) => el.value), alphaId);
-    assert.equal(await mia.$eval('[data-testid=meeting-type]', (el) => el.value), 'visit');
+    assert.equal(await mia.$eval('[data-testid=meeting-type]', (el) => el.dataset.value), 'visit');
     assert.equal(await mia.$eval('[data-testid=meeting-organizer]', (el) => el.value), miaId);
     assert.equal(await selected(mia, '[data-testid=meeting-deal]'), 'Alpha deal');
+    assert.equal(await mia.$eval('[data-testid=meeting-date]', (el) => el.dataset.value), startInPeriod(plan.periodStart, plan.periodEnd, Date.now(), TZ).date);
+    assert.ok(await mia.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'the New meeting page fits 375 px');
     // A customer visit without anyone from the customer warns first; the second click saves.
     await click(mia, '[data-testid=meeting-save]');
     await mia.waitForSelector('[data-testid=meeting-no-external]');
     await click(mia, '[data-testid=meeting-save]');
-    await mia.waitForFunction(() => !document.querySelector('.modal [data-testid=meeting-form]'), { timeout: 10_000 });
+    await mia.waitForFunction(() => !document.querySelector('[data-testid=meeting-form]'), { timeout: 10_000 });
+    await mia.waitForFunction((id) => location.pathname === `/visit-plans/${id}`, {}, planId);
     const meetings = await eventually(async () => {
       const { meetings } = await api(mia, `/crm/meetings?companyId=${alphaId}`);
       return meetings.length === 1 && meetings;
@@ -150,6 +160,17 @@ describe('visit plans', () => {
     assert.ok(meetings, 'the visit was scheduled');
     assert.equal(meetings[0].type, 'visit');
     assert.equal(meetings[0].organizerUserId, miaId);
+
+    // From next month's plan the visit starts on that month's first working day at 09:00 (B9).
+    await mia.goto(`${BASE_URL}/visit-plans/${nextPlan.id}`, { waitUntil: 'networkidle0' });
+    await click(mia, '[data-testid=visit-plan-schedule]');
+    await mia.waitForSelector('[data-testid=new-meeting] [data-testid=meeting-form]');
+    const expected = startInPeriod(nextPlan.periodStart, nextPlan.periodEnd, Date.now(), TZ);
+    assert.equal(expected.time, '09:00');
+    assert.equal(await mia.$eval('[data-testid=meeting-date]', (el) => el.dataset.value), expected.date);
+    assert.equal(await mia.$eval('[data-testid=meeting-start]', (el) => el.value), '09:00');
+    await click(mia, '[data-testid=meeting-close]');
+    await mia.waitForFunction((id) => location.pathname === `/visit-plans/${id}`, {}, nextPlan.id);
   });
 
   step('plans are monthly; Reports adds up a quarter from its monthly plans (CD-212)', async () => {

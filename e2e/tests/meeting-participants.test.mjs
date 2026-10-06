@@ -1,5 +1,5 @@
-// Meeting participants (CD-131): a colleague and a brand-new contact (made from the picker,
-// without leaving the dialog) join a meeting; the colleague gets the invitation email with an .ics;
+// Meeting participants (CD-131): a colleague and a brand-new contact (made from "Add guests",
+// without leaving the New meeting page, CD-221) join a meeting; the colleague gets the invitation email with an .ics;
 // when the organizer leaves the workspace the meeting shows "Organizer left" and an owner picks a
 // new one on the meeting page.
 import assert from 'node:assert/strict';
@@ -43,25 +43,32 @@ describe('meeting participants', () => {
   });
 
   step('adds a colleague and a new contact made from the picker, then saves', async () => {
+    // A link with ?new=1 opens the New meeting page (CD-221).
     await page.goto(`${BASE_URL}/calendar?new=1&companyId=${company.id}&type=online&start=${encodeURIComponent(START)}`, { waitUntil: 'networkidle0' });
-    await page.waitForSelector('.modal [data-testid=meeting-form]');
+    await page.waitForSelector('[data-testid=new-meeting] [data-testid=meeting-form]');
+    assert.equal(new URL(page.url()).pathname, '/meetings/new');
     await page.waitForFunction((title) => document.querySelector('[data-testid=meeting-title]').value === title, {}, TITLE);
-    await setValue(page, '[data-testid=meeting-add-internal]', nina.id);
-    await page.waitForFunction(() => document.querySelector('[data-testid=meeting-internal]').innerText.includes('Nina Colleague'));
+    // "Add guests" searches colleagues and the company's contacts in one list.
+    await click(page, '[data-testid=meeting-guests-add] .picker-search');
+    await page.type('[data-testid=meeting-guests-add] .picker-search', 'Nina');
+    await click(page, '[data-testid=meeting-guests-add] .picker-item::-p-text(Nina Colleague)');
+    await page.waitForFunction(() => document.querySelector('[data-testid=meeting-guests-list]').innerText.includes('Nina Colleague'));
+    assert.equal(await page.$('[data-testid=guests-invite]'), null, 'two members: no "Invite a colleague"');
 
-    // "Add new contact" in the contact picker: the name typed in the search comes along.
-    await click(page, '.meeting-picker .picker-search');
-    await page.type('.meeting-picker .picker-search', 'Zora Newcontact');
+    // "Add new contact" in the guest picker: the name typed in the search comes along.
+    await click(page, '[data-testid=meeting-guests-add] .picker-search');
+    await page.type('[data-testid=meeting-guests-add] .picker-search', 'Zora Newcontact');
     await click(page, '[data-testid=meeting-new-contact]');
     await page.waitForSelector('[data-testid=meeting-new-contact-form]');
     assert.equal(await page.$eval('[data-testid=new-contact-name]', (el) => el.value), 'Zora Newcontact');
     await page.type('[data-testid=new-contact-email]', 'zora@kestrel.example.com');
     await click(page, '[data-testid=new-contact-save]');
-    await page.waitForFunction(() => document.querySelector('[data-testid=meeting-external]').innerText.includes('Zora Newcontact'), { timeout: 10_000 });
+    await page.waitForFunction(() => document.querySelector('[data-testid=meeting-guests-list]').innerText.includes('Zora Newcontact'), { timeout: 10_000 });
     assert.equal(await page.$('[data-testid=meeting-new-contact-form]'), null, 'the small form closed');
 
     await click(page, '[data-testid=meeting-save]');
-    await page.waitForFunction(() => !document.querySelector('.modal [data-testid=meeting-form]'), { timeout: 10_000 });
+    await page.waitForFunction(() => !document.querySelector('[data-testid=meeting-form]'), { timeout: 10_000 });
+    assert.equal(new URL(page.url()).pathname, '/calendar', 'back where it was opened');
     const saved = await eventually(async () => (await api(page, `/crm/meetings?companyId=${company.id}`)).meetings[0]);
     assert.ok(saved, 'the meeting was saved');
     meetingId = saved.id;

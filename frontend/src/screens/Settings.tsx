@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { FieldRow, GhostInput, GhostSelect, Modal, ModalHeader, RemoveButton, Switch } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
@@ -31,7 +31,9 @@ export function Settings() {
   const { tab = 'workspace' } = useParams();
   const navigate = useNavigate();
   const { s, set, session, flash, canEditFields, canSeeBonuses, canEditWorkspace } = useStore();
-  const [inviteOpen, setInviteOpen] = useState(false);
+  // `?invite=1` (Team tab): the Invite dialog opens, e.g. from "Invite a colleague" in a meeting's guests (CD-221).
+  const [params] = useSearchParams();
+  const [inviteOpen, setInviteOpen] = useState(() => tab === 'team' && params.get('invite') === '1' && session.tenant.role !== 'member');
   // Members don't see the sales bonus rules (CD-17): no tab, and its route goes back to Settings.
   // Settings → Employees (CD-215) is for Admins (workspace owners and admins).
   const tabs = TABS.filter((t) => (t.k !== 'bonuses' || canSeeBonuses) && (t.k !== 'employees' || canEditWorkspace));

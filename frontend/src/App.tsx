@@ -17,6 +17,7 @@ const Contacts = lazy(() => loadChunk(() => import('./screens/Contacts')).then((
 const EmployeeCard = lazy(() => loadChunk(() => import('./screens/EmployeeCard')).then((m) => ({ default: m.EmployeeCard })));
 const Dashboard = lazy(() => loadChunk(() => import('./screens/Dashboard')).then((m) => ({ default: m.Dashboard })));
 const Meeting = lazy(() => loadChunk(() => import('./screens/Meeting')).then((m) => ({ default: m.Meeting })));
+const NewMeeting = lazy(() => loadChunk(() => import('./screens/NewMeeting')).then((m) => ({ default: m.NewMeeting })));
 const LeadScreen = lazy(() => loadChunk(() => import('./screens/lead/LeadScreen')).then((m) => ({ default: m.LeadScreen })));
 const OrgStructure = lazy(() => loadChunk(() => import('./screens/OrgStructure')).then((m) => ({ default: m.OrgStructure })));
 const Pipeline = lazy(() => loadChunk(() => import('./screens/Pipeline')).then((m) => ({ default: m.Pipeline })));
@@ -136,6 +137,7 @@ function AppRoutes() {
           <Route path="pipeline" element={<Pipeline />} />
           <Route path="today" element={<Today />} />
           <Route path="calendar" element={<Calendar />} />
+          <Route path="meetings/new" element={<NewMeeting />} />
           <Route path="meetings/:id" element={<Meeting />} />
           <Route path="visit-plans" element={<VisitPlans />} />
           <Route path="visit-plans/:id" element={<VisitPlan />} />
