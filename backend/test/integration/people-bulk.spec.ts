@@ -1,7 +1,8 @@
 /**
  * The Org structure list's bulk actions and personal-details export (CD-137, spec 5.4, 9.3, 9.5):
- * who may use them, department and team together, the reporting-line rules (no loops, all or
- * nothing), Administration's own row, and the audit entry of every personal-details export.
+ * who may use them (Admins only since CD-225), department and team together, the reporting-line
+ * rules (no loops, all or nothing), moving heads (CD-225), and the audit entry of every
+ * personal-details export. `hr` is a workspace admin; `pay` holds a leftover Payroll row.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, createTenant, ok, type Session, signIn } from './helpers';
@@ -30,8 +31,9 @@ beforeAll(async () => {
   [owner, hr, pay, mgr, emp] = (await Promise.all(['bulk-owner', 'bulk-hr', 'bulk-pay', 'bulk-mgr', 'bulk-emp'].map((l) => signIn(l)))) as [Session, Session, Session, Session, Session];
   tenant = await createTenant(owner, 'People bulk');
   id.owner = (await ok('GET', '/people/access', as(owner))).employeeId;
-  for (const [key, s] of [['hr', hr], ['pay', pay], ['mgr', mgr], ['emp', emp]] as const) id[key] = await joinAsEmployee(owner, tenant, s);
-  await grantRole(tenant, id.hr, 'administration');
+  id.hr = await joinAsEmployee(owner, tenant, hr, 'admin');
+  for (const [key, s] of [['pay', pay], ['mgr', mgr], ['emp', emp]] as const) id[key] = await joinAsEmployee(owner, tenant, s);
+  // The removed Payroll role (CD-225): the row gives nothing.
   await grantRole(tenant, id.pay, 'payroll');
   await ok('PATCH', `/people/employees/${id.emp}`, { ...as(), body: { managerId: id.mgr } });
   sales = await createDepartment(tenant, 'Sales');
@@ -42,7 +44,7 @@ beforeAll(async () => {
 });
 
 describe('who may use the bulk actions and the export', () => {
-  it('refuses Employee, Manager and Payroll; allows Administration and Admin', async () => {
+  it('refuses Employee, Manager and a leftover Payroll row; allows Admins', async () => {
     const target = await create('Bulk', 'Target');
     for (const s of [emp, mgr, pay]) {
       expect((await bulk(s, { employeeIds: [target], departmentId: sales })).status).toBe(403);
@@ -96,13 +98,27 @@ describe('Set department and team', () => {
     expect(audit!.n).toBeGreaterThan(0);
   });
 
-  it("Administration can't include their own row; an Admin can", async () => {
+  it('an Admin includes their own row', async () => {
     const a = await create('Ema', 'Own');
-    const res = await bulk(hr, { employeeIds: [a, id.hr], departmentId: sales });
-    expect(res.status).toBe(403);
-    expect(res.body.message).toMatch(/own card/);
-    expect((await card(a)).departmentId).toBeNull();
-    expect((await bulk(owner, { employeeIds: [a, id.owner], departmentId: sales })).body).toEqual({ updated: 2 });
+    expect((await bulk(hr, { employeeIds: [a, id.hr], departmentId: sales })).body).toEqual({ updated: 2 });
+    expect((await bulk(owner, { employeeIds: [a, id.owner], departmentId: sales })).body).toEqual({ updated: 1 });
+  });
+
+  it('moving a department head elsewhere asks first (409 heads_department), then removes them as head (CD-225)', async () => {
+    const head = await create('Hana', 'Head', { departmentId: support });
+    await ok('PATCH', `/people/departments/${support}`, { ...as(), body: { headEmployeeId: head } });
+    const other = await create('Olga', 'Other');
+    const res = await bulk(hr, { employeeIds: [other, head], departmentId: sales });
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ code: 'heads_department', message: 'Hana Head is head of Support. Moving them to Sales removes them as head of Support.' });
+    expect(res.body.people).toEqual([{ employeeId: head, fullName: 'Hana Head', roles: [{ kind: 'department', id: support, name: 'Support' }] }]);
+    // Nothing changed.
+    expect((await card(head)).departmentId).toBe(support);
+    expect((await card(other)).departmentId).toBeNull();
+    expect((await bulk(hr, { employeeIds: [other, head], departmentId: sales, clearHeadRoles: true })).body).toEqual({ updated: 2 });
+    expect((await card(head)).departmentId).toBe(sales);
+    const departments = await ok('GET', '/people/departments', as());
+    expect(departments.find((d: { id: string }) => d.id === support).headEmployeeId).toBeNull();
   });
 });
 
@@ -149,13 +165,13 @@ describe('Set manager', () => {
   });
 
   it("only an Admin makes themselves someone's manager", async () => {
-    expect((await bulk(hr, { employeeIds: [t.x], managerId: id.hr })).status).toBe(403);
+    expect((await bulk(pay, { employeeIds: [t.x], managerId: id.pay })).status).toBe(403);
     expect((await bulk(owner, { employeeIds: [t.x], managerId: id.owner })).body).toEqual({ updated: 1 });
   });
 });
 
 describe('Export with personal details and bank accounts', () => {
-  it('returns them to Administration and Admin, each export audited with its row count', async () => {
+  it('returns them to Admins, each export audited with its row count', async () => {
     const a = await create('Iva', 'Export', { privateEmail: 'iva.private@example.test', addressCity: 'Novi Sad', iban: IBAN, bankName: 'AIK Banka' });
     const b = await create('Jan', 'Export');
     const before = await asTenantSql<{ n: number }>(tenant, `select count(*)::int as n from audit_logs where action = 'employee.personal_exported'`);

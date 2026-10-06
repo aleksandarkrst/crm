@@ -10,6 +10,7 @@ import { JobsService } from '../../shared/events/jobs.service';
 import type { CallerAccess } from './caller-access';
 import { DEPARTMENT_USAGE, type DepartmentUsage } from './department-usage';
 import type { Assign, AssignmentPreview, CreateDepartment, CreateTeam, SetReportingLines, UpdateDepartment, UpdateTeam } from './org.schemas';
+import { checkHeadMoves, placeHead, placeLead } from './heads';
 import { PeopleAccess } from './people-access';
 import { assertValidManager, isLoopError, lockReportingLines, queueManagerEmails, setManagers } from './reporting-lines';
 
@@ -55,7 +56,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 /**
  * Departments, teams and reporting lines (CD-138, CD-139; spec 6 and 7). Every change is for
- * Administration and Admin (403 otherwise; nobody but an Admin changes their own department, team
+ * Admins (403 otherwise; nobody but an Admin changes their own department, team
  * or manager, or makes themselves someone's manager). Manager changes go through `setManagers`
  * (reporting-line lock first, loop check per change) and queue the "New manager" / "New direct
  * report" emails. Live updates come from the tables' triggers.
@@ -107,11 +108,16 @@ export class OrgService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         await this.hr(tx, ctx);
-        if (input.headEmployeeId) await activeEmployee(tx, input.headEmployeeId, 'The department head');
+        // Placing the head moves an employee: the reporting-line lock first (reporting-lines.ts).
+        if (input.headEmployeeId) {
+          await lockReportingLines(tx, ctx.tenantId);
+          await activeEmployee(tx, input.headEmployeeId, 'The department head');
+        }
         const [row] = await tx
           .insert(departments)
           .values({ tenantId: ctx.tenantId, name: input.name, code: input.code ?? null, headEmployeeId: input.headEmployeeId ?? null })
           .returning({ id: departments.id });
+        if (input.headEmployeeId) await placeHead(tx, input.headEmployeeId, row!.id, !!input.clearHeadRoles);
         await this.audit.record(tx, ctx, { action: 'department.created', entityType: 'department', entityId: row!.id, data: { name: input.name } });
         return this.department(tx, row!.id);
       })
@@ -123,11 +129,16 @@ export class OrgService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         await this.hr(tx, ctx);
-        const [current] = await tx.select({ id: departments.id }).from(departments).where(eq(departments.id, id)).for('no key update');
+        const { clearHeadRoles, ...set } = input;
+        if (set.headEmployeeId) await lockReportingLines(tx, ctx.tenantId);
+        const [current] = await tx.select({ id: departments.id, headEmployeeId: departments.headEmployeeId }).from(departments).where(eq(departments.id, id)).for('no key update');
         if (!current) throw new NotFoundException('Department not found');
-        if (input.headEmployeeId) await activeEmployee(tx, input.headEmployeeId, 'The department head');
-        await tx.update(departments).set(input).where(eq(departments.id, id));
-        await this.audit.record(tx, ctx, { action: 'department.updated', entityType: 'department', entityId: id, data: { fields: Object.keys(input) } });
+        if (set.headEmployeeId && set.headEmployeeId !== current.headEmployeeId) {
+          await activeEmployee(tx, set.headEmployeeId, 'The department head');
+          await placeHead(tx, set.headEmployeeId, id, !!clearHeadRoles);
+        }
+        await tx.update(departments).set(set).where(eq(departments.id, id));
+        await this.audit.record(tx, ctx, { action: 'department.updated', entityType: 'department', entityId: id, data: { fields: Object.keys(set) } });
         return this.department(tx, id);
       })
       .catch(mapDbError);
@@ -172,12 +183,14 @@ export class OrgService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         await this.hr(tx, ctx);
+        if (input.leadEmployeeId) await lockReportingLines(tx, ctx.tenantId);
         await departmentExists(tx, input.departmentId);
         if (input.leadEmployeeId) await activeEmployee(tx, input.leadEmployeeId, 'The team lead');
         const [row] = await tx
           .insert(teams)
           .values({ tenantId: ctx.tenantId, departmentId: input.departmentId, name: input.name, leadEmployeeId: input.leadEmployeeId ?? null })
           .returning({ id: teams.id });
+        if (input.leadEmployeeId) await placeLead(tx, input.leadEmployeeId, row!.id, !!input.clearHeadRoles);
         await this.audit.record(tx, ctx, { action: 'team.created', entityType: 'team', entityId: row!.id, data: { name: input.name } });
         return { team: await this.team(tx, row!.id), moved: 0, reassigned: [], loops: [] };
       })
@@ -188,15 +201,14 @@ export class OrgService {
    * Rename, move to another department (its members' department changes in the same statement,
    * by the foreign key's ON UPDATE CASCADE; `moved` counts the active ones), set the lead. With
    * `makeMembersReport`, members who had no manager or reported to the previous lead now report to
-   * the lead (spec 6.3), except where that would close a loop (`loops`) and, for Administration,
-   * their own record. Returns `{ team, moved, reassigned, loops }`.
+   * the lead (spec 6.3), except where that would close a loop (`loops`). Returns `{ team, moved, reassigned, loops }`.
    */
   updateTeam(ctx: TenantContext, id: string, input: UpdateTeam) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const access = await this.hr(tx, ctx);
-        // The reporting-line lock before any row lock (reporting-lines.ts).
-        if (input.makeMembersReport) await lockReportingLines(tx, ctx.tenantId);
+        // The reporting-line lock before any row lock (reporting-lines.ts); a new lead moves too.
+        if (input.makeMembersReport || input.leadEmployeeId) await lockReportingLines(tx, ctx.tenantId);
         const [team] = await tx.select().from(teams).where(eq(teams.id, id)).for('update');
         if (!team) throw new NotFoundException('Team not found');
 
@@ -213,6 +225,7 @@ export class OrgService {
           set.leadEmployeeId = input.leadEmployeeId;
         }
         if (Object.keys(set).length) await tx.update(teams).set(set).where(eq(teams.id, id));
+        if (set.leadEmployeeId) await placeLead(tx, set.leadEmployeeId, id, !!input.clearHeadRoles);
 
         let reassigned: string[] = [];
         let loops: LoopSkip[] = [];
@@ -255,7 +268,7 @@ export class OrgService {
   /**
    * Members of the team who would report to `leadId`: active, not the lead, with no manager or
    * reporting to the previous lead. Those for whom it would close a loop go to `loops` with the
-   * message; an Administration caller's own record is left out (only Admins change their own).
+   * message.
    */
   private async leadPlan(tx: Tx, access: CallerAccess, teamId: string, previousLeadId: string | null, leadId: string) {
     const rows = await this.people(
@@ -354,10 +367,24 @@ export class OrgService {
         if (managers.length) await lockReportingLines(tx, ctx.tenantId);
         await this.target(tx, input.departmentId, input.teamId ?? null);
 
-        const rows = await tx.select({ id: employees.id, fullName: employees.fullName, deactivatedAt: employees.deactivatedAt }).from(employees).where(inArray(employees.id, ids));
+        const rows = await tx
+          .select({ id: employees.id, fullName: employees.fullName, deactivatedAt: employees.deactivatedAt, departmentId: employees.departmentId, teamId: employees.teamId })
+          .from(employees)
+          .where(inArray(employees.id, ids));
         if (rows.length !== ids.length) throw new BadRequestException('Employee not found');
         const left = rows.find((r) => r.deactivatedAt);
         if (left) throw new BadRequestException(`${left.fullName} has left the company`);
+        // Heads and leads moved elsewhere lose that role, after confirming (CD-225).
+        await checkHeadMoves(
+          tx,
+          rows.map((r) => ({
+            employeeId: r.id,
+            fullName: r.fullName,
+            from: r,
+            to: { departmentId: input.departmentId, teamId: input.teamId ? input.teamId : r.departmentId === input.departmentId ? r.teamId : null },
+          })),
+          !!input.clearHeadRoles,
+        );
 
         await tx
           .update(employees)
@@ -384,7 +411,7 @@ export class OrgService {
   }
 
   /**
-   * "Set manager" for one or many employees (spec 7.2): Administration and Admin; nobody but an
+   * "Set manager" for one or many employees (spec 7.2): Admins; nobody but an
    * Admin changes their own manager or makes themselves someone's manager. All or nothing: a loop
    * anywhere refuses the whole change (409, naming the loop). Emails the changes.
    */
@@ -392,7 +419,7 @@ export class OrgService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const access = await this.access.of(ctx, tx);
-        if (!access.isHr) throw new ForbiddenException('Only Administration and Admins change reporting lines');
+        if (!access.isHr) throw new ForbiddenException('Only Admins change reporting lines');
         const ids = [...new Set(input.employeeIds)];
         if (!access.isAdmin && access.employeeId && ids.includes(access.employeeId)) throw new ForbiddenException('Only an Admin can change their own manager');
         if (!access.isAdmin && input.managerId && input.managerId === access.employeeId) throw new ForbiddenException("Only an Admin can make themselves someone's manager");
@@ -417,10 +444,10 @@ export class OrgService {
 
   // ------------------------------------------------------------------ helpers
 
-  /** Administration or Admin, or 403. */
+  /** Admins only (CD-225), or 403. */
   private async hr(tx: Tx, ctx: TenantContext): Promise<CallerAccess> {
     const access = await this.access.of(ctx, tx);
-    if (!access.isHr) throw new ForbiddenException('Only Administration and Admins change departments and teams');
+    if (!access.isHr) throw new ForbiddenException('Only Admins change departments and teams');
     return access;
   }
 

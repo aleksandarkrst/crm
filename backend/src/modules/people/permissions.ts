@@ -53,8 +53,8 @@ function cell(spec: CellSpec): PermissionCell {
   return { scope, label: DEFAULT_LABELS[scope] };
 }
 
-/** One row: the cells in the matrix's column order Employee, Manager, Administration, Payroll, Admin. */
-function row(id: string, action: string, cells: [CellSpec, CellSpec, CellSpec, CellSpec, CellSpec]): PermissionRow {
+/** One row: the cells in the matrix's column order Employee, Manager, Admin. */
+function row(id: string, action: string, cells: [CellSpec, CellSpec, CellSpec]): PermissionRow {
   return { id, action, cells: Object.fromEntries(FUNCTIONAL_ROLES.map((r, i) => [r, cell(cells[i]!)])) as Record<FunctionalRole, PermissionCell> };
 }
 
@@ -71,13 +71,13 @@ export const PERMISSION_MODULES: readonly PermissionModule[] = [
     milestone: null,
     live: true,
     rows: [
-      row('crm.records', 'View and edit companies, contacts, deals, products, meetings', ['Yes', 'Yes', 'Yes', 'Yes', 'Yes']),
-      row('crm.admin', 'Delete CRM records; funnels; custom fields; CRM import and export', ['No', 'No', 'No', 'No', 'Yes']),
-      row('crm.bonuses', 'See and set sales bonuses', ['No', 'No', 'No', 'No', 'Yes']),
-      row('crm.meetings.change', 'Edit, cancel, write minutes of a meeting', [ORGANIZER, SAME, SAME, SAME, 'Yes']),
-      row('crm.visit_plans.own', 'See own visit plans', ['Yes (own)', 'Yes (own)', 'Yes (own)', 'Yes (own)', 'Yes (own)']),
-      row('crm.visit_plans.see', 'See visit plans and team overview', ['Own', 'Indirect', 'No', 'No', 'All']),
-      row('crm.visit_plans.manage', 'Create, edit, delete visit plans', ['No', 'Direct', 'No', 'No', 'All']),
+      row('crm.records', 'View and edit companies, contacts, deals, products, meetings', ['Yes', 'Yes', 'Yes']),
+      row('crm.admin', 'Delete CRM records; funnels; custom fields; CRM import and export', ['No', 'No', 'Yes']),
+      row('crm.bonuses', 'See and set sales bonuses', ['No', 'No', 'Yes']),
+      row('crm.meetings.change', 'Edit, cancel, write minutes of a meeting', [ORGANIZER, SAME, 'Yes']),
+      row('crm.visit_plans.own', 'See own visit plans', ['Yes (own)', 'Yes (own)', 'Yes (own)']),
+      row('crm.visit_plans.see', 'See visit plans and team overview', ['Own', 'Indirect', 'All']),
+      row('crm.visit_plans.manage', 'Create, edit, delete visit plans', ['No', 'Direct', 'All']),
     ],
   },
   {
@@ -90,24 +90,21 @@ export const PERMISSION_MODULES: readonly PermissionModule[] = [
         ['all', 'All active'],
         ['all', 'All active'],
         ['all', 'All, incl. inactive'],
-        ['all', 'All active'],
-        ['all', 'All, incl. inactive'],
       ]),
-      row('org.employment', 'See start date, end date, employment type, weekly hours', ['Own', 'Indirect', 'All', 'No', 'All']),
-      row('org.personal', 'See personal details', ['Own', 'No', 'All', 'No', 'All']),
-      row('org.bank', 'See bank account (masked) and reveal it', ['Own', 'No', 'All', 'No', 'All']),
-      row('org.edit_own', 'Edit own work phone and personal details', ['Yes (own)', 'Yes (own)', 'Yes (own)', 'Yes (own)', 'Yes (own)']),
-      row('org.edit_own_bank', 'Edit own bank account', [['own', 'If setting on'], ['own', 'If setting on'], ['own', 'Yes'], ['own', 'If setting on'], ['own', 'Yes']]),
-      row('org.employees.manage', 'Create and edit employees (work fields, personal details, bank account)', ['No', 'No', ['all', 'All except own employment fields'], 'No', 'All']),
-      row('org.reporting', 'Set department, team, reports to', ['No', 'No', ['all', 'All except own'], 'No', 'All']),
-      row('org.structure', 'Departments and teams: add, rename, delete, assign', ['No', 'No', 'Yes', 'No', 'Yes']),
-      row('org.import', 'Import employees', ['No', 'No', 'Yes', 'No', 'Yes']),
-      row('org.export', 'Export employee list', ['No', 'No', 'Yes', 'No', 'Yes']),
-      row('org.deactivate', 'Deactivate and reactivate', ['No', 'No', 'Yes', 'No', 'Yes']),
-      row('org.delete', 'Delete an employee', ['No', 'No', 'No', 'No', 'Yes']),
-      row('org.invite', 'Invite to Pultly, link and unlink members', ['No', 'No', 'No', 'No', 'Yes']),
-      row('org.roles', 'Assign Administration and Payroll', ['No', 'No', 'No', 'No', 'Yes']),
-      row('org.history', 'See employee history', [['own', 'Own (without reason for leaving)'], 'No', 'All', 'No', 'All']),
+      row('org.employment', 'See start date, end date, employment type, weekly hours', ['Own', 'Indirect', 'All']),
+      row('org.personal', 'See personal details', ['Own', 'No', 'All']),
+      row('org.bank', 'See bank account (masked) and reveal it', ['Own', 'No', 'All']),
+      row('org.edit_own', 'Edit own work phone and personal details', ['Yes (own)', 'Yes (own)', 'Yes (own)']),
+      row('org.edit_own_bank', 'Edit own bank account', [['own', 'If setting on'], ['own', 'If setting on'], ['own', 'Yes']]),
+      row('org.employees.manage', 'Create and edit employees (work fields, personal details, bank account)', ['No', 'No', 'All']),
+      row('org.reporting', 'Set department, team, reports to', ['No', 'No', 'All']),
+      row('org.structure', 'Departments and teams: add, rename, delete, assign', ['No', 'No', 'Yes']),
+      row('org.import', 'Import employees', ['No', 'No', 'Yes']),
+      row('org.export', 'Export employee list', ['No', 'No', 'Yes']),
+      row('org.deactivate', 'Deactivate and reactivate', ['No', 'No', 'Yes']),
+      row('org.delete', 'Delete an employee (once deactivated)', ['No', 'No', 'Yes']),
+      row('org.invite', 'Invite to Pultly, link and unlink members', ['No', 'No', 'Yes']),
+      row('org.history', 'See employee history', [['own', 'Own (without reason for leaving)'], 'No', 'All']),
     ],
   },
   {
@@ -116,12 +113,12 @@ export const PERMISSION_MODULES: readonly PermissionModule[] = [
     milestone: 14,
     live: false,
     rows: [
-      row('projects.see', 'See projects and tasks', ['All', 'All', 'All', 'All', 'All']),
-      row('projects.log_time', 'Log time on a task', [ASSIGNED, ASSIGNED, ASSIGNED, ASSIGNED, ASSIGNED]),
-      row('projects.manage', 'Create and edit client projects and tasks, assign people and hour limits', ['No', 'Yes', 'No', 'No', 'Yes']),
-      row('projects.initiatives', 'Create and edit strategic initiatives of a department', ['No', ['all', 'If department head'], 'No', 'No', 'Yes']),
-      row('projects.effective_time', 'See effective time per person', ['Own', 'Indirect', 'All', 'No', 'All']),
-      row('projects.configure', 'Configure hierarchy and task types', ['No', 'No', 'No', 'No', 'Yes']),
+      row('projects.see', 'See projects and tasks', ['All', 'All', 'All']),
+      row('projects.log_time', 'Log time on a task', [ASSIGNED, ASSIGNED, ASSIGNED]),
+      row('projects.manage', 'Create and edit client projects and tasks, assign people and hour limits', ['No', 'Yes', 'Yes']),
+      row('projects.initiatives', 'Create and edit strategic initiatives of a department', ['No', ['all', 'If department head'], 'Yes']),
+      row('projects.effective_time', 'See effective time per person', ['Own', 'Indirect', 'All']),
+      row('projects.configure', 'Configure hierarchy and task types', ['No', 'No', 'Yes']),
     ],
   },
   {
@@ -130,20 +127,18 @@ export const PERMISSION_MODULES: readonly PermissionModule[] = [
     milestone: 15,
     live: false,
     rows: [
-      row('timesheet.own', 'Enter and submit own timesheet', ['Yes (own)', 'Yes (own)', 'Yes (own)', 'Yes (own)', 'Yes (own)']),
-      row('timesheet.see', 'See timesheets (including drafts)', ['Own', 'Indirect', 'All', 'No', 'All']),
-      row('timesheet.approve', 'Approve or return', ['No', 'Direct', 'No', 'No', ROUTED]),
-      row('timesheet.approved_hours', 'See approved hours', ['Own', 'Indirect', 'All', 'All', 'All']),
-      row('timesheet.payroll_email', 'Receive the payroll email', ['No', 'No', IF_CHOSEN, IF_CHOSEN, IF_CHOSEN]),
-      row('timesheet.change_locked', 'Change an approved, locked day (with a trace)', ['No', 'No', 'No', 'No', 'Yes']),
+      row('timesheet.own', 'Enter and submit own timesheet', ['Yes (own)', 'Yes (own)', 'Yes (own)']),
+      row('timesheet.see', 'See timesheets (including drafts)', ['Own', 'Indirect', 'All']),
+      row('timesheet.approve', 'Approve or return', ['No', 'Direct', ROUTED]),
+      row('timesheet.approved_hours', 'See approved hours', ['Own', 'Indirect', 'All']),
+      row('timesheet.payroll_email', 'Receive the payroll email', ['No', 'No', IF_CHOSEN]),
+      row('timesheet.change_locked', 'Change an approved, locked day (with a trace)', ['No', 'No', 'Yes']),
       row('timesheet.status_today', "Today's status of employees", [
         ['all', 'All, shown as Working, On a trip or Away'],
         ['indirect', 'Indirect with the reason'],
         ['all', 'All with the reason'],
-        ['all', 'All with the reason'],
-        ['all', 'All with the reason'],
       ]),
-      row('timesheet.settings', 'Timesheet settings', ['No', 'No', 'No', 'No', 'Yes']),
+      row('timesheet.settings', 'Timesheet settings', ['No', 'No', 'Yes']),
     ],
   },
   {
@@ -152,12 +147,12 @@ export const PERMISSION_MODULES: readonly PermissionModule[] = [
     milestone: 16,
     live: false,
     rows: [
-      row('time_off.request', 'Request time off, see own balance', ['Yes (own)', 'Yes (own)', 'Yes (own)', 'Yes (own)', 'Yes (own)']),
-      row('time_off.see', 'See requests and balances', ['Own', 'Indirect', 'All', ['all', 'Approved only, all'], 'All']),
-      row('time_off.approve', 'Approve or reject', ['No', 'Direct', 'No', 'No', ROUTED]),
-      row('time_off.sick_leave', 'Sick leave records (type and period, no medical data)', ['Own', 'Indirect', ['all', 'All, create and edit'], ['all', 'All, view'], 'All']),
-      row('time_off.decisions', 'Vacation decisions (PDF)', ['Own', 'No', 'All', 'No', 'All']),
-      row('time_off.settings', 'Vacation policies, public holidays, decision recipients', ['No', 'No', 'No', 'No', 'Yes']),
+      row('time_off.request', 'Request time off, see own balance', ['Yes (own)', 'Yes (own)', 'Yes (own)']),
+      row('time_off.see', 'See requests and balances', ['Own', 'Indirect', 'All']),
+      row('time_off.approve', 'Approve or reject', ['No', 'Direct', ROUTED]),
+      row('time_off.sick_leave', 'Sick leave records (type and period, no medical data)', ['Own', 'Indirect', 'All']),
+      row('time_off.decisions', 'Vacation decisions (PDF)', ['Own', 'No', 'All']),
+      row('time_off.settings', 'Vacation policies, public holidays, decision recipients', ['No', 'No', 'Yes']),
     ],
   },
   {
@@ -166,11 +161,11 @@ export const PERMISSION_MODULES: readonly PermissionModule[] = [
     milestone: 17,
     live: false,
     rows: [
-      row('travel.own', 'Register own trips, add receipts', ['Yes (own)', 'Yes (own)', 'Yes (own)', 'Yes (own)', 'Yes (own)']),
-      row('travel.see', 'See trips and travel orders', [['own', 'Own and trips they take part in'], 'Indirect', 'All', 'No', 'All']),
-      row('travel.approve', 'Approve trips', ['No', 'Direct', 'No', 'No', ROUTED]),
-      row('travel.expenses', 'Expense statements and receipts', ['Own', ['direct', 'Direct, view'], ['all', 'All, process'], 'No', 'All']),
-      row('travel.settings', 'Company details, signatory, travel order recipients', ['No', 'No', 'No', 'No', 'Yes']),
+      row('travel.own', 'Register own trips, add receipts', ['Yes (own)', 'Yes (own)', 'Yes (own)']),
+      row('travel.see', 'See trips and travel orders', [['own', 'Own and trips they take part in'], 'Indirect', 'All']),
+      row('travel.approve', 'Approve trips', ['No', 'Direct', ROUTED]),
+      row('travel.expenses', 'Expense statements and receipts', ['Own', ['direct', 'Direct, view'], 'All']),
+      row('travel.settings', 'Company details, signatory, travel order recipients', ['No', 'No', 'Yes']),
     ],
   },
   {
@@ -179,9 +174,9 @@ export const PERMISSION_MODULES: readonly PermissionModule[] = [
     milestone: 19,
     live: false,
     rows: [
-      row('lateness.see', 'See arrivals, departures and lateness', ['Own', 'Indirect', 'All', 'No', 'All']),
-      row('lateness.email', 'Morning lateness email', ['No', ['indirect', 'If chosen in settings'], IF_CHOSEN, 'No', IF_CHOSEN]),
-      row('lateness.settings', 'Break rules and email recipients', ['No', 'No', 'No', 'No', 'Yes']),
+      row('lateness.see', 'See arrivals, departures and lateness', ['Own', 'Indirect', 'All']),
+      row('lateness.email', 'Morning lateness email', ['No', ['indirect', 'If chosen in settings'], IF_CHOSEN]),
+      row('lateness.settings', 'Break rules and email recipients', ['No', 'No', 'Yes']),
     ],
   },
   {
@@ -190,12 +185,12 @@ export const PERMISSION_MODULES: readonly PermissionModule[] = [
     milestone: 21,
     live: false,
     rows: [
-      row('planning.business_plan', 'See company business plan', [['all', 'Summary'], 'Yes', 'No', 'No', 'Yes']),
-      row('planning.business_plan.edit', 'Create and edit company business plan', ['No', 'No', 'No', 'No', 'Yes']),
-      row('planning.individual', 'See individual plans and KPIs', ['Own', 'Indirect', 'No', 'No', 'All']),
-      row('planning.individual.set', 'Set individual plans and KPIs', ['No', 'Direct', 'No', 'No', 'All']),
-      row('planning.department_kpis', 'Department KPIs', [['own', 'Own department, view'], ['all', 'If department head, edit'], 'No', 'No', 'All']),
-      row('planning.plan_vs_actual', 'Plan vs. actual screen', ['Own', 'Indirect', 'No', 'No', 'All']),
+      row('planning.business_plan', 'See company business plan', [['all', 'Summary'], 'Yes', 'Yes']),
+      row('planning.business_plan.edit', 'Create and edit company business plan', ['No', 'No', 'Yes']),
+      row('planning.individual', 'See individual plans and KPIs', ['Own', 'Indirect', 'All']),
+      row('planning.individual.set', 'Set individual plans and KPIs', ['No', 'Direct', 'All']),
+      row('planning.department_kpis', 'Department KPIs', [['own', 'Own department, view'], ['all', 'If department head, edit'], 'All']),
+      row('planning.plan_vs_actual', 'Plan vs. actual screen', ['Own', 'Indirect', 'All']),
     ],
   },
   {
@@ -204,10 +199,10 @@ export const PERMISSION_MODULES: readonly PermissionModule[] = [
     milestone: null,
     live: true,
     rows: [
-      row('settings.own', 'Own profile and notification preferences', ['Yes (own)', 'Yes (own)', 'Yes (own)', 'Yes (own)', 'Yes (own)']),
-      row('settings.team', 'Settings → Team (invite, workspace roles); owner rules as today', ['No', 'No', 'No', 'No', 'Yes']),
-      row('settings.workspace', 'Workspace settings of every module (including the Employees settings)', ['No', 'No', 'No', 'No', 'Yes']),
-      row('settings.roles_tab', 'See the Roles & permissions tab', ['Yes', 'Yes', 'Yes', 'Yes', 'Yes']),
+      row('settings.own', 'Own profile and notification preferences', ['Yes (own)', 'Yes (own)', 'Yes (own)']),
+      row('settings.team', 'Settings → Team (invite, workspace roles); owner rules as today', ['No', 'No', 'Yes']),
+      row('settings.workspace', 'Workspace settings of every module (including the Employees settings)', ['No', 'No', 'Yes']),
+      row('settings.roles_tab', 'See the Roles & permissions tab', ['Yes', 'Yes', 'Yes']),
     ],
   },
 ];
@@ -254,11 +249,9 @@ export function permissionMatrix() {
   };
 }
 
-/** The roles as Settings → Roles & permissions describes them (spec 9.1). */
+/** The roles as Settings → Roles & permissions describes them (spec 9.1; Administration and Payroll removed by CD-225). */
 export const ROLE_INFO: Record<FunctionalRole, { label: string; who: string; given: string }> = {
   employee: { label: 'Employee', who: 'Every employee with an account.', given: 'Automatic.' },
   manager: { label: 'Manager', who: 'Every employee with at least one active direct report.', given: 'From reporting lines. Cannot be set by hand.' },
-  administration: { label: 'Administration', who: 'HR and office administration staff.', given: 'Assigned by an Admin.' },
-  payroll: { label: 'Payroll', who: 'Payroll or accounting staff who process salaries.', given: 'Assigned by an Admin.' },
-  admin: { label: 'Admin', who: 'Every workspace owner and admin.', given: 'From the workspace role (Settings → Team).' },
+  admin: { label: 'Admin', who: 'Every workspace owner and admin. Admins do all HR work.', given: 'From the workspace role (Settings → Team).' },
 };

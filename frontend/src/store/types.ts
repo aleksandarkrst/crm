@@ -266,6 +266,8 @@ export interface Workspace {
   employeeNumberRequired: boolean;
   /** Employees change their own bank account. */
   employeeSelfEditBank: boolean;
+  /** The CEO on the org chart's company node (CD-225); Admins pick them there. */
+  ceoEmployeeId: string | null;
 }
 
 /** The signed-in user's profile (see ApiProfile). */

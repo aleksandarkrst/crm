@@ -17,6 +17,7 @@ import { type CallerAccess, FUNCTIONAL_ROLES, type FunctionalRole } from './call
 import type { AccountState, CreateEmployee, DataIssue, EmployeeListQuery, EmployeeStatus, UpdateEmployee } from './employees.schemas';
 import { BANK_FIELDS, editableFields, type EmployeeField, EMPLOYMENT_FIELDS, listFields, ORG_FIELDS, PERSONAL_FIELDS } from './field-rules';
 import { domesticFromIban, formatIban, maskIban, type ParsedAccount, parseBankAccount, shortMaskIban } from './iban';
+import { checkHeadMoves } from './heads';
 import { PeopleAccess } from './people-access';
 import { PeopleHistoryService } from './people-history.service';
 import { assertValidManager, lockReportingLines, queueManagerEmails } from './reporting-lines';
@@ -57,7 +58,6 @@ const rowColumns = {
   updatedAt: employees.updatedAt,
   invited: sql<boolean>`${pendingInvitation(employees.id)}`,
   hasReports: sql<boolean>`exists (select 1 from ${employees} r where r.manager_id = ${employees.id} and r.deactivated_at is null)`,
-  assignedRoles: sql<string[]>`array(select er.role::text from employee_roles er where er.employee_id = ${employees.id} order by er.role)`,
   workspaceRole: sql<string | null>`(select m.role from ${memberships} m where m.tenant_id = ${employees.tenantId} and m.user_id = ${employees.userId})`,
 };
 type EmployeeRow = Awaited<ReturnType<EmployeesService['rows']>>[number];
@@ -67,9 +67,11 @@ interface PeopleSettings {
   numberRequired: boolean;
   selfEditBank: boolean;
   workspaceName: string;
+  ceoEmployeeId: string | null;
   /**
-   * The top of the organisation (CD-224, B15): the one active employee without a manager, when
-   * exactly one has none. They are not a "No manager" data issue; with several, all are.
+   * The top of the organisation: the workspace's CEO (CD-225, Org structure → company node), else
+   * (CD-224, B15) the one active employee without a manager when exactly one has none. They are
+   * not a "No manager" data issue; without a CEO and with several, all are.
    */
   topEmployeeId: string | null;
 }
@@ -80,7 +82,6 @@ const accountOf = (r: { userId: string | null; invited: boolean }): AccountState
 function rolesOf(r: EmployeeRow): FunctionalRole[] {
   const roles = new Set<FunctionalRole>(['employee']);
   if (r.hasReports && !r.deactivatedAt) roles.add('manager');
-  for (const role of r.assignedRoles) roles.add(role as FunctionalRole);
   if (r.workspaceRole === 'owner' || r.workspaceRole === 'admin') roles.add('admin');
   return FUNCTIONAL_ROLES.filter((x) => roles.has(x));
 }
@@ -89,7 +90,7 @@ function rolesOf(r: EmployeeRow): FunctionalRole[] {
  * Employees (spec 4): the directory list, the card, create, update, the IBAN reveal and delete.
  * What each caller sees and may change comes from PeopleAccess (spec 9): directory fields for
  * everyone, employment fields for self, managers above and HR, personal details and the bank
- * account only for self, Administration and Admin. Lists never read employee_personal.
+ * account only for self, Admins. Lists never read employee_personal.
  */
 @Injectable()
 export class EmployeesService {
@@ -111,15 +112,15 @@ export class EmployeesService {
   /**
    * The directory (spec 5.4), sorted by last name, all rows (up to a few thousand) in one response.
    * Each row: directory fields; `employment` only for rows in the caller's scope; `hr` (account
-   * state, data issues) for Administration and Admin; `roles` for Admin.
+   * state, data issues) for Admins; `roles` for Admin.
    */
   list(ctx: TenantContext, query: EmployeeListQuery) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const access = await this.access.of(ctx, tx);
       const statuses = new Set<EmployeeStatus>(query.status ?? ['active', 'leaving']);
-      if (statuses.has('inactive') && !access.canSeeInactive) throw new ForbiddenException('Only Administration and Admins see employees who left');
+      if (statuses.has('inactive') && !access.canSeeInactive) throw new ForbiddenException('Only Admins see employees who left');
       if (query.account && !access.isAdmin) throw new ForbiddenException('Only Admins filter by account');
-      if (query.issues && !access.isHr) throw new ForbiddenException('Only Administration and Admins filter by data issues');
+      if (query.issues && !access.isHr) throw new ForbiddenException('Only Admins filter by data issues');
       const settings = await this.settings(tx, ctx.tenantId);
 
       let managerScope: string[] | undefined;
@@ -234,12 +235,13 @@ export class EmployeesService {
       editableFields: r.deactivatedAt && !access.isAdmin ? [] : editableFields(access, id, settings.selfEditBank),
       canRevealBank: access.canSeeBank(id),
       canSeeHistory: access.canSeeHistory(id),
-      canDelete: access.isAdmin && !r.userId && !r.firstLinkedAt,
+      // Delete (CD-225): only once deactivated, then for anyone, former app users included.
+      canDelete: access.isAdmin && !!r.deactivatedAt,
       // App access (spec 4.6, 4.7): Admins only.
       canInvite: access.isAdmin && !r.userId && !r.deactivatedAt,
       canLink: access.isAdmin && !r.userId && !r.deactivatedAt,
       canUnlink: access.isAdmin && !!r.userId,
-      // Leaving (spec 4.8): Administration and Admins; only an Admin on their own card.
+      // Leaving (spec 4.8): Admins; only an Admin on their own card.
       canDeactivate: access.isHr && !r.deactivatedAt && (!access.isSelf(id) || access.isAdmin),
       canReactivate: access.isHr && (!!r.deactivatedAt || !!r.employmentEndDate),
     };
@@ -301,12 +303,12 @@ export class EmployeesService {
 
   // ------------------------------------------------------------------ create and update
 
-  /** Administration and Admin (spec 9.3). Returns the card. */
+  /** Admins (spec 9.3). Returns the card. */
   create(ctx: TenantContext, input: CreateEmployee) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const access = await this.access.of(ctx, tx);
-        if (!access.isHr) throw new ForbiddenException('Only Administration and Admins add employees');
+        if (!access.isHr) throw new ForbiddenException('Only Admins add employees');
         const settings = await this.settings(tx, ctx.tenantId);
         if (settings.numberRequired && !input.employeeNumber) throw new BadRequestException('The employee number is required in this workspace');
         const org = await this.resolveOrg(tx, { departmentId: input.departmentId ?? null, teamId: input.teamId ?? null }, input);
@@ -346,13 +348,13 @@ export class EmployeesService {
   }
 
   /**
-   * Field by field (spec 4.5, 9.3, field-rules.ts): Admin everything; Administration everything
-   * except their own employment fields, department, team and manager; everyone else only their
+   * Field by field (spec 4.5, 9.3, field-rules.ts): Admin everything; everyone else only their
    * own work phone, personal details and (when the workspace allows it) bank account. A manager
    * change takes the reporting-line lock and the loop check. With `version` (If-Match), a field
-   * someone else changed since is a 409. Returns the card.
+   * someone else changed since is a 409. Moving a department head or team lead out of what they
+   * head is a 409 `heads_department` unless `clearHeadRoles` (heads.ts). Returns the card.
    */
-  update(ctx: TenantContext, id: string, input: UpdateEmployee, version?: Date) {
+  update(ctx: TenantContext, id: string, input: UpdateEmployee, version?: Date, clearHeadRoles = false) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const access = await this.access.of(ctx, tx);
@@ -380,7 +382,9 @@ export class EmployeesService {
           if (input[f] !== undefined) (work as Record<string, unknown>)[f] = input[f];
         }
         if (input.departmentId !== undefined || input.teamId !== undefined) {
-          Object.assign(work, await this.resolveOrg(tx, { departmentId: current.departmentId, teamId: current.teamId }, input));
+          const org = await this.resolveOrg(tx, { departmentId: current.departmentId, teamId: current.teamId }, input);
+          await checkHeadMoves(tx, [{ employeeId: id, fullName: current.fullName, from: current, to: org }], clearHeadRoles);
+          Object.assign(work, org);
         }
         if (input.managerId !== undefined && input.managerId !== current.managerId) {
           await assertValidManager(tx, id, input.managerId);
@@ -492,15 +496,15 @@ export class EmployeesService {
   // ------------------------------------------------------------------ reveal, delete, approvers
 
   /**
-   * The full IBAN (spec 4.4 "Show" and "Copy"), for the employee themselves, Administration and
-   * Admin only. Every reveal writes the audit entry "IBAN viewed".
+   * The full IBAN (spec 4.4 "Show" and "Copy"), for the employee themselves and Admins
+   * only. Every reveal writes the audit entry "IBAN viewed".
    */
   reveal(ctx: TenantContext, id: string, which: 'iban' | 'fxIban') {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const access = await this.access.of(ctx, tx);
       const [e] = await tx.select({ id: employees.id, deactivatedAt: employees.deactivatedAt }).from(employees).where(eq(employees.id, id));
       if (!e || (e.deactivatedAt && !access.canSeeInactive)) throw new NotFoundException('Employee not found');
-      if (!access.canSeeBank(id)) throw new ForbiddenException("Only the employee, Administration and Admins see a bank account");
+      if (!access.canSeeBank(id)) throw new ForbiddenException("Only the employee and Admins see a bank account");
       const [p] = await tx.select().from(employeePersonal).where(eq(employeePersonal.employeeId, id));
       const account = which === 'fxIban' && p?.fxSameAsIban !== false ? 'iban' : which;
       const sealed = account === 'iban' ? p?.ibanSealed : p?.fxIbanSealed;
@@ -514,18 +518,20 @@ export class EmployeesService {
   }
 
   /**
-   * Admin only (spec 4.8): an employee that was never linked to a member and has no data in any
-   * Workforce module (e.g. a wrong import row). Otherwise 409 "Deactivate instead". History and the
-   * audit log record it.
+   * Admin only (spec 4.8 as changed by CD-225): an employee who was deactivated first (status
+   * Inactive), former app users included (their membership went at deactivation). Active and
+   * leaving employees get 409 "Deactivate first". Heads, leads, reports and the CEO setting
+   * lose the reference (ON DELETE SET NULL); history keeps a "deleted" row and the audit log the
+   * name, so CRM history shows "Deleted employee".
    */
   remove(ctx: TenantContext, id: string) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const access = await this.access.of(ctx, tx);
         if (!access.isAdmin) throw new ForbiddenException('Only Admins delete employees');
-        const [e] = await tx.select({ fullName: employees.fullName, userId: employees.userId, firstLinkedAt: employees.firstLinkedAt }).from(employees).where(eq(employees.id, id)).for('update');
+        const [e] = await tx.select({ fullName: employees.fullName, deactivatedAt: employees.deactivatedAt }).from(employees).where(eq(employees.id, id)).for('update');
         if (!e) throw new NotFoundException('Employee not found');
-        if (e.userId || e.firstLinkedAt) throw new ConflictException(`${e.fullName} has or had an app account, so the record can't be deleted. Deactivate instead.`);
+        if (!e.deactivatedAt) throw new ConflictException(`${e.fullName} is still active. Deactivate first, then delete.`);
         // Workforce modules (14–21) add their checks here as they ship ("has 3 timesheets").
         await tx.delete(employees).where(eq(employees.id, id));
         await this.audit.record(tx, ctx, { action: 'employee.deleted', entityType: 'employee', entityId: id, data: { name: e.fullName } });
@@ -551,16 +557,20 @@ export class EmployeesService {
         numberRequired: tenants.employeeNumberRequired,
         selfEditBank: tenants.employeeSelfEditBank,
         workspaceName: tenants.name,
+        ceoEmployeeId: tenants.ceoEmployeeId,
       })
       .from(tenants)
       .where(eq(tenants.id, tenantId));
-    const tops = await tx
-      .select({ id: employees.id })
-      .from(employees)
-      .where(and(isNull(employees.managerId), isNull(employees.deactivatedAt)))
-      .limit(2);
-    const topEmployeeId = tops.length === 1 ? tops[0]!.id : null;
-    return { ...(t ?? { defaultWeeklyHours: 40, numberRequired: false, selfEditBank: true, workspaceName: '' }), topEmployeeId };
+    let topEmployeeId = t?.ceoEmployeeId ?? null;
+    if (!topEmployeeId) {
+      const tops = await tx
+        .select({ id: employees.id })
+        .from(employees)
+        .where(and(isNull(employees.managerId), isNull(employees.deactivatedAt)))
+        .limit(2);
+      topEmployeeId = tops.length === 1 ? tops[0]!.id : null;
+    }
+    return { ...(t ?? { defaultWeeklyHours: 40, numberRequired: false, selfEditBank: true, workspaceName: '', ceoEmployeeId: null }), topEmployeeId };
   }
 }
 
@@ -581,10 +591,10 @@ function likeBody(q: string): string {
 
 /** Why a patch was refused, for the 403 message. */
 function refusal(access: CallerAccess, id: string, refused: string[], selfEditBank: boolean): string {
-  if (!access.isHr && !access.isSelf(id)) return 'Only Administration and Admins edit other employees';
+  if (!access.isHr && !access.isSelf(id)) return 'Only Admins edit other employees';
   if (access.isSelf(id)) {
     const bank = refused.filter((f) => (BANK_FIELDS as readonly string[]).includes(f));
-    if (bank.length === refused.length && !selfEditBank) return 'In this workspace, only Administration and Admins change bank accounts';
+    if (bank.length === refused.length && !selfEditBank) return 'In this workspace, only Admins change bank accounts';
     const org = refused.filter((f) => (ORG_FIELDS as readonly string[]).includes(f) || (EMPLOYMENT_FIELDS as readonly string[]).includes(f));
     if (org.length) return `Only an Admin can change ${listFields(org)} on their own card`;
     return `On your own card you can change your work phone, personal details and bank account, not ${listFields(refused)}`;
@@ -614,7 +624,7 @@ function directory(r: EmployeeRow, status: EmployeeStatus) {
   };
 }
 
-/** Employment fields (spec 4.2): self, managers above, Administration, Admin. The reason for leaving only for HR. */
+/** Employment fields (spec 4.2): self, managers above, Admins. The reason for leaving only for Admins. */
 function employment(r: EmployeeRow, access: CallerAccess) {
   return {
     employeeNumber: r.employeeNumber,
@@ -644,8 +654,9 @@ function personal(p: typeof employeePersonal.$inferSelect | undefined) {
 }
 
 /**
- * Data issues (spec 5.2, 7.5, 10.3), for the Administration and Admin filter and warnings. "No
- * manager" leaves out the top of the organisation: the only active employee without a manager.
+ * Data issues (spec 5.2, 7.5, 10.3), for the Admins filter and warnings. "No
+ * manager" leaves out the top of the organisation: the CEO, else the only active employee without
+ * a manager.
  */
 function dataIssues(r: EmployeeRow, settings: PeopleSettings): DataIssue[] {
   if (r.deactivatedAt) return [];

@@ -23,7 +23,7 @@ export const LinkMember = z.object({ userId: z.uuid() });
 export type LinkMember = z.infer<typeof LinkMember>;
 
 /**
- * POST /api/people/employees/:id/deactivate (Administration, Admin; spec 4.8). `reportsManagerId`
+ * POST /api/people/employees/:id/deactivate (Admin; spec 4.8). `reportsManagerId`
  * is required (null = "No manager") when the person has active direct reports. Team leads and
  * department heads they hold are cleared unless a replacement is named.
  */
@@ -37,7 +37,7 @@ export const DeactivateEmployee = z.object({
 export type DeactivateEmployee = z.infer<typeof DeactivateEmployee>;
 
 /**
- * POST /api/people/employees/:id/reactivate (Administration, Admin; spec 4.8). An Inactive
+ * POST /api/people/employees/:id/reactivate (Admin; spec 4.8). An Inactive
  * employee (a rehire) needs the new employment start date; for someone Leaving it cancels the
  * scheduled deactivation.
  */

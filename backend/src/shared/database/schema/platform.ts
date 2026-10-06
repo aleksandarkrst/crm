@@ -26,6 +26,11 @@ export const tenants = pgTable(
     employeeDefaultWeeklyHours: smallint('employee_default_weekly_hours').notNull().default(40),
     employeeNumberRequired: boolean('employee_number_required').notNull().default(false),
     employeeSelfEditBank: boolean('employee_self_edit_bank').notNull().default(true),
+    // The CEO (CD-225): the top of the org chart's company node, an active employee of this
+    // workspace. Not a "No manager" data issue. The foreign key (id, ceo_employee_id) → employees
+    // (tenant_id, id) ON DELETE SET NULL (ceo_employee_id) is in drizzle/0046_tenant_ceo.sql;
+    // deactivating the CEO clears it (people's applyDeactivation).
+    ceoEmployeeId: uuid('ceo_employee_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -149,8 +154,8 @@ export const invitations = pgTable(
      */
     employeeId: uuid('employee_id'),
     /**
-     * Administration / Payroll (people's assigned roles) the inviting Admin ticked (CD-224): the
-     * new member's employee record gets them when the invitation is accepted.
+     * Administration / Payroll the inviting Admin ticked (CD-224). Unused since CD-225 removed those
+     * roles: always empty for new invitations, ignored on acceptance; a later migration may drop it.
      */
     assignedRoles: text('assigned_roles').array().$type<('administration' | 'payroll')[]>().notNull().default(sql`'{}'::text[]`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

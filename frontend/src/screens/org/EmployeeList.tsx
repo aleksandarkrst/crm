@@ -40,7 +40,7 @@ interface Props {
   sort: { key: SortKey; dir: 1 | -1 };
   onSort: (key: SortKey) => void;
   onOpen: (id: string) => void;
-  /** Ticking rows for bulk actions (Administration and Admin); null: no checkboxes. */
+  /** Ticking rows for bulk actions (Admins); null: no checkboxes. */
   selection: { selected: ReadonlySet<string>; toggle: (id: string) => void; setAll: (on: boolean) => void } | null;
   phone: boolean;
 }

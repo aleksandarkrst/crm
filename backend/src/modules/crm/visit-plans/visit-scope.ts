@@ -6,7 +6,7 @@ import { type CallerAccess, relationsFor } from '../../people';
  * - Admins (workspace owners and admins): every plan, and they create, change and delete any.
  * - Managers: their own plans and their reports' at any depth (list, report rows, Overview
  *   summary); they create, change and delete only their DIRECT reports' plans, not their own.
- * - Everyone else (Administration and Payroll included): their own plans, read-only.
+ * - Everyone else: their own plans, read-only.
  * Plans are keyed by member (user id), so reports without an account have none.
  */
 export class VisitScope {

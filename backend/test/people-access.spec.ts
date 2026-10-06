@@ -5,7 +5,7 @@ import { BANK_FIELDS, canSeeHistoryField, EDITABLE_FIELDS, editableFields, PERSO
 import { loopMessage } from '../src/modules/people/reporting-lines';
 
 const caller = (over: Partial<AccessData> = {}) =>
-  new CallerAccess({ tenantId: 't', userId: 'u-me', workspaceRole: 'member', employeeId: 'me', assignedRoles: [], directReportIds: [], reportIds: [], ...over });
+  new CallerAccess({ tenantId: 't', userId: 'u-me', workspaceRole: 'member', employeeId: 'me', directReportIds: [], reportIds: [], ...over });
 
 describe('approver rule (spec 7.4, table of 7.6 AC2)', () => {
   const admins = [
@@ -52,18 +52,19 @@ describe('approver rule (spec 7.4, table of 7.6 AC2)', () => {
 });
 
 describe('caller access (spec 9.1–9.5)', () => {
-  it('derives roles: Employee, Manager from active reports, assigned roles, Admin from the workspace role', () => {
+  it('derives roles: Employee, Manager from active reports, Admin from the workspace role; HR is Admin only (CD-225)', () => {
     expect([...caller().roles]).toEqual(['employee']);
     expect([...caller({ directReportIds: ['a'], reportIds: ['a', 'b'] }).roles]).toEqual(['employee', 'manager']);
-    expect(caller({ assignedRoles: ['payroll', 'administration'] }).isHr).toBe(true);
-    expect(caller({ assignedRoles: ['payroll'] }).isHr).toBe(false);
+    expect(caller().isHr).toBe(false);
+    expect(caller({ directReportIds: ['a'], reportIds: ['a'] }).isHr).toBe(false);
     expect(caller({ workspaceRole: 'owner' }).isAdmin).toBe(true);
     expect(caller({ workspaceRole: 'admin' }).isAdmin).toBe(true);
+    expect(caller({ workspaceRole: 'admin' }).isHr).toBe(true);
     // Roles are additive.
-    expect([...caller({ workspaceRole: 'admin', assignedRoles: ['payroll'], directReportIds: ['a'] }).roles].sort()).toEqual(['admin', 'employee', 'manager', 'payroll']);
+    expect([...caller({ workspaceRole: 'admin', directReportIds: ['a'] }).roles].sort()).toEqual(['admin', 'employee', 'manager']);
   });
 
-  it('employment fields: self, managers of the subtree at any depth, HR; not Payroll', () => {
+  it('employment fields: self, managers of the subtree at any depth, Admins', () => {
     const manager = caller({ directReportIds: ['a'], reportIds: ['a', 'b', 'c'] });
     expect(manager.canSeeEmployment('me')).toBe(true);
     expect(manager.canSeeEmployment('a')).toBe(true);
@@ -71,27 +72,27 @@ describe('caller access (spec 9.1–9.5)', () => {
     expect(manager.canSeeEmployment('x')).toBe(false);
     expect(manager.isDirectReport('a')).toBe(true);
     expect(manager.isDirectReport('c')).toBe(false);
-    expect(caller({ assignedRoles: ['payroll'] }).canSeeEmployment('x')).toBe(false);
-    expect(caller({ assignedRoles: ['administration'] }).canSeeEmployment('x')).toBe(true);
+    expect(caller().canSeeEmployment('x')).toBe(false);
+    expect(caller({ workspaceRole: 'admin' }).canSeeEmployment('x')).toBe(true);
   });
 
-  it('personal details and bank: self, Administration, Admin; never managers or Payroll', () => {
+  it('personal details and bank: self and Admins; never managers', () => {
     const manager = caller({ directReportIds: ['a'], reportIds: ['a'] });
     expect(manager.canSeePersonal('a')).toBe(false);
     expect(manager.canSeeBank('a')).toBe(false);
     expect(manager.canSeePersonal('me')).toBe(true);
-    expect(caller({ assignedRoles: ['payroll'] }).canSeeBank('x')).toBe(false);
-    expect(caller({ assignedRoles: ['administration'] }).canSeeBank('x')).toBe(true);
+    expect(caller().canSeeBank('x')).toBe(false);
+    expect(caller({ workspaceRole: 'owner' }).canSeeBank('x')).toBe(true);
     expect(caller({ workspaceRole: 'admin' }).canSeePersonal('x')).toBe(true);
   });
 
-  it('history: self without the reason for leaving; HR everything', () => {
+  it('history: self without the reason for leaving; Admins everything', () => {
     const me = caller();
     expect(me.canSeeHistory('me')).toBe(true);
     expect(me.canSeeHistory('x')).toBe(false);
     expect(canSeeHistoryField(me, 'me', 'leavingReason')).toBe(false);
     expect(canSeeHistoryField(me, 'me', 'iban')).toBe(true);
-    expect(canSeeHistoryField(caller({ assignedRoles: ['administration'] }), 'x', 'leavingReason')).toBe(true);
+    expect(canSeeHistoryField(caller({ workspaceRole: 'admin' }), 'x', 'leavingReason')).toBe(true);
     expect(canSeeHistoryField(caller({ directReportIds: ['a'], reportIds: ['a'] }), 'a', 'dateOfBirth')).toBe(false);
   });
 });
@@ -103,17 +104,8 @@ describe('who may change which field (spec 4.5, 9.3)', () => {
     expect(editableFields(caller(), 'x', true)).toEqual([]);
     // A manager edits nothing on their reports' cards.
     expect(editableFields(caller({ directReportIds: ['a'], reportIds: ['a'] }), 'a', true)).toEqual([]);
-    expect(editableFields(caller({ assignedRoles: ['payroll'] }), 'x', true)).toEqual([]);
-  });
-
-  it('Administration edits everything except their own employment fields, department, team and manager', () => {
-    const hr = caller({ assignedRoles: ['administration'] });
-    expect(editableFields(hr, 'x', false).sort()).toEqual([...EDITABLE_FIELDS].sort());
-    const own = editableFields(hr, 'me', false);
-    for (const f of ['managerId', 'departmentId', 'teamId', 'employmentStartDate', 'weeklyHours', 'employeeNumber']) expect(own).not.toContain(f);
-    // Their own bank account even when employees may not edit theirs.
-    expect(own).toContain('iban');
-    expect(own).toContain('jobTitle');
+    // Nobody but an Admin sets a department, team or manager, not even on their own card (CD-225).
+    for (const f of ['managerId', 'departmentId', 'teamId', 'jobTitle', 'employmentStartDate']) expect(editableFields(caller(), 'me', true)).not.toContain(f);
   });
 
   it('an Admin edits everything, their own card included', () => {

@@ -1,42 +1,37 @@
 /**
  * The permission matrix of milestones 12 and 13 (CD-142, spec 9.3, AC 9.7), table-driven from the
  * server's own definition (modules/people/permissions.ts): for every row of the live modules (CRM,
- * Org structure, Settings) and every role (Employee, Manager, Administration, Payroll, Admin, and
- * Manager + Payroll for "roles are additive"), an API call checks that the caller may do exactly
- * what the matrix says, for themselves, a direct report, an indirect report and anyone else. Rows
- * whose endpoints come with other issues are `it.todo` until they land. Then: assigning
- * Administration and Payroll (Admins only, effective on the next request, emailed, in history), a
- * workspace role change to admin, and no personal details or IBAN for callers who may not see them.
+ * Org structure, Settings) and every role (Employee, Manager, Admin; Administration and Payroll
+ * were removed by CD-225), an API call checks that the caller may do exactly what the matrix says,
+ * for themselves, a direct report, an indirect report and anyone else. Rows whose endpoints come
+ * with other issues are `it.todo` until they land. Then: leftover Administration / Payroll rows
+ * give nothing and their routes are gone, a workspace role change to admin, and no personal
+ * details or IBAN for callers who may not see them.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { allows, type PermissionRelation, PERMISSION_MODULES, permissionMatrix, permissionRow } from '../../src/modules/people/permissions';
 import type { FunctionalRole } from '../../src/modules/people/caller-access';
-import { call, createTenant, eventually, firstFunnel, mailTo, ok, type Session, signIn } from './helpers';
-import { asTenantSql, createDepartment, IBAN, joinAsEmployee, START } from './people-helpers';
+import { call, createTenant, firstFunnel, ok, type Session, signIn } from './helpers';
+import { asTenantSql, createDepartment, grantRole, IBAN, joinAsEmployee, START } from './people-helpers';
 
-type Caller = 'employee' | 'manager' | 'administration' | 'payroll' | 'admin' | 'manager+payroll';
-type Person = Caller | 'lead' | 'report' | 'other';
-const CALLERS: Caller[] = ['employee', 'manager', 'administration', 'payroll', 'admin', 'manager+payroll'];
+type Caller = 'employee' | 'manager' | 'admin';
+/** `legacy` holds leftover Administration and Payroll rows (CD-225 removed the roles). */
+type Person = Caller | 'lead' | 'other' | 'legacy';
+const CALLERS: Caller[] = ['employee', 'manager', 'admin'];
 /** Each caller's functional roles, as PeopleAccess derives them from the fixture below. */
 const ROLES: Record<Caller, FunctionalRole[]> = {
   employee: ['employee'],
   manager: ['employee', 'manager'],
-  administration: ['employee', 'administration'],
-  payroll: ['employee', 'payroll'],
   admin: ['employee', 'admin'],
-  'manager+payroll': ['employee', 'manager', 'payroll'],
 };
 /**
- * The org: manager → lead → employee (so the employee is the manager's indirect report),
- * manager+payroll → report. "other" reports to nobody. The admin is the workspace owner.
+ * The org: manager → lead → employee (so the employee is the manager's indirect report). "other"
+ * reports to nobody. The admin is the workspace owner.
  */
 const RELATED: Record<Caller, Partial<Record<PermissionRelation, Person>>> = {
   employee: { self: 'employee', other: 'other' },
   manager: { self: 'manager', direct: 'lead', indirect: 'employee', other: 'other' },
-  administration: { self: 'administration', other: 'other' },
-  payroll: { self: 'payroll', other: 'other' },
   admin: { self: 'admin', other: 'other' },
-  'manager+payroll': { self: 'manager+payroll', direct: 'report', other: 'other' },
 };
 
 const who = {} as Record<Person, Session>;
@@ -57,18 +52,17 @@ const allowedBy = (status: number, yes: number) => {
 };
 
 beforeAll(async () => {
-  const people: Person[] = [...CALLERS, 'lead', 'report', 'other'];
+  const people: Person[] = [...CALLERS, 'lead', 'other', 'legacy'];
   for (const p of people) who[p] = await signIn(`perm-${p.replace('+', '-')}`);
   tenant = await createTenant(who.admin, 'Permission matrix');
   emp.admin = (await ok('GET', '/people/access', as('admin'))).employeeId;
   for (const p of people.filter((x) => x !== 'admin')) emp[p] = await joinAsEmployee(who.admin, tenant, who[p]);
-  await ok('PUT', `/people/employees/${emp.administration}/roles/administration`, as('admin'), 200);
-  await ok('PUT', `/people/employees/${emp.payroll}/roles/payroll`, as('admin'), 200);
-  await ok('PUT', `/people/employees/${emp['manager+payroll']}/roles/payroll`, as('admin'), 200);
+  // Rows of the removed roles stay in the table (expand/contract) but give nothing.
+  await grantRole(tenant, emp.legacy, 'administration');
+  await grantRole(tenant, emp.legacy, 'payroll');
   const reportsTo: [Person, Person][] = [
     ['lead', 'manager'],
     ['employee', 'lead'],
-    ['report', 'manager+payroll'],
   ];
   for (const [p, m] of reportsTo) await ok('PATCH', `/people/employees/${emp[p]}`, { ...as('admin'), body: { managerId: emp[m] } }, 200);
   // Everyone has personal details and a bank account, so the sections and the reveal have something to show.
@@ -238,7 +232,7 @@ const CASES: Record<string, Case> = {
   },
   'org.employees.manage': {
     probe: async (c, t, rel) => {
-      // Work fields of the person; and on yourself also an employment field, which Administration may not change ("All except own employment fields").
+      // Work fields of the person; and on yourself also an employment field (Admins only).
       const work = allowedBy((await call('PATCH', `/people/employees/${emp[t]}`, { ...as(c), body: { jobTitle: `Title by ${c}` } })).status, 200);
       if (rel === 'self') {
         const employment = allowedBy((await call('PATCH', `/people/employees/${emp[t]}`, { ...as(c), body: { weeklyHours: 39 } })).status, 200);
@@ -255,29 +249,42 @@ const CASES: Record<string, Case> = {
     probe: async (c, t) => {
       const r = await call('PATCH', `/people/employees/${emp[t]}`, { ...as(c), body: { departmentId } });
       if (r.status === 200) await ok('PATCH', `/people/employees/${emp[t]}`, { ...as('admin'), body: { departmentId: null } }, 200);
+      const m = await call('PATCH', `/people/employees/${emp[t]}`, { ...as(c), body: { managerId: null } });
+      expect(allowedBy(m.status, 200), `${c} → ${t}: manager agrees with department`).toBe(r.status === 200);
       return allowedBy(r.status, 200);
     },
-    // "All except own" for Administration.
-    expect: (c, rel) => (rel === 'self' ? ROLES[c].includes('admin') : allows('org.reporting', ROLES[c], rel)),
+  },
+  'org.structure': {
+    relations: ['other'],
+    probe: async (c) => {
+      const r = await call('POST', '/people/departments', { ...as(c), body: { name: `Dept by ${c} ${Date.now()}` } });
+      if (r.status === 201) await ok('DELETE', `/people/departments/${r.body.id}`, as('admin'));
+      return allowedBy(r.status, 201);
+    },
+  },
+  'org.import': { relations: ['other'], probe: async (c) => allowedBy((await call('GET', '/people/import/template', as(c))).status, 200) },
+  'org.export': {
+    relations: ['other'],
+    probe: async (c, t) => allowedBy((await call('POST', '/people/employees/export', { ...as(c), body: { employeeIds: [emp[t]] } })).status, 200),
+  },
+  'org.deactivate': {
+    relations: ['other'],
+    probe: async (c) => {
+      const e = await ok('POST', '/people/employees', { ...as('admin'), body: { firstName: 'Temp', lastName: `Leaver ${c}`, employmentStartDate: START } });
+      const r = await call('POST', `/people/employees/${e.id}/deactivate`, { ...as(c), body: { lastWorkingDay: new Date().toISOString().slice(0, 10) } });
+      return allowedBy(r.status, 200);
+    },
   },
   'org.delete': {
     relations: ['other'],
+    // Only once deactivated (CD-225): an active employee is a 409 even for an Admin.
     probe: async (c) => {
       const e = await ok('POST', '/people/employees', { ...as('admin'), body: { firstName: 'Temp', lastName: `Delete ${c}`, employmentStartDate: START } });
+      expect((await call('DELETE', `/people/employees/${e.id}`, as(c))).status, `${c}: active`).toBe(c === 'admin' ? 409 : 403);
+      await asTenantSql(tenant, `update employees set employment_end_date = '2026-01-31', deactivated_at = now() where id = $1`, [e.id]);
       const r = await call('DELETE', `/people/employees/${e.id}`, as(c));
       if (r.status !== 204) await ok('DELETE', `/people/employees/${e.id}`, as('admin'));
       return allowedBy(r.status, 204);
-    },
-  },
-  'org.roles': {
-    relations: ['other'],
-    probe: async (c, t) => {
-      const r = await call('PUT', `/people/employees/${emp[t]}/roles/payroll`, as(c));
-      if (r.status === 200) await ok('DELETE', `/people/employees/${emp[t]}/roles/payroll`, as(c));
-      const removal = await call('DELETE', `/people/employees/${emp.payroll}/roles/payroll`, as(c));
-      if (removal.status === 204) await ok('PUT', `/people/employees/${emp.payroll}/roles/payroll`, as('admin'), 200);
-      expect(allowedBy(removal.status, 204), `${c}: remove agrees with grant`).toBe(r.status === 200);
-      return allowedBy(r.status, 200);
     },
   },
   'org.history': {
@@ -299,16 +306,12 @@ const CASES: Record<string, Case> = {
   },
   'settings.roles_tab': {
     relations: ['other'],
-    probe: async (c) => allowedBy((await call('GET', '/people/permissions', as(c))).status, 200) && allowedBy((await call('GET', '/people/roles', as(c))).status, 200),
+    probe: async (c) => allowedBy((await call('GET', '/people/permissions', as(c))).status, 200),
   },
 };
 
 /** Rows whose endpoints other milestone-13 issues build; they become tests when those land. */
 const LATER: Record<string, string> = {
-  'org.structure': 'CD-138 (departments and teams API)',
-  'org.import': 'CD-141 (employee import)',
-  'org.export': 'CD-137 (employee list export)',
-  'org.deactivate': 'CD-140 (deactivate and reactivate)',
   'org.invite': 'CD-140 (invite, link and unlink)',
 };
 
@@ -341,7 +344,7 @@ for (const module of LIVE) {
   });
 }
 
-it('inactive employees: the directory shows them to Administration and Admins only ("All, incl. inactive")', async () => {
+it('inactive employees: the directory shows them to Admins only ("All, incl. inactive")', async () => {
   const gone = await ok('POST', '/people/employees', { ...as('admin'), body: { firstName: 'Gone', lastName: 'Matrix', employmentStartDate: START } });
   await asTenantSql(tenant, `update employees set employment_end_date = '2026-01-31', deactivated_at = now() where id = $1`, [gone.id]);
   const cells = permissionRow('org.directory').cells;
@@ -354,77 +357,31 @@ it('inactive employees: the directory shows them to Administration and Admins on
   }
 });
 
-describe('roles are additive (AC 9.7.2)', () => {
-  it('Manager + Payroll: the report’s employment fields and visit plans (Manager), approved data later (Payroll), never personal details or the IBAN', async () => {
-    const card = await cardOf('manager+payroll', 'report');
-    expect(card).toHaveProperty('employment');
-    expect(card).not.toHaveProperty('personal');
-    expect(card).not.toHaveProperty('bank');
-    expect((await call('GET', `/crm/visit-plans/${plans.report}`, as('manager+payroll'))).status).toBe(200);
-    expect((await call('PATCH', `/crm/visit-plans/${plans.report}`, { ...as('manager+payroll'), body: { note: 'Additive' } })).status).toBe(200);
-    // Payroll alone gets none of it.
-    expect(await cardOf('payroll', 'report')).not.toHaveProperty('employment');
-    expect((await call('GET', `/crm/visit-plans/${plans.report}`, as('payroll'))).status).toBe(404);
-  });
-});
-
-describe('assigning Administration and Payroll (AC 9.7.3)', () => {
-  it('only Admins assign; Admin and Manager are not assignable', async () => {
-    for (const c of CALLERS.filter((x) => x !== 'admin')) {
-      const r = await call('PUT', `/people/employees/${emp.other}/roles/administration`, as(c));
-      expect(r.status, c).toBe(403);
-      expect(r.body.message).toBe('Only Admins assign Administration and Payroll');
+describe('Administration and Payroll are gone (CD-225)', () => {
+  it('a leftover Administration or Payroll row gives nothing: Employee only, no HR data, no HR work', async () => {
+    expect((await ok('GET', '/people/access', as('legacy'))).roles).toEqual(['employee']);
+    expect((await call('GET', '/people/employees?status=inactive', as('legacy'))).status).toBe(403);
+    const card = await cardOf('legacy', 'employee');
+    for (const section of ['employment', 'personal', 'bank', 'hr']) expect(card).not.toHaveProperty(section);
+    // Members get 403 on every HR write: create, edit others, manager, department, import, export, deactivate.
+    for (const c of ['legacy', 'manager', 'employee'] as Person[]) {
+      expect((await call('POST', '/people/employees', { ...as(c), body: { firstName: 'No', lastName: 'Way', employmentStartDate: START } })).status, c).toBe(403);
+      expect((await call('PATCH', `/people/employees/${emp.other}`, { ...as(c), body: { jobTitle: 'Nope' } })).status, c).toBe(403);
+      expect((await call('PATCH', `/people/employees/${emp.other}`, { ...as(c), body: { managerId: emp.manager } })).status, c).toBe(403);
+      expect((await call('PATCH', `/people/employees/${emp.other}`, { ...as(c), body: { departmentId } })).status, c).toBe(403);
+      expect((await call('POST', '/people/reporting-lines', { ...as(c), body: { employeeIds: [emp.other], managerId: emp.manager } })).status, c).toBe(403);
+      expect((await call('POST', '/people/assignments', { ...as(c), body: { departmentId, employeeIds: [emp.other] } })).status, c).toBe(403);
+      expect((await call('GET', '/people/import/template', as(c))).status, c).toBe(403);
+      expect((await call('POST', '/people/employees/export', { ...as(c), body: { employeeIds: [emp.other] } })).status, c).toBe(403);
+      expect((await call('POST', `/people/employees/${emp.other}/deactivate`, { ...as(c), body: { lastWorkingDay: '2031-01-01' } })).status, c).toBe(403);
     }
-    for (const role of ['admin', 'manager', 'employee', 'owner']) expect((await call('PUT', `/people/employees/${emp.other}/roles/${role}`, as('admin'))).status, role).toBe(400);
   });
 
-  it('takes effect on the next request, is in the history and emails the employee', async () => {
-    expect((await call('GET', '/people/employees?status=inactive', as('other'))).status).toBe(403);
-    const granted = await ok('PUT', `/people/employees/${emp.other}/roles/administration`, as('admin'), 200);
-    expect(granted).toEqual({ employeeId: emp.other, roles: ['administration'] });
-    // Granting again changes nothing.
-    expect(await ok('PUT', `/people/employees/${emp.other}/roles/administration`, as('admin'), 200)).toEqual(granted);
-    expect((await ok('GET', '/people/access', as('other'))).roles).toEqual(['employee', 'administration']);
-    expect((await call('GET', '/people/employees?status=inactive', as('other'))).status).toBe(200);
-    expect(await cardOf('other', 'employee')).toHaveProperty('personal.privateEmail', privateEmail('employee'));
-    const holders = await ok('GET', '/people/roles', as('employee'));
-    expect(holders.administration.map((h: { employeeId: string }) => h.employeeId)).toContain(emp.other);
-    expect((await cardOf('admin', 'other')).roles).toEqual(['employee', 'administration']);
-
-    const mail = await eventually(async () => (await mailTo(who.admin, who.other.email)).find((m) => m.subject.startsWith('You now have the Administration role')), 'role granted email');
-    expect(mail.text).toContain('Perm-admin Tester gave you the Administration role');
-    expect(mail.text).not.toContain(IBAN);
-
-    await ok('DELETE', `/people/employees/${emp.other}/roles/administration`, as('admin'));
-    expect((await ok('GET', '/people/access', as('other'))).roles).toEqual(['employee']);
-    expect((await call('GET', '/people/employees?status=inactive', as('other'))).status).toBe(403);
-    expect(await cardOf('other', 'employee')).not.toHaveProperty('personal');
-    await eventually(async () => (await mailTo(who.admin, who.other.email)).find((m) => m.subject.startsWith('Your Administration role in')), 'role removed email');
-
-    const history = await ok('GET', `/people/history?entityType=employee&entityId=${emp.other}`, as('admin'));
-    // Newest first; the payroll rows before them are the matrix's "Assign Administration and Payroll" probe.
-    const rows = history.entries.filter((e: { field: string }) => e.field === 'roles').slice(0, 2);
-    expect(rows.map((e: { oldValue: unknown; newValue: unknown }) => [e.oldValue, e.newValue])).toEqual([
-      [['administration'], []],
-      [[], ['administration']],
-    ]);
-    expect(rows[0].actor).toMatchObject({ userId: who.admin.userId });
-  });
-
-  it('works for an employee without an account; it applies once they have one', async () => {
-    const e = await ok('POST', '/people/employees', { ...as('admin'), body: { firstName: 'No', lastName: 'Account', employmentStartDate: START } });
-    expect(await ok('PUT', `/people/employees/${e.id}/roles/payroll`, as('admin'), 200)).toEqual({ employeeId: e.id, roles: ['payroll'] });
-    const holders = await ok('GET', '/people/roles', as('admin'));
-    expect(holders.payroll.find((h: { employeeId: string }) => h.employeeId === e.id)).toMatchObject({ hasAccount: false, userId: null });
-    await ok('DELETE', `/people/employees/${e.id}/roles/payroll`, as('admin'));
-    await ok('DELETE', `/people/employees/${e.id}`, as('admin'));
-  });
-
-  it('lists Admins from workspace roles and Managers with their number of reports', async () => {
-    const holders = await ok('GET', '/people/roles', as('payroll'));
-    expect(holders.admins.map((a: { userId: string }) => a.userId)).toEqual([who.admin.userId]);
-    const managers = Object.fromEntries(holders.managers.map((m: { employeeId: string; reports: number }) => [m.employeeId, m.reports]));
-    expect(managers).toEqual({ [emp.manager]: 1, [emp.lead]: 1, [emp['manager+payroll']]: 1 });
+  it('the role routes are gone', async () => {
+    expect((await call('GET', '/people/roles', as('admin'))).status).toBe(404);
+    expect((await call('PUT', `/people/employees/${emp.other}/roles/administration`, as('admin'))).status).toBe(404);
+    expect((await call('DELETE', `/people/employees/${emp.legacy}/roles/payroll`, as('admin'))).status).toBe(404);
+    expect(permissionMatrix().roles.map((r) => r.id)).toEqual(['employee', 'manager', 'admin']);
   });
 });
 
@@ -435,13 +392,13 @@ describe('workspace role change (AC 9.7.4)', () => {
     expect((await ok('GET', '/people/access', as('other'))).roles).toEqual(['employee', 'admin']);
     expect(await cardOf('other', 'employee')).toHaveProperty('bank.iban.last4');
     expect((await call('GET', `/crm/visit-plans/${plans.employee}`, as('other'))).status).toBe(200);
-    expect((await call('PUT', `/people/employees/${emp.lead}/roles/payroll`, as('other'))).status).toBe(200);
-    await ok('DELETE', `/people/employees/${emp.lead}/roles/payroll`, as('other'));
+    expect((await call('PATCH', `/people/employees/${emp.lead}`, { ...as('other'), body: { jobTitle: 'Lead' } })).status).toBe(200);
 
     await ok('PATCH', `/team/members/${who.other.userId}`, { ...as('admin'), body: { role: 'member' } }, 200);
     expect((await ok('GET', '/people/access', as('other'))).roles).toEqual(['employee']);
     expect(await cardOf('other', 'employee')).not.toHaveProperty('bank');
     expect((await call('GET', `/crm/visit-plans/${plans.employee}`, as('other'))).status).toBe(404);
+    expect((await call('PATCH', `/people/employees/${emp.lead}`, { ...as('other'), body: { jobTitle: 'Lead again' } })).status).toBe(403);
   });
 });
 

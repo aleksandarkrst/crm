@@ -11,27 +11,35 @@ const code = z
   .transform((v) => (v === '' ? null : v))
   .nullish();
 
-/** POST /api/people/departments */
-export const CreateDepartment = z.object({ name: orgName, code, headEmployeeId: z.uuid().nullish() });
+/**
+ * Moving a department head or team lead elsewhere ends that role: refused with 409
+ * `heads_department` unless this is true, then the role is cleared (CD-225, heads.ts).
+ */
+const clearHeadRoles = z.boolean().optional();
+
+/** POST /api/people/departments. The head is put in the department (CD-225). */
+export const CreateDepartment = z.object({ name: orgName, code, headEmployeeId: z.uuid().nullish(), clearHeadRoles });
 export type CreateDepartment = z.infer<typeof CreateDepartment>;
 
-/** PATCH /api/people/departments/:id */
-export const UpdateDepartment = nonEmptyPatch(z.object({ name: orgName, code, headEmployeeId: z.uuid().nullable() }).partial());
+/** PATCH /api/people/departments/:id. A new head is put in the department (CD-225). */
+export const UpdateDepartment = nonEmptyPatch(z.object({ name: orgName, code, headEmployeeId: z.uuid().nullable() }).partial()).and(z.object({ clearHeadRoles }));
 export type UpdateDepartment = z.infer<typeof UpdateDepartment>;
 
-/** POST /api/people/teams */
-export const CreateTeam = z.object({ departmentId: z.uuid(), name: orgName, leadEmployeeId: z.uuid().nullish() });
+/** POST /api/people/teams. The lead is put in the team and its department (CD-225). */
+export const CreateTeam = z.object({ departmentId: z.uuid(), name: orgName, leadEmployeeId: z.uuid().nullish(), clearHeadRoles });
 export type CreateTeam = z.infer<typeof CreateTeam>;
 
 /**
  * PATCH /api/people/teams/:id. `departmentId` moves the team (its members move with it).
  * `makeMembersReport` with a new lead: "Make team members report to <lead>" (spec 6.3) for members
  * with no manager or who reported to the previous lead. Off unless sent: a lead alone never
- * changes anyone's manager.
+ * changes anyone's manager. A new lead is put in the team and its department (CD-225).
  */
 export const UpdateTeam = nonEmptyPatch(
   z.object({ name: orgName, departmentId: z.uuid(), leadEmployeeId: z.uuid().nullable(), makeMembersReport: z.boolean() }).partial(),
-).refine((v) => !v.makeMembersReport || v.leadEmployeeId !== undefined, { message: 'makeMembersReport needs leadEmployeeId' });
+)
+  .refine((v) => !v.makeMembersReport || v.leadEmployeeId !== undefined, { message: 'makeMembersReport needs leadEmployeeId' })
+  .and(z.object({ clearHeadRoles }));
 export type UpdateTeam = z.infer<typeof UpdateTeam>;
 
 /** GET /api/people/teams/:id/lead-preview?leadEmployeeId= */
@@ -49,7 +57,7 @@ export type AssignmentPreview = z.infer<typeof AssignmentPreview>;
  * department, and in the team when given (moving them out of any other team). `managers` sets
  * Reports to of some of them at the same time (the prefilled suggestion, as the user left it).
  */
-export const Assign = AssignmentPreview.extend({ managers: z.record(z.uuid(), z.uuid().nullable()).optional() });
+export const Assign = AssignmentPreview.extend({ managers: z.record(z.uuid(), z.uuid().nullable()).optional(), clearHeadRoles });
 export type Assign = z.infer<typeof Assign>;
 
 /** POST /api/people/reporting-lines ("Set manager" on one or many): `managerId` null removes it. */

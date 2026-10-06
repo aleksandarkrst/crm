@@ -3,7 +3,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
 import type { Tx } from '../../shared/database/database.service';
-import { type DeactivationPlan, departments, employeePersonal, employeeRoles, employees, type LeavingReason, teams, tenants } from '../../shared/database/schema';
+import { type DeactivationPlan, departments, employeePersonal, employees, type LeavingReason, teams, tenants } from '../../shared/database/schema';
 import type { JobsService } from '../../shared/events/jobs.service';
 import { removeMembership, withdrawEmployeeInvitations } from '../identity';
 import { assertValidManager, type ManagerChange, queueManagerEmails } from './reporting-lines';
@@ -44,7 +44,7 @@ export async function workspaceToday(tx: Tx, tenantId: string, now = new Date())
 /**
  * Why a member's employee record can't be merged into another one by "Link to member" (spec 4.6):
  * it holds data of its own. Empty for a record made automatically when they joined (no
- * department, manager, reports, leads, roles or personal details). Workforce modules (14–21) add
+ * department, manager, reports, leads or personal details). Workforce modules (14–21) add
  * their data here as they ship.
  */
 export async function mergeBlockers(tx: Tx, employeeId: string): Promise<string[]> {
@@ -55,7 +55,6 @@ export async function mergeBlockers(tx: Tx, employeeId: string): Promise<string[
       reports: sql<number>`(select count(*)::int from ${employees} r where r.manager_id = ${employees.id})`,
       leads: sql<number>`(select count(*)::int from ${teams} t where t.lead_employee_id = ${employees.id})`,
       heads: sql<number>`(select count(*)::int from ${departments} d where d.head_employee_id = ${employees.id})`,
-      roles: sql<number>`(select count(*)::int from ${employeeRoles} er where er.employee_id = ${employees.id})`,
       personal: sql<boolean>`exists (select 1 from ${employeePersonal} p where p.employee_id = ${employees.id})`,
     })
     .from(employees)
@@ -67,7 +66,6 @@ export async function mergeBlockers(tx: Tx, employeeId: string): Promise<string[
   if (e.reports) out.push('direct reports');
   if (e.leads) out.push('a team they lead');
   if (e.heads) out.push('a department they head');
-  if (e.roles) out.push('HR roles');
   if (e.personal) out.push('personal details or a bank account');
   return out;
 }
@@ -168,6 +166,8 @@ export async function applyDeactivation(tx: Tx, deps: LifecycleDeps, ctx: Tenant
     .set({ deactivatedAt: new Date(), employmentEndDate: input.lastWorkingDay, leavingReason: input.reason, deactivationPlan: null })
     .where(eq(employees.id, e.id));
   await withdrawEmployeeInvitations(tx, ctx.tenantId, e.id);
+  // The CEO of the org chart's company node (CD-225) must be active: someone leaving stops being it.
+  await tx.update(tenants).set({ ceoEmployeeId: null }).where(and(eq(tenants.id, ctx.tenantId), eq(tenants.ceoEmployeeId, e.id)));
   // Access ends: the membership goes (identity's rules: never the last owner).
   if (e.userId) await removeMembership(tx, deps.audit, ctx, e.userId, 'member.deactivated');
   await deps.jobs.send('people.employee-deactivated', { tenantId: ctx.tenantId, employeeId: e.id, userId: e.userId }, tx);

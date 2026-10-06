@@ -1,7 +1,7 @@
 /**
  * Departments, teams and reporting lines (CD-138, CD-139): `/api/people/departments`, `/teams`,
  * `/assignments` and `/reporting-lines`. Reading is for every member; changes are for
- * Administration and Admins (the API answers 403 otherwise).
+ * Admins (the API answers 403 otherwise).
  */
 import { api } from './api';
 
@@ -57,7 +57,7 @@ export interface ApiDirectoryRow {
 
 export interface ApiPeopleAccess {
   employeeId: string | null;
-  roles: ('employee' | 'manager' | 'administration' | 'payroll' | 'admin')[];
+  roles: ('employee' | 'manager' | 'admin')[];
   directReportIds: string[];
   reportIds: string[];
 }
@@ -86,13 +86,18 @@ export interface AssignmentRow extends ApiOrgPerson {
   suggestedManagerName: string | null;
 }
 
-export interface DepartmentInput {
+/** Confirms moving a department head or team lead elsewhere, which ends that role (CD-225, lib/headMoves.ts). */
+interface HeadMove {
+  clearHeadRoles?: boolean;
+}
+
+export interface DepartmentInput extends HeadMove {
   name?: string;
   code?: string | null;
   headEmployeeId?: string | null;
 }
 
-export interface TeamInput {
+export interface TeamInput extends HeadMove {
   name?: string;
   departmentId?: string;
   leadEmployeeId?: string | null;
@@ -110,7 +115,7 @@ export const orgApi = {
   deleteDepartment: (id: string) => api<null>(`/people/departments/${id}`, { method: 'DELETE' }),
   departmentUsage: (id: string) => api<{ id: string; name: string; teams: { id: string; name: string }[]; usedBy: string[]; members: ApiOrgPerson[] }>(`/people/departments/${id}/usage`),
 
-  createTeam: (input: { departmentId: string; name: string; leadEmployeeId?: string | null }) => api<TeamSaved>('/people/teams', { method: 'POST', json: input }),
+  createTeam: (input: { departmentId: string; name: string; leadEmployeeId?: string | null } & HeadMove) => api<TeamSaved>('/people/teams', { method: 'POST', json: input }),
   updateTeam: (id: string, input: TeamInput) => api<TeamSaved>(`/people/teams/${id}`, { method: 'PATCH', json: input }),
   deleteTeam: (id: string) => api<null>(`/people/teams/${id}`, { method: 'DELETE' }),
   teamUsage: (id: string) => api<{ id: string; name: string; departmentId: string; members: ApiOrgPerson[] }>(`/people/teams/${id}/usage`),
@@ -119,7 +124,7 @@ export const orgApi = {
   previewAssignment: (input: { departmentId: string; teamId?: string | null; employeeIds: string[] }) =>
     api<{ employees: AssignmentRow[] }>('/people/assignments/preview', { method: 'POST', json: input }),
   /** "Add people" / "Set department and team"; `managers` sets Reports to of some of them. */
-  assign: (input: { departmentId: string; teamId?: string | null; employeeIds: string[]; managers?: Record<string, string | null> }) =>
+  assign: (input: { departmentId: string; teamId?: string | null; employeeIds: string[]; managers?: Record<string, string | null> } & HeadMove) =>
     api<{ updated: number; managersChanged: string[] }>('/people/assignments', { method: 'POST', json: input }),
   /** "Set manager" for one or many; null removes it. */
   setManager: (employeeIds: string[], managerId: string | null) => api<{ changed: string[] }>('/people/reporting-lines', { method: 'POST', json: { employeeIds, managerId } }),

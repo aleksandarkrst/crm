@@ -17,7 +17,7 @@ export function usePhone(): boolean {
   return phone;
 }
 
-/** Warning icons for Administration and Admin (spec 5.3): no manager, start date missing. */
+/** Warning icons for Admins (spec 5.3): no manager, start date missing. */
 export function IssueIcons({ e }: { e: ApiEmployee }) {
   const issues = e.hr?.dataIssues ?? [];
   const shown = [issues.includes('no_manager') && 'No manager', issues.includes('no_start_date') && 'Start date missing'].filter(Boolean) as string[];
@@ -144,10 +144,31 @@ export function MultiSelect({
 }
 
 /**
- * Picks one employee by typing (name, job title, email): the Manager filter and "Set manager".
- * Shows the first 50 matches; `none` adds a choice for "nobody".
+ * Picks one employee by typing (name, job title, email): the Manager filter, "Set manager" and the
+ * CEO. Shows the first 50 matches; `none` adds a choice for "nobody", `me` one for yourself.
  */
-export function EmployeePicker({ employees, value, onChange, placeholder, testId, none, autoFocus, inline }: { employees: readonly ApiEmployee[]; value: string | null; onChange: (id: string | null) => void; placeholder: string; testId: string; none?: string; autoFocus?: boolean; inline?: boolean }) {
+export function EmployeePicker({
+  employees,
+  value,
+  onChange,
+  placeholder,
+  testId,
+  none,
+  me,
+  autoFocus,
+  inline,
+}: {
+  employees: readonly ApiEmployee[];
+  value: string | null;
+  onChange: (id: string | null) => void;
+  placeholder: string;
+  testId: string;
+  none?: string;
+  /** The caller's own employee id: a "Me" choice on top (the Manager filter). */
+  me?: string | null;
+  autoFocus?: boolean;
+  inline?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
@@ -193,6 +214,11 @@ export function EmployeePicker({ employees, value, onChange, placeholder, testId
           {none && (
             <button type="button" className="org-picker-item" onClick={() => (onChange(null), setOpen(false))}>
               <span className="org-person-sub">{none}</span>
+            </button>
+          )}
+          {me && !q && (
+            <button type="button" className="org-picker-item" data-testid="org-picker-me" onClick={() => (onChange(me), setOpen(false))}>
+              <span className="org-person-name">Me</span>
             </button>
           )}
           {matches.length === 0 && <div className="org-multi-empty">Nobody matches</div>}

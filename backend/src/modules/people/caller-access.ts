@@ -1,12 +1,14 @@
-import type { AssignedRole, MembershipRole } from '../../shared/database/schema';
+import type { MembershipRole } from '../../shared/database/schema';
 import type { PermissionRelation } from './permissions';
 
 /**
- * The five functional roles (spec 9.1). Roles are additive. Employee: has an employee record.
- * Manager: has at least one active direct report (derived). Administration, Payroll: assigned by
- * an Admin (employee_roles). Admin: workspace owner or admin (derived from the membership).
+ * The functional roles (spec 9.1, as changed by CD-225). Roles are additive. Employee: has an
+ * employee record. Manager: has at least one active direct report (derived). Admin: workspace
+ * owner or admin (derived from the membership). Nothing is assigned by hand: the Administration
+ * and Payroll roles were removed (CD-225), only Admins do HR work. The `employee_roles` table and
+ * `invitations.assigned_roles` stay for now (expand/contract) but nothing reads or writes them.
  */
-export const FUNCTIONAL_ROLES = ['employee', 'manager', 'administration', 'payroll', 'admin'] as const;
+export const FUNCTIONAL_ROLES = ['employee', 'manager', 'admin'] as const;
 export type FunctionalRole = (typeof FUNCTIONAL_ROLES)[number];
 
 export interface AccessData {
@@ -15,7 +17,6 @@ export interface AccessData {
   workspaceRole: MembershipRole;
   /** The caller's own employee record (null only for a member without one, which linking prevents). */
   employeeId: string | null;
-  assignedRoles: readonly AssignedRole[];
   /** Active employees whose manager is the caller. */
   directReportIds: readonly string[];
   /** Active employees below the caller at any depth (direct reports included). */
@@ -56,7 +57,6 @@ export class CallerAccess {
     if (data.employeeId) {
       roles.add('employee');
       if (this.directReportIds.size > 0) roles.add('manager');
-      for (const r of data.assignedRoles) roles.add(r);
     }
     if (data.workspaceRole === 'owner' || data.workspaceRole === 'admin') roles.add('admin');
     this.roles = roles;
@@ -79,18 +79,12 @@ export class CallerAccess {
   get isAdmin(): boolean {
     return this.roles.has('admin');
   }
-  get isAdministration(): boolean {
-    return this.roles.has('administration');
-  }
-  get isPayroll(): boolean {
-    return this.roles.has('payroll');
-  }
   get isManager(): boolean {
     return this.roles.has('manager');
   }
-  /** Administration or Admin: sees all HR data, manages employees, departments, teams and imports. */
+  /** HR work (all HR data; employees, departments, teams, managers, imports): Admins only (CD-225). */
   get isHr(): boolean {
-    return this.isAdmin || this.isAdministration;
+    return this.isAdmin;
   }
 
   isSelf(employeeId: string): boolean {
@@ -104,27 +98,27 @@ export class CallerAccess {
     return this.reportIds.has(employeeId);
   }
 
-  /** Start and end date, employment type, weekly hours, employee number: self, managers above, HR. */
+  /** Start and end date, employment type, weekly hours, employee number: self, managers above, Admins. */
   canSeeEmployment(employeeId: string): boolean {
     return this.isHr || this.isSelf(employeeId) || this.isReport(employeeId);
   }
-  /** Personal details: self, Administration, Admin. Never managers or Payroll (Q2, Q6). */
+  /** Personal details: self and Admins. Never managers (Q2). */
   canSeePersonal(employeeId: string): boolean {
     return this.isHr || this.isSelf(employeeId);
   }
-  /** Bank account (masked) and revealing it: self, Administration, Admin. */
+  /** Bank account (masked) and revealing it: self and Admins. */
   canSeeBank(employeeId: string): boolean {
     return this.isHr || this.isSelf(employeeId);
   }
-  /** Employee history: self (without the reason for leaving), Administration, Admin. */
+  /** Employee history: self (without the reason for leaving) and Admins. */
   canSeeHistory(employeeId: string): boolean {
     return this.isHr || this.isSelf(employeeId);
   }
-  /** The reason for leaving: Administration and Admin only, never the employee. */
+  /** The reason for leaving: Admins only, never the employee. */
   get canSeeLeavingReason(): boolean {
     return this.isHr;
   }
-  /** Inactive employees in lists and on cards: Administration and Admin. */
+  /** Inactive employees in lists and on cards: Admins. */
   get canSeeInactive(): boolean {
     return this.isHr;
   }

@@ -11,8 +11,8 @@ export interface OrgStructure {
   access: ApiPeopleAccess;
 }
 
-/** Administration or Admin: may change departments, teams and reporting lines (spec 9.3). */
-export const canManageOrg = (access: ApiPeopleAccess | null | undefined): boolean => !!access && (access.roles.includes('admin') || access.roles.includes('administration'));
+/** Admins only (CD-225): may change departments, teams and reporting lines (spec 9.3). */
+export const canManageOrg = (access: ApiPeopleAccess | null | undefined): boolean => !!access && access.roles.includes('admin');
 
 /** The API's message (and the first field problem), for the panel's error lines. */
 export function orgError(err: unknown): string {

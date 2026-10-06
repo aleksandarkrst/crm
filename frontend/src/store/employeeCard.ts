@@ -1,14 +1,19 @@
 /**
  * The employee card (CD-140, milestone 13): the store's slice for `/people/:id`. Cards are read when
- * the page opens and kept by id in `s.employeeCards`; every action (saving a section, inviting,
- * linking, deactivating) returns the card as the server now has it, which replaces the cached one.
- * The pickers (active employees, departments, teams) are read once a card needs them
- * (`s.peoplePickers`).
+ * the page opens and kept by id in `s.employeeCards`; every action (saving, inviting, linking,
+ * deactivating) returns the card as the server now has it, which replaces the cached one. The
+ * pickers (active employees, departments, teams) are read when a card needs them
+ * (`s.peoplePickers`), and again once the org changed since (`s.orgRev`, CD-225).
  *
- * Saving sends only the section's fields with the card's version (If-Match): when someone else
- * changed one of them meanwhile, the API answers 409, the card is read again and the section shows
- * the conflict message. Fields the caller may not change are never sent: the card's
- * `permissions.editableFields` (the server's own rules) decides what each section offers.
+ * Saving (CD-225: one Save for the whole card) sends the changed fields with the card's version
+ * (If-Match): when someone else changed one of them meanwhile, the API answers 409, the card is
+ * read again and the card shows the conflict message, keeping what was typed. Fields the caller
+ * may not change are never sent: the card's `permissions.editableFields` (the server's own rules)
+ * decides what is an input. Moving a department head or team lead elsewhere asks first
+ * (lib/headMoves.ts).
+ *
+ * After every change the Org structure page's directory is read again (`refreshPeople`), so the
+ * chart, the list and Ctrl/⌘K show it at once (CD-225).
  *
  * Live updates (CD-20): an `employee` hint names employee ids; open cards among them (or all, for a
  * hint without ids) are read again, and the pickers too when they are loaded.
@@ -29,6 +34,7 @@ import {
   type LeavingReason,
   peopleCardApi,
 } from '../lib/api';
+import { headMoveMessage } from '../lib/headMoves';
 import type { LiveEvent } from './live';
 import type { State } from './types';
 
@@ -41,7 +47,7 @@ export interface PeoplePickers {
 
 export const EMPLOYMENT_TYPE_LABEL: Record<EmploymentType, string> = { permanent: 'Permanent', fixed_term: 'Fixed term', contractor: 'Contractor', student: 'Student or intern' };
 export const LEAVING_REASON_LABEL: Record<LeavingReason, string> = { resigned: 'Resigned', contract_ended: 'Contract ended', dismissed: 'Dismissed', retired: 'Retired', other: 'Other' };
-export const ROLE_LABEL: Record<FunctionalRole, string> = { employee: 'Employee', manager: 'Manager', administration: 'Administration', payroll: 'Payroll', admin: 'Admin' };
+export const ROLE_LABEL: Record<FunctionalRole, string> = { employee: 'Employee', manager: 'Manager', admin: 'Admin' };
 
 /** What a save, invite or other card action answers. */
 export type CardResult = { card: ApiEmployeeCard } | { error: string; conflict?: boolean };
@@ -56,11 +62,13 @@ interface Deps {
   conflictText: (err: unknown) => string | null;
   /** Settings → Team shows invitations and links; read it again after the card changed them. */
   refreshTeam: () => Promise<void>;
+  /** The Org structure directory (chart, list, Ctrl/⌘K): read it again after a change (CD-225). */
+  refreshPeople: () => void;
 }
 
 const inviteLink = (token: string) => `${window.location.origin}/invite/${token}`;
 
-export function employeeCardActions({ cur, set, flash, errText, conflictText, refreshTeam }: Deps) {
+export function employeeCardActions({ cur, set, flash, errText, conflictText, refreshTeam, refreshPeople }: Deps) {
   const put = (card: ApiEmployeeCard) => set((x) => ({ employeeCards: { ...x.employeeCards, [card.id]: card } }));
   const drop = (id: string) =>
     set((x) => {
@@ -84,11 +92,13 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
     }
   };
 
-  /** Runs a card action; the answer replaces the cached card. */
+  /** Runs a card action; the answer replaces the cached card, and the directory and pickers are read again. */
   const act = async (id: string, run: () => Promise<ApiEmployeeCard>, what: string): Promise<CardResult> => {
     try {
       const card = await run();
       put(card);
+      refreshPeople();
+      void loadPickers();
       return { card };
     } catch (err) {
       const conflict = conflictText(err);
@@ -101,7 +111,10 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
   };
 
   let pickersLoading: Promise<void> | null = null;
+  /** The org revision the pickers were read at: a newer one (a department added anywhere) reads them again. */
+  let pickersRev = -1;
   const loadPickers = () => {
+    pickersRev = cur().orgRev;
     pickersLoading ??= Promise.all([peopleCardApi.directory(), peopleCardApi.departments(), peopleCardApi.teams()])
       .then(([directory, departments, teams]) => set({ peoplePickers: { employees: directory.employees, departments, teams } }))
       .catch(() => undefined)
@@ -109,23 +122,39 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
     return pickersLoading;
   };
 
+  const liveIds = new Set<string>();
+  let liveTimer: ReturnType<typeof setTimeout> | undefined;
+
   return {
     load,
-    /** Loads the pickers once (the card's Work and Reporting editors, the deactivate dialog). */
-    ensurePickers: () => (cur().peoplePickers ? Promise.resolve() : loadPickers()),
+    /** Loads the pickers (the card's Work and Reporting fields, the deactivate dialog), again when the org changed since. */
+    ensurePickers: () => (cur().peoplePickers && pickersRev === cur().orgRev ? Promise.resolve() : loadPickers()),
 
     /**
-     * Saves one section's changes (only the fields that changed). A pending invitation went to the
-     * old work email: the server withdrew it, and the toast says to invite again.
+     * Saves the card's changes (only the fields that changed). Moving a department head or team
+     * lead elsewhere asks first ("… removes them as head. Continue?"); `cancelled` when they said
+     * no. A pending invitation went to the old work email: the server withdrew it, and the toast
+     * says to invite again.
      */
-    save: async (id: string, patch: EmployeePatch): Promise<CardResult> => {
+    save: async (id: string, patch: EmployeePatch): Promise<CardResult | { cancelled: true }> => {
       const before = cur().employeeCards[id];
       if (!Object.keys(patch).length) return before ? { card: before } : { error: 'Nothing to save' };
-      const result = await act(id, () => peopleCardApi.update(id, patch, before?.version), 'Not saved');
-      if ('card' in result) {
-        if (before?.account === 'invited' && result.card.account === 'none') flash('The invitation was withdrawn because the work email changed. Invite them again.', 7000);
-        if ('managerId' in patch || 'departmentId' in patch || 'teamId' in patch) void loadPickers();
+      const send = (clear: boolean) => peopleCardApi.update(id, patch, before?.version, clear);
+      let ask: string | null = null;
+      let result = await act(
+        id,
+        () =>
+          send(false).catch((err: unknown) => {
+            ask = headMoveMessage(err);
+            throw err;
+          }),
+        'Not saved',
+      );
+      if (ask) {
+        if (!window.confirm(`${ask} Continue?`)) return { cancelled: true };
+        result = await act(id, () => send(true), 'Not saved');
       }
+      if ('card' in result && before?.account === 'invited' && result.card.account === 'none') flash('The invitation was withdrawn because the work email changed. Invite them again.', 7000);
       return result;
     },
 
@@ -135,6 +164,7 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
         const card = await peopleCardApi.create(input);
         put(card);
         void loadPickers();
+        refreshPeople();
         return { card };
       } catch (err) {
         return { error: errText(err) };
@@ -236,23 +266,21 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
     deactivate: async (id: string, input: DeactivateInput) => {
       const result = await act(id, () => peopleCardApi.deactivate(id, input), 'Not deactivated');
       if ('card' in result) {
-        void loadPickers();
         void refreshTeam();
         flash(result.card.status === 'inactive' ? `${result.card.fullName} is deactivated` : `${result.card.fullName} is leaving on ${result.card.employment?.endDate ?? 'the chosen day'}`, 5000);
       }
       return result;
     },
     reactivate: async (id: string, employmentStartDate?: string) => {
-      const result = await act(id, () => peopleCardApi.reactivate(id, employmentStartDate), 'Not reactivated');
-      if ('card' in result) void loadPickers();
-      return result;
+      return act(id, () => peopleCardApi.reactivate(id, employmentStartDate), 'Not reactivated');
     },
-    /** Delete (Admin; a record that never had an account). */
+    /** Delete (Admin; only once deactivated, CD-225). */
     remove: async (id: string): Promise<boolean> => {
       try {
         await peopleCardApi.remove(id);
         drop(id);
         void loadPickers();
+        refreshPeople();
         return true;
       } catch (err) {
         flash('Not deleted: ' + errText(err), 7000);
@@ -270,12 +298,21 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
       }
     },
 
-    /** Live updates: re-read the open cards a hint names (all of them without ids), and the pickers. */
-    onLive: (e: LiveEvent) => {
+    /**
+     * Live updates: re-read the open cards a hint names (all of them without ids), and the pickers.
+     * `own`: this tab made the change (CD-225): the saved card is current already, so only the
+     * pickers (a new department, a new head) are read again. Hints come in bursts: one read after
+     * a short pause.
+     */
+    onLive: (e: LiveEvent, own = false) => {
       const cards = cur().employeeCards;
-      const ids = e.type === 'employee' && e.ids ? e.ids.filter((id) => cards[id]) : Object.keys(cards);
-      for (const id of ids) void load(id).catch(() => undefined);
-      if (cur().peoplePickers) void loadPickers();
+      if (!own) for (const id of e.type === 'employee' && e.ids ? e.ids.filter((x) => cards[x]) : Object.keys(cards)) liveIds.add(id);
+      clearTimeout(liveTimer);
+      liveTimer = setTimeout(() => {
+        for (const id of liveIds) void load(id).catch(() => undefined);
+        liveIds.clear();
+        if (cur().peoplePickers) void loadPickers();
+      }, 300);
     },
   };
 }

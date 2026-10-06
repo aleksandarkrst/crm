@@ -18,7 +18,7 @@ const pendingInvitation = sql`exists (select 1 from ${invitations} i where i.emp
 
 /**
  * An employee's app access and leaving (spec 4.6–4.8): Invite to Pultly (one or many), Link to
- * member and Unlink (Admin), Deactivate and Reactivate (Administration, Admin). Invitations and
+ * member and Unlink (Admin), Deactivate and Reactivate (Admin). Invitations and
  * membership removal go through identity's public API; the daily job for future last working
  * days is in people-jobs.ts. Every action returns the card, like PATCH.
  */
@@ -184,8 +184,7 @@ export class EmployeeLifecycleService {
   // ------------------------------------------------------------------ deactivate and reactivate (spec 4.8)
 
   /**
-   * Deactivate (Administration, Admin; an Admin may deactivate themselves unless they are the only
-   * one, Administration not). Last working day at most 90 days ago in the workspace's time zone.
+   * Deactivate (Admins; an Admin may deactivate themselves unless they are the only one). Last working day at most 90 days ago in the workspace's time zone.
    * With active direct reports, `reportsManagerId` is required (null = "No manager"); the loop rule
    * applies to every report. Today or earlier: applied now. Later: status Leaving with the choices
    * stored for the daily job (people.deactivate-due). Returns the card.
@@ -194,7 +193,7 @@ export class EmployeeLifecycleService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const access = await this.access.of(ctx, tx);
-        if (!access.isHr) throw new ForbiddenException('Only Administration and Admins deactivate employees');
+        if (!access.isHr) throw new ForbiddenException('Only Admins deactivate employees');
         const self = access.isSelf(id);
         if (self && !access.isAdmin) throw new ForbiddenException('Only an Admin can deactivate their own record');
         await lockReportingLines(tx, ctx.tenantId);
@@ -270,7 +269,7 @@ export class EmployeeLifecycleService {
   }
 
   /**
-   * Reactivate (Administration, Admin). Inactive (a rehire): clears the end date and reason, sets
+   * Reactivate (Admin). Inactive (a rehire): clears the end date and reason, sets
    * the new employment start date (required; the previous period stays in history) and status
    * Active, with no account until invited again. Leaving: cancels the scheduled deactivation.
    */
@@ -278,7 +277,7 @@ export class EmployeeLifecycleService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const access = await this.access.of(ctx, tx);
-        if (!access.isHr) throw new ForbiddenException('Only Administration and Admins reactivate employees');
+        if (!access.isHr) throw new ForbiddenException('Only Admins reactivate employees');
         const e = await this.employee(tx, id, true);
         if (e.deactivatedAt) {
           if (!input.employmentStartDate) throw new BadRequestException('Enter the new employment start date');

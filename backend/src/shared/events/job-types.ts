@@ -69,12 +69,6 @@ export interface JobPayloads {
    */
   'people.bulk-invite': { tenantId: string; actorUserId: string; employeeIds: string[]; role: 'admin' | 'member' };
   /**
-   * Sent by people when an Admin gives an employee Administration or Payroll, or takes it away
-   * (CD-142, spec 10.2). The people worker emails the employee (sign-in email if linked, else work
-   * email) "Role granted" or "Role removed". Can't be turned off; no personal details.
-   */
-  'people.role-changed-email': { tenantId: string; employeeId: string; role: 'administration' | 'payroll'; kind: 'granted' | 'removed'; actorUserId: string };
-  /**
    * Sent by people when someone changes an employee's manager in the app (the card, "Set manager",
    * "Add people", the team-lead dialog, deactivation's reassignment; never the import), one job per
    * employee and recipient (CD-139, spec 10.2). The people worker emails "New manager" to the
@@ -108,10 +102,9 @@ export const JOB_NAMES = [
   'people.bulk-invite',
   'people.deactivate-due',
   'people.employee-deactivated',
-  'people.role-changed-email',
   'people.reporting-line-changed',
   'reporting.nightly',
 ] as const satisfies readonly JobName[];
 
 /** Jobs that send email: retried MAIL_RETRY_LIMIT times with backoff from MAIL_RETRY_DELAY_SECONDS. */
-export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.role-changed-email', 'people.reporting-line-changed']);
+export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed']);

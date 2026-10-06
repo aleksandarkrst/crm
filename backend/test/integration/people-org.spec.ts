@@ -140,7 +140,7 @@ describe('reporting lines', () => {
     expect((await setManager(someone, '00000000-0000-4000-8000-000000000000')).status).toBe(400);
   });
 
-  it('only Administration and Admins change reporting lines', async () => {
+  it('only Admins change reporting lines', async () => {
     const someone = await create({ firstName: 'Some', lastName: 'Two' });
     expect((await call('PATCH', `/people/employees/${someone}`, { ...as(member), body: { managerId: null } })).status).toBe(403);
   });
@@ -308,18 +308,19 @@ describe('approvals go to (spec 7.4)', () => {
 });
 
 describe('deleting an employee', () => {
-  it('Admins delete a record that never had an account; history keeps it', async () => {
+  it('Admins delete a deactivated record; history keeps it', async () => {
     const id = await create({ firstName: 'Wrong', lastName: 'Row' });
+    await asTenantSql(tenant, `update employees set employment_end_date = '2026-01-31', deactivated_at = now() where id = $1`, [id]);
     expect((await call('DELETE', `/people/employees/${id}`, as(member))).status).toBe(403);
     await ok('DELETE', `/people/employees/${id}`, as());
     expect((await call('GET', `/people/employees/${id}`, as())).status).toBe(404);
     const history = await ok('GET', `/people/history?entityType=employee&entityId=${id}`, as());
     expect(history.entries[0]).toMatchObject({ action: 'deleted', label: 'Wrong Row' });
-    // A linked one can't be deleted.
+    // An active one can't be deleted (CD-225): deactivate first.
     const memberId = (await accessOf(member, tenant)).employeeId;
-    const linked = await call('DELETE', `/people/employees/${memberId}`, as());
-    expect(linked.status).toBe(409);
-    expect(linked.body.message).toContain('Deactivate instead');
+    const active = await call('DELETE', `/people/employees/${memberId}`, as());
+    expect(active.status).toBe(409);
+    expect(active.body.message).toContain('Deactivate first');
   });
 });
 
@@ -347,5 +348,53 @@ describe('the top of the organisation (CD-224, B15)', () => {
     await ok('PATCH', `/people/employees/${second}`, { ...asBoss(), body: { managerId: top } }, 200);
     expect(await noManagerIds()).toEqual([]);
     expect(await issuesOf(second)).not.toContain('no_manager');
+  });
+});
+
+describe('the CEO (CD-225): a workspace setting, the top of the chart', () => {
+  let boss: Session;
+  let staff: Session;
+  let ws: string;
+  const asBoss = () => ({ token: boss.token, tenant: ws });
+  const noManagerIds = async () => (await ok('GET', '/people/employees?issues=no_manager', asBoss())).employees.map((e: { id: string }) => e.id).sort();
+
+  beforeAll(async () => {
+    boss = await signIn('org-ceo');
+    staff = await signIn('org-ceo-member');
+    ws = await createTenant(boss, 'Org CEO');
+    await joinAsEmployee(boss, ws, staff);
+  });
+
+  it('only an Admin sets it, to an active employee of the workspace; the CEO is never "No manager"', async () => {
+    const top = (await accessOf(boss, ws)).employeeId as string;
+    const ceo = (await ok('POST', '/people/employees', { ...asBoss(), body: { firstName: 'Cora', lastName: 'Ceo', employmentStartDate: START } })).id as string;
+    expect((await ok('GET', '/workspace', asBoss())).ceoEmployeeId).toBeNull();
+    // Several without a manager and no CEO: all are flagged.
+    expect((await noManagerIds()).length).toBeGreaterThan(1);
+
+    expect((await call('PATCH', '/workspace', { token: staff.token, tenant: ws, body: { ceoEmployeeId: ceo } })).status).toBe(403);
+    expect((await call('PATCH', '/workspace', { ...asBoss(), body: { ceoEmployeeId: '00000000-0000-4000-8000-000000000000' } })).status).toBe(400);
+    // Another workspace's employee is not found (RLS).
+    const own = (await accessOf(staff, ws)).employeeId as string;
+    const elsewhere = (await accessOf(owner, tenant)).employeeId as string;
+    expect((await call('PATCH', '/workspace', { ...asBoss(), body: { ceoEmployeeId: elsewhere } })).status).toBe(400);
+
+    expect((await ok('PATCH', '/workspace', { ...asBoss(), body: { ceoEmployeeId: ceo } })).ceoEmployeeId).toBe(ceo);
+    expect((await ok('GET', '/workspace', { token: staff.token, tenant: ws })).ceoEmployeeId).toBe(ceo);
+    expect(await noManagerIds()).not.toContain(ceo);
+    expect(await noManagerIds()).toEqual([top, own].sort());
+  });
+
+  it('deactivating the CEO clears it; an inactive employee can not be the CEO', async () => {
+    const ceo = (await ok('GET', '/workspace', asBoss())).ceoEmployeeId as string;
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Belgrade', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    await ok('POST', `/people/employees/${ceo}/deactivate`, { ...asBoss(), body: { lastWorkingDay: today } }, 200);
+    expect((await ok('GET', '/workspace', asBoss())).ceoEmployeeId).toBeNull();
+    const refused = await call('PATCH', '/workspace', { ...asBoss(), body: { ceoEmployeeId: ceo } });
+    expect(refused.status).toBe(400);
+    expect(refused.body.message).toBe('The CEO must be an active employee');
+    // Deleting a former CEO leaves nothing behind either.
+    await ok('DELETE', `/people/employees/${ceo}`, asBoss());
+    expect((await ok('GET', '/workspace', asBoss())).ceoEmployeeId).toBeNull();
   });
 });

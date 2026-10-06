@@ -323,6 +323,13 @@
       "when": 1791268899778,
       "tag": "0045_invitation_assigned_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1791279723851,
+      "tag": "0046_tenant_ceo",
+      "breakpoints": true
     }
   ]
 }

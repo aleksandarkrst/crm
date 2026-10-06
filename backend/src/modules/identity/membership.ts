@@ -39,8 +39,6 @@ export const invitationColumns = {
   hasLink: sql<boolean>`${invitations.tokenSealed} is not null`,
   /** The employee card it was sent from (milestone 13), if any. */
   employeeId: invitations.employeeId,
-  /** Administration / Payroll given on acceptance (CD-224). */
-  assignedRoles: invitations.assignedRoles,
 };
 
 export interface InvitationDeps {
@@ -54,8 +52,6 @@ export interface NewInvitation {
   role: InvitationRole;
   /** The employee record it is sent from (spec 4.7): accepting it links the new member to that record. */
   employeeId?: string | null;
-  /** Administration / Payroll the new member's employee record gets on acceptance (CD-224). */
-  roles?: readonly ('administration' | 'payroll')[];
 }
 
 /**
@@ -92,7 +88,6 @@ export async function createInvitation(tx: Tx, deps: InvitationDeps, ctx: Tenant
       tokenSealed: box?.seal(token) ?? null,
       emailStatus: box ? 'queued' : null,
       employeeId: input.employeeId ?? null,
-      assignedRoles: [...new Set(input.roles ?? [])],
     })
     .returning(invitationColumns);
   if (box) await deps.jobs.send('identity.invitation-email', { tenantId: ctx.tenantId, invitationId: row!.id }, tx);
@@ -100,7 +95,7 @@ export async function createInvitation(tx: Tx, deps: InvitationDeps, ctx: Tenant
     action: 'invitation.created',
     entityType: 'invitation',
     entityId: row!.id,
-    data: { email, role: input.role, ...(input.employeeId ? { employeeId: input.employeeId } : {}), ...(input.roles?.length ? { roles: input.roles } : {}) },
+    data: { email, role: input.role, ...(input.employeeId ? { employeeId: input.employeeId } : {}) },
   });
   return { invitation: row!, token };
 }

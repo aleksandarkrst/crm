@@ -110,6 +110,7 @@ export const mapWorkspace = (w: ApiWorkspace): Workspace => ({
   employeeDefaultWeeklyHours: w.employeeDefaultWeeklyHours,
   employeeNumberRequired: w.employeeNumberRequired,
   employeeSelfEditBank: w.employeeSelfEditBank,
+  ceoEmployeeId: w.ceoEmployeeId ?? null,
 });
 
 export const mapProfile = (p: ApiProfile): Profile => ({

@@ -8,15 +8,13 @@ import { type AuthUser, hasRole, type TenantContext } from '../../shared/authori
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { employees, INVITATION_ROLES, invitations, MEMBERSHIP_ROLES, memberships, tenants, users } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
-import { grantInvitedRoles, linkNewMember } from '../people';
+import { linkNewMember } from '../people';
 import { inviteLinkBox } from './invitation-email';
 import { createInvitation, hashInviteToken, invitationColumns, inviteExpiry, keepAnOwner, pendingInvitation as pending, removeMembership } from './membership';
 
 export const CreateInvitation = z.object({
   email: z.email().transform((e) => e.trim().toLowerCase()),
   role: z.enum(INVITATION_ROLES).default('member'),
-  /** Administration / Payroll for the new member's employee record, given when they accept (CD-224). */
-  roles: z.array(z.enum(['administration', 'payroll'])).max(2).default([]),
 });
 export const UpdateMember = z.object({ role: z.enum(MEMBERSHIP_ROLES) });
 export type CreateInvitation = z.infer<typeof CreateInvitation>;
@@ -188,13 +186,7 @@ export class TeamService {
       // The new member's employee record (spec 4.6): the one the invitation was sent from, else
       // one with their email, else a new one.
       if (joined) {
-        const employeeId = await linkNewMember(tx, { tenantId: row.tenantId, userId: user.id, invitedEmployeeId: row.employeeId });
-        // The roles the inviting Admin ticked (CD-224), given in their name. An inviter who left
-        // since then (no user) still gives them: the invitation was an Admin's decision.
-        if (row.assignedRoles.length > 0) {
-          const inviter: TenantContext = { tenantId: row.tenantId, userId: row.invitedByUserId ?? user.id, role: 'admin' };
-          await grantInvitedRoles(tx, { audit: this.audit, jobs: this.jobs }, inviter, employeeId, row.assignedRoles);
-        }
+        await linkNewMember(tx, { tenantId: row.tenantId, userId: user.id, invitedEmployeeId: row.employeeId });
       }
       const role = (await this.memberRole(tx, row.tenantId, user.id))!;
       await this.audit.record(tx, ctx, { action: 'invitation.accepted', entityType: 'invitation', entityId: row.id });
@@ -217,7 +209,6 @@ export class TeamService {
         role: invitations.role,
         invitedByUserId: invitations.invitedByUserId,
         employeeId: invitations.employeeId,
-        assignedRoles: invitations.assignedRoles,
         expiresAt: invitations.expiresAt,
         acceptedAt: invitations.acceptedAt,
         revokedAt: invitations.revokedAt,

@@ -15,7 +15,6 @@ import { PeopleAccess } from './people-access';
 import { PeopleController } from './people.controller';
 import { PeopleHistoryService } from './people-history.service';
 import { RolesController } from './roles.controller';
-import { RolesService } from './roles.service';
 
 /**
  * People (milestone 13): employees, departments, teams, functional roles, access and the approver
@@ -31,7 +30,6 @@ import { RolesService } from './roles.service';
     EmployeesService,
     EmployeeLifecycleService,
     EmployeesBulkService,
-    RolesService,
     OrgService,
     EmployeeImportService,
     { provide: ABSENCE_SOURCE, useValue: nobodyAbsent },

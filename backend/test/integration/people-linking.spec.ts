@@ -136,7 +136,7 @@ describe('creating and joining a workspace', () => {
     await ok('DELETE', `/team/members/${leaver.userId}`, as());
     const card = await ok('GET', `/people/employees/${id}`, as());
     expect(card).toMatchObject({ status: 'active', account: 'none', userId: null });
-    // An employee that had an account can't be deleted.
+    // An active employee can't be deleted (deactivate first, CD-225).
     expect((await call('DELETE', `/people/employees/${id}`, as())).status).toBe(409);
     // Back again: rule 2 finds the same record by work email.
     expect(await joinAsEmployee(owner, tenant, leaver)).toBe(id);

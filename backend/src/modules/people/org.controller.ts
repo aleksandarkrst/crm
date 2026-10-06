@@ -7,7 +7,7 @@ import { OrgService } from './org.service';
 
 /**
  * Departments, teams and reporting lines (CD-138, CD-139). Reading is for every member; every
- * change is for Administration and Admin (the service checks, 403 otherwise). See
+ * change is for Admins (the service checks, 403 otherwise). See
  * docs/ARCHITECTURE.md, "Departments, teams and reporting lines".
  */
 @Controller('people')

@@ -209,7 +209,10 @@ export const employeePersonal = pgTable(
   ],
 );
 
-/** Administration and Payroll, assigned by an Admin (spec 9.1). Manager and Admin are derived. */
+/**
+ * Administration and Payroll, once assigned by an Admin (spec 9.1). Unused since CD-225 removed the
+ * roles (only Admins do HR work): nothing reads or writes it; a later migration may drop it.
+ */
 export const employeeRoles = pgTable(
   'employee_roles',
   {

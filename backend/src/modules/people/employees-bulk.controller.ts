@@ -5,7 +5,7 @@ import { BulkUpdateEmployees, EmployeesBulkService, ExportEmployees } from './em
 
 /**
  * The Org structure list's bulk actions and personal-details export (CD-137, spec 5.4).
- * Administration and Admin; the service checks it per caller and per row.
+ * Admins; the service checks it per caller and per row.
  */
 @Controller('people/employees')
 @RequireTenant('member')

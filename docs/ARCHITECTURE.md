@@ -469,13 +469,10 @@ and admins can resend or copy it later.
 
 - An invitation is for one email address, expires after 7 days, and works once. Re-inviting the
   same address replaces the pending invitation.
-- **Functional roles on the invitation** (CD-224): the invite dialog has optional "Administration"
-  and "Payroll" checkboxes (`roles` in the request, kept in `invitations.assigned_roles`, a checked
-  `text[]`). When the invitation is accepted and the new member's employee record is linked,
-  identity calls people's `grantInvitedRoles` (through its index) in the same transaction: the
-  record gets the roles in the inviting Admin's name (history row field `roles`, audit
-  `employee.role_granted`), without the "Role granted" email. Only Admins invite, and Admins are
-  the ones who assign these roles (row `org.roles`). Someone who was already a member keeps their roles.
+- **No functional roles on the invitation** (CD-225): CD-224's "Administration" and "Payroll"
+  checkboxes went with those roles. The request takes no `roles` (an old client's list is ignored);
+  `invitations.assigned_roles` stays in the table, always empty for new invitations and never read
+  on acceptance (expand/contract: a later migration may drop it).
 - Accepting (`POST /api/invitations/:token/accept`) requires a signed-in user with that email,
   so a forwarded link is useless to anyone else. Onboarding also offers the invitations pending for
   the user's email without the link (`POST /api/me/invitations/:id/accept`, CD-115).
@@ -657,7 +654,7 @@ monthly plans (see "Monthly plans, quarters add up" below). Counting the visits 
   matrix (CD-142, `visit-plans/visit-scope.ts`, rows `crm.visit_plans.*`): owners and admins all;
   managers see their own plans and their reports' at any depth (list, progress, report rows, Overview
   summary) and create, change and delete only their **direct** reports' (not their own);
-  everyone else (Administration and Payroll included) sees only their own, read-only. A plan the
+  everyone else sees only their own, read-only. A plan the
   caller may not see is 404 (also its history), one they see but may not change is 403.
   `GET /scope` → `{ all, manageAll, seesTeam, visibleUserIds, manageableUserIds }` (null = everyone)
   for the store (`s.visitScope`: "New plan", the salesperson picker, Reports in the sidebar);
@@ -1112,8 +1109,7 @@ milestones on lines); `drizzle/0022_products_deal_billing.sql` converts existing
 
 ## Header, command palette and record pages (CD-80)
 
-CD-224 additions: the "+" menu has **Employee** (key E) for workspace owners and admins, and for
-Administration once the people access is loaded; it opens `/org?new=employee`, where the Org page
+CD-224 additions: the "+" menu has **Employee** (key E) for workspace owners and admins; it opens `/org?new=employee`, where the Org page
 opens Add employee (and drops the parameter). Contact pages are addressed by the backend contact id:
 `openContact` resolves a person id ("<deal id>:p" for a deal's primary contact) to it, and an old
 `/contacts/<deal id>:p` link redirects. Company **Domain** and contact **LinkedIn** are checked when
@@ -1611,11 +1607,16 @@ and the backfill in `drizzle/0039_people_rls.sql`.
   department_id, id)`, `ON UPDATE CASCADE` (moving a team to another department moves its members
   in the same statement) and `ON DELETE SET NULL (team_id)` (deleting a team keeps its members in
   the department). A team without a department is a check violation.
-- **`employee_roles`**: `administration` and `payroll`, assigned by an Admin (CD-142 adds the
-  endpoints). Manager and Admin are derived, never stored.
+- **`employee_roles`**: once `administration` and `payroll` (CD-142). Unused since CD-225 removed
+  those roles: nothing reads or writes it (expand/contract; a later migration may drop it). Manager
+  and Admin are derived, never stored.
 - `invitations.employee_id` (the card an invitation was sent from), `tenants.employee_default_weekly_hours`
-  (40), `employee_number_required` (off), `employee_self_edit_bank` (on), all in `GET/PATCH
-  /api/workspace`; `memberships.notify_org_changes` (on) in `/api/profile`.
+  (40), `employee_number_required` (off), `employee_self_edit_bank` (on) and **`ceo_employee_id`**
+  (CD-225, `drizzle/0046_tenant_ceo.sql`: the CEO on the org chart's company node, an active
+  employee, FK `(id, ceo_employee_id) → employees(tenant_id, id) ON DELETE SET NULL
+  (ceo_employee_id)`; `PATCH` checks it is an active employee of the workspace, deactivating the
+  CEO clears it), all in `GET/PATCH /api/workspace`; `memberships.notify_org_changes` (on) in
+  `/api/profile`.
 - **History**: `record_changes` with entity types `employee`, `department`, `team`
   (`crm_record_changes`). Personal details and bank fields are rows of their employee
   (`people_record_personal_changes`): field names as in the API, IBANs only as the short mask.
@@ -1650,22 +1651,21 @@ Every endpoint of milestone 13 and later Workforce modules checks access through
 `PeopleAccess` from `modules/people`; `PeopleModule` exports it):
 
 - `await access.of(ctx)` → `CallerAccess`: `employeeId`, `roles` (`employee`, `manager` = has an
-  active direct report, `administration`, `payroll`, `admin` = workspace owner or admin),
+  active direct report, `admin` = workspace owner or admin; Administration and Payroll were removed
+  by CD-225: only Admins do HR work),
   `directReportIds`, `reportIds` (all active reports at any depth). One recursive query on
   `manager_id` (index `(tenant_id, manager_id)`), cached per request (keyed by the request's
   `TenantContext`). Pass `tx` to read inside an open transaction.
-- Checks (pure, `caller-access.ts`): `isAdmin`, `isAdministration`, `isPayroll`, `isManager`,
-  `isHr` (Administration or Admin), `isSelf(id)`, `isDirectReport(id)` ("Direct" in the matrix),
+- Checks (pure, `caller-access.ts`): `isAdmin`, `isManager`, `isHr` (= `isAdmin` since CD-225; kept
+  as the name for "HR work"), `isSelf(id)`, `isDirectReport(id)` ("Direct" in the matrix),
   `isReport(id)` ("Indirect"), `canSeeEmployment(id)` (self, managers above, HR), `canSeePersonal(id)`
-  and `canSeeBank(id)` (self, HR; never managers or Payroll), `canSeeHistory(id)` (self, HR),
+  and `canSeeBank(id)` (self, HR; never managers), `canSeeHistory(id)` (self, HR),
   `canSeeLeavingReason` and `canSeeInactive` (HR).
 - `access.reportIdsOf(tx, managerId, direct?)`: anyone's subtree. `access.employeeForUser(tenantId,
   userId)`: a member's record.
 - Which card fields a caller may change: `editableFields(access, employeeId, selfEditBank)`
-  (`field-rules.ts`). Admin: all, own card included. Administration: all on others; on their own,
-  work fields, personal details and bank, not employment fields, department, team or manager.
-  Others: on their own card only work phone, personal details and (setting on) bank. Nobody but an
-  Admin makes themselves someone's manager.
+  (`field-rules.ts`). Admin: all, own card included. Everyone else: on their own card only work
+  phone, personal details and (setting on) bank. Only an Admin sets a manager, department or team.
 - `GET /api/people/access` returns the caller's `{ employeeId, roles, directReportIds, reportIds, directReportUserIds, reportUserIds }` (the user ids: reports with an account, for CRM data kept per member).
 
 ### Approver rule (spec 7.4)
@@ -1707,9 +1707,9 @@ The database also refuses `manager_id = id`. Covered by a concurrent A → B / B
   leaving shows as `active` to callers who may not see employment dates.
   **Data issues**: `no_manager`, `no_start_date`, `no_department`, `manager_no_account`,
   `no_employee_number` (when the setting requires it); none for inactive people. "No manager" leaves
-  out the top of the organisation (CD-224): when exactly one active employee has no manager, that
-  person is the top and not an issue; when several have none, every one of them is flagged (nobody
-  can tell which of them is the top).
+  out the top of the organisation: the workspace's CEO (CD-225, `tenants.ceo_employee_id`), else
+  (CD-224) when exactly one active employee has no manager, that person; when there is no CEO and
+  several have none, every one of them is flagged (nobody can tell which of them is the top).
 - `GET /employees/:id` → the card: the directory fields, `version` (send as If-Match), `account`,
   `roles`, `manager` (with `hasAccount` and their own manager), `directReports`, `leadsTeams`,
   `headsDepartments`, `approvals` (with names), `permissions: { editableFields, canRevealBank,
@@ -1723,7 +1723,9 @@ The database also refuses `manager_id = id`. Covered by a concurrent A → B / B
   the card. Validation: names ≤ 100 (Serbian and Cyrillic letters), emails, start date required on
   create and at most a year ahead, weekly hours 1–60, age 15–100, the employee number when the
   setting requires it. Choosing a team sets its department; a team of another department is 400;
-  changing the department drops a team that isn't in it.
+  changing the department drops a team that isn't in it. Moving a department head or team lead out
+  of what they head is 409 `heads_department` until the body has `clearHeadRoles: true` (see
+  "Heads and leads" below).
 - **IBAN** input: an IBAN in any spacing or a Serbian domestic number (`260-0056010016113-79`,
   converted to `RS35…`); foreign IBANs by country length and mod 97 (`iban.ts`). Anything else is
   400 "This is not a valid IBAN or Serbian account number". Adding, changing or removing an IBAN (or
@@ -1731,8 +1733,11 @@ The database also refuses `manager_id = id`. Covered by a concurrent A → B / B
   if linked, else the work email. It can't be turned off.
 - `POST /employees/:id/bank/reveal { account: 'iban'|'fxIban' }` → `{ iban, formatted, domestic,
   foreign }` for self and HR (403 otherwise); audit `employee.iban_viewed` each time.
-- `DELETE /employees/:id`: Admin; only a record that never had an account (409 "Deactivate
-  instead"). Workforce modules add their "has data" checks there.
+- `DELETE /employees/:id`: Admin; only once deactivated (CD-225; 409 "<name> is still active.
+  Deactivate first, then delete."), then for anyone, former app users included (their membership
+  went at deactivation). Heads, leads, reports and the CEO setting lose the reference (`SET NULL`);
+  history keeps the `deleted` row. `permissions.canDelete` = Admin and inactive. Workforce modules
+  add their "has data" checks there.
 - `GET /employees/:id/approvers?date=yyyy-mm-dd`: the approver rule with names.
 - `GET /history?entityType=employee|department|team&entityId=&limit=&offset=` → `{ entries, more }`:
   an employee's history for self and HR (403 otherwise), without `leavingReason` for non-HR; fields
@@ -1740,17 +1745,17 @@ The database also refuses `manager_id = id`. Covered by a concurrent A → B / B
   inactive). Departments and teams: HR only.
 - `GET /departments`, `GET /teams`: every member; see "Departments, teams and reporting lines" below.
 
-- `POST /employees/bulk { employeeIds (≤5,000), departmentId?, teamId?, managerId? }` → `{ updated }`
-  (CD-137, the list's "Set department and team" / "Set manager" and the chart's drag): Administration
-  and Admin, one transaction, all or nothing. Every row passes the card's field rules (Administration
-  can't include their own row) and the reporting-line rules: the lock first, then one walk up from
+- `POST /employees/bulk { employeeIds (≤5,000), departmentId?, teamId?, managerId?, clearHeadRoles? }`
+  → `{ updated }` (CD-137, the list's "Set department and team" / "Set manager" and the chart's
+  drag): Admins, one transaction, all or nothing. Every row passes the card's field rules, the
+  head check (409 `heads_department` without `clearHeadRoles`) and the reporting-line rules: the lock first, then one walk up from
   the new manager decides loops for the whole selection, refused with the foundation's
   `assertValidManager` message (409 `reporting_loop`). Department and team go together (a team brings
   its department; a department alone clears the team; both null = No department). Only rows that
   change are written; one audit entry `employee.bulk_updated` with the fields and the count, history
   per employee from the triggers.
 - `POST /employees/export { employeeIds }` → `{ employees: [{ id, personal, bank }] }`: the export's
-  "Include personal details and bank accounts" (Administration, Admin; 403 otherwise), with full
+  "Include personal details and bank accounts" (Admins; 403 otherwise), with full
   IBANs (formatted). Every call writes the audit entry `employee.personal_exported` with the row count.
 
 Friendly messages for the unique constraints and the team rules are in `shared/database/errors.ts`.
@@ -1758,18 +1763,18 @@ Audit entries for employees list the changed field names only, never values.
 
 ### Departments, teams and reporting lines (CD-138, CD-139)
 
-`org.controller.ts` / `org.service.ts`. Reading is for every member; every change is for
-Administration and Admin (403 otherwise). Nobody but an Admin puts themselves in a department or
-team, changes their own manager, or makes themselves someone's manager.
+`org.controller.ts` / `org.service.ts`. Reading is for every member; every change is for Admins
+(403 otherwise; CD-225 removed Administration).
 
 - `GET /departments` → `{ id, name, code, headEmployeeId, headName, version, teams, activeEmployees }[]`
   by name; `GET /teams` → `{ id, departmentId, name, leadEmployeeId, leadName, leadOutside, version,
-  activeEmployees }[]` by department and name (`leadOutside`: the lead isn't a member, the chart shows
-  them on top with "(lead)").
+  activeEmployees }[]` by department and name (`leadOutside`: the lead isn't a member, only for leads
+  set before CD-225).
 - `POST /departments { name, code?, headEmployeeId? }`, `PATCH /departments/:id` (rename, code,
   head). Name ≤ 100 (trimmed, unique in any case), code ≤ 20 (unique, `''` clears it); a head or
   lead must be an active employee (400). Renaming changes the one row, so the new name shows
-  everywhere; the history keeps the old one. Setting a head or a lead never changes a manager.
+  everywhere; the history keeps the old one. Setting a head or a lead never changes a manager, but
+  puts them in the department (or team), see "Heads and leads".
 - `DELETE /departments/:id`: 409 while it has teams ("Logistics has 2 teams (Trucks, Warehouse).
   Delete them or move them to another department first.") or another module uses it; otherwise its
   members end up with no department. "Used by" comes from the `DEPARTMENT_USAGE` provider
@@ -1785,8 +1790,7 @@ team, changes their own manager, or makes themselves someone's manager.
   - **Lead** with `makeMembersReport: true` ("Make team members report to <lead>", ticked by default
     in the dialog): members with no manager or reporting to the previous lead now report to the lead,
     under the reporting-line lock; someone for whom it would close a loop keeps their manager and is
-    listed in `loops` with the message; an Administration caller's own record is left alone. Without
-    it, nobody's manager changes. `GET /teams/:id/lead-preview?leadEmployeeId=` → `{ members, loops }`
+    listed in `loops` with the message. Without it, nobody's manager changes. `GET /teams/:id/lead-preview?leadEmployeeId=` → `{ members, loops }`
     shows the dialog who would change, without saving.
 - `DELETE /teams/:id`: always allowed; members stay in the department without a team.
 - **Add people**: `POST /assignments/preview { departmentId, teamId?, employeeIds }` → per employee
@@ -1800,6 +1804,22 @@ team, changes their own manager, or makes themselves someone's manager.
   `{ changed }`. All or nothing: one loop refuses the whole change (409 naming it). People who left
   are 400.
 - Lists of the panel and the dialogs use `GET /employees` (directory).
+
+**Heads and leads** (CD-225, `heads.ts`): a head belongs to the department they head, a lead to their
+team.
+- `createDepartment` / `updateDepartment` with a new `headEmployeeId` put the head in the department
+  (`placeHead`: their team stays only when it is in that department); `createTeam` / `updateTeam`
+  with a new `leadEmployeeId` put the lead in the team and its department (`placeLead`). Under the
+  reporting-line lock, in the same transaction; history from the triggers.
+- **Moving a head or lead away** (the card's PATCH, `POST /employees/bulk`, `POST /assignments`, the
+  chart's drag, or heading another department / leading another team): `checkHeadMoves` finds the
+  roles the move ends (a department they leave, a team they lead in a department they leave, or
+  another team when they change team) and refuses with 409 `{ code: 'heads_department', message:
+  'Ana Petrović is head of Sales. Moving them to Service removes them as head of Sales.', people:
+  [{ employeeId, fullName, roles: [{ kind: 'department'|'team', id, name }] }] }` unless the request
+  has `clearHeadRoles: true`; then it clears `head_employee_id` / `lead_employee_id` of those.
+- The UI asks "<message> Continue?" and sends it again with `clearHeadRoles`
+  (`lib/headMoves.ts` `withHeadConfirm`, used by the card, the panel and the bulk actions).
 
 **Changing managers in code** (`reporting-lines.ts`, exported from `modules/people`):
 `setManagers(tx, tenantId, [{ employeeId, managerId }])` takes the reporting-line lock (take it
@@ -1824,7 +1844,7 @@ other person's card. Retried like every email job.
 Admins (`approvals.reason = 'manager_no_account'`).
 
 **Screens**: the "Departments & teams" panel (`screens/org/DepartmentsPanel.tsx`), opened by
-`<DepartmentsPanelButton/>` in the Org structure header (`.org-actions`, shown to Administration and Admins; the panel's CSS classes are `dtp-*`). A list
+`<DepartmentsPanelButton/>` in the Org structure header (`.org-actions`, shown to Admins; the panel's CSS classes are `dtp-*`). A list
 of departments, expandable to their teams, with head or lead and counts of active employees; add and
 rename inline; Edit (name, code, head); Move a team (names how many employees move); Delete with
 confirmations naming the members (a department with teams says which to delete or move first); Add
@@ -1833,7 +1853,8 @@ changeable); Set lead with "Make team members report to <lead>" listing who chan
 their manager because of a loop. Data: `store/org.ts` `useOrgStructure()` reads departments, teams,
 the directory and the caller's access through `lib/orgApi.ts`, and again ~300 ms after any
 `employee`, `department`, `team` or `employee_role` hint (`s.orgRev`), so other viewers' changes
-show without a reload. Works at 375 px (actions wrap under the name).
+show without a reload. Every change also reads the Org structure page's directory again (CD-225).
+Works at 375 px (actions wrap under the name).
 
 
 ### App access and leaving (CD-140, spec 4.6–4.8)
@@ -1858,18 +1879,18 @@ People reaches identity only through `modules/identity/index.ts`: `createInvitat
 - **Link to member** (Admin): `GET /employees/:id/link-candidates` → members with `mergeable` and
   `blockers`; `POST /employees/:id/link { userId }` deletes the member's own record and links this
   one. A record with data of its own (department, manager, reports, a team it leads or department
-  it heads, HR roles, personal details or bank account; `mergeBlockers`, Workforce modules add
+  it heads, personal details or bank account; `mergeBlockers`, Workforce modules add
   theirs) is never merged (409). `POST /employees/:id/unlink`: "No account"; the member gets a new
   automatic record (`people_create_member_employee`).
 - **Deactivate** `POST /employees/:id/deactivate { lastWorkingDay, reason?, reportsManagerId?,
-  teamLeads?, departmentHeads? }` (Administration and Admin; on their own record only an Admin,
-  and not the only Admin). Last working day at most 90 days ago in the workspace's time zone. With
+  teamLeads?, departmentHeads? }` (Admins; on their own record not the only Admin). Last working day at most 90 days ago in the workspace's time zone. With
   active direct reports `reportsManagerId` is required (null = "No manager"; the dialog defaults
   to the skip level); the loop rule applies to every report, and a report picked as the new
   manager goes to the skip level. The last owner can't go ("Make someone else an owner first").
   - Today or earlier: applied now (`applyDeactivation`, under the reporting-line lock): end date,
     reason, `deactivated_at`; reports moved; team leads and department heads replaced or cleared;
-    pending invitations withdrawn; the membership removed through identity (audit
+    pending invitations withdrawn; the CEO setting cleared if it was them (CD-225); the membership
+    removed through identity (audit
     `member.deactivated`); job **`people.employee-deactivated`** `{ tenantId, employeeId, userId }`.
     CRM handles it like `identity.member-removed` (off future planned meetings).
   - Later: status Leaving (`employment_end_date` set), the choices in `employees.deactivation_plan`
@@ -1880,7 +1901,7 @@ People reaches identity only through `modules/identity/index.ts`: `createInvitat
     Leaving and is logged. Dev auth: `POST /api/dev/people/deactivate-due { now? }` runs it for
     the caller's workspace.
   - Each moved report gets one "New manager" email (`people.reporting-line-changed`, CD-139).
-- **Reactivate** `POST /employees/:id/reactivate { employmentStartDate? }` (Administration, Admin):
+- **Reactivate** `POST /employees/:id/reactivate { employmentStartDate? }` (Admins):
   Inactive → Active with the new start date (required), no account until invited; Leaving →
   cancels the plan.
 - The card's `permissions` add `canInvite`, `canLink`, `canUnlink` (Admin), `canDeactivate`,
@@ -1895,28 +1916,42 @@ People reaches identity only through `modules/identity/index.ts`: `createInvitat
 `lib/api.ts`.
 
 - Header: initials, name, job, status (Active, Leaving on …, Inactive since …), account and role
-  badges; Invite to Pultly, Deactivate or Reactivate / Cancel leaving, and a "⋯" menu (Link to
-  member, Delete or "Deactivate instead"). Below 700 px every action is in the menu.
+  badges, **Save** and a "⋯" menu (CD-225). The menu holds what the caller may do: Invite to Pultly
+  (no account), Resend / Copy invite link / Withdraw invitation (pending), Link to member / Unlink
+  account, Deactivate (active), Reactivate or Cancel leaving, and Delete (only once deactivated).
 - Sections: Work (with employment fields when returned, "Leads team", "Heads department"),
-  Reporting ("Approvals go to" from `GET /employees/:id/approvers`), Roles (read-only badges; the
-  `data-slot="role-toggles"` is for CD-142), Personal details and Bank account only when the API
-  returned them, App access, History (`GET /people/history`). Two columns, one below 900 px.
-- Each section edits in place with Save and Cancel and sends only the changed fields the card's
-  `permissions.editableFields` allows, with If-Match; a 409 shows the conflict and the card as it
-  is now.
+  Reporting ("Approvals go to" from `GET /employees/:id/approvers`), Personal details and Bank
+  account only when the API returned them. Two columns, one below 900 px. Not shown since CD-225:
+  App access (actions in the menu; sign-in email and workspace role are in Settings → Team), History
+  (the API and `HistorySection` stay) and Roles. "Timesheet required" is commented out (a future
+  feature; the column and API stay, default Yes).
+- **One draft, one Save** (CD-225): every field in `permissions.editableFields` is an input, the rest
+  plain values (`EditableSection` with `CardEditContext`, `screens/employee/parts.tsx`). The draft
+  holds only what was typed (`store/cardDraft.ts`, unit-tested: `changedFields`, `patchOf`), over
+  the card as it is now; `cardPatch` (sections.tsx) validates and Save sends one `PATCH` with the
+  changed fields and If-Match. Save is disabled when nothing changed and highlighted when
+  something did. A 409 keeps the draft and shows the conflict with "Reload"; `heads_department`
+  asks first (see "Heads and leads"). Leaving with unsaved changes asks "Discard your changes?"
+  (react-router `useBlocker`, so `main.tsx` uses a data router with one catch-all route; and
+  `beforeunload`).
+- Pickers (employees, departments, teams) are read again when the org changed since they were read
+  (`s.orgRev`), so a department added in the panel is offered at once.
 - Bank account: masked; "Show" and "Copy" call the reveal endpoint (audited). The IBAN input
   previews what will be saved (`lib/iban.ts`, the server's rules): a domestic number shows its
   IBAN, a foreign one "Foreign account". The full number never comes back with the card, so the
   input starts empty ("Keep RS35 …") and "Remove IBAN" clears it.
 - Live hints `employee`, `department`, `team`, `employee_role` re-read the open cards and the
-  pickers only (not the CRM lists).
+  pickers only (not the CRM lists), ~300 ms after the last one. This tab's own changes too
+  (CD-225): the people hints are handled before the "own change" early return in `store.tsx`
+  `onLiveEvent`; for those the saved card is current already, so only the pickers and the
+  directory (`people.refresh()`) are read again. Card actions call `people.refresh()` as well.
 - Profile → "My employee card"; Settings → Team: "Employee card" column, and removing someone asks
   "<name> also left the company", which opens the card's Deactivate dialog (`?deactivate=1`)
   instead of removing the membership directly.
 ### Import from Excel and CSV (CD-141, spec 8)
 
 The CSV import's pipeline (`shared/import`, see "CSV import and export") with the type `employees`,
-owned by the people module (`employee-import*.ts`). Administration and Admins only: the routes are
+owned by the people module (`employee-import*.ts`). Admins only: the routes are
 `@RequireTenant('member')` and the service checks `PeopleAccess` (`isHr`), so everyone else gets 403.
 
 - `POST /api/people/import/preview` and `/commit` take `{ csv, mapping?, duplicates: 'skip'|'update',
@@ -2000,7 +2035,8 @@ owned by the people module (`employee-import*.ts`). Administration and Admins on
 - **Data**: the store's people slice (`store/people.ts`, `s.people`) reads `GET /people/access`, then
   the whole directory (inactive too for HR), departments and teams, when a screen watches it
   (`people.watch()`; Ctrl/⌘K calls `people.ensure()`). Live hints `employee`, `department`, `team`,
-  `employee_role` read it again (debounced); they don't reload the CRM lists. Everything else
+  `employee_role` read it again (debounced), this tab's own included (CD-225); they don't reload
+  the CRM lists. Everything else
   (filters, search, sort, both charts) runs in the browser on that copy, with the API's rules
   mirrored in pure functions (`filterEmployees`, `reportIdsBelow`, `departmentChart`,
   `reportingTree`). The UI never assumes `employment`, `hr` or `roles` exist on a row: an empty cell
@@ -2010,23 +2046,32 @@ owned by the people module (`employee-import*.ts`). Administration and Admins on
 - **Search**: name, job title, work email (and employee number for HR), accent- and case-free
   (`foldName`: "petrovic" finds Petrović, đ → d, and "dj" works too). Ctrl/⌘K lists up to five
   employees ("Employees") and opens their card (`paths.employee(id)` = `/people/:id`).
-- **Filters** (both tabs): departments, teams (within the chosen departments), manager (direct, or
-  including indirect), status (Active and Leaving by default; Inactive for HR), account (Admin), data
-  issues (HR). "Me" sets the manager filter for managers. Phones fold them under "Filters".
+- **Filters** (both tabs), all dropdowns since CD-225 (`MultiSelect`, `EmployeePicker`):
+  departments, teams (within the chosen departments), manager (a "Me" choice for managers; once one
+  is chosen, a Scope select: Direct reports / Including indirect), status (Active and Leaving by
+  default; Inactive for HR), account (Admin), data issues (HR). The URL parameters are unchanged, so
+  links keep working. Phones fold them under "Filters".
 - **Chart** (`ChartFrame`): scrolls inside its card, never the page; Fit / 100% / − / + zoom (CSS
   transform, the box takes the scaled size) and pan by dragging the background. Inactive people
   never appear.
-  - *By department*: a column per department by name (head on top), a box per team (lead first,
-    then by name), "No team", and "No department" last. Filters hide; without filters empty
-    departments and teams show. HR on desktop can drag a person onto a team or department box; a
-    dialog confirms, then `POST /employees/bulk` with that one id.
-  - *Reporting lines*: a tree from `managerId` drawn with CSS connectors; roots side by side,
-    biggest first. Two levels open by default; a node's reports fold. Reports that have no reports
+  - *By department*: a **company node** on top (CD-225): the workspace's name and the CEO
+    (`workspace.ceoEmployeeId`; Admins "Set CEO" / "Change" with an `EmployeePicker`, saved through
+    `PATCH /api/workspace`), the departments below it with CSS connector lines (`.org-company-tree`).
+    A column per department by name (head on top, shown once: never again in a team box or "No
+    team"), a box per team (lead first, then by name), "No team", and "No department" last. The CEO
+    is never in a department column. Filters hide; without filters empty departments and teams
+    show. HR on desktop can drag a person onto a team or department box; a dialog confirms, then
+    `POST /employees/bulk` with that one id (moving a head asks first). `departmentChart` and
+    `reportingTree` are in `store/orgChart.ts` (pure, unit-tested in `frontend/test`).
+  - *Reporting lines*: a tree from `managerId` drawn with CSS connectors; roots side by side, the
+    CEO first when set, then the biggest. Two levels open by default; a node's reports fold. Reports that have no reports
     of their own stack in a column (keeps wide teams narrow). Filters dim instead of hiding; the
     search opens the path to every hit, highlights them and scrolls to the first.
-  - Phones (≤700px): an indented, foldable list (department → team → people, or manager → reports).
+  - Phones (≤700px): an indented, foldable list (the company node, then department → team →
+    people; or manager → reports).
 - **List** (`EmployeeList`): virtualised (fixed row height, only rows on screen in the page; tested
-  with 5,000), sticky header, sortable columns, default by last name. Columns by caller
+  with 5,000), sticky header, sortable columns, default by last name. `.org-list-inner` is
+  `width: max-content; min-width: 100%`, so the header's background spans every column (CD-225). Columns by caller
   (`screens/org/columns.tsx`): directory columns for all; Start date and Employment type for
   managers and HR; Status and Account for HR; Roles for Admins. Phones get cards (name, job title,
   team).
@@ -2041,48 +2086,36 @@ owned by the people module (`employee-import*.ts`). Administration and Admins on
 - Measured with a mock API and a production build: 1,000 employees open the department chart in
   ~0.6–1.1 s and the list in ~0.4 s (page load included); 5,000 rows in the list ~0.5 s.
 
-### Roles and permissions (CD-142)
+### Roles and permissions (CD-142; Administration and Payroll removed by CD-225)
 
+- **The roles** (`people/caller-access.ts`): Employee (has a record), Manager (has an active direct
+  report, from reporting lines) and Admin (workspace owner or admin, from the membership). Nothing
+  is assigned by hand. CD-225 removed Administration and Payroll: only Admins do HR work (create
+  and edit employees, departments, teams and managers, import, export, deactivate, delete). The
+  role routes (`PUT|DELETE /api/people/employees/:id/roles/:role`, `GET /api/people/roles`), the
+  "Role granted / removed" email (`people.role-changed-email`) and the invite dialog's checkboxes
+  are gone; `employee_roles` and `invitations.assigned_roles` stay unused (expand/contract).
 - **One definition** (`people/permissions.ts`): the matrix of spec 9.3 as data, `PERMISSION_MODULES`
   (`crm`, `org`, `projects`, `timesheet`, `time_off`, `travel`, `lateness`, `planning`, `settings`;
   `live` false for the modules still to come). Each row has a stable id (`crm.visit_plans.manage`,
-  `org.bank`, …) and a cell per role: `scope` (`none`, `own`, `direct`, `indirect` = direct and
-  deeper, `all`) and the `label` the matrix shows ("If setting on", "All except own", …).
+  `org.bank`, …) and a cell per role (Employee, Manager, Admin): `scope` (`none`, `own`, `direct`,
+  `indirect` = direct and deeper, `all`) and the `label` ("If setting on", …).
   `relationsFor(rowId, roles)` is the union of the cells of the caller's roles (Employee always
   counts: roles are additive) as relations `self`/`direct`/`indirect`/`other`; `allows(rowId, roles,
   relation?)`. `CallerAccess.relationTo(employeeId)` / `relationToUser(userId)` give the relation.
   A change of the matrix is a change of this file (and of the spec).
-- **Who uses it**: Settings → Roles & permissions renders it from `GET /api/people/permissions`
-  (`{ roles, modules }`), so the screen can't drift from the rules; the visit plan scope
-  (`VisitScope`, below) and role assignment check it; `test/integration/permissions-matrix.spec.ts`
-  is generated from it: for every row of the live modules and every role (plus Manager + Payroll)
-  it calls the API for the caller themselves, a direct report, an indirect report and someone else,
-  and expects exactly what the cell says. A new row fails the suite until it has a test (or an
-  `it.todo` naming the issue that builds its endpoint). Label conditions the generic rule can't
-  express (the bank setting, "All except own", inactive employees) have their own expectations.
-- **Assigning Administration and Payroll** (`roles.service.ts`, Admins only, row `org.roles`):
-  `PUT /api/people/employees/:id/roles/:role` → `{ employeeId, roles }` and `DELETE …` → 204 for
-  `administration` and `payroll` (anything else is 400: Admin is the workspace role, Manager comes
-  from reporting lines). Any employee, with or without an account; not someone who left. Granting
-  what they have, or removing what they don't, changes nothing and sends nothing. Each change writes
-  an employee history row (field `roles`, old and new lists), the audit entry
-  `employee.role_granted`/`role_removed`, and queues `people.role-changed-email` ("You now have the
-  Administration role in …" / "Your Payroll role in … was removed", to the sign-in email, else the
-  work email; can't be turned off; no personal details). It applies on the person's next request:
-  PeopleAccess reads `employee_roles` per request. The `employee_role` live hint updates the lists.
-- `GET /api/people/roles` (every member): `{ administration, payroll }` (active holders: employee
-  id, user id, name, job title, `hasAccount`, `grantedAt`), `admins` (workspace owners and admins,
-  with `workspaceRole`) and `managers` (employees with active direct reports, with `reports`).
+- **Who uses it**: `GET /api/people/permissions` (`{ roles, modules }`); the visit plan scope
+  (`VisitScope`, below); `test/integration/permissions-matrix.spec.ts` is generated from it: for
+  every row of the live modules and every role it calls the API for the caller themselves, a direct
+  report, an indirect report and someone else, and expects exactly what the cell says. A new row
+  fails the suite until it has a test (or an `it.todo` naming the issue that builds its endpoint).
+  It also checks that a leftover Administration / Payroll row gives nothing and the role routes 404.
 - **Workspace roles**: changing someone to admin in Settings → Team gives them Admin on their next
   request (it is read from the membership); back to member takes it away.
 - **UI**: Settings → Roles & permissions (`screens/settings/RolesTab.tsx`) shows the workspace roles'
-  matrix. The functional roles' matrix and "Who has which role" are hidden since CD-224 (commented
-  out, the components stay; the product owner may bring them back): Administration and Payroll are
-  given in the Team tab's invite dialog (see "Teams and invitations") and on the employee card.
-  The matrix's labels are product text: no open spec questions such as "(Q1)" (a unit test checks it).
-  `components/RoleToggles.tsx` is the employee card's Roles section: the person's roles as badges
-  and, for Admins, an Administration and a Payroll switch (`useSetEmployeeRole`, `store/roles.ts`).
-  `s.peopleRev` goes up on every `employee` and `employee_role` hint and on resync; the lists re-read.
+  matrix only. The matrix's labels are product text: no open spec questions such as "(Q1)" (a unit
+  test checks it). `s.peopleRev` goes up on every `employee` and `employee_role` hint and on
+  resync; the open card re-reads.
 - **Settings → Employees** (CD-215, Admins; `screens/settings/EmployeesTab.tsx`): default weekly
   hours (1–60), "Employee number required", "Employees can edit their own bank account", saved through
   `PATCH /api/workspace` (owners and admins) like the other workspace settings. Settings →

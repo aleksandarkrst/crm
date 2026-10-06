@@ -25,8 +25,7 @@ const muted = (v: ReactNode) => <span className="org-cell-muted">{v}</span>;
 
 /**
  * The list's columns (spec 5.4) for this caller. The directory columns for everyone; Start date and
- * Employment type for managers, Administration and Admin; Status and Account for Administration
- * and Admin; Roles for Admins. A row the caller may not see a value of (the API left it out) shows
+ * Employment type for managers and Admins; Status, Account and Roles for Admins. A row the caller may not see a value of (the API left it out) shows
  * it empty.
  */
 export function listColumns(access: ApiPeopleAccess | null): Column[] {

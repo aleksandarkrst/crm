@@ -28,7 +28,7 @@ import {
 import { useStore } from '../store/store';
 import { ExportDialog, MoveDialog, SetManagerDialog, SetOrgDialog } from './org/BulkDialogs';
 import { listColumns } from './org/columns';
-import { DepartmentChart, DepartmentList, type DropTarget } from './org/DepartmentChart';
+import { type CompanyNode, DepartmentChart, DepartmentList, type DropTarget } from './org/DepartmentChart';
 import { DepartmentsPanel, DepartmentsPanelButton } from './org/DepartmentsPanel';
 import { AddEmployeeDialog } from './employee/AddEmployeeDialog';
 import { EmployeeList } from './org/EmployeeList';
@@ -47,11 +47,12 @@ type Dialog = { kind: 'add' } | { kind: 'import' } | { kind: 'departments' } | {
 /**
  * Org structure (CD-137, spec 5): the chart (by department or by reporting lines) and the list of
  * employees, with search and filters shared by both. The tab, the chart mode, the filters and the
- * list's sort live in the URL, so links can be shared. Everyone sees the directory; Administration
- * and Admin also get data issues, inactive people, bulk actions, export and drag-to-move.
+ * list's sort live in the URL, so links can be shared. Everyone sees the directory; Admins also get
+ * data issues, inactive people, bulk actions, export and drag-to-move (CD-225: only Admins do HR
+ * work). "By department" hangs the departments below a company node with the CEO (CD-225).
  */
 export function OrgStructure() {
-  const { s, people: actions, flash, employeeCard } = useStore();
+  const { s, people: actions, flash, employeeCard, session, setWorkspace, canEditWorkspace } = useStore();
   const { employees, departments, teams, access, loaded, loading, error } = s.people;
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -121,8 +122,20 @@ export function OrgStructure() {
   const count = tab === 'list' ? rows.length : chartMatches.length;
 
   // ------------------------------------------------------------ the charts
-  const blocks = useMemo(() => (tab === 'chart' && mode === 'department' ? departmentChart(chartMatches, chartPeople, departments, teams, !dirty) : []), [tab, mode, chartMatches, chartPeople, departments, teams, dirty]);
-  const roots = useMemo(() => (tab === 'chart' && mode === 'reporting' ? reportingTree(chartPeople) : []), [tab, mode, chartPeople]);
+  // The CEO (CD-225): a workspace setting, shown in the company node above the departments.
+  const ceoId = s.workspace.ceoEmployeeId;
+  const ceo = useMemo(() => chartPeople.find((e) => e.id === ceoId) ?? null, [chartPeople, ceoId]);
+  const blocks = useMemo(
+    () => (tab === 'chart' && mode === 'department' ? departmentChart(chartMatches, chartPeople, departments, teams, !dirty, ceo?.id ?? null) : []),
+    [tab, mode, chartMatches, chartPeople, departments, teams, dirty, ceo],
+  );
+  const roots = useMemo(() => (tab === 'chart' && mode === 'reporting' ? reportingTree(chartPeople, ceo?.id ?? null) : []), [tab, mode, chartPeople, ceo]);
+  const company: CompanyNode = {
+    name: s.workspace.name || session.tenant.name,
+    ceo,
+    setCeo: admin && canEditWorkspace ? (id) => setWorkspace({ ceoEmployeeId: id }) : null,
+    employees: chartPeople,
+  };
   const q = filters.q.trim();
   const hits = useMemo(() => (q ? new Set(chartPeople.filter((e) => matchesText(e, q, hr)).map((e) => e.id)) : null), [q, chartPeople, hr]);
   const searchPath = useMemo(() => (hits ? pathsTo(chartPeople, hits) : new Set<string>()), [hits, chartPeople]);
@@ -160,15 +173,15 @@ export function OrgStructure() {
   useEffect(() => {
     if (!wantsNew || !loaded) return;
     if (hr) setDialog({ kind: 'add' });
-    else flash('Only Administration and Admins add employees.');
+    else flash('Only Admins add employees.');
     update({ new: null });
   }, [wantsNew, loaded, hr, flash, update]);
   // Phones: the filters fold under a button (the search stays).
   const [filtersOpen, setFiltersOpen] = useState(false);
   const activeFilters = [filters.departmentIds.length, filters.teamIds.length, filters.managerId, filters.accounts.length, filters.issues.length, filters.statuses.join() !== DEFAULT_STATUSES.join()].filter(Boolean).length;
   const open = useCallback((id: string) => navigate(paths.employee(id)), [navigate]);
-  // Desktop, Administration and Admin; Administration doesn't move themselves (spec 9.3).
-  const canDrag = !phone && hr ? (e: ApiEmployee) => admin || e.id !== me : null;
+  // Desktop, Admins (spec 9.3).
+  const canDrag = !phone && hr ? () => true : null;
   const onDrop = (id: string, target: DropTarget) => {
     const employee = employees.find((e) => e.id === id);
     if (!employee) return;
@@ -292,41 +305,26 @@ export function OrgStructure() {
             }
           />
           <MultiSelect label="Team" testId="org-filter-team" options={teamOptions} value={filters.teamIds} onChange={(ids) => update({ team: ids.join(',') })} empty="No teams yet" />
+          {/* Every filter is a dropdown (CD-225). Manager: type a name, or "Me"; the scope once one is chosen. */}
           <div className="org-manager-filter">
-            <EmployeePicker employees={managers} value={filters.managerId} onChange={(id) => update({ manager: id })} placeholder="Manager" testId="org-filter-manager" none="Any manager" />
-            {me && isManagerOf(access) && filters.managerId !== me && (
-              <button type="button" className="cal-pill" data-testid="org-filter-me" onClick={() => update({ manager: me })}>
-                Me
-              </button>
-            )}
+            <EmployeePicker employees={managers} value={filters.managerId} onChange={(id) => update({ manager: id })} placeholder="Manager" testId="org-filter-manager" none="Any manager" me={me && isManagerOf(access) ? me : null} />
             {filters.managerId && (
-              <span className="cal-pills" role="group" aria-label="Reports">
-                <button type="button" aria-pressed={filters.managerScope === 'direct'} data-testid="org-scope-direct" className={'cal-pill' + (filters.managerScope === 'direct' ? ' on' : '')} onClick={() => update({ scope: null })}>
-                  Direct reports only
-                </button>
-                <button type="button" aria-pressed={filters.managerScope === 'indirect'} data-testid="org-scope-indirect" className={'cal-pill' + (filters.managerScope === 'indirect' ? ' on' : '')} onClick={() => update({ scope: 'indirect' })}>
-                  Including indirect
-                </button>
-              </span>
+              <select className="cal-select org-scope" aria-label="Reports" data-testid="org-filter-scope" value={filters.managerScope} onChange={(e) => update({ scope: e.target.value === 'indirect' ? 'indirect' : null })}>
+                <option value="direct">Direct reports</option>
+                <option value="indirect">Including indirect</option>
+              </select>
             )}
           </div>
-          <span className="cal-pills" role="group" aria-label="Status">
-            {statusChoices.map((st) => (
-              <button
-                key={st}
-                type="button"
-                aria-pressed={filters.statuses.includes(st)}
-                data-testid={'org-status-' + st}
-                className={'cal-pill' + (filters.statuses.includes(st) ? ' on' : '')}
-                onClick={() => {
-                  const next = toggle(filters.statuses, st);
-                  update({ status: next.join(',') === DEFAULT_STATUSES.join(',') ? null : next.join(',') || 'none' });
-                }}
-              >
-                {STATUS_LABEL[st]}
-              </button>
-            ))}
-          </span>
+          <MultiSelect
+            label="Status"
+            testId="org-filter-status"
+            options={statusChoices.map((st) => ({ value: st, label: STATUS_LABEL[st] }))}
+            value={filters.statuses}
+            onChange={(v) => {
+              const next = statusChoices.filter((st) => v.includes(st));
+              update({ status: next.join(',') === DEFAULT_STATUSES.join(',') ? null : next.join(',') || 'none' });
+            }}
+          />
           {admin && (
             <MultiSelect
               label="Account"
@@ -336,15 +334,7 @@ export function OrgStructure() {
               onChange={(v) => update({ account: v.join(',') })}
             />
           )}
-          {hr && (
-            <span className="cal-pills" role="group" aria-label="Data issues">
-              {ISSUE_FILTERS.map((i) => (
-                <button key={i.value} type="button" aria-pressed={filters.issues.includes(i.value)} data-testid={'org-issue-' + i.value} className={'cal-pill' + (filters.issues.includes(i.value) ? ' on' : '')} onClick={() => update({ issues: toggle(filters.issues, i.value).join(',') })}>
-                  {i.label}
-                </button>
-              ))}
-            </span>
-          )}
+          {hr && <MultiSelect label="Data issues" testId="org-filter-issues" options={ISSUE_FILTERS} value={filters.issues} onChange={(v) => update({ issues: v.join(',') })} />}
             </>
           )}
           {dirty && (
@@ -393,7 +383,7 @@ export function OrgStructure() {
           // Empty states point to the next step (CD-224).
           <div className="empty-block" data-testid="org-empty">
             <div className="empty-block-title">{dirty ? 'Nobody matches these filters' : 'No employees yet'}</div>
-            <div className="empty-block-text">{dirty ? 'Change or clear the filters to see more people.' : hr ? 'Add employees one by one, or import them from Excel.' : 'Administration and Admins add the employees.'}</div>
+            <div className="empty-block-text">{dirty ? 'Change or clear the filters to see more people.' : hr ? 'Add employees one by one, or import them from Excel.' : 'Admins add the employees.'}</div>
             <div className="empty-block-actions">
               {dirty && (
                 <button type="button" className="btn btn-secondary" onClick={() => update(Object.fromEntries(FILTER_PARAMS.map((k) => [k, null])))}>
@@ -425,9 +415,9 @@ export function OrgStructure() {
               </div>
             )}
             {phone ? (
-            <DepartmentList blocks={blocks} onOpen={open} hr={hr} />
+            <DepartmentList company={company} blocks={blocks} onOpen={open} hr={hr} />
           ) : (
-            <DepartmentChart blocks={blocks} onOpen={open} hr={hr} canDrag={canDrag} onDrop={onDrop} />
+            <DepartmentChart company={company} blocks={blocks} onOpen={open} hr={hr} canDrag={canDrag} onDrop={onDrop} />
           )}
           </>
         ) : phone ? (

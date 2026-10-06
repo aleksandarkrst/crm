@@ -510,7 +510,7 @@ export function ImportDialog({ initialType, onClose, onImported }: { initialType
 
 /**
  * "Import" on the Org structure page (CD-137 mounts it): the employee import of CD-141 for
- * Administration and Admins. `onImported` re-reads the page's lists after an import.
+ * Admins. `onImported` re-reads the page's lists after an import.
  */
 export function EmployeeImportDialog({ onClose, onImported }: { onClose: () => void; onImported?: () => void }) {
   return <ImportDialog initialType="employees" onClose={onClose} onImported={onImported} />;

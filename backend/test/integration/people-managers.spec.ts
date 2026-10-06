@@ -2,7 +2,8 @@
  * Reporting lines (CD-139, spec 7): loops refused on every path, also under concurrent bulk and
  * team-lead changes (AC 7.6.1), manager scope on trees of depth 1 to 10 right after a change
  * (AC 7.6.3), who may change them (AC 7.6.5), the "New manager" and "New direct report" emails
- * (spec 10.2) and the "Manager has no account" data issue (spec 7.5).
+ * (spec 10.2) and the "Manager has no account" data issue (spec 7.5). `hr` is a workspace admin
+ * (only Admins change reporting lines since CD-225); `pay` holds a leftover Payroll row.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, createTenant, eventually, mailTo, ok, type Session, signIn } from './helpers';
@@ -37,8 +38,8 @@ beforeAll(async () => {
   ];
   tenant = await createTenant(owner, 'Reporting lines');
   id.owner = (await accessOf(owner, tenant)).employeeId;
-  for (const [key, s] of [['hr', hr], ['pay', pay], ['mgr', mgr], ['emp', emp], ['peer', peer]] as const) id[key] = await joinAsEmployee(owner, tenant, s);
-  await grantRole(tenant, id.hr, 'administration');
+  id.hr = await joinAsEmployee(owner, tenant, hr, 'admin');
+  for (const [key, s] of [['pay', pay], ['mgr', mgr], ['emp', emp], ['peer', peer]] as const) id[key] = await joinAsEmployee(owner, tenant, s);
   await grantRole(tenant, id.pay, 'payroll');
 });
 
@@ -124,19 +125,18 @@ describe('manager scope (AC 7.6.3)', () => {
 });
 
 describe('who changes reporting lines (AC 7.6.5)', () => {
-  it('Administration and Admins only; nobody but an Admin changes their own or becomes a manager themselves', async () => {
+  it('Admins only (CD-225); an Admin may change their own and make themselves a manager', async () => {
     const e = await person('Someone', 'Else');
     for (const s of [emp, mgr, pay]) {
-      expect((await setManager([e], id.mgr, s)).status, s.name).toBe(403);
+      const r = await setManager([e], id.mgr, s);
+      expect(r.status, s.name).toBe(403);
+      expect(r.body.message).toBe('Only Admins change reporting lines');
       expect((await call('PATCH', `/people/employees/${e}`, { ...as(s), body: { managerId: id.mgr } })).status, s.name).toBe(403);
+      expect((await setManager([id.pay], id.mgr, s)).status, s.name).toBe(403);
     }
-    const own = await setManager([id.hr], id.mgr, hr);
-    expect(own).toMatchObject({ status: 403, body: { message: 'Only an Admin can change their own manager' } });
-    expect((await call('PATCH', `/people/employees/${id.hr}`, { ...as(hr), body: { managerId: id.mgr } })).status).toBe(403);
-    expect((await setManager([e], id.hr, hr)).body.message).toBe("Only an Admin can make themselves someone's manager");
     expect(await managerOf(e)).toBeNull();
-    expect(await managerOf(id.hr)).toBeNull();
-    // Administration sets others; an Admin may set their own and make themselves a manager.
+    expect((await setManager([id.hr], id.mgr, hr)).status).toBe(200);
+    await setManager([id.hr], null, hr);
     expect((await setManager([e], id.mgr, hr)).status).toBe(200);
     expect((await setManager([id.owner], id.mgr, owner)).status).toBe(200);
     expect((await setManager([e], id.owner, owner)).status).toBe(200);
@@ -154,7 +154,7 @@ describe('who changes reporting lines (AC 7.6.5)', () => {
 
 describe('"New manager" and "New direct report" emails (spec 10.2)', () => {
   it('go to the employee and the new manager when someone else changes it in the app, if they want them', async () => {
-    // From the card (single), by Administration.
+    // From the card (single), by another Admin.
     await ok('PATCH', `/people/employees/${id.emp}`, { ...as(hr), body: { managerId: id.mgr } });
     const toEmp = await eventually(async () => (await mailTo(emp, emp.email)).find((m) => m.subject.startsWith('Your new manager in')), '"New manager" email');
     expect(toEmp.subject).toMatch(new RegExp(`^Your new manager in Reporting lines .+: ${mgr.name}$`));

@@ -5,9 +5,9 @@ import type { CallerAccess } from './caller-access';
  * Names are the API's (PATCH /api/people/employees/:id) and the history's `field`.
  */
 export const WORK_FIELDS = ['firstName', 'lastName', 'workEmail', 'jobTitle', 'workPhone', 'workLocation'] as const;
-/** Employment fields: seen by self, managers above (any depth), Administration, Admin. */
+/** Employment fields: seen by self, managers above (any depth) and Admins. */
 export const EMPLOYMENT_FIELDS = ['employeeNumber', 'employmentStartDate', 'employmentType', 'weeklyHours', 'timesheetRequired', 'attendanceTracked'] as const;
-/** Department, team and reports to: Administration and Admin, never on your own card unless Admin. */
+/** Department, team and reports to: Admins only (CD-225). */
 export const ORG_FIELDS = ['departmentId', 'teamId', 'managerId'] as const;
 export const PERSONAL_FIELDS = [
   'dateOfBirth',
@@ -32,17 +32,13 @@ const SELF_SERVICE: readonly EmployeeField[] = ['workPhone', ...PERSONAL_FIELDS]
 
 /**
  * The fields the caller may change on employee `employeeId`'s card (spec 4.5, 9.3):
- * - Admin: everything, their own card included.
- * - Administration: everything on others' cards; on their own, work fields, personal details and
- *   the bank account, but no employment fields, department, team or manager.
+ * - Admin: everything, their own card included (the only role doing HR work since CD-225).
  * - Everyone else: only their own card's work phone and personal details, plus the bank account
  *   when the workspace allows it (`selfEditBank`, Settings → Employees).
  */
 export function editableFields(access: CallerAccess, employeeId: string, selfEditBank: boolean): EmployeeField[] {
   if (access.isAdmin) return [...EDITABLE_FIELDS];
-  const self = access.isSelf(employeeId);
-  if (access.isAdministration) return self ? [...WORK_FIELDS, ...PERSONAL_FIELDS, ...BANK_FIELDS] : [...EDITABLE_FIELDS];
-  if (self) return [...SELF_SERVICE, ...(selfEditBank ? BANK_FIELDS : [])];
+  if (access.isSelf(employeeId)) return [...SELF_SERVICE, ...(selfEditBank ? BANK_FIELDS : [])];
   return [];
 }
 
@@ -53,7 +49,7 @@ const EMPLOYMENT_SET = new Set<string>([...EMPLOYMENT_FIELDS, ...LEAVING_FIELDS]
 /**
  * Whether the caller may see a history row's field of employee `employeeId` (spec 4.5, 9.5):
  * personal and bank fields like the card's sections, employment fields like the employment
- * section, the reason for leaving only for Administration and Admin.
+ * section, the reason for leaving only for Admins.
  */
 export function canSeeHistoryField(access: CallerAccess, employeeId: string, field: string | null): boolean {
   if (!field) return true;
