@@ -39,6 +39,8 @@ export function Contact() {
     if (leadId) ensureDocs(leadId);
   }, [dealIds, leadId, ensureLog, ensureDocs]);
   if (!p) return <Navigate to={paths.contacts} replace />;
+  // Old links by person id ("<deal>:p", "%3Ap" in the address bar) go to the contact's own id (CD-224).
+  if (p.contactId && p.contactId !== id) return <Navigate to={paths.contact(p.contactId)} replace />;
   const company = companyOfPerson(s, p);
   const companyRec = companyRecords(s).find((r) => r.id === (p.companyId ?? c?.companyId));
 

@@ -89,6 +89,12 @@ describe('command palette, + menu and account menu', () => {
     await page.waitForFunction(() => document.querySelector('[data-testid=record-name]')?.value === 'Ana Marković');
     // The header names the screen, not the record.
     assert.equal(await page.$eval('header h1', (el) => el.textContent), 'Contact');
+    // A clean contact id in the address, no "%3Ap" (CD-224); an old person-id link redirects to it.
+    const clean = await page.evaluate(() => location.pathname);
+    assert.match(clean, /^\/contacts\/[0-9a-f-]{36}$/);
+    // Ana is the primary contact of the Northwind deal: her old person id is "<deal id>:p".
+    await page.goto(`${BASE_URL}/contacts/${encodeURIComponent(northwindId + ':p')}`, { waitUntil: 'networkidle0' });
+    await page.waitForFunction((p) => location.pathname === p, {}, clean);
   });
 
   step('says so when nothing matches, and Escape closes the palette', async () => {

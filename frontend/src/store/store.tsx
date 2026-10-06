@@ -1282,7 +1282,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         flash('Funnel reassigned · lead moved to the first stage');
       },
       openLead: (id: string) => navigate(paths.lead(id)),
-      openContact: (id: string) => navigate(paths.contact(id)),
+      /** By the backend contact id when there is one (CD-224): a clean URL, not the person id "<deal>:p". */
+      openContact: (id: string) => navigate(paths.contact(personById(cur(), id)?.contactId ?? id)),
       openCompany: (id: string) => navigate(paths.company(id)),
       loadTemplates,
       ensureDocs,
