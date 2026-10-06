@@ -989,7 +989,7 @@ the store is the one place that talks to the backend.
   default funnel and the notification settings (daily digest, deal assigned) live on
   `memberships`, because funnels and notifications belong to one workspace. A name set here wins over the name in the sign-in token
   (`users.display_name_custom`). The start page and the default funnel take effect (the app opens
-  on them). Language and date format are only stored for now, and the UI says so; the digest is
+  on them). Language and date format are only stored for now and not shown (CD-223); the digest is
   sent (see "Email").
   `memberships.default_funnel_id` has no foreign key (memberships has no RLS), so a trigger clears
   it when its funnel is deleted (0021), and the Profile screen shows "First funnel (…)" when there
@@ -1140,8 +1140,9 @@ composer's WhatsApp and LinkedIn tabs are commented out until those integrations
   it while the menu is open (D deal, P contact, O company, T task, R product). On a deal's screen a
   new task or contact is for that deal.
 - **Notifications**: the bell lists your own open tasks that are overdue or due today (nothing
-  else is made up); the account menu has Personal preferences, Workspace settings, Team and Sign
-  out. The sidebar no longer has Settings and the avatar (on phones they stay under "More").
+  else is made up); the account menu has Personal preferences, Workspace settings and Sign
+  out (Team is a tab of the workspace settings, CD-223). The avatar is not in the sidebar; Settings
+  is back at its bottom (CD-223; on phones both are under "More").
 - **Company and contact pages** look like the deal page: a record header (name, owner, "+ Deal",
   which opens the New deal dialog with this company or contact, and a menu with Delete for owners
   and admins), on the left Summary and Details with icons, Deals (open ones, won and lost with
@@ -1155,24 +1156,48 @@ composer's WhatsApp and LinkedIn tabs are commented out until those integrations
 
 ## Module and workspace switcher (CD-214)
 
-The Pultly mark at the top of the sidebar opens a 420px popover to its right
-(`components/ModuleSwitcher.tsx`, styles `.mod-*` in `styles/header.css`); ⌘J / Ctrl J opens it
-from anywhere. It replaces the workspace-only switcher of CD-23.
+The button under the Pultly mark in the sidebar (it shows the module you're in, CD-223) opens a
+420px popover to its right (`components/ModuleSwitcher.tsx`, styles `.mod-*` in
+`styles/header.css`); ⌘J / Ctrl J opens it from anywhere. The mark itself links home (`/`, your
+start page). It replaces the workspace-only switcher of CD-23.
 
-- **Modules** (`components/modules.ts`, one list): Overview (`/overview`), CRM (`/pipeline`; the
-  current module on Pipeline, Today, Calendar, meetings, Visit plans, Companies, Contacts,
-  Products and deals), Planning, Projects, Workforce and Reporting (`/reports`). The current module
-  comes from the route (none on Settings and Profile). A module without a target is locked with
-  "Coming soon"; Reporting is locked for members ("Owners and admins"). The reason is a field
-  (`LockReason`), so "Not in your plan" can come with plans. Workforce goes to the Org structure
-  page (milestone 13): give it `to: '/org'` once that route exists.
+- **Modules** (`components/modules.ts`, one list, CD-223): Planning, CRM (`/pipeline`), Projects
+  and Workforce (`/org`), in that order. Planning and Projects have no target, so they are locked
+  with "Coming soon". The reason is a field (`LockReason`), so "Owners and admins" or "Not in your
+  plan" can come with roles and plans. There is no Overview or Reporting module: both are CRM pages.
 - **Workspaces**: with 2+ workspaces a row above the modules shows the current one ("Switch ›");
   with one, its name sits next to "Modules". Either opens the list: each workspace with its member
   count (`memberCount` in GET /me's `tenants`), the current one checked, and "New workspace".
   Switching and creating reuse the session's `switchTenant` / `createTenant`.
 - Arrow keys move focus (two columns in the grid), every item has a focus ring, Escape or an
-  outside click closes it and focus goes back to the logo. On phones it opens from "More" as a
-  bottom sheet. Tested in `e2e/tests/module-switcher.test.mjs`.
+  outside click closes it and focus goes back to the switcher button. On phones it opens from
+  "More" as a bottom sheet. Tested in `e2e/tests/module-switcher.test.mjs`.
+
+### Modules as separate apps (CD-223)
+
+Each module is its own app with its own sidebar (`Sidebar` in `components/Layout.tsx`): the Pultly
+mark, the module switcher button (icon and name of the current module), the module's pages, and
+Settings at the bottom, as in the Workforce design.
+
+- **Pages per module** (`nav` in `modules.ts`): CRM has Overview, Pipeline, Today, Calendar, Visit
+  plans, Companies, Contacts, Products and Reports (Reports only for owners, admins and managers who
+  see their team, CD-142: `navFor`); Workforce has Org structure (Timesheets, Time off, Approvals,
+  Utilisation later). Add a module's page there and it shows in the sidebar, the phone bar
+  (`phone: true`) or its "More".
+- **The current module** comes from the route (`screens` prefixes): meetings, deals, companies,
+  contacts, products and reports are CRM; `/org` and employee cards (`/people/:id`) are Workforce.
+  Settings and the profile belong to none and keep the last module, remembered per user in this
+  browser (`localStorage` `crm.module.<userId>`, in try/catch; without storage it falls back to the
+  CRM).
+- **Desktop overflow**: `useFit` measures the nav's height (a `ResizeObserver`) and the item height;
+  when not all pages fit, the ones that don't are hidden (`.nav-overflow`) and a "⋯ More" item
+  (`SideMore`) opens a menu to the right with them (the phone sheet's look). It takes focus, arrow
+  keys / Home / End move, Escape closes and gives focus back, a pick or an outside click closes it.
+- **Command palette**: "Go to" covers every page of every module (Org structure, and Reports for
+  those who see it), since the sidebar shows one module at a time.
+- The account menu has no Team entry any more (it is a tab of the workspace settings), and the
+  profile doesn't show Language and Date format until something applies them (the fields and the
+  API stay).
 
 ## Meetings (CD-130)
 
@@ -2097,9 +2122,10 @@ table instead.
 ## Phones and tablets (CD-70)
 
 Media queries at the end of `styles/global.css` (≤1024px and ≤700px) adapt the desktop styles;
-the desktop layout is unchanged. On phones the sidebar becomes a bottom bar with Pipeline, Today,
-Companies, Contacts and **More** (a sheet with Overview, Products, Settings, Profile, the
-module and workspace switcher as a bottom sheet, and the workspace switch). The header puts the title on its own row and keeps search and "New…" full
+the desktop layout is unchanged. On phones the sidebar becomes a bottom bar with the current
+module's everyday pages (CD-223; CRM: Pipeline, Today, Calendar, Companies; Workforce: Org
+structure) and **More** (a sheet with the module's other pages, Settings, Profile, the module and
+workspace switcher as a bottom sheet, and the workspace switch). The header puts the title on its own row and keeps search and "New…" full
 width. Filter bars wrap two per row; tables scroll sideways inside their card; the pipeline board
 scrolls with snapping columns; dialogs are bottom sheets with their buttons always visible. On a
 deal, the composer and to-dos come before the details, and the stage line names only the current

@@ -235,6 +235,8 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 /* ---------------------------------------------------------------- phones and tablets (CD-70) */
 /* Desktop styles stay as they are; these blocks only adapt them. The "More" menu is phone-only. */
 .nav-more, .more-sheet, .more-backdrop { display: none; }
+/* Desktop: sidebar pages that don't fit sit under the sidebar's own "More" (CD-223). */
+@media (min-width: 701px) { .app-sidebar .nav-overflow { display: none !important; } }
 
 @media (max-width: 1024px) {
   .search-trigger { width: 240px; }
@@ -246,7 +248,7 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 @media (max-width: 700px) {
   .app-main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 
-  /* The sidebar becomes a bottom bar: the four everyday screens and "More". */
+  /* The sidebar becomes a bottom bar: the module's everyday screens and "More". */
   .app-sidebar { position: fixed !important; inset: auto 0 0 0 !important; top: auto !important; width: 100% !important; height: auto !important; flex: none !important; padding: 4px 4px calc(4px + env(safe-area-inset-bottom)) !important; flex-direction: row !important; gap: 0 !important; z-index: 40 !important; }
   .app-sidebar .nav-desktop { display: none !important; }
   .app-sidebar nav { flex: 1; flex-direction: row !important; gap: 0 !important; justify-content: space-around; }

@@ -44,6 +44,28 @@
 .ws-logo:hover, .ws-logo[aria-expanded="true"] { background: rgba(255, 255, 255, 0.06); box-shadow: 0 0 0 3px rgba(198, 241, 106, 0.28); }
 .ws-logo:focus-visible { outline: 2px solid var(--brand-soft-2); outline-offset: 2px; }
 .ws-item.current { background: var(--brand-tint); }
+
+/* The sidebar's top (CD-223): the Pultly mark (home) and, under it, the button that shows the
+   module you're in and opens the switcher. */
+.side-top { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+.mod-trigger { width: 80px; padding: 8px 4px 7px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.04); color: #F5F7F6; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; font: inherit; }
+.mod-trigger:hover, .mod-trigger[aria-expanded="true"] { background: rgba(255, 255, 255, 0.08); border-color: rgba(198, 241, 106, 0.32); }
+.mod-trigger:focus-visible { outline: 2px solid var(--brand-soft-2); outline-offset: 2px; }
+.mod-trigger-tile { width: 34px; height: 34px; border-radius: 9px; background: rgba(198, 241, 106, 0.14); color: var(--lime); display: flex; align-items: center; justify-content: center; }
+.mod-trigger-name { display: flex; align-items: center; gap: 3px; max-width: 100%; font-size: 11px; font-weight: 600; letter-spacing: 0.01em; line-height: 1.2; }
+.mod-trigger-text { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mod-trigger-name svg { flex: none; color: #93A39B; }
+
+/* "⋯ More" in the desktop sidebar (CD-223): the pages that don't fit, in a menu to its right. */
+.side-more { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%; padding: 2px 0 4px; border: 0; background: transparent; cursor: pointer; font-family: inherit; }
+.side-more .nav-icon { width: 46px; height: 42px; border-radius: 11px; display: flex; align-items: center; justify-content: center; }
+.side-more .nav-label { font-size: 10.5px; font-weight: 500; letter-spacing: 0.01em; line-height: 1.2; }
+.side-more:focus-visible { outline: none; }
+.side-more:focus-visible .nav-icon { box-shadow: 0 0 0 2px var(--brand-soft-2); }
+.side-more-pop { position: fixed; left: 106px; bottom: 12px; width: 220px; max-height: calc(100vh - 24px); overflow-y: auto; display: flex; flex-direction: column; background: var(--white); color: var(--ink); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-pop); padding: 6px; z-index: 30; animation: dcFade .14s ease-out both; }
+.side-more-pop .menu-item { color: var(--ink); text-decoration: none; padding: 10px; }
+.side-more-pop .menu-item:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--brand); }
+.side-more-pop .menu-item.active { background: var(--brand-tint); }
 .ws-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ws-initial { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 7px; background: var(--segment); color: var(--text-2); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
 .ws-item.current .ws-initial { background: var(--brand); color: var(--bg-soft); }

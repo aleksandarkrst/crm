@@ -55,9 +55,14 @@ describe('org structure', () => {
     id.olga = (await api(page, '/people/access')).employeeId;
   });
 
-  step('"Org structure" is in the sidebar; the chart shows everyone by department', async () => {
+  step('Workforce opens "Org structure", its sidebar page; the chart shows everyone by department', async () => {
     await page.goto(`${BASE_URL}/pipeline`, { waitUntil: 'networkidle0' });
-    await click(page, '.app-sidebar a[href="/org"]');
+    // Each module has its own sidebar (CD-223): Org structure is in Workforce's.
+    assert.equal(await page.$('.app-sidebar a[href="/org"]'), null, 'not in the CRM sidebar');
+    await click(page, '[data-testid=module-switcher]');
+    await click(page, '[data-testid=module-switcher-pop] [data-module=workforce]');
+    await page.waitForFunction(() => location.pathname === '/org');
+    await page.waitForSelector('.app-sidebar a[href="/org"].active');
     await page.waitForSelector('[data-testid=org-chart-department]');
     await page.waitForFunction(() => document.querySelector('[data-testid=org-count]')?.textContent === '7 employees');
     const columns = await page.$$eval('[data-testid=org-dept]', (els) => els.map((e) => [e.querySelector('.org-dept-name').textContent, [...e.querySelectorAll('[data-testid=org-person]')].map((p) => p.querySelector('.org-person-name').firstChild.textContent)]));
