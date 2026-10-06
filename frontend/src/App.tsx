@@ -16,6 +16,7 @@ const Contacts = lazy(() => import('./screens/Contacts').then((m) => ({ default:
 const EmployeeCard = lazy(() => import('./screens/EmployeeCard').then((m) => ({ default: m.EmployeeCard })));
 const Dashboard = lazy(() => import('./screens/Dashboard').then((m) => ({ default: m.Dashboard })));
 const Meeting = lazy(() => import('./screens/Meeting').then((m) => ({ default: m.Meeting })));
+const NewMeeting = lazy(() => import('./screens/NewMeeting').then((m) => ({ default: m.NewMeeting })));
 const LeadScreen = lazy(() => import('./screens/lead/LeadScreen').then((m) => ({ default: m.LeadScreen })));
 const OrgStructure = lazy(() => import('./screens/OrgStructure').then((m) => ({ default: m.OrgStructure })));
 const Pipeline = lazy(() => import('./screens/Pipeline').then((m) => ({ default: m.Pipeline })));
@@ -102,6 +103,7 @@ function AppRoutes() {
           <Route path="pipeline" element={<Pipeline />} />
           <Route path="today" element={<Today />} />
           <Route path="calendar" element={<Calendar />} />
+          <Route path="meetings/new" element={<NewMeeting />} />
           <Route path="meetings/:id" element={<Meeting />} />
           <Route path="visit-plans" element={<VisitPlans />} />
           <Route path="visit-plans/:id" element={<VisitPlan />} />

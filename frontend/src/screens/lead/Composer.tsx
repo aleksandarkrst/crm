@@ -3,7 +3,7 @@ import { CHANNEL_LABELS, OBJECTIONS } from '../../store/seed';
 import { initialsOf, script, stageOf, todayLabel } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
-import { MeetingForm } from '../../modals/MeetingDialog';
+import { MeetingForm } from '../meeting/MeetingForm';
 import { DealDocuments } from './DealDocuments';
 
 const TABS = [
@@ -128,7 +128,7 @@ export function Composer({ lead }: { lead: Lead }) {
         {tab === 'meeting' &&
           (lead.companyId ? (
             // A real meeting on the calendar (CD-130): with the deal, its company and primary contact.
-            <MeetingForm key={meetingForm} seed={{ dealId: lead.id, companyId: lead.companyId, contactId: lead.contactId }} submitLabel="Schedule meeting" onDone={() => setMeetingForm((n) => n + 1)} />
+            <MeetingForm key={meetingForm} variant="inline" seed={{ dealId: lead.id, companyId: lead.companyId, contactId: lead.contactId }} submitLabel="Schedule meeting" onDone={() => setMeetingForm((n) => n + 1)} />
           ) : (
             <div className="hint-box">Every meeting belongs to a customer company. Pick this deal's company in Summary first.</div>
           ))}

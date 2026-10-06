@@ -59,7 +59,7 @@ export function MeetingTable({ meetings, sort, onSort, onOpen, more, onMore }: {
       {more && (
         <div className="empty-state">
           <button type="button" className="btn btn-secondary" data-testid="meeting-table-more" disabled={busy} onClick={() => void loadMore()}>
-            {busy ? 'Loading…' : 'Load more'}
+            {busy ? 'Loading' : 'Load more'}
           </button>
         </div>
       )}

@@ -9,7 +9,8 @@ import { paths } from '../lib/paths';
 import { VisitPlanDialog, type PlanDraft } from '../modals/VisitPlanDialog';
 import { companyRecords, curOf, initialsOf, memberName } from '../store/selectors';
 import { useStore } from '../store/store';
-import { dateLabel, instantToZoned } from '../store/time';
+import { startInPeriod } from '../store/meetingTime';
+import { dateLabel, instantToZoned, zonedToInstant } from '../store/time';
 import { useVisitProgress } from '../store/useVisitProgress';
 import { completionLabel, paceOf, shiftPeriod, type VisitCount, visitsInCalendar } from '../store/visitPlans';
 
@@ -118,6 +119,11 @@ export function VisitPlan() {
   const lineOf = (companyId: string) => progress?.lines.find((l) => l.companyId === companyId);
   const totals = progress?.totals;
   const toggle = (key: string) => setDrill((d) => (d === key ? null : key));
+  // "Schedule visit" (B9): in the plan's period, today if it is in it, else its first working day.
+  const visitStart = () => {
+    const at = startInPeriod(plan.periodStart, plan.periodEnd, Date.now(), tz);
+    return new Date(zonedToInstant(at.date, at.time, tz)).toISOString();
+  };
   const calendarFor = (kind: VisitCount, ids: string[], companyId: string) => visitsInCalendar(kind, ids, plan, { userId: plan.salespersonUserId, companyId });
   const drillFor = (companyId: string) => {
     const line = lineOf(companyId);
@@ -314,7 +320,7 @@ export function VisitPlan() {
                           type="button"
                           className="btn-outline"
                           data-testid="visit-plan-schedule"
-                          onClick={() => store.meetings.openDialog({ companyId: l.companyId, type: 'visit', organizerUserId: plan.salespersonUserId })}
+                          onClick={() => store.meetings.openDialog({ companyId: l.companyId, type: 'visit', organizerUserId: plan.salespersonUserId, start: visitStart() })}
                         >
                           Schedule visit
                         </button>

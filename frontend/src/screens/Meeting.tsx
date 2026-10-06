@@ -1,18 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Icon } from '../components/icons';
 import { Screen } from '../components/Layout';
 import { Modal, ModalHeader } from '../components/ui';
 import type { ApiMeeting } from '../lib/api';
 import { paths } from '../lib/paths';
-import { locationUrl } from '../store/meetings';
 import { useStore } from '../store/store';
-import { instantToZoned, spanLabel, timeLabel } from '../store/time';
+import { timeLabel } from '../store/time';
 import { useMeeting } from '../store/useMeetings';
-import { StatusBadge, TypeTag } from './calendar/parts';
+import { StatusBadge } from './calendar/parts';
 import { ExternalMinutes } from './meeting/ExternalMinutes';
 import { InternalMinutes } from './meeting/InternalMinutes';
-import { MeetingFields, MeetingTitle } from './meeting/MeetingFields';
+import { MeetingDetails, MeetingGuests, MeetingTitle, MeetingWhen } from './meeting/MeetingFields';
 import { MeetingHistory } from './meeting/MeetingHistory';
 
 type Tab = 'internal' | 'external' | 'history';
@@ -85,7 +83,6 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
     return () => clearTimeout(timer);
   }, [startMs, tick]);
   const started = startMs <= Date.now();
-  const url = locationUrl(m.location);
   const run = async (action: () => Promise<boolean>) => {
     setBusy(true);
     await action();
@@ -99,45 +96,13 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
 
   return (
     <div className="meeting-page" data-testid="meeting-page" data-status={m.status}>
-      <div className="card deal-header" style={{ padding: '16px 20px' }}>
-        <div className="deal-crumb">
-          <Link to={paths.calendar({ view: 'day', date: instantToZoned(m.startsAt, tz).date })} className="crumb-link">
-            Calendar
-          </Link>
-          <span aria-hidden>→</span>
-          <Link to={paths.company(m.companyId)} className="crumb-link">
-            {m.companyName}
-          </Link>
-        </div>
-        <div className="deal-header-top">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: '1 1 300px', minWidth: 0 }}>
+      <div className="card meeting-head">
+        <div className="meeting-head-top">
+          <div className="meeting-head-title">
             <MeetingTitle m={m} editable={editable} />
-            <div className="meeting-facts">
-              <TypeTag type={m.type} />
-              <span data-testid="meeting-status">
-                <StatusBadge m={m} />
-              </span>
-              <span className="meeting-when-label" data-testid="meeting-when">
-                <Icon name="calendar" size={14} /> {spanLabel(m.startsAt, m.endsAt, tz)}
-              </span>
-              {m.location && (
-                <span className="meeting-when-label">
-                  <Icon name="location" size={14} />{' '}
-                  {url ? (
-                    <a href={url} target="_blank" rel="noopener noreferrer" data-testid="meeting-location-link">
-                      {m.location}
-                    </a>
-                  ) : (
-                    m.location
-                  )}
-                </span>
-              )}
-            </div>
-            {m.status === 'cancelled' && (
-              <div className="meeting-muted" data-testid="meeting-cancelled">
-                Cancelled{m.cancelReason ? `: ${m.cancelReason}` : ''}. Restore it to change it.
-              </div>
-            )}
+            <span data-testid="meeting-status">
+              <StatusBadge m={m} />
+            </span>
           </div>
           <div className="deal-actions">
             {canEdit && m.status === 'planned' && (
@@ -184,27 +149,32 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
             )}
           </div>
         </div>
+        <MeetingWhen m={m} editable={editable} />
+        {m.status === 'cancelled' && (
+          <div className="meeting-muted" data-testid="meeting-cancelled">
+            Cancelled{m.cancelReason ? `: ${m.cancelReason}` : ''}. Restore it to change it.
+          </div>
+        )}
         {!canEdit && <div className="meeting-muted">Only the organizer, the internal participants, owners and admins can change this meeting.</div>}
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start', marginTop: 18 }}>
-        <div className="lead-side" style={{ flex: '1 1 340px', maxWidth: 480, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
-          <MeetingFields m={m} editable={editable} />
-        </div>
+      <div className="card mf-cols meeting-body">
+        <MeetingDetails m={m} editable={editable} />
+        <MeetingGuests m={m} editable={editable} />
+      </div>
 
-        <div className="lead-main card" style={{ flex: '999 1 420px', minWidth: 0, overflow: 'hidden' }}>
-          <div className="meeting-tabs" role="tablist">
-            {TABS.map((t) => (
-              <button key={t.value} type="button" role="tab" aria-selected={tab === t.value} data-testid={'meeting-tab-' + t.value} className="composer-tab" onClick={() => setTab(t.value)} style={{ borderBottom: `2px solid ${tab === t.value ? 'var(--brand)' : 'transparent'}`, fontWeight: tab === t.value ? 600 : 500, color: tab === t.value ? 'var(--brand)' : 'var(--text-2)' }}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-          <div style={{ padding: 18 }}>
-            {tab === 'internal' && <InternalMinutes meeting={m} />}
-            {tab === 'external' && <ExternalMinutes meeting={m} />}
-            {tab === 'history' && <MeetingHistory meeting={m} />}
-          </div>
+      <div className="lead-main card" style={{ minWidth: 0, overflow: 'hidden', marginTop: 16 }}>
+        <div className="meeting-tabs" role="tablist">
+          {TABS.map((t) => (
+            <button key={t.value} type="button" role="tab" aria-selected={tab === t.value} data-testid={'meeting-tab-' + t.value} className="composer-tab" onClick={() => setTab(t.value)} style={{ borderBottom: `2px solid ${tab === t.value ? 'var(--brand)' : 'transparent'}`, fontWeight: tab === t.value ? 600 : 500, color: tab === t.value ? 'var(--brand)' : 'var(--text-2)' }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div style={{ padding: 18 }}>
+          {tab === 'internal' && <InternalMinutes meeting={m} />}
+          {tab === 'external' && <ExternalMinutes meeting={m} />}
+          {tab === 'history' && <MeetingHistory meeting={m} />}
         </div>
       </div>
 

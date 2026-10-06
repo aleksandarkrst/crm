@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { IconRow } from '../../components/icons';
-import { Section } from '../../components/RecordParts';
 import { RichText } from '../../components/RichText';
-import { Avatar, Picker, PickerRow, RemoveButton, usePicker } from '../../components/ui';
-import type { ApiMeeting, ApiMeetingParticipant, MeetingInput, MeetingType } from '../../lib/api';
+import type { ApiMeeting, MeetingInput, MeetingType } from '../../lib/api';
 import { paths } from '../../lib/paths';
 import { hasEmail, locationUrl, MEETING_TYPES } from '../../store/meetings';
-import { allPeople, companyIdOfPerson, companyLabels, companyRecords, initialsOf, memberLabels, memberName } from '../../store/selectors';
+import { endSlots, keepLength, lengthLabel, momentOf } from '../../store/meetingTime';
+import { companyLabels, companyRecords, memberLabels, memberName } from '../../store/selectors';
 import { useStore } from '../../store/store';
-import { instantToZoned, zonedToInstant } from '../../store/time';
+import { instantToZoned } from '../../store/time';
+import { type GuestRow, GuestsField } from './Guests';
+import { DateField, TimeField } from './WhenFields';
 
 /** Typing pauses this long before a text field saves (as on the deal page). */
 const TYPING_MS = 600;
@@ -115,32 +116,15 @@ export function MeetingTitle({ m, editable }: { m: ApiMeeting; editable: boolean
 }
 
 /**
- * The meeting's details, each edited in place (CD-212, spec 4.5): type, time, location, company
- * and deal, organizer (owners and admins pick another one, spec 5.3), the internal and external
- * participants (contacts of the meeting's company) and the agenda. Read-only for people who can't
- * change the meeting, and while it is cancelled.
+ * The meeting's date and time on one line (CD-221): date, start – end (the end date only when it
+ * is another day), in 24-hour time. A new start keeps the length; an end before the start is
+ * refused (it says so and shows the saved time again).
  */
-export function MeetingFields({ m, editable }: { m: ApiMeeting; editable: boolean }) {
-  return (
-    <>
-      <DetailsCard m={m} editable={editable} />
-      <InternalCard m={m} editable={editable} />
-      <ExternalCard m={m} editable={editable} />
-      <AgendaCard m={m} editable={editable} />
-    </>
-  );
-}
-
-function DetailsCard({ m, editable }: { m: ApiMeeting; editable: boolean }) {
-  const { s, set, session, flash } = useStore();
+export function MeetingWhen({ m, editable }: { m: ApiMeeting; editable: boolean }) {
+  const { s, flash } = useStore();
   const save = useSave(m);
   const tz = s.workspace.timezone;
-  const admin = session.tenant.role === 'owner' || session.tenant.role === 'admin';
-
-  // Type: saved at once.
-  const type = useField(m.type, (v) => save({ type: v as MeetingType }, 'the type'), 0);
-
-  // Time: start and end together ("startIso|endIso"); a new start keeps the length.
+  // Start and end together ("startIso|endIso").
   const when = useField(
     `${m.startsAt}|${m.endsAt}`,
     async (v) => {
@@ -160,19 +144,40 @@ function DetailsCard({ m, editable }: { m: ApiMeeting; editable: boolean }) {
     TYPING_MS,
   );
   const [startIso = m.startsAt, endIso = m.endsAt] = when.draft.split('|');
-  const a = instantToZoned(startIso, tz);
-  const b = instantToZoned(endIso, tz);
-  const length = Date.parse(endIso) - Date.parse(startIso);
-  const setStart = (date: string, time: string) => {
-    if (!date || !time) return;
-    const start = zonedToInstant(date, time, tz);
-    if (Number.isFinite(start)) when.change(`${new Date(start).toISOString()}|${new Date(start + length).toISOString()}`);
+  const start = Date.parse(startIso);
+  const end = Date.parse(endIso);
+  const a = instantToZoned(start, tz);
+  const b = instantToZoned(end, tz);
+  const set = (nextStart: number, nextEnd: number) => {
+    if (Number.isFinite(nextStart) && Number.isFinite(nextEnd)) when.change(`${new Date(nextStart).toISOString()}|${new Date(nextEnd).toISOString()}`);
   };
-  const setEnd = (date: string, time: string) => {
-    if (!date || !time) return;
-    const end = zonedToInstant(date, time, tz);
-    if (Number.isFinite(end)) when.change(`${startIso}|${new Date(end).toISOString()}`);
-  };
+  const setStart = (at: number) => set(at, keepLength(start, end, at));
+  const slots = useMemo(() => endSlots(start, tz), [start, tz]);
+  const options = slots.map((x) => ({ time: x.time, hint: lengthLabel((x.at - start) / 60_000) + (x.nextDay ? ' · next day' : '') }));
+  return (
+    <div className="mf-when" data-testid="meeting-field-when">
+      <DateField label="Date" testId="meeting-field-date" value={a.date} disabled={!editable} onChange={(date) => setStart(momentOf(date, a.time, tz))} />
+      <TimeField label="Starts" testId="meeting-field-start" value={a.time} disabled={!editable} onChange={(t) => setStart(momentOf(a.date, t, tz))} />
+      <span className="mf-to">to</span>
+      <TimeField label="Ends" testId="meeting-field-end" value={b.time} options={options} disabled={!editable} invalid={end <= start} onChange={(t, i) => set(start, i !== undefined ? slots[i]!.at : momentOf(b.date, t, tz))} />
+      {b.date !== a.date && <DateField label="End date" testId="meeting-field-end-date" value={b.date} disabled={!editable} onChange={(date) => set(start, momentOf(date, b.time, tz))} />}
+    </div>
+  );
+}
+
+/**
+ * The meeting's details, each edited in place (CD-212, laid out as the New meeting page in
+ * CD-221): type, company and deal, location, organizer (owners and admins pick another one,
+ * spec 5.3) and the agenda. Read-only for people who can't change the meeting, and while it is
+ * cancelled.
+ */
+export function MeetingDetails({ m, editable }: { m: ApiMeeting; editable: boolean }) {
+  const { s, set, session, flash } = useStore();
+  const save = useSave(m);
+  const admin = session.tenant.role === 'owner' || session.tenant.role === 'admin';
+
+  // Type: saved at once.
+  const type = useField(m.type, (v) => save({ type: v as MeetingType }, 'the type'), 0);
 
   // Location: typed, saved after a pause.
   const location = useField(
@@ -232,8 +237,22 @@ function DetailsCard({ m, editable }: { m: ApiMeeting; editable: boolean }) {
     0,
   );
 
+  // Agenda: typed, saved after a pause.
+  const agenda = useField(
+    m.agenda ?? '',
+    (v) => {
+      if (v.length > 5000) {
+        flash('The agenda can be at most 5,000 characters.');
+        return Promise.resolve(false);
+      }
+      return save({ agenda: v.trim() || null }, 'the agenda');
+    },
+    TYPING_MS,
+  );
+
   return (
-    <Section title="Details" testId="meeting-details">
+    <section className="mf-details" data-testid="meeting-details" aria-label="Meeting details">
+      <div className="mf-col-title">Meeting details</div>
       <IconRow icon="note" label="Type">
         <select className="ghost" aria-label="Type" data-testid="meeting-field-type" value={type.draft} disabled={!editable} onChange={(e) => type.change(e.target.value)}>
           {MEETING_TYPES.map((t) => (
@@ -242,35 +261,6 @@ function DetailsCard({ m, editable }: { m: ApiMeeting; editable: boolean }) {
             </option>
           ))}
         </select>
-      </IconRow>
-      <IconRow icon="calendar" label="When">
-        <span className="meeting-field-when" data-testid="meeting-field-when">
-          <input type="date" className="ghost" aria-label="Start date" data-testid="meeting-field-date" value={a.date} disabled={!editable} onChange={(e) => setStart(e.target.value, a.time)} onBlur={() => void when.flush()} />
-          <input type="time" className="ghost" aria-label="Starts" data-testid="meeting-field-start" step={300} value={a.time} disabled={!editable} onChange={(e) => setStart(a.date, e.target.value)} onBlur={() => void when.flush()} />
-          <span aria-hidden>–</span>
-          {b.date !== a.date && (
-            <input type="date" className="ghost" aria-label="End date" data-testid="meeting-field-end-date" value={b.date} disabled={!editable} onChange={(e) => setEnd(e.target.value, b.time)} onBlur={() => void when.flush()} />
-          )}
-          <input type="time" className="ghost" aria-label="Ends" data-testid="meeting-field-end" step={300} value={b.time} disabled={!editable} onChange={(e) => setEnd(b.date, e.target.value)} onBlur={() => void when.flush()} />
-        </span>
-      </IconRow>
-      <IconRow icon="location" label="Location">
-        <input
-          className="ghost"
-          aria-label="Location"
-          data-testid="meeting-field-location"
-          maxLength={320}
-          placeholder={editable ? (type.draft === 'online' ? 'Meeting link' : 'Address') : 'No location'}
-          value={location.draft}
-          disabled={!editable}
-          onChange={(e) => location.change(e.target.value)}
-          onBlur={() => void location.flush()}
-        />
-        {url && (
-          <a href={url} target="_blank" rel="noopener noreferrer" className="meeting-field-link" data-testid="meeting-field-location-link">
-            Open
-          </a>
-        )}
       </IconRow>
       <IconRow icon="company" label="Company">
         <select className="ghost" aria-label="Company" data-testid="meeting-field-company" value={companyId} disabled={!editable || savingDeal} onChange={(e) => pickCompany(e.target.value)}>
@@ -319,6 +309,24 @@ function DetailsCard({ m, editable }: { m: ApiMeeting; editable: boolean }) {
           </button>
         )}
       </IconRow>
+      <IconRow icon="location" label="Location">
+        <input
+          className="ghost"
+          aria-label="Location"
+          data-testid="meeting-field-location"
+          maxLength={320}
+          placeholder={editable ? (type.draft === 'online' ? 'Add a meeting link' : 'Add location') : 'No location'}
+          value={location.draft}
+          disabled={!editable}
+          onChange={(e) => location.change(e.target.value)}
+          onBlur={() => void location.flush()}
+        />
+        {url && (
+          <a href={url} target="_blank" rel="noopener noreferrer" className="meeting-field-link" data-testid="meeting-field-location-link">
+            Open
+          </a>
+        )}
+      </IconRow>
       <IconRow icon="owner" label="Organizer">
         {editable && admin ? (
           <select className="ghost" aria-label="Organizer" data-testid="meeting-field-organizer" value={organizer.draft} onChange={(e) => organizer.change(e.target.value)}>
@@ -345,213 +353,82 @@ function DetailsCard({ m, editable }: { m: ApiMeeting; editable: boolean }) {
           </span>
         )}
       </IconRow>
-    </Section>
-  );
-}
-
-function InternalCard({ m, editable }: { m: ApiMeeting; editable: boolean }) {
-  const { s } = useStore();
-  const save = useSave(m);
-  const internal = m.participants.filter((p) => p.kind === 'internal');
-  const ids = internal.filter((p) => p.userId && !p.deleted && p.userId !== m.organizerUserId).map((p) => p.userId!);
-  const members = [...memberLabels(s)].map(([id, name]) => ({ id, name })).sort((x, y) => x.name.localeCompare(y.name));
-  const [busy, setBusy] = useState(false);
-  const setPeople = async (next: string[], what: string) => {
-    setBusy(true);
-    await save({ internalUserIds: next }, what);
-    setBusy(false);
-  };
-  return (
-    <Section title={`Internal participants (${internal.length})`} testId="meeting-internal-list">
-      {internal.map((p) => (
-        <Person
-          key={p.id}
-          p={p}
-          label={p.userId === m.organizerUserId ? 'organizer' : undefined}
-          onRemove={editable && p.userId && p.userId !== m.organizerUserId && !busy ? () => void setPeople(ids.filter((id) => id !== p.userId), `removing ${p.name}`) : undefined}
-        />
-      ))}
-      {editable && (
-        <select className="form-input meeting-add" aria-label="Add a colleague" data-testid="meeting-field-add-internal" value="" disabled={busy} onChange={(e) => e.target.value && void setPeople([...ids, e.target.value], 'the new participant')}>
-          <option value="">+ Add a colleague</option>
-          {members
-            .filter((x) => x.id !== m.organizerUserId && !ids.includes(x.id))
-            .map((x) => (
-              <option key={x.id} value={x.id}>
-                {x.name}
-              </option>
-            ))}
-        </select>
-      )}
-    </Section>
-  );
-}
-
-function ExternalCard({ m, editable }: { m: ApiMeeting; editable: boolean }) {
-  const { s, createContact } = useStore();
-  const save = useSave(m);
-  const picker = usePicker();
-  const external = m.participants.filter((p) => p.kind === 'external');
-  const ids = external.filter((p) => p.contactId && !p.deleted).map((p) => p.contactId!);
-  const [busy, setBusy] = useState(false);
-  const [newContact, setNewContact] = useState<{ name: string; email: string } | null>(null);
-  const setPeople = async (next: string[], what: string) => {
-    setBusy(true);
-    await save({ externalContactIds: next }, what);
-    setBusy(false);
-  };
-  // Only the meeting company's contacts (CD-212).
-  const q = picker.search.trim().toLowerCase();
-  const seen = new Set<string>();
-  const candidates = allPeople(s)
-    .filter((p) => p.contactId && !seen.has(p.contactId) && !!seen.add(p.contactId))
-    .filter((p) => companyIdOfPerson(s, p) === m.companyId && !ids.includes(p.contactId!))
-    .filter((p) => !q || p.name.toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q))
-    .sort((x, y) => x.name.localeCompare(y.name))
-    .slice(0, 60);
-  const addContact = async () => {
-    if (!newContact?.name.trim()) return;
-    setBusy(true);
-    const id = await createContact({ name: newContact.name.trim(), email: newContact.email.trim(), role: '', phone: '', linkedin: '', buyerRole: 'Influencer', notes: '' }, undefined, undefined, m.companyId);
-    setBusy(false);
-    if (!id) return; // the store said why
-    setNewContact(null);
-    await setPeople([...ids, id], 'the new contact');
-  };
-
-  return (
-    <Section title={`External participants (${external.length})`} testId="meeting-external-list">
-      {external.length === 0 && <span className="meeting-muted">Nobody from the customer.</span>}
-      {external.map((p) => (
-        <Person key={p.id} p={p} external onRemove={editable && p.contactId && !p.deleted && !busy ? () => void setPeople(ids.filter((id) => id !== p.contactId), `removing ${p.name}`) : undefined} />
-      ))}
-      {editable && (
-        <div className="meeting-picker" data-testid="meeting-field-add-external">
-          <Picker
-            picker={picker}
-            placeholder={`Add a contact of ${m.companyName}…`}
-            items={
-              candidates.length ? (
-                candidates.map((p) => (
-                  <PickerRow
-                    key={p.contactId}
-                    initials={p.initials || initialsOf(p.name)}
-                    title={p.name}
-                    subtitle={[p.role, p.email].filter((x) => x && x !== '—').join(' · ') || ' '}
-                    trailing={!hasEmail(p.email) ? <span className="badge badge-neutral">No email</span> : undefined}
-                    onPick={() => {
-                      picker.close();
-                      void setPeople([...ids, p.contactId!], p.name);
-                    }}
-                  />
-                ))
-              ) : (
-                <div style={{ padding: 8, fontSize: 12.5, color: 'var(--muted)' }}>{q ? `No contact of ${m.companyName} matches.` : `No more contacts at ${m.companyName}.`}</div>
-              )
-            }
-            footer={
-              <button
-                type="button"
-                className="meeting-picker-add"
-                data-testid="meeting-field-new-contact"
-                onClick={() => {
-                  setNewContact({ name: picker.search.trim(), email: '' });
-                  picker.close();
-                }}
-              >
-                + Add new contact at {m.companyName}
-              </button>
-            }
+      <IconRow icon="agenda" label="Agenda">
+        {editable ? (
+          <textarea
+            className="ghost meeting-agenda-input"
+            aria-label="Agenda"
+            data-testid="meeting-field-agenda"
+            maxLength={5200}
+            placeholder="Add agenda"
+            value={agenda.draft}
+            onChange={(e) => agenda.change(e.target.value)}
+            onBlur={() => void agenda.flush()}
           />
-        </div>
-      )}
-      {newContact && (
-        <div className="meeting-new-contact" data-testid="meeting-field-new-contact-form">
-          <div className="meeting-form-grid">
-            <label className="form-label">
-              Full name
-              <input className="form-input" autoFocus value={newContact.name} maxLength={200} onChange={(e) => setNewContact({ ...newContact, name: e.target.value })} />
-            </label>
-            <label className="form-label">
-              Email
-              <input className="form-input" type="email" value={newContact.email} placeholder="Optional" onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} />
-            </label>
+        ) : m.agenda ? (
+          <div className="field-value" data-testid="meeting-agenda-view">
+            <RichText text={m.agenda} />
           </div>
-          <div className="meeting-new-contact-actions">
-            <span className="meeting-muted">Saved as a contact of {m.companyName}.</span>
-            <button type="button" className="btn btn-secondary" onClick={() => setNewContact(null)}>
-              Cancel
-            </button>
-            <button type="button" className="btn btn-primary" disabled={!newContact.name.trim() || busy} onClick={() => void addContact()}>
-              {busy ? 'Adding…' : 'Add contact'}
-            </button>
-          </div>
-        </div>
-      )}
-    </Section>
+        ) : (
+          <span className="field-value meeting-muted">No agenda</span>
+        )}
+      </IconRow>
+    </section>
   );
 }
 
-function AgendaCard({ m, editable }: { m: ApiMeeting; editable: boolean }) {
-  const { flash } = useStore();
+/**
+ * The guests (CD-221): the organizer, the colleagues and the customer's people, with "Add
+ * guests" (members and the meeting company's contacts, or a new contact there). Each change is
+ * saved at once. People who left stay on past meetings (CD-131), marked.
+ */
+export function MeetingGuests({ m, editable }: { m: ApiMeeting; editable: boolean }) {
   const save = useSave(m);
-  const agenda = useField(
-    m.agenda ?? '',
-    (v) => {
-      if (v.length > 5000) {
-        flash('The agenda can be at most 5,000 characters.');
-        return Promise.resolve(false);
-      }
-      return save({ agenda: v.trim() || null }, 'the agenda');
-    },
-    TYPING_MS,
-  );
+  const [busy, setBusy] = useState(false);
+  const internalIds = m.participants.filter((p) => p.kind === 'internal' && p.userId && !p.deleted && p.userId !== m.organizerUserId).map((p) => p.userId!);
+  const externalIds = m.participants.filter((p) => p.kind === 'external' && p.contactId && !p.deleted).map((p) => p.contactId!);
+  const run = async (input: MeetingInput, what: string) => {
+    setBusy(true);
+    await save(input, what);
+    setBusy(false);
+  };
+  const rows: GuestRow[] = m.participants.map((p) => {
+    const organizer = p.kind === 'internal' && !!p.userId && p.userId === m.organizerUserId;
+    const name = p.deleted ? `${p.name} (${p.kind === 'internal' ? 'former member' : 'deleted'})` : p.name;
+    const sub = organizer ? 'Organizer' : p.kind === 'internal' ? 'Colleague' : hasEmail(p.email) ? p.email! : 'No email';
+    const removable = !organizer && !p.deleted && (p.kind === 'internal' ? !!p.userId : !!p.contactId);
+    return {
+      key: p.id,
+      kind: p.kind,
+      name,
+      sub,
+      muted: p.deleted,
+      to: p.kind === 'external' && p.contactId && !p.deleted ? paths.contact(p.contactId) : undefined,
+      onRemove: removable
+        ? () =>
+            void (p.kind === 'internal'
+              ? run({ internalUserIds: internalIds.filter((id) => id !== p.userId) }, `removing ${p.name}`)
+              : run({ externalContactIds: externalIds.filter((id) => id !== p.contactId) }, `removing ${p.name}`))
+        : undefined,
+    };
+  });
   return (
-    <Section title="Agenda" testId="meeting-agenda-view">
-      {editable ? (
-        <textarea
-          className="ghost meeting-agenda-input"
-          aria-label="Agenda"
-          data-testid="meeting-field-agenda"
-          maxLength={5200}
-          placeholder="What you want to cover"
-          value={agenda.draft}
-          onChange={(e) => agenda.change(e.target.value)}
-          onBlur={() => void agenda.flush()}
-        />
-      ) : m.agenda ? (
-        <RichText text={m.agenda} />
-      ) : (
-        <span className="meeting-muted">No agenda.</span>
-      )}
-    </Section>
-  );
-}
-
-function Person({ p, label, external, onRemove }: { p: ApiMeetingParticipant; label?: string; external?: boolean; onRemove?: () => void }) {
-  // A deleted contact, or a member who left the workspace (they stay on past meetings, CD-131).
-  const name = p.deleted ? `${p.name} (${p.kind === 'internal' ? 'former member' : 'deleted'})` : p.name;
-  const body = (
-    <>
-      <Avatar initials={initialsOf(p.name)} size={26} font={10} />
-      <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <span style={{ fontSize: 13.5, fontWeight: 600, color: p.deleted ? 'var(--muted)' : undefined }}>{name}</span>
-        <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{[label, external ? (hasEmail(p.email) ? p.email : 'No email') : null].filter(Boolean).join(' · ')}</span>
-      </span>
-    </>
-  );
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} data-testid="meeting-person">
-      {external && p.contactId && !p.deleted ? (
-        <Link to={paths.contact(p.contactId)} className="meeting-person-row" style={{ flex: 1, minWidth: 0 }}>
-          {body}
-        </Link>
-      ) : (
-        <div className="meeting-person-row" style={{ flex: 1, minWidth: 0 }}>
-          {body}
-        </div>
-      )}
-      {onRemove && <RemoveButton box={24} size={13} title={`Remove ${p.name}`} onClick={onRemove} />}
-    </div>
+    <section className="mf-guests" aria-label="Guests">
+      <div className="mf-col-title">
+        Guests <span className="meeting-muted">{m.participants.length}</span>
+      </div>
+      <GuestsField
+        testId="meeting-field-guests"
+        rows={rows}
+        companyId={m.companyId}
+        companyName={m.companyName}
+        users={[...(m.organizerUserId ? [m.organizerUserId] : []), ...internalIds]}
+        contacts={externalIds}
+        editable={editable}
+        busy={busy}
+        onAddUser={(id) => void run({ internalUserIds: [...internalIds, id] }, 'the new participant')}
+        onAddContact={(id) => void run({ externalContactIds: [...externalIds, id] }, 'the new contact')}
+      />
+    </section>
   );
 }
