@@ -69,8 +69,8 @@ const fields = {
   workEmail: optionalEmail,
   employeeNumber: optionalText(30),
   jobTitle: optionalText(100),
-  departmentId: z.uuid().nullish(),
-  teamId: z.uuid().nullish(),
+  /** The org unit (CD-226; departments and teams before). */
+  unitId: z.uuid().nullish(),
   managerId: z.uuid().nullish(),
   workPhone: optionalText(40),
   workLocation: optionalText(100),
@@ -113,7 +113,7 @@ export type CreateEmployee = z.infer<typeof CreateEmployee>;
 
 /**
  * One row of the employee import (CD-141, spec 8.4): the create rules, but every field optional
- * (the import checks names, the start date warning, the IBAN, department, team and manager itself).
+ * (the import checks names, the start date warning, the IBAN and manager itself).
  */
 export const ImportedEmployee = z
   .object(fields)
@@ -142,15 +142,15 @@ export type ImportedEmployee = z.infer<typeof ImportedEmployee>;
 /** PATCH /api/people/employees/:id: any subset; who may change which field is checked per caller. */
 export const UpdateEmployee = nonEmptyPatch(z.object(fields).partial());
 export type UpdateEmployee = z.infer<typeof UpdateEmployee>;
-/** The PATCH body: the fields, plus `clearHeadRoles` to confirm moving a head or lead elsewhere (CD-225). */
-export const UpdateEmployeeBody = UpdateEmployee.and(z.object({ clearHeadRoles: z.boolean().optional() }));
+/** The PATCH body: the fields, plus `clearLeadRoles` to confirm moving a unit's lead elsewhere (CD-225, CD-226). */
+export const UpdateEmployeeBody = UpdateEmployee.and(z.object({ clearLeadRoles: z.boolean().optional() }));
 export type UpdateEmployeeBody = z.infer<typeof UpdateEmployeeBody>;
 
 export const EMPLOYEE_STATUSES = ['active', 'leaving', 'inactive'] as const;
 export type EmployeeStatus = (typeof EMPLOYEE_STATUSES)[number];
 export const ACCOUNT_STATES = ['linked', 'invited', 'none'] as const;
 export type AccountState = (typeof ACCOUNT_STATES)[number];
-export const DATA_ISSUES = ['no_manager', 'no_start_date', 'no_department', 'manager_no_account', 'no_employee_number'] as const;
+export const DATA_ISSUES = ['no_manager', 'no_start_date', 'no_unit', 'manager_no_account', 'no_employee_number'] as const;
 export type DataIssue = (typeof DATA_ISSUES)[number];
 
 const csvOf = <T extends readonly [string, ...string[]]>(values: T) =>
@@ -161,8 +161,8 @@ const csvOf = <T extends readonly [string, ...string[]]>(values: T) =>
 
 /** GET /api/people/employees filters (spec 5.2). Lists are comma-separated. */
 export const EmployeeListQuery = z.object({
-  departmentIds: IdList.optional(),
-  teamIds: IdList.optional(),
+  /** People in these units or a unit inside them (CD-226). */
+  unitIds: IdList.optional(),
   managerId: z.uuid().optional(),
   /** With managerId: direct reports only (default) or everyone below them. */
   managerScope: z.enum(['direct', 'indirect']).default('direct'),

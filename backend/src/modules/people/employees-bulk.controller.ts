@@ -12,7 +12,7 @@ import { BulkUpdateEmployees, EmployeesBulkService, ExportEmployees } from './em
 export class EmployeesBulkController {
   constructor(private readonly bulk: EmployeesBulkService) {}
 
-  /** "Set department and team" / "Set manager" for the ticked rows: `{ updated }`. All or nothing. */
+  /** "Set unit" / "Set manager" for the ticked rows and the chart's drag: `{ updated }`. All or nothing. */
   @Post('bulk')
   @HttpCode(200)
   update(@Tenant() ctx: TenantContext, @Body(new ZodPipe(BulkUpdateEmployees)) body: BulkUpdateEmployees) {

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { requestActor } from '../../shared/database/request-context';
-import { departments, employees, memberships, PEOPLE_HISTORY_ENTITY_TYPES, type PeopleHistoryEntityType, recordChanges, teams, users } from '../../shared/database/schema';
+import { departments, employees, memberships, orgLevels, orgUnits, PEOPLE_HISTORY_ENTITY_TYPES, type PeopleHistoryEntityType, recordChanges, teams, users } from '../../shared/database/schema';
 import type { CallerAccess } from './caller-access';
 import { BANK_FIELDS, canSeeHistoryField, EMPLOYMENT_FIELDS, LEAVING_FIELDS, listFields, PERSONAL_FIELDS } from './field-rules';
 import { PeopleAccess } from './people-access';
@@ -22,7 +22,7 @@ type ChangeRow = typeof recordChanges.$inferSelect;
 /** Fields whose values are ids, and what they name. */
 const EMPLOYEE_ID_FIELDS = new Set(['managerId', 'headEmployeeId', 'leadEmployeeId']);
 const FORMER_MEMBER = 'Former member';
-const ENTITY_NAMES: Record<PeopleHistoryEntityType, string> = { employee: 'employee', department: 'department', team: 'team' };
+const ENTITY_NAMES: Record<PeopleHistoryEntityType, string> = { employee: 'employee', department: 'department', team: 'team', org_unit: 'unit' };
 
 export interface PeopleHistoryEntry {
   id: string;
@@ -123,9 +123,9 @@ export class PeopleHistoryService {
     });
   }
 
-  /** Readable names: employees (with "(left)"), departments, teams, members ("Former member" once they left). */
+  /** Readable names: employees (with "(left)"), units, levels, departments, teams, members ("Former member" once they left). */
   private async present(tx: Tx, ctx: TenantContext, rows: ChangeRow[]): Promise<PeopleHistoryEntry[]> {
-    const ids = { employee: new Set<string>(), department: new Set<string>(), team: new Set<string>(), user: new Set<string>() };
+    const ids = { employee: new Set<string>(), department: new Set<string>(), team: new Set<string>(), unit: new Set<string>(), level: new Set<string>(), user: new Set<string>() };
     for (const r of rows) {
       if (r.actorUserId) ids.user.add(r.actorUserId);
       for (const v of [r.oldValue, r.newValue]) {
@@ -133,6 +133,8 @@ export class PeopleHistoryService {
         if (EMPLOYEE_ID_FIELDS.has(r.field)) ids.employee.add(v);
         else if (r.field === 'departmentId') ids.department.add(v);
         else if (r.field === 'teamId') ids.team.add(v);
+        else if (r.field === 'unitId' || r.field === 'parentId') ids.unit.add(v);
+        else if (r.field === 'levelId') ids.level.add(v);
         else if (r.field === 'userId') ids.user.add(v);
       }
     }
@@ -150,6 +152,12 @@ export class PeopleHistoryService {
     if (ids.team.size) {
       for (const t of await tx.select({ id: teams.id, name: teams.name }).from(teams).where(inArray(teams.id, [...ids.team]))) names.set(t.id, t.name);
     }
+    if (ids.unit.size) {
+      for (const u of await tx.select({ id: orgUnits.id, name: orgUnits.name }).from(orgUnits).where(inArray(orgUnits.id, [...ids.unit]))) names.set(u.id, u.name);
+    }
+    if (ids.level.size) {
+      for (const l of await tx.select({ id: orgLevels.id, name: orgLevels.name }).from(orgLevels).where(inArray(orgLevels.id, [...ids.level]))) names.set(l.id, l.name);
+    }
     if (ids.user.size) {
       const list = await tx
         .select({ id: users.id, name: sql<string>`coalesce(${users.displayName}, ${users.email}, 'Member')` })
@@ -163,6 +171,8 @@ export class PeopleHistoryService {
       if (EMPLOYEE_ID_FIELDS.has(field)) return names.get(value) ?? 'Deleted employee';
       if (field === 'departmentId') return names.get(value) ?? 'Deleted department';
       if (field === 'teamId') return names.get(value) ?? 'Deleted team';
+      if (field === 'unitId' || field === 'parentId') return names.get(value) ?? 'Deleted unit';
+      if (field === 'levelId') return names.get(value) ?? 'Deleted level';
       if (field === 'userId') return names.get(value) ?? FORMER_MEMBER;
       return null;
     };

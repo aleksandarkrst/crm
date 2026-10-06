@@ -82,7 +82,7 @@ export class CallerAccess {
   get isManager(): boolean {
     return this.roles.has('manager');
   }
-  /** HR work (all HR data; employees, departments, teams, managers, imports): Admins only (CD-225). */
+  /** HR work (all HR data; employees, levels and units, managers): Admins only (CD-225). */
   get isHr(): boolean {
     return this.isAdmin;
   }

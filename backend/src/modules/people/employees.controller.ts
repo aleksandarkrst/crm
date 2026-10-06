@@ -41,7 +41,7 @@ export class EmployeesController {
 
   /**
    * `If-Match: <version>` (the card's `version`): a field someone else changed since is a 409.
-   * Moving a head or lead elsewhere needs `clearHeadRoles: true` (409 `heads_department` otherwise).
+   * Moving a unit's lead elsewhere needs `clearLeadRoles: true` (409 `heads_unit` otherwise).
    * Returns the card.
    */
   @Patch(':id')
@@ -51,8 +51,8 @@ export class EmployeesController {
     @Body(new ZodPipe(UpdateEmployeeBody)) body: UpdateEmployeeBody,
     @Headers('if-match') ifMatch?: string,
   ) {
-    const { clearHeadRoles, ...fields } = body;
-    return this.employees.update(ctx, id, fields, parseVersion(ifMatch), !!clearHeadRoles);
+    const { clearLeadRoles, ...fields } = body;
+    return this.employees.update(ctx, id, fields, parseVersion(ifMatch), !!clearLeadRoles);
   }
 
   /** The full IBAN ("Show", "Copy"): self, Admin. Audited as "IBAN viewed". */
