@@ -89,6 +89,8 @@ describe('module and workspace switcher', () => {
     assert.equal((await modules()).find((m) => m.current)?.id, 'workforce');
     await click(page, `${POP} [data-module=crm]`);
     await page.waitForFunction(() => location.pathname === '/pipeline');
+    // The URL changes first; the sidebar follows once the screen has loaded (a transition).
+    await inModule('crm');
     await closed();
     assert.deepEqual(await sidebar(), { module: 'crm', pages: CRM_PAGES });
   });
@@ -243,6 +245,7 @@ describe('module and workspace switcher', () => {
     await page.waitForFunction(() => location.pathname === '/org');
     await closed();
     // Workforce's bottom bar: Org structure and "More".
+    await inModule('workforce');
     assert.deepEqual((await sidebar()).pages, ['Org structure']);
     assert.ok(await page.$eval('[data-testid=nav-more]', (el) => el.getClientRects().length > 0), '"More" in the bar');
     // The backdrop closes it, too.
