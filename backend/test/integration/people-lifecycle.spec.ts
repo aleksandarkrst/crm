@@ -1,6 +1,6 @@
 /**
  * An employee's app access and leaving (milestone 13, CD-140, spec 4.6–4.8): Invite to Pultly from
- * the card and in bulk, the invitation's conflicts, a changed work email withdrawing it, Link to
+ * the card (the API; CD-226 took the button and "Invite selected" out), the invitation's conflicts, a changed work email withdrawing it, Link to
  * member (merging the automatic record) and Unlink, Deactivate now and on a future date (the daily
  * job in the workspace's time zone), reassignments, guards, Reactivate, Delete (only once
  * deactivated, CD-225) and who may do what. `hr` holds a leftover Administration row, which gives
@@ -8,7 +8,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, createTenant, eventually, ok, type Session, signIn } from './helpers';
-import { accessOf, asTenantSql, createDepartment, createTeam, grantRole, joinAsEmployee, START } from './people-helpers';
+import { accessOf, addEmployee, asTenantSql, createDepartment, createTeam, grantRole, joinAsEmployee, START } from './people-helpers';
 
 let owner: Session;
 let member: Session;
@@ -17,7 +17,10 @@ let tenant: string;
 let memberEmployee: string;
 let hrEmployee: string;
 const as = (s: Session = owner) => ({ token: s.token, tenant });
-const create = async (body: Record<string, unknown>) => (await ok('POST', '/people/employees', { ...as(), body: { employmentStartDate: START, ...body } })).id as string;
+/** A record shown in the app (with a pending invitation, CD-226). */
+const create = (body: Record<string, unknown>) => addEmployee(owner, tenant, body);
+/** A record without an account or invitation (not shown in the app since CD-226), to invite or link. */
+const rawCreate = async (body: Record<string, unknown>) => (await ok('POST', '/people/employees', { ...as(), body: { employmentStartDate: START, ...body } })).id as string;
 const card = (id: string, s: Session = owner) => ok('GET', `/people/employees/${id}`, as(s));
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const addDays = (date: string, days: number) => iso(new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000));
@@ -36,7 +39,7 @@ beforeAll(async () => {
 describe('Invite to Pultly (spec 4.7)', () => {
   it('links the accepted account to the record it was sent from', async () => {
     const joiner = await signIn('life-invitee');
-    const id = await create({ firstName: 'Ivana', lastName: 'Ilić', workEmail: joiner.email });
+    const id = await rawCreate({ firstName: 'Ivana', lastName: 'Ilić', workEmail: joiner.email });
     const { invitation, token, card: after } = await ok('POST', `/people/employees/${id}/invite`, { ...as(), body: { role: 'member' } });
     expect(invitation).toMatchObject({ email: joiner.email, role: 'member', employeeId: id });
     expect(after.account).toBe('invited');
@@ -54,21 +57,20 @@ describe('Invite to Pultly (spec 4.7)', () => {
   });
 
   it('needs a work email, an active record without an account, and an Admin', async () => {
-    const noEmail = await create({ firstName: 'Bez', lastName: 'Emaila' });
+    const noEmail = await rawCreate({ firstName: 'Bez', lastName: 'Emaila' });
     expect((await call('POST', `/people/employees/${noEmail}/invite`, { ...as(), body: {} })).status).toBe(400);
     expect((await call('POST', `/people/employees/${memberEmployee}/invite`, { ...as(), body: {} })).status).toBe(409);
-    const target = await create({ firstName: 'Pera', lastName: 'Perić', workEmail: 'pera-invite@example.test' });
+    const target = await rawCreate({ firstName: 'Pera', lastName: 'Perić', workEmail: 'pera-invite@example.test' });
     // A member can't invite, with a leftover Administration row neither.
     expect((await call('POST', `/people/employees/${target}/invite`, { ...as(hr), body: {} })).status).toBe(403);
     expect((await call('POST', `/people/employees/${target}/invite`, { ...as(member), body: {} })).status).toBe(403);
-    expect((await call('POST', '/people/employees/invite', { ...as(hr), body: { employeeIds: [target] } })).status).toBe(403);
   });
 
   it("refuses an email that already has an account linked elsewhere, and offers linking for an automatic record", async () => {
     // The prober's own record is automatic (made when they joined): link instead.
     const prober = await signIn('life-prober');
     const proberEmployee = await joinAsEmployee(owner, tenant, prober);
-    const target = await create({ firstName: 'Treća', lastName: 'Kartica' });
+    const target = await rawCreate({ firstName: 'Treća', lastName: 'Kartica' });
     // Work emails are unique, so point the target at the prober's sign-in email after freeing it.
     await asTenantSql(tenant, `update employees set work_email = null where id = $1`, [proberEmployee]);
     await ok('PATCH', `/people/employees/${target}`, { ...as(), body: { workEmail: prober.email } });
@@ -87,7 +89,7 @@ describe('Invite to Pultly (spec 4.7)', () => {
 
   it('changing the work email withdraws a pending invitation', async () => {
     const joiner = await signIn('life-moved');
-    const id = await create({ firstName: 'Mila', lastName: 'Mirić', workEmail: joiner.email });
+    const id = await rawCreate({ firstName: 'Mila', lastName: 'Mirić', workEmail: joiner.email });
     const { token } = await ok('POST', `/people/employees/${id}/invite`, { ...as(), body: {} });
     const after = await ok('PATCH', `/people/employees/${id}`, { ...as(), body: { workEmail: `new-${joiner.email}` } });
     expect(after.account).toBe('none');
@@ -97,24 +99,13 @@ describe('Invite to Pultly (spec 4.7)', () => {
     await ok('POST', `/people/employees/${id}/invite`, { ...as(), body: {} });
     expect((await ok('PATCH', `/people/employees/${id}`, { ...as(), body: { jobTitle: 'Engineer' } })).account).toBe('invited');
   });
-
-  it('"Invite selected" queues only rows with a work email and no account', async () => {
-    const a = await create({ firstName: 'Bulk', lastName: 'One', workEmail: 'bulk-one-life@example.test' });
-    const b = await create({ firstName: 'Bulk', lastName: 'Two' });
-    const result = await ok('POST', '/people/employees/invite', { ...as(), body: { employeeIds: [a, b, memberEmployee], role: 'member' } }, 202);
-    expect(result).toEqual({ queued: 1, skipped: 2 });
-    await eventually(async () => (await card(a)).account === 'invited', 'the bulk invitation');
-    const invited = await card(a);
-    expect(invited.appAccess.invitation).toMatchObject({ email: 'bulk-one-life@example.test', role: 'member' });
-    expect((await card(b)).account).toBe('none');
-  });
 });
 
 describe('Link to member and Unlink (spec 4.6)', () => {
   it('merges the automatic record into the chosen one; unlinking gives the member a new automatic record', async () => {
     const joiner = await signIn('life-link');
     const automatic = await joinAsEmployee(owner, tenant, joiner);
-    const real = await create({ firstName: 'Stvarni', lastName: 'Zapis', jobTitle: 'Technician' });
+    const real = await rawCreate({ firstName: 'Stvarni', lastName: 'Zapis', jobTitle: 'Technician' });
 
     const candidates = await ok('GET', `/people/employees/${real}/link-candidates`, as());
     expect(candidates.find((c: { userId: string }) => c.userId === joiner.userId)).toMatchObject({ employeeId: automatic, mergeable: true, blockers: [] });
@@ -139,7 +130,7 @@ describe('Link to member and Unlink (spec 4.6)', () => {
     const joiner = await signIn('life-busy');
     const own = await joinAsEmployee(owner, tenant, joiner);
     await ok('PATCH', `/people/employees/${own}`, { ...as(), body: { managerId: memberEmployee } });
-    const target = await create({ firstName: 'Ciljni', lastName: 'Zapis' });
+    const target = await rawCreate({ firstName: 'Ciljni', lastName: 'Zapis' });
     const candidates = await ok('GET', `/people/employees/${target}/link-candidates`, as());
     expect(candidates.find((c: { userId: string }) => c.userId === joiner.userId)).toMatchObject({ mergeable: false, blockers: ['a manager'] });
     const refused = await call('POST', `/people/employees/${target}/link`, { ...as(), body: { userId: joiner.userId } });

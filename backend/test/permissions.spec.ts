@@ -32,7 +32,7 @@ describe('the permission matrix (spec 9.3) as data', () => {
     expect(permissionRow('org.edit_own_bank').cells.employee).toEqual({ scope: 'own', label: 'If setting on' });
     expect(permissionRow('org.directory').cells.admin.label).toBe('All, incl. inactive');
     // HR work is the Admin's alone.
-    for (const id of ['org.employees.manage', 'org.reporting', 'org.structure', 'org.import', 'org.export', 'org.deactivate', 'org.delete']) {
+    for (const id of ['org.employees.manage', 'org.reporting', 'org.structure', 'org.export', 'org.deactivate', 'org.delete']) {
       expect(allows(id, ['manager'], 'other'), id).toBe(false);
       expect(allows(id, ['admin'], 'other'), id).toBe(true);
     }

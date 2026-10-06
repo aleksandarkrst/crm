@@ -1,11 +1,13 @@
 // The employee card (CD-140; one Save for the whole card since CD-225): a member opens their own
 // card from Profile, changes their work phone and address inline and saves once, enters a Serbian
 // account number that is saved as its IBAN, shown masked and revealed with "Show"; leaving with
-// unsaved changes asks first; they don't see a colleague's personal details or bank account; the
-// owner edits several sections of someone's card with one Save; the card has no App access,
-// History, Roles or "Timesheet required"; the owner deactivates someone with a direct report from
-// the "⋯" menu, who moves to the chosen manager, and Delete appears only then; on a phone the card
-// fits the screen.
+// unsaved changes asks first; they don't see a colleague's personal details or bank account; someone
+// invited in Settings → Team is on the Org structure as Invited (CD-226) and the owner edits several
+// sections of their card with one Save; the card has no App access, History, Roles or "Timesheet
+// required", and its "⋯" menu has no Invite, Link or Unlink (CD-226); the owner deactivates someone
+// with a direct report from the "⋯" menu, who moves to the chosen manager, and Delete appears only
+// then; withdrawing an invitation takes the person off the Org structure; on a phone the card fits
+// the screen.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
 import { api, BASE_URL, click, createWorkspace, email, eventually, finishOnboarding, setValue, signIn, steps, text, useBrowser } from '../lib/harness.mjs';
@@ -50,6 +52,13 @@ describe('employee card', () => {
     await click(page, '[data-testid=emp-menu]');
     return items;
   };
+  /** Invites `label`'s address in Settings → Team (the API), which creates their record (CD-226); fills `fields` on it. */
+  async function invited(label, fields = {}) {
+    const { invitation } = await api(olga, '/team/invitations', { method: 'POST', body: JSON.stringify({ email: email(label), role: 'member' }) });
+    assert.ok(invitation.employeeId, 'the invitation made an employee record');
+    if (Object.keys(fields).length) await api(olga, `/people/employees/${invitation.employeeId}`, { method: 'PATCH', body: JSON.stringify(fields) });
+    return invitation.employeeId;
+  }
 
   step('an owner and a member share a workspace', async () => {
     olga = await browser.person('olga');
@@ -143,18 +152,14 @@ describe('employee card', () => {
     assert.equal(card.bank, undefined);
   });
 
-  step('"Add employee" opens the new card; the owner edits several sections with one Save', async () => {
+  step('someone invited in Settings → Team is on the Org structure as Invited; the owner edits several sections with one Save', async () => {
+    nova = await invited('card-nova', { firstName: 'Nova', lastName: 'Zaposlena' });
     await olga.goto(`${BASE_URL}/org?tab=list`, { waitUntil: 'networkidle0' });
-    await click(olga, '[data-testid=org-add-employee]');
-    await olga.waitForSelector('.modal input[name=firstName]');
-    await olga.type('.modal input[name=firstName]', 'Nova');
-    await olga.type('.modal input[name=lastName]', 'Zaposlena');
-    await olga.type('.modal input[name=workEmail]', email('card-nova'));
-    await click(olga, '[data-testid=add-employee-save]');
-    await olga.waitForFunction(() => /^\/people\/[0-9a-f-]{36}$/.test(location.pathname));
+    await olga.waitForFunction(() => document.body.innerText.includes('Nova Zaposlena'));
+    await olga.goto(`${BASE_URL}/people/${nova}`, { waitUntil: 'networkidle0' });
     await olga.waitForFunction(() => document.querySelector('[data-testid=emp-name]')?.textContent === 'Nova Zaposlena');
-    nova = await olga.evaluate(() => location.pathname.split('/').pop());
-    assert.equal(await textOf(olga, '[data-testid=emp-account]'), 'No account');
+    assert.equal(await textOf(olga, '[data-testid=emp-account]'), 'Invited');
+    assert.equal((await api(olga, `/people/employees/${nova}`)).workEmail, email('card-nova'));
 
     // Work, Reporting and Personal details at once.
     await olga.waitForSelector('[data-testid=emp-work] input[name=jobTitle]');
@@ -180,16 +185,21 @@ describe('employee card', () => {
     const body = await text(olga);
     assert.ok(!/Timesheet required/.test(body), 'no Timesheet required row');
     assert.ok(!/Sign-in email|Workspace role/.test(body), 'no sign-in email or workspace role');
-    // App access actions are in the menu: Invite (a work email is set) and Link to member.
+    // The menu has the pending invitation's actions and Deactivate; no Invite, Link or Unlink (CD-226).
     const items = await menuItems(olga);
-    assert.ok(items.includes('Invite to Pultly') && items.includes('Link to member') && items.includes('Deactivate'), items.join(', '));
-    assert.ok(!items.includes('Delete'), 'no Delete while active');
+    for (const item of ['Resend invitation', 'Copy invite link', 'Withdraw invitation', 'Deactivate']) assert.ok(items.includes(item), `${item}: ${items.join(', ')}`);
+    for (const item of ['Invite to Pultly', 'Link to member', 'Unlink account', 'Delete']) assert.ok(!items.includes(item), `no ${item}: ${items.join(', ')}`);
+    // A member's card: Deactivate, no Unlink.
+    await olga.goto(`${BASE_URL}/people/${miaEmployee}`, { waitUntil: 'networkidle0' });
+    await olga.waitForSelector('[data-testid=emp-menu]');
+    const member = await menuItems(olga);
+    assert.ok(member.includes('Deactivate') && !member.includes('Unlink account') && !member.includes('Link to member'), member.join(', '));
   });
 
   step('the owner deactivates someone with a direct report from the menu; Delete appears only then', async () => {
     const start = '2024-03-01';
-    leaver = (await api(olga, '/people/employees', { method: 'POST', body: JSON.stringify({ firstName: 'Rade', lastName: 'Odlazić', employmentStartDate: start }) })).id;
-    report = (await api(olga, '/people/employees', { method: 'POST', body: JSON.stringify({ firstName: 'Petar', lastName: 'Ostaje', employmentStartDate: start, managerId: leaver }) })).id;
+    leaver = await invited('card-rade', { firstName: 'Rade', lastName: 'Odlazić', employmentStartDate: start });
+    report = await invited('card-petar', { firstName: 'Petar', lastName: 'Ostaje', employmentStartDate: start, managerId: leaver });
     await olga.goto(`${BASE_URL}/people/${leaver}`, { waitUntil: 'networkidle0' });
     await olga.waitForSelector('[data-testid=emp-status]');
     assert.equal(await textOf(olga, '[data-testid=emp-status]'), 'Active');
@@ -214,6 +224,18 @@ describe('employee card', () => {
     await assert.rejects(api(olga, `/people/employees/${leaver}`), /404/, 'the record is gone');
     const list = await api(olga, '/people/employees?status=active,leaving,inactive');
     assert.ok(!list.employees.some((e) => e.id === leaver), 'not in the directory');
+  });
+
+  step('withdrawing an invitation from the card takes the person off the Org structure', async () => {
+    const gone = await invited('card-withdrawn', { firstName: 'Vera', lastName: 'Povučena' });
+    await olga.goto(`${BASE_URL}/people/${gone}`, { waitUntil: 'networkidle0' });
+    await olga.waitForSelector('[data-testid=emp-menu]');
+    await menu(olga, 'Withdraw invitation');
+    await olga.waitForFunction(() => location.pathname === '/org');
+    assert.ok(dialogs.olga.some((m) => m.startsWith('Withdraw the invitation to Vera Povučena?')), dialogs.olga.join(' | '));
+    await assert.rejects(api(olga, `/people/employees/${gone}`), /404/, 'the record went with the invitation');
+    const list = await api(olga, '/people/employees');
+    assert.ok(!list.employees.some((e) => e.id === gone), 'not in the directory');
   });
 
   step('on a phone the card fits and its actions are in the menu', async () => {

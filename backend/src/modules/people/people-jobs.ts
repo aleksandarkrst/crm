@@ -5,13 +5,13 @@ import { Mailer } from '../../infrastructure/mail/mailer';
 import { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
 import { DatabaseService } from '../../shared/database/database.service';
-import { employees, invitations, memberships, tenants, users } from '../../shared/database/schema';
+import { employees, memberships, tenants, users } from '../../shared/database/schema';
 import type { JobPayloads } from '../../shared/events/job-types';
 import { JobsService } from '../../shared/events/jobs.service';
-import { createInvitation } from '../identity';
 import { bankAccountEmail } from './bank-email';
 import { reportingLineEmail } from './org-email';
 import { applyDeactivation, dueDeactivations, zonedParts } from './lifecycle';
+import { dropUnusedInvitedEmployees } from './linking';
 import { lockReportingLines } from './reporting-lines';
 
 /** How often the worker looks for workspaces where a day has ended (deactivations due). */
@@ -79,7 +79,8 @@ export class BankAccountEmailJob implements OnApplicationBootstrap {
  * where it is 00:05 or later local time, applies the deactivations whose last working day is
  * before today (spec 4.8), each in its own transaction under the reporting-line lock, with the
  * choices of the dialog (employees.deactivation_plan). One that can't be applied (the last owner)
- * stays Leaving and is logged; the next tick tries again.
+ * stays Leaving and is logged; the next tick tries again. Each tick also deletes the records made by
+ * invitations that expired before anyone joined (CD-226, `dropUnusedInvitedEmployees`).
  */
 @Injectable()
 export class DeactivateDueJob implements OnApplicationBootstrap {
@@ -103,6 +104,9 @@ export class DeactivateDueJob implements OnApplicationBootstrap {
       .from(tenants)
       .where(tenantId ? eq(tenants.id, tenantId) : undefined);
     for (const w of workspaces) {
+      // Records made by invitations that expired before anyone joined go (CD-226).
+      const dropped = await this.database.withTenant(w.id, (tx) => dropUnusedInvitedEmployees(tx, w.id));
+      if (dropped) this.logger.log(`${dropped} invited employee record(s) of expired invitations deleted (${w.id})`);
       const local = zonedParts(w.timezone, now);
       if (local.minutes < DUE_AFTER_MINUTES) continue;
       const due = await this.database.withTenant(w.id, (tx) => dueDeactivations(tx, local.date));
@@ -142,73 +146,6 @@ export class DeactivateDueJob implements OnApplicationBootstrap {
       .where(and(eq(memberships.tenantId, tenantId), eq(memberships.role, 'owner')))
       .limit(1);
     return m?.userId ?? null;
-  }
-}
-
-/**
- * "people.bulk-invite" (spec 4.7, 5.4, 8.6), for "Invite selected" and the import's "Invite imported
- * employees": an invitation through identity for each employee that is still Active or Leaving,
- * has a work email and no account, whose record has no pending invitation, whose email isn't a
- * member's already and has no pending invitation either. Nothing is sent unless the person who
- * asked is still an owner or admin. Each in its own transaction, so one refusal doesn't stop the rest.
- */
-@Injectable()
-export class BulkInviteJob implements OnApplicationBootstrap {
-  private readonly logger = new Logger(BulkInviteJob.name);
-
-  constructor(
-    private readonly jobs: JobsService,
-    private readonly database: DatabaseService,
-    private readonly audit: AuditService,
-    @Inject(ENV) private readonly env: Env,
-  ) {}
-
-  async onApplicationBootstrap(): Promise<void> {
-    await this.jobs.work('people.bulk-invite', (data) => this.run(data));
-  }
-
-  async run({ tenantId, actorUserId, employeeIds, role }: JobPayloads['people.bulk-invite']): Promise<void> {
-    const [actor] = await this.database.db
-      .select({ role: memberships.role })
-      .from(memberships)
-      .where(and(eq(memberships.tenantId, tenantId), eq(memberships.userId, actorUserId)));
-    if (actor?.role !== 'owner' && actor?.role !== 'admin') {
-      this.logger.warn(`Bulk invite in ${tenantId} not sent: the person who asked is no longer an owner or admin`);
-      return;
-    }
-    const ctx: TenantContext = { tenantId, userId: actorUserId, role: actor.role };
-    let invited = 0;
-    for (const id of employeeIds) {
-      try {
-        const done = await this.database.withTenant(tenantId, async (tx) => {
-          const [e] = await tx
-            .select({ workEmail: employees.workEmail })
-            .from(employees)
-            .where(
-              and(
-                eq(employees.id, id),
-                isNull(employees.userId),
-                isNull(employees.deactivatedAt),
-                sql`not exists (select 1 from ${invitations} i where i.employee_id = ${employees.id} and i.accepted_at is null and i.revoked_at is null and i.expires_at > now())`,
-              ),
-            );
-          if (!e?.workEmail) return false;
-          const email = e.workEmail.toLowerCase();
-          // Already a member (link instead) or already invited (maybe from another record): skip.
-          const [taken] = await tx.execute<{ taken: boolean }>(sql`select
-            exists (select 1 from ${memberships} m join ${users} u on u.id = m.user_id where m.tenant_id = ${tenantId} and lower(u.email) = ${email})
-            or exists (select 1 from ${invitations} i where i.tenant_id = ${tenantId} and i.email = ${email} and i.accepted_at is null and i.revoked_at is null and i.expires_at > now()) as taken`).then((r) => r.rows);
-          if (taken?.taken) return false;
-          await createInvitation(tx, { jobs: this.jobs, audit: this.audit, env: this.env }, ctx, { email: e.workEmail, role, employeeId: id });
-          return true;
-        });
-        if (done) invited++;
-      } catch (err) {
-        if (!(err instanceof HttpException)) throw err;
-        this.logger.warn(`Bulk invite: employee ${id} (${tenantId}) skipped: ${err.message}`);
-      }
-    }
-    this.logger.log(`Bulk invite in ${tenantId}: ${invited} of ${employeeIds.length} invited`);
   }
 }
 
@@ -277,5 +214,5 @@ export class ReportingLineEmailJob implements OnApplicationBootstrap {
 }
 
 /** Registered in the worker (WorkerModule). */
-@Module({ providers: [BankAccountEmailJob, DeactivateDueJob, BulkInviteJob, ReportingLineEmailJob] })
+@Module({ providers: [BankAccountEmailJob, DeactivateDueJob, ReportingLineEmailJob] })
 export class PeopleWorkerModule {}

@@ -60,7 +60,7 @@ export function ProposalDoc() {
   const decisionMaker = lead.decisionMaker ? lead.decisionMaker.replace(/[\s.]+$/, '') : gap('decision maker');
 
   return (
-    <div className="overlay" style={{ zIndex: 50, alignItems: 'stretch', overflowY: 'auto', padding: 0 }}>
+    <div className="overlay" style={{ zIndex: 50, alignItems: 'flex-start', overflowY: 'auto', padding: 0 }}>
       <div style={{ background: 'var(--bg-soft)', width: '100%', maxWidth: 1080, minHeight: '100vh', animation: 'dcFade .25s ease-out both', margin: '0 auto' }}>
         <div style={{ position: 'sticky', top: 0, background: '#0F1B16', color: '#F5F7F6', padding: '14px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', zIndex: 2 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

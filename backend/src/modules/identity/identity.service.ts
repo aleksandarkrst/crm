@@ -5,7 +5,7 @@ import type { AuthUser } from '../../shared/authorization';
 import { DatabaseService } from '../../shared/database/database.service';
 import { memberships, type MembershipRole, tenants, users } from '../../shared/database/schema';
 import { TenantProvisioning } from '../../shared/events/tenant-provisioning';
-import { linkNewMember } from '../people';
+import { linkNewMember, syncWorkEmail } from '../people';
 import { signInMethod } from './signup-email';
 import type { VerifiedIdentity } from './token.service';
 
@@ -45,22 +45,31 @@ export class IdentityService {
     }
   }
 
+  /**
+   * When the sign-in email changes, the member's employee records follow in the same transaction
+   * (CD-226: work email = sign-in email, people's `syncWorkEmail`).
+   */
   private async upsert(identity: VerifiedIdentity): Promise<AuthUser> {
-    const [row] = await this.database.db
-      .insert(users)
-      .values({ authSubject: identity.subject, email: identity.email, displayName: identity.name })
-      .onConflictDoUpdate({
-        target: users.authSubject,
-        set: {
-          // A new address replaces the old one, unless another account has it (CD-222).
-          email: sql`case when excluded.email is not null and not exists (
-            select 1 from ${users} u where lower(u.email) = lower(excluded.email) and u.auth_subject <> excluded.auth_subject
-          ) then excluded.email else ${users.email} end`,
-          // A name the user set in their profile wins over the one in the token.
-          displayName: sql`case when ${users.displayNameCustom} then ${users.displayName} else coalesce(excluded.display_name, ${users.displayName}) end`,
-        },
-      })
-      .returning();
+    const row = await this.database.db.transaction(async (tx) => {
+      const [before] = await tx.select({ email: users.email }).from(users).where(eq(users.authSubject, identity.subject));
+      const [saved] = await tx
+        .insert(users)
+        .values({ authSubject: identity.subject, email: identity.email, displayName: identity.name })
+        .onConflictDoUpdate({
+          target: users.authSubject,
+          set: {
+            // A new address replaces the old one, unless another account has it (CD-222).
+            email: sql`case when excluded.email is not null and not exists (
+              select 1 from ${users} u where lower(u.email) = lower(excluded.email) and u.auth_subject <> excluded.auth_subject
+            ) then excluded.email else ${users.email} end`,
+            // A name the user set in their profile wins over the one in the token.
+            displayName: sql`case when ${users.displayNameCustom} then ${users.displayName} else coalesce(excluded.display_name, ${users.displayName}) end`,
+          },
+        })
+        .returning();
+      if (before && saved?.email && saved.email.toLowerCase() !== before.email?.toLowerCase()) await syncWorkEmail(tx, saved.id, before.email, saved.email);
+      return saved;
+    });
 
     const user: AuthUser = { id: row!.id, authSubject: row!.authSubject, email: row!.email, displayName: row!.displayName };
     this.userCache.set(identity.subject, { user, expires: Date.now() + USER_CACHE_TTL_MS });

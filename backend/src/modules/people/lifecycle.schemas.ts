@@ -11,13 +11,6 @@ const isoDate = z
 export const InviteEmployee = z.object({ role: z.enum(INVITATION_ROLES).default('member') });
 export type InviteEmployee = z.infer<typeof InviteEmployee>;
 
-/** POST /api/people/employees/invite (Admin, "Invite selected", spec 5.4). */
-export const BulkInvite = z.object({
-  employeeIds: z.array(z.uuid()).min(1, 'Pick at least one employee').max(5000),
-  role: z.enum(INVITATION_ROLES).default('member'),
-});
-export type BulkInvite = z.infer<typeof BulkInvite>;
-
 /** POST /api/people/employees/:id/link (Admin, spec 4.6). */
 export const LinkMember = z.object({ userId: z.uuid() });
 export type LinkMember = z.infer<typeof LinkMember>;

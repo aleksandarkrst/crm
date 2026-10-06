@@ -63,12 +63,6 @@ export interface JobPayloads {
    */
   'people.employee-deactivated': { tenantId: string; employeeId: string; userId: string | null };
   /**
-   * Sent by people for "Invite selected" (the list) and the import's "Invite imported employees"
-   * (spec 4.7, 5.4, 8.6): the people worker creates an invitation through identity for each
-   * employee that still has a work email, no account and no pending invitation.
-   */
-  'people.bulk-invite': { tenantId: string; actorUserId: string; employeeIds: string[]; role: 'admin' | 'member' };
-  /**
    * Sent by people when someone changes an employee's manager in the app (the card, "Set manager",
    * "Add people", the team-lead dialog, deactivation's reassignment; never the import), one job per
    * employee and recipient (CD-139, spec 10.2). The people worker emails "New manager" to the
@@ -99,7 +93,6 @@ export const JOB_NAMES = [
   'notifications.digest-tick',
   'notifications.daily-digest',
   'people.bank-account-changed-email',
-  'people.bulk-invite',
   'people.deactivate-due',
   'people.employee-deactivated',
   'people.reporting-line-changed',

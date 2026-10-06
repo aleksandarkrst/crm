@@ -43,8 +43,6 @@ export type IconPath = keyof typeof ICONS;
 
 export function useCommands(): Command[] {
   const { s, set, addCompany, meetings, session } = useStore();
-  // Admins only (CD-225: only Admins do HR work).
-  const canAddEmployees = session.tenant.role !== 'member';
   const navigate = useNavigate();
   // On a deal's screen, a new task or contact starts out linked to that deal.
   const dealId = useMatch('/deals/:id')?.params.id;
@@ -63,10 +61,6 @@ export function useCommands(): Command[] {
     { id: 'new-task', group: 'Create', label: 'Task', hint: 'Shows in Today', key: 'T', icon: 'task', keywords: 'new create add activity to-do todo call meeting', run: () => set(onDeal ? { taskOpen: true, taskLeadId: onDeal } : { taskOpen: true }) },
     { id: 'new-meeting', group: 'Create', label: 'Meeting', hint: 'On the calendar', key: 'M', icon: 'calendar', keywords: 'new create add meeting visit call schedule calendar', run: () => meetings.openDialog(meetingSeed) },
     { id: 'new-product', group: 'Create', label: 'Product', hint: 'Adds to the catalog', key: 'R', icon: 'product', keywords: 'new create add service catalog', run: () => set({ productOpen: true, productEditId: null }) },
-    // Admins (CD-224, CD-225): opens Add employee on the Org structure page.
-    ...(canAddEmployees
-      ? [{ id: 'new-employee', group: 'Create' as const, label: 'Employee', hint: 'On the org structure', key: 'E', icon: 'org' as const, keywords: 'new create add employee person staff hire people', run: go(paths.org({ new: 'employee' })) }]
-      : []),
   ];
   const goTo: Command[] = [
     { id: 'go-overview', group: 'Go to', label: 'Overview', hint: 'Numbers and forecasts', icon: 'overview', keywords: 'dashboard reports', run: go(paths.overview) },

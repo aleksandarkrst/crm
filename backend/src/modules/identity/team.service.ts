@@ -8,7 +8,7 @@ import { type AuthUser, hasRole, type TenantContext } from '../../shared/authori
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { employees, INVITATION_ROLES, invitations, MEMBERSHIP_ROLES, memberships, tenants, users } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
-import { linkNewMember } from '../people';
+import { createInvitedEmployee, dropUnusedInvitedEmployees, linkNewMember } from '../people';
 import { inviteLinkBox } from './invitation-email';
 import { createInvitation, hashInviteToken, invitationColumns, inviteExpiry, keepAnOwner, pendingInvitation as pending, removeMembership } from './membership';
 
@@ -63,10 +63,15 @@ export class TeamService {
 
   /**
    * Returns the one-time token; the frontend turns it into the invite link. The worker emails the
-   * link too (job "identity.invitation-email", queued in this transaction).
+   * link too (job "identity.invitation-email", queued in this transaction). The invited person gets
+   * an employee record (CD-226, people's `createInvitedEmployee`), shown as Invited on the Org
+   * structure; accepting links it.
    */
   invite(ctx: TenantContext, input: CreateInvitation) {
-    return this.database.withTenant(ctx.tenantId, (tx) => createInvitation(tx, { jobs: this.jobs, audit: this.audit, env: this.env }, ctx, input));
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const employeeId = await createInvitedEmployee(tx, ctx.tenantId, input.email);
+      return createInvitation(tx, { jobs: this.jobs, audit: this.audit, env: this.env }, ctx, { ...input, employeeId });
+    });
   }
 
   /** Emails a pending invitation again, with the same link, and gives it another 7 days. */
@@ -113,6 +118,8 @@ export class TeamService {
         .returning({ id: invitations.id });
       if (!row) throw new NotFoundException('Invitation not found');
       await this.audit.record(tx, ctx, { action: 'invitation.revoked', entityType: 'invitation', entityId: id });
+      // The employee record the invitation made goes with it (CD-226).
+      await dropUnusedInvitedEmployees(tx, ctx.tenantId);
     });
   }
 

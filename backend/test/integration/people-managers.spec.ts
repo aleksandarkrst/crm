@@ -7,7 +7,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, createTenant, eventually, mailTo, ok, type Session, signIn } from './helpers';
-import { accessOf, asTenantSql, grantRole, joinAsEmployee, START } from './people-helpers';
+import { accessOf, addEmployee, asTenantSql, grantRole, joinAsEmployee } from './people-helpers';
 
 let owner: Session;
 let hr: Session;
@@ -19,8 +19,7 @@ let tenant: string;
 const id = {} as Record<'owner' | 'hr' | 'pay' | 'mgr' | 'emp' | 'peer', string>;
 const as = (s: Session = owner) => ({ token: s.token, tenant });
 
-const person = async (firstName: string, lastName: string, extra: Record<string, unknown> = {}) =>
-  (await ok('POST', '/people/employees', { ...as(), body: { firstName, lastName, employmentStartDate: START, ...extra } })).id as string;
+const person = (firstName: string, lastName: string, extra: Record<string, unknown> = {}) => addEmployee(owner, tenant, { firstName, lastName, ...extra });
 const setManager = (employeeIds: string[], managerId: string | null, s: Session = hr) => call('POST', '/people/reporting-lines', { ...as(s), body: { employeeIds, managerId } });
 const managerOf = async (employeeId: string) => (await asTenantSql<{ manager_id: string | null }>(tenant, `select manager_id from employees where id = $1`, [employeeId]))[0]!.manager_id;
 const scopeOf = async (managerId: string) =>

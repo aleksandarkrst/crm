@@ -4,7 +4,7 @@ import { JobsService } from '../../shared/events/jobs.service';
 import { RateLimit } from '../../shared/rate-limit';
 import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
-import { BulkInvite, DeactivateDueNow, DeactivateEmployee, InviteEmployee, LinkMember, ReactivateEmployee } from './lifecycle.schemas';
+import { DeactivateDueNow, DeactivateEmployee, InviteEmployee, LinkMember, ReactivateEmployee } from './lifecycle.schemas';
 import { EmployeeLifecycleService } from './lifecycle.service';
 
 const Id = new ZodPipe(UuidParam);
@@ -18,14 +18,6 @@ const Id = new ZodPipe(UuidParam);
 @RequireTenant('member')
 export class LifecycleController {
   constructor(private readonly lifecycle: EmployeeLifecycleService) {}
-
-  /** "Invite selected": `{ employeeIds, role }` → `{ queued, skipped }`; a job creates the invitations. */
-  @Post('invite')
-  @RateLimit('email')
-  @HttpCode(202)
-  bulkInvite(@Tenant() ctx: TenantContext, @Body(new ZodPipe(BulkInvite)) body: BulkInvite) {
-    return this.lifecycle.bulkInvite(ctx, body);
-  }
 
   /** "Invite to Pultly": `{ role }` → `{ invitation, token, card }`. */
   @Post(':id/invite')

@@ -194,8 +194,7 @@ the Overview audience filter).
 ### Import (CD-64)
 
 `backend/src/modules/crm/import/` imports companies, contacts, deals and (CD-81) products from a
-CSV; employees (CD-141) use the same pipeline from the people module (see "People", "Import from
-Excel and CSV"). The parts every type shares live in `shared/import/` (`csv.ts`; `import-file.ts`:
+CSV (the employee import of CD-141 used the same pipeline until CD-226 removed it). The parts every type shares live in `shared/import/` (`csv.ts`; `import-file.ts`:
 the mapping schema, limits, `prepareImport`, header matching, templates, failure reasons). It has no table
 of its own, so nothing about an import is stored between requests: the browser keeps the file's
 text and sends it with each call as JSON (`{ csv, mapping?, duplicates?, funnelId? }`).
@@ -1109,15 +1108,14 @@ milestones on lines); `drizzle/0022_products_deal_billing.sql` converts existing
 
 ## Header, command palette and record pages (CD-80)
 
-CD-224 additions: the "+" menu has **Employee** (key E) for workspace owners and admins; it opens `/org?new=employee`, where the Org page
-opens Add employee (and drops the parameter). Contact pages are addressed by the backend contact id:
+CD-224 additions (the "+" menu's **Employee** was removed by CD-226: people join by invitation). Contact pages are addressed by the backend contact id:
 `openContact` resolves a person id ("<deal id>:p" for a deal's primary contact) to it, and an old
 `/contacts/<deal id>:p` link redirects. Company **Domain** and contact **LinkedIn** are checked when
 the field is left (`components/ui.tsx` `CheckedInput`, `lib/validate.ts`): a domain is a host name
 (letters, digits, hyphens, dots, a top-level domain; a pasted address keeps only its host, "Saved as
 acme.com"), LinkedIn is a linkedin.com address or a profile path ("in/ana" is saved as
 "linkedin.com/in/ana"); an invalid value shows an inline message and is not saved. The Org page's
-empty states point to the next step: "Add employee" and "Import" when nobody is there, "Clear
+empty states point to the next step: "Invite people" (Settings → Team, CD-226) when nobody is there, "Clear
 filters" when the filters hide everyone, and "Add department" on the department chart and in the
 empty Department filter (opens Departments & teams with the new department's form). The deal
 composer's WhatsApp and LinkedIn tabs are commented out until those integrations exist.
@@ -1591,6 +1589,12 @@ and the backfill in `drizzle/0039_people_rls.sql`.
     `deactivated_at is null`.
   - **Account**: `linked` (`user_id`), `invited` (a pending invitation with `invitations.employee_id`),
     `none`.
+  - **Shown** (CD-226): the app shows only `linked` and `invited` people, and people who left (the
+    Admins' Inactive view). Other records (added or imported before CD-226, members who were
+    removed) stay in the table but aren't listed and their card is 404 (`shownEmployee` in
+    `employees.service.ts`; also left out when finding the top of the organisation).
+  - `created_from_invite` (CD-226, `drizzle/0047_employee_created_from_invite.sql`): made by an
+    invitation from Settings → Team (see linking below).
   - **Search**: `search_text` = accent-free lower case of name, job title and work email, kept by a
     trigger with `people_fold()`. Query with `search_text like '%' || people_fold(q) || '%'`, so
     "petrovic" finds "Petrović". `normalizeForSearch` (TS) has the same mapping for in-memory search.
@@ -1642,8 +1646,25 @@ and the backfill in `drizzle/0039_people_rls.sql`.
      phone from the profile, Permanent, weekly hours from the setting, no department, manager or
      start date.
 - **Removing a member** (or leaving): `unlinkMember` clears `user_id`; the employee stays Active
-  with "No account". Deactivation is a separate step.
+  with "No account" (not shown since CD-226). Deactivation is a separate step.
 - The migration created a linked record for every existing membership.
+- **Inviting** in Settings → Team (CD-226): `TeamService.invite` calls people's
+  `createInvitedEmployee(tx, tenantId, email)` before `createInvitation`, and stores the id in
+  `invitations.employee_id` (so rule 1 links it). An active record without an account that has the
+  email as work email is reused; a record of a member or someone who left with that email gives
+  null (nothing to link); otherwise a new record: names from the email's local part (`emailNames`:
+  "ana.petrovic" → Ana Petrovic; one word is both names), work email = the invited email,
+  `created_from_invite`. The Org structure shows it as Invited. On joining, a `created_from_invite`
+  record takes first and last name from the profile's display name (split at the last space; kept
+  when there is none or one word). Withdrawing (`TeamService.revoke`) or expiry deletes the
+  records made by invitations that were never linked and have no pending invitation
+  (`dropUnusedInvitedEmployees`; expiry: each `people.deactivate-due` tick); deactivated ones stay.
+- **Work email = sign-in email** (CD-226): linking (rules 1 and 2) fills an empty work email with
+  the sign-in email unless another record has it (rule 3 did already). When the sign-in email
+  changes (`IdentityService.upsert`, in its transaction), `syncWorkEmail` sets it on the member's
+  records in each workspace whose work email was empty or the old address (not when another record
+  has the new one; app.tenant_id is set per workspace). The migration filled empty work emails of
+  linked records the same way.
 
 ### Access: `PeopleAccess` (spec 9)
 
@@ -1696,7 +1717,8 @@ The database also refuses `manager_id = id`. Covered by a concurrent A → B / B
 ### API (`/api/people`, any member; rules per caller)
 
 - `GET /employees?departmentIds=&teamIds=&managerId=&managerScope=direct|indirect&status=active,leaving,inactive&account=linked,invited,none&issues=no_manager,no_start_date,no_department,manager_no_account,no_employee_number&q=&ids=`
-  → `{ employees, total }`, sorted by last name, all rows in one response. Default status: active
+  → `{ employees, total }`, sorted by last name, all rows in one response, only the people the app
+  shows (CD-226, "Shown" above). Default status: active
   and leaving; `inactive` is HR only (403 otherwise), `account` Admin only, `issues` HR only. `q`
   searches name, job title and work email (employee number too for HR). Each row has the directory
   fields (`id, userId, firstName, lastName, fullName, jobTitle, departmentId, departmentName, teamId,
@@ -1717,8 +1739,10 @@ The database also refuses `manager_id = id`. Covered by a concurrent A → B / B
   `bank` (`iban: { masked: 'RS35 •••• •••• •••• ••13 79', last4, country, foreign }`, `bankName`,
   `fxSameAsIban`, `fxIban`, `swiftBic`, `fxBankName`, `fxBankAddress`), `appAccess` (Admin: sign-in
   email, workspace role, pending invitation). A section the caller may not see is absent, not empty.
-  Inactive employees are 404 for non-HR.
-- `POST /employees` (HR) and `PATCH /employees/:id` (field rules above; If-Match like CRM, 409
+  Inactive employees are 404 for non-HR; records the app doesn't show are 404 for everyone (CD-226;
+  the actions below still return their card).
+- `POST /employees` (HR; no UI since CD-226, and the record isn't shown until it is invited or
+  linked) and `PATCH /employees/:id` (field rules above; If-Match like CRM, 409
   naming who changed which field) take the work, employment, personal and bank fields and return
   the card. Validation: names ≤ 100 (Serbian and Cyrillic letters), emails, start date required on
   create and at most a year ahead, weekly hours 1–60, age 15–100, the employee number when the
@@ -1829,8 +1853,8 @@ lines already changed (so a bulk change can't build a loop step by step) and ret
 `queueManagerEmails(jobs, tx, tenantId, actorUserId, changes, { employee?, manager? })` queues
 `people.reporting-line-changed` in the same transaction: one job per change and recipient, "New
 manager" to the employee and "New direct report" to the new manager. Every in-app change calls it
-(the card's PATCH and create, `/reporting-lines`, `/assignments`, the list's `POST /employees/bulk`, the team-lead dialog); the import
-doesn't; deactivation's reassignment passes `{ manager: false }` (one "New manager" per moved
+(the card's PATCH and create, `/reporting-lines`, `/assignments`, the list's `POST /employees/bulk`, the team-lead dialog);
+deactivation's reassignment passes `{ manager: false }` (one "New manager" per moved
 report). Removing a manager emails nobody.
 
 **The emails** (`org-email.ts`, worker `ReportingLineEmailJob` in `people-jobs.ts`): sent only if
@@ -1872,10 +1896,9 @@ People reaches identity only through `modules/identity/index.ts`: `createInvitat
   `code: 'link_instead'` with `userId` (the dialog offers "Link instead of invite"). Returns
   `{ invitation, token, card }`. Resend, Copy link and Withdraw are the Team endpoints.
 - Changing the **work email** (PATCH) withdraws the record's pending invitations.
-- `POST /employees/invite { employeeIds, role }` (Admin, "Invite selected"; the import queues the
-  same job): 202 `{ queued, skipped }`; the job **`people.bulk-invite`** invites each row that still
-  has a work email, no account and no pending invitation, whose email isn't a member's or already
-  invited, while the requester is still an owner or admin; one transaction each.
+- CD-226 removed "Invite selected" (`POST /employees/invite` and the `people.bulk-invite` job) and
+  the card's Invite to Pultly, Link to member and Unlink: people are invited in Settings → Team.
+  The single-record invite, link and unlink endpoints stay in the API, without a UI.
 - **Link to member** (Admin): `GET /employees/:id/link-candidates` → members with `mergeable` and
   `blockers`; `POST /employees/:id/link { userId }` deletes the member's own record and links this
   one. A record with data of its own (department, manager, reports, a team it leads or department
@@ -1916,9 +1939,10 @@ People reaches identity only through `modules/identity/index.ts`: `createInvitat
 `lib/api.ts`.
 
 - Header: initials, name, job, status (Active, Leaving on …, Inactive since …), account and role
-  badges, **Save** and a "⋯" menu (CD-225). The menu holds what the caller may do: Invite to Pultly
-  (no account), Resend / Copy invite link / Withdraw invitation (pending), Link to member / Unlink
-  account, Deactivate (active), Reactivate or Cancel leaving, and Delete (only once deactivated).
+  badges, **Save** and a "⋯" menu (CD-225). The menu holds what the caller may do: Resend / Copy
+  invite link / Withdraw invitation (pending; withdrawing asks first and goes back to the Org
+  structure, which the person leaves), Deactivate (active), Reactivate or Cancel leaving, and Delete
+  (only once deactivated). CD-226 took out Invite to Pultly, Link to member and Unlink.
 - Sections: Work (with employment fields when returned, "Leads team", "Heads department"),
   Reporting ("Approvals go to" from `GET /employees/:id/approvers`), Personal details and Bank
   account only when the API returned them. Two columns, one below 900 px. Not shown since CD-225:
@@ -1948,83 +1972,12 @@ People reaches identity only through `modules/identity/index.ts`: `createInvitat
 - Profile → "My employee card"; Settings → Team: "Employee card" column, and removing someone asks
   "<name> also left the company", which opens the card's Deactivate dialog (`?deactivate=1`)
   instead of removing the membership directly.
-### Import from Excel and CSV (CD-141, spec 8)
+### Import from Excel and CSV (CD-141; removed by CD-226)
 
-The CSV import's pipeline (`shared/import`, see "CSV import and export") with the type `employees`,
-owned by the people module (`employee-import*.ts`). Admins only: the routes are
-`@RequireTenant('member')` and the service checks `PeopleAccess` (`isHr`), so everyone else gets 403.
-
-- `POST /api/people/import/preview` and `/commit` take `{ csv, mapping?, duplicates: 'skip'|'update',
-  invite? }` (3 MB JSON body like `/api/crm/import`; 2 MB of text, 5,000 rows). `GET
-  /api/people/import/template` is the CSV template (labels and an example row; no "Full name").
-- **Excel** is read in the browser (`frontend/src/lib/spreadsheet.ts`, loaded only when an .xlsx is
-  picked or the Excel template is downloaded: read-excel-file, write-excel-file and fflate, about
-  35 kB gzipped, maintained and without known vulnerabilities; the npm `xlsx` 0.18.5 is not used).
-  The chosen sheet (the dialog asks when there are several; default the first) becomes CSV text for
-  the same endpoints, so there is one server path with one set of limits. Row N of the sheet is line
-  N of the CSV (empty rows stay empty lines, line breaks in cells become spaces), so line numbers
-  are the sheet's row numbers; the first non-empty row is the header. Formulas give their saved
-  values, merged cells take the top-left value in every cell of the range (read from the sheet's
-  `<mergeCells>`), date cells become `YYYY-MM-DD`, numbers keep the digits Excel saved, text keeps
-  leading zeros. Refused: `.xls` and other OLE files ("Save the file as .xlsx or .csv and try
-  again"), password-protected workbooks (an OLE file with an `EncryptedPackage` stream: "This file
-  is protected. Save it without a password and try again"), files over 5 MB. The Excel template is
-  built from the CSV template (the employee number as a text cell, the date as a date cell).
-- **Columns** (`employee-import-fields.ts`): labels, keys and aliases including WBM's Serbian
-  headers (Ime, Prezime, Ime i prezime, E-mail adresa, Broj zaposlenog, Radno mesto, Sektor,
-  Odeljenje, Tim, Nadređeni, Rukovodilac, Datum zaposlenja, Vrsta ugovora, Sati nedeljno, Telefon,
-  Lokacija, Datum rođenja, Adresa, Poštanski broj, Grad, Privatni email, Mobilni, Tekući račun,
-  Banka …). Header matching ignores case, accents (đ = dj), spaces and punctuation, for every
-  import type. First and last name are required unless Full name is mapped (split at the last
-  space). Values: dates `YYYY-MM-DD`, `DD.MM.YYYY` (with or without the last dot) or an Excel date
-  number; employment types in English or Serbian ("neodređeno", "određeno", "ugovor o delu",
-  "student"); weekly hours with a decimal comma, default from the workspace setting; IBANs and
-  Serbian account numbers as on the card.
-- **The plan** (`employee-import-plan.ts`, pure, unit-tested) checks the whole file before anything
-  is written: the create rules (`ImportedEmployee`), duplicates within the file ("Same email as line
-  14", employee numbers too), an employee number used by someone else, the "Employee number
-  required" setting, a team without a department, managers (an existing active employee or any row
-  of the file, also later rows; "Manager not found: …", "Manager has left the company", not
-  yourself), and reporting loops in the final tree (existing lines with the file's changes): every
-  row of a loop is an error ("Reporting loop: lines 5 → 9 → 5", or "line 5 → Marko Ilić → line 5"
-  with existing employees), checked again after taking them out. Warnings: no start date, no work
-  email, an IBAN converted from an account number, a manager whose row has errors ("Manager is on
-  line 3, which has errors: imported without a manager"; the manager's row is found by its email as
-  written even when its fields didn't parse, CD-224). Duplicates are matched by work email (active
-  or inactive); Skip (default) or Update: only non-empty cells, never the email, never
-  (re)activation ("Inactive: not reactivated"). The dialog shows the Skip it / Update it choice only
-  when the preview has rows matching existing records, and its Cancel asks before discarding a file
-  whose columns were read and mapped (CD-224). Departments are matched by name (case-insensitive) and teams by name within the
-  row's department, created if new.
-- **Preview** returns the CRM preview's shape plus `counts.warnings / newDepartments / newTeams /
-  invitations`, `newDepartments`, `newTeams` ("Sales / Field"), `canInvite` (Admins) and each row's
-  `warnings`. The commit plans again (the server never trusts the preview), so an unchanged file
-  gives the same counts and errors.
-- **Commit**: phase 1 creates the new departments and teams (`on conflict do nothing`), then saves
-  employees in batches of 200 without managers (multi-row inserts; a refused batch is redone row by
-  row in savepoints); personal details and sealed IBANs go to `employee_personal`; an update that
-  changes an IBAN queues "Bank account changed" (new employees' IBANs don't: the import is the
-  initial record). One `employee.imported` audit entry per batch. Phase 2 sets the managers of every
-  saved row in one transaction under `lockReportingLines`, with the loop check over the tree read
-  again under the lock; a row whose manager's row failed (or whose manager left meanwhile) is saved
-  without one and listed in `withoutManager`. No "New manager" emails. The result: created,
-  updated, skipped, failed (with cells, downloadable), `newDepartments`, `newTeams`,
-  `invitationsQueued`, `withoutManager`. 5,000 rows with managers import in under 30 s
-  (integration test).
-- **History and live updates**: the import's transactions set `app.change_action = 'imported'`
-  (the history row of a created employee, department or team says `imported`, not `created`) and
-  `app.quiet_notify = 'on'` (no per-statement hints); the last transaction sends one "re-read the
-  list" hint (ids null) for `employee`, and for `department` and `team` when some were created
-  (`drizzle/0040_employee_import.sql`; every other write path is unchanged).
-- **Invitations** (Admins, "Invite imported employees to Pultly", off by default): one
-  `people.bulk-invite` job `{ tenantId, actorUserId, employeeIds, role: 'member' }` with the new
-  employees that have a work email, the same job as "Invite selected" (see "App access and
-  leaving"): each invited like Settings → Team with `invitations.employee_id` set, skipping members,
-  pending invitations (of the record or the email), linked and inactive employees, and only while
-  the importer is still an owner or admin.
-- **UI**: `ImportDialog` with `initialType="employees"` (exported as `EmployeeImportDialog({ onClose,
-  onImported })`), opened from "Import" on the Org structure page; `onImported` re-reads the page's
-  lists. Store calls in `store/importExport.ts` (`importApi` uses `/people/import` for employees).
+The employee import (`employee-import*.ts`, `POST /api/people/import/*`, the Excel reading in
+`frontend/src/lib/spreadsheet.ts`) and the `people.bulk-invite` job were removed by CD-226: people
+join by invitation from Settings → Team, which creates their record. `drizzle/0040_employee_import.sql`
+(history rows that say `imported`) stays for the rows it wrote.
 
 ### Org structure page (CD-137)
 
@@ -2049,7 +2002,7 @@ owned by the people module (`employee-import*.ts`). Admins only: the routes are
 - **Filters** (both tabs), all dropdowns since CD-225 (`MultiSelect`, `EmployeePicker`):
   departments, teams (within the chosen departments), manager (a "Me" choice for managers; once one
   is chosen, a Scope select: Direct reports / Including indirect), status (Active and Leaving by
-  default; Inactive for HR), account (Admin), data issues (HR). The URL parameters are unchanged, so
+  default; Inactive for HR), account (Admin: Has account / Invited), data issues (HR). The URL parameters are unchanged, so
   links keep working. Phones fold them under "Filters".
 - **Chart** (`ChartFrame`): scrolls inside its card, never the page; Fit / 100% / − / + zoom (CSS
   transform, the box takes the scaled size) and pan by dragging the background. Inactive people
@@ -2076,13 +2029,13 @@ owned by the people module (`employee-import*.ts`). Admins only: the routes are
   managers and HR; Status and Account for HR; Roles for Admins. Phones get cards (name, job title,
   team).
 - **Bulk actions** (HR, ticked rows): Set department and team, Set manager (the server's loop message
-  shows in the dialog), Export selected, and "Invite selected" (Admin, CD-140). **Export
+  shows in the dialog) and Export selected ("Invite selected" was removed by CD-226). **Export
   CSV** (HR): the filtered rows with the visible columns (`lib/csv.ts`); "Include personal details and
   bank accounts" adds them from `POST /employees/export` (audited).
-- `/people/:id` is the employee card (CD-140, below). The header's "Add employee" (HR) opens a short
-  create dialog (`screens/employee/AddEmployeeDialog.tsx`) and then the new card; the bulk bar's
-  "Invite selected" (Admin) confirms how many rows qualify (work email, no account or invitation)
-  and calls `POST /employees/invite`.
+- `/people/:id` is the employee card (CD-140, below).
+- **Who is on it** (CD-226): members and people with a pending invitation (Inactive: people who
+  left, for HR); the API leaves out everyone else. There is no Add employee or Import: people join
+  by invitation in Settings → Team, which creates their record (Invited).
 - Measured with a mock API and a production build: 1,000 employees open the department chart in
   ~0.6–1.1 s and the list in ~0.4 s (page load included); 5,000 rows in the list ~0.5 s.
 
@@ -2091,7 +2044,7 @@ owned by the people module (`employee-import*.ts`). Admins only: the routes are
 - **The roles** (`people/caller-access.ts`): Employee (has a record), Manager (has an active direct
   report, from reporting lines) and Admin (workspace owner or admin, from the membership). Nothing
   is assigned by hand. CD-225 removed Administration and Payroll: only Admins do HR work (create
-  and edit employees, departments, teams and managers, import, export, deactivate, delete). The
+  and edit employees, departments, teams and managers, export, deactivate, delete). The
   role routes (`PUT|DELETE /api/people/employees/:id/roles/:role`, `GET /api/people/roles`), the
   "Role granted / removed" email (`people.role-changed-email`) and the invite dialog's checkboxes
   are gone; `employee_roles` and `invitations.assigned_roles` stay unused (expand/contract).

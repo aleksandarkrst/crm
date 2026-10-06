@@ -143,6 +143,12 @@ export const employees = pgTable(
     deactivationPlan: jsonb('deactivation_plan').$type<DeactivationPlan>(),
     /** First time a member was linked; an employee that was ever linked can't be deleted (spec 4.8). */
     firstLinkedAt: timestamp('first_linked_at', { withTimezone: true }),
+    /**
+     * Made by an invitation from Settings → Team (CD-226, `createInvitedEmployee`): names from the
+     * invited email until the person joins (then from their profile); withdrawn or expired before
+     * anyone linked it, the record is deleted.
+     */
+    createdFromInvite: boolean('created_from_invite').notNull().default(false),
     createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     ...timestamps,
   },

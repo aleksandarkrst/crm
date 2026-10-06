@@ -3,7 +3,8 @@
 // team, manager direct and including indirect, status, data issues) that the URL restores, the
 // list header as wide as its columns, the accent-free search ("petrovic" finds Petrović), the bulk
 // actions with the loop refused, Ctrl K opening an employee's card, a member's narrower columns,
-// and a phone without sideways scrolling.
+// and a phone without sideways scrolling. People join by invitation (CD-226): the page has no Add
+// employee, Import or "Invite selected".
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { describe } from 'node:test';
@@ -45,8 +46,13 @@ describe('org structure', () => {
     dept.service = ins('departments', 'name', `'Service'`);
     dept.north = ins('teams', 'department_id, name', `'${dept.sales}', 'North'`);
     dept.south = ins('teams', 'department_id, name', `'${dept.sales}', 'South'`);
-    const create = async (key, firstName, lastName, extra) =>
-      (id[key] = (await api(page, '/people/employees', { method: 'POST', body: JSON.stringify({ firstName, lastName, employmentStartDate: '2024-03-01', ...extra }) })).id);
+    // Invited in Settings → Team (the API), which creates their record (CD-226); then their details.
+    let n = 0;
+    const create = async (key, firstName, lastName, extra) => {
+      const { invitation } = await api(page, '/team/invitations', { method: 'POST', body: JSON.stringify({ email: email(`org-person-${++n}`), role: 'member' }) });
+      id[key] = invitation.employeeId;
+      await api(page, `/people/employees/${id[key]}`, { method: 'PATCH', body: JSON.stringify({ firstName, lastName, employmentStartDate: '2024-03-01', ...extra }) });
+    };
     // Ana → Marko → Ivan → Mila and Sara; Petar without a manager in Service.
     await create('ana', 'Ana', 'Petrović', { jobTitle: 'CEO', departmentId: dept.sales });
     await create('marko', 'Marko', 'Ilić', { jobTitle: 'Sales director', teamId: dept.north, managerId: id.ana });
@@ -211,6 +217,8 @@ describe('org structure', () => {
     await tick(id.mila);
     await tick(id.sara);
     await page.waitForFunction(() => document.querySelector('.org-bulk-count')?.textContent === '2 selected');
+    // People join by invitation (CD-226): no "Invite selected", Add employee or Import.
+    for (const gone of ['org-bulk-invite', 'org-add-employee', 'employee-import']) assert.equal(await page.$(`[data-testid=${gone}]`), null, gone);
     await click(page, '[data-testid=org-bulk-org]');
     await setValue(page, '[data-testid=org-set-department]', dept.service);
     await click(page, '[data-testid=org-set-org-save]');

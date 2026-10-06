@@ -17,8 +17,12 @@ describe('departments and teams', () => {
   /** Messages of the browser dialogs (the harness accepts them all). */
   const dialogs = [];
 
-  const person = async (firstName, lastName) =>
-    (await api(page, '/people/employees', { method: 'POST', body: JSON.stringify({ firstName, lastName, employmentStartDate: '2024-03-01' }) })).id;
+  // Invited in Settings → Team (the API), which creates their record (CD-226); then their names.
+  const person = async (firstName, lastName) => {
+    const { invitation } = await api(page, '/team/invitations', { method: 'POST', body: JSON.stringify({ email: email(`dt-${firstName}-${lastName}`.toLowerCase()), role: 'member' }) });
+    await api(page, `/people/employees/${invitation.employeeId}`, { method: 'PATCH', body: JSON.stringify({ firstName, lastName, employmentStartDate: '2024-03-01' }) });
+    return invitation.employeeId;
+  };
   const employee = (employeeId) => api(page, `/people/employees/${employeeId}`);
   const openPanel = async () => {
     await page.goto(`${BASE_URL}/org`, { waitUntil: 'networkidle0' });

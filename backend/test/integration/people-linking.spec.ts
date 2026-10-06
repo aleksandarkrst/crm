@@ -130,15 +130,16 @@ describe('creating and joining a workspace', () => {
     expect((await ok('GET', `/people/employees/${created.id}`, as())).account).toBe('linked');
   });
 
-  it('removing a member leaves the employee Active with "No account"; joining again relinks by email', async () => {
+  it('removing a member keeps the employee record (Active, no account; not shown, CD-226); joining again relinks it by email', async () => {
     const leaver = await signIn('link-leaver');
     const id = await joinAsEmployee(owner, tenant, leaver);
     await ok('DELETE', `/team/members/${leaver.userId}`, as());
-    const card = await ok('GET', `/people/employees/${id}`, as());
-    expect(card).toMatchObject({ status: 'active', account: 'none', userId: null });
+    const [row] = await asTenantSql<{ user_id: string | null; deactivated_at: string | null }>(tenant, `select user_id, deactivated_at from employees where id = $1`, [id]);
+    expect(row).toEqual({ user_id: null, deactivated_at: null });
+    expect((await call('GET', `/people/employees/${id}`, as())).status).toBe(404);
     // An active employee can't be deleted (deactivate first, CD-225).
     expect((await call('DELETE', `/people/employees/${id}`, as())).status).toBe(409);
-    // Back again: rule 2 finds the same record by work email.
+    // Back again: the invitation goes to the same record (its work email), so it is linked again.
     expect(await joinAsEmployee(owner, tenant, leaver)).toBe(id);
   });
 });

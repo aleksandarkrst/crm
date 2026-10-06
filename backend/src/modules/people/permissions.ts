@@ -99,7 +99,6 @@ export const PERMISSION_MODULES: readonly PermissionModule[] = [
       row('org.employees.manage', 'Create and edit employees (work fields, personal details, bank account)', ['No', 'No', 'All']),
       row('org.reporting', 'Set department, team, reports to', ['No', 'No', 'All']),
       row('org.structure', 'Departments and teams: add, rename, delete, assign', ['No', 'No', 'Yes']),
-      row('org.import', 'Import employees', ['No', 'No', 'Yes']),
       row('org.export', 'Export employee list', ['No', 'No', 'Yes']),
       row('org.deactivate', 'Deactivate and reactivate', ['No', 'No', 'Yes']),
       row('org.delete', 'Delete an employee (once deactivated)', ['No', 'No', 'Yes']),

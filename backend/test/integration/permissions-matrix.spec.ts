@@ -262,7 +262,6 @@ const CASES: Record<string, Case> = {
       return allowedBy(r.status, 201);
     },
   },
-  'org.import': { relations: ['other'], probe: async (c) => allowedBy((await call('GET', '/people/import/template', as(c))).status, 200) },
   'org.export': {
     relations: ['other'],
     probe: async (c, t) => allowedBy((await call('POST', '/people/employees/export', { ...as(c), body: { employeeIds: [emp[t]] } })).status, 200),
@@ -363,7 +362,7 @@ describe('Administration and Payroll are gone (CD-225)', () => {
     expect((await call('GET', '/people/employees?status=inactive', as('legacy'))).status).toBe(403);
     const card = await cardOf('legacy', 'employee');
     for (const section of ['employment', 'personal', 'bank', 'hr']) expect(card).not.toHaveProperty(section);
-    // Members get 403 on every HR write: create, edit others, manager, department, import, export, deactivate.
+    // Members get 403 on every HR write: create, edit others, manager, department, export, deactivate.
     for (const c of ['legacy', 'manager', 'employee'] as Person[]) {
       expect((await call('POST', '/people/employees', { ...as(c), body: { firstName: 'No', lastName: 'Way', employmentStartDate: START } })).status, c).toBe(403);
       expect((await call('PATCH', `/people/employees/${emp.other}`, { ...as(c), body: { jobTitle: 'Nope' } })).status, c).toBe(403);
@@ -371,7 +370,6 @@ describe('Administration and Payroll are gone (CD-225)', () => {
       expect((await call('PATCH', `/people/employees/${emp.other}`, { ...as(c), body: { departmentId } })).status, c).toBe(403);
       expect((await call('POST', '/people/reporting-lines', { ...as(c), body: { employeeIds: [emp.other], managerId: emp.manager } })).status, c).toBe(403);
       expect((await call('POST', '/people/assignments', { ...as(c), body: { departmentId, employeeIds: [emp.other] } })).status, c).toBe(403);
-      expect((await call('GET', '/people/import/template', as(c))).status, c).toBe(403);
       expect((await call('POST', '/people/employees/export', { ...as(c), body: { employeeIds: [emp.other] } })).status, c).toBe(403);
       expect((await call('POST', `/people/employees/${emp.other}/deactivate`, { ...as(c), body: { lastWorkingDay: '2031-01-01' } })).status, c).toBe(403);
     }

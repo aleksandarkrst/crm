@@ -1326,17 +1326,6 @@ export interface ApiPeopleHistoryEntry {
   changedAt: string;
 }
 
-/** "Link to member": a member and whether their own record can be merged into this one. */
-export interface ApiLinkCandidate {
-  userId: string;
-  name: string;
-  email: string | null;
-  employeeId: string | null;
-  employeeName: string | null;
-  mergeable: boolean;
-  blockers: string[];
-}
-
 export interface DeactivateInput {
   lastWorkingDay: string;
   reason?: LeavingReason | null;
@@ -1350,8 +1339,6 @@ export interface DeactivateInput {
 export const peopleCardApi = {
   access: () => api<ApiPeopleAccess>('/people/access'),
   card: (id: string) => api<ApiEmployeeCard>(`/people/employees/${id}`),
-  /** "Add employee" (Admins): first and last name and the start date are required. */
-  create: (input: EmployeePatch) => api<ApiEmployeeCard>('/people/employees', { method: 'POST', json: input }),
   /** `clearHeadRoles`: confirms moving a department head or team lead elsewhere (CD-225; 409 `heads_department` otherwise). */
   update: (id: string, patch: EmployeePatch, version?: string, clearHeadRoles = false) =>
     api<ApiEmployeeCard>(`/people/employees/${id}`, { method: 'PATCH', json: clearHeadRoles ? { ...patch, clearHeadRoles } : patch, headers: ifMatch(version) }),
@@ -1364,12 +1351,6 @@ export const peopleCardApi = {
   directory: () => api<{ employees: ApiEmployeeRow[]; total: number }>('/people/employees'),
   departments: () => api<ApiDepartment[]>('/people/departments'),
   teams: () => api<ApiTeam[]>('/people/teams'),
-  invite: (id: string, role: 'admin' | 'member') => api<{ invitation: ApiInvitation; token: string; card: ApiEmployeeCard }>(`/people/employees/${id}/invite`, { method: 'POST', json: { role } }),
-  /** "Invite selected": `{ queued, skipped }`; a job creates the invitations. */
-  bulkInvite: (employeeIds: string[], role: 'admin' | 'member' = 'member') => api<{ queued: number; skipped: number }>('/people/employees/invite', { method: 'POST', json: { employeeIds, role } }),
-  linkCandidates: (id: string) => api<ApiLinkCandidate[]>(`/people/employees/${id}/link-candidates`),
-  link: (id: string, userId: string) => api<ApiEmployeeCard>(`/people/employees/${id}/link`, { method: 'POST', json: { userId } }),
-  unlink: (id: string) => api<ApiEmployeeCard>(`/people/employees/${id}/unlink`, { method: 'POST' }),
   deactivate: (id: string, input: DeactivateInput) => api<ApiEmployeeCard>(`/people/employees/${id}/deactivate`, { method: 'POST', json: input }),
   reactivate: (id: string, employmentStartDate?: string) => api<ApiEmployeeCard>(`/people/employees/${id}/reactivate`, { method: 'POST', json: employmentStartDate ? { employmentStartDate } : {} }),
   remove: (id: string) => api(`/people/employees/${id}`, { method: 'DELETE' }),
