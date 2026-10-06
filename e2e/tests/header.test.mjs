@@ -136,20 +136,18 @@ describe('command palette, + menu and account menu', () => {
     await page.waitForFunction(() => !document.querySelector('.modal'));
   });
 
-  step('the + menu has no "Employee" (CD-226: people join by invitation); the Org structure offers to add a department', async () => {
+  step('the + menu has no "Employee" (CD-226: people join by invitation); the Org structure offers to create a unit', async () => {
     await click(page, '[data-testid=new-menu]');
     await page.waitForSelector('[data-testid=new-task]');
     assert.equal(await page.$('[data-testid=new-employee]'), null, 'no Employee in the + menu');
     await page.goto(`${BASE_URL}/org`, { waitUntil: 'networkidle0' });
-    // No departments yet: the chart and the Department filter offer to add one.
-    await page.waitForSelector('[data-testid=org-no-departments]');
-    await click(page, '[data-testid=org-filter-department]');
-    await click(page, '[data-testid=org-filter-add-department]');
-    await page.waitForSelector('[data-testid=departments-list]');
-    // It opens with the new department's form, not the "Add department" button.
-    await page.waitForSelector('.modal input');
-    assert.equal(await page.$('.dtp-add-dept'), null);
-    await clickButton(page, 'Close');
+    // No units yet: the chart and the Unit filter offer to create one (CD-226).
+    await page.waitForSelector('[data-testid=org-no-units]');
+    await click(page, '[data-testid=org-filter-unit]');
+    await click(page, '[data-testid=org-filter-add-unit]');
+    await page.waitForSelector('[data-testid=unit-create-name]');
+    assert.match(await page.$eval('.modal', (el) => el.textContent), /New department/);
+    await clickButton(page, 'Cancel');
     await page.waitForFunction(() => !document.querySelector('.modal'));
   });
 
