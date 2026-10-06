@@ -24,7 +24,9 @@ describe('the permission matrix (spec 9.3) as data', () => {
 
   it('reads the spec’s cells', () => {
     expect(permissionRow('crm.visit_plans.manage').cells.manager).toEqual({ scope: 'direct', label: 'Direct' });
-    expect(permissionRow('org.bank').cells.payroll).toEqual({ scope: 'none', label: 'No (Q2)' });
+    expect(permissionRow('org.bank').cells.payroll).toEqual({ scope: 'none', label: 'No' });
+    // Open spec questions stay out of the product text (CD-224, B16).
+    for (const m of PERMISSION_MODULES) for (const r of m.rows) for (const c of Object.values(r.cells)) expect(c.label, r.id).not.toMatch(/\(Q\d+\)/);
     expect(permissionRow('org.edit_own_bank').cells.employee).toEqual({ scope: 'own', label: 'If setting on' });
     expect(permissionRow('org.directory').cells.administration.label).toBe('All, incl. inactive');
     expect(() => permissionRow('nope')).toThrow();

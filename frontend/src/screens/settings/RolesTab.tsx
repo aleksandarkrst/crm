@@ -18,17 +18,18 @@ const ROLE_RULES: { label: string; roles: (typeof TEAM_ROLES)[number][] }[] = [
 ];
 
 /**
- * Settings → Roles & permissions (CD-142, spec 9.6): the workspace roles (owner, admin, member),
- * the functional roles' matrix as the server defines and enforces it (grouped by module; modules
- * that aren't live yet say so), and who has which role, where Admins add and remove
- * Administration and Payroll.
+ * Settings → Roles & permissions (CD-142, spec 9.6): the workspace roles (owner, admin, member).
+ * The functional roles' matrix and "Who has which role" are hidden per CD-224 (the code stays).
  */
 export function RolesTab() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <WorkspaceRoles />
+      {/* Hidden per CD-224; the product owner may bring it back. Administration and Payroll are given
+          in the Team tab's invite dialog (and on the employee card) meanwhile.
       <FunctionalRoles />
       <RoleHolders />
+      */}
     </div>
   );
 }
@@ -75,8 +76,8 @@ function WorkspaceRoles() {
 const FN_COLS = 'minmax(220px, 1.8fr) repeat(5, minmax(96px, 1fr))';
 const SCOPE_CLASS: Record<PermissionScope, string> = { none: 'perm-cell none', own: 'perm-cell own', direct: 'perm-cell some', indirect: 'perm-cell some', all: 'perm-cell all' };
 
-/** The matrix of spec 9.3, from GET /people/permissions: the same definition the API checks. */
-function FunctionalRoles() {
+/** The matrix of spec 9.3, from GET /people/permissions: the same definition the API checks. Hidden per CD-224 (exported so it stays compiled). */
+export function FunctionalRoles() {
   const { matrix, error } = usePermissionMatrix();
   return (
     <div className="card" data-testid="functional-roles">
@@ -152,8 +153,8 @@ function RoleDescriptions({ matrix }: { matrix: ApiPermissionMatrix }) {
   );
 }
 
-/** "Who has which role": Administration and Payroll (Admins add and remove), Admins and Managers (derived). */
-function RoleHolders() {
+/** "Who has which role": Administration and Payroll (Admins add and remove), Admins and Managers (derived). Hidden per CD-224 (exported so it stays compiled). */
+export function RoleHolders() {
   const { session } = useStore();
   const isAdmin = session.tenant.role === 'owner' || session.tenant.role === 'admin';
   const { holders, error } = useRoleHolders();

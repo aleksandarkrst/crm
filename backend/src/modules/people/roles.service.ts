@@ -102,42 +102,74 @@ export class RolesService {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const access = await this.access.of(ctx, tx);
       if (!allows('org.roles', access.roles)) throw new ForbiddenException('Only Admins assign Administration and Payroll');
-      // Lock the employee, so two Admins changing the same person's roles queue.
-      const [employee] = await tx
-        .select({ id: employees.id, deactivatedAt: employees.deactivatedAt, fullName: employees.fullName })
-        .from(employees)
-        .where(eq(employees.id, employeeId))
-        .for('update');
-      if (!employee) throw new NotFoundException('Employee not found');
-      const before = await this.assignedOf(tx, employeeId);
-      if (kind === 'granted') {
-        if (employee.deactivatedAt) throw new BadRequestException(`${employee.fullName} has left the company. Reactivate them first.`);
-        if (before.includes(role)) return { employeeId, roles: before };
-        await tx.insert(employeeRoles).values({ tenantId: ctx.tenantId, employeeId, role, grantedByUserId: ctx.userId });
-      } else {
-        if (!before.includes(role)) return { employeeId, roles: before };
-        await tx.delete(employeeRoles).where(and(eq(employeeRoles.employeeId, employeeId), eq(employeeRoles.role, role)));
-      }
-      const after = ASSIGNED_ROLES.filter((r) => (r === role ? kind === 'granted' : before.includes(r)));
-      await tx.insert(recordChanges).values({
-        tenantId: ctx.tenantId,
-        entityType: 'employee',
-        entityId: employeeId,
-        action: 'updated',
-        field: 'roles',
-        oldValue: before,
-        newValue: after,
-        actorUserId: ctx.userId,
-        clientId: requestActor.getStore()?.clientId ?? null,
-      });
-      await this.audit.record(tx, ctx, { action: kind === 'granted' ? 'employee.role_granted' : 'employee.role_removed', entityType: 'employee', entityId: employeeId, data: { role } });
-      await this.jobs.send('people.role-changed-email', { tenantId: ctx.tenantId, employeeId, role, kind, actorUserId: ctx.userId }, tx);
-      return { employeeId, roles: after };
+      return changeAssignedRole(tx, { audit: this.audit, jobs: this.jobs }, ctx, employeeId, role, kind, { email: true });
     });
   }
+}
 
-  private async assignedOf(tx: Tx, employeeId: string): Promise<AssignedRole[]> {
-    const rows = await tx.select({ role: employeeRoles.role }).from(employeeRoles).where(eq(employeeRoles.employeeId, employeeId));
-    return ASSIGNED_ROLES.filter((r) => rows.some((x) => x.role === r));
+/**
+ * Gives or takes away one assigned role, in `tx` (app.tenant_id set), without checking the caller:
+ * RolesService checks "org.roles" first, and an accepted invitation applies the roles an Admin
+ * chose when inviting (grantInvitedRoles). Writes the employee history row (field `roles`) and the
+ * audit entry, and queues the "Role granted" / "Role removed" email when `email` is set.
+ */
+async function changeAssignedRole(
+  tx: Tx,
+  deps: { audit: AuditService; jobs: JobsService },
+  ctx: TenantContext,
+  employeeId: string,
+  role: AssignedRole,
+  kind: 'granted' | 'removed',
+  opts: { email: boolean },
+) {
+  // Lock the employee, so two Admins changing the same person's roles queue.
+  const [employee] = await tx
+    .select({ id: employees.id, deactivatedAt: employees.deactivatedAt, fullName: employees.fullName })
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .for('update');
+  if (!employee) throw new NotFoundException('Employee not found');
+  const before = await assignedOf(tx, employeeId);
+  if (kind === 'granted') {
+    if (employee.deactivatedAt) throw new BadRequestException(`${employee.fullName} has left the company. Reactivate them first.`);
+    if (before.includes(role)) return { employeeId, roles: before };
+    await tx.insert(employeeRoles).values({ tenantId: ctx.tenantId, employeeId, role, grantedByUserId: ctx.userId });
+  } else {
+    if (!before.includes(role)) return { employeeId, roles: before };
+    await tx.delete(employeeRoles).where(and(eq(employeeRoles.employeeId, employeeId), eq(employeeRoles.role, role)));
   }
+  const after = ASSIGNED_ROLES.filter((r) => (r === role ? kind === 'granted' : before.includes(r)));
+  await tx.insert(recordChanges).values({
+    tenantId: ctx.tenantId,
+    entityType: 'employee',
+    entityId: employeeId,
+    action: 'updated',
+    field: 'roles',
+    oldValue: before,
+    newValue: after,
+    actorUserId: ctx.userId,
+    clientId: requestActor.getStore()?.clientId ?? null,
+  });
+  await deps.audit.record(tx, ctx, { action: kind === 'granted' ? 'employee.role_granted' : 'employee.role_removed', entityType: 'employee', entityId: employeeId, data: { role } });
+  if (opts.email) await deps.jobs.send('people.role-changed-email', { tenantId: ctx.tenantId, employeeId, role, kind, actorUserId: ctx.userId }, tx);
+  return { employeeId, roles: after };
+}
+
+/**
+ * The Administration / Payroll roles an Admin ticked in the Team tab's invite dialog (CD-224),
+ * given to the new member's employee record when they accept, in identity's transaction. `ctx` is
+ * the inviting Admin (history and audit say who gave the role). No "Role granted" email: the
+ * person chose to join moments ago and the roles were part of the invitation they accepted.
+ */
+export async function grantInvitedRoles(tx: Tx, deps: { audit: AuditService; jobs: JobsService }, ctx: TenantContext, employeeId: string, roles: readonly AssignedRole[]): Promise<AssignedRole[]> {
+  let current: AssignedRole[] = await assignedOf(tx, employeeId);
+  for (const role of ASSIGNED_ROLES.filter((r) => roles.includes(r))) {
+    current = (await changeAssignedRole(tx, deps, ctx, employeeId, role, 'granted', { email: false })).roles;
+  }
+  return current;
+}
+
+async function assignedOf(tx: Tx, employeeId: string): Promise<AssignedRole[]> {
+  const rows = await tx.select({ role: employeeRoles.role }).from(employeeRoles).where(eq(employeeRoles.employeeId, employeeId));
+  return ASSIGNED_ROLES.filter((r) => rows.some((x) => x.role === r));
 }

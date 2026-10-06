@@ -73,6 +73,34 @@ describe('accepting', () => {
   });
 });
 
+describe('functional roles on the invitation (CD-224)', () => {
+  it('gives the ticked Administration and Payroll roles to the new member's employee record on acceptance', async () => {
+    const invitee = await signIn('inv-roles');
+    const { token, invitation } = await ok('POST', '/team/invitations', { ...as(), body: { email: invitee.email, role: 'member', roles: ['administration', 'payroll'] } });
+    expect(invitation.assignedRoles).toEqual(['administration', 'payroll']);
+    expect((await ok('GET', '/team', as())).invitations.find((i: { id: string }) => i.id === invitation.id).assignedRoles).toEqual(['administration', 'payroll']);
+
+    await ok('POST', `/invitations/${token}/accept`, { token: invitee.token }, 200);
+    const access = await ok('GET', '/people/access', { token: invitee.token, tenant });
+    expect(access.roles).toEqual(expect.arrayContaining(['administration', 'payroll']));
+    // The employee history says the inviting owner gave the roles.
+    const history = await ok('GET', `/people/history?entityType=employee&entityId=${access.employeeId}`, as());
+    const change = history.entries.find((e: { field: string | null }) => e.field === 'roles');
+    expect(change).toMatchObject({ newValue: ['administration', 'payroll'] });
+    expect(change.actor?.userId).toBe(owner.userId);
+  });
+
+  it('an invitation without roles gives none, and unknown roles are refused', async () => {
+    const invitee = await signIn('inv-noroles');
+    const { token } = await invite(invitee.email);
+    await ok('POST', `/invitations/${token}/accept`, { token: invitee.token }, 200);
+    const access = await ok('GET', '/people/access', { token: invitee.token, tenant });
+    expect(access.roles).not.toContain('administration');
+    expect(access.roles).not.toContain('payroll');
+    expect((await call('POST', '/team/invitations', { ...as(), body: { email: `bad-role-${Date.now()}@example.test`, roles: ['admin'] } })).status).toBe(400);
+  });
+});
+
 describe('withdrawing and replacing', () => {
   it('a withdrawn invitation can no longer be accepted', async () => {
     const invitee = await signIn('inv-revoked');

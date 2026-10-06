@@ -148,9 +148,18 @@ export const invitations = pgTable(
      * drizzle/0039_people_rls.sql (ON DELETE SET NULL (employee_id)).
      */
     employeeId: uuid('employee_id'),
+    /**
+     * Administration / Payroll (people's assigned roles) the inviting Admin ticked (CD-224): the
+     * new member's employee record gets them when the invitation is accepted.
+     */
+    assignedRoles: text('assigned_roles').array().$type<('administration' | 'payroll')[]>().notNull().default(sql`'{}'::text[]`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('invitations_tenant_idx').on(t.tenantId), index('invitations_employee_idx').on(t.employeeId)],
+  (t) => [
+    index('invitations_tenant_idx').on(t.tenantId),
+    index('invitations_employee_idx').on(t.employeeId),
+    check('invitations_assigned_roles_ck', sql`${t.assignedRoles} <@ array['administration', 'payroll']::text[]`),
+  ],
 );
 
 /**
