@@ -74,7 +74,7 @@ describe('accepting', () => {
 });
 
 describe('functional roles on the invitation (CD-224)', () => {
-  it('gives the ticked Administration and Payroll roles to the new member's employee record on acceptance', async () => {
+  it("gives the ticked Administration and Payroll roles to the new member's employee record on acceptance", async () => {
     const invitee = await signIn('inv-roles');
     const { token, invitation } = await ok('POST', '/team/invitations', { ...as(), body: { email: invitee.email, role: 'member', roles: ['administration', 'payroll'] } });
     expect(invitation.assignedRoles).toEqual(['administration', 'payroll']);
