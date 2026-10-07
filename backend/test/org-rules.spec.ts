@@ -235,6 +235,30 @@ describe('planCeo and planUnitMoved', () => {
     expect(planCeo(s, 'gone')).toEqual([]);
   });
 
+  it('the new CEO reports to nobody, so a lead they reported to can report to them (CD-228)', () => {
+    // Sara reported to Sam, the lead of Sales; Sara becomes the CEO.
+    const s = company();
+    s.people.get('sara')!.managerId = 'sam';
+    s.people.get('sam')!.managerId = null;
+    const changes = planCeo(s, 'sara', 'ceo');
+    expect(changes).toEqual([
+      { employeeId: 'sara', managerId: null },
+      { employeeId: 'sam', managerId: 'sara' },
+    ]);
+    planChanges(s, changes);
+    expect([s.people.get('sara')!.managerId, s.people.get('sam')!.managerId]).toEqual([null, 'sara']);
+  });
+
+  it("leads who reported to the previous CEO move to the new one; a lead's own choice stays", () => {
+    const s = company();
+    s.units.get('service')!.leadId = 'olga';
+    s.people.get('olga')!.managerId = 'ivan';
+    // Sam reported to the old CEO, Olga to Ivan.
+    expect(planCeo(s, 'sara', 'ceo')).toEqual([{ employeeId: 'sam', managerId: 'sara' }]);
+    // Without the previous CEO, only leads with no manager move.
+    expect(planCeo(s, 'sara')).toEqual([]);
+  });
+
   it("a moved unit's lead follows the lead above the new place if they reported to the one above the old", () => {
     const before = company();
     before.units.get('service')!.leadId = 'olga';

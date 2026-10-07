@@ -11,7 +11,7 @@ import { useStore } from '../store/store';
 import { useEmployeeCard } from '../store/useEmployeeCard';
 import { DeactivateDialog, ReactivateDialog } from './employee/dialogs';
 import { CardEditContext, dateLabel } from './employee/parts';
-import { BankSection, cardInitial, cardPatch, PersonalSection, ReportingSection, WorkSection } from './employee/sections';
+import { BankSection, cardInitial, cardPatch, PersonalSection, WorkSection } from './employee/sections';
 
 /** The Org structure page (CD-137). */
 const ORG = paths.org();
@@ -20,15 +20,16 @@ type Dialog = 'deactivate' | 'reactivate' | null;
 
 /**
  * The employee card (CD-140, spec 4.5; CD-225): `/people/:id`. Header with status, account and
- * roles, one Save and a "⋯" menu with the actions the caller may take; sections Work, Reporting,
+ * roles, one Save and a "⋯" menu with the actions the caller may take; sections Work,
  * Personal details and Bank account (only for people allowed to see them). Every field the caller
  * may change is an input; Save sends what changed (highlighted when there is something to save),
  * and leaving with unsaved changes asks "Discard your changes?". `?deactivate=1` opens the
  * Deactivate dialog (Settings → Team, "also left the company"). On phones the sections stack.
  *
  * Not shown since CD-225: App access (its actions are in the menu; the sign-in email and workspace
- * role are in Settings → Team), History (the API stays, sections.tsx) and Roles (Administration and
- * Payroll were removed).
+ * role are in Settings → Team), History (the API stays, sections.tsx), Roles (Administration and
+ * Payroll were removed) and, since CD-228, Reporting (`ReportingSection` stays in sections.tsx):
+ * managers are set on the Org structure (the chart, a unit's lead, the list's Set manager).
  */
 export function EmployeeCard() {
   const { id = '' } = useParams();
@@ -133,7 +134,6 @@ function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => 
         <div className="emp-grid">
           <div className="emp-col">
             <WorkSection card={card} />
-            <ReportingSection card={card} />
           </div>
           <div className="emp-col">
             {card.personal && <PersonalSection card={card} />}

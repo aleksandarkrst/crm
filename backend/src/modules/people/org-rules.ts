@@ -17,8 +17,9 @@ import { loopMessage } from './reporting-lines';
  *   CEO; members of the unit and leads of its units right below who reported to the previous lead,
  *   or to nobody, now report to the new lead (someone for whom that would close a loop keeps their
  *   manager and is listed).
- * - CEO set (`planCeo`): leads of units directly under the company who have no manager report to
- *   the CEO.
+ * - CEO set (`planCeo`): the CEO reports to nobody (their manager is cleared, CD-228: the card
+ *   showed the old one while the chart showed them on top); leads of units directly under the
+ *   company who reported to the previous CEO, or to nobody, report to the new CEO.
  * The CEO never gets a manager automatically.
  */
 
@@ -245,16 +246,28 @@ export function planLead(s: OrgSnapshot, unitId: string, leadId: string | null):
   return { changes, loops };
 }
 
-/** A new CEO: leads of units directly under the company who have no manager report to them. */
-export function planCeo(s: OrgSnapshot, ceoId: string | null): OrgChange[] {
+/**
+ * A new CEO (CD-226, CD-228): the CEO reports to nobody, and the leads of units directly under the
+ * company who reported to `previousCeoId` (the CEO before) or to nobody now report to the new CEO.
+ * A lead who chose another manager keeps them. Clearing the CEO's manager first means a lead the
+ * CEO used to report to can now report to the CEO without a loop.
+ */
+export function planCeo(s: OrgSnapshot, ceoId: string | null, previousCeoId: string | null = null): OrgChange[] {
   if (!isActive(s, ceoId)) return [];
   const work = cloneSnapshot(s);
   work.ceoId = ceoId;
   const out: OrgChange[] = [];
+  const ceo = work.people.get(ceoId)!;
+  if (ceo.managerId) {
+    ceo.managerId = null;
+    out.push({ employeeId: ceoId, managerId: null });
+  }
   for (const u of work.units.values()) {
     if (u.parentId || !u.leadId || u.leadId === ceoId) continue;
     const lead = work.people.get(u.leadId);
-    if (!lead?.active || lead.managerId || !fits(work, lead.id, ceoId)) continue;
+    if (!lead?.active || lead.managerId === ceoId) continue;
+    if (lead.managerId && lead.managerId !== previousCeoId) continue;
+    if (!fits(work, lead.id, ceoId)) continue;
     lead.managerId = ceoId;
     out.push({ employeeId: lead.id, managerId: ceoId });
   }

@@ -1853,7 +1853,10 @@ list's "Set unit" and "Set manager", the chart's drag), `POST /assignments`, `PO
 - **Unit moved** (`planUnitMoved`): its lead, if they reported to the nearest lead above (or to
   nobody), reports to the nearest lead above the new place.
 - **CEO set** (`planCeo`, people's `applyCeoRule`, called by `PATCH /api/workspace` in its
-  transaction): leads of units directly under the company who have no manager report to the CEO.
+  transaction): the CEO reports to nobody (their manager is cleared, CD-228), and leads of units
+  directly under the company who reported to the previous CEO, or to nobody, report to the new
+  CEO; a lead with another manager keeps them. Clearing first breaks the loop when the new CEO
+  used to report to one of those leads.
 - **Leads move** (`heads.ts`): a change that takes a lead out of the unit they lead (the card, bulk,
   "Add people", the drag, or leading another unit) is 409 `{ code: 'heads_unit', message: 'Ana
   Petrović is lead of Sales. Moving them to Service removes them as lead of Sales.', people }`
@@ -2008,10 +2011,11 @@ People reaches identity only through `modules/identity/index.ts`: `createInvitat
   (only once deactivated). CD-226 took out Invite to Pultly, Link to member and Unlink.
 - Sections: Work (with employment fields when returned; one "Unit" select showing the tree path,
   "Sales › Field sales", and "Leads <unit>", CD-226),
-  Reporting ("Approvals go to" from `GET /employees/:id/approvers`), Personal details and Bank
-  account only when the API returned them. Two columns, one below 900 px. Not shown since CD-225:
-  App access (actions in the menu; sign-in email and workspace role are in Settings → Team), History
-  (the API and `HistorySection` stay) and Roles. "Timesheet required" is commented out (a future
+  Personal details and Bank account only when the API returned them. Two columns, one below
+  900 px. Not shown since CD-225: App access (actions in the menu; sign-in email and workspace role
+  are in Settings → Team), History (the API and `HistorySection` stay) and Roles; since CD-228 also
+  Reporting (`ReportingSection` stays: "Reports to", "Approvals go to"): managers are set on the Org
+  structure. "Timesheet required" is commented out (a future
   feature; the column and API stay, default Yes).
 - **One draft, one Save** (CD-225): every field in `permissions.editableFields` is an input, the rest
   plain values (`EditableSection` with `CardEditContext`, `screens/employee/parts.tsx`). The draft
