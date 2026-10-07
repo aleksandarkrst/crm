@@ -407,4 +407,27 @@ describe('the CEO (CD-225): a workspace setting, the top of the chart', () => {
     await ok('DELETE', `/people/employees/${ceo}`, asBoss());
     expect((await ok('GET', '/workspace', asBoss())).ceoEmployeeId).toBeNull();
   });
+
+  it('a new CEO reports to nobody, even someone they reported to; top leads of the previous CEO follow (CD-228)', async () => {
+    const managerOf = async (id: string) => (await ok('GET', `/people/employees/${id}`, asBoss())).managerId as string | null;
+    const levelId = (await ok('GET', '/people/org-levels', asBoss()))[0].id as string;
+    const first = await addEmployee(boss, ws, { firstName: 'Prva', lastName: 'Ceo' });
+    await ok('PATCH', '/workspace', { ...asBoss(), body: { ceoEmployeeId: first } });
+    // Lena leads Sales and reports to the first CEO; Alex reports to Lena; Olga leads Ops with her own manager.
+    const lena = await addEmployee(boss, ws, { firstName: 'Lena', lastName: 'Lead' });
+    await ok('POST', '/people/org-units', { ...asBoss(), body: { levelId, name: 'CEO Sales', leadEmployeeId: lena } });
+    expect(await managerOf(lena)).toBe(first);
+    const alex = await addEmployee(boss, ws, { firstName: 'Alex', lastName: 'Next', managerId: lena });
+    const olga = await addEmployee(boss, ws, { firstName: 'Olga', lastName: 'Ops' });
+    await ok('POST', '/people/org-units', { ...asBoss(), body: { levelId, name: 'CEO Ops', leadEmployeeId: olga } });
+    await ok('PATCH', `/people/employees/${olga}`, { ...asBoss(), body: { managerId: lena } });
+
+    await ok('PATCH', '/workspace', { ...asBoss(), body: { ceoEmployeeId: alex } });
+    // Alex's card no longer says he reports to Lena, and Lena reports to him (no loop left).
+    expect(await managerOf(alex)).toBeNull();
+    expect(await managerOf(lena)).toBe(alex);
+    // Olga chose her manager herself: kept.
+    expect(await managerOf(olga)).toBe(lena);
+    expect(await noManagerIds()).not.toContain(lena);
+  });
 });
