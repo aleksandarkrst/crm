@@ -57,8 +57,28 @@ const FIELD_LABELS: Record<string, string> = {
   periodType: 'Period type',
   periodStart: 'Period starts',
   note: 'Note',
+  // Projects (CD-233)
+  projectTypeId: 'Project type',
+  leadUserId: 'Lead',
+  code: 'Code',
+  health: 'Health',
+  endDate: 'End date',
 };
-const MEETING_TEXT: Record<string, string> = { visit: 'Customer visit', online: 'Online meeting', office: 'Meeting at our office', phone: 'Phone call', planned: 'Planned', held: 'Held', cancelled: 'Cancelled' };
+const MEETING_TEXT: Record<string, string> = {
+  visit: 'Customer visit',
+  online: 'Online meeting',
+  office: 'Meeting at our office',
+  phone: 'Phone call',
+  planned: 'Planned',
+  held: 'Held',
+  cancelled: 'Cancelled',
+  // Projects' status and health (CD-233)
+  open: 'Open',
+  completed: 'Completed',
+  on_track: 'On track',
+  at_risk: 'At risk',
+  off_track: 'Off track',
+};
 const MOMENT_FIELDS = new Set(['startsAt', 'endsAt', 'heldAt', 'cancelledAt']);
 const LINE_LABELS: Record<string, string> = {
   productId: 'product',
@@ -74,9 +94,9 @@ const LINE_LABELS: Record<string, string> = {
 };
 const FREQUENCY_TEXT: Record<string, string> = { one_time: 'One time', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly', annually: 'Annually' };
 const TAX_TEXT: Record<string, string> = { exclusive: 'Tax exclusive', inclusive: 'Tax inclusive', none: 'No tax' };
-const DATE_FIELDS = new Set(['closeDate', 'discoveryDate', 'startDate', 'periodStart']);
+const DATE_FIELDS = new Set(['closeDate', 'discoveryDate', 'startDate', 'endDate', 'periodStart']);
 const PERIOD_TEXT: Record<string, string> = { month: 'Month', quarter: 'Quarter' };
-const NOUN: Record<HistoryEntity, string> = { deal: 'deal', company: 'company', contact: 'contact', meeting: 'meeting', visit_plan: 'visit plan' };
+const NOUN: Record<HistoryEntity, string> = { deal: 'deal', company: 'company', contact: 'contact', meeting: 'meeting', visit_plan: 'visit plan', project: 'project' };
 const PAGE = 30;
 
 const empty = <span style={{ color: 'var(--muted)' }}>empty</span>;
@@ -137,7 +157,7 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
     if (field === 'vatRate') return `${Number(v)}%`;
     if (DATE_FIELDS.has(field) && typeof v === 'string') return dateText(v);
     if (MOMENT_FIELDS.has(field) && typeof v === 'string') return when(v);
-    if ((field === 'type' || field === 'status') && entity === 'meeting' && typeof v === 'string') return MEETING_TEXT[v] ?? v;
+    if ((((field === 'type' || field === 'status') && entity === 'meeting') || ((field === 'status' || field === 'health') && entity === 'project')) && typeof v === 'string') return MEETING_TEXT[v] ?? v;
     if (field === 'billingFrequency' && typeof v === 'string') return FREQUENCY_TEXT[v] ?? v;
     if (field === 'taxMode' && typeof v === 'string') return TAX_TEXT[v] ?? v;
     if (field === 'periodType' && typeof v === 'string') return PERIOD_TEXT[v] ?? v;

@@ -1145,10 +1145,28 @@ and no "hours" are shown anywhere.
   and previews the type's stages; a deal without a company can't start one. Creating opens the
   project and says "Project created from <deal>". The deal's Summary gets a Project row per project
   with its status. "Add starter tasks from the products" waits for project tasks (CD-146).
-- **Project page** (`/projects/:id`, `screens/Project.tsx`), until the Projects module (CD-229): the
-  header with the type's stage bar (click to move) and Complete / Reopen for the lead, owners and
-  admins; Details with the type, stage, status, lead and links to the company and the deal. It
-  belongs to no module, so the sidebar stays on the last one, as in Settings.
+- **Projects module** (CD-234): the switcher's Projects opens `/projects` (`screens/Projects.tsx`),
+  its sidebar has Projects only for now (Tasks, Work orders and Dispatch come with CD-229).
+  - **Board / List** toggle (remembered per person and workspace in `localStorage`
+    `crm.projectsView.<userId>.<tenantId>`), a Project type select with a pencil to Settings →
+    Project types (`?type=`), filters Lead, Health and Status (Open by default), "New project".
+    The board's columns are the type's stages; dragging a card moves the project (lead, owners,
+    admins). The list shows every type: Project (code · name, company), Lead, Type, Stage, Health,
+    Status, Finish. Won deals without a project get a hint with "New project".
+  - **New project** (`modals/NewProjectDialog.tsx`, `s.newProject`): from the board or "+" →
+    Project (J) a company picker; from a company page the company fixed; from a won deal "New
+    project from deal" with the deal fixed. The deal picker lists the company's won deals first,
+    then open ones marked "Open"; lost deals aren't offered. Name, type, lead, code, start and end.
+    "+" → Task is now "Deal task" (T).
+  - **Project page** (`/projects/:id`): the header (crumb, name inline, Complete / Cancel project
+    with the reason pills / Reopen, "⋯ → Delete project" for owners and admins, the stage bar);
+    Details (code, type, lead, health, start, end, description) and Linked (company, deal; another
+    company asks first, then clears the deal; "Deal lost" when it was lost) edit inline; History
+    reads `record_changes` (entity `project`). Read-only for others than the lead, owners and admins.
+  - **Company page**: a Projects card below Deals (open projects with stage, lead and health;
+    "Show closed (N)"; "+" with the company fixed; "No projects for this company yet.").
+  - **Ctrl/⌘K** finds projects by code, name or company (read while the palette is open).
+  - **Settings → Workspace**: "Create a project when a deal is won" (owners and admins).
 
 ## Products, deal products and currency (CD-83)
 

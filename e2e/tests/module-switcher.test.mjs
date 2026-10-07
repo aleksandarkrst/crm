@@ -68,13 +68,10 @@ describe('module and workspace switcher', () => {
     // One workspace: no workspace row, its name next to "Modules".
     assert.equal(await page.$(`${POP} .mod-ws-row`), null);
     assert.ok((await page.$eval(`${POP} .mod-label-ws`, (el) => el.textContent)).includes(firstWorkspace));
-    // Modules that aren't built yet are locked.
+    // Modules that aren't built yet are locked; Projects opened with CD-234.
     assert.deepEqual(
       rows.filter((m) => m.locked).map((m) => [m.id, m.sub]),
-      [
-        ['planning', 'Coming soon'],
-        ['projects', 'Coming soon'],
-      ],
+      [['planning', 'Coming soon']],
     );
   });
 
@@ -117,7 +114,6 @@ describe('module and workspace switcher', () => {
   step('locked modules are not clickable', async () => {
     await click(page, LOGO);
     await click(page, `${POP} [data-module=planning]`);
-    await click(page, `${POP} [data-module=projects]`);
     assert.ok(await page.$(POP), 'still open');
     assert.equal(new URL(page.url()).pathname, '/profile', 'still on the profile');
   });
@@ -142,10 +138,10 @@ describe('module and workspace switcher', () => {
     assert.equal(await focused(), 'crm', 'the current module has focus');
     await page.keyboard.press('ArrowLeft');
     assert.equal(await focused(), 'planning');
-    await page.keyboard.press('ArrowDown');
-    assert.equal(await focused(), 'projects');
     await page.keyboard.press('Enter');
     assert.ok(await page.$(POP), 'a locked module does nothing on Enter');
+    await page.keyboard.press('ArrowDown');
+    assert.equal(await focused(), 'projects');
     await page.keyboard.press('ArrowRight');
     assert.equal(await focused(), 'workforce');
     await page.keyboard.press('Enter');

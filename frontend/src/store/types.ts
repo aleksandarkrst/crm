@@ -268,6 +268,8 @@ export interface Workspace {
   employeeSelfEditBank: boolean;
   /** The CEO on the org chart's company node (CD-225); Admins pick them there. */
   ceoEmployeeId: string | null;
+  /** "Create a project when a deal is won" (CD-233): the projects worker creates the deal's project. */
+  autoCreateProjects: boolean;
 }
 
 /** The signed-in user's profile (see ApiProfile). */
@@ -402,6 +404,11 @@ export interface State {
   showMerge: boolean;
   sent: boolean;
   newLeadOpen: boolean;
+  /**
+   * The New project dialog (CD-234), open with what it starts from: a company (its page's "+ Project")
+   * or a won deal ("Create project"); null when closed.
+   */
+  newProject: { companyId?: string; dealId?: string } | null;
   newLeadType: SegKey;
   /** Company and contact the New deal dialog starts with (from a company or contact page, CD-80). */
   newLeadCompanyId: string | null;

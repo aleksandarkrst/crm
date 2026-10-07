@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { paths } from '../lib/paths';
 import { searchEmployees } from '../store/people';
+import { useProjects } from '../store/projects';
 import { fold, searchWorkspace } from '../store/search';
 import { useStore } from '../store/store';
 import { type Command, ICONS, useCommands } from './commands';
@@ -11,7 +12,7 @@ import '../styles/header.css';
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 export const SEARCH_SHORTCUT = IS_MAC ? '⌘K' : 'Ctrl K';
 
-type Row = { kind: 'command'; command: Command } | { kind: 'record'; record: 'deal' | 'company' | 'contact' | 'employee'; id: string; title: string; subtitle: string; initials: string };
+type Row = { kind: 'command'; command: Command } | { kind: 'record'; record: 'deal' | 'company' | 'contact' | 'employee' | 'project'; id: string; title: string; subtitle: string; initials: string };
 interface Section {
   label: string;
   rows: Row[];
@@ -27,7 +28,7 @@ function commandScore(c: Command, words: string[]): number {
 
 /**
  * The command palette (CD-80): Ctrl K / ⌘K from anywhere, or the header search. It finds deals,
- * companies and contacts (by name, email or phone), employees (by name, job title or email,
+ * companies and contacts (by name, email or phone), projects (by code, name or company, CD-234), employees (by name, job title or email,
  * CD-137; their card opens) and the app's actions: create a record, go to a screen or a setting.
  * Arrows move, Enter runs, Escape closes.
  */
@@ -45,6 +46,8 @@ export function CommandPalette() {
   // The directory isn't part of the workspace load: read it once for the Employees group.
   const ensurePeople = people.ensure;
   useEffect(() => ensurePeople(), [ensurePeople]);
+  // Projects (CD-234) aren't part of the workspace load either: read them while the palette is open.
+  const { data: projects } = useProjects();
 
   const sections = useMemo<Section[]>(() => {
     const q = query.trim();
@@ -62,9 +65,21 @@ export function CommandPalette() {
       .sort((a, b) => b.score - a.score)
       .slice(0, 8)
       .map(({ c }) => ({ kind: 'command' as const, command: c }));
+    const projectHits = (projects ?? [])
+      .filter((p) => {
+        const hay = fold(`${p.code ?? ''} ${p.name} ${p.companyName}`);
+        return words.every((w) => hay.includes(w));
+      })
+      .slice(0, 6)
+      .map((p) => ({ kind: 'record' as const, record: 'project' as const, id: p.id, title: p.code ? `${p.code} · ${p.name}` : p.name, subtitle: `${p.companyName} · ${p.stageName}`, initials: p.name.slice(0, 2).toUpperCase() }));
     const employees = searchEmployees(s.people.employees, q).map((h) => ({ kind: 'record' as const, record: 'employee' as const, id: h.id, title: h.title, subtitle: h.subtitle, initials: h.initials }));
-    return [...records, ...(employees.length ? [{ label: 'Employees', rows: employees }] : []), ...(actions.length ? [{ label: 'Actions', rows: actions }] : [])];
-  }, [query, s, commands]);
+    return [
+      ...records,
+      ...(projectHits.length ? [{ label: 'Projects', rows: projectHits }] : []),
+      ...(employees.length ? [{ label: 'Employees', rows: employees }] : []),
+      ...(actions.length ? [{ label: 'Actions', rows: actions }] : []),
+    ];
+  }, [query, s, commands, projects]);
   const flat = sections.flatMap((x) => x.rows);
   const current = Math.min(active, Math.max(flat.length - 1, 0));
 
@@ -78,6 +93,7 @@ export function CommandPalette() {
     else if (row.record === 'deal') openLead(row.id);
     else if (row.record === 'company') openCompany(row.id);
     else if (row.record === 'employee') navigate(paths.employee(row.id));
+    else if (row.record === 'project') navigate(paths.project(row.id));
     else openContact(row.id);
   };
 

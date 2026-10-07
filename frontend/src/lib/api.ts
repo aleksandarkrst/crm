@@ -205,10 +205,12 @@ export interface ApiWorkspace {
   employeeSelfEditBank: boolean;
   /** The CEO on the org chart's company node (CD-225), an active employee, or null. */
   ceoEmployeeId: string | null;
+  /** "Create a project when a deal is won" (CD-233). */
+  autoCreateProjects: boolean;
 }
 export type ApiCustomerEmailLanguage = 'en' | 'sr';
 export type WorkspaceInput = Partial<
-  Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth' | 'customerEmailLanguage' | 'employeeDefaultWeeklyHours' | 'employeeNumberRequired' | 'employeeSelfEditBank' | 'ceoEmployeeId'>
+  Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth' | 'customerEmailLanguage' | 'employeeDefaultWeeklyHours' | 'employeeNumberRequired' | 'employeeSelfEditBank' | 'ceoEmployeeId' | 'autoCreateProjects'>
 >;
 export type ApiLanguage = 'en' | 'sr' | 'de';
 export type ApiDateFormat = 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
@@ -500,7 +502,7 @@ export interface ApiHistoryEntry {
   actor: { userId: string | null; name: string } | null;
   changedAt: string;
 }
-export type HistoryEntity = 'deal' | 'company' | 'contact' | 'meeting' | 'visit_plan';
+export type HistoryEntity = 'deal' | 'company' | 'contact' | 'meeting' | 'visit_plan' | 'project';
 
 /**
  * Customer visit plans (CD-134): per salesperson and month, the visits planned per company. Plans

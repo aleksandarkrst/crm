@@ -1059,3 +1059,20 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
   .funnel-select { flex: 1 1 calc(100% - 92px); min-width: 0; }
   .funnel-select > select { min-width: 0; flex: 1; }
 }
+
+/* ---------------------------------------------------------------- projects list (CD-234) */
+.projects-table-inner { min-width: 980px; }
+.projects-table-inner > .table-head,
+.projects-table-inner > .table-row { grid-template-columns: minmax(220px, 1.6fr) minmax(140px, 1fr) minmax(130px, 1fr) minmax(120px, 0.9fr) 100px 100px 90px; }
+
+/* ---------------------------------------------------------------- project page (CD-234) */
+.project-fields { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--divider); }
+.project-fields .field-row > select,
+.project-fields .field-row > input,
+.project-fields .field-row > textarea { flex: 1; min-width: 0; }
+.reason-pill { border: 1px solid var(--border); background: var(--white); color: var(--ink); border-radius: 20px; padding: 7px 12px; font-size: 12.5px; cursor: pointer; }
+.reason-pill.on { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); font-weight: 500; }
+@media (max-width: 700px) {
+  .project-fields .field-row { flex-wrap: wrap; gap: 4px; }
+  .project-fields .field-row > .field-label { flex: 1 1 100%; }
+}

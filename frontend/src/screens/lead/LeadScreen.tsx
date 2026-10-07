@@ -11,7 +11,7 @@ import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
 import { CompanySection } from './CompanySection';
 import { Composer } from './Composer';
-import { DealProjectsRow, NewProjectFromDealDialog, WonDealProjectAction } from './DealProjects';
+import { DealProjectsRow, WonDealProjectAction } from './DealProjects';
 import { DealProducts } from './DealProducts';
 import { Discovery } from './Discovery';
 import { History } from './History';
@@ -76,7 +76,6 @@ export function LeadScreen() {
 function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | null }) {
   const { s, set, patchLead, moveLead, reopenLead, canDelete, deleteDeal } = useStore();
   const [menu, setMenu] = useState(false);
-  const [creating, setCreating] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menu) return;
@@ -144,7 +143,7 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
               <span className="badge badge-brand" data-testid="won-state" style={{ fontSize: 12 }}>
                 Won
               </span>
-              <WonDealProjectAction projects={projects} onCreate={() => setCreating(true)} />
+              <WonDealProjectAction projects={projects} onCreate={() => set({ newProject: { dealId: lead.id } })} />
             </>
           ) : (
             <>
@@ -193,7 +192,6 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
           );
         })}
       </div>
-      {creating && <NewProjectFromDealDialog lead={lead} onClose={() => setCreating(false)} />}
     </div>
   );
 }

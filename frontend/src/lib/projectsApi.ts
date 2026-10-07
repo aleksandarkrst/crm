@@ -24,11 +24,21 @@ export interface ApiProjectType {
 }
 
 export type ApiProjectStatus = 'open' | 'completed' | 'cancelled';
+export type ApiProjectHealth = 'on_track' | 'at_risk' | 'off_track';
+/** The Cancel project dialog's reasons (design v2 §2). */
+export const PROJECT_CANCEL_REASONS = ['Client cancelled', 'Budget cut', 'Scope moved to another project', 'Other'] as const;
+export type ApiProjectCancelReason = (typeof PROJECT_CANCEL_REASONS)[number];
 
 export interface ApiProject {
   id: string;
   name: string;
+  code: string | null;
   status: ApiProjectStatus;
+  cancelReason: ApiProjectCancelReason | null;
+  health: ApiProjectHealth;
+  description: string | null;
+  startDate: string | null;
+  endDate: string | null;
   projectTypeId: string;
   projectTypeName: string;
   stageId: string;
@@ -37,11 +47,42 @@ export interface ApiProject {
   companyName: string;
   dealId: string | null;
   dealTitle: string | null;
+  /** The linked deal was lost after the project started: the project says "Deal lost". */
+  dealLost: boolean;
   leadUserId: string | null;
   leadName: string | null;
   createdAt: string;
   version: string;
 }
+
+export interface NewProjectInput {
+  name: string;
+  projectTypeId: string;
+  companyId: string;
+  dealId?: string | null;
+  leadUserId?: string | null;
+  code?: string | null;
+  description?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+/** `cancelled` needs `cancelReason`; another type starts at its first stage; another company clears the deal. */
+export type ProjectPatch = Partial<{
+  name: string;
+  leadUserId: string;
+  projectTypeId: string;
+  stageId: string;
+  status: ApiProjectStatus;
+  cancelReason: ApiProjectCancelReason;
+  companyId: string;
+  dealId: string | null;
+  code: string | null;
+  description: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  health: ApiProjectHealth;
+}>;
 
 const move = (to?: string) => (to ? `?moveProjectsTo=${encodeURIComponent(to)}` : '');
 
@@ -64,8 +105,8 @@ export const projectsApi = {
     return api<ApiProject[]>('/projects' + (q.size ? `?${q}` : ''));
   },
   project: (id: string) => api<ApiProject>(`/projects/${id}`),
-  createProject: (input: { name: string; projectTypeId: string; companyId: string; dealId?: string | null; leadUserId?: string | null }) =>
-    api<ApiProject>('/projects', { method: 'POST', json: input }),
-  updateProject: (id: string, patch: Partial<{ name: string; leadUserId: string; stageId: string; status: ApiProjectStatus }>) =>
-    api<ApiProject>(`/projects/${id}`, { method: 'PATCH', json: patch }),
+  createProject: (input: NewProjectInput) => api<ApiProject>('/projects', { method: 'POST', json: input }),
+  updateProject: (id: string, patch: ProjectPatch) => api<ApiProject>(`/projects/${id}`, { method: 'PATCH', json: patch }),
+  /** Owners and admins. */
+  deleteProject: (id: string) => api<null>(`/projects/${id}`, { method: 'DELETE' }),
 };
