@@ -159,9 +159,53 @@ describe('projects', () => {
     await ok('POST', '/projects', { ...as(), body: { name: 'Gamma site', projectTypeId: web.id, companyId: gamma.id } });
     const refused = await call('DELETE', `/crm/companies/${gamma.id}`, as());
     expect(refused.status).toBe(409);
-    expect(refused.body.message).toBe('This company has projects. Delete them or move them to another company first.');
+    expect(refused.body.message).toBe('Gamma has 1 project. Delete them or move them to another company first.');
     await ok('DELETE', `/crm/deals/${dealId}`, as(), 204);
     expect((await ok('GET', `/projects/${projectId}`, as())).dealId).toBeNull();
+  });
+
+  it('changing the company clears the deal unless one of its deals comes along (TC 5)', async () => {
+    const acmeDeal = await newDeal('Acme follow-up', acme.id);
+    const p = await ok('POST', '/projects', { ...as(), body: { name: 'Moving one', projectTypeId: (await typesNow())[0]!.id, companyId: acme.id, dealId: acmeDeal.id } });
+    const moved = await ok('PATCH', `/projects/${p.id}`, { ...as(), body: { companyId: beta.id } }, 200);
+    expect(moved).toMatchObject({ companyId: beta.id, companyName: 'Beta', dealId: null });
+    const betaDeal = await newDeal('Beta rollout', beta.id);
+    // A deal of the old company with the move is refused; one of the new company is kept.
+    expect((await call('PATCH', `/projects/${p.id}`, { ...as(), body: { companyId: acme.id, dealId: betaDeal.id } })).status).toBe(400);
+    expect((await ok('PATCH', `/projects/${p.id}`, { ...as(), body: { dealId: betaDeal.id } }, 200)).dealTitle).toBe('Beta rollout');
+    const history = await ok('GET', `/crm/history?entityType=project&entityId=${p.id}`, as());
+    expect(history.entries.map((e: { field: string | null }) => e.field)).toEqual(expect.arrayContaining(['companyId', 'dealId']));
+  });
+
+  it('fields: code unique among open projects, dates in order, a cancel needs its reason', async () => {
+    const typeId = (await typesNow())[0]!.id;
+    const a = await ok('POST', '/projects', { ...as(), body: { name: 'Coded A', projectTypeId: typeId, companyId: acme.id, code: 'SRV-1', startDate: '2026-11-01', endDate: '2026-12-15', description: 'Yearly service' } });
+    expect(a).toMatchObject({ code: 'SRV-1', startDate: '2026-11-01', endDate: '2026-12-15', description: 'Yearly service', health: 'on_track' });
+    expect((await call('POST', '/projects', { ...as(), body: { name: 'Coded B', projectTypeId: typeId, companyId: beta.id, code: 'srv-1' } })).status).toBe(409);
+    expect((await call('PATCH', `/projects/${a.id}`, { ...as(), body: { endDate: '2026-10-01' } })).status).toBe(400);
+    expect((await call('PATCH', `/projects/${a.id}`, { ...as(), body: { status: 'cancelled' } })).status).toBe(400);
+    const cancelled = await ok('PATCH', `/projects/${a.id}`, { ...as(), body: { status: 'cancelled', cancelReason: 'Budget cut' } }, 200);
+    expect(cancelled).toMatchObject({ status: 'cancelled', cancelReason: 'Budget cut' });
+    // A cancelled project frees its code; reopening clears the reason.
+    await ok('POST', '/projects', { ...as(), body: { name: 'Coded B', projectTypeId: typeId, companyId: beta.id, code: 'SRV-1' } });
+    expect((await call('PATCH', `/projects/${a.id}`, { ...as(), body: { status: 'open' } })).status).toBe(409);
+    await ok('PATCH', `/projects/${a.id}`, { ...as(), body: { code: null } }, 200);
+    expect(await ok('PATCH', `/projects/${a.id}`, { ...as(), body: { status: 'open', health: 'at_risk' } }, 200)).toMatchObject({ status: 'open', cancelReason: null, health: 'at_risk' });
+  });
+
+  it("moving a project to another type starts it at that type's first stage", async () => {
+    const [first] = await typesNow();
+    const types = await ok<TypeView[]>('POST', '/project-types', { ...as(), body: { name: 'Service', stages: ['Survey', 'Install'] } });
+    const service = types.find((t) => t.name === 'Service')!;
+    const p = await ok('POST', '/projects', { ...as(), body: { name: 'Retyped', projectTypeId: first!.id, companyId: acme.id } });
+    expect(await ok('PATCH', `/projects/${p.id}`, { ...as(), body: { projectTypeId: service.id } }, 200)).toMatchObject({ projectTypeName: 'Service', stageName: 'Survey' });
+  });
+
+  it('owners and admins delete a project; others get 403 (TC 13)', async () => {
+    const p = await ok('POST', '/projects', { ...as(member), body: { name: 'Short-lived', projectTypeId: (await typesNow())[0]!.id, companyId: beta.id } });
+    expect((await call('DELETE', `/projects/${p.id}`, as(member))).status).toBe(403);
+    await ok('DELETE', `/projects/${p.id}`, as(admin), 204);
+    expect((await call('GET', `/projects/${p.id}`, as())).status).toBe(404);
   });
 
   it('another workspace sees none of it', async () => {

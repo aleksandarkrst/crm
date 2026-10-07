@@ -7,6 +7,7 @@ import { CrmWorkerModule, DocumentGenerator } from './modules/crm';
 import { IdentityWorkerModule } from './modules/identity';
 import { NotificationsWorkerModule } from './modules/notifications';
 import { PeopleWorkerModule } from './modules/people';
+import { ProjectsWorkerModule } from './modules/projects';
 import { AuditModule } from './shared/audit/audit.module';
 import { DatabaseModule } from './shared/database/database.module';
 import { EventsModule } from './shared/events/events.module';
@@ -14,7 +15,7 @@ import { JobHandlers } from './worker/job-handlers';
 
 /** The background worker: same codebase and modules as the API, no HTTP server. */
 @Module({
-  imports: [ConfigModule, LoggingModule, DatabaseModule, StorageModule, MailModule, AuditModule, EventsModule.forRole('worker'), CrmWorkerModule, IdentityWorkerModule, NotificationsWorkerModule, PeopleWorkerModule],
+  imports: [ConfigModule, LoggingModule, DatabaseModule, StorageModule, MailModule, AuditModule, EventsModule.forRole('worker'), CrmWorkerModule, IdentityWorkerModule, NotificationsWorkerModule, PeopleWorkerModule, ProjectsWorkerModule],
   providers: [JobHandlers, DocumentGenerator],
 })
 export class WorkerModule {}

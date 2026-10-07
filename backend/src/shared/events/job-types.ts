@@ -5,7 +5,11 @@
  * Payloads carry tenantId so the handler can open a tenant-scoped transaction.
  */
 export interface JobPayloads {
-  /** Sent by CRM when a deal is won. Future owner: projects module (sales → delivery handover). */
+  /**
+   * Sent by CRM when a deal is won (moved into the won stage; not by the CSV import). The projects
+   * worker creates the deal's project when the workspace has "Create a project when a deal is won"
+   * on (CD-233).
+   */
   'crm.deal-won': { tenantId: string; dealId: string; actorUserId: string };
   /** Sent by CRM when someone generates a document on a deal (CD-13); the worker fills the template. */
   'crm.generate-document': { tenantId: string; documentId: string; actorUserId: string };
@@ -79,6 +83,8 @@ export interface JobPayloads {
    * "Project created · <name>" on the deal's timeline (projects doesn't write CRM tables).
    */
   'projects.project-created-from-deal': { tenantId: string; dealId: string; projectId: string; projectName: string; actorUserId: string };
+  /** Sent by projects when a won deal created its project (CD-233): the projects worker emails the deal owner. */
+  'projects.project-created-email': { tenantId: string; projectId: string; recipientUserId: string };
   /** Scheduled nightly by the worker: fails document generations that were interrupted (CD-100). Placeholder for reporting snapshots. */
   'reporting.nightly': Record<string, never>;
 }
@@ -101,9 +107,10 @@ export const JOB_NAMES = [
   'people.deactivate-due',
   'people.employee-deactivated',
   'people.reporting-line-changed',
+  'projects.project-created-email',
   'projects.project-created-from-deal',
   'reporting.nightly',
 ] as const satisfies readonly JobName[];
 
 /** Jobs that send email: retried MAIL_RETRY_LIMIT times with backoff from MAIL_RETRY_DELAY_SECONDS. */
-export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed']);
+export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed', 'projects.project-created-email']);

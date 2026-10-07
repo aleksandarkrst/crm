@@ -31,6 +31,8 @@ export const tenants = pgTable(
     // (tenant_id, id) ON DELETE SET NULL (ceo_employee_id) is in drizzle/0046_tenant_ceo.sql;
     // deactivating the CEO clears it (people's applyDeactivation).
     ceoEmployeeId: uuid('ceo_employee_id'),
+    /** "Create a project when a deal is won" (CD-233, Settings → Workspace): off by default. */
+    autoCreateProjects: boolean('auto_create_projects').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

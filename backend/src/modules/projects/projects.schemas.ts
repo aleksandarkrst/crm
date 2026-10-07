@@ -1,10 +1,23 @@
 import { z } from 'zod';
+import { PROJECT_CANCEL_REASONS, PROJECT_HEALTHS } from '../../shared/database/schema';
 import { nonEmptyPatch } from '../../shared/validation/common';
 
 /** A project type's or stage's name: required, at most 60 characters, trimmed (unique case-insensitively, in the database). */
 const shortName = z.string().trim().min(1, 'Required').max(60, 'At most 60 characters');
 /** Spec 3.2: required, 1 to 200 characters. */
 const projectName = z.string().trim().min(1, 'Required').max(200, 'At most 200 characters');
+/** Empty text clears it. */
+const clearable = (max: number, message: string) =>
+  z
+    .string()
+    .trim()
+    .max(max, message)
+    .transform((v) => (v === '' ? null : v))
+    .nullable();
+const isoDate = z.iso.date().nullable();
+/** Spec 3.2: optional, up to 20 characters, unique among open projects. */
+const code = clearable(20, 'At most 20 characters');
+const description = clearable(5000, 'At most 5,000 characters');
 
 /** POST /api/project-types: a new type after the others, with `stages` (default Planning, In progress, Review). */
 export const CreateProjectType = z.object({ name: shortName, stages: z.array(shortName).min(1).max(20).optional() });
@@ -44,17 +57,34 @@ export const CreateProject = z.object({
   companyId: z.uuid(),
   dealId: z.uuid().nullish(),
   leadUserId: z.uuid().nullish(),
+  code: code.optional(),
+  description: description.optional(),
+  startDate: isoDate.optional(),
+  endDate: isoDate.optional(),
 });
 export type CreateProject = z.infer<typeof CreateProject>;
 
-/** PATCH /api/projects/:id (lead, owners and admins): rename, lead, stage (a stage of its type), status. */
+/**
+ * PATCH /api/projects/:id (lead, owners and admins). `status: 'cancelled'` needs `cancelReason`;
+ * `projectTypeId` puts the project in that type's first stage (unless `stageId` is one of its
+ * stages); `companyId` clears the deal unless `dealId` (of the new company) comes with it.
+ */
 export const UpdateProject = nonEmptyPatch(
   z
     .object({
       name: projectName,
       leadUserId: z.uuid(),
+      projectTypeId: z.uuid(),
       stageId: z.uuid(),
       status: z.enum(['open', 'completed', 'cancelled']),
+      cancelReason: z.enum(PROJECT_CANCEL_REASONS),
+      companyId: z.uuid(),
+      dealId: z.uuid().nullable(),
+      code,
+      description,
+      startDate: isoDate,
+      endDate: isoDate,
+      health: z.enum(PROJECT_HEALTHS),
     })
     .partial(),
 );

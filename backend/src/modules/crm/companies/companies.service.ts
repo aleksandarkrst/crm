@@ -6,7 +6,7 @@ import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { companies, contacts, deals, meetings, visitPlanLines } from '../../../shared/database/schema';
+import { companies, contacts, deals, meetings, projects, visitPlanLines } from '../../../shared/database/schema';
 import { type ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
 import { RecordHistoryService } from '../history/record-history.service';
@@ -120,6 +120,12 @@ export class CompaniesService {
         const [booked] = await tx.select({ n: count() }).from(meetings).where(eq(meetings.companyId, id));
         if (booked && booked.n > 0) {
           const what = booked.n === 1 ? '1 meeting' : `${booked.n} meetings`;
+          throw new ConflictException(`${company.name} has ${what}. Delete them or move them to another company first.`);
+        }
+        // Projects (CD-233) belong to their company; the projects FK refuses it too.
+        const [owned] = await tx.select({ n: count() }).from(projects).where(eq(projects.companyId, id));
+        if (owned && owned.n > 0) {
+          const what = owned.n === 1 ? '1 project' : `${owned.n} projects`;
           throw new ConflictException(`${company.name} has ${what}. Delete them or move them to another company first.`);
         }
         // Visit plans (CD-134) name their customers; a plan would silently lose one.

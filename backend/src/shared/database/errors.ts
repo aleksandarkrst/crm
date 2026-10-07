@@ -27,6 +27,7 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   project_types_name_uq: 'A project type with this name already exists',
   project_stages_name_uq: 'This project type already has a stage with this name',
   projects_name_uq: 'This company already has an open project with this name',
+  projects_code_uq: 'Another open project has this code',
 };
 
 /** Rules about employees' org fields that the database enforces as a last line (people). */
@@ -38,6 +39,12 @@ const PEOPLE_RULES: Record<string, string> = {
   org_units_parent_fk: 'The parent unit was not found',
   org_units_level_fk: 'The level was not found',
   employees_unit_fk: 'The unit was not found',
+};
+
+/** Project field rules the database enforces as a last line (CD-233). */
+const PROJECT_RULES: Record<string, string> = {
+  projects_dates_ck: "The end date can't be before the start date",
+  projects_cancel_reason_ck: 'Only a cancelled project has a cancel reason',
 };
 
 function pgError(err: unknown): PgError | undefined {
@@ -69,6 +76,7 @@ export function mapDbError(err: unknown): never {
     case '23514':
       if (pg.constraint && RULES_WITH_MESSAGES.has(pg.constraint)) throw new ConflictException(pg.message);
       if (pg.constraint === 'meetings_deal_required') throw new BadRequestException('Pick a deal');
+      if (pg.constraint && PROJECT_RULES[pg.constraint]) throw new BadRequestException(PROJECT_RULES[pg.constraint]);
       if (pg.constraint && PEOPLE_RULES[pg.constraint]) throw new BadRequestException(PEOPLE_RULES[pg.constraint]);
       throw err;
     case '22P02':

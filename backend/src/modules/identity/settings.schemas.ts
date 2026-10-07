@@ -37,6 +37,8 @@ export const UpdateWorkspace = z
     employeeSelfEditBank: z.boolean(),
     // The CEO on the org chart's company node (CD-225): an active employee, or null for nobody.
     ceoEmployeeId: z.uuid().nullable(),
+    // "Create a project when a deal is won" (CD-233).
+    autoCreateProjects: z.boolean(),
   })
   .partial()
   .refine(atLeastOne, 'Nothing to update');
