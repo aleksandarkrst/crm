@@ -4,11 +4,14 @@ import { Icon } from '../../components/icons';
 import { Screen } from '../../components/Layout';
 import { MeetingsCard } from '../../components/MeetingsCard';
 import { paths } from '../../lib/paths';
+import type { ApiProject } from '../../lib/projectsApi';
+import { useDealProjects } from '../../store/projects';
 import { champTotal, leadById, memberLabels, memberName, momentLabel, stageOf, stagesFor } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
 import { CompanySection } from './CompanySection';
 import { Composer } from './Composer';
+import { DealProjectsRow, NewProjectFromDealDialog, WonDealProjectAction } from './DealProjects';
 import { DealProducts } from './DealProducts';
 import { Discovery } from './Discovery';
 import { History } from './History';
@@ -22,6 +25,8 @@ export function LeadScreen() {
   const { s, ensureLog } = useStore();
   const { id = '' } = useParams();
   const lead = leadById(s, id);
+  // The deal's projects (CD-275): the won header's Create / Open project and the Summary's row.
+  const { data: projects } = useDealProjects(id || undefined);
   useEffect(() => {
     if (id) ensureLog([id]);
   }, [id, ensureLog]);
@@ -33,11 +38,11 @@ export function LeadScreen() {
   return (
     <Screen title="Deal" parent={{ label: 'Pipeline', to: paths.pipeline }}>
       <div key={lead.id} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <DealHeader lead={lead} />
+        <DealHeader lead={lead} projects={projects} />
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
           <div className="lead-side" style={{ flex: '1 1 400px', maxWidth: 540, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
-            <Summary lead={lead} />
+            <Summary lead={lead} projects={<DealProjectsRow projects={projects} />} />
             <CompanySection lead={lead} />
             <MeetingsCard record={{ dealId: lead.id }} seed={{ dealId: lead.id, companyId: lead.companyId, contactId: lead.contactId }} />
             <DealProducts lead={lead} />
@@ -68,9 +73,10 @@ export function LeadScreen() {
  * The deal's name, owner, Won and Lost, and the stage bar (CD-83). Won moves the deal to its
  * funnel's won stage; a stage of the bar moves it there.
  */
-function DealHeader({ lead }: { lead: Lead }) {
+function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | null }) {
   const { s, set, patchLead, moveLead, reopenLead, canDelete, deleteDeal } = useStore();
   const [menu, setMenu] = useState(false);
+  const [creating, setCreating] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menu) return;
@@ -134,9 +140,12 @@ function DealHeader({ lead }: { lead: Lead }) {
               </button>
             </>
           ) : lead.outcome === 'won' ? (
-            <span className="badge badge-brand" data-testid="won-state" style={{ fontSize: 12 }}>
-              Won
-            </span>
+            <>
+              <span className="badge badge-brand" data-testid="won-state" style={{ fontSize: 12 }}>
+                Won
+              </span>
+              <WonDealProjectAction projects={projects} onCreate={() => setCreating(true)} />
+            </>
           ) : (
             <>
               {wonStage && (
@@ -184,6 +193,7 @@ function DealHeader({ lead }: { lead: Lead }) {
           );
         })}
       </div>
+      {creating && <NewProjectFromDealDialog lead={lead} onClose={() => setCreating(false)} />}
     </div>
   );
 }

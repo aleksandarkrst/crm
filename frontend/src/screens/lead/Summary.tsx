@@ -6,8 +6,8 @@ import { allPeople, closeIsoOf, companyOfPerson, contactsForLead, curOf, funnelO
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
 
-/** The deal's key facts (CD-83): icons instead of labels, the deal value first. */
-export function Summary({ lead }: { lead: Lead }) {
+/** The deal's key facts (CD-83): icons instead of labels, the deal value first. `projects` is the Project row (CD-275). */
+export function Summary({ lead, projects }: { lead: Lead; projects?: React.ReactNode }) {
   const store = useStore();
   const { s } = store;
   const contactPicker = usePicker();
@@ -87,6 +87,7 @@ export function Summary({ lead }: { lead: Lead }) {
         <IconRow icon="source" label="Source">
           <GhostSelect chevron aria-label="Source" value={lead.source} onChange={patch('source')} options={SOURCES} />
         </IconRow>
+        {projects}
         <CustomFieldRows entity="deal" recordId={lead.id} />
       </div>
     </div>
