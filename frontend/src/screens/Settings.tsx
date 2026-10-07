@@ -11,6 +11,7 @@ import type { CustomFieldEntity } from '../lib/api';
 import { useStore } from '../store/store';
 import { TemplatesTab } from './DocumentTemplates';
 import { EmployeesTab } from './settings/EmployeesTab';
+import { ProjectTypesTab } from './settings/ProjectTypesTab';
 import { RolesTab } from './settings/RolesTab';
 import type { TeamMember } from '../store/types';
 
@@ -20,6 +21,7 @@ const TABS = [
   { k: 'roles', label: 'Roles & permissions' },
   { k: 'employees', label: 'Employees' },
   { k: 'funnel', label: 'Funnel builder' },
+  { k: 'project-types', label: 'Project types' },
   { k: 'templates', label: 'Document templates' },
   { k: 'fields', label: 'Customize Fields' },
   { k: 'bonuses', label: 'Sales bonuses' },
@@ -90,6 +92,7 @@ export function Settings() {
       {current === 'roles' && <RolesTab />}
       {current === 'employees' && <EmployeesTab />}
       {current === 'funnel' && <FunnelBuilder />}
+      {current === 'project-types' && <ProjectTypesTab />}
       {current === 'templates' && <TemplatesTab />}
       {current === 'fields' && <FieldsTab />}
       {current === 'bonuses' && <BonusesTab />}

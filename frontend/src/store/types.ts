@@ -464,6 +464,11 @@ export interface State {
    * the org structure on screen is read again (store/org.ts, CD-138).
    */
   orgRev: number;
+  /**
+   * Goes up on every project type, stage or project change (live hints, this tab's own included):
+   * screens showing them read them again (store/projects.ts, CD-272).
+   */
+  projectRev: number;
   /** Employees, org levels and units (milestone 13; see store/people.ts), read when a screen needs them. */
   people: PeopleState;
   /** Goes up on every employee and role change (live hints, resync): people lists re-read (CD-142). */
