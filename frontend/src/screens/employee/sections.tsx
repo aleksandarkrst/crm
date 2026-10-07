@@ -69,12 +69,51 @@ export function cardPatch(changed: Draft): EmployeePatch | string {
   return patch;
 }
 
+/**
+ * The Manager picker (active colleagues, "No manager") and what saving will do to the other field
+ * (CD-226): a new unit brings its lead as manager, a new manager their unit; the server decides.
+ * Used by Work (CD-228: the manager is chosen there) and the hidden Reporting section.
+ */
+function useManagerChoices(card: ApiEmployeeCard) {
+  const { s } = useStore();
+  const pickers = s.peoplePickers;
+  const managers = [
+    { value: '', label: 'No manager' },
+    ...(pickers?.employees ?? []).filter((x) => x.id !== card.id && x.status !== 'inactive').map((x) => ({ value: x.id, label: x.jobTitle ? `${x.fullName} · ${x.jobTitle}` : x.fullName })),
+  ];
+  if (card.managerId && !managers.some((m) => m.value === card.managerId)) managers.push({ value: card.managerId, label: card.managerName ?? 'Manager' });
+  const ceoId = s.workspace.ceoEmployeeId;
+  const nameOf = (id: string | null) => (id ? (pickers?.employees.find((x) => x.id === id)?.fullName ?? null) : null);
+  /**
+   * What saving will do to the other field (CD-226): a new unit brings its lead as manager, a new
+   * manager their unit; when both change, both stay as chosen. The server decides (and skips loops).
+   */
+  const derived = (draft: { unitId?: unknown; managerId?: unknown }): string | null => {
+    const unitId = typeof draft.unitId === 'string' ? draft.unitId : (card.unitId ?? '');
+    const managerId = typeof draft.managerId === 'string' ? draft.managerId : (card.managerId ?? '');
+    const unitChanged = unitId !== (card.unitId ?? '');
+    const managerChanged = managerId !== (card.managerId ?? '');
+    if (!pickers || unitChanged === managerChanged) return null;
+    if (unitChanged && unitId) {
+      const next = managerForUnit(pickers.units, unitId, card.id, ceoId);
+      return next && next !== card.managerId ? `Saving makes ${nameOf(next) ?? 'the unit\'s lead'} their manager.` : null;
+    }
+    if (managerChanged && managerId && !card.leadsUnit) {
+      const next = unitForManager(pickers.units, pickers.employees, managerId);
+      return next && next !== card.unitId ? `Saving moves them to ${unitPathLabel(pickers.units, next)}.` : null;
+    }
+    return null;
+  };
+  return { managers, derived };
+}
+
 export function WorkSection({ card }: { card: ApiEmployeeCard }) {
   const { s, employeeCard } = useStore();
   const pickers = s.peoplePickers;
   const e = card.employment;
   const ensure = employeeCard.ensurePickers;
-  const editsOrg = card.permissions.editableFields.includes('unitId');
+  const editsOrg = card.permissions.editableFields.includes('unitId') || card.permissions.editableFields.includes('managerId');
+  const { managers, derived } = useManagerChoices(card);
   // Read again when the org changed since (a unit added in the panel shows at once, CD-225).
   const orgRev = s.orgRev;
   useEffect(() => {
@@ -90,7 +129,7 @@ export function WorkSection({ card }: { card: ApiEmployeeCard }) {
     <EditableSection
       title="Work"
       testId="emp-work"
-      fields={['firstName', 'lastName', 'jobTitle', 'workEmail', 'workPhone', 'workLocation', 'unitId', 'employeeNumber', 'employmentStartDate', 'employmentType', 'weeklyHours']}
+      fields={['firstName', 'lastName', 'jobTitle', 'workEmail', 'workPhone', 'workLocation', 'unitId', 'managerId', 'employeeNumber', 'employmentStartDate', 'employmentType', 'weeklyHours']}
       view={
         <>
           <Row label="Job title">
@@ -100,6 +139,9 @@ export function WorkSection({ card }: { card: ApiEmployeeCard }) {
             <Val v={unitLabel} hint="No unit" />
           </Row>
           {card.leadsUnit && <Row label="Leads">{card.leadsUnit.name}</Row>}
+          <Row label="Manager" testId="emp-manager">
+            {card.manager ? <Link to={paths.employee(card.manager.id)}>{card.manager.fullName}</Link> : <Val v={null} hint={card.id === s.workspace.ceoEmployeeId ? 'None: the CEO' : 'No manager'} />}
+          </Row>
           <Row label="Work email" testId="emp-work-email">
             {card.workEmail ? <a href={`mailto:${card.workEmail}`}>{card.workEmail}</a> : <Val v={null} />}
           </Row>
@@ -134,6 +176,12 @@ export function WorkSection({ card }: { card: ApiEmployeeCard }) {
             <TextField field="jobTitle" draft={draft} setField={setField} can={can} maxLength={100} />
             <SelectField field="unitId" draft={draft} setField={setField} can={can} options={units} />
             {card.leadsUnit && <Row label="Leads">{card.leadsUnit.name}</Row>}
+            <SelectField field="managerId" draft={draft} setField={setField} can={can} options={managers} />
+            {derived(draft) && (
+              <div className="emp-note" data-testid="emp-derived">
+                {derived(draft)}
+              </div>
+            )}
             <TextField field="workEmail" type="email" draft={draft} setField={setField} can={can} maxLength={254} />
             <TextField field="workPhone" type="tel" draft={draft} setField={setField} can={can} maxLength={40} />
             <TextField field="workLocation" draft={draft} setField={setField} can={can} maxLength={100} placeholder="e.g. Belgrade HQ" />
@@ -167,8 +215,7 @@ function approvalsText(a: ApiApprovals): string {
 }
 
 export function ReportingSection({ card }: { card: ApiEmployeeCard }) {
-  const { s, employeeCard } = useStore();
-  const pickers = s.peoplePickers;
+  const { employeeCard } = useStore();
   const [approvals, setApprovals] = useState<ApiApprovals | null>(card.approvals);
   const ensure = employeeCard.ensurePickers;
   const editsManager = card.permissions.editableFields.includes('managerId');
@@ -187,33 +234,7 @@ export function ReportingSection({ card }: { card: ApiEmployeeCard }) {
       alive = false;
     };
   }, [card.id, card.version, card.managerId, load]);
-  const managers = [
-    { value: '', label: 'No manager' },
-    ...(pickers?.employees ?? []).filter((x) => x.id !== card.id && x.status !== 'inactive').map((x) => ({ value: x.id, label: x.jobTitle ? `${x.fullName} · ${x.jobTitle}` : x.fullName })),
-  ];
-  if (card.managerId && !managers.some((m) => m.value === card.managerId)) managers.push({ value: card.managerId, label: card.managerName ?? 'Manager' });
-  const ceoId = s.workspace.ceoEmployeeId;
-  const nameOf = (id: string | null) => (id ? (pickers?.employees.find((x) => x.id === id)?.fullName ?? null) : null);
-  /**
-   * What saving will do to the other field (CD-226): a new unit brings its lead as manager, a new
-   * manager their unit; when both change, both stay as chosen. The server decides (and skips loops).
-   */
-  const derived = (draft: { unitId?: unknown; managerId?: unknown }): string | null => {
-    const unitId = typeof draft.unitId === 'string' ? draft.unitId : (card.unitId ?? '');
-    const managerId = typeof draft.managerId === 'string' ? draft.managerId : (card.managerId ?? '');
-    const unitChanged = unitId !== (card.unitId ?? '');
-    const managerChanged = managerId !== (card.managerId ?? '');
-    if (!pickers || unitChanged === managerChanged) return null;
-    if (unitChanged && unitId) {
-      const next = managerForUnit(pickers.units, unitId, card.id, ceoId);
-      return next && next !== card.managerId ? `Saving makes ${nameOf(next) ?? 'the unit\'s lead'} their manager.` : null;
-    }
-    if (managerChanged && managerId && !card.leadsUnit) {
-      const next = unitForManager(pickers.units, pickers.employees, managerId);
-      return next && next !== card.unitId ? `Saving moves them to ${unitPathLabel(pickers.units, next)}.` : null;
-    }
-    return null;
-  };
+  const { managers, derived } = useManagerChoices(card);
 
   return (
     <EditableSection

@@ -20,6 +20,9 @@ import { loopMessage } from './reporting-lines';
  * - CEO set (`planCeo`): the CEO reports to nobody (their manager is cleared, CD-228: the card
  *   showed the old one while the chart showed them on top); leads of units directly under the
  *   company who reported to the previous CEO, or to nobody, report to the new CEO.
+ * - Missing managers (`planFillManagers`, with the CEO setting): everyone in a unit who has no
+ *   manager gets one by the rules above (a lead the lead above, else the CEO; a member their
+ *   lead), so the chart and the cards agree (CD-228).
  * The CEO never gets a manager automatically.
  */
 
@@ -270,6 +273,31 @@ export function planCeo(s: OrgSnapshot, ceoId: string | null, previousCeoId: str
     if (!fits(work, lead.id, ceoId)) continue;
     lead.managerId = ceoId;
     out.push({ employeeId: lead.id, managerId: ceoId });
+  }
+  return out;
+}
+
+/**
+ * Fills in missing managers (CD-228): everyone active in a unit who has no manager (the CEO aside)
+ * gets one by the rules: a lead the nearest lead above, else the CEO; a member the unit's lead,
+ * else the nearest lead above, else the CEO. Leads first, top-down, so the result doesn't depend on
+ * the order of the records; anyone for whom every candidate would close a loop stays as they are.
+ * People without a unit are left alone. Returns explicit changes for `planChanges`.
+ */
+export function planFillManagers(s: OrgSnapshot): OrgChange[] {
+  const work = cloneSnapshot(s);
+  const depth = (unitId: string | null) => ancestorsOf(work, unitId).length;
+  const missing = [...work.people.values()]
+    .filter((p) => p.active && !p.managerId && p.unitId && p.id !== work.ceoId)
+    .map((p) => ({ p, leads: unitLedBy(work, p.id) }))
+    .sort((a, b) => Number(!a.leads) - Number(!b.leads) || depth(a.leads?.id ?? a.p.unitId) - depth(b.leads?.id ?? b.p.unitId) || a.p.fullName.localeCompare(b.p.fullName));
+  const out: OrgChange[] = [];
+  for (const { p, leads } of missing) {
+    const managerId = leads ? managerForLead(work, leads.id, p.id) : managerForUnit(work, p.unitId!, p.id);
+    if (!managerId) continue;
+    p.managerId = managerId;
+    // The unit stays as it is: only the manager is filled in.
+    out.push({ employeeId: p.id, unitId: p.unitId, managerId });
   }
   return out;
 }

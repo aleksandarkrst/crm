@@ -156,19 +156,24 @@ describe('employee card', () => {
     assert.equal(await textOf(olga, '[data-testid=emp-account]'), 'Invited');
     assert.equal((await api(olga, `/people/employees/${nova}`)).workEmail, email('card-nova'));
 
-    // Work and Personal details at once.
+    // Work (with the manager) and Personal details at once.
     await olga.waitForSelector('[data-testid=emp-work] input[name=jobTitle]');
     await setValue(olga, '[data-testid=emp-work] input[name=jobTitle]', 'Office manager');
     await setValue(olga, '[data-testid=emp-work] input[name=weeklyHours]', '32');
+    // The manager is chosen in Work (CD-228).
+    await olga.waitForFunction((id) => !!document.querySelector(`[data-testid=emp-work] select[name=managerId] option[value="${id}"]`), {}, olgaEmployee);
+    await setValue(olga, '[data-testid=emp-work] select[name=managerId]', olgaEmployee);
     await setValue(olga, '[data-testid=emp-personal] input[name=addressCity]', 'Novi Sad');
     await save(olga);
     await olga.reload({ waitUntil: 'networkidle0' });
     await olga.waitForSelector('[data-testid=emp-work] input[name=jobTitle]');
     assert.equal(await valueOf(olga, '[data-testid=emp-work] input[name=jobTitle]'), 'Office manager');
     assert.equal(await valueOf(olga, '[data-testid=emp-work] input[name=weeklyHours]'), '32');
+    assert.equal(await valueOf(olga, '[data-testid=emp-work] select[name=managerId]'), olgaEmployee);
     assert.equal(await valueOf(olga, '[data-testid=emp-personal] input[name=addressCity]'), 'Novi Sad');
     const card = await api(olga, `/people/employees/${nova}`);
     assert.equal(card.jobTitle, 'Office manager');
+    assert.equal(card.managerId, olgaEmployee);
   });
 
   step('the card has no App access, History, Roles, Reporting or "Timesheet required"', async () => {

@@ -1856,7 +1856,10 @@ list's "Set unit" and "Set manager", the chart's drag), `POST /assignments`, `PO
   transaction): the CEO reports to nobody (their manager is cleared, CD-228), and leads of units
   directly under the company who reported to the previous CEO, or to nobody, report to the new
   CEO; a lead with another manager keeps them. Clearing first breaks the loop when the new CEO
-  used to report to one of those leads.
+  used to report to one of those leads. Then everyone in a unit who still has no manager gets one
+  by the rules (`planFillManagers`: a lead the nearest lead above, else the CEO; a member the
+  unit's lead, else the nearest lead above, else the CEO; units stay; loops skipped; people
+  without a unit left alone), so the chart and the cards agree (CD-228).
 - **Leads move** (`heads.ts`): a change that takes a lead out of the unit they lead (the card, bulk,
   "Add people", the drag, or leading another unit) is 409 `{ code: 'heads_unit', message: 'Ana
   Petrović is lead of Sales. Moving them to Service removes them as lead of Sales.', people }`
@@ -2010,7 +2013,8 @@ People reaches identity only through `modules/identity/index.ts`: `createInvitat
   structure, which the person leaves), Deactivate (active), Reactivate or Cancel leaving, and Delete
   (only once deactivated). CD-226 took out Invite to Pultly, Link to member and Unlink.
 - Sections: Work (with employment fields when returned; one "Unit" select showing the tree path,
-  "Sales › Field sales", and "Leads <unit>", CD-226),
+  "Sales › Field sales", and "Leads <unit>", CD-226; **Manager**, CD-228: any active colleague or
+  "No manager", with the note on what saving does to the unit, `data-testid=emp-derived`),
   Personal details and Bank account only when the API returned them. Two columns, one below
   900 px. Not shown since CD-225: App access (actions in the menu; sign-in email and workspace role
   are in Settings → Team), History (the API and `HistorySection` stay) and Roles; since CD-228 also
@@ -2027,7 +2031,7 @@ People reaches identity only through `modules/identity/index.ts`: `createInvitat
   (react-router `useBlocker`, so `main.tsx` uses a data router with one catch-all route; and
   `beforeunload`).
 - Pickers (employees, levels, units) are read again when the org changed since they were read
-  (`s.orgRev`), so a unit added on the Org page is offered at once. Reporting in edit mode says
+  (`s.orgRev`), so a unit added on the Org page is offered at once. The Manager field in edit mode says
   what saving will do to the other field ("Saving makes Lena Lead their manager.", "Saving moves
   them to Commercial › Sales.", `data-testid=emp-derived`), from the org rules mirrored in
   `store/orgChart.ts`; the server decides. The Deactivate dialog asks for the new lead of the unit

@@ -421,6 +421,11 @@ describe('the CEO (CD-225): a workspace setting, the top of the chart', () => {
     const olga = await addEmployee(boss, ws, { firstName: 'Olga', lastName: 'Ops' });
     await ok('POST', '/people/org-units', { ...asBoss(), body: { levelId, name: 'CEO Ops', leadEmployeeId: olga } });
     await ok('PATCH', `/people/employees/${olga}`, { ...asBoss(), body: { managerId: lena } });
+    // Bo is in Sales with no manager (taken away by hand).
+    const sales = (await ok('GET', '/people/org-units', asBoss())).find((u: { name: string }) => u.name === 'CEO Sales').id as string;
+    const bo = await addEmployee(boss, ws, { firstName: 'Bo', lastName: 'Member', unitId: sales });
+    await ok('PATCH', `/people/employees/${bo}`, { ...asBoss(), body: { managerId: null } });
+    expect(await managerOf(bo)).toBeNull();
 
     await ok('PATCH', '/workspace', { ...asBoss(), body: { ceoEmployeeId: alex } });
     // Alex's card no longer says he reports to Lena, and Lena reports to him (no loop left).
@@ -429,5 +434,8 @@ describe('the CEO (CD-225): a workspace setting, the top of the chart', () => {
     // Olga chose her manager herself: kept.
     expect(await managerOf(olga)).toBe(lena);
     expect(await noManagerIds()).not.toContain(lena);
+    // Everyone in a unit gets a manager by the rules: Bo reports to Lena, the lead of Sales, and stays in Sales.
+    expect(await managerOf(bo)).toBe(lena);
+    expect((await ok('GET', `/people/employees/${bo}`, asBoss())).unitId).toBe(sales);
   });
 });

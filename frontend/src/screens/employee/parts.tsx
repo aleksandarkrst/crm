@@ -41,7 +41,7 @@ export const FIELD_LABEL: Record<string, string> = {
   unitId: 'Unit',
   departmentId: 'Department',
   teamId: 'Team',
-  managerId: 'Reports to',
+  managerId: 'Manager',
   userId: 'Account',
   dateOfBirth: 'Date of birth',
   privateEmail: 'Private email',
