@@ -70,12 +70,12 @@ export async function ensureLevels(tx: Tx, tenantId: string): Promise<void> {
  * no manager report to the CEO. Called by Settings (PATCH /api/workspace) in its transaction, after
  * saving the CEO. Emails as every in-app manager change.
  */
-export async function applyCeoRule(tx: Tx, jobs: JobsService, tenantId: string, actorUserId: string | null, ceoId: string | null): Promise<void> {
+export async function applyCeoRule(tx: Tx, jobs: JobsService, tenantId: string, actorUserId: string | null, ceoId: string | null, previousCeoId: string | null = null): Promise<void> {
   if (!ceoId) return;
   await lockReportingLines(tx, tenantId);
   const s = await loadOrgSnapshot(tx, tenantId);
   s.ceoId = ceoId;
-  const planned = planChanges(s, planCeo(s, ceoId));
+  const planned = planChanges(s, planCeo(s, ceoId, previousCeoId));
   await writeOrgChanges(tx, tenantId, s, planned, { jobs, actorUserId, clearLeadRoles: false });
 }
 

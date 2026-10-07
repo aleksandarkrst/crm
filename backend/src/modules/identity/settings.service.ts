@@ -46,8 +46,8 @@ export class SettingsService {
 
   /**
    * Owners and admins only (enforced by the route). The CEO must be an active employee of the
-   * workspace; a new CEO becomes the manager of the top units' leads who have none (people's
-   * `applyCeoRule`, CD-226).
+   * workspace. A new CEO reports to nobody and becomes the manager of the top units' leads who
+   * reported to the previous CEO or to nobody (people's `applyCeoRule`, CD-226, CD-228).
    */
   updateWorkspace(ctx: TenantContext, input: UpdateWorkspace) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
@@ -57,9 +57,10 @@ export class SettingsService {
         if (!ceo) throw new BadRequestException('The CEO must be an employee of this workspace');
         if (ceo.deactivatedAt) throw new BadRequestException('The CEO must be an active employee');
       }
+      const [before] = input.ceoEmployeeId ? await tx.select({ ceoEmployeeId: tenants.ceoEmployeeId }).from(tenants).where(eq(tenants.id, ctx.tenantId)) : [];
       const [row] = await tx.update(tenants).set(input).where(eq(tenants.id, ctx.tenantId)).returning(workspaceColumns);
       if (!row) throw new NotFoundException('Workspace not found');
-      if (input.ceoEmployeeId) await applyCeoRule(tx, this.jobs, ctx.tenantId, ctx.userId, input.ceoEmployeeId);
+      if (input.ceoEmployeeId) await applyCeoRule(tx, this.jobs, ctx.tenantId, ctx.userId, input.ceoEmployeeId, before?.ceoEmployeeId ?? null);
       await this.audit.record(tx, ctx, { action: 'workspace.updated', entityType: 'tenant', entityId: ctx.tenantId, data: input });
       return row;
     });
