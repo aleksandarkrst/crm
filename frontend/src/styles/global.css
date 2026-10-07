@@ -1036,3 +1036,26 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
   .meeting-body { padding: 12px 14px; }
   .dt-date .dt-input { width: 128px; }
 }
+
+/* ---------------------------------------------------------------- pipeline views (CD-274) */
+.view-toggle { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 9px; background: var(--white); }
+.view-toggle > button { border: 0; border-radius: 7px; padding: 7px 9px; cursor: pointer; background: transparent; color: var(--text-2); display: flex; align-items: center; }
+.view-toggle > button[aria-pressed='true'] { background: var(--ink); color: var(--white); }
+.funnel-select { display: flex; align-items: stretch; border: 1px solid var(--border); border-radius: 9px; background: var(--white); overflow: hidden; }
+.funnel-select > select { border: 0; background: transparent; padding: 9px 14px; font-size: 13.5px; color: var(--ink); cursor: pointer; min-width: 200px; outline: none; }
+.funnel-select > button { border: 0; border-left: 1px solid var(--border); background: var(--bg-soft); color: var(--text-2); padding: 0 12px; cursor: pointer; display: flex; align-items: center; }
+.funnel-select > button:hover { background: var(--divider); }
+.pipeline-table { border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; overflow-y: hidden; background: var(--white); }
+.pipeline-table-inner { min-width: 1120px; }
+.pipeline-table-inner > .table-head,
+.pipeline-table .table-row { grid-template-columns: minmax(200px, 1.5fr) minmax(150px, 1.1fr) 140px 100px 70px 130px 130px minmax(170px, 1.2fr); }
+.pipeline-table .table-row[data-lost] { background: var(--panel); }
+.pipeline-table-band { display: flex; align-items: center; gap: 10px; padding: 9px 16px; background: var(--bg-soft); border-bottom: 1px solid var(--divider); }
+.pipeline-table-empty { padding: 28px 16px; text-align: center; font-size: 13px; color: var(--text-2); }
+.pt-cell { display: flex; flex-direction: column; min-width: 0; }
+.pt-main { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pt-sub { font-size: 12px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 700px) {
+  .funnel-select { flex: 1 1 calc(100% - 92px); min-width: 0; }
+  .funnel-select > select { min-width: 0; flex: 1; }
+}
