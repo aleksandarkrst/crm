@@ -189,6 +189,18 @@ the Overview audience filter).
   says "Include lost deals" or "Lost deals only". Overview leaves lost deals out of open and weighted
   pipeline, stalled deals, the funnel, payments due and bonuses.
 
+### Pipeline views (CD-274)
+
+- The Pipeline bar starts with a **Kanban / Table** toggle and the **funnel select** with a pencil
+  that opens Settings → Funnel builder (which edits the selected funnel); then the filters
+  (Salesperson, Industry, Value, lost view), the meta line, "⋯" (import and export) and **New deal**.
+- **Table** shows the same deals as the board, with the same filters: one band per stage that has
+  deals (stage name, open value, count), with the columns Deal (company and title), Contact, Stage,
+  Value, Fit, Last contact, Owner and Next step. A row opens the deal; no rows show "No deals
+  match these filters."
+- The chosen view is a per-browser convenience (`localStorage` `crm.pipelineView.<userId>.<tenantId>`,
+  in try/catch; without storage it starts on Kanban).
+
 ## CSV import and export
 
 ### Import (CD-64)
