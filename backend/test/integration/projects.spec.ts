@@ -54,7 +54,7 @@ describe('project types', () => {
     // The name is unique per workspace, case-insensitively.
     expect((await call('POST', '/project-types', { ...as(), body: { name: ' website ' } })).status).toBe(409);
 
-    types = await ok('POST', `/project-types/${web.id}/stages`, { ...as(), body: { name: 'Launch' } });
+    await ok('POST', `/project-types/${web.id}/stages`, { ...as(), body: { name: 'Launch' } });
     types = await ok('PATCH', `/project-types/${web.id}/stages/${web.stages[1]!.id}`, { ...as(), body: { name: 'UX and design' } }, 200);
     const stages = types.find((t) => t.id === web.id)!.stages;
     expect(stages.map((s) => s.name)).toEqual(['Discovery', 'UX and design', 'Build', 'Launch']);
