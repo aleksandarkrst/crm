@@ -63,6 +63,9 @@ function useProjectsRead<T>(enabled: boolean, read: () => Promise<T>, key: strin
 /** Every project type with its stages, in order (Settings → Project types, the New project dialog). */
 export const useProjectTypes = (enabled = true) => useProjectsRead<ApiProjectType[]>(enabled, projectsApi.types, 'types');
 
+/** One project (its page, CD-275). */
+export const useProject = (id: string | undefined) => useProjectsRead<ApiProject>(!!id, () => projectsApi.project(id!), `project:${id ?? ''}`);
+
 /** The projects of one deal (the won deal's header and Summary, CD-275). */
 export const useDealProjects = (dealId: string | undefined) =>
   useProjectsRead<ApiProject[]>(!!dealId, () => projectsApi.projects({ dealId }), `deal:${dealId ?? ''}`);
