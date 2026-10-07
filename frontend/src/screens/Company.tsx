@@ -4,6 +4,7 @@ import { CustomFieldRows } from '../components/CustomFields';
 import { IconRow } from '../components/icons';
 import { MeetingsCard } from '../components/MeetingsCard';
 import { Screen } from '../components/Layout';
+import { CompanyProjects } from './CompanyProjects';
 import { AddButton, DealsSection, FocusTasks, RecordHeader, RecordHistory, Section } from '../components/RecordParts';
 import { CheckedInput, GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
 import { checkDomain } from '../lib/validate';
@@ -120,6 +121,8 @@ export function Company() {
             </Section>
 
             <DealsSection leads={rec.leads} onAdd={newDeal} />
+
+            <CompanyProjects companyId={rec.id} />
 
             <MeetingsCard record={{ companyId: rec.id }} seed={{ companyId: rec.id }} />
 

@@ -63,6 +63,13 @@ function useProjectsRead<T>(enabled: boolean, read: () => Promise<T>, key: strin
 /** Every project type with its stages, in order (Settings → Project types, the New project dialog). */
 export const useProjectTypes = (enabled = true) => useProjectsRead<ApiProjectType[]>(enabled, projectsApi.types, 'types');
 
+/** Every project of the workspace (the Projects board and list, Ctrl/⌘K, CD-234). */
+export const useProjects = (enabled = true) => useProjectsRead<ApiProject[]>(enabled, () => projectsApi.projects(), 'all');
+
+/** The projects of one company (its page's Projects card, CD-234). */
+export const useCompanyProjects = (companyId: string | undefined) =>
+  useProjectsRead<ApiProject[]>(!!companyId, () => projectsApi.projects({ companyId }), `company:${companyId ?? ''}`);
+
 /** One project (its page, CD-275). */
 export const useProject = (id: string | undefined) => useProjectsRead<ApiProject>(!!id, () => projectsApi.project(id!), `project:${id ?? ''}`);
 

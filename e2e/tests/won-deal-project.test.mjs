@@ -51,11 +51,11 @@ describe('won deal → project', () => {
     projectId = page.url().split('/projects/')[1];
     await page.waitForFunction(() => document.body.innerText.includes('Project created from Website and CRM rollout'));
     await page.waitForSelector('[data-testid=project-page]');
-    assert.equal(await page.$eval('[data-testid=project-title]', (el) => el.textContent), 'Northwind rollout');
-    const details = await page.$eval('[data-testid=project-details]', (el) => el.innerText);
-    assert.match(details, /Client project/);
-    assert.match(details, /Northwind Logistics/);
-    assert.match(details, /Website and CRM rollout/);
+    assert.equal(await page.$eval('[data-testid=project-title]', (el) => el.value), 'Northwind rollout');
+    assert.equal(await page.$eval('[data-testid=project-type-field] option:checked', (el) => el.textContent), 'Client project');
+    // The Linked card: the deal's company and the deal.
+    assert.equal(await page.$eval('[data-testid=project-company-field] option:checked', (el) => el.textContent), 'Northwind Logistics');
+    assert.equal(await page.$eval('[data-testid=project-deal-field] option:checked', (el) => el.textContent), 'Website and CRM rollout');
     const project = await api(page, '/projects/' + projectId);
     assert.equal(project.dealId, dealId);
     assert.equal(project.stageName, 'Planning');

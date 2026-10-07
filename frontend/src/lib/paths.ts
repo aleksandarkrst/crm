@@ -41,6 +41,8 @@ export const paths = {
   /** An employee card (CD-140); `deactivate` opens its Deactivate dialog. */
   employee: (id: string, params?: { deactivate?: boolean }) => '/people/' + encodeURIComponent(id) + (params?.deactivate ? '?deactivate=1' : ''),
   lead: (id: string) => '/deals/' + encodeURIComponent(id),
-  /** A project's page (CD-275, until the Projects module of CD-229). */
+  /** The Projects board and list (CD-234); `?type=` picks the board's project type. */
+  projects: '/projects',
+  /** A project's page (CD-275). */
   project: (id: string) => '/projects/' + encodeURIComponent(id),
 };

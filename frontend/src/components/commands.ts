@@ -26,6 +26,7 @@ export const ICONS = {
   company: 'M4 20V6.5L11 4v16M11 20h9V10h-9M14.5 13h2M14.5 16.5h2M7 8.5h1M7 12h1M7 15.5h1',
   task: 'M5 5h14v14H5zM9 12l2 2 4-4',
   product: 'M20 8.5 12 4 4 8.5v7L12 20l8-4.5v-7ZM4 8.5 12 13m0 0 8-4.5M12 13v7',
+  project: 'M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z',
   overview: 'M4 19V5M4 19h16M8 16v-4M12 16V8M16 16v-6',
   pipeline: 'M4 5h5v14H4zM15 5h5v9h-5z',
   settings: 'M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4ZM19.4 13a7.5 7.5 0 0 0 0-2l2-1.5-2-3.5-2.4 1a7 7 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7 7 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a7.5 7.5 0 0 0 0 2l-2 1.5 2 3.5 2.4-1c.5.4 1.1.7 1.7 1l.4 2.5h4l.4-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.5-2-1.5Z',
@@ -58,9 +59,12 @@ export function useCommands(): Command[] {
     { id: 'new-deal', group: 'Create', label: 'Deal', hint: 'Starts a funnel', key: 'D', icon: 'deal', keywords: 'new create add opportunity lead', run: () => set({ newLeadOpen: true }) },
     { id: 'new-contact', group: 'Create', label: 'Contact', hint: 'A person at a company', key: 'P', icon: 'contact', keywords: 'new create add person people', run: () => set(onDeal ? { contactOpen: true, contactCompany: onDeal } : { contactOpen: true }) },
     { id: 'new-company', group: 'Create', label: 'Company', hint: 'Opens the new record', key: 'O', icon: 'company', keywords: 'new create add organization organisation', run: addCompany },
-    { id: 'new-task', group: 'Create', label: 'Task', hint: 'Shows in Today', key: 'T', icon: 'task', keywords: 'new create add activity to-do todo call meeting', run: () => set(onDeal ? { taskOpen: true, taskLeadId: onDeal } : { taskOpen: true }) },
+    // "Deal task" since projects have tasks too (spec Q8, CD-144).
+    { id: 'new-task', group: 'Create', label: 'Deal task', hint: 'Shows in Today', key: 'T', icon: 'task', keywords: 'new create add activity to-do todo call meeting', run: () => set(onDeal ? { taskOpen: true, taskLeadId: onDeal } : { taskOpen: true }) },
     { id: 'new-meeting', group: 'Create', label: 'Meeting', hint: 'On the calendar', key: 'M', icon: 'calendar', keywords: 'new create add meeting visit call schedule calendar', run: () => meetings.openDialog(meetingSeed) },
     { id: 'new-product', group: 'Create', label: 'Product', hint: 'Adds to the catalog', key: 'R', icon: 'product', keywords: 'new create add service catalog', run: () => set({ productOpen: true, productEditId: null }) },
+    // On a company's page or a won deal's, the project starts out for it (CD-234).
+    { id: 'new-project', group: 'Create', label: 'Project', hint: 'Work for a company', key: 'J', icon: 'project', keywords: 'new create add project delivery job', run: () => set({ newProject: deal?.outcome === 'won' ? { dealId: deal.id } : companyId ? { companyId } : {} }) },
   ];
   const goTo: Command[] = [
     { id: 'go-overview', group: 'Go to', label: 'Overview', hint: 'Numbers and forecasts', icon: 'overview', keywords: 'dashboard reports', run: go(paths.overview) },
@@ -75,6 +79,7 @@ export function useCommands(): Command[] {
     ...(navFor(DEFAULT_MODULE, session.tenant.role, s.visitScope.seesTeam).some((n) => n.to === paths.reports())
       ? [{ id: 'go-reports', group: 'Go to' as const, label: 'Reports', hint: 'Visit-plan completion', icon: 'reports' as const, keywords: 'report visits completion targets', run: go(paths.reports()) }]
       : []),
+    { id: 'go-projects', group: 'Go to', label: 'Projects', hint: 'Projects · board and list', icon: 'project', keywords: 'projects delivery board', run: go(paths.projects) },
     { id: 'go-org', group: 'Go to', label: 'Org structure', hint: 'Workforce · people and teams', icon: 'org', keywords: 'workforce people employees units departments teams chart', run: go(paths.org()) },
   ];
   const settings: Command[] = [
@@ -82,6 +87,7 @@ export function useCommands(): Command[] {
     { id: 'go-workspace', group: 'Settings', label: 'Workspace settings', hint: 'Name, currency, time zone', icon: 'settings', keywords: 'currency time zone fiscal year', run: go(paths.settings()) },
     { id: 'go-team', group: 'Settings', label: 'Team', hint: 'Members and invitations', icon: 'team', keywords: 'users invite members roles', run: go(paths.settings('team')) },
     { id: 'go-notifications', group: 'Settings', label: 'Notifications', hint: 'Emails you get', icon: 'bell', keywords: 'email digest', run: go(paths.settings('notifications')) },
+    { id: 'go-project-types', group: 'Settings', label: 'Project types', hint: 'Stages of projects', icon: 'project', keywords: 'project stages board', run: go(paths.settings('project-types')) },
     { id: 'go-funnels', group: 'Settings', label: 'Funnel builder', hint: 'Stages and playbooks', icon: 'pipeline', keywords: 'stages checklist playbook', run: go(paths.settings('funnel')) },
     { id: 'go-fields', group: 'Settings', label: 'Customize fields', hint: 'Custom fields', icon: 'settings', keywords: 'custom fields', run: go(paths.settings('fields')) },
     { id: 'go-templates', group: 'Settings', label: 'Document templates', hint: 'Proposals and contracts', icon: 'document', keywords: 'docx proposal contract', run: go(paths.settings('templates')) },

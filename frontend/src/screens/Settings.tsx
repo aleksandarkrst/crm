@@ -157,6 +157,13 @@ function WorkspaceTab() {
         />
       </FieldRow>
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>Language of the fixed text in emails to customers, such as meeting minutes.</span>
+      <FieldRow label="Projects">
+        <span data-testid="auto-create-projects" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
+          <Switch on={w.autoCreateProjects} disabled={ro} onClick={() => setWorkspace({ autoCreateProjects: !w.autoCreateProjects })} label="Create a project when a deal is won" />
+          <span style={{ fontSize: 13 }}>Create a project when a deal is won</span>
+        </span>
+      </FieldRow>
+      <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>The project takes the deal's title and company, the first project type, and the deal owner as lead, who gets an email. Once per deal.</span>
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 8 }}>
         {ro ? 'Only owners and admins can change the workspace settings.' : 'Changes are saved as you make them.'}
       </span>

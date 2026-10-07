@@ -54,7 +54,7 @@ describe('command palette, + menu and account menu', () => {
     const focused = await page.evaluate(() => document.activeElement?.getAttribute('data-testid'));
     assert.equal(focused, 'palette-input');
     const rows = await results(page);
-    for (const title of ['Create deal', 'Create contact', 'Create company', 'Create task', 'Create product', 'Pipeline', 'Workspace settings']) {
+    for (const title of ['Create deal', 'Create contact', 'Create company', 'Create deal task', 'Create product', 'Pipeline', 'Workspace settings']) {
       assert.ok(rows.some((r) => r.title === title), `${title} in ${JSON.stringify(rows)}`);
     }
     await page.keyboard.press('Escape');
