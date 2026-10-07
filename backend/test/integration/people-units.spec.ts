@@ -298,13 +298,15 @@ describe('automatic managers (CD-226)', () => {
     expect((await row(p.olja, ws)).manager_id).toBe(p.ceo);
   });
 
-  it('a new CEO manages the leads of the top units who have no manager', async () => {
+  it('a new CEO reports to nobody and manages the top leads who had no manager or the previous CEO', async () => {
     await ok('PATCH', `/people/employees/${p.lena}`, { ...asWs(), body: { managerId: null } });
     // Tea (→ Olja → Cera) is above nobody in Sales.
     await ok('PATCH', '/workspace', { ...asWs(), body: { ceoEmployeeId: p.tea } });
+    // The CEO reports to nobody (CD-228: the card showed Olja while the chart showed Tea on top).
+    expect((await row(p.tea, ws)).manager_id).toBeNull();
     expect((await row(p.lena, ws)).manager_id).toBe(p.tea);
-    // Nora (lead of Service) already reported to the old CEO: unchanged.
-    expect((await row(p.nora, ws)).manager_id).toBe(p.ceo);
+    // Nora (lead of Service) reported to the previous CEO: she follows the new one (CD-228).
+    expect((await row(p.nora, ws)).manager_id).toBe(p.tea);
   });
 });
 
