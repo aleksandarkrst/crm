@@ -1,0 +1,24 @@
+/* Type — Unbounded for brand voice, Onest for the interface (Pultly Brand Guide §03). Interface scale kept from the Cadence set. */
+:root{
+--font:'Onest',system-ui,sans-serif;
+--font-sans:var(--font);
+--font-display:'Unbounded','Onest',system-ui,sans-serif;
+--fs-mini:9.5px;--fs-tag:10px;--fs-caps:10.5px;--fs-xs:11px;--fs-xs-2:11.5px;--fs-sm:12px;--fs-sm-2:12.5px;
+--fs-body:13px;--fs-body-2:13.5px;--fs-card-title:14.5px;--fs-section:15px;--fs-lg:16px;
+--fs-h1:20px;--fs-display:24px;--fs-score:26px;--fs-figure:28px;--fs-hero:40px;
+--fw-regular:400;/* @kind font */
+--fw-medium:500;/* @kind font */
+--fw-semibold:600;/* @kind font */
+--fw-bold:700;/* @kind font */
+
+--ls-tight:-0.02em;--ls-display:-0.03em;--ls-wordmark:-0.04em;--ls-caps:0.08em;--ls-th:0.07em;--ls-tag:0.06em;
+--lh-tight:1.2;/* @kind font */
+--lh-hero:1.1;/* @kind font */
+--lh-body:1.48;/* @kind font */
+--lh-relaxed:1.55;/* @kind font */
+
+--text-title-size:var(--fs-display);--text-header-size:var(--fs-h1);--text-body-size:var(--fs-body);
+}
+.display-hero{font-family:var(--font-display);font-weight:600;font-size:var(--fs-hero);line-height:44px;letter-spacing:var(--ls-display)}
+.display-figure{font-family:var(--font-display);font-weight:500;font-size:var(--fs-figure);line-height:1.1;letter-spacing:var(--ls-display)}
+.wordmark{font-family:var(--font-display);font-weight:600;letter-spacing:var(--ls-wordmark);text-transform:lowercase}

@@ -1,0 +1,23 @@
+/* Pultly "Forest Signal" colour tokens — from the Pultly Brand Guide v1.0, applied to the Cadence component set. */
+:root{
+/* brand */
+--forest:#0D241C;--green-700:#14503C;--green-500:#2F7A5E;--green-soft:#E7F2EE;--lime:#C6F16A;
+/* neutrals (green-tinted) */
+--ink:#0F1B16;--text-2:#475750;--muted:#93A39B;--muted-2:#6B7B73;
+--border:#E2E8E4;--divider:#EBF0ED;--divider-2:#F1F4F2;--dashed:#CAD3CE;
+--bg-soft:#F5F7F6;--panel:#FAFBFA;--chip:#F2F5F3;--segment:#EAEFEC;--hover-col:#E6ECE8;--white:#FFFFFF;
+/* brand scale (component aliases) */
+--brand:var(--green-700);--brand-dark:#0C3226;--brand-soft:var(--green-soft);--brand-soft-2:#CBE3DA;--brand-tint:#F3F8F6;--brand-head:#D7E9E1;
+/* semantic */
+--positive:var(--green-700);--positive-soft:var(--green-soft);
+--warn:#B4531B;--warn-soft:#FDF0E4;--danger:#B42318;--danger-soft:#FDECEA;--note:#FFFCF2;
+/* data + stages: green steps light → dark, lime only for final/won */
+--stage-1:#CBE3DA;--stage-2:#A3D2BF;--stage-3:#5FA587;--stage-4:#2F7A5E;--stage-5:#14503C;--stage-won:var(--lime);
+--stage-done:var(--stage-2);--column-bg:#EFF3F1;--doc-border:#2A4238;
+/* semantic aliases */
+--text-body:var(--ink);--text-secondary:var(--text-2);--text-muted:var(--muted);--text-placeholder:var(--muted);--text-on-dark:#F5F7F6;
+--surface-app:var(--bg-soft);--surface-page:var(--white);--surface-card:var(--white);--surface-panel:var(--panel);
+--surface-sidebar:var(--forest);--surface-dark:var(--forest);--surface-overlay:rgba(13,36,28,0.55);
+--border-default:var(--border);--border-subtle:var(--divider);--border-dashed:var(--dashed);
+--accent:var(--brand);--accent-hover:var(--brand-dark);--accent-soft:var(--brand-soft);--signal:var(--lime);--link:var(--brand);--link-hover:var(--brand-dark);
+}
