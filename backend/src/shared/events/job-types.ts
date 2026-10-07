@@ -74,6 +74,11 @@ export interface JobPayloads {
   'notifications.digest-tick': Record<string, never>;
   /** One member's daily digest for one workspace and local date. `force` skips the "once a day" and "turned on" checks (dev trigger). */
   'notifications.daily-digest': { tenantId: string; userId: string; date: string; force?: boolean };
+  /**
+   * Sent by projects when someone creates a project from a deal (CD-275). The CRM worker puts
+   * "Project created · <name>" on the deal's timeline (projects doesn't write CRM tables).
+   */
+  'projects.project-created-from-deal': { tenantId: string; dealId: string; projectId: string; projectName: string; actorUserId: string };
   /** Scheduled nightly by the worker: fails document generations that were interrupted (CD-100). Placeholder for reporting snapshots. */
   'reporting.nightly': Record<string, never>;
 }
@@ -96,6 +101,7 @@ export const JOB_NAMES = [
   'people.deactivate-due',
   'people.employee-deactivated',
   'people.reporting-line-changed',
+  'projects.project-created-from-deal',
   'reporting.nightly',
 ] as const satisfies readonly JobName[];
 

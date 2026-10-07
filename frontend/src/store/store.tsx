@@ -145,6 +145,9 @@ const PARTS_OF: Record<string, Part[]> = {
   employee_role: ['visitScope'],
   department: [],
   team: [],
+  // Projects (milestone 14) aren't part of the workspace load: screens re-read them (store/projects.ts).
+  project_type: [],
+  project: [],
 };
 /**
  * Which rows of each list a change hint names (CD-98), so a live update re-reads just those: by id,
@@ -501,6 +504,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       if (e.type === 'resync' || e.type === 'meeting' || e.type === 'visit_plan') set((x) => ({ visitRev: x.visitRev + 1 }));
       // The org structure (CD-138) is read again by the screens showing it (store/org.ts).
       if (e.type === 'resync' || PEOPLE_HINTS.has(e.type)) set((x) => ({ orgRev: x.orgRev + 1 }));
+      // Project types and projects (CD-272) are read again by the screens showing them.
+      if (e.type === 'resync' || e.type === 'project_type' || e.type === 'project') set((x) => ({ projectRev: x.projectRev + 1 }));
       // People lists (Roles & permissions, CD-142) re-read on any employee or role change, this tab's own included.
       if (e.type === 'resync' || e.type === 'employee' || e.type === 'employee_role') set((x) => ({ peopleRev: x.peopleRev + 1 }));
       if (e.type === 'resync') return refreshAll();

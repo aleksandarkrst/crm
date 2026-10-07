@@ -351,6 +351,20 @@
       "when": 1791310949327,
       "tag": "0049_org_units_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1791403270973,
+      "tag": "0050_projects",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1791403288821,
+      "tag": "0051_projects_rls",
+      "breakpoints": true
     }
   ]
 }

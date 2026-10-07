@@ -32,6 +32,7 @@ backend/src/
     realtime/                   GET /api/events: live change hints (LISTEN/NOTIFY → SSE)
     crm/                        companies, contacts, funnels, deals (+activities), products, documents
     people/                     employees, departments, teams, functional roles, PeopleAccess (milestone 13)
+    projects/                   project types and stages, client projects (milestone 14)
     health/
   shared/                       cross-cutting, domain-free
     database/                   schema/, DatabaseService.withTenant(), migrate.ts, errors
@@ -535,6 +536,7 @@ be retried. Modules register their own handlers through a worker module exported
 | Job | Sent by | Handled by |
 |---|---|---|
 | `crm.deal-won` | CRM, deal enters the won stage | worker placeholder (future projects handover) |
+| `projects.project-created-from-deal` | projects, someone creates a project from a deal | CRM worker: "Project created · <name>" on the deal's timeline |
 | `crm.deal-assigned` | CRM, someone else becomes a deal's owner (create or change) | notifications: "deal assigned to you" email |
 | `crm.meeting-invite` | CRM, someone else adds a member to a planned meeting, or moves, cancels or restores one (one job per member) | CRM worker (`CrmWorkerModule`): the meeting email with an .ics |
 | `crm.meeting-minutes-email` | CRM, someone sends a meeting's external minutes, or retries the failed recipients | CRM worker: one email to the send's queued recipients, status per recipient |
@@ -1077,6 +1079,48 @@ only; a manager scoped to their team is a follow-up (it needs teams first).
   amount are in the workspace currency and there are no exchange rates.
 - Members can still read deals and their owners (as before), so a determined member could apply a
   rate they know; what is protected is the rules and the bonus figures.
+
+## Projects (milestone 14)
+
+The `projects` module (`modules/projects`, tables in `schema/projects.ts`, RLS and triggers in
+`drizzle/0051_projects_rls.sql`). Built so far: project types with stages (CD-272) and client
+projects linked to the CRM, slimmed from CD-233 to what a won deal needs (CD-275). Tasks, time,
+archiving, the company Projects card and automatic creation on a won deal come with the rest of
+CD-144.
+
+- **Project types** (`project_types`, `project_stages`): like funnels, a set of ordered stages for
+  one kind of project (design v2; CD-255 adopted them instead of the CD-143 hierarchy). Complete and
+  Cancel are a project's status, not stages. Every workspace has at least one type and every type
+  at least one stage; a new workspace gets "Client project" (Planning, In progress, Review) from
+  `ProjectTypesService.provision`, and the migration gave existing workspaces the same. Names are
+  unique per workspace (types) and per type (stages), case-insensitively; at most 30 types and 20
+  stages per type.
+  - `GET /api/project-types` (any member): every type in order with its stages and project counts.
+    Owners and admins (403 for members): `POST` (name, optional stage names), `PATCH /:id` (rename),
+    `DELETE /:id?moveProjectsTo=<typeId>`, `POST /:id/stages`, `PATCH /:id/stages/:stageId`,
+    `PUT /:id/stages/order` `{ stageIds }` (every stage once), `DELETE /:id/stages/:stageId?moveProjectsTo=<stageId>`.
+    Every change answers with all types. A stage or type that holds projects is deleted only with
+    `moveProjectsTo` (409 without it); a type's projects go to the target type's first stage.
+  - **Settings → Project types** (`screens/settings/ProjectTypesTab.tsx`): the list of types, the
+    selected type's name, stages (rename inline, ↑/↓, ×, "New stage") and a stage-bar preview.
+    `?type=<id>` selects a type. Deleting something empty uses the app's confirm; with projects, a
+    dialog asks where they go. Others see it read-only.
+- **Projects** (`projects`): name, type and stage (a composite FK on `(tenant_id, project_type_id,
+  stage_id)` keeps the stage one of the type's), `status` (`open`, `completed`, `cancelled`), the
+  CRM company (required; no cascade, so a company with projects can't be deleted: 409 "This company
+  has projects…"), the deal it came from (optional; deleting the deal clears it), the lead and who
+  created it. The name is unique among the company's open projects. History rows (`record_changes`,
+  entity `project`) and live hints come from triggers.
+  - `GET /api/projects?dealId=&companyId=`, `GET /api/projects/:id` (any member). `POST /api/projects`
+    (any member) `{ name, projectTypeId, companyId, dealId?, leadUserId? }`: the deal must be of the
+    company and not lost (400), the lead a member (default: the creator); it starts in the type's
+    first stage. From a deal, the job `projects.project-created-from-deal` puts "Project created ·
+    <name>" on the deal's timeline (the projects module doesn't write CRM tables).
+    `PATCH /api/projects/:id` (the lead, owners and admins; 403 otherwise): name, lead, stage (of its
+    type), status.
+- **Frontend**: `lib/projectsApi.ts`; `store/projects.ts` reads on demand (`useProjectTypes`,
+  `useDealProjects`) and again when the live hints `project_type` / `project` raise `s.projectRev`.
+  Neither is part of the workspace load.
 
 ## Products, deal products and currency (CD-83)
 

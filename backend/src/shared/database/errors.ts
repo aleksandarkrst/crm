@@ -24,6 +24,9 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   org_units_name_uq: 'A unit with this name already exists here',
   org_units_code_uq: 'A unit with this code already exists',
   org_units_lead_uq: 'This person already leads another unit',
+  project_types_name_uq: 'A project type with this name already exists',
+  project_stages_name_uq: 'This project type already has a stage with this name',
+  projects_name_uq: 'This company already has an open project with this name',
 };
 
 /** Rules about employees' org fields that the database enforces as a last line (people). */
@@ -57,6 +60,10 @@ export function mapDbError(err: unknown): never {
       // A deal with meetings (CD-213): the service says so first; this covers a race with a new meeting.
       if (pg.constraint === 'meetings_deal_fk' && pg.message?.startsWith('update or delete')) {
         throw new ConflictException('This deal has meetings. Delete them or move them to another deal first.');
+      }
+      // A company with projects (CD-233): kept, like a company with deals.
+      if (pg.constraint === 'projects_company_fk' && pg.message?.startsWith('update or delete')) {
+        throw new ConflictException('This company has projects. Delete them or move them to another company first.');
       }
       throw new ConflictException(`Referenced record missing or still in use (${pg.constraint ?? 'foreign key'})`);
     case '23514':

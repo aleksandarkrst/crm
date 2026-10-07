@@ -167,6 +167,7 @@ export function initialState(): State {
     meetingDialog: null,
     visitRev: 0,
     orgRev: 0,
+    projectRev: 0,
     people: emptyPeople(),
     peopleRev: 0,
   };
