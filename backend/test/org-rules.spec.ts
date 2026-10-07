@@ -10,6 +10,7 @@ import {
   type OrgSnapshot,
   planCeo,
   planChanges,
+  planFillManagers,
   planLead,
   planUnitMoved,
   unitAndBelow,
@@ -247,6 +248,27 @@ describe('planCeo and planUnitMoved', () => {
     ]);
     planChanges(s, changes);
     expect([s.people.get('sara')!.managerId, s.people.get('sam')!.managerId]).toEqual([null, 'sara']);
+  });
+
+  it('fills in missing managers by the rules; units stay, people without a unit are left alone (CD-228)', () => {
+    const s = company();
+    s.people.get('sam')!.managerId = null;
+    s.people.get('fiona')!.managerId = null;
+    // Nina is in North (no lead): Fiona, the lead above. Ivan in Inside sales (no lead): Sam.
+    // Olga in Service (no lead, nothing above): the CEO. Sara has no unit: unchanged.
+    const changes = planFillManagers(s);
+    expect(changes).toEqual([
+      { employeeId: 'sam', unitId: 'sales', managerId: 'ceo' },
+      { employeeId: 'fiona', unitId: 'field', managerId: 'sam' },
+      { employeeId: 'olga', unitId: 'service', managerId: 'ceo' },
+      { employeeId: 'ivan', unitId: 'inside', managerId: 'sam' },
+      { employeeId: 'nina', unitId: 'north', managerId: 'fiona' },
+    ]);
+    planChanges(s, changes);
+    expect(s.people.get('nina')!.unitId).toBe('north');
+    expect(s.people.get('sara')!.managerId).toBeNull();
+    // Nothing left to fill.
+    expect(planFillManagers(s)).toEqual([]);
   });
 
   it("leads who reported to the previous CEO move to the new one; a lead's own choice stays", () => {

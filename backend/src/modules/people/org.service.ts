@@ -11,7 +11,7 @@ import type { CallerAccess } from './caller-access';
 import { shownEmployee } from './employees.service';
 import { lostLeads } from './heads';
 import { changeOrg, loadOrgSnapshot, writeLead, writeOrgChanges } from './org-changes';
-import { cloneSnapshot, type LoopSkip, planCeo, planChanges, planLead, planUnitMoved, unitAndBelow } from './org-rules';
+import { cloneSnapshot, type LoopSkip, planCeo, planChanges, planFillManagers, planLead, planUnitMoved, unitAndBelow } from './org-rules';
 import type { Assign, CreateLevel, CreateUnit, ReorderLevels, SetReportingLines, UpdateLevel, UpdateUnit } from './org.schemas';
 import { PeopleAccess } from './people-access';
 import { lockReportingLines } from './reporting-lines';
@@ -66,9 +66,11 @@ export async function ensureLevels(tx: Tx, tenantId: string): Promise<void> {
 }
 
 /**
- * The CEO rule (CD-226): when the CEO is set, leads of units directly under the company who have
- * no manager report to the CEO. Called by Settings (PATCH /api/workspace) in its transaction, after
- * saving the CEO. Emails as every in-app manager change.
+ * The CEO rule (CD-226, CD-228): when the CEO is set, the CEO reports to nobody, leads of units
+ * directly under the company who reported to the previous CEO or to nobody report to the new one,
+ * and everyone in a unit who still has no manager gets one by the rules (`planFillManagers`).
+ * Called by Settings (PATCH /api/workspace) in its transaction, after saving the CEO. Emails as
+ * every in-app manager change.
  */
 export async function applyCeoRule(tx: Tx, jobs: JobsService, tenantId: string, actorUserId: string | null, ceoId: string | null, previousCeoId: string | null = null): Promise<void> {
   if (!ceoId) return;
@@ -76,6 +78,8 @@ export async function applyCeoRule(tx: Tx, jobs: JobsService, tenantId: string, 
   const s = await loadOrgSnapshot(tx, tenantId);
   s.ceoId = ceoId;
   const planned = planChanges(s, planCeo(s, ceoId, previousCeoId));
+  // Then everyone in a unit who still has no manager gets one by the rules (CD-228).
+  planned.push(...planChanges(s, planFillManagers(s)));
   await writeOrgChanges(tx, tenantId, s, planned, { jobs, actorUserId, clearLeadRoles: false });
 }
 
