@@ -2,6 +2,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Icon, IconRow } from '../../components/icons';
 import { paths } from '../../lib/paths';
 import type { ApiProject, ApiProjectHealth, ApiProjectStatus } from '../../lib/projectsApi';
+import { moneyTotal } from '../../store/selectors';
+import type { State } from '../../store/types';
 
 export const PROJECT_STATUS_LABEL: Record<ApiProjectStatus, string> = { open: 'Open', completed: 'Completed', cancelled: 'Cancelled' };
 const STATUS_BADGE: Record<ApiProjectStatus, string> = { open: 'badge badge-brand', completed: 'badge badge-neutral', cancelled: 'badge badge-danger' };
@@ -9,6 +11,10 @@ const STATUS_BADGE: Record<ApiProjectStatus, string> = { open: 'badge badge-bran
 export function ProjectStatusBadge({ status }: { status: ApiProjectStatus }) {
   return <span className={STATUS_BADGE[status]}>{PROJECT_STATUS_LABEL[status]}</span>;
 }
+
+/** A project's value in its currency (the workspace's when it has none), or null without one. */
+export const projectValue = (s: State, p: Pick<ApiProject, 'value' | 'currency'>, short = false): string | null =>
+  p.value == null ? null : moneyTotal(s, [{ currency: p.currency ?? undefined, amount: Number(p.value) }], short);
 
 export const HEALTH_LABEL: Record<ApiProjectHealth, string> = { on_track: 'On track', at_risk: 'At risk', off_track: 'Off track' };
 const HEALTH_BADGE: Record<ApiProjectHealth, string> = { on_track: 'badge badge-brand', at_risk: 'badge badge-warn', off_track: 'badge badge-danger' };

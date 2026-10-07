@@ -5,9 +5,9 @@ import { FilterBar } from '../components/ui';
 import { paths } from '../lib/paths';
 import { type ApiProject, type ApiProjectHealth, type ApiProjectStatus, projectsApi } from '../lib/projectsApi';
 import { projectError, useProjects, useProjectTypes } from '../store/projects';
-import { memberLabels } from '../store/selectors';
+import { memberLabels, moneyTotal } from '../store/selectors';
 import { useStore } from '../store/store';
-import { HealthBadge, ProjectStatusBadge } from './lead/DealProjects';
+import { HealthBadge, ProjectStatusBadge, projectValue } from './lead/DealProjects';
 
 type View = 'board' | 'list';
 const VIEWS: { id: View; label: string; icon: string }[] = [
@@ -202,7 +202,10 @@ export function Projects() {
                     }}
                   >
                     <span style={{ fontSize: 14, fontWeight: 600 }}>{st.name}</span>
-                    <span style={{ fontSize: 11.5, color: 'var(--text-2)' }}>{plural(cards.length, 'project')}</span>
+                    <span style={{ fontSize: 11.5, color: 'var(--text-2)' }}>
+                      {plural(cards.length, 'project')}
+                      {cards.some((p) => p.value != null) && ` · ${moneyTotal(s, cards.filter((p) => p.value != null).map((p) => ({ currency: p.currency ?? undefined, amount: Number(p.value) })), true)}`}
+                    </span>
                   </div>
                   <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, flex: 1, background: active ? '#E7F2EE' : '#F4F4F5' }}>
                     {cards.map((p) => (
@@ -222,9 +225,12 @@ export function Projects() {
                         onClick={() => navigate(paths.project(p.id))}
                         style={{ background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: 'var(--shadow-tile)', padding: '11px 12px', cursor: p.status === 'open' ? 'grab' : 'pointer', display: 'flex', flexDirection: 'column', gap: 8, opacity: dragId === p.id ? 0.45 : 1 }}
                       >
-                        <span style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.25 }}>
-                          {p.code && <span style={{ color: 'var(--text-2)', fontWeight: 500 }}>{p.code} · </span>}
-                          {p.name}
+                        <span style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.25 }}>
+                            {p.code && <span style={{ color: 'var(--text-2)', fontWeight: 500 }}>{p.code} · </span>}
+                            {p.name}
+                          </span>
+                          {p.value != null && <span style={{ fontSize: 11, color: 'var(--brand)', whiteSpace: 'nowrap' }}>{projectValue(s, p)}</span>}
                         </span>
                         <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
                           {p.companyName} · {p.leadName ?? 'No lead'}

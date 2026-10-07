@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { check, date, foreignKey, index, integer, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { check, date, foreignKey, index, integer, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { companies, deals } from './crm';
 import { tenants, users } from './platform';
 
@@ -103,6 +103,12 @@ export const projects = pgTable(
     startDate: date('start_date'),
     endDate: date('end_date'),
     health: text('health', { enum: PROJECT_HEALTHS }).notNull().default('on_track'),
+    /** Design v2 Details: what the project is worth (a won deal's amount when it starts from one), in `currency`. */
+    value: numeric('value', { precision: 14, scale: 2 }),
+    /** ISO 4217; the workspace currency when null. */
+    currency: text('currency'),
+    /** Design v2 Details: the hours planned for the project. */
+    budgetHours: numeric('budget_hours', { precision: 8, scale: 1 }),
     companyId: uuid('company_id').notNull(),
     dealId: uuid('deal_id'),
     leadUserId: uuid('lead_user_id').references(() => users.id, { onDelete: 'set null' }),
@@ -123,6 +129,9 @@ export const projects = pgTable(
     check('projects_code_ck', sql`${t.code} is null or length(btrim(${t.code})) between 1 and 20`),
     check('projects_description_ck', sql`${t.description} is null or length(${t.description}) <= 5000`),
     check('projects_dates_ck', sql`${t.startDate} is null or ${t.endDate} is null or ${t.endDate} >= ${t.startDate}`),
+    check('projects_value_ck', sql`${t.value} is null or ${t.value} >= 0`),
+    check('projects_budget_hours_ck', sql`${t.budgetHours} is null or ${t.budgetHours} >= 0`),
+    check('projects_currency_ck', sql`${t.currency} is null or ${t.currency} ~ '^[A-Z]{3}$'`),
     check('projects_health_ck', sql`${t.health} in ('on_track', 'at_risk', 'off_track')`),
     check('projects_status_ck', sql`${t.status} in ('open', 'completed', 'cancelled')`),
   ],

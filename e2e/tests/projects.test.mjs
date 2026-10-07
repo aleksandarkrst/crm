@@ -104,6 +104,22 @@ describe('projects', () => {
     assert.equal((await api(page, '/projects/' + projectId)).status, 'open');
   });
 
+  step('budget and value edit inline; the Overview tab shows the history (design v2 §2)', async () => {
+    await page.click('[data-testid=project-budget]', { count: 3 });
+    await page.keyboard.type('120');
+    await page.keyboard.press('Enter');
+    await page.click('[data-testid=project-value]', { count: 3 });
+    await page.keyboard.type('48000');
+    await page.keyboard.press('Enter');
+    const p = await eventually(async () => {
+      const x = await api(page, '/projects/' + projectId);
+      return x.budgetHours === '120.0' && x.value === '48000.00' && x;
+    });
+    assert.ok(p, 'saved');
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-value-text]')?.textContent === '€48,000');
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-overview]')?.innerText.includes('Health'));
+  });
+
   step('another company clears the deal, after a confirmation (TC 5)', async () => {
     await setValue(page, '[data-testid=project-company-field]', beta.id);
     assert.equal(await confirmInApp(page), 'Move Service 2026 to Beta?');
