@@ -1,0 +1,8 @@
+/* Spacing + radii — exact values from the source (not snapped to a grid). */
+:root{
+--space-2:2px;--space-4:4px;--space-5:5px;--space-6:6px;--space-7:7px;--space-8:8px;--space-9:9px;--space-10:10px;
+--space-12:12px;--space-13:13px;--space-14:14px;--space-16:16px;--space-18:18px;--space-20:20px;--space-24:24px;--space-26:26px;--space-30:30px;--space-44:44px;
+--radius-tag:4px;--radius-badge:5px;--radius-sm:6px;--radius-input:7px;--radius-btn:8px;--radius-choice:9px;--radius-pop:10px;
+--radius-nav:11px;--radius-card:12px;--radius-modal:14px;--radius-pill:999px;
+--sidebar-w:96px;--screen-pad-x:30px;--header-pad:10px 24px;--column-w:268px;
+}

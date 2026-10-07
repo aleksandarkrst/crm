@@ -1,0 +1,8 @@
+html,body{margin:0;padding:0;background:var(--bg-soft);font-family:var(--font);color:var(--ink)}
+*{box-sizing:border-box}
+a{color:var(--brand);text-decoration:none}
+a:hover{color:var(--brand-dark);text-decoration:underline}
+select,input,button,textarea{font-family:inherit;font-size:inherit}
+@keyframes dcFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes dcBar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes dcSpin{to{transform:rotate(360deg)}}

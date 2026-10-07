@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/fonts.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/colors.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/typography.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/spacing.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/effects.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/css/base.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/css/ui.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/css/header.css">
+  <style>:root { --font: 'Onest', system-ui, sans-serif; }</style>
+  <link rel="stylesheet" href="hover.css">
+</helmet>
+<div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; position: relative; font-family: 'Onest', system-ui, sans-serif;">
+  <button type="button" onClick="{{ toggle }}" aria-expanded="{{ open }}" style="display: flex; align-items: center; gap: 6px; border: 1px solid {{ btnBorder }}; background: {{ btnBg }}; color: var(--ink); border-radius: 8px; padding: 7px 11px; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; height: 34px; box-sizing: border-box;">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"></path></svg>
+    <span>Filter</span>
+    <sc-if value="{{ hasCount }}" hint-placeholder-val="{{ false }}"><span style="min-width: 18px; height: 18px; border-radius: 8px; background: var(--brand); color: #FFFFFF; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; box-sizing: border-box;">{{ count }}</span></sc-if>
+  </button>
+  <sc-for list="{{ chips }}" as="c" hint-placeholder-count="0">
+    <span style="display: inline-flex; align-items: center; gap: 4px; height: 34px; box-sizing: border-box; border: 1px solid var(--brand-soft-2); background: var(--brand-tint); color: var(--brand); border-radius: 8px; padding: 0 4px 0 10px; font-size: 12.5px; font-weight: 500; white-space: nowrap;"><span style="color: var(--text-2);">{{ c.label }}:</span><span>{{ c.value }}</span><button type="button" onClick="{{ c.remove }}" aria-label="Remove filter" title="Remove filter" style="border: 0; background: transparent; color: inherit; cursor: pointer; padding: 0 5px; font-size: 15px; line-height: 1; border-radius: 8px;">×</button></span>
+  </sc-for>
+  <sc-if value="{{ hasCount }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn-plain" onClick="{{ clear }}" style="font-size: 12.5px; white-space: nowrap; border-radius: 8px;">Clear</button></sc-if>
+  <sc-if value="{{ open }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ close }}" style="position: fixed; inset: 0; z-index: 40;"></div>
+    <div class="menu-pop" style="position: absolute; top: calc(100% + 6px); left: 0; z-index: 41; width: 320px; max-height: 460px; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 2px; box-sizing: border-box; border-radius: 10px;">
+      <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+        <div style="display: flex; flex-direction: column;">
+          <button type="button" onClick="{{ g.toggle }}" style="display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: {{ g.bg }}; border-radius: 8px; padding: 9px 10px; font-family: inherit; font-size: 13px; color: var(--ink); cursor: pointer; text-align: left;" style-hover="background: var(--bg-soft);">
+            <span style="font-weight: 500; flex: 0 0 auto;">{{ g.label }}</span>
+            <span style="flex: 1; min-width: 0; text-align: right; color: {{ g.sumColor }}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px;">{{ g.summary }}</span>
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="var(--muted-2)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="transform: {{ g.rot }}; flex: 0 0 11px;"><path d="M2.5 4.5 6 8l3.5-3.5"></path></svg>
+          </button>
+          <sc-if value="{{ g.expanded }}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; flex-direction: column; padding: 2px 0 6px;">
+              <sc-for list="{{ g.options }}" as="o" hint-placeholder-count="4">
+                <button type="button" onClick="{{ o.onClick }}" role="{{ o.role }}" aria-checked="{{ o.on }}" style="display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: transparent; border-radius: 8px; padding: 7px 10px 7px 14px; font-family: inherit; font-size: 13px; color: var(--ink); cursor: pointer; text-align: left;" style-hover="background: var(--bg-soft);">
+                  <span style="width: 16px; height: 16px; flex: 0 0 16px; border-radius: {{ o.boxRadius }}; border: 1.5px solid {{ o.boxBorder }}; background: {{ o.boxBg }}; display: flex; align-items: center; justify-content: center; box-sizing: border-box; color: #FFFFFF;"><sc-if value="{{ o.on }}" hint-placeholder-val="{{ false }}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg></sc-if></span>
+                  <span style="flex: 1; min-width: 0;">{{ o.name }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-for>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 4px 2px; border-top: 1px solid var(--divider); margin-top: 4px;"><button type="button" class="btn btn-secondary" onClick="{{ clear }}" style="padding: 6px 12px; font-size: 12.5px; border-radius: 8px;">Clear all</button><button type="button" class="btn btn-primary" onClick="{{ close }}" style="padding: 6px 14px; font-size: 12.5px; border-radius: 8px;">Done</button></div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 700, &quot;height&quot;: 460}, &quot;filters&quot;: {&quot;editor&quot;: null, &quot;tsType&quot;: &quot;Array&lt;{id:string,label:string,multi?:boolean,value:string|string[],def?:string,options:{id:string,name:string}[],onChange:(v:any)=&gt;void}&gt;&quot;}, &quot;onClear&quot;: {&quot;editor&quot;: null, &quot;tsType&quot;: &quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  state = { open: false, exp: null };
+  renderVals() {
+    const fs = this.props.filters || [];
+    const defOf = (f) => (f.multi ? [] : f.def === undefined ? '' : f.def);
+    const isActive = (f) => (f.multi ? Array.isArray(f.value) && f.value.length > 0 : f.value !== undefined && f.value !== null && f.value !== defOf(f));
+    const nameOf = (f, v) => ((f.options || []).find((o) => o.id === v) || { name: v }).name;
+    const sumOf = (f) => { if (!isActive(f)) return f.multi ? 'Any' : nameOf(f, defOf(f)) || 'Any'; if (!f.multi) return nameOf(f, f.value); return f.value.length === 1 ? nameOf(f, f.value[0]) : f.value.length + ' selected'; };
+    const active = fs.filter(isActive);
+    const clear = () => { if (this.props.onClear) this.props.onClear(); else active.forEach((f) => f.onChange && f.onChange(defOf(f))); };
+    const exp = this.state.exp === null ? (fs[0] || {}).id : this.state.exp;
+    return {
+      open: this.state.open, toggle: () => this.setState((s) => ({ open: !s.open })), close: () => this.setState({ open: false }),
+      count: active.length, hasCount: active.length > 0,
+      btnBg: this.state.open || active.length ? 'var(--bg-soft)' : 'var(--white)', btnBorder: active.length ? 'var(--brand)' : 'var(--border)',
+      chips: active.map((f) => ({ label: f.label, value: f.multi ? f.value.map((v) => nameOf(f, v)).join(', ') : nameOf(f, f.value), remove: () => f.onChange && f.onChange(defOf(f)) })),
+      clear,
+      groups: fs.map((f) => { const on = exp === f.id;
+        return { label: f.label, summary: sumOf(f), sumColor: isActive(f) ? 'var(--brand)' : 'var(--muted-2)', expanded: on, rot: on ? 'rotate(180deg)' : 'none', bg: on ? 'var(--bg-soft)' : 'transparent',
+          toggle: () => this.setState({ exp: on ? '' : f.id }),
+          options: (f.options || []).filter((o) => f.multi || true).map((o) => { const sel = f.multi ? (f.value || []).includes(o.id) : f.value === o.id;
+            return { name: o.name, on: sel, role: f.multi ? 'checkbox' : 'radio', boxRadius: f.multi ? '4px' : '50%', boxBorder: sel ? 'var(--brand)' : 'var(--dashed)', boxBg: sel ? 'var(--brand)' : 'var(--white)',
+              onClick: () => { if (!f.onChange) return; if (f.multi) { const cur = f.value || []; f.onChange(sel ? cur.filter((x) => x !== o.id) : [...cur, o.id]); } else f.onChange(o.id); } }; }) }; }),
+    };
+  }
+}
+</script>
+</body>
+</html>

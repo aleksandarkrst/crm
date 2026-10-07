@@ -1,0 +1,36 @@
+/* Hover feedback for every clickable element in the Pultly prototypes.
+   Loaded by CRM, Projects, Workforce, Workspace settings, the module switcher and FilterBar. */
+button, a, select, summary, label[for], [role="button"], [role="tab"], [role="menuitem"], [draggable="true"],
+[style*="cursor: pointer"], [style*="cursor:pointer"] { transition: background-color .12s ease, box-shadow .12s ease, border-color .12s ease, filter .12s ease, color .12s ease; }
+
+/* buttons, menu items, tabs, links styled as buttons, clickable rows and cards */
+button:not(:disabled):hover, [role="button"]:hover, [role="tab"]:hover, [role="menuitem"]:hover,
+[style*="cursor: pointer"]:not(input):not(select):not(textarea):hover, [style*="cursor:pointer"]:not(input):not(select):not(textarea):hover {
+  box-shadow: inset 0 0 0 999px rgba(13, 36, 28, 0.05);
+}
+.btn-primary:not(:disabled):hover, button[style*="background: rgb(20, 80, 60)"]:hover, button[style*="background: rgb(15, 27, 22)"]:hover,
+button[style*="background: rgb(13, 36, 28)"]:hover, button[style*="background: var(--ink)"]:hover, button[style*="background: var(--brand)"]:hover { filter: brightness(1.12); box-shadow: none; }
+
+/* dark sidebar: nav items, logo, module switcher trigger */
+.app-sidebar button:hover, .app-sidebar a:hover, .app-sidebar [style*="cursor: pointer"]:hover { box-shadow: none; }
+.app-sidebar a:hover > span > span:first-child, .app-sidebar button:hover > span:first-child { box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.09); }
+.app-sidebar a:hover > span, .app-sidebar button:hover > span:last-child { color: #F5F7F6; }
+.app-sidebar button[aria-haspopup]:hover { box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.06); }
+
+/* kanban cards in every module */
+[draggable="true"]:hover { box-shadow: 0 6px 16px rgba(13, 36, 28, 0.10) !important; border-color: #CAD3CE !important; }
+
+/* fields: inputs, selects, text areas (ghost fields already have their own hover fill) */
+input:not([type="checkbox"]):not([type="radio"]):not(.ghost):not(:focus):hover,
+select:not(.ghost):not(:focus):hover, textarea:not(:focus):hover { border-color: #93A39B !important; }
+
+/* header: search pill, round icon buttons, avatar */
+.search-trigger:hover { border-color: #93A39B; }
+.icon-round:hover, .round-btn:hover, .avatar-btn:hover { box-shadow: inset 0 0 0 999px rgba(13, 36, 28, 0.06); }
+
+/* switches and stage chevrons */
+.switch:not(:disabled):hover { filter: brightness(0.95); box-shadow: none; }
+.stage-chev:hover { filter: brightness(0.96); box-shadow: none; }
+
+/* plain text links */
+a:not([class]):hover { text-decoration: underline; }

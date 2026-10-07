@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/fonts.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/colors.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/typography.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/effects.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/css/base.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/css/ui.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/css/header.css">
+  <style>@keyframes dcFade { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }</style>
+  <link rel="stylesheet" href="hover.css">
+</helmet>
+<div style="position: relative; display: flex; flex-direction: column; align-items: center; font-family: 'Onest', system-ui, sans-serif; background: #0D241C; border-radius: 12px; width: 80px; box-sizing: border-box;">
+  <button type="button" onClick="{{ toggle }}" aria-expanded="{{ ariaOpen }}" aria-haspopup="dialog" title="Modules and workspaces ({{ keys }})" style="width: 80px; padding: 8px 4px 7px; border-radius: 12px; border: 1px solid {{ trigBorder }}; background: {{ trigBg }}; color: #F5F7F6; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; font-family: inherit; box-sizing: border-box;" style-hover="background: rgba(255,255,255,0.08); border-color: rgba(198,241,106,0.32);">
+    <span style="width: 34px; height: 34px; border-radius: 9px; background: rgba(198,241,106,0.14); color: #C6F16A; display: flex; align-items: center; justify-content: center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{ curIcon }}"></path></svg></span>
+    <span style="display: flex; align-items: center; gap: 3px; width: 72px; justify-content: center; font-size: 11px; font-weight: 600; letter-spacing: 0.01em; line-height: 1.2;"><span style="flex: none; max-width: 58px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ moduleName }}</span><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#93A39B" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex: none;"><path d="M2.5 4.5 6 8l3.5-3.5"></path></svg></span>
+  </button>
+
+  <sc-if value="{{ hasMoved }}" hint-placeholder-val="{{ false }}"><div class="toast" style="z-index: 80;">{{ moved }}</div></sc-if>
+  <sc-if value="{{ open }}" hint-placeholder-val="{{ false }}"><div onClick="{{ close }}" style="position: fixed; inset: 0; z-index: 60;"></div></sc-if>
+
+  <sc-if value="{{ open }}" hint-placeholder-val="{{ false }}">
+    <div role="dialog" aria-label="Modules and workspaces" style="position: absolute; top: 12px; left: calc(100% + 10px); width: 420px; max-height: calc(100vh - 24px); overflow-y: auto; background: var(--white); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-pop); padding: 6px; z-index: 61; color: var(--ink); text-align: left; box-sizing: border-box; animation: dcFade .14s ease-out both;">
+      <sc-if value="{{ isModules }}" hint-placeholder-val="{{ true }}">
+        <sc-if value="{{ several }}" hint-placeholder-val="{{ true }}">
+          <button type="button" onClick="{{ showWs }}" style="display: flex; align-items: center; gap: 11px; width: 100%; padding: 10px 12px 10px 8px; border-radius: 9px; background: var(--bg-soft); border: 0; cursor: pointer; font-family: inherit; text-align: left; color: inherit;" style-hover="background: var(--chip);">
+            <span style="flex: 0 0 30px; width: 30px; height: 30px; border-radius: 8px; background: var(--brand); color: var(--bg-soft); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600;">{{ ws.letter }}</span>
+            <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 11.5px; color: var(--muted-2);">Workspace</span><span style="font-size: 14px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ ws.name }}</span></span>
+            <span style="font-size: 12.5px; color: var(--muted); white-space: nowrap;">Switch ›</span>
+          </button>
+        </sc-if>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 8px 6px;">
+          <span class="caps-muted">Modules</span>
+          <sc-if value="{{ single }}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{ showWs }}" title="Workspaces" style="font-size: 12px; color: var(--muted-2); padding: 2px 6px; border-radius: 6px; border: 0; background: transparent; cursor: pointer; font-family: inherit;" style-hover="color: var(--brand); background: var(--chip);">{{ ws.name }} ›</button></sc-if>
+        </div>
+        <div role="list" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 4px;">
+          <sc-for list="{{ modules }}" as="m" hint-placeholder-count="6">
+            <div role="listitem" style="min-width: 0;">
+              <button type="button" onClick="{{ m.onClick }}" aria-current="{{ m.aria }}" aria-disabled="{{ m.locked }}" title="{{ m.title }}" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: 9px; border: 0; background: {{ m.bg }}; cursor: {{ m.cursor }}; font-family: inherit; text-align: left; color: inherit;" style-hover="background: {{ m.hoverBg }};">
+                <span style="flex: 0 0 34px; width: 34px; height: 34px; border-radius: 9px; background: {{ m.tileBg }}; color: {{ m.tileFg }}; display: flex; align-items: center; justify-content: center; opacity: {{ m.dim }};"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{ m.icon }}"></path></svg></span>
+                <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
+                  <span style="font-size: 13.5px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: {{ m.dim }};">{{ m.name }}</span>
+                  <span style="font-size: 12px; color: {{ m.descFg }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 4px;"><sc-if value="{{ m.isLocked }}" hint-placeholder-val="{{ false }}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex: none;"><path d="M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3"></path></svg></sc-if><span style="flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ m.desc }}</span></span>
+                </span>
+              </button>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; align-items: center; gap: 9px; margin-top: 6px; padding: 9px 8px 4px; border-top: 1px solid var(--divider); font-size: 12.5px; color: var(--text-2);">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM10 10h4v4h-4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z"></path></svg>
+          <span style="flex: 1;">Jump to a module</span>
+          <kbd class="kbd">{{ keys }}</kbd>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isWs }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 8px 6px 4px;">
+          <button type="button" onClick="{{ showMods }}" style="flex: none; white-space: nowrap; font-size: 13px; color: var(--text-2); padding: 4px 6px; border-radius: 6px; border: 0; background: transparent; cursor: pointer; font-family: inherit;" style-hover="color: var(--brand); background: var(--chip);">‹ Modules</button>
+          <span class="caps-muted">Workspaces</span>
+        </div>
+        <div role="list">
+          <sc-for list="{{ workspaces }}" as="w" hint-placeholder-count="4">
+            <div role="listitem">
+              <button type="button" onClick="{{ w.onClick }}" aria-current="{{ w.aria }}" style="display: flex; align-items: center; gap: 11px; width: 100%; padding: 9px 12px 9px 8px; border-radius: 9px; border: 0; background: {{ w.bg }}; cursor: pointer; font-family: inherit; text-align: left; color: inherit;" style-hover="background: {{ w.hoverBg }};">
+                <span style="flex: 0 0 30px; width: 30px; height: 30px; border-radius: 8px; background: {{ w.initBg }}; color: {{ w.initFg }}; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600;">{{ w.letter }}</span>
+                <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 13.5px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ w.name }}</span><span style="font-size: 12px; color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ w.sub }}</span></span>
+                <sc-if value="{{ w.current }}" hint-placeholder-val="{{ false }}"><span aria-label="Current workspace" style="color: var(--brand); display: flex;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg></span></sc-if>
+              </button>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--divider);">
+          <sc-if value="{{ creating }}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; flex-direction: column; gap: 8px; padding: 6px;">
+              <input class="box-input" value="{{ draft }}" onChange="{{ onDraft }}" onKeyDown="{{ onDraftKey }}" placeholder="Workspace name" aria-label="New workspace name" style="width: 100%; box-sizing: border-box; font-family: inherit;">
+              <div style="display: flex; gap: 7px; justify-content: flex-end;">
+                <button type="button" class="btn-plain" onClick="{{ cancelCreate }}" style="padding: 6px 11px; font-size: 12.5px; font-family: inherit;">Cancel</button>
+                <button type="button" class="btn btn-primary" onClick="{{ create }}" disabled="{{ noDraft }}" style="padding: 6px 11px; font-size: 12.5px; font-family: inherit;">Create workspace</button>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ notCreating }}" hint-placeholder-val="{{ true }}">
+            <button type="button" onClick="{{ startCreate }}" style="display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 8px; border-radius: 9px; font-size: 13px; color: var(--ink); border: 0; background: transparent; cursor: pointer; font-family: inherit; text-align: left;" style-hover="background: var(--chip);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>New workspace</button>
+          </sc-if>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:560,&quot;height&quot;:520},&quot;module&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;crm&quot;,&quot;planning&quot;,&quot;projects&quot;,&quot;workforce&quot;,&quot;finance&quot;,&quot;reporting&quot;,&quot;service&quot;,&quot;settings&quot;],&quot;default&quot;:&quot;projects&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;role&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;owner&quot;,&quot;admin&quot;,&quot;manager&quot;,&quot;member&quot;],&quot;default&quot;:&quot;owner&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const WS0 = [
+  { id: 'studio', name: 'Studio', members: 9, modules: ['crm', 'planning', 'projects', 'workforce', 'finance', 'reporting', 'service'] },
+  { id: 'cadence', name: 'Cadence', members: 4, modules: ['crm', 'projects', 'finance'] },
+  { id: 'labs', name: 'Studio Labs', members: 3, modules: ['crm', 'projects', 'workforce', 'reporting'] },
+  { id: 'holding', name: 'Petrović Holding', members: 2, modules: ['planning', 'finance'] },
+  { id: 'adriatic', name: 'Adriatic Group', members: 5, modules: ['crm', 'projects'] },
+  { id: 'nsoffice', name: 'Studio Novi Sad', members: 4, modules: ['crm', 'projects', 'workforce', 'finance', 'reporting', 'service'] },
+  { id: 'personal', name: 'Personal', members: 1, modules: ['planning'] },
+];
+const I = {
+  planning: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h5M8 17h3',
+  crm: 'M5 5h5v14H5zM14 5h5v9h-5z',
+  projects: 'M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z',
+  workforce: 'M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2.5 20c.7-3 2.8-4.8 5.5-4.8s4.8 1.8 5.5 4.8M13.6 15.6c.7-.3 1.5-.4 2.4-.4 2.7 0 4.8 1.8 5.5 4.8',
+  finance: 'M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3 2 2.6 4.5 3 4.5 1.3 4.5 3-2 3-4.5 3-4.5-1.3-4.5-3',
+  reporting: 'M6 3h8l4 4v14H6zM14 3v4h4M9.5 17v-3M12 17v-6M14.5 17v-2',
+  service: 'M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z',
+  settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z',
+};
+const MODS = [
+  ['crm', 'CRM', 'Pipeline, deals, contacts', 'CRM.dc.html'],
+  ['projects', 'Projects', 'Tasks, work orders, dispatch', 'Projects Prototype.dc.html'],
+  ['workforce', 'Workforce', 'People and capacity', 'Workforce.dc.html'],
+  ['settings', 'Workspace settings', 'CRM, Projects, Workforce', 'Settings.dc.html#general'],
+  ['planning', 'Planning', 'Budgets and targets', ''],
+  ['finance', 'Finance', 'Receivables, payables, bank', ''],
+  ['reporting', 'Reporting', 'Schedule and utilisation', ''],
+];
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const KEYS = IS_MAC ? '⌘ J' : 'Ctrl J';
+class Component extends DCLogic {
+  constructor(props) { super(props); let cur = 'studio', extra = [], over = {};
+    try { cur = localStorage.getItem('cadence.ws') || 'studio'; extra = JSON.parse(localStorage.getItem('cadence.wsExtra') || '[]'); over = JSON.parse(localStorage.getItem('cadence.wsMods') || '{}'); } catch (e) {}
+    this.state = { open: false, view: 'modules', cur, extra, over, creating: false, draft: '', moved: '' }; }
+  componentDidMount() {
+    this.onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') { e.preventDefault(); this.setState((s) => ({ open: !s.open, view: 'modules', creating: false })); }
+      else if (e.key === 'Escape' && this.state.open) this.close();
+    };
+    document.addEventListener('keydown', this.onKey);
+  }
+  componentWillUnmount() { document.removeEventListener('keydown', this.onKey); }
+  close() { this.setState({ open: false, view: 'modules', creating: false, draft: '' }); }
+  all() { const o = this.state.over; return [...WS0, ...this.state.extra].map((w) => (o[w.id] ? { ...w, modules: o[w.id] } : w)); }
+  setWs(id) { try { localStorage.setItem('cadence.ws', id); } catch (e) {}
+    const mod = this.props.module || 'projects'; const w = this.all().find((x) => x.id === id);
+    if (w && mod !== 'settings' && !w.modules.includes(mod)) { const first = MODS.find(([m, , , href]) => href && w.modules.includes(m));
+      if (first) { this.setState({ cur: id, open: false, view: 'modules', moved: w.name + ' has no ' + MODS.find((m) => m[0] === mod)[1] + '. Opening ' + first[1] + '…' }); setTimeout(() => { window.location.href = first[3]; }, 900); return; }
+      this.setState({ cur: id, open: false, view: 'modules', moved: w.name + ' has no modules turned on that open here.' }); return; }
+    this.setState({ cur: id, open: false, view: 'modules', moved: '' }); }
+  renderVals() {
+    const st = this.state; const mod = this.props.module || 'projects';
+    const all = this.all(); const ws = all.find((w) => w.id === st.cur) || all[0];
+    const create = () => { const n = st.draft.trim(); if (!n) return;
+      const id = 'ws' + Date.now(); const extra = [...st.extra, { id, name: n, members: 1, modules: MODS.filter((m) => m[3]).map((m) => m[0]) }];
+      try { localStorage.setItem('cadence.wsExtra', JSON.stringify(extra)); } catch (e) {}
+      this.setState({ extra, creating: false, draft: '' }, () => this.setWs(id)); };
+    const curMod = MODS.find((m) => m[0] === mod);
+    return {
+      keys: KEYS, open: st.open, ariaOpen: st.open ? 'true' : 'false',
+      trigBg: st.open ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)', trigBorder: st.open ? 'rgba(198,241,106,0.32)' : 'rgba(255,255,255,0.08)',
+      curIcon: I[mod] || I.settings, moduleName: mod === 'settings' ? 'Settings' : (curMod || MODS[1])[1],
+      hasMoved: !!st.moved, moved: st.moved,
+      toggle: () => this.setState((s) => ({ open: !s.open, view: 'modules', creating: false })), close: () => this.close(),
+      isModules: st.view === 'modules', isWs: st.view === 'workspaces', several: all.length > 1, single: all.length <= 1,
+      showWs: () => this.setState({ view: 'workspaces' }), showMods: () => this.setState({ view: 'modules', creating: false }),
+      ws: { name: ws.name, letter: ws.name.trim().charAt(0).toUpperCase() },
+      modules: MODS.map(([id, name, desc, href]) => {
+        const role = this.props.role || 'owner';
+        const lock = id === 'settings' ? (role === 'owner' || role === 'admin' ? null : 'Owners and admins') : !ws.modules.includes(id) ? 'Not in this workspace' : !href ? 'Coming soon' : null;
+        const current = id === mod;
+        return { name, icon: I[id], desc: lock || desc, isLocked: !!lock, locked: lock ? 'true' : 'false', aria: current ? 'true' : 'false', title: lock ? name + ': ' + lock : desc,
+          bg: current ? 'var(--brand-tint)' : 'transparent', hoverBg: lock ? 'transparent' : current ? 'var(--brand-tint)' : 'var(--chip)', cursor: lock ? 'default' : 'pointer',
+          tileBg: current ? 'var(--forest)' : 'var(--chip)', tileFg: current ? 'var(--lime)' : 'var(--text-2)', dim: lock ? 0.55 : 1, descFg: lock ? 'var(--muted)' : 'var(--muted-2)',
+          onClick: () => { if (lock) return; this.close(); if (!current) window.location.href = href; } };
+      }),
+      workspaces: [...all].sort((a, b) => a.name.localeCompare(b.name)).map((w) => { const c = w.id === ws.id;
+        return { name: w.name, letter: w.name.trim().charAt(0).toUpperCase(), sub: w.members + (w.members === 1 ? ' member' : ' members'), current: c, aria: c ? 'true' : 'false',
+          bg: c ? 'var(--brand-tint)' : 'transparent', hoverBg: c ? 'var(--brand-tint)' : 'var(--chip)', initBg: c ? 'var(--brand)' : 'var(--segment)', initFg: c ? 'var(--bg-soft)' : 'var(--text-2)',
+          onClick: () => { if (c) this.close(); else this.setWs(w.id); } }; }),
+      creating: st.creating, notCreating: !st.creating, startCreate: () => this.setState({ creating: true }), cancelCreate: () => this.setState({ creating: false, draft: '' }),
+      draft: st.draft, noDraft: !st.draft.trim(), onDraft: (e) => this.setState({ draft: e.target.value }), onDraftKey: (e) => { if (e.key === 'Enter') create(); }, create,
+    };
+  }
+}
+</script>
+</body>
+</html>
