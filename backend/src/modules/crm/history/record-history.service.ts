@@ -5,7 +5,7 @@ import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { requestActor } from '../../../shared/database/request-context';
 import { parseVersion } from '../../../shared/validation/version';
-import { companies, contacts, deals, funnels, funnelStages, HISTORY_ENTITY_TYPES, type HistoryEntityType, memberships, products, recordChanges, users, visitPlans } from '../../../shared/database/schema';
+import { companies, contacts, deals, funnels, funnelStages, HISTORY_ENTITY_TYPES, type HistoryEntityType, memberships, products, projectStages, projectTypes, recordChanges, users, visitPlans } from '../../../shared/database/schema';
 
 export const HistoryQuery = z.object({
   entityType: z.enum(HISTORY_ENTITY_TYPES),
@@ -21,9 +21,9 @@ type ChangeRow = typeof recordChanges.$inferSelect;
 export { parseVersion };
 
 /** Fields whose values are ids; the history shows the name instead. */
-const ID_FIELDS = new Set(['stageId', 'funnelId', 'companyId', 'primaryContactId', 'ownerUserId', 'dealId', 'organizerUserId', 'salespersonUserId']);
+const ID_FIELDS = new Set(['stageId', 'funnelId', 'companyId', 'primaryContactId', 'ownerUserId', 'dealId', 'organizerUserId', 'salespersonUserId', 'projectTypeId', 'leadUserId']);
 /** Id fields that name a member. */
-const USER_FIELDS = new Set(['ownerUserId', 'organizerUserId', 'salespersonUserId']);
+const USER_FIELDS = new Set(['ownerUserId', 'organizerUserId', 'salespersonUserId', 'leadUserId']);
 
 /** How a conflict message names a field ("Your change to the closing date wasn't saved"). */
 const FIELD_NAMES: Record<string, string> = {
@@ -74,7 +74,7 @@ const FIELD_NAMES: Record<string, string> = {
   periodStart: 'the period',
   note: 'the note',
 };
-const ENTITY_NAMES: Record<HistoryEntityType, string> = { deal: 'deal', company: 'company', contact: 'contact', meeting: 'meeting', visit_plan: 'visit plan' };
+const ENTITY_NAMES: Record<HistoryEntityType, string> = { deal: 'deal', company: 'company', contact: 'contact', meeting: 'meeting', visit_plan: 'visit plan', project: 'project' };
 
 /** A patch field → the history field it changes (the fit score is stored from the CHAMP scores). */
 const historyField = (field: string) => (field === 'champ' ? 'fitScore' : field);
@@ -192,6 +192,7 @@ export class RecordHistoryService {
       companyId: new Set<string>(),
       primaryContactId: new Set<string>(),
       dealId: new Set<string>(),
+      projectTypeId: new Set<string>(),
       user: new Set<string>(),
       product: new Set<string>(),
     };
@@ -201,7 +202,7 @@ export class RecordHistoryService {
         for (const v of [r.oldValue, r.newValue]) {
           if (typeof v !== 'string') continue;
           if (USER_FIELDS.has(r.field)) ids.user.add(v);
-          else ids[r.field as 'stageId' | 'funnelId' | 'companyId' | 'primaryContactId' | 'dealId'].add(v);
+          else ids[r.field as 'stageId' | 'funnelId' | 'companyId' | 'primaryContactId' | 'dealId' | 'projectTypeId'].add(v);
         }
       }
       // Lines keep the product's name from when they changed; a change of product needs both names.
@@ -216,6 +217,9 @@ export class RecordHistoryService {
       for (const row of await query([...set])) if (row.name) names.set(row.id, row.name);
     };
     await load(ids.stageId, (list) => tx.select({ id: funnelStages.id, name: funnelStages.name }).from(funnelStages).where(inArray(funnelStages.id, list)));
+    // A project's stages and types (CD-233) are named the same way.
+    await load(ids.stageId, (list) => tx.select({ id: projectStages.id, name: projectStages.name }).from(projectStages).where(inArray(projectStages.id, list)));
+    await load(ids.projectTypeId, (list) => tx.select({ id: projectTypes.id, name: projectTypes.name }).from(projectTypes).where(inArray(projectTypes.id, list)));
     await load(ids.funnelId, (list) => tx.select({ id: funnels.id, name: funnels.label }).from(funnels).where(inArray(funnels.id, list)));
     await load(ids.companyId, (list) => tx.select({ id: companies.id, name: companies.name }).from(companies).where(inArray(companies.id, list)));
     await load(ids.primaryContactId, (list) => tx.select({ id: contacts.id, name: contacts.fullName }).from(contacts).where(inArray(contacts.id, list)));

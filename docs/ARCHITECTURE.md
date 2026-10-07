@@ -535,7 +535,8 @@ be retried. Modules register their own handlers through a worker module exported
 
 | Job | Sent by | Handled by |
 |---|---|---|
-| `crm.deal-won` | CRM, deal enters the won stage | worker placeholder (future projects handover) |
+| `crm.deal-won` | CRM, deal enters the won stage (not the CSV import) | projects worker (`ProjectsWorkerModule`): the deal's project when "Create a project when a deal is won" is on |
+| `projects.project-created-email` | projects, a won deal created its project | projects worker: "Project created from a won deal" to the deal owner |
 | `projects.project-created-from-deal` | projects, someone creates a project from a deal | CRM worker: "Project created · <name>" on the deal's timeline |
 | `crm.deal-assigned` | CRM, someone else becomes a deal's owner (create or change) | notifications: "deal assigned to you" email |
 | `crm.meeting-invite` | CRM, someone else adds a member to a planned meeting, or moves, cancels or restores one (one job per member) | CRM worker (`CrmWorkerModule`): the meeting email with an .ics |
@@ -1083,10 +1084,10 @@ only; a manager scoped to their team is a follow-up (it needs teams first).
 ## Projects (milestone 14)
 
 The `projects` module (`modules/projects`, tables in `schema/projects.ts`, RLS and triggers in
-`drizzle/0051_projects_rls.sql`). Built so far: project types with stages (CD-272) and client
-projects linked to the CRM, slimmed from CD-233 to what a won deal needs (CD-275). Tasks, time,
-archiving, the company Projects card and automatic creation on a won deal come with the rest of
-CD-144.
+`drizzle/0051_projects_rls.sql`, `0053_project_fields_auto_create_rls.sql`). Built so far: project
+types with stages (CD-272) and client projects linked to the CRM (CD-233, CD-275). Tasks and time
+come later (CD-146, milestone 15); until then nothing logs hours, so every project can be deleted
+and no "hours" are shown anywhere.
 
 - **Project types** (`project_types`, `project_stages`): like funnels, a set of ordered stages for
   one kind of project (design v2; CD-255 adopted them instead of the CD-143 hierarchy). Complete and
@@ -1105,19 +1106,35 @@ CD-144.
     selected type's name, stages (rename inline, ↑/↓, ×, "New stage") and a stage-bar preview.
     `?type=<id>` selects a type. Deleting something empty uses the app's confirm; with projects, a
     dialog asks where they go. Others see it read-only.
-- **Projects** (`projects`): name, type and stage (a composite FK on `(tenant_id, project_type_id,
-  stage_id)` keeps the stage one of the type's), `status` (`open`, `completed`, `cancelled`), the
-  CRM company (required; no cascade, so a company with projects can't be deleted: 409 "This company
-  has projects…"), the deal it came from (optional; deleting the deal clears it), the lead and who
-  created it. The name is unique among the company's open projects. History rows (`record_changes`,
-  entity `project`) and live hints come from triggers.
+- **Projects** (`projects`): name, optional code (≤ 20, unique among open projects), type and stage
+  (a composite FK on `(tenant_id, project_type_id, stage_id)` keeps the stage one of the type's),
+  `status` (`open`, `completed`, `cancelled`, with `cancel_reason` from the Cancel dialog's list),
+  `health` (`on_track`, `at_risk`, `off_track`; design v2), description (≤ 5,000), start and end
+  date (end not before start), the CRM company (required; no cascade: deleting a company with
+  projects is refused with 409 "Acme has 2 projects…"), the deal it came from (optional; deleting
+  the deal clears it), the lead and who created it. The name is unique among the company's open
+  projects. Design v2 replaced the spec's Archive with Complete / Cancel / Reopen (CD-256). History
+  rows (`record_changes`, entity `project`, read with `GET /api/crm/history?entityType=project`) and
+  live hints come from triggers.
   - `GET /api/projects?dealId=&companyId=`, `GET /api/projects/:id` (any member). `POST /api/projects`
     (any member) `{ name, projectTypeId, companyId, dealId?, leadUserId? }`: the deal must be of the
     company and not lost (400), the lead a member (default: the creator); it starts in the type's
     first stage. From a deal, the job `projects.project-created-from-deal` puts "Project created ·
     <name>" on the deal's timeline (the projects module doesn't write CRM tables).
-    `PATCH /api/projects/:id` (the lead, owners and admins; 403 otherwise): name, lead, stage (of its
-    type), status.
+    `PATCH /api/projects/:id` (the lead, owners and admins; 403 otherwise): any field. Another type
+    starts at its first stage unless a stage of it comes along; another company clears the deal
+    unless a deal of that company comes along; `cancelled` needs `cancelReason`, open and completed
+    clear it. `DELETE /api/projects/:id` (owners and admins).
+  - **Automatic project on a won deal** (spec 3.2): the workspace setting "Create a project when a
+    deal is won" (`tenants.auto_create_projects`, `PATCH /api/workspace` `autoCreateProjects`, off
+    by default). The projects worker handles `crm.deal-won` (`autoCreateFromWonDeal`): one project
+    per deal, ever: `project_auto_deals` records the deal in the same transaction, so a deal moved
+    out of won and won again, or a retried job, gets no second one, even after that project was
+    deleted. It takes the deal's title (numbered "(2)" when the company has an open project of that
+    name), company and link, the first project type and its first stage, and the deal owner as lead
+    (the first owner or admin by membership when the owner left). A deal without a company gets
+    none. The deal timeline gets "Project created · <name>" and the owner "Project created from a
+    won deal". The CSV import never sends `crm.deal-won`, so imported won deals create nothing.
 - **Frontend**: `lib/projectsApi.ts`; `store/projects.ts` reads on demand (`useProjectTypes`,
   `useDealProjects`, `useProject`) and again when the live hints `project_type` / `project` raise
   `s.projectRev`. Neither is part of the workspace load.

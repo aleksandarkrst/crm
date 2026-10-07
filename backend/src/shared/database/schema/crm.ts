@@ -855,7 +855,7 @@ export const visitPlanLines = pgTable(
 // ---------------------------------------------------------------- change history (CD-69)
 
 /** CRM records whose history GET /api/crm/history serves. */
-export const HISTORY_ENTITY_TYPES = ['deal', 'company', 'contact', 'meeting', 'visit_plan'] as const;
+export const HISTORY_ENTITY_TYPES = ['deal', 'company', 'contact', 'meeting', 'visit_plan', 'project'] as const;
 export type HistoryEntityType = (typeof HISTORY_ENTITY_TYPES)[number];
 /**
  * People records (milestone 13). Their history is served only by GET /api/people/history, with the

@@ -1,8 +1,5 @@
 import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
 import { DocumentGenerator } from '../modules/crm';
-import { DatabaseService } from '../shared/database/database.service';
-import { deals } from '../shared/database/schema';
 import { JobsService } from '../shared/events/jobs.service';
 
 /**
@@ -15,21 +12,10 @@ export class JobHandlers implements OnApplicationBootstrap {
 
   constructor(
     private readonly jobs: JobsService,
-    private readonly database: DatabaseService,
     private readonly documents: DocumentGenerator,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    await this.jobs.work('crm.deal-won', async ({ tenantId, dealId }) => {
-      // Placeholder for the sales → delivery handover. When the projects module exists, this
-      // creates the project from the won deal instead of only logging.
-      const deal = await this.database.withTenant(tenantId, async (tx) => {
-        const [row] = await tx.select({ id: deals.id, title: deals.title }).from(deals).where(eq(deals.id, dealId));
-        return row;
-      });
-      this.logger.log(`Deal won: ${deal?.title ?? dealId} (tenant ${tenantId}) — handover not implemented yet`);
-    });
-
     await this.jobs.work('crm.generate-document', ({ tenantId, documentId }, attempt) => this.documents.run(tenantId, documentId, attempt));
 
     await this.jobs.work('reporting.nightly', async () => {

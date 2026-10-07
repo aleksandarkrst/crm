@@ -1,10 +1,10 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, desc, eq, type SQL, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import { AuditService } from '../../shared/audit/audit.service';
 import { hasRole, type TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
-import { companies, deals, memberships, projects, projectStages, projectTypes, users } from '../../shared/database/schema';
+import { companies, deals, memberships, projectAutoDeals, projects, projectStages, projectTypes, tenants, users } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import type { CreateProject, ListProjectsQuery, UpdateProject } from './projects.schemas';
 
@@ -14,7 +14,13 @@ const userName = (column: typeof projects.leadUserId) => sql<string | null>`(sel
 const columns = {
   id: projects.id,
   name: projects.name,
+  code: projects.code,
   status: projects.status,
+  cancelReason: projects.cancelReason,
+  health: projects.health,
+  description: projects.description,
+  startDate: sql<string | null>`${projects.startDate}::text`,
+  endDate: sql<string | null>`${projects.endDate}::text`,
   projectTypeId: projects.projectTypeId,
   projectTypeName: projectTypes.name,
   stageId: projects.stageId,
@@ -23,6 +29,8 @@ const columns = {
   companyName: companies.name,
   dealId: projects.dealId,
   dealTitle: deals.title,
+  /** The linked deal was lost after the project started (spec 3.2: the project shows "Deal lost"). */
+  dealLost: sql<boolean>`${deals.lostAt} is not null`,
   leadUserId: projects.leadUserId,
   leadName: userName(projects.leadUserId),
   createdAt: projects.createdAt,
@@ -43,19 +51,97 @@ function selectProjects(tx: Tx, where?: SQL) {
     .orderBy(asc(companies.name), desc(projects.createdAt));
 }
 
-async function assertMember(tx: Tx, ctx: TenantContext, userId: string): Promise<void> {
+async function isMember(tx: Tx, tenantId: string, userId: string): Promise<boolean> {
   const [row] = await tx
     .select({ userId: memberships.userId })
     .from(memberships)
-    .where(and(eq(memberships.tenantId, ctx.tenantId), eq(memberships.userId, userId)));
-  if (!row) throw new BadRequestException('The project lead must be a member of this workspace');
+    .where(and(eq(memberships.tenantId, tenantId), eq(memberships.userId, userId)));
+  return !!row;
+}
+
+async function assertMember(tx: Tx, tenantId: string, userId: string): Promise<void> {
+  if (!(await isMember(tx, tenantId, userId))) throw new BadRequestException('The project lead must be a member of this workspace');
+}
+
+/** Spec 3.2: only a deal of the project's company, and not a lost one. */
+async function checkDeal(tx: Tx, dealId: string, companyId: string): Promise<{ id: string; title: string }> {
+  const [row] = await tx.select({ id: deals.id, title: deals.title, companyId: deals.companyId, lostAt: deals.lostAt }).from(deals).where(eq(deals.id, dealId));
+  if (!row) throw new BadRequestException('Deal not found');
+  if (row.companyId !== companyId) throw new BadRequestException("The deal belongs to another company. Pick one of this company's deals.");
+  if (row.lostAt) throw new BadRequestException('A lost deal can’t start a project. Reopen it first.');
+  return row;
+}
+
+async function checkCompany(tx: Tx, companyId: string): Promise<void> {
+  const [company] = await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId));
+  if (!company) throw new BadRequestException('Company not found');
+}
+
+async function firstStage(tx: Tx, projectTypeId: string): Promise<string> {
+  const [stage] = await tx.select({ id: projectStages.id }).from(projectStages).where(eq(projectStages.projectTypeId, projectTypeId)).orderBy(asc(projectStages.position)).limit(1);
+  if (!stage) throw new BadRequestException('Project type not found');
+  return stage.id;
 }
 
 /**
- * Client projects (CD-233, slimmed for CD-275): every member reads them and can create one; the
- * project lead, owners and admins change one. A project always has one CRM company and optionally
- * the deal it came from (a deal of that company that isn't lost). Creating one from a deal puts
- * "Project created · <name>" on the deal's timeline through the job
+ * "Create a project when a deal is won" (CD-233, spec 3.2), run by the worker for `crm.deal-won`
+ * when the workspace has it on. Exactly one project per deal, ever: `project_auto_deals` gets the
+ * deal in the same transaction (a reopened deal won again, or a retried job, finds it and stops).
+ * The project: the deal's title (numbered when the company has an open project of that name), its
+ * company and the deal, the first project type, the deal owner as lead (or the first owner or admin
+ * when the owner is gone). A deal without a company, or lost again meanwhile, gets none.
+ * Returns what the caller needs for the timeline entry and the owner's email.
+ */
+export async function autoCreateFromWonDeal(
+  tx: Tx,
+  tenantId: string,
+  dealId: string,
+): Promise<{ projectId: string; projectName: string; dealOwnerUserId: string | null; dealTitle: string } | null> {
+  const [tenant] = await tx.select({ on: tenants.autoCreateProjects }).from(tenants).where(eq(tenants.id, tenantId));
+  if (!tenant?.on) return null;
+  const [deal] = await tx
+    .select({ id: deals.id, title: deals.title, companyId: deals.companyId, ownerUserId: deals.ownerUserId, lostAt: deals.lostAt })
+    .from(deals)
+    .where(eq(deals.id, dealId));
+  if (!deal || deal.lostAt || !deal.companyId) return null;
+  const claimed = await tx.insert(projectAutoDeals).values({ tenantId, dealId }).onConflictDoNothing().returning({ dealId: projectAutoDeals.dealId });
+  if (!claimed.length) return null;
+
+  const [type] = await tx.select({ id: projectTypes.id }).from(projectTypes).orderBy(asc(projectTypes.position)).limit(1);
+  if (!type) return null;
+  const stageId = await firstStage(tx, type.id);
+  const ownerIsMember = deal.ownerUserId ? await isMember(tx, tenantId, deal.ownerUserId) : false;
+  let leadUserId = ownerIsMember ? deal.ownerUserId : null;
+  if (!leadUserId) {
+    const [admin] = await tx
+      .select({ userId: memberships.userId })
+      .from(memberships)
+      .where(and(eq(memberships.tenantId, tenantId), inArray(memberships.role, ['owner', 'admin'])))
+      .orderBy(asc(memberships.createdAt))
+      .limit(1);
+    leadUserId = admin?.userId ?? null;
+  }
+  // The name is unique among the company's open projects: "Title", then "Title (2)", …
+  const taken = new Set(
+    (await tx.select({ name: projects.name }).from(projects).where(and(eq(projects.companyId, deal.companyId), eq(projects.status, 'open')))).map((p) => p.name.trim().toLowerCase()),
+  );
+  const base = deal.title.trim().slice(0, 190);
+  let name = base;
+  for (let i = 2; taken.has(name.toLowerCase()); i++) name = `${base} (${i})`;
+
+  const [row] = await tx
+    .insert(projects)
+    .values({ tenantId, name, projectTypeId: type.id, stageId, companyId: deal.companyId, dealId, leadUserId, createdByUserId: null })
+    .returning({ id: projects.id });
+  await tx.update(projectAutoDeals).set({ projectId: row!.id }).where(eq(projectAutoDeals.dealId, dealId));
+  return { projectId: row!.id, projectName: name, dealOwnerUserId: ownerIsMember ? deal.ownerUserId : null, dealTitle: deal.title };
+}
+
+/**
+ * Client projects (CD-233): every member reads them and can create one; the project lead, owners
+ * and admins change one; owners and admins delete one. A project always has one CRM company and
+ * optionally the deal it came from (a deal of that company that isn't lost). Creating one from a
+ * deal puts "Project created · <name>" on the deal's timeline through the job
  * `projects.project-created-from-deal`, which the CRM handles (this module doesn't write CRM tables).
  */
 @Injectable()
@@ -79,36 +165,26 @@ export class ProjectsService {
   create(ctx: TenantContext, input: CreateProject) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
-        const [company] = await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, input.companyId));
-        if (!company) throw new BadRequestException('Company not found');
-        let deal: { id: string; title: string } | undefined;
-        if (input.dealId) {
-          const [row] = await tx.select({ id: deals.id, title: deals.title, companyId: deals.companyId, lostAt: deals.lostAt }).from(deals).where(eq(deals.id, input.dealId));
-          if (!row) throw new BadRequestException('Deal not found');
-          if (row.companyId !== input.companyId) throw new BadRequestException("The deal belongs to another company. Pick one of this company's deals.");
-          if (row.lostAt) throw new BadRequestException('A lost deal can’t start a project. Reopen it first.');
-          deal = row;
-        }
+        await checkCompany(tx, input.companyId);
+        const deal = input.dealId ? await checkDeal(tx, input.dealId, input.companyId) : undefined;
         const leadUserId = input.leadUserId ?? ctx.userId;
-        await assertMember(tx, ctx, leadUserId);
-        const [stage] = await tx
-          .select({ id: projectStages.id })
-          .from(projectStages)
-          .where(eq(projectStages.projectTypeId, input.projectTypeId))
-          .orderBy(asc(projectStages.position))
-          .limit(1);
-        if (!stage) throw new BadRequestException('Project type not found');
+        await assertMember(tx, ctx.tenantId, leadUserId);
+        const stageId = await firstStage(tx, input.projectTypeId);
         const [row] = await tx
           .insert(projects)
           .values({
             tenantId: ctx.tenantId,
             name: input.name,
             projectTypeId: input.projectTypeId,
-            stageId: stage.id,
+            stageId,
             companyId: input.companyId,
             dealId: deal?.id ?? null,
             leadUserId,
             createdByUserId: ctx.userId,
+            code: input.code ?? null,
+            description: input.description ?? null,
+            startDate: input.startDate ?? null,
+            endDate: input.endDate ?? null,
           })
           .returning({ id: projects.id });
         await this.audit.record(tx, ctx, { action: 'project.created', entityType: 'project', entityId: row!.id, data: { ...input, leadUserId } });
@@ -118,23 +194,65 @@ export class ProjectsService {
       .catch(mapDbError);
   }
 
-  /** The lead, owners and admins: rename, lead, stage (one of its type's), status. */
+  /** The lead, owners and admins. See UpdateProject for the rules of type, company and status. */
   update(ctx: TenantContext, id: string, input: UpdateProject) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const current = await this.find(tx, id);
         if (current.leadUserId !== ctx.userId && !hasRole(ctx.role, 'admin')) throw new ForbiddenException('Only the project lead, owners and admins can change this project');
-        if (input.leadUserId) await assertMember(tx, ctx, input.leadUserId);
-        if (input.stageId) {
+        // dealId is checked below, against the (new) company.
+        const patch: Partial<typeof projects.$inferInsert> = { ...input, dealId: undefined };
+
+        if (input.leadUserId) await assertMember(tx, ctx.tenantId, input.leadUserId);
+
+        // Type and stage: a new type starts at its first stage unless a stage of it comes along.
+        const typeId = input.projectTypeId ?? current.projectTypeId;
+        if (input.stageId || input.projectTypeId) {
+          const stageId = input.stageId ?? (input.projectTypeId && input.projectTypeId !== current.projectTypeId ? await firstStage(tx, typeId) : current.stageId);
           const [stage] = await tx
             .select({ id: projectStages.id })
             .from(projectStages)
-            .where(and(eq(projectStages.id, input.stageId), eq(projectStages.projectTypeId, current.projectTypeId)));
+            .where(and(eq(projectStages.id, stageId), eq(projectStages.projectTypeId, typeId)));
           if (!stage) throw new BadRequestException("Pick a stage of the project's type");
+          patch.stageId = stageId;
         }
-        await tx.update(projects).set(input).where(eq(projects.id, id));
+
+        // Company and deal (spec 3.2): another company clears the deal, unless one of its deals comes along.
+        const companyId = input.companyId ?? current.companyId;
+        if (input.companyId && input.companyId !== current.companyId) {
+          await checkCompany(tx, input.companyId);
+          patch.dealId = null;
+        }
+        if (input.dealId !== undefined) patch.dealId = input.dealId === null ? null : (await checkDeal(tx, input.dealId, companyId)).id;
+
+        // Status: cancelling needs a reason; open and completed clear it.
+        const status = input.status ?? current.status;
+        if (status === 'cancelled') {
+          if (!input.cancelReason && !(current.status === 'cancelled' && current.cancelReason)) throw new BadRequestException('Pick the reason the project was cancelled');
+        } else if (input.cancelReason) {
+          throw new BadRequestException('Only a cancelled project has a cancel reason');
+        } else {
+          patch.cancelReason = null;
+        }
+
+        await tx.update(projects).set(patch).where(eq(projects.id, id));
         await this.audit.record(tx, ctx, { action: 'project.updated', entityType: 'project', entityId: id, data: input });
         return this.find(tx, id);
+      })
+      .catch(mapDbError);
+  }
+
+  /**
+   * Owners and admins (the controller's @RequireTenant('admin')). Spec 3.2 refuses a project with
+   * logged hours (409 "This project has logged hours. Archive it instead."); time entries come with
+   * milestone 15, so today every project can be deleted.
+   */
+  remove(ctx: TenantContext, id: string) {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        const [row] = await tx.delete(projects).where(eq(projects.id, id)).returning({ id: projects.id, name: projects.name });
+        if (!row) throw new NotFoundException('Project not found');
+        await this.audit.record(tx, ctx, { action: 'project.deleted', entityType: 'project', entityId: id, data: { name: row.name } });
       })
       .catch(mapDbError);
   }
