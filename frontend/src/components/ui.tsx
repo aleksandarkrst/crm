@@ -281,6 +281,7 @@ export interface BarChip {
 }
 
 export function FilterBar({
+  lead,
   search,
   chips,
   dirty,
@@ -289,6 +290,8 @@ export function FilterBar({
   action,
   extra,
 }: {
+  /** Controls before the filters (e.g. the Pipeline's view toggle and funnel select). */
+  lead?: ReactNode;
   search?: { value: string; onChange: (v: string) => void; placeholder: string };
   chips: BarChip[];
   dirty?: boolean;
@@ -300,6 +303,7 @@ export function FilterBar({
 }) {
   return (
     <div className="filter-bar" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+      {lead}
       {search && (
         <div className="filter-search" style={{ display: 'flex', alignItems: 'center', background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 11px', width: 230 }}>
           <input
