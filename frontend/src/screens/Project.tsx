@@ -9,16 +9,19 @@ import { type ApiProject, type ApiProjectCancelReason, type ApiProjectHealth, PR
 import { projectError, useProject, useProjectTypes } from '../store/projects';
 import { companyLabels, companyRecords, curOf, memberLabels } from '../store/selectors';
 import { useStore } from '../store/store';
-import { HEALTH_LABEL, ProjectStatusBadge } from './lead/DealProjects';
+import { HEALTH_LABEL, ProjectStatusBadge, projectValue } from './lead/DealProjects';
 
 /**
  * A project's page (CD-234, design v2 §2), until the Projects module brings tasks, plan, team and
  * documents:
  * - header: crumb "Projects → company", the name (inline), Complete / Cancel project (reason
  *   dialog) or Reopen, "⋯ → Delete project" for owners and admins, and the type's stage bar;
- * - Details (code, type, lead, health, start, end, description) and Linked (company, deal; a lost
- *   deal says so), all inline; another company clears the deal, after a confirmation;
- * - History (who changed what).
+ * - Details (code, type, lead, health, start, end, budget in hours, value, description) and Linked
+ *   (company, deal, the deal's contact; a lost deal says so), all inline; another company clears the
+ *   deal, after a confirmation;
+ * - the Overview tab with the History (who changed what). Plan, Team, Communication, Documents and
+ *   Report come with the screens that fill them (CD-263); "Coming up" and the file drop need tasks
+ *   and project documents.
  * The lead, owners and admins change it; everyone else sees it read-only (the API agrees).
  */
 export function Project() {
@@ -210,6 +213,17 @@ export function Project() {
                 <Row label="End">
                   <input className="ghost ghost-sm" type="date" aria-label="End" value={project.endDate ?? ''} disabled={!canEdit || busy} onChange={(e) => void update({ endDate: e.target.value || null })} />
                 </Row>
+                <Row label="Budget (h)">
+                  <NumberField label="Budget in hours" testId="project-budget" value={project.budgetHours} disabled={!canEdit} step={0.5} placeholder="Not set" onSave={(budgetHours) => update({ budgetHours })} />
+                </Row>
+                <Row label="Value">
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                    <NumberField label="Value" testId="project-value" value={project.value} disabled={!canEdit} step={1} placeholder="Not set" onSave={(value) => update({ value })} />
+                    <span style={{ fontSize: 12.5, color: 'var(--text-2)', whiteSpace: 'nowrap' }} data-testid="project-value-text">
+                      {projectValue(s, project) ?? project.currency ?? curOf(s).currency}
+                    </span>
+                  </span>
+                </Row>
                 <Row label="Description">
                   <TextField multiline className="ghost ghost-sm" label="Description" value={project.description ?? ''} disabled={!canEdit} placeholder="What the project delivers" maxLength={5000} onSave={(v) => update({ description: v || null })} />
                 </Row>
@@ -217,16 +231,15 @@ export function Project() {
             </div>
             <LinkedCard project={project} canEdit={canEdit} busy={busy} update={update} />
           </div>
-          <div style={{ flex: '999 1 420px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div className="card card-pad">
-              <span style={{ fontSize: 15, fontWeight: 600 }}>Plan</span>
-              <div className="hint-box" style={{ marginTop: 12 }}>
-                Tasks, the team, documents and the report come with the rest of the Projects module.
+          <div style={{ flex: '999 1 420px', minWidth: 0 }}>
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }} data-testid="project-overview">
+              <div style={{ display: 'flex', gap: 2, overflowX: 'auto', borderBottom: '1px solid var(--divider)', padding: '0 8px' }} role="tablist">
+                <button type="button" role="tab" aria-selected className="composer-tab" style={{ borderBottom: '2px solid #14503C', fontWeight: 600, color: '#14503C' }}>
+                  Overview
+                </button>
               </div>
-            </div>
-            <div className="card card-pad">
-              <span style={{ fontSize: 15, fontWeight: 600 }}>History</span>
-              <div style={{ marginTop: 12 }}>
+              <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <span className="caps">History</span>
                 <ChangeHistory entity="project" id={project.id} cur={curOf(s)} rev={project.version} />
               </div>
             </div>
@@ -283,6 +296,15 @@ function LinkedCard({ project, canEdit, busy, update }: { project: ApiProject; c
             <Link to={paths.company(project.companyId)} className="crumb-link">
               {project.companyName}
             </Link>
+          )}
+        </Row>
+        <Row label="Contact">
+          {project.contactId ? (
+            <Link to={paths.contact(project.contactId)} className="crumb-link" data-testid="project-contact">
+              {project.contactName}
+            </Link>
+          ) : (
+            <span style={{ color: 'var(--text-2)', fontSize: 13 }}>{project.dealId ? 'The deal has no contact' : 'Comes with the deal'}</span>
           )}
         </Row>
         <Row label="Deal">
@@ -360,6 +382,56 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
       <span className="field-label">{label}</span>
       {children}
     </div>
+  );
+}
+
+/** A number that saves when it loses focus (Enter too); empty clears it; Escape puts the saved value back. */
+function NumberField({
+  value,
+  onSave,
+  label,
+  testId,
+  disabled,
+  step,
+  placeholder,
+}: {
+  value: string | null;
+  onSave: (v: number | null) => Promise<boolean>;
+  label: string;
+  testId?: string;
+  disabled?: boolean;
+  step: number;
+  placeholder?: string;
+}) {
+  const shown = value == null ? '' : String(Number(value));
+  const [draft, setDraft] = useState(shown);
+  useEffect(() => setDraft(shown), [shown]);
+  const commit = async () => {
+    const trimmed = draft.trim();
+    if (trimmed === shown) return;
+    const next = trimmed === '' ? null : Number(trimmed);
+    if (next !== null && (!Number.isFinite(next) || next < 0)) return setDraft(shown);
+    if (!(await onSave(next))) setDraft(shown);
+  };
+  return (
+    <input
+      className="ghost ghost-sm"
+      type="number"
+      min={0}
+      step={step}
+      aria-label={label}
+      data-testid={testId}
+      value={draft}
+      disabled={disabled}
+      placeholder={placeholder}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => void commit()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+        if (e.key === 'Escape') setDraft(shown);
+      }}
+      style={{ flex: 1, minWidth: 0 }}
+    />
   );
 }
 

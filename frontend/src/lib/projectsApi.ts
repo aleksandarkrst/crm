@@ -36,6 +36,10 @@ export interface ApiProject {
   status: ApiProjectStatus;
   cancelReason: ApiProjectCancelReason | null;
   health: ApiProjectHealth;
+  /** Design v2 Details: the value (a decimal string, in `currency`, the workspace's when null) and the budget in hours. */
+  value: string | null;
+  currency: string | null;
+  budgetHours: string | null;
   description: string | null;
   startDate: string | null;
   endDate: string | null;
@@ -49,6 +53,9 @@ export interface ApiProject {
   dealTitle: string | null;
   /** The linked deal was lost after the project started: the project says "Deal lost". */
   dealLost: boolean;
+  /** The deal's primary contact (the Linked card). */
+  contactId: string | null;
+  contactName: string | null;
   leadUserId: string | null;
   leadName: string | null;
   createdAt: string;
@@ -82,6 +89,9 @@ export type ProjectPatch = Partial<{
   startDate: string | null;
   endDate: string | null;
   health: ApiProjectHealth;
+  value: number | null;
+  currency: string | null;
+  budgetHours: number | null;
 }>;
 
 const move = (to?: string) => (to ? `?moveProjectsTo=${encodeURIComponent(to)}` : '');

@@ -18,6 +18,10 @@ const isoDate = z.iso.date().nullable();
 /** Spec 3.2: optional, up to 20 characters, unique among open projects. */
 const code = clearable(20, 'At most 20 characters');
 const description = clearable(5000, 'At most 5,000 characters');
+/** Design v2 Details: Value (in `currency`, the workspace's when unset) and Budget (h). */
+const value = z.number().min(0, "Can't be negative").max(999_999_999_999, 'Too large').nullable();
+const currency = z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, 'An ISO 4217 code, e.g. EUR').nullable();
+const budgetHours = z.number().min(0, "Can't be negative").max(9_999_999, 'Too large').nullable();
 
 /** POST /api/project-types: a new type after the others, with `stages` (default Planning, In progress, Review). */
 export const CreateProjectType = z.object({ name: shortName, stages: z.array(shortName).min(1).max(20).optional() });
@@ -61,6 +65,10 @@ export const CreateProject = z.object({
   description: description.optional(),
   startDate: isoDate.optional(),
   endDate: isoDate.optional(),
+  /** Defaults to the deal's amount and currency when the project starts from a deal. */
+  value: value.optional(),
+  currency: currency.optional(),
+  budgetHours: budgetHours.optional(),
 });
 export type CreateProject = z.infer<typeof CreateProject>;
 
@@ -85,6 +93,9 @@ export const UpdateProject = nonEmptyPatch(
       startDate: isoDate,
       endDate: isoDate,
       health: z.enum(PROJECT_HEALTHS),
+      value,
+      currency,
+      budgetHours,
     })
     .partial(),
 );

@@ -1110,12 +1110,15 @@ and no "hours" are shown anywhere.
   (a composite FK on `(tenant_id, project_type_id, stage_id)` keeps the stage one of the type's),
   `status` (`open`, `completed`, `cancelled`, with `cancel_reason` from the Cancel dialog's list),
   `health` (`on_track`, `at_risk`, `off_track`; design v2), description (≤ 5,000), start and end
-  date (end not before start), the CRM company (required; no cascade: deleting a company with
+  date (end not before start), `value` and `currency` (the deal's amount and currency when the
+  project starts from a deal; the workspace currency when null), `budget_hours`, the CRM company (required; no cascade: deleting a company with
   projects is refused with 409 "Acme has 2 projects…"), the deal it came from (optional; deleting
   the deal clears it), the lead and who created it. The name is unique among the company's open
   projects. Design v2 replaced the spec's Archive with Complete / Cancel / Reopen (CD-256). History
   rows (`record_changes`, entity `project`, read with `GET /api/crm/history?entityType=project`) and
-  live hints come from triggers.
+  live hints come from triggers. A deal deleted since is named from its own `deleted` history row
+  ("CAT 320 overhaul (deleted)"). The API also returns the deal's primary contact (`contactId`,
+  `contactName`).
   - `GET /api/projects?dealId=&companyId=`, `GET /api/projects/:id` (any member). `POST /api/projects`
     (any member) `{ name, projectTypeId, companyId, dealId?, leadUserId? }`: the deal must be of the
     company and not lost (400), the lead a member (default: the creator); it starts in the type's
@@ -1160,9 +1163,12 @@ and no "hours" are shown anywhere.
     "+" → Task is now "Deal task" (T).
   - **Project page** (`/projects/:id`): the header (crumb, name inline, Complete / Cancel project
     with the reason pills / Reopen, "⋯ → Delete project" for owners and admins, the stage bar);
-    Details (code, type, lead, health, start, end, description) and Linked (company, deal; another
-    company asks first, then clears the deal; "Deal lost" when it was lost) edit inline; History
-    reads `record_changes` (entity `project`). Read-only for others than the lead, owners and admins.
+    Details (code, type, lead, health, start, end, budget (h), value, description) and Linked
+    (company, deal, the deal's contact; another company asks first, then clears the deal; "Deal
+    lost" when it was lost) edit inline; the Overview tab holds the History. Read-only for others
+    than the lead, owners and admins. The other v2 tabs (Plan, Team, Communication, Documents,
+    Report), "Coming up", the file drop, the Team card and progress come with tasks, teams and
+    project documents (CD-146, CD-147, CD-271). Board cards and column heads show the value.
   - **Company page**: a Projects card below Deals (open projects with stage, lead and health;
     "Show closed (N)"; "+" with the company fixed; "No projects for this company yet.").
   - **Ctrl/⌘K** finds projects by code, name or company (read while the palette is open).

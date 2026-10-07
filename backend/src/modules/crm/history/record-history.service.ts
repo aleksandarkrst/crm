@@ -224,6 +224,15 @@ export class RecordHistoryService {
     await load(ids.companyId, (list) => tx.select({ id: companies.id, name: companies.name }).from(companies).where(inArray(companies.id, list)));
     await load(ids.primaryContactId, (list) => tx.select({ id: contacts.id, name: contacts.fullName }).from(contacts).where(inArray(contacts.id, list)));
     await load(ids.dealId, (list) => tx.select({ id: deals.id, name: deals.title }).from(deals).where(inArray(deals.id, list)));
+    // A deal deleted since (a project's deal, CD-144 TC 15) is named from its own "deleted" history row.
+    const goneDeals = [...ids.dealId].filter((id) => !names.has(id));
+    if (goneDeals.length) {
+      const gone = await tx
+        .select({ id: recordChanges.entityId, name: recordChanges.label })
+        .from(recordChanges)
+        .where(and(eq(recordChanges.entityType, 'deal'), eq(recordChanges.action, 'deleted'), inArray(recordChanges.entityId, goneDeals)));
+      for (const row of gone) if (row.name) names.set(row.id, `${row.name} (deleted)`);
+    }
     await load(ids.product, (list) => tx.select({ id: products.id, name: products.name }).from(products).where(inArray(products.id, list)));
     // users is global: only people who are members of this workspace now are named.
     await load(ids.user, (list) =>

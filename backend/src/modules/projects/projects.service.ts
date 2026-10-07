@@ -4,7 +4,7 @@ import { AuditService } from '../../shared/audit/audit.service';
 import { hasRole, type TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
-import { companies, deals, memberships, projectAutoDeals, projects, projectStages, projectTypes, tenants, users } from '../../shared/database/schema';
+import { companies, contacts, deals, memberships, projectAutoDeals, projects, projectStages, projectTypes, tenants, users } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import type { CreateProject, ListProjectsQuery, UpdateProject } from './projects.schemas';
 
@@ -18,6 +18,9 @@ const columns = {
   status: projects.status,
   cancelReason: projects.cancelReason,
   health: projects.health,
+  value: projects.value,
+  currency: projects.currency,
+  budgetHours: projects.budgetHours,
   description: projects.description,
   startDate: sql<string | null>`${projects.startDate}::text`,
   endDate: sql<string | null>`${projects.endDate}::text`,
@@ -31,6 +34,9 @@ const columns = {
   dealTitle: deals.title,
   /** The linked deal was lost after the project started (spec 3.2: the project shows "Deal lost"). */
   dealLost: sql<boolean>`${deals.lostAt} is not null`,
+  /** The deal's primary contact (design v2 Linked card). */
+  contactId: deals.primaryContactId,
+  contactName: contacts.fullName,
   leadUserId: projects.leadUserId,
   leadName: userName(projects.leadUserId),
   createdAt: projects.createdAt,
@@ -47,6 +53,7 @@ function selectProjects(tx: Tx, where?: SQL) {
     .innerJoin(projectStages, eq(projectStages.id, projects.stageId))
     .innerJoin(companies, eq(companies.id, projects.companyId))
     .leftJoin(deals, eq(deals.id, projects.dealId))
+    .leftJoin(contacts, eq(contacts.id, deals.primaryContactId))
     .where(where)
     .orderBy(asc(companies.name), desc(projects.createdAt));
 }
@@ -64,13 +71,19 @@ async function assertMember(tx: Tx, tenantId: string, userId: string): Promise<v
 }
 
 /** Spec 3.2: only a deal of the project's company, and not a lost one. */
-async function checkDeal(tx: Tx, dealId: string, companyId: string): Promise<{ id: string; title: string }> {
-  const [row] = await tx.select({ id: deals.id, title: deals.title, companyId: deals.companyId, lostAt: deals.lostAt }).from(deals).where(eq(deals.id, dealId));
+async function checkDeal(tx: Tx, dealId: string, companyId: string): Promise<{ id: string; title: string; amount: string; currency: string }> {
+  const [row] = await tx
+    .select({ id: deals.id, title: deals.title, companyId: deals.companyId, lostAt: deals.lostAt, amount: deals.amount, currency: deals.currency })
+    .from(deals)
+    .where(eq(deals.id, dealId));
   if (!row) throw new BadRequestException('Deal not found');
   if (row.companyId !== companyId) throw new BadRequestException("The deal belongs to another company. Pick one of this company's deals.");
   if (row.lostAt) throw new BadRequestException('A lost deal can’t start a project. Reopen it first.');
   return row;
 }
+
+/** A project from a deal is worth the deal's amount, in its currency (none for an empty deal). */
+const dealValue = (deal: { amount: string; currency: string }) => (Number(deal.amount) > 0 ? { value: deal.amount, currency: deal.currency } : {});
 
 async function checkCompany(tx: Tx, companyId: string): Promise<void> {
   const [company] = await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId));
@@ -100,7 +113,7 @@ export async function autoCreateFromWonDeal(
   const [tenant] = await tx.select({ on: tenants.autoCreateProjects }).from(tenants).where(eq(tenants.id, tenantId));
   if (!tenant?.on) return null;
   const [deal] = await tx
-    .select({ id: deals.id, title: deals.title, companyId: deals.companyId, ownerUserId: deals.ownerUserId, lostAt: deals.lostAt })
+    .select({ id: deals.id, title: deals.title, companyId: deals.companyId, ownerUserId: deals.ownerUserId, lostAt: deals.lostAt, amount: deals.amount, currency: deals.currency })
     .from(deals)
     .where(eq(deals.id, dealId));
   if (!deal || deal.lostAt || !deal.companyId) return null;
@@ -131,7 +144,7 @@ export async function autoCreateFromWonDeal(
 
   const [row] = await tx
     .insert(projects)
-    .values({ tenantId, name, projectTypeId: type.id, stageId, companyId: deal.companyId, dealId, leadUserId, createdByUserId: null })
+    .values({ tenantId, name, projectTypeId: type.id, stageId, companyId: deal.companyId, dealId, leadUserId, createdByUserId: null, ...dealValue(deal) })
     .returning({ id: projects.id });
   await tx.update(projectAutoDeals).set({ projectId: row!.id }).where(eq(projectAutoDeals.dealId, dealId));
   return { projectId: row!.id, projectName: name, dealOwnerUserId: ownerIsMember ? deal.ownerUserId : null, dealTitle: deal.title };
@@ -185,6 +198,9 @@ export class ProjectsService {
             description: input.description ?? null,
             startDate: input.startDate ?? null,
             endDate: input.endDate ?? null,
+            budgetHours: input.budgetHours == null ? null : String(input.budgetHours),
+            // From a deal, the value starts as the deal's amount unless one was given.
+            ...(input.value !== undefined ? { value: input.value == null ? null : String(input.value), currency: input.currency ?? null } : deal ? dealValue(deal) : { currency: input.currency ?? null }),
           })
           .returning({ id: projects.id });
         await this.audit.record(tx, ctx, { action: 'project.created', entityType: 'project', entityId: row!.id, data: { ...input, leadUserId } });
@@ -201,7 +217,12 @@ export class ProjectsService {
         const current = await this.find(tx, id);
         if (current.leadUserId !== ctx.userId && !hasRole(ctx.role, 'admin')) throw new ForbiddenException('Only the project lead, owners and admins can change this project');
         // dealId is checked below, against the (new) company.
-        const patch: Partial<typeof projects.$inferInsert> = { ...input, dealId: undefined };
+        const patch: Partial<typeof projects.$inferInsert> = {
+          ...input,
+          dealId: undefined,
+          value: input.value === undefined ? undefined : input.value === null ? null : String(input.value),
+          budgetHours: input.budgetHours === undefined ? undefined : input.budgetHours === null ? null : String(input.budgetHours),
+        };
 
         if (input.leadUserId) await assertMember(tx, ctx.tenantId, input.leadUserId);
 

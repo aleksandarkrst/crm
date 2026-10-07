@@ -162,6 +162,10 @@ describe('projects', () => {
     expect(refused.body.message).toBe('Gamma has 1 project. Delete them or move them to another company first.');
     await ok('DELETE', `/crm/deals/${dealId}`, as(), 204);
     expect((await ok('GET', `/projects/${projectId}`, as())).dealId).toBeNull();
+    // TC 15: the history names the deal that was deleted.
+    const history = await ok('GET', `/crm/history?entityType=project&entityId=${projectId}`, as());
+    const dealChange = history.entries.find((e: { field: string | null; newValue: unknown }) => e.field === 'dealId' && e.newValue === null);
+    expect(dealChange).toMatchObject({ oldLabel: 'CAT 320 overhaul (deleted)' });
   });
 
   it('changing the company clears the deal unless one of its deals comes along (TC 5)', async () => {
@@ -191,6 +195,18 @@ describe('projects', () => {
     expect((await call('PATCH', `/projects/${a.id}`, { ...as(), body: { status: 'open' } })).status).toBe(409);
     await ok('PATCH', `/projects/${a.id}`, { ...as(), body: { code: null } }, 200);
     expect(await ok('PATCH', `/projects/${a.id}`, { ...as(), body: { status: 'open', health: 'at_risk' } }, 200)).toMatchObject({ status: 'open', cancelReason: null, health: 'at_risk' });
+  });
+
+  it("value starts as the deal's amount and currency; value and budget edit (design v2 Details)", async () => {
+    const typeId = (await typesNow())[0]!.id;
+    const deal = await ok('POST', '/crm/deals', { ...as(), body: { title: 'Priced deal', funnelId: (await firstFunnel(owner, tenant)).id, companyId: acme.id, amount: 48000, currency: 'USD' } });
+    const p = await ok('POST', '/projects', { ...as(), body: { name: 'Priced', projectTypeId: typeId, companyId: acme.id, dealId: deal.id } });
+    expect(p).toMatchObject({ value: '48000.00', currency: 'USD', budgetHours: null });
+    const edited = await ok('PATCH', `/projects/${p.id}`, { ...as(), body: { value: 50000.5, budgetHours: 120.5 } }, 200);
+    expect(edited).toMatchObject({ value: '50000.50', currency: 'USD', budgetHours: '120.5' });
+    expect((await call('PATCH', `/projects/${p.id}`, { ...as(), body: { budgetHours: -1 } })).status).toBe(400);
+    // Without a deal: no value until someone sets one.
+    expect(await ok('POST', '/projects', { ...as(), body: { name: 'Unpriced', projectTypeId: typeId, companyId: acme.id } })).toMatchObject({ value: null, currency: null });
   });
 
   it("moving a project to another type starts it at that type's first stage", async () => {
