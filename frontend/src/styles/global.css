@@ -1166,3 +1166,13 @@ a.task-card-project:hover { color: var(--brand); }
 .gantt-bar { position: absolute; top: 10px; height: 18px; border-radius: 5px; }
 .gantt-warn { font-size: 11px; color: #B4531B; overflow: hidden; text-overflow: ellipsis; }
 .gantt-today { position: absolute; top: 0; width: 0; border-left: 1.5px dashed var(--danger); z-index: 1; pointer-events: none; }
+
+/* ---------------------------------------------------------------- checklist, files, comments (CD-270) */
+.check-bar { height: 4px; border-radius: 2px; background: var(--chip); overflow: hidden; }
+.check-bar > span { display: block; height: 100%; background: var(--brand); }
+.check-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+.check-box { width: 18px; height: 18px; flex: 0 0 18px; border-radius: 5px; border: 1.5px solid var(--dashed); background: var(--white); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; color: var(--white); }
+.check-box.on { background: var(--brand); border-color: var(--brand); }
+.check-row.done input { color: var(--muted); text-decoration: line-through; }
+.file-tile { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 7px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; display: flex; align-items: center; justify-content: center; }
+.comment { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--divider); }

@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } fr
 import { RequireTenant, Tenant, type TenantContext } from '../../shared/authorization';
 import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
+import { AddChecklistItem, AddComment, TaskNotesService, UpdateChecklistItem } from './task-notes.service';
 import { AssignTask, CreateTask, ListTasksQuery, SetHourLimit, TaskHistoryQuery, UpdateTask } from './tasks.schemas';
 import { TasksService } from './tasks.service';
 
@@ -18,7 +19,10 @@ const Id = new ZodPipe(UuidParam);
 @Controller('tasks')
 @RequireTenant('member')
 export class TasksController {
-  constructor(private readonly tasks: TasksService) {}
+  constructor(
+    private readonly tasks: TasksService,
+    private readonly notes: TaskNotesService,
+  ) {}
 
   /** `?projectId=`, `?assigneeId=<employeeId|me>`, `?status=`, `?q=` (name, "T-12", project name). */
   @Get()
@@ -77,6 +81,44 @@ export class TasksController {
   @Delete(':id/assignees/:employeeId')
   unassign(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Param('employeeId', Id) employeeId: string) {
     return this.tasks.unassign(ctx, id, employeeId);
+  }
+
+  /** The checklist (CD-270): `{ id, text, done, position }[]` in order; every change answers with it. */
+  @Get(':id/checklist')
+  checklist(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.notes.checklist(ctx, id);
+  }
+
+  @Post(':id/checklist')
+  addItem(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(AddChecklistItem)) body: AddChecklistItem) {
+    return this.notes.addItem(ctx, id, body);
+  }
+
+  @Patch(':id/checklist/:itemId')
+  updateItem(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Param('itemId', Id) itemId: string, @Body(new ZodPipe(UpdateChecklistItem)) body: UpdateChecklistItem) {
+    return this.notes.updateItem(ctx, id, itemId, body);
+  }
+
+  @Delete(':id/checklist/:itemId')
+  removeItem(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Param('itemId', Id) itemId: string) {
+    return this.notes.removeItem(ctx, id, itemId);
+  }
+
+  /** Comments (CD-270): `{ id, body, authorUserId, authorName, createdAt }[]`, oldest first; every change answers with them. */
+  @Get(':id/comments')
+  comments(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.notes.comments(ctx, id);
+  }
+
+  @Post(':id/comments')
+  addComment(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(AddComment)) body: AddComment) {
+    return this.notes.addComment(ctx, id, body);
+  }
+
+  /** The author, owners and admins. */
+  @Delete(':id/comments/:commentId')
+  removeComment(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Param('commentId', Id) commentId: string) {
+    return this.notes.removeComment(ctx, id, commentId);
   }
 
   /** `{ entries, more }`, newest first, in the CRM history's shape. */

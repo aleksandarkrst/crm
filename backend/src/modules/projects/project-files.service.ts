@@ -6,7 +6,7 @@ import { AuditService } from '../../shared/audit/audit.service';
 import { hasRole, type TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
-import { MAX_PROJECT_FILE_BYTES, PROJECT_FILE_FOLDERS, projectFiles, projects, users } from '../../shared/database/schema';
+import { MAX_PROJECT_FILE_BYTES, PROJECT_FILE_FOLDERS, projectFiles, projects, tasks, users } from '../../shared/database/schema';
 
 /** What multer hands over for one uploaded file (kept in memory). */
 export interface UploadedProjectFile {
@@ -16,8 +16,8 @@ export interface UploadedProjectFile {
   buffer: Buffer;
 }
 
-/** multipart/form-data fields next to `file`: the folder (default "Client material"). */
-export const UploadProjectFile = z.object({ folder: z.enum(PROJECT_FILE_FOLDERS).default('Client material') });
+/** multipart/form-data fields next to `file`: the folder (default "Client material") and the task it is for (CD-270). */
+export const UploadProjectFile = z.object({ folder: z.enum(PROJECT_FILE_FOLDERS).default('Client material'), taskId: z.uuid().optional() });
 export type UploadProjectFile = z.infer<typeof UploadProjectFile>;
 
 /** PATCH /api/projects/:id/files/:fileId: move it to another folder. */
@@ -30,6 +30,9 @@ const fileColumns = {
   folder: projectFiles.folder,
   contentType: projectFiles.contentType,
   sizeBytes: projectFiles.sizeBytes,
+  /** The task it was added to (CD-270): "Linked to: T-12". */
+  taskId: projectFiles.taskId,
+  taskNumber: sql<number | null>`(select t.number from ${tasks} t where t.id = ${projectFiles.taskId})`,
   addedByUserId: projectFiles.addedByUserId,
   addedByName: sql<string | null>`(select coalesce(u.display_name, u.email) from ${users} u where u.id = ${projectFiles.addedByUserId})`,
   createdAt: projectFiles.createdAt,
@@ -73,8 +76,14 @@ export class ProjectFilesService {
     if (file.size > MAX_PROJECT_FILE_BYTES) throw new BadRequestException('A file can be at most 25 MB');
     const id = crypto.randomUUID();
     const storageKey = `projects/${projectId}/${id}`;
-    // The project must exist (and be this workspace's) before anything is stored.
-    await this.database.withTenant(ctx.tenantId, (tx) => this.project(tx, projectId));
+    // The project (and the task, a task of it) must exist before anything is stored.
+    await this.database.withTenant(ctx.tenantId, async (tx) => {
+      await this.project(tx, projectId);
+      if (input.taskId) {
+        const [task] = await tx.select({ projectId: tasks.projectId }).from(tasks).where(eq(tasks.id, input.taskId));
+        if (task?.projectId !== projectId) throw new BadRequestException('Task not found in this project');
+      }
+    });
     await this.storage.putBuffer(ctx.tenantId, storageKey, file.buffer);
     try {
       return await this.database.withTenant(ctx.tenantId, async (tx) => {
@@ -87,6 +96,7 @@ export class ProjectFilesService {
           contentType: file.mimetype || 'application/octet-stream',
           sizeBytes: file.size,
           storageKey,
+          taskId: input.taskId ?? null,
           addedByUserId: ctx.userId,
         });
         await this.audit.record(tx, ctx, { action: 'project.file_added', entityType: 'project', entityId: projectId, data: { fileId: id, name: file.originalname, size: file.size } });

@@ -1298,6 +1298,19 @@ and no "hours" are shown anywhere.
   table's Depends on column, and the Plan tab's **Gantt** (`ProjectGantt.tsx`, plain HTML and SVG:
   bars from start to due by stage, today marked, an arrow from the dependency's due date to the
   task's start, "Starts before T-3 is due (12 Oct)" while that one is open).
+- **Checklist, files, comments** (CD-270, `drizzle/0067`, `0068`; `task-notes.service.ts`):
+  - `task_checklist_items` (text, done, position; at most 100) and `task_comments` (author, body),
+    both cascading with the task, with RLS and live hints `task`. Whoever can see the task reads
+    them; whoever can act on it adds, ticks and edits items and posts comments
+    (`TasksService.require`, the same 404 / 403 as the task). A comment is deleted by its author,
+    owners or admins. Every change answers with the whole list.
+  - **Files** are project files with `project_files.task_id` (`POST /api/projects/:id/files` with
+    `taskId`, a task of that project): the task page lists them, and the Documents tab shows "Linked
+    to: T-12". Deleting the task keeps the file in the project (`ON DELETE SET NULL (task_id)`).
+  - Screens (`screens/task/TaskNotes.tsx`, under Description): Checklist ("N of M", a 4 px bar,
+    checkbox, inline text struck through when done, ×, "Add an item" with Add or Enter), Files ("New
+    file", extension tiles coloured by type, a name downloads), Comments (avatar, name · date, text,
+    "Comment"). @mentions emailing people come later.
 - **Email "Assigned to a task"** (job `projects.task-assigned`, projects worker): to someone with an
   account assigned by another person, when they're still on the task and `memberships.
   notify_task_assigned` is on (read when sending). Number, name, project, company, due date and a

@@ -13,6 +13,7 @@ import { activeAssignees, dueText, isLate, todayIso, useTask, useTasks } from '.
 import { NumberField, Row, TextField } from './project/fields';
 import { assignedMessage, DueLabel, PeoplePicker, useTaskUpdate } from './task/parts';
 import { PeopleAndHours } from './task/PeopleAndHours';
+import { TaskChecklist, TaskComments, TaskFiles } from './task/TaskNotes';
 
 /**
  * A task's page (CD-283, design v2 §4):
@@ -286,6 +287,9 @@ export function Task() {
               <span style={{ fontSize: 15, fontWeight: 600 }}>Description</span>
               <TextField multiline className="ghost ghost-sm" testId="task-description" label="Description" value={task.description ?? ''} disabled={!canEdit} placeholder="What needs doing, and what done looks like" maxLength={10000} onSave={(v) => update({ description: v || null })} />
             </div>
+            <TaskChecklist task={task} />
+            <TaskFiles task={task} />
+            <TaskComments task={task} />
             <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <span className="caps">History</span>
               {/* Assignee and limit changes don't touch the task's version: they count as a change too. */}

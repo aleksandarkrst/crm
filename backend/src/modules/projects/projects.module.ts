@@ -7,6 +7,7 @@ import { ProjectTypesController } from './project-types.controller';
 import { ProjectTypesService } from './project-types.service';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
+import { TaskNotesService } from './task-notes.service';
 import { TasksController } from './tasks.controller';
 import { TasksService } from './tasks.service';
 
@@ -18,6 +19,6 @@ import { TasksService } from './tasks.service';
 @Module({
   imports: [PeopleModule],
   controllers: [ProjectTypesController, ProjectsController, ProjectFilesController, TasksController],
-  providers: [ProjectTypesService, ProjectsService, ProjectMembersService, ProjectFilesService, TasksService],
+  providers: [ProjectTypesService, ProjectsService, ProjectMembersService, ProjectFilesService, TasksService, TaskNotesService],
 })
 export class ProjectsModule {}

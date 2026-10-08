@@ -96,6 +96,22 @@ export interface ApiTaskHours {
   total: { logged: number; approved: number; taskLimit: number | null; remaining: number | null; someWithoutLimit: boolean };
 }
 
+/** A checklist item (CD-270). */
+export interface ApiChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+  position: number;
+}
+/** A comment on a task (CD-270). */
+export interface ApiTaskComment {
+  id: string;
+  body: string;
+  authorUserId: string | null;
+  authorName: string | null;
+  createdAt: string;
+}
+
 export interface NewTaskInput {
   projectId: string;
   name: string;
@@ -154,5 +170,13 @@ export const tasksApi = {
   assign: (id: string, employeeIds: string[], hourLimits?: Record<string, number>) => api<ApiTask>(`/tasks/${id}/assignees`, { method: 'POST', json: { employeeIds, hourLimits } }),
   setHourLimit: (id: string, employeeId: string, hourLimit: number | null) => api<ApiTask>(`/tasks/${id}/assignees/${employeeId}`, { method: 'PATCH', json: { hourLimit } }),
   hours: (id: string) => api<ApiTaskHours>(`/tasks/${id}/hours`),
+  // Checklist and comments (CD-270): each change answers with the whole list.
+  checklist: (id: string) => api<ApiChecklistItem[]>(`/tasks/${id}/checklist`),
+  addItem: (id: string, text: string) => api<ApiChecklistItem[]>(`/tasks/${id}/checklist`, { method: 'POST', json: { text } }),
+  updateItem: (id: string, itemId: string, patch: { text?: string; done?: boolean }) => api<ApiChecklistItem[]>(`/tasks/${id}/checklist/${itemId}`, { method: 'PATCH', json: patch }),
+  removeItem: (id: string, itemId: string) => api<ApiChecklistItem[]>(`/tasks/${id}/checklist/${itemId}`, { method: 'DELETE' }),
+  comments: (id: string) => api<ApiTaskComment[]>(`/tasks/${id}/comments`),
+  addComment: (id: string, body: string) => api<ApiTaskComment[]>(`/tasks/${id}/comments`, { method: 'POST', json: { body } }),
+  removeComment: (id: string, commentId: string) => api<ApiTaskComment[]>(`/tasks/${id}/comments/${commentId}`, { method: 'DELETE' }),
   unassign: (id: string, employeeId: string) => api<ApiTask>(`/tasks/${id}/assignees/${employeeId}`, { method: 'DELETE' }),
 };

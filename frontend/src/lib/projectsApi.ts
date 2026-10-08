@@ -127,16 +127,20 @@ export interface ApiProjectFile {
   folder: ProjectFileFolder;
   contentType: string;
   sizeBytes: number;
+  /** The task it was added to (CD-270): "Linked to: T-12". */
+  taskId: string | null;
+  taskNumber: number | null;
   addedByUserId: string | null;
   addedByName: string | null;
   createdAt: string;
 }
 
-/** Multipart upload of one file (api() sends JSON only). */
-async function uploadFile(projectId: string, file: File, folder: ProjectFileFolder): Promise<ApiProjectFile> {
+/** Multipart upload of one file (api() sends JSON only); `taskId`: the task it is for (CD-270). */
+async function uploadFile(projectId: string, file: File, folder: ProjectFileFolder, taskId?: string): Promise<ApiProjectFile> {
   const form = new FormData();
   form.append('file', file, file.name);
   form.append('folder', folder);
+  if (taskId) form.append('taskId', taskId);
   const res = await authorizedFetch(`/projects/${projectId}/files`, { method: 'POST', body: form });
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(res.status, res.status === 413 ? { message: 'A file can be at most 25 MB' } : body);
