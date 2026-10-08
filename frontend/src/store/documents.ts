@@ -71,7 +71,7 @@ async function upload<T>(path: string, form: FormData): Promise<T> {
 }
 
 /** Downloads a file behind auth and saves it under the name the API gives it. */
-async function download(path: string, fallback: string): Promise<void> {
+export async function download(path: string, fallback: string): Promise<void> {
   const res = await authorizedFetch(path);
   if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
   const disposition = res.headers.get('Content-Disposition') || '';

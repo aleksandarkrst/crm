@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../lib/api';
-import { type ApiProject, type ApiProjectMember, type ApiProjectType, projectsApi } from '../lib/projectsApi';
+import { type ApiProject, type ApiProjectFile, type ApiProjectMember, type ApiProjectType, projectsApi } from '../lib/projectsApi';
+import { type DealDoc, docsApi } from './documents';
 import { useStore } from './store';
 
 /** The API's message (and the first field problem), for error lines and toasts. */
@@ -76,6 +77,14 @@ export const useProject = (id: string | undefined) => useProjectsRead<ApiProject
 /** A project's team (CD-271). */
 export const useProjectMembers = (projectId: string | undefined) =>
   useProjectsRead<ApiProjectMember[]>(!!projectId, () => projectsApi.members(projectId!), `members:${projectId ?? ''}`);
+
+/** A project's files (CD-271, Documents tab). */
+export const useProjectFiles = (projectId: string | undefined) =>
+  useProjectsRead<ApiProjectFile[]>(!!projectId, () => projectsApi.files(projectId!), `files:${projectId ?? ''}`);
+
+/** The documents of a project's deal, shown on its Documents tab ("Deal files appear automatically"). */
+export const useDealDocuments = (dealId: string | null | undefined) =>
+  useProjectsRead<DealDoc[]>(!!dealId, () => docsApi.documents(dealId!), `dealdocs:${dealId ?? ''}`);
 
 /** The projects of one deal (the won deal's header and Summary, CD-275). */
 export const useDealProjects = (dealId: string | undefined) =>

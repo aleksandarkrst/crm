@@ -4,7 +4,8 @@
  * project types (the API answers 403 otherwise); any member creates a project, and its lead, owners
  * and admins change it.
  */
-import { api } from './api';
+import { download } from '../store/documents';
+import { api, ApiError, authorizedFetch } from './api';
 
 export interface ApiProjectStage {
   id: string;
@@ -111,6 +112,35 @@ export interface ApiProjectMember {
   loadHours: number;
 }
 
+/** Where a project's file sits (design v2 Documents tab). */
+export const PROJECT_FILE_FOLDERS = ['Contract', 'Brief', 'Design', 'Client material', 'Deliverable'] as const;
+export type ProjectFileFolder = (typeof PROJECT_FILE_FOLDERS)[number];
+/** The same limit as the API, checked before uploading. */
+export const MAX_PROJECT_FILE_BYTES = 25 * 1024 * 1024;
+
+/** A file added to a project (CD-271). */
+export interface ApiProjectFile {
+  id: string;
+  name: string;
+  folder: ProjectFileFolder;
+  contentType: string;
+  sizeBytes: number;
+  addedByUserId: string | null;
+  addedByName: string | null;
+  createdAt: string;
+}
+
+/** Multipart upload of one file (api() sends JSON only). */
+async function uploadFile(projectId: string, file: File, folder: ProjectFileFolder): Promise<ApiProjectFile> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  form.append('folder', folder);
+  const res = await authorizedFetch(`/projects/${projectId}/files`, { method: 'POST', body: form });
+  const body: unknown = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(res.status, res.status === 413 ? { message: 'A file can be at most 25 MB' } : body);
+  return body as ApiProjectFile;
+}
+
 const move = (to?: string) => (to ? `?moveProjectsTo=${encodeURIComponent(to)}` : '');
 
 export const projectsApi = {
@@ -140,6 +170,12 @@ export const projectsApi = {
   updateMember: (projectId: string, employeeId: string, patch: { role?: string | null; hoursPerWeek?: number }) =>
     api<ApiProjectMember[]>(`/projects/${projectId}/members/${employeeId}`, { method: 'PUT', json: patch }),
   removeMember: (projectId: string, employeeId: string) => api<ApiProjectMember[]>(`/projects/${projectId}/members/${employeeId}`, { method: 'DELETE' }),
+  // Files (CD-271): anyone adds and downloads; the one who added it, the lead, owners and admins move or delete it.
+  files: (projectId: string) => api<ApiProjectFile[]>(`/projects/${projectId}/files`),
+  uploadFile,
+  moveFile: (projectId: string, fileId: string, folder: ProjectFileFolder) => api<ApiProjectFile>(`/projects/${projectId}/files/${fileId}`, { method: 'PATCH', json: { folder } }),
+  deleteFile: (projectId: string, fileId: string) => api<null>(`/projects/${projectId}/files/${fileId}`, { method: 'DELETE' }),
+  downloadFile: (projectId: string, f: ApiProjectFile) => download(`/projects/${projectId}/files/${f.id}/download`, f.name),
   /** Owners and admins. */
   deleteProject: (id: string) => api<null>(`/projects/${id}`, { method: 'DELETE' }),
 };

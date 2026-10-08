@@ -4,7 +4,8 @@ import { AuditService } from '../../shared/audit/audit.service';
 import { hasRole, type TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
-import { companies, contacts, deals, memberships, projectAutoDeals, projects, projectStages, projectTypes, tenants, users } from '../../shared/database/schema';
+import { StorageService } from '../../infrastructure/storage/storage.service';
+import { companies, contacts, deals, memberships, projectAutoDeals, projectFiles, projects, projectStages, projectTypes, tenants, users } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import type { CreateProject, ListProjectsQuery, UpdateProject } from './projects.schemas';
 
@@ -163,6 +164,7 @@ export class ProjectsService {
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
     private readonly jobs: JobsService,
+    private readonly storage: StorageService,
   ) {}
 
   /** Projects by company name, newest first; `dealId` / `companyId` narrow the list. */
@@ -268,14 +270,18 @@ export class ProjectsService {
    * logged hours (409 "This project has logged hours. Archive it instead."); time entries come with
    * milestone 15, so today every project can be deleted.
    */
-  remove(ctx: TenantContext, id: string) {
-    return this.database
+  async remove(ctx: TenantContext, id: string) {
+    const keys = await this.database
       .withTenant(ctx.tenantId, async (tx) => {
+        // Its files' rows go with it (FK cascade); the stored bytes are removed after the commit.
+        const files = await tx.select({ key: projectFiles.storageKey }).from(projectFiles).where(eq(projectFiles.projectId, id));
         const [row] = await tx.delete(projects).where(eq(projects.id, id)).returning({ id: projects.id, name: projects.name });
         if (!row) throw new NotFoundException('Project not found');
         await this.audit.record(tx, ctx, { action: 'project.deleted', entityType: 'project', entityId: id, data: { name: row.name } });
+        return files.map((f) => f.key);
       })
       .catch(mapDbError);
+    for (const key of keys) await this.storage.delete(ctx.tenantId, key);
   }
 
   private async find(tx: Tx, id: string): Promise<ProjectView> {
