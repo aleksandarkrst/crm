@@ -1,6 +1,6 @@
 // Settings → Project types (CD-272): the default type, adding and renaming a type, adding,
-// reordering and deleting stages (the app's confirm; with projects, a dialog that moves them), and
-// deleting a type.
+// reordering and deleting stages (the app's confirm; a stage in use can't be deleted, CD-280), and
+// deleting a type (its projects move to another type).
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
 import { api, BASE_URL, click, clickButton, confirmInApp, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
@@ -64,20 +64,13 @@ describe('project types', () => {
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=project-stage]').length === 3);
   });
 
-  step('a stage with projects asks where they go', async () => {
+  step('a stage in use can\'t be deleted: the button is disabled with its reason (CD-280 TC 4)', async () => {
     const web = (await typesNow(page)).find((t) => t.name === 'Website');
     const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Northwind' }) });
-    const project = await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Northwind site', projectTypeId: web.id, companyId: company.id }) });
+    await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Northwind site', projectTypeId: web.id, companyId: company.id }) });
     await page.waitForFunction(() => document.querySelector('[data-testid=project-stage]')?.innerText.includes('1 project'));
-    await waitForToastToClear(page);
-    const rows = await page.$$('[data-testid=project-stage]');
-    await (await rows[0].$('button[aria-label="Delete stage"]')).click();
-    await page.waitForSelector('[data-testid=move-projects-to]');
-    const target = web.stages.find((s) => s.name === 'Review').id;
-    await setValue(page, '[data-testid=move-projects-to]', target);
-    await clickButton(page, 'Delete stage');
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid=project-stage]').length === 2);
-    assert.equal((await api(page, `/projects/${project.id}`)).stageName, 'Review');
+    const del = await page.$eval('[data-testid=project-stage] button[aria-label="Delete stage"]', (el) => ({ disabled: el.disabled, title: el.title }));
+    assert.deepEqual(del, { disabled: true, title: 'In use by 1 project. Move them to another stage first.' });
   });
 
   step('deletes a type, moving its project to another type', async () => {

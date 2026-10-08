@@ -16,19 +16,32 @@ import { ProjectTypesTab } from './settings/ProjectTypesTab';
 import { RolesTab } from './settings/RolesTab';
 import type { TeamMember } from '../store/types';
 
+/**
+ * The sections of Settings (CD-280), grouped by module in the left nav. Each has its own route
+ * (`/settings/<k>`). The design names General, Members, Funnels, Project types and Cost rates; the
+ * other sections the app already had keep their content in the group they belong to. Cost rates
+ * comes when there are rates to set (a Linear follow-up).
+ */
 const TABS = [
-  { k: 'workspace', label: 'Workspace' },
-  { k: 'team', label: 'Team' },
-  { k: 'roles', label: 'Roles & permissions' },
-  { k: 'employees', label: 'Employees' },
-  { k: 'funnel', label: 'Funnel builder' },
-  { k: 'project-types', label: 'Project types' },
-  { k: 'templates', label: 'Document templates' },
-  { k: 'fields', label: 'Customize Fields' },
-  { k: 'bonuses', label: 'Sales bonuses' },
-  { k: 'notifications', label: 'Notifications' },
+  { k: 'workspace', group: 'Workspace', label: 'General', description: 'Name, currency, time zone and the modules this workspace uses.' },
+  { k: 'team', group: 'Workspace', label: 'Members', description: 'Who works in this workspace, their roles and the invitations still open.' },
+  { k: 'roles', group: 'Workspace', label: 'Roles & permissions', description: 'What owners, admins and members can do.' },
+  { k: 'notifications', group: 'Workspace', label: 'Notifications', description: 'The emails you get from this workspace.' },
+  { k: 'funnel', group: 'CRM', label: 'Funnels', description: 'The stages deals move through, with their activities and to-dos.' },
+  { k: 'templates', group: 'CRM', label: 'Document templates', description: 'Templates hold the fixed story; merge fields pull the rest from the deal when someone generates a document.' },
+  { k: 'fields', group: 'CRM', label: 'Customize fields', description: 'Custom fields show on deals, companies and contacts, in their create forms and in CSV exports. Everyone can fill them in.' },
+  { k: 'bonuses', group: 'CRM', label: 'Sales bonuses', description: 'How salespeople earn bonuses on won deals.' },
+  {
+    k: 'project-types',
+    group: 'Projects',
+    label: 'Project types',
+    description:
+      "A project type is a set of stages for one kind of project, like a funnel in the CRM. Each project is on one board: it shows in that board's columns, and its tasks are grouped by the same stages in the plan. Complete and Cancel are always available and are not stages.",
+  },
+  { k: 'employees', group: 'Workforce', label: 'Employees', description: 'What new employees start with and what employees may change themselves.' },
 ] as const;
 type Tab = (typeof TABS)[number]['k'];
+const GROUPS = ['Workspace', 'CRM', 'Projects', 'Workforce'] as const;
 
 export function Settings() {
   const { tab = 'workspace' } = useParams();
@@ -42,13 +55,14 @@ export function Settings() {
   const tabs = TABS.filter((t) => (t.k !== 'bonuses' || canSeeBonuses) && (t.k !== 'employees' || canEditWorkspace));
   if (!tabs.some((t) => t.k === tab)) return <Navigate to={paths.settings()} replace />;
   const current = tab as Tab;
+  const section = tabs.find((t) => t.k === current)!;
 
   const action =
     current === 'templates'
-      ? { label: 'New template', onClick: () => (canManageTemplates(session.tenant.role) ? set({ templateOpen: true }) : flash('Only owners and admins can add templates')), meta: 'Templates hold the fixed story; merge fields pull the rest from the deal when someone generates a document.' }
+      ? { label: 'New template', onClick: () => (canManageTemplates(session.tenant.role) ? set({ templateOpen: true }) : flash('Only owners and admins can add templates')), meta: '' }
       : current === 'fields'
         ? canEditFields
-          ? { label: 'New field', onClick: () => set({ fieldOpen: true }), meta: 'Custom fields show on deals, companies and contacts, in their create forms and in CSV exports. Everyone can fill them in.' }
+          ? { label: 'New field', onClick: () => set({ fieldOpen: true }), meta: '' }
           : null
         : current === 'team'
           ? {
@@ -60,44 +74,54 @@ export function Settings() {
 
   return (
     <Screen title="Settings">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 14 }}>
-        <div style={{ display: 'flex', gap: 6, background: 'var(--segment)', padding: 4, borderRadius: 9, width: 'fit-content', flexWrap: 'wrap' }}>
-          {tabs.map((t) => (
-            <button
-              key={t.k}
-              type="button"
-              onClick={() => navigate(paths.settings(t.k))}
-              style={{ border: 0, cursor: 'pointer', padding: '8px 14px', borderRadius: 6, fontSize: 13, fontWeight: 500, background: t.k === current ? 'var(--white)' : 'transparent', color: t.k === current ? 'var(--ink)' : 'var(--text-2)' }}
-            >
-              {t.label}
-            </button>
+      <div className="settings-frame">
+        <nav className="settings-nav" aria-label="Settings" data-testid="settings-nav">
+          {GROUPS.filter((g) => tabs.some((t) => t.group === g)).map((g) => (
+            <div key={g} className="settings-nav-group" data-group={g}>
+              <span className="caps-muted settings-nav-label">{g}</span>
+              {tabs
+                .filter((t) => t.group === g)
+                .map((t) => (
+                  <button key={t.k} type="button" className={'settings-nav-item' + (t.k === current ? ' on' : '')} aria-current={t.k === current ? 'page' : undefined} data-section={t.k} onClick={() => navigate(paths.settings(t.k))}>
+                    {t.label}
+                  </button>
+                ))}
+            </div>
           ))}
-        </div>
-        {action && (
-          <>
-            <span style={{ fontSize: 12.5, color: 'var(--text-2)', marginLeft: 'auto', maxWidth: 520, textAlign: 'right', lineHeight: 1.45 }}>{action.meta}</span>
-            {'soon' in action && action.soon ? (
-              <ComingSoonButton label={action.label} />
-            ) : (
-              <button type="button" className="btn btn-primary" style={{ flex: '0 0 auto' }} onClick={action.onClick}>
-                {action.label}
-              </button>
+        </nav>
+        <div className="settings-content" data-testid="settings-content">
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap', marginBottom: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 320px', minWidth: 0 }}>
+              <h2 className="settings-title">{section.label}</h2>
+              <span className="settings-description">{section.description}</span>
+            </div>
+            {action && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
+                {action.meta && <span style={{ fontSize: 12.5, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{action.meta}</span>}
+                {'soon' in action && action.soon ? (
+                  <ComingSoonButton label={action.label} />
+                ) : (
+                  <button type="button" className="btn btn-primary" style={{ flex: '0 0 auto' }} onClick={action.onClick}>
+                    {action.label}
+                  </button>
+                )}
+              </span>
             )}
-          </>
-        )}
-      </div>
+          </div>
 
-      {current === 'workspace' && <WorkspaceTab />}
-      {current === 'workspace' && <GettingStartedCard />}
-      {current === 'team' && <TeamTab />}
-      {current === 'roles' && <RolesTab />}
-      {current === 'employees' && <EmployeesTab />}
-      {current === 'funnel' && <FunnelBuilder />}
-      {current === 'project-types' && <ProjectTypesTab />}
-      {current === 'templates' && <TemplatesTab />}
-      {current === 'fields' && <FieldsTab />}
-      {current === 'bonuses' && <BonusesTab />}
-      {current === 'notifications' && <NotificationsTab />}
+          {current === 'workspace' && <WorkspaceTab />}
+          {current === 'workspace' && <GettingStartedCard />}
+          {current === 'team' && <TeamTab />}
+          {current === 'roles' && <RolesTab />}
+          {current === 'employees' && <EmployeesTab />}
+          {current === 'funnel' && <FunnelBuilder />}
+          {current === 'project-types' && <ProjectTypesTab />}
+          {current === 'templates' && <TemplatesTab />}
+          {current === 'fields' && <FieldsTab />}
+          {current === 'bonuses' && <BonusesTab />}
+          {current === 'notifications' && <NotificationsTab />}
+        </div>
+      </div>
       {inviteOpen && <InviteModal onClose={() => setInviteOpen(false)} />}
     </Screen>
   );

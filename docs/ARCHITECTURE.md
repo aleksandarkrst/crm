@@ -1010,6 +1010,15 @@ the store is the one place that talks to the backend.
   columns on `deals`. They are edited in the deal's **Discovery** card and merged into the proposal
   view, which shows fields that are still empty as bracketed gaps.
 
+**The Settings page** (CD-280, `screens/Settings.tsx`): a 200 px left nav grouped by module, the
+section on the right (title, one-line description, the section's action button). Each section has
+its own route (`/settings/<section>`, kept on reload). Groups: **Workspace** (General, Members, Roles &
+permissions, Notifications), **CRM** (Funnels, Document templates, Customize fields, Sales bonuses),
+**Projects** (Project types) and **Workforce** (Employees). The design also names Workforce → Cost
+rates; it comes when there are rates to set. Sales bonuses and Employees stay hidden from those who
+can't use them. Settings belongs to no module, so the sidebar and the switcher keep the module it
+was opened from. Under 800 px the nav wraps above the content.
+
 Settings has no Integrations or Billing tab: both were placeholders that saved nothing and were
 removed in CD-207 (`/settings/integrations` and `/settings/billing` go to Settings like any unknown
 tab). They come back when a real integration (CD-79) or billing exists.
@@ -1101,7 +1110,9 @@ and no "hours" are shown anywhere.
     `DELETE /:id?moveProjectsTo=<typeId>`, `POST /:id/stages`, `PATCH /:id/stages/:stageId`,
     `PUT /:id/stages/order` `{ stageIds }` (every stage once), `DELETE /:id/stages/:stageId?moveProjectsTo=<stageId>`.
     Every change answers with all types. A stage or type that holds projects is deleted only with
-    `moveProjectsTo` (409 without it); a type's projects go to the target type's first stage.
+    `moveProjectsTo` (409 without it); a type's projects go to the target type's first stage. The
+    Settings screen doesn't offer deleting a stage in use (CD-280: its Delete is disabled with "In
+    use by N projects. Move them to another stage first."); a type in use asks where its projects go.
   - **Settings → Project types** (`screens/settings/ProjectTypesTab.tsx`): the list of types, the
     selected type's name, stages (rename inline, ↑/↓, ×, "New stage") and a stage-bar preview.
     `?type=<id>` selects a type. Deleting something empty uses the app's confirm; with projects, a
