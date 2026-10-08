@@ -9,8 +9,10 @@ import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
 import { TaskNotesService } from './task-notes.service';
 import { TasksController } from './tasks.controller';
-import { TechniciansController } from './technicians.controller';
 import { TasksService } from './tasks.service';
+import { TechniciansController } from './technicians.controller';
+import { WorkOrdersController } from './work-orders.controller';
+import { WorkOrdersService } from './work-orders.service';
 
 /**
  * Projects (milestone 14): project types with stages (CD-272) and client projects linked to the
@@ -19,7 +21,7 @@ import { TasksService } from './tasks.service';
  */
 @Module({
   imports: [PeopleModule],
-  controllers: [ProjectTypesController, ProjectsController, ProjectFilesController, TasksController, TechniciansController],
-  providers: [ProjectTypesService, ProjectsService, ProjectMembersService, ProjectFilesService, TasksService, TaskNotesService],
+  controllers: [ProjectTypesController, ProjectsController, ProjectFilesController, TasksController, TechniciansController, WorkOrdersController],
+  providers: [ProjectTypesService, ProjectsService, ProjectMembersService, ProjectFilesService, TasksService, TaskNotesService, WorkOrdersService],
 })
 export class ProjectsModule {}
