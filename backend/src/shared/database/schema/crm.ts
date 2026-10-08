@@ -863,8 +863,8 @@ export type HistoryEntityType = (typeof HISTORY_ENTITY_TYPES)[number];
  */
 export const PEOPLE_HISTORY_ENTITY_TYPES = ['employee', 'department', 'team', 'org_unit'] as const;
 export type PeopleHistoryEntityType = (typeof PEOPLE_HISTORY_ENTITY_TYPES)[number];
-/** Project tasks (CD-146). Served only by GET /api/tasks/:id/history, with the task's visibility rules. */
-export const TASK_HISTORY_ENTITY_TYPES = ['task'] as const;
+/** Project tasks (CD-146) and work orders (CD-266). Served only by their own history endpoints, with their access rules. */
+export const TASK_HISTORY_ENTITY_TYPES = ['task', 'work_order'] as const;
 export type TaskHistoryEntityType = (typeof TASK_HISTORY_ENTITY_TYPES)[number];
 /** `imported`: a record created by the employee import (CD-141), in place of `created` (drizzle/0040). */
 export const RECORD_CHANGE_ACTIONS = ['created', 'imported', 'updated', 'deleted', 'line_added', 'line_changed', 'line_removed', 'participant_added', 'participant_removed'] as const;

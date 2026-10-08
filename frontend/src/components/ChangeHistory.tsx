@@ -73,6 +73,20 @@ const FIELD_LABELS: Record<string, string> = {
   estimateHours: 'Estimate (h)',
   assignees: 'Assignees',
   waitsForTaskId: 'Waits for',
+  // Work orders (CD-266)
+  priority: 'Priority',
+  holdReason: 'On hold reason',
+  scheduledDate: 'Date',
+  scheduledStart: 'Start',
+  durationHours: 'Duration (h)',
+  workPlace: 'Where',
+  equipment: 'Equipment',
+  job: 'Job',
+  report: 'Report',
+  materials: 'Materials',
+  customerName: 'Customer',
+  signedOffAt: 'Signed off',
+  technicians: 'Technicians',
 };
 const MEETING_TEXT: Record<string, string> = {
   visit: 'Customer visit',
@@ -93,8 +107,19 @@ const MEETING_TEXT: Record<string, string> = {
   in_progress: 'In progress',
   on_hold: 'On hold',
   done: 'Done',
+  // Work orders (CD-266)
+  unscheduled: 'Unscheduled',
+  scheduled: 'Scheduled',
+  installation: 'Installation',
+  repair: 'Repair',
+  maintenance: 'Maintenance',
+  inspection: 'Inspection',
+  normal: 'Normal',
+  urgent: 'Urgent',
+  customer: 'At the customer',
+  workshop: 'In the workshop',
 };
-const MOMENT_FIELDS = new Set(['startsAt', 'endsAt', 'heldAt', 'cancelledAt']);
+const MOMENT_FIELDS = new Set(['startsAt', 'endsAt', 'heldAt', 'cancelledAt', 'signedOffAt']);
 const LINE_LABELS: Record<string, string> = {
   productId: 'product',
   quantity: 'quantity',
@@ -109,9 +134,9 @@ const LINE_LABELS: Record<string, string> = {
 };
 const FREQUENCY_TEXT: Record<string, string> = { one_time: 'One time', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly', annually: 'Annually' };
 const TAX_TEXT: Record<string, string> = { exclusive: 'Tax exclusive', inclusive: 'Tax inclusive', none: 'No tax' };
-const DATE_FIELDS = new Set(['closeDate', 'discoveryDate', 'startDate', 'endDate', 'periodStart', 'dueDate']);
+const DATE_FIELDS = new Set(['closeDate', 'discoveryDate', 'startDate', 'endDate', 'periodStart', 'dueDate', 'scheduledDate']);
 const PERIOD_TEXT: Record<string, string> = { month: 'Month', quarter: 'Quarter' };
-const NOUN: Record<HistoryEntity, string> = { deal: 'deal', company: 'company', contact: 'contact', meeting: 'meeting', visit_plan: 'visit plan', project: 'project', task: 'task' };
+const NOUN: Record<HistoryEntity, string> = { deal: 'deal', company: 'company', contact: 'contact', meeting: 'meeting', visit_plan: 'visit plan', project: 'project', task: 'task', work_order: 'work order' };
 const PAGE = 30;
 
 const empty = <span style={{ color: 'var(--muted)' }}>empty</span>;
@@ -172,7 +197,7 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
     if (field === 'vatRate') return `${Number(v)}%`;
     if (DATE_FIELDS.has(field) && typeof v === 'string') return dateText(v);
     if (MOMENT_FIELDS.has(field) && typeof v === 'string') return when(v);
-    if ((((field === 'type' || field === 'status') && entity === 'meeting') || ((field === 'status' || field === 'health') && (entity === 'project' || entity === 'task'))) && typeof v === 'string') return MEETING_TEXT[v] ?? v;
+    if ((((field === 'type' || field === 'status') && entity === 'meeting') || ((field === 'status' || field === 'health') && (entity === 'project' || entity === 'task')) || (['status', 'type', 'priority', 'workPlace'].includes(field) && entity === 'work_order')) && typeof v === 'string') return MEETING_TEXT[v] ?? v;
     if (field === 'billingFrequency' && typeof v === 'string') return FREQUENCY_TEXT[v] ?? v;
     if (field === 'taxMode' && typeof v === 'string') return TAX_TEXT[v] ?? v;
     if (field === 'periodType' && typeof v === 'string') return PERIOD_TEXT[v] ?? v;
@@ -206,7 +231,7 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
     const v = ((e.action === 'participant_added' ? e.newValue : e.oldValue) ?? {}) as { kind?: string; name?: string };
     const name = e.label ?? v.name ?? 'someone';
     // A task's assignees (CD-146) are people of the company: no internal/external.
-    if (entity === 'task') return name;
+    if (entity === 'task' || entity === 'work_order') return name;
     return `${name} (${v.kind === 'external' ? 'external' : 'internal'})`;
   };
   /** One change in words; null for a row folded into another (the note of a loss). */
@@ -262,6 +287,8 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
     }
     const field = e.field ?? '';
     const sameMoment = (f: string) => all.find((x) => x.field === f && x.changedAt === e.changedAt);
+    // A work order's new lead technician (CD-266).
+    if (field === 'leadTechnician') return <>{e.label ?? 'Someone'} leads the work order now</>;
     // A person's hour limit on a task (CD-147), labelled with the person.
     if (field === 'hourLimit') {
       const h = (v: unknown) => (v == null ? 'no limit' : `${Number(v)} h`);

@@ -1330,8 +1330,25 @@ and no "hours" are shown anywhere.
   Sidebar **Work orders** (`screens/WorkOrders.tsx`): Kanban / Table toggle (remembered per person
   and workspace), filters Technician (Me too), Type, Priority and Company, "New work order"
   (`modals/NewWorkOrderDialog.tsx`; "+" → Work order, W). Dragging a card, or the table's inline
-  status, changes the status; On hold asks why. The work order page, Track time, checklist and
-  sign-off come with CD-266; time entries and the status/time-lock rules with CD-148 and milestone 15.
+  status, changes the status; On hold asks why. Time entries and the status/time-lock rules come with
+  CD-148 and milestone 15.
+- **Work order page** (CD-266, `screens/WorkOrder.tsx`, `/work-orders/:id`; `drizzle/0073`, `0074`):
+  - Header: crumb "Work orders → (project) → WO-1044", title inline, the meta line (company · project
+    · stage · technicians · "Wed 4 Nov, 08:00–16:00"), Put on hold (the shared reason dialog), Mark
+    completed or Reopen, the status bar, and the On hold reason in a red box.
+  - Details: company, project (the company's), where (`work_place`: at the customer / in the
+    workshop), site (`location`), type, priority, equipment. Job. Schedule: technicians (Service and
+    Both only; "Make lead" reorders them; the first leads), date, start, duration.
+  - Checklist: `work_order_checklist_items`, the same card as tasks (`ChecklistCard`).
+  - Report and sign-off: what was done, materials, the customer's name; "Customer signs off" records
+    `signed_off_at` and who recorded it, needs the name (a check keeps it while signed), and can be
+    undone.
+  - History (`GET /api/work-orders/:id/history`): the order's fields (`work_orders_history`) and its
+    technicians added, removed and the new lead (`projects_record_technician_changes`). Technicians
+    are changed by difference, not deleted and re-added, so the history shows real changes.
+  - Track time is left out until milestone 15's time entries (tasks and work orders together).
+  - Settings → Technicians' "Open work" counts open work orders too.
+- **Email "Assigned to a task"** (job `projects.task-assigned`, projects worker): to someone with an
 - **Email "Assigned to a task"** (job `projects.task-assigned`, projects worker): to someone with an
   account assigned by another person, when they're still on the task and `memberships.
   notify_task_assigned` is on (read when sending). Number, name, project, company, due date and a

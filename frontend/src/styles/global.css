@@ -1180,9 +1180,13 @@ a.task-card-project:hover { color: var(--brand); }
 /* ---------------------------------------------------------------- technicians (CD-268) */
 .techs-table-inner { min-width: 640px; }
 .techs-table-inner > .table-head,
-.techs-table-inner > .table-row { grid-template-columns: minmax(200px, 1.6fr) minmax(130px, 1fr) minmax(210px, 1.2fr) 100px; }
+.techs-table-inner > .table-row { grid-template-columns: minmax(200px, 1.6fr) minmax(130px, 1fr) minmax(210px, 1.2fr) minmax(150px, 1fr); }
 
 /* ---------------------------------------------------------------- work orders (CD-265) */
 .work-orders-table-inner { min-width: 980px; }
 .work-orders-table-inner > .table-head,
 .work-orders-table-inner > .table-row { grid-template-columns: 80px minmax(180px, 1.6fr) minmax(140px, 1.2fr) minmax(120px, 1fr) 110px minmax(150px, 1.1fr) 110px 140px; }
+
+/* ---------------------------------------------------------------- work order page (CD-266) */
+.chip-action { border: 0; background: transparent; cursor: pointer; color: var(--brand); font-size: 11.5px; padding: 0 2px; }
+.signed-box { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: var(--brand-tint); border-radius: 10px; padding: 10px 14px; font-size: 13px; }

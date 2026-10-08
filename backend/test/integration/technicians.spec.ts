@@ -12,6 +12,7 @@ interface Technician {
   name: string;
   workType: string;
   openTasks: number;
+  openWorkOrders: number;
 }
 
 let owner: Session;
@@ -53,8 +54,10 @@ describe('Settings → Technicians', () => {
     const done = await ok<{ id: string }>('POST', '/tasks', { ...as(), body: { projectId: project.id, name: 'Done one', assigneeIds: [anaId] } });
     await ok('PATCH', `/tasks/${done.id}`, { ...as(), body: { status: 'done' } }, 200);
 
+    // Ana (Both) is on an open work order too (CD-265).
+    await ok('POST', '/work-orders', { ...as(), body: { title: 'Service the unit', companyId: company.id, technicianIds: [anaId] } });
     const list = await ok<Technician[]>('GET', '/technicians', as());
-    expect(list.find((t) => t.employeeId === anaId)).toMatchObject({ workType: 'both', openTasks: 1 });
+    expect(list.find((t) => t.employeeId === anaId)).toMatchObject({ workType: 'both', openTasks: 1, openWorkOrders: 1 });
     expect((await call('GET', '/technicians', as(ana))).status).toBe(403);
   });
 });

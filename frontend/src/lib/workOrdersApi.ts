@@ -1,5 +1,6 @@
 /** Work orders (CD-265, `/api/work-orders`). Every member sees every work order. */
 import { api } from './api';
+import type { ApiChecklistItem } from './tasksApi';
 
 export type WorkOrderStatus = 'unscheduled' | 'scheduled' | 'in_progress' | 'on_hold' | 'completed';
 /** The kanban columns, in order (design v2 §5). */
@@ -15,6 +16,9 @@ export const workOrderStatusLabel = (s: WorkOrderStatus) => WORK_ORDER_STATUSES.
 export type WorkOrderType = 'installation' | 'repair' | 'maintenance' | 'inspection';
 export const WORK_ORDER_TYPE_LABEL: Record<WorkOrderType, string> = { installation: 'Installation', repair: 'Repair', maintenance: 'Maintenance', inspection: 'Inspection' };
 export type WorkOrderPriority = 'normal' | 'urgent';
+/** Where the work is done (CD-266). */
+export type WorkOrderPlace = 'customer' | 'workshop';
+export const WORK_ORDER_PLACE_LABEL: Record<WorkOrderPlace, string> = { customer: 'At the customer', workshop: 'In the workshop' };
 /** The On hold dialog's presets (design v2 §6); any other text works too. */
 export const WORK_ORDER_HOLD_REASONS = ['Waiting for parts', 'Waiting for the customer', 'Site not accessible', 'Needs a second technician'] as const;
 
@@ -43,9 +47,15 @@ export interface ApiWorkOrder {
   scheduledStart: string | null;
   durationHours: number;
   location: string | null;
+  workPlace: WorkOrderPlace;
   equipment: string | null;
   job: string | null;
+  /** Report and sign-off (CD-266). */
   report: string | null;
+  materials: string | null;
+  customerName: string | null;
+  signedOffAt: string | null;
+  signedOffByName: string | null;
   completedAt: string | null;
   createdAt: string;
   version: string;
@@ -83,7 +93,12 @@ export type WorkOrderPatch = Partial<{
   location: string | null;
   equipment: string | null;
   job: string | null;
+  workPlace: WorkOrderPlace;
   report: string | null;
+  materials: string | null;
+  customerName: string | null;
+  /** Needs the customer's name. */
+  signedOff: boolean;
 }>;
 
 export interface WorkOrderFilter {
@@ -123,4 +138,9 @@ export const workOrdersApi = {
   create: (input: NewWorkOrderInput) => api<ApiWorkOrder>('/work-orders', { method: 'POST', json: input }),
   update: (id: string, patch: WorkOrderPatch) => api<ApiWorkOrder>(`/work-orders/${id}`, { method: 'PATCH', json: patch }),
   remove: (id: string) => api<null>(`/work-orders/${id}`, { method: 'DELETE' }),
+  // The checklist (CD-266): each change answers with the whole list.
+  checklist: (id: string) => api<ApiChecklistItem[]>(`/work-orders/${id}/checklist`),
+  addItem: (id: string, text: string) => api<ApiChecklistItem[]>(`/work-orders/${id}/checklist`, { method: 'POST', json: { text } }),
+  updateItem: (id: string, itemId: string, patch: { text?: string; done?: boolean }) => api<ApiChecklistItem[]>(`/work-orders/${id}/checklist/${itemId}`, { method: 'PATCH', json: patch }),
+  removeItem: (id: string, itemId: string) => api<ApiChecklistItem[]>(`/work-orders/${id}/checklist/${itemId}`, { method: 'DELETE' }),
 };

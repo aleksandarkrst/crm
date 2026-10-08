@@ -12,6 +12,7 @@ interface Technician {
   team: string | null;
   workType: WorkType;
   openTasks: number;
+  openWorkOrders: number;
 }
 
 /**
@@ -81,7 +82,9 @@ export function TechniciansTab() {
                     ))}
                   </select>
                 </span>
-                <span style={{ color: t.openTasks ? 'var(--ink)' : 'var(--muted)' }}>{t.openTasks ? `${t.openTasks} ${t.openTasks === 1 ? 'task' : 'tasks'}` : 'None'}</span>
+                <span style={{ color: t.openTasks || t.openWorkOrders ? 'var(--ink)' : 'var(--muted)' }} data-testid="open-work">
+                  {[t.openTasks ? `${t.openTasks} ${t.openTasks === 1 ? 'task' : 'tasks'}` : '', t.openWorkOrders ? `${t.openWorkOrders} ${t.openWorkOrders === 1 ? 'work order' : 'work orders'}` : ''].filter(Boolean).join(' · ') || 'None'}
+                </span>
               </div>
             ))}
           </div>

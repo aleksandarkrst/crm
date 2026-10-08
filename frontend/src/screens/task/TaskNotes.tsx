@@ -22,24 +22,30 @@ function useSave<T>(set: (data: T) => void) {
   };
 }
 
+/** The calls a checklist makes: a task's or a work order's (CD-266), each answering with the whole list. */
+export interface ChecklistApi {
+  add: (text: string) => Promise<ApiChecklistItem[]>;
+  update: (itemId: string, patch: { text?: string; done?: boolean }) => Promise<ApiChecklistItem[]>;
+  remove: (itemId: string) => Promise<ApiChecklistItem[]>;
+}
+
 /**
- * Checklist (CD-270, design v2 §4): "N of M" with a 4 px bar; items with a checkbox, inline text
- * (struck through when done) and ×; "Add an item" with Add, where Enter adds too.
+ * Checklist (CD-270, design v2 §4; shared with work orders, CD-266): "N of M" with a 4 px bar;
+ * items with a checkbox, inline text (struck through when done) and ×; "Add an item" with Add,
+ * where Enter adds too.
  */
-export function TaskChecklist({ task }: { task: ApiTask }) {
-  const { data, set } = useChecklist(task.id);
+export function ChecklistCard({ items: data, set, canEdit, api }: { items: ApiChecklistItem[] | null; set: (items: ApiChecklistItem[]) => void; canEdit: boolean; api: ChecklistApi }) {
   const save = useSave<ApiChecklistItem[]>(set);
   const [draft, setDraft] = useState('');
-  const canEdit = task.access === 'act';
   const items = data ?? [];
   const done = items.filter((i) => i.done).length;
   const add = async () => {
     const text = draft.trim();
     if (!text) return;
-    if (await save(() => tasksApi.addItem(task.id, text))) setDraft('');
+    if (await save(() => api.add(text))) setDraft('');
   };
   return (
-    <div className="card card-pad" data-testid="task-checklist" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div className="card card-pad" data-testid="checklist" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <span style={{ fontSize: 15, fontWeight: 600 }}>Checklist</span>
         {items.length > 0 && (
@@ -55,7 +61,7 @@ export function TaskChecklist({ task }: { task: ApiTask }) {
       )}
       <div>
         {items.map((item) => (
-          <ChecklistRow key={item.id} item={item} canEdit={canEdit} onToggle={() => void save(() => tasksApi.updateItem(task.id, item.id, { done: !item.done }))} onRename={(text) => save(() => tasksApi.updateItem(task.id, item.id, { text }))} onRemove={() => void save(() => tasksApi.removeItem(task.id, item.id))} />
+          <ChecklistRow key={item.id} item={item} canEdit={canEdit} onToggle={() => void save(() => api.update(item.id, { done: !item.done }))} onRename={(text) => save(() => api.update(item.id, { text }))} onRemove={() => void save(() => api.remove(item.id))} />
         ))}
       </div>
       {canEdit && (
@@ -77,6 +83,19 @@ export function TaskChecklist({ task }: { task: ApiTask }) {
       )}
       {!canEdit && items.length === 0 && <span style={{ fontSize: 13, color: 'var(--text-2)' }}>No checklist yet.</span>}
     </div>
+  );
+}
+
+/** A task's checklist (CD-270). */
+export function TaskChecklist({ task }: { task: ApiTask }) {
+  const { data, set } = useChecklist(task.id);
+  return (
+    <ChecklistCard
+      items={data}
+      set={set}
+      canEdit={task.access === 'act'}
+      api={{ add: (text) => tasksApi.addItem(task.id, text), update: (itemId, patch) => tasksApi.updateItem(task.id, itemId, patch), remove: (itemId) => tasksApi.removeItem(task.id, itemId) }}
+    />
   );
 }
 

@@ -23,7 +23,7 @@ describe('task notes', () => {
     project = await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Fit-out', projectTypeId: type.id, companyId: company.id }) });
     task = await api(page, '/tasks', { method: 'POST', body: JSON.stringify({ projectId: project.id, name: 'Survey' }) });
     await page.goto(BASE_URL + '/tasks/' + task.id, { waitUntil: 'networkidle0' });
-    await page.waitForSelector('[data-testid=task-checklist]');
+    await page.waitForSelector('[data-testid=checklist]');
   });
 
   step('the checklist: Enter and Add, "N of M", tick, remove', async () => {

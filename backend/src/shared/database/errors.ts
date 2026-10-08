@@ -49,6 +49,7 @@ const PROJECT_RULES: Record<string, string> = {
   tasks_hold_reason_ck: 'A task on hold needs a reason, and only a task on hold has one',
   tasks_estimate_ck: 'Use 0.25 to 9,999 hours in steps of 0.25',
   task_assignments_limit_ck: 'Use 0.25 to 9,999 hours in steps of 0.25',
+  work_orders_sign_off_ck: "The customer's name is needed while the work order is signed off",
 };
 
 function pgError(err: unknown): PgError | undefined {
