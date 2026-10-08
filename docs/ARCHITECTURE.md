@@ -277,7 +277,9 @@ reloads the workspace. The API calls live in `store/importExport.ts`.
 **Export filter results** in the "⋯" menu of Pipeline, Companies, Contacts and Products (CD-81,
 next to **Import data**) downloads the list the screen shows, with its filters applied (Pipeline:
 the funnel on screen and the lost-deals view too), as `pultly-<list>-<date>.csv`. Owners and
-admins only; the menu is hidden for members. The menu is only on those four list screens.
+admins only; the menu is hidden for members. The menu is only on those four list screens, and on
+Projects (CD-278), where it only exports (no import): the projects the view shows (the board's
+project type, or the list) with code, name, company, lead, type, stage, health, status, start, end.
 
 Products (CD-81) are matched by name like companies (skip or update). Their columns are name,
 description, unit price, unit, quantity, tax %, billing frequency ("One time", "Monthly", …, also
