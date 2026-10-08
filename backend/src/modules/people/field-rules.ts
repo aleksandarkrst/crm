@@ -6,7 +6,7 @@ import type { CallerAccess } from './caller-access';
  */
 export const WORK_FIELDS = ['firstName', 'lastName', 'workEmail', 'jobTitle', 'workPhone', 'workLocation'] as const;
 /** Employment fields: seen by self, managers above (any depth) and Admins. */
-export const EMPLOYMENT_FIELDS = ['employeeNumber', 'employmentStartDate', 'employmentType', 'weeklyHours', 'timesheetRequired', 'attendanceTracked'] as const;
+export const EMPLOYMENT_FIELDS = ['employeeNumber', 'employmentStartDate', 'employmentType', 'weeklyHours', 'timesheetRequired', 'attendanceTracked', 'workType'] as const;
 /** Unit and reports to: Admins only (CD-225; the unit replaced department and team in CD-226). */
 export const ORG_FIELDS = ['unitId', 'managerId'] as const;
 export const PERSONAL_FIELDS = [
@@ -74,6 +74,7 @@ export const FIELD_LABELS: Record<string, string> = {
   weeklyHours: 'the weekly hours',
   timesheetRequired: '"Timesheet required"',
   attendanceTracked: '"Attendance tracked"',
+  workType: 'the work type',
   unitId: 'the unit',
   managerId: 'the manager',
   dateOfBirth: 'the date of birth',

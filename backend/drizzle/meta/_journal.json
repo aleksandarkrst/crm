@@ -484,6 +484,20 @@
       "when": 1791467448575,
       "tag": "0068_task_checklist_comments_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1791471568414,
+      "tag": "0069_employee_work_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1791471572331,
+      "tag": "0070_employee_work_type_history",
+      "breakpoints": true
     }
   ]
 }

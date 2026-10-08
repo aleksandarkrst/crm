@@ -25,6 +25,10 @@ const tenantId = () =>
     .notNull()
     .references(() => tenants.id, { onDelete: 'cascade' });
 
+/** Work type (CD-268): Office gets project tasks, Service work orders, Both either. */
+export const WORK_TYPES = ['office', 'service', 'both'] as const;
+export type WorkType = (typeof WORK_TYPES)[number];
+
 export const EMPLOYMENT_TYPES = ['permanent', 'fixed_term', 'contractor', 'student'] as const;
 export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
 export const LEAVING_REASONS = ['resigned', 'contract_ended', 'dismissed', 'retired', 'other'] as const;
@@ -201,6 +205,8 @@ export const employees = pgTable(
     weeklyHours: numeric('weekly_hours', { precision: 4, scale: 1, mode: 'number' }).notNull().default(40),
     timesheetRequired: boolean('timesheet_required').notNull().default(true),
     attendanceTracked: boolean('attendance_tracked').notNull().default(false),
+    /** What they can be given (CD-268): office staff get project tasks, service staff work orders, both either. */
+    workType: text('work_type', { enum: WORK_TYPES }).notNull().default('office'),
     /** Set only through Deactivate (spec 4.8). */
     employmentEndDate: date('employment_end_date'),
     /** When the deactivation was applied (status Inactive). */
@@ -238,6 +244,7 @@ export const employees = pgTable(
     check('employees_names_ck', sql`length(${t.firstName}) <= 100 and length(btrim(${t.lastName})) between 1 and 100`),
     check('employees_type_ck', sql`${t.employmentType} in ('permanent', 'fixed_term', 'contractor', 'student')`),
     check('employees_weekly_hours_ck', sql`${t.weeklyHours} between 1 and 60`),
+    check('employees_work_type_ck', sql`${t.workType} in ('office', 'service', 'both')`),
     check('employees_leaving_reason_ck', sql`${t.leavingReason} is null or ${t.leavingReason} in ('resigned', 'contract_ended', 'dismissed', 'retired', 'other')`),
     check('employees_not_own_manager_ck', sql`${t.managerId} is null or ${t.managerId} <> ${t.id}`),
     check('employees_team_needs_department_ck', sql`${t.teamId} is null or ${t.departmentId} is not null`),

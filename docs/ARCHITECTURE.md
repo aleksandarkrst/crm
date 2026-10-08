@@ -1311,6 +1311,12 @@ and no "hours" are shown anywhere.
     checkbox, inline text struck through when done, ×, "Add an item" with Add or Enter), Files ("New
     file", extension tiles coloured by type, a name downloads), Comments (avatar, name · date, text,
     "Comment"). @mentions emailing people come later.
+- **Work type** (CD-268, `drizzle/0069`, `0070`): `employees.work_type` Office / Service / Both
+  (default Office), an employment field (owners and admins change it; in the employee's history) that
+  the directory shows to everyone, because pickers filter on it: task assignees are Office and Both,
+  work order technicians Service and Both. Settings → Projects → **Technicians** (`GET
+  /api/technicians`, owners and admins) lists everyone with their team, work type (inline) and open
+  tasks; the employee card's Work section has the same field.
 - **Email "Assigned to a task"** (job `projects.task-assigned`, projects worker): to someone with an
   account assigned by another person, when they're still on the task and `memberships.
   notify_task_assigned` is on (read when sending). Number, name, project, company, due date and a

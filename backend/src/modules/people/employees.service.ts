@@ -58,6 +58,7 @@ const rowColumns = {
   weeklyHours: employees.weeklyHours,
   timesheetRequired: employees.timesheetRequired,
   attendanceTracked: employees.attendanceTracked,
+  workType: employees.workType,
   deactivatedAt: employees.deactivatedAt,
   leavingReason: employees.leavingReason,
   firstLinkedAt: employees.firstLinkedAt,
@@ -347,6 +348,7 @@ export class EmployeesService {
             weeklyHours: input.weeklyHours ?? settings.defaultWeeklyHours,
             timesheetRequired: input.timesheetRequired ?? true,
             attendanceTracked: input.attendanceTracked ?? false,
+            workType: input.workType ?? 'office',
             createdByUserId: ctx.userId,
           });
         const changes = await this.savePersonal(tx, ctx, id, input, undefined);
@@ -605,6 +607,8 @@ function directory(r: EmployeeRow, status: EmployeeStatus) {
     workEmail: r.workEmail,
     workPhone: r.workPhone,
     workLocation: r.workLocation,
+    /** What they can be given (CD-268); the assignee pickers filter on it. */
+    workType: r.workType,
     status,
   };
 }

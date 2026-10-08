@@ -1176,3 +1176,8 @@ a.task-card-project:hover { color: var(--brand); }
 .check-row.done input { color: var(--muted); text-decoration: line-through; }
 .file-tile { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 7px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; display: flex; align-items: center; justify-content: center; }
 .comment { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--divider); }
+
+/* ---------------------------------------------------------------- technicians (CD-268) */
+.techs-table-inner { min-width: 640px; }
+.techs-table-inner > .table-head,
+.techs-table-inner > .table-row { grid-template-columns: minmax(200px, 1.6fr) minmax(130px, 1fr) minmax(210px, 1.2fr) 100px; }

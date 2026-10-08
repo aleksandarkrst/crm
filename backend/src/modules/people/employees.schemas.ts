@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EMPLOYMENT_TYPES } from '../../shared/database/schema';
+import { EMPLOYMENT_TYPES, WORK_TYPES } from '../../shared/database/schema';
 import { IdList, nonEmptyPatch, optionalText } from '../../shared/validation/common';
 import { INVALID_ACCOUNT_MESSAGE, parseBankAccount, parseSwiftBic } from './iban';
 import { cleanName } from './search';
@@ -83,6 +83,7 @@ const fields = {
     .transform((h) => Math.round(h * 10) / 10),
   timesheetRequired: z.boolean(),
   attendanceTracked: z.boolean(),
+  workType: z.enum(WORK_TYPES),
   // Personal details (spec 4.3)
   dateOfBirth,
   privateEmail: optionalEmail,

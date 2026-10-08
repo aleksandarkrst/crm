@@ -35,6 +35,7 @@ export const FIELD_LABEL: Record<string, string> = {
   weeklyHours: 'Weekly hours',
   timesheetRequired: 'Timesheet required',
   attendanceTracked: 'Attendance tracked',
+  workType: 'Work type',
   employmentEndDate: 'Employment end date',
   deactivatedAt: 'Deactivated',
   leavingReason: 'Reason for leaving',
