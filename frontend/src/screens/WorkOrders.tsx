@@ -88,7 +88,7 @@ export function WorkOrders() {
   };
   const setStatus = (order: ApiWorkOrder, status: WorkOrderStatus) => {
     if (status === order.status) return;
-    if (!order.canChange) return flash('You can see this work order but not change it');
+    if (!order.canSetStatus) return flash('Only the technicians, the project lead, owners and admins change the status');
     if (status === 'on_hold') return setHolding(order);
     void save(order, { status }, (w) => `${workOrderId(w)} moved to ${workOrderStatusLabel(status)}`);
   };
@@ -189,7 +189,7 @@ function WorkOrderBoard({ orders, onDrop }: { orders: ApiWorkOrder[]; onDrop: (w
                   className="task-card"
                   data-testid="work-order-card"
                   data-work-order={workOrderId(w)}
-                  draggable={w.canChange}
+                  draggable={w.canSetStatus}
                   onDragStart={(e) => {
                     e.dataTransfer.setData('text/plain', w.id);
                     e.dataTransfer.effectAllowed = 'move';
@@ -272,7 +272,7 @@ function WorkOrdersTable({ orders, onStatus }: { orders: ApiWorkOrder[]; onStatu
             <span style={{ color: 'var(--text-2)' }}>{scheduledText(w) ? `${scheduledText(w)} · ${durationText(w.durationHours)}` : '—'}</span>
             <span style={{ color: 'var(--text-2)' }}>{WORK_ORDER_TYPE_LABEL[w.type]}</span>
             <span>
-              <select className="ghost ghost-sm" aria-label={`Status of ${workOrderId(w)}`} data-testid="work-order-status-select" value={w.status} disabled={!w.canChange} onChange={(e) => onStatus(w, e.target.value as WorkOrderStatus)}>
+              <select className="ghost ghost-sm" aria-label={`Status of ${workOrderId(w)}`} data-testid="work-order-status-select" value={w.status} disabled={!w.canSetStatus} onChange={(e) => onStatus(w, e.target.value as WorkOrderStatus)}>
                 {WORK_ORDER_STATUSES.map((st) => (
                   <option key={st.id} value={st.id}>
                     {st.label}

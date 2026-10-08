@@ -77,7 +77,9 @@ export function WorkOrder() {
     );
   }
 
-  const canEdit = order.canChange;
+  // CD-148: a Completed order is locked until it is reopened; the status has its own rule.
+  const canEdit = order.canChange && !order.locked;
+  const canSetStatus = order.canSetStatus;
   const ref = workOrderId(order);
   const save = async (patch: WorkOrderPatch, message?: (w: ApiWorkOrder) => string): Promise<boolean> => {
     try {
@@ -136,7 +138,7 @@ export function WorkOrder() {
             <div className="deal-actions">
               {order.priority === 'urgent' && <span className="badge badge-danger">Urgent</span>}
               {order.status === 'completed' && <span className="badge badge-brand">Completed</span>}
-              {canEdit &&
+              {canSetStatus &&
                 (order.status === 'completed' ? (
                   <button type="button" className="btn btn-secondary" data-testid="reopen-work-order" onClick={() => setStatus('in_progress')}>
                     Reopen
@@ -180,7 +182,7 @@ export function WorkOrder() {
                 className={'stage-chev' + (i === at ? ' current' : i < at ? ' done' : '')}
                 title={i === at ? `${st.label} (current status)` : `Move to ${st.label}`}
                 aria-current={i === at ? 'step' : undefined}
-                disabled={i === at || !canEdit}
+                disabled={i === at || !canSetStatus}
                 onClick={() => setStatus(st.id)}
               >
                 {st.label}
@@ -190,7 +192,12 @@ export function WorkOrder() {
           {order.status === 'on_hold' && (
             <div className="hold-box" data-testid="hold-box">
               <span style={{ fontWeight: 600 }}>On hold</span>
-              <TextField className="ghost ghost-sm" label="Why the work is paused" value={order.holdReason ?? ''} disabled={!canEdit} required maxLength={200} onSave={(holdReason) => save({ holdReason }, (w) => `${workOrderId(w)} on hold · ${holdReason}`)} />
+              <TextField className="ghost ghost-sm" label="Why the work is paused" value={order.holdReason ?? ''} disabled={!canSetStatus} required maxLength={200} onSave={(holdReason) => save({ holdReason }, (w) => `${workOrderId(w)} on hold · ${holdReason}`)} />
+            </div>
+          )}
+          {order.locked && (
+            <div className="hint-box" data-testid="work-order-locked">
+              Completed{order.completedAt ? ` on ${new Date(order.completedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}. {canSetStatus ? 'Reopen it to change it.' : 'It can no longer be changed.'}
             </div>
           )}
         </div>
