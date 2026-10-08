@@ -415,6 +415,8 @@ export interface State {
   newProject: { companyId?: string; dealId?: string } | null;
   /** The New task dialog (CD-283), open with the project it is fixed to (from a project's Plan tab); null when closed. */
   newTask: { projectId?: string } | null;
+  /** The New work order dialog (CD-265), open with what it starts out for; null when closed. */
+  newWorkOrder: { projectId?: string; companyId?: string } | null;
   newLeadType: SegKey;
   /** Company and contact the New deal dialog starts with (from a company or contact page, CD-80). */
   newLeadCompanyId: string | null;
@@ -484,6 +486,8 @@ export interface State {
   projectRev: number;
   /** Goes up on every task change (live hints `task` and `project`): screens showing tasks read them again (store/tasks.ts). */
   taskRev: number;
+  /** Raised by live hints for work orders (CD-265). */
+  workOrderRev: number;
   /** Employees, org levels and units (milestone 13; see store/people.ts), read when a screen needs them. */
   people: PeopleState;
   /** Goes up on every employee and role change (live hints, resync): people lists re-read (CD-142). */

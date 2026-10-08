@@ -75,10 +75,10 @@ describe('projects', () => {
     await page.waitForFunction(() => location.pathname === '/projects');
     await page.waitForFunction(() => document.querySelector('[data-testid=module-switcher]')?.getAttribute('data-current-module') === 'projects');
     await page.waitForFunction(() => document.querySelector('.search-trigger-text')?.textContent === 'Search projects, tasks, deals');
-    // "+" is "Create in Projects": Project and Task (CD-283).
+    // "+" is "Create in Projects": Project, Task (CD-283) and Work order (CD-265).
     await click(page, '[data-testid=new-menu]');
     assert.match(await page.$eval('.new-menu-pop', (el) => el.textContent), /Create in Projects/);
-    assert.deepEqual(await page.$$eval('.new-menu-pop [role=menuitem]', (els) => els.map((el) => el.getAttribute('data-testid'))), ['new-project', 'new-project-task']);
+    assert.deepEqual(await page.$$eval('.new-menu-pop [role=menuitem]', (els) => els.map((el) => el.getAttribute('data-testid'))), ['new-project', 'new-project-task', 'new-work-order']);
     await page.keyboard.press('Escape');
     // Ctrl/⌘K: the Create group starts with Project.
     await page.keyboard.down('Control');

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, date, foreignKey, index, integer, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, date, foreignKey, index, integer, numeric, pgTable, primaryKey, text, time, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { companies, deals } from './crm';
 import { employees } from './people';
 import { tenants, users } from './platform';
@@ -386,5 +386,93 @@ export const taskComments = pgTable(
     index('task_comments_task_idx').on(t.tenantId, t.taskId, t.createdAt),
     foreignKey({ columns: [t.tenantId, t.taskId], foreignColumns: [tasks.tenantId, tasks.id], name: 'task_comments_task_fk' }).onDelete('cascade'),
     check('task_comments_body_ck', sql`length(btrim(${t.body})) between 1 and 5000`),
+  ],
+);
+
+
+// ---------------------------------------------------------------- work orders (CD-265, design v2 §5)
+
+/** A work order's status: the Work orders kanban columns (design v2 §5). On hold carries a reason. */
+export const WORK_ORDER_STATUSES = ['unscheduled', 'scheduled', 'in_progress', 'on_hold', 'completed'] as const;
+export type WorkOrderStatus = (typeof WORK_ORDER_STATUSES)[number];
+export const WORK_ORDER_TYPES = ['installation', 'repair', 'maintenance', 'inspection'] as const;
+export type WorkOrderType = (typeof WORK_ORDER_TYPES)[number];
+export const WORK_ORDER_PRIORITIES = ['normal', 'urgent'] as const;
+/** At most this many technicians on one work order (CD-259). */
+export const MAX_WORK_ORDER_TECHNICIANS = 20;
+
+/** The last work order number given out in a workspace: WO-1001, WO-1002, … never reused. */
+export const workOrderCounters = pgTable('work_order_counters', {
+  tenantId: uuid('tenant_id')
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  lastNumber: integer('last_number').notNull().default(1000),
+});
+
+/**
+ * A work order (CD-265, design v2 §5): service work for a company, optionally within a project,
+ * done by Service (or Both) technicians. Scheduled needs a technician, a date and a start time.
+ */
+export const workOrders = pgTable(
+  'work_orders',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    /** "WO-1044": per workspace, from `work_order_counters`. */
+    number: integer('number').notNull(),
+    title: text('title').notNull(),
+    companyId: uuid('company_id').notNull(),
+    projectId: uuid('project_id'),
+    type: text('type', { enum: WORK_ORDER_TYPES }).notNull().default('repair'),
+    priority: text('priority', { enum: WORK_ORDER_PRIORITIES }).notNull().default('normal'),
+    status: text('status', { enum: WORK_ORDER_STATUSES }).notNull().default('unscheduled'),
+    /** Why the work is paused: set with status `on_hold`, cleared when it leaves On hold. */
+    holdReason: text('hold_reason'),
+    scheduledDate: date('scheduled_date'),
+    scheduledStart: time('scheduled_start'),
+    /** Planned time in hours, in steps of 0.25. */
+    durationHours: numeric('duration_hours', { precision: 5, scale: 2, mode: 'number' }).notNull().default(2),
+    location: text('location'),
+    equipment: text('equipment'),
+    job: text('job'),
+    report: text('report'),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (t) => [
+    unique('work_orders_tenant_id_uq').on(t.tenantId, t.id),
+    unique('work_orders_number_uq').on(t.tenantId, t.number),
+    index('work_orders_tenant_project_idx').on(t.tenantId, t.projectId),
+    index('work_orders_tenant_company_idx').on(t.tenantId, t.companyId),
+    foreignKey({ columns: [t.tenantId, t.companyId], foreignColumns: [companies.tenantId, companies.id], name: 'work_orders_company_fk' }).onDelete('cascade'),
+    foreignKey({ columns: [t.tenantId, t.projectId], foreignColumns: [projects.tenantId, projects.id], name: 'work_orders_project_fk' }).onDelete('set null'),
+    check('work_orders_title_ck', sql`length(btrim(${t.title})) between 1 and 200`),
+    check('work_orders_status_ck', sql`${t.status} in ('unscheduled', 'scheduled', 'in_progress', 'on_hold', 'completed')`),
+    check('work_orders_type_ck', sql`${t.type} in ('installation', 'repair', 'maintenance', 'inspection')`),
+    check('work_orders_priority_ck', sql`${t.priority} in ('normal', 'urgent')`),
+    check('work_orders_hold_reason_ck', sql`(${t.status} = 'on_hold') = (${t.holdReason} is not null) and (${t.holdReason} is null or length(btrim(${t.holdReason})) between 1 and 200)`),
+    check('work_orders_scheduled_ck', sql`${t.status} <> 'scheduled' or (${t.scheduledDate} is not null and ${t.scheduledStart} is not null)`),
+    check('work_orders_duration_ck', sql`${t.durationHours} between 0.25 and 99 and mod(${t.durationHours} * 4, 1) = 0`),
+    check('work_orders_text_ck', sql`length(${t.location}) <= 300 and length(${t.equipment}) <= 300 and length(${t.job}) <= 10000 and length(${t.report}) <= 10000`),
+  ],
+);
+
+/** The technicians on a work order (CD-259): several, one of them the lead. */
+export const workOrderTechnicians = pgTable(
+  'work_order_technicians',
+  {
+    tenantId: tenantId(),
+    workOrderId: uuid('work_order_id').notNull(),
+    employeeId: uuid('employee_id').notNull(),
+    isLead: boolean('is_lead').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.workOrderId, t.employeeId] }),
+    uniqueIndex('work_order_technicians_lead_uq').on(t.tenantId, t.workOrderId).where(sql`${t.isLead}`),
+    index('work_order_technicians_employee_idx').on(t.tenantId, t.employeeId),
+    foreignKey({ columns: [t.tenantId, t.workOrderId], foreignColumns: [workOrders.tenantId, workOrders.id], name: 'work_order_technicians_wo_fk' }).onDelete('cascade'),
+    foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'work_order_technicians_employee_fk' }).onDelete('cascade'),
   ],
 );

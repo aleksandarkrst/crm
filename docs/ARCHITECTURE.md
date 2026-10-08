@@ -1317,6 +1317,21 @@ and no "hours" are shown anywhere.
   work order technicians Service and Both. Settings → Projects → **Technicians** (`GET
   /api/technicians`, owners and admins) lists everyone with their team, work type (inline) and open
   tasks; the employee card's Work section has the same field.
+- **Work orders** (CD-265, `drizzle/0071`, `0072`): `work_orders` (numbered WO-1001, WO-1002, … per
+  workspace from `work_order_counters`, never reused), `work_order_technicians` (several, the first is
+  the lead, CD-259). Status Unscheduled / Scheduled / In progress / On hold / Completed; On hold carries
+  a reason. Scheduled needs a technician, a date and a start time (a database check): setting all
+  three moves an Unscheduled order to Scheduled, clearing one moves it back. Technicians must be
+  active people with the Service or Both work type (400 otherwise). Type: installation, repair,
+  maintenance, inspection; priority normal or urgent; duration in quarter hours (default 2 h).
+  `GET/POST /api/work-orders`, `GET/PATCH/DELETE /api/work-orders/:id`; every member sees every work
+  order; owners, admins, the project lead, the order's technicians and the one who created it change
+  it (`canChange`), owners, admins and the creator delete it (`canDelete`). Live hint `work_order`.
+  Sidebar **Work orders** (`screens/WorkOrders.tsx`): Kanban / Table toggle (remembered per person
+  and workspace), filters Technician (Me too), Type, Priority and Company, "New work order"
+  (`modals/NewWorkOrderDialog.tsx`; "+" → Work order, W). Dragging a card, or the table's inline
+  status, changes the status; On hold asks why. The work order page, Track time, checklist and
+  sign-off come with CD-266; time entries and the status/time-lock rules with CD-148 and milestone 15.
 - **Email "Assigned to a task"** (job `projects.task-assigned`, projects worker): to someone with an
   account assigned by another person, when they're still on the task and `memberships.
   notify_task_assigned` is on (read when sending). Number, name, project, company, due date and a
