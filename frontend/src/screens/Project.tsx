@@ -14,6 +14,7 @@ import { HEALTH_LABEL, ProjectStatusBadge, projectValue } from './lead/DealProje
 import { dealEmails, ProjectCommunication } from './project/ProjectCommunication';
 import { DropZone, ProjectDocuments, useFileUpload } from './project/ProjectDocuments';
 import { ComingUp, ProjectPlan } from './project/ProjectPlan';
+import { ProjectWorkOrders } from './project/ProjectWorkOrders';
 import { NumberField, Row, TextField } from './project/fields';
 import { ProjectTeam } from './project/ProjectTeam';
 
@@ -307,7 +308,10 @@ export function Project() {
                     <ChangeHistory entity="project" id={project.id} cur={curOf(s)} rev={project.version} />
                   </>
                 ) : tab === 'plan' ? (
-                  <ProjectPlan projectId={project.id} tasks={tasks} stages={stages} canAdd={canAddTasks} onChange={setTasks} />
+                  <>
+                    <ProjectPlan projectId={project.id} tasks={tasks} stages={stages} canAdd={canAddTasks} onChange={setTasks} />
+                    <ProjectWorkOrders projectId={project.id} canAdd={project.status === 'open'} />
+                  </>
                 ) : tab === 'team' ? (
                   <ProjectTeam projectId={project.id} team={team} canEdit={canEdit} onChange={setTeam} />
                 ) : tab === 'communication' ? (

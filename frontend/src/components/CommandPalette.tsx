@@ -11,11 +11,13 @@ import { type Command, ICONS, useCommands } from './commands';
 import { currentModule } from './modules';
 import { Avatar } from './ui';
 import '../styles/header.css';
+import { workOrderId, workOrderStatusLabel } from '../lib/workOrdersApi';
+import { useWorkOrders } from '../store/workOrders';
 
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 export const SEARCH_SHORTCUT = IS_MAC ? '⌘K' : 'Ctrl K';
 
-type Row = { kind: 'command'; command: Command } | { kind: 'record'; record: 'deal' | 'company' | 'contact' | 'employee' | 'project' | 'task'; id: string; title: string; subtitle: string; initials: string };
+type Row = { kind: 'command'; command: Command } | { kind: 'record'; record: 'deal' | 'company' | 'contact' | 'employee' | 'project' | 'task' | 'work_order'; id: string; title: string; subtitle: string; initials: string };
 interface Section {
   label: string;
   rows: Row[];
@@ -53,6 +55,8 @@ export function CommandPalette() {
   const { data: projects } = useProjects();
   // And the tasks the caller can see (CD-283): "T-12 · Task · Project".
   const { data: tasks } = useTasks();
+  // And work orders (CD-263, design v2 "Ctrl K"): "WO-1044 · Work order · Company · Status".
+  const { data: workOrders } = useWorkOrders();
   // In the Projects module its own actions and records come first (CD-229).
   const { pathname } = useLocation();
   const inProjects = currentModule(pathname, session.userId).id === 'projects';
@@ -94,7 +98,18 @@ export function CommandPalette() {
       })
       .slice(0, 4)
       .map((t) => ({ kind: 'record' as const, record: 'task' as const, id: t.id, title: `${taskId(t)} · ${t.name}`, subtitle: `Task · ${t.projectName}`, initials: 'T' }));
-    const projectSection = [...(projectHits.length ? [{ label: 'Projects', rows: projectHits }] : []), ...(taskHits.length ? [{ label: 'Tasks', rows: taskHits }] : [])];
+    const orderHits = (workOrders ?? [])
+      .filter((w) => {
+        const hay = fold(`${workOrderId(w)} ${w.title} ${w.companyName}`);
+        return words.every((x) => hay.includes(x));
+      })
+      .slice(0, 4)
+      .map((w) => ({ kind: 'record' as const, record: 'work_order' as const, id: w.id, title: `${workOrderId(w)} · ${w.title}`, subtitle: `${w.companyName} · ${workOrderStatusLabel(w.status)}`, initials: 'WO' }));
+    const projectSection = [
+      ...(projectHits.length ? [{ label: 'Projects', rows: projectHits }] : []),
+      ...(taskHits.length ? [{ label: 'Tasks', rows: taskHits }] : []),
+      ...(orderHits.length ? [{ label: 'Work orders', rows: orderHits }] : []),
+    ];
     return [
       ...(inProjects ? projectSection : []),
       ...records,
@@ -102,7 +117,7 @@ export function CommandPalette() {
       ...(employees.length ? [{ label: 'Employees', rows: employees }] : []),
       ...(actions.length ? [{ label: 'Actions', rows: actions }] : []),
     ];
-  }, [query, s, commands, projects, tasks, inProjects]);
+  }, [query, s, commands, projects, tasks, workOrders, inProjects]);
   const flat = sections.flatMap((x) => x.rows);
   const current = Math.min(active, Math.max(flat.length - 1, 0));
 
@@ -118,6 +133,7 @@ export function CommandPalette() {
     else if (row.record === 'employee') navigate(paths.employee(row.id));
     else if (row.record === 'project') navigate(paths.project(row.id));
     else if (row.record === 'task') navigate(paths.task(row.id));
+    else if (row.record === 'work_order') navigate(paths.workOrder(row.id));
     else openContact(row.id);
   };
 

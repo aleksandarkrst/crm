@@ -75,6 +75,8 @@ export interface NewProjectInput {
   description?: string | null;
   startDate?: string | null;
   endDate?: string | null;
+  /** "Add starter tasks from the products" (CD-263): a task per product line of the deal. */
+  starterTasks?: boolean;
 }
 
 /** `cancelled` needs `cancelReason`; another type starts at its first stage; another company clears the deal. */

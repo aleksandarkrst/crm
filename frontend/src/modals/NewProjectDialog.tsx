@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Modal, ModalHeader } from '../components/ui';
+import { Modal, ModalHeader, Switch } from '../components/ui';
 import { paths } from '../lib/paths';
 import { projectsApi } from '../lib/projectsApi';
 import { projectError, useProjectTypes } from '../store/projects';
@@ -35,6 +35,8 @@ export function NewProjectDialog() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [saving, setSaving] = useState(false);
+  // "Add starter tasks from the products" (CD-263): off unless asked for.
+  const [starterTasks, setStarterTasks] = useState(false);
   const close = () => set({ newProject: null });
 
   const type = types?.find((t) => t.id === typeId) ?? types?.[0];
@@ -66,6 +68,7 @@ export function NewProjectDialog() {
         code: code.trim() || null,
         startDate: startDate || null,
         endDate: endDate || null,
+        ...(dealId && starterTasks ? { starterTasks: true } : {}),
       });
       flash(fromDeal ? `Project created from ${dealName}` : `Project ${project.name} created`);
       close();
@@ -187,6 +190,17 @@ export function NewProjectDialog() {
           {error ? `Couldn't load project types: ${error}` : type ? type.stages.map((st) => st.name).join(' → ') : 'Loading'}
         </span>
       </div>
+      {dealId && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} data-testid="starter-tasks">
+          <Switch on={starterTasks} onClick={() => setStarterTasks(!starterTasks)} label="Add starter tasks from the products" />
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 13.5, fontWeight: 500 }}>Add starter tasks from the products</span>
+            <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
+              {s.dealLines[dealId]?.length === 0 ? 'The deal has no products yet.' : 'A task per product of the deal, at the first stage. Products sold in hours set the estimate.'}
+            </span>
+          </span>
+        </div>
+      )}
       {fromDeal && !fromDeal.companyId && <div className="hint-box">{blocked}</div>}
       <div className="modal-actions">
         <button type="button" className="btn btn-secondary" onClick={close}>
