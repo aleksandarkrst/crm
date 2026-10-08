@@ -434,7 +434,12 @@ The access token lasts 2 hours, so:
   2. The link is `/signup/verify#<token>` (after `#`, so it stays out of server logs). The token is
      stored as a SHA-256 hash (plus sealed with `APP_SECRET`, so a retried job can email it), works for
      24 hours and once. A new email replaces older links; asking again within 60 s sends nothing.
-  3. `check` shows the address; `complete {token, password}` creates the user at the provider with
+  3. `check` shows the address and the password rules: the Auth0 connection's policy, read with
+     `read:connections` (`password-policy.ts`, the Flexible Password Policy or the legacy levels).
+     The page ticks them off while the person types, and the backend checks them again before
+     calling Auth0, so a refusal says which rule a password misses; rules only Auth0 can check
+     (dictionary, profile data, history, runs like "abc") are listed and left to it.
+     `complete {token, password}` creates the user at the provider with
      `email_verified: true` (Auth0 Management API, `accounts.ts`) and uses the link up. A password the
      provider refuses doesn't use it up. Pultly never stores the password.
   4. `complete` also signs in (the session cookie above), so the new account opens right away.

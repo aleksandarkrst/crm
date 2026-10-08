@@ -7,6 +7,7 @@
  */
 import { getAccessToken, renewSession, type SignedIn } from './auth';
 import { canSignInAgain, sessionEnded, whenSignedInAgain } from './session';
+import type { PasswordPolicy } from './password-rules';
 
 const TENANT_KEY = 'crm.tenantId';
 
@@ -94,7 +95,7 @@ export type SignupProblem = { code: 'invalid' | 'expired' | 'used' | 'exists'; m
 export const signupApi = {
   options: () => publicApi<SignupOptions>('/auth/signup/options'),
   start: (email: string) => publicApi<{ sent: true }>('/auth/signup', { email }),
-  check: (token: string) => publicApi<{ email: string }>('/auth/signup/check', { token }),
+  check: (token: string) => publicApi<{ email: string; password: PasswordPolicy }>('/auth/signup/check', { token }),
   /** Creates the account and signs in: the access token is there unless signing in failed. */
   complete: (token: string, password: string) => publicApi<LinkDone>('/auth/signup/complete', { token, password }),
 };
@@ -105,7 +106,7 @@ export type LinkDone = { email: string } & Partial<SignedIn>;
 /** "Forgot password?" (CD-114): the same shape as creating an account, and the same problems (410). */
 export const passwordApi = {
   forgot: (email: string) => publicApi<{ sent: true }>('/auth/password/forgot', { email }),
-  check: (token: string) => publicApi<{ email: string }>('/auth/password/check', { token }),
+  check: (token: string) => publicApi<{ email: string; password: PasswordPolicy }>('/auth/password/check', { token }),
   reset: (token: string, password: string) => publicApi<LinkDone>('/auth/password/reset', { token, password }),
 };
 

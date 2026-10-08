@@ -10,8 +10,8 @@ import { SignupService } from './signup.service';
 const StartBody = z.object({ email: z.email().max(254).transform((e) => e.trim().toLowerCase()) });
 const Token = z.string().min(20).max(200);
 const CheckBody = z.object({ token: Token });
-// The provider applies its own password policy on top (Auth0: the connection's strength setting).
-const CompleteBody = z.object({ token: Token, password: z.string().min(8, 'Use at least 8 characters.').max(128) });
+// The length and the rest of the rules are the provider's (SignupService checks them, password-policy.ts).
+const CompleteBody = z.object({ token: Token, password: z.string().min(1).max(128) });
 
 /**
  * Having set the password, the person is signed in with it straight away. When that fails (the

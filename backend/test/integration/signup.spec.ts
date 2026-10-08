@@ -9,6 +9,7 @@
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { call, mailTo, ok, type Session, signIn, waitForMail } from './helpers';
+import { DEFAULT_PASSWORD_POLICY } from '../../src/modules/identity/password-policy';
 
 /** A call that sends and returns cookies, as the browser does for /api/auth. */
 async function withCookie(path: string, init: { body?: unknown; cookie?: string; json?: boolean } = {}) {
@@ -53,12 +54,13 @@ describe('create account with email', () => {
   it('confirms the address, then sets the password once', async () => {
     const email = `signup-new-${RUN}@example.test`;
     const token = await requestLink(email.toUpperCase().replace('@EXAMPLE.TEST', '@example.test'));
-    expect(await ok('POST', '/auth/signup/check', { body: { token } }, 200)).toEqual({ email });
+    expect(await ok('POST', '/auth/signup/check', { body: { token } }, 200)).toEqual({ email, password: DEFAULT_PASSWORD_POLICY });
 
     const weak = await call('POST', '/auth/signup/complete', { body: { token, password: 'short' } });
     expect(weak.status).toBe(400);
+    expect(weak.body).toMatchObject({ code: 'password', message: expect.stringContaining('at least 8 characters') });
     // A refused password doesn't use the link up.
-    expect(await ok('POST', '/auth/signup/check', { body: { token } }, 200)).toEqual({ email });
+    expect(await ok('POST', '/auth/signup/check', { body: { token } }, 200)).toEqual({ email, password: DEFAULT_PASSWORD_POLICY });
 
     const done = await withCookie('/auth/signup/complete', { body: { token, password: 'a long enough password' } });
     expect(done.status).toBe(200);
@@ -89,7 +91,7 @@ describe('create account with email', () => {
     const fresh = await requestLink(email, 2);
     expect(fresh).not.toBe(token);
     expect((await call('POST', '/auth/signup/check', { body: { token } })).body).toMatchObject({ code: 'invalid' });
-    expect(await ok('POST', '/auth/signup/check', { body: { token: fresh } }, 200)).toEqual({ email });
+    expect(await ok('POST', '/auth/signup/check', { body: { token: fresh } }, 200)).toEqual({ email, password: DEFAULT_PASSWORD_POLICY });
   });
 
   it('asking again within a minute keeps the link and sends no second email', async () => {
@@ -98,7 +100,7 @@ describe('create account with email', () => {
     await ok('POST', '/auth/signup', { body: { email } }, 202);
     await new Promise((resolve) => setTimeout(resolve, 1500));
     expect(await mailTo(reader, email)).toHaveLength(1);
-    expect(await ok('POST', '/auth/signup/check', { body: { token } }, 200)).toEqual({ email });
+    expect(await ok('POST', '/auth/signup/check', { body: { token } }, 200)).toEqual({ email, password: DEFAULT_PASSWORD_POLICY });
   });
 
   it('answers the same for an existing account, whose owner is emailed to sign in instead', async () => {
@@ -212,7 +214,7 @@ describe('forgot password', () => {
 
     // A reset link can't create an account, nor a sign-up link reset a password.
     expect((await call('POST', '/auth/signup/check', { body: { token } })).body).toMatchObject({ code: 'invalid' });
-    expect(await ok('POST', '/auth/password/check', { body: { token } }, 200)).toEqual({ email: account.email });
+    expect(await ok('POST', '/auth/password/check', { body: { token } }, 200)).toEqual({ email: account.email, password: DEFAULT_PASSWORD_POLICY });
 
     const done = await withCookie('/auth/password/reset', { body: { token, password: 'a brand new password' } });
     expect(done.status).toBe(200);

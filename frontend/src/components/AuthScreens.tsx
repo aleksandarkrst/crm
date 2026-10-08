@@ -2,6 +2,7 @@ import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useState
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ApiError, type LinkDone, passwordApi, type SignupOptions, type SignupProblem, signupApi } from '../lib/api';
 import { adoptSession, authMode, devLogin, googleSignIn, passwordSignIn, takeSignInProblem } from '../lib/auth';
+import { checkPassword, type PasswordPolicy } from '../lib/password-rules';
 import { Logo } from './Logo';
 
 /** The card every screen before the app uses: sign-in, creating an account, workspaces, invites. */
@@ -327,7 +328,7 @@ const PROBLEM_TITLES: Record<SignupProblem['code'], string> = {
   exists: 'You already have an account',
 };
 
-type LinkState = { kind: 'checking' } | { kind: 'password'; email: string } | { kind: 'problem'; problem: SignupProblem };
+type LinkState = { kind: 'checking' } | { kind: 'password'; email: string; policy: PasswordPolicy } | { kind: 'problem'; problem: SignupProblem };
 
 const asProblem = (err: unknown): SignupProblem | null => {
   if (!(err instanceof ApiError) || (err.status !== 410 && err.status !== 409)) return null;
@@ -355,7 +356,7 @@ function ChoosePassword({
   signInNotice,
   onSignedIn,
 }: {
-  check: (token: string) => Promise<{ email: string }>;
+  check: (token: string) => Promise<{ email: string; password: PasswordPolicy }>;
   complete: (token: string, password: string) => Promise<LinkDone>;
   title: string;
   sub: (email: string) => string;
@@ -377,14 +378,15 @@ function ChoosePassword({
   useEffect(() => {
     if (!token) return setState({ kind: 'problem', problem: { code: 'invalid', message: 'The link is incomplete. Open it from the email again, or ask for a new one.' } });
     check(token).then(
-      ({ email }) => setState({ kind: 'password', email }),
+      ({ email, password: policy }) => setState({ kind: 'password', email, policy }),
       (err: unknown) => setState(problemOr(err)),
     );
   }, [token, check]);
 
-  const submit = async (e: FormEvent, email: string) => {
+  const submit = async (e: FormEvent, email: string, policy: PasswordPolicy) => {
     e.preventDefault();
-    if (password.length < 8) return setError('Use at least 8 characters.');
+    const unmet = checkPassword(password, policy).find((rule) => rule.met === false);
+    if (unmet) return setError(`The password doesn't meet this rule: ${unmet.text.charAt(0).toLowerCase()}${unmet.text.slice(1)}.`);
     if (password !== confirm) return setError("The two passwords don't match.");
     setBusy(true);
     setError('');
@@ -420,16 +422,17 @@ function ChoosePassword({
       </Centered>
     );
   }
-  const { email } = state;
+  const { email, policy } = state;
   return (
     <Centered title={title} sub={sub(email)}>
-      <form onSubmit={(e) => void submit(e, email)} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <form onSubmit={(e) => void submit(e, email, policy)} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {/* For password managers: the account the new password belongs to. */}
         <input type="email" autoComplete="username" value={email} readOnly hidden />
         <label className="form-label">
           Password
-          <input className="form-input" type="password" required autoFocus autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" />
+          <input className="form-input" type="password" required autoFocus autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={`At least ${policy.minLength} characters`} />
         </label>
+        <PasswordRules password={password} policy={policy} />
         <label className="form-label">
           Confirm password
           <input className="form-input" type="password" required autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Type it again" />
@@ -440,6 +443,25 @@ function ChoosePassword({
         </button>
       </form>
     </Centered>
+  );
+}
+
+/** The provider's password rules, ticked off while the person types (CD-114). */
+function PasswordRules({ password, policy }: { password: string; policy: PasswordPolicy }) {
+  return (
+    <ul aria-label="Password rules" style={{ listStyle: 'none', margin: '-4px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12.5, lineHeight: 1.4 }}>
+      {checkPassword(password, policy).map((rule) => {
+        const met = rule.met === true && password.length > 0;
+        return (
+          <li key={rule.text} style={{ display: 'flex', gap: 6, color: met ? 'var(--forest)' : 'var(--text-2)' }}>
+            <span role="img" aria-label={rule.met === null ? 'checked when you save' : met ? 'met' : 'not met yet'} style={{ width: 12, flexShrink: 0, textAlign: 'center' }}>
+              {rule.met === null ? '·' : met ? '✓' : '○'}
+            </span>
+            <span>{rule.text}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

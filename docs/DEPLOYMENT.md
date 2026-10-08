@@ -101,15 +101,19 @@ page. In Auth0:
   confirms the email first, then creates the user in Auth0 with the chosen password; "Forgot
   password?" sends a one-hour link and sets the new password the same way:
   - **Applications → Machine to Machine**: create `CRM account creation`, authorize it for the
-    **Auth0 Management API** with only the `create:users` and `update:users` permissions. Put the
+    **Auth0 Management API** with only the `create:users`, `update:users` and `read:connections`
+    permissions (the last lets the app read the connection's password policy, below). Put the
     tenant domain (e.g. `your-tenant.eu.auth0.com`), its client ID and secret in
     `AUTH0_MANAGEMENT_DOMAIN`, `AUTH0_MANAGEMENT_CLIENT_ID`, `AUTH0_MANAGEMENT_CLIENT_SECRET`.
     Without them, email sign-up is hidden and password reset fails. Both also need working email
     (section 4a).
   - **Authentication → Database → Username-Password-Authentication** (or the connection named in
     `AUTH0_DB_CONNECTION`): turn on **Disable Sign Ups**, so nobody creates an unconfirmed account
-    through Auth0 directly; the Management API still can. Its password policy applies to the chosen
-    password.
+    through Auth0 directly; the Management API still can. Its **Password Policy** applies to the
+    chosen password, and the app reads it (`read:connections`, refreshed every 10 minutes): the
+    choose-password page lists those rules and checks them while the person types. Without
+    `read:connections` the page asks for 8 characters only, logs a warning, and Auth0 still refuses
+    what its policy doesn't allow.
   - **Authentication → Social → Google**: enable it for the sign-in application (with your own Google
     OAuth client in production; Auth0's dev keys only work for testing). Its name goes in
     `AUTH_GOOGLE_CONNECTION` (default `google-oauth2`; empty hides "Continue with Google").

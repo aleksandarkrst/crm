@@ -7,6 +7,7 @@ import { DatabaseService, type Tx } from '../../shared/database/database.service
 import { signupRequests, users } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import { AccountDirectory, AccountError } from './accounts';
+import { type PasswordPolicy, passwordProblem } from './password-policy';
 import { signInMethod, signupLinkBox } from './signup-email';
 
 /** What an emailed link is for: creating an account, or choosing a new password ("Forgot password?"). */
@@ -112,10 +113,20 @@ export class SignupService {
     });
   }
 
-  /** The address a working link is for, for the "choose a password" page. Doesn't use the link up. */
-  async check(token: string, purpose: LinkPurpose = 'signup'): Promise<{ email: string }> {
+  /**
+   * The address a working link is for, and the password rules, for the "choose a password" page.
+   * Doesn't use the link up.
+   */
+  async check(token: string, purpose: LinkPurpose = 'signup'): Promise<{ email: string; password: PasswordPolicy }> {
     const [row] = await this.database.db.select().from(signupRequests).where(eq(signupRequests.tokenHash, hashToken(token)));
-    return { email: usable(row, purpose).email };
+    const { email } = usable(row, purpose);
+    return { email, password: await this.accounts.passwordPolicy() };
+  }
+
+  /** Refuses a password that misses the provider's rules before asking the provider. */
+  private async checkPassword(password: string): Promise<void> {
+    const problem = passwordProblem(password, await this.accounts.passwordPolicy());
+    if (problem) refused(new AccountError('password', problem));
   }
 
   /**
@@ -123,6 +134,7 @@ export class SignupService {
    * the provider answers, so the same link can't create two accounts.
    */
   async complete(token: string, password: string): Promise<{ email: string }> {
+    await this.checkPassword(password);
     const outcome = await this.database.db.transaction(async (tx) => {
       const [row] = await tx.select().from(signupRequests).where(eq(signupRequests.tokenHash, hashToken(token))).for('update');
       const { id, email } = usable(row, 'signup');
@@ -154,6 +166,7 @@ export class SignupService {
    * a password have one to reset; the email to any other kind carries no link (SignupEmailJob).
    */
   async resetPassword(token: string, password: string): Promise<{ email: string }> {
+    await this.checkPassword(password);
     const outcome = await this.database.db.transaction(async (tx) => {
       const [row] = await tx.select().from(signupRequests).where(eq(signupRequests.tokenHash, hashToken(token))).for('update');
       const { id, email } = usable(row, 'reset');
