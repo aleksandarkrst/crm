@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { askConfirm } from '../../components/ConfirmDialog';
 import { Modal, ModalHeader } from '../../components/ui';
+import type { WorkspaceTerms } from '../../lib/api';
 import { type ApiProjectType, projectsApi } from '../../lib/projectsApi';
 import { projectError, useProjectTypes } from '../../store/projects';
+import { DEFAULT_TERMS } from '../../store/remote';
 import { useStore } from '../../store/store';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -84,6 +86,7 @@ export function ProjectTypesTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} data-testid="project-types">
+      <NamesCard editable={editable} />
       {!editable && (
         <span data-testid="project-types-read-only" style={{ fontSize: 12, color: 'var(--text-2)' }}>
           Only owners and admins can change project types and their stages.
@@ -361,5 +364,97 @@ function RemoveDialog({
         </button>
       </div>
     </Modal>
+  );
+}
+
+const TERM_FIELDS: { key: keyof WorkspaceTerms; label: string }[] = [
+  { key: 'project', label: 'One project' },
+  { key: 'projects', label: 'Several projects' },
+  { key: 'task', label: 'One task' },
+  { key: 'tasks', label: 'Several tasks' },
+];
+
+/** The same rules as the API: 1 to 30 characters, and a task name can't repeat a project name. */
+function termErrors(t: WorkspaceTerms): Partial<Record<keyof WorkspaceTerms, string>> {
+  const out: Partial<Record<keyof WorkspaceTerms, string>> = {};
+  for (const { key } of TERM_FIELDS) {
+    const v = t[key].trim();
+    if (!v) out[key] = 'Enter a name';
+    else if (v.length > 30) out[key] = 'At most 30 characters';
+  }
+  const projectNames = new Set([t.project.trim().toLowerCase(), t.projects.trim().toLowerCase()]);
+  for (const key of ['task', 'tasks'] as const) if (!out[key] && projectNames.has(t[key].trim().toLowerCase())) out[key] = 'Projects and tasks need different names';
+  return out;
+}
+
+const sameTerms = (a: WorkspaceTerms, b: WorkspaceTerms) => TERM_FIELDS.every(({ key }) => a[key].trim() === b[key].trim());
+
+/**
+ * What this workspace calls projects and tasks (CD-143): singular and plural, used everywhere the
+ * words appear (sidebar, pages, buttons, dialogs, emails) and live for everyone. Owners and admins
+ * change them; others see them read-only.
+ */
+function NamesCard({ editable }: { editable: boolean }) {
+  const { s, flash, saveTerms } = useStore();
+  const saved = s.workspace.terms;
+  const [draft, setDraft] = useState<WorkspaceTerms>(saved);
+  const [errors, setErrors] = useState<Partial<Record<keyof WorkspaceTerms, string>>>({});
+  const [saving, setSaving] = useState(false);
+  // Someone else renamed them: show the new names unless this person is editing.
+  useEffect(() => setDraft((d) => (sameTerms(d, saved) || !editable ? saved : d)), [saved, editable]);
+
+  const submit = async (next: WorkspaceTerms) => {
+    const trimmed = { project: next.project.trim(), projects: next.projects.trim(), task: next.task.trim(), tasks: next.tasks.trim() };
+    const found = termErrors(trimmed);
+    setErrors(found);
+    if (Object.keys(found).length) return;
+    setSaving(true);
+    const refused = await saveTerms(trimmed);
+    setSaving(false);
+    if (refused) return setErrors(refused);
+    setDraft(trimmed);
+    flash(sameTerms(trimmed, DEFAULT_TERMS) ? 'Names reset to Project and Task' : `Names saved: ${trimmed.projects} and ${trimmed.tasks}`);
+  };
+
+  const changed = !sameTerms(draft, saved);
+  return (
+    <div className="card" data-testid="project-terms" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span className="caps">Names</span>
+        <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>What this workspace calls projects and tasks, e.g. Job and Activity. The names show everywhere: the sidebar, pages, buttons and emails.</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+        {TERM_FIELDS.map(({ key, label }) => (
+          <label key={key} className="form-label">
+            {label}
+            <input
+              className="form-input"
+              data-testid={`term-${key}`}
+              value={draft[key]}
+              disabled={!editable || saving}
+              maxLength={40}
+              aria-invalid={!!errors[key]}
+              onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
+              onKeyDown={(e) => e.key === 'Enter' && changed && void submit(draft)}
+            />
+            {errors[key] && (
+              <span data-testid={`term-${key}-error`} style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 500 }}>
+                {errors[key]}
+              </span>
+            )}
+          </label>
+        ))}
+      </div>
+      {editable && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button type="button" className={changed && !saving ? 'btn btn-primary' : 'btn btn-disabled'} disabled={!changed || saving} data-testid="save-terms" onClick={() => void submit(draft)}>
+            {saving ? 'Saving…' : 'Save names'}
+          </button>
+          <button type="button" className="btn btn-secondary" disabled={saving || sameTerms(saved, DEFAULT_TERMS)} data-testid="reset-terms" onClick={() => void submit(DEFAULT_TERMS)}>
+            Reset to defaults
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

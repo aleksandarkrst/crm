@@ -6,6 +6,7 @@ import type { ApiProject } from '../lib/projectsApi';
 import { useCompanyProjects } from '../store/projects';
 import { useStore } from '../store/store';
 import { HealthBadge, ProjectStatusBadge } from './lead/DealProjects';
+import { useTerms } from '../store/terms';
 
 /**
  * The company page's Projects card (CD-234, spec 5): its open projects with stage, lead and health;
@@ -14,6 +15,7 @@ import { HealthBadge, ProjectStatusBadge } from './lead/DealProjects';
  */
 export function CompanyProjects({ companyId }: { companyId: string }) {
   const { set } = useStore();
+  const terms = useTerms();
   const navigate = useNavigate();
   const { data: projects, error } = useCompanyProjects(companyId);
   const [showClosed, setShowClosed] = useState(false);
@@ -39,19 +41,19 @@ export function CompanyProjects({ companyId }: { companyId: string }) {
   );
 
   return (
-    <Section title="Projects" testId="company-projects" action={<AddButton label="Add a project" testId="company-add-project" onClick={() => set({ newProject: { companyId } })} />}>
+    <Section title={terms.Projects} testId="company-projects" action={<AddButton label={`Add ${terms.aProject}`} testId="company-add-project" onClick={() => set({ newProject: { companyId } })} />}>
       {!projects ? (
-        <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{error ? `Couldn't load projects: ${error}` : 'Loading projects'}</span>
+        <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{error ? `Couldn't load ${terms.projects}: ${error}` : `Loading ${terms.projects}`}</span>
       ) : projects.length === 0 ? (
-        <span style={{ fontSize: 13, color: 'var(--text-2)' }}>No projects for this company yet.</span>
+        <span style={{ fontSize: 13, color: 'var(--text-2)' }}>No {terms.projects} for this company yet.</span>
       ) : (
         <>
-          <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Open projects ({open.length})</span>
+          <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Open {terms.projects} ({open.length})</span>
           {open.map(row)}
           {closed.length > 0 && (
             <>
               <button type="button" className="btn-link" data-testid="company-projects-closed" onClick={() => setShowClosed((v) => !v)} style={{ alignSelf: 'flex-start', border: 0, background: 'transparent', padding: '8px 0 0', cursor: 'pointer', color: 'var(--brand)', fontSize: 12.5 }}>
-                {showClosed ? 'Hide closed projects' : `Show closed (${closed.length})`}
+                {showClosed ? `Hide closed ${terms.projects}` : `Show closed (${closed.length})`}
               </button>
               {showClosed && closed.map(row)}
             </>

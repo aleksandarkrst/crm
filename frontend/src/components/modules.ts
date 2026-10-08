@@ -1,4 +1,5 @@
 import { paths } from '../lib/paths';
+import type { Terms } from '../store/terms';
 import type { IconName } from './icons';
 
 /**
@@ -22,6 +23,8 @@ export interface NavDef {
   phone?: boolean;
   /** Owners, admins and managers (people who see their team) only: Reports (CD-135, CD-142). */
   managers?: boolean;
+  /** The label is the workspace's name for projects or tasks (CD-143). */
+  term?: 'Projects' | 'Tasks';
 }
 
 export interface ModuleDef {
@@ -60,8 +63,8 @@ const CRM_NAV: NavDef[] = [
 
 /** Projects' pages: the board and list (CD-234), Tasks (CD-283) and Work orders (CD-265). */
 const PROJECTS_NAV: NavDef[] = [
-  { to: paths.projects, label: 'Projects', icon: 'M4 4h5v16H4zM10 4h5v10h-5zM16 4h4v7h-4z', phone: true },
-  { to: paths.tasks, label: 'Tasks', icon: 'M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2', phone: true },
+  { to: paths.projects, label: 'Projects', term: 'Projects', icon: 'M4 4h5v16H4zM10 4h5v10h-5zM16 4h4v7h-4z', phone: true },
+  { to: paths.tasks, label: 'Tasks', term: 'Tasks', icon: 'M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2', phone: true },
   { to: paths.workOrders, label: 'Work orders', icon: 'M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.3-.7-.7-2.3 2.4-2.4Z', phone: true },
 ];
 
@@ -122,8 +125,8 @@ export function routeModule(pathname: string): ModuleDef | undefined {
 }
 
 /** The sidebar items this person sees in a module: Reports only for owners, admins and managers (CD-142). */
-export function navFor(m: ModuleDef, role: string, seesTeam = false): NavDef[] {
-  return m.nav.filter((n) => !n.managers || seesTeam || role === 'owner' || role === 'admin');
+export function navFor(m: ModuleDef, role: string, seesTeam = false, terms?: Pick<Terms, 'Projects' | 'Tasks'>): NavDef[] {
+  return m.nav.filter((n) => !n.managers || seesTeam || role === 'owner' || role === 'admin').map((n) => (n.term && terms ? { ...n, label: terms[n.term] } : n));
 }
 
 const lastKey = (userId: string) => `crm.module.${userId}`;

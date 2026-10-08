@@ -1117,6 +1117,18 @@ and no "hours" are shown anywhere.
     selected type's name, stages (rename inline, ↑/↓, ×, "New stage") and a stage-bar preview.
     `?type=<id>` selects a type. Deleting something empty uses the app's confirm; with projects, a
     dialog asks where they go. Others see it read-only.
+- **Names for projects and tasks** (CD-143; `drizzle/0075_workspace_terms.sql`): `tenants`
+  `project_term`, `project_term_plural`, `task_term`, `task_term_plural` (Project, Projects, Task,
+  Tasks by default; 1–30 characters each). `GET /api/workspace` returns them as `terms`;
+  `PATCH /api/workspace { terms }` (owners and admins, all four at once) refuses a task name that
+  repeats a project name (400 with the field). The audit entry keeps `previousTerms`. `tenants` has
+  no change trigger, so the service sends the live hint `workspace` itself (`pg_notify`); the store
+  re-reads the workspace settings on it. The frontend reads the names with `useTerms()`
+  (`store/terms.ts`: "Project" to start a label, "project" in a sentence, "a project" / "an
+  activity"); the sidebar items (`NavDef.term`), page titles, crumbs, buttons, dialogs, table
+  headers, Ctrl/⌘K and the "+" menu use it. Settings → Project types has a **Names** card (Save
+  names, Reset to defaults; field errors). The emails "Assigned to a task" and "Project created from
+  a won deal" use them too. The module is still called Projects, and Work order keeps its name.
 - **Projects** (`projects`): name, optional code (≤ 20, unique among open projects), type and stage
   (a composite FK on `(tenant_id, project_type_id, stage_id)` keeps the stage one of the type's),
   `status` (`open`, `completed`, `cancelled`, with `cancel_reason` from the Cancel dialog's list),

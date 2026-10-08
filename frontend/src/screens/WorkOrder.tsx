@@ -28,6 +28,7 @@ import { NumberField, Row, TextField } from './project/fields';
 import { PeoplePicker } from './task/parts';
 import { ChecklistCard } from './task/TaskNotes';
 import { HoldDialog } from './WorkOrders';
+import { useTerms } from '../store/terms';
 
 /** "Wed 30 Sept, 08:00–16:00", or nothing without a date. */
 function whenText(w: Pick<ApiWorkOrder, 'scheduledDate' | 'scheduledStart' | 'durationHours'>): string | null {
@@ -59,6 +60,7 @@ export function WorkOrder() {
   const { data: projects } = useProjects();
   const checklist = useWorkOrderChecklist(id);
   const [holding, setHolding] = useState(false);
+  const terms = useTerms();
   const [adding, setAdding] = useState(false);
   const [menu, setMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -212,8 +214,8 @@ export function WorkOrder() {
                     {order.companyName}
                   </Link>
                 </Row>
-                <Row label="Project">
-                  <select className="ghost ghost-sm" aria-label="Project" data-testid="work-order-project" value={order.projectId ?? ''} disabled={!canEdit} onChange={(e) => void save({ projectId: e.target.value || null })}>
+                <Row label={terms.Project}>
+                  <select className="ghost ghost-sm" aria-label={terms.Project} data-testid="work-order-project" value={order.projectId ?? ''} disabled={!canEdit} onChange={(e) => void save({ projectId: e.target.value || null })}>
                     <option value="">None</option>
                     {companyProjects.map((p) => (
                       <option key={p.id} value={p.id}>

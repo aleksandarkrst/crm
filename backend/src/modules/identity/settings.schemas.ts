@@ -20,6 +20,21 @@ export function isIanaTimeZone(tz: string): boolean {
 
 const atLeastOne = (v: object) => Object.values(v).some((x) => x !== undefined);
 
+/** A name for projects or tasks (CD-143): 1 to 30 characters. */
+const term = z.string().trim().min(1, 'Enter a name').max(30, 'At most 30 characters');
+
+/** What the workspace calls projects and tasks (CD-143). The task names can't repeat a project name. */
+export const WorkspaceTerms = z
+  .object({ project: term, projects: term, task: term, tasks: term })
+  .superRefine((t, ctx) => {
+    const projectNames = new Set([t.project.toLowerCase(), t.projects.toLowerCase()]);
+    for (const key of ['task', 'tasks'] as const) {
+      if (projectNames.has(t[key].toLowerCase())) ctx.addIssue({ code: 'custom', path: [key], message: 'Projects and tasks need different names' });
+    }
+  });
+export type WorkspaceTerms = z.infer<typeof WorkspaceTerms>;
+export const DEFAULT_TERMS: WorkspaceTerms = { project: 'Project', projects: 'Projects', task: 'Task', tasks: 'Tasks' };
+
 export const UpdateWorkspace = z
   .object({
     name: z.string().trim().min(1).max(100),
@@ -41,6 +56,8 @@ export const UpdateWorkspace = z
     autoCreateProjects: z.boolean(),
     // The modules turned on (CD-279): each once; any subset, none included.
     modules: z.array(z.enum(WORKSPACE_MODULES)).max(WORKSPACE_MODULES.length).refine((m) => new Set(m).size === m.length, 'Each module once'),
+    // What the workspace calls projects and tasks (CD-143): all four names at once.
+    terms: WorkspaceTerms,
   })
   .partial()
   .refine(atLeastOne, 'Nothing to update');

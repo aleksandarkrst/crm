@@ -2,6 +2,7 @@ import { useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { paths } from '../lib/paths';
 import { useStore } from '../store/store';
 import { currentModule, DEFAULT_MODULE, navFor } from './modules';
+import { useTerms } from '../store/terms';
 
 /**
  * What the "+" menu and the command palette can do (CD-80). One list, so both offer the same
@@ -46,6 +47,7 @@ export type IconPath = keyof typeof ICONS;
 
 export function useCommands(): Command[] {
   const { s, set, addCompany, meetings, session } = useStore();
+  const terms = useTerms();
   const navigate = useNavigate();
   // On a deal's screen, a new task or contact starts out linked to that deal.
   const dealId = useMatch('/deals/:id')?.params.id;
@@ -69,8 +71,8 @@ export function useCommands(): Command[] {
     { id: 'new-meeting', group: 'Create', label: 'Meeting', hint: 'On the calendar', key: 'M', icon: 'calendar', keywords: 'new create add meeting visit call schedule calendar', run: () => meetings.openDialog(meetingSeed) },
     { id: 'new-product', group: 'Create', label: 'Product', hint: 'Adds to the catalog', key: 'R', icon: 'product', keywords: 'new create add service catalog', run: () => set({ productOpen: true, productEditId: null }) },
     // On a company's page or a won deal's, the project starts out for it (CD-234).
-    { id: 'new-project', group: 'Create', label: 'Project', hint: 'Work for a company', key: 'J', icon: 'project', module: 'projects', keywords: 'new create add project delivery job', run: () => set({ newProject: deal?.outcome === 'won' ? { dealId: deal.id } : companyId ? { companyId } : {} }) },
-    { id: 'new-project-task', group: 'Create', label: inProjects ? 'Task' : 'Project task', hint: 'Work on a project', key: 'K', icon: 'task', module: 'projects', keywords: 'new create add task project plan to-do todo', run: () => set({ newTask: projectId ? { projectId } : {} }) },
+    { id: 'new-project', group: 'Create', label: terms.Project, hint: 'Work for a company', key: 'J', icon: 'project', module: 'projects', keywords: 'new create add project delivery job', run: () => set({ newProject: deal?.outcome === 'won' ? { dealId: deal.id } : companyId ? { companyId } : {} }) },
+    { id: 'new-project-task', group: 'Create', label: inProjects ? terms.Task : `${terms.Project} ${terms.task}`, hint: `Work on ${terms.aProject}`, key: 'K', icon: 'task', module: 'projects', keywords: 'new create add task project plan to-do todo', run: () => set({ newTask: projectId ? { projectId } : {} }) },
     { id: 'new-work-order', group: 'Create', label: 'Work order', hint: 'Service work for a company', key: 'W', icon: 'task', module: 'projects', keywords: 'new create add work order service repair installation maintenance technician', run: () => set({ newWorkOrder: projectId ? { projectId } : companyId ? { companyId } : {} }) },
   ];
   const goTo: Command[] = [
@@ -86,8 +88,8 @@ export function useCommands(): Command[] {
     ...(navFor(DEFAULT_MODULE, session.tenant.role, s.visitScope.seesTeam).some((n) => n.to === paths.reports())
       ? [{ id: 'go-reports', group: 'Go to' as const, label: 'Reports', hint: 'Visit-plan completion', icon: 'reports' as const, keywords: 'report visits completion targets', run: go(paths.reports()) }]
       : []),
-    { id: 'go-projects', group: 'Go to', label: 'Projects', hint: 'Projects · board and list', icon: 'project', keywords: 'projects delivery board', run: go(paths.projects) },
-    { id: 'go-tasks', group: 'Go to', label: 'Tasks', hint: 'Projects · kanban and table', icon: 'task', keywords: 'tasks project plan to-do todo kanban', run: go(paths.tasks) },
+    { id: 'go-projects', group: 'Go to', label: terms.Projects, hint: 'Projects · board and list', icon: 'project', keywords: 'projects delivery board', run: go(paths.projects) },
+    { id: 'go-tasks', group: 'Go to', label: terms.Tasks, hint: 'Projects · kanban and table', icon: 'task', keywords: 'tasks project plan to-do todo kanban', run: go(paths.tasks) },
     { id: 'go-work-orders', group: 'Go to', label: 'Work orders', hint: 'Projects · kanban and table', icon: 'task', keywords: 'work orders service technician repair installation kanban', run: go(paths.workOrders) },
     { id: 'go-org', group: 'Go to', label: 'Org structure', hint: 'Workforce · people and teams', icon: 'org', keywords: 'workforce people employees units departments teams chart', run: go(paths.org()) },
   ];
@@ -96,7 +98,7 @@ export function useCommands(): Command[] {
     { id: 'go-workspace', group: 'Settings', label: 'Workspace settings', hint: 'Name, currency, time zone', icon: 'settings', keywords: 'currency time zone fiscal year', run: go(paths.settings()) },
     { id: 'go-team', group: 'Settings', label: 'Team', hint: 'Members and invitations', icon: 'team', keywords: 'users invite members roles', run: go(paths.settings('team')) },
     { id: 'go-notifications', group: 'Settings', label: 'Notifications', hint: 'Emails you get', icon: 'bell', keywords: 'email digest', run: go(paths.settings('notifications')) },
-    { id: 'go-project-types', group: 'Settings', label: 'Project types', hint: 'Stages of projects', icon: 'project', keywords: 'project stages board', run: go(paths.settings('project-types')) },
+    { id: 'go-project-types', group: 'Settings', label: `${terms.Project} types`, hint: `Stages of ${terms.projects}`, icon: 'project', keywords: 'project stages board', run: go(paths.settings('project-types')) },
     { id: 'go-funnels', group: 'Settings', label: 'Funnel builder', hint: 'Stages and playbooks', icon: 'pipeline', keywords: 'stages checklist playbook', run: go(paths.settings('funnel')) },
     { id: 'go-fields', group: 'Settings', label: 'Customize fields', hint: 'Custom fields', icon: 'settings', keywords: 'custom fields', run: go(paths.settings('fields')) },
     { id: 'go-templates', group: 'Settings', label: 'Document templates', hint: 'Proposals and contracts', icon: 'document', keywords: 'docx proposal contract', run: go(paths.settings('templates')) },

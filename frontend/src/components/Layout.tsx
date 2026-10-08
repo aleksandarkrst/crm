@@ -4,6 +4,7 @@ import { paths } from '../lib/paths';
 import { Modals } from '../modals/Modals';
 import { overdueTasks } from '../store/selectors';
 import { useStore } from '../store/store';
+import { useTerms } from '../store/terms';
 import { GettingStarted } from './GettingStarted';
 import { CommandPalette } from './CommandPalette';
 import { ConfirmHost } from './ConfirmDialog';
@@ -96,7 +97,8 @@ function Sidebar() {
   const name = s.profile.name || session.userName;
   const overdue = overdueTasks(s).length;
   const module = currentModule(pathname, session.userId);
-  const items = navFor(module, session.tenant.role, s.visitScope.seesTeam);
+  const terms = useTerms();
+  const items = navFor(module, session.tenant.role, s.visitScope.seesTeam, terms);
   // Settings and the profile keep the module you came from.
   const own = routeModule(pathname);
   useEffect(() => {

@@ -6,6 +6,7 @@ import { projectsApi } from '../lib/projectsApi';
 import { projectError, useProjectTypes } from '../store/projects';
 import { companyLabels, companyRecords, memberLabels } from '../store/selectors';
 import { useStore } from '../store/store';
+import { useTerms } from '../store/terms';
 
 /**
  * New project (CD-234, CD-275; design v2 §11 and "Dialogs"). Opened with `s.newProject`:
@@ -19,6 +20,7 @@ import { useStore } from '../store/store';
  */
 export function NewProjectDialog() {
   const { s, set, session, flash } = useStore();
+  const terms = useTerms();
   const navigate = useNavigate();
   const seed = s.newProject ?? {};
   const fromDeal = seed.dealId ? s.leads.find((l) => l.id === seed.dealId) : undefined;
@@ -44,11 +46,11 @@ export function NewProjectDialog() {
     .sort((a, b) => Number(b.outcome === 'won') - Number(a.outcome === 'won') || (a.title || '').localeCompare(b.title || ''));
   const dealName = fromDeal ? fromDeal.title || fromDeal.company : '';
   const blocked = fromDeal && !fromDeal.companyId
-    ? 'Add a company to the deal first: a project always belongs to a company.'
+    ? `Add a company to the deal first: ${terms.aProject} always belongs to a company.`
     : !companyId
-      ? 'Pick the company the project is for.'
+      ? `Pick the company the ${terms.project} is for.`
       : !name.trim()
-        ? 'Give the project a name.'
+        ? `Give the ${terms.project} a name.`
         : startDate && endDate && endDate < startDate
           ? "The end date can't be before the start date."
           : null;
@@ -67,7 +69,7 @@ export function NewProjectDialog() {
         startDate: startDate || null,
         endDate: endDate || null,
       });
-      flash(fromDeal ? `Project created from ${dealName}` : `Project ${project.name} created`);
+      flash(fromDeal ? `${terms.Project} created from ${dealName}` : `${terms.Project} ${project.name} created`);
       close();
       navigate(paths.project(project.id));
     } catch (err) {
@@ -80,8 +82,8 @@ export function NewProjectDialog() {
   return (
     <Modal maxWidth={600} onBackdrop={close}>
       <ModalHeader
-        title={fromDeal ? 'New project from deal' : 'New project'}
-        sub={fromDeal ? 'The company, contact, emails and files from the deal are linked to the project.' : 'A project for one of your companies, optionally linked to the deal it came from. Nothing is created until you save.'}
+        title={fromDeal ? `New ${terms.project} from deal` : `New ${terms.project}`}
+        sub={fromDeal ? `The company, contact, emails and files from the deal are linked to the ${terms.project}.` : `${terms.AProject} for one of your companies, optionally linked to the deal it came from. Nothing is created until you save.`}
       />
       {fromDeal ? (
         <div className="hint-box" data-testid="project-deal-summary" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -140,12 +142,12 @@ export function NewProjectDialog() {
         </div>
       )}
       <label className="form-label">
-        Project name
+        {terms.Project} name
         <input className="form-input" data-testid="project-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} placeholder="e.g. Service 2026" />
       </label>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
         <label className="form-label">
-          Project type
+          {terms.Project} type
           <select className="form-input" data-testid="project-type" value={type?.id ?? ''} onChange={(e) => setTypeId(e.target.value)} disabled={!types}>
             {(types ?? []).map((t) => (
               <option key={t.id} value={t.id}>
@@ -155,7 +157,7 @@ export function NewProjectDialog() {
           </select>
         </label>
         <label className="form-label">
-          Project lead
+          {terms.Project} lead
           <select className="form-input" data-testid="project-lead" value={leadUserId} onChange={(e) => setLeadUserId(e.target.value)}>
             {leads.map((o) => (
               <option key={o.value} value={o.value}>
@@ -184,7 +186,7 @@ export function NewProjectDialog() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span className="caps">Stages</span>
         <span data-testid="project-stages" style={{ fontSize: 13, color: 'var(--text-2)' }}>
-          {error ? `Couldn't load project types: ${error}` : type ? type.stages.map((st) => st.name).join(' → ') : 'Loading'}
+          {error ? `Couldn't load ${terms.project} types: ${error}` : type ? type.stages.map((st) => st.name).join(' → ') : 'Loading'}
         </span>
       </div>
       {fromDeal && !fromDeal.companyId && <div className="hint-box">{blocked}</div>}
@@ -200,7 +202,7 @@ export function NewProjectDialog() {
           data-testid="create-project-submit"
           onClick={() => void create()}
         >
-          {saving ? 'Creating…' : 'Create project'}
+          {saving ? 'Creating…' : `Create ${terms.project}`}
         </button>
       </div>
     </Modal>

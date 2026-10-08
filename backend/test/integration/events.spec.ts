@@ -113,6 +113,13 @@ describe('event stream', () => {
     expect(mine.events.some((e) => e.ids?.includes(own.id))).toBe(false);
   });
 
+  it('renamed projects and tasks reach every member at once (CD-143)', async () => {
+    const mine = await openStream(member, tenant);
+    streams.push(mine);
+    await ok('PATCH', '/workspace', { token: owner.token, tenant, headers: { 'x-client-id': 'tab-terms' }, body: { terms: { project: 'Job', projects: 'Jobs', task: 'Step', tasks: 'Steps' } } });
+    expect(await mine.waitFor((e) => e.type === 'workspace')).toMatchObject({ ids: [tenant], client: 'tab-terms' });
+  });
+
   it('requires a signed-in member of the workspace', async () => {
     expect((await call('GET', '/events', { tenant })).status).toBe(401);
     expect((await call('GET', '/events', { token: outsider.token, tenant })).status).toBe(403);

@@ -7,6 +7,7 @@ import { type ApiProject, type ApiProjectHealth, type ApiProjectStatus, projects
 import { projectError, useProjects, useProjectTypes } from '../store/projects';
 import { memberLabels, moneyTotal } from '../store/selectors';
 import { useStore } from '../store/store';
+import { useTerms } from '../store/terms';
 import { HealthBadge, ProjectStatusBadge, projectValue } from './lead/DealProjects';
 import { AvatarStack } from './task/parts';
 
@@ -39,6 +40,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
  */
 export function Projects() {
   const { s, set, session, flash } = useStore();
+  const t = useTerms();
   const navigate = useNavigate();
   const { data: projects, error, set: setProjects } = useProjects();
   const { data: types } = useProjectTypes();
@@ -78,7 +80,7 @@ export function Projects() {
 
   const moveTo = async (p: ApiProject, stageId: string) => {
     if (p.stageId === stageId) return;
-    if (!canEdit(p)) return flash('Only the project lead, owners and admins can move this project');
+    if (!canEdit(p)) return flash(`Only the ${t.project} lead, owners and admins can move this ${t.project}`);
     const before = projects ?? [];
     const stage = type?.stages.find((st) => st.id === stageId);
     setProjects(before.map((x) => (x.id === p.id ? { ...x, stageId, stageName: stage?.name ?? x.stageName } : x)));
@@ -93,7 +95,7 @@ export function Projects() {
   };
 
   return (
-    <Screen title="Projects">
+    <Screen title={t.Projects}>
       <FilterBar
         lead={
           <>
@@ -108,14 +110,14 @@ export function Projects() {
             </div>
             {view === 'board' && (
               <div className="funnel-select">
-                <select aria-label="Project type" data-testid="projects-type" value={type?.id ?? ''} onChange={(e) => setParams({ type: e.target.value }, { replace: true })}>
+                <select aria-label={`${t.Project} type`} data-testid="projects-type" value={type?.id ?? ''} onChange={(e) => setParams({ type: e.target.value }, { replace: true })}>
                   {(types ?? []).map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.name}
                     </option>
                   ))}
                 </select>
-                <button type="button" title="Edit project type" aria-label="Edit project type" data-testid="projects-edit-type" onClick={() => navigate(paths.settings('project-types') + (type ? `?type=${type.id}` : ''))}>
+                <button type="button" title={`Edit ${t.project} type`} aria-label={`Edit ${t.project} type`} data-testid="projects-edit-type" onClick={() => navigate(paths.settings('project-types') + (type ? `?type=${type.id}` : ''))}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />
                   </svg>
@@ -135,26 +137,26 @@ export function Projects() {
           setHealth('Health');
           setStatus('open');
         }}
-        meta={projects ? `${plural(view === 'board' ? onBoard.length : shown.length, STATUS_FILTER.find((x) => x.value === status)!.label.toLowerCase() + ' project')}` : undefined}
-        action={{ label: 'New project', onClick: () => set({ newProject: {} }) }}
+        meta={projects ? `${plural(view === 'board' ? onBoard.length : shown.length, `${STATUS_FILTER.find((x) => x.value === status)!.label.toLowerCase()} ${t.project}`, `${STATUS_FILTER.find((x) => x.value === status)!.label.toLowerCase()} ${t.projects}`)}` : undefined}
+        action={{ label: `New ${t.project}`, onClick: () => set({ newProject: {} }) }}
       />
 
       {unlinkedWon.length > 0 && (
         <div className="hint-box" data-testid="won-without-project" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
           <span style={{ flex: '1 1 300px' }}>
-            {unlinkedWon.length === 1 ? '1 won deal has no project yet: ' : `${unlinkedWon.length} won deals have no project yet, for example `}
+            {unlinkedWon.length === 1 ? `1 won deal has no ${t.project} yet: ` : `${unlinkedWon.length} won deals have no ${t.project} yet, for example `}
             <b style={{ color: 'var(--ink)' }}>
               {unlinkedWon[0]!.company} · {unlinkedWon[0]!.title || unlinkedWon[0]!.company}
             </b>
           </span>
           <button type="button" className="btn btn-outline" onClick={() => set({ newProject: { dealId: unlinkedWon[0]!.id } })}>
-            New project
+            New {t.project}
           </button>
         </div>
       )}
 
       {!projects ? (
-        <div className="hint-box">{error ? `Couldn't load projects: ${error}` : 'Loading projects'}</div>
+        <div className="hint-box">{error ? `Couldn't load ${t.projects}: ${error}` : `Loading ${t.projects}`}</div>
       ) : view === 'list' ? (
         <ProjectsList projects={shown} onOpen={(id) => navigate(paths.project(id))} />
       ) : (
@@ -204,7 +206,7 @@ export function Projects() {
                   >
                     <span style={{ fontSize: 14, fontWeight: 600 }}>{st.name}</span>
                     <span style={{ fontSize: 11.5, color: 'var(--text-2)' }}>
-                      {plural(cards.length, 'project')}
+                      {plural(cards.length, t.project, t.projects)}
                       {cards.some((p) => p.value != null) && ` · ${moneyTotal(s, cards.filter((p) => p.value != null).map((p) => ({ currency: p.currency ?? undefined, amount: Number(p.value) })), true)}`}
                     </span>
                   </div>
@@ -246,7 +248,7 @@ export function Projects() {
                         </span>
                       </div>
                     ))}
-                    {cards.length === 0 && <div className="empty-dashed">No projects</div>}
+                    {cards.length === 0 && <div className="empty-dashed">No {t.projects}</div>}
                   </div>
                 </div>
               );
@@ -260,19 +262,20 @@ export function Projects() {
 
 /** The list view (design v2 §1): every project the filters show, all types. Rows open the project. */
 function ProjectsList({ projects, onOpen }: { projects: ApiProject[]; onOpen: (id: string) => void }) {
+  const t = useTerms();
   return (
     <div className="pipeline-table" data-testid="projects-list">
       <div className="projects-table-inner">
         <div className="table-head caps">
-          <span>Project</span>
+          <span>{t.Project}</span>
           <span>Lead</span>
-          <span>Project type</span>
+          <span>{t.Project} type</span>
           <span>Stage</span>
           <span>Health</span>
           <span>Status</span>
           <span>Finish</span>
         </div>
-        {projects.length === 0 && <div className="pipeline-table-empty">No projects match these filters.</div>}
+        {projects.length === 0 && <div className="pipeline-table-empty">No {t.projects} match these filters.</div>}
         {projects.map((p) => (
           <div key={p.id} className="table-row clickable" data-testid="projects-row" onClick={() => onOpen(p.id)}>
             <span className="pt-cell">

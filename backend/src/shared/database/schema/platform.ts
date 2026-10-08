@@ -42,6 +42,14 @@ export const tenants = pgTable(
     modules: text('modules').array().notNull().default(sql`'{planning,crm,projects,workforce,finance,reporting}'::text[]`),
     /** "Create a project when a deal is won" (CD-233, Settings → Workspace): off by default. */
     autoCreateProjects: boolean('auto_create_projects').notNull().default(false),
+    /**
+     * What this workspace calls projects and tasks (CD-143, Settings → Project types): singular and
+     * plural, shown everywhere the words appear (sidebar, screens, buttons, dialogs, emails).
+     */
+    projectTerm: text('project_term').notNull().default('Project'),
+    projectTermPlural: text('project_term_plural').notNull().default('Projects'),
+    taskTerm: text('task_term').notNull().default('Task'),
+    taskTermPlural: text('task_term_plural').notNull().default('Tasks'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -49,6 +57,7 @@ export const tenants = pgTable(
     check('tenants_modules_ck', sql`${t.modules} <@ '{planning,crm,projects,workforce,finance,reporting}'::text[]`),
     check('tenants_customer_email_language_ck', sql`${t.customerEmailLanguage} in ('en', 'sr')`),
     check('tenants_employee_weekly_hours_ck', sql`${t.employeeDefaultWeeklyHours} between 1 and 60`),
+    check('tenants_terms_ck', sql`char_length(${t.projectTerm}) between 1 and 30 and char_length(${t.projectTermPlural}) between 1 and 30 and char_length(${t.taskTerm}) between 1 and 30 and char_length(${t.taskTermPlural}) between 1 and 30`),
   ],
 );
 

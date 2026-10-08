@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { paths } from '../../lib/paths';
 import { type ApiTask, TASK_STATUSES, taskId } from '../../lib/tasksApi';
 import { dueText, todayIso } from '../../store/tasks';
+import { useTerms } from '../../store/terms';
 
 const DAY = 26;
 const LABEL = 230;
@@ -22,8 +23,9 @@ type Line = { kind: 'band'; label: string } | { kind: 'task'; task: ApiTask };
  * due says so ("Starts before T-3 is due (12 Oct)"). Tasks without dates are listed without a bar.
  */
 export function ProjectGantt({ tasks, bands }: { tasks: ApiTask[]; bands: { id: string; label: string; tasks: ApiTask[] }[] }) {
+  const terms = useTerms();
   const dated = tasks.filter((t) => t.startDate || t.dueDate);
-  if (!tasks.length) return <div className="hint-box">No tasks yet. Add the first one with New task.</div>;
+  if (!tasks.length) return <div className="hint-box">No {terms.tasks} yet. Add the first one with New {terms.task}.</div>;
   const today = dayOf(todayIso());
   const days = dated.flatMap((t) => [t.startDate, t.dueDate].filter((d): d is string => !!d).map(dayOf));
   const first = Math.min(today, ...days) - 2;
@@ -75,7 +77,7 @@ export function ProjectGantt({ tasks, bands }: { tasks: ApiTask[]; bands: { id: 
       <div style={{ width: LABEL + width, position: 'relative' }}>
         <div className="gantt-head" style={{ height: HEAD }}>
           <span className="gantt-label caps-muted" style={{ width: LABEL }}>
-            Task
+            {terms.Task}
           </span>
           <span style={{ position: 'relative', width, height: HEAD }}>
             {ticks.map((t) => (

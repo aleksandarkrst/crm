@@ -16,6 +16,7 @@ import { DropZone, ProjectDocuments, useFileUpload } from './project/ProjectDocu
 import { ComingUp, ProjectPlan } from './project/ProjectPlan';
 import { NumberField, Row, TextField } from './project/fields';
 import { ProjectTeam } from './project/ProjectTeam';
+import { useTerms } from '../store/terms';
 
 /**
  * A project's page (CD-234, design v2 §2), until the Projects module brings tasks, plan, team and
@@ -33,6 +34,7 @@ import { ProjectTeam } from './project/ProjectTeam';
 export function Project() {
   const { id = '' } = useParams();
   const { s, session, flash, ensureLog } = useStore();
+  const t = useTerms();
   const navigate = useNavigate();
   const { data: project, error, set } = useProject(id);
   const { data: types } = useProjectTypes();
@@ -60,8 +62,8 @@ export function Project() {
 
   if (!project) {
     return (
-      <Screen title="Project" parent={{ label: 'Projects', to: paths.projects }}>
-        <div className="hint-box">{error ? `Couldn't load this project: ${error}` : 'Loading the project'}</div>
+      <Screen title={t.Project} parent={{ label: t.Projects, to: paths.projects }}>
+        <div className="hint-box">{error ? `Couldn't load this ${t.project}: ${error}` : `Loading the ${t.project}`}</div>
       </Screen>
     );
   }
@@ -94,7 +96,7 @@ export function Project() {
 
   const remove = async () => {
     setMenu(false);
-    const yes = await askConfirm({ title: `Delete ${project.name}?`, message: 'The project and its history are deleted. The company and the deal are kept.', confirmLabel: 'Delete project', danger: true });
+    const yes = await askConfirm({ title: `Delete ${project.name}?`, message: `The ${t.project} and its history are deleted. The company and the deal are kept.`, confirmLabel: `Delete ${t.project}`, danger: true });
     if (!yes) return;
     try {
       await projectsApi.deleteProject(project.id);
@@ -106,12 +108,12 @@ export function Project() {
   };
 
   return (
-    <Screen title="Project" parent={{ label: 'Projects', to: paths.projects }}>
+    <Screen title={t.Project} parent={{ label: t.Projects, to: paths.projects }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }} data-testid="project-page">
         <div className="card deal-header" style={{ padding: '16px 20px' }}>
           <div className="deal-crumb">
             <Link to={paths.projects} className="crumb-link">
-              Projects
+              {t.Projects}
             </Link>
             <span aria-hidden>→</span>
             <Link to={paths.company(project.companyId)} className="crumb-link" style={{ color: 'var(--ink)' }}>
@@ -122,7 +124,7 @@ export function Project() {
             <TextField
               className="ghost deal-title"
               testId="project-title"
-              label="Project name"
+              label={`${t.Project} name`}
               value={project.name}
               disabled={!canEdit}
               required
@@ -133,16 +135,16 @@ export function Project() {
               {project.status === 'cancelled' && project.cancelReason && <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{project.cancelReason}</span>}
               {canEdit &&
                 (closed ? (
-                  <button type="button" className="btn btn-secondary" data-testid="reopen-project" disabled={busy} onClick={() => void update({ status: 'open' }, () => 'Project reopened')}>
+                  <button type="button" className="btn btn-secondary" data-testid="reopen-project" disabled={busy} onClick={() => void update({ status: 'open' }, () => `${t.Project} reopened`)}>
                     Reopen
                   </button>
                 ) : (
                   <>
-                    <button type="button" className="btn btn-primary" data-testid="complete-project" disabled={busy} onClick={() => void update({ status: 'completed' }, () => 'Project completed')}>
+                    <button type="button" className="btn btn-primary" data-testid="complete-project" disabled={busy} onClick={() => void update({ status: 'completed' }, () => `${t.Project} completed`)}>
                       Complete
                     </button>
                     <button type="button" className="btn btn-outline" data-testid="cancel-project" disabled={busy} onClick={() => setCancelling(true)} style={{ fontSize: 13, padding: '9px 14px' }}>
-                      Cancel project
+                      Cancel {t.project}
                     </button>
                   </>
                 ))}
@@ -154,7 +156,7 @@ export function Project() {
                   {menu && (
                     <div className="deal-menu" role="menu">
                       <button type="button" role="menuitem" data-testid="delete-project" onClick={() => void remove()}>
-                        Delete project
+                        Delete {t.project}
                       </button>
                     </div>
                   )}
@@ -192,14 +194,14 @@ export function Project() {
                 <Row label="Code">
                   <TextField className="ghost ghost-sm" label="Code" value={project.code ?? ''} disabled={!canEdit} placeholder="None" maxLength={20} onSave={(v) => update({ code: v || null })} />
                 </Row>
-                <Row label="Project type">
+                <Row label={`${t.Project} type`}>
                   <select
                     className="ghost ghost-sm"
-                    aria-label="Project type"
+                    aria-label={`${t.Project} type`}
                     data-testid="project-type-field"
                     value={project.projectTypeId}
                     disabled={!canEdit || busy}
-                    onChange={(e) => void update({ projectTypeId: e.target.value }, (p) => `${p.name} is now a ${p.projectTypeName} project, in ${p.stageName}`)}
+                    onChange={(e) => void update({ projectTypeId: e.target.value }, (p) => `${p.name} is now a ${p.projectTypeName} ${t.project}, in ${p.stageName}`)}
                   >
                     {(types ?? [{ id: project.projectTypeId, name: project.projectTypeName }]).map((t) => (
                       <option key={t.id} value={t.id}>
@@ -246,7 +248,7 @@ export function Project() {
                   </span>
                 </Row>
                 <Row label="Description">
-                  <TextField multiline className="ghost ghost-sm" label="Description" value={project.description ?? ''} disabled={!canEdit} placeholder="What the project delivers" maxLength={5000} onSave={(v) => update({ description: v || null })} />
+                  <TextField multiline className="ghost ghost-sm" label="Description" value={project.description ?? ''} disabled={!canEdit} placeholder={`What the ${t.project} delivers`} maxLength={5000} onSave={(v) => update({ description: v || null })} />
                 </Row>
               </div>
             </div>
@@ -267,7 +269,7 @@ export function Project() {
                     </span>
                   ))
                 ) : (
-                  <span style={{ fontSize: 13, color: 'var(--text-2)' }}>No one is on this project yet.</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-2)' }}>No one is on this {t.project} yet.</span>
                 )}
               </div>
             </div>
@@ -332,7 +334,7 @@ export function Project() {
           name={project.name}
           onClose={() => setCancelling(false)}
           onCancel={async (reason) => {
-            if (await update({ status: 'cancelled', cancelReason: reason }, () => 'Project cancelled')) setCancelling(false);
+            if (await update({ status: 'cancelled', cancelReason: reason }, () => `${t.Project} cancelled`)) setCancelling(false);
           }}
         />
       )}
@@ -343,6 +345,7 @@ export function Project() {
 /** The company and the deal (spec 3.2): the deal is one of the company's, won first; lost ones aren't offered. */
 function LinkedCard({ project, canEdit, busy, update }: { project: ApiProject; canEdit: boolean; busy: boolean; update: (patch: ProjectPatch, done?: (p: ApiProject) => string) => Promise<boolean> }) {
   const { s } = useStore();
+  const t = useTerms();
   const records = companyRecords(s);
   const labels = companyLabels(records);
   const deals = s.leads
@@ -353,7 +356,7 @@ function LinkedCard({ project, canEdit, busy, update }: { project: ApiProject; c
     if (companyId === project.companyId) return;
     const name = records.find((r) => r.id === companyId)?.name ?? 'the other company';
     if (project.dealId) {
-      const yes = await askConfirm({ title: `Move ${project.name} to ${name}?`, message: `The link to the deal ${project.dealTitle ?? ''} is removed: a project's deal is always one of its company's.`, confirmLabel: 'Move project' });
+      const yes = await askConfirm({ title: `Move ${project.name} to ${name}?`, message: `The link to the deal ${project.dealTitle ?? ''} is removed: a ${t.project}'s deal is always one of its company's.`, confirmLabel: `Move ${t.project}` });
       if (!yes) return;
     }
     await update({ companyId }, (p) => `${p.name} moved to ${p.companyName}`);
@@ -419,11 +422,12 @@ function LinkedCard({ project, canEdit, busy, update }: { project: ApiProject; c
 
 /** Design v2 §2: "Cancel this project?" with the reason pills. */
 function CancelDialog({ name, onClose, onCancel }: { name: string; onClose: () => void; onCancel: (reason: ApiProjectCancelReason) => Promise<void> }) {
+  const t = useTerms();
   const [reason, setReason] = useState<ApiProjectCancelReason | null>(null);
   const [saving, setSaving] = useState(false);
   return (
     <Modal maxWidth={480} onBackdrop={onClose}>
-      <ModalHeader title="Cancel this project?" sub={`Open tasks stay as they are and ${name} leaves the workload. You can reopen it later.`} />
+      <ModalHeader title={`Cancel this ${t.project}?`} sub={`Open ${t.tasks} stay as they are and ${name} leaves the workload. You can reopen it later.`} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <span className="caps">Reason</span>
         <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }} data-testid="cancel-reasons">
@@ -436,7 +440,7 @@ function CancelDialog({ name, onClose, onCancel }: { name: string; onClose: () =
       </div>
       <div className="modal-actions">
         <button type="button" className="btn btn-secondary" onClick={onClose}>
-          Keep project
+          Keep {t.project}
         </button>
         <button
           type="button"
@@ -450,7 +454,7 @@ function CancelDialog({ name, onClose, onCancel }: { name: string; onClose: () =
             setSaving(false);
           }}
         >
-          Cancel project
+          Cancel {t.project}
         </button>
       </div>
     </Modal>

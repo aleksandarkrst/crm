@@ -5,6 +5,7 @@ import { durationError, WORK_ORDER_TYPE_LABEL, type WorkOrderPriority, type Work
 import { projectError, useProjects } from '../store/projects';
 import { companyLabels, companyRecords, initialsOf } from '../store/selectors';
 import { useStore } from '../store/store';
+import { useTerms } from '../store/terms';
 
 /**
  * New work order (CD-265, design v2 §6). Opened with `s.newWorkOrder`: from a project the project
@@ -14,6 +15,7 @@ import { useStore } from '../store/store';
  */
 export function NewWorkOrderDialog() {
   const { s, set, flash } = useStore();
+  const terms = useTerms();
   const seed = s.newWorkOrder ?? {};
   const { data: projects } = useProjects();
   const records = companyRecords(s);
@@ -103,9 +105,9 @@ export function NewWorkOrderDialog() {
           )}
         </label>
         <label className="form-label">
-          Project
+          {terms.Project}
           <select className="form-input" data-testid="work-order-project" value={projectId} disabled={!!seed.projectId || !company} onChange={(e) => setProjectId(e.target.value)}>
-            <option value="">No project</option>
+            <option value="">No {terms.project}</option>
             {(seedProject ? [seedProject] : projectsOfCompany).map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}

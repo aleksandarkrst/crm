@@ -9,6 +9,7 @@ import { projectError } from '../../store/projects';
 import { initialsOf } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import { activeAssignees, dueText, hours, isLate, todayIso } from '../../store/tasks';
+import { useTerms } from '../../store/terms';
 
 /** Up to `max` people as overlapping avatars, then "+N" (board cards, tables). */
 export function AvatarStack({ names, max = 3, size = 24 }: { names: string[]; max?: number; size?: number }) {
@@ -249,6 +250,7 @@ export function PeoplePicker({
   const { people, error } = useDirectory(kind);
   const [team, setTeam] = useState<ApiProjectMember[]>([]);
   const [q, setQ] = useState('');
+  const terms = useTerms();
   useEffect(() => {
     if (!projectId) return setTeam([]);
     let live = true;
@@ -265,10 +267,10 @@ export function PeoplePicker({
     const onTeam = new Set(team.map((m) => m.employeeId));
     const rows = (people ?? []).filter((p) => !taken.has(p.id)).filter((p) => !needle || `${p.fullName} ${p.jobTitle ?? ''} ${p.unitName ?? ''}`.toLowerCase().includes(needle));
     return [
-      { label: 'Project team', rows: rows.filter((p) => onTeam.has(p.id)) },
+      { label: `${terms.Project} team`, rows: rows.filter((p) => onTeam.has(p.id)) },
       { label: 'Others', rows: rows.filter((p) => !onTeam.has(p.id)) },
     ].filter((g) => g.rows.length);
-  }, [people, team, taken, q]);
+  }, [people, team, taken, q, terms.Project]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

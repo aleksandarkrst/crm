@@ -211,10 +211,18 @@ export interface ApiWorkspace {
   autoCreateProjects: boolean;
   /** The modules turned on (CD-279): planning, crm, projects, workforce, finance, reporting. */
   modules: string[];
+  /** What the workspace calls projects and tasks (CD-143), singular and plural. */
+  terms: WorkspaceTerms;
+}
+export interface WorkspaceTerms {
+  project: string;
+  projects: string;
+  task: string;
+  tasks: string;
 }
 export type ApiCustomerEmailLanguage = 'en' | 'sr';
 export type WorkspaceInput = Partial<
-  Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth' | 'customerEmailLanguage' | 'employeeDefaultWeeklyHours' | 'employeeNumberRequired' | 'employeeSelfEditBank' | 'ceoEmployeeId' | 'autoCreateProjects' | 'modules'>
+  Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth' | 'customerEmailLanguage' | 'employeeDefaultWeeklyHours' | 'employeeNumberRequired' | 'employeeSelfEditBank' | 'ceoEmployeeId' | 'autoCreateProjects' | 'modules' | 'terms'>
 >;
 export type ApiLanguage = 'en' | 'sr' | 'de';
 export type ApiDateFormat = 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';

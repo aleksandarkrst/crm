@@ -11,6 +11,7 @@ import { type Command, ICONS, useCommands } from './commands';
 import { currentModule } from './modules';
 import { Avatar } from './ui';
 import '../styles/header.css';
+import { useTerms } from '../store/terms';
 
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 export const SEARCH_SHORTCUT = IS_MAC ? '⌘K' : 'Ctrl K';
@@ -39,6 +40,7 @@ export function CommandPalette() {
   const { s, set, openLead, openCompany, openContact, people, session } = useStore();
   const navigate = useNavigate();
   const commands = useCommands();
+  const terms = useTerms();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const input = useRef<HTMLInputElement>(null);
@@ -93,8 +95,8 @@ export function CommandPalette() {
         return words.every((w) => hay.includes(w));
       })
       .slice(0, 4)
-      .map((t) => ({ kind: 'record' as const, record: 'task' as const, id: t.id, title: `${taskId(t)} · ${t.name}`, subtitle: `Task · ${t.projectName}`, initials: 'T' }));
-    const projectSection = [...(projectHits.length ? [{ label: 'Projects', rows: projectHits }] : []), ...(taskHits.length ? [{ label: 'Tasks', rows: taskHits }] : [])];
+      .map((t) => ({ kind: 'record' as const, record: 'task' as const, id: t.id, title: `${taskId(t)} · ${t.name}`, subtitle: `${terms.Task} · ${t.projectName}`, initials: 'T' }));
+    const projectSection = [...(projectHits.length ? [{ label: terms.Projects, rows: projectHits }] : []), ...(taskHits.length ? [{ label: terms.Tasks, rows: taskHits }] : [])];
     return [
       ...(inProjects ? projectSection : []),
       ...records,
@@ -102,7 +104,7 @@ export function CommandPalette() {
       ...(employees.length ? [{ label: 'Employees', rows: employees }] : []),
       ...(actions.length ? [{ label: 'Actions', rows: actions }] : []),
     ];
-  }, [query, s, commands, projects, tasks, inProjects]);
+  }, [query, s, commands, projects, tasks, inProjects, terms]);
   const flat = sections.flatMap((x) => x.rows);
   const current = Math.min(active, Math.max(flat.length - 1, 0));
 

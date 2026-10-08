@@ -7,6 +7,7 @@ import { type ApiTask, TASK_STATUSES, taskId, type TaskStatus } from '../lib/tas
 import { activeAssignees, hours, isLate, todayIso, useTasks } from '../store/tasks';
 import { useStore } from '../store/store';
 import { AvatarStack, DueLabel, TaskBoard, useTaskUpdate } from './task/parts';
+import { useTerms } from '../store/terms';
 
 type View = 'kanban' | 'table';
 const VIEWS: { id: View; label: string; icon: string }[] = [
@@ -35,6 +36,7 @@ const weekAfter = (iso: string) => {
  */
 export function Tasks() {
   const { s, set, session } = useStore();
+  const terms = useTerms();
   const navigate = useNavigate();
   const { data: tasks, error, set: setTasks } = useTasks();
   const [view, setViewState] = useState<View>(() => {
@@ -75,7 +77,7 @@ export function Tasks() {
   const estimate = open.reduce((a, t) => a + (t.estimateHours ?? 0), 0);
 
   return (
-    <Screen title="Tasks">
+    <Screen title={terms.Tasks}>
       <FilterBar
         lead={
           <div className="view-toggle" role="group" aria-label="View">
@@ -89,7 +91,7 @@ export function Tasks() {
           </div>
         }
         chips={[
-          { value: project, options: ['Project', ...projects], onChange: setProject },
+          { value: project, options: [{ value: 'Project', label: terms.Project }, ...projects], onChange: setProject },
           { value: assignee, options: ['Assignee', ...(me ? [{ value: 'me', label: 'Me' }] : []), ...people], onChange: setAssignee },
           { value: due, options: ['Due', ...DUE_FILTER], onChange: setDue },
         ]}
@@ -99,18 +101,20 @@ export function Tasks() {
           setAssignee('Assignee');
           setDue('Due');
         }}
-        meta={tasks ? `${plural(shown.length, 'task')}${estimate ? ` · ${hours(estimate)} estimated` : ''}` : undefined}
-        action={{ label: 'New task', onClick: () => set({ newTask: project !== 'Project' ? { projectId: project } : {} }) }}
+        meta={tasks ? `${plural(shown.length, terms.task, terms.tasks)}${estimate ? ` · ${hours(estimate)} estimated` : ''}` : undefined}
+        action={{ label: `New ${terms.task}`, onClick: () => set({ newTask: project !== 'Project' ? { projectId: project } : {} }) }}
       />
 
       {!tasks ? (
-        <div className="hint-box">{error ? `Couldn't load tasks: ${error}` : 'Loading tasks'}</div>
+        <div className="hint-box">{error ? `Couldn't load ${terms.tasks}: ${error}` : `Loading ${terms.tasks}`}</div>
       ) : view === 'table' ? (
         <TasksTable tasks={shown} onOpen={(id) => navigate(paths.task(id))} onStatus={setStatus} />
       ) : (
         <>
           <TaskBoard tasks={shown} columns={TASK_STATUSES} columnOf={(t) => t.status} onDrop={(t, status) => setStatus(t, status as TaskStatus)} />
-          <p style={{ fontSize: 12.5, color: 'var(--text-2)', margin: '10px 0 0' }}>Drag a task to change its status. Click a task to open it, or the project name to open the project.</p>
+          <p style={{ fontSize: 12.5, color: 'var(--text-2)', margin: '10px 0 0' }}>
+            Drag {terms.aTask} to change its status. Click {terms.aTask} to open it, or the {terms.project} name to open the {terms.project}.
+          </p>
         </>
       )}
       {dialog}
@@ -120,20 +124,21 @@ export function Tasks() {
 
 /** The table view (design v2 §3): ID, Task, Project (+ company), Stage, Assignees, Est. h, Due, Status (inline). */
 function TasksTable({ tasks, onOpen, onStatus }: { tasks: ApiTask[]; onOpen: (id: string) => void; onStatus: (t: ApiTask, s: TaskStatus) => void }) {
+  const terms = useTerms();
   return (
     <div className="pipeline-table" data-testid="tasks-table">
       <div className="tasks-table-inner">
         <div className="table-head caps">
           <span>ID</span>
-          <span>Task</span>
-          <span>Project</span>
+          <span>{terms.Task}</span>
+          <span>{terms.Project}</span>
           <span>Stage</span>
           <span>Assignees</span>
           <span>Est. h</span>
           <span>Due</span>
           <span>Status</span>
         </div>
-        {tasks.length === 0 && <div className="pipeline-table-empty">No tasks match these filters.</div>}
+        {tasks.length === 0 && <div className="pipeline-table-empty">No {terms.tasks} match these filters.</div>}
         {tasks.map((t) => (
           <div key={t.id} className="table-row clickable" data-testid="tasks-row" onClick={() => onOpen(t.id)}>
             <span style={{ color: 'var(--text-2)' }}>{taskId(t)}</span>

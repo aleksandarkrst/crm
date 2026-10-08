@@ -4,6 +4,7 @@ import { quarterHourError, taskId, tasksApi } from '../lib/tasksApi';
 import { projectError, useProjects } from '../store/projects';
 import { useStore } from '../store/store';
 import { PeoplePicker } from '../screens/task/parts';
+import { useTerms } from '../store/terms';
 
 /**
  * New task (CD-283, design v2 "Dialogs"). Opened with `s.newTask`: from a project's Plan tab the
@@ -13,6 +14,7 @@ import { PeoplePicker } from '../screens/task/parts';
  */
 export function NewTaskDialog() {
   const { s, set, flash } = useStore();
+  const terms = useTerms();
   const seed = s.newTask ?? {};
   const { data: projects, error } = useProjects();
   const [projectId, setProjectId] = useState(seed.projectId ?? '');
@@ -26,7 +28,7 @@ export function NewTaskDialog() {
   const open = (projects ?? []).filter((p) => p.status === 'open');
   const fixed = seed.projectId ? projects?.find((p) => p.id === seed.projectId) : undefined;
   const estimateError = estimate.trim() ? quarterHourError(Number(estimate)) : null;
-  const blocked = !projectId ? 'Pick the project the task belongs to.' : !name.trim() ? 'Give the task a name.' : estimateError;
+  const blocked = !projectId ? `Pick the ${terms.project} the ${terms.task} belongs to.` : !name.trim() ? `Give the ${terms.task} a name.` : estimateError;
 
   const create = async () => {
     if (blocked || saving) return;
@@ -49,13 +51,13 @@ export function NewTaskDialog() {
 
   return (
     <Modal maxWidth={600} onBackdrop={close}>
-      <ModalHeader title="New task" sub="Office work on a project: quotes, calls, admin, follow-ups. It goes into the project plan at its current stage." />
+      <ModalHeader title={`New ${terms.task}`} sub={`Office work on ${terms.aProject}: quotes, calls, admin, follow-ups. It goes into the ${terms.project} plan at its current stage.`} />
       <label className="form-label">
-        Task
+        {terms.Task}
         <input className="form-input" autoFocus data-testid="task-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} placeholder="e.g. Survey report and unit sizing" />
       </label>
       <label className="form-label">
-        Project
+        {terms.Project}
         {seed.projectId ? (
           <input className="form-input" value={fixed ? `${fixed.name} · ${fixed.companyName}` : ''} disabled data-testid="task-project-fixed" />
         ) : (
@@ -68,7 +70,7 @@ export function NewTaskDialog() {
               setPicked(new Set());
             }}
           >
-            <option value="">{error ? `Couldn't load projects: ${error}` : 'Pick a project'}</option>
+            <option value="">{error ? `Couldn't load ${terms.projects}: ${error}` : `Pick ${terms.aProject}`}</option>
             {open.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name} · {p.companyName}
@@ -105,7 +107,7 @@ export function NewTaskDialog() {
             }
           />
         ) : (
-          <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Pick a project first: its team is listed first.</span>
+          <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Pick {terms.aProject} first: its team is listed first.</span>
         )}
       </div>
       <div className="modal-actions">
@@ -120,7 +122,7 @@ export function NewTaskDialog() {
           data-testid="create-task-submit"
           onClick={() => void create()}
         >
-          {saving ? 'Adding…' : 'Add task'}
+          {saving ? 'Adding…' : `Add ${terms.task}`}
         </button>
       </div>
     </Modal>
