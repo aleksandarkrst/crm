@@ -9,9 +9,19 @@
 **Fidelity:** high. Every class used (`deal-header`, `deal-crumb`, `deal-header-top`, `deal-actions`, `stage-bar`, `stage-chev`, `card`, `caps`, `field-row`, `field-label`, `ghost ghost-sm`, `select-wrap`, `box-input`, `table-head`, `table-row`, `badge-*`, `btn-*`, `modal`, `overlay`, `hint-box`) already exists in `frontend/src/styles/global.css`. Reuse `FilterBar` from `components/ui.tsx`, and the pipeline column and card markup from `screens/Pipeline.tsx`.
 
 ## App shell (CD-229)
-- **Sidebar:** the Pultly mark, then the module switcher showing "Projects", then the nav items **Projects** (board icon), **Tasks** (list icon), **Work orders** (wrench) and **Dispatch** (calendar). Settings sits at the bottom.
-- **Header:** `Screen` with the title. Record pages use crumbs in the `deal-crumb` (for example "Projects → Northwind Logistics"). The search pill reads "Search projects, tasks, work orders". "+" opens "Create in Projects": Project, Task, Work order.
-- **Ctrl K:** opens the command palette with groups Projects, Tasks and Work orders.
+- **Sidebar (96 px, Forest):**
+  - the Pultly mark, which links to the workspace home (Planning → Business plan);
+  - the workspace switcher (`WorkspaceSwitcher`), showing the current company and the module "Projects"; it opens the module and workspace popover;
+  - three nav items, icon over label: **Projects** (folder), **Tasks** (tick) and **Work orders** (wrench). The active item is the Green 500 46×42 tile. Projects stays active on a project page, and on a task or work order opened from a project.
+  - Dispatch has no nav item. It opens from "Open dispatch" on a project's Work orders list, or from Ctrl K → Go to. Settings is not in the sidebar; it opens from Ctrl K → Workspace settings.
+- **Header (`screen-header`):**
+  - left: the screen title (Projects, Tasks, Work orders, Dispatch, Settings, Reports · Workload). Record pages add crumbs in the `deal-crumb`, for example "Projects → Northwind Logistics".
+  - centre: the search pill "Search projects, tasks, work orders" with a `Ctrl K` key hint (`⌘ K` on Mac), then "+", which opens the "Create in Projects" menu: Project, Task, Work order. Work order prefills the project when opened from a project page.
+  - right: the notifications bell and the user avatar.
+- **Ctrl K (command palette):** opens from the shortcut or the search pill. Groups:
+  - **Create:** Project, Task, Work order, plus Deal (CRM) and Time off request (Workforce);
+  - **Go to:** Projects, Tasks, Work orders, Dispatch, CRM, Workforce, Workspace settings;
+  - **Projects**, **Tasks** and **Work orders:** search results, up to 4 per group ("Name · Company · Code", "ID · Task · Project", "ID · Work order · Company · Status").
 
 ## 1. Projects board · `#projects`
 - **Filter bar, left to right:**
