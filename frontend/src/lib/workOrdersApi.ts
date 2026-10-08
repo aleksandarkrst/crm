@@ -61,6 +61,10 @@ export interface ApiWorkOrder {
   version: string;
   technicians: ApiWorkOrderTechnician[];
   canChange: boolean;
+  /** CD-148: the technicians, the project lead, owners and admins change the status (Reopen included). */
+  canSetStatus: boolean;
+  /** Completed: nothing changes until it is reopened. */
+  locked: boolean;
   canDelete: boolean;
 }
 

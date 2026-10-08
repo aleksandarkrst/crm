@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, notInArray, type SQL, sql } from 'drizzle-orm';
 import { AuditService } from '../../shared/audit/audit.service';
 import { hasRole, type TenantContext } from '../../shared/authorization';
@@ -67,7 +67,8 @@ type Row = Awaited<ReturnType<typeof selectOrders>>[number];
 /**
  * Work orders (CD-265, design v2 §5). Every member sees every work order. Owners and admins, the
  * project lead, the order's technicians and whoever created it change it; owners, admins and the
- * creator delete it. New work orders: any member.
+ * creator delete it. New work orders: any member. Status (CD-148): the technicians, the project lead,
+ * owners and admins change it; a Completed order is locked until it is reopened.
  */
 @Injectable()
 export class WorkOrdersService {
@@ -144,6 +145,15 @@ export class WorkOrdersService {
       .withTenant(ctx.tenantId, async (tx) => {
         const row = await this.row(tx, id);
         if (!(await this.canChange(tx, ctx, row))) throw new ForbiddenException("Only owners, admins, the project lead, the technicians and the one who created it can change a work order");
+        // Status (CD-148): the technicians, the project lead, owners and admins.
+        if (input.status && input.status !== row.status && !(await this.canSetStatus(tx, ctx, row))) {
+          throw new ForbiddenException('Only the technicians, the project lead, owners and admins change the status of a work order');
+        }
+        // A Completed order is locked: reopening (another status) is the only change.
+        if (row.status === 'completed') {
+          const others = Object.entries(input).filter(([k, v]) => v !== undefined && k !== 'status' && k !== 'holdReason');
+          if (!input.status || input.status === 'completed' || others.length) throw new ConflictException('This work order is completed. Reopen it to change it.');
+        }
         if (input.projectId) await this.checkProject(tx, input.projectId, row.companyId);
 
         const technicianIds = input.technicianIds ? [...new Set(input.technicianIds)] : row.technicians.map((t) => t.employeeId);
@@ -230,11 +240,25 @@ export class WorkOrdersService {
     return !!me && row.technicians.some((t) => t.employeeId === me);
   }
 
+  /** Who changes a work order's status (CD-148): owners and admins, the project lead and its technicians. */
+  private async canSetStatus(tx: Tx, ctx: TenantContext, row: Row): Promise<boolean> {
+    if (hasRole(ctx.role, 'admin') || row.projectLeadUserId === ctx.userId) return true;
+    const me = await this.employeeOf(tx, ctx);
+    return !!me && row.technicians.some((t) => t.employeeId === me);
+  }
+
   private async present(tx: Tx, ctx: TenantContext, row: Row) {
     // The project lead's id is only for the access check, not for the client.
     const order: Omit<Row, 'projectLeadUserId'> & { projectLeadUserId?: string | null } = { ...row };
     delete order.projectLeadUserId;
-    return { ...order, canChange: await this.canChange(tx, ctx, row), canDelete: hasRole(ctx.role, 'admin') || row.createdByUserId === ctx.userId };
+    return {
+      ...order,
+      canChange: await this.canChange(tx, ctx, row),
+      // CD-148: who may change the status (Reopen included), and whether the order is locked.
+      canSetStatus: await this.canSetStatus(tx, ctx, row),
+      locked: row.status === 'completed',
+      canDelete: hasRole(ctx.role, 'admin') || row.createdByUserId === ctx.userId,
+    };
   }
 
   private async checkCompany(tx: Tx, companyId: string) {
@@ -371,6 +395,7 @@ export class WorkOrdersService {
   private async changeable(tx: Tx, ctx: TenantContext, id: string) {
     const row = await this.row(tx, id);
     if (!(await this.canChange(tx, ctx, row))) throw new ForbiddenException('Only owners, admins, the project lead, the technicians and the one who created it can change a work order');
+    if (row.status === 'completed') throw new ConflictException('This work order is completed. Reopen it to change it.');
     return row;
   }
 }

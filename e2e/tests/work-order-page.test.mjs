@@ -1,5 +1,5 @@
 // The work order page (CD-266, design v2 §6): opened from the list; header with the meta line, Put
-// on hold (reason), Mark completed and Reopen; Details; Schedule with technicians (Service and Both
+// on hold (reason), Mark completed (locks the order, CD-148) and Reopen; Details; Schedule with technicians (Service and Both
 // only, one lead); the shared checklist; Report and sign-off (needs the customer's name); history.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
@@ -45,8 +45,12 @@ describe('work order page', () => {
     await click(page, '[data-testid=complete-work-order]');
     await page.waitForSelector('[data-testid=reopen-work-order]');
     assert.equal((await api(page, '/work-orders/' + order.id)).status, 'completed');
+    // CD-148: Completed locks the order until it is reopened.
+    assert.match(await page.$eval('[data-testid=work-order-locked]', (el) => el.textContent), /Completed on .*\. Reopen it to change it\./);
+    assert.ok(await page.$eval('[data-testid=work-order-equipment]', (el) => el.disabled));
     await click(page, '[data-testid=reopen-work-order]');
     await page.waitForFunction(() => document.querySelector('[data-testid=work-order-status-bar] .current')?.textContent === 'In progress');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=work-order-locked]') && !document.querySelector('[data-testid=work-order-equipment]').disabled);
   });
 
   step('Details: where, equipment', async () => {

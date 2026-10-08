@@ -1330,8 +1330,7 @@ and no "hours" are shown anywhere.
   Sidebar **Work orders** (`screens/WorkOrders.tsx`): Kanban / Table toggle (remembered per person
   and workspace), filters Technician (Me too), Type, Priority and Company, "New work order"
   (`modals/NewWorkOrderDialog.tsx`; "+" → Work order, W). Dragging a card, or the table's inline
-  status, changes the status; On hold asks why. Time entries and the status/time-lock rules come with
-  CD-148 and milestone 15.
+  status, changes the status; On hold asks why. Who changes the status and the Completed lock: CD-148 below.
 - **Work order page** (CD-266, `screens/WorkOrder.tsx`, `/work-orders/:id`; `drizzle/0073`, `0074`):
   - Header: crumb "Work orders → (project) → WO-1044", title inline, the meta line (company · project
     · stage · technicians · "Wed 4 Nov, 08:00–16:00"), Put on hold (the shared reason dialog), Mark
@@ -1348,7 +1347,15 @@ and no "hours" are shown anywhere.
     are changed by difference, not deleted and re-added, so the history shows real changes.
   - Track time is left out until milestone 15's time entries (tasks and work orders together).
   - Settings → Technicians' "Open work" counts open work orders too.
-- **Email "Assigned to a task"** (job `projects.task-assigned`, projects worker): to someone with an
+- **Work order status and lock** (CD-148, design v2): the technicians, the project lead, owners and
+  admins change the status (`canSetStatus`, 403 for others, the creator included); the kanban drag,
+  the table's status select, the status bar and the header buttons follow it. Mark completed is
+  immediate (no dialog) and sets `completed_at`; Reopen needs no reason. A Completed order is
+  `locked`: fields, technicians, sign-off and the checklist answer 409 "Reopen it to change it", and
+  the only change allowed is to another status. Status changes are in the history; no extra emails.
+  `canLogWorkOrderTime` / `workOrderLogRefusalFor` (`work-order-log.ts`, exported from the projects
+  module) are milestone 15's rule for time on a work order: a technician on it, not Completed. The
+  database trigger on time entries that enforces the lock comes with milestone 15.
 - **Email "Assigned to a task"** (job `projects.task-assigned`, projects worker): to someone with an
   account assigned by another person, when they're still on the task and `memberships.
   notify_task_assigned` is on (read when sending). Number, name, project, company, due date and a
