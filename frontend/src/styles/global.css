@@ -1092,3 +1092,8 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
   .settings-frame { flex-direction: column; gap: 16px; }
   .settings-nav { position: static; width: 100%; flex: 0 0 auto; flex-direction: row; flex-wrap: wrap; gap: 10px 18px; }
 }
+
+/* ---------------------------------------------------------------- project team (CD-271) */
+.team-table-inner { min-width: 760px; }
+.team-table-inner > .table-head,
+.team-table-inner > .table-row { grid-template-columns: minmax(190px, 1.4fr) minmax(100px, 0.8fr) minmax(150px, 1.2fr) 100px minmax(160px, 1fr) 30px; }

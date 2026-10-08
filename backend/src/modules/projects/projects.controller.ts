@@ -1,8 +1,9 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { RequireTenant, Tenant, type TenantContext } from '../../shared/authorization';
 import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
 import { CreateProject, ListProjectsQuery, UpdateProject } from './projects.schemas';
+import { AddProjectMembers, ProjectMembersService, UpdateProjectMember } from './project-members.service';
 import { ProjectsService } from './projects.service';
 
 const Id = new ZodPipe(UuidParam);
@@ -17,7 +18,10 @@ const Id = new ZodPipe(UuidParam);
 @Controller('projects')
 @RequireTenant('member')
 export class ProjectsController {
-  constructor(private readonly projects: ProjectsService) {}
+  constructor(
+    private readonly projects: ProjectsService,
+    private readonly team: ProjectMembersService,
+  ) {}
 
   /** `?dealId=` / `?companyId=` narrow the list. */
   @Get()
@@ -38,6 +42,28 @@ export class ProjectsController {
   @Patch(':id')
   update(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(UpdateProject)) body: UpdateProject) {
     return this.projects.update(ctx, id, body);
+  }
+
+  /** The team (CD-271): `{ employeeId, name, jobTitle, team, active, role, hoursPerWeek, weeklyHours, loadHours }[]` by name. */
+  @Get(':id/members')
+  members(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.team.list(ctx, id);
+  }
+
+  /** The lead, owners and admins (403 otherwise); every change answers with the whole team. */
+  @Post(':id/members')
+  addMembers(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(AddProjectMembers)) body: AddProjectMembers) {
+    return this.team.add(ctx, id, body);
+  }
+
+  @Put(':id/members/:employeeId')
+  updateMember(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Param('employeeId', Id) employeeId: string, @Body(new ZodPipe(UpdateProjectMember)) body: UpdateProjectMember) {
+    return this.team.update(ctx, id, employeeId, body);
+  }
+
+  @Delete(':id/members/:employeeId')
+  removeMember(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Param('employeeId', Id) employeeId: string) {
+    return this.team.remove(ctx, id, employeeId);
   }
 
   @Delete(':id')

@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { check, date, foreignKey, index, integer, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { companies, deals } from './crm';
+import { employees } from './people';
 import { tenants, users } from './platform';
 
 /**
@@ -157,3 +158,32 @@ export const projectAutoDeals = pgTable(
     foreignKey({ columns: [t.tenantId, t.dealId], foreignColumns: [deals.tenantId, deals.id], name: 'project_auto_deals_deal_fk' }).onDelete('cascade'),
   ],
 );
+
+/**
+ * A project's team (CD-271, design v2 §2 Team tab): employees from the org chart with their role on
+ * the project and the hours a week they give it. Load (on the Team tab) adds up every open
+ * project's hours of a person against their weekly hours. Deleting the project removes its team;
+ * an employee who leaves stays listed (shown as inactive) until removed.
+ */
+export const projectMembers = pgTable(
+  'project_members',
+  {
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id').notNull(),
+    employeeId: uuid('employee_id').notNull(),
+    role: text('role'),
+    hoursPerWeek: numeric('hours_per_week', { precision: 4, scale: 1, mode: 'number' }).notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.projectId, t.employeeId], name: 'project_members_pk' }),
+    index('project_members_tenant_employee_idx').on(t.tenantId, t.employeeId),
+    foreignKey({ columns: [t.tenantId, t.projectId], foreignColumns: [projects.tenantId, projects.id], name: 'project_members_project_fk' }).onDelete('cascade'),
+    foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'project_members_employee_fk' }).onDelete('cascade'),
+    check('project_members_role_ck', sql`${t.role} is null or length(btrim(${t.role})) between 1 and 100`),
+    check('project_members_hours_ck', sql`${t.hoursPerWeek} between 0 and 80`),
+  ],
+);
+

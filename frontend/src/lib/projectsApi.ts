@@ -94,6 +94,23 @@ export type ProjectPatch = Partial<{
   budgetHours: number | null;
 }>;
 
+/** A person on a project's team (CD-271). */
+export interface ApiProjectMember {
+  employeeId: string;
+  name: string;
+  jobTitle: string | null;
+  /** Their org unit. */
+  team: string | null;
+  /** False once they left the company. */
+  active: boolean;
+  role: string | null;
+  hoursPerWeek: number;
+  /** Their weekly hours (Workforce). */
+  weeklyHours: number;
+  /** The hours a week they give every open project. */
+  loadHours: number;
+}
+
 const move = (to?: string) => (to ? `?moveProjectsTo=${encodeURIComponent(to)}` : '');
 
 export const projectsApi = {
@@ -117,6 +134,12 @@ export const projectsApi = {
   project: (id: string) => api<ApiProject>(`/projects/${id}`),
   createProject: (input: NewProjectInput) => api<ApiProject>('/projects', { method: 'POST', json: input }),
   updateProject: (id: string, patch: ProjectPatch) => api<ApiProject>(`/projects/${id}`, { method: 'PATCH', json: patch }),
+  // The team (CD-271): every change answers with the whole team.
+  members: (projectId: string) => api<ApiProjectMember[]>(`/projects/${projectId}/members`),
+  addMembers: (projectId: string, employeeIds: string[]) => api<ApiProjectMember[]>(`/projects/${projectId}/members`, { method: 'POST', json: { employeeIds } }),
+  updateMember: (projectId: string, employeeId: string, patch: { role?: string | null; hoursPerWeek?: number }) =>
+    api<ApiProjectMember[]>(`/projects/${projectId}/members/${employeeId}`, { method: 'PUT', json: patch }),
+  removeMember: (projectId: string, employeeId: string) => api<ApiProjectMember[]>(`/projects/${projectId}/members/${employeeId}`, { method: 'DELETE' }),
   /** Owners and admins. */
   deleteProject: (id: string) => api<null>(`/projects/${id}`, { method: 'DELETE' }),
 };
