@@ -69,6 +69,8 @@ export const CreateProject = z.object({
   value: value.optional(),
   currency: currency.optional(),
   budgetHours: budgetHours.optional(),
+  /** "Add starter tasks from the products" (CD-263): a task per product line of the deal. */
+  starterTasks: z.boolean().optional(),
 });
 export type CreateProject = z.infer<typeof CreateProject>;
 

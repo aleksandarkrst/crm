@@ -5,7 +5,7 @@ import { hasRole, type TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
 import { StorageService } from '../../infrastructure/storage/storage.service';
-import { companies, contacts, deals, memberships, projectAutoDeals, projectFiles, projects, projectStages, projectTypes, tasks, tenants, users } from '../../shared/database/schema';
+import { companies, contacts, dealLines, deals, memberships, products, projectAutoDeals, projectFiles, projects, projectStages, projectTypes, taskCounters, tasks, tenants, users } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import type { CreateProject, ListProjectsQuery, UpdateProject } from './projects.schemas';
 
@@ -216,6 +216,7 @@ export class ProjectsService {
           })
           .returning({ id: projects.id });
         await this.audit.record(tx, ctx, { action: 'project.created', entityType: 'project', entityId: row!.id, data: { ...input, leadUserId } });
+        if (deal && input.starterTasks) await addStarterTasks(tx, ctx, row!.id, stageId, deal.id);
         if (deal) await this.jobs.send('projects.project-created-from-deal', { tenantId: ctx.tenantId, dealId: deal.id, projectId: row!.id, projectName: input.name, actorUserId: ctx.userId }, tx);
         return this.find(tx, row!.id);
       })
@@ -303,5 +304,35 @@ export class ProjectsService {
     const [row] = await selectProjects(tx, eq(projects.id, id));
     if (!row) throw new NotFoundException('Project not found');
     return row;
+  }
+}
+
+/** Units that mean hours: a line of "8 h" of work becomes an 8 h estimate. */
+const HOUR_UNITS = new Set(['h', 'hr', 'hrs', 'hour', 'hours', 'sat', 'sati', 'std', 'stunden']);
+
+/**
+ * "Add starter tasks from the products" (CD-263, design v2 §11): one task per product line of the
+ * deal, in the deal's order, at the project's first stage, named after the product (or the line's
+ * description). A line sold in hours gives the task its estimate. Nobody is assigned yet.
+ */
+async function addStarterTasks(tx: Tx, ctx: TenantContext, projectId: string, stageId: string, dealId: string) {
+  const lines = await tx
+    .select({ name: products.name, unit: products.unit, description: dealLines.description, quantity: dealLines.quantity })
+    .from(dealLines)
+    .leftJoin(products, eq(products.id, dealLines.productId))
+    .where(eq(dealLines.dealId, dealId))
+    .orderBy(asc(dealLines.position));
+  for (const line of lines) {
+    const name = (line.name ?? line.description ?? '').trim().slice(0, 200);
+    if (!name) continue;
+    const qty = Number(line.quantity);
+    const inHours = HOUR_UNITS.has((line.unit ?? '').trim().toLowerCase().replace(/\.$/, ''));
+    const estimateHours = inHours && qty >= 0.25 && qty <= 9999 && Number.isInteger(qty * 4) ? qty : null;
+    const [counter] = await tx
+      .insert(taskCounters)
+      .values({ tenantId: ctx.tenantId, lastNumber: 1 })
+      .onConflictDoUpdate({ target: taskCounters.tenantId, set: { lastNumber: sql`${taskCounters.lastNumber} + 1` } })
+      .returning({ number: taskCounters.lastNumber });
+    await tx.insert(tasks).values({ tenantId: ctx.tenantId, number: counter!.number, projectId, stageId, name, estimateHours, createdByUserId: ctx.userId });
   }
 }

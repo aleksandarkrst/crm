@@ -1174,7 +1174,18 @@ and no "hours" are shown anywhere.
   for the name (the deal's title), the project type (the first), the lead (the person creating it)
   and previews the type's stages; a deal without a company can't start one. Creating opens the
   project and says "Project created from <deal>". The deal's Summary gets a Project row per project
-  with its status. "Add starter tasks from the products" waits for project tasks (CD-146).
+  with its status. "Add starter tasks from the products" (CD-263, off by default; `starterTasks`
+  on `POST /api/projects` with a deal) adds a task per product line of the deal, in its order, at
+  the first stage, named after the product; a line in hours (h, hour, sat, …) sets the estimate.
+- **Design v2 gaps** (CD-263):
+  - Projects board cards: a progress bar (done of all tasks), the next two open tasks (by due date)
+    and "N open tasks · finish 23 Oct"; the list has Progress and Tasks columns. Both count the
+    tasks the viewer can see (`GET /api/tasks` filters by visibility), read once for the screen.
+  - The project's Plan tab lists its work orders (`screens/project/ProjectWorkOrders.tsx`: ID, Work
+    order, Technician, Scheduled, Type, Status) with "New work order" for the project.
+  - Ctrl/⌘K has a Work orders group ("WO-1044 · title", "Company · Status"), up to 4.
+  - Not built here: the Report tab, Logged columns and Track time (milestone 15), Dispatch (CD-267)
+    and the Workload report (CD-273), which are in later milestones.
 - **Projects module** (CD-234, CD-229): the switcher's Projects opens `/projects` (`screens/Projects.tsx`).
   Its sidebar has Projects; Tasks and Work orders join the sidebar, the "+" menu and Ctrl/⌘K with
   their features (CD-146, CD-265); Dispatch is for later. In the module the "+" menu is "Create in
