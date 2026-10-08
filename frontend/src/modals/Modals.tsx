@@ -11,6 +11,7 @@ import { GenerationModal, NewTemplateModal } from './DocumentModals';
 import { DealProductsDialog } from './DealProductsDialog';
 import { MeetingDialog } from './MeetingDialog';
 import { NewProjectDialog } from './NewProjectDialog';
+import { NewTaskDialog } from './NewTaskDialog';
 import { ProductModal } from './ProductModal';
 import { ProposalDoc } from './ProposalDoc';
 
@@ -33,6 +34,7 @@ export function Modals() {
       {s.lostLeadId && <MarkLostModal />}
       {s.meetingDialog && <MeetingDialog />}
       {s.newProject && <NewProjectDialog />}
+      {s.newTask && <NewTaskDialog />}
     </>
   );
 }

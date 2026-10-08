@@ -239,6 +239,8 @@ export interface ApiProfile {
   notifyVisitPlans: boolean;
   /** Email me "New manager" / "New direct report" when someone changes reporting lines (milestone 13). */
   notifyOrgChanges: boolean;
+  /** Email me when someone else assigns me to a task (CD-146). */
+  notifyTaskAssigned: boolean;
 }
 /**
  * Getting started (CD-68): the workspace's activation steps (CD-115), derived from its records.
@@ -506,7 +508,7 @@ export interface ApiHistoryEntry {
   actor: { userId: string | null; name: string } | null;
   changedAt: string;
 }
-export type HistoryEntity = 'deal' | 'company' | 'contact' | 'meeting' | 'visit_plan' | 'project';
+export type HistoryEntity = 'deal' | 'company' | 'contact' | 'meeting' | 'visit_plan' | 'project' | 'task';
 
 /**
  * Customer visit plans (CD-134): per salesperson and month, the visits planned per company. Plans
@@ -1004,8 +1006,11 @@ export const crmApi = {
   visitReport: (q: VisitPeriodQuery) => api<ApiVisitReport>('/crm/visit-plans/report' + visitQuery(q)),
   /** The Overview card and the company card; members always get their own. */
   visitSummary: (q: VisitPeriodQuery) => api<ApiVisitSummary>('/crm/visit-plans/progress-summary' + visitQuery(q)),
+  // Tasks (CD-146) have their own endpoint, with the task's visibility rules.
   history: (entityType: HistoryEntity, entityId: string, offset = 0, limit = 30) =>
-    api<{ entries: ApiHistoryEntry[]; more: boolean }>(`/crm/history?entityType=${entityType}&entityId=${entityId}&limit=${limit}&offset=${offset}`),
+    api<{ entries: ApiHistoryEntry[]; more: boolean }>(
+      entityType === 'task' ? `/tasks/${entityId}/history?limit=${limit}&offset=${offset}` : `/crm/history?entityType=${entityType}&entityId=${entityId}&limit=${limit}&offset=${offset}`,
+    ),
 
   meetings: {
     list: (q: MeetingQuery) => api<{ meetings: ApiMeeting[]; more: boolean }>('/crm/meetings' + meetingSearch(q)),

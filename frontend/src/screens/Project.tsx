@@ -9,9 +9,12 @@ import { type ApiProject, type ApiProjectCancelReason, type ApiProjectHealth, PR
 import { projectError, useDealDocuments, useProject, useProjectFiles, useProjectMembers, useProjectTypes } from '../store/projects';
 import { companyLabels, companyRecords, curOf, memberLabels, timelineFor } from '../store/selectors';
 import { useStore } from '../store/store';
+import { useTasks } from '../store/tasks';
 import { HEALTH_LABEL, ProjectStatusBadge, projectValue } from './lead/DealProjects';
 import { dealEmails, ProjectCommunication } from './project/ProjectCommunication';
 import { DropZone, ProjectDocuments, useFileUpload } from './project/ProjectDocuments';
+import { ComingUp, ProjectPlan } from './project/ProjectPlan';
+import { NumberField, Row, TextField } from './project/fields';
 import { ProjectTeam } from './project/ProjectTeam';
 
 /**
@@ -36,7 +39,8 @@ export function Project() {
   const { data: team, set: setTeam } = useProjectMembers(id);
   const { data: files, set: setFiles } = useProjectFiles(id);
   const { data: dealDocs } = useDealDocuments(project?.dealId);
-  const [tab, setTab] = useState<'overview' | 'team' | 'communication' | 'documents'>('overview');
+  const { data: tasks, set: setTasks } = useTasks({ projectId: id }, !!id);
+  const [tab, setTab] = useState<'overview' | 'plan' | 'team' | 'communication' | 'documents'>('overview');
   // The deal's timeline holds its emails (the Communication tab and its count).
   const dealId = project?.dealId;
   useEffect(() => {
@@ -67,6 +71,9 @@ export function Project() {
   const stages = types?.find((t) => t.id === project.projectTypeId)?.stages ?? [];
   const idx = stages.findIndex((st) => st.id === project.stageId);
   const closed = project.status !== 'open';
+  // The team, the lead, owners and admins add tasks (CD-146), while the project is open.
+  const me = s.team.find((m) => m.id === session.userId)?.employeeId ?? null;
+  const canAddTasks = !closed && (canEdit || !!team?.some((m) => m.employeeId === me));
 
   // Field edits run side by side (each saves its own field); `busy` only disables the buttons, so a
   // quick second edit isn't dropped while the first one saves.
@@ -271,6 +278,7 @@ export function Project() {
                 {(
                   [
                     ['overview', 'Overview'],
+                    ['plan', `Plan · ${tasks?.length ?? 0}`],
                     ['team', `Team · ${team?.length ?? 0}`],
                     ['communication', `Communication · ${project.dealId ? dealEmails(timelineFor(s, project.dealId)).length : 0}`],
                     ['documents', `Documents · ${(files?.length ?? 0) + (dealDocs ?? []).filter((d) => d.status === 'ready').length}`],
@@ -293,10 +301,13 @@ export function Project() {
               <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {tab === 'overview' ? (
                   <>
+                    <ComingUp tasks={tasks} />
                     <DropZone testId="overview-drop" text="Drop a file here, or" button="Choose file" busy={overviewUpload.busy} onFiles={(fs) => void overviewUpload.add(fs, 'Client material')} />
                     <span className="caps">History</span>
                     <ChangeHistory entity="project" id={project.id} cur={curOf(s)} rev={project.version} />
                   </>
+                ) : tab === 'plan' ? (
+                  <ProjectPlan projectId={project.id} tasks={tasks} stages={stages} canAdd={canAddTasks} onChange={setTasks} />
                 ) : tab === 'team' ? (
                   <ProjectTeam projectId={project.id} team={team} canEdit={canEdit} onChange={setTeam} />
                 ) : tab === 'communication' ? (
@@ -443,120 +454,5 @@ function CancelDialog({ name, onClose, onCancel }: { name: string; onClose: () =
         </button>
       </div>
     </Modal>
-  );
-}
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="field-row">
-      <span className="field-label">{label}</span>
-      {children}
-    </div>
-  );
-}
-
-/** A number that saves when it loses focus (Enter too); empty clears it; Escape puts the saved value back. */
-function NumberField({
-  value,
-  onSave,
-  label,
-  testId,
-  disabled,
-  step,
-  placeholder,
-}: {
-  value: string | null;
-  onSave: (v: number | null) => Promise<boolean>;
-  label: string;
-  testId?: string;
-  disabled?: boolean;
-  step: number;
-  placeholder?: string;
-}) {
-  const shown = value == null ? '' : String(Number(value));
-  const [draft, setDraft] = useState(shown);
-  useEffect(() => setDraft(shown), [shown]);
-  const commit = async () => {
-    const trimmed = draft.trim();
-    if (trimmed === shown) return;
-    const next = trimmed === '' ? null : Number(trimmed);
-    if (next !== null && (!Number.isFinite(next) || next < 0)) return setDraft(shown);
-    if (!(await onSave(next))) setDraft(shown);
-  };
-  return (
-    <input
-      className="ghost ghost-sm"
-      type="number"
-      min={0}
-      step={step}
-      aria-label={label}
-      data-testid={testId}
-      value={draft}
-      disabled={disabled}
-      placeholder={placeholder}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => void commit()}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') e.currentTarget.blur();
-        if (e.key === 'Escape') setDraft(shown);
-      }}
-      style={{ flex: 1, minWidth: 0 }}
-    />
-  );
-}
-
-/** Text that saves when it loses focus (Enter too, unless multi-line); Escape puts the saved value back. */
-function TextField({
-  value,
-  onSave,
-  label,
-  className,
-  testId,
-  disabled,
-  placeholder,
-  maxLength,
-  multiline,
-  required,
-}: {
-  value: string;
-  onSave: (v: string) => Promise<boolean>;
-  label: string;
-  className: string;
-  testId?: string;
-  disabled?: boolean;
-  placeholder?: string;
-  maxLength?: number;
-  multiline?: boolean;
-  required?: boolean;
-}) {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
-  const commit = async () => {
-    const next = draft.trim();
-    if (next === value.trim()) return setDraft(value);
-    if (required && !next) return setDraft(value);
-    if (!(await onSave(next))) setDraft(value);
-  };
-  const common = {
-    className,
-    'aria-label': label,
-    'data-testid': testId,
-    value: draft,
-    disabled,
-    placeholder,
-    maxLength,
-    onBlur: () => void commit(),
-  };
-  return multiline ? (
-    <textarea {...common} rows={3} style={{ resize: 'vertical', lineHeight: 1.5, flex: 1 }} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setDraft(value)} />
-  ) : (
-    <input
-      {...common}
-      onChange={(e) => setDraft(e.target.value)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') e.currentTarget.blur();
-        if (e.key === 'Escape') setDraft(value);
-      }}
-    />
   );
 }

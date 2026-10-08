@@ -876,6 +876,7 @@ function NotificationsTab() {
       toggle: () => patchProfile({ meetingInvites: !p.meetingInvites }),
     },
     { id: 'visit-plans', label: 'Visit plans', desc: 'An email when someone else creates or changes your visit plan.', on: p.visitPlans, toggle: () => patchProfile({ visitPlans: !p.visitPlans }) },
+    { id: 'task-assignments', label: 'Task assignments', desc: 'An email when someone else assigns you to a task.', on: p.taskAssigned, toggle: () => patchProfile({ taskAssigned: !p.taskAssigned }) },
     {
       id: 'org-changes',
       label: 'Org changes',

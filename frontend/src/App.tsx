@@ -23,6 +23,8 @@ const OrgStructure = lazy(() => loadChunk(() => import('./screens/OrgStructure')
 const Pipeline = lazy(() => loadChunk(() => import('./screens/Pipeline')).then((m) => ({ default: m.Pipeline })));
 const Projects = lazy(() => loadChunk(() => import('./screens/Projects')).then((m) => ({ default: m.Projects })));
 const Project = lazy(() => loadChunk(() => import('./screens/Project')).then((m) => ({ default: m.Project })));
+const Tasks = lazy(() => loadChunk(() => import('./screens/Tasks')).then((m) => ({ default: m.Tasks })));
+const Task = lazy(() => loadChunk(() => import('./screens/Task')).then((m) => ({ default: m.Task })));
 const Products = lazy(() => loadChunk(() => import('./screens/Products')).then((m) => ({ default: m.Products })));
 const Profile = lazy(() => loadChunk(() => import('./screens/Profile')).then((m) => ({ default: m.Profile })));
 const Settings = lazy(() => loadChunk(() => import('./screens/Settings')).then((m) => ({ default: m.Settings })));
@@ -151,6 +153,8 @@ function AppRoutes() {
           <Route path="products" element={<Products />} />
           <Route path="projects" element={<Projects />} />
           <Route path="projects/:id" element={<Project />} />
+          <Route path="tasks" element={<Tasks />} />
+          <Route path="tasks/:id" element={<Task />} />
           <Route path="org" element={<OrgStructure />} />
           <Route path="people/:id" element={<EmployeeCard />} />
           <Route path="reports" element={<Navigate to={paths.reports()} replace />} />

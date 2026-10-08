@@ -19,6 +19,8 @@ export interface ApiDirectoryRow {
   managerId: string | null;
   managerName: string | null;
   status: 'active' | 'leaving' | 'inactive';
+  /** Their member account; null: "No account yet" (no emails). */
+  userId: string | null;
 }
 
 export interface ApiPeopleAccess {

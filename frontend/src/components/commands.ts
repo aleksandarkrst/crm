@@ -1,7 +1,7 @@
-import { useMatch, useNavigate } from 'react-router-dom';
+import { useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { paths } from '../lib/paths';
 import { useStore } from '../store/store';
-import { DEFAULT_MODULE, navFor } from './modules';
+import { currentModule, DEFAULT_MODULE, navFor } from './modules';
 
 /**
  * What the "+" menu and the command palette can do (CD-80). One list, so both offer the same
@@ -56,6 +56,9 @@ export function useCommands(): Command[] {
   const deal = s.leads.find((l) => l.id === onDeal);
   const meetingSeed = deal ? { dealId: deal.id, companyId: deal.companyId, contactId: deal.contactId } : companyId ? { companyId } : contactId ? { contactId } : {};
   const go = (to: string) => () => navigate(to);
+  // On a project's page a new task is for that project (CD-283); in the Projects module it is just "Task".
+  const projectId = useMatch('/projects/:id')?.params.id;
+  const inProjects = currentModule(useLocation().pathname, session.userId).id === 'projects';
 
   const create: Command[] = [
     { id: 'new-deal', group: 'Create', label: 'Deal', hint: 'Starts a funnel', key: 'D', icon: 'deal', keywords: 'new create add opportunity lead', run: () => set({ newLeadOpen: true }) },
@@ -67,6 +70,7 @@ export function useCommands(): Command[] {
     { id: 'new-product', group: 'Create', label: 'Product', hint: 'Adds to the catalog', key: 'R', icon: 'product', keywords: 'new create add service catalog', run: () => set({ productOpen: true, productEditId: null }) },
     // On a company's page or a won deal's, the project starts out for it (CD-234).
     { id: 'new-project', group: 'Create', label: 'Project', hint: 'Work for a company', key: 'J', icon: 'project', module: 'projects', keywords: 'new create add project delivery job', run: () => set({ newProject: deal?.outcome === 'won' ? { dealId: deal.id } : companyId ? { companyId } : {} }) },
+    { id: 'new-project-task', group: 'Create', label: inProjects ? 'Task' : 'Project task', hint: 'Work on a project', key: 'K', icon: 'task', module: 'projects', keywords: 'new create add task project plan to-do todo', run: () => set({ newTask: projectId ? { projectId } : {} }) },
   ];
   const goTo: Command[] = [
     { id: 'go-overview', group: 'Go to', label: 'Overview', hint: 'Numbers and forecasts', icon: 'overview', keywords: 'dashboard reports', run: go(paths.overview) },
@@ -82,6 +86,7 @@ export function useCommands(): Command[] {
       ? [{ id: 'go-reports', group: 'Go to' as const, label: 'Reports', hint: 'Visit-plan completion', icon: 'reports' as const, keywords: 'report visits completion targets', run: go(paths.reports()) }]
       : []),
     { id: 'go-projects', group: 'Go to', label: 'Projects', hint: 'Projects · board and list', icon: 'project', keywords: 'projects delivery board', run: go(paths.projects) },
+    { id: 'go-tasks', group: 'Go to', label: 'Tasks', hint: 'Projects · kanban and table', icon: 'task', keywords: 'tasks project plan to-do todo kanban', run: go(paths.tasks) },
     { id: 'go-org', group: 'Go to', label: 'Org structure', hint: 'Workforce · people and teams', icon: 'org', keywords: 'workforce people employees units departments teams chart', run: go(paths.org()) },
   ];
   const settings: Command[] = [

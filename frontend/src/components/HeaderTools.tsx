@@ -13,7 +13,7 @@ export function HeaderCenter() {
   const { set, session } = useStore();
   const { pathname } = useLocation();
   // The Projects module searches its own records first (CD-229).
-  const placeholder = currentModule(pathname, session.userId).id === 'projects' ? 'Search projects, deals, companies' : 'Search deals, companies, contacts';
+  const placeholder = currentModule(pathname, session.userId).id === 'projects' ? 'Search projects, tasks, deals' : 'Search deals, companies, contacts';
   return (
     <div className="header-center">
       <button type="button" className="search-trigger" data-testid="global-search" aria-label="Search and commands" onClick={() => set({ paletteOpen: true })}>
