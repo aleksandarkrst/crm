@@ -58,8 +58,11 @@ const CRM_NAV: NavDef[] = [
   { to: paths.reports(), label: 'Reports', icon: 'M5 20V10M10 20V4M15 20v-7M20 20v-4M3 20h18', managers: true },
 ];
 
-/** Projects' pages (CD-234): the board and list for now; Tasks, Work orders and Dispatch come with CD-229. */
-const PROJECTS_NAV: NavDef[] = [{ to: paths.projects, label: 'Projects', icon: 'M4 4h5v16H4zM10 4h5v10h-5zM16 4h4v7h-4z', phone: true }];
+/** Projects' pages: the board and list (CD-234) and Tasks (CD-283); Work orders come with CD-265. */
+const PROJECTS_NAV: NavDef[] = [
+  { to: paths.projects, label: 'Projects', icon: 'M4 4h5v16H4zM10 4h5v10h-5zM16 4h4v7h-4z', phone: true },
+  { to: paths.tasks, label: 'Tasks', icon: 'M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2', phone: true },
+];
 
 /** Workforce's pages: Org structure for now; Timesheets, Time off, Approvals and Utilisation come later. */
 const WORKFORCE_NAV: NavDef[] = [{ to: paths.org(), label: 'Org structure', icon: 'M9.5 3.5h5v4h-5zM3.5 16.5h5v4h-5zM15.5 16.5h5v4h-5zM12 7.5v4.5M6 16.5v-2.5h12v2.5', phone: true }];
@@ -80,7 +83,7 @@ export const MODULES: ModuleDef[] = [
     screens: ['/overview', '/pipeline', '/today', '/calendar', '/meetings', '/visit-plans', '/companies', '/contacts', '/products', '/deals', '/reports'],
     nav: CRM_NAV,
   },
-  { id: 'projects', name: 'Projects', description: 'Tasks, work orders, dispatch', icon: 'projects', to: paths.projects, screens: ['/projects'], nav: PROJECTS_NAV },
+  { id: 'projects', name: 'Projects', description: 'Tasks, work orders, dispatch', icon: 'projects', to: paths.projects, screens: ['/projects', '/tasks'], nav: PROJECTS_NAV },
   { id: 'workforce', name: 'Workforce', description: 'People and capacity', icon: 'workforce', to: paths.org(), screens: ['/org', '/people'], nav: WORKFORCE_NAV },
   { id: 'settings', name: 'Workspace settings', description: 'CRM, Projects, Workforce', icon: 'settings', to: paths.settings(), screens: [], nav: [], managers: true, settings: true },
   { id: 'planning', name: 'Planning', description: 'Budgets and targets', icon: 'planning', screens: [], nav: [] },

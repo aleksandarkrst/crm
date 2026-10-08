@@ -8,6 +8,7 @@ import { projectError, useProjects, useProjectTypes } from '../store/projects';
 import { memberLabels, moneyTotal } from '../store/selectors';
 import { useStore } from '../store/store';
 import { HealthBadge, ProjectStatusBadge, projectValue } from './lead/DealProjects';
+import { AvatarStack } from './task/parts';
 
 type View = 'board' | 'list';
 const VIEWS: { id: View; label: string; icon: string }[] = [
@@ -232,8 +233,11 @@ export function Projects() {
                           </span>
                           {p.value != null && <span style={{ fontSize: 11, color: 'var(--brand)', whiteSpace: 'nowrap' }}>{projectValue(s, p)}</span>}
                         </span>
-                        <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                          {p.companyName} · {p.leadName ?? 'No lead'}
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-2)' }}>
+                          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {p.companyName} · {p.leadName ?? 'No lead'}
+                          </span>
+                          {p.team.length > 0 && <AvatarStack names={p.team.map((m) => m.name)} size={20} />}
                         </span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', borderTop: '1px dashed var(--border)', paddingTop: 7 }}>
                           {p.status === 'open' ? <HealthBadge health={p.health} /> : <ProjectStatusBadge status={p.status} />}
@@ -277,7 +281,10 @@ function ProjectsList({ projects, onOpen }: { projects: ApiProject[]; onOpen: (i
               </span>
               <span className="pt-sub">{p.companyName}</span>
             </span>
-            <span className="pt-main">{p.leadName ?? 'No lead'}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              <span className="pt-main">{p.leadName ?? 'No lead'}</span>
+              {p.team.length > 0 && <AvatarStack names={p.team.map((m) => m.name)} size={20} />}
+            </span>
             <span className="pt-main" style={{ color: 'var(--text-2)' }}>
               {p.projectTypeName}
             </span>

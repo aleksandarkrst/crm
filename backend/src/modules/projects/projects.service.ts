@@ -40,6 +40,9 @@ const columns = {
   contactName: contacts.fullName,
   leadUserId: projects.leadUserId,
   leadName: userName(projects.leadUserId),
+  /** The project's team by name (CD-283: the avatars on the board's cards and in the list). */
+  team: sql<{ employeeId: string; name: string }[]>`coalesce((select json_agg(json_build_object('employeeId', e.id, 'name', e.full_name) order by e.full_name)
+    from project_members m join employees e on e.id = m.employee_id where m.project_id = "projects"."id"), '[]'::json)`,
   createdAt: projects.createdAt,
   version: projects.updatedAt,
 };

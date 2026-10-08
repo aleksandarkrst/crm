@@ -1251,6 +1251,26 @@ and no "hours" are shown anywhere.
   `loggableTasks(tx, employeeId)` are exported from `modules/projects` (`task-log.ts`): an active
   assignee, a task that isn't Done, an open project. Timesheets use these and don't reimplement the
   rule; CD-147 adds the per-person hour limit.
+- **Screens** (CD-283; `lib/tasksApi.ts`, `store/tasks.ts`, read on demand and again on live hints
+  `task` and `project` via `s.taskRev`):
+  - **Tasks** (`/tasks`, a sidebar item of the Projects module): Kanban (To do · In progress · On
+    hold · Done; drag a card to change the status) or Table (status inline), remembered per person
+    and workspace; filters project, assignee ("Me") and due; "New task".
+  - **Task page** (`/tasks/:id`): crumb "Tasks → project → T-12", the name inline, Mark done /
+    Reopen, the status bar, the meta line; Details (assignees as chips, "Add" picks the project
+    team first, then others, "No account yet"; stage; start; due, red when late; estimate; project;
+    company), Description and History (`GET /api/tasks/:id/history`). "⋯" moves it to another
+    project or deletes it (the lead, owners and admins). Read-only for indirect managers.
+  - **On hold** always asks why first (`useTaskUpdate` in `screens/task/parts.tsx`: the presets or
+    the person's own words), then the page shows the reason in a red box, editable.
+  - **New task dialog** (`s.newTask`): Task, Project (fixed from a project's Plan tab), Due,
+    Estimate (quarter hours, checked before sending), Assignees.
+  - **Project page:** a **Plan · N** tab (Table grouped by stage in bands; Kanban by status or by
+    stage, dragging changes that) and "Coming up" on Overview (the next five open tasks by due date).
+    The board's cards and the list show the team as stacked avatars (`team` on each project).
+  - **"+" and Ctrl/⌘K:** "Task" (K; "Project task" outside Projects, for the open project on its
+    page), Go to → Tasks, and a Tasks results group ("T-12 · name", by number, name or project).
+  - **Settings → Notifications:** "Task assignments".
 - **Email "Assigned to a task"** (job `projects.task-assigned`, projects worker): to someone with an
   account assigned by another person, when they're still on the task and `memberships.
   notify_task_assigned` is on (read when sending). Number, name, project, company, due date and a

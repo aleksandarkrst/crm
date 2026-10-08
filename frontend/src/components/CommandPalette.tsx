@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { paths } from '../lib/paths';
 import { searchEmployees } from '../store/people';
 import { useProjects } from '../store/projects';
+import { taskId } from '../lib/tasksApi';
+import { useTasks } from '../store/tasks';
 import { fold, searchWorkspace } from '../store/search';
 import { useStore } from '../store/store';
 import { type Command, ICONS, useCommands } from './commands';
@@ -13,7 +15,7 @@ import '../styles/header.css';
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 export const SEARCH_SHORTCUT = IS_MAC ? '⌘K' : 'Ctrl K';
 
-type Row = { kind: 'command'; command: Command } | { kind: 'record'; record: 'deal' | 'company' | 'contact' | 'employee' | 'project'; id: string; title: string; subtitle: string; initials: string };
+type Row = { kind: 'command'; command: Command } | { kind: 'record'; record: 'deal' | 'company' | 'contact' | 'employee' | 'project' | 'task'; id: string; title: string; subtitle: string; initials: string };
 interface Section {
   label: string;
   rows: Row[];
@@ -29,7 +31,7 @@ function commandScore(c: Command, words: string[]): number {
 
 /**
  * The command palette (CD-80): Ctrl K / ⌘K from anywhere, or the header search. It finds deals,
- * companies and contacts (by name, email or phone), projects (by code, name or company, CD-234), employees (by name, job title or email,
+ * companies and contacts (by name, email or phone), projects (by code, name or company, CD-234), tasks (by "T-12", name or project, CD-283), employees (by name, job title or email,
  * CD-137; their card opens) and the app's actions: create a record, go to a screen or a setting.
  * Arrows move, Enter runs, Escape closes.
  */
@@ -49,6 +51,8 @@ export function CommandPalette() {
   useEffect(() => ensurePeople(), [ensurePeople]);
   // Projects (CD-234) aren't part of the workspace load either: read them while the palette is open.
   const { data: projects } = useProjects();
+  // And the tasks the caller can see (CD-283): "T-12 · Task · Project".
+  const { data: tasks } = useTasks();
   // In the Projects module its own actions and records come first (CD-229).
   const { pathname } = useLocation();
   const inProjects = currentModule(pathname, session.userId).id === 'projects';
@@ -83,7 +87,14 @@ export function CommandPalette() {
       .slice(0, 6)
       .map((p) => ({ kind: 'record' as const, record: 'project' as const, id: p.id, title: p.code ? `${p.code} · ${p.name}` : p.name, subtitle: `${p.companyName} · ${p.stageName}`, initials: p.name.slice(0, 2).toUpperCase() }));
     const employees = searchEmployees(s.people.employees, q).map((h) => ({ kind: 'record' as const, record: 'employee' as const, id: h.id, title: h.title, subtitle: h.subtitle, initials: h.initials }));
-    const projectSection = projectHits.length ? [{ label: 'Projects', rows: projectHits }] : [];
+    const taskHits = (tasks ?? [])
+      .filter((t) => {
+        const hay = fold(`${taskId(t)} ${t.name} ${t.projectName}`);
+        return words.every((w) => hay.includes(w));
+      })
+      .slice(0, 4)
+      .map((t) => ({ kind: 'record' as const, record: 'task' as const, id: t.id, title: `${taskId(t)} · ${t.name}`, subtitle: `Task · ${t.projectName}`, initials: 'T' }));
+    const projectSection = [...(projectHits.length ? [{ label: 'Projects', rows: projectHits }] : []), ...(taskHits.length ? [{ label: 'Tasks', rows: taskHits }] : [])];
     return [
       ...(inProjects ? projectSection : []),
       ...records,
@@ -91,7 +102,7 @@ export function CommandPalette() {
       ...(employees.length ? [{ label: 'Employees', rows: employees }] : []),
       ...(actions.length ? [{ label: 'Actions', rows: actions }] : []),
     ];
-  }, [query, s, commands, projects, inProjects]);
+  }, [query, s, commands, projects, tasks, inProjects]);
   const flat = sections.flatMap((x) => x.rows);
   const current = Math.min(active, Math.max(flat.length - 1, 0));
 
@@ -106,6 +117,7 @@ export function CommandPalette() {
     else if (row.record === 'company') openCompany(row.id);
     else if (row.record === 'employee') navigate(paths.employee(row.id));
     else if (row.record === 'project') navigate(paths.project(row.id));
+    else if (row.record === 'task') navigate(paths.task(row.id));
     else openContact(row.id);
   };
 

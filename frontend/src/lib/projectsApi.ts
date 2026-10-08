@@ -59,6 +59,8 @@ export interface ApiProject {
   contactName: string | null;
   leadUserId: string | null;
   leadName: string | null;
+  /** The team by name (the avatars on board cards and in the list). */
+  team: { employeeId: string; name: string }[];
   createdAt: string;
   version: string;
 }

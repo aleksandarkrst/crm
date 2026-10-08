@@ -293,6 +293,8 @@ export interface Profile {
   visitPlans: boolean;
   /** "New manager" / "New direct report" emails (milestone 13). */
   orgChanges: boolean;
+  /** "Assigned to a task" emails (CD-146). */
+  taskAssigned: boolean;
 }
 
 export interface BonusRule {
@@ -411,6 +413,8 @@ export interface State {
    * or a won deal ("Create project"); null when closed.
    */
   newProject: { companyId?: string; dealId?: string } | null;
+  /** The New task dialog (CD-283), open with the project it is fixed to (from a project's Plan tab); null when closed. */
+  newTask: { projectId?: string } | null;
   newLeadType: SegKey;
   /** Company and contact the New deal dialog starts with (from a company or contact page, CD-80). */
   newLeadCompanyId: string | null;
@@ -478,6 +482,8 @@ export interface State {
    * screens showing them read them again (store/projects.ts, CD-272).
    */
   projectRev: number;
+  /** Goes up on every task change (live hints `task` and `project`): screens showing tasks read them again (store/tasks.ts). */
+  taskRev: number;
   /** Employees, org levels and units (milestone 13; see store/people.ts), read when a screen needs them. */
   people: PeopleState;
   /** Goes up on every employee and role change (live hints, resync): people lists re-read (CD-142). */

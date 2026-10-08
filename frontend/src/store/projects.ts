@@ -16,12 +16,17 @@ export function projectError(err: unknown): string {
 /**
  * Reads something from the projects API when `enabled` turns on, and again shortly after any
  * project type, stage or project change (`s.projectRev`, raised by live hints, this tab's own
- * included). `set` replaces the data at once with what a save answered. The last data stays on
+ * included), or any task change with `revKey` `taskRev` (store/tasks.ts). `set` replaces the data at once with what a save answered. The last data stays on
  * screen while it loads.
  */
-function useProjectsRead<T>(enabled: boolean, read: () => Promise<T>, key: string): { data: T | null; error: string | null; reload: () => Promise<void>; set: (data: T) => void } {
+export function useProjectsRead<T>(
+  enabled: boolean,
+  read: () => Promise<T>,
+  key: string,
+  revKey: 'projectRev' | 'taskRev' = 'projectRev',
+): { data: T | null; error: string | null; reload: () => Promise<void>; set: (data: T) => void } {
   const { s } = useStore();
-  const rev = s.projectRev;
+  const rev = s[revKey];
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const seq = useRef(0);
