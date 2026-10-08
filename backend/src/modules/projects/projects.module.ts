@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { ProjectFilesController } from './project-files.controller';
+import { ProjectFilesService } from './project-files.service';
 import { ProjectMembersService } from './project-members.service';
 import { ProjectTypesController } from './project-types.controller';
 import { ProjectTypesService } from './project-types.service';
@@ -10,7 +12,7 @@ import { ProjectsService } from './projects.service';
  * CRM (CD-233, slimmed for CD-275). Tasks, time and the rest of CD-144 come later.
  */
 @Module({
-  controllers: [ProjectTypesController, ProjectsController],
-  providers: [ProjectTypesService, ProjectsService, ProjectMembersService],
+  controllers: [ProjectTypesController, ProjectsController, ProjectFilesController],
+  providers: [ProjectTypesService, ProjectsService, ProjectMembersService, ProjectFilesService],
 })
 export class ProjectsModule {}

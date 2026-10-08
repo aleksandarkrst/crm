@@ -1191,6 +1191,17 @@ and no "hours" are shown anywhere.
     it (`GET/POST /api/projects/:id/members`, `PUT/DELETE …/members/:employeeId`, each answering
     with the whole team; 403 for others). The left column's Team card lists them with "Manage". The
     design's Open and Remaining columns (their tasks) come with CD-146.
+  - **Documents tab** (CD-271, `screens/project/ProjectDocuments.tsx`; `project_files`, RLS in
+    `drizzle/0060`): folders (Contract, Brief, Design, Client material, Deliverable) as filters with
+    counts, a drop zone ("Drop files here to add them to this project, or Upload"), and the files
+    with folder (inline), linked to, added by, date and size; a name downloads it. The deal's
+    generated documents show too ("From the deal", in Contract; managed on the deal). Any member
+    adds files (`POST /api/projects/:id/files`, multipart, at most 25 MB, rate limit `heavy`) and
+    downloads them (`…/files/:fileId/download`, always an attachment with `nosniff`); the one who
+    added a file, the lead, owners and admins move (`PATCH`) or delete it. The bytes are in storage
+    under `projects/<projectId>/<fileId>`; deleting a file or the project removes them after the
+    commit. The Overview tab has the same drop zone (into Client material). "Linked to" a task or
+    work order comes with those (CD-146, CD-265).
   - **Company page**: a Projects card below Deals (open projects with stage, lead and health;
     "Show closed (N)"; "+" with the company fixed; "No projects for this company yet.").
   - **Ctrl/⌘K** finds projects by code, name or company (read while the palette is open).

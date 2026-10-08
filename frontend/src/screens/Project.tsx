@@ -6,10 +6,11 @@ import { Screen } from '../components/Layout';
 import { Modal, ModalHeader } from '../components/ui';
 import { paths } from '../lib/paths';
 import { type ApiProject, type ApiProjectCancelReason, type ApiProjectHealth, PROJECT_CANCEL_REASONS, type ProjectPatch, projectsApi } from '../lib/projectsApi';
-import { projectError, useProject, useProjectMembers, useProjectTypes } from '../store/projects';
+import { projectError, useDealDocuments, useProject, useProjectFiles, useProjectMembers, useProjectTypes } from '../store/projects';
 import { companyLabels, companyRecords, curOf, memberLabels } from '../store/selectors';
 import { useStore } from '../store/store';
 import { HEALTH_LABEL, ProjectStatusBadge, projectValue } from './lead/DealProjects';
+import { DropZone, ProjectDocuments, useFileUpload } from './project/ProjectDocuments';
 import { ProjectTeam } from './project/ProjectTeam';
 
 /**
@@ -32,7 +33,10 @@ export function Project() {
   const { data: project, error, set } = useProject(id);
   const { data: types } = useProjectTypes();
   const { data: team, set: setTeam } = useProjectMembers(id);
-  const [tab, setTab] = useState<'overview' | 'team'>('overview');
+  const { data: files, set: setFiles } = useProjectFiles(id);
+  const { data: dealDocs } = useDealDocuments(project?.dealId);
+  const [tab, setTab] = useState<'overview' | 'team' | 'documents'>('overview');
+  const overviewUpload = useFileUpload(id, (f) => setFiles([f, ...(files ?? [])]));
   const [busy, setBusy] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -262,6 +266,7 @@ export function Project() {
                   [
                     ['overview', 'Overview'],
                     ['team', `Team · ${team?.length ?? 0}`],
+                    ['documents', `Documents · ${(files?.length ?? 0) + (dealDocs ?? []).filter((d) => d.status === 'ready').length}`],
                   ] as const
                 ).map(([k, label]) => (
                   <button
@@ -281,11 +286,21 @@ export function Project() {
               <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {tab === 'overview' ? (
                   <>
+                    <DropZone testId="overview-drop" text="Drop a file here, or" button="Choose file" busy={overviewUpload.busy} onFiles={(fs) => void overviewUpload.add(fs, 'Client material')} />
                     <span className="caps">History</span>
                     <ChangeHistory entity="project" id={project.id} cur={curOf(s)} rev={project.version} />
                   </>
-                ) : (
+                ) : tab === 'team' ? (
                   <ProjectTeam projectId={project.id} team={team} canEdit={canEdit} onChange={setTeam} />
+                ) : (
+                  <ProjectDocuments
+                    projectId={project.id}
+                    dealTitle={project.dealTitle}
+                    files={files}
+                    dealDocs={dealDocs ?? []}
+                    canManage={(f) => canEdit || f.addedByUserId === session.userId}
+                    onChange={setFiles}
+                  />
                 )}
               </div>
             </div>

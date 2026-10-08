@@ -167,6 +167,37 @@ describe('projects', () => {
     await page.waitForFunction(() => document.querySelector('[data-testid=project-team-card]')?.innerText.includes('Project manager'));
   });
 
+  step('the Documents tab: upload, folders, move, delete (CD-271)', async () => {
+    const dir = await import('node:os').then((os) => os.tmpdir());
+    const path = (await import('node:path')).join(dir, `brief-${Date.now()}.txt`);
+    await (await import('node:fs/promises')).writeFile(path, 'project brief');
+    await click(page, '[data-testid=project-tab-documents]');
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-documents]')?.innerText.includes('No files in this folder.'));
+    // Uploading with "Brief" selected puts it in Brief.
+    await click(page, '[data-testid=document-folders] [data-folder=Brief]');
+    const input = await page.waitForSelector('[data-testid=documents-drop-input]');
+    await input.uploadFile(path);
+    await page.waitForSelector('[data-testid=project-file]');
+    const files = await api(page, `/projects/${projectId}/files`);
+    assert.equal(files.length, 1);
+    assert.equal(files[0].folder, 'Brief');
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-tab-documents]')?.textContent === 'Documents · 1');
+    // Move it to Design: All shows it, Brief is empty.
+    await click(page, '[data-testid=document-folders] [data-folder=all]');
+    await setValue(page, '[data-testid=project-file] select[aria-label=Folder]', 'Design');
+    assert.ok(await eventually(async () => (await api(page, `/projects/${projectId}/files`))[0]?.folder === 'Design'));
+    await click(page, '[data-testid=document-folders] [data-folder=Brief]');
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-documents]')?.innerText.includes('No files in this folder.'));
+    await click(page, '[data-testid=document-folders] [data-folder=Design]');
+    await click(page, '[data-testid=project-file] button[aria-label="Delete file"]');
+    assert.ok(await eventually(async () => (await api(page, `/projects/${projectId}/files`)).length === 0));
+    // The Overview's drop zone adds to the project too.
+    await click(page, '[data-testid=project-tab-overview]');
+    const overview = await page.waitForSelector('[data-testid=overview-drop-input]');
+    await overview.uploadFile(path);
+    assert.ok(await eventually(async () => (await api(page, `/projects/${projectId}/files`))[0]?.folder === 'Client material'));
+  });
+
   step('another company clears the deal, after a confirmation (TC 5)', async () => {
     await setValue(page, '[data-testid=project-company-field]', beta.id);
     assert.equal(await confirmInApp(page), 'Move Service 2026 to Beta?');

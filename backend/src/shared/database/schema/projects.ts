@@ -187,3 +187,38 @@ export const projectMembers = pgTable(
   ],
 );
 
+/** Where a project's file sits (design v2 Documents tab). */
+export const PROJECT_FILE_FOLDERS = ['Contract', 'Brief', 'Design', 'Client material', 'Deliverable'] as const;
+export type ProjectFileFolder = (typeof PROJECT_FILE_FOLDERS)[number];
+/** The largest file someone can add to a project. */
+export const MAX_PROJECT_FILE_BYTES = 25 * 1024 * 1024;
+
+/**
+ * A file added to a project (CD-271, Documents tab): the bytes are in storage under `storage_key`
+ * (`projects/<projectId>/<id>`); the row says what it is, its folder and who added it. Deleting the
+ * project deletes its rows (the service removes the stored files).
+ */
+export const projectFiles = pgTable(
+  'project_files',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    projectId: uuid('project_id').notNull(),
+    name: text('name').notNull(),
+    folder: text('folder', { enum: PROJECT_FILE_FOLDERS }).notNull(),
+    contentType: text('content_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    storageKey: text('storage_key').notNull(),
+    addedByUserId: uuid('added_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (t) => [
+    unique('project_files_tenant_id_uq').on(t.tenantId, t.id),
+    index('project_files_tenant_project_idx').on(t.tenantId, t.projectId),
+    foreignKey({ columns: [t.tenantId, t.projectId], foreignColumns: [projects.tenantId, projects.id], name: 'project_files_project_fk' }).onDelete('cascade'),
+    check('project_files_name_ck', sql`length(btrim(${t.name})) between 1 and 255`),
+    check('project_files_folder_ck', sql`${t.folder} in ('Contract', 'Brief', 'Design', 'Client material', 'Deliverable')`),
+    check('project_files_size_ck', sql`${t.sizeBytes} between 0 and 26214400`),
+  ],
+);
+
