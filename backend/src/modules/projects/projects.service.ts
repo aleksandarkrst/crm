@@ -97,6 +97,13 @@ async function firstStage(tx: Tx, projectTypeId: string): Promise<string> {
   return stage.id;
 }
 
+/** The stage a completed project ends on (CD-282), as a won deal ends on the funnel's Won stage. */
+async function lastStage(tx: Tx, projectTypeId: string): Promise<string> {
+  const [stage] = await tx.select({ id: projectStages.id }).from(projectStages).where(eq(projectStages.projectTypeId, projectTypeId)).orderBy(desc(projectStages.position)).limit(1);
+  if (!stage) throw new BadRequestException('Project type not found');
+  return stage.id;
+}
+
 /**
  * "Create a project when a deal is won" (CD-233, spec 3.2), run by the worker for `crm.deal-won`
  * when the workspace has it on. Exactly one project per deal, ever: `project_auto_deals` gets the
@@ -238,6 +245,9 @@ export class ProjectsService {
             .where(and(eq(projectStages.id, stageId), eq(projectStages.projectTypeId, typeId)));
           if (!stage) throw new BadRequestException("Pick a stage of the project's type");
           patch.stageId = stageId;
+        } else if (input.status === 'completed' && current.status !== 'completed') {
+          // Completing moves the project to its type's last stage (CD-282); reopening keeps it there.
+          patch.stageId = await lastStage(tx, typeId);
         }
 
         // Company and deal (spec 3.2): another company clears the deal, unless one of its deals comes along.

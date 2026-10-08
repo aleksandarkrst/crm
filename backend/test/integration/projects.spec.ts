@@ -126,8 +126,11 @@ describe('projects', () => {
     expect(moved.stageName).toBe('In progress');
     const web = (await typesNow()).find((t) => t.name === 'Websites')!;
     expect((await call('PATCH', `/projects/${projectId}`, { ...as(member), body: { stageId: web.stages[0]!.id } })).status).toBe(400);
-    expect((await ok('PATCH', `/projects/${projectId}`, { ...as(admin), body: { status: 'completed' } }, 200)).status).toBe('completed');
-    await ok('PATCH', `/projects/${projectId}`, { ...as(admin), body: { status: 'open' } }, 200);
+    // Completing moves it to the type's last stage (CD-282); reopening keeps it there.
+    const completed = await ok('PATCH', `/projects/${projectId}`, { ...as(admin), body: { status: 'completed' } }, 200);
+    expect([completed.status, completed.stageName]).toEqual(['completed', 'Review']);
+    expect((await ok('PATCH', `/projects/${projectId}`, { ...as(admin), body: { status: 'open' } }, 200)).stageName).toBe('Review');
+    await ok('PATCH', `/projects/${projectId}`, { ...as(admin), body: { stageId: clientType.stages[1]!.id } }, 200);
   });
 
   it('deleting a stage or type with projects needs somewhere to move them', async () => {

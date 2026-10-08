@@ -61,7 +61,7 @@ describe('won deal → project', () => {
     assert.equal(project.stageName, 'Planning');
   });
 
-  step('the stage bar moves the project; Complete closes it', async () => {
+  step('the stage bar moves the project; Complete closes it on the last stage', async () => {
     await waitForToastToClear(page);
     await click(page, '[data-testid=project-stage-bar] button[title="Move to In progress"]');
     await page.waitForFunction(() => document.querySelector('[data-testid=project-stage-bar] .current')?.textContent === 'In progress');
@@ -70,6 +70,8 @@ describe('won deal → project', () => {
     const done = await eventually(async () => (await api(page, '/projects/' + projectId)).status === 'completed');
     assert.ok(done, 'completed');
     await page.waitForFunction(() => [...document.querySelectorAll('button')].some((b) => b.textContent === 'Reopen'));
+    // Like a won deal on the Won stage (CD-282).
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-stage-bar] .current')?.textContent === 'Review');
   });
 
   step('the deal now offers "Open project" and lists it in the Summary', async () => {
