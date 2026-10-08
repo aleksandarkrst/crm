@@ -4,12 +4,13 @@ import { AuditService } from '../../shared/audit/audit.service';
 import { hasRole, type TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
-import { companies, employees, projects, projectStages, recordChanges, taskAssignments, taskCounters, tasks, users } from '../../shared/database/schema';
+import { companies, employees, MAX_TASK_ASSIGNEES, projects, projectStages, recordChanges, taskAssignments, taskCounters, tasks, users } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import { PeopleAccess } from '../people';
 import { canAssign, canCreateTask, canManage, type TaskCaller, taskAccess, type TaskAccessLevel } from './task-access';
+import { hoursSummary, taskHours } from './task-hours';
 import { loggableTasks } from './task-log';
-import type { AssignTask, CreateTask, ListTasksQuery, TaskHistoryQuery, UpdateTask } from './tasks.schemas';
+import type { AssignTask, CreateTask, ListTasksQuery, SetHourLimit, TaskHistoryQuery, UpdateTask } from './tasks.schemas';
 
 /** One person on a task, as the API returns it. */
 export interface TaskAssigneeView {
@@ -22,13 +23,15 @@ export interface TaskAssigneeView {
   hasAccount: boolean;
   /** Left the company ("(former member)"). */
   formerMember: boolean;
+  /** Their hour limit on this task (CD-147); null: no limit. */
+  hourLimit: number | null;
 }
 
 // Correlated subqueries name the outer table explicitly: in a one-table select Drizzle leaves
 // columns unqualified, which would bind them to the subquery's own table.
 const assigneesJson = sql<TaskAssigneeView[]>`coalesce((
   select json_agg(json_build_object('employeeId', e.id, 'name', e.full_name, 'jobTitle', e.job_title, 'active', a.active,
-    'hasAccount', e.user_id is not null, 'formerMember', e.deactivated_at is not null) order by a.active desc, e.full_name)
+    'hasAccount', e.user_id is not null, 'formerMember', e.deactivated_at is not null, 'hourLimit', a.hour_limit::float) order by a.active desc, e.full_name)
   from task_assignments a join employees e on e.id = a.employee_id where a.task_id = "tasks"."id"), '[]'::json)`;
 const teamJson = sql<string[]>`coalesce((select json_agg(m.employee_id) from project_members m where m.project_id = "tasks"."project_id"), '[]'::json)`;
 
@@ -293,14 +296,17 @@ export class TasksService {
         const { row } = await this.changeable(tx, caller, id);
         const ids = [...new Set(input.employeeIds)];
         for (const employeeId of ids) this.assertCanAssign(caller, row.projectLeadUserId, employeeId);
+        const limits = input.hourLimits ?? {};
+        if (Object.keys(limits).length && !canManage(caller, row.projectLeadUserId)) throw new ForbiddenException('Only the project lead, owners and admins set hour limits');
         if (row.assignees.some((a) => a.active && ids.includes(a.employeeId))) throw new ConflictException('Already assigned to this task');
+        if (row.assignees.filter((a) => a.active).length + ids.length > MAX_TASK_ASSIGNEES) throw new BadRequestException(`At most ${MAX_TASK_ASSIGNEES} people on one task`);
         await this.checkAssignable(tx, ids);
         await tx
           .insert(taskAssignments)
-          .values(ids.map((employeeId) => ({ tenantId: ctx.tenantId, taskId: id, employeeId, assignedByUserId: ctx.userId })))
+          .values(ids.map((employeeId) => ({ tenantId: ctx.tenantId, taskId: id, employeeId, hourLimit: limits[employeeId] ?? null, assignedByUserId: ctx.userId })))
           .onConflictDoUpdate({
             target: [taskAssignments.tenantId, taskAssignments.taskId, taskAssignments.employeeId],
-            set: { active: true, assignedByUserId: ctx.userId, assignedAt: sql`now()` },
+            set: { active: true, hourLimit: sql`excluded.hour_limit`, assignedByUserId: ctx.userId, assignedAt: sql`now()` },
           });
         await this.emailAssigned(tx, ctx, id, ids);
         await this.audit.record(tx, ctx, { action: 'task.assigned', entityType: 'task', entityId: id, data: { employeeIds: ids } });
@@ -323,6 +329,42 @@ export class TasksService {
       if (!done) throw new NotFoundException('Not assigned to this task');
       await this.audit.record(tx, ctx, { action: 'task.unassigned', entityType: 'task', entityId: id, data: { employeeId } });
       return this.presentById(tx, caller, id);
+    });
+  }
+
+  /**
+   * Someone's hour limit on the task (CD-147): the lead, owners and admins; also below the hours
+   * they logged (they show as over). Every change is in the task's history.
+   */
+  setHourLimit(ctx: TenantContext, id: string, employeeId: string, input: SetHourLimit) {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        const caller = await this.caller(ctx, tx);
+        const { row } = await this.changeable(tx, caller, id);
+        if (!canManage(caller, row.projectLeadUserId)) throw new ForbiddenException('Only the project lead, owners and admins set hour limits');
+        const [done] = await tx
+          .update(taskAssignments)
+          .set({ hourLimit: input.hourLimit })
+          .where(and(eq(taskAssignments.taskId, id), eq(taskAssignments.employeeId, employeeId), eq(taskAssignments.active, true)))
+          .returning({ employeeId: taskAssignments.employeeId });
+        if (!done) throw new NotFoundException('Not assigned to this task');
+        await this.audit.record(tx, ctx, { action: 'task.limit_set', entityType: 'task', entityId: id, data: { employeeId, hourLimit: input.hourLimit } });
+        return this.presentById(tx, caller, id);
+      })
+      .catch(mapDbError);
+  }
+
+  /**
+   * The People and hours card (CD-147): a row per person (removed people who logged hours too) and
+   * the total. The lead, the people's managers and admins see everyone's hours; anyone else sees
+   * their own and only the others' names.
+   */
+  hours(ctx: TenantContext, id: string) {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const caller = await this.caller(ctx, tx);
+      const { row } = await this.visible(tx, caller, id);
+      const seesAll = canManage(caller, row.projectLeadUserId) || row.assignees.some((a) => caller.reportIds.has(a.employeeId));
+      return hoursSummary(row.assignees, await taskHours(tx, id), { seesAll, me: caller.employeeId });
     });
   }
 

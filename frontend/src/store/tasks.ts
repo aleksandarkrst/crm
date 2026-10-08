@@ -1,4 +1,4 @@
-import { type ApiTask, type TaskFilter, tasksApi } from '../lib/tasksApi';
+import { type ApiTask, type ApiTaskHours, type TaskFilter, tasksApi } from '../lib/tasksApi';
 import { useProjectsRead } from './projects';
 
 /**
@@ -12,6 +12,9 @@ export const useTasks = (filter: TaskFilter = {}, enabled = true) =>
 
 /** One task (its page). */
 export const useTask = (id: string | undefined) => useProjectsRead<ApiTask>(!!id, () => tasksApi.get(id!), `task:${id ?? ''}`, 'taskRev');
+
+/** A task's People and hours (CD-147): read with the task, again on any task change. */
+export const useTaskHours = (id: string | undefined) => useProjectsRead<ApiTaskHours>(!!id, () => tasksApi.hours(id!), `hours:${id ?? ''}`, 'taskRev');
 
 /** Due date as "7 Oct"; past due and not Done is late. */
 export const dueText = (iso: string | null) => (iso ? new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : null);

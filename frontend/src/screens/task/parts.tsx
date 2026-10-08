@@ -225,7 +225,7 @@ function useDirectory() {
  * without an account say "No account yet" (they get no email). `taken` are already on the task.
  * Inline (no overlay of its own), so the New task dialog can hold it.
  */
-export function PeoplePicker({ projectId, taken, picked, onToggle }: { projectId: string | null; taken: Set<string>; picked: Set<string>; onToggle: (employeeId: string) => void }) {
+export function PeoplePicker({ projectId, taken, picked, onToggle }: { projectId: string | null; taken: Set<string>; picked: Set<string>; onToggle: (employeeId: string, name: string) => void }) {
   const { people, error } = useDirectory();
   const [team, setTeam] = useState<ApiProjectMember[]>([]);
   const [q, setQ] = useState('');
@@ -268,7 +268,7 @@ export function PeoplePicker({ projectId, taken, picked, onToggle }: { projectId
               </div>
               {g.rows.map((p) => (
                 <label key={p.id} data-employee={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 12px', borderTop: '1px solid var(--divider)', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={picked.has(p.id)} onChange={() => onToggle(p.id)} />
+                  <input type="checkbox" checked={picked.has(p.id)} onChange={() => onToggle(p.id, p.fullName)} />
                   <Avatar initials={initialsOf(p.fullName)} size={24} font={9.5} />
                   <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
                     <span style={{ fontSize: 13.5, fontWeight: 500 }}>{p.fullName}</span>

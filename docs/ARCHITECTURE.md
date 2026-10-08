@@ -1271,6 +1271,22 @@ and no "hours" are shown anywhere.
   - **"+" and Ctrl/⌘K:** "Task" (K; "Project task" outside Projects, for the open project on its
     page), Go to → Tasks, and a Tasks results group ("T-12 · name", by number, name or project).
   - **Settings → Notifications:** "Task assignments".
+- **Several people, hour limits** (CD-147, `drizzle/0063`, `0064`):
+  - `task_assignments.hour_limit`: per person, 0.25 to 9,999 h in quarter hours, null for none.
+    Only the lead, owners and admins set it (when assigning, `hourLimits`, or `PATCH
+    /api/tasks/:id/assignees/:employeeId`), also below the hours logged; the history records each
+    change ("Hour limit for Ana: 8 h → 6 h"). At most 50 people on a task.
+  - **People and hours** (`GET /api/tasks/:id/hours`, `task-hours.ts`, pure and unit-tested): a row
+    per current person and per removed person with hours (limit, logged, approved, remaining, used %
+    with the bar level: neutral below 80 %, amber from 80 %, red from 100 %), and the total. The task
+    limit (sum of limits) shows only when every current person has one. The lead, owners, admins
+    and the people's managers see every row; anyone else their own hours and the others' names.
+    The card sits at the top of the task page's right column (six columns don't fit under Details).
+  - **Hours until milestone 15:** `taskHours()` is the one read of logged and approved hours; it
+    reads `task_time_fixtures`, which only tests write (integration tests in SQL, e2e through the
+    dev-only `POST /api/dev/tasks/:id/hours`). Time entries replace both.
+  - `canLogTime(…, { block })`: in Block mode (CD-149 will make it a setting) an entry past the
+    person's own limit is refused (`over_limit`); one person's hours never count toward another's.
 - **Email "Assigned to a task"** (job `projects.task-assigned`, projects worker): to someone with an
   account assigned by another person, when they're still on the task and `memberships.
   notify_task_assigned` is on (read when sending). Number, name, project, company, due date and a

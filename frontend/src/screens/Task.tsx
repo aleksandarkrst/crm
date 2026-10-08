@@ -5,13 +5,14 @@ import { askConfirm } from '../components/ConfirmDialog';
 import { Screen } from '../components/Layout';
 import { Avatar, Modal, ModalHeader } from '../components/ui';
 import { paths } from '../lib/paths';
-import { type ApiTask, TASK_STATUSES, taskId, type TaskPatch, tasksApi } from '../lib/tasksApi';
+import { type ApiTask, quarterHourError, TASK_STATUSES, taskId, type TaskPatch, tasksApi } from '../lib/tasksApi';
 import { projectError, useProject, useProjects, useProjectTypes } from '../store/projects';
 import { curOf, initialsOf } from '../store/selectors';
 import { useStore } from '../store/store';
 import { activeAssignees, dueText, isLate, todayIso, useTask } from '../store/tasks';
 import { NumberField, Row, TextField } from './project/fields';
 import { assignedMessage, PeoplePicker, useTaskUpdate } from './task/parts';
+import { PeopleAndHours } from './task/PeopleAndHours';
 
 /**
  * A task's page (CD-283, design v2 §4):
@@ -58,9 +59,9 @@ export function Task() {
   const me = s.team.find((m) => m.id === session.userId)?.employeeId ?? null;
   const update = (patch: TaskPatch, message?: (t: ApiTask) => string) => save(task, patch, message);
 
-  const assign = async (ids: string[]) => {
+  const assign = async (ids: string[], hourLimits?: Record<string, number>) => {
     try {
-      const saved = await tasksApi.assign(task.id, ids);
+      const saved = await tasksApi.assign(task.id, ids, hourLimits);
       set(saved);
       const added = saved.assignees.filter((a) => ids.includes(a.employeeId)).map((a) => ({ name: a.name, hasAccount: a.hasAccount, me: a.employeeId === me }));
       flash(assignedMessage(saved, added));
@@ -255,13 +256,16 @@ export function Task() {
             </div>
           </div>
           <div style={{ flex: '999 1 380px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* CD-147: here rather than under Details, where its six columns don't fit. */}
+            <PeopleAndHours task={task} onChange={set} onUnassign={(id, name) => void unassign(id, name)} />
             <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <span style={{ fontSize: 15, fontWeight: 600 }}>Description</span>
               <TextField multiline className="ghost ghost-sm" testId="task-description" label="Description" value={task.description ?? ''} disabled={!canEdit} placeholder="What needs doing, and what done looks like" maxLength={10000} onSave={(v) => update({ description: v || null })} />
             </div>
             <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <span className="caps">History</span>
-              <ChangeHistory entity="task" id={task.id} cur={curOf(s)} rev={task.version} />
+              {/* Assignee and limit changes don't touch the task's version: they count as a change too. */}
+              <ChangeHistory entity="task" id={task.id} cur={curOf(s)} rev={`${task.version}:${task.assignees.map((a) => `${a.employeeId}${a.active}${a.hourLimit}`).join()}`} />
             </div>
           </div>
         </div>
@@ -281,11 +285,18 @@ export function Task() {
   );
 }
 
-/** "Add people": the project team first, then others; several at once. */
-function AssignDialog({ task, onClose, onAssign }: { task: ApiTask; onClose: () => void; onAssign: (ids: string[]) => Promise<void> }) {
-  const [picked, setPicked] = useState<Set<string>>(new Set());
+/**
+ * "Add people": the project team first, then others; several at once. The lead, owners and admins
+ * give each one an hour limit too (CD-147; empty is no limit).
+ */
+function AssignDialog({ task, onClose, onAssign }: { task: ApiTask; onClose: () => void; onAssign: (ids: string[], hourLimits?: Record<string, number>) => Promise<void> }) {
+  const [names, setNames] = useState<Map<string, string>>(new Map());
+  const [limits, setLimits] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const taken = new Set(activeAssignees(task).map((a) => a.employeeId));
+  const picked = new Set(names.keys());
+  const errors = Object.fromEntries([...names.keys()].map((id) => [id, limits[id]?.trim() ? quarterHourError(Number(limits[id])) : null]));
+  const invalid = Object.values(errors).some(Boolean);
   return (
     <Modal maxWidth={520} onBackdrop={onClose}>
       <ModalHeader title={`Assign people to ${taskId(task)}`} sub="People with an account get an email. Everyone assigned can log time on the task." />
@@ -293,27 +304,39 @@ function AssignDialog({ task, onClose, onAssign }: { task: ApiTask; onClose: () 
         projectId={task.projectId}
         taken={taken}
         picked={picked}
-        onToggle={(id) =>
-          setPicked((cur) => {
-            const next = new Set(cur);
+        onToggle={(id, name) =>
+          setNames((cur) => {
+            const next = new Map(cur);
             if (next.has(id)) next.delete(id);
-            else next.add(id);
+            else next.set(id, name);
             return next;
           })
         }
       />
+      {task.canManage && names.size > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} data-testid="assign-limits">
+          {[...names].map(([id, name]) => (
+            <label key={id} className="form-label">
+              Hour limit for {name}
+              <input className="form-input" type="number" min={0.25} step={0.25} placeholder="No limit" value={limits[id] ?? ''} onChange={(e) => setLimits((cur) => ({ ...cur, [id]: e.target.value }))} data-testid="assign-limit" />
+              <span style={{ fontSize: 12, color: errors[id] ? 'var(--danger)' : 'var(--text-2)' }}>{errors[id] ?? 'Empty means no limit. Use quarter hours, for example 7.5 or 7.25.'}</span>
+            </label>
+          ))}
+        </div>
+      )}
       <div className="modal-actions">
         <button type="button" className="btn btn-secondary" onClick={onClose}>
           Cancel
         </button>
         <button
           type="button"
-          className={picked.size && !saving ? 'btn btn-primary' : 'btn btn-disabled'}
-          disabled={!picked.size || saving}
+          className={picked.size && !saving && !invalid ? 'btn btn-primary' : 'btn btn-disabled'}
+          disabled={!picked.size || saving || invalid}
           data-testid="assign-submit"
           onClick={async () => {
             setSaving(true);
-            await onAssign([...picked]);
+            const set = Object.fromEntries([...names.keys()].filter((id) => limits[id]?.trim()).map((id) => [id, Number(limits[id])]));
+            await onAssign([...picked], Object.keys(set).length ? set : undefined);
             setSaving(false);
           }}
         >
