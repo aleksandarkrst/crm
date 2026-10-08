@@ -1,6 +1,6 @@
 // CSV import (CD-64) and export (CD-65) from the "⋯" menu of the list screens (CD-81): import
 // companies, deals and products through the dialog and see them in the lists, then export the
-// contacts and products lists and check the downloaded files.
+// contacts, products and projects lists and check the downloaded files.
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -185,5 +185,24 @@ describe('CSV import and export', () => {
     const lines = readFileSync(join(downloads, name), 'utf8').replace(/^\uFEFF/, '').split('\r\n').filter(Boolean);
     assert.equal(lines[0], 'Product ID,Name,Description,Unit price,Unit,Quantity,Tax %,Billing frequency,Billing cycles');
     assert.ok(lines.some((l) => l.includes(`Support plan ${RUN},,300,month,1,20,Monthly,12`)), lines.join('\n'));
+  });
+
+  step('exports the projects list; Projects have no import (CD-278)', async () => {
+    const globexId = (await api(page, '/crm/companies')).find((c) => c.name === globex).id;
+    const [type] = await api(page, '/project-types');
+    await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: `Rollout ${RUN}`, code: 'EXP-1', projectTypeId: type.id, companyId: globexId, startDate: '2026-11-02', endDate: '2026-12-18' }) });
+    await page.goto(BASE_URL + '/projects', { waitUntil: 'networkidle0' });
+    await page.waitForFunction((n) => document.body.innerText.includes(n), {}, `Rollout ${RUN}`);
+    await click(page, '[data-testid=data-menu]');
+    assert.ok(!(await page.$eval('.menu-pop', (el) => el.innerText)).includes('Import data'), 'no import for projects');
+    await page.keyboard.press('Escape');
+
+    rmSync(downloads, { recursive: true, force: true });
+    await exportList(page);
+    const name = await eventually(() => existsSync(downloads) && readdirSync(downloads).find((f) => f.endsWith('.csv')), { timeout: 10_000 });
+    assert.match(name, /^pultly-projects-/);
+    const lines = readFileSync(join(downloads, name), 'utf8').replace(/^﻿/, '').split('\r\n').filter(Boolean);
+    assert.equal(lines[0], 'Code,Name,Company,Lead,Type,Stage,Health,Status,Start,End');
+    assert.ok(lines.some((l) => l.startsWith(`EXP-1,Rollout ${RUN},${globex},Ivy Importer,${type.name},${type.stages[0].name},On track,Open,2026-11-02,2026-12-18`)), lines.join('\n'));
   });
 });

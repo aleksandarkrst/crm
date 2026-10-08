@@ -3,6 +3,7 @@
  * browser (see lib/csv.ts for the Excel and formula-injection rules). Owners and admins only.
  */
 import type { CustomFieldEntity } from '../lib/api';
+import type { ApiProject } from '../lib/projectsApi';
 import { type CsvColumn, toCsv } from '../lib/csv';
 import { type CompanyRecord, customFieldsOf, customValueText, memberName, ownerOf, personById, valueNum } from './selectors';
 import type { CatalogItem, Funnel, Lead, State } from './types';
@@ -101,5 +102,24 @@ export function productsCsv(items: CatalogItem[]): string {
     { header: 'Tax %', value: (p) => p.vat },
     { header: 'Billing frequency', value: (p) => frequency[p.frequency] },
     { header: 'Billing cycles', value: (p) => p.cycles ?? '' },
+  ]);
+}
+
+const PROJECT_HEALTH = { on_track: 'On track', at_risk: 'At risk', off_track: 'Off track' } as const;
+const PROJECT_STATUS = { open: 'Open', completed: 'Completed', cancelled: 'Cancelled' } as const;
+
+/** Projects as the Projects screen shows them (its view and filters, CD-278). */
+export function projectsCsv(projects: ApiProject[]): string {
+  return toCsv(projects, [
+    { header: 'Code', value: (p) => clean(p.code) },
+    { header: 'Name', value: (p) => p.name },
+    { header: 'Company', value: (p) => p.companyName },
+    { header: 'Lead', value: (p) => clean(p.leadName) },
+    { header: 'Type', value: (p) => p.projectTypeName },
+    { header: 'Stage', value: (p) => p.stageName },
+    { header: 'Health', value: (p) => PROJECT_HEALTH[p.health] },
+    { header: 'Status', value: (p) => PROJECT_STATUS[p.status] },
+    { header: 'Start', value: (p) => clean(p.startDate) },
+    { header: 'End', value: (p) => clean(p.endDate) },
   ]);
 }

@@ -2,7 +2,7 @@
 // installments) and the redesigned deal page (header with Won and Lost, stage bar, sections).
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, clickButton, createDealInUi, eventually, newUserWithWorkspace, setValue, steps, text, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, confirmInApp, createDealInUi, eventually, newUserWithWorkspace, setValue, steps, text, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
 
 describe('products and the deal page', () => {
   const browser = useBrowser();
@@ -152,6 +152,8 @@ describe('products and the deal page', () => {
   step('the owner deletes the deal from the header menu', async () => {
     await click(page, 'button[aria-label="More actions"]');
     await clickButton(page, 'Delete deal');
+    // The app's own confirm (CD-278), not the browser's.
+    assert.match(await confirmInApp(page), /^Delete the deal ".*"\?$/);
     await page.waitForFunction(() => location.pathname.startsWith('/pipeline'));
     const gone = await eventually(async () => !(await api(page, '/crm/deals')).some((d) => d.deal.id === dealId));
     assert.ok(gone, 'deal deleted');
