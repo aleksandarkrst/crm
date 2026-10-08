@@ -112,6 +112,7 @@ export const mapWorkspace = (w: ApiWorkspace): Workspace => ({
   employeeSelfEditBank: w.employeeSelfEditBank,
   ceoEmployeeId: w.ceoEmployeeId ?? null,
   autoCreateProjects: w.autoCreateProjects ?? false,
+  modules: w.modules ?? ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting'],
 });
 
 export const mapProfile = (p: ApiProfile): Profile => ({

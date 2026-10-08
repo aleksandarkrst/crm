@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CUSTOMER_EMAIL_LANGUAGES, DATE_FORMATS, PROFILE_LANGUAGES, START_PAGES } from '../../shared/database/schema';
+import { CUSTOMER_EMAIL_LANGUAGES, DATE_FORMATS, PROFILE_LANGUAGES, START_PAGES, WORKSPACE_MODULES } from '../../shared/database/schema';
 
 // ICU's lists (Node ships full ICU): every ISO 4217 code and every canonical IANA zone.
 const CURRENCIES = new Set(Intl.supportedValuesOf('currency'));
@@ -39,6 +39,8 @@ export const UpdateWorkspace = z
     ceoEmployeeId: z.uuid().nullable(),
     // "Create a project when a deal is won" (CD-233).
     autoCreateProjects: z.boolean(),
+    // The modules turned on (CD-279): each once; any subset, none included.
+    modules: z.array(z.enum(WORKSPACE_MODULES)).max(WORKSPACE_MODULES.length).refine((m) => new Set(m).size === m.length, 'Each module once'),
   })
   .partial()
   .refine(atLeastOne, 'Nothing to update');

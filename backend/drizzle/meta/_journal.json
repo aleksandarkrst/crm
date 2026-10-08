@@ -393,6 +393,13 @@
       "when": 1791413045295,
       "tag": "0055_project_value_budget_history",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1791439126279,
+      "tag": "0056_workspace_modules",
+      "breakpoints": true
     }
   ]
 }

@@ -2,10 +2,12 @@
 // the Pultly mark shows the module you're in and opens the switcher (also with Ctrl+J); each module
 // has its own sidebar, Settings keeps the last one; picking navigates, locked modules do nothing;
 // Escape and an outside click close it; it switches and creates workspaces; pages that don't fit a
-// short window go under "More"; on phones it is a bottom sheet.
+// short window go under "More"; on phones it is a bottom sheet. CD-279: Workspace settings is a
+// tile (locked for members), modules turned off for a workspace say "Not in this workspace", and
+// switching to a workspace without the current module opens its first one, or says it has none.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, clickButton, newUserWithWorkspace, RUN, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, email, finishOnboarding, newUserWithWorkspace, RUN, signIn, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
 
 const POP = '[data-testid=module-switcher-pop]';
 const LOGO = '[data-testid=module-switcher]';
@@ -62,16 +64,20 @@ describe('module and workspace switcher', () => {
     const rows = await modules();
     assert.deepEqual(
       rows.map((m) => m.id),
-      ['planning', 'crm', 'projects', 'workforce'],
+      ['crm', 'projects', 'workforce', 'settings', 'planning', 'finance', 'reporting'],
     );
     assert.deepEqual(rows.find((m) => m.current)?.id, 'crm');
     // One workspace: no workspace row, its name next to "Modules".
     assert.equal(await page.$(`${POP} .mod-ws-row`), null);
     assert.ok((await page.$eval(`${POP} .mod-label-ws`, (el) => el.textContent)).includes(firstWorkspace));
-    // Modules that aren't built yet are locked; Projects opened with CD-234.
+    // Modules that aren't built yet are locked; an owner opens Workspace settings.
     assert.deepEqual(
       rows.filter((m) => m.locked).map((m) => [m.id, m.sub]),
-      [['planning', 'Coming soon']],
+      [
+        ['planning', 'Coming soon'],
+        ['finance', 'Coming soon'],
+        ['reporting', 'Coming soon'],
+      ],
     );
   });
 
@@ -136,13 +142,16 @@ describe('module and workspace switcher', () => {
     await ctrlJ();
     await page.waitForSelector(POP);
     assert.equal(await focused(), 'crm', 'the current module has focus');
-    await page.keyboard.press('ArrowLeft');
-    assert.equal(await focused(), 'planning');
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await focused(), 'projects');
+    await page.keyboard.press('ArrowDown');
+    assert.equal(await focused(), 'settings');
+    await page.keyboard.press('ArrowDown');
+    assert.equal(await focused(), 'finance');
     await page.keyboard.press('Enter');
     assert.ok(await page.$(POP), 'a locked module does nothing on Enter');
-    await page.keyboard.press('ArrowDown');
-    assert.equal(await focused(), 'projects');
-    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowLeft');
     assert.equal(await focused(), 'workforce');
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => location.pathname === '/org');
@@ -220,6 +229,80 @@ describe('module and workspace switcher', () => {
     await click(page, `${POP} .mod-ws-row`);
     await click(page, `${POP} [data-workspace="${firstWorkspace}"]`);
     await page.waitForFunction((name) => document.querySelector('[data-testid=module-switcher]')?.title.includes(name), {}, firstWorkspace);
+  });
+
+  /** Sets a workspace's modules through the API, as its owner (whichever workspace is open). */
+  const setModules = (tenantName, modules) =>
+    page.evaluate(
+      async (tenantName, modules) => {
+        const auth = { Authorization: 'Bearer ' + localStorage.getItem('crm.devToken') };
+        const me = await (await fetch('/api/me', { headers: auth })).json();
+        const t = me.tenants.find((x) => x.name === tenantName);
+        const res = await fetch('/api/workspace', { method: 'PATCH', headers: { ...auth, 'X-Tenant-Id': t.id, 'Content-Type': 'application/json' }, body: JSON.stringify({ modules }) });
+        if (!res.ok) throw new Error('PATCH /workspace ' + res.status);
+      },
+      tenantName,
+      modules,
+    );
+  const toast = (text) => page.waitForFunction((text) => document.querySelector('.toast')?.textContent.includes(text), {}, text);
+
+  step('switching to a workspace without the current module opens its first one (CD-279 TC 4)', async () => {
+    await setModules(secondWorkspace, ['crm']);
+    await page.goto(BASE_URL + '/projects', { waitUntil: 'networkidle0' });
+    await inModule('projects');
+    await click(page, LOGO);
+    await click(page, `${POP} .mod-ws-row`);
+    await click(page, `${POP} [data-workspace="${secondWorkspace}"]`);
+    await toast(`${secondWorkspace} has no Projects. Opening CRM…`);
+    await page.waitForFunction((name) => document.querySelector('[data-testid=module-switcher]')?.title.includes(name), {}, secondWorkspace);
+    await page.waitForFunction(() => location.pathname === '/pipeline');
+    await inModule('crm');
+  });
+
+  step('modules turned off show "Not in this workspace"; Settings → General turns them on', async () => {
+    await click(page, LOGO);
+    const rows = await modules();
+    assert.deepEqual(
+      rows.filter((m) => m.locked && m.sub === 'Not in this workspace').map((m) => m.id),
+      ['projects', 'workforce', 'planning', 'finance', 'reporting'],
+    );
+    await click(page, `${POP} [data-module=settings]`);
+    await page.waitForFunction(() => location.pathname.startsWith('/settings'));
+    await click(page, '[data-testid=workspace-modules] [data-module=projects] [role=switch]');
+    await page.waitForFunction(async () => (await (await fetch('/api/workspace', { headers: { Authorization: 'Bearer ' + localStorage.getItem('crm.devToken'), 'X-Tenant-Id': localStorage.getItem('crm.tenantId') } })).json()).modules.includes('projects'));
+    await click(page, LOGO);
+    assert.equal((await modules()).find((m) => m.id === 'projects').locked, false, 'Projects opens now');
+    assert.equal((await modules()).find((m) => m.id === 'settings').current, true, 'on Settings its tile is the current one');
+    await page.keyboard.press('Escape');
+    await closed();
+  });
+
+  step('a workspace with no module that opens here: a toast, and nothing changes (CD-279 TC 3)', async () => {
+    await setModules(firstWorkspace, ['planning', 'finance']);
+    await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
+    await click(page, LOGO);
+    await click(page, `${POP} .mod-ws-row`);
+    await click(page, `${POP} [data-workspace="${firstWorkspace}"]`);
+    await toast(`${firstWorkspace} has no modules turned on that open here.`);
+    assert.ok((await page.$eval(LOGO, (el) => el.title)).includes(secondWorkspace), 'still in the second workspace');
+    assert.equal(new URL(page.url()).pathname, '/pipeline');
+    await setModules(firstWorkspace, ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting']);
+  });
+
+  step('a member sees Workspace settings locked for "Owners and admins" (CD-279 TC 2)', async () => {
+    const { token } = await api(page, '/team/invitations', { method: 'POST', body: JSON.stringify({ email: email('modsw-member'), role: 'member' }) });
+    const member = await browser.person('modsw-member');
+    await member.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
+    await signIn(member, email('modsw-member'), 'Mo Member');
+    await clickButton(member, 'Accept and join');
+    await finishOnboarding(member);
+    await member.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
+    await click(member, LOGO);
+    const settings = await member.$eval(`${POP} [data-module=settings]`, (el) => ({ locked: el.getAttribute('aria-disabled') === 'true', sub: el.querySelector('.mod-desc').textContent.trim() }));
+    assert.deepEqual(settings, { locked: true, sub: 'Owners and admins' });
+    // Every module back on for the steps after.
+    await setModules(secondWorkspace, ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting']);
+    await page.reload({ waitUntil: 'networkidle0' });
   });
 
   step('on a phone it opens from "More" as a bottom sheet without sideways scroll', async () => {

@@ -193,6 +193,7 @@ const WORKSPACE_FIELDS: Partial<Record<keyof Workspace, keyof WorkspaceInput>> =
   employeeSelfEditBank: 'employeeSelfEditBank',
   ceoEmployeeId: 'ceoEmployeeId',
   autoCreateProjects: 'autoCreateProjects',
+  modules: 'modules',
 };
 /** Profile fields as the API names them. */
 const PROFILE_FIELDS: Partial<Record<keyof Profile, keyof ProfileInput>> = {

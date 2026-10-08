@@ -1,9 +1,16 @@
 import { paths } from '../lib/paths';
 import type { IconName } from './icons';
 
-/** Why a module can't be picked: not built yet, not for your role, or (later, with plans) not in your plan. */
-export type LockReason = 'soon' | 'role' | 'plan';
-export const LOCK_LABEL: Record<LockReason, string> = { soon: 'Coming soon', role: 'Owners and admins', plan: 'Not in your plan' };
+/**
+ * Why a module can't be picked: not built yet, not for your role, turned off for this workspace
+ * (CD-279, Settings → General → Modules), or (later, with plans) not in your plan.
+ */
+export type LockReason = 'soon' | 'role' | 'off' | 'plan';
+export const LOCK_LABEL: Record<LockReason, string> = { soon: 'Coming soon', role: 'Owners and admins', off: 'Not in this workspace', plan: 'Not in your plan' };
+
+/** The modules a workspace turns on or off (the API's `modules`); Workspace settings is always there. */
+export const WORKSPACE_MODULES = ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting'] as const;
+export type WorkspaceModule = (typeof WORKSPACE_MODULES)[number];
 
 /** One page in a module's sidebar (CD-223). */
 export interface NavDef {
@@ -30,6 +37,11 @@ export interface ModuleDef {
   nav: NavDef[];
   /** Owners and admins only. */
   managers?: boolean;
+  /**
+   * Workspace settings (CD-279, CD-280): a tile that opens Settings, always there (not turned on or
+   * off). Settings keeps the sidebar of the module it was opened from, so it owns no screens.
+   */
+  settings?: boolean;
 }
 
 /** The CRM's pages, in sidebar order. */
@@ -53,12 +65,12 @@ const PROJECTS_NAV: NavDef[] = [{ to: paths.projects, label: 'Projects', icon: '
 const WORKFORCE_NAV: NavDef[] = [{ to: paths.org(), label: 'Org structure', icon: 'M9.5 3.5h5v4h-5zM3.5 16.5h5v4h-5zM15.5 16.5h5v4h-5zM12 7.5v4.5M6 16.5v-2.5h12v2.5', phone: true }];
 
 /**
- * The modules in the switcher (CD-214, CD-223), in grid order. Each is its own app with its own
- * sidebar. Workforce goes to the Org structure page (milestone 13, CD-137); its employee cards
- * (/people/…) belong to it too. Settings and the profile belong to none: they keep the last one.
+ * The modules in the switcher (CD-214, CD-223, CD-279), in the design's grid order. Each is its own
+ * app with its own sidebar. Workforce goes to the Org structure page (milestone 13, CD-137); its
+ * employee cards (/people/…) belong to it too. Workspace settings opens Settings, which (like the
+ * profile) belongs to no module: it keeps the last one's sidebar.
  */
 export const MODULES: ModuleDef[] = [
-  { id: 'planning', name: 'Planning', description: 'Budgets and targets', icon: 'planning', screens: [], nav: [] },
   {
     id: 'crm',
     name: 'CRM',
@@ -68,18 +80,36 @@ export const MODULES: ModuleDef[] = [
     screens: ['/overview', '/pipeline', '/today', '/calendar', '/meetings', '/visit-plans', '/companies', '/contacts', '/products', '/deals', '/reports'],
     nav: CRM_NAV,
   },
-  { id: 'projects', name: 'Projects', description: 'Tasks and deadlines', icon: 'projects', to: paths.projects, screens: ['/projects'], nav: PROJECTS_NAV },
+  { id: 'projects', name: 'Projects', description: 'Tasks, work orders, dispatch', icon: 'projects', to: paths.projects, screens: ['/projects'], nav: PROJECTS_NAV },
   { id: 'workforce', name: 'Workforce', description: 'People and capacity', icon: 'workforce', to: paths.org(), screens: ['/org', '/people'], nav: WORKFORCE_NAV },
+  { id: 'settings', name: 'Workspace settings', description: 'CRM, Projects, Workforce', icon: 'settings', to: paths.settings(), screens: [], nav: [], managers: true, settings: true },
+  { id: 'planning', name: 'Planning', description: 'Budgets and targets', icon: 'planning', screens: [], nav: [] },
+  { id: 'finance', name: 'Finance', description: 'Receivables, payables, bank', icon: 'finance', screens: [], nav: [] },
+  { id: 'reporting', name: 'Reporting', description: 'Schedule and utilisation', icon: 'reports', screens: [], nav: [] },
 ];
 
 /** Where you land with nothing else to go by: the CRM. */
 export const DEFAULT_MODULE = MODULES.find((m) => m.id === 'crm')!;
 
-/** Why this person can't open the module, or null when they can. */
-export function lockReason(m: ModuleDef, role: string): LockReason | null {
+/** All on when the API didn't say (an older API, a tenant just created). */
+export const enabledModules = (modules: readonly string[] | undefined): readonly string[] => modules ?? WORKSPACE_MODULES;
+
+/**
+ * Why this person can't open the module in a workspace with these modules turned on, or null when
+ * they can (CD-279: Workspace settings for owners and admins; a module turned off for the
+ * workspace; one not built yet).
+ */
+export function lockReason(m: ModuleDef, role: string, modules?: readonly string[]): LockReason | null {
+  if (m.settings) return role === 'owner' || role === 'admin' ? null : 'role';
+  if (!enabledModules(modules).includes(m.id)) return 'off';
   if (!m.to) return 'soon';
   if (m.managers && role !== 'owner' && role !== 'admin') return 'role';
   return null;
+}
+
+/** The first module this person can open in a workspace with these modules (switching workspaces, CD-279). */
+export function firstOpenModule(role: string, modules?: readonly string[]): ModuleDef | undefined {
+  return MODULES.find((m) => !m.settings && !lockReason(m, role, modules));
 }
 
 /** The module the screen at `pathname` belongs to (none for settings and the profile). */
@@ -98,7 +128,7 @@ const lastKey = (userId: string) => `crm.module.${userId}`;
 export function lastModule(userId: string): ModuleDef | undefined {
   try {
     const id = localStorage.getItem(lastKey(userId));
-    return MODULES.find((m) => m.id === id && m.to);
+    return MODULES.find((m) => m.id === id && m.to && !m.settings);
   } catch {
     return undefined;
   }

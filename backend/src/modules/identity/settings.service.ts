@@ -22,6 +22,7 @@ const workspaceColumns = {
   employeeSelfEditBank: tenants.employeeSelfEditBank,
   ceoEmployeeId: tenants.ceoEmployeeId,
   autoCreateProjects: tenants.autoCreateProjects,
+  modules: tenants.modules,
 };
 
 /**

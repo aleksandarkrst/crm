@@ -6,6 +6,10 @@ import { boolean, check, index, jsonb, pgTable, primaryKey, smallint, text, time
  * they are how we figure out which tenants a user may access in the first place.
  */
 
+/** The modules a workspace can turn on or off (CD-279); Workspace settings is always there. */
+export const WORKSPACE_MODULES = ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting'] as const;
+export type WorkspaceModule = (typeof WORKSPACE_MODULES)[number];
+
 export const CUSTOMER_EMAIL_LANGUAGES = ['en', 'sr'] as const;
 export type CustomerEmailLanguage = (typeof CUSTOMER_EMAIL_LANGUAGES)[number];
 
@@ -31,12 +35,18 @@ export const tenants = pgTable(
     // (tenant_id, id) ON DELETE SET NULL (ceo_employee_id) is in drizzle/0046_tenant_ceo.sql;
     // deactivating the CEO clears it (people's applyDeactivation).
     ceoEmployeeId: uuid('ceo_employee_id'),
+    /**
+     * The modules turned on for this workspace (CD-279, Settings → General → Modules): the switcher
+     * shows the others as "Not in this workspace". All on by default.
+     */
+    modules: text('modules').array().notNull().default(sql`'{planning,crm,projects,workforce,finance,reporting}'::text[]`),
     /** "Create a project when a deal is won" (CD-233, Settings → Workspace): off by default. */
     autoCreateProjects: boolean('auto_create_projects').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     check('tenants_fiscal_month_ck', sql`${t.fiscalYearStartMonth} between 1 and 12`),
+    check('tenants_modules_ck', sql`${t.modules} <@ '{planning,crm,projects,workforce,finance,reporting}'::text[]`),
     check('tenants_customer_email_language_ck', sql`${t.customerEmailLanguage} in ('en', 'sr')`),
     check('tenants_employee_weekly_hours_ck', sql`${t.employeeDefaultWeeklyHours} between 1 and 60`),
   ],

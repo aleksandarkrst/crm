@@ -158,6 +158,8 @@ export interface ApiTenant {
   role: ApiRole;
   /** In GET /me's list (the sidebar switcher, CD-214). */
   memberCount?: number;
+  /** The modules turned on for this workspace (CD-279); all when absent. */
+  modules?: string[];
 }
 export interface ApiMe {
   user: { id: string; email: string | null; displayName: string | null };
@@ -207,10 +209,12 @@ export interface ApiWorkspace {
   ceoEmployeeId: string | null;
   /** "Create a project when a deal is won" (CD-233). */
   autoCreateProjects: boolean;
+  /** The modules turned on (CD-279): planning, crm, projects, workforce, finance, reporting. */
+  modules: string[];
 }
 export type ApiCustomerEmailLanguage = 'en' | 'sr';
 export type WorkspaceInput = Partial<
-  Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth' | 'customerEmailLanguage' | 'employeeDefaultWeeklyHours' | 'employeeNumberRequired' | 'employeeSelfEditBank' | 'ceoEmployeeId' | 'autoCreateProjects'>
+  Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth' | 'customerEmailLanguage' | 'employeeDefaultWeeklyHours' | 'employeeNumberRequired' | 'employeeSelfEditBank' | 'ceoEmployeeId' | 'autoCreateProjects' | 'modules'>
 >;
 export type ApiLanguage = 'en' | 'sr' | 'de';
 export type ApiDateFormat = 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';

@@ -1263,14 +1263,28 @@ The button under the Pultly mark in the sidebar (it shows the module you're in, 
 `styles/header.css`); ⌘J / Ctrl J opens it from anywhere. The mark itself links home (`/`, your
 start page). It replaces the workspace-only switcher of CD-23.
 
-- **Modules** (`components/modules.ts`, one list, CD-223): Planning, CRM (`/pipeline`), Projects
-  and Workforce (`/org`), in that order. Planning and Projects have no target, so they are locked
-  with "Coming soon". The reason is a field (`LockReason`), so "Owners and admins" or "Not in your
-  plan" can come with roles and plans. There is no Overview or Reporting module: both are CRM pages.
+- **Modules** (`components/modules.ts`, one list, CD-223, CD-279), in the design's grid order: CRM
+  (`/pipeline`), Projects (`/projects`), Workforce (`/org`), **Workspace settings** (`/settings`),
+  Planning, Finance and Reporting. The current one is on a brand-tint row with a Forest tile. Locked
+  ones are dimmed with a lock and the reason (`LockReason`, `lockReason(module, role, modules)`):
+  "Coming soon" (no target yet), "Not in this workspace" (turned off for the workspace) and
+  "Owners and admins" (Workspace settings for members). On Settings the Workspace settings tile is
+  the current one, while the trigger and the sidebar keep the module Settings was opened from
+  (CD-280; the CD-279 text's "Settings" on the trigger lost to that and the design screenshots).
+- **Modules per workspace** (CD-279): `tenants.modules` (`text[]`, all six on by default, a check
+  keeps it to `planning, crm, projects, workforce, finance, reporting`). GET /me's `tenants` and
+  GET /api/workspace return it; owners and admins change it with PATCH /api/workspace `modules` and
+  in **Settings → General → Modules** (switches). Turning one off hides nothing else and deletes
+  nothing: the switcher locks it.
 - **Workspaces**: with 2+ workspaces a row above the modules shows the current one ("Switch ›");
   with one, its name sits next to "Modules". Either opens the list: each workspace with its member
   count (`memberCount` in GET /me's `tenants`), the current one checked, and "New workspace".
   Switching and creating reuse the session's `switchTenant` / `createTenant`.
+  - **Switching keeps the module** you're in (its start page, since a record belongs to the other
+    workspace; Settings and the profile stay). If the other workspace doesn't have it, the toast
+    "Acme has no Projects. Opening CRM…" shows and its first module that opens here opens after a
+    moment; with none, the toast "Acme has no modules turned on that open here." and nothing
+    changes.
 - Arrow keys move focus (two columns in the grid), every item has a focus ring, Escape or an
   outside click closes it and focus goes back to the switcher button. On phones it opens from
   "More" as a bottom sheet. Tested in `e2e/tests/module-switcher.test.mjs`.
