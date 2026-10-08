@@ -16,6 +16,8 @@ export interface Command {
   keywords?: string;
   icon: IconPath;
   key?: string;
+  /** The module a create action belongs to (CD-229): in Projects the "+" menu offers only its own. */
+  module?: 'crm' | 'projects';
   run: () => void;
 }
 
@@ -64,7 +66,7 @@ export function useCommands(): Command[] {
     { id: 'new-meeting', group: 'Create', label: 'Meeting', hint: 'On the calendar', key: 'M', icon: 'calendar', keywords: 'new create add meeting visit call schedule calendar', run: () => meetings.openDialog(meetingSeed) },
     { id: 'new-product', group: 'Create', label: 'Product', hint: 'Adds to the catalog', key: 'R', icon: 'product', keywords: 'new create add service catalog', run: () => set({ productOpen: true, productEditId: null }) },
     // On a company's page or a won deal's, the project starts out for it (CD-234).
-    { id: 'new-project', group: 'Create', label: 'Project', hint: 'Work for a company', key: 'J', icon: 'project', keywords: 'new create add project delivery job', run: () => set({ newProject: deal?.outcome === 'won' ? { dealId: deal.id } : companyId ? { companyId } : {} }) },
+    { id: 'new-project', group: 'Create', label: 'Project', hint: 'Work for a company', key: 'J', icon: 'project', module: 'projects', keywords: 'new create add project delivery job', run: () => set({ newProject: deal?.outcome === 'won' ? { dealId: deal.id } : companyId ? { companyId } : {} }) },
   ];
   const goTo: Command[] = [
     { id: 'go-overview', group: 'Go to', label: 'Overview', hint: 'Numbers and forecasts', icon: 'overview', keywords: 'dashboard reports', run: go(paths.overview) },

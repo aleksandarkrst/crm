@@ -55,8 +55,9 @@ export function Project() {
   const idx = stages.findIndex((st) => st.id === project.stageId);
   const closed = project.status !== 'open';
 
+  // Field edits run side by side (each saves its own field); `busy` only disables the buttons, so a
+  // quick second edit isn't dropped while the first one saves.
   const update = async (patch: ProjectPatch, done?: (p: ApiProject) => string): Promise<boolean> => {
-    if (busy) return false;
     setBusy(true);
     try {
       const next = await projectsApi.updateProject(project.id, patch);

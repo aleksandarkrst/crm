@@ -65,6 +65,30 @@ describe('projects', () => {
     await page.waitForFunction(() => !document.querySelector('.modal'));
   });
 
+  step('the Projects module has its own "+" menu, search and Ctrl/⌘K order (CD-229)', async () => {
+    // TC 1: the switcher opens the board.
+    await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
+    await page.keyboard.down('Control');
+    await page.keyboard.press('j');
+    await page.keyboard.up('Control');
+    await click(page, '[data-testid=module-switcher-pop] [data-module=projects]');
+    await page.waitForFunction(() => location.pathname === '/projects');
+    await page.waitForFunction(() => document.querySelector('[data-testid=module-switcher]')?.getAttribute('data-current-module') === 'projects');
+    await page.waitForFunction(() => document.querySelector('.search-trigger-text')?.textContent === 'Search projects, deals, companies');
+    // "+" is "Create in Projects": Project only, for now.
+    await click(page, '[data-testid=new-menu]');
+    assert.match(await page.$eval('.new-menu-pop', (el) => el.textContent), /Create in Projects/);
+    assert.deepEqual(await page.$$eval('.new-menu-pop [role=menuitem]', (els) => els.map((el) => el.getAttribute('data-testid'))), ['new-project']);
+    await page.keyboard.press('Escape');
+    // Ctrl/⌘K: the Create group starts with Project.
+    await page.keyboard.down('Control');
+    await page.keyboard.press('k');
+    await page.keyboard.up('Control');
+    await page.waitForSelector('[data-testid=palette-input]');
+    assert.equal(await page.$eval('[data-group=Create] .search-item-title', (el) => el.textContent), 'Create project');
+    await page.keyboard.press('Escape');
+  });
+
   step('the Projects board shows it in its stage, and the list too', async () => {
     await page.goto(BASE_URL + '/projects', { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=projects-board]');

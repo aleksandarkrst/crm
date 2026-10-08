@@ -63,6 +63,8 @@ const FIELD_LABELS: Record<string, string> = {
   code: 'Code',
   health: 'Health',
   endDate: 'End date',
+  budgetHours: 'Budget (h)',
+  value: 'Value',
 };
 const MEETING_TEXT: Record<string, string> = {
   visit: 'Customer visit',

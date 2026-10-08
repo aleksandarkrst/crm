@@ -1,13 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useStore } from '../store/store';
 import { ICONS, useCommands } from './commands';
+import { currentModule } from './modules';
 
 /**
  * The header's "+" menu (CD-66, CD-80): creates a deal, contact, company, task or product from any
  * screen (on a deal's screen, a new task or contact is for that deal). While it is open, the
- * letter next to an item runs it.
+ * letter next to an item runs it. In the Projects module it is "Create in Projects" with that
+ * module's own items (CD-229; Task and Work order join with CD-146 and CD-265).
  */
 export function NewMenu() {
-  const items = useCommands().filter((c) => c.group === 'Create');
+  const { session } = useStore();
+  const { pathname } = useLocation();
+  const inProjects = currentModule(pathname, session.userId).id === 'projects';
+  const items = useCommands().filter((c) => c.group === 'Create' && (!inProjects || c.module === 'projects'));
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
@@ -77,6 +84,7 @@ export function NewMenu() {
       </button>
       {open && (
         <div className="menu-pop new-menu-pop" role="menu">
+          {inProjects && <span className="caps-muted" style={{ display: 'block', padding: '6px 10px 4px' }}>Create in Projects</span>}
           {items.map((it, i) => (
             <button
               key={it.id}

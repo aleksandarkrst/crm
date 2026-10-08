@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { paths } from '../lib/paths';
 import { searchEmployees } from '../store/people';
 import { useProjects } from '../store/projects';
 import { fold, searchWorkspace } from '../store/search';
 import { useStore } from '../store/store';
 import { type Command, ICONS, useCommands } from './commands';
+import { currentModule } from './modules';
 import { Avatar } from './ui';
 import '../styles/header.css';
 
@@ -33,7 +34,7 @@ function commandScore(c: Command, words: string[]): number {
  * Arrows move, Enter runs, Escape closes.
  */
 export function CommandPalette() {
-  const { s, set, openLead, openCompany, openContact, people } = useStore();
+  const { s, set, openLead, openCompany, openContact, people, session } = useStore();
   const navigate = useNavigate();
   const commands = useCommands();
   const [query, setQuery] = useState('');
@@ -48,11 +49,20 @@ export function CommandPalette() {
   useEffect(() => ensurePeople(), [ensurePeople]);
   // Projects (CD-234) aren't part of the workspace load either: read them while the palette is open.
   const { data: projects } = useProjects();
+  // In the Projects module its own actions and records come first (CD-229).
+  const { pathname } = useLocation();
+  const inProjects = currentModule(pathname, session.userId).id === 'projects';
 
   const sections = useMemo<Section[]>(() => {
     const q = query.trim();
     if (!q) {
-      return (['Create', 'Go to', 'Settings'] as const).map((g) => ({ label: g, rows: commands.filter((c) => c.group === g).map((command) => ({ kind: 'command' as const, command })) }));
+      return (['Create', 'Go to', 'Settings'] as const).map((g) => ({
+        label: g,
+        rows: commands
+          .filter((c) => c.group === g)
+          .sort((a, b) => Number(!(inProjects && a.module === 'projects')) - Number(!(inProjects && b.module === 'projects')))
+          .map((command) => ({ kind: 'command' as const, command })),
+      }));
     }
     const words = fold(q).split(/\s+/).filter(Boolean);
     const records: Section[] = searchWorkspace(s, q).map((g) => ({
@@ -73,13 +83,15 @@ export function CommandPalette() {
       .slice(0, 6)
       .map((p) => ({ kind: 'record' as const, record: 'project' as const, id: p.id, title: p.code ? `${p.code} · ${p.name}` : p.name, subtitle: `${p.companyName} · ${p.stageName}`, initials: p.name.slice(0, 2).toUpperCase() }));
     const employees = searchEmployees(s.people.employees, q).map((h) => ({ kind: 'record' as const, record: 'employee' as const, id: h.id, title: h.title, subtitle: h.subtitle, initials: h.initials }));
+    const projectSection = projectHits.length ? [{ label: 'Projects', rows: projectHits }] : [];
     return [
+      ...(inProjects ? projectSection : []),
       ...records,
-      ...(projectHits.length ? [{ label: 'Projects', rows: projectHits }] : []),
+      ...(inProjects ? [] : projectSection),
       ...(employees.length ? [{ label: 'Employees', rows: employees }] : []),
       ...(actions.length ? [{ label: 'Actions', rows: actions }] : []),
     ];
-  }, [query, s, commands, projects]);
+  }, [query, s, commands, projects, inProjects]);
   const flat = sections.flatMap((x) => x.rows);
   const current = Math.min(active, Math.max(flat.length - 1, 0));
 
