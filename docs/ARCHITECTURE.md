@@ -1202,6 +1202,11 @@ and no "hours" are shown anywhere.
     under `projects/<projectId>/<fileId>`; deleting a file or the project removes them after the
     commit. The Overview tab has the same drop zone (into Client material). "Linked to" a task or
     work order comes with those (CD-146, CD-265).
+  - **Communication tab** (CD-271, `screens/project/ProjectCommunication.tsx`): the emails logged on
+    the project's deal (its timeline's "Email sent · …" entries, the CRM composer's "Send & log"),
+    newest first, with "New email", which logs one there the same way, to the deal's contact.
+    Without a deal it says to link one. There is no mail integration yet (Later: Integrations), so
+    nothing is sent from here, as in the composer.
   - **Company page**: a Projects card below Deals (open projects with stage, lead and health;
     "Show closed (N)"; "+" with the company fixed; "No projects for this company yet.").
   - **Ctrl/⌘K** finds projects by code, name or company (read while the palette is open).
