@@ -52,6 +52,8 @@ export const UpdateTask = nonEmptyPatch(
       startDate: isoDate,
       dueDate: isoDate,
       estimateHours: quarterHours.nullable(),
+      /** The task this one waits for (CD-269): one of the same project, not one that waits for this one. */
+      waitsForTaskId: z.uuid().nullable(),
     })
     .partial(),
 );

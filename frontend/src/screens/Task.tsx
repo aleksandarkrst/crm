@@ -5,13 +5,13 @@ import { askConfirm } from '../components/ConfirmDialog';
 import { Screen } from '../components/Layout';
 import { Avatar, Modal, ModalHeader } from '../components/ui';
 import { paths } from '../lib/paths';
-import { type ApiTask, quarterHourError, TASK_STATUSES, taskId, type TaskPatch, tasksApi } from '../lib/tasksApi';
+import { type ApiTask, type ApiTaskBrief, quarterHourError, statusLabel, TASK_STATUSES, taskId, type TaskPatch, tasksApi } from '../lib/tasksApi';
 import { projectError, useProject, useProjects, useProjectTypes } from '../store/projects';
 import { curOf, initialsOf } from '../store/selectors';
 import { useStore } from '../store/store';
-import { activeAssignees, dueText, isLate, todayIso, useTask } from '../store/tasks';
+import { activeAssignees, dueText, isLate, todayIso, useTask, useTasks } from '../store/tasks';
 import { NumberField, Row, TextField } from './project/fields';
-import { assignedMessage, PeoplePicker, useTaskUpdate } from './task/parts';
+import { assignedMessage, DueLabel, PeoplePicker, useTaskUpdate } from './task/parts';
 import { PeopleAndHours } from './task/PeopleAndHours';
 
 /**
@@ -31,6 +31,8 @@ export function Task() {
   const navigate = useNavigate();
   const { data: task, error, set } = useTask(id);
   const { data: project } = useProject(task?.projectId);
+  // The project's tasks: what this one can wait for (CD-269).
+  const { data: siblings } = useTasks({ projectId: task?.projectId }, !!task?.projectId);
   const { data: types } = useProjectTypes();
   const { save, setStatus, dialog } = useTaskUpdate(set);
   const [adding, setAdding] = useState(false);
@@ -242,6 +244,27 @@ export function Task() {
                 <Row label="Estimate, h">
                   <NumberField label="Estimate in hours" testId="task-estimate" value={task.estimateHours == null ? null : String(task.estimateHours)} disabled={!canEdit} step={0.25} placeholder="Not set" onSave={(estimateHours) => update({ estimateHours })} />
                 </Row>
+                <Row label="Waits for">
+                  <select
+                    className="ghost ghost-sm"
+                    aria-label="Waits for"
+                    data-testid="task-waits-for"
+                    value={task.waitsForTaskId ?? ''}
+                    disabled={!canEdit}
+                    onChange={(e) => void update({ waitsForTaskId: e.target.value || null }, (t) => (t.waitsFor ? `${taskId(t)} waits for ${taskId(t.waitsFor)}` : `${taskId(t)} waits for nothing`))}
+                  >
+                    <option value="">—</option>
+                    {(siblings ?? [])
+                      .filter((x) => x.id !== task.id)
+                      .sort((a, b) => a.number - b.number)
+                      .map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {taskId(x)} · {x.name}
+                        </option>
+                      ))}
+                    {task.waitsFor && !siblings?.some((x) => x.id === task.waitsForTaskId) && <option value={task.waitsFor.id}>{taskId(task.waitsFor)}</option>}
+                  </select>
+                </Row>
                 <Row label="Project">
                   <Link to={paths.project(task.projectId)} className="crumb-link" data-testid="task-project-link">
                     {task.projectName}
@@ -254,6 +277,7 @@ export function Task() {
                 </Row>
               </div>
             </div>
+            <Dependencies task={task} />
           </div>
           <div style={{ flex: '999 1 380px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* CD-147: here rather than under Details, where its six columns don't fit. */}
@@ -282,6 +306,31 @@ export function Task() {
         />
       )}
     </Screen>
+  );
+}
+
+/** Design v2 §4: what this task waits for and what waits for it; each row opens that task. */
+function Dependencies({ task }: { task: ApiTask }) {
+  const navigate = useNavigate();
+  const deps = task.dependencies ?? { waitsFor: null, blocks: [] };
+  const row = (t: ApiTaskBrief) => (
+    <button key={t.id} type="button" className="dep-row" data-testid="dep-row" onClick={() => navigate(paths.task(t.id))}>
+      <span style={{ width: 8, height: 8, borderRadius: 4, flex: '0 0 8px', background: TASK_STATUSES.find((s) => s.id === t.status)!.dot }} />
+      <span style={{ color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{taskId(t)}</span>
+      <span className="pt-main" style={{ flex: 1, textAlign: 'left' }}>
+        {t.name}
+      </span>
+      {t.status === 'done' || !t.dueDate ? <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{statusLabel(t.status)}</span> : <DueLabel task={t} />}
+    </button>
+  );
+  return (
+    <div className="card card-pad" data-testid="task-dependencies" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <span style={{ fontSize: 15, fontWeight: 600 }}>Dependencies</span>
+      <span className="caps-muted">Waits for</span>
+      <div data-testid="deps-waits-for">{deps.waitsFor ? row(deps.waitsFor) : <span className="dep-empty">Nothing. This task can start any time.</span>}</div>
+      <span className="caps-muted">Blocks</span>
+      <div data-testid="deps-blocks">{deps.blocks.length ? deps.blocks.map(row) : <span className="dep-empty">No tasks wait for this one.</span>}</div>
+    </div>
   );
 }
 

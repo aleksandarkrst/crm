@@ -1130,9 +1130,9 @@ a.task-card-project:hover { color: var(--brand); }
 .tasks-table-inner { min-width: 1000px; }
 .tasks-table-inner > .table-head,
 .tasks-table-inner > .table-row { grid-template-columns: 64px minmax(200px, 2fr) minmax(160px, 1.3fr) minmax(110px, 0.8fr) 110px 64px 120px 130px; }
-.plan-table-inner { min-width: 780px; }
+.plan-table-inner { min-width: 860px; }
 .plan-table-inner .table-head,
-.plan-table-inner .table-row { grid-template-columns: 64px minmax(200px, 2fr) 110px 64px 80px 120px 120px; }
+.plan-table-inner .table-row { grid-template-columns: 64px minmax(200px, 2fr) 110px 64px 80px 120px 84px 120px; }
 .table-band { display: flex; justify-content: space-between; gap: 12px; padding: 9px 16px; background: var(--bg-soft); border-bottom: 1px solid var(--divider); font-size: 12.5px; }
 .hold-box { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--danger-soft); color: var(--danger); border-radius: 10px; padding: 8px 14px; font-size: 13px; }
 .hold-box input { color: var(--ink); flex: 1; min-width: 160px; }
@@ -1150,3 +1150,19 @@ a.task-card-project:hover { color: var(--brand); }
 .hours-row { border-bottom: 1px solid var(--divider); font-size: 13px; }
 .hours-total { font-weight: 600; border-bottom: 0; }
 .hours-hidden { grid-column: span 4; font-size: 12px; color: var(--muted); }
+
+/* ---------------------------------------------------------------- dependencies and Gantt (CD-269) */
+.task-card-waits { font-size: 12px; }
+.dep-row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 4px; border: 0; border-top: 1px solid var(--divider); background: transparent; font: inherit; font-size: 13px; color: inherit; cursor: pointer; min-width: 0; }
+.dep-row:hover { background: var(--bg-soft); }
+.dep-empty { font-size: 13px; color: var(--text-2); }
+.gantt { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--white); }
+.gantt-head { display: flex; border-bottom: 1px solid var(--border); background: var(--panel); position: sticky; top: 0; }
+.gantt-tick { position: absolute; top: 8px; font-size: 11px; color: var(--text-2); white-space: nowrap; border-left: 1px solid var(--divider); padding-left: 4px; }
+.gantt-label { position: sticky; left: 0; z-index: 2; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 0 12px; background: var(--white); border-right: 1px solid var(--divider); font-size: 12.5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 0 0 auto; }
+.gantt-head .gantt-label { background: var(--panel); }
+.gantt-row { display: flex; border-bottom: 1px solid var(--divider); }
+.gantt-band { display: flex; align-items: center; background: var(--bg-soft); border-bottom: 1px solid var(--divider); font-size: 12.5px; }
+.gantt-bar { position: absolute; top: 10px; height: 18px; border-radius: 5px; }
+.gantt-warn { font-size: 11px; color: #B4531B; overflow: hidden; text-overflow: ellipsis; }
+.gantt-today { position: absolute; top: 0; width: 0; border-left: 1.5px dashed var(--danger); z-index: 1; pointer-events: none; }

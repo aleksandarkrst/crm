@@ -270,6 +270,12 @@ export const tasks = pgTable(
     estimateHours: numeric('estimate_hours', { precision: 6, scale: 2, mode: 'number' }),
     /** When it was last marked Done (cleared on reopen). */
     doneAt: timestamp('done_at', { withTimezone: true }),
+    /**
+     * The task this one waits for (CD-269): another task of the same project, never one that already
+     * waits for this one (TasksService checks both). Cleared when that task is deleted
+     * (`tasks_waits_for_fk`, drizzle/0066) or either one moves to another project.
+     */
+    waitsForTaskId: uuid('waits_for_task_id'),
     createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     ...timestamps,
   },
@@ -277,6 +283,8 @@ export const tasks = pgTable(
     unique('tasks_tenant_id_uq').on(t.tenantId, t.id),
     unique('tasks_number_uq').on(t.tenantId, t.number),
     index('tasks_tenant_project_idx').on(t.tenantId, t.projectId),
+    index('tasks_tenant_waits_for_idx').on(t.tenantId, t.waitsForTaskId),
+    check('tasks_not_own_dependency_ck', sql`${t.waitsForTaskId} is null or ${t.waitsForTaskId} <> ${t.id}`),
     foreignKey({ columns: [t.tenantId, t.projectId], foreignColumns: [projects.tenantId, projects.id], name: 'tasks_project_fk' }).onDelete('cascade'),
     check('tasks_name_ck', sql`length(btrim(${t.name})) between 1 and 200`),
     check('tasks_status_ck', sql`${t.status} in ('todo', 'in_progress', 'on_hold', 'done')`),

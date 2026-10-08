@@ -6,14 +6,16 @@ import { type ApiTask, TASK_STATUSES, taskId, type TaskStatus } from '../../lib/
 import { useStore } from '../../store/store';
 import { activeAssignees, dueText, hours } from '../../store/tasks';
 import { AvatarStack, DueLabel, TaskBoard, TaskStatusBadge, useTaskUpdate } from '../task/parts';
+import { ProjectGantt } from './ProjectGantt';
 
-type View = 'table' | 'kanban';
+type View = 'table' | 'kanban' | 'gantt';
 const NO_STAGE = 'none';
 
 /**
  * A project's Plan tab (CD-283, design v2 §2): its tasks as a Table grouped by stage (bands with
  * the count and estimate) or a Kanban by status or by stage; dropping a card changes that. "New
- * task" opens the dialog with the project fixed. The Gantt view comes with CD-269.
+ * task" opens the dialog with the project fixed. Gantt: bars from start to due with the
+ * dependencies as arrows (CD-269).
  */
 export function ProjectPlan({ projectId, tasks, stages, canAdd, onChange }: { projectId: string; tasks: ApiTask[] | null; stages: ApiProjectStage[]; canAdd: boolean; onChange: (tasks: ApiTask[]) => void }) {
   const { set } = useStore();
@@ -22,16 +24,17 @@ export function ProjectPlan({ projectId, tasks, stages, canAdd, onChange }: { pr
   const [by, setBy] = useState<'status' | 'stage'>('status');
   const replace = (t: ApiTask) => onChange((tasks ?? []).map((x) => (x.id === t.id ? t : x)));
   const { save, setStatus, dialog } = useTaskUpdate(replace);
-  const all = tasks ?? [];
+  // A plan reads in order: T-1 before T-2 (the API lists the newest first).
+  const all = [...(tasks ?? [])].sort((a, b) => a.number - b.number);
   const stageColumns = [...stages.map((st) => ({ id: st.id, label: st.name })), ...(all.some((t) => !t.stageId) ? [{ id: NO_STAGE, label: 'No stage' }] : [])];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="project-plan">
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div className="view-toggle" role="group" aria-label="View">
-          {(['table', 'kanban'] as const).map((v) => (
+          {(['table', 'kanban', 'gantt'] as const).map((v) => (
             <button key={v} type="button" aria-pressed={view === v} data-testid={`plan-view-${v}`} onClick={() => setView(v)} style={{ padding: '0 10px', width: 'auto', fontSize: 12.5 }}>
-              {v === 'table' ? 'Table' : 'Kanban'}
+              {v === 'table' ? 'Table' : v === 'kanban' ? 'Kanban' : 'Gantt'}
             </button>
           ))}
         </div>
@@ -49,6 +52,8 @@ export function ProjectPlan({ projectId, tasks, stages, canAdd, onChange }: { pr
       </div>
       {!tasks ? (
         <div className="hint-box">Loading tasks</div>
+      ) : view === 'gantt' ? (
+        <ProjectGantt tasks={all} bands={stageColumns.map((c) => ({ ...c, tasks: all.filter((t) => (t.stageId ?? NO_STAGE) === c.id) })).filter((b) => b.tasks.length)} />
       ) : view === 'kanban' ? (
         by === 'status' ? (
           <TaskBoard tasks={all} columns={TASK_STATUSES} columnOf={(t) => t.status} onDrop={(t, status) => setStatus(t, status as TaskStatus)} showProject={false} />
@@ -71,6 +76,7 @@ export function ProjectPlan({ projectId, tasks, stages, canAdd, onChange }: { pr
               <span>Est. h</span>
               <span>Start</span>
               <span>Due</span>
+              <span>Depends on</span>
               <span>Status</span>
             </div>
             {all.length === 0 && <div className="pipeline-table-empty">No tasks yet. Add the first one with New task.</div>}
@@ -99,6 +105,9 @@ export function ProjectPlan({ projectId, tasks, stages, canAdd, onChange }: { pr
                       <span style={{ color: 'var(--text-2)' }}>{t.estimateHours ?? '—'}</span>
                       <span style={{ color: 'var(--text-2)' }}>{dueText(t.startDate) ?? '—'}</span>
                       <span>{t.dueDate ? <DueLabel task={t} /> : '—'}</span>
+                      <span style={{ color: 'var(--text-2)' }} data-testid="plan-depends">
+                        {t.waitsFor ? taskId(t.waitsFor) : '—'}
+                      </span>
                       <span>
                         <TaskStatusBadge status={t.status} />
                       </span>

@@ -48,6 +48,9 @@ const columns = {
   companyId: projects.companyId,
   companyName: companies.name,
   stageId: tasks.stageId,
+  waitsForTaskId: tasks.waitsForTaskId,
+  /** The task it waits for, in brief (its number, status and due date; the name only on the task's page). */
+  waitsFor: sql<{ id: string; number: number; status: string; dueDate: string | null } | null>`(select json_build_object('id', w.id, 'number', w.number, 'status', w.status, 'dueDate', w.due_date::text) from tasks w where w.id = "tasks"."waits_for_task_id")`,
   stageName: projectStages.name,
   stagePosition: projectStages.position,
   status: tasks.status,
@@ -178,7 +181,7 @@ export class TasksService {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const caller = await this.caller(ctx, tx);
       const { row, access } = await this.visible(tx, caller, id);
-      return present(row, caller, access);
+      return { ...present(row, caller, access), dependencies: await this.dependencies(tx, caller, row) };
     });
   }
 
@@ -247,7 +250,14 @@ export class TasksService {
           if (target.status !== 'open') throw new BadRequestException('Tasks can only be moved to an open project');
           patch.projectId = target.id;
           patch.stageId = target.stageId;
+          // Dependencies stay within a project (CD-269): moving clears them both ways.
+          patch.waitsForTaskId = null;
+          await tx.update(tasks).set({ waitsForTaskId: null }).where(eq(tasks.waitsForTaskId, id));
           project = target;
+        }
+        if (input.waitsForTaskId !== undefined) {
+          if (input.waitsForTaskId !== null) await this.checkDependency(tx, id, project.id, input.waitsForTaskId);
+          patch.waitsForTaskId = input.waitsForTaskId;
         }
         if (input.stageId !== undefined) {
           if (!project.projectTypeId) project = await this.project(tx, project.id);
@@ -385,10 +395,13 @@ export class TasksService {
       const ids = (field: string) => [...new Set(page.filter((r) => r.change.field === field).flatMap((r) => [r.change.oldValue, r.change.newValue]).filter((v): v is string => typeof v === 'string'))];
       const names = new Map<string, string>();
       const stageIds = ids('stageId');
+      const taskIds = ids('waitsForTaskId');
+      if (taskIds.length) for (const t of await tx.select({ id: tasks.id, number: tasks.number, name: tasks.name }).from(tasks).where(inArray(tasks.id, taskIds))) names.set(t.id, `T-${t.number} · ${t.name}`);
       const projectIds = ids('projectId');
       if (stageIds.length) for (const s of await tx.select({ id: projectStages.id, name: projectStages.name }).from(projectStages).where(inArray(projectStages.id, stageIds))) names.set(s.id, s.name);
       if (projectIds.length) for (const p of await tx.select({ id: projects.id, name: projects.name }).from(projects).where(inArray(projects.id, projectIds))) names.set(p.id, p.name);
-      const label = (field: string | null, v: unknown) => (typeof v === 'string' && (field === 'stageId' || field === 'projectId') ? (names.get(v) ?? (field === 'stageId' ? 'Deleted stage' : 'Deleted project')) : null);
+      const GONE: Record<string, string> = { stageId: 'Deleted stage', projectId: 'Deleted project', waitsForTaskId: 'Deleted task' };
+      const label = (field: string | null, v: unknown) => (typeof v === 'string' && field && GONE[field] ? (names.get(v) ?? GONE[field]) : null);
       const entries: TaskHistoryEntry[] = page.map(({ change: c, actorName }) => ({
         id: c.id,
         action: c.action,
@@ -430,7 +443,38 @@ export class TasksService {
   private async presentById(tx: Tx, caller: TaskCaller, id: string) {
     const [row] = await selectTasks(tx, eq(tasks.id, id), 1);
     // The caller made this change, so they could act on it; after removing themselves they may not see it any more.
-    return present(row!, caller, taskAccess(caller, facts(row!)) === 'read' ? 'read' : 'act');
+    return { ...present(row!, caller, taskAccess(caller, facts(row!)) === 'read' ? 'read' : 'act'), dependencies: await this.dependencies(tx, caller, row!) };
+  }
+
+  /**
+   * The task page's Dependencies card (CD-269): the task this one waits for and the ones waiting for
+   * it, those the caller can see, with names.
+   */
+  private async dependencies(tx: Tx, caller: TaskCaller, row: TaskRow) {
+    const rows = await tx
+      .select({ id: tasks.id, number: tasks.number, name: tasks.name, status: tasks.status, dueDate: sql<string | null>`${tasks.dueDate}::text`, waitsForTaskId: tasks.waitsForTaskId })
+      .from(tasks)
+      .innerJoin(projects, eq(projects.id, tasks.projectId))
+      .where(and(visibleWhere(caller), row.waitsForTaskId ? sql`(${tasks.id} = ${row.waitsForTaskId} or ${tasks.waitsForTaskId} = ${row.id})` : eq(tasks.waitsForTaskId, row.id)))
+      .orderBy(tasks.number);
+    const brief = ({ waitsForTaskId: _w, ...t }: (typeof rows)[number]) => t;
+    return { waitsFor: rows.filter((t) => t.id === row.waitsForTaskId).map(brief)[0] ?? null, blocks: rows.filter((t) => t.waitsForTaskId === row.id).map(brief) };
+  }
+
+  /** "Waits for" (CD-269): a task of the same project, not itself, and no loop (it can't wait for one that waits for it). */
+  private async checkDependency(tx: Tx, id: string, projectId: string, waitsForTaskId: string) {
+    if (waitsForTaskId === id) throw new BadRequestException("A task can't wait for itself");
+    const [target] = await tx.select({ projectId: tasks.projectId }).from(tasks).where(eq(tasks.id, waitsForTaskId));
+    if (!target || target.projectId !== projectId) throw new BadRequestException('Pick a task of the same project');
+    // Walk the chain from the target: reaching this task would close a loop.
+    const { rows } = await tx.execute<{ id: string }>(sql`
+      with recursive chain(id, depth) as (
+        select waits_for_task_id, 1 from tasks where id = ${waitsForTaskId} and waits_for_task_id is not null
+        union
+        select t.waits_for_task_id, c.depth + 1 from tasks t join chain c on t.id = c.id where t.waits_for_task_id is not null and c.depth < 500
+      )
+      select id::text from chain where id = ${id} limit 1`);
+    if (rows.length) throw new BadRequestException('That task already waits for this one');
   }
 
   private async project(tx: Tx, projectId: string) {
