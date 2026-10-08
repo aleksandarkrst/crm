@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Screen } from '../components/Layout';
 import { FilterBar } from '../components/ui';
@@ -9,6 +9,9 @@ import { memberLabels, moneyTotal } from '../store/selectors';
 import { useStore } from '../store/store';
 import { HealthBadge, ProjectStatusBadge, projectValue } from './lead/DealProjects';
 import { AvatarStack } from './task/parts';
+import { type ApiTask, TASK_STATUSES } from '../lib/tasksApi';
+import { useTasks } from '../store/tasks';
+import { DueLabel } from './task/parts';
 
 type View = 'board' | 'list';
 const VIEWS: { id: View; label: string; icon: string }[] = [
@@ -42,6 +45,9 @@ export function Projects() {
   const navigate = useNavigate();
   const { data: projects, error, set: setProjects } = useProjects();
   const { data: types } = useProjectTypes();
+  // The tasks the caller can see (CD-263): each card's progress and next open tasks.
+  const { data: tasks } = useTasks();
+  const work = useMemo(() => workByProject(tasks ?? []), [tasks]);
   const [params, setParams] = useSearchParams();
   const [view, setViewState] = useState<View>(() => {
     try {
@@ -156,7 +162,7 @@ export function Projects() {
       {!projects ? (
         <div className="hint-box">{error ? `Couldn't load projects: ${error}` : 'Loading projects'}</div>
       ) : view === 'list' ? (
-        <ProjectsList projects={shown} onOpen={(id) => navigate(paths.project(id))} />
+        <ProjectsList projects={shown} work={tasks ? work : null} onOpen={(id) => navigate(paths.project(id))} />
       ) : (
         <div className="pipeline-board" style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '0 -30px -44px', padding: '0 30px', minHeight: 'calc(100vh - 118px)' }}>
           <div className="pipeline-columns" data-testid="projects-board" style={{ display: 'flex', gap: 14, overflowX: 'auto', alignItems: 'stretch', flex: 1, minHeight: 420 }}>
@@ -239,11 +245,27 @@ export function Projects() {
                           </span>
                           {p.team.length > 0 && <AvatarStack names={p.team.map((m) => m.name)} size={20} />}
                         </span>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', borderTop: '1px dashed var(--border)', paddingTop: 7 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           {p.status === 'open' ? <HealthBadge health={p.health} /> : <ProjectStatusBadge status={p.status} />}
                           {p.dealLost && <span className="badge badge-danger">Deal lost</span>}
-                          {p.endDate && <span style={{ fontSize: 11.5, color: 'var(--text-2)' }}>finish {shortDate(p.endDate)}</span>}
+                          {tasks && <Progress work={work.get(p.id)} />}
                         </span>
+                        {(work.get(p.id)?.next.length ?? 0) > 0 && (
+                          <span style={{ display: 'flex', flexDirection: 'column', gap: 5, borderTop: '1px dashed var(--border)', paddingTop: 7 }} data-testid="project-card-next">
+                            {work.get(p.id)!.next.map((t) => (
+                              <span key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, minWidth: 0 }}>
+                                <span aria-hidden style={{ width: 7, height: 7, borderRadius: 999, flex: 'none', background: TASK_STATUSES.find((x) => x.id === t.status)!.dot }} />
+                                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
+                                {t.dueDate && <DueLabel task={t} />}
+                              </span>
+                            ))}
+                          </span>
+                        )}
+                        {(tasks || p.endDate) && (
+                          <span style={{ fontSize: 11.5, color: 'var(--text-2)' }} data-testid="project-card-foot">
+                            {[tasks ? plural(work.get(p.id)?.open ?? 0, 'open task') : null, p.endDate ? `finish ${shortDate(p.endDate)}` : null].filter(Boolean).join(' · ')}
+                          </span>
+                        )}
                       </div>
                     ))}
                     {cards.length === 0 && <div className="empty-dashed">No projects</div>}
@@ -259,7 +281,7 @@ export function Projects() {
 }
 
 /** The list view (design v2 §1): every project the filters show, all types. Rows open the project. */
-function ProjectsList({ projects, onOpen }: { projects: ApiProject[]; onOpen: (id: string) => void }) {
+function ProjectsList({ projects, work, onOpen }: { projects: ApiProject[]; work: Map<string, ProjectWork> | null; onOpen: (id: string) => void }) {
   return (
     <div className="pipeline-table" data-testid="projects-list">
       <div className="projects-table-inner">
@@ -269,6 +291,8 @@ function ProjectsList({ projects, onOpen }: { projects: ApiProject[]; onOpen: (i
           <span>Project type</span>
           <span>Stage</span>
           <span>Health</span>
+          <span>Progress</span>
+          <span>Tasks</span>
           <span>Status</span>
           <span>Finish</span>
         </div>
@@ -292,6 +316,8 @@ function ProjectsList({ projects, onOpen }: { projects: ApiProject[]; onOpen: (i
             <span>
               <HealthBadge health={p.health} />
             </span>
+            <span>{work ? <Progress work={work.get(p.id)} /> : null}</span>
+            <span style={{ color: 'var(--text-2)' }}>{work ? `${work.get(p.id)?.open ?? 0} open` : ''}</span>
             <span>
               <ProjectStatusBadge status={p.status} />
             </span>
@@ -300,5 +326,44 @@ function ProjectsList({ projects, onOpen }: { projects: ApiProject[]; onOpen: (i
         ))}
       </div>
     </div>
+  );
+}
+
+/** A project's tasks as its card and row show them (CD-263): done of all, open, the next two open. */
+interface ProjectWork {
+  total: number;
+  done: number;
+  open: number;
+  next: ApiTask[];
+}
+
+/** Next = the open tasks by due date (undated last), like the project's "Coming up". */
+function workByProject(tasks: ApiTask[]): Map<string, ProjectWork> {
+  const out = new Map<string, ProjectWork>();
+  for (const t of tasks) {
+    const w = out.get(t.projectId) ?? { total: 0, done: 0, open: 0, next: [] };
+    w.total += 1;
+    if (t.status === 'done') w.done += 1;
+    else {
+      w.open += 1;
+      w.next.push(t);
+    }
+    out.set(t.projectId, w);
+  }
+  for (const w of out.values()) w.next = w.next.sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999') || a.number - b.number).slice(0, 2);
+  return out;
+}
+
+/** "▬▬▭ 40%": done tasks of all tasks; nothing when the project has none. */
+function Progress({ work }: { work: ProjectWork | undefined }) {
+  if (!work?.total) return <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>No tasks</span>;
+  const pct = Math.round((work.done / work.total) * 100);
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} title={`${work.done} of ${work.total} tasks done`} data-testid="project-progress">
+      <span style={{ width: 54, height: 4, borderRadius: 99, background: 'var(--chip)', overflow: 'hidden' }}>
+        <span style={{ display: 'block', width: `${pct}%`, height: '100%', background: 'var(--brand)' }} />
+      </span>
+      <span style={{ fontSize: 11.5, color: 'var(--text-2)' }}>{pct}%</span>
+    </span>
   );
 }
