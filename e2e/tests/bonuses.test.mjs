@@ -47,7 +47,7 @@ describe('sales bonus rules', () => {
 
   step('a member sees no bonus tab, no bonus card, and gets 403 from the API', async () => {
     await member.goto(BASE_URL + '/settings/workspace', { waitUntil: 'networkidle0' });
-    await member.waitForFunction(() => document.body.innerText.includes('Customize Fields'));
+    await member.waitForFunction(() => document.body.innerText.includes('Customize fields'));
     assert.ok(!(await text(member)).includes('Sales bonuses'), 'no Sales bonuses tab');
     await member.goto(BASE_URL + '/settings/bonuses', { waitUntil: 'networkidle0' });
     await member.waitForFunction(() => location.pathname === '/settings/workspace');

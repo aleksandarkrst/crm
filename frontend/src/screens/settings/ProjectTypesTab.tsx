@@ -84,17 +84,11 @@ export function ProjectTypesTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} data-testid="project-types">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em' }}>Project types</span>
-        <span style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5, maxWidth: 760 }}>
-          A project type is a set of stages for one kind of project, like a funnel in the CRM. Each project is on one board: it shows in that board's columns, and its tasks are grouped by the same stages in the plan. Complete and Cancel are always available and are not stages.
+      {!editable && (
+        <span data-testid="project-types-read-only" style={{ fontSize: 12, color: 'var(--text-2)' }}>
+          Only owners and admins can change project types and their stages.
         </span>
-        {!editable && (
-          <span data-testid="project-types-read-only" style={{ fontSize: 12, color: 'var(--text-2)' }}>
-            Only owners and admins can change project types and their stages.
-          </span>
-        )}
-      </div>
+      )}
 
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 240px', maxWidth: 300, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -293,9 +287,9 @@ function StageRow({
             type="button"
             className="icon-btn"
             aria-label="Delete stage"
-            title={only ? 'A project type needs at least one stage' : 'Delete stage'}
-            disabled={only}
-            style={{ opacity: only ? 0.35 : 1 }}
+            title={only ? 'A project type needs at least one stage' : projects > 0 ? `In use by ${plural(projects, 'project')}. Move them to another stage first.` : 'Delete stage'}
+            disabled={only || projects > 0}
+            style={{ opacity: only || projects > 0 ? 0.35 : 1 }}
             onClick={onRemove}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
