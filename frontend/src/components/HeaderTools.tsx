@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { paths } from '../lib/paths';
 import { initialsOf, isOverdue, isoLabel, leadById, todayIso } from '../store/selectors';
 import { useStore } from '../store/store';
 import { SEARCH_SHORTCUT } from './CommandPalette';
 import { ICONS } from './commands';
+import { currentModule } from './modules';
 import { NewMenu } from './NewMenu';
 
 /** The middle of every screen's header (CD-80): search (opens the command palette) and "+". */
 export function HeaderCenter() {
-  const { set } = useStore();
+  const { set, session } = useStore();
+  const { pathname } = useLocation();
+  // The Projects module searches its own records first (CD-229).
+  const placeholder = currentModule(pathname, session.userId).id === 'projects' ? 'Search projects, deals, companies' : 'Search deals, companies, contacts';
   return (
     <div className="header-center">
       <button type="button" className="search-trigger" data-testid="global-search" aria-label="Search and commands" onClick={() => set({ paletteOpen: true })}>
@@ -17,7 +21,7 @@ export function HeaderCenter() {
           <circle cx="11" cy="11" r="6.5" />
           <path d="m20 20-4.2-4.2" />
         </svg>
-        <span className="search-trigger-text">Search deals, companies, contacts</span>
+        <span className="search-trigger-text">{placeholder}</span>
         <kbd className="kbd">{SEARCH_SHORTCUT}</kbd>
       </button>
       <NewMenu />

@@ -1159,8 +1159,12 @@ and no "hours" are shown anywhere.
   and previews the type's stages; a deal without a company can't start one. Creating opens the
   project and says "Project created from <deal>". The deal's Summary gets a Project row per project
   with its status. "Add starter tasks from the products" waits for project tasks (CD-146).
-- **Projects module** (CD-234): the switcher's Projects opens `/projects` (`screens/Projects.tsx`),
-  its sidebar has Projects only for now (Tasks, Work orders and Dispatch come with CD-229).
+- **Projects module** (CD-234, CD-229): the switcher's Projects opens `/projects` (`screens/Projects.tsx`).
+  Its sidebar has Projects; Tasks and Work orders join the sidebar, the "+" menu and Ctrl/⌘K with
+  their features (CD-146, CD-265); Dispatch is for later. In the module the "+" menu is "Create in
+  Projects" with its own items (`module: 'projects'` on a command), the header search reads "Search
+  projects, deals, companies", and Ctrl/⌘K lists its own create actions and the Projects results
+  first.
   - **Board / List** toggle (remembered per person and workspace in `localStorage`
     `crm.projectsView.<userId>.<tenantId>`), a Project type select with a pencil to Settings →
     Project types (`?type=`), filters Lead, Health and Status (Open by default), "New project".
