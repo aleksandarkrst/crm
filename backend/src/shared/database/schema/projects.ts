@@ -209,12 +209,15 @@ export const projectFiles = pgTable(
     contentType: text('content_type').notNull(),
     sizeBytes: integer('size_bytes').notNull(),
     storageKey: text('storage_key').notNull(),
+    /** The task it was added to (CD-270), shown in the Documents tab as "Linked to: T-12"; cleared if the task goes. */
+    taskId: uuid('task_id'),
     addedByUserId: uuid('added_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     ...timestamps,
   },
   (t) => [
     unique('project_files_tenant_id_uq').on(t.tenantId, t.id),
     index('project_files_tenant_project_idx').on(t.tenantId, t.projectId),
+    index('project_files_tenant_task_idx').on(t.tenantId, t.taskId),
     foreignKey({ columns: [t.tenantId, t.projectId], foreignColumns: [projects.tenantId, projects.id], name: 'project_files_project_fk' }).onDelete('cascade'),
     check('project_files_name_ck', sql`length(btrim(${t.name})) between 1 and 255`),
     check('project_files_folder_ck', sql`${t.folder} in ('Contract', 'Brief', 'Design', 'Client material', 'Deliverable')`),
@@ -343,5 +346,45 @@ export const taskTimeFixtures = pgTable(
   (t) => [
     index('task_time_fixtures_task_idx').on(t.tenantId, t.taskId),
     foreignKey({ columns: [t.tenantId, t.taskId], foreignColumns: [tasks.tenantId, tasks.id], name: 'task_time_fixtures_task_fk' }).onDelete('cascade'),
+  ],
+);
+
+/** A task's checklist (CD-270): items in order, ticked when done. Deleting the task deletes them. */
+export const taskChecklistItems = pgTable(
+  'task_checklist_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    taskId: uuid('task_id').notNull(),
+    text: text('text').notNull(),
+    done: boolean('done').notNull().default(false),
+    position: integer('position').notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    index('task_checklist_items_task_idx').on(t.tenantId, t.taskId, t.position),
+    foreignKey({ columns: [t.tenantId, t.taskId], foreignColumns: [tasks.tenantId, tasks.id], name: 'task_checklist_items_task_fk' }).onDelete('cascade'),
+    check('task_checklist_items_text_ck', sql`length(btrim(${t.text})) between 1 and 300`),
+  ],
+);
+
+/** At most this many checklist items on a task. */
+export const MAX_TASK_CHECKLIST_ITEMS = 100;
+
+/** A comment on a task (CD-270), visible to everyone who can see the task. Deleting the task deletes them. */
+export const taskComments = pgTable(
+  'task_comments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    taskId: uuid('task_id').notNull(),
+    authorUserId: uuid('author_user_id').references(() => users.id, { onDelete: 'set null' }),
+    body: text('body').notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    index('task_comments_task_idx').on(t.tenantId, t.taskId, t.createdAt),
+    foreignKey({ columns: [t.tenantId, t.taskId], foreignColumns: [tasks.tenantId, tasks.id], name: 'task_comments_task_fk' }).onDelete('cascade'),
+    check('task_comments_body_ck', sql`length(btrim(${t.body})) between 1 and 5000`),
   ],
 );

@@ -470,6 +470,20 @@
       "when": 1791465788462,
       "tag": "0066_task_dependencies_fk",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1791467445429,
+      "tag": "0067_task_checklist_comments",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1791467448575,
+      "tag": "0068_task_checklist_comments_rls",
+      "breakpoints": true
     }
   ]
 }

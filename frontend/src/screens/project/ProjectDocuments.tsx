@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { paths } from '../../lib/paths';
 import { type ApiProjectFile, MAX_PROJECT_FILE_BYTES, PROJECT_FILE_FOLDERS, type ProjectFileFolder, projectsApi } from '../../lib/projectsApi';
 import { type DealDoc, docsApi } from '../../store/documents';
 import { projectError } from '../../store/projects';
@@ -6,15 +8,15 @@ import { useStore } from '../../store/store';
 
 type Folder = ProjectFileFolder | 'all';
 
-const size = (bytes: number | null) => (bytes == null ? '—' : bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
-const day = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-const ext = (name: string) => (/\.([a-z0-9]{1,4})$/i.exec(name)?.[1] ?? 'file').toUpperCase();
+export const fileSize = (bytes: number | null) => (bytes == null ? '—' : bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
+export const fileDay = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+export const fileExt = (name: string) => (/\.([a-z0-9]{1,4})$/i.exec(name)?.[1] ?? 'file').toUpperCase();
 
 /**
  * Adds the files someone dropped or picked, one by one (each its own upload); too large ones are
  * refused before sending. Used by the Documents tab and the Overview's drop zone.
  */
-export function useFileUpload(projectId: string, onAdded: (f: ApiProjectFile) => void) {
+export function useFileUpload(projectId: string, onAdded: (f: ApiProjectFile) => void, taskId?: string) {
   const { flash } = useStore();
   const [busy, setBusy] = useState(false);
   const add = async (files: FileList | File[], folder: ProjectFileFolder) => {
@@ -28,14 +30,14 @@ export function useFileUpload(projectId: string, onAdded: (f: ApiProjectFile) =>
         continue;
       }
       try {
-        onAdded(await projectsApi.uploadFile(projectId, file, folder));
+        onAdded(await projectsApi.uploadFile(projectId, file, folder, taskId));
         added++;
       } catch (err) {
         flash(projectError(err));
       }
     }
     setBusy(false);
-    if (added) flash(added === 1 ? 'File added to the project' : `${added} files added to the project`);
+    if (added) flash(`${added === 1 ? 'File' : `${added} files`} added to the ${taskId ? 'task' : 'project'}`);
   };
   return { add, busy };
 }
@@ -140,7 +142,7 @@ export function ProjectDocuments({
           {shown.map((f) => (
             <div key={f.id} className="table-row" data-testid="project-file" style={{ paddingTop: 8, paddingBottom: 8 }}>
               <button type="button" className="doc-name" onClick={() => void run(() => projectsApi.downloadFile(projectId, f))} title="Download">
-                <span className="doc-ext">{ext(f.name)}</span>
+                <span className="doc-ext">{fileExt(f.name)}</span>
                 <span className="pt-cell">
                   <span className="pt-main" style={{ fontWeight: 600 }}>
                     {f.name}
@@ -167,12 +169,18 @@ export function ProjectDocuments({
               ) : (
                 <span style={{ color: 'var(--text-2)' }}>{f.folder}</span>
               )}
-              <span style={{ color: 'var(--text-2)' }}>The project</span>
+              {f.taskId && f.taskNumber != null ? (
+                <Link to={paths.task(f.taskId)} className="crumb-link" data-testid="file-task-link">
+                  T-{f.taskNumber}
+                </Link>
+              ) : (
+                <span style={{ color: 'var(--text-2)' }}>The project</span>
+              )}
               <span className="pt-main" style={{ color: 'var(--text-2)' }}>
                 {f.addedByName ?? '—'}
               </span>
-              <span style={{ color: 'var(--text-2)' }}>{day(f.createdAt)}</span>
-              <span style={{ color: 'var(--text-2)' }}>{size(f.sizeBytes)}</span>
+              <span style={{ color: 'var(--text-2)' }}>{fileDay(f.createdAt)}</span>
+              <span style={{ color: 'var(--text-2)' }}>{fileSize(f.sizeBytes)}</span>
               {canManage(f) ? (
                 <button
                   type="button"
@@ -215,8 +223,8 @@ export function ProjectDocuments({
                 <span className="pt-main" style={{ color: 'var(--text-2)' }}>
                   {d.createdByName ?? '—'}
                 </span>
-                <span style={{ color: 'var(--text-2)' }}>{day(d.createdAt)}</span>
-                <span style={{ color: 'var(--text-2)' }}>{size(d.sizeBytes)}</span>
+                <span style={{ color: 'var(--text-2)' }}>{fileDay(d.createdAt)}</span>
+                <span style={{ color: 'var(--text-2)' }}>{fileSize(d.sizeBytes)}</span>
                 <span />
               </div>
             ))}

@@ -418,6 +418,16 @@ export class TasksService {
     });
   }
 
+  /**
+   * For the task's checklist, comments and files (CD-270): the caller and the task, or 404 when
+   * they can't see it and 403 when `act` is needed but they only read it.
+   */
+  async require(tx: Tx, ctx: TenantContext, id: string, need: 'read' | 'act') {
+    const caller = await this.caller(ctx, tx);
+    const found = need === 'act' ? await this.changeable(tx, caller, id) : await this.visible(tx, caller, id);
+    return { caller, ...found };
+  }
+
   // ---------------------------------------------------------------- helpers
 
   private async caller(ctx: TenantContext, tx: Tx): Promise<TaskCaller> {
