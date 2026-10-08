@@ -1125,7 +1125,9 @@ and no "hours" are shown anywhere.
   project starts from a deal; the workspace currency when null), `budget_hours`, the CRM company (required; no cascade: deleting a company with
   projects is refused with 409 "Acme has 2 projects…"), the deal it came from (optional; deleting
   the deal clears it), the lead and who created it. The name is unique among the company's open
-  projects. Design v2 replaced the spec's Archive with Complete / Cancel / Reopen (CD-256). History
+  projects. Design v2 replaced the spec's Archive with Complete / Cancel / Reopen (CD-256).
+  Completing also moves the project to its type's last stage, as a won deal sits on the Won stage
+  (CD-282); Reopen keeps the stage and Cancel doesn't move it. History
   rows (`record_changes`, entity `project`, read with `GET /api/crm/history?entityType=project`) and
   live hints come from triggers. A deal deleted since is named from its own `deleted` history row
   ("CAT 320 overhaul (deleted)"). The API also returns the deal's primary contact (`contactId`,
