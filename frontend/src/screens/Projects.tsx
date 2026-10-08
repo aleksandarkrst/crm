@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { DataActions } from '../components/DataActions';
 import { Screen } from '../components/Layout';
 import { FilterBar } from '../components/ui';
 import { paths } from '../lib/paths';
 import { type ApiProject, type ApiProjectHealth, type ApiProjectStatus, projectsApi } from '../lib/projectsApi';
+import { projectsCsv } from '../store/exportCsv';
 import { projectError, useProjects, useProjectTypes } from '../store/projects';
 import { memberLabels, moneyTotal } from '../store/selectors';
 import { useStore } from '../store/store';
@@ -71,6 +73,8 @@ export function Projects() {
     .filter((p) => lead === 'Lead' || p.leadUserId === lead)
     .filter((p) => health === 'Health' || p.health === health);
   const onBoard = shown.filter((p) => p.projectTypeId === type?.id);
+  // "Export filter results" (CD-278): the projects the current view shows.
+  const exported = view === 'board' ? onBoard : shown;
   const dirty = lead !== 'Lead' || health !== 'Health' || status !== 'open';
   const linked = new Set((projects ?? []).map((p) => p.dealId).filter(Boolean));
   const unlinkedWon = s.leads.filter((l) => l.outcome === 'won' && l.companyId && !linked.has(l.id));
@@ -137,6 +141,7 @@ export function Projects() {
         }}
         meta={projects ? `${plural(view === 'board' ? onBoard.length : shown.length, STATUS_FILTER.find((x) => x.value === status)!.label.toLowerCase() + ' project')}` : undefined}
         action={{ label: 'New project', onClick: () => set({ newProject: {} }) }}
+        extra={projects ? <DataActions type="projects" count={exported.length} exportCsv={() => projectsCsv(exported)} /> : undefined}
       />
 
       {unlinkedWon.length > 0 && (

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { Icon } from '../../components/icons';
+import { askConfirm } from '../../components/ConfirmDialog';
 import { Screen } from '../../components/Layout';
 import { MeetingsCard } from '../../components/MeetingsCard';
 import { paths } from '../../lib/paths';
@@ -95,10 +96,16 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
   const ownerOptions = [...memberLabels(s)].map(([value, label]) => ({ value, label }));
   if (lead.ownerId && !ownerOptions.some((o) => o.value === lead.ownerId)) ownerOptions.push({ value: lead.ownerId, label: memberName(s, lead.ownerId, lead.owner) });
 
-  const onDelete = () => {
+  const onDelete = async () => {
     setMenu(false);
     const name = lead.title || lead.company;
-    if (window.confirm(`Delete the deal "${name}"? Its products, to-dos and activity history are deleted too. The company and contacts are kept. This can't be undone.`)) void deleteDeal(lead.id);
+    const yes = await askConfirm({
+      title: `Delete the deal "${name}"?`,
+      message: "Its products, to-dos and activity history are deleted too. The company and contacts are kept. This can't be undone.",
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (yes) void deleteDeal(lead.id);
   };
 
   return (
@@ -148,7 +155,7 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
           ) : (
             <>
               {wonStage && (
-                <button type="button" className="btn btn-won" data-testid="mark-won" onClick={() => moveLead(lead.id, wonStage.id)}>
+                <button type="button" className="btn btn-primary" data-testid="mark-won" onClick={() => moveLead(lead.id, wonStage.id)}>
                   Won
                 </button>
               )}
@@ -164,7 +171,7 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
               </button>
               {menu && (
                 <div className="deal-menu" role="menu">
-                  <button type="button" role="menuitem" onClick={onDelete}>
+                  <button type="button" role="menuitem" data-testid="delete-deal" onClick={() => void onDelete()}>
                     Delete deal
                   </button>
                 </div>
