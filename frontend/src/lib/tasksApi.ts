@@ -17,6 +17,15 @@ export const statusLabel = (s: TaskStatus) => TASK_STATUSES.find((x) => x.id ===
 /** The On hold dialog's presets (design v2 §4); any other text works too. */
 export const HOLD_REASONS = ['Waiting for the client', 'Waiting for another task', 'Waiting for access or keys', 'Assignee unavailable'] as const;
 
+/** Another task in a few words (the Dependencies card). */
+export interface ApiTaskBrief {
+  id: string;
+  number: number;
+  name: string;
+  status: TaskStatus;
+  dueDate: string | null;
+}
+
 export interface ApiTaskAssignee {
   employeeId: string;
   name: string;
@@ -45,6 +54,11 @@ export interface ApiTask {
   stageId: string | null;
   stageName: string | null;
   stagePosition: number | null;
+  /** The task this one waits for (CD-269), and in brief: its number, status and due date. */
+  waitsForTaskId: string | null;
+  waitsFor: { id: string; number: number; status: TaskStatus; dueDate: string | null } | null;
+  /** On one task's read only: the dependencies the caller can see, with names. */
+  dependencies?: { waitsFor: ApiTaskBrief | null; blocks: ApiTaskBrief[] };
   status: TaskStatus;
   onHoldReason: string | null;
   description: string | null;
@@ -104,6 +118,7 @@ export type TaskPatch = Partial<{
   startDate: string | null;
   dueDate: string | null;
   estimateHours: number | null;
+  waitsForTaskId: string | null;
 }>;
 
 export interface TaskFilter {

@@ -72,6 +72,7 @@ const FIELD_LABELS: Record<string, string> = {
   dueDate: 'Due',
   estimateHours: 'Estimate (h)',
   assignees: 'Assignees',
+  waitsForTaskId: 'Waits for',
 };
 const MEETING_TEXT: Record<string, string> = {
   visit: 'Customer visit',

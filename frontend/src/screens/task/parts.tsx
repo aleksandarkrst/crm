@@ -190,6 +190,12 @@ export function TaskBoard({ tasks, columns, columnOf, onDrop, showProject = true
                   <Link to={paths.task(t.id)} className="task-card-name">
                     {t.name}
                   </Link>
+                  {t.waitsFor && (
+                    <span className="task-card-waits" data-testid="card-waits" style={{ color: t.waitsFor.status === 'done' ? 'var(--muted)' : '#B4531B' }}>
+                      ↳ waits for {taskId(t.waitsFor)}
+                      {t.waitsFor.status === 'done' ? ' (done)' : ''}
+                    </span>
+                  )}
                   {t.status === 'on_hold' && t.onHoldReason && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{t.onHoldReason}</span>}
                   <span className="task-card-foot">
                     <AvatarStack names={activeAssignees(t).map((a) => a.name)} size={22} />

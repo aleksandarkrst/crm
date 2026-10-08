@@ -456,6 +456,20 @@
       "when": 1791464319417,
       "tag": "0064_task_limits_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1791465785592,
+      "tag": "0065_task_dependencies",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1791465788462,
+      "tag": "0066_task_dependencies_fk",
+      "breakpoints": true
     }
   ]
 }

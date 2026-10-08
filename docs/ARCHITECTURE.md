@@ -1287,6 +1287,17 @@ and no "hours" are shown anywhere.
     dev-only `POST /api/dev/tasks/:id/hours`). Time entries replace both.
   - `canLogTime(…, { block })`: in Block mode (CD-149 will make it a setting) an entry past the
     person's own limit is refused (`over_limit`); one person's hours never count toward another's.
+- **Dependencies** (CD-269, `drizzle/0065`, `0066`): `tasks.waits_for_task_id`, a task of the same
+  project, never itself (check) and never one that already waits for it (TasksService walks the
+  chain: 400 "That task already waits for this one"). Deleting the task it waits for clears it
+  (`tasks_waits_for_fk`, `ON DELETE SET NULL (waits_for_task_id)`); moving either one to another
+  project clears it both ways; the history names it ("T-3 · Survey"). Lists carry `waitsFor` in brief
+  (number, status, due; not the name, as the caller may not see that task); one task's read adds
+  `dependencies` (Waits for / Blocks, with names, filtered by visibility). Screens: "Waits for" in
+  Details, the Dependencies card, "↳ waits for T-3" on kanban cards (amber while open), the Plan
+  table's Depends on column, and the Plan tab's **Gantt** (`ProjectGantt.tsx`, plain HTML and SVG:
+  bars from start to due by stage, today marked, an arrow from the dependency's due date to the
+  task's start, "Starts before T-3 is due (12 Oct)" while that one is open).
 - **Email "Assigned to a task"** (job `projects.task-assigned`, projects worker): to someone with an
   account assigned by another person, when they're still on the task and `memberships.
   notify_task_assigned` is on (read when sending). Number, name, project, company, due date and a
