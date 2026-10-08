@@ -508,7 +508,7 @@ export interface ApiHistoryEntry {
   actor: { userId: string | null; name: string } | null;
   changedAt: string;
 }
-export type HistoryEntity = 'deal' | 'company' | 'contact' | 'meeting' | 'visit_plan' | 'project' | 'task';
+export type HistoryEntity = 'deal' | 'company' | 'contact' | 'meeting' | 'visit_plan' | 'project' | 'task' | 'work_order';
 
 /**
  * Customer visit plans (CD-134): per salesperson and month, the visits planned per company. Plans
@@ -1009,7 +1009,11 @@ export const crmApi = {
   // Tasks (CD-146) have their own endpoint, with the task's visibility rules.
   history: (entityType: HistoryEntity, entityId: string, offset = 0, limit = 30) =>
     api<{ entries: ApiHistoryEntry[]; more: boolean }>(
-      entityType === 'task' ? `/tasks/${entityId}/history?limit=${limit}&offset=${offset}` : `/crm/history?entityType=${entityType}&entityId=${entityId}&limit=${limit}&offset=${offset}`,
+      entityType === 'task'
+        ? `/tasks/${entityId}/history?limit=${limit}&offset=${offset}`
+        : entityType === 'work_order'
+          ? `/work-orders/${entityId}/history?limit=${limit}&offset=${offset}`
+          : `/crm/history?entityType=${entityType}&entityId=${entityId}&limit=${limit}&offset=${offset}`,
     ),
 
   meetings: {

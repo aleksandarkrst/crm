@@ -512,6 +512,20 @@
       "when": 1791477445932,
       "tag": "0072_work_orders_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1791481392389,
+      "tag": "0073_work_order_page",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1791481395360,
+      "tag": "0074_work_order_page_history",
+      "breakpoints": true
     }
   ]
 }

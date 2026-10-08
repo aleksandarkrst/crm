@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MAX_WORK_ORDER_TECHNICIANS, WORK_ORDER_PRIORITIES, WORK_ORDER_STATUSES, WORK_ORDER_TYPES } from '../../shared/database/schema';
+import { MAX_WORK_ORDER_TECHNICIANS, WORK_ORDER_PLACES, WORK_ORDER_PRIORITIES, WORK_ORDER_STATUSES, WORK_ORDER_TYPES } from '../../shared/database/schema';
 import { nonEmptyPatch } from '../../shared/validation/common';
 import { quarterHours } from './tasks.schemas';
 
@@ -57,11 +57,23 @@ export const UpdateWorkOrder = nonEmptyPatch(
       location: text(300),
       equipment: text(300),
       job: text(10_000),
+      workPlace: z.enum(WORK_ORDER_PLACES),
+      // Report and sign-off (CD-266). Signing off needs the customer's name.
       report: text(10_000),
+      materials: text(5_000),
+      customerName: text(200),
+      signedOff: z.boolean(),
     })
     .partial(),
 );
 export type UpdateWorkOrder = z.infer<typeof UpdateWorkOrder>;
+
+/** POST /api/work-orders/:id/checklist and PATCH …/checklist/:itemId (CD-266, the task checklist's rules). */
+const itemText = z.string().trim().min(1, 'Write the item').max(300, 'At most 300 characters');
+export const AddWorkOrderItem = z.object({ text: itemText });
+export type AddWorkOrderItem = z.infer<typeof AddWorkOrderItem>;
+export const UpdateWorkOrderItem = nonEmptyPatch(z.object({ text: itemText, done: z.boolean() }).partial());
+export type UpdateWorkOrderItem = z.infer<typeof UpdateWorkOrderItem>;
 
 export const ListWorkOrdersQuery = z.object({
   projectId: z.uuid().optional(),

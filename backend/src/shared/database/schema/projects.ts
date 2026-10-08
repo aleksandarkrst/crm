@@ -398,6 +398,9 @@ export type WorkOrderStatus = (typeof WORK_ORDER_STATUSES)[number];
 export const WORK_ORDER_TYPES = ['installation', 'repair', 'maintenance', 'inspection'] as const;
 export type WorkOrderType = (typeof WORK_ORDER_TYPES)[number];
 export const WORK_ORDER_PRIORITIES = ['normal', 'urgent'] as const;
+/** Where the work is done (design v2 §6 Details). */
+export const WORK_ORDER_PLACES = ['customer', 'workshop'] as const;
+export type WorkOrderPlace = (typeof WORK_ORDER_PLACES)[number];
 /** At most this many technicians on one work order (CD-259). */
 export const MAX_WORK_ORDER_TECHNICIANS = 20;
 
@@ -432,10 +435,18 @@ export const workOrders = pgTable(
     scheduledStart: time('scheduled_start'),
     /** Planned time in hours, in steps of 0.25. */
     durationHours: numeric('duration_hours', { precision: 5, scale: 2, mode: 'number' }).notNull().default(2),
+    /** The site (address or name) at the customer. */
     location: text('location'),
+    /** At the customer or in the workshop (CD-266). */
+    workPlace: text('work_place', { enum: WORK_ORDER_PLACES }).notNull().default('customer'),
     equipment: text('equipment'),
     job: text('job'),
+    /** Report and sign-off (CD-266): what was done, the materials used, who signed for the customer and when. */
     report: text('report'),
+    materials: text('materials'),
+    customerName: text('customer_name'),
+    signedOffAt: timestamp('signed_off_at', { withTimezone: true }),
+    signedOffByUserId: uuid('signed_off_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     completedAt: timestamp('completed_at', { withTimezone: true }),
     createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     ...timestamps,
@@ -455,6 +466,8 @@ export const workOrders = pgTable(
     check('work_orders_scheduled_ck', sql`${t.status} <> 'scheduled' or (${t.scheduledDate} is not null and ${t.scheduledStart} is not null)`),
     check('work_orders_duration_ck', sql`${t.durationHours} between 0.25 and 99 and mod(${t.durationHours} * 4, 1) = 0`),
     check('work_orders_text_ck', sql`length(${t.location}) <= 300 and length(${t.equipment}) <= 300 and length(${t.job}) <= 10000 and length(${t.report}) <= 10000`),
+    check('work_orders_place_ck', sql`${t.workPlace} in ('customer', 'workshop')`),
+    check('work_orders_sign_off_ck', sql`length(${t.materials}) <= 5000 and length(${t.customerName}) <= 200 and (${t.signedOffAt} is null or ${t.customerName} is not null)`),
   ],
 );
 
@@ -474,5 +487,24 @@ export const workOrderTechnicians = pgTable(
     index('work_order_technicians_employee_idx').on(t.tenantId, t.employeeId),
     foreignKey({ columns: [t.tenantId, t.workOrderId], foreignColumns: [workOrders.tenantId, workOrders.id], name: 'work_order_technicians_wo_fk' }).onDelete('cascade'),
     foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'work_order_technicians_employee_fk' }).onDelete('cascade'),
+  ],
+);
+
+/** A work order's checklist (CD-266): the same items as a task's checklist. */
+export const workOrderChecklistItems = pgTable(
+  'work_order_checklist_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    workOrderId: uuid('work_order_id').notNull(),
+    text: text('text').notNull(),
+    done: boolean('done').notNull().default(false),
+    position: integer('position').notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    index('work_order_checklist_items_wo_idx').on(t.tenantId, t.workOrderId, t.position),
+    foreignKey({ columns: [t.tenantId, t.workOrderId], foreignColumns: [workOrders.tenantId, workOrders.id], name: 'work_order_checklist_items_wo_fk' }).onDelete('cascade'),
+    check('work_order_checklist_items_text_ck', sql`length(btrim(${t.text})) between 1 and 300`),
   ],
 );

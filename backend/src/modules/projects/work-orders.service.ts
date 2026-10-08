@@ -1,11 +1,12 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, desc, eq, inArray, type SQL, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, notInArray, type SQL, sql } from 'drizzle-orm';
 import { AuditService } from '../../shared/audit/audit.service';
 import { hasRole, type TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
-import { companies, employees, projects, workOrderCounters, workOrders, workOrderTechnicians } from '../../shared/database/schema';
-import type { CreateWorkOrder, ListWorkOrdersQuery, UpdateWorkOrder } from './work-orders.schemas';
+import { companies, employees, MAX_TASK_CHECKLIST_ITEMS, projects, recordChanges, users, workOrderChecklistItems, workOrderCounters, workOrders, workOrderTechnicians } from '../../shared/database/schema';
+import type { TaskHistoryEntry } from './tasks.service';
+import type { AddWorkOrderItem, CreateWorkOrder, ListWorkOrdersQuery, UpdateWorkOrder, UpdateWorkOrderItem } from './work-orders.schemas';
 
 export interface WorkOrderTechnicianView {
   employeeId: string;
@@ -38,7 +39,12 @@ const columns = {
   location: workOrders.location,
   equipment: workOrders.equipment,
   job: workOrders.job,
+  workPlace: workOrders.workPlace,
   report: workOrders.report,
+  materials: workOrders.materials,
+  customerName: workOrders.customerName,
+  signedOffAt: workOrders.signedOffAt,
+  signedOffByName: sql<string | null>`(select coalesce(u.display_name, u.email) from users u where u.id = "work_orders"."signed_off_by_user_id")`,
   completedAt: workOrders.completedAt,
   createdByUserId: workOrders.createdByUserId,
   createdAt: workOrders.createdAt,
@@ -154,6 +160,12 @@ export class WorkOrdersService {
           if (status === 'unscheduled' && scheduleable) status = 'scheduled';
           else if (status === 'scheduled' && !scheduleable) status = 'unscheduled';
         }
+        // Signing off (CD-266): the customer's name is needed, and stays while signed.
+        const customerName = input.customerName !== undefined ? input.customerName : row.customerName;
+        const signed = input.signedOff ?? !!row.signedOffAt;
+        if (signed && !customerName) throw new BadRequestException(input.signedOff ? "Write the customer's name to sign off" : "The customer's name stays while the work order is signed off");
+        const signOff = input.signedOff === undefined || input.signedOff === !!row.signedOffAt ? {} : input.signedOff ? { signedOffAt: new Date(), signedOffByUserId: ctx.userId } : { signedOffAt: null, signedOffByUserId: null };
+
         let holdReason: string | null = null;
         if (status === 'on_hold') {
           holdReason = input.holdReason ?? row.holdReason;
@@ -177,7 +189,11 @@ export class WorkOrdersService {
             location: input.location,
             equipment: input.equipment,
             job: input.job,
+            workPlace: input.workPlace,
             report: input.report,
+            materials: input.materials,
+            customerName: input.customerName,
+            ...signOff,
             completedAt: status === row.status ? undefined : status === 'completed' ? new Date() : null,
           })
           .where(eq(workOrders.id, id));
@@ -241,9 +257,120 @@ export class WorkOrdersService {
     if (found.some((e) => e.workType === 'office')) throw new BadRequestException('Only people with the Service or Both work type can be technicians');
   }
 
-  /** Replaces the technicians; the first is the lead. */
+  /**
+   * Sets the technicians; the first is the lead. Only the difference is written (removed, added, a
+   * new lead), so the history records real changes (CD-266).
+   */
   private async setTechnicians(tx: Tx, ctx: TenantContext, workOrderId: string, ids: string[]) {
-    await tx.delete(workOrderTechnicians).where(eq(workOrderTechnicians.workOrderId, workOrderId));
-    if (ids.length) await tx.insert(workOrderTechnicians).values(ids.map((employeeId, i) => ({ tenantId: ctx.tenantId, workOrderId, employeeId, isLead: i === 0 })));
+    const ofOrder = eq(workOrderTechnicians.workOrderId, workOrderId);
+    await tx.delete(workOrderTechnicians).where(ids.length ? and(ofOrder, notInArray(workOrderTechnicians.employeeId, ids)) : ofOrder);
+    if (!ids.length) return;
+    const current = await tx.select({ employeeId: workOrderTechnicians.employeeId, isLead: workOrderTechnicians.isLead }).from(workOrderTechnicians).where(ofOrder);
+    const lead = ids[0]!;
+    // One lead at a time (a unique index): step the old one down before the new one steps up.
+    if (current.some((t) => t.isLead && t.employeeId !== lead)) await tx.update(workOrderTechnicians).set({ isLead: false }).where(and(ofOrder, eq(workOrderTechnicians.isLead, true)));
+    const fresh = ids.filter((id) => !current.some((t) => t.employeeId === id));
+    // A new lead is inserted as the lead; an existing one is promoted (a "lead" history row).
+    if (fresh.length) await tx.insert(workOrderTechnicians).values(fresh.map((employeeId) => ({ tenantId: ctx.tenantId, workOrderId, employeeId, isLead: employeeId === lead })));
+    if (!fresh.includes(lead)) await tx.update(workOrderTechnicians).set({ isLead: true }).where(and(ofOrder, eq(workOrderTechnicians.employeeId, lead), eq(workOrderTechnicians.isLead, false)));
+  }
+
+  // ---------------------------------------------------------------- the work order page (CD-266)
+
+  /** Newest first, in the task history's shape; projects are named. Every member reads it. */
+  history(ctx: TenantContext, id: string, query: { limit: number; offset: number }) {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      await this.row(tx, id);
+      const rows = await tx
+        .select({ change: recordChanges, actorName: sql<string | null>`coalesce(${users.displayName}, ${users.email})` })
+        .from(recordChanges)
+        .leftJoin(users, eq(users.id, recordChanges.actorUserId))
+        .where(and(eq(recordChanges.entityType, 'work_order'), eq(recordChanges.entityId, id)))
+        .orderBy(desc(recordChanges.changedAt), desc(recordChanges.id))
+        .limit(query.limit + 1)
+        .offset(query.offset);
+      const page = rows.slice(0, query.limit);
+      const projectIds = [...new Set(page.filter((r) => r.change.field === 'projectId').flatMap((r) => [r.change.oldValue, r.change.newValue]).filter((v): v is string => typeof v === 'string'))];
+      const names = new Map<string, string>();
+      if (projectIds.length) for (const p of await tx.select({ id: projects.id, name: projects.name }).from(projects).where(inArray(projects.id, projectIds))) names.set(p.id, p.name);
+      const label = (field: string | null, v: unknown) => (field === 'projectId' && typeof v === 'string' ? (names.get(v) ?? 'Deleted project') : null);
+      const entries: TaskHistoryEntry[] = page.map(({ change: c, actorName }) => ({
+        id: c.id,
+        action: c.action,
+        field: c.field,
+        oldValue: c.oldValue,
+        newValue: c.newValue,
+        oldLabel: label(c.field, c.oldValue),
+        newLabel: label(c.field, c.newValue),
+        label: c.label,
+        actor: c.actorUserId ? { userId: c.actorUserId, name: actorName ?? 'A former member' } : null,
+        changedAt: c.changedAt,
+      }));
+      return { entries, more: rows.length > query.limit };
+    });
+  }
+
+  /** The checklist, in order. Every member reads it; whoever can change the order changes it. */
+  checklist(ctx: TenantContext, id: string) {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      await this.row(tx, id);
+      return this.items(tx, id);
+    });
+  }
+
+  addItem(ctx: TenantContext, id: string, input: AddWorkOrderItem) {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        await this.changeable(tx, ctx, id);
+        const [{ n, next }] = (await tx
+          .select({ n: sql<number>`count(*)::int`, next: sql<number>`coalesce(max(${workOrderChecklistItems.position}) + 1, 0)::int` })
+          .from(workOrderChecklistItems)
+          .where(eq(workOrderChecklistItems.workOrderId, id))) as [{ n: number; next: number }];
+        if (n >= MAX_TASK_CHECKLIST_ITEMS) throw new BadRequestException(`At most ${MAX_TASK_CHECKLIST_ITEMS} items on a checklist`);
+        await tx.insert(workOrderChecklistItems).values({ tenantId: ctx.tenantId, workOrderId: id, text: input.text, position: next });
+        return this.items(tx, id);
+      })
+      .catch(mapDbError);
+  }
+
+  updateItem(ctx: TenantContext, id: string, itemId: string, input: UpdateWorkOrderItem) {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        await this.changeable(tx, ctx, id);
+        const [row] = await tx
+          .update(workOrderChecklistItems)
+          .set(input)
+          .where(and(eq(workOrderChecklistItems.id, itemId), eq(workOrderChecklistItems.workOrderId, id)))
+          .returning({ id: workOrderChecklistItems.id });
+        if (!row) throw new NotFoundException('Checklist item not found');
+        return this.items(tx, id);
+      })
+      .catch(mapDbError);
+  }
+
+  removeItem(ctx: TenantContext, id: string, itemId: string) {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      await this.changeable(tx, ctx, id);
+      const [row] = await tx
+        .delete(workOrderChecklistItems)
+        .where(and(eq(workOrderChecklistItems.id, itemId), eq(workOrderChecklistItems.workOrderId, id)))
+        .returning({ id: workOrderChecklistItems.id });
+      if (!row) throw new NotFoundException('Checklist item not found');
+      return this.items(tx, id);
+    });
+  }
+
+  private items(tx: Tx, id: string) {
+    return tx
+      .select({ id: workOrderChecklistItems.id, text: workOrderChecklistItems.text, done: workOrderChecklistItems.done, position: workOrderChecklistItems.position })
+      .from(workOrderChecklistItems)
+      .where(eq(workOrderChecklistItems.workOrderId, id))
+      .orderBy(asc(workOrderChecklistItems.position));
+  }
+
+  private async changeable(tx: Tx, ctx: TenantContext, id: string) {
+    const row = await this.row(tx, id);
+    if (!(await this.canChange(tx, ctx, row))) throw new ForbiddenException('Only owners, admins, the project lead, the technicians and the one who created it can change a work order');
+    return row;
   }
 }

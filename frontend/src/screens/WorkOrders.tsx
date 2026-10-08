@@ -209,7 +209,9 @@ function WorkOrderBoard({ orders, onDrop }: { orders: ApiWorkOrder[]; onDrop: (w
                       </span>
                     )}
                   </span>
-                  <span className="task-card-name">{w.title}</span>
+                  <Link to={paths.workOrder(w.id)} className="task-card-name">
+                    {w.title}
+                  </Link>
                   <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{siteOf(w)}</span>
                   {w.status === 'on_hold' && w.holdReason && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{w.holdReason}</span>}
                   <span className="task-card-foot">
@@ -247,9 +249,9 @@ function WorkOrdersTable({ orders, onStatus }: { orders: ApiWorkOrder[]; onStatu
           <div key={w.id} className="table-row" data-testid="work-orders-row" data-work-order={workOrderId(w)}>
             <span style={{ color: 'var(--text-2)' }}>{workOrderId(w)}</span>
             <span className="pt-cell">
-              <span className="pt-main" style={{ fontWeight: 600 }}>
+              <Link to={paths.workOrder(w.id)} className="pt-main crumb-link" style={{ fontWeight: 600, color: 'var(--ink)' }}>
                 {w.title}
-              </span>
+              </Link>
               {w.priority === 'urgent' && <span className="pt-sub" style={{ color: 'var(--danger)' }}>Urgent</span>}
             </span>
             <span className="pt-main" style={{ color: 'var(--text-2)' }}>
@@ -286,7 +288,7 @@ function WorkOrdersTable({ orders, onStatus }: { orders: ApiWorkOrder[]; onStatu
 }
 
 /** Design v2 §6: "Put WO-1044 on hold" with the reason presets or the person's own words. */
-function HoldDialog({ order, onClose, onHold }: { order: ApiWorkOrder; onClose: () => void; onHold: (reason: string) => Promise<void> }) {
+export function HoldDialog({ order, onClose, onHold }: { order: ApiWorkOrder; onClose: () => void; onHold: (reason: string) => Promise<void> }) {
   const [preset, setPreset] = useState<string | null>(null);
   const [other, setOther] = useState('');
   const [saving, setSaving] = useState(false);

@@ -51,4 +51,6 @@ export const paths = {
   task: (id: string) => '/tasks/' + encodeURIComponent(id),
   /** The Work orders page (CD-265): kanban and table. */
   workOrders: '/work-orders',
+  /** A work order's page (CD-266). */
+  workOrder: (id: string) => '/work-orders/' + encodeURIComponent(id),
 };

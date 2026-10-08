@@ -213,17 +213,17 @@ export function TaskBoard({ tasks, columns, columnOf, onDrop, showProject = true
   );
 }
 
-/** The org chart's people (who hasn't left), read once per picker. */
-function useDirectory() {
+/** The org chart's people (who hasn't left) who can be given `kind` (CD-268), read once per picker. */
+function useDirectory(kind: 'task' | 'work_order') {
   const [people, setPeople] = useState<ApiDirectoryRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     orgApi
       .directory()
-      // Tasks go to office staff (CD-268): Office and Both; Service people get work orders.
-      .then((rows) => setPeople(rows.filter((r) => r.status !== 'inactive' && r.workType !== 'service')))
+      // Tasks go to office staff (CD-268): Office and Both; work orders to Service and Both.
+      .then((rows) => setPeople(rows.filter((r) => r.status !== 'inactive' && r.workType !== (kind === 'task' ? 'service' : 'office'))))
       .catch((err: unknown) => setError(projectError(err)));
-  }, []);
+  }, [kind]);
   return { people, error };
 }
 
@@ -232,8 +232,21 @@ function useDirectory() {
  * without an account say "No account yet" (they get no email). `taken` are already on the task.
  * Inline (no overlay of its own), so the New task dialog can hold it.
  */
-export function PeoplePicker({ projectId, taken, picked, onToggle }: { projectId: string | null; taken: Set<string>; picked: Set<string>; onToggle: (employeeId: string, name: string) => void }) {
-  const { people, error } = useDirectory();
+export function PeoplePicker({
+  projectId,
+  taken,
+  picked,
+  onToggle,
+  kind = 'task',
+}: {
+  projectId: string | null;
+  taken: Set<string>;
+  picked: Set<string>;
+  onToggle: (employeeId: string, name: string) => void;
+  /** Who can be given it (CD-268): tasks Office and Both, work orders Service and Both. */
+  kind?: 'task' | 'work_order';
+}) {
+  const { people, error } = useDirectory(kind);
   const [team, setTeam] = useState<ApiProjectMember[]>([]);
   const [q, setQ] = useState('');
   useEffect(() => {
