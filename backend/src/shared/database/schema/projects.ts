@@ -301,6 +301,8 @@ export const taskAssignments = pgTable(
     taskId: uuid('task_id').notNull(),
     employeeId: uuid('employee_id').notNull(),
     active: boolean('active').notNull().default(true),
+    /** Their hour limit on this task (CD-147): 0.25 to 9,999 h in quarter hours; null is no limit. */
+    hourLimit: numeric('hour_limit', { precision: 6, scale: 2, mode: 'number' }),
     assignedByUserId: uuid('assigned_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow(),
     ...timestamps,
@@ -310,5 +312,28 @@ export const taskAssignments = pgTable(
     index('task_assignments_tenant_employee_idx').on(t.tenantId, t.employeeId),
     foreignKey({ columns: [t.tenantId, t.taskId], foreignColumns: [tasks.tenantId, tasks.id], name: 'task_assignments_task_fk' }).onDelete('cascade'),
     foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'task_assignments_employee_fk' }).onDelete('cascade'),
+    check('task_assignments_limit_ck', sql`${t.hourLimit} is null or (${t.hourLimit} between 0.25 and 9999 and mod(${t.hourLimit} * 4, 1) = 0)`),
+  ],
+);
+
+/**
+ * Stand-in hours per person and task (CD-147) until milestone 15 brings time entries: only the
+ * integration tests write it, and `taskHours` (task-hours.ts) is the one place that reads logged and
+ * approved hours, so milestone 15 swaps that read and drops this table.
+ */
+export const taskTimeFixtures = pgTable(
+  'task_time_fixtures',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    taskId: uuid('task_id').notNull(),
+    employeeId: uuid('employee_id').notNull(),
+    hours: numeric('hours', { precision: 6, scale: 2, mode: 'number' }).notNull(),
+    approved: boolean('approved').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('task_time_fixtures_task_idx').on(t.tenantId, t.taskId),
+    foreignKey({ columns: [t.tenantId, t.taskId], foreignColumns: [tasks.tenantId, tasks.id], name: 'task_time_fixtures_task_fk' }).onDelete('cascade'),
   ],
 );

@@ -67,9 +67,19 @@ export const ListTasksQuery = z.object({
 });
 export type ListTasksQuery = z.infer<typeof ListTasksQuery>;
 
-/** POST /api/tasks/:id/assignees: employees to add (already active ones: 409). */
-export const AssignTask = z.object({ employeeIds: z.array(z.uuid()).min(1, 'Pick at least one person').max(50) });
+/**
+ * POST /api/tasks/:id/assignees: employees to add (already active ones: 409), with an optional
+ * hour limit each (CD-147; the lead, owners and admins set limits). At most 50 people on a task.
+ */
+export const AssignTask = z.object({
+  employeeIds: z.array(z.uuid()).min(1, 'Pick at least one person').max(50, 'At most 50 people on one task'),
+  hourLimits: z.record(z.uuid(), quarterHours).optional(),
+});
 export type AssignTask = z.infer<typeof AssignTask>;
+
+/** PATCH /api/tasks/:id/assignees/:employeeId: their hour limit (null: no limit). The lead, owners and admins. */
+export const SetHourLimit = z.object({ hourLimit: quarterHours.nullable() });
+export type SetHourLimit = z.infer<typeof SetHourLimit>;
 
 /** GET /api/tasks/:id/history. */
 export const TaskHistoryQuery = z.object({

@@ -9,7 +9,7 @@ import { CrmModule } from './modules/crm';
 import { IdentityModule } from './modules/identity';
 import { NotificationsDevModule, NotificationsModule } from './modules/notifications';
 import { PeopleDevModule, PeopleModule } from './modules/people';
-import { ProjectsModule } from './modules/projects';
+import { ProjectsDevModule, ProjectsModule } from './modules/projects';
 import { RealtimeModule } from './modules/realtime';
 import { AuditModule } from './shared/audit/audit.module';
 import { DatabaseModule } from './shared/database/database.module';
@@ -35,8 +35,9 @@ import { RateLimitModule } from './shared/rate-limit';
     PeopleModule,
     ProjectsModule,
     // Development only: the emails the log mail driver "sent" (GET /api/dev/mail), and sending
-    // your daily digest now (POST /api/dev/digest), and the daily deactivation job (POST /api/dev/people/deactivate-due).
-    ...(loadEnv().AUTH_MODE === 'dev' ? [DevMailModule, NotificationsDevModule, PeopleDevModule] : []),
+    // your daily digest now (POST /api/dev/digest), the daily deactivation job (POST /api/dev/people/deactivate-due),
+    // and stand-in hours on a task until time entries exist (POST /api/dev/tasks/:id/hours, CD-147).
+    ...(loadEnv().AUTH_MODE === 'dev' ? [DevMailModule, NotificationsDevModule, PeopleDevModule, ProjectsDevModule] : []),
     RealtimeModule,
   ],
   controllers: [HealthController],

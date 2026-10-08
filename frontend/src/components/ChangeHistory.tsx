@@ -261,6 +261,15 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
     }
     const field = e.field ?? '';
     const sameMoment = (f: string) => all.find((x) => x.field === f && x.changedAt === e.changedAt);
+    // A person's hour limit on a task (CD-147), labelled with the person.
+    if (field === 'hourLimit') {
+      const h = (v: unknown) => (v == null ? 'no limit' : `${Number(v)} h`);
+      return (
+        <>
+          Hour limit for {e.label ?? 'someone'}: {h(e.oldValue)} → {h(e.newValue)}
+        </>
+      );
+    }
     if (field === 'lostReason') {
       const note = sameMoment('lostNote');
       if (e.newValue) return <>Marked as lost: {String(e.newValue)}{note?.newValue ? <> · “{clip(String(note.newValue))}”</> : null}</>;

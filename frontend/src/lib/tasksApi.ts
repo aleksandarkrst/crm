@@ -27,6 +27,8 @@ export interface ApiTaskAssignee {
   hasAccount: boolean;
   /** Left the company. */
   formerMember: boolean;
+  /** Their hour limit on this task (CD-147); null: no limit. */
+  hourLimit: number | null;
 }
 
 export interface ApiTask {
@@ -57,6 +59,27 @@ export interface ApiTask {
   access: 'act' | 'read';
   /** May delete it or move it to another project (the lead, owners and admins). */
   canManage: boolean;
+}
+
+/** One person on the People and hours card (CD-147). Hidden hours (`visible: false`) are null. */
+export interface ApiHoursRow {
+  employeeId: string;
+  name: string;
+  jobTitle: string | null;
+  active: boolean;
+  formerMember: boolean;
+  hourLimit: number | null;
+  visible: boolean;
+  logged: number | null;
+  approved: number | null;
+  remaining: number | null;
+  usedPercent: number | null;
+  level: 'neutral' | 'amber' | 'red' | null;
+  over: boolean;
+}
+export interface ApiTaskHours {
+  rows: ApiHoursRow[];
+  total: { logged: number; approved: number; taskLimit: number | null; remaining: number | null; someWithoutLimit: boolean };
 }
 
 export interface NewTaskInput {
@@ -112,6 +135,9 @@ export const tasksApi = {
   update: (id: string, patch: TaskPatch) => api<ApiTask>(`/tasks/${id}`, { method: 'PATCH', json: patch }),
   remove: (id: string) => api<null>(`/tasks/${id}`, { method: 'DELETE' }),
   // Assignees: each change answers with the task.
-  assign: (id: string, employeeIds: string[]) => api<ApiTask>(`/tasks/${id}/assignees`, { method: 'POST', json: { employeeIds } }),
+  /** `hourLimits`: employee id → hours (the lead, owners and admins, CD-147). */
+  assign: (id: string, employeeIds: string[], hourLimits?: Record<string, number>) => api<ApiTask>(`/tasks/${id}/assignees`, { method: 'POST', json: { employeeIds, hourLimits } }),
+  setHourLimit: (id: string, employeeId: string, hourLimit: number | null) => api<ApiTask>(`/tasks/${id}/assignees/${employeeId}`, { method: 'PATCH', json: { hourLimit } }),
+  hours: (id: string) => api<ApiTaskHours>(`/tasks/${id}/hours`),
   unassign: (id: string, employeeId: string) => api<ApiTask>(`/tasks/${id}/assignees/${employeeId}`, { method: 'DELETE' }),
 };

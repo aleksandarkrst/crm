@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } fr
 import { RequireTenant, Tenant, type TenantContext } from '../../shared/authorization';
 import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
-import { AssignTask, CreateTask, ListTasksQuery, TaskHistoryQuery, UpdateTask } from './tasks.schemas';
+import { AssignTask, CreateTask, ListTasksQuery, SetHourLimit, TaskHistoryQuery, UpdateTask } from './tasks.schemas';
 import { TasksService } from './tasks.service';
 
 const Id = new ZodPipe(UuidParam);
@@ -12,7 +12,7 @@ const Id = new ZodPipe(UuidParam);
  * are in task-access.ts). A task: `{ id, number, name, projectId, projectName, projectCode,
  * projectStatus, projectLeadUserId, companyId, companyName, stageId, stageName, stagePosition,
  * status, onHoldReason, description, startDate, dueDate, estimateHours, doneAt, createdAt, version,
- * assignees: { employeeId, name, jobTitle, active, hasAccount, formerMember }[], access: 'act' |
+ * assignees: { employeeId, name, jobTitle, active, hasAccount, formerMember, hourLimit }[], access: 'act' |
  * 'read', canManage }`. Changes answer with the task.
  */
 @Controller('tasks')
@@ -56,6 +56,22 @@ export class TasksController {
   @Post(':id/assignees')
   assign(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(AssignTask)) body: AssignTask) {
     return this.tasks.assign(ctx, id, body);
+  }
+
+  /** Someone's hour limit (CD-147): the lead, owners and admins. Answers with the task. */
+  @Patch(':id/assignees/:employeeId')
+  setHourLimit(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Param('employeeId', Id) employeeId: string, @Body(new ZodPipe(SetHourLimit)) body: SetHourLimit) {
+    return this.tasks.setHourLimit(ctx, id, employeeId, body);
+  }
+
+  /**
+   * The People and hours card (CD-147): `{ rows: { employeeId, name, jobTitle, active, formerMember,
+   * hourLimit, visible, logged, approved, remaining, usedPercent, level, over }[], total: { logged,
+   * approved, taskLimit, remaining, someWithoutLimit } }`. Hidden hours are null.
+   */
+  @Get(':id/hours')
+  hours(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.tasks.hours(ctx, id);
   }
 
   @Delete(':id/assignees/:employeeId')
