@@ -103,6 +103,8 @@ describe('org structure', () => {
       if (!saved) await new Promise((r) => setTimeout(r, 200));
     }
     assert.ok(saved, 'ceoEmployeeId saved');
+    // Setting the CEO fills in missing managers (CD-228): Petar, alone in Service (no lead), now reports to the CEO.
+    assert.equal((await card(id.petar)).managerId, id.ana);
     assert.ok(!(await card(id.ana)).hr.dataIssues.includes('no_manager'));
     await openOrg();
     await page.waitForSelector(`[data-testid=org-company] [data-testid=org-person][data-id="${id.ana}"]`);
@@ -190,14 +192,14 @@ describe('org structure', () => {
     await click(page, '[data-testid=org-filter-issues]');
     await click(page, '.org-multi-item::-p-text(No manager)');
     await page.waitForFunction(() => new URLSearchParams(location.search).get('issues') === 'no_manager');
-    // The CEO (Ana) is not "No manager".
-    await page.waitForFunction(() => document.querySelector('[data-testid=org-count]').textContent === '2 employees');
-    assert.deepEqual(await listNames(), ['Petar Lukić', 'Olga Owner']);
+    // The CEO (Ana) is not "No manager", and Petar got the CEO when she was set (CD-228); Olga has no unit, so she keeps none.
+    await page.waitForFunction(() => document.querySelector('[data-testid=org-count]').textContent === '1 employee');
+    assert.deepEqual(await listNames(), ['Olga Owner']);
     await click(page, '[data-testid=org-filter-status]');
     await click(page, '.org-multi-item::-p-text(Inactive)');
     await page.waitForFunction(() => new URLSearchParams(location.search).get('status') === 'active,leaving,inactive');
     await page.reload({ waitUntil: 'networkidle0' });
-    await page.waitForFunction(() => document.querySelector('[data-testid=org-count]')?.textContent === '2 employees');
+    await page.waitForFunction(() => document.querySelector('[data-testid=org-count]')?.textContent === '1 employee');
     assert.equal(await page.$eval('[data-testid=org-filter-issues]', (e) => e.textContent), 'Data issues: No manager');
     assert.equal(await page.$eval('[data-testid=org-filter-status]', (e) => e.textContent), 'Status: Active +2');
     // No pill buttons left for these filters.
