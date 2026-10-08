@@ -511,6 +511,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       if (e.type === 'resync' || e.type === 'project_type' || e.type === 'project') set((x) => ({ projectRev: x.projectRev + 1 }));
       // Tasks (CD-146) too, and when their project changes (its name, stage or status shows on them).
       if (e.type === 'resync' || e.type === 'task' || e.type === 'project' || e.type === 'project_type') set((x) => ({ taskRev: x.taskRev + 1 }));
+      // Work orders (CD-265), also when their project changes.
+      if (e.type === 'resync' || e.type === 'work_order' || e.type === 'project') set((x) => ({ workOrderRev: x.workOrderRev + 1 }));
       // People lists (Roles & permissions, CD-142) re-read on any employee or role change, this tab's own included.
       if (e.type === 'resync' || e.type === 'employee' || e.type === 'employee_role') set((x) => ({ peopleRev: x.peopleRev + 1 }));
       if (e.type === 'resync') return refreshAll();

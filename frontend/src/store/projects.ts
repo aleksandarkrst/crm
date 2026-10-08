@@ -23,7 +23,7 @@ export function useProjectsRead<T>(
   enabled: boolean,
   read: () => Promise<T>,
   key: string,
-  revKey: 'projectRev' | 'taskRev' = 'projectRev',
+  revKey: 'projectRev' | 'taskRev' | 'workOrderRev' = 'projectRev',
 ): { data: T | null; error: string | null; reload: () => Promise<void>; set: (data: T) => void } {
   const { s } = useStore();
   const rev = s[revKey];

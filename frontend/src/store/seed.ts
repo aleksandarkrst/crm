@@ -134,6 +134,7 @@ export function initialState(): State {
     newLeadOpen: false,
     newProject: null,
     newTask: null,
+    newWorkOrder: null,
     newLeadType: '',
     taskOpen: false,
     taskLeadId: '',
@@ -171,6 +172,7 @@ export function initialState(): State {
     orgRev: 0,
     projectRev: 0,
     taskRev: 0,
+    workOrderRev: 0,
     people: emptyPeople(),
     peopleRev: 0,
   };

@@ -160,7 +160,7 @@ describe('tasks', () => {
   step('"+" in Projects offers Task (K); Ctrl/⌘K finds a task by its ID', async () => {
     await page.goto(BASE_URL + '/tasks', { waitUntil: 'networkidle0' });
     await click(page, '[data-testid=new-menu]');
-    assert.deepEqual(await page.$$eval('.new-menu-pop [role=menuitem]', (els) => els.map((el) => el.getAttribute('data-testid'))), ['new-project', 'new-project-task']);
+    assert.deepEqual(await page.$$eval('.new-menu-pop [role=menuitem]', (els) => els.map((el) => el.getAttribute('data-testid'))), ['new-project', 'new-project-task', 'new-work-order']);
     await page.keyboard.press('k');
     await page.waitForSelector('[data-testid=task-project]');
     await click(page, 'button::-p-text(Cancel)');

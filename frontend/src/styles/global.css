@@ -1181,3 +1181,8 @@ a.task-card-project:hover { color: var(--brand); }
 .techs-table-inner { min-width: 640px; }
 .techs-table-inner > .table-head,
 .techs-table-inner > .table-row { grid-template-columns: minmax(200px, 1.6fr) minmax(130px, 1fr) minmax(210px, 1.2fr) 100px; }
+
+/* ---------------------------------------------------------------- work orders (CD-265) */
+.work-orders-table-inner { min-width: 980px; }
+.work-orders-table-inner > .table-head,
+.work-orders-table-inner > .table-row { grid-template-columns: 80px minmax(180px, 1.6fr) minmax(140px, 1.2fr) minmax(120px, 1fr) 110px minmax(150px, 1.1fr) 110px 140px; }

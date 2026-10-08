@@ -71,6 +71,7 @@ export function useCommands(): Command[] {
     // On a company's page or a won deal's, the project starts out for it (CD-234).
     { id: 'new-project', group: 'Create', label: 'Project', hint: 'Work for a company', key: 'J', icon: 'project', module: 'projects', keywords: 'new create add project delivery job', run: () => set({ newProject: deal?.outcome === 'won' ? { dealId: deal.id } : companyId ? { companyId } : {} }) },
     { id: 'new-project-task', group: 'Create', label: inProjects ? 'Task' : 'Project task', hint: 'Work on a project', key: 'K', icon: 'task', module: 'projects', keywords: 'new create add task project plan to-do todo', run: () => set({ newTask: projectId ? { projectId } : {} }) },
+    { id: 'new-work-order', group: 'Create', label: 'Work order', hint: 'Service work for a company', key: 'W', icon: 'task', module: 'projects', keywords: 'new create add work order service repair installation maintenance technician', run: () => set({ newWorkOrder: projectId ? { projectId } : companyId ? { companyId } : {} }) },
   ];
   const goTo: Command[] = [
     { id: 'go-overview', group: 'Go to', label: 'Overview', hint: 'Numbers and forecasts', icon: 'overview', keywords: 'dashboard reports', run: go(paths.overview) },
@@ -87,6 +88,7 @@ export function useCommands(): Command[] {
       : []),
     { id: 'go-projects', group: 'Go to', label: 'Projects', hint: 'Projects · board and list', icon: 'project', keywords: 'projects delivery board', run: go(paths.projects) },
     { id: 'go-tasks', group: 'Go to', label: 'Tasks', hint: 'Projects · kanban and table', icon: 'task', keywords: 'tasks project plan to-do todo kanban', run: go(paths.tasks) },
+    { id: 'go-work-orders', group: 'Go to', label: 'Work orders', hint: 'Projects · kanban and table', icon: 'task', keywords: 'work orders service technician repair installation kanban', run: go(paths.workOrders) },
     { id: 'go-org', group: 'Go to', label: 'Org structure', hint: 'Workforce · people and teams', icon: 'org', keywords: 'workforce people employees units departments teams chart', run: go(paths.org()) },
   ];
   const settings: Command[] = [
