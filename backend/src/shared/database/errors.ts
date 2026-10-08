@@ -45,6 +45,9 @@ const PEOPLE_RULES: Record<string, string> = {
 const PROJECT_RULES: Record<string, string> = {
   projects_dates_ck: "The end date can't be before the start date",
   projects_cancel_reason_ck: 'Only a cancelled project has a cancel reason',
+  tasks_dates_ck: "The due date can't be before the start date",
+  tasks_hold_reason_ck: 'A task on hold needs a reason, and only a task on hold has one',
+  tasks_estimate_ck: 'Use 0.25 to 9,999 hours in steps of 0.25',
 };
 
 function pgError(err: unknown): PgError | undefined {

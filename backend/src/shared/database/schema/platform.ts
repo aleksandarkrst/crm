@@ -108,6 +108,8 @@ export const memberships = pgTable(
     notifyVisitPlans: boolean('notify_visit_plans').notNull().default(true),
     // Email me about org changes: a new manager, a new direct report (milestone 13, spec 10.2).
     notifyOrgChanges: boolean('notify_org_changes').notNull().default(true),
+    // Email me when someone else assigns me to a task (CD-146).
+    notifyTaskAssigned: boolean('notify_task_assigned').notNull().default(true),
     /** The getting-started checklist (CD-68) is dismissed per user, so each admin decides for themselves. */
     onboardingDismissedAt: timestamp('onboarding_dismissed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

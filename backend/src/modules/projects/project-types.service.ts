@@ -4,7 +4,7 @@ import { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
-import { MAX_PROJECT_STAGES, MAX_PROJECT_TYPES, projects, projectStages, projectTypes } from '../../shared/database/schema';
+import { MAX_PROJECT_STAGES, MAX_PROJECT_TYPES, projects, projectStages, projectTypes, tasks } from '../../shared/database/schema';
 import { type TenantProvisioner, TenantProvisioning } from '../../shared/events/tenant-provisioning';
 import type { CreateProjectStage, CreateProjectType, DeleteProjectStageQuery, DeleteProjectTypeQuery, ReorderProjectStages, UpdateProjectStage, UpdateProjectType } from './projects.schemas';
 
@@ -100,6 +100,11 @@ export class ProjectTypesService implements TenantProvisioner, OnModuleInit {
           if (!query.moveProjectsTo) throw new ConflictException(`${type.name} has ${plural(type.projects, 'project')}. Pick a project type to move them to.`);
           const target = types.find((t) => t.id === query.moveProjectsTo && t.id !== id);
           if (!target) throw new BadRequestException('Pick another project type to move the projects to');
+          // Their tasks (CD-146) go to the same first stage; the old stages go with the type.
+          await tx
+            .update(tasks)
+            .set({ stageId: target.stages[0]!.id })
+            .where(inArray(tasks.projectId, tx.select({ id: projects.id }).from(projects).where(eq(projects.projectTypeId, id))));
           await tx.update(projects).set({ projectTypeId: target.id, stageId: target.stages[0]!.id }).where(eq(projects.projectTypeId, id));
         }
         await tx.delete(projectTypes).where(eq(projectTypes.id, id));
@@ -174,7 +179,9 @@ export class ProjectTypesService implements TenantProvisioner, OnModuleInit {
             throw new BadRequestException('Pick another stage of this project type to move the projects to');
           }
           await tx.update(projects).set({ stageId: query.moveProjectsTo }).where(eq(projects.stageId, stageId));
+          await tx.update(tasks).set({ stageId: query.moveProjectsTo }).where(eq(tasks.stageId, stageId));
         }
+        // Otherwise its tasks (CD-146) lose the stage (tasks_stage_fk: ON DELETE SET NULL).
         await tx.delete(projectStages).where(eq(projectStages.id, stageId));
         await tx
           .update(projectStages)

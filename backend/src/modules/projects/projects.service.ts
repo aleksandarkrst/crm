@@ -5,7 +5,7 @@ import { hasRole, type TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
 import { StorageService } from '../../infrastructure/storage/storage.service';
-import { companies, contacts, deals, memberships, projectAutoDeals, projectFiles, projects, projectStages, projectTypes, tenants, users } from '../../shared/database/schema';
+import { companies, contacts, deals, memberships, projectAutoDeals, projectFiles, projects, projectStages, projectTypes, tasks, tenants, users } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import type { CreateProject, ListProjectsQuery, UpdateProject } from './projects.schemas';
 
@@ -269,6 +269,8 @@ export class ProjectsService {
         }
 
         await tx.update(projects).set(patch).where(eq(projects.id, id));
+        // Another type: the tasks (CD-146) follow the project to its new stage, as their stages are the old type's.
+        if (input.projectTypeId && input.projectTypeId !== current.projectTypeId) await tx.update(tasks).set({ stageId: patch.stageId }).where(eq(tasks.projectId, id));
         await this.audit.record(tx, ctx, { action: 'project.updated', entityType: 'project', entityId: id, data: input });
         return this.find(tx, id);
       })
