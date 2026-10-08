@@ -85,6 +85,8 @@ export interface JobPayloads {
   'projects.project-created-from-deal': { tenantId: string; dealId: string; projectId: string; projectName: string; actorUserId: string };
   /** Sent by projects when a won deal created its project (CD-233): the projects worker emails the deal owner. */
   'projects.project-created-email': { tenantId: string; projectId: string; recipientUserId: string };
+  /** Sent by projects when someone assigns another person to a task (CD-146): the projects worker emails them, if they want it. */
+  'projects.task-assigned': { tenantId: string; taskId: string; recipientUserId: string; actorUserId: string };
   /** Scheduled nightly by the worker: fails document generations that were interrupted (CD-100). Placeholder for reporting snapshots. */
   'reporting.nightly': Record<string, never>;
 }
@@ -109,8 +111,9 @@ export const JOB_NAMES = [
   'people.reporting-line-changed',
   'projects.project-created-email',
   'projects.project-created-from-deal',
+  'projects.task-assigned',
   'reporting.nightly',
 ] as const satisfies readonly JobName[];
 
 /** Jobs that send email: retried MAIL_RETRY_LIMIT times with backoff from MAIL_RETRY_DELAY_SECONDS. */
-export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed', 'projects.project-created-email']);
+export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed', 'projects.project-created-email', 'projects.task-assigned']);

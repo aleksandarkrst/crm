@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { check, date, foreignKey, index, integer, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, date, foreignKey, index, integer, numeric, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { companies, deals } from './crm';
 import { employees } from './people';
 import { tenants, users } from './platform';
@@ -222,3 +222,93 @@ export const projectFiles = pgTable(
   ],
 );
 
+
+// ---------------------------------------------------------------- tasks (CD-146, design v2)
+
+/** A task's status (design v2 §3, §4): the Tasks kanban columns and the task page's status bar. */
+export const TASK_STATUSES = ['todo', 'in_progress', 'on_hold', 'done'] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+/** The On hold dialog's reason presets (design v2 §4); any other text is allowed too. */
+export const TASK_HOLD_REASONS = ['Waiting for the client', 'Waiting for another task', 'Waiting for access or keys', 'Assignee unavailable'] as const;
+/** At most this many people on one task (CD-147). */
+export const MAX_TASK_ASSIGNEES = 50;
+
+/**
+ * The last task number given out in a workspace (CD-146): tasks are numbered T-1, T-2, … per
+ * workspace and a number is never reused, also after a delete. One row per workspace, raised with
+ * `insert … on conflict do update … returning` in the transaction that creates the task.
+ */
+export const taskCounters = pgTable('task_counters', {
+  tenantId: uuid('tenant_id')
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  lastNumber: integer('last_number').notNull().default(0),
+});
+
+/**
+ * A task of a project (CD-146, design v2 §3, §4). It sits in one of the project type's stages
+ * (`stage_id`; cleared when that stage is deleted, set again when the project changes type) and has
+ * a status; On hold carries a reason. People work on it through `task_assignments`. Deleting the
+ * project deletes its tasks.
+ */
+export const tasks = pgTable(
+  'tasks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    /** "T-142": per workspace, from `task_counters`. */
+    number: integer('number').notNull(),
+    projectId: uuid('project_id').notNull(),
+    stageId: uuid('stage_id'),
+    name: text('name').notNull(),
+    status: text('status', { enum: TASK_STATUSES }).notNull().default('todo'),
+    /** Why the work is paused: set with status `on_hold`, cleared when it leaves On hold. */
+    onHoldReason: text('on_hold_reason'),
+    description: text('description'),
+    startDate: date('start_date'),
+    dueDate: date('due_date'),
+    estimateHours: numeric('estimate_hours', { precision: 6, scale: 2, mode: 'number' }),
+    /** When it was last marked Done (cleared on reopen). */
+    doneAt: timestamp('done_at', { withTimezone: true }),
+    createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (t) => [
+    unique('tasks_tenant_id_uq').on(t.tenantId, t.id),
+    unique('tasks_number_uq').on(t.tenantId, t.number),
+    index('tasks_tenant_project_idx').on(t.tenantId, t.projectId),
+    foreignKey({ columns: [t.tenantId, t.projectId], foreignColumns: [projects.tenantId, projects.id], name: 'tasks_project_fk' }).onDelete('cascade'),
+    check('tasks_name_ck', sql`length(btrim(${t.name})) between 1 and 200`),
+    check('tasks_status_ck', sql`${t.status} in ('todo', 'in_progress', 'on_hold', 'done')`),
+    check('tasks_hold_reason_ck', sql`(${t.status} = 'on_hold') = (${t.onHoldReason} is not null) and (${t.onHoldReason} is null or length(btrim(${t.onHoldReason})) between 1 and 200)`),
+    check('tasks_description_ck', sql`${t.description} is null or length(${t.description}) <= 10000`),
+    check('tasks_dates_ck', sql`${t.dueDate} is null or ${t.startDate} is null or ${t.dueDate} >= ${t.startDate}`),
+    check('tasks_estimate_ck', sql`${t.estimateHours} is null or (${t.estimateHours} between 0.25 and 9999 and mod(${t.estimateHours} * 4, 1) = 0)`),
+  ],
+);
+
+/**
+ * Who works on a task (CD-146, CD-147): employees from the org chart, with or without an account.
+ * One row per person and task; removing someone sets `active = false` and keeps the row, so their
+ * hours stay in the totals ("Not assigned any more"). Deleting the task or the employee removes it.
+ */
+export const taskAssignments = pgTable(
+  'task_assignments',
+  {
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    taskId: uuid('task_id').notNull(),
+    employeeId: uuid('employee_id').notNull(),
+    active: boolean('active').notNull().default(true),
+    assignedByUserId: uuid('assigned_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow(),
+    ...timestamps,
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.taskId, t.employeeId], name: 'task_assignments_pk' }),
+    index('task_assignments_tenant_employee_idx').on(t.tenantId, t.employeeId),
+    foreignKey({ columns: [t.tenantId, t.taskId], foreignColumns: [tasks.tenantId, tasks.id], name: 'task_assignments_task_fk' }).onDelete('cascade'),
+    foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'task_assignments_employee_fk' }).onDelete('cascade'),
+  ],
+);

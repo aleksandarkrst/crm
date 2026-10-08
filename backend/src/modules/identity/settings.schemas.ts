@@ -71,6 +71,7 @@ export const UpdateProfile = z
     notifyMeetingInvites: z.boolean(),
     notifyVisitPlans: z.boolean(),
     notifyOrgChanges: z.boolean(),
+    notifyTaskAssigned: z.boolean(),
   })
   .partial()
   .refine(atLeastOne, 'Nothing to update');

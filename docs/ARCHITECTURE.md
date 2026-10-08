@@ -1214,6 +1214,48 @@ and no "hours" are shown anywhere.
   - **Ctrl/⌘K** finds projects by code, name or company (read while the palette is open).
   - **Settings → Workspace**: "Create a project when a deal is won" (owners and admins).
 
+### Tasks (CD-146)
+
+- **Tables** (`drizzle/0061` generated, `0062` custom):
+  - `tasks`: a number per workspace (T-1, T-2, …), the project, a stage of the project's type
+    (`tasks_stage_fk`, `ON DELETE SET NULL (stage_id)`), name, status `todo | in_progress | on_hold
+    | done` (On hold carries `on_hold_reason`, a check keeps the two together), description,
+    start/due (due not before start), estimate (0.25 to 9,999 h in quarter hours), `done_at`.
+  - `task_counters`: the last number per workspace, raised with `insert … on conflict do update …
+    returning` in the creating transaction, so a number is never reused, also after a delete.
+  - `task_assignments`: one row per person and task (employees, with or without an account).
+    Removing someone sets `active = false` and keeps the row ("Not assigned any more"; their hours
+    stay in totals once time entries exist).
+  - RLS, version triggers, history (`record_changes`, entity `task`; assignees as
+    `participant_added` / `participant_removed` from `projects_record_assignment_changes()`, like a
+    meeting's participants) and live hints `task` (assignees report their task).
+- **Follows the project:** a new task starts at the project's current stage; when the project
+  changes type its tasks move to the new stage; deleting a stage moves its tasks with its projects
+  (or clears their stage), deleting a type moves them to the target type's first stage. Deleting the
+  project deletes its tasks.
+- **Visibility** (`task-access.ts`, pure and unit-tested): owners and admins, the project lead, the
+  project team, the task's active assignees and their direct managers act; their indirect managers
+  only read (403 on changes). Everyone else gets 404, and `GET /api/tasks` filters with the same
+  rules in SQL (`visibleWhere`), so lists and search never show a hidden task. The Administration
+  role is gone (CD-225), so admins cover HR's view.
+- **Who changes what:** the team, the lead and admins create tasks; anyone who can act edits one.
+  Owners, admins and the lead assign anyone, a direct manager their direct reports, and everyone
+  themselves. The lead (of both projects, to move it) and admins move and delete a task. Delete
+  becomes "Close it instead" (409) once time entries exist (milestone 15).
+- **API:** `GET/POST /api/tasks` (`?projectId=`, `?assigneeId=<id|me>`, `?status=`, `?q=`: name,
+  "T-12", project), `GET/PATCH/DELETE /api/tasks/:id`, `POST /api/tasks/:id/assignees`, `DELETE
+  …/assignees/:employeeId`, `GET …/history` (the CRM history's shape, with stage and project names;
+  the CRM history endpoint never serves tasks), `GET /api/tasks/loggable` (the caller's own). Each
+  task says the caller's `access` (`act` / `read`) and `canManage`.
+- **Time (milestone 15):** `canLogTime(tx, employeeId, taskId, date, hours)` and
+  `loggableTasks(tx, employeeId)` are exported from `modules/projects` (`task-log.ts`): an active
+  assignee, a task that isn't Done, an open project. Timesheets use these and don't reimplement the
+  rule; CD-147 adds the per-person hour limit.
+- **Email "Assigned to a task"** (job `projects.task-assigned`, projects worker): to someone with an
+  account assigned by another person, when they're still on the task and `memberships.
+  notify_task_assigned` is on (read when sending). Number, name, project, company, due date and a
+  link to `/tasks/:id`.
+
 ## Products, deal products and currency (CD-83)
 
 Replaces the CD-77 model (products with a currency of their own, payment schedules and
