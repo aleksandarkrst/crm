@@ -220,7 +220,8 @@ function useDirectory() {
   useEffect(() => {
     orgApi
       .directory()
-      .then((rows) => setPeople(rows.filter((r) => r.status !== 'inactive')))
+      // Tasks go to office staff (CD-268): Office and Both; Service people get work orders.
+      .then((rows) => setPeople(rows.filter((r) => r.status !== 'inactive' && r.workType !== 'service')))
       .catch((err: unknown) => setError(projectError(err)));
   }, []);
   return { people, error };

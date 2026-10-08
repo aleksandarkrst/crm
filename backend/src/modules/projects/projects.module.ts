@@ -9,6 +9,7 @@ import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
 import { TaskNotesService } from './task-notes.service';
 import { TasksController } from './tasks.controller';
+import { TechniciansController } from './technicians.controller';
 import { TasksService } from './tasks.service';
 
 /**
@@ -18,7 +19,7 @@ import { TasksService } from './tasks.service';
  */
 @Module({
   imports: [PeopleModule],
-  controllers: [ProjectTypesController, ProjectsController, ProjectFilesController, TasksController],
+  controllers: [ProjectTypesController, ProjectsController, ProjectFilesController, TasksController, TechniciansController],
   providers: [ProjectTypesService, ProjectsService, ProjectMembersService, ProjectFilesService, TasksService, TaskNotesService],
 })
 export class ProjectsModule {}

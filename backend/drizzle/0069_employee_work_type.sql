@@ -1,0 +1,2 @@
+ALTER TABLE "employees" ADD COLUMN "work_type" text DEFAULT 'office' NOT NULL;--> statement-breakpoint
+ALTER TABLE "employees" ADD CONSTRAINT "employees_work_type_ck" CHECK ("employees"."work_type" in ('office', 'service', 'both'));

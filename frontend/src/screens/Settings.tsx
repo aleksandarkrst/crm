@@ -13,6 +13,7 @@ import { useStore } from '../store/store';
 import { TemplatesTab } from './DocumentTemplates';
 import { EmployeesTab } from './settings/EmployeesTab';
 import { ProjectTypesTab } from './settings/ProjectTypesTab';
+import { TechniciansTab } from './settings/TechniciansTab';
 import { RolesTab } from './settings/RolesTab';
 import type { TeamMember } from '../store/types';
 
@@ -38,6 +39,7 @@ const TABS = [
     description:
       "A project type is a set of stages for one kind of project, like a funnel in the CRM. Each project is on one board: it shows in that board's columns, and its tasks are grouped by the same stages in the plan. Complete and Cancel are always available and are not stages.",
   },
+  { k: 'technicians', group: 'Projects', label: 'Technicians', description: 'What each person can be given: project tasks, work orders or both.' },
   { k: 'employees', group: 'Workforce', label: 'Employees', description: 'What new employees start with and what employees may change themselves.' },
 ] as const;
 type Tab = (typeof TABS)[number]['k'];
@@ -52,7 +54,7 @@ export function Settings() {
   const [inviteOpen, setInviteOpen] = useState(() => tab === 'team' && params.get('invite') === '1' && session.tenant.role !== 'member');
   // Members don't see the sales bonus rules (CD-17): no tab, and its route goes back to Settings.
   // Settings → Employees (CD-215) is for Admins (workspace owners and admins).
-  const tabs = TABS.filter((t) => (t.k !== 'bonuses' || canSeeBonuses) && (t.k !== 'employees' || canEditWorkspace));
+  const tabs = TABS.filter((t) => (t.k !== 'bonuses' || canSeeBonuses) && (t.k !== 'employees' || canEditWorkspace) && (t.k !== 'technicians' || canEditWorkspace));
   if (!tabs.some((t) => t.k === tab)) return <Navigate to={paths.settings()} replace />;
   const current = tab as Tab;
   const section = tabs.find((t) => t.k === current)!;
@@ -116,6 +118,7 @@ export function Settings() {
           {current === 'employees' && <EmployeesTab />}
           {current === 'funnel' && <FunnelBuilder />}
           {current === 'project-types' && <ProjectTypesTab />}
+          {current === 'technicians' && <TechniciansTab />}
           {current === 'templates' && <TemplatesTab />}
           {current === 'fields' && <FieldsTab />}
           {current === 'bonuses' && <BonusesTab />}

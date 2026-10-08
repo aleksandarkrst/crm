@@ -1090,6 +1090,8 @@ export interface ApiEmployee {
   workEmail: string | null;
   workPhone: string | null;
   workLocation: string | null;
+  /** What they can be given (CD-268). */
+  workType: WorkType;
   status: ApiEmployeeStatus;
   /** Self, managers above them, Admins. */
   employment?: ApiEmployment;
@@ -1186,6 +1188,9 @@ export type FunctionalRole = 'employee' | 'manager' | 'admin';
 export type EmployeeStatus = 'active' | 'leaving' | 'inactive';
 export type EmployeeAccount = 'linked' | 'invited' | 'none';
 export type EmploymentType = 'permanent' | 'fixed_term' | 'contractor' | 'student';
+/** Work type (CD-268): Office gets project tasks, Service work orders, Both either. */
+export type WorkType = 'office' | 'service' | 'both';
+export const WORK_TYPE_LABEL: Record<WorkType, string> = { office: 'Office', service: 'Service', both: 'Both' };
 export type LeavingReason = 'resigned' | 'contract_ended' | 'dismissed' | 'retired' | 'other';
 
 /** The fields of an employee card the API takes (PATCH /people/employees/:id) and names in history and `editableFields`. */
@@ -1202,6 +1207,7 @@ export type EmployeeField =
   | 'weeklyHours'
   | 'timesheetRequired'
   | 'attendanceTracked'
+  | 'workType'
   | 'unitId'
   | 'managerId'
   | 'dateOfBirth'
@@ -1254,6 +1260,8 @@ export interface ApiEmployeeCard {
   workEmail: string | null;
   workPhone: string | null;
   workLocation: string | null;
+  /** What they can be given (CD-268). */
+  workType: WorkType;
   status: EmployeeStatus;
   /** Send back as If-Match. */
   version: string;

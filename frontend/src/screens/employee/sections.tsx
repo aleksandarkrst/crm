@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { askConfirm } from '../../components/ConfirmDialog';
-import type { ApiApprovals, ApiEmployeeCard, ApiPeopleHistoryEntry, EmployeePatch, EmploymentType } from '../../lib/api';
+import { type ApiApprovals, type ApiEmployeeCard, type ApiPeopleHistoryEntry, type EmployeePatch, type EmploymentType, WORK_TYPE_LABEL, type WorkType } from '../../lib/api';
 import { formatIban, INVALID_ACCOUNT_MESSAGE, isSwiftBic, parseBankAccount } from '../../lib/iban';
 import { paths } from '../../lib/paths';
 import { EMPLOYMENT_TYPE_LABEL, LEAVING_REASON_LABEL } from '../../store/employeeCard';
@@ -12,6 +12,8 @@ import { CheckField, dateLabel, EditableSection, FIELD_LABEL, Row, SelectField, 
 
 const str = (v: string | number | null | undefined) => (v === null || v === undefined ? '' : String(v));
 const EMPLOYMENT_OPTIONS = (Object.keys(EMPLOYMENT_TYPE_LABEL) as EmploymentType[]).map((value) => ({ value, label: EMPLOYMENT_TYPE_LABEL[value] }));
+/** Work type (CD-268): the same field as Settings → Technicians. */
+const WORK_TYPE_OPTIONS = (Object.keys(WORK_TYPE_LABEL) as WorkType[]).map((value) => ({ value, label: WORK_TYPE_LABEL[value] }));
 
 // ------------------------------------------------------------------ Work (spec 4.2)
 
@@ -40,6 +42,7 @@ export function cardInitial(card: ApiEmployeeCard): Draft {
           employmentStartDate: str(e.startDate),
           employmentType: e.type,
           weeklyHours: str(e.weeklyHours),
+          workType: card.workType,
           // Timesheet required: a future feature (CD-225, everyone fills in a timesheet for now). The
           // column and the API stay (default Yes); the card doesn't show or send it.
           // timesheetRequired: e.timesheetRequired,
@@ -129,7 +132,7 @@ export function WorkSection({ card }: { card: ApiEmployeeCard }) {
     <EditableSection
       title="Work"
       testId="emp-work"
-      fields={['firstName', 'lastName', 'jobTitle', 'workEmail', 'workPhone', 'workLocation', 'unitId', 'managerId', 'employeeNumber', 'employmentStartDate', 'employmentType', 'weeklyHours']}
+      fields={['firstName', 'lastName', 'jobTitle', 'workEmail', 'workPhone', 'workLocation', 'unitId', 'managerId', 'employeeNumber', 'employmentStartDate', 'employmentType', 'weeklyHours', 'workType']}
       view={
         <>
           <Row label="Job title">
@@ -161,6 +164,9 @@ export function WorkSection({ card }: { card: ApiEmployeeCard }) {
               </Row>
               <Row label="Employment type">{EMPLOYMENT_TYPE_LABEL[e.type]}</Row>
               <Row label="Weekly hours">{e.weeklyHours}</Row>
+              <Row label="Work type" testId="emp-work-type">
+                {WORK_TYPE_LABEL[card.workType]}
+              </Row>
               {/* Timesheet required: a future feature (CD-225). <Row label="Timesheet required">{e.timesheetRequired ? 'Yes' : 'No'}</Row> */}
               {e.endDate && <Row label="Employment end date">{dateLabel(e.endDate)}</Row>}
               {e.leavingReason && <Row label="Reason for leaving">{LEAVING_REASON_LABEL[e.leavingReason]}</Row>}
@@ -191,6 +197,7 @@ export function WorkSection({ card }: { card: ApiEmployeeCard }) {
                 <TextField field="employmentStartDate" type="date" draft={draft} setField={setField} can={can} />
                 <SelectField field="employmentType" draft={draft} setField={setField} can={can} options={EMPLOYMENT_OPTIONS} />
                 <TextField field="weeklyHours" type="number" draft={draft} setField={setField} can={can} />
+                <SelectField field="workType" draft={draft} setField={setField} can={can} options={WORK_TYPE_OPTIONS} />
                 {/* Timesheet required: a future feature (CD-225). <CheckField field="timesheetRequired" draft={draft} setField={setField} can={can} /> */}
                 {e.endDate && <Row label="Employment end date">{dateLabel(e.endDate)}</Row>}
                 {e.leavingReason && <Row label="Reason for leaving">{LEAVING_REASON_LABEL[e.leavingReason]}</Row>}

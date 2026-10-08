@@ -21,6 +21,8 @@ export interface ApiDirectoryRow {
   status: 'active' | 'leaving' | 'inactive';
   /** Their member account; null: "No account yet" (no emails). */
   userId: string | null;
+  /** What they can be given (CD-268): task pickers list Office and Both, work order pickers Service and Both. */
+  workType: 'office' | 'service' | 'both';
 }
 
 export interface ApiPeopleAccess {
