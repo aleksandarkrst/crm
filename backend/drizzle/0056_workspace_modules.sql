@@ -1,0 +1,2 @@
+ALTER TABLE "tenants" ADD COLUMN "modules" text[] DEFAULT '{planning,crm,projects,workforce,finance,reporting}'::text[] NOT NULL;--> statement-breakpoint
+ALTER TABLE "tenants" ADD CONSTRAINT "tenants_modules_ck" CHECK ("tenants"."modules" <@ '{planning,crm,projects,workforce,finance,reporting}'::text[]);

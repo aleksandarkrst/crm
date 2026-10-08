@@ -270,6 +270,8 @@ export interface Workspace {
   ceoEmployeeId: string | null;
   /** "Create a project when a deal is won" (CD-233): the projects worker creates the deal's project. */
   autoCreateProjects: boolean;
+  /** The modules turned on for this workspace (CD-279, Settings → General → Modules). */
+  modules: string[];
 }
 
 /** The signed-in user's profile (see ApiProfile). */

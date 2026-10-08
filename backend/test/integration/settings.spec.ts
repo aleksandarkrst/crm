@@ -33,6 +33,20 @@ describe('workspace settings', () => {
     expect(ws.name).toContain('Settings');
   });
 
+  it('modules: all on by default; owners and admins turn them off; GET /me lists them per workspace (CD-279)', async () => {
+    const all = ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting'];
+    expect((await ok('GET', '/workspace', as(member))).modules).toEqual(all);
+    expect((await call('PATCH', '/workspace', { ...as(member), body: { modules: ['crm'] } })).status).toBe(403);
+    expect((await call('PATCH', '/workspace', { ...as(admin), body: { modules: ['crm', 'service'] } })).status).toBe(400);
+    expect((await call('PATCH', '/workspace', { ...as(admin), body: { modules: ['crm', 'crm'] } })).status).toBe(400);
+    expect((await ok('PATCH', '/workspace', { ...as(admin), body: { modules: ['crm', 'projects'] } })).modules).toEqual(['crm', 'projects']);
+    const me = await ok('GET', '/me', { token: member.token });
+    expect(me.tenants.find((t: { id: string }) => t.id === tenant).modules).toEqual(['crm', 'projects']);
+    // None is allowed too (the switcher then says the workspace has no modules turned on).
+    expect((await ok('PATCH', '/workspace', { ...as(owner), body: { modules: [] } })).modules).toEqual([]);
+    await ok('PATCH', '/workspace', { ...as(owner), body: { modules: all } });
+  });
+
   it('owners and admins can change them, and the new name shows in GET /me', async () => {
     const name = `Renamed ${Date.now()}`;
     const ws = await ok('PATCH', '/workspace', { ...as(owner), body: { name, currency: 'rsd', timezone: 'Europe/London', fiscalYearStartMonth: 4 } });

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { FieldRow, GhostInput, GhostSelect, Modal, ModalHeader, RemoveButton, Switch } from '../components/ui';
 import { Screen } from '../components/Layout';
+import { MODULES, WORKSPACE_MODULES } from '../components/modules';
 import { paths } from '../lib/paths';
 import { canManageTemplates } from '../store/documents';
 import { ACTIVITIES, CHANNEL_LABELS, CHANNELS, CURRENCIES, DOCS, FIELD_TYPES, TEAM_ROLES } from '../store/seed';
@@ -157,6 +158,21 @@ function WorkspaceTab() {
         />
       </FieldRow>
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>Language of the fixed text in emails to customers, such as meeting minutes.</span>
+      <FieldRow label="Modules">
+        <span data-testid="workspace-modules" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 18px', padding: '6px 0' }}>
+          {WORKSPACE_MODULES.map((id) => {
+            const on = w.modules.includes(id);
+            const name = MODULES.find((m) => m.id === id)?.name ?? id;
+            return (
+              <span key={id} data-module={id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Switch on={on} disabled={ro} label={`${name} in this workspace`} onClick={() => setWorkspace({ modules: WORKSPACE_MODULES.filter((m) => (m === id ? !on : w.modules.includes(m))) })} />
+                <span style={{ fontSize: 13 }}>{name}</span>
+              </span>
+            );
+          })}
+        </span>
+      </FieldRow>
+      <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>Modules that are off show as "Not in this workspace" in the module switcher. Their data is kept.</span>
       <FieldRow label="Projects">
         <span data-testid="auto-create-projects" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
           <Switch on={w.autoCreateProjects} disabled={ro} onClick={() => setWorkspace({ autoCreateProjects: !w.autoCreateProjects })} label="Create a project when a deal is won" />

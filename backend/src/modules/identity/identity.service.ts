@@ -128,6 +128,7 @@ export class IdentityService {
         slug: tenants.slug,
         role: memberships.role,
         memberCount: sql<number>`(select count(*)::int from memberships m where m.tenant_id = ${tenants.id})`,
+        modules: tenants.modules,
       })
       .from(memberships)
       .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
@@ -147,7 +148,7 @@ export class IdentityService {
       await tx.execute(sql`select set_config('app.tenant_id', ${tenant!.id}, true)`);
       await this.provisioning.run(tx, tenant!.id);
       await linkNewMember(tx, { tenantId: tenant!.id, userId });
-      return { id: tenant!.id, name: tenant!.name, slug: tenant!.slug, role: 'owner' as const, memberCount: 1 };
+      return { id: tenant!.id, name: tenant!.name, slug: tenant!.slug, role: 'owner' as const, memberCount: 1, modules: tenant!.modules };
     });
   }
 }
