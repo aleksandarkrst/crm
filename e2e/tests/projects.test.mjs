@@ -198,6 +198,19 @@ describe('projects', () => {
     assert.ok(await eventually(async () => (await api(page, `/projects/${projectId}/files`))[0]?.folder === 'Client material'));
   });
 
+  step('the Communication tab: the deal\'s emails, and New email logs one there (CD-271)', async () => {
+    await click(page, '[data-testid=project-tab-communication]');
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-comms]')?.innerText.includes('No emails on the deal yet.'));
+    await click(page, '[data-testid=new-email]');
+    await page.type('[data-testid=email-subject]', 'Kickoff dates');
+    await page.type('[data-testid=email-body]', 'Hi, can we start on Monday?');
+    await click(page, '[data-testid=send-email]');
+    await page.waitForFunction(() => document.querySelector('[data-testid=email-thread]')?.innerText.includes('Kickoff dates'));
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-tab-communication]')?.textContent === 'Communication · 1');
+    const logged = await eventually(async () => (await api(page, `/crm/deals/${dealId}/activities`)).some((a) => a.title === 'Email sent · Kickoff dates'));
+    assert.ok(logged, 'logged on the deal');
+  });
+
   step('another company clears the deal, after a confirmation (TC 5)', async () => {
     await setValue(page, '[data-testid=project-company-field]', beta.id);
     assert.equal(await confirmInApp(page), 'Move Service 2026 to Beta?');

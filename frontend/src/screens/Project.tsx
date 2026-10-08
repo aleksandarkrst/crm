@@ -7,9 +7,10 @@ import { Modal, ModalHeader } from '../components/ui';
 import { paths } from '../lib/paths';
 import { type ApiProject, type ApiProjectCancelReason, type ApiProjectHealth, PROJECT_CANCEL_REASONS, type ProjectPatch, projectsApi } from '../lib/projectsApi';
 import { projectError, useDealDocuments, useProject, useProjectFiles, useProjectMembers, useProjectTypes } from '../store/projects';
-import { companyLabels, companyRecords, curOf, memberLabels } from '../store/selectors';
+import { companyLabels, companyRecords, curOf, memberLabels, timelineFor } from '../store/selectors';
 import { useStore } from '../store/store';
 import { HEALTH_LABEL, ProjectStatusBadge, projectValue } from './lead/DealProjects';
+import { dealEmails, ProjectCommunication } from './project/ProjectCommunication';
 import { DropZone, ProjectDocuments, useFileUpload } from './project/ProjectDocuments';
 import { ProjectTeam } from './project/ProjectTeam';
 
@@ -28,14 +29,19 @@ import { ProjectTeam } from './project/ProjectTeam';
  */
 export function Project() {
   const { id = '' } = useParams();
-  const { s, session, flash } = useStore();
+  const { s, session, flash, ensureLog } = useStore();
   const navigate = useNavigate();
   const { data: project, error, set } = useProject(id);
   const { data: types } = useProjectTypes();
   const { data: team, set: setTeam } = useProjectMembers(id);
   const { data: files, set: setFiles } = useProjectFiles(id);
   const { data: dealDocs } = useDealDocuments(project?.dealId);
-  const [tab, setTab] = useState<'overview' | 'team' | 'documents'>('overview');
+  const [tab, setTab] = useState<'overview' | 'team' | 'communication' | 'documents'>('overview');
+  // The deal's timeline holds its emails (the Communication tab and its count).
+  const dealId = project?.dealId;
+  useEffect(() => {
+    if (dealId) ensureLog([dealId]);
+  }, [dealId, ensureLog]);
   const overviewUpload = useFileUpload(id, (f) => setFiles([f, ...(files ?? [])]));
   const [busy, setBusy] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -266,6 +272,7 @@ export function Project() {
                   [
                     ['overview', 'Overview'],
                     ['team', `Team · ${team?.length ?? 0}`],
+                    ['communication', `Communication · ${project.dealId ? dealEmails(timelineFor(s, project.dealId)).length : 0}`],
                     ['documents', `Documents · ${(files?.length ?? 0) + (dealDocs ?? []).filter((d) => d.status === 'ready').length}`],
                   ] as const
                 ).map(([k, label]) => (
@@ -292,6 +299,8 @@ export function Project() {
                   </>
                 ) : tab === 'team' ? (
                   <ProjectTeam projectId={project.id} team={team} canEdit={canEdit} onChange={setTeam} />
+                ) : tab === 'communication' ? (
+                  <ProjectCommunication project={project} />
                 ) : (
                   <ProjectDocuments
                     projectId={project.id}
