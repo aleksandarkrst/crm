@@ -101,6 +101,9 @@ const loadBonusRules = () => crmApi.bonusRules().catch((err: unknown) => (err in
 const loadOnboarding = () => crmApi.onboarding().catch((err: unknown) => (err instanceof ApiError && err.status === 403 ? null : Promise.reject(err)));
 
 /** Workspace settings. */
+/** Project / Projects / Task / Tasks: what a workspace calls them until it renames them (CD-143). */
+export const DEFAULT_TERMS = { project: 'Project', projects: 'Projects', task: 'Task', tasks: 'Tasks' } as const;
+
 export const mapWorkspace = (w: ApiWorkspace): Workspace => ({
   name: w.name,
   currency: w.currency,
@@ -113,6 +116,7 @@ export const mapWorkspace = (w: ApiWorkspace): Workspace => ({
   ceoEmployeeId: w.ceoEmployeeId ?? null,
   autoCreateProjects: w.autoCreateProjects ?? false,
   modules: w.modules ?? ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting'],
+  terms: w.terms ?? DEFAULT_TERMS,
 });
 
 export const mapProfile = (p: ApiProfile): Profile => ({

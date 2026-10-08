@@ -16,6 +16,7 @@ import { ProjectTypesTab } from './settings/ProjectTypesTab';
 import { TechniciansTab } from './settings/TechniciansTab';
 import { RolesTab } from './settings/RolesTab';
 import type { TeamMember } from '../store/types';
+import { useTerms } from '../store/terms';
 
 /**
  * The sections of Settings (CD-280), grouped by module in the left nav. Each has its own route
@@ -49,6 +50,9 @@ export function Settings() {
   const { tab = 'workspace' } = useParams();
   const navigate = useNavigate();
   const { s, set, session, flash, canEditFields, canSeeBonuses, canEditWorkspace } = useStore();
+  const terms = useTerms();
+  // "Project types" follows what the workspace calls projects (CD-143).
+  const labelOf = (t: (typeof TABS)[number]) => (t.k === 'project-types' ? `${terms.Project} types` : t.label);
   // `?invite=1` (Team tab): the Invite dialog opens, e.g. from "Invite a colleague" in a meeting's guests (CD-221).
   const [params] = useSearchParams();
   const [inviteOpen, setInviteOpen] = useState(() => tab === 'team' && params.get('invite') === '1' && session.tenant.role !== 'member');
@@ -85,7 +89,7 @@ export function Settings() {
                 .filter((t) => t.group === g)
                 .map((t) => (
                   <button key={t.k} type="button" className={'settings-nav-item' + (t.k === current ? ' on' : '')} aria-current={t.k === current ? 'page' : undefined} data-section={t.k} onClick={() => navigate(paths.settings(t.k))}>
-                    {t.label}
+                    {labelOf(t)}
                   </button>
                 ))}
             </div>
@@ -94,7 +98,7 @@ export function Settings() {
         <div className="settings-content" data-testid="settings-content">
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap', marginBottom: 16 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 320px', minWidth: 0 }}>
-              <h2 className="settings-title">{section.label}</h2>
+              <h2 className="settings-title">{labelOf(section)}</h2>
               <span className="settings-description">{section.description}</span>
             </div>
             {action && (

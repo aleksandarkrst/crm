@@ -9,24 +9,35 @@ import type { JobPayloads } from '../../shared/events/job-types';
 import { JobsService } from '../../shared/events/jobs.service';
 import { autoCreateFromWonDeal } from './projects.service';
 
+/** What the workspace calls projects and tasks (CD-143), e.g. "Project" or "Work order". */
+export interface Terms {
+  project: string;
+  task: string;
+}
+const DEFAULT_TERMS: Terms = { project: 'Project', task: 'Task' };
+/** "Work order" → "work order" inside a sentence; an acronym ("RFQ") stays as it is. */
+export const inSentence = (term: string) => (/^[A-Z][^A-Z]/.test(term) ? term[0]!.toLowerCase() + term.slice(1) : term);
+
 export interface ProjectCreatedEmailInput {
   to: string;
   recipientName: string | null;
   workspaceName: string;
   appUrl: string;
+  terms?: Terms;
   project: { id: string; name: string; company: string; dealTitle: string | null };
 }
 
 /** "Project created from a won deal" (CD-233, spec 3.2), to the deal's owner. */
-export function projectCreatedEmail({ to, recipientName, workspaceName, appUrl, project }: ProjectCreatedEmailInput): MailMessage {
+export function projectCreatedEmail({ to, recipientName, workspaceName, appUrl, project, terms = DEFAULT_TERMS }: ProjectCreatedEmailInput): MailMessage {
   const link = `${appUrl.replace(/\/+$/, '')}/projects/${project.id}`;
-  const subject = `Project created from a won deal: ${project.name}`;
+  const word = inSentence(terms.project);
+  const subject = `${terms.project} created from a won deal: ${project.name}`;
   const greeting = recipientName ? `Hi ${recipientName.split(' ')[0]},` : 'Hi,';
-  const intro = `${project.dealTitle ?? 'Your deal'} was won, so ${workspaceName} created the project ${project.name} for ${project.company}. You lead it.`;
+  const intro = `${project.dealTitle ?? 'Your deal'} was won, so ${workspaceName} created the ${word} ${project.name} for ${project.company}. You lead it.`;
   const footer = `You get this email because "Create a project when a deal is won" is on in Settings → Workspace for ${workspaceName}.`;
-  const text = [greeting, '', intro, '', `Open the project: ${link}`, '', footer].join('\n');
+  const text = [greeting, '', intro, '', `Open the ${word}: ${link}`, '', footer].join('\n');
   const html = layoutHtml(
-    [`<p style="margin:0 0 12px">${escapeHtml(greeting)}</p>`, `<p style="margin:0 0 12px">${escapeHtml(intro)}</p>`, buttonHtml('Open the project', link)].join('\n'),
+    [`<p style="margin:0 0 12px">${escapeHtml(greeting)}</p>`, `<p style="margin:0 0 12px">${escapeHtml(intro)}</p>`, buttonHtml(`Open the ${word}`, link)].join('\n'),
     footer,
     appUrl,
   );
@@ -39,22 +50,25 @@ export interface TaskAssignedEmailInput {
   actorName: string;
   workspaceName: string;
   appUrl: string;
+  terms?: Terms;
   task: { id: string; number: number; name: string; project: string; company: string; dueDate: string | null };
 }
 
 const dueLabel = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
 /** "Assigned to a task" (CD-146): number, name, project, company, due date and a link. */
-export function taskAssignedEmail({ to, recipientName, actorName, workspaceName, appUrl, task }: TaskAssignedEmailInput): MailMessage {
+export function taskAssignedEmail({ to, recipientName, actorName, workspaceName, appUrl, task, terms = DEFAULT_TERMS }: TaskAssignedEmailInput): MailMessage {
   const link = `${appUrl.replace(/\/+$/, '')}/tasks/${task.id}`;
-  const subject = `Assigned to a task: T-${task.number} ${task.name}`;
+  const word = inSentence(terms.task);
+  const article = /^[aeiou]/i.test(word) ? 'an' : 'a';
+  const subject = `Assigned to ${article} ${word}: T-${task.number} ${task.name}`;
   const greeting = recipientName ? `Hi ${recipientName.split(' ')[0]},` : 'Hi,';
-  const intro = `${actorName} assigned you to T-${task.number} ${task.name} on the project ${task.project} for ${task.company}.`;
+  const intro = `${actorName} assigned you to T-${task.number} ${task.name} on the ${inSentence(terms.project)} ${task.project} for ${task.company}.`;
   const due = task.dueDate ? `Due ${dueLabel(task.dueDate)}.` : 'No due date yet.';
   const footer = `You get this email because "Task assignments" is on in Settings → Notifications for ${workspaceName}.`;
-  const text = [greeting, '', intro, due, '', `Open the task: ${link}`, '', footer].join('\n');
+  const text = [greeting, '', intro, due, '', `Open the ${word}: ${link}`, '', footer].join('\n');
   const html = layoutHtml(
-    [`<p style="margin:0 0 12px">${escapeHtml(greeting)}</p>`, `<p style="margin:0 0 12px">${escapeHtml(intro)} ${escapeHtml(due)}</p>`, buttonHtml('Open the task', link)].join('\n'),
+    [`<p style="margin:0 0 12px">${escapeHtml(greeting)}</p>`, `<p style="margin:0 0 12px">${escapeHtml(intro)} ${escapeHtml(due)}</p>`, buttonHtml(`Open the ${word}`, link)].join('\n'),
     footer,
     appUrl,
   );
@@ -99,7 +113,7 @@ export class ProjectJobs implements OnApplicationBootstrap {
 
   async sendCreated({ tenantId, projectId, recipientUserId }: JobPayloads['projects.project-created-email']): Promise<void> {
     const [recipient] = await this.database.db
-      .select({ email: users.email, name: users.displayName, workspaceName: tenants.name })
+      .select({ email: users.email, name: users.displayName, workspaceName: tenants.name, projectTerm: tenants.projectTerm, taskTerm: tenants.taskTerm })
       .from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
       .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
@@ -119,13 +133,13 @@ export class ProjectJobs implements OnApplicationBootstrap {
       this.logger.warn(`Project-created email for ${projectId} not sent: ${this.mailer.notDelivered}`);
       return;
     }
-    await this.mailer.send(projectCreatedEmail({ to: recipient.email, recipientName: recipient.name, workspaceName: recipient.workspaceName, appUrl: this.env.APP_URL, project }));
+    await this.mailer.send(projectCreatedEmail({ to: recipient.email, recipientName: recipient.name, workspaceName: recipient.workspaceName, appUrl: this.env.APP_URL, project, terms: { project: recipient.projectTerm, task: recipient.taskTerm } }));
   }
 
   async sendTaskAssigned({ tenantId, taskId, recipientUserId, actorUserId }: JobPayloads['projects.task-assigned']): Promise<void> {
     if (recipientUserId === actorUserId) return;
     const [recipient] = await this.database.db
-      .select({ email: users.email, name: users.displayName, wants: memberships.notifyTaskAssigned, workspaceName: tenants.name })
+      .select({ email: users.email, name: users.displayName, wants: memberships.notifyTaskAssigned, workspaceName: tenants.name, projectTerm: tenants.projectTerm, taskTerm: tenants.taskTerm })
       .from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
       .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
@@ -155,7 +169,7 @@ export class ProjectJobs implements OnApplicationBootstrap {
       return;
     }
     await this.mailer.send(
-      taskAssignedEmail({ to: recipient.email, recipientName: recipient.name, actorName: actor?.name ?? 'A teammate', workspaceName: recipient.workspaceName, appUrl: this.env.APP_URL, task }),
+      taskAssignedEmail({ to: recipient.email, recipientName: recipient.name, actorName: actor?.name ?? 'A teammate', workspaceName: recipient.workspaceName, appUrl: this.env.APP_URL, task, terms: { project: recipient.projectTerm, task: recipient.taskTerm } }),
     );
   }
 }

@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { AuditService } from '../../shared/audit/audit.service';
 import type { AuthUser, TenantContext } from '../../shared/authorization';
 import { DatabaseService } from '../../shared/database/database.service';
@@ -7,7 +7,7 @@ import { JobsService } from '../../shared/events/jobs.service';
 import { employees, funnels, memberships, tenants, users } from '../../shared/database/schema';
 import { applyCeoRule } from '../people';
 import { IdentityService } from './identity.service';
-import type { UpdateProfile, UpdateWorkspace } from './settings.schemas';
+import type { UpdateProfile, UpdateWorkspace, WorkspaceTerms } from './settings.schemas';
 
 const workspaceColumns = {
   id: tenants.id,
@@ -23,7 +23,17 @@ const workspaceColumns = {
   ceoEmployeeId: tenants.ceoEmployeeId,
   autoCreateProjects: tenants.autoCreateProjects,
   modules: tenants.modules,
+  projectTerm: tenants.projectTerm,
+  projectTermPlural: tenants.projectTermPlural,
+  taskTerm: tenants.taskTerm,
+  taskTermPlural: tenants.taskTermPlural,
 };
+type TermColumns = { projectTerm: string; projectTermPlural: string; taskTerm: string; taskTermPlural: string };
+
+/** The row as the API returns it: the four names as `terms` (CD-143). */
+function present<T extends TermColumns>({ projectTerm, projectTermPlural, taskTerm, taskTermPlural, ...row }: T) {
+  return { ...row, terms: { project: projectTerm, projects: projectTermPlural, task: taskTerm, tasks: taskTermPlural } satisfies WorkspaceTerms };
+}
 
 /**
  * Workspace settings (a row of `tenants`) and the signed-in user's profile (their `users` row plus
@@ -43,7 +53,7 @@ export class SettingsService {
   async getWorkspace(ctx: TenantContext) {
     const [row] = await this.database.db.select(workspaceColumns).from(tenants).where(eq(tenants.id, ctx.tenantId));
     if (!row) throw new NotFoundException('Workspace not found');
-    return row;
+    return present(row);
   }
 
   /**
@@ -59,12 +69,24 @@ export class SettingsService {
         if (!ceo) throw new BadRequestException('The CEO must be an employee of this workspace');
         if (ceo.deactivatedAt) throw new BadRequestException('The CEO must be an active employee');
       }
-      const [before] = input.ceoEmployeeId ? await tx.select({ ceoEmployeeId: tenants.ceoEmployeeId }).from(tenants).where(eq(tenants.id, ctx.tenantId)) : [];
-      const [row] = await tx.update(tenants).set(input).where(eq(tenants.id, ctx.tenantId)).returning(workspaceColumns);
+      const [before] = input.ceoEmployeeId || input.terms ? await tx.select(workspaceColumns).from(tenants).where(eq(tenants.id, ctx.tenantId)) : [];
+      const { terms, ...rest } = input;
+      const names = terms ? { projectTerm: terms.project, projectTermPlural: terms.projects, taskTerm: terms.task, taskTermPlural: terms.tasks } : {};
+      const [row] = await tx
+        .update(tenants)
+        .set({ ...rest, ...names })
+        .where(eq(tenants.id, ctx.tenantId))
+        .returning(workspaceColumns);
       if (!row) throw new NotFoundException('Workspace not found');
       if (input.ceoEmployeeId) await applyCeoRule(tx, this.jobs, ctx.tenantId, ctx.userId, input.ceoEmployeeId, before?.ceoEmployeeId ?? null);
-      await this.audit.record(tx, ctx, { action: 'workspace.updated', entityType: 'tenant', entityId: ctx.tenantId, data: input });
-      return row;
+      // Renamed projects or tasks (CD-143): the audit keeps the old names too.
+      const data = terms && before ? { ...input, previousTerms: present(before).terms } : input;
+      await this.audit.record(tx, ctx, { action: 'workspace.updated', entityType: 'tenant', entityId: ctx.tenantId, data });
+      // Open screens show the new names without a reload: `tenants` has no change trigger, so hint here.
+      if (terms) {
+        await tx.execute(sql`select pg_notify('crm_changes', json_build_object('t', ${ctx.tenantId}::text, 'type', 'workspace', 'op', 'update', 'ids', json_build_array(${ctx.tenantId}::text), 'client', app_current_client())::text)`);
+      }
+      return present(row);
     });
   }
 

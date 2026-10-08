@@ -7,6 +7,7 @@ import { useStore } from '../../store/store';
 import { activeAssignees, dueText, hours } from '../../store/tasks';
 import { AvatarStack, DueLabel, TaskBoard, TaskStatusBadge, useTaskUpdate } from '../task/parts';
 import { ProjectGantt } from './ProjectGantt';
+import { useTerms } from '../../store/terms';
 
 type View = 'table' | 'kanban' | 'gantt';
 const NO_STAGE = 'none';
@@ -19,6 +20,7 @@ const NO_STAGE = 'none';
  */
 export function ProjectPlan({ projectId, tasks, stages, canAdd, onChange }: { projectId: string; tasks: ApiTask[] | null; stages: ApiProjectStage[]; canAdd: boolean; onChange: (tasks: ApiTask[]) => void }) {
   const { set } = useStore();
+  const terms = useTerms();
   const navigate = useNavigate();
   const [view, setView] = useState<View>('table');
   const [by, setBy] = useState<'status' | 'stage'>('status');
@@ -40,13 +42,13 @@ export function ProjectPlan({ projectId, tasks, stages, canAdd, onChange }: { pr
         </div>
         {view === 'kanban' && (
           <select className="ghost ghost-sm" aria-label="Columns" data-testid="plan-columns" value={by} onChange={(e) => setBy(e.target.value as 'status' | 'stage')} style={{ width: 'auto' }}>
-            <option value="status">By task status</option>
+            <option value="status">By {terms.task} status</option>
             <option value="stage">By project stage</option>
           </select>
         )}
         {canAdd && (
           <button type="button" className="btn btn-primary" data-testid="plan-new-task" onClick={() => set({ newTask: { projectId } })} style={{ marginLeft: 'auto', fontSize: 13, padding: '8px 14px' }}>
-            New task
+            New {terms.task}
           </button>
         )}
       </div>
@@ -71,7 +73,7 @@ export function ProjectPlan({ projectId, tasks, stages, canAdd, onChange }: { pr
           <div className="plan-table-inner">
             <div className="table-head caps">
               <span>ID</span>
-              <span>Task</span>
+              <span>{terms.Task}</span>
               <span>Assignees</span>
               <span>Est. h</span>
               <span>Start</span>
@@ -79,7 +81,7 @@ export function ProjectPlan({ projectId, tasks, stages, canAdd, onChange }: { pr
               <span>Depends on</span>
               <span>Status</span>
             </div>
-            {all.length === 0 && <div className="pipeline-table-empty">No tasks yet. Add the first one with New task.</div>}
+            {all.length === 0 && <div className="pipeline-table-empty">No {terms.tasks} yet. Add the first one with New {terms.task}.</div>}
             {stageColumns.map((col) => {
               const rows = all.filter((t) => (t.stageId ?? NO_STAGE) === col.id);
               if (!rows.length) return null;
@@ -89,7 +91,7 @@ export function ProjectPlan({ projectId, tasks, stages, canAdd, onChange }: { pr
                   <div className="table-band">
                     <span style={{ fontWeight: 600 }}>{col.label}</span>
                     <span style={{ color: 'var(--text-2)' }}>
-                      {rows.length} {rows.length === 1 ? 'task' : 'tasks'}
+                      {rows.length} {rows.length === 1 ? terms.task : terms.tasks}
                       {est ? ` · ${hours(est)}` : ''}
                     </span>
                   </div>

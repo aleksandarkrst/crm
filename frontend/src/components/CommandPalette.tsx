@@ -11,6 +11,7 @@ import { type Command, ICONS, useCommands } from './commands';
 import { currentModule } from './modules';
 import { Avatar } from './ui';
 import '../styles/header.css';
+import { useTerms } from '../store/terms';
 import { workOrderId, workOrderStatusLabel } from '../lib/workOrdersApi';
 import { useWorkOrders } from '../store/workOrders';
 
@@ -41,6 +42,7 @@ export function CommandPalette() {
   const { s, set, openLead, openCompany, openContact, people, session } = useStore();
   const navigate = useNavigate();
   const commands = useCommands();
+  const terms = useTerms();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const input = useRef<HTMLInputElement>(null);
@@ -97,7 +99,7 @@ export function CommandPalette() {
         return words.every((w) => hay.includes(w));
       })
       .slice(0, 4)
-      .map((t) => ({ kind: 'record' as const, record: 'task' as const, id: t.id, title: `${taskId(t)} · ${t.name}`, subtitle: `Task · ${t.projectName}`, initials: 'T' }));
+      .map((t) => ({ kind: 'record' as const, record: 'task' as const, id: t.id, title: `${taskId(t)} · ${t.name}`, subtitle: `${terms.Task} · ${t.projectName}`, initials: 'T' }));
     const orderHits = (workOrders ?? [])
       .filter((w) => {
         const hay = fold(`${workOrderId(w)} ${w.title} ${w.companyName}`);
@@ -106,8 +108,8 @@ export function CommandPalette() {
       .slice(0, 4)
       .map((w) => ({ kind: 'record' as const, record: 'work_order' as const, id: w.id, title: `${workOrderId(w)} · ${w.title}`, subtitle: `${w.companyName} · ${workOrderStatusLabel(w.status)}`, initials: 'WO' }));
     const projectSection = [
-      ...(projectHits.length ? [{ label: 'Projects', rows: projectHits }] : []),
-      ...(taskHits.length ? [{ label: 'Tasks', rows: taskHits }] : []),
+      ...(projectHits.length ? [{ label: terms.Projects, rows: projectHits }] : []),
+      ...(taskHits.length ? [{ label: terms.Tasks, rows: taskHits }] : []),
       ...(orderHits.length ? [{ label: 'Work orders', rows: orderHits }] : []),
     ];
     return [
@@ -117,7 +119,7 @@ export function CommandPalette() {
       ...(employees.length ? [{ label: 'Employees', rows: employees }] : []),
       ...(actions.length ? [{ label: 'Actions', rows: actions }] : []),
     ];
-  }, [query, s, commands, projects, tasks, workOrders, inProjects]);
+  }, [query, s, commands, projects, tasks, workOrders, inProjects, terms]);
   const flat = sections.flatMap((x) => x.rows);
   const current = Math.min(active, Math.max(flat.length - 1, 0));
 

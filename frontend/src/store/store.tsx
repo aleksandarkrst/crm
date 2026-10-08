@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput } from '../lib/api';
+import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput, type WorkspaceTerms } from '../lib/api';
 import { paths } from '../lib/paths';
 import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference } from './documents';
 import { employeeCardActions } from './employeeCard';
@@ -148,6 +148,8 @@ const PARTS_OF: Record<string, Part[]> = {
   // Projects (milestone 14) aren't part of the workspace load: screens re-read them (store/projects.ts).
   project_type: [],
   project: [],
+  // Renamed projects or tasks (CD-143): the workspace settings carry the names.
+  workspace: ['workspace'],
 };
 /**
  * Which rows of each list a change hint names (CD-98), so a live update re-reads just those: by id,
@@ -1728,6 +1730,25 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             const ws = await crmApi.updateWorkspace({ [field]: value });
             if (field === 'name') session.renameTenant(ws.name);
           });
+        }
+      },
+      /**
+       * Renames projects and tasks (CD-143, owners and admins): all four names at once. Returns the
+       * API's field errors ({ task: '…' }) when it refuses them, else null.
+       */
+      saveTerms: async (terms: WorkspaceTerms): Promise<Partial<Record<keyof WorkspaceTerms, string>> | null> => {
+        try {
+          const ws = await crmApi.updateWorkspace({ terms });
+          set((x) => ({ workspace: { ...x.workspace, terms: ws.terms } }));
+          return null;
+        } catch (err) {
+          const issues = err instanceof ApiError ? ((err.body as { issues?: { path: string; message: string }[] } | undefined)?.issues ?? []) : [];
+          const out: Partial<Record<keyof WorkspaceTerms, string>> = {};
+          for (const i of issues) {
+            const key = i.path.split('.').pop() as keyof WorkspaceTerms;
+            if (key in terms) out[key] = i.message;
+          }
+          return Object.keys(out).length ? out : { project: errText(err) };
         }
       },
       /** Edits your own profile and saves it (one write per field after a pause). */

@@ -14,6 +14,7 @@ import { NumberField, Row, TextField } from './project/fields';
 import { assignedMessage, DueLabel, PeoplePicker, useTaskUpdate } from './task/parts';
 import { PeopleAndHours } from './task/PeopleAndHours';
 import { TaskChecklist, TaskComments, TaskFiles } from './task/TaskNotes';
+import { useTerms } from '../store/terms';
 
 /**
  * A task's page (CD-283, design v2 §4):
@@ -29,6 +30,7 @@ import { TaskChecklist, TaskComments, TaskFiles } from './task/TaskNotes';
 export function Task() {
   const { id = '' } = useParams();
   const { s, session, flash } = useStore();
+  const terms = useTerms();
   const navigate = useNavigate();
   const { data: task, error, set } = useTask(id);
   const { data: project } = useProject(task?.projectId);
@@ -49,8 +51,8 @@ export function Task() {
 
   if (!task) {
     return (
-      <Screen title="Task" parent={{ label: 'Tasks', to: paths.tasks }}>
-        <div className="hint-box">{error ? `Couldn't load this task: ${error}` : 'Loading the task'}</div>
+      <Screen title={terms.Task} parent={{ label: terms.Tasks, to: paths.tasks }}>
+        <div className="hint-box">{error ? `Couldn't load this ${terms.task}: ${error}` : `Loading the ${terms.task}`}</div>
       </Screen>
     );
   }
@@ -84,7 +86,7 @@ export function Task() {
   };
   const remove = async () => {
     setMenu(false);
-    const yes = await askConfirm({ title: `Delete ${taskId(task)}?`, message: `${task.name} and its history are deleted. The project is kept.`, confirmLabel: 'Delete task', danger: true });
+    const yes = await askConfirm({ title: `Delete ${taskId(task)}?`, message: `${task.name} and its history are deleted. The ${terms.project} is kept.`, confirmLabel: `Delete ${terms.task}`, danger: true });
     if (!yes) return;
     try {
       await tasksApi.remove(task.id);
@@ -97,12 +99,12 @@ export function Task() {
 
   const meta = [task.stageName, people.map((a) => a.name).join(', ') || 'Unassigned', task.dueDate ? `Due ${dueText(task.dueDate)}` : null].filter(Boolean).join(' · ');
   return (
-    <Screen title="Task" parent={{ label: 'Tasks', to: paths.tasks }}>
+    <Screen title={terms.Task} parent={{ label: terms.Tasks, to: paths.tasks }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }} data-testid="task-page">
         <div className="card deal-header" style={{ padding: '16px 20px' }}>
           <div className="deal-crumb">
             <Link to={paths.tasks} className="crumb-link">
-              Tasks
+              {terms.Tasks}
             </Link>
             <span aria-hidden>→</span>
             <Link to={paths.project(task.projectId)} className="crumb-link">
@@ -112,7 +114,7 @@ export function Task() {
             <span style={{ color: 'var(--ink)' }}>{taskId(task)}</span>
           </div>
           <div className="deal-header-top">
-            <TextField className="ghost deal-title" testId="task-title" label="Task name" value={task.name} disabled={!canEdit} required maxLength={200} onSave={(name) => update({ name })} />
+            <TextField className="ghost deal-title" testId="task-title" label={`${terms.Task} name`} value={task.name} disabled={!canEdit} required maxLength={200} onSave={(name) => update({ name })} />
             <div className="deal-actions">
               {task.status === 'done' && <span className="badge badge-brand">Done</span>}
               {canEdit &&
@@ -195,7 +197,7 @@ export function Task() {
                         {a.name}
                         {a.formerMember && <span style={{ color: 'var(--muted)' }}> (former member)</span>}
                         {canEdit && (
-                          <button type="button" aria-label={`Take ${a.name} off the task`} onClick={() => void unassign(a.employeeId, a.name)}>
+                          <button type="button" aria-label={`Take ${a.name} off the ${terms.task}`} onClick={() => void unassign(a.employeeId, a.name)}>
                             ×
                           </button>
                         )}
@@ -266,7 +268,7 @@ export function Task() {
                     {task.waitsFor && !siblings?.some((x) => x.id === task.waitsForTaskId) && <option value={task.waitsFor.id}>{taskId(task.waitsFor)}</option>}
                   </select>
                 </Row>
-                <Row label="Project">
+                <Row label={terms.Project}>
                   <Link to={paths.project(task.projectId)} className="crumb-link" data-testid="task-project-link">
                     {task.projectName}
                   </Link>
@@ -350,9 +352,10 @@ function AssignDialog({ task, onClose, onAssign }: { task: ApiTask; onClose: () 
   const picked = new Set(names.keys());
   const errors = Object.fromEntries([...names.keys()].map((id) => [id, limits[id]?.trim() ? quarterHourError(Number(limits[id])) : null]));
   const invalid = Object.values(errors).some(Boolean);
+  const terms = useTerms();
   return (
     <Modal maxWidth={520} onBackdrop={onClose}>
-      <ModalHeader title={`Assign people to ${taskId(task)}`} sub="People with an account get an email. Everyone assigned can log time on the task." />
+      <ModalHeader title={`Assign people to ${taskId(task)}`} sub={`People with an account get an email. Everyone assigned can log time on the ${terms.task}.`} />
       <PeoplePicker
         projectId={task.projectId}
         taken={taken}
@@ -406,13 +409,14 @@ function MoveDialog({ task, onClose, onMove }: { task: ApiTask; onClose: () => v
   const [target, setTarget] = useState('');
   const [saving, setSaving] = useState(false);
   const options = (projects ?? []).filter((p) => p.status === 'open' && p.id !== task.projectId);
+  const terms = useTerms();
   return (
     <Modal maxWidth={460} onBackdrop={onClose}>
-      <ModalHeader title={`Move ${taskId(task)}`} sub="It goes to the other project's current stage. Its people, dates and history come along." />
+      <ModalHeader title={`Move ${taskId(task)}`} sub={`It goes to the other ${terms.project}'s current stage. Its people, dates and history come along.`} />
       <label className="form-label">
-        Project
+        {terms.Project}
         <select className="form-input" data-testid="move-target" value={target} onChange={(e) => setTarget(e.target.value)}>
-          <option value="">Pick a project</option>
+          <option value="">Pick {terms.aProject}</option>
           {options.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name} · {p.companyName}

@@ -5,6 +5,7 @@ import { type ApiProjectMember, projectsApi } from '../../lib/projectsApi';
 import { projectError } from '../../store/projects';
 import { initialsOf } from '../../store/selectors';
 import { useStore } from '../../store/store';
+import { useTerms } from '../../store/terms';
 
 /** The hours-a-week choices (design v2). */
 const HOURS = [0, 2, 4, 6, 8, 12, 16, 20, 24, 32, 40];
@@ -23,6 +24,7 @@ function load(m: ApiProjectMember) {
  */
 export function ProjectTeam({ projectId, team, canEdit, onChange }: { projectId: string; team: ApiProjectMember[] | null; canEdit: boolean; onChange: (team: ApiProjectMember[]) => void }) {
   const { flash } = useStore();
+  const terms = useTerms();
   const [adding, setAdding] = useState(false);
 
   const save = async (change: () => Promise<ApiProjectMember[]>, done?: string) => {
@@ -52,7 +54,7 @@ export function ProjectTeam({ projectId, team, canEdit, onChange }: { projectId:
           <div className="table-head caps">
             <span>Person</span>
             <span>Team</span>
-            <span>Project role</span>
+            <span>{terms.Project} role</span>
             <span>Hours / week</span>
             <span>Load, all projects</span>
             <span />
@@ -133,11 +135,12 @@ export function ProjectTeam({ projectId, team, canEdit, onChange }: { projectId:
 
 function RoleField({ value, disabled, onSave }: { value: string; disabled: boolean; onSave: (v: string) => void }) {
   const [draft, setDraft] = useState(value);
+  const terms = useTerms();
   useEffect(() => setDraft(value), [value]);
   return (
     <input
       className="ghost ghost-sm"
-      aria-label="Project role"
+      aria-label={`${terms.Project} role`}
       placeholder="Role on this project"
       value={draft}
       disabled={disabled}

@@ -20,6 +20,7 @@ import { projectError } from '../store/projects';
 import { useStore } from '../store/store';
 import { scheduledText, useWorkOrders } from '../store/workOrders';
 import { AvatarStack } from './task/parts';
+import { useTerms } from '../store/terms';
 
 type View = 'kanban' | 'table';
 const VIEWS: { id: View; label: string; icon: string }[] = [
@@ -231,6 +232,7 @@ function WorkOrderBoard({ orders, onDrop }: { orders: ApiWorkOrder[]; onDrop: (w
 
 /** The table view (design v2 §5): ID, Work order, Site, Project, Technician, Scheduled, Type, Status (inline). */
 function WorkOrdersTable({ orders, onStatus }: { orders: ApiWorkOrder[]; onStatus: (w: ApiWorkOrder, s: WorkOrderStatus) => void }) {
+  const terms = useTerms();
   return (
     <div className="pipeline-table" data-testid="work-orders-table">
       <div className="work-orders-table-inner">
@@ -238,7 +240,7 @@ function WorkOrdersTable({ orders, onStatus }: { orders: ApiWorkOrder[]; onStatu
           <span>ID</span>
           <span>Work order</span>
           <span>Site</span>
-          <span>Project</span>
+          <span>{terms.Project}</span>
           <span>Technician</span>
           <span>Scheduled</span>
           <span>Type</span>
