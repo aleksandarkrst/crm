@@ -224,6 +224,29 @@ describe('projects', () => {
     expect((await call('GET', `/projects/${p.id}`, as())).status).toBe(404);
   });
 
+  it('the team: the lead adds people, sets role and hours; load adds up open projects (CD-271)', async () => {
+    const typeId = (await typesNow())[0]!.id;
+    const meEmployee = async (s: Session) => (await ok('GET', '/people/access', as(s))).employeeId as string;
+    const [memberEmp, adminEmp] = [await meEmployee(member), await meEmployee(admin)];
+    const a = await ok('POST', '/projects', { ...as(member), body: { name: 'Team A', projectTypeId: typeId, companyId: acme.id } });
+    const b = await ok('POST', '/projects', { ...as(), body: { name: 'Team B', projectTypeId: typeId, companyId: acme.id } });
+    // The member leads A and adds people; on B (led by the owner) they get 403.
+    let team = await ok('POST', `/projects/${a.id}/members`, { ...as(member), body: { employeeIds: [memberEmp, adminEmp] } });
+    expect(team.map((m: { employeeId: string }) => m.employeeId).sort()).toEqual([memberEmp, adminEmp].sort());
+    expect((await call('POST', `/projects/${b.id}/members`, { ...as(member), body: { employeeIds: [memberEmp] } })).status).toBe(403);
+    team = await ok('PUT', `/projects/${a.id}/members/${memberEmp}`, { ...as(member), body: { role: 'Project manager', hoursPerWeek: 24 } }, 200);
+    expect(team.find((m: { employeeId: string }) => m.employeeId === memberEmp)).toMatchObject({ role: 'Project manager', hoursPerWeek: 24, weeklyHours: 40, loadHours: 24 });
+    // Load counts every open project.
+    await ok('POST', `/projects/${b.id}/members`, { ...as(), body: { employeeIds: [memberEmp] } });
+    await ok('PUT', `/projects/${b.id}/members/${memberEmp}`, { ...as(), body: { hoursPerWeek: 20 } }, 200);
+    expect((await ok('GET', `/projects/${a.id}/members`, as(member))).find((m: { employeeId: string }) => m.employeeId === memberEmp).loadHours).toBe(44);
+    await ok('PATCH', `/projects/${b.id}`, { ...as(), body: { status: 'completed' } }, 200);
+    expect((await ok('GET', `/projects/${a.id}/members`, as(member))).find((m: { employeeId: string }) => m.employeeId === memberEmp).loadHours).toBe(24);
+    expect((await call('PUT', `/projects/${a.id}/members/${memberEmp}`, { ...as(member), body: { hoursPerWeek: 99 } })).status).toBe(400);
+    team = await ok('DELETE', `/projects/${a.id}/members/${adminEmp}`, as(member), 200);
+    expect(team.map((m: { employeeId: string }) => m.employeeId)).toEqual([memberEmp]);
+  });
+
   it('another workspace sees none of it', async () => {
     const theirs = { token: stranger.token, tenant: otherTenant };
     expect((await ok('GET', '/projects', theirs)).length).toBe(0);

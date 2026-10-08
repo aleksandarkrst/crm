@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../lib/api';
-import { type ApiProject, type ApiProjectType, projectsApi } from '../lib/projectsApi';
+import { type ApiProject, type ApiProjectMember, type ApiProjectType, projectsApi } from '../lib/projectsApi';
 import { useStore } from './store';
 
 /** The API's message (and the first field problem), for error lines and toasts. */
@@ -72,6 +72,10 @@ export const useCompanyProjects = (companyId: string | undefined) =>
 
 /** One project (its page, CD-275). */
 export const useProject = (id: string | undefined) => useProjectsRead<ApiProject>(!!id, () => projectsApi.project(id!), `project:${id ?? ''}`);
+
+/** A project's team (CD-271). */
+export const useProjectMembers = (projectId: string | undefined) =>
+  useProjectsRead<ApiProjectMember[]>(!!projectId, () => projectsApi.members(projectId!), `members:${projectId ?? ''}`);
 
 /** The projects of one deal (the won deal's header and Summary, CD-275). */
 export const useDealProjects = (dealId: string | undefined) =>

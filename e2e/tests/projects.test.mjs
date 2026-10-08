@@ -144,6 +144,29 @@ describe('projects', () => {
     await page.waitForFunction(() => document.querySelector('[data-testid=project-overview]')?.innerText.includes('Health'));
   });
 
+  step('the Team tab: add people from the org chart, role, hours, load (CD-271)', async () => {
+    await click(page, '[data-testid=project-tab-team]');
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-team]')?.innerText.includes('No one is on this project yet.'));
+    await click(page, '[data-testid=add-people]');
+    // The owner is an employee too (every member is, CD-226).
+    await page.waitForFunction(() => document.querySelector('[data-testid=add-people-list]')?.innerText.includes('Pia Projects'));
+    await click(page, '[data-testid=add-people-list] label input[type=checkbox]');
+    await click(page, '[data-testid=add-people-submit]');
+    await page.waitForSelector('[data-testid=team-row]');
+    await page.click('[data-testid=team-row] input[aria-label="Project role"]');
+    await page.keyboard.type('Project manager');
+    await page.keyboard.press('Enter');
+    await setValue(page, '[data-testid=team-row] select[aria-label="Hours per week"]', '24');
+    const member = await eventually(async () => {
+      const [m] = await api(page, `/projects/${projectId}/members`);
+      return m?.role === 'Project manager' && m.hoursPerWeek === 24 && m;
+    });
+    assert.ok(member, 'saved');
+    await page.waitForFunction(() => document.querySelector('[data-testid=team-load]')?.textContent.includes('24 h of 40 h · 60%'));
+    assert.equal(await page.$eval('[data-testid=project-tab-team]', (el) => el.textContent), 'Team · 1');
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-team-card]')?.innerText.includes('Project manager'));
+  });
+
   step('another company clears the deal, after a confirmation (TC 5)', async () => {
     await setValue(page, '[data-testid=project-company-field]', beta.id);
     assert.equal(await confirmInApp(page), 'Move Service 2026 to Beta?');

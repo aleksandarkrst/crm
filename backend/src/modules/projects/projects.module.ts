@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ProjectMembersService } from './project-members.service';
 import { ProjectTypesController } from './project-types.controller';
 import { ProjectTypesService } from './project-types.service';
 import { ProjectsController } from './projects.controller';
@@ -10,6 +11,6 @@ import { ProjectsService } from './projects.service';
  */
 @Module({
   controllers: [ProjectTypesController, ProjectsController],
-  providers: [ProjectTypesService, ProjectsService],
+  providers: [ProjectTypesService, ProjectsService, ProjectMembersService],
 })
 export class ProjectsModule {}

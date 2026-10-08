@@ -1184,6 +1184,13 @@ and no "hours" are shown anywhere.
     than the lead, owners and admins. The other v2 tabs (Plan, Team, Communication, Documents,
     Report), "Coming up", the file drop, the Team card and progress come with tasks, teams and
     project documents (CD-146, CD-147, CD-271). Board cards and column heads show the value.
+  - **Team tab** (CD-271, `screens/project/ProjectTeam.tsx`; `project_members`, RLS in
+    `drizzle/0058`): people from the org chart with their project role and hours a week, and their
+    load ("24 h of 40 h · 60%", red over 100 %): every open project's hours against their weekly
+    hours. "Add people" picks active employees (several at once). The lead, owners and admins change
+    it (`GET/POST /api/projects/:id/members`, `PUT/DELETE …/members/:employeeId`, each answering
+    with the whole team; 403 for others). The left column's Team card lists them with "Manage". The
+    design's Open and Remaining columns (their tasks) come with CD-146.
   - **Company page**: a Projects card below Deals (open projects with stage, lead and health;
     "Show closed (N)"; "+" with the company fixed; "No projects for this company yet.").
   - **Ctrl/⌘K** finds projects by code, name or company (read while the palette is open).

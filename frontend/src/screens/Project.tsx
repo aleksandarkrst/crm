@@ -6,10 +6,11 @@ import { Screen } from '../components/Layout';
 import { Modal, ModalHeader } from '../components/ui';
 import { paths } from '../lib/paths';
 import { type ApiProject, type ApiProjectCancelReason, type ApiProjectHealth, PROJECT_CANCEL_REASONS, type ProjectPatch, projectsApi } from '../lib/projectsApi';
-import { projectError, useProject, useProjectTypes } from '../store/projects';
+import { projectError, useProject, useProjectMembers, useProjectTypes } from '../store/projects';
 import { companyLabels, companyRecords, curOf, memberLabels } from '../store/selectors';
 import { useStore } from '../store/store';
 import { HEALTH_LABEL, ProjectStatusBadge, projectValue } from './lead/DealProjects';
+import { ProjectTeam } from './project/ProjectTeam';
 
 /**
  * A project's page (CD-234, design v2 §2), until the Projects module brings tasks, plan, team and
@@ -30,6 +31,8 @@ export function Project() {
   const navigate = useNavigate();
   const { data: project, error, set } = useProject(id);
   const { data: types } = useProjectTypes();
+  const { data: team, set: setTeam } = useProjectMembers(id);
+  const [tab, setTab] = useState<'overview' | 'team'>('overview');
   const [busy, setBusy] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -231,17 +234,59 @@ export function Project() {
               </div>
             </div>
             <LinkedCard project={project} canEdit={canEdit} busy={busy} update={update} />
+            <div className="card card-pad" data-testid="project-team-card">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <span style={{ fontSize: 15, fontWeight: 600 }}>Team · {team?.length ?? 0}</span>
+                <button type="button" className="crumb-link" onClick={() => setTab('team')} style={{ border: 0, background: 'transparent', padding: 0, cursor: 'pointer', fontSize: 12.5 }}>
+                  Manage
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--divider)' }}>
+                {team?.length ? (
+                  team.map((m) => (
+                    <span key={m.employeeId} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13 }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</span>
+                      <span style={{ color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{m.role ?? `${m.hoursPerWeek} h / week`}</span>
+                    </span>
+                  ))
+                ) : (
+                  <span style={{ fontSize: 13, color: 'var(--text-2)' }}>No one is on this project yet.</span>
+                )}
+              </div>
+            </div>
           </div>
           <div style={{ flex: '999 1 420px', minWidth: 0 }}>
             <div className="card" style={{ padding: 0, overflow: 'hidden' }} data-testid="project-overview">
               <div style={{ display: 'flex', gap: 2, overflowX: 'auto', borderBottom: '1px solid var(--divider)', padding: '0 8px' }} role="tablist">
-                <button type="button" role="tab" aria-selected className="composer-tab" style={{ borderBottom: '2px solid #14503C', fontWeight: 600, color: '#14503C' }}>
-                  Overview
-                </button>
+                {(
+                  [
+                    ['overview', 'Overview'],
+                    ['team', `Team · ${team?.length ?? 0}`],
+                  ] as const
+                ).map(([k, label]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === k}
+                    data-testid={`project-tab-${k}`}
+                    className="composer-tab"
+                    onClick={() => setTab(k)}
+                    style={{ borderBottom: `2px solid ${tab === k ? '#14503C' : 'transparent'}`, fontWeight: tab === k ? 600 : 500, color: tab === k ? '#14503C' : '#475750' }}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
               <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <span className="caps">History</span>
-                <ChangeHistory entity="project" id={project.id} cur={curOf(s)} rev={project.version} />
+                {tab === 'overview' ? (
+                  <>
+                    <span className="caps">History</span>
+                    <ChangeHistory entity="project" id={project.id} cur={curOf(s)} rev={project.version} />
+                  </>
+                ) : (
+                  <ProjectTeam projectId={project.id} team={team} canEdit={canEdit} onChange={setTeam} />
+                )}
               </div>
             </div>
           </div>
