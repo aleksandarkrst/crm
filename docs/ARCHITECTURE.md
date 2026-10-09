@@ -1397,7 +1397,7 @@ The `timesheet` module (`modules/timesheet`, tables in `schema/timesheet.ts`, RL
 and live hints in `drizzle/0077_timesheet_rls.sql`). Spec: "Functional spec: 15 · Timesheet and
 approvals" in Linear; design `docs/design/Timesheet.dc.html`. Built so far: weekly time entry
 (CD-152), time from the task and work order pages (CD-276), the settings, public holidays and
-the deadline with auto submit (CD-153), and the approval mode (CD-156).
+the deadline with auto submit (CD-153), the approval mode (CD-156) and the Late status (CD-155).
 
 - **Tables:**
   - `time_entries`: one person's hours on a task **or** a work order (a check) on a date, whole
@@ -1408,8 +1408,10 @@ the deadline with auto submit (CD-153), and the approval mode (CD-156).
     `start_time`/`end_time` (CD-276, `drizzle/0078`): Start → End on the work order page, both or
     neither, and then `minutes` is their difference (`time_entries_span_ck`). Changing the hours
     (in the grid or as hours) moves the end; past midnight the times are dropped.
-  - `timesheet_days`: a day's status once it leaves Draft (`submitted`, `rejected`, `approved`;
-    no row is Draft), who submitted it and when. The design's Rejected is the spec's Returned.
+  - `timesheet_days`: a day's status once it was first submitted (`submitted`, `rejected`,
+    `approved`, or `draft` after a Recall; without a row a day is Draft), who submitted it and
+    when, and `first_submitted_at` (CD-155, `drizzle/0082`, kept through Recall). The design's
+    Rejected is the spec's Returned.
   - `timesheet_rows`: rows added to a week ("+ Add task or work order", Copy last week) so they
     show before they have hours. Rows still without hours go when the week is submitted.
 - **The lock** (`time_entries_lock`, BEFORE INSERT/UPDATE/DELETE, for the row before and after):
@@ -1469,7 +1471,16 @@ the deadline with auto submit (CD-153), and the approval mode (CD-156).
     of Draft or Rejected days up to the current week, never over a value or the daily maximum.
   - `POST submit` `{ weekStart }`: the required Draft days up to the current week become Submitted
     (also days without hours: the screen asks first). Rejected days are resubmitted on their own
-    (CD-158). `POST recall`: Submitted days go back to Draft.
+    (CD-158). `POST recall`: Submitted days go back to Draft (their rows stay, with when they
+    were first submitted).
+  - **Late** (CD-155, spec 5.5): the week answers `deadlinePassed` and `lateIfSubmitted` (days Submit
+    week would submit that never went in, after the deadline). Submitting one of them (the week or
+    a single day) sets `timesheet_weeks.late_at` once (`markLate`); recalling and resubmitting days
+    first submitted on time never does, and nothing clears it (the audit row has `late`). The
+    Timesheet then reads "Deadline passed N days ago" (red) instead of "Submit by …", the button
+    **Submit late**, which confirms "This week will be marked as submitted late.", and the week
+    shows the Late badge. Not built: the deadline extension for an absence on the deadline day
+    (needs time off, milestone 16).
   - **Approval mode** (CD-156, Settings → Approvals' two cards): Whole week (`week`, the default)
     offers only Submit week; Day by day (`day`) also `POST submit { weekStart, date }` for one day
     (400 in Whole week mode), shown as "Submit" under the day's header. A single day keeps the

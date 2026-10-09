@@ -69,8 +69,9 @@ export const timeEntries = pgTable(
 );
 
 /**
- * One person's timesheet day once it leaves Draft (spec 5.2): no row is Draft. Submitted and
- * Approved days refuse changes to their entries (the trigger on time_entries).
+ * One person's timesheet day once it was first submitted (spec 5.2): without a row a day is Draft;
+ * a recalled day is a Draft row that keeps `first_submitted_at` (CD-155). Submitted and Approved
+ * days refuse changes to their entries (the trigger on time_entries).
  */
 export const timesheetDays = pgTable(
   'timesheet_days',
@@ -81,6 +82,8 @@ export const timesheetDays = pgTable(
     status: text('status', { enum: TIMESHEET_DAY_STATUSES }).notNull(),
     submittedAt: timestamp('submitted_at', { withTimezone: true }),
     submittedByUserId: uuid('submitted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** When the day was first submitted (CD-155): kept through Recall, so a later submission is only Late if it never went in. */
+    firstSubmittedAt: timestamp('first_submitted_at', { withTimezone: true }),
     ...timestamps,
   },
   (t) => [

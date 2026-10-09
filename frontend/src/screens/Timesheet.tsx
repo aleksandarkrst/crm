@@ -22,6 +22,14 @@ const BADGE: Record<WeekStatus, string> = {
   rejected: 'badge-warn',
 };
 
+const LATE_NOTE = 'This week will be marked as submitted late.';
+
+/** "today", "yesterday", "3 days ago": how long ago the deadline passed. */
+function sinceText(date: string, today: string): string {
+  const days = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${date}T00:00:00Z`)) / 86_400_000);
+  return days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
+}
+
 const listOf = (names: string[]) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
 
 /**
@@ -71,7 +79,11 @@ export function Timesheet() {
 
   const submit = async (w: ApiTimesheetWeek) => {
     const empty = w.days.filter((d) => w.submittable.includes(d.date) && d.minutes === 0).map((d) => dayName(d.date));
-    if (empty.length && !(await askConfirm({ title: `${listOf(empty)} ${empty.length === 1 ? 'has' : 'have'} no hours. Submit anyway?`, confirmLabel: 'Submit week' }))) return;
+    const late = w.lateIfSubmitted.length > 0;
+    const label = late ? 'Submit late' : 'Submit week';
+    if (empty.length && !(await askConfirm({ title: `${listOf(empty)} ${empty.length === 1 ? 'has' : 'have'} no hours. Submit anyway?`, message: late ? LATE_NOTE : undefined, confirmLabel: label }))) return;
+    // After the deadline, submitting marks the week as submitted late (spec 5.5): say so first.
+    if (late && !empty.length && !(await askConfirm({ title: `Submit week ${w.weekNumber} late?`, message: LATE_NOTE, confirmLabel: label }))) return;
     setBusy(true);
     await run(async () => {
       try {
@@ -87,7 +99,9 @@ export function Timesheet() {
   /** One day (Day by day mode, CD-156). */
   const submitDay = async (w: ApiTimesheetWeek, date: string) => {
     const day = w.days.find((d) => d.date === date);
-    if (day && day.minutes === 0 && !(await askConfirm({ title: `${dayName(date)} has no hours. Submit anyway?`, confirmLabel: 'Submit day' }))) return;
+    const late = w.lateIfSubmitted.includes(date);
+    if (day && day.minutes === 0 && !(await askConfirm({ title: `${dayName(date)} has no hours. Submit anyway?`, message: late ? LATE_NOTE : undefined, confirmLabel: 'Submit day' }))) return;
+    if (late && day?.minutes && !(await askConfirm({ title: `Submit ${dayName(date)} late?`, message: LATE_NOTE, confirmLabel: 'Submit day' }))) return;
     await run(async () => {
       try {
         set(await timesheetApi.submit(w.weekStart, date));
@@ -155,7 +169,14 @@ export function Timesheet() {
             Auto-submitted
           </span>
         )}
-        {week.submittable.length > 0 && <span className="ts-due">Submit by {deadline}</span>}
+        {week.submittable.length > 0 &&
+          (week.deadlinePassed ? (
+            <span className="ts-due" style={{ color: 'var(--danger)' }} data-testid="ts-deadline-passed">
+              Deadline passed {sinceText(week.deadline.date, week.today)}
+            </span>
+          ) : (
+            <span className="ts-due">Submit by {deadline}</span>
+          ))}
         <span className="ts-spacer" style={{ flex: 1 }} />
         <button type="button" className="btn-plain" data-testid="ts-copy" onClick={() => setCopying(true)} disabled={future}>
           Copy last week
@@ -180,7 +201,7 @@ export function Timesheet() {
           title={future ? 'A week can be submitted once it has started' : week.submittable.length === 0 ? 'Nothing to submit in this week' : undefined}
           onClick={() => void submit(week)}
         >
-          {busy ? 'Submitting…' : 'Submit week'}
+          {busy ? 'Submitting…' : week.lateIfSubmitted.length ? 'Submit late' : 'Submit week'}
         </button>
       </div>
       <Grid week={week} onSave={onSave} onAdd={onAdd} onSubmitDay={week.settings.approvalMode === 'day' ? (date) => void submitDay(week, date) : undefined} />

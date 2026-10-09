@@ -249,7 +249,12 @@ describe('submit, recall and the lock', () => {
   it('an approved day is locked (423), also for the database itself', async () => {
     const day = addDays(monday, 2);
     await ok('PUT', '/timesheet/cells', { ...as(marko), body: { date: day, taskId: task, minutes: 240 } });
-    await asTenantSql(tenant, `insert into timesheet_days (tenant_id, employee_id, work_date, status) values ($1, $2, $3, 'approved')`, [tenant, markoId, day]);
+    // Recalled days keep their row (CD-155): approve it either way.
+    await asTenantSql(
+      tenant,
+      `insert into timesheet_days (tenant_id, employee_id, work_date, status) values ($1, $2, $3, 'approved') on conflict (tenant_id, employee_id, work_date) do update set status = 'approved'`,
+      [tenant, markoId, day],
+    );
     const refused = await setCell({ date: day, taskId: task, minutes: 60 }, marko);
     expect(refused.status).toBe(423);
     expect(JSON.stringify(refused.body)).toContain('Day is approved and locked');
