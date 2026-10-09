@@ -2,7 +2,7 @@ name: Nightly
 
 # Checks too slow for every pull request (CD-250): the time report's performance target with
 # generated data (100,000 time entries, 2,000 tasks, 200 people; backend/test/performance).
-# Runs every night on main and on demand.
+# Runs every night on main and on demand, with the same database setup as the integration tests.
 
 on:
   schedule:
@@ -15,33 +15,5 @@ concurrency:
 
 jobs:
   performance:
-    runs-on: ubuntu-latest
-    defaults: { run: { working-directory: backend } }
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env: { POSTGRES_USER: app_admin, POSTGRES_PASSWORD: ci_admin_password, POSTGRES_DB: app }
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U app_admin -d app" --health-interval 2s --health-timeout 5s --health-retries 30
-    env:
-      # Same setup as the integration job in ci.yml: migrations as the owner, the API as the runtime role.
-      PGHOST: localhost
-      PGPASSWORD: ci_admin_password
-      POSTGRES_USER: app_admin
-      POSTGRES_DB: app
-      APP_DB_USER: app_runtime
-      APP_DB_PASSWORD: ci_runtime_password
-      MIGRATION_DATABASE_URL: postgres://app_admin:ci_admin_password@localhost:5432/app
-      DATABASE_URL: postgres://app_runtime:ci_runtime_password@localhost:5432/app
-      AUTH_MODE: dev
-      DEV_JWT_SECRET: ci-only-dev-secret-at-least-32-characters
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with: { node-version: 24, cache: npm, cache-dependency-path: backend/package-lock.json }
-      - name: Create the runtime role and pgboss schema (as the Postgres image's init would)
-        run: sh ../infra/postgres/init/01-roles.sh
-      - run: npm ci
-      - run: npm run db:migrate
-      - run: npm run test:performance
+    uses: ./.github/workflows/db-tests.yml
+    with: { script: test:performance }

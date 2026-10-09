@@ -97,7 +97,9 @@ curl -s localhost:3000/api/tenants -H "authorization: Bearer $TOKEN" -H 'content
 
 ## Tests
 
-Three layers run in CI on every pull request (`.github/workflows/ci.yml`), and a fourth every night:
+Four layers: unit and integration tests run on every pull request (`.github/workflows/ci.yml`),
+the browser tests before a production deploy (`promote.yml`) and the performance tests every
+night (`nightly.yml`):
 
 - **Unit tests** (`backend`, `npm test`): fast, no database.
 - **Integration tests** (`backend/test/integration`, `npm run test:integration`): build the API,
@@ -145,8 +147,9 @@ Three layers run in CI on every pull request (`.github/workflows/ci.yml`), and a
   against the time report's 2-second target. Too slow for every pull request: the `Nightly`
   workflow (`.github/workflows/nightly.yml`) runs them every night and on demand.
 
-All three create their own users and workspaces with unique emails, so they can run against
-the dev database without resetting it. The database must be migrated first.
+The integration, browser and performance tests create their own users and workspaces with unique
+emails, so they can run against the dev database without resetting it. The database must be
+migrated first.
 
 ```bash
 # Integration tests (the dev database from docker-compose.dev.yml, migrated)
