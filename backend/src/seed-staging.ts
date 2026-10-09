@@ -310,6 +310,11 @@ class Seed {
     let authSubject: string;
     if (existing) {
       const providerId = existing.authSubject.slice(existing.authSubject.indexOf('|') + 1);
+      // Only a password account of the provider's database connection gets its password set; a
+      // social or unknown subject under a seed address means the address is not ours to reset.
+      if (loadEnv().AUTH_MODE !== 'dev' && !providerId.startsWith('auth0|')) {
+        throw new Error(`${email} belongs to an account that doesn't sign in with a password (${providerId}); choose another SEED_EMAIL_DOMAIN`);
+      }
       await this.s.accounts.setPassword(providerId, password);
       userId = existing.id;
       authSubject = existing.authSubject;
@@ -338,9 +343,10 @@ class Seed {
   /**
    * Deletes the seed workspace of this name that `ownerId` owns, with everything in it. Not a
    * cascade from `tenants`: the history triggers would insert into record_changes for a tenant
-   * that no longer exists. So the records go first, inside the tenant context (RLS applies), in
-   * an order the restrict foreign keys and the time-entry lock allow; then the membership rows
-   * and the tenant, whose remaining cascades (audit_logs, record_changes) have no triggers.
+   * that no longer exists. So the records go first, inside the tenant context and filtered by
+   * tenant_id, in an order the restrict foreign keys and the time-entry lock allow; then the
+   * membership rows and the tenant, whose remaining cascades (audit_logs, record_changes) have
+   * no triggers. Other workspaces are never touched (test/integration/seed-staging.spec.ts).
    */
   private async resetWorkspace(name: string, ownerId: string) {
     const rows = await this.database.db
@@ -351,8 +357,9 @@ class Seed {
     for (const row of rows) {
       await this.database.withTenant(row.id, async (tx) => {
         // Submitted and approved days lock their entries; a draft day lets them go.
-        await tx.execute(sql`update timesheet_days set status = 'draft'`);
-        for (const table of PURGE_ORDER) await tx.execute(sql.raw(`delete from "${table}"`));
+        // RLS already keeps this inside the workspace; the filter makes it true for a role that bypasses RLS too.
+        await tx.execute(sql`update timesheet_days set status = 'draft' where tenant_id = ${row.id}`);
+        for (const table of PURGE_ORDER) await tx.execute(sql`delete from ${sql.identifier(table)} where tenant_id = ${row.id}`);
         await tx.delete(invitationsTable).where(eq(invitationsTable.tenantId, row.id));
         await tx.delete(memberships).where(eq(memberships.tenantId, row.id));
       });
