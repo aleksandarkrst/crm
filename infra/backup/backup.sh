@@ -7,6 +7,10 @@
 #   backup.sh loop   # default: back up every BACKUP_INTERVAL_HOURS, check the disk every hour
 #   backup.sh once   # one backup now (deploy.sh runs this before migrations)
 #
+# BACKUP_LABEL (CD-314): a word added to the file names, so a backup taken for a reason can be found
+# later: deploy.sh passes "deploy-<commit>", and the backup before a migration is then
+# <db>-<timestamp>-deploy-<commit>.dump (and -files-… .tar.gz). The last line of "once" names the dump.
+#
 # Alerts (CD-8): each backup reports to BACKUP_HEARTBEAT_URL and each disk check to
 # DISK_HEARTBEAT_URL (Better Stack heartbeats). "<url>" means OK, "<url>/fail" means failed, and
 # the monitor alerts on a failure or when the reports stop coming.
@@ -50,6 +54,9 @@ check_disk() {
 
 run_backup() {
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  # Only letters, digits, dots, dashes and underscores reach a file name.
+  label="$(printf '%s' "${BACKUP_LABEL:-}" | tr -c 'A-Za-z0-9._-' '_' | cut -c1-60)"
+  [ -n "${label}" ] && stamp="${stamp}-${label}"
   file="/backups/${PGDATABASE}-${stamp}.dump"
   echo "[backup] dumping ${PGDATABASE} → ${file}"
   # With owners: the dump records that the pgboss schema belongs to the runtime role (CD-89).
@@ -92,6 +99,7 @@ run_backup() {
   fi
 
   find /backups \( -name '*.dump' -o -name '*.tar.gz' \) -mtime "+${RETENTION_DAYS}" -delete
+  echo "[backup] kept as ${file}${files:+ and ${files}}"
 }
 
 case "${1:-loop}" in

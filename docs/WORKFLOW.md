@@ -155,7 +155,10 @@ Setup and details: [DEPLOYMENT.md, Staging](DEPLOYMENT.md#9-staging). Until
   - never change a column's type or meaning in place.
   A migration that can't follow this needs a plan in its pull request (maintenance window, or
   restoring the pre-deploy backup on failure).
-- **Backups with a practised restore** (CD-5) before real customer data goes in.
+- **Backups with a practised restore** (CD-5, CD-314): every deploy takes a backup named after
+  the commit before it migrates, and the restore runbook
+  ([DEPLOYMENT.md, Restore](DEPLOYMENT.md#restore-practise-this-before-you-need-it)) is
+  rehearsed on staging and logged in its drill table before real customer data goes in.
 - **Secrets never in the repository**: they live in GitHub secrets and on the server. Agents never
   get production credentials.
 
