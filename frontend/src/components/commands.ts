@@ -40,6 +40,7 @@ export const ICONS = {
   logout: 'M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11',
   calendar: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
   org: 'M9.5 3.5h5v4h-5zM3.5 16.5h5v4h-5zM15.5 16.5h5v4h-5zM12 7.5v4.5M6 16.5v-2.5h12v2.5',
+  timesheet: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
   reports: 'M5 20V10M10 20V4M15 20v-7M20 20v-4M3 20h18',
   visitPlan: 'M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11ZM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z',
 } as const;
@@ -91,6 +92,7 @@ export function useCommands(): Command[] {
     { id: 'go-projects', group: 'Go to', label: terms.Projects, hint: 'Projects · board and list', icon: 'project', keywords: 'projects delivery board', run: go(paths.projects) },
     { id: 'go-tasks', group: 'Go to', label: terms.Tasks, hint: 'Projects · kanban and table', icon: 'task', keywords: 'tasks project plan to-do todo kanban', run: go(paths.tasks) },
     { id: 'go-work-orders', group: 'Go to', label: 'Work orders', hint: 'Projects · kanban and table', icon: 'task', keywords: 'work orders service technician repair installation kanban', run: go(paths.workOrders) },
+    { id: 'go-timesheet', group: 'Go to', label: 'Timesheet', hint: 'Workforce · your hours this week', icon: 'timesheet', keywords: 'workforce time hours log week submit', run: go(paths.timesheet()) },
     { id: 'go-org', group: 'Go to', label: 'Org structure', hint: 'Workforce · people and teams', icon: 'org', keywords: 'workforce people employees units departments teams chart', run: go(paths.org()) },
   ];
   const settings: Command[] = [

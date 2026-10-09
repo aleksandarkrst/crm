@@ -512,9 +512,12 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       // Project types and projects (CD-272) are read again by the screens showing them.
       if (e.type === 'resync' || e.type === 'project_type' || e.type === 'project') set((x) => ({ projectRev: x.projectRev + 1 }));
       // Tasks (CD-146) too, and when their project changes (its name, stage or status shows on them).
-      if (e.type === 'resync' || e.type === 'task' || e.type === 'project' || e.type === 'project_type') set((x) => ({ taskRev: x.taskRev + 1 }));
+      // Time entries (CD-152) change a task's People and hours card and a work order's time too.
+      if (e.type === 'resync' || e.type === 'task' || e.type === 'project' || e.type === 'project_type' || e.type === 'timesheet') set((x) => ({ taskRev: x.taskRev + 1 }));
       // Work orders (CD-265), also when their project changes.
-      if (e.type === 'resync' || e.type === 'work_order' || e.type === 'project') set((x) => ({ workOrderRev: x.workOrderRev + 1 }));
+      if (e.type === 'resync' || e.type === 'work_order' || e.type === 'project' || e.type === 'timesheet') set((x) => ({ workOrderRev: x.workOrderRev + 1 }));
+      // The Timesheet (CD-152): its own entries, days and rows, and the tasks, work orders and projects on its rows.
+      if (e.type === 'resync' || e.type === 'timesheet' || e.type === 'task' || e.type === 'work_order' || e.type === 'project') set((x) => ({ timesheetRev: x.timesheetRev + 1 }));
       // People lists (Roles & permissions, CD-142) re-read on any employee or role change, this tab's own included.
       if (e.type === 'resync' || e.type === 'employee' || e.type === 'employee_role') set((x) => ({ peopleRev: x.peopleRev + 1 }));
       if (e.type === 'resync') return refreshAll();

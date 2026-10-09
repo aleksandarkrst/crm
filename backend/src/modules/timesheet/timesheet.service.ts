@@ -65,6 +65,8 @@ export interface RowView {
   path: string;
   /** Why no new hours can go on it ("Task done", "Project closed", …), or null. */
   lockedReason: string | null;
+  /** What the person may change: any day's hours, only hours already there (unassigned since, spec 4.4), or nothing. */
+  edit: 'any' | 'existing' | 'none';
   /** The person's own hour limit on a task (CD-147) and all their hours on it, in minutes. */
   limit: { limitMinutes: number; loggedMinutes: number } | null;
   cells: Record<string, CellView>;
@@ -510,6 +512,7 @@ export class TimesheetService {
         name: f.name,
         path: f.path,
         lockedReason: reasonOf(f),
+        edit: !f.refusal ? 'any' : f.refusal === 'not_assigned' || f.refusal === 'not_technician' ? 'existing' : 'none',
         limit: f.limitMinutes != null ? { limitMinutes: f.limitMinutes, loggedMinutes: logged.get(f.id) ?? 0 } : null,
         cells: {},
         minutes: 0,

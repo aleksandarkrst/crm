@@ -19,6 +19,7 @@ const Dashboard = lazy(() => loadChunk(() => import('./screens/Dashboard')).then
 const Meeting = lazy(() => loadChunk(() => import('./screens/Meeting')).then((m) => ({ default: m.Meeting })));
 const NewMeeting = lazy(() => loadChunk(() => import('./screens/NewMeeting')).then((m) => ({ default: m.NewMeeting })));
 const LeadScreen = lazy(() => loadChunk(() => import('./screens/lead/LeadScreen')).then((m) => ({ default: m.LeadScreen })));
+const Timesheet = lazy(() => loadChunk(() => import('./screens/Timesheet')).then((m) => ({ default: m.Timesheet })));
 const OrgStructure = lazy(() => loadChunk(() => import('./screens/OrgStructure')).then((m) => ({ default: m.OrgStructure })));
 const Pipeline = lazy(() => loadChunk(() => import('./screens/Pipeline')).then((m) => ({ default: m.Pipeline })));
 const Projects = lazy(() => loadChunk(() => import('./screens/Projects')).then((m) => ({ default: m.Projects })));
@@ -159,6 +160,7 @@ function AppRoutes() {
           <Route path="tasks/:id" element={<Task />} />
           <Route path="work-orders" element={<WorkOrders />} />
           <Route path="work-orders/:id" element={<WorkOrder />} />
+          <Route path="timesheet" element={<Timesheet />} />
           <Route path="org" element={<OrgStructure />} />
           <Route path="people/:id" element={<EmployeeCard />} />
           <Route path="reports" element={<Navigate to={paths.reports()} replace />} />

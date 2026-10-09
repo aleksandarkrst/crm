@@ -81,12 +81,12 @@ describe('module and workspace switcher', () => {
     );
   });
 
-  step('picking Workforce opens Org structure with only its own page in the sidebar', async () => {
+  step('picking Workforce opens Org structure with only its own pages in the sidebar', async () => {
     await click(page, `${POP} [data-module=workforce]`);
     await page.waitForFunction(() => location.pathname === '/org');
     await closed();
     await inModule('workforce');
-    assert.deepEqual(await sidebar(), { module: 'workforce', pages: ['Org structure'] });
+    assert.deepEqual(await sidebar(), { module: 'workforce', pages: ['Timesheet', 'Org structure'] });
     assert.equal((await page.$eval(LOGO, (el) => el.textContent)).trim(), 'Workforce');
     await click(page, LOGO);
     assert.equal((await modules()).find((m) => m.current)?.id, 'workforce');
@@ -105,7 +105,7 @@ describe('module and workspace switcher', () => {
     await inModule('workforce');
     await click(page, '.app-sidebar a[href="/settings"]');
     await page.waitForFunction(() => location.pathname.startsWith('/settings/'));
-    assert.deepEqual(await sidebar(), { module: 'workforce', pages: ['Org structure'] });
+    assert.deepEqual(await sidebar(), { module: 'workforce', pages: ['Timesheet', 'Org structure'] });
     // Remembered in this browser: still Workforce after a reload.
     await page.reload({ waitUntil: 'networkidle0' });
     await inModule('workforce');
@@ -323,9 +323,9 @@ describe('module and workspace switcher', () => {
     await click(page, `${POP} [data-module=workforce]`);
     await page.waitForFunction(() => location.pathname === '/org');
     await closed();
-    // Workforce's bottom bar: Org structure and "More".
+    // Workforce's bottom bar: Timesheet, Org structure and "More".
     await inModule('workforce');
-    assert.deepEqual((await sidebar()).pages, ['Org structure']);
+    assert.deepEqual((await sidebar()).pages, ['Timesheet', 'Org structure']);
     assert.ok(await page.$eval('[data-testid=nav-more]', (el) => el.getClientRects().length > 0), '"More" in the bar');
     // The backdrop closes it, too.
     await click(page, '[data-testid=nav-more]');

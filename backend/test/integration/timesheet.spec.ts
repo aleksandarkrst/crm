@@ -21,6 +21,7 @@ interface Row {
   name: string;
   path: string;
   lockedReason: string | null;
+  edit: 'any' | 'existing' | 'none';
   limit: { limitMinutes: number; loggedMinutes: number } | null;
   cells: Record<string, Cell>;
   minutes: number;
@@ -163,7 +164,7 @@ describe('rows and hours', () => {
     await ok('PUT', '/timesheet/cells', { ...as(), body: { date: monday, taskId: t, minutes: 60 } });
     await ok('DELETE', `/tasks/${t}/assignees/${anaId}`, as(owner), 200);
     const w = await week();
-    expect(w.rows.find((r) => r.id === t)!.lockedReason).toBe('Not assigned to you any more');
+    expect(w.rows.find((r) => r.id === t)).toMatchObject({ lockedReason: 'Not assigned to you any more', edit: 'existing' });
     await ok('PUT', '/timesheet/cells', { ...as(), body: { date: monday, taskId: t, minutes: 30 } });
     expect((await setCell({ date: addDays(monday, 1), taskId: t, minutes: 30 })).status).toBe(403);
     await ok('PUT', '/timesheet/cells', { ...as(), body: { date: monday, taskId: t, minutes: 0 } });
@@ -271,7 +272,7 @@ describe('submit, recall and the lock', () => {
     const locked = await setCell({ date: addDays(monday, 3), taskId: t, minutes: 300 });
     expect(locked.status).toBe(423);
     expect(JSON.stringify(locked.body)).toContain('Project is closed');
-    expect((await week()).rows.find((r) => r.id === t)!.lockedReason).toBe('Project closed');
+    expect((await week()).rows.find((r) => r.id === t)).toMatchObject({ lockedReason: 'Project closed', edit: 'none' });
     // Not in the picker any more.
     const items = await ok<{ id: string }[]>('GET', '/timesheet/loggable', as());
     expect(items.map((i) => i.id)).not.toContain(t);

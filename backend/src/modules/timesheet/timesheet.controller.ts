@@ -8,7 +8,7 @@ import { TimesheetService } from './timesheet.service';
  * The caller's own weekly timesheet (CD-152). A week: `{ weekStart, weekNumber, label, today,
  * thisWeek, deadline: { date, time }, settings: { dayMinutes, maxDayMinutes, timeFormat }, employee,
  * status, statusLabel, submittable, canRecall, days: { date, status, submittedAt, expectedMinutes,
- * minutes, required, editable }[], rows: { key, kind, id, code, name, path, lockedReason, limit,
+ * minutes, required, editable }[], rows: { key, kind, id, code, name, path, lockedReason, edit, limit,
  * cells: { [date]: { minutes, note, entries } }, minutes }[] }`. Changes answer with the week.
  */
 @Controller('timesheet')

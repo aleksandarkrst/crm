@@ -68,8 +68,11 @@ const PROJECTS_NAV: NavDef[] = [
   { to: paths.workOrders, label: 'Work orders', icon: 'M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.3-.7-.7-2.3 2.4-2.4Z', phone: true },
 ];
 
-/** Workforce's pages: Org structure for now; Timesheets, Time off, Approvals and Utilisation come later. */
-const WORKFORCE_NAV: NavDef[] = [{ to: paths.org(), label: 'Org structure', icon: 'M9.5 3.5h5v4h-5zM3.5 16.5h5v4h-5zM15.5 16.5h5v4h-5zM12 7.5v4.5M6 16.5v-2.5h12v2.5', phone: true }];
+/** Workforce's pages: Timesheet (CD-152) and Org structure; Approvals, Today's status and Time off come later. */
+const WORKFORCE_NAV: NavDef[] = [
+  { to: paths.timesheet(), label: 'Timesheet', icon: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2', phone: true },
+  { to: paths.org(), label: 'Org structure', icon: 'M9.5 3.5h5v4h-5zM3.5 16.5h5v4h-5zM15.5 16.5h5v4h-5zM12 7.5v4.5M6 16.5v-2.5h12v2.5', phone: true },
+];
 
 /**
  * The modules in the switcher (CD-214, CD-223, CD-279), in the design's grid order. Each is its own
@@ -88,7 +91,7 @@ export const MODULES: ModuleDef[] = [
     nav: CRM_NAV,
   },
   { id: 'projects', name: 'Projects', description: 'Tasks, work orders, dispatch', icon: 'projects', to: paths.projects, screens: ['/projects', '/tasks', '/work-orders'], nav: PROJECTS_NAV },
-  { id: 'workforce', name: 'Workforce', description: 'People and capacity', icon: 'workforce', to: paths.org(), screens: ['/org', '/people'], nav: WORKFORCE_NAV },
+  { id: 'workforce', name: 'Workforce', description: 'People and capacity', icon: 'workforce', to: paths.org(), screens: ['/timesheet', '/org', '/people'], nav: WORKFORCE_NAV },
   { id: 'settings', name: 'Workspace settings', description: 'CRM, Projects, Workforce', icon: 'settings', to: paths.settings(), screens: [], nav: [], managers: true, settings: true },
   { id: 'planning', name: 'Planning', description: 'Budgets and targets', icon: 'planning', screens: [], nav: [] },
   { id: 'finance', name: 'Finance', description: 'Receivables, payables, bank', icon: 'finance', screens: [], nav: [] },

@@ -490,6 +490,8 @@ export interface State {
   taskRev: number;
   /** Raised by live hints for work orders (CD-265). */
   workOrderRev: number;
+  /** Raised by any timesheet change (CD-152): the Timesheet reads its week again. */
+  timesheetRev: number;
   /** Employees, org levels and units (milestone 13; see store/people.ts), read when a screen needs them. */
   people: PeopleState;
   /** Goes up on every employee and role change (live hints, resync): people lists re-read (CD-142). */

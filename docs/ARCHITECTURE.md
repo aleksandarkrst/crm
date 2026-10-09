@@ -1096,9 +1096,10 @@ only; a manager scoped to their team is a follow-up (it needs teams first).
 
 The `projects` module (`modules/projects`, tables in `schema/projects.ts`, RLS and triggers in
 `drizzle/0051_projects_rls.sql`, `0053_project_fields_auto_create_rls.sql`). Built so far: project
-types with stages (CD-272) and client projects linked to the CRM (CD-233, CD-275). Tasks and time
-come later (CD-146, milestone 15); until then nothing logs hours, so every project can be deleted
-and no "hours" are shown anywhere.
+types with stages (CD-272) and client projects linked to the CRM (CD-233, CD-275), tasks
+(CD-146) and work orders (CD-265). Time is logged on tasks and work orders through the timesheet
+(milestone 15, see "Timesheet"); a project with time on its tasks can't be deleted (409 "This
+project has logged hours. Complete or cancel it instead.").
 
 - **Project types** (`project_types`, `project_stages`): like funnels, a set of ordered stages for
   one kind of project (design v2; CD-255 adopted them instead of the CD-143 hierarchy). Complete and
@@ -1265,17 +1266,17 @@ and no "hours" are shown anywhere.
   role is gone (CD-225), so admins cover HR's view.
 - **Who changes what:** the team, the lead and admins create tasks; anyone who can act edits one.
   Owners, admins and the lead assign anyone, a direct manager their direct reports, and everyone
-  themselves. The lead (of both projects, to move it) and admins move and delete a task. Delete
-  becomes "Close it instead" (409) once time entries exist (milestone 15).
+  themselves. The lead (of both projects, to move it) and admins move and delete a task. A task
+  with time logged on it is kept: 409 "Mark it done instead" (`time_entries_task_fk` restricts).
 - **API:** `GET/POST /api/tasks` (`?projectId=`, `?assigneeId=<id|me>`, `?status=`, `?q=`: name,
   "T-12", project), `GET/PATCH/DELETE /api/tasks/:id`, `POST /api/tasks/:id/assignees`, `DELETE
   …/assignees/:employeeId`, `GET …/history` (the CRM history's shape, with stage and project names;
   the CRM history endpoint never serves tasks), `GET /api/tasks/loggable` (the caller's own). Each
   task says the caller's `access` (`act` / `read`) and `canManage`.
-- **Time (milestone 15):** `canLogTime(tx, employeeId, taskId, date, hours)` and
-  `loggableTasks(tx, employeeId)` are exported from `modules/projects` (`task-log.ts`): an active
-  assignee, a task that isn't Done, an open project. Timesheets use these and don't reimplement the
-  rule; CD-147 adds the per-person hour limit.
+- **Time (milestone 15):** `canLogTime(tx, employeeId, taskId, date, hours)`, the pure
+  `logTimeRefusal` and `loggableTasks(tx, employeeId)` are exported from `modules/projects`
+  (`task-log.ts`): an active assignee, a task that isn't Done, an open project. The timesheet uses
+  these and doesn't reimplement the rule; CD-147 adds the per-person hour limit.
 - **Screens** (CD-283; `lib/tasksApi.ts`, `store/tasks.ts`, read on demand and again on live hints
   `task` and `project` via `s.taskRev`):
   - **Tasks** (`/tasks`, a sidebar item of the Projects module): Kanban (To do · In progress · On
@@ -1307,9 +1308,11 @@ and no "hours" are shown anywhere.
     limit (sum of limits) shows only when every current person has one. The lead, owners, admins
     and the people's managers see every row; anyone else their own hours and the others' names.
     The card sits at the top of the task page's right column (six columns don't fit under Details).
-  - **Hours until milestone 15:** `taskHours()` is the one read of logged and approved hours; it
-    reads `task_time_fixtures`, which only tests write (integration tests in SQL, e2e through the
-    dev-only `POST /api/dev/tasks/:id/hours`). Time entries replace both.
+  - **Hours:** `taskHours()` is the one read of logged and approved hours: the person's time
+    entries on the task, approved ones being those on approved days (CD-152). The dev-only `POST
+    /api/dev/tasks/:id/hours` (browser tests) writes a time entry on a day of its own in January
+    2026, approved when asked. `task_time_fixtures`, the stand-in before, is unused and dropped in
+    a later release (expand, then contract).
   - `canLogTime(…, { block })`: in Block mode (CD-149 will make it a setting) an entry past the
     person's own limit is refused (`over_limit`); one person's hours never count toward another's.
 - **Dependencies** (CD-269, `drizzle/0065`, `0066`): `tasks.waits_for_task_id`, a task of the same
@@ -1370,7 +1373,7 @@ and no "hours" are shown anywhere.
   - History (`GET /api/work-orders/:id/history`): the order's fields (`work_orders_history`) and its
     technicians added, removed and the new lead (`projects_record_technician_changes`). Technicians
     are changed by difference, not deleted and re-added, so the history shows real changes.
-  - Track time is left out until milestone 15's time entries (tasks and work orders together).
+  - Track time comes with CD-276 (the same time entries as the timesheet).
   - Settings → Technicians' "Open work" counts open work orders too.
 - **Work order status and lock** (CD-148, design v2): the technicians, the project lead, owners and
   admins change the status (`canSetStatus`, 403 for others, the creator included); the kanban drag,
@@ -1379,12 +1382,82 @@ and no "hours" are shown anywhere.
   `locked`: fields, technicians, sign-off and the checklist answer 409 "Reopen it to change it", and
   the only change allowed is to another status. Status changes are in the history; no extra emails.
   `canLogWorkOrderTime` / `workOrderLogRefusalFor` (`work-order-log.ts`, exported from the projects
-  module) are milestone 15's rule for time on a work order: a technician on it, not Completed. The
-  database trigger on time entries that enforces the lock comes with milestone 15.
+  module) are milestone 15's rule for time on a work order: a technician on it, not Completed;
+  `loggableWorkOrders` lists them (also leaving out those of a closed project). The trigger on
+  time entries enforces the lock (see "Timesheet"). A work order with time is kept: 409 "Complete
+  it instead".
 - **Email "Assigned to a task"** (job `projects.task-assigned`, projects worker): to someone with an
   account assigned by another person, when they're still on the task and `memberships.
   notify_task_assigned` is on (read when sending). Number, name, project, company, due date and a
   link to `/tasks/:id`.
+
+## Timesheet (milestone 15)
+
+The `timesheet` module (`modules/timesheet`, tables in `schema/timesheet.ts`, RLS, the lock trigger
+and live hints in `drizzle/0077_timesheet_rls.sql`). Spec: "Functional spec: 15 · Timesheet and
+approvals" in Linear; design `docs/design/Timesheet.dc.html`. Built so far: weekly time entry
+(CD-152).
+
+- **Tables:**
+  - `time_entries`: one person's hours on a task **or** a work order (a check) on a date, whole
+    minutes in steps of 15 (15 to 1,440), an optional note (up to 500 characters). Several entries
+    per person, row and day are allowed (the task and work order pages log entries, CD-276); a
+    timesheet cell is their sum. Deleting the employee takes them along; deleting a task or work
+    order with entries is refused (`ON DELETE RESTRICT`, mapped to 409 "… instead").
+  - `timesheet_days`: a day's status once it leaves Draft (`submitted`, `rejected`, `approved`;
+    no row is Draft), who submitted it and when. The design's Rejected is the spec's Returned.
+  - `timesheet_rows`: rows added to a week ("+ Add task or work order", Copy last week) so they
+    show before they have hours. Rows still without hours go when the week is submitted.
+- **The lock** (`time_entries_lock`, BEFORE INSERT/UPDATE/DELETE, for the row before and after):
+  a Submitted day gives 409 "This day is submitted. Recall it to change its hours."; an Approved
+  day 423 "Day is approved and locked"; a Completed work order 423; a task whose project isn't
+  open 423 "Project is closed"; a Done task 423. Each raises `check_violation` naming the rule
+  (`errors.ts`, `TIMESHEET_LOCKS`), so the rule holds whichever code writes entries. A cascade
+  from deleting the employee isn't checked (the employee is gone by then).
+- **Rules** (`timesheet-rules.ts`, pure and unit-tested): a week is its Monday, labelled "Week 41 ·
+  5 to 11 Oct 2026" (ISO week); expected hours are the standard day on working days within
+  employment; a day is required when hours are expected or entered; the week's status is derived
+  from its days (spec 5.4, first match wins: No entry needed, Rejected (N days), Draft / Not
+  submitted, Submitted / Partly approved (a of n days), Approved); the daily maximum; Copy last
+  week's plan.
+- **Settings:** `timesheetSettings(tx, tenantId)` is the one read: fixed defaults until CD-153
+  stores them per workspace (8 h Monday to Friday, shown as 7.50, 12 h a day at most, due Friday
+  17:00 of the same week). Public holidays come with CD-153 too.
+- **API** (`/api/timesheet`, any member, always the caller's own employee record; without one the
+  week has `employee: null` and changes answer 403):
+  - `GET week?week=<Monday>` (this week by default, in the workspace time zone): the week, its days
+    (status, expected and entered minutes, required, editable) and rows (code "T-12" / "WO-1044",
+    name, "Company › Project", the person's limit and their hours on the task, why it's locked,
+    `edit`: any day, only hours already there, or nothing; and the cells).
+  - `GET loggable`: tasks (`loggableTasks`) and work orders (`loggableWorkOrders`) the person can
+    log on now.
+  - `PUT cells` `{ date, taskId | workOrderId, minutes, note? }`: sets one cell (0 clears it).
+    Refused after the current week, outside employment, above the daily maximum ("Maximum 12 h per
+    day"; lowering an over-full day is allowed), on a row the person can't log on (403 not
+    assigned, 423 closed), and on a cell with several entries (409: change them on the task or
+    work order page). Hours already there can be corrected after the person was unassigned (spec
+    4.4). One writer per person and day (`pg_advisory_xact_lock`), so two tabs can't pass the
+    maximum together.
+  - `POST rows`, `GET copy?weekStart=` (for the dialog: the rows it copies and the ones it skips,
+    with why), `POST copy` `{ weekStart, mode: rows | hours }`: hours day by day into empty cells
+    of Draft or Rejected days up to the current week, never over a value or the daily maximum.
+  - `POST submit` `{ weekStart }`: the required Draft days up to the current week become Submitted
+    (also days without hours: the screen asks first). Rejected days are resubmitted on their own
+    (CD-158). `POST recall`: Submitted days go back to Draft.
+  - Every change answers with the whole week; submit, recall and copy are in the audit log
+    (`timesheet.submitted`, `timesheet.recalled`, `timesheet.copied`).
+- **Live hints:** `timesheet` (the employee's id) from all three tables. The Timesheet
+  (`s.timesheetRev`), the task's People and hours card (`taskRev`) and work orders (`workOrderRev`)
+  read again; a task, work order or project change also re-reads the Timesheet.
+- **Screen** (`/timesheet?week=<Monday>`, Workforce's first page; `screens/Timesheet.tsx`,
+  `screens/timesheet/`): week navigation, the status badge, "Submit by Fri 9 Oct, 17:00", Copy last
+  week, "⋯" with Recall submission, Submit week. The grid: Project tasks, then Work orders (sub-line
+  "Company › Project · 4 h left of 6", red when over the limit, or why it's locked), "+ Add task or
+  work order" (a search), Total entered, Expected and Difference. Cells take "7.5", "7,5", "7:30"
+  (rounded to 15 minutes, `parseHours`), save when left, arrows and Enter move, Shift+Enter opens
+  the note popover; submitted cells are blue, approved green, rejected days amber. Saves run one
+  after another and the answer replaces the week, so totals always match the database. On phones
+  the days scroll sideways under a pinned first column (the spec's day view is not built).
 
 ## Products, deal products and currency (CD-83)
 
@@ -1509,8 +1582,8 @@ Settings at the bottom, as in the Workforce design.
 
 - **Pages per module** (`nav` in `modules.ts`): CRM has Overview, Pipeline, Today, Calendar, Visit
   plans, Companies, Contacts, Products and Reports (Reports only for owners, admins and managers who
-  see their team, CD-142: `navFor`); Workforce has Org structure (Timesheets, Time off, Approvals,
-  Utilisation later). Add a module's page there and it shows in the sidebar, the phone bar
+  see their team, CD-142: `navFor`); Workforce has Timesheet (CD-152) and Org structure
+  (Approvals, Today's status, Time off and Utilisation later). Add a module's page there and it shows in the sidebar, the phone bar
   (`phone: true`) or its "More".
 - **The current module** comes from the route (`screens` prefixes): meetings, deals, companies,
   contacts, products and reports are CRM; `/org` and employee cards (`/people/:id`) are Workforce.

@@ -53,4 +53,6 @@ export const paths = {
   workOrders: '/work-orders',
   /** A work order's page (CD-266). */
   workOrder: (id: string) => '/work-orders/' + encodeURIComponent(id),
+  /** My timesheet (CD-152); `week` is its Monday, this week without one. */
+  timesheet: (week?: string | null) => '/timesheet' + query({ week }),
 };
