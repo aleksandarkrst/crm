@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/fonts.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/colors.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/typography.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/spacing.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/effects.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/css/base.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/css/ui.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/css/header.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/styles.css">
+  <script src="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/_ds_bundle.js"></script>
+  <style>
+    body, button, input, select, textarea { margin: 0; font-family: 'Onest', system-ui, sans-serif; }
+    body { background: #E9EEEB; }
+    a { color: var(--brand); text-decoration: none; }
+    a:hover { color: var(--brand-dark); text-decoration: underline; }
+  </style>
+</helmet>
+<section style="padding: 56px; display: flex; flex-direction: column; gap: 40px; color: var(--ink);">
+  <div style="display: flex; flex-direction: column; gap: 6px; max-width: 900px;">
+    <span class="caps" style="color: var(--muted-2);">Pultly · Milestone 15</span>
+    <span style="font-family: 'Unbounded', sans-serif; font-size: 40px; font-weight: 600; letter-spacing: -0.03em;">Timesheet and approvals</span>
+    <span style="font-size: 14px; color: var(--text-2); line-height: 1.5;">One screen per Linear task, CD-152 to CD-162 and CD-277. Payroll reports (CD-160) are left for the Reports module. Sample workspace: West Balkans Machinery, week 41 (5 to 11 Oct 2026), deadline Friday 17:00, today Tuesday 13 Oct.</span>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 56px; align-items: flex-start;">
+
+    <!-- CD-152 MY TIMESHEET -->
+    <div id="cd-152" data-screen-label="CD-152 My timesheet" style="display: flex; flex-direction: column; gap: 12px; flex: 0 0 auto; width: 1280px;">
+      <div style="display: flex; align-items: center; gap: 10px;"><span style="background: #0D241C; color: #C6F16A; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;">CD-152</span><span style="font-size: 15px; font-weight: 600;">Weekly time entry per task and work order · Draft week</span></div>
+      <div style="display: flex; height: 820px; background: #FFFFFF; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; position: relative;">
+        <aside style="width: 96px; flex: 0 0 96px; background: #0D241C; padding: 18px 8px; display: flex; flex-direction: column; align-items: center; gap: 14px; box-sizing: border-box;">
+          <svg viewBox="0 0 64 48" width="40" height="30" fill="none"><path d="M14 4h48L52 34H4z" fill="#FFFFFF"></path><path d="M20 28h5l2.7-8h-5z" fill="#0D241C"></path><path d="M28 28h5l4-12h-5z" fill="#0D241C"></path><path d="M36 28h5l5.3-16h-5z" fill="#C6F16A"></path><rect x="4" y="39" width="36" height="5" rx="2.5" fill="#FFFFFF"></rect></svg>
+          <sc-for list="{{ nav.ts }}" as="n" hint-placeholder-count="5"><span style="display: flex; flex-direction: column; align-items: center; gap: 5px; color: {{ n.fg }};"><span style="width: 46px; height: 42px; border-radius: 11px; background: {{ n.bg }}; display: flex; align-items: center; justify-content: center;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.icon }}"></path></svg></span><span style="font-size: 10.5px; font-weight: 500; text-align: center;">{{ n.label }}</span></span></sc-for>
+        </aside>
+        <main style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+          <header class="screen-header" style="position: static;"><div class="header-title"><h1>Timesheet</h1></div><div class="header-right"><span class="avatar-btn">DM</span></div></header>
+          <div style="padding: 16px 30px; display: flex; flex-direction: column; gap: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <button type="button" class="btn-plain" style="padding: 7px 10px;">←</button><button type="button" class="btn-plain">This week</button><button type="button" class="btn-plain" style="padding: 7px 10px;">→</button>
+              <span style="font-size: 15px; font-weight: 600;">Week 41 · 5 to 11 Oct 2026</span><span class="badge badge-neutral">Draft</span>
+              <span style="font-size: 12.5px; color: var(--text-2);">Submit by Fri 9 Oct, 17:00</span>
+              <span style="flex: 1;"></span>
+              <button type="button" class="btn-plain">Copy last week</button><button type="button" class="btn-plain">⋯</button><button type="button" class="btn btn-primary">Submit week</button>
+            </div>
+            <div style="border: 1px solid var(--border); border-radius: 12px; overflow: hidden;">
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) repeat(7, 82px) 84px; background: var(--panel); border-bottom: 1px solid var(--border);">
+                <span class="th" style="padding: 10px 14px; align-self: end;">Task or work order</span>
+                <sc-for list="{{ ts1.days }}" as="d" hint-placeholder-count="7"><span style="padding: 8px 4px; text-align: center; background: {{ d.bg }}; border-left: 1px solid var(--divider); display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 10.5px; font-weight: 600; color: var(--muted-2); letter-spacing: 0.06em;">{{ d.name }}</span><span style="font-size: 12.5px; font-weight: 600;">{{ d.date }}</span><span style="font-size: 11px; color: {{ d.totColor }};">{{ d.tot }}</span></span></sc-for>
+                <span class="th" style="padding: 10px 8px; text-align: right; align-self: end; border-left: 1px solid var(--divider);">Total</span>
+              </div>
+              <sc-for list="{{ ts1.rows }}" as="r" hint-placeholder-count="8">
+                <div style="display: grid; grid-template-columns: minmax(0, 1fr) repeat(7, 82px) 84px; border-bottom: 1px solid var(--divider); background: {{ r.bg }};">
+                  <span style="padding: 8px 14px; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 13px; font-weight: {{ r.fw }}; color: {{ r.color }};">{{ r.label }}</span><span style="font-size: 11.5px; color: {{ r.subColor }};">{{ r.sub }}</span></span>
+                  <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="7"><span style="border-left: 1px solid var(--divider); padding: 5px; display: flex; background: {{ c.colBg }};"><span style="flex: 1; display: flex; align-items: center; justify-content: center; border-radius: 7px; font-size: 13px; background: {{ c.bg }}; color: {{ c.fg }}; border: {{ c.border }}; position: relative;">{{ c.v }}</span></span></sc-for>
+                  <span style="padding: 8px; text-align: right; font-size: 13px; font-weight: 600; border-left: 1px solid var(--divider); align-self: center;">{{ r.total }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display: flex; gap: 16px; font-size: 12px; color: var(--text-2);"><span>Type 7.5, 7,5 or 7:30 · saved when you leave the cell · arrows and Tab move · Shift+Enter opens the note</span></div>
+          </div>
+        </main>
+        <div class="menu-pop" style="position: absolute; left: 640px; top: 300px; width: 280px; padding: 12px; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box;">
+          <span style="font-size: 12.5px; font-weight: 600;">#142 · Wed 7 Oct</span>
+          <label class="form-label" style="font-size: 12px;">Hours<input class="form-input" value="7.50" style="font-family: inherit;"></label>
+          <label class="form-label" style="font-size: 12px;">Note<textarea class="box-input" rows="2" style="font-family: inherit;">Waited 1 h for the seal kit from the warehouse.</textarea></label>
+          <span style="font-size: 11px; color: var(--text-2);">Up to 500 characters · visible to your approver</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CD-152 COPY LAST WEEK -->
+    <div id="cd-152b" data-screen-label="CD-152 Copy last week" style="display: flex; flex-direction: column; gap: 12px; flex: 0 0 auto; width: 620px;">
+      <div style="display: flex; align-items: center; gap: 10px;"><span style="background: #0D241C; color: #C6F16A; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;">CD-152</span><span style="font-size: 15px; font-weight: 600;">Copy last week</span></div>
+      <div style="height: 520px; background: rgba(13,36,28,0.55); border-radius: 12px; display: flex; align-items: center; justify-content: center; padding: 30px; box-sizing: border-box;">
+        <div class="modal" style="position: static; width: 100%; max-width: none; box-sizing: border-box; animation: none;">
+          <div><div class="modal-title">Copy week 40 into week 41</div><div class="modal-sub">Only tasks and work orders you can still log on are copied.</div></div>
+          <label class="choice" style="display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid var(--brand); border-radius: 10px; background: var(--brand-tint);"><span style="width: 16px; height: 16px; border-radius: 50%; border: 5px solid var(--brand); box-sizing: border-box; margin-top: 2px;"></span><span style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 13.5px; font-weight: 600;">Rows only</span><span style="font-size: 12.5px; color: var(--text-2);">Adds last week's tasks and work orders, empty.</span></span></label>
+          <label class="choice" style="display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid var(--border); border-radius: 10px;"><span style="width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--dashed); box-sizing: border-box; margin-top: 2px;"></span><span style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 13.5px; font-weight: 600;">Rows and hours</span><span style="font-size: 12.5px; color: var(--text-2);">Copies hours day by day into empty cells. Never overwrites, skips days off and days over 12 h.</span></span></label>
+          <div class="hint-box" style="font-size: 12.5px;">2 rows will be skipped: #129 is closed, task SP-9 is in a completed project.</div>
+          <div class="modal-actions"><button type="button" class="btn-plain">Cancel</button><button type="button" class="btn btn-primary">Copy</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CD-277 PROJECT HOURS AND CLOSED LOCK -->
+    <div id="cd-277" data-screen-label="CD-277 Logged hours and closed projects" style="display: flex; flex-direction: column; gap: 12px; flex: 0 0 auto; width: 1280px;">
+      <div style="display: flex; align-items: center; gap: 10px;"><span style="background: #0D241C; color: #C6F16A; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;">CD-277</span><span style="font-size: 15px; font-weight: 600;">Logged hours on the company card and project lists · time locked on closed projects</span></div>
+      <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 20px; align-items: start;">
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <span class="caps">CRM · Company page · Projects card</span>
+          <div class="card" style="padding: 20px; display: flex; flex-direction: column; gap: 4px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;"><span class="card-title">Projects</span><span style="font-size: 12px; color: var(--text-2);">64.5 h this month · 412 h total</span></div>
+            <sc-for list="{{ coProjects }}" as="p" hint-placeholder-count="3">
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 10px 0; border-top: 1px solid var(--divider);">
+                <a href="#" style="font-size: 13.5px; font-weight: 600; color: var(--ink);">{{ p.name }}</a>
+                <span><span class="badge {{ p.cls }}">{{ p.stage }}</span></span>
+                <span style="font-size: 12px; color: var(--text-2);">{{ p.month }}</span>
+                <span style="font-size: 12px; color: {{ p.totColor }}; text-align: right;">{{ p.total }}</span>
+              </div>
+            </sc-for>
+            <span style="font-size: 12px; color: var(--text-2); margin-top: 6px;">Hours count draft, submitted, rejected and approved entries. "This month" follows the calendar month.</span>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <span class="caps">Projects · Table view</span>
+          <div style="border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #FFFFFF;">
+            <div class="table-head" style="grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 110px 110px 170px;"><span class="th">Project</span><span class="th">Client</span><span class="th">Stage</span><span class="th">This month</span><span class="th">Logged / budget</span></div>
+            <sc-for list="{{ projRows }}" as="r" hint-placeholder-count="5">
+              <div class="table-row" style="grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 110px 110px 170px;">
+                <span style="font-size: 13.5px; font-weight: 600;">{{ r.name }}</span>
+                <span style="font-size: 13px; color: var(--text-2);">{{ r.client }}</span>
+                <span><span class="badge {{ r.cls }}">{{ r.stage }}</span></span>
+                <span style="font-size: 13px;">{{ r.month }}</span>
+                <span style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 12.5px; color: {{ r.color }}; min-width: 70px;">{{ r.total }}</span><span style="flex: 1; height: 5px; border-radius: 3px; background: var(--chip); overflow: hidden;"><span style="display: block; height: 100%; width: {{ r.pct }}; background: {{ r.color }};"></span></span></span>
+              </div>
+            </sc-for>
+          </div>
+          <span style="font-size: 12px; color: var(--text-2);">The board cards show the same "This month" figure under the task count. Projects without a budget show logged hours only.</span>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start;">
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <span class="caps">Task page · project completed</span>
+          <div class="card" style="padding: 20px; display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;"><span class="card-title">Time</span><span style="font-size: 12.5px; color: var(--text-2);">38 of 40 h</span></div>
+            <div class="hint-box" style="font-size: 12.5px; display: flex; flex-direction: column; gap: 4px;"><span style="font-weight: 600;">Hidrogradnja › Engine overhaul, CAT 336 was completed on Fri 2 Oct.</span><span>Time can't be logged, edited or deleted on its tasks. A project lead or Admin can reopen the project to log time again.</span></div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; opacity: 0.5;">
+              <span class="box-input" style="width: 120px; color: var(--muted-2);">Dragan Milić</span><span class="box-input" style="width: 64px; color: var(--muted-2);">2</span><span class="box-input" style="flex: 1 1 160px; color: var(--muted-2);">What did you work on?</span><button type="button" class="btn btn-secondary" disabled="" style="cursor: not-allowed;">Log time</button>
+            </div>
+            <sc-for list="{{ lockedLog }}" as="l" hint-placeholder-count="3"><div style="display: grid; grid-template-columns: 90px 110px minmax(0, 1fr) 54px; gap: 10px; font-size: 13px; padding: 8px 0; border-top: 1px solid var(--divider);"><span style="color: var(--text-2);">{{ l.date }}</span><span>{{ l.who }}</span><span style="color: var(--text-2);">{{ l.note }}</span><span style="text-align: right; font-weight: 600;">{{ l.h }}</span></div></sc-for>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <span class="caps">Timesheet · row of a closed project</span>
+          <div style="border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #FFFFFF;">
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) repeat(5, 62px); background: var(--panel); border-bottom: 1px solid var(--border);">
+              <span class="th" style="padding: 10px 14px;">Task or work order</span>
+              <sc-for list="{{ lockDays }}" as="d" hint-placeholder-count="5"><span class="th" style="padding: 10px 4px; text-align: center; border-left: 1px solid var(--divider);">{{ d }}</span></sc-for>
+            </div>
+            <sc-for list="{{ lockRows }}" as="r" hint-placeholder-count="2">
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) repeat(5, 62px); border-bottom: 1px solid var(--divider); background: {{ r.bg }};">
+                <span style="padding: 8px 14px; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 13px; font-weight: 500; color: {{ r.color }};">{{ r.label }}</span><span style="font-size: 11.5px; color: {{ r.subColor }};">{{ r.sub }}</span></span>
+                <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="5"><span style="border-left: 1px solid var(--divider); padding: 5px; display: flex;"><span style="flex: 1; display: flex; align-items: center; justify-content: center; border-radius: 7px; font-size: 13px; background: {{ c.bg }}; color: {{ c.fg }}; border: {{ c.border }};">{{ c.v }}</span></span></sc-for>
+              </div>
+            </sc-for>
+          </div>
+          <span style="font-size: 12px; color: var(--text-2); line-height: 1.5;">Hours entered before the project closed stay and can still be submitted and approved. Empty cells are locked from the close date. The API refuses new entries with 423 "Project is closed". Closed projects can't be added with "+ Add task or work order" or copied from last week.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CD-155 / CD-158 REJECTED AND LATE -->
+    <div id="cd-158" data-screen-label="CD-155 CD-158 Rejected and late" style="display: flex; flex-direction: column; gap: 12px; flex: 0 0 auto; width: 1280px;">
+      <div style="display: flex; align-items: center; gap: 10px;"><span style="background: #0D241C; color: #C6F16A; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;">CD-155</span><span style="background: #0D241C; color: #C6F16A; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;">CD-158</span><span style="font-size: 15px; font-weight: 600;">Late flag and resubmitting only the rejected day</span></div>
+      <div style="display: flex; height: 700px; background: #FFFFFF; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;">
+        <aside style="width: 96px; flex: 0 0 96px; background: #0D241C; padding: 18px 8px; display: flex; flex-direction: column; align-items: center; gap: 14px; box-sizing: border-box;">
+          <svg viewBox="0 0 64 48" width="40" height="30" fill="none"><path d="M14 4h48L52 34H4z" fill="#FFFFFF"></path><path d="M20 28h5l2.7-8h-5z" fill="#0D241C"></path><path d="M28 28h5l4-12h-5z" fill="#0D241C"></path><path d="M36 28h5l5.3-16h-5z" fill="#C6F16A"></path><rect x="4" y="39" width="36" height="5" rx="2.5" fill="#FFFFFF"></rect></svg>
+          <sc-for list="{{ nav.ts }}" as="n" hint-placeholder-count="5"><span style="display: flex; flex-direction: column; align-items: center; gap: 5px; color: {{ n.fg }};"><span style="width: 46px; height: 42px; border-radius: 11px; background: {{ n.bg }}; display: flex; align-items: center; justify-content: center;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.icon }}"></path></svg></span><span style="font-size: 10.5px; font-weight: 500; text-align: center;">{{ n.label }}</span></span></sc-for>
+        </aside>
+        <main style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+          <header class="screen-header" style="position: static;"><div class="header-title"><h1>Timesheet</h1></div><div class="header-right"><span class="avatar-btn">DM</span></div></header>
+          <div style="padding: 16px 30px; display: flex; flex-direction: column; gap: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <span style="font-size: 15px; font-weight: 600;">Week 41 · 5 to 11 Oct 2026</span><span class="badge badge-warn">Rejected (1 day)</span><span class="badge badge-danger">Late</span>
+              <span style="font-size: 12.5px; color: var(--text-2);">First submitted Mon 12 Oct, 08:40 · deadline was Fri 9 Oct, 17:00</span>
+              <span style="flex: 1;"></span><button type="button" class="btn-plain">⋯</button><button type="button" class="btn btn-primary">Resubmit rejected days (1)</button>
+            </div>
+            <div style="background: var(--warn-soft); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;">
+              <span style="font-size: 13px; font-weight: 600; color: var(--warn);">Wednesday 7 Oct was rejected by Marko Ilić · today 09:12</span>
+              <span style="font-size: 13px; color: var(--ink);">“7.5 h on #142 but the customer signed 5 h on the work sheet. Please check and add a note.”</span>
+            </div>
+            <div style="border: 1px solid var(--border); border-radius: 12px; overflow: hidden;">
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) repeat(7, 82px) 84px; background: var(--panel); border-bottom: 1px solid var(--border);">
+                <span class="th" style="padding: 10px 14px; align-self: end;">Task or work order</span>
+                <sc-for list="{{ ts3.days }}" as="d" hint-placeholder-count="7"><span style="padding: 8px 4px; text-align: center; background: {{ d.bg }}; border-left: 1px solid var(--divider); display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 10.5px; font-weight: 600; color: var(--muted-2); letter-spacing: 0.06em;">{{ d.name }}</span><span style="font-size: 12.5px; font-weight: 600;">{{ d.date }}</span><span style="font-size: 11px; color: {{ d.totColor }}; font-weight: 600;">{{ d.tot }}</span></span></sc-for>
+                <span class="th" style="padding: 10px 8px; text-align: right; align-self: end; border-left: 1px solid var(--divider);">Total</span>
+              </div>
+              <sc-for list="{{ ts3.rows }}" as="r" hint-placeholder-count="5">
+                <div style="display: grid; grid-template-columns: minmax(0, 1fr) repeat(7, 82px) 84px; border-bottom: 1px solid var(--divider); background: {{ r.bg }};">
+                  <span style="padding: 8px 14px; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 13px; font-weight: {{ r.fw }}; color: {{ r.color }};">{{ r.label }}</span><span style="font-size: 11.5px; color: {{ r.subColor }};">{{ r.sub }}</span></span>
+                  <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="7"><span style="border-left: 1px solid var(--divider); padding: 5px; display: flex; background: {{ c.colBg }};"><span style="flex: 1; display: flex; align-items: center; justify-content: center; border-radius: 7px; font-size: 13px; background: {{ c.bg }}; color: {{ c.fg }}; border: {{ c.border }};">{{ c.v }}</span></span></sc-for>
+                  <span style="padding: 8px; text-align: right; font-size: 13px; font-weight: 600; border-left: 1px solid var(--divider); align-self: center;">{{ r.total }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display: flex; gap: 18px; font-size: 12px; color: var(--text-2); align-items: center;"><span style="display: flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 3px; background: #E7F2EE; border: 1px solid #A3D2BF;"></span>Approved · locked</span><span style="display: flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 3px; background: #EEF2FA; border: 1px solid #C9D3E6;"></span>Submitted · read-only</span><span style="display: flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 3px; background: #FFFFFF; border: 1px solid #B4531B;"></span>Rejected · editable</span><span>The Late flag stays on this week permanently, also after approval.</span></div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- CD-153 SETTINGS · EMPLOYEES -->
+    <div id="cd-153" data-screen-label="CD-153 Settings Employees" style="display: flex; flex-direction: column; gap: 12px; flex: 0 0 auto; width: 1280px;">
+      <div style="display: flex; align-items: center; gap: 10px;"><span style="background: #0D241C; color: #C6F16A; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;">CD-153</span><span style="font-size: 15px; font-weight: 600;">Settings → Workforce → Employees · standard working day, time format, max hours per day</span></div>
+      <div style="display: flex; flex-direction: column; background: #FFFFFF; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;">
+        <header class="screen-header" style="position: static;"><div class="header-title"><h1>Settings</h1></div><div class="header-right"><span class="avatar-btn">AK</span></div></header>
+        <div style="display: grid; grid-template-columns: 250px minmax(0, 1fr); align-items: start;">
+          <div style="padding: 22px 16px; display: flex; flex-direction: column; gap: 18px;">
+            <sc-for list="{{ setNavEmp }}" as="g" hint-placeholder-count="4"><div style="display: flex; flex-direction: column; gap: 2px;"><span class="caps" style="padding: 0 12px 6px; color: var(--muted-2);">{{ g.label }}</span><sc-for list="{{ g.items }}" as="t" hint-placeholder-count="3"><span style="padding: 9px 12px; border-radius: 9px; font-size: 14px; font-weight: {{ t.fw }}; background: {{ t.bg }}; color: {{ t.fg }};">{{ t.label }}</span></sc-for></div></sc-for>
+          </div>
+          <div style="padding: 24px 32px 36px 20px; display: flex; flex-direction: column; gap: 20px; min-width: 0;">
+            <div style="display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 20px; font-weight: 600;">Employees</span><span style="font-size: 14px; color: var(--text-2);">What new employees start with and what employees may change themselves.</span></div>
+            <div class="card" style="padding: 24px; display: flex; flex-direction: column; gap: 12px;"><div style="display: flex; flex-direction: column; gap: 4px;"><span class="card-title">Employees</span></div><div style="display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 6px 16px; align-items: center; padding: 6px 0;"><span style="font-size: 13.5px; color: var(--text-2);">Default weekly hours</span><input class="form-input" value="40" style="width: 150px; font-family: inherit; box-sizing: border-box;"><span></span><span style="font-size: 12.5px; color: var(--text-2);">New employees and imports start with these hours.</span></div><div style="display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 6px 16px; align-items: center; padding: 6px 0;"><span style="font-size: 13.5px; color: var(--text-2);">Time format</span><div style="display: flex; gap: 6px; flex-wrap: wrap;"><span class="choice-pill on">7.50</span><span class="choice-pill">7:30</span></div><span></span><span style="font-size: 12.5px; color: var(--text-2);">How hours are shown in the Timesheet, Approvals and reports. Typing either format works.</span></div><div style="display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 6px 16px; align-items: center; padding: 6px 0;"><span style="font-size: 13.5px; color: var(--text-2);">Max hours per day</span><input class="form-input" value="12" style="width: 150px; font-family: inherit; box-sizing: border-box;"><span></span><span style="font-size: 12.5px; color: var(--text-2);">Entries above this on one day are refused.</span></div><div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--divider);"><span style="display: flex; flex-direction: column; gap: 3px;"><span style="font-size: 14px; font-weight: 600;">Employee number required</span><span style="font-size: 13px; color: var(--text-2);">Adding, editing and importing employees needs an employee number. Employees without one show under Data issues.</span></span><button type="button" class="switch"><span></span></button></div><div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--divider);"><span style="display: flex; flex-direction: column; gap: 3px;"><span style="font-size: 14px; font-weight: 600;">Employees can edit their own bank account</span><span style="font-size: 13px; color: var(--text-2);">When off, only Admins change bank accounts. The employee is emailed about every change either way.</span></span><button type="button" class="switch on"><span></span></button></div><span style="font-size: 13px; color: var(--text-2); padding-top: 4px;">Changes are saved as you make them. Only owners and admins edit employees, units and managers.</span></div>
+            <div class="card" style="padding: 24px; display: flex; flex-direction: column; gap: 12px;"><div style="display: flex; flex-direction: column; gap: 4px;"><span class="card-title">Standard working day</span><span style="font-size: 13px; color: var(--text-2);">The day every employee is expected to work. Drives expected hours in the Timesheet and the hours of time off.</span></div><div style="display: flex; gap: 12px; flex-wrap: wrap;"><label class="form-label">Hours per day<input class="form-input" value="8" style="width: 120px; font-family: inherit; box-sizing: border-box;"></label><label class="form-label">Start<input class="form-input" value="08:00" style="width: 120px; font-family: inherit; box-sizing: border-box;"></label><label class="form-label">End<input class="form-input" value="16:00" style="width: 120px; font-family: inherit; box-sizing: border-box;"></label></div><div style="display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 13.5px; color: var(--text-2);">Working days</span><div style="display: flex; gap: 6px; flex-wrap: wrap;"><span class="choice-pill on">Mon</span><span class="choice-pill on">Tue</span><span class="choice-pill on">Wed</span><span class="choice-pill on">Thu</span><span class="choice-pill on">Fri</span><span class="choice-pill">Sat</span><span class="choice-pill">Sun</span></div></div><span style="font-size: 12.5px; color: var(--text-2);">Approved days keep the hours they had when they were approved.</span></div>
+            <div class="card" style="padding: 24px; display: flex; flex-direction: column; gap: 12px;"><div style="display: flex; flex-direction: column; gap: 4px;"><span class="card-title">Organization levels</span><span style="font-size: 13px; color: var(--text-2);">How the company is organized, top-down: for example Sector, Department and Team. Units are created on the Org structure page; a unit sits inside a unit of a higher level. Every unit's leader is its Lead.</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--divider);"><span style="color: var(--muted-2);">⋮⋮</span><span style="font-size: 13px; color: var(--text-2); width: 18px;">1.</span><input class="form-input" value="Department" style="flex: 1; font-family: inherit; box-sizing: border-box;"><span style="font-size: 13px; color: var(--text-2);">7 units</span><button type="button" class="btn-outline">↑</button><button type="button" class="btn-outline">↓</button><button type="button" class="btn-outline">Remove</button></div><div style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--divider);"><span style="color: var(--muted-2);">⋮⋮</span><span style="font-size: 13px; color: var(--text-2); width: 18px;">2.</span><input class="form-input" value="Team" style="flex: 1; font-family: inherit; box-sizing: border-box;"><span style="font-size: 13px; color: var(--text-2);">6 units</span><button type="button" class="btn-outline">↑</button><button type="button" class="btn-outline">↓</button><button type="button" class="btn-outline">Remove</button></div><div style="display: flex; gap: 10px;"><input class="form-input" placeholder="New level, e.g. Sector" style="flex: 1; font-family: inherit; box-sizing: border-box;"><button type="button" class="btn btn-secondary" disabled="">Add level</button></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CD-156 SETTINGS · APPROVALS -->
+    <div id="cd-156" data-screen-label="CD-156 Settings Approvals" style="display: flex; flex-direction: column; gap: 12px; flex: 0 0 auto; width: 1280px;">
+      <div style="display: flex; align-items: center; gap: 10px;"><span style="background: #0D241C; color: #C6F16A; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;">CD-153</span><span style="background: #0D241C; color: #C6F16A; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;">CD-156</span><span style="font-size: 15px; font-weight: 600;">Settings → Workforce → Approvals · approval mode, submission deadline, reminders</span></div>
+      <div style="display: flex; flex-direction: column; background: #FFFFFF; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;">
+        <header class="screen-header" style="position: static;"><div class="header-title"><h1>Settings</h1></div><div class="header-right"><span class="avatar-btn">AK</span></div></header>
+        <div style="display: grid; grid-template-columns: 250px minmax(0, 1fr); align-items: start;">
+          <div style="padding: 22px 16px; display: flex; flex-direction: column; gap: 18px;">
+            <sc-for list="{{ setNavAp }}" as="g" hint-placeholder-count="4"><div style="display: flex; flex-direction: column; gap: 2px;"><span class="caps" style="padding: 0 12px 6px; color: var(--muted-2);">{{ g.label }}</span><sc-for list="{{ g.items }}" as="t" hint-placeholder-count="3"><span style="padding: 9px 12px; border-radius: 9px; font-size: 14px; font-weight: {{ t.fw }}; background: {{ t.bg }}; color: {{ t.fg }};">{{ t.label }}</span></sc-for></div></sc-for>
+          </div>
+          <div style="padding: 24px 32px 36px 20px; display: flex; flex-direction: column; gap: 20px; min-width: 0;">
+            <div style="display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 20px; font-weight: 600;">Approvals</span><span style="font-size: 14px; color: var(--text-2);">When timesheets are due, how managers approve them and who gets reminded.</span></div>
+            <div class="card" style="padding: 24px; display: flex; flex-direction: column; gap: 12px;"><div style="display: flex; flex-direction: column; gap: 4px;"><span class="card-title">Approval mode</span></div><label style="display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid var(--brand); border-radius: 10px; background: var(--brand-tint);"><span style="width: 16px; height: 16px; border-radius: 50%; border: 5px solid var(--brand); box-sizing: border-box; margin-top: 2px; flex: 0 0 16px;"></span><span style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 13.5px; font-weight: 600;">Whole week</span><span style="font-size: 12.5px; color: var(--text-2);">Employees submit the week. Managers approve it once every working day is submitted.</span></span></label><label style="display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid var(--border); border-radius: 10px;"><span style="width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--dashed); box-sizing: border-box; margin-top: 2px; flex: 0 0 16px;"></span><span style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 13.5px; font-weight: 600;">Day by day</span><span style="font-size: 12.5px; color: var(--text-2);">Employees can also submit single days. Managers approve or reject each submitted day.</span></span></label><span style="font-size: 12.5px; color: var(--text-2);">Changing the mode never changes a day's status, only the actions offered from then on.</span></div>
+            <div class="card" style="padding: 24px; display: flex; flex-direction: column; gap: 12px;"><div style="display: flex; flex-direction: column; gap: 4px;"><span class="card-title">Submission deadline</span></div><div style="display: flex; gap: 12px; flex-wrap: wrap;"><label class="form-label">Day<input class="form-input" value="Friday" style="width: 150px; font-family: inherit; box-sizing: border-box;"></label><label class="form-label">Time<input class="form-input" value="17:00" style="width: 120px; font-family: inherit; box-sizing: border-box;"></label><label class="form-label">Week<input class="form-input" value="Same week" style="width: 150px; font-family: inherit; box-sizing: border-box;"></label></div><span style="font-size: 12.5px; color: var(--text-2);">Week 42 is due Fri 16 Oct, 17:00. A deadline on a public holiday moves to the next working day.</span><div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--divider);"><span style="display: flex; flex-direction: column; gap: 3px;"><span style="font-size: 14px; font-weight: 600;">Auto submit at the deadline</span><span style="font-size: 13px; color: var(--text-2);">Weeks with hours and draft days are submitted and marked Late and Auto-submitted. Weeks without hours and rejected days are left alone.</span></span><button type="button" class="switch"><span></span></button></div></div>
+            <div class="card" style="padding: 24px; display: flex; flex-direction: column; gap: 12px;"><div style="display: flex; flex-direction: column; gap: 4px;"><span class="card-title">Reminders</span></div><div style="display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 6px 16px; align-items: center; padding: 6px 0;"><span style="font-size: 13.5px; color: var(--text-2);">Reminder</span><input class="form-input" value="2 hours before the deadline" style="width: 260px; font-family: inherit; box-sizing: border-box;"><span></span><span style="font-size: 12.5px; color: var(--text-2);">Sent to everyone who hasn't submitted yet.</span></div><div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--divider);"><span style="display: flex; flex-direction: column; gap: 3px;"><span style="font-size: 14px; font-weight: 600;">After-deadline emails</span><span style="font-size: 13px; color: var(--text-2);">At the deadline, late employees get a notice and each manager gets a list of their late people.</span></span><button type="button" class="switch on"><span></span></button></div></div>
+            <span style="font-size: 13px; color: var(--text-2);">Changes are saved as you make them and written to the audit log. Changing the deadline applies to the current week.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CD-154 EMAILS -->
+    <div id="cd-154" data-screen-label="CD-154 Reminder emails" style="display: flex; flex-direction: column; gap: 12px; flex: 0 0 auto; width: 1280px;">
+      <div style="display: flex; align-items: center; gap: 10px;"><span style="background: #0D241C; color: #C6F16A; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;">CD-154</span><span style="font-size: 15px; font-weight: 600;">Reminder before the deadline and notices after it</span></div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: start;">
+        <sc-for list="{{ emails }}" as="m" hint-placeholder-count="3">
+          <div style="background: #FFFFFF; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column;">
+            <div style="padding: 12px 16px; border-bottom: 1px solid var(--divider); display: flex; flex-direction: column; gap: 3px; background: var(--panel);"><span class="caps">{{ m.when }}</span><span style="font-size: 13.5px; font-weight: 600;">{{ m.subject }}</span><span style="font-size: 12px; color: var(--text-2);">{{ m.to }}</span></div>
+            <div style="padding: 20px; display: flex; flex-direction: column; gap: 12px;">
+              <svg viewBox="0 0 64 48" width="34" height="26" fill="none"><path d="M14 4h48L52 34H4z" fill="#0D241C"></path><path d="M20 28h5l2.7-8h-5z" fill="#FFFFFF"></path><path d="M28 28h5l4-12h-5z" fill="#FFFFFF"></path><path d="M36 28h5l5.3-16h-5z" fill="#C6F16A"></path><rect x="4" y="39" width="36" height="5" rx="2.5" fill="#0D241C"></rect></svg>
+              <span style="font-size: 13.5px; line-height: 1.55;">{{ m.body }}</span>
+              <div style="background: var(--bg-soft); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;"><sc-for list="{{ m.lines }}" as="l" hint-placeholder-count="3"><div style="display: flex; justify-content: space-between; gap: 10px; font-size: 13px;"><span>{{ l.a }}</span><span style="color: {{ l.color }}; font-weight: 500;">{{ l.b }}</span></div></sc-for></div>
+              <span class="btn btn-primary" style="align-self: flex-start;">{{ m.cta }}</span>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- CD-157 APPROVALS -->
+    <div id="cd-157" data-screen-label="CD-157 Approvals" style="display: flex; flex-direction: column; gap: 12px; flex: 0 0 auto; width: 1280px;">
+      <div style="display: flex; align-items: center; gap: 10px;"><span style="background: #0D241C; color: #C6F16A; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;">CD-157</span><span style="font-size: 15px; font-weight: 600;">Manager approval screen · Monday morning</span></div>
+      <div style="display: flex; height: 760px; background: #FFFFFF; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;">
+        <aside style="width: 96px; flex: 0 0 96px; background: #0D241C; padding: 18px 8px; display: flex; flex-direction: column; align-items: center; gap: 14px; box-sizing: border-box;">
+          <svg viewBox="0 0 64 48" width="40" height="30" fill="none"><path d="M14 4h48L52 34H4z" fill="#FFFFFF"></path><path d="M20 28h5l2.7-8h-5z" fill="#0D241C"></path><path d="M28 28h5l4-12h-5z" fill="#0D241C"></path><path d="M36 28h5l5.3-16h-5z" fill="#C6F16A"></path><rect x="4" y="39" width="36" height="5" rx="2.5" fill="#FFFFFF"></rect></svg>
+          <sc-for list="{{ nav.ap }}" as="n" hint-placeholder-count="5"><span style="display: flex; flex-direction: column; align-items: center; gap: 5px; color: {{ n.fg }};"><span style="width: 46px; height: 42px; border-radius: 11px; background: {{ n.bg }}; display: flex; align-items: center; justify-content: center;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.icon }}"></path></svg></span><span style="font-size: 10.5px; font-weight: 500; text-align: center;">{{ n.label }}</span></span></sc-for>
+        </aside>
+        <main style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+          <header class="screen-header" style="position: static;"><div class="header-title"><h1>Approvals</h1></div><div class="header-right"><span class="avatar-btn">MI</span></div></header>
+          <div style="padding: 16px 30px; display: flex; flex-direction: column; gap: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <button type="button" class="btn-plain" style="padding: 7px 10px;">←</button><span style="font-size: 15px; font-weight: 600;">Week 41 · 5 to 11 Oct</span><button type="button" class="btn-plain" style="padding: 7px 10px;">→</button>
+              <div style="display: flex; gap: 6px; margin-left: 8px;"><span class="choice-pill on">My team · 6</span><span class="choice-pill">All employees</span></div>
+              <span class="btn-plain">Status: All</span><span style="flex: 1;"></span>
+              <span style="font-size: 12.5px; color: var(--text-2);">3 ready · 1 not submitted · 1 rejected · 1 approved</span><button type="button" class="btn btn-primary">Approve 3 complete weeks</button>
+            </div>
+            <div style="border: 1px solid var(--border); border-radius: 12px; overflow: hidden;">
+              <div class="table-head" style="grid-template-columns: 34px minmax(200px, 1.6fr) 150px 170px 120px minmax(160px, 1fr) 150px;"><span></span><span class="th">Employee</span><span class="th">Status</span><span class="th">Days</span><span class="th">Entered</span><span class="th">Flags</span><span class="th"></span></div>
+              <sc-for list="{{ approvals }}" as="r" hint-placeholder-count="6">
+                <div class="table-row" style="grid-template-columns: 34px minmax(200px, 1.6fr) 150px 170px 120px minmax(160px, 1fr) 150px;">
+                  <span style="width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid {{ r.cbBorder }}; background: {{ r.cbBg }}; color: #FFFFFF; font-size: 10px; display: flex; align-items: center; justify-content: center; box-sizing: border-box;">{{ r.cb }}</span>
+                  <span style="display: flex; align-items: center; gap: 10px;"><span class="avatar" style="width: 28px; height: 28px; font-size: 11px;">{{ r.ini }}</span><span style="display: flex; flex-direction: column; gap: 1px;"><span style="font-size: 13.5px; font-weight: 600;">{{ r.name }}</span><span style="font-size: 12px; color: var(--text-2);">{{ r.role }}</span></span></span>
+                  <span><span class="badge {{ r.badge }}">{{ r.status }}</span></span>
+                  <span style="display: flex; gap: 3px;"><sc-for list="{{ r.days }}" as="d" hint-placeholder-count="7"><span title="{{ d.t }}" style="width: 18px; height: 18px; border-radius: 5px; background: {{ d.bg }}; border: {{ d.border }}; box-sizing: border-box;"></span></sc-for></span>
+                  <span style="font-size: 13px; color: {{ r.hColor }};">{{ r.hours }}</span>
+                                    <span style="display: flex; gap: 4px; flex-wrap: wrap;"><sc-for list="{{ r.flags }}" as="f" hint-placeholder-count="1"><span class="badge {{ f.cls }}">{{ f.t }}</span></sc-for></span>
+                  <span style="display: flex; justify-content: flex-end;"><span class="{{ r.actCls }}">{{ r.act }}</span></span>
+                </div>
+              </sc-for>
+            </div>
+            <span style="font-size: 12px; color: var(--text-2);">Day squares: green approved, blue submitted, amber rejected, grey draft, hatched no entry needed. You also approve for Bojan Đurić while his manager is on vacation.</span>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- CD-157 / CD-156 / CD-158 APPROVAL DETAIL -->
+    <div id="cd-157b" data-screen-label="CD-157 Approval detail day by day" style="display: flex; flex-direction: column; gap: 12px; flex: 0 0 auto; width: 1280px;">
+      <div style="display: flex; align-items: center; gap: 10px;"><span style="background: #0D241C; color: #C6F16A; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;">CD-157</span><span style="background: #0D241C; color: #C6F16A; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;">CD-156</span><span style="background: #0D241C; color: #C6F16A; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;">CD-158</span><span style="font-size: 15px; font-weight: 600;">One person's week · approve or reject each day by project and task</span></div>
+      <div style="display: flex; background: #FFFFFF; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;">
+        <aside style="width: 96px; flex: 0 0 96px; background: #0D241C; padding: 18px 8px; display: flex; flex-direction: column; align-items: center; gap: 14px; box-sizing: border-box;">
+          <svg viewBox="0 0 64 48" width="40" height="30" fill="none"><path d="M14 4h48L52 34H4z" fill="#FFFFFF"></path><path d="M20 28h5l2.7-8h-5z" fill="#0D241C"></path><path d="M28 28h5l4-12h-5z" fill="#0D241C"></path><path d="M36 28h5l5.3-16h-5z" fill="#C6F16A"></path><rect x="4" y="39" width="36" height="5" rx="2.5" fill="#FFFFFF"></rect></svg>
+          <sc-for list="{{ nav.ap }}" as="n" hint-placeholder-count="4"><span style="display: flex; flex-direction: column; align-items: center; gap: 5px; color: {{ n.fg }};"><span style="width: 46px; height: 42px; border-radius: 11px; background: {{ n.bg }}; display: flex; align-items: center; justify-content: center;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.icon }}"></path></svg></span><span style="font-size: 10.5px; font-weight: 500; text-align: center;">{{ n.label }}</span></span></sc-for>
+        </aside>
+        <main style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+          <header class="screen-header" style="position: static;"><div class="header-title"><h1>Approvals</h1></div><div class="header-right"><span class="avatar-btn">MI</span></div></header>
+          <div style="padding: 16px 30px 28px; display: flex; flex-direction: column; gap: 14px;">
+            <div class="deal-crumb"><a href="#">Approvals</a><span>→</span><span>Dragan Milić · week 41</span></div>
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;"><span style="font-size: 20px; font-weight: 600;">Dragan Milić</span><span class="badge badge-neutral">Partly approved (2 of 5 days)</span><span class="badge badge-danger">Late</span><span style="flex: 1;"></span><span style="font-size: 12.5px; color: var(--text-2);">39.5 h entered · 3 days waiting for you</span><button type="button" class="btn btn-primary">Approve all waiting days (3)</button></div>
+            <sc-for list="{{ detailDays }}" as="d" hint-placeholder-count="5">
+              <div style="border: 1px solid {{ d.border }}; border-radius: 12px; overflow: hidden;">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: {{ d.headBg }}; flex-wrap: wrap;">
+                  <span style="font-size: 14px; font-weight: 600; min-width: 92px;">{{ d.day }}</span><span class="badge {{ d.badge }}">{{ d.status }}</span><span style="font-size: 13px; font-weight: 600;">{{ d.hours }}</span><span style="font-size: 12.5px; color: var(--text-2);">{{ d.sub }}</span><span style="flex: 1;"></span>
+                  <sc-if value="{{ d.canAct }}" hint-placeholder-val="{{ false }}"><div style="display: flex; gap: 8px;"><button type="button" class="btn-plain">Reject</button><button type="button" class="btn btn-primary">Approve</button></div></sc-if>
+                </div>
+                <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 110px minmax(0, 1.3fr); gap: 0 14px; padding: 4px 16px 8px;">
+                  <span class="th" style="padding: 8px 0;">Project</span><span class="th" style="padding: 8px 0;">Task or work order</span><span class="th" style="padding: 8px 0; text-align: right;">Hours</span><span class="th" style="padding: 8px 0;">Note</span>
+                  <sc-for list="{{ d.rows }}" as="r" hint-placeholder-count="2">
+                    <span style="font-size: 13px; color: var(--text-2); padding: 8px 0; border-top: 1px solid var(--divider);">{{ r.project }}</span>
+                    <span style="font-size: 13px; font-weight: 500; padding: 8px 0; border-top: 1px solid var(--divider);">{{ r.task }}</span>
+                    <span style="font-size: 13px; padding: 8px 0; border-top: 1px solid var(--divider); display: flex; justify-content: flex-end; gap: 8px;"><span style="color: var(--muted-2); text-decoration: line-through;">{{ r.was }}</span><span style="font-weight: 600;">{{ r.h }}</span></span>
+                    <span style="font-size: 13px; color: var(--text-2); padding: 8px 0; border-top: 1px solid var(--divider);">{{ r.note }}</span>
+                  </sc-for>
+                </div>
+                <sc-if value="{{ d.hasComment }}" hint-placeholder-val="{{ false }}"><div style="padding: 10px 16px; border-top: 1px solid var(--divider); font-size: 12.5px; color: var(--text-2);">{{ d.comment }}</div></sc-if>
+                <sc-if value="{{ d.rejecting }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding: 14px 16px; border-top: 1px solid var(--divider); background: var(--bg-soft); display: flex; flex-direction: column; gap: 8px;">
+                    <label class="form-label">Why are you rejecting Thursday? (required)<textarea class="box-input" rows="2" style="font-family: inherit;">The Agrokop inspection is missing. It was on the dispatch board for Thursday morning.</textarea></label>
+                    <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 12px; color: var(--text-2);">Dragan can edit only this day and resubmit it. He gets an email with your comment.</span><span style="flex: 1;"></span><button type="button" class="btn-plain">Cancel</button><button type="button" class="btn btn-primary">Reject Thursday</button></div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- CD-159 LOCK APPROVED DAYS -->
+    <div id="cd-159" data-screen-label="CD-159 Lock approved days" style="display: flex; flex-direction: column; gap: 12px; flex: 0 0 auto; width: 1280px;">
+      <div style="display: flex; align-items: center; gap: 10px;"><span style="background: #0D241C; color: #C6F16A; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;">CD-159</span><span style="font-size: 15px; font-weight: 600;">Lock approved days · Admin unlock with a full trace</span></div>
+      <div style="display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start;">
+        <div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; height: 440px; box-sizing: border-box;">
+          <span class="caps">Approved day · employee view</span>
+          <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600;">Monday 5 Oct</span><span class="badge badge-brand">Approved · locked</span></div>
+          <span style="font-size: 12.5px; color: var(--text-2);">Approved by Marko Ilić on Mon 12 Oct, 09:05. Expected hours at approval: 8.</span>
+          <div style="display: flex; flex-direction: column; gap: 6px; background: var(--bg-soft); border-radius: 10px; padding: 12px;">
+            <div style="display: flex; justify-content: space-between; font-size: 13px;"><span>#142 Hydraulic leak, CAT 320</span><span>6.00 h</span></div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px;"><span>#138 Dismantle and inspect engine</span><span>2.00 h</span></div>
+          </div>
+          <span style="font-size: 12.5px; color: var(--text-2); line-height: 1.5;">Cells are read-only. The API refuses changes with 423 “Day is approved and locked”. Reopening a work order never unlocks approved days.</span>
+          <span style="font-size: 12.5px; color: var(--text-2); line-height: 1.5;">If approved time off or a trip changes on this day, the system rejects the day with its own reason.</span>
+        </div>
+        <div style="background: rgba(13,36,28,0.55); border-radius: 12px; padding: 24px; height: 440px; box-sizing: border-box; display: flex; align-items: center;">
+          <div class="modal" style="position: static; width: 100%; max-width: none; box-sizing: border-box; animation: none;">
+            <div><div class="modal-title">Unlock Monday 5 Oct?</div><div class="modal-sub">The day goes back to Dragan as Rejected. Marko and Dragan get an email.</div></div>
+            <label class="form-label">Reason (required, at least 10 characters)<textarea class="box-input" rows="3" style="font-family: inherit;">Payroll found 2 h on the wrong work order, needs to move to #138.</textarea></label>
+            <span style="font-size: 12px; color: var(--text-2);">Only Admins can unlock.</span>
+            <div class="modal-actions"><button type="button" class="btn-plain">Cancel</button><button type="button" class="btn btn-primary">Unlock day</button></div>
+          </div>
+        </div>
+        <div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; height: 440px; box-sizing: border-box;">
+          <span class="caps">Day history</span>
+          <sc-for list="{{ history }}" as="h" hint-placeholder-count="5"><div style="display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; font-size: 12.5px; border-top: 1px solid var(--divider); padding-top: 8px;"><span style="color: var(--text-2);">{{ h.when }}</span><span style="display: flex; flex-direction: column; gap: 2px;"><span style="font-weight: 600;">{{ h.what }}</span><span style="color: var(--text-2);">{{ h.detail }}</span></span></div></sc-for>
+        </div>
+      </div>
+    </div>
+
+    <!-- CD-161 EMPLOYEE CARD -->
+    <div id="cd-161" data-screen-label="CD-161 Employee card" style="display: flex; flex-direction: column; gap: 12px; flex: 0 0 auto; width: 760px;">
+      <div style="display: flex; align-items: center; gap: 10px;"><span style="background: #0D241C; color: #C6F16A; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;">CD-161</span><span style="font-size: 15px; font-weight: 600;">Late submission count on the employee card</span></div>
+      <div class="card" style="padding: 22px 24px; display: flex; flex-direction: column; gap: 16px;">
+        <div style="display: flex; align-items: center; gap: 14px;"><span class="avatar" style="width: 48px; height: 48px; font-size: 16px; font-weight: 600;">DM</span><span style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 18px; font-weight: 600;">Dragan Milić</span><span style="font-size: 13px; color: var(--text-2);">Service technician · Service · reports to Marko Ilić</span></span></div>
+        <div style="display: flex; gap: 6px; border-bottom: 1px solid var(--border); padding-bottom: 12px;"><span class="choice-pill">Details</span><span class="choice-pill on">Timesheet</span><span class="choice-pill">Time off</span><span class="choice-pill">History</span></div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+          <div style="border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 4px;"><span class="caps">Late this year</span><span style="font-family: 'Unbounded', sans-serif; font-size: 28px; font-weight: 600; color: var(--danger);">4</span><span style="font-size: 12px; color: var(--text-2);">of 41 weeks · 1 auto-submitted</span></div>
+          <div style="border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 4px;"><span class="caps">Last 12 weeks</span><span style="font-family: 'Unbounded', sans-serif; font-size: 28px; font-weight: 600;">2</span><span style="font-size: 12px; color: var(--text-2);">weeks 38 and 41</span></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span class="caps">Late weeks</span>
+          <sc-for list="{{ lateWeeks }}" as="l" hint-placeholder-count="4"><div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) 120px; gap: 10px; font-size: 13px; padding: 8px 0; border-top: 1px solid var(--divider);"><span style="font-weight: 600;">{{ l.week }}</span><span style="color: var(--text-2);">{{ l.detail }}</span><span><span class="badge {{ l.cls }}">{{ l.flag }}</span></span></div></sc-for>
+        </div>
+        <span style="font-size: 12px; color: var(--text-2);">Visible to the employee, their managers, Administration and Admins. The count can't be edited.</span>
+      </div>
+    </div>
+
+    <!-- CD-162 TODAY'S STATUS -->
+    <div id="cd-162" data-screen-label="CD-162 Today's status" style="display: flex; flex-direction: column; gap: 12px; flex: 0 0 auto; width: 1280px;">
+      <div style="display: flex; align-items: center; gap: 10px;"><span style="background: #0D241C; color: #C6F16A; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 6px;">CD-162</span><span style="font-size: 15px; font-weight: 600;">Today's employee status</span></div>
+      <div style="display: flex; height: 720px; background: #FFFFFF; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;">
+        <aside style="width: 96px; flex: 0 0 96px; background: #0D241C; padding: 18px 8px; display: flex; flex-direction: column; align-items: center; gap: 14px; box-sizing: border-box;">
+          <svg viewBox="0 0 64 48" width="40" height="30" fill="none"><path d="M14 4h48L52 34H4z" fill="#FFFFFF"></path><path d="M20 28h5l2.7-8h-5z" fill="#0D241C"></path><path d="M28 28h5l4-12h-5z" fill="#0D241C"></path><path d="M36 28h5l5.3-16h-5z" fill="#C6F16A"></path><rect x="4" y="39" width="36" height="5" rx="2.5" fill="#FFFFFF"></rect></svg>
+          <sc-for list="{{ nav.today }}" as="n" hint-placeholder-count="5"><span style="display: flex; flex-direction: column; align-items: center; gap: 5px; color: {{ n.fg }};"><span style="width: 46px; height: 42px; border-radius: 11px; background: {{ n.bg }}; display: flex; align-items: center; justify-content: center;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.icon }}"></path></svg></span><span style="font-size: 10.5px; font-weight: 500; text-align: center;">{{ n.label }}</span></span></sc-for>
+        </aside>
+        <main style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+          <header class="screen-header" style="position: static;"><div class="header-title"><h1>Today's status</h1></div><div class="header-right"><span class="avatar-btn">MI</span></div></header>
+          <div style="padding: 16px 30px; display: flex; flex-direction: column; gap: 16px;">
+            <div style="display: flex; align-items: center; gap: 10px;"><span style="font-size: 15px; font-weight: 600;">Tuesday 13 Oct 2026</span><span class="btn-plain">Department: All</span><span class="btn-plain">Team: All</span><span style="flex: 1;"></span><span style="font-size: 12.5px; color: var(--text-2);">Updated 10:42</span></div>
+            <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
+              <sc-for list="{{ statusKpis }}" as="k" hint-placeholder-count="4"><div style="border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px;"><span style="display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; border-radius: 50%; background: {{ k.dot }};"></span><span class="caps">{{ k.label }}</span></span><span style="font-family: 'Unbounded', sans-serif; font-size: 28px; font-weight: 600;">{{ k.n }}</span></div></sc-for>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start;">
+              <sc-for list="{{ statusCols }}" as="c" hint-placeholder-count="3">
+                <div style="background: var(--column-bg); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                  <span style="font-size: 13px; font-weight: 600; padding: 0 2px;">{{ c.title }}</span>
+                  <sc-for list="{{ c.people }}" as="p" hint-placeholder-count="3"><div style="background: #FFFFFF; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; gap: 10px;"><span class="avatar" style="width: 28px; height: 28px; font-size: 11px;">{{ p.ini }}</span><span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 13px; font-weight: 600;">{{ p.name }}</span><span style="font-size: 12px; color: var(--text-2);">{{ p.sub }}</span></span></div></sc-for>
+                </div>
+              </sc-for>
+            </div>
+            <span style="font-size: 12px; color: var(--text-2);">Working is everyone without time off or a trip today. Sick leave shows only the type, never a diagnosis. Employees see their own team; managers and Admins see everyone they manage.</span>
+          </div>
+        </main>
+      </div>
+    </div>
+
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const ICON = {
+  ts: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
+  ap: 'M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',
+  today: 'M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM22 19v-1a4 4 0 0 0-3-3.9M16 3.1a3.5 3.5 0 0 1 0 6.8',
+  pay: 'M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6',
+  set: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12h2M3 12h2M12 3v2M12 19v2M17 7l1.5-1.5M5.5 18.5L7 17M17 17l1.5 1.5M5.5 5.5L7 7',
+};
+const WF = [['ts', 'Timesheet'], ['ap', 'Approvals'], ['today', "Today's status"], ['set', 'Settings']];
+const SNG = [['Workspace', ['General', 'Members', 'Roles & permissions', 'Notifications']], ['CRM', ['Funnels', 'Document templates', 'Customize fields', 'Sales bonuses']], ['Projects', ['Project types', 'Technicians']], ['Workforce', ['Employees', 'Approvals']]];
+const SN = (active) => SNG.map(([label, items]) => ({ label, items: items.map((l) => ({ label: l, fw: l === active ? 500 : 400, bg: l === active ? '#E7F2EE' : 'transparent', fg: l === active ? '#14503C' : '#0F1B16' })) }));
+const mk = (active) => WF.map(([id, label]) => ({ label, icon: ICON[id], bg: id === active ? '#2F7A5E' : 'transparent', fg: id === active ? '#FFFFFF' : '#93A39B' }));
+const DN = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'], DD = ['5 Oct', '6 Oct', '7 Oct', '8 Oct', '9 Oct', '10 Oct', '11 Oct'];
+const WK = '#F7F9F8';
+const cell = (v, i, st) => {
+  const we = i >= 5; const colBg = we ? WK : 'transparent';
+  if (st === 'auto') return { v, colBg, bg: '#F2F5F3', fg: '#475750', border: '1px solid transparent' };
+  if (st === 'off') return { v: v || '', colBg, bg: 'transparent', fg: '#93A39B', border: '1px solid transparent' };
+  if (st === 'approved') return { v, colBg, bg: '#E7F2EE', fg: '#14503C', border: '1px solid #A3D2BF' };
+  if (st === 'submitted') return { v, colBg, bg: '#EEF2FA', fg: '#2E3F5C', border: '1px solid #C9D3E6' };
+  if (st === 'returned') return { v, colBg, bg: '#FFFFFF', fg: '#0F1B16', border: '1.5px solid #B4531B' };
+  if (st === 'focus') return { v, colBg, bg: '#FFFFFF', fg: '#0F1B16', border: '1.5px solid #14503C' };
+  if (st === 'warn') return { v, colBg, bg: '#FDF0E4', fg: '#B4531B', border: '1px solid #F2C9A5' };
+  return { v, colBg, bg: '#FFFFFF', fg: v ? '#0F1B16' : '#93A39B', border: '1px solid #E2E8E4' };
+};
+const row = (label, sub, vals, total, opts) => { const o = opts || {}; return { label, sub, total, bg: o.bg || '#FFFFFF', fw: o.fw || 500, color: o.color || '#0F1B16', subColor: o.subColor || '#6B7B73',
+  cells: vals.map((v, i) => cell(v, i, (o.st && o.st[i]) || o.all || '')) }; };
+const day = (i, tot, totColor, bg) => ({ name: DN[i], date: DD[i], tot, totColor: totColor || '#475750', bg: bg || (i >= 5 ? WK : 'transparent') });
+class Component extends DCLogic {
+  renderVals() {
+    const ts1 = {
+      days: [day(0, '8 h'), day(1, '8 h'), day(2, '7.5 h', '#B4531B'), day(3, '8 h'), day(4, '2 h · holiday', '#475750', '#F2F5F3'), day(5, '—'), day(6, '—')],
+      rows: [
+        row('Project tasks', '', ['', '', '', '', '', '', ''], '', { all: 'off', bg: '#FAFBFA', fw: 600, color: '#475750' }),
+        row('SP-14 Update the spare parts price list', 'Internal › Parts catalogue 2026 · 4 h left of 6', ['2', '', '', '', '', '', ''], '2'),
+        row('WS-4 Van and tool maintenance', 'Internal › Workshop maintenance · no limit', ['', '', '', '', '2', '', ''], '2', { st: [0, 0, 0, 0, 'warn'] }),
+        row('Work orders', '', ['', '', '', '', '', '', ''], '', { all: 'off', bg: '#FAFBFA', fw: 600, color: '#475750' }),
+        row('#142 Hydraulic leak, CAT 320', 'Kovin Pančevo › Service contract 2026 · 1.5 h over your limit of 16', ['6', '6', '7.5', '', '', '', ''], '19.5', { st: ['', '', 'focus'], subColor: '#B42318' }),
+        row('#138 Dismantle and inspect engine', 'Hidrogradnja › Engine overhaul, CAT 336 · 8 h left of 32', ['', '2', '', '4', '', '', ''], '6'),
+        row('#151 Quarterly inspection, 3 machines', 'Kovin Pančevo › Service contract 2026 · 8 h left of 12', ['', '', '', '4', '', '', ''], '4'),
+        row('+ Add task or work order', 'Tasks you are assigned to with time logging on, and open work orders you are on', ['', '', '', '', '', '', ''], '', { color: '#14503C', fw: 600, all: 'off' }),
+        row('Public holiday · Armistice Day (observed)', 'From the holiday calendar', ['', '', '', '', '8', '', ''], '8', { all: 'auto', bg: '#FAFBFA', color: '#475750' }),
+        row('Total entered', 'Tasks, work orders and trips', ['8', '8', '7.5', '8', '2', '', ''], '33.5', { all: 'off', bg: '#FAFBFA', fw: 600 }),
+        row('Expected', 'Standard day 8 h, minus holidays', ['8', '8', '8', '8', '0', '', ''], '32', { all: 'off', bg: '#FAFBFA', color: '#475750' }),
+        row('Difference', 'Entered plus automatic minus expected', ['0', '0', '−0.5', '0', '+2', '', ''], '+1.5', { all: 'off', bg: '#FAFBFA', color: '#475750' }),
+      ],
+    };
+    const S = ['approved', 'approved', 'returned', 'submitted', 'submitted', 'off', 'off'];
+    const ts3 = {
+      days: [day(0, 'Approved', '#14503C'), day(1, 'Approved', '#14503C'), day(2, 'Rejected', '#B4531B', '#FDF0E4'), day(3, 'Submitted', '#2E3F5C'), day(4, 'Submitted', '#2E3F5C'), day(5, '—'), day(6, '—')],
+      rows: [
+        row('#142 Hydraulic leak, CAT 320', 'Kovin Pančevo › Service contract 2026', ['6', '6', '5', '', '', '', ''], '17', { st: S }),
+        row('#138 Dismantle and inspect engine', 'Hidrogradnja › Engine overhaul, CAT 336', ['2', '2', '', '4', '6', '', ''], '14', { st: S }),
+        row('#151 Quarterly inspection, 3 machines', 'Kovin Pančevo › Service contract 2026', ['', '', '', '4', '2', '', ''], '6', { st: S }),
+        row('Business trip · Pančevo, RS', 'Approved trip · hours can be changed', ['', '', '2.5', '', '', '', ''], '2.5', { st: S, color: '#475750' }),
+        row('Total entered', '', ['8', '8', '7.5', '8', '8', '', ''], '39.5', { all: 'off', bg: '#FAFBFA', fw: 600 }),
+      ],
+    };
+    const lvl = (s) => ({ a: { bg: '#A3D2BF', border: 'none', t: 'Approved' }, s: { bg: '#C9D3E6', border: 'none', t: 'Submitted' }, r: { bg: '#F2C9A5', border: 'none', t: 'Rejected' }, d: { bg: '#E2E8E4', border: 'none', t: 'Draft' }, n: { bg: 'repeating-linear-gradient(45deg,#F2F5F3 0 3px,#FFFFFF 3px 6px)', border: '1px solid #E2E8E4', t: 'No entry needed' } })[s];
+    const days = (str) => str.split('').map(lvl);
+    const A = (name, role, status, badge, d, hours, hColor, plan, flags, act, actCls, checked) => ({ name, role, ini: name.split(' ').map((x) => x[0]).join(''), status, badge, days: days(d), hours, hColor, plan, flags, act, actCls,
+      cb: checked ? '✓' : '', cbBg: checked ? '#14503C' : '#FFFFFF', cbBorder: checked ? '#14503C' : '#CAD3CE' });
+    const ro = (v) => ({ v, bg: '#F2F5F3', fg: '#475750', border: '1px solid transparent' });
+    const lk = () => ({ v: '—', bg: 'transparent', fg: '#93A39B', border: '1px dashed #E2E8E4' });
+    const ed = (v) => ({ v, bg: '#FFFFFF', fg: v ? '#0F1B16' : '#93A39B', border: '1px solid #E2E8E4' });
+    return {
+      coProjects: [
+        { name: 'Service contract 2026', stage: 'In progress', cls: 'badge-brand', month: '41.5 h this month', total: '286 h logged · no budget', totColor: '#475750' },
+        { name: 'Quarterly inspections Q4', stage: 'Planned', cls: 'badge-neutral', month: '0 h this month', total: '0 of 36 h', totColor: '#475750' },
+        { name: 'Excavator fleet audit', stage: 'Completed', cls: 'badge-neutral', month: '23 h this month', total: '126 of 120 h', totColor: '#B42318' },
+      ],
+      projRows: [
+        { name: 'Service contract 2026', client: 'Kovin Pančevo', stage: 'In progress', cls: 'badge-brand', month: '41.5 h', total: '286 h', pct: '0%', color: '#475750' },
+        { name: 'Engine overhaul, CAT 336', client: 'Hidrogradnja', stage: 'Completed', cls: 'badge-neutral', month: '6 h', total: '38 / 40 h', pct: '95%', color: '#B4531B' },
+        { name: 'Excavator fleet audit', client: 'Kovin Pančevo', stage: 'Completed', cls: 'badge-neutral', month: '23 h', total: '126 / 120 h', pct: '100%', color: '#B42318' },
+        { name: 'Parts catalogue 2026', client: 'Internal', stage: 'In progress', cls: 'badge-brand', month: '9 h', total: '22 / 60 h', pct: '37%', color: '#2F7A5E' },
+        { name: 'Hydraulics retrofit, Volvo EC220', client: 'Agrokop', stage: 'In progress', cls: 'badge-brand', month: '14 h', total: '30 / 80 h', pct: '38%', color: '#2F7A5E' },
+      ],
+      lockedLog: [
+        { date: 'Fri 2 Oct', who: 'Dragan Milić', note: 'Final test run and handover', h: '4.00' },
+        { date: 'Thu 1 Oct', who: 'Dragan Milić', note: 'Reassemble and torque', h: '6.00' },
+        { date: 'Wed 30 Sep', who: 'Ivan Popović', note: 'Cylinder head inspection', h: '3.50' },
+      ],
+      lockDays: ['MON 28', 'TUE 29', 'WED 30', 'THU 1', 'FRI 2'].map((d) => d),
+      lockRows: [
+        { label: '#138 Dismantle and inspect engine', sub: 'Hidrogradnja › Engine overhaul, CAT 336 · Completed 2 Oct · locked', color: '#475750', subColor: '#B4531B', bg: '#FAFBFA', cells: [ro('4'), ro('2'), lk(), lk(), lk()] },
+        { label: '#142 Hydraulic leak, CAT 320', sub: 'Kovin Pančevo › Service contract 2026', color: '#0F1B16', subColor: '#6B7B73', bg: '#FFFFFF', cells: [ed('4'), ed('6'), ed('8'), ed('7'), ed('')] },
+      ],
+      nav: { ts: mk('ts'), ap: mk('ap'), today: mk('today'), set: mk('set') },
+      setNavEmp: SN('Employees'), setNavAp: SN('Approvals'),
+      ts1, ts3,
+      emails: [
+        { when: 'Fri 9 Oct, 15:00 · 2 h before', subject: 'Reminder: submit your timesheet for week 41 by Fri 17:00', to: 'To Dragan Milić', body: 'Your timesheet for week 41 (5 to 11 Oct) is due today at 17:00.', lines: [{ a: 'Entered so far', b: '31.5 of 32 h', color: '#0F1B16' }, { a: 'Missing', b: 'Friday', color: '#B4531B' }], cta: 'Open timesheet' },
+        { when: 'Fri 9 Oct, 17:00 · at the deadline', subject: 'Your timesheet for week 41 is late', to: 'To Bojan Đurić', body: 'The deadline passed at 17:00. You can still submit, but the week will be marked as submitted late.', lines: [{ a: 'Entered so far', b: '12 of 32 h', color: '#0F1B16' }, { a: 'Missing', b: 'Wed, Thu, Fri', color: '#B42318' }], cta: 'Open timesheet' },
+        { when: 'Fri 9 Oct, 17:00 · one per approver', subject: 'Late timesheets for week 41', to: 'To Marko Ilić', body: 'These people in your team missed the deadline for week 41.', lines: [{ a: 'Bojan Đurić', b: 'not submitted · 12 h', color: '#B42318' }, { a: 'Ivan Popović', b: 'auto-submitted (late)', color: '#B4531B' }, { a: 'Boris Lukić', b: 'not submitted · 0 h', color: '#B42318' }], cta: 'Open approvals' },
+      ],
+      approvals: [
+        A('Nemanja Tomić', 'Service technician', 'Submitted', 'badge-brand', 'sssssnn', '40 / 40 h', '#0F1B16', 'plan 40', [], 'Approve week', 'btn btn-primary', true),
+        A('Ivan Popović', 'Senior technician', 'Submitted', 'badge-brand', 'sssssnn', '38 / 40 h', '#B4531B', 'plan 40', [{ t: 'Late', cls: 'badge-danger' }, { t: 'Auto-submitted', cls: 'badge-neutral' }], 'Approve week', 'btn btn-primary', true),
+        A('Bojan Đurić', 'Installer', 'Not submitted', 'badge-warn', 'ddddd' + 'nn', '12 / 32 h', '#B42318', 'plan 32', [{ t: 'Late', cls: 'badge-danger' }, { t: 'Manager away', cls: 'badge-neutral' }], 'Send reminder', 'btn-plain', false),
+        A('Dragan Milić', 'Service technician', 'Rejected (1 day)', 'badge-warn', 'aarssnn', '39.5 / 40 h', '#0F1B16', 'plan 38', [{ t: 'Late', cls: 'badge-danger' }, { t: 'Over limit #142', cls: 'badge-warn' }], 'Open', 'btn-outline', false),
+        A('Boris Lukić', 'Technician · no account yet', 'Not submitted', 'badge-neutral', 'nnnnnnn', '—', '#6B7B73', '—', [{ t: 'Admin enters time', cls: 'badge-neutral' }], 'Enter time', 'btn-plain', false),
+        A('Jovan Kostić', 'Service lead', 'Approved', 'badge-brand', 'aaaaann', '32 / 32 h', '#0F1B16', 'plan 32', [{ t: 'Vacation Fri', cls: 'badge-neutral' }], 'View', 'btn-plain', false),
+      ],
+      detailDays: [
+        { day: 'Mon 5 Oct', status: 'Approved', badge: 'badge-brand', hours: '8.00 h', sub: 'Approved by you · 12 Oct, 09:05', canAct: false, rejecting: false, hasComment: false, comment: "", border: '#E2E8E4', headBg: '#FAFBFA', rows: [{ project: 'Kovin Pančevo › Service contract 2026', task: '#142 Hydraulic leak, CAT 320', h: '6.00', note: 'Replaced the pressure hose, tested under load', was: '' }, { project: 'Hidrogradnja › Engine overhaul, CAT 336', task: '#138 Dismantle and inspect engine', h: '2.00', note: '—', was: '' }] },
+        { day: 'Tue 6 Oct', status: 'Approved', badge: 'badge-brand', hours: '8.00 h', sub: 'Approved by you · 12 Oct, 09:05', canAct: false, rejecting: false, hasComment: false, comment: "", border: '#E2E8E4', headBg: '#FAFBFA', rows: [{ project: 'Kovin Pančevo › Service contract 2026', task: '#142 Hydraulic leak, CAT 320', h: '6.00', note: 'Waited for the seal kit', was: '' }, { project: 'Hidrogradnja › Engine overhaul, CAT 336', task: '#138 Dismantle and inspect engine', h: '2.00', note: '—', was: '' }] },
+        { day: 'Wed 7 Oct', status: 'Resubmitted', badge: 'badge-brand', hours: '7.50 h', sub: 'Changed since you rejected it', canAct: true, rejecting: false, hasComment: true, comment: "Your comment: “7.5 h on #142 but the customer signed 5 h on the work sheet.” · Dragan's reply: “Fixed, split into travel.”", border: '#A3D2BF', headBg: '#F3F8F6', rows: [{ project: 'Kovin Pančevo › Service contract 2026', task: '#142 Hydraulic leak, CAT 320', h: '5.00', note: 'Customer sheet says 5 h. The rest was travel.', was: '7.50' }, { project: 'Business trip', task: 'Pančevo, RS', h: '2.50', note: '—', was: '0.00' }] },
+        { day: 'Thu 8 Oct', status: 'Submitted', badge: 'badge-neutral', hours: '8.00 h', sub: 'Submitted Mon 12 Oct, 08:40', canAct: true, rejecting: true, hasComment: false, comment: "", border: '#14503C', headBg: '#FAFBFA', rows: [{ project: 'Hidrogradnja › Engine overhaul, CAT 336', task: '#138 Dismantle and inspect engine', h: '4.00', note: 'Cylinder head off, gaskets ordered', was: '' }, { project: 'Kovin Pančevo › Service contract 2026', task: '#151 Quarterly inspection, 3 machines', h: '4.00', note: 'Machines 1 and 2', was: '' }] },
+        { day: 'Fri 9 Oct', status: 'Submitted', badge: 'badge-neutral', hours: '8.00 h', sub: 'Submitted Mon 12 Oct, 08:40', canAct: true, rejecting: false, hasComment: false, comment: "", border: '#E2E8E4', headBg: '#FAFBFA', rows: [{ project: 'Hidrogradnja › Engine overhaul, CAT 336', task: '#138 Dismantle and inspect engine', h: '6.00', note: '—', was: '' }, { project: 'Kovin Pančevo › Service contract 2026', task: '#151 Quarterly inspection, 3 machines', h: '2.00', note: 'Machine 3', was: '' }] },
+      ],
+      history: [
+        { when: '9 Oct 16:20', what: 'Submitted', detail: 'Dragan Milić · on time' },
+        { when: '12 Oct 09:05', what: 'Approved', detail: 'Marko Ilić · snapshot 8.00 h, expected 8' },
+        { when: '16 Oct 11:40', what: 'Unlocked by Admin', detail: 'Ana Petrović · “Payroll found 2 h on the wrong work order”' },
+        { when: '16 Oct 14:02', what: 'Resubmitted', detail: 'Dragan Milić · #142 6.00 → 4.00, #138 2.00 → 4.00' },
+        { when: '16 Oct 15:30', what: 'Approved', detail: 'Marko Ilić' },
+      ],
+      payroll: [
+        { period: '1 to 15 Oct 2026', sub: 'Sends Thu 15 Oct, 18:00', status: 'Scheduled', badge: 'badge-neutral', people: '26', un: '2 people', uColor: '#B4531B', act: 'Preview', bg: '#F3F8F6' },
+        { period: '16 to 30 Sep 2026', sub: 'Sent 30 Sep, 18:00 · 1 correction', status: 'Sent', badge: 'badge-brand', people: '25', un: '0', uColor: '#0F1B16', act: 'Download XLSX', bg: '#FFFFFF' },
+        { period: '1 to 15 Sep 2026', sub: 'Sent 15 Sep, 18:00', status: 'Sent', badge: 'badge-brand', people: '25', un: '1 person', uColor: '#B4531B', act: 'Download XLSX', bg: '#FFFFFF' },
+        { period: '16 to 31 Aug 2026', sub: 'Send failed, retried 4 times', status: 'Failed', badge: 'badge-danger', people: '24', un: '0', uColor: '#0F1B16', act: 'Send again', bg: '#FFFFFF' },
+      ],
+      lateWeeks: [
+        { week: 'Week 41 · 5 Oct', detail: 'First submitted Mon 12 Oct, 08:40', flag: 'Late', cls: 'badge-danger' },
+        { week: 'Week 38 · 14 Sep', detail: 'Submitted automatically at the deadline', flag: 'Auto-submitted', cls: 'badge-neutral' },
+        { week: 'Week 22 · 25 May', detail: 'First submitted Tue 2 Jun, 10:15', flag: 'Late', cls: 'badge-danger' },
+        { week: 'Week 9 · 23 Feb', detail: 'First submitted Mon 2 Mar, 07:58', flag: 'Late', cls: 'badge-danger' },
+      ],
+      statusKpis: [{ label: 'Working', n: '19', dot: '#2F7A5E' }, { label: 'On a business trip', n: '3', dot: '#C6F16A' }, { label: 'On time off', n: '2', dot: '#B4531B' }, { label: 'Sick leave', n: '1', dot: '#B42318' }],
+      statusCols: [
+        { title: 'On a business trip · 3', people: [{ ini: 'IP', name: 'Ivan Popović', sub: 'Vienna, AT · until Thu 15 Oct' }, { ini: 'BĐ', name: 'Bojan Đurić', sub: 'Sombor, RS · today only' }, { ini: 'SM', name: 'Stefan Marković', sub: 'Zagreb, HR · until Fri 16 Oct' }] },
+        { title: 'On time off · 2', people: [{ ini: 'JK', name: 'Jovan Kostić', sub: 'Vacation · back Mon 19 Oct' }, { ini: 'MĐ', name: 'Milica Đorđević', sub: 'Paid leave · half day, morning' }] },
+        { title: 'Sick leave · 1', people: [{ ini: 'NT', name: 'Nemanja Tomić', sub: 'Sick leave · since Mon 12 Oct' }] },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
