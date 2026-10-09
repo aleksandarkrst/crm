@@ -1427,7 +1427,7 @@ limit report below has an API and no screen. `project-report.ts` holds the rules
 
 The backend part (CD-248); it has no screen (see above). Pure rules are unit-tested
 (`test/time-report.spec.ts`); `test/integration/time-report.spec.ts` covers the jobs, Block and
-the report, and `time-report-performance.spec.ts` the performance target.
+the report, and `test/performance/time-report.spec.ts` the performance target (nightly, CD-250).
 
 - **Which hours count:** logged = every time entry of the person on the task (draft, submitted,
   rejected and approved days); approved = entries on approved days. Work order time and absences

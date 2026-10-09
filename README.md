@@ -97,7 +97,7 @@ curl -s localhost:3000/api/tenants -H "authorization: Bearer $TOKEN" -H 'content
 
 ## Tests
 
-Three layers, all run in CI (`.github/workflows/ci.yml`):
+Three layers run in CI on every pull request (`.github/workflows/ci.yml`), and a fourth every night:
 
 - **Unit tests** (`backend`, `npm test`): fast, no database.
 - **Integration tests** (`backend/test/integration`, `npm run test:integration`): build the API,
@@ -140,7 +140,12 @@ Three layers, all run in CI (`.github/workflows/ci.yml`):
   editing the same field at once explains the refused change, and the deal's change history;
   a session that ends mid-edit opens "Your session ended" and saves the edit after signing in again.
 
-Both suites create their own users and workspaces with unique emails, so they can run against
+- **Performance tests** (`backend/test/performance`, `npm run test:performance`): the same setup
+  as the integration tests, with generated data (100,000 time entries, 2,000 tasks, 200 people)
+  against the time report's 2-second target. Too slow for every pull request: the `Nightly`
+  workflow (`.github/workflows/nightly.yml`) runs them every night and on demand.
+
+All three create their own users and workspaces with unique emails, so they can run against
 the dev database without resetting it. The database must be migrated first.
 
 ```bash
