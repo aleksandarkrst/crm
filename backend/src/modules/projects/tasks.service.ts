@@ -8,6 +8,7 @@ import { companies, employees, MAX_TASK_ASSIGNEES, projects, projectStages, reco
 import { JobsService } from '../../shared/events/jobs.service';
 import { PeopleAccess } from '../people';
 import { canAssign, canCreateTask, canManage, type TaskCaller, taskAccess, type TaskAccessLevel } from './task-access';
+import { refreshLimitAlert } from './hour-limits';
 import { hoursSummary, taskHours } from './task-hours';
 import { loggableTasks, logTimeRefusal } from './task-log';
 import { closedProjectHint, timeEntriesOf } from './time-entries';
@@ -322,6 +323,8 @@ export class TasksService {
             set: { active: true, hourLimit: sql`excluded.hour_limit`, assignedByUserId: ctx.userId, assignedAt: sql`now()` },
           });
         await this.emailAssigned(tx, ctx, id, ids);
+        // Someone brought back with hours already logged may be at or over their new limit (CD-149).
+        for (const employeeId of ids) await refreshLimitAlert(tx, this.jobs, ctx.tenantId, id, employeeId);
         await this.audit.record(tx, ctx, { action: 'task.assigned', entityType: 'task', entityId: id, data: { employeeIds: ids } });
         return this.presentById(tx, caller, id);
       })
@@ -340,6 +343,7 @@ export class TasksService {
         .where(and(eq(taskAssignments.taskId, id), eq(taskAssignments.employeeId, employeeId), eq(taskAssignments.active, true)))
         .returning({ employeeId: taskAssignments.employeeId });
       if (!done) throw new NotFoundException('Not assigned to this task');
+      await refreshLimitAlert(tx, this.jobs, ctx.tenantId, id, employeeId);
       await this.audit.record(tx, ctx, { action: 'task.unassigned', entityType: 'task', entityId: id, data: { employeeId } });
       return this.presentById(tx, caller, id);
     });
@@ -361,6 +365,8 @@ export class TasksService {
           .where(and(eq(taskAssignments.taskId, id), eq(taskAssignments.employeeId, employeeId), eq(taskAssignments.active, true)))
           .returning({ employeeId: taskAssignments.employeeId });
         if (!done) throw new NotFoundException('Not assigned to this task');
+        // Raising a limit clears the alert at once; lowering it below the hours logged sends the email (CD-149).
+        await refreshLimitAlert(tx, this.jobs, ctx.tenantId, id, employeeId);
         await this.audit.record(tx, ctx, { action: 'task.limit_set', entityType: 'task', entityId: id, data: { employeeId, hourLimit: input.hourLimit } });
         return this.presentById(tx, caller, id);
       })

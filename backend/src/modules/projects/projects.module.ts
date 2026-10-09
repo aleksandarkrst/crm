@@ -11,17 +11,19 @@ import { TaskNotesService } from './task-notes.service';
 import { TasksController } from './tasks.controller';
 import { TasksService } from './tasks.service';
 import { TechniciansController } from './technicians.controller';
+import { TimeReportController } from './time-report.controller';
+import { TimeReportService } from './time-report.service';
 import { WorkOrdersController } from './work-orders.controller';
 import { WorkOrdersService } from './work-orders.service';
 
 /**
  * Projects (milestone 14): project types with stages (CD-272) and client projects linked to the
- * CRM (CD-233, slimmed for CD-275), their team, files and tasks (CD-271, CD-146). Time comes with
- * milestone 15.
+ * CRM (CD-233, slimmed for CD-275), their team, files and tasks (CD-271, CD-146), and the time
+ * report against hour limits (CD-149).
  */
 @Module({
   imports: [PeopleModule],
-  controllers: [ProjectTypesController, ProjectsController, ProjectFilesController, TasksController, TechniciansController, WorkOrdersController],
-  providers: [ProjectTypesService, ProjectsService, ProjectMembersService, ProjectFilesService, TasksService, TaskNotesService, WorkOrdersService],
+  controllers: [ProjectTypesController, ProjectsController, ProjectFilesController, TasksController, TechniciansController, TimeReportController, WorkOrdersController],
+  providers: [ProjectTypesService, ProjectsService, ProjectMembersService, ProjectFilesService, TasksService, TaskNotesService, TimeReportService, WorkOrdersService],
 })
 export class ProjectsModule {}

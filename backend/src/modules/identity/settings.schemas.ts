@@ -92,6 +92,8 @@ export const UpdateWorkspace = z
     ceoEmployeeId: z.uuid().nullable(),
     // "Create a project when a deal is won" (CD-233).
     autoCreateProjects: z.boolean(),
+    // Hour limit mode (CD-149, Settings → Projects): Warn saves time beyond a limit, Block refuses it.
+    hourLimitMode: z.enum(['warn', 'block']),
     // The modules turned on (CD-279): each once; any subset, none included.
     modules: z.array(z.enum(WORKSPACE_MODULES)).max(WORKSPACE_MODULES.length).refine((m) => new Set(m).size === m.length, 'Each module once'),
     // What the workspace calls projects and tasks (CD-143): all four names at once.
@@ -129,6 +131,7 @@ export const UpdateProfile = z
     notifyVisitPlans: z.boolean(),
     notifyOrgChanges: z.boolean(),
     notifyTaskAssigned: z.boolean(),
+    notifyHourLimits: z.boolean(),
   })
   .partial()
   .refine(atLeastOne, 'Nothing to update');

@@ -54,6 +54,8 @@ export const timeEntries = pgTable(
   (t) => [
     index('time_entries_employee_date_idx').on(t.tenantId, t.employeeId, t.workDate),
     index('time_entries_task_idx').on(t.tenantId, t.taskId),
+    // Someone's hours on a task: limits, alerts and the time report (CD-149).
+    index('time_entries_task_employee_idx').on(t.tenantId, t.taskId, t.employeeId),
     index('time_entries_work_order_idx').on(t.tenantId, t.workOrderId),
     foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'time_entries_employee_fk' }).onDelete('cascade'),
     foreignKey({ columns: [t.tenantId, t.taskId], foreignColumns: [tasks.tenantId, tasks.id], name: 'time_entries_task_fk' }).onDelete('restrict'),

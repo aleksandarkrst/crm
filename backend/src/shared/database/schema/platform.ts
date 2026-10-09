@@ -49,6 +49,11 @@ export const tenants = pgTable(
     /** "Create a project when a deal is won" (CD-233, Settings → Workspace): off by default. */
     autoCreateProjects: boolean('auto_create_projects').notNull().default(false),
     /**
+     * Hour limit mode (CD-149, spec 10.4): `warn` saves time beyond someone's hour limit on a task
+     * (flagged "Over limit"); `block` refuses an entry that takes them past it.
+     */
+    hourLimitMode: text('hour_limit_mode', { enum: ['warn', 'block'] }).notNull().default('warn'),
+    /**
      * What this workspace calls projects and tasks (CD-143, Settings → Project types): singular and
      * plural, shown everywhere the words appear (sidebar, screens, buttons, dialogs, emails).
      */
@@ -82,6 +87,7 @@ export const tenants = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    check('tenants_hour_limit_mode_ck', sql`${t.hourLimitMode} in ('warn', 'block')`),
     check('tenants_fiscal_month_ck', sql`${t.fiscalYearStartMonth} between 1 and 12`),
     check('tenants_modules_ck', sql`${t.modules} <@ '{planning,crm,projects,workforce,finance,reporting}'::text[]`),
     check('tenants_customer_email_language_ck', sql`${t.customerEmailLanguage} in ('en', 'sr')`),
@@ -158,6 +164,8 @@ export const memberships = pgTable(
     notifyOrgChanges: boolean('notify_org_changes').notNull().default(true),
     // Email me when someone else assigns me to a task (CD-146).
     notifyTaskAssigned: boolean('notify_task_assigned').notNull().default(true),
+    // Email me "Hour limit almost reached" and "Hour limit reached" (CD-149).
+    notifyHourLimits: boolean('notify_hour_limits').notNull().default(true),
     /** The getting-started checklist (CD-68) is dismissed per user, so each admin decides for themselves. */
     onboardingDismissedAt: timestamp('onboarding_dismissed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

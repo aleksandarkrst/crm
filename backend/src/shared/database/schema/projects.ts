@@ -349,6 +349,28 @@ export const taskTimeFixtures = pgTable(
   ],
 );
 
+/**
+ * How far someone's logged hours on a task are into their hour limit (CD-149, spec 10.3): 0 below
+ * 80 %, 80 from 80 %, 100 from the limit. Only this state is stored, so each "Hour limit almost
+ * reached" and "Hour limit reached" email goes once per crossing; the hours are summed when read.
+ */
+export const taskLimitAlerts = pgTable(
+  'task_limit_alerts',
+  {
+    tenantId: tenantId(),
+    taskId: uuid('task_id').notNull(),
+    employeeId: uuid('employee_id').notNull(),
+    level: integer('level').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.taskId, t.employeeId], name: 'task_limit_alerts_pk' }),
+    foreignKey({ columns: [t.tenantId, t.taskId], foreignColumns: [tasks.tenantId, tasks.id], name: 'task_limit_alerts_task_fk' }).onDelete('cascade'),
+    foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'task_limit_alerts_employee_fk' }).onDelete('cascade'),
+    check('task_limit_alerts_level_ck', sql`${t.level} in (0, 80, 100)`),
+  ],
+);
+
 /** A task's checklist (CD-270): items in order, ticked when done. Deleting the task deletes them. */
 export const taskChecklistItems = pgTable(
   'task_checklist_items',
