@@ -287,15 +287,17 @@ export class TasksService {
       .catch(mapDbError);
   }
 
-  /** The project lead, owners and admins. Time entries (milestone 15) will make it 409 "Close it instead". */
+  /** The project lead, owners and admins. A task with time logged on it is kept: 409 "Mark it done instead" (time_entries_task_fk). */
   remove(ctx: TenantContext, id: string) {
-    return this.database.withTenant(ctx.tenantId, async (tx) => {
-      const caller = await this.caller(ctx, tx);
-      const { row } = await this.changeable(tx, caller, id);
-      if (!canManage(caller, row.projectLeadUserId)) throw new ForbiddenException('Only the project lead, owners and admins can delete a task');
-      await tx.delete(tasks).where(eq(tasks.id, id));
-      await this.audit.record(tx, ctx, { action: 'task.deleted', entityType: 'task', entityId: id, data: { number: row.number, name: row.name, projectId: row.projectId } });
-    });
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        const caller = await this.caller(ctx, tx);
+        const { row } = await this.changeable(tx, caller, id);
+        if (!canManage(caller, row.projectLeadUserId)) throw new ForbiddenException('Only the project lead, owners and admins can delete a task');
+        await tx.delete(tasks).where(eq(tasks.id, id));
+        await this.audit.record(tx, ctx, { action: 'task.deleted', entityType: 'task', entityId: id, data: { number: row.number, name: row.name, projectId: row.projectId } });
+      })
+      .catch(mapDbError);
   }
 
   /** Adds people (or brings back removed ones); someone already on the task: 409. Answers with the task. */

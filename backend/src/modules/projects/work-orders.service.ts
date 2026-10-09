@@ -218,9 +218,10 @@ export class WorkOrdersService {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const row = await this.row(tx, id);
       if (!hasRole(ctx.role, 'admin') && row.createdByUserId !== ctx.userId) throw new ForbiddenException('Only owners, admins and the one who created it can delete a work order');
+      // Time logged on it refuses the delete (time_entries_work_order_fk → 409 "Complete it instead").
       await tx.delete(workOrders).where(eq(workOrders.id, id));
       await this.audit.record(tx, ctx, { action: 'work_order.deleted', entityType: 'work_order', entityId: id, data: { number: row.number, title: row.title } });
-    });
+    }).catch(mapDbError);
   }
 
   private async row(tx: Tx, id: string): Promise<Row> {

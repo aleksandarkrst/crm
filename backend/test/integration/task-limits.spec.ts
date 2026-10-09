@@ -1,6 +1,6 @@
 /**
  * Several people on one task (CD-147): hour limits per person (validation, who sets them, history),
- * the People and hours totals with stand-in hours (task_time_fixtures until milestone 15), what an
+ * the People and hours totals from time entries (CD-152; an approved day makes its hours approved), what an
  * assignee and a manager see, the 50-person cap and the loggable list of a late joiner.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -39,9 +39,13 @@ const as = (s: Session = owner) => ({ token: s.token, tenant });
 const newTask = (name: string, body: Record<string, unknown> = {}) => ok<{ id: string; number: number }>('POST', '/tasks', { ...as(lead), body: { projectId, name, ...body } });
 const hoursOf = (taskId: string, s: Session = lead) => ok<Hours>('GET', `/tasks/${taskId}/hours`, as(s));
 const row = (h: Hours, name: Name) => h.rows.find((r) => r.employeeId === emp[name])!;
-/** Stand-in hours until milestone 15's time entries. */
-const logged = (taskId: string, who: Name, hours: number, approved = false) =>
-  asTenantSql(tenant, `insert into task_time_fixtures (tenant_id, task_id, employee_id, hours, approved) values ($1, $2, $3, $4, $5)`, [tenant, taskId, emp[who], hours, approved]);
+/** Time entries written straight to the table, each on a day of its own (an approved day once written: the lock refuses later entries). */
+let day = 0;
+const logged = async (taskId: string, who: Name, hours: number, approved = false) => {
+  const date = new Date(Date.UTC(2026, 0, 5 + day++)).toISOString().slice(0, 10);
+  await asTenantSql(tenant, `insert into time_entries (tenant_id, task_id, employee_id, work_date, minutes) values ($1, $2, $3, $4, $5)`, [tenant, taskId, emp[who], date, hours * 60]);
+  if (approved) await asTenantSql(tenant, `insert into timesheet_days (tenant_id, employee_id, work_date, status) values ($1, $2, $3, 'approved')`, [tenant, emp[who], date]);
+};
 
 beforeAll(async () => {
   [owner, lead, ana, marko, petar, jovan] = await Promise.all([signIn('limits-owner'), signIn('limits-lead'), signIn('limits-ana'), signIn('limits-marko'), signIn('limits-petar'), signIn('limits-jovan')]);
