@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { RequireTenant, Tenant, type TenantContext } from '../../shared/authorization';
+import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
-import { AddRow, CopyWeek, SetCell, WeekAction, WeekQuery } from './timesheet.schemas';
+import { AddRow, CopyWeek, CreateEntry, SetCell, UpdateEntry, WeekAction, WeekQuery } from './timesheet.schemas';
 import { TimesheetService } from './timesheet.service';
 
 /**
@@ -53,6 +54,23 @@ export class TimesheetController {
   @Post('submit')
   submit(@Tenant() ctx: TenantContext, @Body(new ZodPipe(WeekAction)) body: WeekAction) {
     return this.timesheet.submit(ctx, body.weekStart);
+  }
+
+  /** An entry from the task or work order page (CD-276): `{ id, date, minutes, note, startTime, endTime }`. */
+  @Post('entries')
+  createEntry(@Tenant() ctx: TenantContext, @Body(new ZodPipe(CreateEntry)) body: CreateEntry) {
+    return this.timesheet.createEntry(ctx, body);
+  }
+
+  @Patch('entries/:id')
+  updateEntry(@Tenant() ctx: TenantContext, @Param('id', new ZodPipe(UuidParam)) id: string, @Body(new ZodPipe(UpdateEntry)) body: UpdateEntry) {
+    return this.timesheet.updateEntry(ctx, id, body);
+  }
+
+  @Delete('entries/:id')
+  @HttpCode(204)
+  removeEntry(@Tenant() ctx: TenantContext, @Param('id', new ZodPipe(UuidParam)) id: string) {
+    return this.timesheet.removeEntry(ctx, id);
   }
 
   @Post('recall')

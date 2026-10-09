@@ -68,6 +68,7 @@ const TIMESHEET_LOCKS: Record<string, number> = {
 const TIMESHEET_RULES: Record<string, string> = {
   time_entries_minutes_ck: 'Use 0.25 to 24 hours in steps of 0.25',
   time_entries_note_ck: 'A note can have up to 500 characters',
+  time_entries_span_ck: 'The end must be after the start, on the same day',
 };
 
 /** Deleting what has time logged on it (CD-152): kept, closed instead. */

@@ -41,6 +41,16 @@ export class WorkOrdersController {
     return this.orders.update(ctx, id, body);
   }
 
+  /**
+   * The Track time card (CD-276): `{ loggedMinutes, plannedMinutes, entries: { id, employeeId, name,
+   * date, minutes, note, startTime, endTime, dayStatus, mine, canChange }[], canLog, lock }`.
+   * Entries are written through `/api/timesheet/entries`.
+   */
+  @Get(':id/time')
+  time(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.orders.time(ctx, id);
+  }
+
   /** `{ entries, more }`, newest first (CD-266). */
   @Get(':id/history')
   history(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Query(new ZodPipe(TaskHistoryQuery)) query: TaskHistoryQuery) {
