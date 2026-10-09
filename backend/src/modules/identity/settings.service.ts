@@ -39,6 +39,8 @@ const workspaceColumns = {
   tsDeadlineWeek: tenants.timesheetDeadlineWeek,
   tsAutoSubmit: tenants.timesheetAutoSubmit,
   tsApprovalMode: tenants.timesheetApprovalMode,
+  tsReminderHours: tenants.timesheetReminderHours,
+  tsAfterDeadlineEmails: tenants.timesheetAfterDeadlineEmails,
 };
 type TermColumns = { projectTerm: string; projectTermPlural: string; taskTerm: string; taskTermPlural: string };
 type TimesheetColumns = {
@@ -53,11 +55,13 @@ type TimesheetColumns = {
   tsDeadlineWeek: 'same' | 'next';
   tsAutoSubmit: boolean;
   tsApprovalMode: 'week' | 'day';
+  tsReminderHours: number | null;
+  tsAfterDeadlineEmails: boolean;
 };
 
 /** The row as the API returns it: the four names as `terms` (CD-143), the timesheet settings as `timesheet` (CD-153). */
 function present<T extends TermColumns & TimesheetColumns>(r: T) {
-  const { projectTerm, projectTermPlural, taskTerm, taskTermPlural, tsDayMinutes, tsDayStart, tsDayEnd, tsWorkingDays, tsTimeFormat, tsMaxDayHours, tsDeadlineWeekday, tsDeadlineTime, tsDeadlineWeek, tsAutoSubmit, tsApprovalMode, ...row } = r;
+  const { projectTerm, projectTermPlural, taskTerm, taskTermPlural, tsDayMinutes, tsDayStart, tsDayEnd, tsWorkingDays, tsTimeFormat, tsMaxDayHours, tsDeadlineWeekday, tsDeadlineTime, tsDeadlineWeek, tsAutoSubmit, tsApprovalMode, tsReminderHours, tsAfterDeadlineEmails, ...row } = r;
   return {
     ...row,
     terms: { project: projectTerm, projects: projectTermPlural, task: taskTerm, tasks: taskTermPlural } satisfies WorkspaceTerms,
@@ -73,6 +77,8 @@ function present<T extends TermColumns & TimesheetColumns>(r: T) {
       deadlineWeek: tsDeadlineWeek,
       autoSubmit: tsAutoSubmit,
       approvalMode: tsApprovalMode,
+      reminderHours: tsReminderHours,
+      afterDeadlineEmails: tsAfterDeadlineEmails,
     } satisfies Required<TimesheetSettingsInput>,
   };
 }
@@ -92,6 +98,8 @@ function timesheetPatch(t: TimesheetSettingsInput | undefined, before: Timesheet
     timesheetDeadlineWeek: t.deadlineWeek,
     timesheetAutoSubmit: t.autoSubmit,
     timesheetApprovalMode: t.approvalMode,
+    timesheetReminderHours: t.reminderHours,
+    timesheetAfterDeadlineEmails: t.afterDeadlineEmails,
     ...(t.autoSubmit === true && !before?.tsAutoSubmit ? { timesheetAutoSubmitSince: new Date() } : {}),
     ...(t.autoSubmit === false ? { timesheetAutoSubmitSince: null } : {}),
   };

@@ -13,6 +13,8 @@ import { reportingLineEmail } from './org-email';
 import { applyDeactivation, dueDeactivations, unitLeadsOf, zonedParts } from './lifecycle';
 import { dropUnusedInvitedEmployees } from './linking';
 import { lockReportingLines } from './reporting-lines';
+import { ABSENCE_SOURCE, nobodyAbsent } from './approvers';
+import { PeopleAccess } from './people-access';
 
 /** How often the worker looks for workspaces where a day has ended (deactivations due). */
 export const DEACTIVATE_DUE_CRON = '5,20,35,50 * * * *';
@@ -214,5 +216,12 @@ export class ReportingLineEmailJob implements OnApplicationBootstrap {
 }
 
 /** Registered in the worker (WorkerModule). */
-@Module({ providers: [BankAccountEmailJob, DeactivateDueJob, ReportingLineEmailJob] })
+/**
+ * The people worker; it also gives the worker's other modules PeopleAccess (the approver rule for
+ * the timesheet emails, CD-154), with the same absence source as the API until milestone 16.
+ */
+@Module({
+  providers: [BankAccountEmailJob, DeactivateDueJob, ReportingLineEmailJob, PeopleAccess, { provide: ABSENCE_SOURCE, useValue: nobodyAbsent }],
+  exports: [PeopleAccess],
+})
 export class PeopleWorkerModule {}

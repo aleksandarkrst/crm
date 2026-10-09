@@ -176,3 +176,28 @@ export const timesheetDeadlineRuns = pgTable(
   },
   (t) => [primaryKey({ columns: [t.tenantId, t.weekStart], name: 'timesheet_deadline_runs_pk' })],
 );
+
+/** The timesheet emails (CD-154). */
+export const TIMESHEET_NOTICE_KINDS = ['reminder', 'late', 'auto_submitted', 'late_summary'] as const;
+export type TimesheetNoticeKind = (typeof TIMESHEET_NOTICE_KINDS)[number];
+
+/**
+ * One timesheet email per week, kind and recipient (CD-154): the reminder, "late" and "submitted
+ * automatically" (recipient: the employee) and the approver's summary (recipient: the user). Claimed
+ * in the same transaction that queues the email, so a tick run twice, or after a restart, sends it
+ * once; the mail job's retries cover a failed send.
+ */
+export const timesheetNotices = pgTable(
+  'timesheet_notices',
+  {
+    tenantId: tenantId(),
+    weekStart: date('week_start').notNull(),
+    kind: text('kind', { enum: TIMESHEET_NOTICE_KINDS }).notNull(),
+    recipient: uuid('recipient').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.weekStart, t.kind, t.recipient], name: 'timesheet_notices_pk' }),
+    check('timesheet_notices_kind_ck', sql`${t.kind} in ('reminder', 'late', 'auto_submitted', 'late_summary')`),
+  ],
+);

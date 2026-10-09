@@ -78,6 +78,8 @@ describe('the settings', () => {
       deadlineWeek: 'same',
       autoSubmit: false,
       approvalMode: 'week',
+      reminderHours: 2,
+      afterDeadlineEmails: true,
     });
   });
 

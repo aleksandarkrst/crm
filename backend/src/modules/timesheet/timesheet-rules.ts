@@ -27,6 +27,9 @@ export interface TimesheetSettings {
   autoSubmitSince: Date | null;
   /** Approval mode (CD-156): `week` offers only Submit week; `day` single days too. */
   approvalMode: 'week' | 'day';
+  /** The reminder before the deadline, in hours (null: off), and the emails after it (CD-154). */
+  reminderHours: number | null;
+  afterDeadlineEmails: boolean;
 }
 
 export const DEFAULT_TIMESHEET_SETTINGS: TimesheetSettings = {
@@ -40,6 +43,8 @@ export const DEFAULT_TIMESHEET_SETTINGS: TimesheetSettings = {
   autoSubmit: false,
   autoSubmitSince: null,
   approvalMode: 'week',
+  reminderHours: 2,
+  afterDeadlineEmails: true,
 };
 
 /** A public holiday (CD-153): `minutes` off, or null for the whole standard day. */

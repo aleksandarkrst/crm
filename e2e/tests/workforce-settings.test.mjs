@@ -1,6 +1,6 @@
 // Settings → Workforce (CD-153): Employees (time format, max hours per day, the standard working
 // day), Holidays (add, copy from last year) and Approvals (deadline with its live line, auto
-// submit), and what they change in the Timesheet: Expected, the hours' format, the holiday row and
+// submit; the reminders, CD-154), and what they change in the Timesheet: Expected, the hours' format, the holiday row and
 // header, and "Submit by".
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
@@ -97,6 +97,16 @@ describe('workforce settings', () => {
     await page.waitForFunction(() => /is due Sun \d+ \w{3}, 23:30\./.test(document.querySelector('[data-testid=deadline-next]')?.textContent ?? ''));
     await click(page, '[data-setting=auto-submit] [role=switch]');
     assert.ok(await eventually(async () => (await timesheet()).autoSubmit === true));
+    // Reminders (CD-154): 2 hours before by default; 4 hours, and the after-deadline emails off.
+    assert.equal(await page.$eval('[data-testid=reminder-hours]', (el) => el.value), '2');
+    await setValue(page, '[data-testid=reminder-hours]', '4');
+    await click(page, '[data-setting=after-deadline-emails] [role=switch]');
+    assert.ok(await eventually(async () => {
+      const t = await timesheet();
+      return t.reminderHours === 4 && t.afterDeadlineEmails === false;
+    }));
+    await setValue(page, '[data-testid=reminder-hours]', '');
+    assert.ok(await eventually(async () => (await timesheet()).reminderHours === null));
     await page.goto(BASE_URL + '/timesheet', { waitUntil: 'networkidle0' });
     await page.waitForSelector('.ts-due');
     assert.equal(await page.$eval('.ts-due', (el) => el.textContent), `Submit by ${label(addDays(monday, 6))}, 23:30`);

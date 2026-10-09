@@ -234,6 +234,9 @@ export interface ApiTimesheetSettings {
   autoSubmit: boolean;
   /** Approval mode (CD-156): the whole week, or day by day (single days can be submitted). */
   approvalMode: 'week' | 'day';
+  /** Reminders (CD-154): hours before the deadline (null: off), and the emails after it. */
+  reminderHours: number | null;
+  afterDeadlineEmails: boolean;
 }
 export const DEFAULT_TIMESHEET_SETTINGS: ApiTimesheetSettings = {
   dayMinutes: 480,
@@ -247,6 +250,8 @@ export const DEFAULT_TIMESHEET_SETTINGS: ApiTimesheetSettings = {
   deadlineWeek: 'same',
   autoSubmit: false,
   approvalMode: 'week',
+  reminderHours: 2,
+  afterDeadlineEmails: true,
 };
 export interface WorkspaceTerms {
   project: string;

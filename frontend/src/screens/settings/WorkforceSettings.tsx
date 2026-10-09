@@ -9,6 +9,11 @@ import { useStore } from '../../store/store';
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEKDAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const isClock = (v: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
+/** When the reminder goes (CD-154). If a workspace has another number of hours, it is listed too. */
+const REMINDER_HOURS: (number | null)[] = [null, 1, 2, 4, 8, 24];
+const reminderLabel = (h: number | null) => (h === null ? 'Off' : h === 24 ? '1 day before the deadline' : `${h} ${h === 1 ? 'hour' : 'hours'} before the deadline`);
+const REMINDERS = REMINDER_HOURS.map((hours) => ({ hours, label: reminderLabel(hours) }));
+
 /** The two approval modes (CD-156, design `#cd-156`). */
 const APPROVAL_MODES: { id: 'week' | 'day'; title: string; text: string }[] = [
   { id: 'week', title: 'Whole week', text: 'Employees submit the week. Managers approve it once every working day is submitted.' },
@@ -174,8 +179,8 @@ export function WorkingDayCard() {
 
 /**
  * Settings → Workforce → Approvals: the approval mode (CD-156), the submission deadline (day, time,
- * same or next week; a live line with the next one) and auto submit (CD-153). Reminders come with
- * their own issue.
+ * same or next week; a live line with the next one) and auto submit (CD-153), and the reminders
+ * (CD-154: when the reminder goes, and the after-deadline emails).
  */
 export function ApprovalsTab() {
   const { t, save } = useTimesheetSettings();
@@ -229,6 +234,34 @@ export function ApprovalsTab() {
             <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Weeks with hours and draft days are submitted and marked Late and Auto-submitted. Weeks without hours and rejected days are left alone.</span>
           </span>
           <Switch on={t.autoSubmit} onClick={() => save({ autoSubmit: !t.autoSubmit })} label="Auto submit at the deadline" />
+        </div>
+      </div>
+      <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="reminders-card">
+        <span className="card-title">Reminders</span>
+        <FieldRow label="Reminder">
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
+            <select
+              className="form-input"
+              value={t.reminderHours ?? ''}
+              data-testid="reminder-hours"
+              style={{ width: 260 }}
+              onChange={(e) => save({ reminderHours: e.target.value ? Number(e.target.value) : null })}
+            >
+              {(REMINDER_HOURS.includes(t.reminderHours) ? REMINDERS : [...REMINDERS, { hours: t.reminderHours, label: reminderLabel(t.reminderHours) }]).map((r) => (
+                <option key={r.label} value={r.hours ?? ''}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+            <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>Sent to everyone who hasn't submitted yet.</span>
+          </span>
+        </FieldRow>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 0 0', borderTop: '1px solid var(--divider)' }} data-setting="after-deadline-emails">
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>After-deadline emails</span>
+            <span style={{ fontSize: 13, color: 'var(--text-2)' }}>At the deadline, late employees get a notice and each manager gets a list of their late people.</span>
+          </span>
+          <Switch on={t.afterDeadlineEmails} onClick={() => save({ afterDeadlineEmails: !t.afterDeadlineEmails })} label="After-deadline emails" />
         </div>
       </div>
       <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Changes are saved as you make them and written to the audit log. Changing the deadline applies to the current week.</span>
