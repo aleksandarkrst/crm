@@ -1,11 +1,11 @@
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull, ne, or } from 'drizzle-orm';
 import type { Tx } from '../../shared/database/database.service';
-import { workOrders, workOrderTechnicians } from '../../shared/database/schema';
+import { companies, projects, workOrders, workOrderTechnicians } from '../../shared/database/schema';
 
 /**
  * Who may log time on a work order (CD-148): the rule milestone 15's timesheets use for work
  * orders, as `canLogTime` (task-log.ts) is for tasks. Call it inside `DatabaseService.withTenant`.
- * The database trigger on time entries that enforces the same lock comes with milestone 15.
+ * The trigger on time entries (drizzle/0077_timesheet_rls.sql) enforces the same lock.
  */
 
 export type WorkOrderLogRefusal = 'not_found' | 'not_technician' | 'completed';
@@ -30,4 +30,27 @@ export async function workOrderLogRefusalFor(tx: Tx, employeeId: string, workOrd
 /** Whether `employeeId` may log time on `workOrderId` now. */
 export async function canLogWorkOrderTime(tx: Tx, employeeId: string, workOrderId: string): Promise<boolean> {
   return (await workOrderLogRefusalFor(tx, employeeId, workOrderId)) === null;
+}
+
+/**
+ * The work orders `employeeId` can log time on now (the Timesheet's picker, CD-152): they are a
+ * technician on it, it isn't Completed, and its project (if any) is open. By number.
+ */
+export function loggableWorkOrders(tx: Tx, employeeId: string) {
+  return tx
+    .select({
+      id: workOrders.id,
+      number: workOrders.number,
+      title: workOrders.title,
+      status: workOrders.status,
+      companyName: companies.name,
+      projectId: projects.id,
+      projectName: projects.name,
+    })
+    .from(workOrderTechnicians)
+    .innerJoin(workOrders, eq(workOrders.id, workOrderTechnicians.workOrderId))
+    .innerJoin(companies, eq(companies.id, workOrders.companyId))
+    .leftJoin(projects, eq(projects.id, workOrders.projectId))
+    .where(and(eq(workOrderTechnicians.employeeId, employeeId), ne(workOrders.status, 'completed'), or(isNull(workOrders.projectId), eq(projects.status, 'open'))))
+    .orderBy(asc(workOrders.number));
 }

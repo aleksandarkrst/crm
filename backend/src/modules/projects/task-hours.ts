@@ -1,23 +1,26 @@
 import { and, eq, sql } from 'drizzle-orm';
 import type { Tx } from '../../shared/database/database.service';
-import { taskTimeFixtures } from '../../shared/database/schema';
+import { timeEntries, timesheetDays } from '../../shared/database/schema';
 
 /**
  * Hours per person on a task (CD-147): what the People and hours card shows and what limits are
- * checked against. Logged hours are every entry (draft, submitted, returned, approved); approved
- * are the approved ones. Until milestone 15 they come from `task_time_fixtures`, written only by
- * tests: `taskHours` is the one read to swap for time entries.
+ * checked against. Logged hours are every time entry (draft, submitted, rejected, approved days);
+ * approved are the ones on approved days (CD-152).
  */
 export async function taskHours(tx: Tx, taskId: string, employeeId?: string): Promise<Map<string, { logged: number; approved: number }>> {
   const rows = await tx
     .select({
-      employeeId: taskTimeFixtures.employeeId,
-      logged: sql<number>`coalesce(sum(${taskTimeFixtures.hours}), 0)::float`,
-      approved: sql<number>`coalesce(sum(${taskTimeFixtures.hours}) filter (where ${taskTimeFixtures.approved}), 0)::float`,
+      employeeId: timeEntries.employeeId,
+      logged: sql<number>`coalesce(sum(${timeEntries.minutes}), 0)::float / 60`,
+      approved: sql<number>`coalesce(sum(${timeEntries.minutes}) filter (where ${timesheetDays.status} = 'approved'), 0)::float / 60`,
     })
-    .from(taskTimeFixtures)
-    .where(and(eq(taskTimeFixtures.taskId, taskId), employeeId ? eq(taskTimeFixtures.employeeId, employeeId) : undefined))
-    .groupBy(taskTimeFixtures.employeeId);
+    .from(timeEntries)
+    .leftJoin(
+      timesheetDays,
+      and(eq(timesheetDays.tenantId, timeEntries.tenantId), eq(timesheetDays.employeeId, timeEntries.employeeId), eq(timesheetDays.workDate, timeEntries.workDate)),
+    )
+    .where(and(eq(timeEntries.taskId, taskId), employeeId ? eq(timeEntries.employeeId, employeeId) : undefined))
+    .groupBy(timeEntries.employeeId);
   return new Map(rows.map((r) => [r.employeeId, { logged: r.logged, approved: r.approved }]));
 }
 

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpException } from '@nestjs/common';
 
 interface PgError {
   code?: string;
@@ -52,6 +52,30 @@ const PROJECT_RULES: Record<string, string> = {
   work_orders_sign_off_ck: "The customer's name is needed while the work order is signed off",
 };
 
+/**
+ * The lock on time entries (CD-152, drizzle/0077_timesheet_rls.sql): its message is written for
+ * people. A submitted day is a conflict (recall it first); the other locks are 423 Locked.
+ */
+const TIMESHEET_LOCKS: Record<string, number> = {
+  time_entries_day_submitted: 409,
+  time_entries_day_approved: 423,
+  time_entries_work_order_completed: 423,
+  time_entries_project_closed: 423,
+  time_entries_task_done: 423,
+};
+
+/** Time entry rules the database enforces as a last line (CD-152). */
+const TIMESHEET_RULES: Record<string, string> = {
+  time_entries_minutes_ck: 'Use 0.25 to 24 hours in steps of 0.25',
+  time_entries_note_ck: 'A note can have up to 500 characters',
+};
+
+/** Deleting what has time logged on it (CD-152): kept, closed instead. */
+const LOGGED_TIME: Record<string, string> = {
+  time_entries_task_fk: 'Time has been logged on this task. Mark it done instead of deleting it.',
+  time_entries_work_order_fk: 'Time has been logged on this work order. Complete it instead of deleting it.',
+};
+
 function pgError(err: unknown): PgError | undefined {
   // drizzle wraps driver errors; the pg error is on `cause`.
   const e = err as { code?: string; cause?: PgError };
@@ -69,6 +93,7 @@ export function mapDbError(err: unknown): never {
       throw new ConflictException(`Already exists (${pg.constraint ?? 'unique constraint'})`);
     case '23503':
       if (pg.constraint && PEOPLE_RULES[pg.constraint]) throw new BadRequestException(PEOPLE_RULES[pg.constraint]);
+      if (pg.constraint && LOGGED_TIME[pg.constraint] && pg.message?.startsWith('update or delete')) throw new ConflictException(LOGGED_TIME[pg.constraint]);
       // A deal with meetings (CD-213): the service says so first; this covers a race with a new meeting.
       if (pg.constraint === 'meetings_deal_fk' && pg.message?.startsWith('update or delete')) {
         throw new ConflictException('This deal has meetings. Delete them or move them to another deal first.');
@@ -80,6 +105,8 @@ export function mapDbError(err: unknown): never {
       throw new ConflictException(`Referenced record missing or still in use (${pg.constraint ?? 'foreign key'})`);
     case '23514':
       if (pg.constraint && RULES_WITH_MESSAGES.has(pg.constraint)) throw new ConflictException(pg.message);
+      if (pg.constraint && pg.constraint in TIMESHEET_LOCKS) throw new HttpException(pg.message ?? 'Locked', TIMESHEET_LOCKS[pg.constraint]!);
+      if (pg.constraint && TIMESHEET_RULES[pg.constraint]) throw new BadRequestException(TIMESHEET_RULES[pg.constraint]);
       if (pg.constraint === 'meetings_deal_required') throw new BadRequestException('Pick a deal');
       if (pg.constraint && PROJECT_RULES[pg.constraint]) throw new BadRequestException(PROJECT_RULES[pg.constraint]);
       if (pg.constraint && PEOPLE_RULES[pg.constraint]) throw new BadRequestException(PEOPLE_RULES[pg.constraint]);

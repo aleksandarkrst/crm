@@ -1194,3 +1194,62 @@ a.task-card-project:hover { color: var(--brand); }
 /* ---------------------------------------------------------------- work order page (CD-266) */
 .chip-action { border: 0; background: transparent; cursor: pointer; color: var(--brand); font-size: 11.5px; padding: 0 2px; }
 .signed-box { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: var(--brand-tint); border-radius: 10px; padding: 10px 14px; font-size: 13px; }
+
+/* ---------------------------------------------------------------- timesheet (CD-152) */
+.ts-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.ts-toolbar .btn-plain.ts-arrow { padding: 7px 10px; }
+.ts-week-label { font-size: 15px; font-weight: 600; }
+.ts-due { font-size: 12.5px; color: var(--text-2); }
+.ts-grid { border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; position: relative; }
+.ts-row { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(7, 82px) 84px; border-bottom: 1px solid var(--divider); min-width: 878px; background: var(--white); }
+.ts-row:last-child { border-bottom: 0; }
+.ts-row.ts-head { background: var(--panel); border-bottom: 1px solid var(--border); }
+.ts-row.ts-soft { background: var(--panel); }
+.ts-label { padding: 8px 14px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ts-label-main { font-size: 13px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ts-label-main a { color: inherit; }
+.ts-label-sub { font-size: 11.5px; color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ts-label-sub.over { color: var(--danger); }
+.ts-group .ts-label-main { font-weight: 600; color: var(--text-2); }
+.ts-day { padding: 8px 4px; text-align: center; border-left: 1px solid var(--divider); display: flex; flex-direction: column; gap: 2px; }
+.ts-day-name { font-size: 10.5px; font-weight: 600; color: var(--muted-2); letter-spacing: 0.06em; }
+.ts-day-date { font-size: 12.5px; font-weight: 600; }
+.ts-day-total { font-size: 11px; color: var(--text-2); }
+.ts-day-total.short { color: var(--warn); }
+.ts-box { border-left: 1px solid var(--divider); padding: 5px; display: flex; position: relative; }
+.ts-weekend { background: #F7F9F8; }
+.ts-input { flex: 1; width: 100%; min-width: 0; text-align: center; border-radius: 7px; border: 1px solid var(--border); font: inherit; font-size: 13px; padding: 6px 2px; background: var(--white); color: var(--ink); }
+.ts-input:focus { outline: none; border: 1.5px solid var(--brand); }
+.ts-input.warn { background: var(--warn-soft); color: var(--warn); border-color: #F2C9A5; }
+.ts-input.submitted { background: #EEF2FA; color: #2E3F5C; border-color: #C9D3E6; }
+.ts-input.approved { background: var(--brand-soft); color: var(--brand); border-color: var(--stage-done); }
+.ts-input.rejected { border: 1.5px solid var(--warn); }
+.ts-input.locked { background: var(--chip); color: var(--text-2); border-color: transparent; }
+.ts-input.error { border: 1.5px solid var(--danger); }
+.ts-input:read-only { cursor: default; }
+.ts-note-mark { position: absolute; top: 5px; right: 5px; width: 0; height: 0; border-left: 7px solid transparent; border-top: 7px solid var(--brand); border-top-right-radius: 6px; pointer-events: none; }
+.ts-note-btn { position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border: 0; padding: 0; background: transparent; cursor: pointer; opacity: 0; }
+.ts-box:hover .ts-note-btn, .ts-box:focus-within .ts-note-btn { opacity: 1; }
+.ts-note-btn::after { content: ''; position: absolute; top: 3px; right: 3px; width: 0; height: 0; border-left: 7px solid transparent; border-top: 7px solid var(--muted); border-top-right-radius: 6px; }
+.ts-total { padding: 8px; text-align: right; font-size: 13px; font-weight: 600; border-left: 1px solid var(--divider); align-self: center; }
+.ts-sum { display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--text-2); border-left: 1px solid var(--divider); }
+.ts-sum.strong { color: var(--ink); font-weight: 600; }
+.ts-sum.below { color: var(--danger); }
+.ts-sum.above { color: #2F6FB5; }
+.ts-add { border: 0; background: transparent; cursor: pointer; text-align: left; padding: 8px 14px; font: inherit; width: 100%; }
+.ts-add .ts-label-main { color: var(--brand); font-weight: 600; }
+.ts-add-picker { padding: 6px 14px 10px; grid-column: 1 / -1; position: relative; max-width: 520px; }
+.ts-help { font-size: 12px; color: var(--text-2); margin-top: 12px; }
+.ts-note-pop { position: absolute; width: 280px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); z-index: 20; }
+.ts-note-pop .form-label { font-size: 12px; }
+.ts-choice { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+.ts-choice.on { border-color: var(--brand); background: var(--brand-tint); }
+.ts-radio { width: 16px; height: 16px; flex: 0 0 16px; border-radius: 50%; border: 1.5px solid var(--dashed); box-sizing: border-box; margin-top: 2px; }
+.ts-choice.on .ts-radio { border: 5px solid var(--brand); }
+.ts-banner { border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px; }
+@media (max-width: 700px) {
+  .ts-toolbar .ts-spacer { display: none; }
+  /* The days scroll sideways under the task or work order, which stays in view. */
+  .ts-row { grid-template-columns: 160px repeat(7, 72px) 64px; min-width: 728px; }
+  .ts-row > .ts-label, .ts-row.ts-head > .th:first-child { position: sticky; left: 0; z-index: 1; background: inherit; border-right: 1px solid var(--divider); }
+}

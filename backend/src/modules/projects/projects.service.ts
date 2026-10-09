@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import { AuditService } from '../../shared/audit/audit.service';
 import { hasRole, type TenantContext } from '../../shared/authorization';
@@ -283,13 +283,16 @@ export class ProjectsService {
 
   /**
    * Owners and admins (the controller's @RequireTenant('admin')). Spec 3.2 refuses a project with
-   * logged hours (409 "This project has logged hours. Archive it instead."); time entries come with
-   * milestone 15, so today every project can be deleted.
+   * logged hours on its tasks (CD-152: 409, complete or cancel it instead). Its work orders stay
+   * without a project (work_orders_project_fk), with their time.
    */
   async remove(ctx: TenantContext, id: string) {
     const keys = await this.database
       .withTenant(ctx.tenantId, async (tx) => {
         // Its files' rows go with it (FK cascade); the stored bytes are removed after the commit.
+        const logged = await tx.execute(sql`
+          select 1 from time_entries e where e.task_id in (select id from tasks where project_id = ${id}) limit 1`);
+        if (logged.rows.length) throw new ConflictException('This project has logged hours. Complete or cancel it instead.');
         const files = await tx.select({ key: projectFiles.storageKey }).from(projectFiles).where(eq(projectFiles.projectId, id));
         const [row] = await tx.delete(projects).where(eq(projects.id, id)).returning({ id: projects.id, name: projects.name });
         if (!row) throw new NotFoundException('Project not found');

@@ -328,9 +328,9 @@ export const taskAssignments = pgTable(
 );
 
 /**
- * Stand-in hours per person and task (CD-147) until milestone 15 brings time entries: only the
- * integration tests write it, and `taskHours` (task-hours.ts) is the one place that reads logged and
- * approved hours, so milestone 15 swaps that read and drops this table.
+ * Stand-in hours per person and task (CD-147), unused since time entries (CD-152): nothing reads or
+ * writes it. Kept one release so the release before keeps working on this schema (expand, then
+ * contract); a later migration drops it.
  */
 export const taskTimeFixtures = pgTable(
   'task_time_fixtures',

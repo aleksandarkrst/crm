@@ -1,6 +1,6 @@
 import { and, asc, eq, ne } from 'drizzle-orm';
 import type { Tx } from '../../shared/database/database.service';
-import { projects, taskAssignments, tasks } from '../../shared/database/schema';
+import { companies, projects, taskAssignments, tasks } from '../../shared/database/schema';
 import { taskHours } from './task-hours';
 
 /**
@@ -54,13 +54,14 @@ export async function logTimeRefusalFor(tx: Tx, employeeId: string, taskId: stri
   return logTimeRefusal({ taskStatus: row.taskStatus, projectStatus: row.projectStatus, assignment: row.active === null ? null : { active: row.active, hourLimit: row.hourLimit }, block });
 }
 
-/** The tasks `employeeId` can log time on now (the Timesheet's task picker), by project and number. */
+/** The tasks `employeeId` can log time on now (the Timesheet's picker), by project and number, with the project's company. */
 export function loggableTasks(tx: Tx, employeeId: string) {
   return tx
-    .select({ id: tasks.id, number: tasks.number, name: tasks.name, status: tasks.status, projectId: projects.id, projectName: projects.name })
+    .select({ id: tasks.id, number: tasks.number, name: tasks.name, status: tasks.status, projectId: projects.id, projectName: projects.name, companyName: companies.name })
     .from(taskAssignments)
     .innerJoin(tasks, eq(tasks.id, taskAssignments.taskId))
     .innerJoin(projects, eq(projects.id, tasks.projectId))
+    .innerJoin(companies, eq(companies.id, projects.companyId))
     .where(and(eq(taskAssignments.employeeId, employeeId), eq(taskAssignments.active, true), ne(tasks.status, 'done'), eq(projects.status, 'open')))
     .orderBy(asc(projects.name), asc(tasks.number));
 }

@@ -97,7 +97,7 @@ export function PeopleAndHours({ task, onChange, onUnassign }: { task: ApiTask; 
         </div>
       </div>
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>
-        Each person logs their own time on {taskId(task)}; one person&apos;s hours never count toward another&apos;s limit. Logged and approved hours fill in from timesheets once time tracking is on.
+        Each person logs their own time on {taskId(task)}; one person&apos;s hours never count toward another&apos;s limit. Logged hours come from the timesheets; approved hours are those on approved days.
       </span>
     </div>
   );
