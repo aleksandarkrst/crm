@@ -4,10 +4,12 @@ import {
   type CopySourceRow,
   type CopyTarget,
   dayLimitRefusal,
+  deadlineInstant,
   endAfter,
   deadlineOf,
   DEFAULT_TIMESHEET_SETTINGS as S,
   expectedMinutes,
+  holidayMinutes,
   formatMinutes,
   isoWeek,
   isRequired,
@@ -157,5 +159,39 @@ describe('Start → End (CD-276)', () => {
     expect(endAfter('08:00', 150)).toBe('10:30');
     expect(endAfter('22:00', 120)).toBeNull();
     expect(endAfter('22:00', 105)).toBe('23:45');
+  });
+});
+
+describe('settings and holidays (CD-153)', () => {
+  const holidays = new Map([
+    ['2026-11-11', { date: '2026-11-11', name: 'Armistice Day', minutes: null }],
+    ['2026-10-09', { date: '2026-10-09', name: 'Half day', minutes: 240 }],
+    ['2026-10-10', { date: '2026-10-10', name: 'Saturday holiday', minutes: null }],
+  ]);
+  const isHoliday = (d: string) => holidays.has(d);
+
+  it('a holiday lowers the expected hours of a working day, never below 0, and not on weekends', () => {
+    expect(expectedMinutes('2026-11-11', S, always, holidays.get('2026-11-11'))).toBe(0);
+    expect(expectedMinutes('2026-10-09', S, always, holidays.get('2026-10-09'))).toBe(240);
+    expect(holidayMinutes('2026-10-10', S, holidays.get('2026-10-10'))).toBe(0);
+    expect(holidayMinutes('2026-11-11', { ...S, dayMinutes: 360 }, { date: '2026-11-11', name: 'x', minutes: 600 })).toBe(360);
+  });
+
+  it('follows the working days and the standard day', () => {
+    const sixDays = { ...S, workingDays: [1, 2, 3, 4, 5, 6], dayMinutes: 450 };
+    expect(expectedMinutes('2026-10-10', sixDays, always)).toBe(450);
+    expect(expectedMinutes('2026-10-11', sixDays, always)).toBe(0);
+  });
+
+  it('a deadline on a holiday moves to the next working day; "next week" is a week later', () => {
+    // Wednesday 11 Nov is a holiday: a Wednesday deadline moves to Thursday.
+    expect(deadlineOf('2026-11-09', { ...S, deadline: { weekday: 3, time: '12:00', week: 'same' } }, isHoliday)).toEqual({ date: '2026-11-12', time: '12:00' });
+    expect(deadlineOf('2026-10-05', { ...S, deadline: { weekday: 1, time: '10:00', week: 'next' } }, isHoliday)).toEqual({ date: '2026-10-12', time: '10:00' });
+    // Friday 9 Oct (a holiday) moves past the weekend (Saturday is one too) to Monday.
+    expect(deadlineOf('2026-10-05', S, isHoliday)).toEqual({ date: '2026-10-12', time: '17:00' });
+  });
+
+  it('the deadline instant is the local time on its day', () => {
+    expect(deadlineInstant(new Date('2026-10-08T22:00:00Z'), '17:00').toISOString()).toBe('2026-10-09T15:00:00.000Z');
   });
 });

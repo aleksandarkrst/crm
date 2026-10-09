@@ -11,6 +11,10 @@ export const WORKSPACE_MODULES = ['planning', 'crm', 'projects', 'workforce', 'f
 export type WorkspaceModule = (typeof WORKSPACE_MODULES)[number];
 
 export const CUSTOMER_EMAIL_LANGUAGES = ['en', 'sr'] as const;
+/** How the timesheet shows hours (CD-153): 7.50 or 7:30. */
+export const TIME_FORMATS = ['decimal', 'clock'] as const;
+/** Whether a week is due in the same week or the next one (CD-153). */
+export const DEADLINE_WEEKS = ['same', 'next'] as const;
 export type CustomerEmailLanguage = (typeof CUSTOMER_EMAIL_LANGUAGES)[number];
 
 export const tenants = pgTable(
@@ -50,6 +54,24 @@ export const tenants = pgTable(
     projectTermPlural: text('project_term_plural').notNull().default('Projects'),
     taskTerm: text('task_term').notNull().default('Task'),
     taskTermPlural: text('task_term_plural').notNull().default('Tasks'),
+    /**
+     * Timesheet settings (CD-153, Settings → Workforce → Employees and Approvals): the standard
+     * working day (hours as minutes, start, end, ISO weekdays 1 Monday … 7 Sunday), how hours are
+     * shown, the most a person may enter on one day, the submission deadline (weekday, local time,
+     * same or next week) and whether draft weeks are submitted at the deadline. `timesheet_auto_
+     * submit_since`: when that was last turned on; deadlines before it are left alone.
+     */
+    timesheetDayMinutes: smallint('timesheet_day_minutes').notNull().default(480),
+    timesheetDayStart: text('timesheet_day_start').notNull().default('08:00'),
+    timesheetDayEnd: text('timesheet_day_end').notNull().default('16:00'),
+    timesheetWorkingDays: smallint('timesheet_working_days').array().notNull().default(sql`'{1,2,3,4,5}'::smallint[]`),
+    timesheetTimeFormat: text('timesheet_time_format', { enum: TIME_FORMATS }).notNull().default('decimal'),
+    timesheetMaxDayHours: smallint('timesheet_max_day_hours').notNull().default(12),
+    timesheetDeadlineWeekday: smallint('timesheet_deadline_weekday').notNull().default(5),
+    timesheetDeadlineTime: text('timesheet_deadline_time').notNull().default('17:00'),
+    timesheetDeadlineWeek: text('timesheet_deadline_week', { enum: DEADLINE_WEEKS }).notNull().default('same'),
+    timesheetAutoSubmit: boolean('timesheet_auto_submit').notNull().default(false),
+    timesheetAutoSubmitSince: timestamp('timesheet_auto_submit_since', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -57,6 +79,14 @@ export const tenants = pgTable(
     check('tenants_modules_ck', sql`${t.modules} <@ '{planning,crm,projects,workforce,finance,reporting}'::text[]`),
     check('tenants_customer_email_language_ck', sql`${t.customerEmailLanguage} in ('en', 'sr')`),
     check('tenants_employee_weekly_hours_ck', sql`${t.employeeDefaultWeeklyHours} between 1 and 60`),
+    check(
+      'tenants_timesheet_ck',
+      sql`${t.timesheetDayMinutes} between 15 and 1440 and ${t.timesheetDayMinutes} % 15 = 0
+        and ${t.timesheetDayStart} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' and ${t.timesheetDayEnd} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' and ${t.timesheetDayEnd} > ${t.timesheetDayStart}
+        and ${t.timesheetWorkingDays} <@ '{1,2,3,4,5,6,7}'::smallint[] and cardinality(${t.timesheetWorkingDays}) between 1 and 7
+        and ${t.timesheetTimeFormat} in ('decimal', 'clock') and ${t.timesheetMaxDayHours} between 1 and 24
+        and ${t.timesheetDeadlineWeekday} between 1 and 7 and ${t.timesheetDeadlineTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' and ${t.timesheetDeadlineWeek} in ('same', 'next')`,
+    ),
     check('tenants_terms_ck', sql`char_length(${t.projectTerm}) between 1 and 30 and char_length(${t.projectTermPlural}) between 1 and 30 and char_length(${t.taskTerm}) between 1 and 30 and char_length(${t.taskTermPlural}) between 1 and 30`),
   ],
 );
