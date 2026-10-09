@@ -1,0 +1,4 @@
+-- {{table}} ({{issue}}). See "{{section}}" in docs/ARCHITECTURE.md.
+ALTER TABLE "{{table}}" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "{{table}}" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY tenant_isolation ON "{{table}}" USING (tenant_id = app_current_tenant()) WITH CHECK (tenant_id = app_current_tenant());

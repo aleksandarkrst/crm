@@ -1,0 +1,58 @@
+{
+  "$comment": "Checked-in Claude Code settings (CD-310): hooks that enforce CLAUDE.md, and the safe commands agents may run without asking. Personal overrides go in settings.local.json (ignored).",
+  "permissions": {
+    "allow": [
+      "Bash(npm run lint)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm test)",
+      "Bash(npm test:*)",
+      "Bash(npm run build)",
+      "Bash(npm run build:*)",
+      "Bash(npm run test:integration)",
+      "Bash(npm run test:performance)",
+      "Bash(npx vitest run:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npx tsc --noEmit:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git fetch:*)",
+      "Bash(git branch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push -u origin:*)",
+      "Bash(git push)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr ready:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [{ "type": "command", "command": "node -e \"require(process.env.CLAUDE_PROJECT_DIR + '/.claude/hooks/protect-files.js')\"", "timeout": 20 }]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "command": "node -e \"require(process.env.CLAUDE_PROJECT_DIR + '/.claude/hooks/guard-bash.js')\"", "timeout": 10 }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [{ "type": "command", "command": "node -e \"require(process.env.CLAUDE_PROJECT_DIR + '/.claude/hooks/check-edit.js')\"", "timeout": 300 }]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [{ "type": "command", "command": "node -e \"require(process.env.CLAUDE_PROJECT_DIR + '/.claude/hooks/unpushed.js')\"", "timeout": 20 }]
+      }
+    ]
+  }
+}

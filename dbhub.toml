@@ -1,0 +1,13 @@
+# DBHub (the `postgres` MCP server in .mcp.json, CD-310): the dev database from
+# docker-compose.dev.yml as the runtime role, read-only. For looking at data and query plans while
+# developing, never for changing data or the schema (migrations do that). The password is the dev
+# default from backend/.env.example; it never leaves this machine.
+[[sources]]
+id = "dev"
+dsn = "postgres://app_runtime:dev_runtime_password@localhost:5432/app?sslmode=disable"
+
+[[tools]]
+name = "execute_sql"
+source = "dev"
+readonly = true
+max_rows = 500

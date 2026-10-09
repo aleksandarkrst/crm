@@ -21,3 +21,7 @@ Thumbs.db
 
 # Parallel agent worktrees (local only)
 .claude/worktrees/
+# The edit hook's incremental typecheck state (CD-310)
+.claude/hooks/.cache/
+# Personal Claude Code settings
+.claude/settings.local.json
