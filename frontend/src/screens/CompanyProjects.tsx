@@ -7,11 +7,13 @@ import { useCompanyProjects } from '../store/projects';
 import { useStore } from '../store/store';
 import { HealthBadge, ProjectStatusBadge } from './lead/DealProjects';
 import { useTerms } from '../store/terms';
+import { loggedColor, loggedTotalText, useHours } from './project/hours';
 
 /**
  * The company page's Projects card (CD-234, spec 5): its open projects with stage, lead and health;
  * completed and cancelled ones under "Show closed (N)"; "+" starts a project for this company. Every
- * member sees it; it updates live (live hint `project`). Hours come with time entries (milestone 15).
+ * member sees it; it updates live (live hints `project` and `timesheet`). Logged hours (CD-277): the
+ * total line, and per project this month's and the total against the budget.
  */
 export function CompanyProjects({ companyId }: { companyId: string }) {
   const { set } = useStore();
@@ -19,6 +21,7 @@ export function CompanyProjects({ companyId }: { companyId: string }) {
   const navigate = useNavigate();
   const { data: projects, error } = useCompanyProjects(companyId);
   const [showClosed, setShowClosed] = useState(false);
+  const h = useHours();
   const open = (projects ?? []).filter((p) => p.status === 'open');
   const closed = (projects ?? []).filter((p) => p.status !== 'open');
 
@@ -35,8 +38,16 @@ export function CompanyProjects({ companyId }: { companyId: string }) {
         <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
           {p.stageName} · {p.leadName ?? 'No lead'}
         </span>
+        <span style={{ fontSize: 12, color: 'var(--text-2)' }} data-testid="company-project-month">
+          {h(p.monthMinutes)} this month
+        </span>
       </span>
-      {p.status === 'open' ? <HealthBadge health={p.health} /> : <ProjectStatusBadge status={p.status} />}
+      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+        {p.status === 'open' ? <HealthBadge health={p.health} /> : <ProjectStatusBadge status={p.status} />}
+        <span style={{ fontSize: 12, color: loggedColor(p) === 'var(--danger)' ? 'var(--danger)' : 'var(--text-2)', whiteSpace: 'nowrap' }} data-testid="company-project-total">
+          {loggedTotalText(p, h)}
+        </span>
+      </span>
     </button>
   );
 
@@ -48,7 +59,14 @@ export function CompanyProjects({ companyId }: { companyId: string }) {
         <span style={{ fontSize: 13, color: 'var(--text-2)' }}>No {terms.projects} for this company yet.</span>
       ) : (
         <>
-          <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Open {terms.projects} ({open.length})</span>
+          <span style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', fontSize: 13, color: 'var(--text-2)' }}>
+            <span>
+              Open {terms.projects} ({open.length})
+            </span>
+            <span style={{ fontSize: 12 }} data-testid="company-projects-hours">
+              {h(projects.reduce((a, p) => a + p.monthMinutes, 0))} this month · {h(projects.reduce((a, p) => a + p.loggedMinutes, 0))} total
+            </span>
+          </span>
           {open.map(row)}
           {closed.length > 0 && (
             <>
