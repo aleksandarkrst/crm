@@ -1397,7 +1397,8 @@ The `timesheet` module (`modules/timesheet`, tables in `schema/timesheet.ts`, RL
 and live hints in `drizzle/0077_timesheet_rls.sql`). Spec: "Functional spec: 15 · Timesheet and
 approvals" in Linear; design `docs/design/Timesheet.dc.html`. Built so far: weekly time entry
 (CD-152), time from the task and work order pages (CD-276), the settings, public holidays and
-the deadline with auto submit (CD-153), the approval mode (CD-156) and the Late status (CD-155).
+the deadline with auto submit (CD-153), the approval mode (CD-156), the Late status (CD-155) and
+the reminder and after-deadline emails (CD-154).
 
 - **Tables:**
   - `time_entries`: one person's hours on a task **or** a work order (a check) on a date, whole
@@ -1430,7 +1431,9 @@ the deadline with auto submit (CD-153), the approval mode (CD-156) and the Late 
   `tenants_timesheet_ck`): the standard working day (minutes, start, end, ISO working days), the
   time format (`decimal` 7.50 or `clock` 7:30), the most hours a day (1–24), the deadline (weekday,
   "HH:MM", `same` or `next` week), auto submit (with `timesheet_auto_submit_since`, set when it
-  is turned on) and the approval mode (CD-156, `drizzle/0081`: `week` or `day`). Read only through `timesheetSettings(tx, tenantId)`; changed through `PATCH
+  is turned on), the approval mode (CD-156, `drizzle/0081`: `week` or `day`) and the reminders
+  (CD-154, `drizzle/0083`: `reminderHours` before the deadline, null for off, default 2; and
+  `afterDeadlineEmails`, default on). Read only through `timesheetSettings(tx, tenantId)`; changed through `PATCH
   /api/workspace` `{ timesheet: { … } }` (any of them; owners and admins, 403 for others; in the
   audit log as `workspace.updated`; a `workspace` live hint). `GET /api/workspace` returns them as
   `timesheet`, so every screen shows hours in the workspace's format (`s.workspace.timesheet`).
@@ -1481,6 +1484,26 @@ the deadline with auto submit (CD-153), the approval mode (CD-156) and the Late 
     **Submit late**, which confirms "This week will be marked as submitted late.", and the week
     shows the Late badge. Not built: the deadline extension for an absence on the deadline day
     (needs time off, milestone 16).
+- **Emails** (CD-154, `notices.ts`, `notice-emails.ts` pure and unit-tested): the worker's tick
+  (`timesheet-jobs.ts`), after auto submit, queues for each workspace:
+  - the **reminder** "Reminder: submit your timesheet for week 41 by Fri 17:00", from
+    `reminderHours` before each deadline until it, to every active member (an employee with an
+    account in the workspace and an email) whose week has a required Draft day or a Rejected day:
+    hours so far against expected, the days without hours ("Missing: Friday", or "Still to do:
+    Submit the week"), Open timesheet;
+  - at the deadline (a day late at most, after downtime): **"Your timesheet for week 41 is late"**
+    to each member with a required day never submitted (with `afterDeadlineEmails`), or **"… was
+    submitted automatically"** to those auto submit sent in (always: it follows the auto submit
+    switch), and one **"Late timesheets for week 41"** per approver (`PeopleAccess.approversFor`:
+    the manager, or the Admins without one), listing each late person with "not submitted · 12 h"
+    or "auto-submitted (late)". Its button opens Workforce until the approval screen exists.
+  - Each is claimed in `timesheet_notices` (week, kind, recipient; `drizzle/0084` RLS) in the
+    transaction that queues `timesheet.notice-email`, so a tick run twice or after a restart sends
+    it once; the mail job (`MAIL_JOBS`) builds and sends it with the recipient's current address and
+    the workspace's time format. The worker gets `PeopleAccess` from `PeopleWorkerModule`. The dev
+    `POST /api/dev/timesheet/deadline-tick` runs auto submit and then queues the emails.
+  - Not built yet: the manual reminder from the approval screen and the daily digest additions
+    (spec 7.3, 7.4).
   - **Approval mode** (CD-156, Settings → Approvals' two cards): Whole week (`week`, the default)
     offers only Submit week; Day by day (`day`) also `POST submit { weekStart, date }` for one day
     (400 in Whole week mode), shown as "Submit" under the day's header. A single day keeps the

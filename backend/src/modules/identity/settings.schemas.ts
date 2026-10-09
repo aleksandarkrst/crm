@@ -66,6 +66,9 @@ export const TimesheetSettingsInput = z
     autoSubmit: z.boolean(),
     // Approval mode (CD-156): the whole week, or day by day.
     approvalMode: z.enum(APPROVAL_MODES),
+    // Reminders (CD-154): hours before the deadline (null: off), and the emails after it.
+    reminderHours: z.number().int().min(1, 'Between 1 and 72 hours').max(72, 'Between 1 and 72 hours').nullable(),
+    afterDeadlineEmails: z.boolean(),
   })
   .partial();
 export type TimesheetSettingsInput = z.infer<typeof TimesheetSettingsInput>;

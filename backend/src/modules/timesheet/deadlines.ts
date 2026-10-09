@@ -1,23 +1,18 @@
-import { Body, Controller, HttpCode, Injectable, Logger, Module, type OnApplicationBootstrap, Post } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
-import { z } from 'zod';
-import { RequireTenant, Tenant, type TenantContext } from '../../shared/authorization';
+import { Injectable } from '@nestjs/common';
+import { eq, sql } from 'drizzle-orm';
+import type { TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { employees, tenants, timesheetDeadlineRuns, timesheetWeeks } from '../../shared/database/schema';
-import { JobsService } from '../../shared/events/jobs.service';
 import { zonedDayStart, zonedParts } from '../../shared/time/zoned-time';
-import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
 import { addDays, deadlineInstant, deadlineOf, isoWeek, mondayOf, type TimesheetSettings } from './timesheet-rules';
 import { type Caller, readWeek, submitDays } from './timesheet.service';
 import { holidaysBetween, timesheetSettings } from './timesheet-settings';
 
-/** How often the worker looks for deadlines that passed. */
-export const TIMESHEET_TICK_CRON = '*/15 * * * *';
 
 /** The deadlines of the weeks around `monday`, in order: last weeks' (a "next week" deadline falls in this one), this week's, the next. */
 const mondaysAround = (monday: string) => [addDays(monday, -14), addDays(monday, -7), monday, addDays(monday, 7), addDays(monday, 14)];
 
-async function deadlinesAround(tx: Tx, settings: TimesheetSettings, timeZone: string, today: string) {
+export async function deadlinesAround(tx: Tx, settings: TimesheetSettings, timeZone: string, today: string) {
   const monday = mondayOf(today);
   const holidays = await holidaysBetween(tx, addDays(monday, -21), addDays(monday, 70));
   return mondaysAround(monday).map((weekStart) => {
@@ -27,7 +22,7 @@ async function deadlinesAround(tx: Tx, settings: TimesheetSettings, timeZone: st
 }
 
 /** One employee as the Timesheet reads them, for the deadline job (not the signed-in caller). */
-async function callerFor(tx: Tx, employeeId: string, today: string, settings: TimesheetSettings, timeZone: string, now: Date): Promise<Caller> {
+export async function callerFor(tx: Tx, employeeId: string, today: string, settings: TimesheetSettings, timeZone: string, now: Date): Promise<Caller> {
   const [e] = await tx
     .select({ name: employees.fullName, start: employees.employmentStartDate, end: employees.employmentEndDate })
     .from(employees)
@@ -96,50 +91,3 @@ export class TimesheetDeadlines {
     });
   }
 }
-
-/** The worker's side (CD-153): `timesheet.tick` every 15 minutes runs auto submit for each workspace that has it on. */
-@Injectable()
-export class TimesheetJobs implements OnApplicationBootstrap {
-  private readonly logger = new Logger(TimesheetJobs.name);
-
-  constructor(
-    private readonly jobs: JobsService,
-    private readonly database: DatabaseService,
-    private readonly deadlines: TimesheetDeadlines,
-  ) {}
-
-  async onApplicationBootstrap(): Promise<void> {
-    await this.jobs.work('timesheet.tick', () => this.tick());
-    await this.jobs.schedule('timesheet.tick', TIMESHEET_TICK_CRON);
-  }
-
-  async tick(now: Date = new Date()): Promise<void> {
-    const workspaces = await this.database.db.select({ id: tenants.id }).from(tenants).where(and(eq(tenants.timesheetAutoSubmit, true), sql`${tenants.timesheetAutoSubmitSince} is not null`));
-    for (const w of workspaces) {
-      const submitted = await this.deadlines.autoSubmitDue(w.id, now);
-      if (submitted) this.logger.log(`Auto-submitted ${submitted} timesheet week(s) in workspace ${w.id}`);
-    }
-  }
-}
-
-@Module({ providers: [TimesheetDeadlines, TimesheetJobs] })
-export class TimesheetWorkerModule {}
-
-const Tick = z.object({ now: z.iso.datetime().optional() });
-type Tick = z.infer<typeof Tick>;
-
-/** Development only (AUTH_MODE=dev): runs auto submit for the caller's workspace at `now` (tests). */
-@Controller('dev/timesheet')
-export class DevTimesheetController {
-  constructor(private readonly deadlines: TimesheetDeadlines) {}
-
-  @Post('deadline-tick')
-  @RequireTenant('member')
-  @HttpCode(200)
-  async tick(@Tenant() ctx: TenantContext, @Body(new ZodPipe(Tick)) body: Tick) {
-    return { submitted: await this.deadlines.autoSubmitDue(ctx.tenantId, body.now ? new Date(body.now) : new Date()) };
-  }
-}
-
-@Module({ controllers: [DevTimesheetController], providers: [TimesheetDeadlines] })
-export class TimesheetDevModule {}

@@ -76,6 +76,9 @@ export const tenants = pgTable(
     timesheetAutoSubmitSince: timestamp('timesheet_auto_submit_since', { withTimezone: true }),
     /** Approval mode (CD-156): `week` (only Submit week) or `day` (single days too). Changing it never changes a day's status. */
     timesheetApprovalMode: text('timesheet_approval_mode', { enum: APPROVAL_MODES }).notNull().default('week'),
+    /** Reminders (CD-154): hours before the deadline (null: off), and the emails after it. */
+    timesheetReminderHours: smallint('timesheet_reminder_hours').default(2),
+    timesheetAfterDeadlineEmails: boolean('timesheet_after_deadline_emails').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -84,6 +87,7 @@ export const tenants = pgTable(
     check('tenants_customer_email_language_ck', sql`${t.customerEmailLanguage} in ('en', 'sr')`),
     check('tenants_employee_weekly_hours_ck', sql`${t.employeeDefaultWeeklyHours} between 1 and 60`),
     check('tenants_timesheet_approval_mode_ck', sql`${t.timesheetApprovalMode} in ('week', 'day')`),
+    check('tenants_timesheet_reminder_ck', sql`${t.timesheetReminderHours} is null or ${t.timesheetReminderHours} between 1 and 72`),
     check(
       'tenants_timesheet_ck',
       sql`${t.timesheetDayMinutes} between 15 and 1440 and ${t.timesheetDayMinutes} % 15 = 0

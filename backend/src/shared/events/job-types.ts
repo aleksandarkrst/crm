@@ -89,6 +89,19 @@ export interface JobPayloads {
   'projects.task-assigned': { tenantId: string; taskId: string; recipientUserId: string; actorUserId: string };
   /** Cron (every 15 minutes): auto submit at the timesheet deadline in workspaces that have it on (CD-153). */
   'timesheet.tick': Record<string, never>;
+  /**
+   * One timesheet email (CD-154), queued by the tick: the reminder, "late", "submitted
+   * automatically" (to the employee) or the approver's summary of late people. The figures are the
+   * week's at queueing; the recipient's address and name are read when sending.
+   */
+  'timesheet.notice-email': {
+    tenantId: string;
+    kind: 'reminder' | 'late' | 'auto_submitted' | 'late_summary';
+    weekStart: string;
+    recipientUserId: string;
+    week: { weekStart: string; weekNumber: number; deadline: { date: string; time: string }; enteredMinutes: number; expectedMinutes: number; missing: string[] };
+    people?: { name: string; enteredMinutes: number; autoSubmitted: boolean }[];
+  };
   /** Scheduled nightly by the worker: fails document generations that were interrupted (CD-100). Placeholder for reporting snapshots. */
   'reporting.nightly': Record<string, never>;
 }
@@ -116,7 +129,8 @@ export const JOB_NAMES = [
   'projects.task-assigned',
   'reporting.nightly',
   'timesheet.tick',
+  'timesheet.notice-email',
 ] as const satisfies readonly JobName[];
 
 /** Jobs that send email: retried MAIL_RETRY_LIMIT times with backoff from MAIL_RETRY_DELAY_SECONDS. */
-export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed', 'projects.project-created-email', 'projects.task-assigned']);
+export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed', 'projects.project-created-email', 'projects.task-assigned', 'timesheet.notice-email']);

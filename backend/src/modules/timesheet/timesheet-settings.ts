@@ -17,6 +17,8 @@ export const timesheetColumns = {
   autoSubmit: tenants.timesheetAutoSubmit,
   autoSubmitSince: tenants.timesheetAutoSubmitSince,
   approvalMode: tenants.timesheetApprovalMode,
+  reminderHours: tenants.timesheetReminderHours,
+  afterDeadlineEmails: tenants.timesheetAfterDeadlineEmails,
 };
 
 /** The workspace's timesheet settings (CD-153): the one read every rule uses. */
@@ -34,6 +36,8 @@ export async function timesheetSettings(tx: Tx, tenantId: string): Promise<Times
     autoSubmit: row.autoSubmit,
     autoSubmitSince: row.autoSubmitSince,
     approvalMode: row.approvalMode,
+    reminderHours: row.reminderHours,
+    afterDeadlineEmails: row.afterDeadlineEmails,
   };
 }
 
