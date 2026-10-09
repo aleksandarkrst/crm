@@ -151,6 +151,14 @@ listener use their own connections without these limits.
 2. `npm run db:generate -- --name <change>` creates the migration.
 3. `npx drizzle-kit generate --custom --name <change>_rls` creates an empty migration. Add the three RLS statements (copy them from `0001_rls.sql`).
 4. Access the table only inside `database.withTenant(ctx.tenantId, …)`.
+5. Name the table in `test/integration/tenant-isolation.spec.ts` (no rows without a tenant, `42501` on a write into another tenant, `23503` on a cross-tenant reference).
+
+CI's `guards` job (CD-311) refuses the pull request otherwise: `scripts/check-rls.sh` wants every
+created table protected or listed with a reason in `scripts/rls-allowlist.txt`, and
+`scripts/check-tenant-tests.sh` wants a changed integration spec that names a new `tenant_id`
+table. `scripts/check-migrations.sh` stops `DROP COLUMN`, `DROP TABLE`, `ALTER COLUMN … TYPE`,
+`RENAME COLUMN`, `RENAME TO` and `SET NOT NULL` without a default unless the pull request
+description has a `migration-plan:` section (docs/WORKFLOW.md section 4).
 
 ## Deal stage history
 
