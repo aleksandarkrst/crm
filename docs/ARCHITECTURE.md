@@ -1099,7 +1099,15 @@ The `projects` module (`modules/projects`, tables in `schema/projects.ts`, RLS a
 types with stages (CD-272) and client projects linked to the CRM (CD-233, CD-275), tasks
 (CD-146) and work orders (CD-265). Time is logged on tasks and work orders through the timesheet
 (milestone 15, see "Timesheet"); a project with time on its tasks can't be deleted (409 "This
-project has logged hours. Complete or cancel it instead.").
+project has logged hours. Complete or cancel it instead."), and a completed or cancelled one takes
+no time until it is reopened (the lock on time entries).
+- **Logged hours** (CD-277): every project read carries `loggedMinutes` (every time entry on its
+  tasks and work orders, any day status) and `monthMinutes` (this calendar month in the workspace's
+  time zone). The company page's Projects card shows "64.5 h this month · 412 h total" and per
+  project "41.5 h this month" and "126 of 120 h" (red over the budget) or "286 h logged · no
+  budget"; the Projects table has This month and Logged / budget (a bar: green, amber from 95 %,
+  red over, grey without a budget); board cards show this month's hours. A `timesheet` live hint
+  reads projects again.
 
 - **Project types** (`project_types`, `project_stages`): like funnels, a set of ordered stages for
   one kind of project (design v2; CD-255 adopted them instead of the CD-143 hierarchy). Complete and

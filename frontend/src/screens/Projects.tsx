@@ -10,6 +10,7 @@ import { projectError, useProjects, useProjectTypes } from '../store/projects';
 import { memberLabels, moneyTotal } from '../store/selectors';
 import { useStore } from '../store/store';
 import { useTerms } from '../store/terms';
+import { LoggedBudget, useHours } from './project/hours';
 import { HealthBadge, ProjectStatusBadge, projectValue } from './lead/DealProjects';
 import { AvatarStack } from './task/parts';
 import { type ApiTask, TASK_STATUSES } from '../lib/tasksApi';
@@ -47,6 +48,7 @@ export function Projects() {
   const { s, set, session, flash } = useStore();
   const t = useTerms();
   const navigate = useNavigate();
+  const hours = useHours();
   const { data: projects, error, set: setProjects } = useProjects();
   const { data: types } = useProjectTypes();
   // The tasks the caller can see (CD-263): each card's progress and next open tasks.
@@ -257,6 +259,11 @@ export function Projects() {
                           {p.dealLost && <span className="badge badge-danger">Deal lost</span>}
                           {tasks && <Progress work={work.get(p.id)} />}
                         </span>
+                        {p.monthMinutes > 0 && (
+                          <span style={{ fontSize: 11.5, color: 'var(--text-2)' }} data-testid="project-card-month">
+                            {hours(p.monthMinutes)} this month
+                          </span>
+                        )}
                         {(work.get(p.id)?.next.length ?? 0) > 0 && (
                           <span style={{ display: 'flex', flexDirection: 'column', gap: 5, borderTop: '1px dashed var(--border)', paddingTop: 7 }} data-testid="project-card-next">
                             {work.get(p.id)!.next.map((t) => (
@@ -290,6 +297,7 @@ export function Projects() {
 /** The list view (design v2 §1): every project the filters show, all types. Rows open the project. */
 function ProjectsList({ projects, work, onOpen }: { projects: ApiProject[]; work: Map<string, ProjectWork> | null; onOpen: (id: string) => void }) {
   const t = useTerms();
+  const h = useHours();
   return (
     <div className="pipeline-table" data-testid="projects-list">
       <div className="projects-table-inner">
@@ -301,6 +309,8 @@ function ProjectsList({ projects, work, onOpen }: { projects: ApiProject[]; work
           <span>Health</span>
           <span>Progress</span>
           <span>Tasks</span>
+          <span>This month</span>
+          <span>Logged / budget</span>
           <span>Status</span>
           <span>Finish</span>
         </div>
@@ -326,6 +336,8 @@ function ProjectsList({ projects, work, onOpen }: { projects: ApiProject[]; work
             </span>
             <span>{work ? <Progress work={work.get(p.id)} /> : null}</span>
             <span style={{ color: 'var(--text-2)' }}>{work ? `${work.get(p.id)?.open ?? 0} open` : ''}</span>
+            <span data-testid="project-month">{h(p.monthMinutes)}</span>
+            <LoggedBudget project={p} />
             <span>
               <ProjectStatusBadge status={p.status} />
             </span>

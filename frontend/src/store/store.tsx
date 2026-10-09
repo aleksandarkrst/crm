@@ -511,7 +511,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       // The org structure (CD-138) is read again by the screens showing it (store/org.ts).
       if (e.type === 'resync' || PEOPLE_HINTS.has(e.type)) set((x) => ({ orgRev: x.orgRev + 1 }));
       // Project types and projects (CD-272) are read again by the screens showing them.
-      if (e.type === 'resync' || e.type === 'project_type' || e.type === 'project') set((x) => ({ projectRev: x.projectRev + 1 }));
+      // Logged hours show on projects (CD-277): a time entry change reads them again too.
+      if (e.type === 'resync' || e.type === 'project_type' || e.type === 'project' || e.type === 'timesheet') set((x) => ({ projectRev: x.projectRev + 1 }));
       // Tasks (CD-146) too, and when their project changes (its name, stage or status shows on them).
       // Time entries (CD-152) change a task's People and hours card and a work order's time too.
       if (e.type === 'resync' || e.type === 'task' || e.type === 'project' || e.type === 'project_type' || e.type === 'timesheet') set((x) => ({ taskRev: x.taskRev + 1 }));

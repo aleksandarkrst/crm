@@ -1061,9 +1061,9 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 }
 
 /* ---------------------------------------------------------------- projects list (CD-234) */
-.projects-table-inner { min-width: 1150px; }
+.projects-table-inner { min-width: 1240px; }
 .projects-table-inner > .table-head,
-.projects-table-inner > .table-row { grid-template-columns: minmax(220px, 1.6fr) minmax(140px, 1fr) minmax(130px, 1fr) minmax(120px, 0.9fr) 100px 100px 70px 100px 90px; }
+.projects-table-inner > .table-row { grid-template-columns: minmax(200px, 1.4fr) minmax(120px, 1fr) minmax(110px, 0.9fr) minmax(100px, 0.8fr) 100px 100px 70px 80px 150px 100px 80px; }
 
 /* ---------------------------------------------------------------- project page (CD-234) */
 .project-fields { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--divider); }

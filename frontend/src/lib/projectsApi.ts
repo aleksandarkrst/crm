@@ -41,6 +41,9 @@ export interface ApiProject {
   value: string | null;
   currency: string | null;
   budgetHours: string | null;
+  /** Logged time (CD-277): everyone's entries on its tasks and work orders, all time and this calendar month, in minutes. */
+  loggedMinutes: number;
+  monthMinutes: number;
   description: string | null;
   startDate: string | null;
   endDate: string | null;
