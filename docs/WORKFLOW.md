@@ -73,7 +73,8 @@ When the checks pass, open a pull request to `main`:
 - Move the Linear issue to **In Review** and link the pull request (Linear links it automatically
   when the branch name or title contains the issue ID).
 
-**GitHub CI** then runs three checks on the pull request: `backend`, `frontend` and `integration`.
+**GitHub CI** then runs three checks on the pull request: `backend`, `frontend` and
+`integration / run` (the database job in `db-tests.yml`, shared with the nightly performance run).
 All three must be green before merging. The `e2e` browser tests (about 16 minutes, workflow
 `e2e.yml`) don't run on pull requests or on `main` (CD-218). They run only before a production
 deploy (step 4 below). Don't start them for a pull request or after a merge to staging; a change
@@ -81,7 +82,7 @@ that touches the flows the e2e tests cover updates or adds tests in `e2e/`, and 
 production checks them (CD-227).
 
 The image build can also be checked before merging. Run **CI / CD** from the Actions tab against
-the branch and enable **Build both Docker images without publishing them**. The checks (`backend`, `frontend`, `website`, `integration`) run
+the branch and enable **Build both Docker images without publishing them**. The checks (`backend`, `frontend`, `website`, `integration / run`) run
 first, followed by `images`; verification never pushes an image or starts `deploy`, even on `main`. See [image verification](DEPLOYMENT.md#verify-docker-images-before-merging) for dispatch steps and the default-branch prerequisite.
 
 ## 5. Review
@@ -166,7 +167,7 @@ settings on GitHub, not in the code:
   - **Require a pull request before merging** (required approvals: 0 while you are the only
     reviewer; GitHub doesn't let you approve your own pull request)
   - **Require status checks to pass**, with **Require branches to be up to date before merging**;
-    add the checks `backend`, `frontend` and `integration` (`e2e` runs only before production
+    add the checks `backend`, `frontend` and `integration / run` (`e2e` runs only before production
     deploys, CD-218; don't add it, it would never report on a pull request)
   - **Block force pushes**
 - Bypass list: leave empty, so the rules apply to everyone.

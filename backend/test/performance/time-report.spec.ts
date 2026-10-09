@@ -51,7 +51,7 @@ beforeAll(async () => {
      where (a.n < 3 or g < 17)`,
     [tenant],
   );
-}, 300_000);
+}); // hookTimeout in vitest.performance.config.mts
 
 const timed = async (path: string) => {
   const started = performance.now();
