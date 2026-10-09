@@ -51,7 +51,10 @@ at the first failure and report it (a failing check is fixed, never skipped or d
 8. **Move the issue to In Review** in Linear (`save_issue` with state `In Review`) and add a
    comment with the pull request link, what was tested, and anything left undone or decided.
 9. **Report** to the user: the PR link, the check results, the reviewer findings and their
-   outcome, and what is left for the reviewer to decide.
+   outcome, whether the pull request touches a protected path (CLAUDE.md lists them; then the
+   project owner merges it, otherwise the review routine does), and what is left to check on
+   staging (docs/STAGING_CHECK.md). Don't wait for a human code review: once the pull request is
+   ready for review with green CI, the hand-over is done.
 
 Never merge (`gh pr merge` is refused by a hook anyway), never push to `main`, and don't close
 the Linear issue: the merge does that.

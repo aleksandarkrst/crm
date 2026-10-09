@@ -10,8 +10,21 @@ backend/    NestJS API + background worker (same image), Drizzle ORM, pg-boss jo
 e2e/        browser end-to-end tests (Puppeteer + node:test)
 infra/      Postgres init (roles), backup container, server bootstrap
 scripts/    deploy.sh — run on the server by CI
-docs/       ARCHITECTURE.md, DEPLOYMENT.md, WORKFLOW.md (how work goes from issue to production)
+docs/       ARCHITECTURE.md, DEPLOYMENT.md, WORKFLOW.md (issue to production), STAGING_CHECK.md
 ```
+
+## Contributing: from an issue to production
+
+Every change starts as a Linear issue (`CD-…`) and goes out on its own branch and pull request.
+CI runs the checks, including the `guards` job that enforces row-level security and safe
+migrations. Nobody reads an ordinary pull request before it merges: a review routine (a scheduled
+Claude Code session) reviews pull requests that are ready for review with green CI, posts a
+plain-language summary and merges them. Pull requests that touch migrations, tenant isolation,
+sign-in, CI, deploys or the automation itself wait for the project owner. Every merge goes to
+staging, where a person answers the five questions in
+[docs/STAGING_CHECK.md](docs/STAGING_CHECK.md) with the seed workspaces; production is promoted
+by hand after that. The whole process, and the rules coding agents follow, are in
+[docs/WORKFLOW.md](docs/WORKFLOW.md) and [CLAUDE.md](CLAUDE.md).
 
 ## Run it locally
 
