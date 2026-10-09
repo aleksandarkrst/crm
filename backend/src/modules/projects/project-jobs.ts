@@ -4,9 +4,10 @@ import { ENV, type Env } from '../../infrastructure/config/config.module';
 import { buttonHtml, escapeHtml, layoutHtml } from '../../infrastructure/mail/html';
 import { Mailer, type MailMessage } from '../../infrastructure/mail/mailer';
 import { DatabaseService } from '../../shared/database/database.service';
-import { companies, deals, employees, memberships, projects, taskAssignments, tasks, tenants, users } from '../../shared/database/schema';
+import { companies, deals, employees, memberships, projects, taskAssignments, taskLimitAlerts, tasks, tenants, users } from '../../shared/database/schema';
 import type { JobPayloads } from '../../shared/events/job-types';
 import { JobsService } from '../../shared/events/jobs.service';
+import { hoursText, refreshLimitAlert, startOnFirstEntry } from './hour-limits';
 import { autoCreateFromWonDeal } from './projects.service';
 
 /** What the workspace calls projects and tasks (CD-143), e.g. "Project" or "Work order". */
@@ -75,6 +76,49 @@ export function taskAssignedEmail({ to, recipientName, actorName, workspaceName,
   return { to, subject, text, html };
 }
 
+export interface LimitAlertEmailInput {
+  to: string;
+  recipientName: string | null;
+  /** The recipient is the person at the limit ("You have logged…"). */
+  self: boolean;
+  personName: string;
+  workspaceName: string;
+  appUrl: string;
+  terms?: Terms;
+  level: 80 | 100;
+  loggedMinutes: number;
+  limitMinutes: number;
+  task: { id: string; number: number; name: string; project: string; company: string };
+}
+
+/** "Hour limit almost reached" (80 %) and "Hour limit reached" (100 %), CD-149, spec 12.2. */
+export function limitAlertEmail(input: LimitAlertEmailInput): MailMessage {
+  const { task, level, loggedMinutes: logged, limitMinutes: limit, terms = DEFAULT_TERMS } = input;
+  const link = `${input.appUrl.replace(/\/+$/, '')}/tasks/${task.id}`;
+  const word = inSentence(terms.task);
+  const title = level === 100 ? 'Hour limit reached' : 'Hour limit almost reached';
+  const subject = `${title}: T-${task.number} ${task.name}`;
+  const greeting = input.recipientName ? `Hi ${input.recipientName.split(' ')[0]},` : 'Hi,';
+  const who = input.self ? 'You have' : `${input.personName} has`;
+  const whose = input.self ? 'your' : 'their';
+  const against = logged > limit ? `, ${hoursText(logged - limit)} h over ${whose} ${hoursText(limit)} h limit,` : ` of ${whose} ${hoursText(limit)} h limit`;
+  const intro = `${who} logged ${hoursText(logged)} h${against} on T-${task.number} ${task.name} (${task.project}, ${task.company}).`;
+  const next =
+    level === 100
+      ? input.self
+        ? `Ask the ${inSentence(terms.project)} lead to raise your limit if the work needs more time.`
+        : `Raise the limit on the ${word} if the work needs more time.`
+      : `${Math.round((logged / limit) * 100)}% of the limit is used.`;
+  const footer = `You get this email because "Hour limit warnings" is on in Settings → Notifications for ${input.workspaceName}.`;
+  const text = [greeting, '', intro, next, '', `Open the ${word}: ${link}`, '', footer].join('\n');
+  const html = layoutHtml(
+    [`<p style="margin:0 0 12px">${escapeHtml(greeting)}</p>`, `<p style="margin:0 0 12px">${escapeHtml(intro)} ${escapeHtml(next)}</p>`, buttonHtml(`Open the ${word}`, link)].join('\n'),
+    footer,
+    input.appUrl,
+  );
+  return { to: input.to, subject, text, html };
+}
+
 /**
  * Worker side of projects (CD-233):
  * - "crm.deal-won": with "Create a project when a deal is won" on, the deal's project
@@ -83,6 +127,10 @@ export function taskAssignedEmail({ to, recipientName, actorName, workspaceName,
  * - "projects.project-created-email": emails the deal owner, if still a member and still the lead.
  * - "projects.task-assigned" (CD-146): emails someone assigned to a task, if they still are and
  *   "Task assignments" is on for them (read when sending, so turning it off stops queued emails).
+ * - "timesheet.task-hours-changed" (CD-149): a To do task moves to In progress on its first entry;
+ *   the person's hour limit alert is recomputed, which queues "projects.limit-alert" on a crossing.
+ * - "projects.limit-alert": emails one member, if "Hour limit warnings" is on for them and the
+ *   person is still at that level.
  */
 @Injectable()
 export class ProjectJobs implements OnApplicationBootstrap {
@@ -99,6 +147,65 @@ export class ProjectJobs implements OnApplicationBootstrap {
     await this.jobs.work('crm.deal-won', (data) => this.dealWon(data));
     await this.jobs.work('projects.project-created-email', (data) => this.sendCreated(data));
     await this.jobs.work('projects.task-assigned', (data) => this.sendTaskAssigned(data));
+    await this.jobs.work('timesheet.task-hours-changed', (data) => this.hoursChanged(data));
+    await this.jobs.work('projects.limit-alert', (data) => this.sendLimitAlert(data));
+  }
+
+  async hoursChanged({ tenantId, taskId, employeeId }: JobPayloads['timesheet.task-hours-changed']): Promise<void> {
+    await this.database.withTenant(tenantId, async (tx) => {
+      if (await startOnFirstEntry(tx, taskId)) this.logger.log(`Task ${taskId} started by its first time entry (tenant ${tenantId})`);
+      await refreshLimitAlert(tx, this.jobs, tenantId, taskId, employeeId);
+    });
+  }
+
+  async sendLimitAlert({ tenantId, taskId, employeeId, level, recipientUserId, loggedMinutes, limitMinutes }: JobPayloads['projects.limit-alert']): Promise<void> {
+    const [recipient] = await this.database.db
+      .select({ email: users.email, name: users.displayName, wants: memberships.notifyHourLimits, workspaceName: tenants.name, projectTerm: tenants.projectTerm, taskTerm: tenants.taskTerm })
+      .from(memberships)
+      .innerJoin(users, eq(users.id, memberships.userId))
+      .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
+      .where(and(eq(memberships.tenantId, tenantId), eq(memberships.userId, recipientUserId)));
+    if (!recipient?.email || !recipient.wants) return;
+    const [task] = await this.database.withTenant(tenantId, (tx) =>
+      tx
+        .select({
+          id: tasks.id,
+          number: tasks.number,
+          name: tasks.name,
+          project: projects.name,
+          company: companies.name,
+          personName: employees.fullName,
+          personUserId: employees.userId,
+          level: taskLimitAlerts.level,
+        })
+        .from(tasks)
+        .innerJoin(projects, eq(projects.id, tasks.projectId))
+        .innerJoin(companies, eq(companies.id, projects.companyId))
+        .innerJoin(taskLimitAlerts, and(eq(taskLimitAlerts.taskId, tasks.id), eq(taskLimitAlerts.employeeId, employeeId)))
+        .innerJoin(employees, eq(employees.id, taskLimitAlerts.employeeId))
+        .where(eq(tasks.id, taskId)),
+    );
+    // Deleted, or back below this level (entries removed, the limit raised) before this ran.
+    if (!task || task.level < level) return;
+    if (this.mailer.notDelivered) {
+      this.logger.warn(`Limit alert for ${taskId} not sent: ${this.mailer.notDelivered}`);
+      return;
+    }
+    await this.mailer.send(
+      limitAlertEmail({
+        to: recipient.email,
+        recipientName: recipient.name,
+        self: task.personUserId === recipientUserId,
+        personName: task.personName,
+        workspaceName: recipient.workspaceName,
+        appUrl: this.env.APP_URL,
+        terms: { project: recipient.projectTerm, task: recipient.taskTerm },
+        level,
+        loggedMinutes,
+        limitMinutes,
+        task,
+      }),
+    );
   }
 
   async dealWon({ tenantId, dealId, actorUserId }: JobPayloads['crm.deal-won']): Promise<void> {

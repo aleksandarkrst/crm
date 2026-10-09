@@ -22,6 +22,7 @@ const workspaceColumns = {
   employeeSelfEditBank: tenants.employeeSelfEditBank,
   ceoEmployeeId: tenants.ceoEmployeeId,
   autoCreateProjects: tenants.autoCreateProjects,
+  hourLimitMode: tenants.hourLimitMode,
   modules: tenants.modules,
   projectTerm: tenants.projectTerm,
   projectTermPlural: tenants.projectTermPlural,
@@ -182,6 +183,7 @@ export class SettingsService {
         notifyVisitPlans: memberships.notifyVisitPlans,
         notifyOrgChanges: memberships.notifyOrgChanges,
         notifyTaskAssigned: memberships.notifyTaskAssigned,
+        notifyHourLimits: memberships.notifyHourLimits,
       })
       .from(users)
       .innerJoin(memberships, and(eq(memberships.userId, users.id), eq(memberships.tenantId, ctx.tenantId)))
@@ -192,11 +194,11 @@ export class SettingsService {
 
   /**
    * Updates the caller's own profile; `defaultFunnelId` and the notification settings
-   * (`dailyDigest`, `notifyDealAssigned`, CD-16; `notifyMeetingInvites`, `notifyVisitPlans`, CD-207; `notifyTaskAssigned`, CD-146) apply to this workspace only.
+   * (`dailyDigest`, `notifyDealAssigned`, CD-16; `notifyMeetingInvites`, `notifyVisitPlans`, CD-207; `notifyTaskAssigned`, CD-146; `notifyHourLimits`, CD-149) apply to this workspace only.
    */
   async updateProfile(ctx: TenantContext, user: AuthUser, input: UpdateProfile) {
-    const { defaultFunnelId, dailyDigest, notifyDealAssigned, notifyMeetingInvites, notifyVisitPlans, notifyOrgChanges, notifyTaskAssigned, ...own } = input;
-    const workspaceOnly = { defaultFunnelId, dailyDigest, notifyDealAssigned, notifyMeetingInvites, notifyVisitPlans, notifyOrgChanges, notifyTaskAssigned };
+    const { defaultFunnelId, dailyDigest, notifyDealAssigned, notifyMeetingInvites, notifyVisitPlans, notifyOrgChanges, notifyTaskAssigned, notifyHourLimits, ...own } = input;
+    const workspaceOnly = { defaultFunnelId, dailyDigest, notifyDealAssigned, notifyMeetingInvites, notifyVisitPlans, notifyOrgChanges, notifyTaskAssigned, notifyHourLimits };
     await this.database.withTenant(ctx.tenantId, async (tx) => {
       if (defaultFunnelId) {
         // RLS is on, so a funnel of another workspace is simply not found.

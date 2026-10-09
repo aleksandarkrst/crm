@@ -596,6 +596,20 @@
       "when": 1791548951693,
       "tag": "0084_timesheet_notices_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1791552294643,
+      "tag": "0085_hour_limits",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1791552298676,
+      "tag": "0086_hour_limits_rls",
+      "breakpoints": true
     }
   ]
 }

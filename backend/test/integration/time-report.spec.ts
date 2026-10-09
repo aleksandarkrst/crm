@@ -1,0 +1,223 @@
+/**
+ * Effective time and hour limits (CD-149, CD-248): a task starts on its first entry; "Hour limit
+ * almost reached" and "Hour limit reached" go once per crossing (to the person and the lead, the
+ * reached one also to their manager) and again after dropping below; raising a limit clears the
+ * alert at once; Block mode refuses hours past a limit with the hours left; the time report's
+ * totals, entry states, period, removed people and who sees what; the CSV export.
+ */
+import { beforeAll, describe, expect, inject, it } from 'vitest';
+import { addMember, call, createTenant, eventually, mailTo, ok, type Session, signIn } from './helpers';
+import { accessOf, asTenantSql } from './people-helpers';
+
+interface Node {
+  kind: string;
+  id: string;
+  name: string;
+  code: string | null;
+  notAssigned?: boolean;
+  limitMinutes: number | null;
+  loggedMinutes: number;
+  approvedMinutes: number;
+  allTimeMinutes: number;
+  remainingMinutes: number | null;
+  usedPercent: number | null;
+  flag: string | null;
+  children: Node[];
+}
+interface Report {
+  rows: Node[];
+  total: Node;
+}
+
+let owner: Session;
+let ana: Session;
+let marko: Session;
+let lena: Session;
+let jovan: Session;
+let tenant: string;
+const ids = {} as Record<'ana' | 'marko' | 'lena' | 'jovan', string>;
+let projectId: string;
+let task: { id: string; number: number };
+let week: string;
+
+const as = (s: Session = owner) => ({ token: s.token, tenant });
+const addDays = (date: string, n: number) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+const cell = (s: Session, day: number, minutes: number, taskId = task.id) => call('PUT', '/timesheet/cells', { ...as(s), body: { date: addDays(week, day), taskId, minutes } });
+const level = async (employeeId = ids.ana) => (await asTenantSql<{ level: number }>(tenant, 'select level from task_limit_alerts where task_id = $1 and employee_id = $2', [task.id, employeeId]))[0]?.level ?? 0;
+const reachLevel = (want: number) => eventually(async () => (await level()) === want || null, `alert level ${want}`);
+const subjects = async (s: Session, prefix: string) => (await mailTo(owner, s.email)).filter((m) => m.subject === `${prefix}: T-${task.number} Hydraulic leak`);
+const mailsReach = (s: Session, prefix: string, count: number) => eventually(async () => (await subjects(s, prefix)).length >= count || null, `${count}× "${prefix}" to ${s.name}`);
+const report = (s: Session, query = '') => ok<Report>('GET', `/time-report?projectId=${projectId}${query}`, as(s));
+const flat = (nodes: Node[]): Node[] => nodes.flatMap((n) => [n, ...flat(n.children)]);
+
+beforeAll(async () => {
+  [owner, ana, marko, lena, jovan] = await Promise.all([signIn('tr-owner'), signIn('tr-ana'), signIn('tr-marko'), signIn('tr-lena'), signIn('tr-jovan')]);
+  tenant = await createTenant(owner, 'Time report');
+  for (const s of [ana, marko, lena, jovan]) await addMember(owner, tenant, s, 'member');
+  for (const [key, s] of [['ana', ana], ['marko', marko], ['lena', lena], ['jovan', jovan]] as const) ids[key] = (await accessOf(s, tenant)).employeeId;
+  await asTenantSql(tenant, `update employees set employment_start_date = '2024-01-01', work_type = 'both'`);
+  // Marko manages Ana; Lena leads the project.
+  await ok('POST', '/people/reporting-lines', { ...as(), body: { employeeIds: [ids.ana], managerId: ids.marko } }, 200);
+  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { name: 'Kovin Pančevo' } });
+  const [type] = await ok<{ id: string }[]>('GET', '/project-types', as());
+  projectId = (await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name: 'Service contract 2026', projectTypeId: type!.id, companyId: company.id, leadUserId: lena.userId } })).id;
+  task = await ok<{ id: string; number: number }>('POST', '/tasks', { ...as(), body: { projectId, name: 'Hydraulic leak', assigneeIds: [ids.ana, ids.marko] } });
+  await ok('PATCH', `/tasks/${task.id}/assignees/${ids.ana}`, { ...as(), body: { hourLimit: 10 } });
+  week = (await ok<{ thisWeek: string }>('GET', '/timesheet/week', as(ana))).thisWeek;
+});
+
+describe('hour limit alerts (Warn mode)', () => {
+  it('the first entry starts the task (TC 17)', async () => {
+    expect((await ok<{ status: string }>('GET', `/tasks/${task.id}`, as())).status).toBe('todo');
+    expect((await cell(ana, 0, 450)).status).toBe(200); // 7.5 h of 10
+    await eventually(async () => (await ok<{ status: string }>('GET', `/tasks/${task.id}`, as())).status === 'in_progress' || null, 'task in progress');
+    expect(await level()).toBe(0);
+  });
+
+  it('80 % sends "almost reached" to her and the lead once (TC 7)', async () => {
+    await cell(ana, 1, 30); // 8 h
+    await reachLevel(80);
+    await mailsReach(ana, 'Hour limit almost reached', 1);
+    await mailsReach(lena, 'Hour limit almost reached', 1);
+    await cell(ana, 1, 60); // 8.5 h: nothing more
+    expect((await subjects(marko, 'Hour limit almost reached')).length).toBe(0);
+  });
+
+  it('100 % sends "reached" to her, the lead and her manager; over it is saved in Warn mode (TC 8, 11)', async () => {
+    await cell(ana, 2, 90); // 10 h
+    await reachLevel(100);
+    for (const s of [ana, lena, marko]) await mailsReach(s, 'Hour limit reached', 1);
+    expect((await cell(ana, 3, 90)).status).toBe(200); // 11.5 h
+    const me = flat((await report(ana)).rows).find((n) => n.kind === 'person' && n.id === ids.ana)!;
+    expect([me.allTimeMinutes, me.remainingMinutes, me.flag]).toEqual([690, -90, 'over']);
+    const mail = (await subjects(marko, 'Hour limit reached'))[0]!;
+    expect(mail.text).toContain(`has logged 10 h of their 10 h limit on T-${task.number} Hydraulic leak`);
+  });
+
+  it('dropping below and crossing again sends again (TC 9)', async () => {
+    await cell(ana, 2, 0);
+    await cell(ana, 3, 0); // 8.5 h: back to 80, nothing sent
+    await reachLevel(80);
+    await cell(ana, 0, 360); // 7 h
+    await reachLevel(0);
+    await cell(ana, 0, 450); // 8.5 h again
+    await reachLevel(80);
+    await mailsReach(ana, 'Hour limit almost reached', 2);
+    await mailsReach(lena, 'Hour limit almost reached', 2);
+    expect((await subjects(ana, 'Hour limit reached')).length).toBe(1);
+  }, 60_000);
+
+  it('raising a limit clears the alert at once (TC 10)', async () => {
+    await ok('PATCH', `/tasks/${task.id}/assignees/${ids.ana}`, { ...as(), body: { hourLimit: 20 } });
+    expect(await level()).toBe(0);
+    await ok('PATCH', `/tasks/${task.id}/assignees/${ids.ana}`, { ...as(), body: { hourLimit: 10 } });
+    expect(await level()).toBe(80);
+  });
+
+  it('turning "Hour limit warnings" off stops them', async () => {
+    await ok('PATCH', '/profile', { ...as(lena), body: { notifyHourLimits: false } });
+    expect((await ok<{ notifyHourLimits: boolean }>('GET', '/profile', as(lena))).notifyHourLimits).toBe(false);
+  });
+});
+
+describe('Block mode', () => {
+  beforeAll(async () => {
+    await ok('PATCH', '/workspace', { ...as(), body: { hourLimitMode: 'block' } });
+  });
+
+  it('refuses hours past the limit with what is left; up to the limit saves (TC 12, 14)', async () => {
+    expect((await ok<{ hourLimitMode: string }>('GET', '/workspace', as())).hourLimitMode).toBe('block');
+    const refused = await call('PUT', '/timesheet/cells', { ...as(ana), body: { date: addDays(week, 4), taskId: task.id, minutes: 120 } });
+    expect(refused.status).toBe(400);
+    expect(JSON.stringify(refused.body)).toContain(`You have 1.5 h left on T-${task.number} (limit 10 h). Ask ${lena.name} to raise your limit.`);
+    const entry = await call('POST', '/timesheet/entries', { ...as(ana), body: { date: addDays(week, 4), taskId: task.id, minutes: 120 } });
+    expect(entry.status).toBe(400);
+    expect((await cell(ana, 4, 90)).status).toBe(200); // exactly 10 h
+    expect((await cell(ana, 5, 15)).status).toBe(400); // nothing left
+    expect((await cell(ana, 4, 60)).status).toBe(200); // lowering is fine
+  });
+
+  it("someone without a limit isn't blocked (TC 13)", async () => {
+    expect((await cell(marko, 0, 600)).status).toBe(200);
+  });
+
+  it('Warn again saves past the limit', async () => {
+    await ok('PATCH', '/workspace', { ...as(), body: { hourLimitMode: 'warn' } });
+    expect((await cell(ana, 5, 120)).status).toBe(200);
+  });
+});
+
+describe('the time report', () => {
+  let task2: string;
+
+  beforeAll(async () => {
+    task2 = (await ok<{ id: string }>('POST', '/tasks', { ...as(), body: { projectId, name: 'Pump service', assigneeIds: [ids.ana, ids.jovan] } })).id;
+    // Ana: 2 h draft, 1 h submitted, 1 h returned, 3 h approved, long ago; Jovan 4 h, then removed.
+    const days = ['2025-03-03', '2025-03-04', '2025-03-05', '2025-03-06'];
+    await asTenantSql(
+      tenant,
+      `insert into time_entries (tenant_id, employee_id, task_id, work_date, minutes) select $1, $2, $3, d.day::date, d.m from unnest($4::text[], $5::int[]) as d(day, m)`,
+      [tenant, ids.ana, task2, days, [120, 60, 60, 180]],
+    );
+    await asTenantSql(
+      tenant,
+      `insert into timesheet_days (tenant_id, employee_id, work_date, status) select $1, $2, d.day::date, d.s from unnest($3::text[], $4::text[]) as d(day, s)`,
+      [tenant, ids.ana, days.slice(1), ['submitted', 'rejected', 'approved']],
+    );
+    await asTenantSql(tenant, `insert into time_entries (tenant_id, employee_id, task_id, work_date, minutes) values ($1, $2, $3, '2025-03-03', 240)`, [tenant, ids.jovan, task2]);
+    await ok('DELETE', `/tasks/${task2}/assignees/${ids.jovan}`, as(), 200);
+  });
+
+  const pump = (r: Report) => flat(r.rows).find((n) => n.kind === 'task' && n.id === task2)!;
+
+  it('logged counts every state, approved only approved days; a removed person stays (TC 2, 4)', async () => {
+    const t = pump(await report(owner));
+    expect([t.loggedMinutes, t.approvedMinutes]).toEqual([660, 180]);
+    const anaRow = t.children.find((c) => c.id === ids.ana)!;
+    expect([anaRow.loggedMinutes, anaRow.approvedMinutes]).toEqual([420, 180]);
+    expect(t.children.find((c) => c.id === ids.jovan)).toMatchObject({ loggedMinutes: 240, notAssigned: true });
+  });
+
+  it('a period narrows Logged and Approved, not Remaining (TC 3)', async () => {
+    const r = await report(owner, '&period=range&from=2025-03-05&to=2025-03-31');
+    expect([pump(r).loggedMinutes, pump(r).approvedMinutes]).toEqual([240, 180]);
+    const leak = flat(r.rows).find((n) => n.kind === 'person' && n.id === ids.ana && n.loggedMinutes === 0 && n.limitMinutes === 600)!;
+    expect(leak.remainingMinutes).not.toBeNull();
+    expect((await call('GET', '/time-report?period=range', as())).status).toBe(400);
+  });
+
+  it('the person view adds up each person across tasks (TC 1)', async () => {
+    const r = await ok<Report>('GET', `/time-report?groupBy=person&projectId=${projectId}`, as());
+    expect(r.rows.map((p) => p.name).sort()).toEqual([ana.name, jovan.name, marko.name].sort());
+    const a = r.rows.find((p) => p.id === ids.ana)!;
+    expect(a.children[0]!.children.map((t) => t.code)).toEqual([`T-${task.number}`, expect.stringMatching(/^T-\d+$/)]);
+  });
+
+  it('each viewer sees only the people they may (TC 6)', async () => {
+    const people = async (s: Session) => [...new Set(flat((await report(s)).rows).filter((n) => n.kind === 'person').map((n) => n.id))].sort();
+    expect(await people(owner)).toEqual([ids.ana, ids.jovan, ids.marko].sort());
+    expect(await people(lena)).toEqual([ids.ana, ids.jovan, ids.marko].sort()); // the lead: everyone on the project
+    expect(await people(marko)).toEqual([ids.ana, ids.marko].sort()); // himself and his report
+    expect(await people(ana)).toEqual([ids.ana]);
+    expect(await people(jovan)).toEqual([ids.jovan]); // only his own removed line
+    const anaTotal = (await report(ana)).total.allTimeMinutes;
+    expect(anaTotal).toBeLessThan((await report(owner)).total.allTimeMinutes);
+  });
+
+  it('only over 80 % keeps the people at or above it', async () => {
+    const r = await report(owner, '&onlyOver80=true');
+    expect(flat(r.rows).filter((n) => n.kind === 'person').map((n) => n.id)).toEqual([ids.ana]);
+  });
+
+  it('CSV for admins, leads and managers, with a BOM and the same rows (TC 15)', async () => {
+    expect((await call('GET', `/time-report/csv?projectId=${projectId}`, as(ana))).status).toBe(403);
+    for (const s of [owner, lena, marko]) {
+      const res = await fetch(`${inject('apiUrl')}/api/time-report/csv?projectId=${projectId}`, { headers: { authorization: `Bearer ${s.token}`, 'x-tenant-id': tenant } });
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toContain('text/csv');
+      const text = new TextDecoder('utf-8', { ignoreBOM: true }).decode(await res.arrayBuffer());
+      expect(text.startsWith('﻿Project,Phase,Task,Person,')).toBe(true);
+      if (s === owner) expect(text).toContain('Not assigned any more');
+    }
+  });
+});

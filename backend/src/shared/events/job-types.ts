@@ -87,6 +87,18 @@ export interface JobPayloads {
   'projects.project-created-email': { tenantId: string; projectId: string; recipientUserId: string };
   /** Sent by projects when someone assigns another person to a task (CD-146): the projects worker emails them, if they want it. */
   'projects.task-assigned': { tenantId: string; taskId: string; recipientUserId: string; actorUserId: string };
+  /**
+   * Sent by the timesheet in the transaction that changes someone's time entries on a task (create,
+   * change, delete, copy). The projects worker moves a To do task to In progress on its first entry
+   * and updates their hour limit alert (CD-149), which may queue "projects.limit-alert".
+   */
+  'timesheet.task-hours-changed': { tenantId: string; taskId: string; employeeId: string };
+  /**
+   * "Hour limit almost reached" (80) or "Hour limit reached" (100) to one member (CD-149), queued
+   * once per crossing. The figures are the ones at the crossing; the worker skips it when the
+   * person dropped below the level again before it ran, or the member turned "Hour limit warnings" off.
+   */
+  'projects.limit-alert': { tenantId: string; taskId: string; employeeId: string; level: 80 | 100; recipientUserId: string; loggedMinutes: number; limitMinutes: number };
   /** Cron (every 15 minutes): auto submit at the timesheet deadline in workspaces that have it on (CD-153). */
   'timesheet.tick': Record<string, never>;
   /**
@@ -127,10 +139,12 @@ export const JOB_NAMES = [
   'projects.project-created-email',
   'projects.project-created-from-deal',
   'projects.task-assigned',
+  'projects.limit-alert',
   'reporting.nightly',
   'timesheet.tick',
   'timesheet.notice-email',
+  'timesheet.task-hours-changed',
 ] as const satisfies readonly JobName[];
 
 /** Jobs that send email: retried MAIL_RETRY_LIMIT times with backoff from MAIL_RETRY_DELAY_SECONDS. */
-export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed', 'projects.project-created-email', 'projects.task-assigned', 'timesheet.notice-email']);
+export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed', 'projects.project-created-email', 'projects.task-assigned', 'projects.limit-alert', 'timesheet.notice-email']);

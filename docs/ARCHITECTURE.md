@@ -1321,8 +1321,8 @@ no time until it is reopened (the lock on time entries).
     /api/dev/tasks/:id/hours` (browser tests) writes a time entry on a day of its own in January
     2026, approved when asked. `task_time_fixtures`, the stand-in before, is unused and dropped in
     a later release (expand, then contract).
-  - `canLogTime(…, { block })`: in Block mode (CD-149 will make it a setting) an entry past the
-    person's own limit is refused (`over_limit`); one person's hours never count toward another's.
+  - `canLogTime(…, { block })`: an entry past the person's own limit is refused (`over_limit`);
+    one person's hours never count toward another's. The Timesheet uses `hourLimitBlock` (below).
 - **Dependencies** (CD-269, `drizzle/0065`, `0066`): `tasks.waits_for_task_id`, a task of the same
   project, never itself (check) and never one that already waits for it (TasksService walks the
   chain: 400 "That task already waits for this one"). Deleting the task it waits for clears it
@@ -1398,6 +1398,57 @@ no time until it is reopened (the lock on time entries).
   account assigned by another person, when they're still on the task and `memberships.
   notify_task_assigned` is on (read when sending). Number, name, project, company, due date and a
   link to `/tasks/:id`.
+
+### Effective time and hour limits (CD-149)
+
+The backend part (CD-248); the screens come with the frontend part. Pure rules are unit-tested
+(`test/time-report.spec.ts`); `test/integration/time-report.spec.ts` covers the jobs, Block and
+the report, and `time-report-performance.spec.ts` the performance target.
+
+- **Which hours count:** logged = every time entry of the person on the task (draft, submitted,
+  rejected and approved days); approved = entries on approved days. Work order time and absences
+  aren't task entries. Totals are always summed when read (index `time_entries_task_employee_idx`,
+  `drizzle/0085`); only the alert state is stored.
+- **Settings** (`drizzle/0085`): `tenants.hour_limit_mode` `warn` (default) or `block`, in `PATCH
+  /api/workspace` (`hourLimitMode`); `memberships.notify_hour_limits` ("Hour limit warnings" in
+  Settings → Notifications, on by default), in `PATCH /api/profile` (`notifyHourLimits`).
+- **Block mode** (`hour-limits.ts`, `hourLimitBlock`): the Timesheet (cells, entries, Copy last
+  week) refuses an entry that takes someone past their own limit on a task with 400 "You have 1.5 h
+  left on T-142 (limit 8 h). Ask <lead> to raise your limit." Lowering hours is always allowed, so
+  people already over the limit when Block is turned on keep their entries and can't add more;
+  Copy last week leaves out the hours that don't fit. People without a limit (and removed people)
+  are never blocked. Warn mode saves them; the report flags them "Over limit".
+- **Alerts** (`task_limit_alerts`, RLS in `drizzle/0086`): per person and task, `level` 0, 80 (from
+  80 % of the limit) or 100 (from the limit). The timesheet sends `timesheet.task-hours-changed {
+  tenantId, taskId, employeeId }` in the transaction of every change to someone's task entries; the
+  projects worker moves a To do task to In progress on its first entry and calls
+  `refreshLimitAlert`, which locks the row, recomputes the level and, only when it goes up, queues
+  `projects.limit-alert` for the highest threshold crossed: "Hour limit almost reached" to the person
+  and the lead, "Hour limit reached" also to their direct manager, each member once. Going down
+  sends nothing, so crossing again later sends again. Assigning, removing someone and changing a
+  limit recompute it in the request (raising a limit clears the alert at once). The email job skips
+  members with "Hour limit warnings" off and people already back below that level.
+- **The report** (`GET /api/time-report`, `GET /api/time-report/csv`; `time-report.ts` builds it,
+  `time-report.service.ts` reads it): `groupBy=project` (Project › Stage › Task › Person; tasks
+  without a stage sit under the project; stages are the spec's phases) or `person` (Person › Project
+  › Task); `period` all (default), this_month, last_month, this_quarter and this_year (by the fiscal
+  year start), or range with `from` and `to`; filters `companyId`, `projectTypeId` (the kind),
+  `projectId`, `unitId` (the unit and those below it), `leadUserId`, `employeeId`, `status` (task),
+  `onlyOver80`. Each node has limit (a person's own; a task's when every current person has one;
+  groups sum the known ones, `limitPartial` otherwise), logged and approved in the period, all-time
+  logged, and remaining, used % and the flag (`eighty`, `reached`, `over`) against all-time logged.
+  Removed people stay with their hours (`notAssigned`).
+  - **Who sees what:** the people on tasks whose hours the viewer may see: their own; as a project's
+    lead, everyone on it; as a manager, their direct and indirect reports; owners and admins all.
+    Totals only add up what they see. CSV: owners and admins, project leads and managers (403
+    otherwise). The spec's Payroll and Administration roles were removed (CD-225), so there is no
+    "approved only" view.
+  - **CSV:** the screen's rows in order (subtotals included) with the path in the first columns,
+    then Total; UTF-8 with a BOM, CRLF, numbers as numbers, text guarded against formulas.
+  - **Performance:** three plain queries (hours per person and task, tasks, people) joined in code.
+    One big join depended on row estimates, which are far off for rows added since the last ANALYZE,
+    and then took seconds. With 100,000 entries, 2,000 tasks and 200 people a request takes about
+    0.15 to 0.35 s locally.
 
 ## Timesheet (milestone 15)
 

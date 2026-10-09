@@ -21,7 +21,8 @@ import {
 } from '../../shared/database/schema';
 import { zonedDayStart, zonedParts } from '../../shared/time/zoned-time';
 import { PeopleAccess } from '../people';
-import { loggableTasks, loggableWorkOrders, type LogTimeRefusal, logTimeRefusal, type WorkOrderLogRefusal, workOrderLogRefusal } from '../projects';
+import { JobsService } from '../../shared/events/jobs.service';
+import { hourLimitBlock, loggableTasks, loggableWorkOrders, type LogTimeRefusal, logTimeRefusal, type WorkOrderLogRefusal, workOrderLogRefusal } from '../projects';
 import {
   addDays,
   copyPlan,
@@ -236,7 +237,20 @@ export class TimesheetService {
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
     private readonly people: PeopleAccess,
+    private readonly jobs: JobsService,
   ) {}
+
+  /** Someone's hours on tasks changed (CD-149): the projects worker starts the task and updates their limit alert. */
+  private async hoursChanged(tx: Tx, tenantId: string, employeeId: string, taskIds: (string | null)[]) {
+    for (const taskId of new Set(taskIds)) if (taskId) await this.jobs.send('timesheet.task-hours-changed', { tenantId, taskId, employeeId }, tx);
+  }
+
+  /** Block mode (CD-149): refuses `minutes` more on a task past the person's hour limit; `except`: the entries the change replaces. */
+  private async checkHourLimit(tx: Tx, tenantId: string, employeeId: string, taskId: string | null, minutes: number, except: string[] = []) {
+    if (!taskId) return;
+    const refusal = await hourLimitBlock(tx, tenantId, employeeId, taskId, minutes, except);
+    if (refusal) throw new BadRequestException(refusal);
+  }
 
   week(ctx: TenantContext, weekStart?: string): Promise<WeekView> {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
@@ -297,9 +311,11 @@ export class TimesheetService {
             .where(and(mine, entry ? sql`${timeEntries.id} <> ${entry.id}` : undefined));
           const refusal = entry && input.minutes <= entry.minutes ? null : dayLimitRefusal(total, input.minutes, caller.settings);
           if (refusal) throw new BadRequestException(refusal);
+          if (!entry || input.minutes > entry.minutes) await this.checkHourLimit(tx, ctx.tenantId, employeeId, input.taskId ?? null, input.minutes, entry ? [entry.id] : []);
           if (entry) await tx.update(timeEntries).set({ minutes: input.minutes, note, ...keepSpan(entry.startTime, input.minutes) }).where(eq(timeEntries.id, entry.id));
           else await tx.insert(timeEntries).values({ tenantId: ctx.tenantId, employeeId, workDate: input.date, taskId: input.taskId ?? null, workOrderId: input.workOrderId ?? null, minutes: input.minutes, note, createdByUserId: ctx.userId });
         }
+        if (entry || input.minutes > 0) await this.hoursChanged(tx, ctx.tenantId, employeeId, [input.taskId ?? null]);
         return readWeek(tx, caller, mondayOf(input.date));
       })
       .catch(mapDbError);
@@ -322,6 +338,7 @@ export class TimesheetService {
         if (!facts) throw new NotFoundException(input.taskId ? 'Task not found' : 'Work order not found');
         if (facts.refusal) throw refusalError(facts);
         await this.checkDayLimit(tx, caller, employeeId, input.date, span.minutes, null);
+        await this.checkHourLimit(tx, ctx.tenantId, employeeId, input.taskId ?? null, span.minutes);
         const [row] = await tx
           .insert(timeEntries)
           .values({
@@ -335,6 +352,7 @@ export class TimesheetService {
             createdByUserId: ctx.userId,
           })
           .returning();
+        await this.hoursChanged(tx, ctx.tenantId, employeeId, [input.taskId ?? null]);
         return entryView(row!);
       })
       .catch(mapDbError);
@@ -364,11 +382,13 @@ export class TimesheetService {
         // Hours already there can be corrected after someone was unassigned (spec 4.4); closed rows are the trigger's.
         if (facts?.refusal && facts.refusal !== 'not_assigned' && facts.refusal !== 'not_technician') throw refusalError(facts);
         await this.checkDayLimit(tx, caller, employeeId, date, span.minutes, date === entry.workDate ? entry : null);
+        if (span.minutes > entry.minutes) await this.checkHourLimit(tx, ctx.tenantId, employeeId, entry.taskId, span.minutes, [entry.id]);
         const [row] = await tx
           .update(timeEntries)
           .set({ workDate: date, ...span, ...(input.note !== undefined ? { note: input.note } : {}) })
           .where(eq(timeEntries.id, id))
           .returning();
+        await this.hoursChanged(tx, ctx.tenantId, employeeId, [entry.taskId]);
         return entryView(row!);
       })
       .catch(mapDbError);
@@ -380,8 +400,9 @@ export class TimesheetService {
       .withTenant(ctx.tenantId, async (tx) => {
         const caller = await this.caller(ctx, tx);
         const employeeId = this.ownEmployee(caller);
-        await this.ownEntry(tx, employeeId, id);
+        const entry = await this.ownEntry(tx, employeeId, id);
         await tx.delete(timeEntries).where(eq(timeEntries.id, id));
+        await this.hoursChanged(tx, ctx.tenantId, employeeId, [entry.taskId]);
       })
       .catch(mapDbError);
   }
@@ -463,7 +484,18 @@ export class TimesheetService {
             .values(plan.rows.map((key) => ({ tenantId: ctx.tenantId, employeeId, weekStart: input.weekStart, ...split(key) })))
             .onConflictDoNothing();
         }
-        const cells = plan.cells.filter((c) => employed(c.date, caller.employment));
+        const cells = [];
+        // Block mode (CD-149): hours that would take someone past their limit on a task aren't copied.
+        const added = new Map<string, number>();
+        for (const c of plan.cells.filter((c) => employed(c.date, caller.employment))) {
+          const { taskId } = split(c.key);
+          if (taskId) {
+            const more = (added.get(taskId) ?? 0) + c.minutes;
+            if (await hourLimitBlock(tx, ctx.tenantId, employeeId, taskId, more)) continue;
+            added.set(taskId, more);
+          }
+          cells.push(c);
+        }
         if (cells.length) {
           await tx
             .insert(timeEntries)
@@ -475,6 +507,7 @@ export class TimesheetService {
           entityId: employeeId,
           data: { weekStart: input.weekStart, mode: input.mode, rows: plan.rows.length, cells: cells.length },
         });
+        await this.hoursChanged(tx, ctx.tenantId, employeeId, [...added.keys()]);
         const week = await readWeek(tx, caller, input.weekStart);
         return { week, copiedRows: plan.rows.length, copiedCells: cells.length, skipped: plan.skippedRows, fullDays: plan.fullDays };
       })
