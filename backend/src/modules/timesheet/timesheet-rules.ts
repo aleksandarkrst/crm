@@ -183,3 +183,18 @@ export function copyPlan(source: readonly CopySourceRow[], target: CopyTarget, h
   plan.fullDays.sort();
   return plan;
 }
+
+const toMinutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+const toClock = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+/** Start → End in minutes (CD-276); null when the end isn't after the start or isn't a whole quarter hour later. */
+export function spanMinutes(start: string, end: string): number | null {
+  const m = toMinutes(end) - toMinutes(start);
+  return m > 0 && m % 15 === 0 ? m : null;
+}
+
+/** The end of an entry `minutes` long from `start`, or null when it would pass midnight. */
+export function endAfter(start: string, minutes: number): string | null {
+  const end = toMinutes(start) + minutes;
+  return end < 1440 ? toClock(end) : null;
+}

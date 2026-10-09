@@ -21,12 +21,14 @@ import {
   workOrderStatusLabel,
 } from '../lib/workOrdersApi';
 import { projectError, useProject, useProjects } from '../store/projects';
-import { curOf, initialsOf } from '../store/selectors';
+import { curOf, initialsOf, todayIso as todayInZone } from '../store/selectors';
 import { useStore } from '../store/store';
 import { useWorkOrder, useWorkOrderChecklist } from '../store/workOrders';
 import { NumberField, Row, TextField } from './project/fields';
 import { PeoplePicker } from './task/parts';
 import { ChecklistCard } from './task/TaskNotes';
+import { TimeCard } from './timesheet/TimeCard';
+import { useWorkOrderTime } from '../store/timesheet';
 import { HoldDialog } from './WorkOrders';
 import { useTerms } from '../store/terms';
 
@@ -47,7 +49,7 @@ function whenText(w: Pick<ApiWorkOrder, 'scheduledDate' | 'scheduledStart' | 'du
  *   hold and Mark completed (or Reopen), the status bar, and the On hold reason in a red box;
  * - Details (company, project, where, type, priority, equipment, site);
  * - Job, Schedule (technicians with a lead, date, start, duration), Checklist, Report and sign-off,
- *   History. Track time comes with milestone 15's time entries.
+ *   Track time (CD-276: the timesheet's entries) under Details; History.
  * Whoever can change the order (owners, admins, the project lead, its technicians, its creator)
  * edits it; everyone else reads it.
  */
@@ -59,6 +61,7 @@ export function WorkOrder() {
   const { data: project } = useProject(order?.projectId ?? undefined);
   const { data: projects } = useProjects();
   const checklist = useWorkOrderChecklist(id);
+  const time = useWorkOrderTime(id);
   const [holding, setHolding] = useState(false);
   const terms = useTerms();
   const [adding, setAdding] = useState(false);
@@ -257,6 +260,16 @@ export function WorkOrder() {
                 </Row>
               </div>
             </div>
+            <TimeCard
+              kind="work_order"
+              target={{ workOrderId: order.id }}
+              code={workOrderId(order)}
+              card={time.data}
+              error={time.error}
+              reload={time.reload}
+              today={todayInZone(s.workspace.timezone)}
+              defaultStart={order.scheduledDate === todayInZone(s.workspace.timezone) ? order.scheduledStart : null}
+            />
           </div>
 
           <div style={{ flex: '999 1 380px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>

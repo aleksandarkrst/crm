@@ -5,7 +5,10 @@ import { hasRole, type TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
 import { companies, employees, MAX_TASK_CHECKLIST_ITEMS, projects, recordChanges, users, workOrderChecklistItems, workOrderCounters, workOrders, workOrderTechnicians } from '../../shared/database/schema';
+import { PeopleAccess } from '../people';
 import type { TaskHistoryEntry } from './tasks.service';
+import { timeEntriesOf } from './time-entries';
+import { workOrderLogRefusal } from './work-order-log';
 import type { AddWorkOrderItem, CreateWorkOrder, ListWorkOrdersQuery, UpdateWorkOrder, UpdateWorkOrderItem } from './work-orders.schemas';
 
 export interface WorkOrderTechnicianView {
@@ -75,7 +78,30 @@ export class WorkOrdersService {
   constructor(
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
+    private readonly people: PeopleAccess,
   ) {}
+
+  /**
+   * The Track time card (CD-276): the entries (the caller's own; everyone's for the project lead,
+   * owners, admins and the people's managers), everyone's total against the planned duration, and
+   * whether the caller can log time here (a technician on it, not Completed).
+   */
+  time(ctx: TenantContext, id: string) {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const row = await this.row(tx, id);
+      const access = await this.people.of(ctx, tx);
+      const lead = hasRole(ctx.role, 'admin') || (row.projectLeadUserId !== null && row.projectLeadUserId === ctx.userId);
+      const isTechnician = !!access.employeeId && row.technicians.some((t) => t.employeeId === access.employeeId);
+      const completed = row.status === 'completed';
+      const time = await timeEntriesOf(tx, { workOrderId: id }, { me: access.employeeId, seesAllOf: (e) => lead || access.reportIds.has(e), locked: completed });
+      return {
+        ...time,
+        plannedMinutes: Math.round(row.durationHours * 60),
+        canLog: workOrderLogRefusal({ status: row.status, isTechnician }) === null,
+        lock: completed ? { kind: 'completed' as const, title: 'This work order is completed.', text: 'Reopen it to log, edit or delete time.' } : null,
+      };
+    });
+  }
 
   list(ctx: TenantContext, query: ListWorkOrdersQuery) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {

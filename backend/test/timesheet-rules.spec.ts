@@ -4,6 +4,7 @@ import {
   type CopySourceRow,
   type CopyTarget,
   dayLimitRefusal,
+  endAfter,
   deadlineOf,
   DEFAULT_TIMESHEET_SETTINGS as S,
   expectedMinutes,
@@ -11,6 +12,7 @@ import {
   isoWeek,
   isRequired,
   mondayOf,
+  spanMinutes,
   submittableDays,
   type WeekDay,
   weekLabel,
@@ -139,5 +141,21 @@ describe('Copy last week (spec 4.7)', () => {
     expect(copyPlan(source, target({ dayStatus: { '2026-10-05': 'submitted', '2026-10-06': 'approved' } }), true, S).cells).toEqual([]);
     expect(copyPlan(source, target({ dayStatus: { '2026-10-05': 'rejected' } }), true, S).cells).toHaveLength(2);
     expect(copyPlan(source, target({ lastDate: '2026-10-05' }), true, S).cells).toEqual([{ key: 'task:a', date: '2026-10-05', minutes: 240 }]);
+  });
+});
+
+describe('Start → End (CD-276)', () => {
+  it('is the minutes between, in quarter hours, never backwards', () => {
+    expect(spanMinutes('08:00', '10:30')).toBe(150);
+    expect(spanMinutes('08:10', '09:10')).toBe(60);
+    expect(spanMinutes('08:00', '08:10')).toBeNull();
+    expect(spanMinutes('10:00', '09:00')).toBeNull();
+    expect(spanMinutes('10:00', '10:00')).toBeNull();
+  });
+
+  it('moves the end with new hours, and drops it past midnight', () => {
+    expect(endAfter('08:00', 150)).toBe('10:30');
+    expect(endAfter('22:00', 120)).toBeNull();
+    expect(endAfter('22:00', 105)).toBe('23:45');
   });
 });

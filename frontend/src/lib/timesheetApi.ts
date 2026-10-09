@@ -137,3 +137,47 @@ export const dayLabel = (date: string) => `${DAY[weekday(date)]} ${Number(date.s
 /** "Wednesday". */
 export const dayName = (date: string) => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][weekday(date)]!;
 export const addDays = (date: string, n: number) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+
+/** One entry on a task's Time card or a work order's Track time card (CD-276). */
+export interface ApiTimeEntry {
+  id: string;
+  employeeId: string;
+  name: string;
+  date: string;
+  minutes: number;
+  note: string | null;
+  /** "HH:MM": Start → End, both or neither. */
+  startTime: string | null;
+  endTime: string | null;
+  dayStatus: DayStatus;
+  mine: boolean;
+  /** Edit and Delete: your own entry on a Draft or Rejected day, while nothing locks the task or order. */
+  canChange: boolean;
+}
+
+export interface ApiTimeCard {
+  /** Everyone's minutes, also entries you don't see. */
+  loggedMinutes: number;
+  /** A task's estimate. */
+  estimateMinutes?: number | null;
+  /** A work order's planned duration. */
+  plannedMinutes?: number;
+  entries: ApiTimeEntry[];
+  canLog: boolean;
+  lock: { kind: 'project_closed' | 'task_done' | 'completed'; title: string; text: string } | null;
+}
+
+export interface NewEntry {
+  date: string;
+  minutes?: number;
+  startTime?: string;
+  endTime?: string;
+  note?: string | null;
+}
+export type EntryPatch = Partial<{ date: string; minutes: number; startTime: string | null; endTime: string | null; note: string | null }>;
+
+export const entriesApi = {
+  create: (target: RowTarget, entry: NewEntry) => api<ApiTimeEntry>('/timesheet/entries', { method: 'POST', json: { ...target, ...entry } }),
+  update: (id: string, patch: EntryPatch) => api<ApiTimeEntry>(`/timesheet/entries/${id}`, { method: 'PATCH', json: patch }),
+  remove: (id: string) => api<null>(`/timesheet/entries/${id}`, { method: 'DELETE' }),
+};

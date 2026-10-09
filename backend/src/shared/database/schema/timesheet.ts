@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { check, date, foreignKey, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { check, date, foreignKey, index, integer, pgTable, primaryKey, text, time, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { employees } from './people';
 import { tenants, users } from './platform';
 import { tasks, workOrders } from './projects';
@@ -45,6 +45,9 @@ export const timeEntries = pgTable(
     workOrderId: uuid('work_order_id'),
     minutes: integer('minutes').notNull(),
     note: text('note'),
+    /** Start → End on the work order page (CD-276): both or neither; then `minutes` is their difference. */
+    startTime: time('start_time'),
+    endTime: time('end_time'),
     createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     ...timestamps,
   },
@@ -58,6 +61,10 @@ export const timeEntries = pgTable(
     check('time_entries_target_ck', sql`(${t.taskId} is null) <> (${t.workOrderId} is null)`),
     check('time_entries_minutes_ck', sql`${t.minutes} between 15 and 1440 and ${t.minutes} % 15 = 0`),
     check('time_entries_note_ck', sql`${t.note} is null or length(${t.note}) <= 500`),
+    check(
+      'time_entries_span_ck',
+      sql`(${t.startTime} is null) = (${t.endTime} is null) and (${t.startTime} is null or (${t.endTime} > ${t.startTime} and ${t.minutes} = extract(epoch from ${t.endTime} - ${t.startTime}) / 60))`,
+    ),
   ],
 );
 

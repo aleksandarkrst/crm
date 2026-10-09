@@ -78,6 +78,16 @@ export class TasksController {
     return this.tasks.hours(ctx, id);
   }
 
+  /**
+   * The Time card (CD-276): `{ loggedMinutes, estimateMinutes, entries: { id, employeeId, name, date,
+   * minutes, note, startTime, endTime, dayStatus, mine, canChange }[], canLog, lock: { kind, title,
+   * text } | null }`. Entries are written through `/api/timesheet/entries`.
+   */
+  @Get(':id/time')
+  time(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.tasks.time(ctx, id);
+  }
+
   @Delete(':id/assignees/:employeeId')
   unassign(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Param('employeeId', Id) employeeId: string) {
     return this.tasks.unassign(ctx, id, employeeId);

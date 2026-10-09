@@ -1,0 +1,3 @@
+ALTER TABLE "time_entries" ADD COLUMN "start_time" time;--> statement-breakpoint
+ALTER TABLE "time_entries" ADD COLUMN "end_time" time;--> statement-breakpoint
+ALTER TABLE "time_entries" ADD CONSTRAINT "time_entries_span_ck" CHECK (("time_entries"."start_time" is null) = ("time_entries"."end_time" is null) and ("time_entries"."start_time" is null or ("time_entries"."end_time" > "time_entries"."start_time" and "time_entries"."minutes" = extract(epoch from "time_entries"."end_time" - "time_entries"."start_time") / 60)));

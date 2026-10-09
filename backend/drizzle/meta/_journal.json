@@ -547,6 +547,13 @@
       "when": 1791533143785,
       "tag": "0077_timesheet_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1791536651190,
+      "tag": "0078_time_entry_span",
+      "breakpoints": true
     }
   ]
 }

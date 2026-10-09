@@ -29,10 +29,12 @@ import {
   deadlineOf,
   type Employment,
   employed,
+  endAfter,
   expectedMinutes,
   isoWeek,
   isRequired,
   mondayOf,
+  spanMinutes,
   submittableDays,
   type TimesheetSettings,
   type WeekDay,
@@ -41,7 +43,7 @@ import {
   weekStatus,
   type WeekStatus,
 } from './timesheet-rules';
-import type { AddRow, CopyWeek, SetCell } from './timesheet.schemas';
+import type { AddRow, CopyWeek, CreateEntry, SetCell, UpdateEntry } from './timesheet.schemas';
 import { timesheetSettings } from './timesheet-settings';
 
 export type RowKind = 'task' | 'work_order';
@@ -166,6 +168,44 @@ function refusalError(f: RowFacts): HttpException {
 }
 
 const keyOf = (kind: RowKind, id: string) => `${kind}:${id}`;
+
+/** One writer per person and day, so two tabs can't pass the daily maximum together. */
+const lockDay = (tx: Tx, employeeId: string, date: string) => tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${employeeId}:${date}`}, 0))`);
+
+/** An entry as the entry endpoints answer (CD-276). */
+export interface EntryView {
+  id: string;
+  date: string;
+  minutes: number;
+  note: string | null;
+  startTime: string | null;
+  endTime: string | null;
+}
+const entryView = (e: { id: string; workDate: string; minutes: number; note: string | null; startTime: string | null; endTime: string | null }): EntryView => ({
+  id: e.id,
+  date: e.workDate,
+  minutes: e.minutes,
+  note: e.note,
+  startTime: e.startTime?.slice(0, 5) ?? null,
+  endTime: e.endTime?.slice(0, 5) ?? null,
+});
+
+/** The minutes of an entry and its Start → End, from either. */
+function resolveSpan(minutes: number | undefined, start: string | null, end: string | null) {
+  if (start && end) {
+    const span = spanMinutes(start.slice(0, 5), end.slice(0, 5));
+    if (span === null) throw new BadRequestException('The end must be after the start, in steps of 15 minutes');
+    return { minutes: span, startTime: start.slice(0, 5), endTime: end.slice(0, 5) };
+  }
+  if (minutes === undefined) throw new BadRequestException('Enter the hours first');
+  return { minutes, startTime: null, endTime: null };
+}
+
+/** New hours on an entry with Start → End move its end; past midnight the times go. */
+function keepSpan(start: string | null, minutes: number): { startTime: string | null; endTime: string | null } {
+  const end = start ? endAfter(start.slice(0, 5), minutes) : null;
+  return end ? { startTime: start!.slice(0, 5), endTime: end } : { startTime: null, endTime: null };
+}
 const pathOf = (company: string, project: string | null) => (project ? `${company} › ${project}` : company);
 
 /**
@@ -218,11 +258,13 @@ export class TimesheetService {
         const id = (input.taskId ?? input.workOrderId)!;
         if (input.date > caller.thisWeekEnd) throw new BadRequestException('Hours can be entered up to the end of this week');
         if (!employed(input.date, caller.employment)) throw new BadRequestException("You weren't employed on this day");
-        // One writer per person and day, so two tabs can't pass the daily maximum together.
-        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${employeeId}:${input.date}`}, 0))`);
+        await lockDay(tx, employeeId, input.date);
         const target = kind === 'task' ? eq(timeEntries.taskId, id) : eq(timeEntries.workOrderId, id);
         const mine = and(eq(timeEntries.employeeId, employeeId), eq(timeEntries.workDate, input.date));
-        const existing = await tx.select({ id: timeEntries.id, minutes: timeEntries.minutes, note: timeEntries.note }).from(timeEntries).where(and(mine, target));
+        const existing = await tx
+          .select({ id: timeEntries.id, minutes: timeEntries.minutes, note: timeEntries.note, startTime: timeEntries.startTime })
+          .from(timeEntries)
+          .where(and(mine, target));
         const [facts] = await this.rowFacts(tx, employeeId, kind === 'task' ? [id] : [], kind === 'work_order' ? [id] : []);
         if (!facts) throw new NotFoundException(kind === 'task' ? 'Task not found' : 'Work order not found');
         // Hours already there can be corrected after someone was unassigned (spec 4.4); new ones need the rule.
@@ -240,12 +282,118 @@ export class TimesheetService {
             .where(and(mine, entry ? sql`${timeEntries.id} <> ${entry.id}` : undefined));
           const refusal = entry && input.minutes <= entry.minutes ? null : dayLimitRefusal(total, input.minutes, caller.settings);
           if (refusal) throw new BadRequestException(refusal);
-          if (entry) await tx.update(timeEntries).set({ minutes: input.minutes, note }).where(eq(timeEntries.id, entry.id));
+          if (entry) await tx.update(timeEntries).set({ minutes: input.minutes, note, ...keepSpan(entry.startTime, input.minutes) }).where(eq(timeEntries.id, entry.id));
           else await tx.insert(timeEntries).values({ tenantId: ctx.tenantId, employeeId, workDate: input.date, taskId: input.taskId ?? null, workOrderId: input.workOrderId ?? null, minutes: input.minutes, note, createdByUserId: ctx.userId });
         }
         return this.readWeek(tx, caller, mondayOf(input.date));
       })
       .catch(mapDbError);
+  }
+
+  /**
+   * An entry from the task or work order page (CD-276), the caller's own: on a day up to the end of
+   * this week, within employment and the daily maximum, on a task or work order they can log on now.
+   * The lock trigger refuses submitted and approved days.
+   */
+  createEntry(ctx: TenantContext, input: CreateEntry): Promise<EntryView> {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        const caller = await this.caller(ctx, tx);
+        const employeeId = this.ownEmployee(caller);
+        const span = resolveSpan(input.minutes, input.startTime ?? null, input.endTime ?? null);
+        this.checkDate(caller, input.date);
+        await lockDay(tx, employeeId, input.date);
+        const [facts] = await this.rowFacts(tx, employeeId, input.taskId ? [input.taskId] : [], input.workOrderId ? [input.workOrderId] : []);
+        if (!facts) throw new NotFoundException(input.taskId ? 'Task not found' : 'Work order not found');
+        if (facts.refusal) throw refusalError(facts);
+        await this.checkDayLimit(tx, caller, employeeId, input.date, span.minutes, null);
+        const [row] = await tx
+          .insert(timeEntries)
+          .values({
+            tenantId: ctx.tenantId,
+            employeeId,
+            workDate: input.date,
+            taskId: input.taskId ?? null,
+            workOrderId: input.workOrderId ?? null,
+            ...span,
+            note: input.note ?? null,
+            createdByUserId: ctx.userId,
+          })
+          .returning();
+        return entryView(row!);
+      })
+      .catch(mapDbError);
+  }
+
+  /** Changes the caller's own entry: date, hours or Start → End, note. Others' entries are 404. */
+  updateEntry(ctx: TenantContext, id: string, input: UpdateEntry): Promise<EntryView> {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        const caller = await this.caller(ctx, tx);
+        const employeeId = this.ownEmployee(caller);
+        const entry = await this.ownEntry(tx, employeeId, id);
+        const date = input.date ?? entry.workDate;
+        let span: { minutes: number; startTime: string | null; endTime: string | null };
+        if (input.startTime !== undefined || input.endTime !== undefined) {
+          const start = input.startTime === undefined ? entry.startTime : input.startTime;
+          const end = input.endTime === undefined ? entry.endTime : input.endTime;
+          if ((start === null) !== (end === null)) throw new BadRequestException('Enter a start and an end');
+          span = resolveSpan(input.minutes ?? entry.minutes, start, end);
+        } else {
+          const minutes = input.minutes ?? entry.minutes;
+          span = { minutes, ...keepSpan(entry.startTime, minutes) };
+        }
+        if (date !== entry.workDate) this.checkDate(caller, date);
+        for (const day of [...new Set([entry.workDate, date])].sort()) await lockDay(tx, employeeId, day);
+        const [facts] = await this.rowFacts(tx, employeeId, entry.taskId ? [entry.taskId] : [], entry.workOrderId ? [entry.workOrderId] : []);
+        // Hours already there can be corrected after someone was unassigned (spec 4.4); closed rows are the trigger's.
+        if (facts?.refusal && facts.refusal !== 'not_assigned' && facts.refusal !== 'not_technician') throw refusalError(facts);
+        await this.checkDayLimit(tx, caller, employeeId, date, span.minutes, date === entry.workDate ? entry : null);
+        const [row] = await tx
+          .update(timeEntries)
+          .set({ workDate: date, ...span, ...(input.note !== undefined ? { note: input.note } : {}) })
+          .where(eq(timeEntries.id, id))
+          .returning();
+        return entryView(row!);
+      })
+      .catch(mapDbError);
+  }
+
+  /** Removes the caller's own entry (the lock trigger refuses submitted and approved days). */
+  removeEntry(ctx: TenantContext, id: string): Promise<void> {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        const caller = await this.caller(ctx, tx);
+        const employeeId = this.ownEmployee(caller);
+        await this.ownEntry(tx, employeeId, id);
+        await tx.delete(timeEntries).where(eq(timeEntries.id, id));
+      })
+      .catch(mapDbError);
+  }
+
+  private async ownEntry(tx: Tx, employeeId: string, id: string) {
+    const [entry] = await tx
+      .select()
+      .from(timeEntries)
+      .where(and(eq(timeEntries.id, id), eq(timeEntries.employeeId, employeeId)));
+    if (!entry) throw new NotFoundException('Time entry not found');
+    return entry;
+  }
+
+  private checkDate(caller: Caller & { thisWeekEnd: string }, date: string) {
+    if (date > caller.thisWeekEnd) throw new BadRequestException('Hours can be entered up to the end of this week');
+    if (!employed(date, caller.employment)) throw new BadRequestException("You weren't employed on this day");
+  }
+
+  /** The daily maximum for `minutes` more on `date`; lowering an entry already over it is fine. */
+  private async checkDayLimit(tx: Tx, caller: Caller, employeeId: string, date: string, minutes: number, replacing: { id: string; minutes: number } | null) {
+    if (replacing && minutes <= replacing.minutes) return;
+    const [{ total } = { total: 0 }] = await tx
+      .select({ total: sql<number>`coalesce(sum(${timeEntries.minutes}), 0)::int` })
+      .from(timeEntries)
+      .where(and(eq(timeEntries.employeeId, employeeId), eq(timeEntries.workDate, date), replacing ? sql`${timeEntries.id} <> ${replacing.id}` : undefined));
+    const refusal = dayLimitRefusal(total, minutes, caller.settings);
+    if (refusal) throw new BadRequestException(refusal);
   }
 
   /** "+ Add task or work order": an empty row in the week, for something the caller can log on now. */

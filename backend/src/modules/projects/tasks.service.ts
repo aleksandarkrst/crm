@@ -9,7 +9,8 @@ import { JobsService } from '../../shared/events/jobs.service';
 import { PeopleAccess } from '../people';
 import { canAssign, canCreateTask, canManage, type TaskCaller, taskAccess, type TaskAccessLevel } from './task-access';
 import { hoursSummary, taskHours } from './task-hours';
-import { loggableTasks } from './task-log';
+import { loggableTasks, logTimeRefusal } from './task-log';
+import { closedProjectHint, timeEntriesOf } from './time-entries';
 import type { AssignTask, CreateTask, ListTasksQuery, SetHourLimit, TaskHistoryQuery, UpdateTask } from './tasks.schemas';
 
 /** One person on a task, as the API returns it. */
@@ -377,6 +378,40 @@ export class TasksService {
       const { row } = await this.visible(tx, caller, id);
       const seesAll = canManage(caller, row.projectLeadUserId) || row.assignees.some((a) => caller.reportIds.has(a.employeeId));
       return hoursSummary(row.assignees, await taskHours(tx, id), { seesAll, me: caller.employeeId });
+    });
+  }
+
+  /**
+   * The task page's Time card (CD-276): the entries (the caller's own; everyone's for the lead,
+   * owners, admins and the people's managers), everyone's total, whether the caller can log time
+   * here and, when the task is locked, why.
+   */
+  time(ctx: TenantContext, id: string) {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const caller = await this.caller(ctx, tx);
+      const { row } = await this.visible(tx, caller, id);
+      const lead = canManage(caller, row.projectLeadUserId);
+      const projectClosed = row.projectStatus !== 'open';
+      const locked = projectClosed || row.status === 'done';
+      const me = caller.employeeId ? row.assignees.find((a) => a.employeeId === caller.employeeId) : undefined;
+      const refusal = caller.employeeId
+        ? logTimeRefusal({ taskStatus: row.status, projectStatus: row.projectStatus, assignment: me ? { active: me.active } : null })
+        : 'not_assigned';
+      const time = await timeEntriesOf(tx, { taskId: id }, { me: caller.employeeId, seesAllOf: (e) => lead || caller.reportIds.has(e), locked });
+      return {
+        ...time,
+        estimateMinutes: row.estimateHours == null ? null : Math.round(row.estimateHours * 60),
+        canLog: refusal === null,
+        lock: projectClosed
+          ? {
+              kind: 'project_closed' as const,
+              title: await closedProjectHint(tx, row),
+              text: "Time can't be logged, edited or deleted on its tasks. A project lead or Admin can reopen the project to log time again.",
+            }
+          : row.status === 'done'
+            ? { kind: 'task_done' as const, title: 'This task is done.', text: 'Reopen it to log, edit or delete time.' }
+            : null,
+      };
     });
   }
 
