@@ -9,6 +9,11 @@ import { useStore } from '../../store/store';
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEKDAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const isClock = (v: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
+/** The two approval modes (CD-156, design `#cd-156`). */
+const APPROVAL_MODES: { id: 'week' | 'day'; title: string; text: string }[] = [
+  { id: 'week', title: 'Whole week', text: 'Employees submit the week. Managers approve it once every working day is submitted.' },
+  { id: 'day', title: 'Day by day', text: 'Employees can also submit single days. Managers approve or reject each submitted day.' },
+];
 
 /** The workspace's timesheet settings and a save that sends them whole (one write after a pause, like every workspace setting). */
 function useTimesheetSettings() {
@@ -168,9 +173,9 @@ export function WorkingDayCard() {
 }
 
 /**
- * Settings → Workforce → Approvals (CD-153): the submission deadline (day, time, same or next
- * week; a live line with the next one) and auto submit. Approval mode and reminders come with
- * their own issues.
+ * Settings → Workforce → Approvals: the approval mode (CD-156), the submission deadline (day, time,
+ * same or next week; a live line with the next one) and auto submit (CD-153). Reminders come with
+ * their own issue.
  */
 export function ApprovalsTab() {
   const { t, save } = useTimesheetSettings();
@@ -179,6 +184,20 @@ export function ApprovalsTab() {
   const { data: next } = useProjectsRead(true, holidaysApi.nextDeadline, `deadline:${key}`, 'timesheetRev');
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="approval-mode">
+        <span className="card-title">Approval mode</span>
+        {APPROVAL_MODES.map((m) => (
+          <label key={m.id} className={`ts-choice${t.approvalMode === m.id ? ' on' : ''}`} data-testid={`approval-mode-${m.id}`}>
+            <input type="radio" name="approval-mode" checked={t.approvalMode === m.id} onChange={() => save({ approvalMode: m.id })} style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} />
+            <span className="ts-radio" aria-hidden />
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 600 }}>{m.title}</span>
+              <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{m.text}</span>
+            </span>
+          </label>
+        ))}
+        <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>Changing the mode never changes a day's status, only the actions offered from then on.</span>
+      </div>
       <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="deadline-card">
         <span className="card-title">Submission deadline</span>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>

@@ -15,6 +15,7 @@ const BADGE: Record<WeekStatus, string> = {
   no_entry: 'badge-neutral',
   not_submitted: 'badge-neutral',
   draft: 'badge-neutral',
+  partly_submitted: 'badge-neutral',
   submitted: 'badge-brand',
   partly_approved: 'badge-neutral',
   approved: 'badge-brand',
@@ -81,6 +82,20 @@ export function Timesheet() {
       }
     });
     setBusy(false);
+  };
+
+  /** One day (Day by day mode, CD-156). */
+  const submitDay = async (w: ApiTimesheetWeek, date: string) => {
+    const day = w.days.find((d) => d.date === date);
+    if (day && day.minutes === 0 && !(await askConfirm({ title: `${dayName(date)} has no hours. Submit anyway?`, confirmLabel: 'Submit day' }))) return;
+    await run(async () => {
+      try {
+        set(await timesheetApi.submit(w.weekStart, date));
+        flash(`${dayLabel(date)} submitted`);
+      } catch (err) {
+        flash(projectError(err));
+      }
+    });
   };
 
   const recall = async (w: ApiTimesheetWeek) => {
@@ -168,7 +183,7 @@ export function Timesheet() {
           {busy ? 'Submitting…' : 'Submit week'}
         </button>
       </div>
-      <Grid week={week} onSave={onSave} onAdd={onAdd} />
+      <Grid week={week} onSave={onSave} onAdd={onAdd} onSubmitDay={week.settings.approvalMode === 'day' ? (date) => void submitDay(week, date) : undefined} />
       <div className="ts-help">Type 7.5, 7,5 or 7:30 · saved when you leave the cell · arrows and Tab move · Shift+Enter opens the note</div>
       {copying && (
         <CopyDialog

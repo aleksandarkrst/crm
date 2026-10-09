@@ -50,6 +50,12 @@ export type CopyWeek = z.infer<typeof CopyWeek>;
 export const WeekAction = z.object({ weekStart });
 export type WeekAction = z.infer<typeof WeekAction>;
 
+/** POST /api/timesheet/submit: the week, or with `date` one of its days (Day by day mode, CD-156). */
+export const SubmitWeek = z
+  .object({ weekStart, date: isoDate.optional() })
+  .refine((v) => !v.date || mondayOf(v.date) === v.weekStart, { message: 'The day must be in that week', path: ['date'] });
+export type SubmitWeek = z.infer<typeof SubmitWeek>;
+
 /** 24-hour "HH:MM". */
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM');
 const entryMinutes = z

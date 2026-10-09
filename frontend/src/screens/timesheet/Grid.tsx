@@ -22,6 +22,7 @@ const DAY_NAMES = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const shortDate = (date: string) => `${Number(date.slice(8))} ${MONTHS[Number(date.slice(5, 7)) - 1]}`;
 const EMPTY: ApiCell = { minutes: 0, note: null, entries: 0 };
+const DAY_STATUS = { draft: 'Draft', submitted: 'Submitted', rejected: 'Rejected', approved: 'Approved' } as const;
 
 export type SaveCell = (row: ApiTimesheetRow, date: string, minutes: number, note?: string | null) => Promise<boolean>;
 
@@ -301,7 +302,7 @@ function AddRow({ week, onAdd }: { week: ApiTimesheetWeek; onAdd: (item: ApiLogg
  * (typing replaces, saved when the cell is left, arrows and Tab move, Shift+Enter opens the
  * note), the add row, and Total entered, Expected and Difference.
  */
-export function Grid({ week, onSave, onAdd }: { week: ApiTimesheetWeek; onSave: SaveCell; onAdd: (item: ApiLoggable) => Promise<void> }) {
+export function Grid({ week, onSave, onAdd, onSubmitDay }: { week: ApiTimesheetWeek; onSave: SaveCell; onAdd: (item: ApiLoggable) => Promise<void>; onSubmitDay?: (date: string) => void }) {
   const format = week.settings.timeFormat;
   const wrap = useRef<HTMLDivElement>(null);
   const [note, setNote] = useState<{ key: string; date: string; top: number; left: number } | null>(null);
@@ -412,6 +413,12 @@ export function Grid({ week, onSave, onAdd }: { week: ApiTimesheetWeek; onSave: 
                 <span className={`ts-day-total${short ? ' short' : ''}`}>
                   {d.holiday ? `${shortHours(d.minutes, format)} h · holiday` : d.minutes || d.expectedMinutes ? `${shortHours(d.minutes, format)} h` : '—'}
                 </span>
+                {onSubmitDay && week.submittable.includes(d.date) && (
+                  <button type="button" className="ts-day-submit" onClick={() => onSubmitDay(d.date)} data-testid="ts-submit-day" aria-label={`Submit ${dayLabel(d.date)}`}>
+                    Submit
+                  </button>
+                )}
+                {d.status !== 'draft' && <span className={`ts-day-status ${d.status}`}>{DAY_STATUS[d.status]}</span>}
               </span>
             );
           })}

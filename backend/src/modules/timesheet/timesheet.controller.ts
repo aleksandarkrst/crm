@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query
 import { RequireTenant, Tenant, type TenantContext } from '../../shared/authorization';
 import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
-import { AddRow, CopyWeek, CreateEntry, SetCell, UpdateEntry, WeekAction, WeekQuery } from './timesheet.schemas';
+import { AddRow, CopyWeek, CreateEntry, SetCell, SubmitWeek, UpdateEntry, WeekAction, WeekQuery } from './timesheet.schemas';
 import { TimesheetService } from './timesheet.service';
 
 /**
@@ -51,9 +51,10 @@ export class TimesheetController {
     return this.timesheet.copy(ctx, body);
   }
 
+  /** Submit week; with `date`, that day only (Day by day mode, CD-156). */
   @Post('submit')
-  submit(@Tenant() ctx: TenantContext, @Body(new ZodPipe(WeekAction)) body: WeekAction) {
-    return this.timesheet.submit(ctx, body.weekStart);
+  submit(@Tenant() ctx: TenantContext, @Body(new ZodPipe(SubmitWeek)) body: SubmitWeek) {
+    return this.timesheet.submit(ctx, body.weekStart, body.date);
   }
 
   /** An entry from the task or work order page (CD-276): `{ id, date, minutes, note, startTime, endTime }`. */

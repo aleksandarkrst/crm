@@ -232,6 +232,8 @@ export interface ApiTimesheetSettings {
   deadlineTime: string;
   deadlineWeek: 'same' | 'next';
   autoSubmit: boolean;
+  /** Approval mode (CD-156): the whole week, or day by day (single days can be submitted). */
+  approvalMode: 'week' | 'day';
 }
 export const DEFAULT_TIMESHEET_SETTINGS: ApiTimesheetSettings = {
   dayMinutes: 480,
@@ -244,6 +246,7 @@ export const DEFAULT_TIMESHEET_SETTINGS: ApiTimesheetSettings = {
   deadlineTime: '17:00',
   deadlineWeek: 'same',
   autoSubmit: false,
+  approvalMode: 'week',
 };
 export interface WorkspaceTerms {
   project: string;

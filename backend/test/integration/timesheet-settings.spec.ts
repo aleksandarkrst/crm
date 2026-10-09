@@ -77,6 +77,7 @@ describe('the settings', () => {
       deadlineTime: '17:00',
       deadlineWeek: 'same',
       autoSubmit: false,
+      approvalMode: 'week',
     });
   });
 
@@ -104,7 +105,7 @@ describe('the settings', () => {
     await ok('PATCH', '/workspace', { ...as(), body: { timesheet: { dayMinutes: 450, workingDays: [1, 2, 3, 4, 5, 6], maxDayHours: 2 } } });
     const w = await week();
     expect(w.days.map((d) => d.expectedMinutes)).toEqual([450, 450, 450, 450, 450, 450, 0]);
-    expect(w.settings).toEqual({ dayMinutes: 450, maxDayMinutes: 120, timeFormat: 'clock' });
+    expect(w.settings).toEqual({ dayMinutes: 450, maxDayMinutes: 120, timeFormat: 'clock', approvalMode: 'week' });
     const cell = await call('PUT', '/timesheet/cells', { ...as(ana), body: { date: monday, taskId, minutes: 135 } });
     expect(cell.status).toBe(400);
     expect(JSON.stringify(cell.body)).toContain('Maximum 2 h per day');

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CUSTOMER_EMAIL_LANGUAGES, DATE_FORMATS, DEADLINE_WEEKS, PROFILE_LANGUAGES, START_PAGES, TIME_FORMATS, WORKSPACE_MODULES } from '../../shared/database/schema';
+import { APPROVAL_MODES, CUSTOMER_EMAIL_LANGUAGES, DATE_FORMATS, DEADLINE_WEEKS, PROFILE_LANGUAGES, START_PAGES, TIME_FORMATS, WORKSPACE_MODULES } from '../../shared/database/schema';
 
 // ICU's lists (Node ships full ICU): every ISO 4217 code and every canonical IANA zone.
 const CURRENCIES = new Set(Intl.supportedValuesOf('currency'));
@@ -64,6 +64,8 @@ export const TimesheetSettingsInput = z
     deadlineTime: hhmm,
     deadlineWeek: z.enum(DEADLINE_WEEKS),
     autoSubmit: z.boolean(),
+    // Approval mode (CD-156): the whole week, or day by day.
+    approvalMode: z.enum(APPROVAL_MODES),
   })
   .partial();
 export type TimesheetSettingsInput = z.infer<typeof TimesheetSettingsInput>;

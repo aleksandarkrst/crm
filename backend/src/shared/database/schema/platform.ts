@@ -15,6 +15,8 @@ export const CUSTOMER_EMAIL_LANGUAGES = ['en', 'sr'] as const;
 export const TIME_FORMATS = ['decimal', 'clock'] as const;
 /** Whether a week is due in the same week or the next one (CD-153). */
 export const DEADLINE_WEEKS = ['same', 'next'] as const;
+/** How managers approve timesheets (CD-156): the whole week, or day by day. */
+export const APPROVAL_MODES = ['week', 'day'] as const;
 export type CustomerEmailLanguage = (typeof CUSTOMER_EMAIL_LANGUAGES)[number];
 
 export const tenants = pgTable(
@@ -72,6 +74,8 @@ export const tenants = pgTable(
     timesheetDeadlineWeek: text('timesheet_deadline_week', { enum: DEADLINE_WEEKS }).notNull().default('same'),
     timesheetAutoSubmit: boolean('timesheet_auto_submit').notNull().default(false),
     timesheetAutoSubmitSince: timestamp('timesheet_auto_submit_since', { withTimezone: true }),
+    /** Approval mode (CD-156): `week` (only Submit week) or `day` (single days too). Changing it never changes a day's status. */
+    timesheetApprovalMode: text('timesheet_approval_mode', { enum: APPROVAL_MODES }).notNull().default('week'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -79,6 +83,7 @@ export const tenants = pgTable(
     check('tenants_modules_ck', sql`${t.modules} <@ '{planning,crm,projects,workforce,finance,reporting}'::text[]`),
     check('tenants_customer_email_language_ck', sql`${t.customerEmailLanguage} in ('en', 'sr')`),
     check('tenants_employee_weekly_hours_ck', sql`${t.employeeDefaultWeeklyHours} between 1 and 60`),
+    check('tenants_timesheet_approval_mode_ck', sql`${t.timesheetApprovalMode} in ('week', 'day')`),
     check(
       'tenants_timesheet_ck',
       sql`${t.timesheetDayMinutes} between 15 and 1440 and ${t.timesheetDayMinutes} % 15 = 0

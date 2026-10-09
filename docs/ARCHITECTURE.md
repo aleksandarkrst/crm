@@ -1396,8 +1396,8 @@ project has logged hours. Complete or cancel it instead.").
 The `timesheet` module (`modules/timesheet`, tables in `schema/timesheet.ts`, RLS, the lock trigger
 and live hints in `drizzle/0077_timesheet_rls.sql`). Spec: "Functional spec: 15 · Timesheet and
 approvals" in Linear; design `docs/design/Timesheet.dc.html`. Built so far: weekly time entry
-(CD-152), time from the task and work order pages (CD-276), and the settings, public holidays and
-the deadline with auto submit (CD-153).
+(CD-152), time from the task and work order pages (CD-276), the settings, public holidays and
+the deadline with auto submit (CD-153), and the approval mode (CD-156).
 
 - **Tables:**
   - `time_entries`: one person's hours on a task **or** a work order (a check) on a date, whole
@@ -1427,8 +1427,8 @@ the deadline with auto submit (CD-153).
 - **Settings** (CD-153): columns `timesheet_*` on `tenants` (`drizzle/0079`, one check
   `tenants_timesheet_ck`): the standard working day (minutes, start, end, ISO working days), the
   time format (`decimal` 7.50 or `clock` 7:30), the most hours a day (1–24), the deadline (weekday,
-  "HH:MM", `same` or `next` week) and auto submit (with `timesheet_auto_submit_since`, set when it
-  is turned on). Read only through `timesheetSettings(tx, tenantId)`; changed through `PATCH
+  "HH:MM", `same` or `next` week), auto submit (with `timesheet_auto_submit_since`, set when it
+  is turned on) and the approval mode (CD-156, `drizzle/0081`: `week` or `day`). Read only through `timesheetSettings(tx, tenantId)`; changed through `PATCH
   /api/workspace` `{ timesheet: { … } }` (any of them; owners and admins, 403 for others; in the
   audit log as `workspace.updated`; a `workspace` live hint). `GET /api/workspace` returns them as
   `timesheet`, so every screen shows hours in the workspace's format (`s.workspace.timesheet`).
@@ -1470,6 +1470,12 @@ the deadline with auto submit (CD-153).
   - `POST submit` `{ weekStart }`: the required Draft days up to the current week become Submitted
     (also days without hours: the screen asks first). Rejected days are resubmitted on their own
     (CD-158). `POST recall`: Submitted days go back to Draft.
+  - **Approval mode** (CD-156, Settings → Approvals' two cards): Whole week (`week`, the default)
+    offers only Submit week; Day by day (`day`) also `POST submit { weekStart, date }` for one day
+    (400 in Whole week mode), shown as "Submit" under the day's header. A single day keeps the
+    week's empty rows. Switching the mode changes no day's status. The week's status then reads
+    "Partly submitted (n of m days)" while some required days are Submitted or Approved and
+    others Draft.
   - Every change answers with the whole week; submit, recall and copy are in the audit log
     (`timesheet.submitted`, `timesheet.recalled`, `timesheet.copied`).
   - **Entries** (CD-276; the task and work order pages): `POST entries` `{ taskId | workOrderId,

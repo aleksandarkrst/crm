@@ -81,7 +81,10 @@ describe('week status (spec 5.4)', () => {
     expect(weekStatus([day('a', 'rejected'), day('b', 'rejected'), day('c', 'draft')]).label).toBe('Rejected (2 days)');
     expect(weekStatus([day('a', 'rejected'), day('b', 'approved')]).label).toBe('Rejected (1 day)');
     expect(weekStatus([day('a', 'draft', true, 0), day('b', 'draft', true, 0)])).toEqual({ status: 'not_submitted', label: 'Not submitted' });
-    expect(weekStatus([day('a', 'draft'), day('b', 'submitted')])).toEqual({ status: 'draft', label: 'Draft' });
+    // Single days submitted (day by day, CD-156) while others are Draft.
+    expect(weekStatus([day('a', 'draft'), day('b', 'submitted')])).toEqual({ status: 'partly_submitted', label: 'Partly submitted (1 of 2 days)' });
+    expect(weekStatus([day('a', 'draft'), day('b', 'approved'), day('c', 'submitted')]).label).toBe('Partly submitted (2 of 3 days)');
+    expect(weekStatus([day('a', 'draft'), day('b', 'draft', false, 0)])).toEqual({ status: 'draft', label: 'Draft' });
     expect(weekStatus([day('a', 'submitted'), day('b', 'submitted')])).toEqual({ status: 'submitted', label: 'Submitted' });
     expect(weekStatus([day('a', 'approved'), day('b', 'approved'), day('c', 'submitted')]).label).toBe('Partly approved (2 of 3 days)');
     expect(weekStatus([day('a', 'approved'), day('b', 'approved'), day('c', 'draft', false, 0)])).toEqual({ status: 'approved', label: 'Approved' });
