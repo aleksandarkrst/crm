@@ -17,6 +17,6 @@ The rules for every agent working here. Package-specific rules load when you tou
 - docs/ARCHITECTURE.md is long. Read its "Contents" list, then only the section for the module you touch (grep the heading, read to the next heading). The same goes for the README's test section: find the layer you need.
 - Automation in this repository (CD-310), all checked in:
   - Hooks (`.claude/settings.json`, scripts in `.claude/hooks/`): after an Edit or Write of a TypeScript file, ESLint, `tsc` and the unit specs that import it run and report problems; edits to `.env`, lockfiles, `backend/drizzle/meta/` and committed migrations are refused; `git push` to main, switching to main, `gh pr merge` and `drizzle-kit push` are refused; ending a turn with unpushed commits is refused once with a reminder.
-  - Skills: `/start-issue`, `/finish-issue`, `/new-tenant-table <name>` (user-invoked).
+  - Skills: `/start-issue`, `/finish-issue`, `/new-tenant-table <name>`, `/staging-check CD-123` (user-invoked).
   - Agents: `tenant-security-reviewer` (backend diffs), `design-fidelity-reviewer` (frontend diffs); `/finish-issue` runs them.
   - MCP servers (`.mcp.json`): `linear` (the tracker) and `postgres` (the dev database as the runtime role, read-only: for inspecting data and plans, never for changing data or schema; migrations do that).

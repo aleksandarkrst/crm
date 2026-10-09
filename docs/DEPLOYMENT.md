@@ -572,8 +572,21 @@ promote an earlier commit that passed staging, or run `scripts/deploy.sh <sha>` 
 
 ### Data
 
-Staging starts empty: sign in, create a workspace and choose the sample data. To try something on
-real-looking data, restore a production dump into staging (it also rehearses the restore path).
+Staging starts empty. The seed (CD-313) gives it two test workspaces, Seed Alpha and Seed Bravo,
+each with an owner, an admin and a member and records in every module, for the checklist in
+[STAGING_CHECK.md](STAGING_CHECK.md):
+```bash
+APP_DIR=/opt/crm-staging bash scripts/seed-staging.sh      # under a minute; run again to reset
+```
+It runs `dist/seed-staging.js` in the api image: the six accounts are created at Auth0 through the
+Management API (`AUTH0_MANAGEMENT_*`, so staging's `.env` needs them) and signed in once, the
+workspaces are deleted and built again, and the emails and a new password are printed at the end
+(`SEED_PASSWORD=…` keeps one you chose; `SEED_EMAIL_DOMAIN` changes the `@example.com` addresses).
+With `MAIL_DRIVER=log` (staging's default) nothing is emailed to them. It refuses to run where
+`APP_URL` doesn't contain "staging".
+
+To try something on real-looking data instead, restore a production dump into staging (it also
+rehearses the restore path).
 The staging worker would email real people, so stop it first (`docker compose stop worker` in
 `/opt/crm-staging`), restore with `infra/backup/restore.sh` as in [Restore](#restore-practise-this-before-you-need-it),
 then drop queued jobs and change the email addresses before starting it again:
