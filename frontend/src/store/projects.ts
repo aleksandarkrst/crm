@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../lib/api';
-import { type ApiProject, type ApiProjectFile, type ApiProjectMember, type ApiProjectType, projectsApi } from '../lib/projectsApi';
+import { type ApiProject, type ApiProjectFile, type ApiProjectMember, type ApiProjectReport, type ApiProjectType, type ApiWorkload, projectsApi } from '../lib/projectsApi';
 import { type DealDoc, docsApi } from './documents';
 import { useStore } from './store';
 
@@ -82,6 +82,21 @@ export const useProject = (id: string | undefined) => useProjectsRead<ApiProject
 /** A project's team (CD-271). */
 export const useProjectMembers = (projectId: string | undefined) =>
   useProjectsRead<ApiProjectMember[]>(!!projectId, () => projectsApi.members(projectId!), `members:${projectId ?? ''}`);
+
+/**
+ * A project's Report tab (CD-261): reloads on task changes, and on project and time changes (the
+ * `timesheet` hint raises `projectRev`) through the key.
+ */
+export function useProjectReport(projectId: string | undefined, enabled: boolean) {
+  const { s } = useStore();
+  return useProjectsRead<ApiProjectReport>(!!projectId && enabled, () => projectsApi.report(projectId!), `report:${projectId ?? ''}:${s.projectRev}`, 'taskRev');
+}
+
+/** The Workload report (CD-261): the same reloads. */
+export function useWorkload() {
+  const { s } = useStore();
+  return useProjectsRead<ApiWorkload>(true, projectsApi.workload, `workload:${s.projectRev}`, 'taskRev');
+}
 
 /** A project's files (CD-271, Documents tab). */
 export const useProjectFiles = (projectId: string | undefined) =>

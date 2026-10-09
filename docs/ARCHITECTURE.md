@@ -1399,9 +1399,33 @@ no time until it is reopened (the lock on time entries).
   notify_task_assigned` is on (read when sending). Number, name, project, company, due date and a
   link to `/tasks/:id`.
 
+### Report tab and Workload (CD-261)
+
+Design v2 (`Projects Prototype.dc.html` `#project-report`, `#workload`) compares logged time with
+**estimates**, not hour limits; the owner chose it over a limit-based Time report screen, so the
+limit report below has an API and no screen. `project-report.ts` holds the rules (pure,
+`test/project-report.spec.ts`); `project-reports.service.ts` reads tasks, their current people and
+`time_entries`.
+
+- **Shares:** a task's estimate is split evenly among its current people, so "By person" adds up to
+  "By stage"; logged hours are each person's own entries (removed people keep theirs, with no share).
+- **Report tab** (`GET /api/projects/:id/report`, every member): the summary line ("40% done by
+  estimate. 14 of 20 hours logged against a budget of 100 hours; …", built in
+  `screens/project/ProjectReport.tsx`), **By stage** (stages in order that have tasks, then "No
+  stage": tasks done / total, estimate, logged (red when done tasks ran over their estimate),
+  remaining on open tasks, done by estimate, latest due date, red when one is late) and **By
+  person** (open, overdue, estimate, logged, remaining, "vs estimate" on finished tasks, red above
+  +5 %). The forecast finish slips by the latest late task's days, plus 5 when work is on hold.
+- **Workload** (`GET /api/workload`, screen `/workload` "Reports · Workload", Ctrl/⌘K → Go to →
+  Workload; no sidebar item, as in the design): open tasks of open projects; each person's remaining
+  share spread evenly over the task's days from its start (or today) to its due date (today when
+  late, the start without one), summed per week for this week and the next seven, by team (org
+  unit); over 40 h in a week is red. "Workforce → Planner" is plain text until the Planner exists.
+- Both reload on task changes (`taskRev`) and on project and time changes (`projectRev`).
+
 ### Effective time and hour limits (CD-149)
 
-The backend part (CD-248); the screens come with the frontend part. Pure rules are unit-tested
+The backend part (CD-248); it has no screen (see above). Pure rules are unit-tested
 (`test/time-report.spec.ts`); `test/integration/time-report.spec.ts` covers the jobs, Block and
 the report, and `time-report-performance.spec.ts` the performance target.
 

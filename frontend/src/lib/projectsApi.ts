@@ -152,6 +152,33 @@ async function uploadFile(projectId: string, file: File, folder: ProjectFileFold
   return body as ApiProjectFile;
 }
 
+/** Estimates against logged time (CD-261), in minutes: a project's summary, a stage or a person. */
+export interface ApiReportStats {
+  tasks: number;
+  doneTasks: number;
+  openTasks: number;
+  estimateMinutes: number;
+  loggedMinutes: number;
+  remainingMinutes: number;
+  donePercent: number;
+  overEstimate: boolean;
+  variancePercent: number | null;
+  lateTasks: number;
+}
+
+/** A project's Report tab (CD-261): the summary, "By stage" and "By person". */
+export interface ApiProjectReport {
+  summary: ApiReportStats & { budgetMinutes: number | null; onHoldTasks: number; forecast: { slipDays: number; date: string } | null };
+  stages: (ApiReportStats & { id: string | null; name: string; dueDate: string | null })[];
+  people: (ApiReportStats & { employeeId: string; name: string })[];
+}
+
+/** The Workload report (CD-261): remaining minutes per person and week (Mondays), by team. */
+export interface ApiWorkload {
+  weeks: string[];
+  teams: { name: string; rows: { employeeId: string; name: string; jobTitle: string | null; cells: number[]; projects: string[] }[] }[];
+}
+
 const move = (to?: string) => (to ? `?moveProjectsTo=${encodeURIComponent(to)}` : '');
 
 export const projectsApi = {
@@ -187,6 +214,8 @@ export const projectsApi = {
   moveFile: (projectId: string, fileId: string, folder: ProjectFileFolder) => api<ApiProjectFile>(`/projects/${projectId}/files/${fileId}`, { method: 'PATCH', json: { folder } }),
   deleteFile: (projectId: string, fileId: string) => api<null>(`/projects/${projectId}/files/${fileId}`, { method: 'DELETE' }),
   downloadFile: (projectId: string, f: ApiProjectFile) => download(`/projects/${projectId}/files/${f.id}/download`, f.name),
+  report: (id: string) => api<ApiProjectReport>(`/projects/${id}/report`),
+  workload: () => api<ApiWorkload>('/workload'),
   /** Owners and admins. */
   deleteProject: (id: string) => api<null>(`/projects/${id}`, { method: 'DELETE' }),
 };
