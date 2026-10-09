@@ -130,6 +130,16 @@ export function Timesheet() {
         <span className={`badge ${BADGE[week.status]}`} data-testid="ts-status">
           {week.statusLabel}
         </span>
+        {week.late && (
+          <span className="badge badge-danger" data-testid="ts-late">
+            Late
+          </span>
+        )}
+        {week.autoSubmitted && (
+          <span className="badge badge-neutral" data-testid="ts-auto-submitted">
+            Auto-submitted
+          </span>
+        )}
         {week.submittable.length > 0 && <span className="ts-due">Submit by {deadline}</span>}
         <span className="ts-spacer" style={{ flex: 1 }} />
         <button type="button" className="btn-plain" data-testid="ts-copy" onClick={() => setCopying(true)} disabled={future}>
@@ -163,6 +173,7 @@ export function Timesheet() {
       {copying && (
         <CopyDialog
           weekStart={week.weekStart}
+          maxHours={week.settings.maxDayMinutes / 60}
           onClose={() => setCopying(false)}
           onCopied={(result) => {
             setCopying(false);

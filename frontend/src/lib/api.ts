@@ -213,7 +213,38 @@ export interface ApiWorkspace {
   modules: string[];
   /** What the workspace calls projects and tasks (CD-143), singular and plural. */
   terms: WorkspaceTerms;
+  /** Timesheet settings (CD-153, Settings → Workforce → Employees and Approvals). */
+  timesheet: ApiTimesheetSettings;
 }
+export interface ApiTimesheetSettings {
+  /** The standard working day in minutes (8 h = 480), from `dayStart` to `dayEnd` ("HH:MM"). */
+  dayMinutes: number;
+  dayStart: string;
+  dayEnd: string;
+  /** ISO weekdays: 1 Monday … 7 Sunday. */
+  workingDays: number[];
+  /** 7.50 or 7:30. */
+  timeFormat: 'decimal' | 'clock';
+  /** The most one person may enter on one day, 1–24. */
+  maxDayHours: number;
+  /** The submission deadline: ISO weekday, "HH:MM", in the same week or the next one. */
+  deadlineWeekday: number;
+  deadlineTime: string;
+  deadlineWeek: 'same' | 'next';
+  autoSubmit: boolean;
+}
+export const DEFAULT_TIMESHEET_SETTINGS: ApiTimesheetSettings = {
+  dayMinutes: 480,
+  dayStart: '08:00',
+  dayEnd: '16:00',
+  workingDays: [1, 2, 3, 4, 5],
+  timeFormat: 'decimal',
+  maxDayHours: 12,
+  deadlineWeekday: 5,
+  deadlineTime: '17:00',
+  deadlineWeek: 'same',
+  autoSubmit: false,
+};
 export interface WorkspaceTerms {
   project: string;
   projects: string;
@@ -223,7 +254,7 @@ export interface WorkspaceTerms {
 export type ApiCustomerEmailLanguage = 'en' | 'sr';
 export type WorkspaceInput = Partial<
   Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth' | 'customerEmailLanguage' | 'employeeDefaultWeeklyHours' | 'employeeNumberRequired' | 'employeeSelfEditBank' | 'ceoEmployeeId' | 'autoCreateProjects' | 'modules' | 'terms'>
->;
+> & { timesheet?: Partial<ApiTimesheetSettings> };
 export type ApiLanguage = 'en' | 'sr' | 'de';
 export type ApiDateFormat = 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
 export type ApiStartPage = 'pipeline' | 'overview' | 'today' | 'contacts';

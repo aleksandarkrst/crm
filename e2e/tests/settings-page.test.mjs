@@ -35,8 +35,8 @@ describe('settings page', () => {
     assert.deepEqual(await navGroups(), [
       ['Workspace', ['General', 'Members', 'Roles & permissions', 'Notifications']],
       ['CRM', ['Funnels', 'Document templates', 'Customize fields', 'Sales bonuses']],
-      ['Projects', ['Project types']],
-      ['Workforce', ['Employees']],
+      ['Projects', ['Project types', 'Technicians']],
+      ['Workforce', ['Employees', 'Approvals', 'Holidays']],
     ]);
     assert.deepEqual(await active(), ['General']);
     assert.equal(await page.$eval('.settings-title', (el) => el.textContent), 'General');

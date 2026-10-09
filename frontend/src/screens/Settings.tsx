@@ -12,6 +12,7 @@ import type { CustomFieldEntity } from '../lib/api';
 import { useStore } from '../store/store';
 import { TemplatesTab } from './DocumentTemplates';
 import { EmployeesTab } from './settings/EmployeesTab';
+import { ApprovalsTab, HolidaysTab } from './settings/WorkforceSettings';
 import { ProjectTypesTab } from './settings/ProjectTypesTab';
 import { TechniciansTab } from './settings/TechniciansTab';
 import { RolesTab } from './settings/RolesTab';
@@ -42,6 +43,8 @@ const TABS = [
   },
   { k: 'technicians', group: 'Projects', label: 'Technicians', description: 'What each person can be given: project tasks, work orders or both.' },
   { k: 'employees', group: 'Workforce', label: 'Employees', description: 'What new employees start with and what employees may change themselves.' },
+  { k: 'approvals', group: 'Workforce', label: 'Approvals', description: 'When timesheets are due, how managers approve them and who gets reminded.' },
+  { k: 'holidays', group: 'Workforce', label: 'Holidays', description: 'Days nobody is expected to work. They show in the Timesheet and move deadlines.' },
 ] as const;
 type Tab = (typeof TABS)[number]['k'];
 const GROUPS = ['Workspace', 'CRM', 'Projects', 'Workforce'] as const;
@@ -58,7 +61,7 @@ export function Settings() {
   const [inviteOpen, setInviteOpen] = useState(() => tab === 'team' && params.get('invite') === '1' && session.tenant.role !== 'member');
   // Members don't see the sales bonus rules (CD-17): no tab, and its route goes back to Settings.
   // Settings → Employees (CD-215) is for Admins (workspace owners and admins).
-  const tabs = TABS.filter((t) => (t.k !== 'bonuses' || canSeeBonuses) && (t.k !== 'employees' || canEditWorkspace) && (t.k !== 'technicians' || canEditWorkspace));
+  const tabs = TABS.filter((t) => (t.k !== 'bonuses' || canSeeBonuses) && (!['employees', 'approvals', 'holidays'].includes(t.k) || canEditWorkspace) && (t.k !== 'technicians' || canEditWorkspace));
   if (!tabs.some((t) => t.k === tab)) return <Navigate to={paths.settings()} replace />;
   const current = tab as Tab;
   const section = tabs.find((t) => t.k === current)!;
@@ -120,6 +123,8 @@ export function Settings() {
           {current === 'team' && <TeamTab />}
           {current === 'roles' && <RolesTab />}
           {current === 'employees' && <EmployeesTab />}
+          {current === 'approvals' && <ApprovalsTab />}
+          {current === 'holidays' && <HolidaysTab />}
           {current === 'funnel' && <FunnelBuilder />}
           {current === 'project-types' && <ProjectTypesTab />}
           {current === 'technicians' && <TechniciansTab />}

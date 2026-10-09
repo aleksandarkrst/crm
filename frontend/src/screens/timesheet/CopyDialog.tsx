@@ -4,9 +4,9 @@ import { type ApiCopyPreview, type ApiCopyResult, timesheetApi } from '../../lib
 import { projectError } from '../../store/projects';
 
 type Mode = 'rows' | 'hours';
-const CHOICES: { id: Mode; title: string; text: string }[] = [
+const choices = (maxHours: number): { id: Mode; title: string; text: string }[] => [
   { id: 'rows', title: 'Rows only', text: "Adds last week's tasks and work orders, empty." },
-  { id: 'hours', title: 'Rows and hours', text: 'Copies hours day by day into empty cells. Never overwrites, skips days off and days over 12 h.' },
+  { id: 'hours', title: 'Rows and hours', text: `Copies hours day by day into empty cells. Never overwrites, skips days off and days over ${maxHours} h.` },
 ];
 
 /** "2 rows will be skipped: WO-1029 is completed, task T-9 is in a closed project." */
@@ -14,7 +14,7 @@ export const skippedText = (skipped: ApiCopyPreview['skipped']) =>
   `${skipped.length} ${skipped.length === 1 ? 'row' : 'rows'} will be skipped: ${skipped.map((s) => `${s.label} ${s.reason}`).join(', ')}.`;
 
 /** Copy last week (design `#cd-152b`): rows only (default) or rows and hours; says what it skips before copying. */
-export function CopyDialog({ weekStart, onClose, onCopied }: { weekStart: string; onClose: () => void; onCopied: (result: ApiCopyResult) => void }) {
+export function CopyDialog({ weekStart, maxHours, onClose, onCopied }: { weekStart: string; maxHours: number; onClose: () => void; onCopied: (result: ApiCopyResult) => void }) {
   const [mode, setMode] = useState<Mode>('rows');
   const [preview, setPreview] = useState<ApiCopyPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +43,7 @@ export function CopyDialog({ weekStart, onClose, onCopied }: { weekStart: string
   return (
     <Modal maxWidth={560} onBackdrop={onClose}>
       <ModalHeader title={preview ? `Copy week ${preview.fromWeek} into week ${preview.toWeek}` : 'Copy last week'} sub="Only tasks and work orders you can still log on are copied." />
-      {CHOICES.map((c) => (
+      {choices(maxHours).map((c) => (
         <label key={c.id} className={`ts-choice${mode === c.id ? ' on' : ''}`} data-testid={`ts-copy-${c.id}`}>
           <input type="radio" name="ts-copy" checked={mode === c.id} onChange={() => setMode(c.id)} style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} />
           <span className="ts-radio" aria-hidden />

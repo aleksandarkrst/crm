@@ -4,6 +4,7 @@ import { FieldRow, Switch } from '../../components/ui';
 import { type ApiOrgLevel, orgApi } from '../../lib/orgApi';
 import { orgError } from '../../store/org';
 import { useStore } from '../../store/store';
+import { TimeFormatAndMax, WorkingDayCard } from './WorkforceSettings';
 
 /** At most this many levels (the API's limit, CD-226). */
 const MAX_LEVELS = 5;
@@ -162,13 +163,15 @@ function LevelName({ level, onSave }: { level: ApiOrgLevel; onSave: (name: strin
 /**
  * Settings → Employees (CD-215, spec 10.3), Admins only: the weekly hours new employees and
  * imports start with, whether an employee number is required, and whether employees change their
- * own bank account, saved per workspace as you change them (PATCH /workspace); and the
- * organization levels (CD-226, their own endpoints).
+ * own bank account, the time format and the most hours a day (CD-153), saved per workspace as you
+ * change them (PATCH /workspace); the standard working day (CD-153); and the organization levels
+ * (CD-226, their own endpoints).
  */
 export function EmployeesTab() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <EmployeeSettings />
+      <WorkingDayCard />
       <OrgLevels />
     </div>
   );
@@ -214,6 +217,7 @@ function EmployeeSettings() {
           <span style={{ fontSize: 12, color: valid ? 'var(--text-2)' : 'var(--danger)' }}>{valid ? 'New employees and imports start with these hours.' : 'Between 1 and 60 hours.'}</span>
         </span>
       </FieldRow>
+      <TimeFormatAndMax />
       <div style={row} data-setting="number-required">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: 13.5, fontWeight: 600 }}>Employee number required</span>

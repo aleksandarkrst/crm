@@ -1,4 +1,4 @@
-import type { ApiCustomerEmailLanguage, ApiCustomField, ApiDateFormat, ApiLanguage, ApiOnboarding, ApiStageChange, ApiStartPage, CustomFieldEntity, CustomFieldValues, DealOutcome, LostReason, ApiVisitScope, WorkspaceTerms } from '../lib/api';
+import type { ApiCustomerEmailLanguage, ApiCustomField, ApiDateFormat, ApiLanguage, ApiOnboarding, ApiStageChange, ApiStartPage, CustomFieldEntity, CustomFieldValues, DealOutcome, LostReason, ApiVisitScope, WorkspaceTerms, ApiTimesheetSettings } from '../lib/api';
 import type { DealDoc, DocTemplate } from './documents';
 import type { MeetingDialogSeed, MeetingList } from './meetings';
 import type { ApiEmployeeCard, ApiInternalMinutes, ApiMeeting } from '../lib/api';
@@ -274,6 +274,8 @@ export interface Workspace {
   modules: string[];
   /** What the workspace calls projects and tasks (CD-143, Settings → Project types). */
   terms: WorkspaceTerms;
+  /** Timesheet settings (CD-153, Settings → Workforce). */
+  timesheet: ApiTimesheetSettings;
 }
 
 /** The signed-in user's profile (see ApiProfile). */
