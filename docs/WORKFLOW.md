@@ -67,7 +67,8 @@ A failing test is never skipped, disabled or deleted to get green: find the caus
 In Claude Code the edit hook already runs ESLint, `tsc` and the unit specs that import a changed
 file after every edit, so most problems surface before the full checks. A new tenant-scoped
 table goes in with `/new-tenant-table <name>` (schema, migration, paired RLS migration, indexes,
-isolation test, docs) and `check-rls.sh` proves every tenant table has its policy.
+isolation test, docs) and `scripts/check-rls.sh` proves every table has its policy (or a reason in
+`scripts/rls-allowlist.txt`).
 
 Also try the change in the app (`npm run dev`), at desktop and phone width when it touches the UI.
 Passing tests are not the same as working software.
@@ -85,9 +86,24 @@ When the checks pass, open a pull request to `main`:
   push, a draft pull request with this description layout, ready-for-review once CI is green,
   and the Linear move. It never merges (`gh pr merge` is refused by a hook).
 
-**GitHub CI** then runs three checks on the pull request: `backend`, `frontend` and
-`integration / run` (the database job in `db-tests.yml`, shared with the nightly performance run).
-All three must be green before merging. The `e2e` browser tests (about 16 minutes, workflow
+**GitHub CI** then runs five checks on the pull request: `backend`, `frontend`, `website`,
+`integration / run` (the database job in `db-tests.yml`, shared with the nightly performance run)
+and `guards`. All must be green before merging. `guards` (CD-311) is what used to need a reviewer
+reading the SQL, now mechanical:
+
+- `scripts/check-rls.sh`: every table created in `backend/drizzle/*.sql` has row-level security
+  turned on and forced and a tenant policy, or is listed with a reason in `scripts/rls-allowlist.txt`.
+- `scripts/check-migrations.sh`: the migrations the pull request adds contain no `DROP COLUMN`,
+  `DROP TABLE`, `ALTER COLUMN … TYPE`, `RENAME COLUMN`, `RENAME TO` or `SET NOT NULL` on a column
+  without a default (section 7, expand then contract). When a change can't follow that, the pull
+  request description gets a `migration-plan:` section (a heading or a line starting with it) with
+  the maintenance window or the restore plan, and the check accepts the statements.
+- `scripts/check-tenant-tests.sh`: a `CREATE TABLE` with `tenant_id` in the pull request comes with
+  a spec under `backend/test/integration/` added or changed in the same pull request that names
+  the table (`tenant-isolation.spec.ts`, see `/new-tenant-table` step 5).
+
+`scripts/guards-selftest.sh` runs first and proves the three scripts still fail on what they must.
+Run any of them locally from the repository root (`sh scripts/check-migrations.sh origin/main`). The `e2e` browser tests (about 16 minutes, workflow
 `e2e.yml`) don't run on pull requests or on `main` (CD-218). They run only before a production
 deploy (step 4 below). Don't start them for a pull request or after a merge to staging; a change
 that touches the flows the e2e tests cover updates or adds tests in `e2e/`, and the run before
@@ -184,8 +200,8 @@ settings on GitHub, not in the code:
   - **Require a pull request before merging** (required approvals: 0 while you are the only
     reviewer; GitHub doesn't let you approve your own pull request)
   - **Require status checks to pass**, with **Require branches to be up to date before merging**;
-    add the checks `backend`, `frontend` and `integration / run` (`e2e` runs only before production
-    deploys, CD-218; don't add it, it would never report on a pull request)
+    add the checks `backend`, `frontend`, `website`, `integration / run` and `guards` (`e2e` runs
+    only before production deploys, CD-218; don't add it, it would never report on a pull request)
   - **Block force pushes**
 - Bypass list: leave empty, so the rules apply to everyone.
 

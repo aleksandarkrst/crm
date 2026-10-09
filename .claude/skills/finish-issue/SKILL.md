@@ -26,7 +26,9 @@ at the first failure and report it (a failing check is fixed, never skipped or d
    rerun the checks that cover the fix, and keep their notes for the pull request. If one reports
    `No findings.`, say so in the pull request.
 5. **Docs**: `docs/ARCHITECTURE.md` (the module's section) and the README where behaviour
-   changed. A new tenant table has its RLS migration and `check-rls.sh` passes.
+   changed. A new tenant table has its RLS migration; from the root, `sh scripts/check-rls.sh`,
+   `sh scripts/check-migrations.sh origin/main` and `sh scripts/check-tenant-tests.sh origin/main`
+   pass (CI's `guards` job runs them; a destructive migration needs a `migration-plan:` section in the PR).
 6. **Commit and push**: commits start with `CD-…:`; `git push` (the branch has an upstream from
    `/start-issue`; otherwise `git push -u origin <branch>`). Nothing may stay unpushed.
 7. **Open the pull request** as a draft to `main` with `gh pr create --draft --base main`:

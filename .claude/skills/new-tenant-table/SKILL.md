@@ -109,11 +109,13 @@ section is the reference.
 ## Finish
 
 ```sh
-bash .claude/skills/new-tenant-table/check-rls.sh      # from the repo root
+sh scripts/check-rls.sh                                 # from the repo root (CI's guards job runs it too)
+sh scripts/check-tenant-tests.sh origin/main           # the new table must be named in a changed spec
 cd backend && npm run lint && npm run typecheck && npm test && npm run build
 ```
 
-`check-rls.sh` fails (exit 1) naming every table created with a `tenant_id` column that has no
-`CREATE POLICY` in `backend/drizzle/*.sql`. The only intended exceptions are `memberships` and
-`invitations`, which decide access before a tenant context exists (ARCHITECTURE.md "Teams and
-invitations"); do not add more.
+`check-rls.sh` fails (exit 1) naming every table created in `backend/drizzle/*.sql` that lacks
+ENABLE + FORCE ROW LEVEL SECURITY or a tenant policy and is not listed in `scripts/rls-allowlist.txt`.
+The only intended exceptions are the platform tables and `memberships` and `invitations`, which
+decide access before a tenant context exists (ARCHITECTURE.md "Teams and invitations"); do not
+add more. CI's `guards` job runs the same checks on the pull request (CD-311).

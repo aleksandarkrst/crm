@@ -1,0 +1,18 @@
+# Tables in backend/drizzle/*.sql that are allowed to have no row-level security policy
+# (scripts/check-rls.sh, CD-311). One table per line; "#" starts a comment. A schema-qualified
+# entry ("pgboss.*") covers a whole schema. Add a table here only with a reason: every table
+# that holds a workspace's data needs ENABLE + FORCE ROW LEVEL SECURITY and a tenant policy
+# (see .claude/skills/new-tenant-table/rls.sql.template).
+
+# Platform tables (identity module): they say which workspaces a user may enter, so they are
+# read before any tenant context exists (docs/ARCHITECTURE.md "Multi-tenancy: three layers").
+tenants
+users
+signup_requests
+
+# These carry tenant_id but decide access before a tenant context exists ("Teams and invitations").
+memberships
+invitations
+
+# pg-boss creates and owns its job tables at runtime (infra/postgres/init); no migration touches them.
+pgboss.*

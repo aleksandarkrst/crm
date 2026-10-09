@@ -56,6 +56,26 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
+  # Mechanical checks for the protected paths (CD-311), since merges are automated: every table has
+  # row-level security (scripts/check-rls.sh + rls-allowlist.txt), a pull request's migrations only
+  # expand unless its description has a `migration-plan:` section (check-migrations.sh), and a new
+  # tenant table comes with an integration spec that names it (check-tenant-tests.sh). The
+  # self-test first, so a change to the scripts can't quietly let a bad migration through.
+  guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0 }
+      - run: sh scripts/guards-selftest.sh
+      - run: sh scripts/check-rls.sh
+      - if: github.event_name == 'pull_request'
+        env:
+          # Through the environment, never inlined in the shell: the body is written by whoever opened the PR.
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: sh scripts/check-migrations.sh "origin/${{ github.base_ref }}"
+      - if: github.event_name == 'pull_request'
+        run: sh scripts/check-tenant-tests.sh "origin/${{ github.base_ref }}"
+
   # The API against a real PostgreSQL: RLS tenant isolation, composite FKs, roles, invitations.
   # The job itself (Postgres service, roles, migrations) is db-tests.yml, shared with nightly.yml.
   integration:
@@ -66,7 +86,7 @@ jobs:
     if: >-
       (github.ref == 'refs/heads/main' && github.event_name != 'pull_request') ||
       (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/') && inputs.verify_images)
-    needs: [backend, frontend, website, integration]
+    needs: [backend, frontend, website, integration, guards]
     runs-on: ubuntu-latest
     permissions: { contents: read, packages: write }
     steps:
