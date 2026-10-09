@@ -8,3 +8,9 @@ export { canLogTime, loggableTasks, type LogTimeRefusal, logTimeRefusal, logTime
 // Hour limits (CD-149): Block mode's refusal for an entry on a task.
 export { hourLimitBlock } from './hour-limits';
 export { canLogWorkOrderTime, loggableWorkOrders, type WorkOrderLogRefusal, workOrderLogRefusal, workOrderLogRefusalFor } from './work-order-log';
+// The staging seed (src/seed-staging.ts, CD-313).
+export { ProjectMembersService } from './project-members.service';
+export { ProjectsService } from './projects.service';
+export { ProjectTypesService } from './project-types.service';
+export { TasksService } from './tasks.service';
+export { WorkOrdersService } from './work-orders.service';

@@ -117,7 +117,10 @@ first, followed by `images`; verification never pushes an image or starts `deplo
 
 The reviewer (today: the project owner) checks:
 
-- **Does it do what the issue asked?** Try it, don't only read the test results.
+- **Does it do what the issue asked?** Try it, don't only read the test results. The trying
+  happens on staging, with the seed workspaces and the five yes/no questions in
+  [STAGING_CHECK.md](STAGING_CHECK.md) (CD-313); `/staging-check CD-123` prints them with the
+  issue's acceptance criteria filled in. Anyone can do this step, without reading code.
 - **Database migrations**, line by line: they are the hardest thing to undo once live.
 - **Permissions**: who can see or change what (owner, admin, member), and that one workspace can
   never see another's data.
@@ -149,7 +152,9 @@ After every merge, CI runs again on `main` and then:
    because the sign-in app is compiled into it).
 2. **`deploy-staging`**: deploys the commit to staging (https://staging.pultly.com,
    same server, own database) and runs the smoke test there.
-3. **Check it on staging**: whoever merged opens staging and tries the change.
+3. **Check it on staging**: whoever merged (or any tester) opens staging and answers the five
+   questions in [STAGING_CHECK.md](STAGING_CHECK.md) with the seed accounts
+   (`APP_DIR=/opt/crm-staging bash scripts/seed-staging.sh` creates or resets them).
 4. **Promote to production**: Actions → *Promote to production* → Run workflow (or
    `gh workflow run promote.yml`). It first runs the e2e browser tests on the commit staging runs
    now (about 16 minutes); only if they pass does it deploy that commit and smoke-test production.

@@ -12,3 +12,6 @@ export { applyCeoRule } from './org.service';
 export { domesticFromIban, formatIban, maskIban, parseBankAccount, type ParsedAccount, shortMaskIban } from './iban';
 export { cleanName, normalizeForSearch } from './search';
 export { allows, PERMISSION_MODULES, type PermissionRelation, type PermissionScope, permissionRow, relationsFor } from './permissions';
+// The staging seed (src/seed-staging.ts, CD-313).
+export { EmployeesService } from './employees.service';
+export { OrgService } from './org.service';

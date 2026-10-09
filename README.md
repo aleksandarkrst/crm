@@ -159,6 +159,11 @@ The integration, browser and performance tests create their own users and worksp
 emails, so they can run against the dev database without resetting it. The database must be
 migrated first.
 
+For trying the app by hand, `node dist/seed-staging.js` (after `npm run build`, with the dev
+database in `backend/.env`) creates the two test workspaces the staging check uses
+([docs/STAGING_CHECK.md](docs/STAGING_CHECK.md)); in dev auth mode the printed emails sign in with
+any password.
+
 ```bash
 # Integration tests (the dev database from docker-compose.dev.yml, migrated)
 cd backend
