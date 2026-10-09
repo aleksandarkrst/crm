@@ -90,7 +90,7 @@ export const MODULES: ModuleDef[] = [
     screens: ['/overview', '/pipeline', '/today', '/calendar', '/meetings', '/visit-plans', '/companies', '/contacts', '/products', '/deals', '/reports'],
     nav: CRM_NAV,
   },
-  { id: 'projects', name: 'Projects', description: 'Tasks, work orders, dispatch', icon: 'projects', to: paths.projects, screens: ['/projects', '/tasks', '/work-orders'], nav: PROJECTS_NAV },
+  { id: 'projects', name: 'Projects', description: 'Tasks, work orders, dispatch', icon: 'projects', to: paths.projects, screens: ['/projects', '/tasks', '/work-orders', '/workload'], nav: PROJECTS_NAV },
   { id: 'workforce', name: 'Workforce', description: 'People and capacity', icon: 'workforce', to: paths.org(), screens: ['/timesheet', '/org', '/people'], nav: WORKFORCE_NAV },
   { id: 'settings', name: 'Workspace settings', description: 'CRM, Projects, Workforce', icon: 'settings', to: paths.settings(), screens: [], nav: [], managers: true, settings: true },
   { id: 'planning', name: 'Planning', description: 'Budgets and targets', icon: 'planning', screens: [], nav: [] },

@@ -27,6 +27,7 @@ const Project = lazy(() => loadChunk(() => import('./screens/Project')).then((m)
 const Tasks = lazy(() => loadChunk(() => import('./screens/Tasks')).then((m) => ({ default: m.Tasks })));
 const Task = lazy(() => loadChunk(() => import('./screens/Task')).then((m) => ({ default: m.Task })));
 const WorkOrders = lazy(() => loadChunk(() => import('./screens/WorkOrders')).then((m) => ({ default: m.WorkOrders })));
+const Workload = lazy(() => loadChunk(() => import('./screens/Workload')).then((m) => ({ default: m.Workload })));
 const WorkOrder = lazy(() => loadChunk(() => import('./screens/WorkOrder')).then((m) => ({ default: m.WorkOrder })));
 const Products = lazy(() => loadChunk(() => import('./screens/Products')).then((m) => ({ default: m.Products })));
 const Profile = lazy(() => loadChunk(() => import('./screens/Profile')).then((m) => ({ default: m.Profile })));
@@ -160,6 +161,7 @@ function AppRoutes() {
           <Route path="tasks/:id" element={<Task />} />
           <Route path="work-orders" element={<WorkOrders />} />
           <Route path="work-orders/:id" element={<WorkOrder />} />
+          <Route path="workload" element={<Workload />} />
           <Route path="timesheet" element={<Timesheet />} />
           <Route path="org" element={<OrgStructure />} />
           <Route path="people/:id" element={<EmployeeCard />} />

@@ -92,6 +92,7 @@ export function useCommands(): Command[] {
     { id: 'go-projects', group: 'Go to', label: terms.Projects, hint: 'Projects · board and list', icon: 'project', keywords: 'projects delivery board', run: go(paths.projects) },
     { id: 'go-tasks', group: 'Go to', label: terms.Tasks, hint: 'Projects · kanban and table', icon: 'task', keywords: 'tasks project plan to-do todo kanban', run: go(paths.tasks) },
     { id: 'go-work-orders', group: 'Go to', label: 'Work orders', hint: 'Projects · kanban and table', icon: 'task', keywords: 'work orders service technician repair installation kanban', run: go(paths.workOrders) },
+    { id: 'go-workload', group: 'Go to', label: 'Workload', hint: 'Projects · remaining hours per person', icon: 'reports', keywords: 'workload capacity load remaining hours estimate report people weeks', run: go(paths.workload) },
     { id: 'go-timesheet', group: 'Go to', label: 'Timesheet', hint: 'Workforce · your hours this week', icon: 'timesheet', keywords: 'workforce time hours log week submit', run: go(paths.timesheet()) },
     { id: 'go-org', group: 'Go to', label: 'Org structure', hint: 'Workforce · people and teams', icon: 'org', keywords: 'workforce people employees units departments teams chart', run: go(paths.org()) },
   ];

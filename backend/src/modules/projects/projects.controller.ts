@@ -5,6 +5,7 @@ import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
 import { CreateProject, ListProjectsQuery, UpdateProject } from './projects.schemas';
 import { AddProjectMembers, ProjectMembersService, UpdateProjectMember } from './project-members.service';
 import { ProjectsService } from './projects.service';
+import { ProjectReportsService } from './project-reports.service';
 
 const Id = new ZodPipe(UuidParam);
 
@@ -21,6 +22,7 @@ export class ProjectsController {
   constructor(
     private readonly projects: ProjectsService,
     private readonly team: ProjectMembersService,
+    private readonly reports: ProjectReportsService,
   ) {}
 
   /** `?dealId=` / `?companyId=` narrow the list. */
@@ -42,6 +44,15 @@ export class ProjectsController {
   @Patch(':id')
   update(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(UpdateProject)) body: UpdateProject) {
     return this.projects.update(ctx, id, body);
+  }
+
+  /**
+   * The Report tab (CD-261): `{ summary, stages, people }`, estimates against logged time in minutes
+   * (see `ProjectReport` in project-report.ts). Every member, like the project.
+   */
+  @Get(':id/report')
+  report(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.reports.report(ctx, id);
   }
 
   /** The team (CD-271): `{ employeeId, name, jobTitle, team, active, role, hoursPerWeek, weeklyHours, loadHours }[]` by name. */

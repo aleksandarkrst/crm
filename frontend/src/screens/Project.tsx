@@ -13,6 +13,7 @@ import { useTasks } from '../store/tasks';
 import { HEALTH_LABEL, ProjectStatusBadge, projectValue } from './lead/DealProjects';
 import { dealEmails, ProjectCommunication } from './project/ProjectCommunication';
 import { DropZone, ProjectDocuments, useFileUpload } from './project/ProjectDocuments';
+import { ProjectReport } from './project/ProjectReport';
 import { ComingUp, ProjectPlan } from './project/ProjectPlan';
 import { ProjectWorkOrders } from './project/ProjectWorkOrders';
 import { NumberField, Row, TextField } from './project/fields';
@@ -27,9 +28,8 @@ import { useTerms } from '../store/terms';
  * - Details (code, type, lead, health, start, end, budget in hours, value, description) and Linked
  *   (company, deal, the deal's contact; a lost deal says so), all inline; another company clears the
  *   deal, after a confirmation;
- * - the Overview tab with the History (who changed what). Plan, Team, Communication, Documents and
- *   Report come with the screens that fill them (CD-263); "Coming up" and the file drop need tasks
- *   and project documents.
+ * - the Overview tab with the History (who changed what), Plan, Team, Communication, Documents
+ *   and Report (estimates against logged time, CD-261).
  * The lead, owners and admins change it; everyone else sees it read-only (the API agrees).
  */
 export function Project() {
@@ -43,7 +43,7 @@ export function Project() {
   const { data: files, set: setFiles } = useProjectFiles(id);
   const { data: dealDocs } = useDealDocuments(project?.dealId);
   const { data: tasks, set: setTasks } = useTasks({ projectId: id }, !!id);
-  const [tab, setTab] = useState<'overview' | 'plan' | 'team' | 'communication' | 'documents'>('overview');
+  const [tab, setTab] = useState<'overview' | 'plan' | 'team' | 'communication' | 'documents' | 'report'>('overview');
   // The deal's timeline holds its emails (the Communication tab and its count).
   const dealId = project?.dealId;
   useEffect(() => {
@@ -285,6 +285,7 @@ export function Project() {
                     ['team', `Team · ${team?.length ?? 0}`],
                     ['communication', `Communication · ${project.dealId ? dealEmails(timelineFor(s, project.dealId)).length : 0}`],
                     ['documents', `Documents · ${(files?.length ?? 0) + (dealDocs ?? []).filter((d) => d.status === 'ready').length}`],
+                    ['report', 'Report'],
                   ] as const
                 ).map(([k, label]) => (
                   <button
@@ -318,6 +319,8 @@ export function Project() {
                   <ProjectTeam projectId={project.id} team={team} canEdit={canEdit} onChange={setTeam} />
                 ) : tab === 'communication' ? (
                   <ProjectCommunication project={project} />
+                ) : tab === 'report' ? (
+                  <ProjectReport projectId={project.id} endDate={project.endDate} />
                 ) : (
                   <ProjectDocuments
                     projectId={project.id}
