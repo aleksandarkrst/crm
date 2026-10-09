@@ -104,27 +104,35 @@ night (`nightly.yml`):
 - **Unit tests** (`backend`, `npm test`): fast, no database.
 - **Integration tests** (`backend/test/integration`, `npm run test:integration`): build the API,
   start `dist/main.js` on port 3101 (dev auth) and the worker (`dist/worker.js`, log mail driver,
-  fast retries) and test them over HTTP against PostgreSQL:
-  tenant isolation through RLS (API and raw SQL as the runtime role), composite-FK rejection of
-  cross-tenant references, member/admin/owner rules and last-owner protection, invitations
-  (invited email only, single use, withdraw, replace), deal-amount recalculation from lines,
-  deal stage history (a row per creation, move, funnel change, loss and reopening, isolated per
-  tenant) and lost deals (reason pick list, reopen, no moves while lost); funnels and stages
-  (create, copy, rename, delete; add, reorder and delete stages with their deals moved and the
-  moves in the history; roles and isolation), checklist items keeping to-dos across renames, the
-  database guards (no lost deal in a won stage, no deal in a deleted stage), CSV import (roles,
-  per-row validation, duplicates skipped or updated, deal matching, size and row limits, tenant
-  isolation, quoting edge cases), custom fields (definitions and roles, value validation per type,
-  required, option renames, soft delete, isolation), sales bonus rules (members get 403),
-  deal products (billing, tax modes, discounts, installments, currency), documents (template upload limits and roles, generation by
-  the worker with the deal's values checked in the .docx, downloads behind auth with another
-  workspace getting 404, files removed with their template, document or deal), and email: invitation emails (sent,
-  resent, copy link, roles, failed after retries), notification settings per user and workspace,
-  the daily digest's content by the workspace's date (and skipped when empty), and "deal assigned
-  to you" only when someone else assigns it;
-  the live event stream (a member gets their workspace's changes, never another's), conflicting
-  updates (409 per field, merges, same tab, no If-Match) and the change history (who, what,
-  old → new, former members, paging, isolation).
+  fast retries) and test them over HTTP against PostgreSQL. One spec file per area; find yours
+  by name rather than reading this list whole:
+  - *Tenancy and access*: tenant isolation through RLS (API and raw SQL as the runtime role),
+    composite-FK rejection of cross-tenant references, member/admin/owner rules and last-owner
+    protection, the permissions matrix and people visibility, invitations (invited email only,
+    single use, withdraw, replace), sign-up and onboarding.
+  - *Deals and pipeline*: deal-amount recalculation from lines, stage history (a row per creation,
+    move, funnel change, loss and reopening, isolated per tenant), lost deals (reason pick list,
+    reopen, no moves while lost), funnels and stages (create, copy, rename, delete; add, reorder
+    and delete stages with their deals moved and the moves in the history; roles and isolation),
+    checklist items keeping to-dos across renames, the database guards (no lost deal in a won
+    stage, no deal in a deleted stage), deal products (billing, tax modes, discounts,
+    installments, currency), sales bonus rules (members get 403).
+  - *Import, export, custom fields, documents*: CSV import (roles, per-row validation, duplicates
+    skipped or updated, deal matching, size and row limits, tenant isolation, quoting edge cases),
+    custom fields (definitions and roles, value validation per type, required, option renames,
+    soft delete, isolation), documents (template upload limits and roles, generation by the worker
+    with the deal's values checked in the .docx, downloads behind auth with another workspace
+    getting 404, files removed with their template, document or deal).
+  - *Email and notifications*: invitation emails (sent, resent, copy link, roles, failed after
+    retries), notification settings per user and workspace, the daily digest's content by the
+    workspace's date (and skipped when empty), "deal assigned to you" only when someone else
+    assigns it, meeting invitations and minutes emails.
+  - *Working together*: the live event stream (a member gets their workspace's changes, never
+    another's), conflicting updates (409 per field, merges, same tab, no If-Match) and the change
+    history (who, what, old → new, former members, paging, isolation).
+  - *Meetings, visit plans, people, projects, timesheet*: each module's spec files
+    (`meetings*.spec.ts`, `visit-plans`, `people-*`, `projects*`, `tasks*`, `time-*`,
+    `timesheet*`) cover the rules described in their docs/ARCHITECTURE.md section.
 - **Browser tests** (`e2e/`, Puppeteer with its bundled Chrome, run by `node:test`): sign-in,
   workspace, products, new deal, closing date, notes, drag between stages, reload, every screen
   renders; deal lines and stage to-dos persist; CHAMP fit score; team invitations with two

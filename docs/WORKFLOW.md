@@ -34,6 +34,10 @@ is open) → **Done** (merged; Linear moves it when the pull request is merged).
   or in one session can't be reviewed and is lost if the session stops.
 - **Never work on `main` directly.** Everything reaches `main` through a pull request.
 - **Commit messages start with the issue ID**: `CD-20: close the live-update stream on pagehide`.
+- In Claude Code, `/start-issue CD-20` does all of this: reads the issue, branches from
+  `origin/main` with Linear's branch name, pushes, moves the issue to In Progress and prints the
+  checks. Hooks (`.claude/settings.json`) refuse pushes to `main`, switching to `main` and
+  ending a turn with unpushed commits.
 
 ### Several agents at once
 
@@ -60,6 +64,11 @@ that would have caught the bug. Run the same checks CI runs:
 
 A failing test is never skipped, disabled or deleted to get green: find the cause.
 
+In Claude Code the edit hook already runs ESLint, `tsc` and the unit specs that import a changed
+file after every edit, so most problems surface before the full checks. A new tenant-scoped
+table goes in with `/new-tenant-table <name>` (schema, migration, paired RLS migration, indexes,
+isolation test, docs) and `check-rls.sh` proves every tenant table has its policy.
+
 Also try the change in the app (`npm run dev`), at desktop and phone width when it touches the UI.
 Passing tests are not the same as working software.
 
@@ -72,6 +81,9 @@ When the checks pass, open a pull request to `main`:
   anything left undone. Screenshots for UI changes.
 - Move the Linear issue to **In Review** and link the pull request (Linear links it automatically
   when the branch name or title contains the issue ID).
+- In Claude Code, `/finish-issue` does this end to end: the checks, the reviewer agents (below),
+  push, a draft pull request with this description layout, ready-for-review once CI is green,
+  and the Linear move. It never merges (`gh pr merge` is refused by a hook).
 
 **GitHub CI** then runs three checks on the pull request: `backend`, `frontend` and
 `integration / run` (the database job in `db-tests.yml`, shared with the nightly performance run).
@@ -97,7 +109,11 @@ The reviewer (today: the project owner) checks:
 - **Docs**: `docs/ARCHITECTURE.md` and the README updated where behaviour changed.
 
 A second agent in a fresh session can review too, e.g. with Claude Code's `/code-review`; it
-catches different things than the agent that wrote the code.
+catches different things than the agent that wrote the code. Two checked-in reviewer agents
+(`.claude/agents/`) run before the pull request opens: `tenant-security-reviewer` reads a
+backend diff for `withTenant()`, paired RLS, module boundaries, jobs, expand-then-contract and
+permission tests; `design-fidelity-reviewer` reads changed `.tsx` against the design-port rules.
+Their findings go in the pull request description.
 
 Review comments are answered on the pull request: fixed in a new commit, or explained.
 
@@ -147,7 +163,8 @@ Setup and details: [DEPLOYMENT.md, Staging](DEPLOYMENT.md#9-staging). Until
 
 | File | What it holds | Who updates it |
 |---|---|---|
-| `CLAUDE.md` | The rules every agent follows | When an agent repeats a mistake, add a line |
+| `CLAUDE.md` (root, `backend/`, `frontend/`, `website/`) | The rules every agent follows; the package files load when an agent touches that package | When an agent repeats a mistake, add a line |
+| `.claude/` (`settings.json`, `hooks/`, `skills/`, `agents/`) and `.mcp.json` | The automation that enforces the rules: hooks, `/start-issue`, `/finish-issue`, `/new-tenant-table`, the reviewer agents, the Linear and Postgres servers | When the process or the checks change |
 | `AGENTS.md` | Points Codex and other agents to CLAUDE.md | Rarely |
 | `docs/ARCHITECTURE.md` | How the system works | Every pull request that changes behaviour |
 | `docs/WORKFLOW.md` | This process | When the process changes |
