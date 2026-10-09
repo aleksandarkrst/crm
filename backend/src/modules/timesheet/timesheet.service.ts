@@ -19,7 +19,7 @@ import {
   workOrders,
   workOrderTechnicians,
 } from '../../shared/database/schema';
-import { zonedParts } from '../../shared/time/zoned-time';
+import { zonedDayStart, zonedParts } from '../../shared/time/zoned-time';
 import { PeopleAccess } from '../people';
 import { loggableTasks, loggableWorkOrders, type LogTimeRefusal, logTimeRefusal, type WorkOrderLogRefusal, workOrderLogRefusal } from '../projects';
 import {
@@ -27,6 +27,7 @@ import {
   copyPlan,
   type CopySourceRow,
   dayLimitRefusal,
+  deadlineInstant,
   deadlineOf,
   type Employment,
   employed,
@@ -109,6 +110,10 @@ export interface WeekView {
   /** Flags on the week (spec 5.2): first submitted after the deadline; submitted by the deadline job (CD-153). */
   late: boolean;
   autoSubmitted: boolean;
+  /** The week's deadline has passed (CD-155). */
+  deadlinePassed: boolean;
+  /** Days Submit week would submit that were never submitted, after the deadline: submitting one makes the week Late (spec 5.5). */
+  lateIfSubmitted: string[];
   days: DayView[];
   rows: RowView[];
 }
@@ -127,6 +132,9 @@ export interface Caller {
   employment: Employment;
   today: string;
   settings: TimesheetSettings;
+  /** The workspace's time zone and the moment of the request: whether the deadline has passed (CD-155). */
+  timeZone: string;
+  now: Date;
 }
 
 interface RowFacts {
@@ -489,8 +497,11 @@ export class TimesheetService {
         const before = await readWeek(tx, caller, weekStart);
         const days = date ? before.submittable.filter((d) => d === date) : before.submittable;
         if (days.length === 0) throw new BadRequestException(date ? 'That day has nothing to submit' : 'Nothing to submit in this week');
-        await submitDays(tx, ctx.tenantId, employeeId, weekStart, days, ctx.userId, new Date(), { dropEmptyRows: !date });
-        await this.audit.record(tx, ctx, { action: 'timesheet.submitted', entityType: 'employee', entityId: employeeId, data: { weekStart, days } });
+        await submitDays(tx, ctx.tenantId, employeeId, weekStart, days, ctx.userId, caller.now, { dropEmptyRows: !date });
+        // A required day submitted for the first time after the deadline makes the week Late, for good (spec 5.5).
+        const late = days.some((d) => before.lateIfSubmitted.includes(d));
+        if (late) await markLate(tx, ctx.tenantId, employeeId, weekStart, caller.now);
+        await this.audit.record(tx, ctx, { action: 'timesheet.submitted', entityType: 'employee', entityId: employeeId, data: { weekStart, days, late } });
         return readWeek(tx, caller, weekStart);
       })
       .catch(mapDbError);
@@ -502,8 +513,10 @@ export class TimesheetService {
       .withTenant(ctx.tenantId, async (tx) => {
         const caller = await this.caller(ctx, tx);
         const employeeId = this.ownEmployee(caller);
+        // Back to Draft, keeping when each day was first submitted (CD-155).
         const recalled = await tx
-          .delete(timesheetDays)
+          .update(timesheetDays)
+          .set({ status: 'draft' })
           .where(and(eq(timesheetDays.employeeId, employeeId), between(timesheetDays.workDate, weekStart, addDays(weekStart, 6)), eq(timesheetDays.status, 'submitted')))
           .returning({ date: timesheetDays.workDate });
         if (recalled.length === 0) throw new BadRequestException('Nothing to recall in this week');
@@ -521,7 +534,9 @@ export class TimesheetService {
   private async caller(ctx: TenantContext, tx: Tx): Promise<Caller & { thisWeekEnd: string }> {
     const access = await this.people.of(ctx, tx);
     const [tenant] = await tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId));
-    const today = zonedParts(new Date(), tenant?.timezone ?? 'UTC').date;
+    const now = new Date();
+    const timeZone = tenant?.timezone ?? 'UTC';
+    const today = zonedParts(now, timeZone).date;
     const settings = await timesheetSettings(tx, ctx.tenantId);
     let name = '';
     let employment: Employment = { start: null, end: null };
@@ -533,7 +548,7 @@ export class TimesheetService {
       name = e?.name ?? '';
       employment = { start: e?.start ?? null, end: e?.end ?? null };
     }
-    return { employeeId: access.employeeId, name, employment, today, settings, thisWeekEnd: addDays(mondayOf(today), 6) };
+    return { employeeId: access.employeeId, name, employment, today, settings, timeZone, now, thisWeekEnd: addDays(mondayOf(today), 6) };
   }
 
   /** Last week's rows (entries and added rows), with why each can't be copied. */
@@ -668,18 +683,20 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
   const settings = caller.settings;
   // The week's holidays, and those a deadline in the next weeks may move past.
   const holidays = await holidaysBetween(tx, monday, addDays(monday, 45));
+  const deadline = deadlineOf(monday, settings, (d) => holidays.has(d));
+  const deadlinePassed = deadlineInstant(zonedDayStart(deadline.date, caller.timeZone), deadline.time) <= caller.now;
   const base = {
     weekStart: monday,
     weekNumber: isoWeek(monday),
     label: weekLabel(monday),
     today: caller.today,
     thisWeek: mondayOf(caller.today),
-    deadline: deadlineOf(monday, settings, (d) => holidays.has(d)),
+    deadline,
     settings: { dayMinutes: settings.dayMinutes, maxDayMinutes: settings.maxDayMinutes, timeFormat: settings.timeFormat, approvalMode: settings.approvalMode },
   };
   const employeeId = caller.employeeId;
   if (!employeeId) {
-    return { ...base, employee: null, status: 'no_entry', statusLabel: 'No entry needed', submittable: [], canRecall: false, late: false, autoSubmitted: false, days: [], rows: [] };
+    return { ...base, employee: null, status: 'no_entry', statusLabel: 'No entry needed', submittable: [], canRecall: false, late: false, autoSubmitted: false, deadlinePassed, lateIfSubmitted: [], days: [], rows: [] };
   }
   const [entries, added, dayRows, [flags]] = await Promise.all([
     tx
@@ -691,7 +708,7 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
       .from(timesheetRows)
       .where(and(eq(timesheetRows.employeeId, employeeId), eq(timesheetRows.weekStart, monday))),
     tx
-      .select({ date: timesheetDays.workDate, status: timesheetDays.status, submittedAt: timesheetDays.submittedAt })
+      .select({ date: timesheetDays.workDate, status: timesheetDays.status, submittedAt: timesheetDays.submittedAt, firstSubmittedAt: timesheetDays.firstSubmittedAt })
       .from(timesheetDays)
       .where(and(eq(timesheetDays.employeeId, employeeId), between(timesheetDays.workDate, monday, sunday))),
     tx
@@ -761,6 +778,7 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
   });
   const weekDays: WeekDay[] = days.map((d) => ({ date: d.date, status: d.status, required: d.required, minutes: d.minutes }));
   const { status, label } = weekStatus(weekDays);
+  const submittable = submittableDays(weekDays, caller.today);
   // Tasks first, then work orders; each by its path, then its number.
   const ordered = [...rows.values()].sort(
     (a, b) => (a.kind === b.kind ? 0 : a.kind === 'task' ? -1 : 1) || a.path.localeCompare(b.path) || a.code.localeCompare(b.code, undefined, { numeric: true }),
@@ -770,13 +788,26 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
     employee: { id: employeeId, name: caller.name },
     status,
     statusLabel: label,
-    submittable: submittableDays(weekDays, caller.today),
+    submittable,
     canRecall: days.some((d) => d.status === 'submitted'),
+    deadlinePassed,
+    lateIfSubmitted: deadlinePassed ? submittable.filter((d) => !statusOf.get(d)?.firstSubmittedAt) : [],
     late: !!flags?.lateAt,
     autoSubmitted: !!flags?.autoSubmittedAt,
     days,
     rows: ordered,
   };
+}
+
+/** The week is Late from `now` on (spec 5.5): set once, never cleared or moved. */
+export async function markLate(tx: Tx, tenantId: string, employeeId: string, weekStart: string, now: Date) {
+  await tx
+    .insert(timesheetWeeks)
+    .values({ tenantId, employeeId, weekStart, lateAt: now })
+    .onConflictDoUpdate({
+      target: [timesheetWeeks.tenantId, timesheetWeeks.employeeId, timesheetWeeks.weekStart],
+      set: { lateAt: sql`coalesce(${timesheetWeeks.lateAt}, excluded.late_at)` },
+    });
 }
 
 /**
@@ -793,10 +824,10 @@ export async function submitDays(tx: Tx, tenantId: string, employeeId: string, w
   if (!days.length) return;
   await tx
     .insert(timesheetDays)
-    .values(days.map((workDate) => ({ tenantId, employeeId, workDate, status: 'submitted' as const, submittedAt: now, submittedByUserId: userId })))
+    .values(days.map((workDate) => ({ tenantId, employeeId, workDate, status: 'submitted' as const, submittedAt: now, submittedByUserId: userId, firstSubmittedAt: now })))
     .onConflictDoUpdate({
       target: [timesheetDays.tenantId, timesheetDays.employeeId, timesheetDays.workDate],
-      set: { status: 'submitted', submittedAt: now, submittedByUserId: userId },
+      set: { status: 'submitted', submittedAt: now, submittedByUserId: userId, firstSubmittedAt: sql`coalesce(${timesheetDays.firstSubmittedAt}, excluded.first_submitted_at)` },
       setWhere: sql`${timesheetDays.status} = 'draft'`,
     });
 }

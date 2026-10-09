@@ -61,6 +61,10 @@ export interface ApiTimesheetWeek {
   /** First submitted after the deadline; submitted by the deadline job (CD-153). */
   late: boolean;
   autoSubmitted: boolean;
+  /** The week's deadline has passed (CD-155). */
+  deadlinePassed: boolean;
+  /** Days never submitted that would make the week Late now (spec 5.5). */
+  lateIfSubmitted: string[];
   days: ApiTimesheetDay[];
   rows: ApiTimesheetRow[];
 }

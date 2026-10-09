@@ -87,17 +87,18 @@ describe('workforce settings', () => {
 
   step('Approvals: the deadline day and time, the live line, and "Submit by" in the Timesheet', async () => {
     await page.goto(BASE_URL + '/settings/approvals', { waitUntil: 'networkidle0' });
-    await setValue(page, '[data-testid=deadline-day]', '4');
-    await setValue(page, '[data-testid=deadline-time]', '15:30');
+    // Sunday 23:30: still ahead whatever day the test runs (a passed deadline shows "Deadline passed", CD-155).
+    await setValue(page, '[data-testid=deadline-day]', '7');
+    await setValue(page, '[data-testid=deadline-time]', '23:30');
     await eventually(async () => {
       const t = await timesheet();
-      return t.deadlineWeekday === 4 && t.deadlineTime === '15:30';
+      return t.deadlineWeekday === 7 && t.deadlineTime === '23:30';
     });
-    await page.waitForFunction(() => /is due Thu \d+ \w{3}, 15:30\./.test(document.querySelector('[data-testid=deadline-next]')?.textContent ?? ''));
+    await page.waitForFunction(() => /is due Sun \d+ \w{3}, 23:30\./.test(document.querySelector('[data-testid=deadline-next]')?.textContent ?? ''));
     await click(page, '[data-setting=auto-submit] [role=switch]');
     assert.ok(await eventually(async () => (await timesheet()).autoSubmit === true));
     await page.goto(BASE_URL + '/timesheet', { waitUntil: 'networkidle0' });
     await page.waitForSelector('.ts-due');
-    assert.equal(await page.$eval('.ts-due', (el) => el.textContent), `Submit by ${label(addDays(monday, 3))}, 15:30`);
+    assert.equal(await page.$eval('.ts-due', (el) => el.textContent), `Submit by ${label(addDays(monday, 6))}, 23:30`);
   });
 });

@@ -27,12 +27,12 @@ async function deadlinesAround(tx: Tx, settings: TimesheetSettings, timeZone: st
 }
 
 /** One employee as the Timesheet reads them, for the deadline job (not the signed-in caller). */
-async function callerFor(tx: Tx, employeeId: string, today: string, settings: TimesheetSettings): Promise<Caller> {
+async function callerFor(tx: Tx, employeeId: string, today: string, settings: TimesheetSettings, timeZone: string, now: Date): Promise<Caller> {
   const [e] = await tx
     .select({ name: employees.fullName, start: employees.employmentStartDate, end: employees.employmentEndDate })
     .from(employees)
     .where(eq(employees.id, employeeId));
-  return { employeeId, name: e?.name ?? '', employment: { start: e?.start ?? null, end: e?.end ?? null }, today, settings };
+  return { employeeId, name: e?.name ?? '', employment: { start: e?.start ?? null, end: e?.end ?? null }, today, settings, timeZone, now };
 }
 
 /**
@@ -77,7 +77,7 @@ export class TimesheetDeadlines {
           where e.work_date between ${due.weekStart} and ${addDays(due.weekStart, 6)} and p.user_id is not null and p.deactivated_at is null`);
         let submitted = 0;
         for (const { employee_id: employeeId } of rows) {
-          const week = await readWeek(tx, await callerFor(tx, employeeId, today, settings), due.weekStart);
+          const week = await readWeek(tx, await callerFor(tx, employeeId, today, settings, tz, now), due.weekStart);
           if (week.submittable.length === 0) continue;
           await submitDays(tx, tenantId, employeeId, due.weekStart, week.submittable, null, now);
           await tx
