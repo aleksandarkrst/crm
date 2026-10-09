@@ -246,7 +246,7 @@ The first deploy: merge an approved pull request to `main`, or run the workflow 
 
 On the CD-34 branch, open **Actions → CI / CD → Run workflow**, select that branch, and
 check **Build both Docker images without publishing them** (`verify_images=true`). The
-`backend`, `frontend`, `website` and `integration` jobs must pass before `images` builds both
+`backend`, `frontend`, `website` and `integration / run` jobs must pass before `images` builds both
 Dockerfiles with the configured frontend OIDC build arguments. Confirm both builds pass and
 `deploy` is skipped. This verifies image builds; it does not run a production stack.
 

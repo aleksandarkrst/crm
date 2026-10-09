@@ -57,38 +57,10 @@ jobs:
       - run: npm run build
 
   # The API against a real PostgreSQL: RLS tenant isolation, composite FKs, roles, invitations.
+  # The job itself (Postgres service, roles, migrations) is db-tests.yml, shared with nightly.yml.
   integration:
-    runs-on: ubuntu-latest
-    defaults: { run: { working-directory: backend } }
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env: { POSTGRES_USER: app_admin, POSTGRES_PASSWORD: ci_admin_password, POSTGRES_DB: app }
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U app_admin -d app" --health-interval 2s --health-timeout 5s --health-retries 30
-    env:
-      # Same setup as production: migrations run as the owner, the API as the non-owner runtime role.
-      PGHOST: localhost
-      PGPASSWORD: ci_admin_password
-      POSTGRES_USER: app_admin
-      POSTGRES_DB: app
-      APP_DB_USER: app_runtime
-      APP_DB_PASSWORD: ci_runtime_password
-      MIGRATION_DATABASE_URL: postgres://app_admin:ci_admin_password@localhost:5432/app
-      DATABASE_URL: postgres://app_runtime:ci_runtime_password@localhost:5432/app
-      AUTH_MODE: dev
-      DEV_JWT_SECRET: ci-only-dev-secret-at-least-32-characters
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with: { node-version: 24, cache: npm, cache-dependency-path: backend/package-lock.json }
-      - name: Create the runtime role and pgboss schema (as the Postgres image's init would)
-        run: sh ../infra/postgres/init/01-roles.sh
-      - run: npm ci
-      - run: npm run build
-      - run: npm run db:migrate
-      - run: npm run test:integration
+    uses: ./.github/workflows/db-tests.yml
+    with: { script: test:integration }
 
   images:
     if: >-

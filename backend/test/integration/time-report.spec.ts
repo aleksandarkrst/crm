@@ -48,12 +48,14 @@ let week: string;
 const as = (s: Session = owner) => ({ token: s.token, tenant });
 const addDays = (date: string, n: number) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 const cell = (s: Session, day: number, minutes: number, taskId = task.id) => call('PUT', '/timesheet/cells', { ...as(s), body: { date: addDays(week, day), taskId, minutes } });
-const level = async (employeeId = ids.ana) => (await asTenantSql<{ level: number }>(tenant, 'select level from task_limit_alerts where task_id = $1 and employee_id = $2', [task.id, employeeId]))[0]?.level ?? 0;
+const level = async (employeeId = ids.ana, taskId = task.id) => (await asTenantSql<{ level: number }>(tenant, 'select level from task_limit_alerts where task_id = $1 and employee_id = $2', [taskId, employeeId]))[0]?.level ?? 0;
 const reachLevel = (want: number) => eventually(async () => (await level()) === want || null, `alert level ${want}`);
 const subjects = async (s: Session, prefix: string) => (await mailTo(owner, s.email)).filter((m) => m.subject === `${prefix}: T-${task.number} Hydraulic leak`);
 const mailsReach = (s: Session, prefix: string, count: number) => eventually(async () => (await subjects(s, prefix)).length >= count || null, `${count}× "${prefix}" to ${s.name}`);
 const report = (s: Session, query = '') => ok<Report>('GET', `/time-report?projectId=${projectId}${query}`, as(s));
 const flat = (nodes: Node[]): Node[] => nodes.flatMap((n) => [n, ...flat(n.children)]);
+/** Ana's row on the project as she sees it (her own hours only). */
+const anaRow = async () => flat((await report(ana)).rows).find((n) => n.kind === 'person' && n.id === ids.ana)!;
 
 beforeAll(async () => {
   [owner, ana, marko, lena, jovan, vesna] = await Promise.all([signIn('tr-owner'), signIn('tr-ana'), signIn('tr-marko'), signIn('tr-lena'), signIn('tr-jovan'), signIn('tr-vesna')]);
@@ -92,10 +94,10 @@ describe('hour limit alerts (Warn mode)', () => {
     await cell(ana, 2, 90); // 10 h
     await reachLevel(100);
     for (const s of [ana, lena, marko]) await mailsReach(s, 'Hour limit reached', 1);
-    const atLimit = flat((await report(ana)).rows).find((n) => n.kind === 'person' && n.id === ids.ana)!;
+    const atLimit = await anaRow();
     expect([atLimit.remainingMinutes, atLimit.usedPercent, atLimit.flag]).toEqual([0, 100, 'reached']);
     expect((await cell(ana, 3, 90)).status).toBe(200); // 11.5 h
-    const me = flat((await report(ana)).rows).find((n) => n.kind === 'person' && n.id === ids.ana)!;
+    const me = await anaRow();
     expect([me.allTimeMinutes, me.remainingMinutes, me.flag]).toEqual([690, -90, 'over']);
     const mail = (await subjects(marko, 'Hour limit reached'))[0]!;
     expect(mail.text).toContain(`has logged 10 h of their 10 h limit on T-${task.number} Hydraulic leak`);
@@ -154,15 +156,14 @@ describe('Block mode', () => {
   });
 
   it('switching to Block keeps the entries already over the limit; only lowering them is allowed (TC 14)', async () => {
-    const me = async () => flat((await report(ana)).rows).find((n) => n.kind === 'person' && n.id === ids.ana)!;
-    expect(await me()).toMatchObject({ allTimeMinutes: 690, flag: 'over' });
+    expect(await anaRow()).toMatchObject({ allTimeMinutes: 690, flag: 'over' });
     await ok('PATCH', '/workspace', { ...as(), body: { hourLimitMode: 'block' } });
-    expect(await me()).toMatchObject({ allTimeMinutes: 690, flag: 'over' });
+    expect(await anaRow()).toMatchObject({ allTimeMinutes: 690, flag: 'over' });
     const refused = await cell(ana, 6, 15);
     expect(refused.status).toBe(400);
     expect(JSON.stringify(refused.body)).toContain(`You have 0 h left on T-${task.number} (limit 10 h).`);
     expect((await cell(ana, 5, 60)).status).toBe(200); // 10.5 h: still over, still saved
-    expect(await me()).toMatchObject({ allTimeMinutes: 630, flag: 'over' });
+    expect(await anaRow()).toMatchObject({ allTimeMinutes: 630, flag: 'over' });
     await ok('PATCH', '/workspace', { ...as(), body: { hourLimitMode: 'warn' } });
   });
 });
@@ -307,26 +308,33 @@ describe('the job handler (TC 17)', () => {
   // The job sent directly with pg-boss, for an entry written straight to the table (no job yet), as
   // the Timesheet's writes send it.
   let boss: PgBoss;
+  let bossError: Error | null = null;
 
   beforeAll(async () => {
     boss = new PgBoss({ connectionString: inject('databaseUrl'), schema: 'pgboss', createSchema: false, supervise: false, schedule: false });
-    boss.on('error', () => {});
+    boss.on('error', (err) => {
+      bossError ??= err;
+    });
     await boss.start();
   });
   afterAll(async () => {
     await boss?.stop({ graceful: false });
+    expect(bossError).toBeNull();
   });
 
-  it('"timesheet.task-hours-changed" starts an Open task on its first entry and updates the alert state', async () => {
-    const t = await ok<{ id: string; number: number }>('POST', '/tasks', { ...as(), body: { projectId, name: 'Fixture job', assigneeIds: [ids.ana] } });
-    await ok('PATCH', `/tasks/${t.id}/assignees/${ids.ana}`, { ...as(), body: { hourLimit: 1 } });
-    await asTenantSql(tenant, `insert into time_entries (tenant_id, employee_id, task_id, work_date, minutes) values ($1, $2, $3, '2025-03-11', 60)`, [tenant, ids.ana, t.id]);
-    const status = async () => (await ok<{ status: string }>('GET', `/tasks/${t.id}`, as())).status;
-    const alert = async () => (await asTenantSql<{ level: number }>(tenant, `select level from task_limit_alerts where task_id = $1 and employee_id = $2`, [t.id, ids.ana]))[0]?.level ?? 0;
-    expect([await status(), await alert()]).toEqual(['todo', 0]);
-    await boss.send('timesheet.task-hours-changed', { tenantId: tenant, taskId: t.id, employeeId: ids.ana });
-    await eventually(async () => (await status()) === 'in_progress' || null, 'task in progress');
-    await eventually(async () => (await alert()) === 100 || null, 'alert level 100');
-    await eventually(async () => (await mailTo(owner, ana.email)).some((m) => m.subject === `Hour limit reached: T-${t.number} Fixture job`) || null, '"Hour limit reached" for the fixture job');
-  });
+  it(
+    '"timesheet.task-hours-changed" starts an Open task on its first entry and updates the alert state',
+    async () => {
+      const t = await ok<{ id: string; number: number }>('POST', '/tasks', { ...as(), body: { projectId, name: 'Fixture job', assigneeIds: [ids.ana] } });
+      await ok('PATCH', `/tasks/${t.id}/assignees/${ids.ana}`, { ...as(), body: { hourLimit: 1 } });
+      await asTenantSql(tenant, `insert into time_entries (tenant_id, employee_id, task_id, work_date, minutes) values ($1, $2, $3, '2025-03-11', 60)`, [tenant, ids.ana, t.id]);
+      const status = async () => (await ok<{ status: string }>('GET', `/tasks/${t.id}`, as())).status;
+      expect([await status(), await level(ids.ana, t.id)]).toEqual(['todo', 0]);
+      await boss.send('timesheet.task-hours-changed', { tenantId: tenant, taskId: t.id, employeeId: ids.ana });
+      await eventually(async () => (await status()) === 'in_progress' || null, 'task in progress');
+      await eventually(async () => (await level(ids.ana, t.id)) === 100 || null, 'alert level 100');
+      await eventually(async () => (await mailTo(owner, ana.email)).some((m) => m.subject === `Hour limit reached: T-${t.number} Fixture job`) || null, '"Hour limit reached" for the fixture job');
+    },
+    60_000, // three worker hops polled in turn
+  );
 });
