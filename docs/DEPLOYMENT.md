@@ -149,7 +149,12 @@ this server yet…" (so owners copy the link instead) and records daily digests 
   2. Fill in `infra/backup/rclone.conf`. The `offsite-crypt` remote encrypts every file before upload.
   3. Store the crypt passphrases in your password manager. Without them the backups cannot be read.
 - Run a backup now: `docker compose run --rm backup once`.
-- A backup is also taken automatically before every deploy's migrations.
+- A backup is also taken automatically before every deploy's migrations (CD-314): `deploy.sh`
+  runs the same `backup once` with `BACKUP_LABEL=deploy-<commit>`, so the pair is named
+  `app-<timestamp>-deploy-<commit>.dump` and `app-files-<timestamp>-deploy-<commit>.tar.gz`, and
+  the deploy log shows `backup before migration` before `running migrations`. If the backup fails,
+  the migrations don't run and the deploy stops. The pair is pruned with the others after
+  `BACKUP_RETENTION_DAYS`; copy it elsewhere if a migration needs a longer watch.
 - **How much can be lost (CD-94).** A dump runs every `BACKUP_INTERVAL_HOURS` (6 by default; older
   `.env` files say 24, change it), so at most about 6 hours of work. If that is too much once
   customers rely on it, the next step is continuous WAL archiving (pgBackRest or WAL-G to the same
@@ -184,15 +189,33 @@ the one you need to `/backups/` (try this during a restore drill).
 
 ### Restore (practise this before you need it)
 
+The restore is the undo button for a bad migration, so it is practised on staging before it is
+ever needed on production (CD-314). The same steps apply to both stacks; only the folder differs:
+`/opt/crm-staging` (staging) or `/opt/crm` (production). Run them on the server as `deploy`.
+
+**One command** (`scripts/restore-backup.sh`: the steps below, timed, with a confirmation first):
+
 ```bash
-cd /opt/crm
-docker compose stop api worker
-docker compose run --rm --entrypoint ls backup -lh /backups        # pick a file
-# or fetch an off-site copy:  docker compose run --rm --entrypoint rclone backup copy offsite-crypt:crm/<file> /backups/
+cd /opt/crm-staging                                            # or /opt/crm for production
+bash scripts/restore-backup.sh --list                          # the backups this stack has
+APP_DIR=/opt/crm-staging bash scripts/restore-backup.sh app-20260101T020000Z-deploy-abc1234.dump --verify
+```
+
+It stops `api` and `worker`, restores the dump and the files archive with the same timestamp,
+starts them again, waits for readiness, and with `--verify` runs `scripts/verify-production.sh`.
+It prints how long the stack was down. `--yes` skips the confirmation (for a scripted drill).
+
+**Step by step** (what the script does, for when a step needs attention):
+
+```bash
+cd /opt/crm-staging                                            # or /opt/crm
+docker compose stop api worker                                 # nothing may write during the restore
+docker compose run --rm --entrypoint ls backup -lh /backups    # pick the dump (deploy-<commit> = before that deploy's migrations)
+# an off-site copy instead:  docker compose run --rm --entrypoint rclone backup copy offsite-crypt:crm/<file> /backups/
 docker compose run --rm --entrypoint restore.sh backup /backups/app-<timestamp>.dump
-# the files from the same run (replaces everything in the app_storage volume):
-docker compose run --rm --entrypoint restore.sh backup /backups/app-files-<timestamp>.tar.gz
+docker compose run --rm --entrypoint restore.sh backup /backups/app-files-<timestamp>.tar.gz   # replaces everything in app_storage
 docker compose start api worker
+bash scripts/verify-production.sh                              # the smoke test, now on the restored data
 ```
 
 How the database restore works: `restore.sh` restores the dump into a fresh database
@@ -201,7 +224,12 @@ own its tables), checks that the runtime role can read the job queue, and only t
 The database it replaced is kept as `app_before_restore`. If any step fails, the current database
 is left untouched.
 
-Check the restore before you throw away the old database:
+**On production**, two more things: tell the team (the app is unavailable for the duration measured
+on staging, and everything written after the backup is lost), and restore only a backup taken
+before the migration that went wrong, i.e. the `deploy-<commit>` pair of that deploy, then deploy
+the previous commit (`bash scripts/deploy.sh <previous-sha>`) so the code matches the schema again.
+
+**Check the restore before you throw away the old database:**
 1. `docker compose logs --tail=50 api worker` shows no `permission denied` errors.
 2. Sign in and open a restored record.
 3. Send an invitation (or generate a document) and check that `docker compose logs worker` shows
@@ -209,11 +237,19 @@ Check the restore before you throw away the old database:
 4. Then free the space: `docker compose exec postgres dropdb -U app_admin app_before_restore`.
    To undo the restore instead, stop api and worker and rename the databases back.
 
-Record each restore drill (date, backup used, which checks passed) in the table below.
+On staging the worker would email real people from restored production data: stop it first and
+scrub the addresses as described in [Staging → Data](#data).
 
-| Date | Backup | Where | Result |
-|---|---|---|---|
-| | | | |
+### Restore drills
+
+Run the restore once on staging from a real backup file (`docker compose run --rm backup once`
+first if there is none), and again after any change to `infra/backup/` or `restore-backup.sh`.
+Record each drill here: the date, the backup used, where, how long `restore-backup.sh` reported,
+and what went wrong. The runbook is not trusted until this table has a row.
+
+| Date | Backup | Where | Duration | Result |
+|---|---|---|---|---|
+| _not yet run_ | | staging | | Run `APP_DIR=/opt/crm-staging bash scripts/restore-backup.sh <dump> --verify` and fill this in. |
 
 ## 6. GitHub Actions
 
@@ -575,7 +611,7 @@ promote an earlier commit that passed staging, or run `scripts/deploy.sh <sha>` 
 Staging starts empty: sign in, create a workspace and choose the sample data. To try something on
 real-looking data, restore a production dump into staging (it also rehearses the restore path).
 The staging worker would email real people, so stop it first (`docker compose stop worker` in
-`/opt/crm-staging`), restore with `infra/backup/restore.sh` as in [Restore](#restore-practise-this-before-you-need-it),
+`/opt/crm-staging`), restore with `scripts/restore-backup.sh` as in [Restore](#restore-practise-this-before-you-need-it),
 then drop queued jobs and change the email addresses before starting it again:
 ```bash
 docker compose exec -T postgres psql -U app_admin app -c "
@@ -601,6 +637,7 @@ docker compose logs -f --tail=100 api     # logs
 docker compose run --rm migrate           # migrations by hand
 bash scripts/deploy.sh <sha>              # deploy / roll back to any built commit
 bash scripts/verify-production.sh         # smoke-test the live stack and tunnel
+bash scripts/restore-backup.sh --list     # the backups; restore one: scripts/restore-backup.sh <dump> --verify
 gh workflow run promote.yml               # (from your machine) staging's commit → production
 docker compose exec postgres psql -U app_admin app
 ```
@@ -619,8 +656,10 @@ either: follow the manual rollback below.
 
 Migrations are not undone by either rollback. They must be backward-compatible, so the previous
 image still works on the new schema (the rule is in [WORKFLOW.md](WORKFLOW.md#7-from-main-to-production)).
-Restore the pre-deploy backup (`/backups`, taken by every deploy) only when a migration destroyed or
-corrupted data, because it also throws away everything written since the deploy.
+Restore the pre-deploy backup (`/backups/app-<timestamp>-deploy-<commit>.dump`, taken by every
+deploy) only when a migration destroyed or corrupted data, because it also throws away everything
+written since the deploy: [Restore](#restore-practise-this-before-you-need-it), practised on
+staging first ([Restore drills](#restore-drills)).
 
 **When to outgrow one server:** once backups, restore tests and monitoring are routine and load
 grows, move PostgreSQL to its own server or a managed service. Change `DATABASE_URL` and
