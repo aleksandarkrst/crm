@@ -1,10 +1,12 @@
 /**
  * The time report's performance target (CD-149, spec 10.2, TC 16): under 2 seconds for a workspace
  * with 100,000 time entries on 2,000 tasks by 200 people, across all projects and per person.
+ * Its own suite (`npm run test:performance`, vitest.performance.config.mts): the data takes minutes
+ * to generate, so the "Nightly" workflow runs it, not every pull request (CD-250).
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { call, createTenant, type Session, signIn } from './helpers';
-import { asTenantSql } from './people-helpers';
+import { call, createTenant, type Session, signIn } from '../integration/helpers';
+import { asTenantSql } from '../integration/people-helpers';
 
 let owner: Session;
 let tenant: string;
