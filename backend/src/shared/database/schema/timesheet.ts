@@ -118,3 +118,58 @@ export const timesheetRows = pgTable(
 );
 
 export type TimeEntry = typeof timeEntries.$inferSelect;
+
+/**
+ * The workspace's public holidays (CD-153, Settings → Workforce → Holidays): one per date, a name,
+ * and the hours off (null: the whole standard day). They show as a row in the Timesheet, lower the
+ * expected hours and move a deadline that falls on them to the next working day.
+ */
+export const publicHolidays = pgTable(
+  'public_holidays',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    holidayDate: date('holiday_date').notNull(),
+    name: text('name').notNull(),
+    minutes: integer('minutes'),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex('public_holidays_date_uq').on(t.tenantId, t.holidayDate),
+    check('public_holidays_name_ck', sql`length(btrim(${t.name})) between 1 and 100`),
+    check('public_holidays_minutes_ck', sql`${t.minutes} is null or (${t.minutes} between 15 and 1440 and ${t.minutes} % 15 = 0)`),
+  ],
+);
+
+/**
+ * Flags on one person's week (spec 5.2): Late (first submitted after the deadline) and
+ * Auto-submitted (submitted by the deadline job, CD-153). Set once and never cleared.
+ */
+export const timesheetWeeks = pgTable(
+  'timesheet_weeks',
+  {
+    tenantId: tenantId(),
+    employeeId: uuid('employee_id').notNull(),
+    weekStart: date('week_start').notNull(),
+    lateAt: timestamp('late_at', { withTimezone: true }),
+    autoSubmittedAt: timestamp('auto_submitted_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.employeeId, t.weekStart], name: 'timesheet_weeks_pk' }),
+    foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'timesheet_weeks_employee_fk' }).onDelete('cascade'),
+    check('timesheet_weeks_monday_ck', sql`extract(isodow from ${t.weekStart}) = 1`),
+  ],
+);
+
+/** A week whose deadline the auto submit has handled (CD-153), so a tick run twice, or after downtime, does it once. */
+export const timesheetDeadlineRuns = pgTable(
+  'timesheet_deadline_runs',
+  {
+    tenantId: tenantId(),
+    weekStart: date('week_start').notNull(),
+    ranAt: timestamp('ran_at', { withTimezone: true }).notNull().defaultNow(),
+    submittedWeeks: integer('submitted_weeks').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.weekStart], name: 'timesheet_deadline_runs_pk' })],
+);

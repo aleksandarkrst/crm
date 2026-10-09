@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CUSTOMER_EMAIL_LANGUAGES, DATE_FORMATS, PROFILE_LANGUAGES, START_PAGES, WORKSPACE_MODULES } from '../../shared/database/schema';
+import { CUSTOMER_EMAIL_LANGUAGES, DATE_FORMATS, DEADLINE_WEEKS, PROFILE_LANGUAGES, START_PAGES, TIME_FORMATS, WORKSPACE_MODULES } from '../../shared/database/schema';
 
 // ICU's lists (Node ships full ICU): every ISO 4217 code and every canonical IANA zone.
 const CURRENCIES = new Set(Intl.supportedValuesOf('currency'));
@@ -35,6 +35,39 @@ export const WorkspaceTerms = z
 export type WorkspaceTerms = z.infer<typeof WorkspaceTerms>;
 export const DEFAULT_TERMS: WorkspaceTerms = { project: 'Project', projects: 'Projects', task: 'Task', tasks: 'Tasks' };
 
+/** 24-hour "HH:MM". */
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM');
+
+/**
+ * The timesheet settings (CD-153, Settings → Workforce → Employees and Approvals): the standard
+ * working day, how hours are shown, the most a person may enter on one day, and the submission
+ * deadline with auto submit. Any of them at once.
+ */
+export const TimesheetSettingsInput = z
+  .object({
+    dayMinutes: z
+      .number()
+      .int()
+      .min(15, 'At least 0.25 hours')
+      .max(1440, 'At most 24 hours')
+      .refine((m) => m % 15 === 0, 'Use steps of 0.25 hours'),
+    dayStart: hhmm,
+    dayEnd: hhmm,
+    workingDays: z
+      .array(z.number().int().min(1).max(7))
+      .min(1, 'Pick at least one working day')
+      .max(7)
+      .refine((d) => new Set(d).size === d.length, 'Each day once'),
+    timeFormat: z.enum(TIME_FORMATS),
+    maxDayHours: z.number().int().min(1, 'Between 1 and 24 hours').max(24, 'Between 1 and 24 hours'),
+    deadlineWeekday: z.number().int().min(1).max(7),
+    deadlineTime: hhmm,
+    deadlineWeek: z.enum(DEADLINE_WEEKS),
+    autoSubmit: z.boolean(),
+  })
+  .partial();
+export type TimesheetSettingsInput = z.infer<typeof TimesheetSettingsInput>;
+
 export const UpdateWorkspace = z
   .object({
     name: z.string().trim().min(1).max(100),
@@ -58,6 +91,8 @@ export const UpdateWorkspace = z
     modules: z.array(z.enum(WORKSPACE_MODULES)).max(WORKSPACE_MODULES.length).refine((m) => new Set(m).size === m.length, 'Each module once'),
     // What the workspace calls projects and tasks (CD-143): all four names at once.
     terms: WorkspaceTerms,
+    // Settings → Workforce (CD-153): any of the timesheet settings.
+    timesheet: TimesheetSettingsInput,
   })
   .partial()
   .refine(atLeastOne, 'Nothing to update');

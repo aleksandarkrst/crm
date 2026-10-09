@@ -15,6 +15,7 @@ import {
   timesheetDays,
   timesheetRows,
   type TimesheetDayStatus,
+  timesheetWeeks,
   workOrders,
   workOrderTechnicians,
 } from '../../shared/database/schema';
@@ -31,6 +32,7 @@ import {
   employed,
   endAfter,
   expectedMinutes,
+  holidayMinutes,
   isoWeek,
   isRequired,
   mondayOf,
@@ -44,7 +46,7 @@ import {
   type WeekStatus,
 } from './timesheet-rules';
 import type { AddRow, CopyWeek, CreateEntry, SetCell, UpdateEntry } from './timesheet.schemas';
-import { timesheetSettings } from './timesheet-settings';
+import { holidaysBetween, timesheetSettings } from './timesheet-settings';
 
 export type RowKind = 'task' | 'work_order';
 
@@ -84,6 +86,8 @@ export interface DayView {
   required: boolean;
   /** The person can change its hours: Draft or Rejected, within employment, not after the current week. */
   editable: boolean;
+  /** A public holiday on a working day (CD-153): its name and the hours off; it lowers the expected hours. */
+  holiday: { name: string; minutes: number } | null;
 }
 
 export interface WeekView {
@@ -102,6 +106,9 @@ export interface WeekView {
   /** Days Submit week would submit. */
   submittable: string[];
   canRecall: boolean;
+  /** Flags on the week (spec 5.2): first submitted after the deadline; submitted by the deadline job (CD-153). */
+  late: boolean;
+  autoSubmitted: boolean;
   days: DayView[];
   rows: RowView[];
 }
@@ -114,7 +121,7 @@ export interface PickerItem {
   path: string;
 }
 
-interface Caller {
+export interface Caller {
   employeeId: string | null;
   name: string;
   employment: Employment;
@@ -226,7 +233,7 @@ export class TimesheetService {
   week(ctx: TenantContext, weekStart?: string): Promise<WeekView> {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const caller = await this.caller(ctx, tx);
-      return this.readWeek(tx, caller, weekStart ?? mondayOf(caller.today));
+      return readWeek(tx, caller, weekStart ?? mondayOf(caller.today));
     });
   }
 
@@ -265,7 +272,7 @@ export class TimesheetService {
           .select({ id: timeEntries.id, minutes: timeEntries.minutes, note: timeEntries.note, startTime: timeEntries.startTime })
           .from(timeEntries)
           .where(and(mine, target));
-        const [facts] = await this.rowFacts(tx, employeeId, kind === 'task' ? [id] : [], kind === 'work_order' ? [id] : []);
+        const [facts] = await rowFacts(tx, employeeId, kind === 'task' ? [id] : [], kind === 'work_order' ? [id] : []);
         if (!facts) throw new NotFoundException(kind === 'task' ? 'Task not found' : 'Work order not found');
         // Hours already there can be corrected after someone was unassigned (spec 4.4); new ones need the rule.
         const correcting = existing.length > 0 && (facts.refusal === 'not_assigned' || facts.refusal === 'not_technician');
@@ -285,7 +292,7 @@ export class TimesheetService {
           if (entry) await tx.update(timeEntries).set({ minutes: input.minutes, note, ...keepSpan(entry.startTime, input.minutes) }).where(eq(timeEntries.id, entry.id));
           else await tx.insert(timeEntries).values({ tenantId: ctx.tenantId, employeeId, workDate: input.date, taskId: input.taskId ?? null, workOrderId: input.workOrderId ?? null, minutes: input.minutes, note, createdByUserId: ctx.userId });
         }
-        return this.readWeek(tx, caller, mondayOf(input.date));
+        return readWeek(tx, caller, mondayOf(input.date));
       })
       .catch(mapDbError);
   }
@@ -303,7 +310,7 @@ export class TimesheetService {
         const span = resolveSpan(input.minutes, input.startTime ?? null, input.endTime ?? null);
         this.checkDate(caller, input.date);
         await lockDay(tx, employeeId, input.date);
-        const [facts] = await this.rowFacts(tx, employeeId, input.taskId ? [input.taskId] : [], input.workOrderId ? [input.workOrderId] : []);
+        const [facts] = await rowFacts(tx, employeeId, input.taskId ? [input.taskId] : [], input.workOrderId ? [input.workOrderId] : []);
         if (!facts) throw new NotFoundException(input.taskId ? 'Task not found' : 'Work order not found');
         if (facts.refusal) throw refusalError(facts);
         await this.checkDayLimit(tx, caller, employeeId, input.date, span.minutes, null);
@@ -345,7 +352,7 @@ export class TimesheetService {
         }
         if (date !== entry.workDate) this.checkDate(caller, date);
         for (const day of [...new Set([entry.workDate, date])].sort()) await lockDay(tx, employeeId, day);
-        const [facts] = await this.rowFacts(tx, employeeId, entry.taskId ? [entry.taskId] : [], entry.workOrderId ? [entry.workOrderId] : []);
+        const [facts] = await rowFacts(tx, employeeId, entry.taskId ? [entry.taskId] : [], entry.workOrderId ? [entry.workOrderId] : []);
         // Hours already there can be corrected after someone was unassigned (spec 4.4); closed rows are the trigger's.
         if (facts?.refusal && facts.refusal !== 'not_assigned' && facts.refusal !== 'not_technician') throw refusalError(facts);
         await this.checkDayLimit(tx, caller, employeeId, date, span.minutes, date === entry.workDate ? entry : null);
@@ -402,14 +409,14 @@ export class TimesheetService {
       .withTenant(ctx.tenantId, async (tx) => {
         const caller = await this.caller(ctx, tx);
         const employeeId = this.ownEmployee(caller);
-        const [facts] = await this.rowFacts(tx, employeeId, input.taskId ? [input.taskId] : [], input.workOrderId ? [input.workOrderId] : []);
+        const [facts] = await rowFacts(tx, employeeId, input.taskId ? [input.taskId] : [], input.workOrderId ? [input.workOrderId] : []);
         if (!facts) throw new NotFoundException(input.taskId ? 'Task not found' : 'Work order not found');
         if (facts.refusal) throw refusalError(facts);
         await tx
           .insert(timesheetRows)
           .values({ tenantId: ctx.tenantId, employeeId, weekStart: input.weekStart, taskId: input.taskId ?? null, workOrderId: input.workOrderId ?? null })
           .onConflictDoNothing();
-        return this.readWeek(tx, caller, input.weekStart);
+        return readWeek(tx, caller, input.weekStart);
       })
       .catch(mapDbError);
   }
@@ -460,7 +467,7 @@ export class TimesheetService {
           entityId: employeeId,
           data: { weekStart: input.weekStart, mode: input.mode, rows: plan.rows.length, cells: cells.length },
         });
-        const week = await this.readWeek(tx, caller, input.weekStart);
+        const week = await readWeek(tx, caller, input.weekStart);
         return { week, copiedRows: plan.rows.length, copiedCells: cells.length, skipped: plan.skippedRows, fullDays: plan.fullDays };
       })
       .catch(mapDbError);
@@ -477,23 +484,11 @@ export class TimesheetService {
         const caller = await this.caller(ctx, tx);
         const employeeId = this.ownEmployee(caller);
         if (weekStart > mondayOf(caller.today)) throw new BadRequestException('A week can be submitted once it has started');
-        const before = await this.readWeek(tx, caller, weekStart);
+        const before = await readWeek(tx, caller, weekStart);
         if (before.submittable.length === 0) throw new BadRequestException('Nothing to submit in this week');
-        await tx.execute(sql`
-          delete from timesheet_rows r where r.employee_id = ${employeeId} and r.week_start = ${weekStart}
-            and not exists (select 1 from time_entries e where e.employee_id = r.employee_id and e.work_date between ${weekStart} and ${addDays(weekStart, 6)}
-              and (e.task_id = r.task_id or e.work_order_id = r.work_order_id))`);
-        const now = new Date();
-        await tx
-          .insert(timesheetDays)
-          .values(before.submittable.map((workDate) => ({ tenantId: ctx.tenantId, employeeId, workDate, status: 'submitted' as const, submittedAt: now, submittedByUserId: ctx.userId })))
-          .onConflictDoUpdate({
-            target: [timesheetDays.tenantId, timesheetDays.employeeId, timesheetDays.workDate],
-            set: { status: 'submitted', submittedAt: now, submittedByUserId: ctx.userId },
-            setWhere: sql`${timesheetDays.status} = 'draft'`,
-          });
+        await submitDays(tx, ctx.tenantId, employeeId, weekStart, before.submittable, ctx.userId, new Date());
         await this.audit.record(tx, ctx, { action: 'timesheet.submitted', entityType: 'employee', entityId: employeeId, data: { weekStart, days: before.submittable } });
-        return this.readWeek(tx, caller, weekStart);
+        return readWeek(tx, caller, weekStart);
       })
       .catch(mapDbError);
   }
@@ -510,7 +505,7 @@ export class TimesheetService {
           .returning({ date: timesheetDays.workDate });
         if (recalled.length === 0) throw new BadRequestException('Nothing to recall in this week');
         await this.audit.record(tx, ctx, { action: 'timesheet.recalled', entityType: 'employee', entityId: employeeId, data: { weekStart, days: recalled.map((r) => r.date).sort() } });
-        return this.readWeek(tx, caller, weekStart);
+        return readWeek(tx, caller, weekStart);
       })
       .catch(mapDbError);
   }
@@ -538,179 +533,6 @@ export class TimesheetService {
     return { employeeId: access.employeeId, name, employment, today, settings, thisWeekEnd: addDays(mondayOf(today), 6) };
   }
 
-  /** The facts about tasks and work orders for one person: names, paths, whether they can log on them, their limit. */
-  private async rowFacts(tx: Tx, employeeId: string, taskIds: string[], orderIds: string[]): Promise<RowFacts[]> {
-    const facts: RowFacts[] = [];
-    if (taskIds.length) {
-      const rows = await tx
-        .select({
-          id: tasks.id,
-          number: tasks.number,
-          name: tasks.name,
-          status: tasks.status,
-          projectName: projects.name,
-          projectStatus: projects.status,
-          companyName: companies.name,
-          active: taskAssignments.active,
-          hourLimit: taskAssignments.hourLimit,
-        })
-        .from(tasks)
-        .innerJoin(projects, eq(projects.id, tasks.projectId))
-        .innerJoin(companies, eq(companies.id, projects.companyId))
-        .leftJoin(taskAssignments, and(eq(taskAssignments.taskId, tasks.id), eq(taskAssignments.employeeId, employeeId)))
-        .where(inArray(tasks.id, taskIds));
-      for (const r of rows) {
-        facts.push({
-          kind: 'task',
-          id: r.id,
-          code: `T-${r.number}`,
-          name: r.name,
-          path: pathOf(r.companyName, r.projectName),
-          refusal: logTimeRefusal({ taskStatus: r.status, projectStatus: r.projectStatus, assignment: r.active === null ? null : { active: r.active } }),
-          limitMinutes: r.active && r.hourLimit != null ? Math.round(r.hourLimit * 60) : null,
-        });
-      }
-    }
-    if (orderIds.length) {
-      const rows = await tx
-        .select({
-          id: workOrders.id,
-          number: workOrders.number,
-          title: workOrders.title,
-          status: workOrders.status,
-          companyName: companies.name,
-          projectName: projects.name,
-          projectStatus: projects.status,
-          technician: workOrderTechnicians.employeeId,
-        })
-        .from(workOrders)
-        .innerJoin(companies, eq(companies.id, workOrders.companyId))
-        .leftJoin(projects, eq(projects.id, workOrders.projectId))
-        .leftJoin(workOrderTechnicians, and(eq(workOrderTechnicians.workOrderId, workOrders.id), eq(workOrderTechnicians.employeeId, employeeId)))
-        .where(inArray(workOrders.id, orderIds));
-      for (const r of rows) {
-        const refusal = workOrderLogRefusal({ status: r.status, isTechnician: r.technician !== null });
-        facts.push({
-          kind: 'work_order',
-          id: r.id,
-          code: `WO-${r.number}`,
-          name: r.title,
-          path: pathOf(r.companyName, r.projectName),
-          refusal: refusal ?? (r.projectStatus && r.projectStatus !== 'open' ? 'project_closed' : null),
-          limitMinutes: null,
-        });
-      }
-    }
-    return facts;
-  }
-
-  private async readWeek(tx: Tx, caller: Caller, monday: string): Promise<WeekView> {
-    const dates = weekDates(monday);
-    const sunday = dates[6]!;
-    const lastDate = addDays(mondayOf(caller.today), 6);
-    const settings = caller.settings;
-    const base = {
-      weekStart: monday,
-      weekNumber: isoWeek(monday),
-      label: weekLabel(monday),
-      today: caller.today,
-      thisWeek: mondayOf(caller.today),
-      deadline: deadlineOf(monday, settings),
-      settings: { dayMinutes: settings.dayMinutes, maxDayMinutes: settings.maxDayMinutes, timeFormat: settings.timeFormat },
-    };
-    const employeeId = caller.employeeId;
-    if (!employeeId) {
-      return { ...base, employee: null, status: 'no_entry', statusLabel: 'No entry needed', submittable: [], canRecall: false, days: [], rows: [] };
-    }
-    const [entries, added, dayRows] = await Promise.all([
-      tx
-        .select({ date: timeEntries.workDate, taskId: timeEntries.taskId, workOrderId: timeEntries.workOrderId, minutes: timeEntries.minutes, note: timeEntries.note })
-        .from(timeEntries)
-        .where(and(eq(timeEntries.employeeId, employeeId), between(timeEntries.workDate, monday, sunday))),
-      tx
-        .select({ taskId: timesheetRows.taskId, workOrderId: timesheetRows.workOrderId, createdAt: timesheetRows.createdAt })
-        .from(timesheetRows)
-        .where(and(eq(timesheetRows.employeeId, employeeId), eq(timesheetRows.weekStart, monday))),
-      tx
-        .select({ date: timesheetDays.workDate, status: timesheetDays.status, submittedAt: timesheetDays.submittedAt })
-        .from(timesheetDays)
-        .where(and(eq(timesheetDays.employeeId, employeeId), between(timesheetDays.workDate, monday, sunday))),
-    ]);
-    const taskIds = [...new Set([...entries, ...added].flatMap((e) => (e.taskId ? [e.taskId] : [])))];
-    const orderIds = [...new Set([...entries, ...added].flatMap((e) => (e.workOrderId ? [e.workOrderId] : [])))];
-    const facts = await this.rowFacts(tx, employeeId, taskIds, orderIds);
-    const limited = facts.filter((f) => f.limitMinutes != null).map((f) => f.id);
-    const logged = new Map<string, number>();
-    if (limited.length) {
-      const sums = await tx
-        .select({ taskId: timeEntries.taskId, minutes: sql<number>`sum(${timeEntries.minutes})::int` })
-        .from(timeEntries)
-        .where(and(eq(timeEntries.employeeId, employeeId), inArray(timeEntries.taskId, limited)))
-        .groupBy(timeEntries.taskId);
-      for (const s of sums) logged.set(s.taskId!, s.minutes);
-    }
-
-    const rows = new Map<string, RowView>();
-    for (const f of facts) {
-      rows.set(keyOf(f.kind, f.id), {
-        key: keyOf(f.kind, f.id),
-        kind: f.kind,
-        id: f.id,
-        code: f.code,
-        name: f.name,
-        path: f.path,
-        lockedReason: reasonOf(f),
-        edit: !f.refusal ? 'any' : f.refusal === 'not_assigned' || f.refusal === 'not_technician' ? 'existing' : 'none',
-        limit: f.limitMinutes != null ? { limitMinutes: f.limitMinutes, loggedMinutes: logged.get(f.id) ?? 0 } : null,
-        cells: {},
-        minutes: 0,
-      });
-    }
-    const perDay: Record<string, number> = {};
-    for (const e of entries) {
-      const row = rows.get(e.taskId ? keyOf('task', e.taskId) : keyOf('work_order', e.workOrderId!));
-      if (!row) continue;
-      const cell = (row.cells[e.date] ??= { minutes: 0, note: null, entries: 0 });
-      cell.minutes += e.minutes;
-      cell.entries += 1;
-      cell.note = cell.entries === 1 ? e.note : null;
-      row.minutes += e.minutes;
-      perDay[e.date] = (perDay[e.date] ?? 0) + e.minutes;
-    }
-
-    const statusOf = new Map(dayRows.map((d) => [d.date, d]));
-    const days: DayView[] = dates.map((date) => {
-      const expected = expectedMinutes(date, settings, caller.employment);
-      const minutes = perDay[date] ?? 0;
-      const status = statusOf.get(date)?.status ?? 'draft';
-      return {
-        date,
-        status,
-        submittedAt: statusOf.get(date)?.submittedAt?.toISOString() ?? null,
-        expectedMinutes: expected,
-        minutes,
-        required: isRequired(expected, minutes),
-        editable: (status === 'draft' || status === 'rejected') && date <= lastDate && employed(date, caller.employment),
-      };
-    });
-    const weekDays: WeekDay[] = days.map((d) => ({ date: d.date, status: d.status, required: d.required, minutes: d.minutes }));
-    const { status, label } = weekStatus(weekDays);
-    // Tasks first, then work orders; each by its path, then its number.
-    const ordered = [...rows.values()].sort(
-      (a, b) => (a.kind === b.kind ? 0 : a.kind === 'task' ? -1 : 1) || a.path.localeCompare(b.path) || a.code.localeCompare(b.code, undefined, { numeric: true }),
-    );
-    return {
-      ...base,
-      employee: { id: employeeId, name: caller.name },
-      status,
-      statusLabel: label,
-      submittable: submittableDays(weekDays, caller.today),
-      canRecall: days.some((d) => d.status === 'submitted'),
-      days,
-      rows: ordered,
-    };
-  }
-
   /** Last week's rows (entries and added rows), with why each can't be copied. */
   private async copySource(tx: Tx, employeeId: string, weekStart: string): Promise<CopySourceRow[]> {
     const from = addDays(weekStart, -7);
@@ -725,7 +547,7 @@ export class TimesheetService {
         .where(and(eq(timesheetRows.employeeId, employeeId), eq(timesheetRows.weekStart, from))),
     ]);
     const all = [...entries, ...added];
-    const facts = await this.rowFacts(
+    const facts = await rowFacts(
       tx,
       employeeId,
       [...new Set(all.flatMap((e) => (e.taskId ? [e.taskId] : [])))],
@@ -768,4 +590,209 @@ export class TimesheetService {
       dayStatus: Object.fromEntries(dayRows.map((d) => [d.date, d.status])),
     };
   }
+}
+
+/** The facts about tasks and work orders for one person: names, paths, whether they can log on them, their limit. */
+export async function rowFacts(tx: Tx, employeeId: string, taskIds: string[], orderIds: string[]): Promise<RowFacts[]> {
+  const facts: RowFacts[] = [];
+  if (taskIds.length) {
+    const rows = await tx
+      .select({
+        id: tasks.id,
+        number: tasks.number,
+        name: tasks.name,
+        status: tasks.status,
+        projectName: projects.name,
+        projectStatus: projects.status,
+        companyName: companies.name,
+        active: taskAssignments.active,
+        hourLimit: taskAssignments.hourLimit,
+      })
+      .from(tasks)
+      .innerJoin(projects, eq(projects.id, tasks.projectId))
+      .innerJoin(companies, eq(companies.id, projects.companyId))
+      .leftJoin(taskAssignments, and(eq(taskAssignments.taskId, tasks.id), eq(taskAssignments.employeeId, employeeId)))
+      .where(inArray(tasks.id, taskIds));
+    for (const r of rows) {
+      facts.push({
+        kind: 'task',
+        id: r.id,
+        code: `T-${r.number}`,
+        name: r.name,
+        path: pathOf(r.companyName, r.projectName),
+        refusal: logTimeRefusal({ taskStatus: r.status, projectStatus: r.projectStatus, assignment: r.active === null ? null : { active: r.active } }),
+        limitMinutes: r.active && r.hourLimit != null ? Math.round(r.hourLimit * 60) : null,
+      });
+    }
+  }
+  if (orderIds.length) {
+    const rows = await tx
+      .select({
+        id: workOrders.id,
+        number: workOrders.number,
+        title: workOrders.title,
+        status: workOrders.status,
+        companyName: companies.name,
+        projectName: projects.name,
+        projectStatus: projects.status,
+        technician: workOrderTechnicians.employeeId,
+      })
+      .from(workOrders)
+      .innerJoin(companies, eq(companies.id, workOrders.companyId))
+      .leftJoin(projects, eq(projects.id, workOrders.projectId))
+      .leftJoin(workOrderTechnicians, and(eq(workOrderTechnicians.workOrderId, workOrders.id), eq(workOrderTechnicians.employeeId, employeeId)))
+      .where(inArray(workOrders.id, orderIds));
+    for (const r of rows) {
+      const refusal = workOrderLogRefusal({ status: r.status, isTechnician: r.technician !== null });
+      facts.push({
+        kind: 'work_order',
+        id: r.id,
+        code: `WO-${r.number}`,
+        name: r.title,
+        path: pathOf(r.companyName, r.projectName),
+        refusal: refusal ?? (r.projectStatus && r.projectStatus !== 'open' ? 'project_closed' : null),
+        limitMinutes: null,
+      });
+    }
+  }
+  return facts;
+}
+
+export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<WeekView> {
+  const dates = weekDates(monday);
+  const sunday = dates[6]!;
+  const lastDate = addDays(mondayOf(caller.today), 6);
+  const settings = caller.settings;
+  // The week's holidays, and those a deadline in the next weeks may move past.
+  const holidays = await holidaysBetween(tx, monday, addDays(monday, 45));
+  const base = {
+    weekStart: monday,
+    weekNumber: isoWeek(monday),
+    label: weekLabel(monday),
+    today: caller.today,
+    thisWeek: mondayOf(caller.today),
+    deadline: deadlineOf(monday, settings, (d) => holidays.has(d)),
+    settings: { dayMinutes: settings.dayMinutes, maxDayMinutes: settings.maxDayMinutes, timeFormat: settings.timeFormat },
+  };
+  const employeeId = caller.employeeId;
+  if (!employeeId) {
+    return { ...base, employee: null, status: 'no_entry', statusLabel: 'No entry needed', submittable: [], canRecall: false, late: false, autoSubmitted: false, days: [], rows: [] };
+  }
+  const [entries, added, dayRows, [flags]] = await Promise.all([
+    tx
+      .select({ date: timeEntries.workDate, taskId: timeEntries.taskId, workOrderId: timeEntries.workOrderId, minutes: timeEntries.minutes, note: timeEntries.note })
+      .from(timeEntries)
+      .where(and(eq(timeEntries.employeeId, employeeId), between(timeEntries.workDate, monday, sunday))),
+    tx
+      .select({ taskId: timesheetRows.taskId, workOrderId: timesheetRows.workOrderId, createdAt: timesheetRows.createdAt })
+      .from(timesheetRows)
+      .where(and(eq(timesheetRows.employeeId, employeeId), eq(timesheetRows.weekStart, monday))),
+    tx
+      .select({ date: timesheetDays.workDate, status: timesheetDays.status, submittedAt: timesheetDays.submittedAt })
+      .from(timesheetDays)
+      .where(and(eq(timesheetDays.employeeId, employeeId), between(timesheetDays.workDate, monday, sunday))),
+    tx
+      .select({ lateAt: timesheetWeeks.lateAt, autoSubmittedAt: timesheetWeeks.autoSubmittedAt })
+      .from(timesheetWeeks)
+      .where(and(eq(timesheetWeeks.employeeId, employeeId), eq(timesheetWeeks.weekStart, monday))),
+  ]);
+  const taskIds = [...new Set([...entries, ...added].flatMap((e) => (e.taskId ? [e.taskId] : [])))];
+  const orderIds = [...new Set([...entries, ...added].flatMap((e) => (e.workOrderId ? [e.workOrderId] : [])))];
+  const facts = await rowFacts(tx, employeeId, taskIds, orderIds);
+  const limited = facts.filter((f) => f.limitMinutes != null).map((f) => f.id);
+  const logged = new Map<string, number>();
+  if (limited.length) {
+    const sums = await tx
+      .select({ taskId: timeEntries.taskId, minutes: sql<number>`sum(${timeEntries.minutes})::int` })
+      .from(timeEntries)
+      .where(and(eq(timeEntries.employeeId, employeeId), inArray(timeEntries.taskId, limited)))
+      .groupBy(timeEntries.taskId);
+    for (const s of sums) logged.set(s.taskId!, s.minutes);
+  }
+
+  const rows = new Map<string, RowView>();
+  for (const f of facts) {
+    rows.set(keyOf(f.kind, f.id), {
+      key: keyOf(f.kind, f.id),
+      kind: f.kind,
+      id: f.id,
+      code: f.code,
+      name: f.name,
+      path: f.path,
+      lockedReason: reasonOf(f),
+      edit: !f.refusal ? 'any' : f.refusal === 'not_assigned' || f.refusal === 'not_technician' ? 'existing' : 'none',
+      limit: f.limitMinutes != null ? { limitMinutes: f.limitMinutes, loggedMinutes: logged.get(f.id) ?? 0 } : null,
+      cells: {},
+      minutes: 0,
+    });
+  }
+  const perDay: Record<string, number> = {};
+  for (const e of entries) {
+    const row = rows.get(e.taskId ? keyOf('task', e.taskId) : keyOf('work_order', e.workOrderId!));
+    if (!row) continue;
+    const cell = (row.cells[e.date] ??= { minutes: 0, note: null, entries: 0 });
+    cell.minutes += e.minutes;
+    cell.entries += 1;
+    cell.note = cell.entries === 1 ? e.note : null;
+    row.minutes += e.minutes;
+    perDay[e.date] = (perDay[e.date] ?? 0) + e.minutes;
+  }
+
+  const statusOf = new Map(dayRows.map((d) => [d.date, d]));
+  const days: DayView[] = dates.map((date) => {
+    const holiday = holidays.get(date);
+    const off = holidayMinutes(date, settings, holiday);
+    const expected = expectedMinutes(date, settings, caller.employment, holiday);
+    const minutes = perDay[date] ?? 0;
+    const status = statusOf.get(date)?.status ?? 'draft';
+    return {
+      holiday: holiday && off > 0 ? { name: holiday.name, minutes: off } : null,
+      date,
+      status,
+      submittedAt: statusOf.get(date)?.submittedAt?.toISOString() ?? null,
+      expectedMinutes: expected,
+      minutes,
+      required: isRequired(expected, minutes),
+      editable: (status === 'draft' || status === 'rejected') && date <= lastDate && employed(date, caller.employment),
+    };
+  });
+  const weekDays: WeekDay[] = days.map((d) => ({ date: d.date, status: d.status, required: d.required, minutes: d.minutes }));
+  const { status, label } = weekStatus(weekDays);
+  // Tasks first, then work orders; each by its path, then its number.
+  const ordered = [...rows.values()].sort(
+    (a, b) => (a.kind === b.kind ? 0 : a.kind === 'task' ? -1 : 1) || a.path.localeCompare(b.path) || a.code.localeCompare(b.code, undefined, { numeric: true }),
+  );
+  return {
+    ...base,
+    employee: { id: employeeId, name: caller.name },
+    status,
+    statusLabel: label,
+    submittable: submittableDays(weekDays, caller.today),
+    canRecall: days.some((d) => d.status === 'submitted'),
+    late: !!flags?.lateAt,
+    autoSubmitted: !!flags?.autoSubmittedAt,
+    days,
+    rows: ordered,
+  };
+}
+
+/**
+ * Submits `days` of one person's week (spec 5.3 T1): they become Submitted (only Draft ones; a
+ * Rejected or Approved day is left alone) and rows still without hours go (spec 4.4). `userId`
+ * null: the deadline job (CD-153).
+ */
+export async function submitDays(tx: Tx, tenantId: string, employeeId: string, weekStart: string, days: string[], userId: string | null, now: Date) {
+  await tx.execute(sql`
+    delete from timesheet_rows r where r.employee_id = ${employeeId} and r.week_start = ${weekStart}
+      and not exists (select 1 from time_entries e where e.employee_id = r.employee_id and e.work_date between ${weekStart} and ${addDays(weekStart, 6)}
+        and (e.task_id = r.task_id or e.work_order_id = r.work_order_id))`);
+  if (!days.length) return;
+  await tx
+    .insert(timesheetDays)
+    .values(days.map((workDate) => ({ tenantId, employeeId, workDate, status: 'submitted' as const, submittedAt: now, submittedByUserId: userId })))
+    .onConflictDoUpdate({
+      target: [timesheetDays.tenantId, timesheetDays.employeeId, timesheetDays.workDate],
+      set: { status: 'submitted', submittedAt: now, submittedByUserId: userId },
+      setWhere: sql`${timesheetDays.status} = 'draft'`,
+    });
 }

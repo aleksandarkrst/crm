@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Avatar } from '../../components/ui';
-import { type ApiTimeCard, type ApiTimeEntry, dayLabel, entriesApi, type EntryPatch, type NewEntry, parseHours, type RowTarget, shortHours } from '../../lib/timesheetApi';
+import { type ApiTimeCard, type ApiTimeEntry, dayLabel, entriesApi, type EntryPatch, type NewEntry, parseHours, type RowTarget, shortHours, type TimeFormat } from '../../lib/timesheetApi';
 import { projectError } from '../../store/projects';
 import { useStore } from '../../store/store';
 
-const FORMAT = 'decimal' as const;
-const h = (minutes: number) => `${shortHours(minutes, FORMAT)} h`;
+/** Hours as the workspace shows them (CD-153): "2.5 h" or "2:30 h". */
+const hoursIn = (format: TimeFormat) => (minutes: number) => `${shortHours(minutes, format)} h`;
 const initials = (name: string) =>
   name
     .split(/\s+/)
@@ -35,7 +35,8 @@ function IconButton({ path, label, danger, onClick, testId }: { path: string; la
 }
 
 /** One entry, viewed or edited inline: hours, date and note (Cancel / Save), or Start → End and note (Done) on a work order. */
-function EntryRow({ entry, span, onSave, onRemove }: { entry: ApiTimeEntry; span: boolean; onSave: (patch: EntryPatch) => Promise<boolean>; onRemove: () => void }) {
+function EntryRow({ entry, span, format, onSave, onRemove }: { entry: ApiTimeEntry; span: boolean; format: TimeFormat; onSave: (patch: EntryPatch) => Promise<boolean>; onRemove: () => void }) {
+  const h = hoursIn(format);
   const [editing, setEditing] = useState(false);
   const [hours, setHours] = useState('');
   const [date, setDate] = useState(entry.date);
@@ -45,7 +46,7 @@ function EntryRow({ entry, span, onSave, onRemove }: { entry: ApiTimeEntry; span
   const { flash } = useStore();
   const withTimes = span && entry.startTime !== null;
   const open = () => {
-    setHours(shortHours(entry.minutes, FORMAT));
+    setHours(shortHours(entry.minutes, 'decimal'));
     setDate(entry.date);
     setFrom(entry.startTime ?? '');
     setTo(entry.endTime ?? '');
@@ -143,7 +144,9 @@ export function TimeCard({
   /** Where a work order's first entry of the day starts (its scheduled start when it is today). */
   defaultStart?: string | null;
 }) {
-  const { flash } = useStore();
+  const { s, flash } = useStore();
+  const format = s.workspace.timesheet.timeFormat;
+  const h = hoursIn(format);
   const [hours, setHours] = useState(kind === 'work_order' ? '1' : '');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -235,6 +238,7 @@ export function TimeCard({
                 key={e.id}
                 entry={e}
                 span={span}
+                format={format}
                 onSave={(patch) => run(() => entriesApi.update(e.id, patch), `Time entry updated · ${h(patch.minutes ?? e.minutes)}`)}
                 onRemove={() => void run(() => entriesApi.remove(e.id), span ? `Time entry removed from ${code}.` : `${h(e.minutes)} removed from ${code}.`)}
               />

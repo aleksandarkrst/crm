@@ -6,29 +6,45 @@ import type { TimesheetDayStatus } from '../../shared/database/schema';
  */
 
 /**
- * What the Timesheet runs on. Fixed defaults until CD-153 stores them per workspace: read them
- * only through `timesheetSettings` (timesheet-settings.ts), so CD-153 swaps one place.
+ * What the Timesheet runs on: the workspace's settings (CD-153, columns on `tenants`), read only
+ * through `timesheetSettings` (timesheet-settings.ts).
  */
 export interface TimesheetSettings {
-  /** The standard working day (spec 6.5): 8 h. */
+  /** The standard working day (spec 6.5): 8 h by default, from `dayStart` to `dayEnd`. */
   dayMinutes: number;
+  dayStart: string;
+  dayEnd: string;
   /** ISO weekdays that are working days: 1 Monday … 7 Sunday. */
   workingDays: readonly number[];
-  /** Entries above this on one day are refused (spec 4.5): 12 h. */
+  /** Entries above this on one day are refused (spec 4.5): 12 h by default. */
   maxDayMinutes: number;
   /** How hours are shown: 7.50 (decimal) or 7:30 (clock). Typing either works. */
   timeFormat: 'decimal' | 'clock';
-  /** The submission deadline: ISO weekday and local time, in the same week. */
-  deadline: { weekday: number; time: string };
+  /** The submission deadline: ISO weekday and local time, in the same week or the next one. */
+  deadline: { weekday: number; time: string; week: 'same' | 'next' };
+  /** Draft weeks with hours are submitted at the deadline (CD-153), for deadlines from `autoSubmitSince`. */
+  autoSubmit: boolean;
+  autoSubmitSince: Date | null;
 }
 
 export const DEFAULT_TIMESHEET_SETTINGS: TimesheetSettings = {
   dayMinutes: 480,
+  dayStart: '08:00',
+  dayEnd: '16:00',
   workingDays: [1, 2, 3, 4, 5],
   maxDayMinutes: 720,
   timeFormat: 'decimal',
-  deadline: { weekday: 5, time: '17:00' },
+  deadline: { weekday: 5, time: '17:00', week: 'same' },
+  autoSubmit: false,
+  autoSubmitSince: null,
 };
+
+/** A public holiday (CD-153): `minutes` off, or null for the whole standard day. */
+export interface Holiday {
+  date: string;
+  name: string;
+  minutes: number | null;
+}
 
 const DAY_MS = 86_400_000;
 const toUtc = (date: string) => Date.parse(`${date}T00:00:00Z`);
@@ -59,9 +75,17 @@ export function weekLabel(monday: string): string {
   return `Week ${isoWeek(monday)} · ${from} to ${day(sunday)} ${month(sunday)} ${sunday.slice(0, 4)}`;
 }
 
-/** When the week is due: the deadline's weekday of the same week and its time (CD-153 adds holidays and "next week"). */
-export function deadlineOf(monday: string, settings: TimesheetSettings): { date: string; time: string } {
-  return { date: addDays(monday, settings.deadline.weekday - 1), time: settings.deadline.time };
+/**
+ * When the week is due (CD-153): the deadline's weekday of the same week or the next one, at its
+ * time. A deadline on a public holiday moves to the next working day that isn't one.
+ */
+export function deadlineOf(monday: string, settings: TimesheetSettings, isHoliday: (date: string) => boolean = () => false): { date: string; time: string } {
+  let date = addDays(monday, (settings.deadline.week === 'next' ? 7 : 0) + settings.deadline.weekday - 1);
+  for (let i = 0; i < 31 && isHoliday(date); i++) {
+    do date = addDays(date, 1);
+    while (!settings.workingDays.includes(isoWeekday(date)));
+  }
+  return { date, time: settings.deadline.time };
 }
 
 /** The employee's employment, when the workspace knows it: days outside need no hours. */
@@ -72,10 +96,23 @@ export interface Employment {
 
 export const employed = (date: string, e: Employment) => (!e.start || date >= e.start) && (!e.end || date <= e.end);
 
-/** Expected minutes on a day (spec 2): the standard day on a working day within employment, else 0. */
-export function expectedMinutes(date: string, settings: TimesheetSettings, employment: Employment): number {
-  return settings.workingDays.includes(isoWeekday(date)) && employed(date, employment) ? settings.dayMinutes : 0;
+/** A holiday's hours off on a day (spec 4.6): on working days only, never more than the standard day. */
+export function holidayMinutes(date: string, settings: TimesheetSettings, holiday: Holiday | undefined): number {
+  if (!holiday || !settings.workingDays.includes(isoWeekday(date))) return 0;
+  return Math.min(settings.dayMinutes, holiday.minutes ?? settings.dayMinutes);
 }
+
+/**
+ * Expected minutes on a day (spec 2): the standard day on a working day within employment, minus a
+ * public holiday's hours (CD-153), else 0.
+ */
+export function expectedMinutes(date: string, settings: TimesheetSettings, employment: Employment, holiday?: Holiday): number {
+  if (!settings.workingDays.includes(isoWeekday(date)) || !employed(date, employment)) return 0;
+  return settings.dayMinutes - holidayMinutes(date, settings, holiday);
+}
+
+/** The deadline as an instant, given the start of its local day (`zonedDayStart`) in the workspace zone. */
+export const deadlineInstant = (dayStart: Date, time: string) => new Date(dayStart.getTime() + (Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5))) * 60_000);
 
 /** A day needs submitting when hours are expected on it or it has hours (spec 5.1). */
 export const isRequired = (expected: number, entered: number) => expected > 0 || entered > 0;
@@ -120,7 +157,8 @@ export function formatMinutes(minutes: number, format: TimesheetSettings['timeFo
 /** Why a day's total can't take `minutes` more (spec 4.5), or null. */
 export function dayLimitRefusal(otherMinutes: number, minutes: number, settings: TimesheetSettings): string | null {
   if (otherMinutes + minutes <= settings.maxDayMinutes) return null;
-  return `Maximum ${formatMinutes(settings.maxDayMinutes, settings.timeFormat).replace(/\.00$/, '')} h per day`;
+  // The maximum is whole hours (1 to 24): "Maximum 12 h per day" in either format.
+  return `Maximum ${Math.round((settings.maxDayMinutes / 60) * 100) / 100} h per day`;
 }
 
 /** A row of last week, for Copy last week (spec 4.7): its label and why it can't be copied, or null. */

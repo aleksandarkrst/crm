@@ -1267,3 +1267,14 @@ a.task-card-project:hover { color: var(--brand); }
 .time-icon:hover { background: var(--bg-soft); color: var(--ink); }
 .time-icon.danger { color: var(--muted); }
 .time-icon.danger:hover { background: var(--danger-soft); color: var(--danger); }
+
+/* ---------------------------------------------------------------- Settings → Workforce → Holidays (CD-153) */
+.holiday-row { display: grid; grid-template-columns: 170px minmax(0, 1fr) 120px 190px; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--divider); }
+.holiday-row.holiday-head { border-top: 0; padding-bottom: 0; }
+.holiday-row .form-input { width: 100%; min-width: 0; box-sizing: border-box; }
+@media (max-width: 700px) {
+  .holiday-row { grid-template-columns: 1fr 1fr; }
+  .holiday-row.holiday-head { display: none; }
+}
+.ts-holiday { background: var(--chip); }
+.ts-auto { flex: 1; display: flex; align-items: center; justify-content: center; border-radius: 7px; font-size: 13px; background: var(--chip); color: var(--text-2); padding: 6px 2px; }

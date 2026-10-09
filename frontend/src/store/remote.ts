@@ -3,7 +3,7 @@
  * a lead (deal) shows its company and primary contact inline, companies are derived from leads
  * plus companies without a deal, and people are primary contacts plus everyone else.
  */
-import { type ApiActivity, type ApiBonusRules, type ApiCompany, type ApiCustomField, type ApiDealLine, type ApiDealRow, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiInvitation, type ApiMember, type ApiProduct, type ApiProfile, type ApiStageChange, type ApiVisitPlan, type ApiWorkspace, ApiError, crmApi } from '../lib/api';
+import { type ApiActivity, type ApiBonusRules, type ApiCompany, type ApiCustomField, type ApiDealLine, type ApiDealRow, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiInvitation, type ApiMember, type ApiProduct, type ApiProfile, type ApiStageChange, type ApiVisitPlan, type ApiWorkspace, ApiError, crmApi, DEFAULT_TIMESHEET_SETTINGS } from '../lib/api';
 import { initialsOf, localeFor, momentLabel, money, taskKey } from './selectors';
 import { sortPlans } from './visitPlans';
 import { SYSTEM_CHANNEL } from './seed';
@@ -117,6 +117,7 @@ export const mapWorkspace = (w: ApiWorkspace): Workspace => ({
   autoCreateProjects: w.autoCreateProjects ?? false,
   modules: w.modules ?? ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting'],
   terms: w.terms ?? DEFAULT_TERMS,
+  timesheet: w.timesheet ?? DEFAULT_TIMESHEET_SETTINGS,
 });
 
 export const mapProfile = (p: ApiProfile): Profile => ({

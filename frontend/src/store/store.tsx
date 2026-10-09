@@ -196,6 +196,7 @@ const WORKSPACE_FIELDS: Partial<Record<keyof Workspace, keyof WorkspaceInput>> =
   ceoEmployeeId: 'ceoEmployeeId',
   autoCreateProjects: 'autoCreateProjects',
   modules: 'modules',
+  timesheet: 'timesheet',
 };
 /** Profile fields as the API names them. */
 const PROFILE_FIELDS: Partial<Record<keyof Profile, keyof ProfileInput>> = {
@@ -517,7 +518,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       // Work orders (CD-265), also when their project changes.
       if (e.type === 'resync' || e.type === 'work_order' || e.type === 'project' || e.type === 'timesheet') set((x) => ({ workOrderRev: x.workOrderRev + 1 }));
       // The Timesheet (CD-152): its own entries, days and rows, and the tasks, work orders and projects on its rows.
-      if (e.type === 'resync' || e.type === 'timesheet' || e.type === 'task' || e.type === 'work_order' || e.type === 'project') set((x) => ({ timesheetRev: x.timesheetRev + 1 }));
+      // Holidays (CD-153) and the workspace's timesheet settings change everyone's week.
+      if (e.type === 'resync' || e.type === 'timesheet' || e.type === 'task' || e.type === 'work_order' || e.type === 'project' || e.type === 'holiday' || e.type === 'workspace')
+        set((x) => ({ timesheetRev: x.timesheetRev + 1 }));
       // People lists (Roles & permissions, CD-142) re-read on any employee or role change, this tab's own included.
       if (e.type === 'resync' || e.type === 'employee' || e.type === 'employee_role') set((x) => ({ peopleRev: x.peopleRev + 1 }));
       if (e.type === 'resync') return refreshAll();

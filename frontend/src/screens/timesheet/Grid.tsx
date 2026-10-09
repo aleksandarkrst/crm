@@ -336,6 +336,7 @@ export function Grid({ week, onSave, onAdd }: { week: ApiTimesheetWeek; onSave: 
   };
 
   const today = week.today;
+  const holidayNames = [...new Set(week.days.flatMap((d) => (d.holiday ? [d.holiday.name] : [])))];
   const totalMinutes = week.days.reduce((a, d) => a + d.minutes, 0);
   const expected = week.days.reduce((a, d) => a + d.expectedMinutes, 0);
   const noteRow = note && week.rows.find((r) => r.key === note.key);
@@ -384,7 +385,7 @@ export function Grid({ week, onSave, onAdd }: { week: ApiTimesheetWeek; onSave: 
       {week.days.map((d) => {
         const v = value(d);
         const tone = opts.signed && d.date <= today && v !== 0 ? (v < 0 ? ' below' : ' above') : '';
-        const empty = !opts.signed && v === 0 && d.expectedMinutes === 0;
+        const empty = !opts.signed && v === 0 && d.expectedMinutes === 0 && !d.holiday;
         return (
           <span key={d.date} className={`ts-sum${opts.strong ? ' strong' : ''}${tone}${isWeekend(d.date) ? ' ts-weekend' : ''}`}>
             {empty || (opts.signed && d.expectedMinutes === 0 && d.minutes === 0) ? '' : shortHours(v, format, opts.signed)}
@@ -405,10 +406,12 @@ export function Grid({ week, onSave, onAdd }: { week: ApiTimesheetWeek; onSave: 
           {week.days.map((d, i) => {
             const short = d.expectedMinutes > 0 && d.minutes < d.expectedMinutes && d.date <= today;
             return (
-              <span key={d.date} className={`ts-day${isWeekend(d.date) ? ' ts-weekend' : ''}`} data-testid="ts-day" data-date={d.date} data-status={d.status}>
+              <span key={d.date} className={`ts-day${d.holiday ? ' ts-holiday' : isWeekend(d.date) ? ' ts-weekend' : ''}`} data-testid="ts-day" data-date={d.date} data-status={d.status}>
                 <span className="ts-day-name">{DAY_NAMES[i]}</span>
                 <span className="ts-day-date">{shortDate(d.date)}</span>
-                <span className={`ts-day-total${short ? ' short' : ''}`}>{d.minutes || d.expectedMinutes ? `${shortHours(d.minutes, format)} h` : '—'}</span>
+                <span className={`ts-day-total${short ? ' short' : ''}`}>
+                  {d.holiday ? `${shortHours(d.minutes, format)} h · holiday` : d.minutes || d.expectedMinutes ? `${shortHours(d.minutes, format)} h` : '—'}
+                </span>
               </span>
             );
           })}
@@ -421,8 +424,24 @@ export function Grid({ week, onSave, onAdd }: { week: ApiTimesheetWeek; onSave: 
         {orders.length > 0 && group('Work orders')}
         {orders.map((row, i) => rowEl(row, tasks.length + i))}
         {canAdd && <AddRow week={week} onAdd={onAdd} />}
+        {holidayNames.map((name) => (
+          <div className="ts-row ts-soft" key={name} data-testid="ts-holiday-row">
+            <span className="ts-label">
+              <span className="ts-label-main" style={{ color: 'var(--text-2)' }}>
+                Public holiday · {name}
+              </span>
+              <span className="ts-label-sub">From the holiday calendar</span>
+            </span>
+            {week.days.map((d) => (
+              <span key={d.date} className={`ts-box${isWeekend(d.date) ? ' ts-weekend' : ''}`}>
+                <span className="ts-auto">{d.holiday?.name === name ? shortHours(d.holiday.minutes, format) : ''}</span>
+              </span>
+            ))}
+            <span className="ts-total">{shortHours(week.days.reduce((a, d) => a + (d.holiday?.name === name ? d.holiday.minutes : 0), 0), format)}</span>
+          </div>
+        ))}
         {sumRow('Total entered', 'Tasks and work orders', (d) => d.minutes, totalMinutes, { strong: true, testId: 'ts-total-entered' })}
-        {sumRow('Expected', `Standard day ${shortHours(week.settings.dayMinutes, format)} h`, (d) => d.expectedMinutes, expected, { testId: 'ts-expected' })}
+        {sumRow('Expected', `Standard day ${shortHours(week.settings.dayMinutes, format)} h${holidayNames.length ? ', minus holidays' : ''}`, (d) => d.expectedMinutes, expected, { testId: 'ts-expected' })}
         {sumRow('Difference', 'Entered minus expected', (d) => d.minutes - d.expectedMinutes, totalMinutes - expected, { signed: true, testId: 'ts-difference' })}
       </div>
       {note && noteRow && noteDay && (

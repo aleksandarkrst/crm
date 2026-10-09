@@ -40,6 +40,8 @@ export interface ApiTimesheetDay {
   minutes: number;
   required: boolean;
   editable: boolean;
+  /** A public holiday on a working day (CD-153): its name and the hours off. */
+  holiday: { name: string; minutes: number } | null;
 }
 
 export interface ApiTimesheetWeek {
@@ -56,6 +58,9 @@ export interface ApiTimesheetWeek {
   statusLabel: string;
   submittable: string[];
   canRecall: boolean;
+  /** First submitted after the deadline; submitted by the deadline job (CD-153). */
+  late: boolean;
+  autoSubmitted: boolean;
   days: ApiTimesheetDay[];
   rows: ApiTimesheetRow[];
 }
@@ -180,4 +185,22 @@ export const entriesApi = {
   create: (target: RowTarget, entry: NewEntry) => api<ApiTimeEntry>('/timesheet/entries', { method: 'POST', json: { ...target, ...entry } }),
   update: (id: string, patch: EntryPatch) => api<ApiTimeEntry>(`/timesheet/entries/${id}`, { method: 'PATCH', json: patch }),
   remove: (id: string) => api<null>(`/timesheet/entries/${id}`, { method: 'DELETE' }),
+};
+
+/** A public holiday (CD-153): `minutes` off, null for the whole standard day. */
+export interface ApiHoliday {
+  id: string;
+  date: string;
+  name: string;
+  minutes: number | null;
+}
+
+export const holidaysApi = {
+  list: (year: number) => api<ApiHoliday[]>(`/timesheet/holidays?year=${year}`),
+  create: (h: { date: string; name: string; minutes?: number | null }) => api<ApiHoliday>('/timesheet/holidays', { method: 'POST', json: h }),
+  update: (id: string, patch: Partial<{ date: string; name: string; minutes: number | null }>) => api<ApiHoliday>(`/timesheet/holidays/${id}`, { method: 'PATCH', json: patch }),
+  remove: (id: string) => api<null>(`/timesheet/holidays/${id}`, { method: 'DELETE' }),
+  copyFromLastYear: (year: number) => api<{ copied: number; holidays: ApiHoliday[] }>('/timesheet/holidays/copy', { method: 'POST', json: { year } }),
+  /** The first submission deadline that hasn't passed (Settings → Workforce → Approvals). */
+  nextDeadline: () => api<{ weekStart: string; weekNumber: number; date: string; time: string }>('/timesheet/deadline'),
 };

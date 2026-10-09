@@ -78,3 +78,29 @@ export type CreateEntry = z.infer<typeof CreateEntry>;
 /** PATCH /api/timesheet/entries/:id: date, hours, Start → End (null clears both) and note. */
 export const UpdateEntry = nonEmptyPatch(z.object({ date: isoDate, minutes: entryMinutes, startTime: hhmm.nullable(), endTime: hhmm.nullable(), note: entryNote }).partial());
 export type UpdateEntry = z.infer<typeof UpdateEntry>;
+
+const holidayName = z.string().trim().min(1, 'Enter a name').max(100, 'At most 100 characters');
+/** Hours off: whole minutes in steps of 15; null (or left out) is the whole standard day. */
+const holidayMinutes = z
+  .number()
+  .int()
+  .min(15, 'At least 0.25 hours')
+  .max(1440, 'At most 24 hours')
+  .refine((m) => m % 15 === 0, 'Use steps of 0.25 hours')
+  .nullable();
+
+/** GET /api/timesheet/holidays?year=2026 (this year by default). */
+export const HolidaysQuery = z.object({ year: z.coerce.number().int().min(2000).max(2100).optional() });
+export type HolidaysQuery = z.infer<typeof HolidaysQuery>;
+
+/** POST /api/timesheet/holidays (owners and admins). */
+export const CreateHoliday = z.object({ date: isoDate, name: holidayName, minutes: holidayMinutes.optional() });
+export type CreateHoliday = z.infer<typeof CreateHoliday>;
+
+/** PATCH /api/timesheet/holidays/:id (owners and admins). */
+export const UpdateHoliday = nonEmptyPatch(z.object({ date: isoDate, name: holidayName, minutes: holidayMinutes }).partial());
+export type UpdateHoliday = z.infer<typeof UpdateHoliday>;
+
+/** POST /api/timesheet/holidays/copy: last year's holidays into `year`. */
+export const CopyHolidays = z.object({ year: z.number().int().min(2001).max(2100) });
+export type CopyHolidays = z.infer<typeof CopyHolidays>;

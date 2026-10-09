@@ -1016,7 +1016,7 @@ the store is the one place that talks to the backend.
 section on the right (title, one-line description, the section's action button). Each section has
 its own route (`/settings/<section>`, kept on reload). Groups: **Workspace** (General, Members, Roles &
 permissions, Notifications), **CRM** (Funnels, Document templates, Customize fields, Sales bonuses),
-**Projects** (Project types) and **Workforce** (Employees). The design also names Workforce → Cost
+**Projects** (Project types, Technicians) and **Workforce** (Employees, Approvals, Holidays; CD-153). The design also names Workforce → Cost
 rates; it comes when there are rates to set. Sales bonuses and Employees stay hidden from those who
 can't use them. Settings belongs to no module, so the sidebar and the switcher keep the module it
 was opened from. Under 800 px the nav wraps above the content.
@@ -1396,7 +1396,8 @@ project has logged hours. Complete or cancel it instead.").
 The `timesheet` module (`modules/timesheet`, tables in `schema/timesheet.ts`, RLS, the lock trigger
 and live hints in `drizzle/0077_timesheet_rls.sql`). Spec: "Functional spec: 15 · Timesheet and
 approvals" in Linear; design `docs/design/Timesheet.dc.html`. Built so far: weekly time entry
-(CD-152) and time from the task and work order pages (CD-276).
+(CD-152), time from the task and work order pages (CD-276), and the settings, public holidays and
+the deadline with auto submit (CD-153).
 
 - **Tables:**
   - `time_entries`: one person's hours on a task **or** a work order (a check) on a date, whole
@@ -1419,13 +1420,35 @@ approvals" in Linear; design `docs/design/Timesheet.dc.html`. Built so far: week
   from deleting the employee isn't checked (the employee is gone by then).
 - **Rules** (`timesheet-rules.ts`, pure and unit-tested): a week is its Monday, labelled "Week 41 ·
   5 to 11 Oct 2026" (ISO week); expected hours are the standard day on working days within
-  employment; a day is required when hours are expected or entered; the week's status is derived
+  employment, minus holidays; a day is required when hours are expected or entered; the week's status is derived
   from its days (spec 5.4, first match wins: No entry needed, Rejected (N days), Draft / Not
   submitted, Submitted / Partly approved (a of n days), Approved); the daily maximum; Copy last
   week's plan.
-- **Settings:** `timesheetSettings(tx, tenantId)` is the one read: fixed defaults until CD-153
-  stores them per workspace (8 h Monday to Friday, shown as 7.50, 12 h a day at most, due Friday
-  17:00 of the same week). Public holidays come with CD-153 too.
+- **Settings** (CD-153): columns `timesheet_*` on `tenants` (`drizzle/0079`, one check
+  `tenants_timesheet_ck`): the standard working day (minutes, start, end, ISO working days), the
+  time format (`decimal` 7.50 or `clock` 7:30), the most hours a day (1–24), the deadline (weekday,
+  "HH:MM", `same` or `next` week) and auto submit (with `timesheet_auto_submit_since`, set when it
+  is turned on). Read only through `timesheetSettings(tx, tenantId)`; changed through `PATCH
+  /api/workspace` `{ timesheet: { … } }` (any of them; owners and admins, 403 for others; in the
+  audit log as `workspace.updated`; a `workspace` live hint). `GET /api/workspace` returns them as
+  `timesheet`, so every screen shows hours in the workspace's format (`s.workspace.timesheet`).
+- **Public holidays** (CD-153, `public_holidays`, `drizzle/0080` RLS, live hint `holiday`): a date
+  (one per date, 409), a name and the hours off (null: the whole standard day). `GET
+  /api/timesheet/holidays?year=` (any member); `POST`, `PATCH /:id`, `DELETE /:id` and `POST
+  holidays/copy { year }` (last year's on the same day and month, only where the year has none) for
+  owners and admins, each in the audit log. On a working day a holiday lowers Expected by its
+  hours (`holidayMinutes`, never more than the standard day; weekends never), shows as a read-only
+  row "Public holiday · <name>" and in the day's header ("2 h · holiday"); work on it is allowed. A
+  deadline on a holiday moves to the next working day that isn't one (`deadlineOf`).
+- **Deadline and auto submit** (CD-153, `deadlines.ts`): `GET /api/timesheet/deadline` is the next
+  one that hasn't passed (Settings → Approvals' live line). The worker's `timesheet.tick` (every 15
+  minutes) runs `autoSubmitDue` for each workspace with auto submit on: for every deadline that
+  passed since it was turned on, once (`timesheet_deadline_runs`), each active person with an
+  account and hours that week gets the week's required Draft days submitted (`submitDays`, the
+  same as Submit week, by nobody) and `timesheet_weeks` flags Late and Auto-submitted (set once,
+  never cleared). Weeks without hours and Rejected days are left alone. The week shows the flags
+  as badges. Dev only: `POST /api/dev/timesheet/deadline-tick { now? }` runs it for the caller's
+  workspace.
 - **API** (`/api/timesheet`, any member, always the caller's own employee record; without one the
   week has `employee: null` and changes answer 403):
   - `GET week?week=<Monday>` (this week by default, in the workspace time zone): the week, its days
@@ -2581,9 +2604,12 @@ join by invitation from Settings → Team, which creates their record. `drizzle/
   resync; the open card re-reads.
 - **Settings → Employees** (CD-215, Admins; `screens/settings/EmployeesTab.tsx`): default weekly
   hours (1–60), "Employee number required", "Employees can edit their own bank account", saved through
-  `PATCH /api/workspace` (owners and admins) like the other workspace settings; and the
+  `PATCH /api/workspace` (owners and admins) like the other workspace settings; the time format and
+  max hours per day, and a Standard working day card (CD-153, see "Timesheet"); and the
   Organization levels (CD-226, their own endpoints, see "Levels, units and reporting lines"). Settings →
-  Notifications has "Org changes" (`notifyOrgChanges`).
+  Notifications has "Org changes" (`notifyOrgChanges`). **Settings → Approvals** (the submission
+  deadline, its live line and auto submit) and **Settings → Holidays** (CD-153,
+  `screens/settings/WorkforceSettings.tsx`) are for Admins too.
 
 ## Onboarding after sign-up (CD-115)
 
