@@ -5,10 +5,13 @@ code: people and coding agents (Claude, Codex and others). The short rules for a
 [CLAUDE.md](../CLAUDE.md); this page explains the whole process and why.
 
 ```
-Linear issue ──▶ branch ──▶ build + test ──▶ pull request ──▶ CI green ──▶ review ──▶ merge
-                                                                                       │
-                     production ◀── release (tag or approval) ◀── staging ◀────────────┘
+Linear issue ──▶ branch ──▶ build + test ──▶ pull request ──▶ CI green ──▶ review routine ──▶ merge
+                                                                                               │
+             production ◀── promote (by hand) ◀── staging check (a person) ◀── staging ◀───────┘
 ```
+
+Code review before the merge is automated; the human check is on staging, after it. Production
+is promoted by hand. Sections 5 to 7 say who does what.
 
 ## 1. Plan the work in Linear
 
@@ -25,6 +28,8 @@ Tasks and bugs live in Linear (team **Coding**, project **CRM**, IDs `CD-…`), 
 
 Issue states: **Backlog / Todo** → **In Progress** (a branch exists) → **In Review** (a pull request
 is open) → **Done** (merged; Linear moves it when the pull request is merged).
+
+Linear is the only place plans and milestones live: there is no plan file in the repository.
 
 ## 2. One branch per issue
 
@@ -82,6 +87,8 @@ When the checks pass, open a pull request to `main`:
   anything left undone. Screenshots for UI changes.
 - Move the Linear issue to **In Review** and link the pull request (Linear links it automatically
   when the branch name or title contains the issue ID).
+- Mark the pull request **ready for review** once CI is green: that is what the review routine
+  (section 5) picks up. A draft is left alone.
 - In Claude Code, `/finish-issue` does this end to end: the checks, the reviewer agents (below),
   push, a draft pull request with this description layout, ready-for-review once CI is green,
   and the Linear move. It never merges (`gh pr merge` is refused by a hook).
@@ -115,32 +122,52 @@ first, followed by `images`; verification never pushes an image or starts `deplo
 
 ## 5. Review
 
-The reviewer (today: the project owner) checks:
+Nobody reads a pull request before it merges unless it touches a protected path. Three things
+replace that reading, in this order:
 
-- **Does it do what the issue asked?** Try it, don't only read the test results. The trying
-  happens on staging, with the seed workspaces and the five yes/no questions in
-  [STAGING_CHECK.md](STAGING_CHECK.md) (CD-313); `/staging-check CD-123` prints them with the
-  issue's acceptance criteria filled in. Anyone can do this step, without reading code.
-- **Database migrations**, line by line: they are the hardest thing to undo once live.
-- **Permissions**: who can see or change what (owner, admin, member), and that one workspace can
-  never see another's data.
-- **Scope**: changes outside the issue need a reason.
-- **Docs**: `docs/ARCHITECTURE.md` and the README updated where behaviour changed.
+1. **The reviewer agents and CI**, before the pull request is ready (section 4): the checked-in
+   agents in `.claude/agents/` (`tenant-security-reviewer` reads a backend diff for
+   `withTenant()`, paired RLS, module boundaries, jobs, expand-then-contract and permission tests;
+   `design-fidelity-reviewer` reads changed `.tsx` against the design-port rules), their findings
+   in the description, and the five CI checks, `guards` among them (CD-311), which enforce the
+   rules that used to need a reviewer reading the SQL.
+2. **The review routine.** A scheduled Claude Code session, set up outside the repository, looks
+   at every pull request in **Ready for review** with green CI. It reads the diff against the
+   issue's acceptance criteria and the rules in CLAUDE.md, posts a **plain-language summary** of
+   what the change does and what to try on staging (for the person doing step 3, who may not read
+   code), asks for fixes as review comments when something is wrong, and **merges the ordinary
+   ones**. It does not merge a pull request that touches a **protected path**; it says so in its
+   summary and the project owner merges it after reading those files:
+   - `backend/drizzle/` and `scripts/rls-allowlist.txt`: migrations and row-level security, the
+     hardest things to undo once live;
+   - `backend/src/shared/database/` and `backend/src/shared/authorization/`: tenant isolation;
+   - `backend/src/modules/identity/`: sign-in, accounts, roles and invitations;
+   - `.github/workflows/`, `scripts/`, `infra/`, `docker-compose.yml`: CI, deploys, backups, the server;
+   - `.claude/`, `.mcp.json` and the `CLAUDE.md` files: the automation and the rules themselves.
+   Review comments, from the routine or a person, are answered on the pull request: fixed in a
+   new commit, or explained. Agents never merge and never wait for a human review on an ordinary
+   pull request: once it is ready for review with green CI, their part is done.
+3. **The staging check, by a person**, after the merge (section 7, step 3): the seed workspaces
+   and the five yes/no questions in [STAGING_CHECK.md](STAGING_CHECK.md) (CD-313), which
+   `/staging-check CD-123` prints with the issue's acceptance criteria filled in. This is the
+   step that asks "does it do what the issue asked?" by trying it, with every role, on a phone
+   too. Anyone can do it without reading code. A **no** goes back to a branch as a new issue or a
+   fix on the same one; nothing is promoted until the five answers are yes.
 
-A second agent in a fresh session can review too, e.g. with Claude Code's `/code-review`; it
-catches different things than the agent that wrote the code. Two checked-in reviewer agents
-(`.claude/agents/`) run before the pull request opens: `tenant-security-reviewer` reads a
-backend diff for `withTenant()`, paired RLS, module boundaries, jobs, expand-then-contract and
-permission tests; `design-fidelity-reviewer` reads changed `.tsx` against the design-port rules.
-Their findings go in the pull request description.
-
-Review comments are answered on the pull request: fixed in a new commit, or explained.
+A second agent in a fresh session can still review a diff before it is ready, e.g. with Claude
+Code's `/code-review`; it catches different things than the agent that wrote the code.
 
 ## 6. Merge
 
-- Merge only when CI is green and the review is done.
-- The branch must be **up to date with `main`** first, so the checks ran against what will
-  actually be on `main`.
+- **Who merges what.** The review routine merges ordinary pull requests. The project owner merges
+  pull requests that touch a protected path (section 5), after reading those files. Agents never
+  merge (`gh pr merge` is refused by a hook).
+- **When.** Only when CI is green, the branch is **up to date with `main`** (the ruleset requires
+  it, so the checks ran against what will actually be on `main`), and every review comment is
+  answered.
+- **How.** One pull request at a time; after each merge the other open branches bring in `main`
+  and run their checks again (section 2). Squash or merge commit as the repository's default
+  setting says; never rebase someone else's branch.
 - After merging, delete the branch. Linear moves the issue to **Done**.
 
 ## 7. From `main` to production
@@ -152,12 +179,14 @@ After every merge, CI runs again on `main` and then:
    because the sign-in app is compiled into it).
 2. **`deploy-staging`**: deploys the commit to staging (https://staging.pultly.com,
    same server, own database) and runs the smoke test there.
-3. **Check it on staging**: whoever merged (or any tester) opens staging and answers the five
-   questions in [STAGING_CHECK.md](STAGING_CHECK.md) with the seed accounts
-   (`APP_DIR=/opt/crm-staging bash scripts/seed-staging.sh` creates or resets them).
-4. **Promote to production**: Actions → *Promote to production* → Run workflow (or
-   `gh workflow run promote.yml`). It first runs the e2e browser tests on the commit staging runs
-   now (about 16 minutes); only if they pass does it deploy that commit and smoke-test production.
+3. **Check it on staging**: a person (the project owner, or any tester) opens staging and answers
+   the five questions in [STAGING_CHECK.md](STAGING_CHECK.md) with the seed accounts
+   (`APP_DIR=/opt/crm-staging bash scripts/seed-staging.sh` creates or resets them), guided by
+   the review routine's summary of the change. This is the human review step.
+4. **Promote to production**, by hand and only after the five answers are yes: Actions →
+   *Promote to production* → Run workflow (or `gh workflow run promote.yml`). It first runs the
+   e2e browser tests on the commit staging runs now (about 16 minutes); only if they pass does it
+   deploy that commit and smoke-test production.
    Only commits that passed staging can be promoted.
 
 Setup and details: [DEPLOYMENT.md, Staging](DEPLOYMENT.md#9-staging). Until
@@ -192,8 +221,8 @@ Setup and details: [DEPLOYMENT.md, Staging](DEPLOYMENT.md#9-staging). Until
 | `AGENTS.md` | Points Codex and other agents to CLAUDE.md | Rarely |
 | `docs/ARCHITECTURE.md` | How the system works | Every pull request that changes behaviour |
 | `docs/WORKFLOW.md` | This process | When the process changes |
-| `KANBAN.md` | A snapshot of the plan by milestone | When a milestone starts or ends |
-| Linear | The source of truth for what's planned and done | Continuously |
+| `docs/STAGING_CHECK.md` | The human check on staging | When the seed or the questions change |
+| Linear | The only source for plans, milestones and what's done | Continuously |
 
 ## 9. Protecting `main` (GitHub settings)
 
@@ -205,8 +234,8 @@ settings on GitHub, not in the code:
 - Target branches: **Add target → Include default branch**.
 - Turn on:
   - **Restrict deletions**
-  - **Require a pull request before merging** (required approvals: 0 while you are the only
-    reviewer; GitHub doesn't let you approve your own pull request)
+  - **Require a pull request before merging** (required approvals: 0: the review routine merges
+    ordinary pull requests on green checks, and GitHub doesn't let you approve your own)
   - **Require status checks to pass**, with **Require branches to be up to date before merging**;
     add the checks `backend`, `frontend`, `website`, `integration / run` and `guards` (`e2e` runs
     only before production deploys, CD-218; don't add it, it would never report on a pull request)
