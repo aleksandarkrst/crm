@@ -7,12 +7,14 @@ import { Avatar, Modal, ModalHeader } from '../components/ui';
 import { paths } from '../lib/paths';
 import { type ApiTask, type ApiTaskBrief, quarterHourError, statusLabel, TASK_STATUSES, taskId, type TaskPatch, tasksApi } from '../lib/tasksApi';
 import { projectError, useProject, useProjects, useProjectTypes } from '../store/projects';
-import { curOf, initialsOf } from '../store/selectors';
+import { curOf, initialsOf, todayIso as todayInZone } from '../store/selectors';
 import { useStore } from '../store/store';
 import { activeAssignees, dueText, isLate, todayIso, useTask, useTasks } from '../store/tasks';
 import { NumberField, Row, TextField } from './project/fields';
 import { assignedMessage, DueLabel, PeoplePicker, useTaskUpdate } from './task/parts';
 import { PeopleAndHours } from './task/PeopleAndHours';
+import { TimeCard } from './timesheet/TimeCard';
+import { useTaskTime } from '../store/timesheet';
 import { TaskChecklist, TaskComments, TaskFiles } from './task/TaskNotes';
 import { useTerms } from '../store/terms';
 
@@ -38,6 +40,7 @@ export function Task() {
   const { data: siblings } = useTasks({ projectId: task?.projectId }, !!task?.projectId);
   const { data: types } = useProjectTypes();
   const { save, setStatus, dialog } = useTaskUpdate(set);
+  const time = useTaskTime(id);
   const [adding, setAdding] = useState(false);
   const [moving, setMoving] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -280,6 +283,15 @@ export function Task() {
                 </Row>
               </div>
             </div>
+            <TimeCard
+              kind="task"
+              target={{ taskId: task.id }}
+              code={taskId(task)}
+              card={time.data}
+              error={time.error}
+              reload={time.reload}
+              today={todayInZone(s.workspace.timezone)}
+            />
             <Dependencies task={task} />
           </div>
           <div style={{ flex: '999 1 380px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>

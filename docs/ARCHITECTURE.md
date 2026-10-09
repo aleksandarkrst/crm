@@ -1373,7 +1373,7 @@ project has logged hours. Complete or cancel it instead.").
   - History (`GET /api/work-orders/:id/history`): the order's fields (`work_orders_history`) and its
     technicians added, removed and the new lead (`projects_record_technician_changes`). Technicians
     are changed by difference, not deleted and re-added, so the history shows real changes.
-  - Track time comes with CD-276 (the same time entries as the timesheet).
+  - Track time (CD-276): the timesheet's entries, see "Timesheet".
   - Settings → Technicians' "Open work" counts open work orders too.
 - **Work order status and lock** (CD-148, design v2): the technicians, the project lead, owners and
   admins change the status (`canSetStatus`, 403 for others, the creator included); the kanban drag,
@@ -1396,7 +1396,7 @@ project has logged hours. Complete or cancel it instead.").
 The `timesheet` module (`modules/timesheet`, tables in `schema/timesheet.ts`, RLS, the lock trigger
 and live hints in `drizzle/0077_timesheet_rls.sql`). Spec: "Functional spec: 15 · Timesheet and
 approvals" in Linear; design `docs/design/Timesheet.dc.html`. Built so far: weekly time entry
-(CD-152).
+(CD-152) and time from the task and work order pages (CD-276).
 
 - **Tables:**
   - `time_entries`: one person's hours on a task **or** a work order (a check) on a date, whole
@@ -1404,6 +1404,9 @@ approvals" in Linear; design `docs/design/Timesheet.dc.html`. Built so far: week
     per person, row and day are allowed (the task and work order pages log entries, CD-276); a
     timesheet cell is their sum. Deleting the employee takes them along; deleting a task or work
     order with entries is refused (`ON DELETE RESTRICT`, mapped to 409 "… instead").
+    `start_time`/`end_time` (CD-276, `drizzle/0078`): Start → End on the work order page, both or
+    neither, and then `minutes` is their difference (`time_entries_span_ck`). Changing the hours
+    (in the grid or as hours) moves the end; past midnight the times are dropped.
   - `timesheet_days`: a day's status once it leaves Draft (`submitted`, `rejected`, `approved`;
     no row is Draft), who submitted it and when. The design's Rejected is the spec's Returned.
   - `timesheet_rows`: rows added to a week ("+ Add task or work order", Copy last week) so they
@@ -1446,6 +1449,23 @@ approvals" in Linear; design `docs/design/Timesheet.dc.html`. Built so far: week
     (CD-158). `POST recall`: Submitted days go back to Draft.
   - Every change answers with the whole week; submit, recall and copy are in the audit log
     (`timesheet.submitted`, `timesheet.recalled`, `timesheet.copied`).
+  - **Entries** (CD-276; the task and work order pages): `POST entries` `{ taskId | workOrderId,
+    date, minutes | startTime + endTime, note? }`, `PATCH entries/:id` (date, hours, Start → End,
+    note), `DELETE entries/:id`. Always the caller's own (someone else's entry is 404); the same
+    rules as a cell (the current week, employment, the daily maximum, who may log on what, the lock).
+- **Time cards** (CD-276, reads in the projects module, `time-entries.ts`): `GET /api/tasks/:id/time`
+  and `GET /api/work-orders/:id/time` give everyone's total (`loggedMinutes`), the estimate or the
+  planned duration, the entries the caller may see (their own; everyone's for the project lead,
+  owners, admins and the people's managers, as the People and hours card), each with its day's
+  status and `canChange` (own, Draft or Rejected day, nothing locked), `canLog`, and `lock`: a
+  closed project ("Hidrogradnja › Engine overhaul, CAT 336 was completed on Fri 2 Oct.", the date
+  from the project's history), a Done task or a Completed work order. Screens:
+  `screens/timesheet/TimeCard.tsx` under Details on the task page (Time: "6 h of 10 h logged",
+  hours and note, Edit inline with Cancel / Save) and the work order page (Track time: "of 4 h
+  planned"; a new entry starts where your last one today ended, or at the order's start when it is
+  scheduled today, else 08:00; edited as Start → End with Done). Submitted and Approved entries
+  show their status instead of Edit and Delete; a closed project greys the add row out, a Completed
+  order has none. Logging for someone else (the design's "Who" picker) is not built.
 - **Live hints:** `timesheet` (the employee's id) from all three tables. The Timesheet
   (`s.timesheetRev`), the task's People and hours card (`taskRev`) and work orders (`workOrderRev`)
   read again; a task, work order or project change also re-reads the Timesheet.
