@@ -2,7 +2,7 @@
 import { api } from './api';
 
 export type DayStatus = 'draft' | 'submitted' | 'rejected' | 'approved';
-export type WeekStatus = 'no_entry' | 'rejected' | 'draft' | 'not_submitted' | 'submitted' | 'partly_approved' | 'approved';
+export type WeekStatus = 'no_entry' | 'rejected' | 'draft' | 'not_submitted' | 'partly_submitted' | 'submitted' | 'partly_approved' | 'approved';
 export type RowKind = 'task' | 'work_order';
 export type TimeFormat = 'decimal' | 'clock';
 
@@ -52,7 +52,7 @@ export interface ApiTimesheetWeek {
   today: string;
   thisWeek: string;
   deadline: { date: string; time: string };
-  settings: { dayMinutes: number; maxDayMinutes: number; timeFormat: TimeFormat };
+  settings: { dayMinutes: number; maxDayMinutes: number; timeFormat: TimeFormat; approvalMode: 'week' | 'day' };
   employee: { id: string; name: string } | null;
   status: WeekStatus;
   statusLabel: string;
@@ -100,7 +100,8 @@ export const timesheetApi = {
   addRow: (weekStart: string, target: RowTarget) => api<ApiTimesheetWeek>('/timesheet/rows', { method: 'POST', json: { weekStart, ...target } }),
   copyPreview: (weekStart: string) => api<ApiCopyPreview>(`/timesheet/copy?weekStart=${weekStart}`),
   copy: (weekStart: string, mode: 'rows' | 'hours') => api<ApiCopyResult>('/timesheet/copy', { method: 'POST', json: { weekStart, mode } }),
-  submit: (weekStart: string) => api<ApiTimesheetWeek>('/timesheet/submit', { method: 'POST', json: { weekStart } }),
+  /** The week; with `date`, that day only (Day by day mode, CD-156). */
+  submit: (weekStart: string, date?: string) => api<ApiTimesheetWeek>('/timesheet/submit', { method: 'POST', json: { weekStart, ...(date ? { date } : {}) } }),
   recall: (weekStart: string) => api<ApiTimesheetWeek>('/timesheet/recall', { method: 'POST', json: { weekStart } }),
 };
 
