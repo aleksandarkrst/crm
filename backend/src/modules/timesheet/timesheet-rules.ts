@@ -25,6 +25,8 @@ export interface TimesheetSettings {
   /** Draft weeks with hours are submitted at the deadline (CD-153), for deadlines from `autoSubmitSince`. */
   autoSubmit: boolean;
   autoSubmitSince: Date | null;
+  /** Approval mode (CD-156): `week` offers only Submit week; `day` single days too. */
+  approvalMode: 'week' | 'day';
 }
 
 export const DEFAULT_TIMESHEET_SETTINGS: TimesheetSettings = {
@@ -37,6 +39,7 @@ export const DEFAULT_TIMESHEET_SETTINGS: TimesheetSettings = {
   deadline: { weekday: 5, time: '17:00', week: 'same' },
   autoSubmit: false,
   autoSubmitSince: null,
+  approvalMode: 'week',
 };
 
 /** A public holiday (CD-153): `minutes` off, or null for the whole standard day. */
@@ -130,7 +133,7 @@ export interface WeekDay {
   minutes: number;
 }
 
-export type WeekStatus = 'no_entry' | 'rejected' | 'draft' | 'not_submitted' | 'submitted' | 'partly_approved' | 'approved';
+export type WeekStatus = 'no_entry' | 'rejected' | 'draft' | 'not_submitted' | 'partly_submitted' | 'submitted' | 'partly_approved' | 'approved';
 
 /** The week's status from its days (spec 5.4), first match wins, with the badge's text. */
 export function weekStatus(days: readonly WeekDay[]): { status: WeekStatus; label: string } {
@@ -139,6 +142,9 @@ export function weekStatus(days: readonly WeekDay[]): { status: WeekStatus; labe
   const rejected = days.filter((d) => d.status === 'rejected').length;
   if (rejected > 0) return { status: 'rejected', label: `Rejected (${rejected} ${rejected === 1 ? 'day' : 'days'})` };
   if (required.some((d) => d.status === 'draft')) {
+    // Single days submitted (day by day, CD-156) while others are still Draft: the mix.
+    const sent = required.filter((d) => d.status === 'submitted' || d.status === 'approved').length;
+    if (sent > 0) return { status: 'partly_submitted', label: `Partly submitted (${sent} of ${required.length} days)` };
     return days.some((d) => d.minutes > 0) ? { status: 'draft', label: 'Draft' } : { status: 'not_submitted', label: 'Not submitted' };
   }
   const approved = required.filter((d) => d.status === 'approved').length;

@@ -1,0 +1,2 @@
+ALTER TABLE "tenants" ADD COLUMN "timesheet_approval_mode" text DEFAULT 'week' NOT NULL;--> statement-breakpoint
+ALTER TABLE "tenants" ADD CONSTRAINT "tenants_timesheet_approval_mode_ck" CHECK ("tenants"."timesheet_approval_mode" in ('week', 'day'));

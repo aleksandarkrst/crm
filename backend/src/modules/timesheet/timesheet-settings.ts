@@ -16,6 +16,7 @@ export const timesheetColumns = {
   deadlineWeek: tenants.timesheetDeadlineWeek,
   autoSubmit: tenants.timesheetAutoSubmit,
   autoSubmitSince: tenants.timesheetAutoSubmitSince,
+  approvalMode: tenants.timesheetApprovalMode,
 };
 
 /** The workspace's timesheet settings (CD-153): the one read every rule uses. */
@@ -32,6 +33,7 @@ export async function timesheetSettings(tx: Tx, tenantId: string): Promise<Times
     deadline: { weekday: row.deadlineWeekday, time: row.deadlineTime, week: row.deadlineWeek },
     autoSubmit: row.autoSubmit,
     autoSubmitSince: row.autoSubmitSince,
+    approvalMode: row.approvalMode,
   };
 }
 

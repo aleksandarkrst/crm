@@ -98,7 +98,7 @@ export interface WeekView {
   /** The Monday of the current week. */
   thisWeek: string;
   deadline: { date: string; time: string };
-  settings: Pick<TimesheetSettings, 'dayMinutes' | 'maxDayMinutes' | 'timeFormat'>;
+  settings: Pick<TimesheetSettings, 'dayMinutes' | 'maxDayMinutes' | 'timeFormat' | 'approvalMode'>;
   /** Null for a member without an employee record: nothing to enter. */
   employee: { id: string; name: string } | null;
   status: WeekStatus;
@@ -478,16 +478,19 @@ export class TimesheetService {
    * Submitted; rows still without hours go (spec 4.4). Rejected days are resubmitted on their own
    * (CD-158).
    */
-  submit(ctx: TenantContext, weekStart: string): Promise<WeekView> {
+  submit(ctx: TenantContext, weekStart: string, date?: string): Promise<WeekView> {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const caller = await this.caller(ctx, tx);
         const employeeId = this.ownEmployee(caller);
         if (weekStart > mondayOf(caller.today)) throw new BadRequestException('A week can be submitted once it has started');
+        // A single day (CD-156): only in Day by day mode, and only a day Submit week would submit.
+        if (date && caller.settings.approvalMode !== 'day') throw new BadRequestException('This workspace approves whole weeks: submit the week');
         const before = await readWeek(tx, caller, weekStart);
-        if (before.submittable.length === 0) throw new BadRequestException('Nothing to submit in this week');
-        await submitDays(tx, ctx.tenantId, employeeId, weekStart, before.submittable, ctx.userId, new Date());
-        await this.audit.record(tx, ctx, { action: 'timesheet.submitted', entityType: 'employee', entityId: employeeId, data: { weekStart, days: before.submittable } });
+        const days = date ? before.submittable.filter((d) => d === date) : before.submittable;
+        if (days.length === 0) throw new BadRequestException(date ? 'That day has nothing to submit' : 'Nothing to submit in this week');
+        await submitDays(tx, ctx.tenantId, employeeId, weekStart, days, ctx.userId, new Date(), { dropEmptyRows: !date });
+        await this.audit.record(tx, ctx, { action: 'timesheet.submitted', entityType: 'employee', entityId: employeeId, data: { weekStart, days } });
         return readWeek(tx, caller, weekStart);
       })
       .catch(mapDbError);
@@ -672,7 +675,7 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
     today: caller.today,
     thisWeek: mondayOf(caller.today),
     deadline: deadlineOf(monday, settings, (d) => holidays.has(d)),
-    settings: { dayMinutes: settings.dayMinutes, maxDayMinutes: settings.maxDayMinutes, timeFormat: settings.timeFormat },
+    settings: { dayMinutes: settings.dayMinutes, maxDayMinutes: settings.maxDayMinutes, timeFormat: settings.timeFormat, approvalMode: settings.approvalMode },
   };
   const employeeId = caller.employeeId;
   if (!employeeId) {
@@ -778,11 +781,12 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
 
 /**
  * Submits `days` of one person's week (spec 5.3 T1): they become Submitted (only Draft ones; a
- * Rejected or Approved day is left alone) and rows still without hours go (spec 4.4). `userId`
- * null: the deadline job (CD-153).
+ * Rejected or Approved day is left alone) and, for the whole week, rows still without hours go
+ * (spec 4.4). `userId` null: the deadline job (CD-153).
  */
-export async function submitDays(tx: Tx, tenantId: string, employeeId: string, weekStart: string, days: string[], userId: string | null, now: Date) {
-  await tx.execute(sql`
+export async function submitDays(tx: Tx, tenantId: string, employeeId: string, weekStart: string, days: string[], userId: string | null, now: Date, opts: { dropEmptyRows?: boolean } = {}) {
+  // A single day (CD-156) leaves the week's empty rows: the rest of the week isn't done.
+  if (opts.dropEmptyRows !== false) await tx.execute(sql`
     delete from timesheet_rows r where r.employee_id = ${employeeId} and r.week_start = ${weekStart}
       and not exists (select 1 from time_entries e where e.employee_id = r.employee_id and e.work_date between ${weekStart} and ${addDays(weekStart, 6)}
         and (e.task_id = r.task_id or e.work_order_id = r.work_order_id))`);
