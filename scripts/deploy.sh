@@ -3,7 +3,8 @@
 #   bash /opt/crm/scripts/deploy.sh <git-sha>
 #
 # Steps: check out the commit (compose + infra files) → pull the prebuilt images → back up
-# the database → run migrations → roll the stack → wait for the readiness check.
+# the database and files (named deploy-<commit>, CD-314) → run migrations → roll the stack →
+# wait for the readiness check. A failed backup stops the deploy before the migrations.
 #
 # If any step fails, the previous version is put back: its commit is checked out and pinned in
 # .env again, and if the new containers were already started, the previous images are started
@@ -34,10 +35,15 @@ main() {
   # api, worker and migrate share the backend image.
   docker compose pull api worker frontend website
 
-  log "pre-migration backup"
+  # The undo button for a bad migration (CD-314): a dump and a files archive named after this
+  # commit, before anything changes. If it fails, nothing is migrated and the deploy stops here.
+  log "backup before migration (BACKUP_LABEL=deploy-${VERSION:0:12})"
   docker compose up -d postgres
   docker compose build backup
-  docker compose run --rm backup once
+  if ! docker compose run --rm -e "BACKUP_LABEL=deploy-${VERSION:0:12}" backup once; then
+    log "backup failed; migrations not run"
+    exit 1
+  fi
 
   log "running migrations"
   docker compose run --rm migrate
