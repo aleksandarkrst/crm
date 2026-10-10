@@ -81,7 +81,10 @@ run 'migrations are current and idempotent' docker compose run --rm migrate
 
 before="$(docker compose run --rm --entrypoint sh backup -c \
   "ls -1t /backups/*.dump 2>/dev/null | head -n 1" 2>/dev/null)"
-if docker compose run --rm backup once; then
+# Smoke verification checks local dump creation/validation. deploy.sh already requires a
+# complete offsite copy before migrations; uploading it again adds object-store latency
+# to the SSH deadline after the new stack is healthy. Scheduled backups still upload.
+if docker compose run --rm -e BACKUP_RCLONE_REMOTE= backup once; then
   after="$(docker compose run --rm --entrypoint sh backup -c \
     "ls -1t /backups/*.dump 2>/dev/null | head -n 1" 2>/dev/null)"
   if [[ -n "$after" && "$after" != "$before" ]]; then
