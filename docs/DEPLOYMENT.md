@@ -148,6 +148,8 @@ this server yet…" (so owners copy the link instead) and records daily digests 
   1. Create a Hetzner Object Storage bucket (or a Storage Box).
   2. Fill in `infra/backup/rclone.conf`. The `offsite-crypt` remote encrypts every file before upload.
   3. Store the crypt passphrases in your password manager. Without them the backups cannot be read.
+- Offsite retention cleanup is best-effort and limited to 60 seconds per location (plus a 5-second termination grace period). A cleanup failure retains old backups and logs a warning; required uploads still fail the backup if unsuccessful.
+- Post-deployment smoke verification creates and validates a local backup without a second offsite upload. The pre-migration deployment backup still requires the configured offsite upload to succeed.
 - Run a backup now: `docker compose run --rm backup once`.
 - A backup is also taken automatically before every deploy's migrations (CD-314): `deploy.sh`
   runs the same `backup once` with `BACKUP_LABEL=deploy-<commit>`, so the pair is named

@@ -52,6 +52,15 @@ check_disk() {
   fi
 }
 
+# Retention is best-effort maintenance, not part of creating a recoverable backup.
+# Bound the whole operation (including retries/listing) so a slow object store cannot
+# consume the deployment's SSH timeout. timeout is supplied by Alpine's BusyBox.
+prune_remote() {
+  if ! timeout -k 5 60 rclone delete "$@" --quiet; then
+    echo "[backup] WARNING: offsite retention cleanup failed or timed out; copies retained"
+  fi
+}
+
 run_backup() {
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
   # Only letters, digits, dots, dashes and underscores reach a file name.
@@ -92,8 +101,10 @@ run_backup() {
     # Pruning: the daily copies at the top level only (--max-depth 1 leaves weekly/ alone), then the
     # weekly ones. With versioning and Object Lock on the bucket (docs/DEPLOYMENT.md) a delete only
     # hides a file: its locked version stays for the lock period, whoever deletes it.
-    rclone delete "${REMOTE}/" --max-depth 1 --min-age "${RETENTION_DAYS}d" --quiet || true
-    [ "${WEEKLY_RETENTION_DAYS}" -gt 0 ] && { rclone delete "${REMOTE}/weekly/" --min-age "${WEEKLY_RETENTION_DAYS}d" --quiet || true; }
+    prune_remote "${REMOTE}/" --max-depth 1 --min-age "${RETENTION_DAYS}d"
+    if [ "${WEEKLY_RETENTION_DAYS}" -gt 0 ]; then
+      prune_remote "${REMOTE}/weekly/" --min-age "${WEEKLY_RETENTION_DAYS}d"
+    fi
   else
     echo "[backup] WARNING: BACKUP_RCLONE_REMOTE not set — backup exists only on this server"
   fi
