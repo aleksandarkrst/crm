@@ -1284,3 +1284,31 @@ a.task-card-project:hover { color: var(--brand); }
 .ts-day-status.submitted { color: #2E3F5C; }
 .ts-day-status.approved { color: var(--brand); }
 .ts-day-status.rejected { color: var(--warn); }
+
+/* A quieter pipeline: plain stage headers and a separate, optional filter row. */
+.pipeline-toolbar .filter-bar { margin-bottom: 0 !important; }
+.pipeline-toolbar .view-toggle > button { gap: 6px; }
+.pipeline-summary { margin: 12px 0 20px; color: var(--text-2); font-size: 12px; }
+#pipeline-filters .filter-bar { margin: 12px 0 0 !important; }
+.pipeline-board.pipeline-simple { min-height: 0 !important; margin: 0 !important; padding: 0 !important; }
+.pipeline-simple .pipeline-columns { display: flex; gap: 16px; overflow-x: auto; align-items: stretch; padding-bottom: 16px; min-height: 420px; }
+.pipeline-stage { flex: 0 0 268px; width: 268px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-soft); display: flex; flex-direction: column; }
+.pipeline-stage[data-drag-over] { border-color: var(--brand); background: var(--brand-soft); }
+.pipeline-stage-header { padding: 16px 12px; border-bottom: 1px solid var(--divider); display: flex; flex-direction: column; gap: 6px; }
+.pipeline-stage-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 600; }
+.pipeline-stage-count { color: var(--text-2); font-size: 12px; font-weight: 400; }
+.pipeline-stage-value { color: var(--text-2); font-size: 12px; }
+.pipeline-stage-cards { padding: 12px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.pipeline-deal { background: var(--white); border: 1px solid var(--border); border-radius: 6px; padding: 12px; cursor: grab; display: flex; flex-direction: column; gap: 8px; }
+.pipeline-deal:hover { border-color: var(--brand); }
+.pipeline-deal:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.pipeline-deal[data-lost] { background: var(--panel); cursor: pointer; }
+.pipeline-deal-contact { font-size: 12px; color: var(--text-2); }
+.pipeline-stage-empty { padding: 20px 0; text-align: center; font-size: 12px; color: var(--muted); }
+@media (max-width: 600px) {
+  .pipeline-toolbar .filter-bar { gap: 8px !important; }
+  .pipeline-toolbar .funnel-select { flex: 1; min-width: 0; }
+  .pipeline-toolbar .funnel-select > select { min-width: 0; width: 100%; }
+  .pipeline-toolbar .view-toggle { order: 3; }
+  .pipeline-toolbar .filter-actions { margin-left: auto !important; width: auto; }
+}
