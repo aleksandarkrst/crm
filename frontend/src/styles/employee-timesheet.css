@@ -1,0 +1,8 @@
+.emp-timesheet { display: flex; flex-direction: column; gap: 12px; }
+.emp-timesheet h3, .emp-timesheet h4, .emp-timesheet p { margin: 0; }
+.emp-timesheet-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.emp-timesheet-stats > div { border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 4px; }
+.emp-timesheet-stats strong { font-family: var(--font-display); font-size: 28px; }
+.emp-timesheet-late { color: var(--danger); }
+.emp-timesheet-week { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; border-top: 1px solid var(--divider); padding-top: 10px; }
+@media (max-width: 480px) { .emp-timesheet-stats { grid-template-columns: 1fr; } }

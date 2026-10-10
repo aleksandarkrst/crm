@@ -259,6 +259,57 @@ export class TimesheetService {
     });
   }
 
+  /** Read-only employee history; one Late flag counts once, including auto submissions. */
+  employeeLate(ctx: TenantContext, employeeId: string) {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const access = await this.people.of(ctx, tx);
+      if (!access.canSeeEmployment(employeeId)) throw new ForbiddenException('You cannot see this employee\'s timesheet');
+      const [employee] = await tx.select({ fullName: employees.fullName, timesheetRequired: employees.timesheetRequired,
+        employmentStartDate: employees.employmentStartDate, employmentEndDate: employees.employmentEndDate })
+        .from(employees).where(eq(employees.id, employeeId));
+      if (!employee) throw new NotFoundException('Employee not found');
+      if (!employee.timesheetRequired) return { applicable: false as const };
+      const caller = await this.caller(ctx, tx);
+      const thisWeek = mondayOf(caller.today);
+      // Calendar twelve months, clamped to 28 Feb when today is 29 Feb.
+      const year = Number(caller.today.slice(0, 4)) - 1;
+      const anniversary = `${year}${caller.today.slice(4)}`;
+      const from = caller.today.endsWith('-02-29') ? `${year}-02-28` : anniversary;
+      const { rows } = await tx.execute<{ week_start: string; late_at: string; auto_submitted_at: string | null; first_submitted_at: string | null }>(sql`
+        select w.week_start::text, w.late_at, w.auto_submitted_at,
+          (select min(d.first_submitted_at) from timesheet_days d
+           where d.employee_id = w.employee_id and d.work_date between w.week_start and w.week_start + 6) as first_submitted_at
+        from timesheet_weeks w where w.employee_id = ${employeeId}
+          and w.week_start between ${from}::date and ${thisWeek}::date and w.late_at is not null
+        order by w.week_start desc`);
+      const returned = await tx.execute<{ count: number }>(sql`
+        select count(distinct date_trunc('week', work_date))::int as count from timesheet_days
+        where employee_id = ${employeeId} and status = 'rejected'
+          and date_trunc('week', work_date)::date between ${from}::date and ${thisWeek}::date`);
+      const holidays = await holidaysBetween(tx, from, addDays(thisWeek, 45));
+      const recent = rows.slice(0, 5).map((w) => {
+        const deadline = deadlineOf(w.week_start, caller.settings, (d) => holidays.has(d));
+        const first = w.first_submitted_at ? new Date(w.first_submitted_at) : null;
+        const due = deadlineInstant(zonedDayStart(deadline.date, caller.timeZone), deadline.time);
+        // In Day by day mode an earlier day may have gone in on time: measure when the
+        // week actually became Late, not that earlier day's first submission.
+        const hours = Math.max(0, Math.floor((new Date(w.late_at).getTime() - due.getTime()) / 3_600_000));
+        return {
+          weekStart: w.week_start, label: weekLabel(w.week_start), deadline,
+          firstSubmittedAt: first?.toISOString() ?? null,
+          autoSubmitted: !!w.auto_submitted_at,
+          detail: w.auto_submitted_at ? 'Auto-submitted' : hours < 1 ? 'Less than 1 h late' : `${hours >= 24 ? `${Math.floor(hours / 24)} ${hours >= 48 ? 'days' : 'day'} ` : ''}${hours % 24} h late`,
+        };
+      });
+      const last = await readWeek(tx, { ...caller, employeeId, name: employee.fullName,
+        employment: { start: employee.employmentStartDate, end: employee.employmentEndDate } }, addDays(thisWeek, -7));
+      return { applicable: true as const, from, through: caller.today, lateCount: rows.length,
+        autoSubmittedCount: rows.filter((w) => w.auto_submitted_at).length,
+        returnedWeekCount: returned.rows[0]?.count ?? 0,
+        recent, lastWeek: { weekStart: last.weekStart, status: last.status, statusLabel: last.statusLabel, late: last.late } };
+    });
+  }
+
   /** What "+ Add task or work order" offers: tasks and work orders the caller can log on now. */
   loggable(ctx: TenantContext): Promise<PickerItem[]> {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
