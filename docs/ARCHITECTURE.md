@@ -1693,6 +1693,20 @@ the reminder and after-deadline emails (CD-154).
 - **Live hints:** `timesheet` (the employee's id) from all three tables. The Timesheet
   (`s.timesheetRev`), the task's People and hours card (`taskRev`) and work orders (`workOrderRev`)
   read again; a task, work order or project change also re-reads the Timesheet.
+- **Employee card summary** (CD-161): `GET /api/timesheet/employees/:id/late` is read-only,
+  available to the employee, their direct/indirect managers and Admins (`PeopleAccess`);
+  peers receive 403 and an Admin requesting an employee outside the workspace receives 404.
+  Employees without a required timesheet return `applicable: false`. The rolling twelve calendar
+  months count weeks by their Monday with a permanent Late flag, including auto submissions;
+  the five latest show the first submission, deadline and hours until the week became Late
+  (or Auto-submitted). Day-by-day submissions may have an earlier on-time first submission.
+  Deadlines are derived from current workspace settings and holidays; historical settings are
+  not stored, so changing them can change the displayed deadline/duration, never the Late count.
+  The summary also returns last week's status and the count of weeks with currently Returned
+  (Rejected) days, counted once per week. Resubmitting them reduces that count.
+  `screens/employee/TimesheetSection.tsx` reads through the employee-card store action and
+  refreshes on timesheet and people revisions; forbidden summaries are hidden. The employee's
+  Open timesheet link opens their own last week. Manager links await the team view (CD-157).
 - **Screen** (`/timesheet?week=<Monday>`, Workforce's first page; `screens/Timesheet.tsx`,
   `screens/timesheet/`): week navigation, the status badge, "Submit by Fri 9 Oct, 17:00", Copy last
   week, "⋯" with Recall submission, Submit week. The grid: Project tasks, then Work orders (sub-line

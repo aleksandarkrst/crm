@@ -12,6 +12,7 @@ import { useEmployeeCard } from '../store/useEmployeeCard';
 import { DeactivateDialog, ReactivateDialog } from './employee/dialogs';
 import { CardEditContext, dateLabel } from './employee/parts';
 import { BankSection, cardInitial, cardPatch, PersonalSection, WorkSection } from './employee/sections';
+import { TimesheetSection } from './employee/TimesheetSection';
 
 /** The Org structure page (CD-137). */
 const ORG = paths.org();
@@ -134,6 +135,7 @@ function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => 
         <div className="emp-grid">
           <div className="emp-col">
             <WorkSection card={card} />
+            <TimesheetSection id={card.id} />
           </div>
           <div className="emp-col">
             {card.personal && <PersonalSection card={card} />}

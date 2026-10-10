@@ -4,6 +4,7 @@ import { createBrowserRouter, RouterProvider, useRouteError } from 'react-router
 import { App } from './App';
 import { reportError, startErrorTracking } from './lib/monitoring';
 import './styles/global.css';
+import './styles/employee-timesheet.css';
 
 /** A render error the router caught: thrown on, so React's own handler below reports it as before. */
 function Rethrow(): never {
