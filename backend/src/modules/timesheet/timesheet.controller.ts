@@ -17,6 +17,12 @@ import { TimesheetService } from './timesheet.service';
 export class TimesheetController {
   constructor(private readonly timesheet: TimesheetService) {}
 
+  /** Employee card: own record, managers above and Admins only (CD-161). */
+  @Get('employees/:id/late')
+  employeeLate(@Tenant() ctx: TenantContext, @Param('id', new ZodPipe(UuidParam)) id: string) {
+    return this.timesheet.employeeLate(ctx, id);
+  }
+
   /** `?week=<Monday>`, this week by default. */
   @Get('week')
   week(@Tenant() ctx: TenantContext, @Query(new ZodPipe(WeekQuery)) query: WeekQuery) {

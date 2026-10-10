@@ -19,6 +19,7 @@
  * hint without ids) are read again, and the pickers too when they are loaded.
  */
 import { askConfirm } from '../components/ConfirmDialog';
+import { employeeTimesheetSummary, type EmployeeTimesheetSummary } from '../lib/employeeTimesheetApi';
 import {
   type ApiEmployeeCard,
   type ApiEmployeeRow,
@@ -51,6 +52,8 @@ export const ROLE_LABEL: Record<FunctionalRole, string> = { employee: 'Employee'
 
 /** What a save or other card action answers. */
 export type CardResult = { card: ApiEmployeeCard } | { error: string; conflict?: boolean };
+
+export type TimesheetSummaryResult = { status: 'loading' | 'hidden' | 'error' } | { status: 'ready'; summary: EmployeeTimesheetSummary };
 
 interface Deps {
   cur: () => State;
@@ -122,9 +125,24 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
 
   const liveIds = new Set<string>();
   let liveTimer: ReturnType<typeof setTimeout> | undefined;
+  const summaryRequests = new Map<string, number>();
+  const loadTimesheetSummary = async (id: string) => {
+    const request = (summaryRequests.get(id) ?? 0) + 1;
+    summaryRequests.set(id, request);
+    const putSummary = (result: TimesheetSummaryResult) => {
+      if (summaryRequests.get(id) === request) set((x) => ({ employeeTimesheets: { ...x.employeeTimesheets, [id]: result } }));
+    };
+    putSummary({ status: 'loading' });
+    try {
+      putSummary({ status: 'ready', summary: await employeeTimesheetSummary(id) });
+    } catch (err) {
+      putSummary({ status: err instanceof ApiError && (err.status === 403 || err.status === 404) ? 'hidden' : 'error' });
+    }
+  };
 
   return {
     load,
+    timesheetSummary: loadTimesheetSummary,
     /** Loads the pickers (the card's Work and Reporting fields, the deactivate dialog), again when the org changed since. */
     ensurePickers: () => (cur().peoplePickers && pickersRev === cur().orgRev ? Promise.resolve() : loadPickers()),
 

@@ -146,6 +146,8 @@ night (`nightly.yml`):
   - *Meetings, visit plans, people, projects, timesheet*: each module's spec files
     (`meetings*.spec.ts`, `visit-plans`, `people-*`, `projects*`, `tasks*`, `time-*`,
     `timesheet*`) cover the rules described in their docs/ARCHITECTURE.md section.
+    `employee-timesheet.spec.ts` covers the employee card's rolling late-submission summary,
+    automatic submissions, returned weeks, manager visibility and tenant isolation.
 - **Browser tests** (`e2e/`, Puppeteer with its bundled Chrome, run by `node:test`): sign-in,
   workspace, products, new deal, closing date, notes, drag between stages, reload, every screen
   renders; deal lines and stage to-dos persist; CHAMP fit score; team invitations with two

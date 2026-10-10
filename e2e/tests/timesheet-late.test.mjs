@@ -12,11 +12,13 @@ describe('timesheet late', () => {
   const step = steps(browser, 'timesheet-late');
   let page;
   let last;
+  let employeeId;
 
   step('sets up hours last week', async () => {
     page = await browser.person('lou');
     await newUserWithWorkspace(page, { label: 'ts-late', name: 'Lou Late', workspace: 'Late Co' });
     const me = (await api(page, '/people/access')).employeeId;
+    employeeId = me;
     const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Hidrogradnja' }) });
     const [type] = await api(page, '/project-types');
     const project = await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Engine overhaul', projectTypeId: type.id, companyId: company.id }) });
@@ -37,5 +39,17 @@ describe('timesheet late', () => {
     await page.waitForSelector('[data-testid=ts-late]');
     assert.equal(await page.$eval('[data-testid=ts-status]', (el) => el.textContent), 'Submitted');
     assert.equal(await page.$('[data-testid=ts-deadline-passed]'), null);
+  });
+
+  step('the employee card shows the late week and fits at phone width', async () => {
+    await page.goto(`${BASE_URL}/people/${employeeId}`, { waitUntil: 'networkidle0' });
+    await page.waitForFunction(() => document.querySelector('[data-testid=employee-timesheet]')?.textContent.includes('Late (12 months)'));
+    const content = await page.$eval('[data-testid=employee-timesheet]', (el) => el.textContent);
+    assert.match(content, /Late \(12 months\)1/);
+    assert.match(content, /Recent late weeks/);
+    assert.match(content, /First submitted:/);
+    await page.setViewport({ width: 360, height: 800 });
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
+    await page.setViewport({ width: 1440, height: 900 });
   });
 });

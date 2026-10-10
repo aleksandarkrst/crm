@@ -164,6 +164,7 @@ export function initialState(): State {
     stageHistory: null,
     meetings: {},
     employeeCards: {},
+    employeeTimesheets: {},
     peoplePickers: null,
     myEmployeeId: undefined,
     meetingLists: {},
