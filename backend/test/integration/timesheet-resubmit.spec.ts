@@ -32,7 +32,7 @@ let tenant: string, draganId: string, monday: string, taskId: string;
 const as = (s: Session) => ({ token: s.token, tenant });
 const addDays = (date: string, n: number) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 const week = (s: Session = dragan) => ok<Week>('GET', `/timesheet/week?week=${monday}`, as(s));
-const resubmit = (s: Session, body: Record<string, unknown>) => call<Week>('POST', '/timesheet/resubmit', { ...as(s), body: { weekStart: monday, ...body } });
+const resubmit = (s: Session, body: Record<string, unknown>) => call<Week & { message?: string }>('POST', '/timesheet/resubmit', { ...as(s), body: { weekStart: monday, ...body } });
 const sendBack = (dates: string[], comment: string) => ok('POST', '/timesheet/approvals/return', { ...as(marko), body: { employeeId: draganId, weekStart: monday, dates, comment } });
 const setMode = (approvalMode: 'week' | 'day') => ok('PATCH', '/workspace', { ...as(owner), body: { timesheet: { approvalMode } } });
 
