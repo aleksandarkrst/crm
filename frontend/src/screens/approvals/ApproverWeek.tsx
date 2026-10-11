@@ -33,7 +33,7 @@ export function ApproverWeek() {
   const [params, setParams] = useSearchParams();
   const weekParam = params.get('week') ?? undefined;
   const { data, error, set } = useApproverWeek(id, weekParam);
-  const { data: history } = useWeekHistory(id, data?.week.weekStart);
+  const { data: history } = useWeekHistory(id, weekParam);
   const [unlocking, setUnlocking] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   /** Entry changes of a day since it was last returned or unlocked: the approver checks only what changed (spec 5.6). */

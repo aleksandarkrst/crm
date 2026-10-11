@@ -120,6 +120,11 @@ describe('lock approved days (CD-159)', () => {
     expect((await history(marko)).events.length).toBe(h.events.length);
     expect((await history(owner)).changes.length).toBe(h.changes.length);
     await ok('GET', `/timesheet/approvals/${draganId}/history?week=${monday}`, as(peer), 403);
+    // From another workspace Dragan does not exist: neither his history nor an unlock of his days.
+    const elsewhere = { token: peer.token, tenant: await createTenant(peer, 'Other lock tenant') };
+    await ok('GET', `/timesheet/approvals/${draganId}/history?week=${monday}`, elsewhere, 404);
+    expect((await call('POST', '/timesheet/approvals/unlock', { ...elsewhere, body: { employeeId: draganId, weekStart: monday, dates: [monday], reason: 'Trying from another workspace.' } })).status).toBe(404);
+    expect((await week()).days[0]!.status).toBe('approved');
   });
 
   it('the trigger records a direct database change and a deleted entry, with no actor', async () => {

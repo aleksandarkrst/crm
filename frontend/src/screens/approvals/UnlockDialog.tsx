@@ -23,20 +23,12 @@ export function UnlockDialog({ date, firstName, onClose, onUnlock }: { date: str
 
   return (
     <Modal maxWidth={440} onBackdrop={onClose}>
-      <ModalHeader
-        title={`Unlock ${dayLabel(date)}?`}
-        sub={`The day goes back to ${firstName} as Rejected, to correct and resubmit. ${firstName} and the approver get an email with your reason. Only Admins can unlock.`}
-      />
-      <textarea
-        className="box-input"
-        rows={3}
-        maxLength={1000}
-        autoFocus
-        value={reason}
-        onChange={(e) => setReason(e.target.value)}
-        placeholder="Reason (required, at least 10 characters)"
-        data-testid="ap-unlock-reason"
-      />
+      <ModalHeader title={`Unlock ${dayLabel(date)}?`} sub={`The day goes back to ${firstName} as Rejected, to correct and resubmit. ${firstName} and the approver get an email with your reason.`} />
+      <label className="form-label">
+        Reason (required, at least 10 characters)
+        <textarea className="box-input" rows={3} maxLength={1000} autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Payroll found 2 h on the wrong work order" data-testid="ap-unlock-reason" />
+      </label>
+      <div className="emp-note">Only Admins can unlock.</div>
       {error && (
         <div className="form-error" role="alert">
           {error}

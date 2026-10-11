@@ -1272,7 +1272,8 @@ a.task-card-project:hover { color: var(--brand); }
 /* What changed on a resubmitted day (CD-159, spec 5.6), and the week's History panel (spec 9.5). */
 .ap-changes { margin: 0; padding: 8px 14px 8px 30px; font-size: 13px; background: var(--panel); border-top: 1px solid var(--divider); display: flex; flex-direction: column; gap: 2px; }
 .hist-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; max-height: 60vh; overflow-y: auto; }
-.hist-line { display: grid; grid-template-columns: 84px 1fr; gap: 2px 12px; padding: 8px 0; border-top: 1px solid var(--divider); font-size: 13px; }
+.hist-line { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 2px 12px; padding: 8px 0; border-top: 1px solid var(--divider); font-size: 13px; }
+.hist-text { overflow-wrap: anywhere; }
 .hist-line:first-child { border-top: 0; }
 .hist-day { font-weight: 600; color: var(--text-2); grid-row: span 2; }
 .hist-text { color: var(--ink); }
