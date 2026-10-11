@@ -3,7 +3,8 @@ import { type ApiApprovals, type ApiApproverWeek, approvalsApi, type ApiTimeCard
 import { useProjectsRead } from './projects';
 
 /** The caller's timesheet week (CD-152), read again after any timesheet, task, work order or project change (`s.timesheetRev`). */
-export const useTimesheetWeek = (week: string | undefined) => useProjectsRead<ApiTimesheetWeek>(true, () => timesheetApi.week(week), `timesheet:${week ?? ''}`, 'timesheetRev');
+export const useTimesheetWeek = (week: string | undefined, employeeId?: string) =>
+  useProjectsRead<ApiTimesheetWeek>(true, () => timesheetApi.week(week, employeeId), `timesheet:${week ?? ''}:${employeeId ?? ''}`, 'timesheetRev');
 
 /** The Approvals list (CD-157): the weeks the caller approves, read again after any timesheet change. */
 export const useApprovals = (week: string | undefined) => useProjectsRead<ApiApprovals>(true, () => approvalsApi.list(week), `approvals:${week ?? ''}`, 'timesheetRev');

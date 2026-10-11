@@ -136,4 +136,27 @@ describe('approvals', () => {
     assert.match(historyText, /Unlocked: “Short · payroll found 2 h on the wrong work order”/);
     assert.match(historyText, /T-\d+ Inspect engine: added, 8 h/);
   });
+
+  step("the Admin fixes and resubmits Dragan's unlocked Monday on his behalf; the week is marked and Approve is withheld from the Admin (CD-317)", async () => {
+    await click(manager, '[data-testid=confirm-cancel], .modal .btn-plain');
+    await click(manager, '[data-testid=ap-enter-on-behalf]');
+    await manager.waitForSelector('[data-testid=ts-on-behalf]');
+    assert.match(await manager.$eval('[data-testid=ts-on-behalf]', (el) => el.textContent), /entering time on behalf of Dragan Milić/);
+    assert.match(await manager.$eval('h1, .header-title', (el) => el.textContent), /Dragan Milić/);
+    const dragan = people['ap-dragan'];
+    await api(manager, '/timesheet/cells', { method: 'PUT', body: JSON.stringify({ date: monday, taskId: (await api(manager, `/timesheet/week?week=${monday}&employeeId=${dragan.id}`)).rows[0].id, minutes: 420, employeeId: dragan.id }) });
+    await manager.waitForFunction(() => document.querySelector('[data-testid=ts-resubmit]'));
+    await click(manager, '[data-testid=ts-resubmit]');
+    await manager.waitForSelector('[data-testid=ts-resubmit-reply]');
+    await manager.type('[data-testid=ts-resubmit-reply]', 'Corrected by the office.');
+    await click(manager, '[data-testid=ts-resubmit-confirm]');
+    await manager.waitForSelector('[data-testid=ts-on-behalf-badge]');
+    await manager.goto(`${BASE_URL}/approvals/${dragan.id}?week=${monday}`, { waitUntil: 'networkidle0' });
+    await manager.waitForSelector('[data-testid=ap-on-behalf]');
+    assert.match(await manager.$eval('[data-testid=ap-entered-by-me]', (el) => el.textContent), /You entered a day of this week on behalf of Dragan; another approver must approve it\./);
+    assert.equal(await manager.$('[data-testid=ap-approve-week]'), null);
+    await click(manager, '[data-testid=ap-history]');
+    await manager.waitForSelector('[data-testid=week-history]');
+    assert.match(await manager.$eval('[data-testid=week-history]', (el) => el.textContent), /Resubmitted: “Corrected by the office\.”Marko Ilić on behalf of Dragan Milić/);
+  });
 });

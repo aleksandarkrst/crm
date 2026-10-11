@@ -130,6 +130,8 @@ export interface WeekView {
   /** Flags on the week (spec 5.2): first submitted after the deadline; submitted by the deadline job (CD-153). */
   late: boolean;
   autoSubmitted: boolean;
+  /** A day of the week was submitted or resubmitted by an Admin on the employee's behalf (CD-317). */
+  onBehalf: boolean;
   /** The week's deadline has passed (CD-155). */
   deadlinePassed: boolean;
   /** Days Submit week would submit that were never submitted, after the deadline: submitting one makes the week Late (spec 5.5). */
@@ -155,6 +157,8 @@ export interface Caller {
   /** The workspace's time zone and the moment of the request: whether the deadline has passed (CD-155). */
   timeZone: string;
   now: Date;
+  /** An Admin acting for `employeeId`, not themselves (CD-317): the history shows it. */
+  onBehalf?: boolean;
 }
 
 interface RowFacts {
@@ -274,9 +278,9 @@ export class TimesheetService {
     if (refusal) throw new BadRequestException(refusal);
   }
 
-  week(ctx: TenantContext, weekStart?: string): Promise<WeekView> {
+  week(ctx: TenantContext, weekStart?: string, employeeId?: string): Promise<WeekView> {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
-      const caller = await this.caller(ctx, tx);
+      const caller = await this.caller(ctx, tx, employeeId);
       return readWeek(tx, caller, weekStart ?? mondayOf(caller.today));
     });
   }
@@ -338,9 +342,9 @@ export class TimesheetService {
   }
 
   /** What "+ Add task or work order" offers: tasks and work orders the caller can log on now. */
-  loggable(ctx: TenantContext): Promise<PickerItem[]> {
+  loggable(ctx: TenantContext, employeeId?: string): Promise<PickerItem[]> {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
-      const caller = await this.caller(ctx, tx);
+      const caller = await this.caller(ctx, tx, employeeId);
       if (!caller.employeeId) return [];
       const [taskRows, orderRows] = await Promise.all([loggableTasks(tx, caller.employeeId), loggableWorkOrders(tx, caller.employeeId)]);
       return [
@@ -359,7 +363,7 @@ export class TimesheetService {
   setCell(ctx: TenantContext, input: SetCell): Promise<WeekView> {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
-        const caller = await this.caller(ctx, tx);
+        const caller = await this.caller(ctx, tx, input.employeeId);
         const employeeId = this.ownEmployee(caller);
         const kind: RowKind = input.taskId ? 'task' : 'work_order';
         const id = (input.taskId ?? input.workOrderId)!;
@@ -514,7 +518,7 @@ export class TimesheetService {
   addRow(ctx: TenantContext, input: AddRow): Promise<WeekView> {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
-        const caller = await this.caller(ctx, tx);
+        const caller = await this.caller(ctx, tx, input.employeeId);
         const employeeId = this.ownEmployee(caller);
         const [facts] = await rowFacts(tx, employeeId, input.taskId ? [input.taskId] : [], input.workOrderId ? [input.workOrderId] : []);
         if (!facts) throw new NotFoundException(input.taskId ? 'Task not found' : 'Work order not found');
@@ -529,9 +533,9 @@ export class TimesheetService {
   }
 
   /** What Copy last week would do (its dialog): the rows it copies and the ones it skips, with why. */
-  copyPreview(ctx: TenantContext, weekStart: string) {
+  copyPreview(ctx: TenantContext, weekStart: string, forEmployeeId?: string) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
-      const caller = await this.caller(ctx, tx);
+      const caller = await this.caller(ctx, tx, forEmployeeId);
       const employeeId = this.ownEmployee(caller);
       const plan = copyPlan(await this.copySource(tx, employeeId, weekStart), await this.copyTarget(tx, caller, employeeId, weekStart), false, caller.settings);
       return { fromWeek: isoWeek(addDays(weekStart, -7)), toWeek: isoWeek(weekStart), rows: plan.rows.length, skipped: plan.skippedRows };
@@ -542,7 +546,7 @@ export class TimesheetService {
   copy(ctx: TenantContext, input: CopyWeek) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
-        const caller = await this.caller(ctx, tx);
+        const caller = await this.caller(ctx, tx, input.employeeId);
         const employeeId = this.ownEmployee(caller);
         await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${employeeId}:week:${input.weekStart}`}, 0))`);
         for (const date of weekDates(input.weekStart)) await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${employeeId}:${date}`}, 0))`);
@@ -597,10 +601,10 @@ export class TimesheetService {
    * Submitted; rows still without hours go (spec 4.4). Rejected days are resubmitted on their own
    * (CD-158).
    */
-  submit(ctx: TenantContext, weekStart: string, date?: string): Promise<WeekView> {
+  submit(ctx: TenantContext, weekStart: string, date?: string, forEmployeeId?: string): Promise<WeekView> {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
-        const caller = await this.caller(ctx, tx);
+        const caller = await this.caller(ctx, tx, forEmployeeId);
         const employeeId = this.ownEmployee(caller);
         if (weekStart > mondayOf(caller.today)) throw new BadRequestException('A week can be submitted once it has started');
         // A single day (CD-156): only in Day by day mode, and only a day Submit week would submit.
@@ -612,7 +616,7 @@ export class TimesheetService {
         // A required day submitted for the first time after the deadline makes the week Late, for good (spec 5.5).
         const late = days.some((d) => before.lateIfSubmitted.includes(d));
         if (late) await markLate(tx, ctx.tenantId, employeeId, weekStart, caller.now);
-        await this.audit.record(tx, ctx, { action: 'timesheet.submitted', entityType: 'employee', entityId: employeeId, data: { weekStart, days, late } });
+        await this.audit.record(tx, ctx, { action: 'timesheet.submitted', entityType: 'employee', entityId: employeeId, data: { weekStart, days, late, ...(caller.onBehalf ? { onBehalf: true } : {}) } });
         return readWeek(tx, caller, weekStart);
       })
       .catch(mapDbError);
@@ -623,10 +627,10 @@ export class TimesheetService {
    * back to Submitted, with an optional reply the approver sees; the other days keep their status
    * and the Late flag never changes. The approvers are emailed.
    */
-  resubmit(ctx: TenantContext, weekStart: string, date?: string, reply: string | null = null): Promise<WeekView> {
+  resubmit(ctx: TenantContext, weekStart: string, date?: string, reply: string | null = null, forEmployeeId?: string): Promise<WeekView> {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
-        const caller = await this.caller(ctx, tx);
+        const caller = await this.caller(ctx, tx, forEmployeeId);
         const employeeId = this.ownEmployee(caller);
         if (date && caller.settings.approvalMode !== 'day') throw new BadRequestException('This workspace approves whole weeks: resubmit the rejected days together');
         const before = await readWeek(tx, caller, weekStart);
@@ -640,7 +644,7 @@ export class TimesheetService {
         if (changed.length !== days.length) throw new ConflictException('This week changed, please review it again');
         const actor = { userId: ctx.userId, name: await actorNameOf(tx, ctx.userId) };
         await recordDayEvents(tx, { tenantId: ctx.tenantId, employeeId, dates: days, kind: 'resubmitted', actor, comment: reply, approvalMode: caller.settings.approvalMode });
-        await this.audit.record(tx, ctx, { action: 'timesheet.resubmitted', entityType: 'employee', entityId: employeeId, data: { weekStart, days, ...(reply ? { reply } : {}) } });
+        await this.audit.record(tx, ctx, { action: 'timesheet.resubmitted', entityType: 'employee', entityId: employeeId, data: { weekStart, days, ...(reply ? { reply } : {}), ...(caller.onBehalf ? { onBehalf: true } : {}) } });
         const approvers = await this.people.approversFor(ctx.tenantId, employeeId, weekStart, tx);
         for (const a of approvers?.approvers ?? []) {
           if (a.userId === ctx.userId) continue;
@@ -688,24 +692,33 @@ export class TimesheetService {
     return caller.employeeId;
   }
 
-  private async caller(ctx: TenantContext, tx: Tx): Promise<Caller & { thisWeekEnd: string }> {
+  /**
+   * Who the timesheet is for: the caller's own employee record, or with `forEmployeeId` someone
+   * else's (CD-317, spec 9.4): Admins only (403 otherwise), any employee of the workspace (404
+   * when there is none), marked `onBehalf` so every action says so in the history.
+   */
+  private async caller(ctx: TenantContext, tx: Tx, forEmployeeId?: string): Promise<Caller & { thisWeekEnd: string }> {
     const access = await this.people.of(ctx, tx);
     const [tenant] = await tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId));
     const now = new Date();
     const timeZone = tenant?.timezone ?? 'UTC';
     const today = zonedParts(now, timeZone).date;
     const settings = await timesheetSettings(tx, ctx.tenantId);
+    const onBehalf = !!forEmployeeId && forEmployeeId !== access.employeeId;
+    if (onBehalf && !access.isAdmin) throw new ForbiddenException('Only Admins can enter time for someone else');
+    const employeeId = onBehalf ? forEmployeeId! : access.employeeId;
     let name = '';
     let employment: Employment = { start: null, end: null };
-    if (access.employeeId) {
+    if (employeeId) {
       const [e] = await tx
         .select({ name: employees.fullName, start: employees.employmentStartDate, end: employees.employmentEndDate })
         .from(employees)
-        .where(eq(employees.id, access.employeeId));
+        .where(eq(employees.id, employeeId));
+      if (!e && onBehalf) throw new NotFoundException('Employee not found');
       name = e?.name ?? '';
       employment = { start: e?.start ?? null, end: e?.end ?? null };
     }
-    return { employeeId: access.employeeId, name, employment, today, settings, timeZone, now, thisWeekEnd: addDays(mondayOf(today), 6) };
+    return { employeeId, name, employment, today, settings, timeZone, now, onBehalf, thisWeekEnd: addDays(mondayOf(today), 6) };
   }
 
   /** Last week's rows (entries and added rows), with why each can't be copied. */
@@ -853,9 +866,9 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
   };
   const employeeId = caller.employeeId;
   if (!employeeId) {
-    return { ...base, employee: null, status: 'no_entry', statusLabel: 'No entry needed', submittable: [], resubmittable: [], canRecall: false, late: false, autoSubmitted: false, deadlinePassed, lateIfSubmitted: [], days: [], rows: [] };
+    return { ...base, employee: null, status: 'no_entry', statusLabel: 'No entry needed', submittable: [], resubmittable: [], canRecall: false, late: false, autoSubmitted: false, onBehalf: false, deadlinePassed, lateIfSubmitted: [], days: [], rows: [] };
   }
-  const [entries, added, dayRows, [flags]] = await Promise.all([
+  const [entries, added, dayRows, [flags], onBehalfRows] = await Promise.all([
     tx
       .select({ date: timeEntries.workDate, taskId: timeEntries.taskId, workOrderId: timeEntries.workOrderId, minutes: timeEntries.minutes, note: timeEntries.note })
       .from(timeEntries)
@@ -888,6 +901,12 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
       .select({ lateAt: timesheetWeeks.lateAt, autoSubmittedAt: timesheetWeeks.autoSubmittedAt })
       .from(timesheetWeeks)
       .where(and(eq(timesheetWeeks.employeeId, employeeId), eq(timesheetWeeks.weekStart, monday))),
+    // Submitted by someone other than the employee's own account (CD-317): an Admin on their behalf.
+    tx.execute<{ on_behalf: boolean }>(sql`
+      select exists(select 1 from timesheet_day_events e join employees p on p.id = e.employee_id
+        where e.employee_id = ${employeeId} and e.work_date between ${monday} and ${sunday}
+          and e.kind in ('submitted', 'resubmitted') and e.actor_user_id is not null
+          and (p.user_id is null or p.user_id <> e.actor_user_id)) as on_behalf`),
   ]);
   const taskIds = [...new Set([...entries, ...added].flatMap((e) => (e.taskId ? [e.taskId] : [])))];
   const orderIds = [...new Set([...entries, ...added].flatMap((e) => (e.workOrderId ? [e.workOrderId] : [])))];
@@ -977,6 +996,7 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
     lateIfSubmitted: deadlinePassed ? submittable.filter((d) => !statusOf.get(d)?.firstSubmittedAt) : [],
     late: !!flags?.lateAt,
     autoSubmitted: !!flags?.autoSubmittedAt,
+    onBehalf: !!onBehalfRows.rows[0]?.on_behalf,
     days,
     rows: ordered,
   };

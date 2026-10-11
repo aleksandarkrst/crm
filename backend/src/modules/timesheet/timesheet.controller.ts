@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query
 import { RequireTenant, Tenant, type TenantContext } from '../../shared/authorization';
 import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
-import { AddRow, CopyWeek, CreateEntry, ResubmitWeek, SetCell, SubmitWeek, UpdateEntry, WeekAction, WeekQuery } from './timesheet.schemas';
+import { AddRow, CopyWeek, CreateEntry, LoggableQuery, ResubmitWeek, SetCell, SubmitWeek, UpdateEntry, WeekAction, WeekQuery } from './timesheet.schemas';
 import { TimesheetService } from './timesheet.service';
 
 /**
@@ -23,16 +23,16 @@ export class TimesheetController {
     return this.timesheet.employeeLate(ctx, id);
   }
 
-  /** `?week=<Monday>`, this week by default. */
+  /** `?week=<Monday>`, this week by default; `&employeeId=` for an Admin entering time on someone's behalf (CD-317). */
   @Get('week')
   week(@Tenant() ctx: TenantContext, @Query(new ZodPipe(WeekQuery)) query: WeekQuery) {
-    return this.timesheet.week(ctx, query.week);
+    return this.timesheet.week(ctx, query.week, query.employeeId);
   }
 
   /** "+ Add task or work order": `{ kind, id, code, name, path }[]`. */
   @Get('loggable')
-  loggable(@Tenant() ctx: TenantContext) {
-    return this.timesheet.loggable(ctx);
+  loggable(@Tenant() ctx: TenantContext, @Query(new ZodPipe(LoggableQuery)) query: LoggableQuery) {
+    return this.timesheet.loggable(ctx, query.employeeId);
   }
 
   @Put('cells')
@@ -48,7 +48,7 @@ export class TimesheetController {
   /** Copy last week's dialog: `{ fromWeek, toWeek, rows, skipped: { label, reason }[] }`. */
   @Get('copy')
   copyPreview(@Tenant() ctx: TenantContext, @Query(new ZodPipe(WeekAction)) query: WeekAction) {
-    return this.timesheet.copyPreview(ctx, query.weekStart);
+    return this.timesheet.copyPreview(ctx, query.weekStart, query.employeeId);
   }
 
   /** `{ week, copiedRows, copiedCells, skipped, fullDays }`. */
@@ -60,7 +60,7 @@ export class TimesheetController {
   /** Submit week; with `date`, that day only (Day by day mode, CD-156). */
   @Post('submit')
   submit(@Tenant() ctx: TenantContext, @Body(new ZodPipe(SubmitWeek)) body: SubmitWeek) {
-    return this.timesheet.submit(ctx, body.weekStart, body.date);
+    return this.timesheet.submit(ctx, body.weekStart, body.date, body.employeeId);
   }
 
   /** An entry from the task or work order page (CD-276): `{ id, date, minutes, note, startTime, endTime }`. */
@@ -88,6 +88,6 @@ export class TimesheetController {
   /** Resubmit the week's Rejected days (CD-158); with `date`, that day only (Day by day mode). `reply` goes to the approver. */
   @Post('resubmit')
   resubmit(@Tenant() ctx: TenantContext, @Body(new ZodPipe(ResubmitWeek)) body: ResubmitWeek) {
-    return this.timesheet.resubmit(ctx, body.weekStart, body.date, body.reply ?? null);
+    return this.timesheet.resubmit(ctx, body.weekStart, body.date, body.reply ?? null, body.employeeId);
   }
 }

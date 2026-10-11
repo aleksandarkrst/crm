@@ -10,9 +10,16 @@ const target = { taskId: z.uuid().optional(), workOrderId: z.uuid().optional() }
 const oneTarget = (v: { taskId?: string; workOrderId?: string }) => !!v.taskId !== !!v.workOrderId;
 const ONE_TARGET = { message: 'Pick a task or a work order' };
 
-/** GET /api/timesheet/week?week=2026-10-05 (default: this week). */
-export const WeekQuery = z.object({ week: weekStart.optional() });
+/** Someone else's timesheet (CD-317): Admins only; left out, the caller's own. */
+const forEmployee = { employeeId: z.uuid().optional() };
+
+/** GET /api/timesheet/week?week=2026-10-05 (default: this week); `employeeId` for an Admin acting on behalf (CD-317). */
+export const WeekQuery = z.object({ week: weekStart.optional(), ...forEmployee });
 export type WeekQuery = z.infer<typeof WeekQuery>;
+
+/** GET /api/timesheet/loggable?employeeId= (CD-317). */
+export const LoggableQuery = z.object(forEmployee);
+export type LoggableQuery = z.infer<typeof LoggableQuery>;
 
 /**
  * PUT /api/timesheet/cells: one cell's hours (whole minutes in steps of 15, 0 clears it) and,
@@ -22,6 +29,7 @@ export const SetCell = z
   .object({
     date: isoDate,
     ...target,
+    ...forEmployee,
     minutes: z
       .number()
       .int()
@@ -39,20 +47,20 @@ export const SetCell = z
 export type SetCell = z.infer<typeof SetCell>;
 
 /** POST /api/timesheet/rows: "+ Add task or work order". */
-export const AddRow = z.object({ weekStart, ...target }).refine(oneTarget, ONE_TARGET);
+export const AddRow = z.object({ weekStart, ...target, ...forEmployee }).refine(oneTarget, ONE_TARGET);
 export type AddRow = z.infer<typeof AddRow>;
 
 /** POST /api/timesheet/copy: Copy last week into `weekStart`, rows only or rows and hours. */
-export const CopyWeek = z.object({ weekStart, mode: z.enum(['rows', 'hours']) });
+export const CopyWeek = z.object({ weekStart, mode: z.enum(['rows', 'hours']), ...forEmployee });
 export type CopyWeek = z.infer<typeof CopyWeek>;
 
-/** POST /api/timesheet/submit and /recall. */
-export const WeekAction = z.object({ weekStart });
+/** GET /api/timesheet/copy and POST /recall (recall is always the caller's own: `employeeId` is ignored there). */
+export const WeekAction = z.object({ weekStart, ...forEmployee });
 export type WeekAction = z.infer<typeof WeekAction>;
 
 /** POST /api/timesheet/submit: the week, or with `date` one of its days (Day by day mode, CD-156). */
 export const SubmitWeek = z
-  .object({ weekStart, date: isoDate.optional() })
+  .object({ weekStart, date: isoDate.optional(), ...forEmployee })
   .refine((v) => !v.date || mondayOf(v.date) === v.weekStart, { message: 'The day must be in that week', path: ['date'] });
 export type SubmitWeek = z.infer<typeof SubmitWeek>;
 
@@ -61,6 +69,7 @@ export const ResubmitWeek = z
   .object({
     weekStart,
     date: isoDate.optional(),
+    ...forEmployee,
     reply: z
       .string()
       .max(1000, 'A reply can have up to 1,000 characters')

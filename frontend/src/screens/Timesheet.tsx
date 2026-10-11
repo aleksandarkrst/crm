@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { paths } from '../lib/paths';
 import { askConfirm } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Layout';
@@ -34,7 +35,9 @@ export function Timesheet() {
   const { s, flash } = useStore();
   const [params, setParams] = useSearchParams();
   const weekParam = params.get('week') ?? undefined;
-  const { data: week, error, set } = useTimesheetWeek(weekParam);
+  /** An Admin entering time for someone else (CD-317): `?employee=<id>`; every call carries it. */
+  const employeeParam = params.get('employee') ?? undefined;
+  const { data: week, error, set } = useTimesheetWeek(weekParam, employeeParam);
   const [copying, setCopying] = useState(false);
   /** The rejected days being resubmitted (CD-158): all of them, or one in Day by day mode. */
   const [resubmitting, setResubmitting] = useState<string[] | null>(null);
@@ -44,7 +47,7 @@ export function Timesheet() {
   const menu = usePicker();
   const queue = useRef<Promise<unknown>>(Promise.resolve());
 
-  const go = (monday: string | null) => setParams(monday ? { week: monday } : {});
+  const go = (monday: string | null) => setParams({ ...(monday ? { week: monday } : {}), ...(employeeParam ? { employee: employeeParam } : {}) });
   /** Runs saves one after another, so an older answer never replaces a newer one. */
   const run = <T,>(work: () => Promise<T>): Promise<T> => {
     const next = queue.current.then(work, work);
@@ -55,7 +58,7 @@ export function Timesheet() {
   const onSave: SaveCell = (row: ApiTimesheetRow, date: string, minutes: number, note?: string | null) =>
     run(async () => {
       try {
-        set(await timesheetApi.setCell(date, targetOf(row), minutes, note));
+        set(await timesheetApi.setCell(date, targetOf(row), minutes, note, employeeParam));
         return true;
       } catch (err) {
         flash(projectError(err));
@@ -67,7 +70,7 @@ export function Timesheet() {
     run(async () => {
       if (!week) return;
       try {
-        set(await timesheetApi.addRow(week.weekStart, targetOf(item)));
+        set(await timesheetApi.addRow(week.weekStart, targetOf(item), employeeParam));
       } catch (err) {
         flash(projectError(err));
       }
@@ -83,7 +86,7 @@ export function Timesheet() {
     setBusy(true);
     await run(async () => {
       try {
-        set(await timesheetApi.submit(w.weekStart));
+        set(await timesheetApi.submit(w.weekStart, undefined, employeeParam));
         flash(`Week ${w.weekNumber} submitted`);
       } catch (err) {
         flash(projectError(err));
@@ -100,7 +103,7 @@ export function Timesheet() {
     if (late && day?.minutes && !(await askConfirm({ title: `Submit ${dayName(date)} late?`, message: LATE_NOTE, confirmLabel: 'Submit day' }))) return;
     await run(async () => {
       try {
-        set(await timesheetApi.submit(w.weekStart, date));
+        set(await timesheetApi.submit(w.weekStart, date, employeeParam));
         flash(`${dayLabel(date)} submitted`);
       } catch (err) {
         flash(projectError(err));
@@ -113,7 +116,7 @@ export function Timesheet() {
     const single = w.settings.approvalMode === 'day' && dates.length === 1 && w.resubmittable.length > 1 ? dates[0] : undefined;
     return run(async () => {
       try {
-        set(await timesheetApi.resubmit(w.weekStart, single, reply));
+        set(await timesheetApi.resubmit(w.weekStart, single, reply, employeeParam));
         setResubmitting(null);
         flash(dates.length === 1 ? `${dayLabel(dates[0]!)} resubmitted` : `${dates.length} days resubmitted`);
         return null;
@@ -153,7 +156,12 @@ export function Timesheet() {
   const deadline = `${dayLabel(week.deadline.date)}, ${week.deadline.time}`;
   const future = week.weekStart > week.thisWeek;
   return (
-    <Screen title="Timesheet">
+    <Screen title={employeeParam ? `${week.employee.name} · Timesheet` : 'Timesheet'} parent={employeeParam ? { label: 'Approvals', to: paths.approval(week.employee.id, week.weekStart) } : undefined}>
+      {employeeParam && (
+        <div className="hint-box" data-testid="ts-on-behalf" style={{ marginBottom: 14 }}>
+          You are entering time on behalf of {week.employee.name}. Every change and submission is recorded in your name, and another approver must approve the days you submit.
+        </div>
+      )}
       <div className="ts-toolbar">
         <button type="button" className="btn-plain ts-arrow" aria-label="Previous week" data-testid="ts-prev" onClick={() => go(addDays(week.weekStart, -7))}>
           ←
@@ -173,6 +181,11 @@ export function Timesheet() {
         {week.late && (
           <span className="badge badge-danger" data-testid="ts-late">
             Late
+          </span>
+        )}
+        {week.onBehalf && (
+          <span className="badge badge-neutral" data-testid="ts-on-behalf-badge">
+            Entered on behalf
           </span>
         )}
         {week.autoSubmitted && (
@@ -198,7 +211,7 @@ export function Timesheet() {
           </button>
           {menu.open && (
             <div className="deal-menu" role="menu">
-              <button type="button" role="menuitem" data-testid="ts-recall" disabled={!week.canRecall} onClick={() => void recall(week)}>
+              <button type="button" role="menuitem" data-testid="ts-recall" disabled={!week.canRecall || !!employeeParam} onClick={() => void recall(week)}>
                 Recall submission
               </button>
               <button
@@ -247,6 +260,7 @@ export function Timesheet() {
         ))}
       <Grid
         week={week}
+        employeeId={employeeParam}
         onSave={onSave}
         onAdd={onAdd}
         onSubmitDay={week.settings.approvalMode === 'day' ? (date) => void submitDay(week, date) : undefined}
@@ -255,11 +269,20 @@ export function Timesheet() {
       <div className="ts-help">Type 7.5, 7,5 or 7:30 · saved when you leave the cell · arrows and Tab move · Shift+Enter opens the note</div>
       {resubmitting && <ResubmitDialog dates={resubmitting} onClose={() => setResubmitting(null)} onResubmit={(reply) => resubmit(week, resubmitting, reply)} />}
       {showHistory && (
-        <HistoryPanel employeeId={week.employee.id} week={week.weekStart} weekNumber={week.weekNumber} format={week.settings.timeFormat} timeZone={s.workspace?.timezone} onClose={() => setShowHistory(false)} />
+        <HistoryPanel
+          employeeId={week.employee.id}
+          employeeName={week.employee.name}
+          week={week.weekStart}
+          weekNumber={week.weekNumber}
+          format={week.settings.timeFormat}
+          timeZone={s.workspace?.timezone}
+          onClose={() => setShowHistory(false)}
+        />
       )}
       {copying && (
         <CopyDialog
           weekStart={week.weekStart}
+          employeeId={employeeParam}
           maxHours={week.settings.maxDayMinutes / 60}
           onClose={() => setCopying(false)}
           onCopied={(result) => {

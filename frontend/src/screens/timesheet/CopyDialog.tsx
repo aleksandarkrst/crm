@@ -10,30 +10,29 @@ const choices = (maxHours: number): { id: Mode; title: string; text: string }[] 
 ];
 
 /** "2 rows will be skipped: WO-1029 is completed, task T-9 is in a closed project." */
-export const skippedText = (skipped: ApiCopyPreview['skipped']) =>
-  `${skipped.length} ${skipped.length === 1 ? 'row' : 'rows'} will be skipped: ${skipped.map((s) => `${s.label} ${s.reason}`).join(', ')}.`;
+export const skippedText = (skipped: ApiCopyPreview['skipped']) => `${skipped.length} ${skipped.length === 1 ? 'row' : 'rows'} will be skipped: ${skipped.map((s) => `${s.label} ${s.reason}`).join(', ')}.`;
 
 /** Copy last week (design `#cd-152b`): rows only (default) or rows and hours; says what it skips before copying. */
-export function CopyDialog({ weekStart, maxHours, onClose, onCopied }: { weekStart: string; maxHours: number; onClose: () => void; onCopied: (result: ApiCopyResult) => void }) {
+export function CopyDialog({ weekStart, maxHours, employeeId, onClose, onCopied }: { weekStart: string; maxHours: number; employeeId?: string; onClose: () => void; onCopied: (result: ApiCopyResult) => void }) {
   const [mode, setMode] = useState<Mode>('rows');
   const [preview, setPreview] = useState<ApiCopyPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     let alive = true;
-    timesheetApi.copyPreview(weekStart).then(
+    timesheetApi.copyPreview(weekStart, employeeId).then(
       (p) => alive && setPreview(p),
       (err) => alive && setError(projectError(err)),
     );
     return () => {
       alive = false;
     };
-  }, [weekStart]);
+  }, [weekStart, employeeId]);
 
   const copy = async () => {
     setBusy(true);
     try {
-      onCopied(await timesheetApi.copy(weekStart, mode));
+      onCopied(await timesheetApi.copy(weekStart, mode, employeeId));
     } catch (err) {
       setError(projectError(err));
       setBusy(false);
