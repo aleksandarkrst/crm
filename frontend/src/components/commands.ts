@@ -95,6 +95,7 @@ export function useCommands(): Command[] {
     { id: 'go-workload', group: 'Go to', label: 'Workload', hint: 'Projects · remaining hours per person', icon: 'reports', keywords: 'workload capacity load remaining hours estimate report people weeks', run: go(paths.workload) },
     { id: 'go-timesheet', group: 'Go to', label: 'Timesheet', hint: 'Workforce · your hours this week', icon: 'timesheet', keywords: 'workforce time hours log week submit', run: go(paths.timesheet()) },
     { id: 'go-org', group: 'Go to', label: 'Org structure', hint: 'Workforce · people and teams', icon: 'org', keywords: 'workforce people employees units departments teams chart', run: go(paths.org()) },
+    { id: 'go-approvals', group: 'Go to', label: 'Approvals', hint: 'Workforce · timesheets waiting for you', icon: 'timesheet', keywords: 'workforce approvals approve reject return timesheet week team', run: go(paths.approvals()) },
   ];
   const settings: Command[] = [
     { id: 'go-profile', group: 'Settings', label: 'Personal preferences', hint: 'Your profile', icon: 'profile', keywords: 'profile account start page', run: go(paths.profile) },

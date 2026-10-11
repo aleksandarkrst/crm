@@ -42,6 +42,12 @@ export interface ApiTimesheetDay {
   editable: boolean;
   /** A public holiday on a working day (CD-153): its name and the hours off. */
   holiday: { name: string; minutes: number } | null;
+  /** The approver's decision (CD-157): the latest comment, who returned or approved the day and when. */
+  comment: string | null;
+  returnedAt: string | null;
+  returnedBy: string | null;
+  approvedAt: string | null;
+  approvedBy: string | null;
 }
 
 export interface ApiTimesheetWeek {
@@ -94,6 +100,54 @@ export interface ApiCopyResult {
 
 export type RowTarget = { taskId: string } | { workOrderId: string };
 export const targetOf = (row: { kind: RowKind; id: string }): RowTarget => (row.kind === 'task' ? { taskId: row.id } : { workOrderId: row.id });
+
+/** What the caller may do with someone's week (CD-157): approve and return, the same as an Admin override, or only look. */
+export type ApprovalRight = 'approver' | 'override' | null;
+
+export interface ApiApprovalRow {
+  employee: { id: string; name: string; jobTitle: string | null };
+  right: ApprovalRight;
+  status: WeekStatus;
+  statusLabel: string;
+  late: boolean;
+  autoSubmitted: boolean;
+  days: { date: string; status: DayStatus; required: boolean; minutes: number }[];
+  enteredMinutes: number;
+  expectedMinutes: number;
+  /** Required days never submitted: "Not submitted" after the deadline. */
+  missing: string[];
+  waiting: number;
+  returned: number;
+  approvable: boolean;
+}
+
+export interface ApiApprovals {
+  weekStart: string;
+  weekNumber: number;
+  label: string;
+  thisWeek: string;
+  deadline: { date: string; time: string };
+  deadlinePassed: boolean;
+  approvalMode: 'week' | 'day';
+  timeFormat: TimeFormat;
+  rows: ApiApprovalRow[];
+}
+
+export interface ApiApproverWeek {
+  week: ApiTimesheetWeek;
+  right: ApprovalRight;
+}
+
+/** Approvals (CD-157, `/api/timesheet/approvals`): the weeks the caller approves. */
+export const approvalsApi = {
+  list: (week?: string) => api<ApiApprovals>(`/timesheet/approvals${week ? `?week=${week}` : ''}`),
+  week: (employeeId: string, week?: string) => api<ApiApproverWeek>(`/timesheet/approvals/${employeeId}/week${week ? `?week=${week}` : ''}`),
+  /** The week (Whole week mode) or `dates` of it (Day by day). */
+  approve: (employeeId: string, weekStart: string, dates?: string[]) => api<ApiApproverWeek>('/timesheet/approvals/approve', { method: 'POST', json: { employeeId, weekStart, ...(dates ? { dates } : {}) } }),
+  /** The Submitted days (or `dates` of them) go back to the employee with the comment. */
+  return: (employeeId: string, weekStart: string, comment: string, dates?: string[]) =>
+    api<ApiApproverWeek>('/timesheet/approvals/return', { method: 'POST', json: { employeeId, weekStart, comment, ...(dates ? { dates } : {}) } }),
+};
 
 export const timesheetApi = {
   week: (week?: string) => api<ApiTimesheetWeek>(`/timesheet/week${week ? `?week=${week}` : ''}`),

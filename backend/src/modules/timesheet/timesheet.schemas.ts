@@ -56,6 +56,23 @@ export const SubmitWeek = z
   .refine((v) => !v.date || mondayOf(v.date) === v.weekStart, { message: 'The day must be in that week', path: ['date'] });
 export type SubmitWeek = z.infer<typeof SubmitWeek>;
 
+/** GET /api/timesheet/approvals?week=2026-10-05 (default: the latest week whose deadline passed). */
+export const ApprovalsQuery = z.object({ week: weekStart.optional() });
+export type ApprovalsQuery = z.infer<typeof ApprovalsQuery>;
+
+const inWeek = (v: { weekStart: string; dates?: string[] }) => !v.dates || v.dates.every((d) => mondayOf(d) === v.weekStart);
+const IN_WEEK = { message: 'The days must be in that week', path: ['dates'] };
+/** One person's week; `dates` picks days of it (Day by day mode, or Return selected days). */
+const weekDays = { employeeId: z.uuid(), weekStart, dates: z.array(isoDate).min(1).max(7).optional() };
+
+/** POST /api/timesheet/approvals/approve (CD-157). */
+export const ApproveDays = z.object(weekDays).refine(inWeek, IN_WEEK);
+export type ApproveDays = z.infer<typeof ApproveDays>;
+
+/** POST /api/timesheet/approvals/return (CD-157): the comment is required (spec 5.3 T4). */
+export const ReturnDays = z.object({ ...weekDays, comment: z.string().trim().min(1, 'Enter a comment').max(1000, 'A comment can have up to 1,000 characters') }).refine(inWeek, IN_WEEK);
+export type ReturnDays = z.infer<typeof ReturnDays>;
+
 /** 24-hour "HH:MM". */
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM');
 const entryMinutes = z
