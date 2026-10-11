@@ -7,7 +7,9 @@ import { paths } from '../../lib/paths';
 import { addDays, type ApiTimesheetWeek, approvalsApi, dayLabel, dayName, shortHours } from '../../lib/timesheetApi';
 import { projectError } from '../../store/projects';
 import { useStore } from '../../store/store';
-import { useApproverWeek } from '../../store/timesheet';
+import { useApproverWeek, useWeekHistory } from '../../store/timesheet';
+import { changeText, HistoryPanel } from './HistoryPanel';
+import { UnlockDialog } from './UnlockDialog';
 import { DAY_STATUS, WEEK_BADGE, when } from './parts';
 import { RejectDialog } from './RejectDialog';
 
@@ -25,10 +27,25 @@ const DAY_BADGE = {
  */
 export function ApproverWeek() {
   const { id } = useParams<{ id: string }>();
-  const { s, flash } = useStore();
+  const { s, session, flash } = useStore();
+  /** Admins (the workspace owner and admins) may unlock approved days (CD-159, spec 9.2). */
+  const admin = session.tenant.role === 'owner' || session.tenant.role === 'admin';
   const [params, setParams] = useSearchParams();
   const weekParam = params.get('week') ?? undefined;
   const { data, error, set } = useApproverWeek(id, weekParam);
+  const { data: history } = useWeekHistory(id, data?.week.weekStart);
+  const [unlocking, setUnlocking] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  /** Entry changes of a day since it was last returned or unlocked: the approver checks only what changed (spec 5.6). */
+  const changesSince = (date: string) => {
+    if (!history) return [];
+    const since = history.events
+      .filter((e) => e.date === date && (e.kind === 'returned' || e.kind === 'unlocked'))
+      .map((e) => e.at)
+      .sort()
+      .pop();
+    return history.changes.filter((c) => c.date === date && (!since || c.at > since));
+  };
   const [rejecting, setRejecting] = useState<{
     dates: string[];
     whole: boolean;
@@ -70,6 +87,17 @@ export function ApproverWeek() {
     }
   };
 
+  const unlock = async (w: ApiTimesheetWeek, date: string, reason: string): Promise<string | null> => {
+    try {
+      set(await approvalsApi.unlock(w.employee!.id, w.weekStart, reason, [date]));
+      setUnlocking(null);
+      flash(`${dayLabel(date)} unlocked: back with ${w.employee!.name.split(' ')[0]} as Rejected`);
+      return null;
+    } catch (err) {
+      return projectError(err);
+    }
+  };
+
   if (!data || !data.week.employee) {
     return (
       <Screen title="Approvals" parent={{ label: 'Approvals', to: paths.approvals() }}>
@@ -105,6 +133,9 @@ export function ApproverWeek() {
           {shortHours(entered, w.settings.timeFormat)} h entered · {waiting.length} {waiting.length === 1 ? 'day' : 'days'} waiting {right ? 'for you' : 'for the approver'}
         </span>
         <span style={{ flex: 1 }} />
+        <button type="button" className="btn-plain" data-testid="ap-history" onClick={() => setShowHistory(true)}>
+          History
+        </button>
         {right && waiting.length > 0 && (
           <>
             <button type="button" className="btn-plain" disabled={busy} data-testid="ap-reject-week" onClick={() => setRejecting({ dates: waiting, whole: true })}>
@@ -128,6 +159,7 @@ export function ApproverWeek() {
       {shown.length === 0 && <EmptyState title="No entry needed" text="No working day in this week falls inside the employment, and no hours were entered." />}
       {shown.map((d) => {
         const rows = w.rows.filter((r) => r.cells[d.date]);
+        const changes = d.status === 'submitted' && d.resubmittedAt ? changesSince(d.date) : [];
         return (
           <section className="card ap-day" key={d.date} data-testid="ap-day" data-date={d.date} data-status={d.status}>
             <header className="ap-day-head">
@@ -149,6 +181,11 @@ export function ApproverWeek() {
                     Approve
                   </button>
                 </>
+              )}
+              {admin && right && d.status === 'approved' && (
+                <button type="button" className="btn-plain" disabled={busy} data-testid="ap-unlock-day" onClick={() => setUnlocking(d.date)}>
+                  Unlock day
+                </button>
               )}
             </header>
             {d.status === 'rejected' && d.comment && (
@@ -174,9 +211,20 @@ export function ApproverWeek() {
                 )}
               </p>
             )}
+            {changes.length > 0 && (
+              <ul className="ap-changes" data-testid="ap-day-changes">
+                {changes.map((c, i) => (
+                  <li key={i}>{changeText(c, w.settings.timeFormat)}</li>
+                ))}
+              </ul>
+            )}
             {d.status === 'approved' && d.approvedAt && (
-              <p className="ap-comment ap-approved">
-                Approved{d.approvedBy ? ` by ${d.approvedBy}` : ''} on {when(d.approvedAt, timeZone)} · locked
+              <p className="ap-comment ap-approved" data-testid="ap-day-approved">
+                Approved{d.approvedBy ? ` by ${d.approvedBy}` : ''} on {when(d.approvedAt, timeZone)}
+                {d.approvedExpectedMinutes !== null && d.approvedMinutes !== null
+                  ? ` · at approval ${shortHours(d.approvedMinutes, w.settings.timeFormat)} of ${shortHours(d.approvedExpectedMinutes, w.settings.timeFormat)} h`
+                  : ''}{' '}
+                · locked
               </p>
             )}
             {rows.length === 0 ? (
@@ -213,6 +261,8 @@ export function ApproverWeek() {
           </section>
         );
       })}
+      {unlocking && <UnlockDialog date={unlocking} firstName={firstName} onClose={() => setUnlocking(null)} onUnlock={(reason) => unlock(w, unlocking, reason)} />}
+      {showHistory && <HistoryPanel employeeId={employee.id} week={w.weekStart} weekNumber={w.weekNumber} format={w.settings.timeFormat} timeZone={timeZone} onClose={() => setShowHistory(false)} />}
       {rejecting && (
         <RejectDialog
           dates={rejecting.dates}

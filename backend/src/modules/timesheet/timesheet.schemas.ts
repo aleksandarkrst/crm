@@ -84,6 +84,12 @@ const weekDays = { employeeId: z.uuid(), weekStart, dates: z.array(isoDate).min(
 export const ApproveDays = z.object(weekDays).refine(inWeek, IN_WEEK);
 export type ApproveDays = z.infer<typeof ApproveDays>;
 
+/** POST /api/timesheet/approvals/unlock (CD-159, Admins): approved days back to the employee, with a reason of 10 to 1,000 characters (spec 9.2). */
+export const UnlockDays = z
+  .object({ ...weekDays, reason: z.string().trim().min(10, 'Give a reason of at least 10 characters').max(1000, 'A reason can have up to 1,000 characters') })
+  .refine(inWeek, IN_WEEK);
+export type UnlockDays = z.infer<typeof UnlockDays>;
+
 /** POST /api/timesheet/approvals/return (CD-157): the comment is required (spec 5.3 T4). */
 export const ReturnDays = z.object({ ...weekDays, comment: z.string().trim().min(1, 'Enter a comment').max(1000, 'A comment can have up to 1,000 characters') }).refine(inWeek, IN_WEEK);
 export type ReturnDays = z.infer<typeof ReturnDays>;

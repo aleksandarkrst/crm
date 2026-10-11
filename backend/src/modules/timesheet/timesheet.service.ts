@@ -101,6 +101,9 @@ export interface DayView {
   returnedBy: string | null;
   approvedAt: string | null;
   approvedBy: string | null;
+  /** The day as it was approved (CD-159): expected and entered minutes at that moment. */
+  approvedExpectedMinutes: number | null;
+  approvedMinutes: number | null;
   /** The employee resubmitted the returned day (CD-158): when, and their reply to the comment. */
   resubmittedAt: string | null;
   reply: string | null;
@@ -872,6 +875,8 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
         returnedBy: returner.displayName,
         approvedAt: timesheetDays.approvedAt,
         approvedBy: approver.displayName,
+        approvedExpectedMinutes: timesheetDays.approvedExpectedMinutes,
+        approvedMinutes: timesheetDays.approvedMinutes,
         resubmittedAt: timesheetDays.resubmittedAt,
         reply: timesheetDays.reply,
       })
@@ -943,6 +948,8 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
       returnedBy: statusOf.get(date)?.returnedBy ?? null,
       approvedAt: statusOf.get(date)?.approvedAt?.toISOString() ?? null,
       approvedBy: statusOf.get(date)?.approvedBy ?? null,
+      approvedExpectedMinutes: statusOf.get(date)?.approvedExpectedMinutes ?? null,
+      approvedMinutes: statusOf.get(date)?.approvedMinutes ?? null,
       resubmittedAt: statusOf.get(date)?.resubmittedAt?.toISOString() ?? null,
       reply: statusOf.get(date)?.reply ?? null,
       expectedMinutes: expected,

@@ -1269,6 +1269,13 @@ a.task-card-project:hover { color: var(--brand); }
 .ap-comment { margin: 0; padding: 10px 14px; font-size: 13px; background: var(--warn-soft); border-top: 1px solid var(--divider); }
 .ap-comment.ap-approved { background: var(--brand-soft); color: var(--brand); }
 .ap-comment.ap-resubmitted { background: var(--panel); }
+/* What changed on a resubmitted day (CD-159, spec 5.6), and the week's History panel (spec 9.5). */
+.ap-changes { margin: 0; padding: 8px 14px 8px 30px; font-size: 13px; background: var(--panel); border-top: 1px solid var(--divider); display: flex; flex-direction: column; gap: 2px; }
+.hist-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; max-height: 60vh; overflow-y: auto; }
+.hist-line { display: grid; grid-template-columns: 84px 1fr; gap: 2px 12px; padding: 8px 0; border-top: 1px solid var(--divider); font-size: 13px; }
+.hist-line:first-child { border-top: 0; }
+.hist-day { font-weight: 600; color: var(--text-2); grid-row: span 2; }
+.hist-text { color: var(--ink); }
 .ap-comment q { font-style: italic; }
 /* The employee's view of a rejected day (CD-158, design #cd-158): the approver's comment above the grid. */
 .ts-rejected-note { padding: 12px 14px; margin-bottom: 14px; border-radius: 10px; background: var(--warn-soft); font-size: 13px; line-height: 1.5; color: var(--ink); }

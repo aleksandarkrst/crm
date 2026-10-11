@@ -48,6 +48,9 @@ export interface ApiTimesheetDay {
   returnedBy: string | null;
   approvedAt: string | null;
   approvedBy: string | null;
+  /** The day as it was approved (CD-159): expected and entered minutes at that moment. */
+  approvedExpectedMinutes: number | null;
+  approvedMinutes: number | null;
   /** The employee resubmitted the returned day (CD-158): when, and their reply to the comment. */
   resubmittedAt: string | null;
   reply: string | null;
@@ -145,6 +148,12 @@ export interface ApiApproverWeek {
   right: ApprovalRight;
 }
 
+/** The week's history (CD-159, spec 9.5): status events and entry changes, oldest first. */
+export interface ApiWeekHistory {
+  events: { date: string; kind: string; actorName: string | null; comment: string | null; approvalMode: 'week' | 'day'; at: string }[];
+  changes: { at: string; actorName: string | null; date: string; action: 'created' | 'updated' | 'deleted'; field: string | null; from: unknown; to: unknown; row: string; minutes: number; note: string | null }[];
+}
+
 /** Approvals (CD-157, `/api/timesheet/approvals`): the weeks the caller approves. */
 export const approvalsApi = {
   list: (week?: string) => api<ApiApprovals>(`/timesheet/approvals${week ? `?week=${week}` : ''}`),
@@ -154,6 +163,11 @@ export const approvalsApi = {
   /** The Submitted days (or `dates` of them) go back to the employee with the comment. */
   return: (employeeId: string, weekStart: string, comment: string, dates?: string[]) =>
     api<ApiApproverWeek>('/timesheet/approvals/return', { method: 'POST', json: { employeeId, weekStart, comment, ...(dates ? { dates } : {}) } }),
+  /** Admins (CD-159): approved days go back to the employee as Rejected, with the reason (10 to 1,000 characters). */
+  unlock: (employeeId: string, weekStart: string, reason: string, dates?: string[]) =>
+    api<ApiApproverWeek>('/timesheet/approvals/unlock', { method: 'POST', json: { employeeId, weekStart, reason, ...(dates ? { dates } : {}) } }),
+  /** The week's history (CD-159): for the employee, their approvers and Admins. */
+  history: (employeeId: string, week?: string) => api<ApiWeekHistory>(`/timesheet/approvals/${employeeId}/history${week ? `?week=${week}` : ''}`),
 };
 
 export const timesheetApi = {

@@ -89,6 +89,9 @@ export const timesheetDays = pgTable(
     /** The approver's decision (CD-157): when and who approved, or when and who returned it, with the latest comment. */
     approvedAt: timestamp('approved_at', { withTimezone: true }),
     approvedByUserId: uuid('approved_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** The day as it was approved (CD-159, spec 9.1): expected and entered minutes at that moment; cleared by an unlock. */
+    approvedExpectedMinutes: integer('approved_expected_minutes'),
+    approvedMinutes: integer('approved_minutes'),
     returnedAt: timestamp('returned_at', { withTimezone: true }),
     returnedByUserId: uuid('returned_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     comment: text('comment'),

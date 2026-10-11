@@ -115,4 +115,25 @@ describe('approvals', () => {
     assert.match(await manager.$eval('[data-testid=ap-day-resubmitted]', (el) => el.textContent), /Resubmitted · .* · was rejected by Marko Ilić: The Agrokop inspection is missing\. · reply: Added the Agrokop inspection on Thursday\./);
     assert.match(await manager.$eval('[data-testid=ap-week-summary]', (el) => el.textContent), /5 days waiting for you/);
   });
+
+  step("an Admin unlocks Dragan's approved Monday with a reason; the day is Rejected and the history shows it (CD-159)", async () => {
+    await manager.goto(`${BASE_URL}/approvals/${people['ap-dragan'].id}?week=${monday}`, { waitUntil: 'networkidle0' });
+    await manager.waitForSelector('[data-testid=ap-day-approved]');
+    assert.match(await manager.$eval('[data-testid=ap-day-approved]', (el) => el.textContent), /Approved by Marko Ilić on .* · at approval 8 of 8 h · locked/);
+    const mondayCard = `[data-testid=ap-day][data-date="${monday}"]`;
+    await click(manager, `${mondayCard} [data-testid=ap-unlock-day]`);
+    await manager.waitForSelector('[data-testid=ap-unlock-reason]');
+    await manager.type('[data-testid=ap-unlock-reason]', 'Short');
+    await click(manager, '[data-testid=ap-unlock-confirm]');
+    assert.match(await manager.$eval('.modal', (el) => el.textContent), /at least 10 characters/);
+    await manager.type('[data-testid=ap-unlock-reason]', ' · payroll found 2 h on the wrong work order');
+    await click(manager, '[data-testid=ap-unlock-confirm]');
+    await manager.waitForFunction((sel) => document.querySelector(sel)?.dataset.status === 'rejected', {}, mondayCard);
+    assert.match(await manager.$eval(`${mondayCard} [data-testid=ap-day-comment]`, (el) => el.textContent), /Rejected by Marko Ilić · .*payroll found 2 h on the wrong work order/);
+    await click(manager, '[data-testid=ap-history]');
+    await manager.waitForSelector('[data-testid=week-history]');
+    const historyText = await manager.$eval('[data-testid=week-history]', (el) => el.textContent);
+    assert.match(historyText, /Unlocked: “Short · payroll found 2 h on the wrong work order”/);
+    assert.match(historyText, /T-\d+ Inspect engine: added, 8 h/);
+  });
 });

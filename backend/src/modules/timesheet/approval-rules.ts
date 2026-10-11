@@ -63,3 +63,11 @@ export function approvableDays(days: readonly WeekDay[], mode: TimesheetSettings
 export function returnableDays(days: readonly WeekDay[], dates?: string[]): DayPick {
   return pick(days, dates, 'Nothing to return');
 }
+
+/** Which days an Admin unlock covers (T6, CD-159): the chosen Approved days, or all of them. */
+export function unlockableDays(days: readonly WeekDay[], dates?: string[]): DayPick {
+  const approved = days.filter((d) => d.status === 'approved').map((d) => d.date);
+  if (dates && dates.some((d) => !approved.includes(d))) return { error: 'Only approved days can be unlocked' };
+  const chosen = dates ?? approved;
+  return chosen.length ? { dates: chosen } : { error: 'Nothing to unlock' };
+}

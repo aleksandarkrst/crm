@@ -12,6 +12,7 @@ import { WEEK_BADGE as BADGE, when } from './approvals/parts';
 import { CopyDialog, skippedText } from './timesheet/CopyDialog';
 import { Grid, type SaveCell } from './timesheet/Grid';
 import { ResubmitDialog } from './timesheet/ResubmitDialog';
+import { HistoryPanel } from './approvals/HistoryPanel';
 
 const LATE_NOTE = 'This week will be marked as submitted late.';
 
@@ -37,6 +38,8 @@ export function Timesheet() {
   const [copying, setCopying] = useState(false);
   /** The rejected days being resubmitted (CD-158): all of them, or one in Day by day mode. */
   const [resubmitting, setResubmitting] = useState<string[] | null>(null);
+  /** The week's History panel (CD-159). */
+  const [showHistory, setShowHistory] = useState(false);
   const [busy, setBusy] = useState(false);
   const menu = usePicker();
   const queue = useRef<Promise<unknown>>(Promise.resolve());
@@ -198,6 +201,17 @@ export function Timesheet() {
               <button type="button" role="menuitem" data-testid="ts-recall" disabled={!week.canRecall} onClick={() => void recall(week)}>
                 Recall submission
               </button>
+              <button
+                type="button"
+                role="menuitem"
+                data-testid="ts-history"
+                onClick={() => {
+                  menu.close();
+                  setShowHistory(true);
+                }}
+              >
+                History
+              </button>
             </div>
           )}
         </div>
@@ -240,6 +254,9 @@ export function Timesheet() {
       />
       <div className="ts-help">Type 7.5, 7,5 or 7:30 · saved when you leave the cell · arrows and Tab move · Shift+Enter opens the note</div>
       {resubmitting && <ResubmitDialog dates={resubmitting} onClose={() => setResubmitting(null)} onResubmit={(reply) => resubmit(week, resubmitting, reply)} />}
+      {showHistory && (
+        <HistoryPanel employeeId={week.employee.id} week={week.weekStart} weekNumber={week.weekNumber} format={week.settings.timeFormat} timeZone={s.workspace?.timezone} onClose={() => setShowHistory(false)} />
+      )}
       {copying && (
         <CopyDialog
           weekStart={week.weekStart}
