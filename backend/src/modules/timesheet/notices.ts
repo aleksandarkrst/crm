@@ -8,7 +8,7 @@ import type { JobPayloads } from '../../shared/events/job-types';
 import { JobsService } from '../../shared/events/jobs.service';
 import { zonedParts } from '../../shared/time/zoned-time';
 import { PeopleAccess } from '../people';
-import { autoSubmittedEmail, lateEmail, type LatePerson, lateSummaryEmail, reminderEmail, returnedEmail, type WeekFacts } from './notice-emails';
+import { autoSubmittedEmail, lateEmail, type LatePerson, lateSummaryEmail, reminderEmail, resubmittedEmail, returnedEmail, type WeekFacts } from './notice-emails';
 import { callerFor, deadlinesAround } from './deadlines';
 import { isoWeek } from './timesheet-rules';
 import { readWeek, type WeekView } from './timesheet.service';
@@ -159,7 +159,9 @@ export class TimesheetNoticeMailer {
             ? autoSubmittedEmail(common, week)
             : data.kind === 'returned'
               ? returnedEmail(common, week, data.returned ?? { days: [], comment: '', approverName: null })
-              : lateSummaryEmail(common, week, data.people ?? []);
+              : data.kind === 'resubmitted'
+                ? resubmittedEmail(common, week, data.resubmitted ?? { days: [], reply: null, employeeId: '', employeeName: 'An employee' })
+                : lateSummaryEmail(common, week, data.people ?? []);
     await this.mailer.send(message);
   }
 }

@@ -302,7 +302,20 @@ function AddRow({ week, onAdd }: { week: ApiTimesheetWeek; onAdd: (item: ApiLogg
  * (typing replaces, saved when the cell is left, arrows and Tab move, Shift+Enter opens the
  * note), the add row, and Total entered, Expected and Difference.
  */
-export function Grid({ week, onSave, onAdd, onSubmitDay }: { week: ApiTimesheetWeek; onSave: SaveCell; onAdd: (item: ApiLoggable) => Promise<void>; onSubmitDay?: (date: string) => void }) {
+export function Grid({
+  week,
+  onSave,
+  onAdd,
+  onSubmitDay,
+  onResubmitDay,
+}: {
+  week: ApiTimesheetWeek;
+  onSave: SaveCell;
+  onAdd: (item: ApiLoggable) => Promise<void>;
+  onSubmitDay?: (date: string) => void;
+  /** Day by day mode (CD-158): a rejected day is resubmitted on its own. */
+  onResubmitDay?: (date: string) => void;
+}) {
   const format = week.settings.timeFormat;
   const wrap = useRef<HTMLDivElement>(null);
   const [note, setNote] = useState<{ key: string; date: string; top: number; left: number } | null>(null);
@@ -416,6 +429,11 @@ export function Grid({ week, onSave, onAdd, onSubmitDay }: { week: ApiTimesheetW
                 {onSubmitDay && week.submittable.includes(d.date) && (
                   <button type="button" className="ts-day-submit" onClick={() => onSubmitDay(d.date)} data-testid="ts-submit-day" aria-label={`Submit ${dayLabel(d.date)}`}>
                     Submit
+                  </button>
+                )}
+                {onResubmitDay && week.resubmittable.includes(d.date) && (
+                  <button type="button" className="ts-day-submit" onClick={() => onResubmitDay(d.date)} data-testid="ts-resubmit-day" aria-label={`Resubmit ${dayLabel(d.date)}`}>
+                    Resubmit
                   </button>
                 )}
                 {d.status !== 'draft' && <span className={`ts-day-status ${d.status}`}>{DAY_STATUS[d.status]}</span>}

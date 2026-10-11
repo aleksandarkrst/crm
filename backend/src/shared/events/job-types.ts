@@ -108,13 +108,15 @@ export interface JobPayloads {
    */
   'timesheet.notice-email': {
     tenantId: string;
-    kind: 'reminder' | 'late' | 'auto_submitted' | 'late_summary' | 'returned';
+    kind: 'reminder' | 'late' | 'auto_submitted' | 'late_summary' | 'returned' | 'resubmitted';
     weekStart: string;
     recipientUserId: string;
     week: { weekStart: string; weekNumber: number; deadline: { date: string; time: string }; enteredMinutes: number; expectedMinutes: number; missing: string[] };
     people?: { name: string; enteredMinutes: number; autoSubmitted: boolean }[];
     /** `returned` (CD-157): the days the approver sent back and their comment. */
     returned?: { days: string[]; comment: string; approverName: string | null };
+    /** `resubmitted` (CD-158, to the approver): the days the employee sent again and their reply. */
+    resubmitted?: { days: string[]; reply: string | null; employeeId: string; employeeName: string };
   };
   /** Scheduled nightly by the worker: fails document generations that were interrupted (CD-100). Placeholder for reporting snapshots. */
   'reporting.nightly': Record<string, never>;

@@ -42,6 +42,7 @@ import {
   isoWeek,
   isRequired,
   mondayOf,
+  resubmittableDays,
   spanMinutes,
   submittableDays,
   type TimesheetSettings,
@@ -100,6 +101,9 @@ export interface DayView {
   returnedBy: string | null;
   approvedAt: string | null;
   approvedBy: string | null;
+  /** The employee resubmitted the returned day (CD-158): when, and their reply to the comment. */
+  resubmittedAt: string | null;
+  reply: string | null;
 }
 
 export interface WeekView {
@@ -117,6 +121,8 @@ export interface WeekView {
   statusLabel: string;
   /** Days Submit week would submit. */
   submittable: string[];
+  /** Rejected days "Resubmit rejected days" sends again (CD-158). */
+  resubmittable: string[];
   canRecall: boolean;
   /** Flags on the week (spec 5.2): first submitted after the deadline; submitted by the deadline job (CD-153). */
   late: boolean;
@@ -609,6 +615,50 @@ export class TimesheetService {
       .catch(mapDbError);
   }
 
+  /**
+   * Resubmit (spec 5.3 T5, CD-158): the week's Rejected days (or one of them in Day by day mode) go
+   * back to Submitted, with an optional reply the approver sees; the other days keep their status
+   * and the Late flag never changes. The approvers are emailed.
+   */
+  resubmit(ctx: TenantContext, weekStart: string, date?: string, reply: string | null = null): Promise<WeekView> {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        const caller = await this.caller(ctx, tx);
+        const employeeId = this.ownEmployee(caller);
+        if (date && caller.settings.approvalMode !== 'day') throw new BadRequestException('This workspace approves whole weeks: resubmit the rejected days together');
+        const before = await readWeek(tx, caller, weekStart);
+        const days = date ? before.resubmittable.filter((d) => d === date) : before.resubmittable;
+        if (days.length === 0) throw new BadRequestException(date ? 'That day is not rejected' : 'Nothing to resubmit in this week');
+        const changed = await tx
+          .update(timesheetDays)
+          .set({ status: 'submitted', submittedAt: caller.now, submittedByUserId: ctx.userId, resubmittedAt: caller.now, reply })
+          .where(and(eq(timesheetDays.employeeId, employeeId), inArray(timesheetDays.workDate, days), eq(timesheetDays.status, 'rejected')))
+          .returning({ date: timesheetDays.workDate });
+        if (changed.length !== days.length) throw new ConflictException('This week changed, please review it again');
+        const actor = { userId: ctx.userId, name: await actorNameOf(tx, ctx.userId) };
+        await recordDayEvents(tx, { tenantId: ctx.tenantId, employeeId, dates: days, kind: 'resubmitted', actor, comment: reply, approvalMode: caller.settings.approvalMode });
+        await this.audit.record(tx, ctx, { action: 'timesheet.resubmitted', entityType: 'employee', entityId: employeeId, data: { weekStart, days, ...(reply ? { reply } : {}) } });
+        const approvers = await this.people.approversFor(ctx.tenantId, employeeId, weekStart, tx);
+        for (const a of approvers?.approvers ?? []) {
+          if (a.userId === ctx.userId) continue;
+          await this.jobs.send(
+            'timesheet.notice-email',
+            {
+              tenantId: ctx.tenantId,
+              kind: 'resubmitted',
+              weekStart,
+              recipientUserId: a.userId,
+              week: { weekStart, weekNumber: before.weekNumber, deadline: before.deadline, enteredMinutes: before.days.reduce((s, d) => s + d.minutes, 0), expectedMinutes: before.days.reduce((s, d) => s + d.expectedMinutes, 0), missing: [] },
+              resubmitted: { days, reply, employeeId, employeeName: caller.name },
+            },
+            tx,
+          );
+        }
+        return readWeek(tx, caller, weekStart);
+      })
+      .catch(mapDbError);
+  }
+
   /** Recall (spec 5.3 T2): the week's Submitted days go back to Draft; approved and rejected days stay. */
   recall(ctx: TenantContext, weekStart: string): Promise<WeekView> {
     return this.database
@@ -800,7 +850,7 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
   };
   const employeeId = caller.employeeId;
   if (!employeeId) {
-    return { ...base, employee: null, status: 'no_entry', statusLabel: 'No entry needed', submittable: [], canRecall: false, late: false, autoSubmitted: false, deadlinePassed, lateIfSubmitted: [], days: [], rows: [] };
+    return { ...base, employee: null, status: 'no_entry', statusLabel: 'No entry needed', submittable: [], resubmittable: [], canRecall: false, late: false, autoSubmitted: false, deadlinePassed, lateIfSubmitted: [], days: [], rows: [] };
   }
   const [entries, added, dayRows, [flags]] = await Promise.all([
     tx
@@ -822,6 +872,8 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
         returnedBy: returner.displayName,
         approvedAt: timesheetDays.approvedAt,
         approvedBy: approver.displayName,
+        resubmittedAt: timesheetDays.resubmittedAt,
+        reply: timesheetDays.reply,
       })
       .from(timesheetDays)
       .leftJoin(returner, eq(returner.id, timesheetDays.returnedByUserId))
@@ -891,6 +943,8 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
       returnedBy: statusOf.get(date)?.returnedBy ?? null,
       approvedAt: statusOf.get(date)?.approvedAt?.toISOString() ?? null,
       approvedBy: statusOf.get(date)?.approvedBy ?? null,
+      resubmittedAt: statusOf.get(date)?.resubmittedAt?.toISOString() ?? null,
+      reply: statusOf.get(date)?.reply ?? null,
       expectedMinutes: expected,
       minutes,
       required: isRequired(expected, minutes),
@@ -910,6 +964,7 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
     status,
     statusLabel: label,
     submittable,
+    resubmittable: resubmittableDays(weekDays),
     canRecall: days.some((d) => d.status === 'submitted'),
     deadlinePassed,
     lateIfSubmitted: deadlinePassed ? submittable.filter((d) => !statusOf.get(d)?.firstSubmittedAt) : [],

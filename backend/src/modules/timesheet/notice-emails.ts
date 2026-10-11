@@ -143,3 +143,23 @@ export function returnedEmail(c: Common, w: Pick<WeekFacts, 'weekStart' | 'weekN
     `You get this email because a day of your timesheet in ${c.workspaceName} was returned by your approver.`,
   );
 }
+
+export interface ResubmittedDays {
+  days: string[];
+  reply: string | null;
+  employeeId: string;
+  employeeName: string;
+}
+
+/** "Dragan Milić resubmitted Wednesday of week 41" (CD-158, spec 5.3 T5): to the approver, with the employee's reply. */
+export function resubmittedEmail(c: Common, w: Pick<WeekFacts, 'weekStart' | 'weekNumber'>, r: ResubmittedDays): MailMessage {
+  const what = r.days.length === 1 ? dayLabel(r.days[0]!) : `${r.days.length} days (${r.days.map(dayLabel).join(', ')})`;
+  return message(
+    c,
+    `${r.employeeName} resubmitted ${r.days.length === 1 ? dayLabel(r.days[0]!) : `${r.days.length} days`} of week ${w.weekNumber}`,
+    [`${r.employeeName} fixed and resubmitted ${what} of week ${w.weekNumber} (${range(w.weekStart)}) after your return. The ${r.days.length === 1 ? 'day is' : 'days are'} waiting for your approval again.`],
+    r.reply ? [['Reply', r.reply]] : [],
+    { label: 'Open Approvals', href: `${base(c.appUrl)}/approvals/${r.employeeId}?week=${w.weekStart}` },
+    `You get this email because you approve timesheets in ${c.workspaceName}.`,
+  );
+}

@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query
 import { RequireTenant, Tenant, type TenantContext } from '../../shared/authorization';
 import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
-import { AddRow, CopyWeek, CreateEntry, SetCell, SubmitWeek, UpdateEntry, WeekAction, WeekQuery } from './timesheet.schemas';
+import { AddRow, CopyWeek, CreateEntry, ResubmitWeek, SetCell, SubmitWeek, UpdateEntry, WeekAction, WeekQuery } from './timesheet.schemas';
 import { TimesheetService } from './timesheet.service';
 
 /**
@@ -83,5 +83,11 @@ export class TimesheetController {
   @Post('recall')
   recall(@Tenant() ctx: TenantContext, @Body(new ZodPipe(WeekAction)) body: WeekAction) {
     return this.timesheet.recall(ctx, body.weekStart);
+  }
+
+  /** Resubmit the week's Rejected days (CD-158); with `date`, that day only (Day by day mode). `reply` goes to the approver. */
+  @Post('resubmit')
+  resubmit(@Tenant() ctx: TenantContext, @Body(new ZodPipe(ResubmitWeek)) body: ResubmitWeek) {
+    return this.timesheet.resubmit(ctx, body.weekStart, body.date, body.reply ?? null);
   }
 }

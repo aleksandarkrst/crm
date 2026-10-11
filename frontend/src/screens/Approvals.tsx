@@ -140,6 +140,7 @@ export function Approvals() {
                   <span className={`badge ${WEEK_BADGE[r.status]}`}>{r.statusLabel}</span>
                   {r.late && <span className="badge badge-danger">Late</span>}
                   {r.autoSubmitted && <span className="badge badge-neutral">Auto-submitted</span>}
+                  {r.resubmitted > 0 && <span className="badge badge-neutral">Resubmitted</span>}
                 </span>
                 <DaySquares days={r.days} />
                 <span>

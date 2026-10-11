@@ -131,6 +131,9 @@ export function submittableDays(days: readonly WeekDay[], today: string): string
   return days.filter((d) => d.required && d.status === 'draft' && d.date <= lastDay).map((d) => d.date);
 }
 
+/** Days that can be resubmitted (spec 5.3 T5, CD-158): the Rejected ones; the other days keep their status. */
+export const resubmittableDays = (days: readonly WeekDay[]): string[] => days.filter((d) => d.status === 'rejected').map((d) => d.date);
+
 export interface WeekDay {
   date: string;
   status: TimesheetDayStatus;

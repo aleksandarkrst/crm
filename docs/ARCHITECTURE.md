@@ -1574,8 +1574,9 @@ the reminder and after-deadline emails (CD-154) and the approval screen (CD-157)
     `approved`, or `draft` after a Recall; without a row a day is Draft), who submitted it and
     when, `first_submitted_at` (CD-155, `drizzle/0082`, kept through Recall), and the approver's
     decision (CD-157, `drizzle/0087`): `approved_at`/`approved_by_user_id`,
-    `returned_at`/`returned_by_user_id` and the latest `comment` (1 to 1,000 characters). The
-    design's Rejected is the spec's Returned.
+    `returned_at`/`returned_by_user_id` and the latest `comment` (1 to 1,000 characters), and the
+    employee's answer (CD-158, `drizzle/0089`): `resubmitted_at` and their optional `reply`, cleared
+    by the next return. The design's Rejected is the spec's Returned.
   - `timesheet_day_events` (CD-157, spec 9.5; RLS and an append-only trigger in `drizzle/0088`):
     one row per day and status change (`submitted`, `auto_submitted`, `recalled`, `approved`,
     `returned`, `resubmitted`, `unlocked`), with the actor's user id and their name at the time
@@ -1642,9 +1643,20 @@ the reminder and after-deadline emails (CD-154) and the approval screen (CD-157)
     with why), `POST copy` `{ weekStart, mode: rows | hours }`: hours day by day into empty cells
     of Draft or Rejected days up to the current week, never over a value or the daily maximum.
   - `POST submit` `{ weekStart }`: the required Draft days up to the current week become Submitted
-    (also days without hours: the screen asks first). Rejected days are resubmitted on their own
-    (CD-158). `POST recall`: Submitted days go back to Draft (their rows stay, with when they
-    were first submitted).
+    (also days without hours: the screen asks first). `POST recall`: Submitted days go back to
+    Draft (their rows stay, with when they were first submitted).
+  - **Resubmit** (CD-158, spec 5.3 T5 and 5.6): `POST resubmit { weekStart, date?, reply? }` sends
+    the week's Rejected days (`resubmittable` on the week) back to Submitted, one of them with
+    `date` in Day by day mode only; the other days keep their status and the Late flag never
+    changes. The optional reply (up to 1,000 characters) is kept on the days with
+    `resubmitted_at`, written to the history as a `resubmitted` event and to the audit log
+    (`timesheet.resubmitted`), and emailed to the approvers (`approversFor`; "Dragan Milić
+    resubmitted Wednesday of week 41", kind `resubmitted`). The Timesheet shows each rejected
+    day's comment above the grid ("Wed 7 Oct was rejected by Marko Ilić · Mon 12 Oct, 09:12: …"),
+    the button "Resubmit rejected days (N)" with the reply dialog, and in Day by day mode a
+    Resubmit under the day; the approver's week marks the day Resubmitted with the comment and the
+    reply, and the Approvals list shows a Resubmitted badge. The per-entry Changes view waits for
+    the entry history (CD-159).
   - **Late** (CD-155, spec 5.5): the week answers `deadlinePassed` and `lateIfSubmitted` (days Submit
     week would submit that never went in, after the deadline). Submitting one of them (the week or
     a single day) sets `timesheet_weeks.late_at` once (`markLate`); recalling and resubmitting days

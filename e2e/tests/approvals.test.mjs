@@ -91,4 +91,28 @@ describe('approvals', () => {
     await manager.waitForSelector('[data-testid=ap-returned]');
     assert.match(await manager.$eval('[data-testid=ap-returned]', (el) => el.textContent), /Bojan Đurić · 5 days/);
   });
+
+  step('Bojan sees the comment on his timesheet and resubmits the rejected days with a reply (CD-158)', async () => {
+    const bojan = people['ap-bojan'].page;
+    await bojan.goto(`${BASE_URL}/timesheet?week=${monday}`, { waitUntil: 'networkidle0' });
+    await bojan.waitForSelector('[data-testid=ts-rejected-note]');
+    assert.equal((await bojan.$$('[data-testid=ts-rejected-note]')).length, 5);
+    assert.match(await bojan.$eval('[data-testid=ts-rejected-note]', (el) => el.textContent), /^Monday \d+ \w+ was rejected by Marko Ilić · .*The Agrokop inspection is missing\.$/);
+    assert.equal(await bojan.$('[data-testid=ts-submit]'), null);
+    assert.equal(await bojan.$eval('[data-testid=ts-resubmit]', (el) => el.textContent), 'Resubmit rejected days (5)');
+    await click(bojan, '[data-testid=ts-resubmit]');
+    await bojan.waitForSelector('[data-testid=ts-resubmit-reply]');
+    await bojan.type('[data-testid=ts-resubmit-reply]', 'Added the Agrokop inspection on Thursday.');
+    await click(bojan, '[data-testid=ts-resubmit-confirm]');
+    await bojan.waitForFunction(() => document.querySelector('[data-testid=ts-status]')?.textContent === 'Submitted');
+    assert.equal(await bojan.$('[data-testid=ts-rejected-note]'), null);
+  });
+
+  step('the approver sees the days as Resubmitted with the reply', async () => {
+    await manager.goto(`${BASE_URL}/approvals/${people['ap-bojan'].id}?week=${monday}`, { waitUntil: 'networkidle0' });
+    await manager.waitForSelector('[data-testid=ap-day-resubmitted]');
+    assert.equal((await manager.$$('[data-testid=ap-day-resubmitted]')).length, 5);
+    assert.match(await manager.$eval('[data-testid=ap-day-resubmitted]', (el) => el.textContent), /Resubmitted · .* · was rejected by Marko Ilić: The Agrokop inspection is missing\. · reply: Added the Agrokop inspection on Thursday\./);
+    assert.match(await manager.$eval('[data-testid=ap-week-summary]', (el) => el.textContent), /5 days waiting for you/);
+  });
 });

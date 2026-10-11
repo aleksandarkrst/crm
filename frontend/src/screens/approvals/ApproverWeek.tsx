@@ -134,6 +134,7 @@ export function ApproverWeek() {
               <strong>{dayName(d.date)}</strong>
               <span className="emp-note">{dayLabel(d.date)}</span>
               <span className={`badge ${DAY_BADGE[d.status]}`}>{DAY_STATUS[d.status]}</span>
+              {d.status === 'submitted' && d.resubmittedAt && <span className="badge badge-neutral">Resubmitted</span>}
               <span className="ap-hours">
                 {shortHours(d.minutes, w.settings.timeFormat)} of {shortHours(d.expectedMinutes, w.settings.timeFormat)} h
               </span>
@@ -154,6 +155,23 @@ export function ApproverWeek() {
               <p className="ap-comment" data-testid="ap-day-comment">
                 Rejected{d.returnedBy ? ` by ${d.returnedBy}` : ''}
                 {d.returnedAt ? ` · ${when(d.returnedAt, timeZone)}` : ''}: <q>{d.comment}</q>
+              </p>
+            )}
+            {d.status === 'submitted' && d.resubmittedAt && (
+              <p className="ap-comment ap-resubmitted" data-testid="ap-day-resubmitted">
+                Resubmitted · {when(d.resubmittedAt, timeZone)}
+                {d.comment && (
+                  <>
+                    {' '}
+                    · was rejected{d.returnedBy ? ` by ${d.returnedBy}` : ''}: <q>{d.comment}</q>
+                  </>
+                )}
+                {d.reply && (
+                  <>
+                    {' '}
+                    · reply: <q>{d.reply}</q>
+                  </>
+                )}
               </p>
             )}
             {d.status === 'approved' && d.approvedAt && (

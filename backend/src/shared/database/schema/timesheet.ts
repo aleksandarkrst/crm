@@ -92,6 +92,9 @@ export const timesheetDays = pgTable(
     returnedAt: timestamp('returned_at', { withTimezone: true }),
     returnedByUserId: uuid('returned_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     comment: text('comment'),
+    /** The employee resubmitted a returned day (CD-158): when, and their optional reply to the comment; cleared by the next return. */
+    resubmittedAt: timestamp('resubmitted_at', { withTimezone: true }),
+    reply: text('reply'),
     ...timestamps,
   },
   (t) => [
@@ -99,6 +102,7 @@ export const timesheetDays = pgTable(
     foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'timesheet_days_employee_fk' }).onDelete('cascade'),
     check('timesheet_days_status_ck', sql`${t.status} in ('draft', 'submitted', 'rejected', 'approved')`),
     check('timesheet_days_comment_ck', sql`${t.comment} is null or length(${t.comment}) between 1 and 1000`),
+    check('timesheet_days_reply_ck', sql`${t.reply} is null or length(${t.reply}) between 1 and 1000`),
   ],
 );
 

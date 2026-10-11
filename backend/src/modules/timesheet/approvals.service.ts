@@ -29,8 +29,9 @@ export interface ApprovalRow {
   expectedMinutes: number;
   /** Required days never submitted that Submit week would send: "Not submitted" after the deadline. */
   missing: string[];
-  /** Submitted days waiting for the approver, and days returned to the employee. */
+  /** Submitted days waiting for the approver (of them, the ones resubmitted after a return, CD-158), and days returned to the employee. */
   waiting: number;
+  resubmitted: number;
   returned: number;
   /** Approve week is possible now (Whole week mode: no required Draft or Rejected day left). */
   approvable: boolean;
@@ -132,7 +133,7 @@ export class ApprovalsService {
               .where(and(inArray(timeEntries.employeeId, ids), between(timeEntries.workDate, monday, sunday)))
               .groupBy(timeEntries.employeeId, timeEntries.workDate),
             tx
-              .select({ employeeId: timesheetDays.employeeId, date: timesheetDays.workDate, status: timesheetDays.status })
+              .select({ employeeId: timesheetDays.employeeId, date: timesheetDays.workDate, status: timesheetDays.status, resubmittedAt: timesheetDays.resubmittedAt })
               .from(timesheetDays)
               .where(and(inArray(timesheetDays.employeeId, ids), between(timesheetDays.workDate, monday, sunday))),
             tx
@@ -143,6 +144,7 @@ export class ApprovalsService {
         : [[], [], []];
       const minutesOf = new Map(sums.map((s) => [`${s.employeeId}:${s.date}`, s.minutes]));
       const statusOf = new Map(dayRows.map((d) => [`${d.employeeId}:${d.date}`, d.status]));
+      const resubmittedOf = new Set(dayRows.filter((d) => d.status === 'submitted' && d.resubmittedAt).map((d) => `${d.employeeId}:${d.date}`));
       const flagsOf = new Map(flags.map((f) => [f.employeeId, f]));
 
       const rows: ApprovalRow[] = people.map((p) => {
@@ -166,6 +168,7 @@ export class ApprovalsService {
           expectedMinutes: days.reduce((a, d) => a + d.expected, 0),
           missing: submittableDays(days, today),
           waiting: days.filter((d) => d.status === 'submitted').length,
+          resubmitted: days.filter((d) => resubmittedOf.has(`${p.id}:${d.date}`)).length,
           returned: days.filter((d) => d.status === 'rejected').length,
           approvable: 'dates' in approvableDays(days, settings.approvalMode),
         };
@@ -234,7 +237,7 @@ export class ApprovalsService {
         // Only days still Submitted change: fewer rows than picked means the week changed meanwhile (spec 8.2, 8.4).
         const changed = await tx
           .update(timesheetDays)
-          .set(action === 'approve' ? { approvedAt: now, approvedByUserId: ctx.userId, status: 'approved' } : { returnedAt: now, returnedByUserId: ctx.userId, status: 'rejected', comment: comment ?? null })
+          .set(action === 'approve' ? { approvedAt: now, approvedByUserId: ctx.userId, status: 'approved' } : { returnedAt: now, returnedByUserId: ctx.userId, status: 'rejected', comment: comment ?? null, resubmittedAt: null, reply: null })
           .where(and(eq(timesheetDays.employeeId, employeeId), inArray(timesheetDays.workDate, pick.dates), eq(timesheetDays.status, 'submitted')))
           .returning({ date: timesheetDays.workDate });
         if (changed.length !== pick.dates.length) throw new ConflictException('This week changed, please review it again');
