@@ -9,12 +9,11 @@ import { employees, tenants, timeEntries, timesheetDays, type TimesheetDayStatus
 import { JobsService } from '../../shared/events/jobs.service';
 import { zonedDayStart, zonedParts } from '../../shared/time/zoned-time';
 import { type CallerAccess, PeopleAccess } from '../people';
-import { approvableDays, type ApprovalRight, approvalRight, type ApprovalTarget, type DayPick } from './approval-rules';
+import { approvableDays, type ApprovalRight, approvalRight, type ApprovalTarget, type DayPick, returnableDays } from './approval-rules';
 import { callerFor } from './deadlines';
 import { addDays, deadlineInstant, deadlineOf, expectedMinutes, isoWeek, isRequired, mondayOf, submittableDays, type TimesheetSettings, type WeekDay, weekDates, weekLabel, weekStatus, type WeekStatus } from './timesheet-rules';
 import { actorNameOf, readWeek, recordDayEvents, type WeekView } from './timesheet.service';
 import { holidaysBetween, timesheetSettings } from './timesheet-settings';
-import { returnableDays } from './approval-rules';
 
 /** One employee's week on the Approvals list (CD-157, design `#cd-157`). */
 export interface ApprovalRow {
@@ -85,8 +84,8 @@ export class ApprovalsService {
    * timesheet, managers their direct and indirect reports; with their reporting line for the rule.
    * shortcut: people without an app account are left out until CD-317 lets Admins enter for them, add them with it.
    */
-  private async visible(tx: Tx, access: CallerAccess, employeeId?: string) {
-    const ids = employeeId ? [employeeId] : access.isAdmin ? null : [...access.reportIds];
+  private async visible(tx: Tx, access: CallerAccess) {
+    const ids = access.isAdmin ? null : [...access.reportIds];
     if (ids && ids.length === 0) return [];
     return tx
       .select({
