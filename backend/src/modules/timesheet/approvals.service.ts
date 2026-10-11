@@ -5,11 +5,11 @@ import { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
-import { employees, tenants, timeEntries, timesheetDays, type TimesheetDayStatus, timesheetWeeks } from '../../shared/database/schema';
+import { employees, tasks, tenants, timeEntries, timesheetDayEvents, timesheetDays, type TimesheetDayStatus, timesheetWeeks, workOrders } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import { zonedDayStart, zonedParts } from '../../shared/time/zoned-time';
 import { type CallerAccess, PeopleAccess } from '../people';
-import { approvableDays, type ApprovalRight, approvalRight, type ApprovalTarget, type DayPick, returnableDays } from './approval-rules';
+import { approvableDays, type ApprovalRight, approvalRight, type ApprovalTarget, type DayPick, returnableDays, unlockableDays } from './approval-rules';
 import { callerFor } from './deadlines';
 import { addDays, deadlineInstant, deadlineOf, expectedMinutes, isoWeek, isRequired, mondayOf, submittableDays, type TimesheetSettings, type WeekDay, weekDates, weekLabel, weekStatus, type WeekStatus } from './timesheet-rules';
 import { actorNameOf, readWeek, recordDayEvents, type WeekView } from './timesheet.service';
@@ -53,6 +53,22 @@ export interface ApprovalsView {
 export interface ApproverWeek {
   week: WeekView;
   right: ApprovalRight;
+}
+
+/** An entry as the history trigger snapshots it (`timesheet_entry_json`, drizzle/0091). */
+interface EntrySnapshot {
+  employeeId: string;
+  date: string;
+  taskId: string | null;
+  workOrderId: string | null;
+  minutes: number;
+  note: string | null;
+}
+
+/** The week's history (spec 9.5): status events and entry changes, oldest first. */
+export interface WeekHistory {
+  events: { date: string; kind: string; actorName: string | null; comment: string | null; approvalMode: 'week' | 'day'; at: string }[];
+  changes: { at: string; actorName: string | null; date: string; action: 'created' | 'updated' | 'deleted'; field: string | null; from: unknown; to: unknown; row: string; minutes: number; note: string | null }[];
 }
 
 const manager = alias(employees, 'manager');
@@ -218,6 +234,121 @@ export class ApprovalsService {
     return this.decide(ctx, employeeId, weekStart, 'return', (days) => returnableDays(days, dates), comment);
   }
 
+  /**
+   * Admin unlock (spec 9.2, CD-159): approved days go back to the employee as Rejected with the
+   * reason as the comment (T6); the Late flag stays. Admins only, never their own days. The
+   * employee and whoever approved the days are emailed; the audit log has `timesheet.day_unlocked`.
+   */
+  unlock(ctx: TenantContext, employeeId: string, weekStart: string, reason: string, dates?: string[]): Promise<ApproverWeek> {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        const access = await this.people.of(ctx, tx);
+        if (!access.isAdmin) throw new ForbiddenException('Only Admins can unlock approved days');
+        const [p] = await this.target(tx, access, employeeId);
+        if (access.isSelf(employeeId)) throw new ForbiddenException('You cannot unlock your own days');
+        const { settings, timeZone, now, today } = await this.context(tx, ctx.tenantId);
+        const caller = await callerFor(tx, employeeId, today, settings, timeZone, now);
+        const before = await readWeek(tx, caller, weekStart);
+        const pick = unlockableDays(
+          before.days.map((d) => ({ date: d.date, status: d.status, required: d.required, minutes: d.minutes })),
+          dates,
+        );
+        if ('error' in pick) throw new BadRequestException(pick.error);
+        const approvers = await tx
+          .select({ userId: timesheetDays.approvedByUserId })
+          .from(timesheetDays)
+          .where(and(eq(timesheetDays.employeeId, employeeId), inArray(timesheetDays.workDate, pick.dates), isNotNull(timesheetDays.approvedByUserId)));
+        const changed = await tx
+          .update(timesheetDays)
+          .set({ status: 'rejected', returnedAt: now, returnedByUserId: ctx.userId, comment: reason, resubmittedAt: null, reply: null, approvedAt: null, approvedByUserId: null, approvedExpectedMinutes: null, approvedMinutes: null })
+          .where(and(eq(timesheetDays.employeeId, employeeId), inArray(timesheetDays.workDate, pick.dates), eq(timesheetDays.status, 'approved')))
+          .returning({ date: timesheetDays.workDate });
+        if (changed.length !== pick.dates.length) throw new ConflictException('This week changed, please review it again');
+        const days = pick.dates.slice().sort();
+        const actor = { userId: ctx.userId, name: await actorNameOf(tx, ctx.userId) };
+        await recordDayEvents(tx, { tenantId: ctx.tenantId, employeeId, dates: days, kind: 'unlocked', actor, comment: reason, approvalMode: settings.approvalMode });
+        await this.audit.record(tx, ctx, { action: 'timesheet.day_unlocked', entityType: 'employee', entityId: employeeId, data: { weekStart, days, reason } });
+        const recipients = new Set<string>([...approvers.map((a) => a.userId!), ...(p.userId ? [p.userId] : [])]);
+        recipients.delete(ctx.userId);
+        for (const recipientUserId of recipients) {
+          await this.jobs.send(
+            'timesheet.notice-email',
+            {
+              tenantId: ctx.tenantId,
+              kind: 'unlocked',
+              weekStart,
+              recipientUserId,
+              week: { weekStart, weekNumber: before.weekNumber, deadline: before.deadline, enteredMinutes: before.days.reduce((a, d) => a + d.minutes, 0), expectedMinutes: before.days.reduce((a, d) => a + d.expectedMinutes, 0), missing: [] },
+              unlocked: { days, reason, adminName: actor.name, employeeId, employeeName: p.name, toEmployee: recipientUserId === p.userId },
+            },
+            tx,
+          );
+        }
+        return { week: await readWeek(tx, caller, weekStart), right: this.right(access, p) };
+      })
+      .catch(mapDbError);
+  }
+
+  /**
+   * The week's history (spec 9.5, CD-159), oldest first: every status change of its days
+   * (`timesheet_day_events`) and every change to its entries (`record_changes`, written by the
+   * `timesheet_entry_history` trigger with whole-row snapshots). For the employee, their approvers
+   * and Admins; task and work order names are today's, a deleted one reads "Deleted".
+   */
+  history(ctx: TenantContext, employeeId: string, week?: string): Promise<WeekHistory> {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const access = await this.people.of(ctx, tx);
+      await this.target(tx, access, employeeId);
+      const { today } = await this.context(tx, ctx.tenantId);
+      const monday = week ?? mondayOf(today);
+      const sunday = addDays(monday, 6);
+      const events = await tx
+        .select({ date: timesheetDayEvents.workDate, kind: timesheetDayEvents.kind, actorName: timesheetDayEvents.actorName, comment: timesheetDayEvents.comment, approvalMode: timesheetDayEvents.approvalMode, at: timesheetDayEvents.createdAt })
+        .from(timesheetDayEvents)
+        .where(and(eq(timesheetDayEvents.employeeId, employeeId), between(timesheetDayEvents.workDate, monday, sunday)))
+        .orderBy(timesheetDayEvents.createdAt, timesheetDayEvents.workDate);
+      const { rows } = await tx.execute<{ id: string; action: string; field: string | null; old_value: EntrySnapshot | null; new_value: EntrySnapshot | null; changed_at: string | Date; actor_name: string | null }>(sql`
+        select c.id, c.action, c.field, c.old_value, c.new_value, c.changed_at, u.display_name as actor_name
+        from record_changes c left join users u on u.id = c.actor_user_id
+        where c.entity_type = 'time_entry' and coalesce(c.new_value, c.old_value) ->> 'employeeId' = ${employeeId}
+          and (c.new_value ->> 'date' between ${monday} and ${sunday} or c.old_value ->> 'date' between ${monday} and ${sunday})
+        order by c.changed_at, c.id`);
+      const snaps = rows.map((r) => (r.new_value ?? r.old_value)!);
+      const taskIds = [...new Set(snaps.flatMap((s) => (s.taskId ? [s.taskId] : [])))];
+      const orderIds = [...new Set(snaps.flatMap((s) => (s.workOrderId ? [s.workOrderId] : [])))];
+      const [taskRows, orderRows] = await Promise.all([
+        taskIds.length ? tx.select({ id: tasks.id, number: tasks.number, name: tasks.name }).from(tasks).where(inArray(tasks.id, taskIds)) : [],
+        orderIds.length ? tx.select({ id: workOrders.id, number: workOrders.number, title: workOrders.title }).from(workOrders).where(inArray(workOrders.id, orderIds)) : [],
+      ]);
+      const rowOf = (s: EntrySnapshot) => {
+        if (s.taskId) {
+          const t = taskRows.find((x) => x.id === s.taskId);
+          return t ? `T-${t.number} ${t.name}` : 'Deleted task';
+        }
+        const o = orderRows.find((x) => x.id === s.workOrderId);
+        return o ? `WO-${o.number} ${o.title}` : 'Deleted work order';
+      };
+      return {
+        events: events.map((e) => ({ ...e, at: e.at.toISOString() })),
+        changes: rows.map((r) => {
+          const snap = (r.new_value ?? r.old_value)!;
+          return {
+            at: new Date(r.changed_at).toISOString(),
+            actorName: r.actor_name,
+            date: snap.date,
+            action: r.action as 'created' | 'updated' | 'deleted',
+            field: r.field,
+            from: r.field && r.old_value ? (r.old_value[r.field as keyof EntrySnapshot] ?? null) : null,
+            to: r.field && r.new_value ? (r.new_value[r.field as keyof EntrySnapshot] ?? null) : null,
+            row: rowOf(snap),
+            minutes: snap.minutes,
+            note: snap.note,
+          };
+        }),
+      };
+    });
+  }
+
   private decide(ctx: TenantContext, employeeId: string, weekStart: string, action: 'approve' | 'return', choose: (days: WeekDay[], settings: TimesheetSettings) => DayPick, comment?: string): Promise<ApproverWeek> {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
@@ -241,6 +372,10 @@ export class ApprovalsService {
           .where(and(eq(timesheetDays.employeeId, employeeId), inArray(timesheetDays.workDate, pick.dates), eq(timesheetDays.status, 'submitted')))
           .returning({ date: timesheetDays.workDate });
         if (changed.length !== pick.dates.length) throw new ConflictException('This week changed, please review it again');
+        // The day as it was approved (spec 9.1): the snapshot payroll and the unlock dialog show.
+        if (action === 'approve')
+          for (const d of before.days.filter((x) => pick.dates.includes(x.date)))
+            await tx.update(timesheetDays).set({ approvedExpectedMinutes: d.expectedMinutes, approvedMinutes: d.minutes }).where(and(eq(timesheetDays.employeeId, employeeId), eq(timesheetDays.workDate, d.date)));
         const dates = pick.dates.slice().sort();
         await recordDayEvents(tx, { tenantId: ctx.tenantId, employeeId, dates, kind: action === 'approve' ? 'approved' : 'returned', actor, comment, approvalMode: settings.approvalMode });
         await this.audit.record(tx, ctx, { action: action === 'approve' ? 'timesheet.approved' : 'timesheet.returned', entityType: 'employee', entityId: employeeId, data: { weekStart, days: dates, override: right === 'override', ...(comment ? { comment } : {}) } });

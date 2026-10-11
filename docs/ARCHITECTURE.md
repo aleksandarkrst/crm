@@ -1576,7 +1576,9 @@ the reminder and after-deadline emails (CD-154) and the approval screen (CD-157)
     decision (CD-157, `drizzle/0087`): `approved_at`/`approved_by_user_id`,
     `returned_at`/`returned_by_user_id` and the latest `comment` (1 to 1,000 characters), and the
     employee's answer (CD-158, `drizzle/0089`): `resubmitted_at` and their optional `reply`, cleared
-    by the next return. The design's Rejected is the spec's Returned.
+    by the next return; and the approval snapshot (CD-159, `drizzle/0090`):
+    `approved_expected_minutes` and `approved_minutes` as the day was when approved, cleared by an
+    unlock. The design's Rejected is the spec's Returned.
   - `timesheet_day_events` (CD-157, spec 9.5; RLS and an append-only trigger in `drizzle/0088`):
     one row per day and status change (`submitted`, `auto_submitted`, `recalled`, `approved`,
     `returned`, `resubmitted`, `unlocked`), with the actor's user id and their name at the time
@@ -1655,8 +1657,28 @@ the reminder and after-deadline emails (CD-154) and the approval screen (CD-157)
     day's comment above the grid ("Wed 7 Oct was rejected by Marko Ilić · Mon 12 Oct, 09:12: …"),
     the button "Resubmit rejected days (N)" with the reply dialog, and in Day by day mode a
     Resubmit under the day; the approver's week marks the day Resubmitted with the comment and the
-    reply, and the Approvals list shows a Resubmitted badge. The per-entry Changes view waits for
-    the entry history (CD-159).
+    reply, and the Approvals list shows a Resubmitted badge.
+  - **Lock, unlock and history** (CD-159, spec 9). The lock is the trigger on time_entries (423
+    "Day is approved and locked", every write path). Approving stores the snapshot on the day.
+    `POST approvals/unlock { employeeId, weekStart, dates?, reason }` (T6): Admins only, never
+    their own days, a reason of 10 to 1,000 characters; the chosen Approved days (or all of them)
+    go back as Rejected with the reason as the comment, the snapshot and any reply cleared, the Late
+    flag untouched; an `unlocked` history event, the audit action `timesheet.day_unlocked`, and
+    "Timesheet day unlocked: week 41" to the employee and to whoever approved the days
+    (`unlockedEmail`). **Entry history:** the `timesheet_entry_history` trigger (`drizzle/0091`)
+    writes a `record_changes` row of entity type `time_entry` for every insert, update (one per
+    changed field: minutes, note, date, task or work order) and delete of an entry, with whole-row
+    snapshots (`timesheet_entry_json`: employee, date, task or work order, minutes, note) in
+    `old_value`/`new_value`, so a week's history is read by employee and date after the entry is
+    gone (a partial expression index on the employee). `GET approvals/:employeeId/history?week=`
+    answers `{ events, changes }` oldest first (the day events, and the entry changes with today's
+    task or work order name, "Deleted task" when it went) to the employee, their approvers and
+    Admins. **Screens:** the approver's week has Unlock day on an approved day (Admins; a dialog
+    with the reason), "Approved by … · at approval 8 of 8 h · locked", the Changes list under a
+    resubmitted day (entry changes since it was last returned or unlocked, spec 5.6), and a History
+    button; the Timesheet's "⋯" has History too. Both open `screens/approvals/HistoryPanel.tsx`.
+    Not built: the system return when time off or a trip changes (spec 9.3, milestone 16) and the
+    payroll "Changes to earlier periods" (CD-160).
   - **Late** (CD-155, spec 5.5): the week answers `deadlinePassed` and `lateIfSubmitted` (days Submit
     week would submit that never went in, after the deadline). Submitting one of them (the week or
     a single day) sets `timesheet_weeks.late_at` once (`markLate`); recalling and resubmitting days

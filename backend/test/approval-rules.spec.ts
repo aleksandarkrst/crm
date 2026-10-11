@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { approvableDays, approvalRight, returnableDays } from '../src/modules/timesheet/approval-rules';
+import { approvableDays, approvalRight, returnableDays, unlockableDays } from '../src/modules/timesheet/approval-rules';
 import type { WeekDay } from '../src/modules/timesheet/timesheet-rules';
 
 const day = (date: string, status: WeekDay['status'], required = true, minutes = 480): WeekDay => ({ date, status, required, minutes });
@@ -44,6 +44,16 @@ describe('approvableDays (spec 5.3 T3)', () => {
     expect(approvableDays(days, 'day', ['2026-10-07'])).toEqual({ dates: ['2026-10-07'] });
     expect(approvableDays(days, 'day', ['2026-10-06'])).toEqual({ error: 'This week changed, please review it again', conflict: true });
     expect(approvableDays(week('draft', 'draft', 'draft', 'draft', 'draft'), 'day')).toEqual({ error: 'Nothing to approve' });
+  });
+});
+
+describe('unlockableDays (spec 5.3 T6, CD-159)', () => {
+  it('covers the chosen Approved days, or all of them; anything else is refused', () => {
+    const days = week('approved', 'approved', 'submitted', 'rejected', 'draft');
+    expect(unlockableDays(days)).toEqual({ dates: ['2026-10-05', '2026-10-06'] });
+    expect(unlockableDays(days, ['2026-10-06'])).toEqual({ dates: ['2026-10-06'] });
+    expect(unlockableDays(days, ['2026-10-07'])).toEqual({ error: 'Only approved days can be unlocked' });
+    expect(unlockableDays(week('submitted', 'submitted', 'submitted', 'submitted', 'submitted'))).toEqual({ error: 'Nothing to unlock' });
   });
 });
 

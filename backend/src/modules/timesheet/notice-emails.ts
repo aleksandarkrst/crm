@@ -163,3 +163,30 @@ export function resubmittedEmail(c: Common, w: Pick<WeekFacts, 'weekStart' | 'we
     `You get this email because you approve timesheets in ${c.workspaceName}.`,
   );
 }
+
+export interface UnlockedDays {
+  days: string[];
+  reason: string;
+  adminName: string | null;
+  employeeId: string;
+  employeeName: string;
+  /** The employee's copy says "your"; the approver's names the employee. */
+  toEmployee: boolean;
+}
+
+/** "Timesheet day unlocked" (CD-159, spec 9.2): an Admin reopened approved days; the employee corrects and resubmits, the approver approves again. */
+export function unlockedEmail(c: Common, w: Pick<WeekFacts, 'weekStart' | 'weekNumber'>, u: UnlockedDays): MailMessage {
+  const who = u.adminName ?? 'An Admin';
+  const what = u.days.length === 1 ? dayLabel(u.days[0]!) : `${u.days.length} days (${u.days.map(dayLabel).join(', ')})`;
+  const whose = u.toEmployee ? 'your timesheet' : `${u.employeeName}'s timesheet`;
+  return message(
+    c,
+    `Timesheet day unlocked: week ${w.weekNumber}`,
+    [
+      `${who} unlocked ${what} of ${whose} for week ${w.weekNumber} (${range(w.weekStart)}). ${u.days.length === 1 ? 'The day is' : 'The days are'} back as Rejected: ${u.toEmployee ? 'correct the hours and resubmit' : `${u.employeeName} corrects the hours and resubmits`}, then ${u.toEmployee ? 'your approver approves' : 'you approve'} again.`,
+    ],
+    [['Reason', u.reason]],
+    u.toEmployee ? { label: 'Open timesheet', href: `${base(c.appUrl)}/timesheet?week=${w.weekStart}` } : { label: 'Open Approvals', href: `${base(c.appUrl)}/approvals/${u.employeeId}?week=${w.weekStart}` },
+    `You get this email because an approved timesheet day in ${c.workspaceName} was unlocked.`,
+  );
+}

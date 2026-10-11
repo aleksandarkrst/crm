@@ -3,7 +3,7 @@ import { RequireTenant, Tenant, type TenantContext } from '../../shared/authoriz
 import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
 import { ApprovalsService } from './approvals.service';
-import { ApprovalsQuery, ApproveDays, ReturnDays, WeekQuery } from './timesheet.schemas';
+import { ApprovalsQuery, ApproveDays, ReturnDays, UnlockDays, WeekQuery } from './timesheet.schemas';
 
 /**
  * Approvals (CD-157): the weeks the caller approves. The list: `{ weekStart, weekNumber, label,
@@ -38,5 +38,17 @@ export class ApprovalsController {
   @Post('return')
   return(@Tenant() ctx: TenantContext, @Body(new ZodPipe(ReturnDays)) body: ReturnDays) {
     return this.approvals.return(ctx, body.employeeId, body.weekStart, body.comment, body.dates);
+  }
+
+  /** Admins only (CD-159): approved days (or `dates` of them) go back to the employee as Rejected, with the reason. */
+  @Post('unlock')
+  unlock(@Tenant() ctx: TenantContext, @Body(new ZodPipe(UnlockDays)) body: UnlockDays) {
+    return this.approvals.unlock(ctx, body.employeeId, body.weekStart, body.reason, body.dates);
+  }
+
+  /** The week's history (CD-159): `{ events, changes }`, oldest first; for the employee, their approvers and Admins. */
+  @Get(':employeeId/history')
+  history(@Tenant() ctx: TenantContext, @Param('employeeId', new ZodPipe(UuidParam)) employeeId: string, @Query(new ZodPipe(WeekQuery)) query: WeekQuery) {
+    return this.approvals.history(ctx, employeeId, query.week);
   }
 }

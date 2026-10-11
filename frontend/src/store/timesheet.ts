@@ -1,5 +1,5 @@
 import { api } from '../lib/api';
-import { type ApiApprovals, type ApiApproverWeek, approvalsApi, type ApiTimeCard, type ApiTimesheetWeek, timesheetApi } from '../lib/timesheetApi';
+import { type ApiApprovals, type ApiApproverWeek, approvalsApi, type ApiTimeCard, type ApiTimesheetWeek, type ApiWeekHistory, timesheetApi } from '../lib/timesheetApi';
 import { useProjectsRead } from './projects';
 
 /** The caller's timesheet week (CD-152), read again after any timesheet, task, work order or project change (`s.timesheetRev`). */
@@ -7,6 +7,10 @@ export const useTimesheetWeek = (week: string | undefined) => useProjectsRead<Ap
 
 /** The Approvals list (CD-157): the weeks the caller approves, read again after any timesheet change. */
 export const useApprovals = (week: string | undefined) => useProjectsRead<ApiApprovals>(true, () => approvalsApi.list(week), `approvals:${week ?? ''}`, 'timesheetRev');
+
+/** One person's week history (CD-159): status events and entry changes, read again after any timesheet change. */
+export const useWeekHistory = (employeeId: string | undefined, week: string | undefined) =>
+  useProjectsRead<ApiWeekHistory>(!!employeeId, () => approvalsApi.history(employeeId!, week), `week-history:${employeeId ?? ''}:${week ?? ''}`, 'timesheetRev');
 
 /** One person's week for their approver (CD-157). */
 export const useApproverWeek = (employeeId: string | undefined, week: string | undefined) =>
