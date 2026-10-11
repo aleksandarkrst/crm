@@ -301,8 +301,13 @@ export class TimesheetService {
           detail: w.auto_submitted_at ? 'Auto-submitted' : hours < 1 ? 'Less than 1 h late' : `${hours >= 24 ? `${Math.floor(hours / 24)} ${hours >= 48 ? 'days' : 'day'} ` : ''}${hours % 24} h late`,
         };
       });
-      const last = await readWeek(tx, { ...caller, employeeId, name: employee.fullName,
-        employment: { start: employee.employmentStartDate, end: employee.employmentEndDate } }, addDays(thisWeek, -7));
+      const lastWeek = addDays(thisWeek, -7);
+      const employment: Employment = { start: employee.employmentStartDate, end: employee.employmentEndDate };
+      // Last week wholly before their first day (a new starter) or after their last: nothing to
+      // read, and the status says which rather than "No entry needed".
+      const last = weekDates(lastWeek).some((d) => employed(d, employment))
+        ? await readWeek(tx, { ...caller, employeeId, name: employee.fullName, employment }, lastWeek)
+        : { weekStart: lastWeek, status: 'no_entry' as const, statusLabel: employment.start && lastWeek < employment.start ? 'Not yet employed' : 'Employment ended', late: false };
       return { applicable: true as const, from, through: caller.today, lateCount: rows.length,
         autoSubmittedCount: rows.filter((w) => w.auto_submitted_at).length,
         returnedWeekCount: returned.rows[0]?.count ?? 0,

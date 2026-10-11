@@ -4,7 +4,11 @@ import { paths } from '../../lib/paths';
 import { useStore } from '../../store/store';
 import { dateLabel, Row } from './parts';
 
-/** The read-only CD-161 block; server permissions decide whether it is visible. */
+/**
+ * The read-only CD-161 block; server permissions decide whether it is visible. Nothing is shown
+ * until the server answered, so someone who may not see it (a peer) never gets a loading box;
+ * a re-read keeps the figures on screen (store/employeeCard.ts).
+ */
 export function TimesheetSection({ id }: { id: string }) {
   const { s, employeeCard } = useStore();
   useEffect(() => { void employeeCard.loadMyEmployeeId(); }, [employeeCard]);
@@ -12,12 +16,12 @@ export function TimesheetSection({ id }: { id: string }) {
     void employeeCard.timesheetSummary(id);
   }, [id, s.timesheetRev, s.peopleRev, employeeCard]);
   const result = s.employeeTimesheets[id];
-  if (result?.status === 'hidden') return null;
-  const summary = result?.status === 'ready' ? result.summary : undefined;
+  if (!result || result.status === 'loading' || result.status === 'hidden') return null;
+  const summary = result.status === 'ready' ? result.summary : undefined;
   return (
     <section className="card card-pad emp-timesheet" data-testid="employee-timesheet">
       <h3>Timesheet</h3>
-      {!summary ? <p className="emp-note" role={result?.status === 'error' ? 'alert' : undefined}>{result?.status === 'error' ? 'Timesheet summary could not be loaded.' : 'Loading timesheet summary'}</p>
+      {!summary ? <p className="emp-note" role="alert">Timesheet summary could not be loaded.</p>
         : !summary.applicable ? <p className="emp-note">Not applicable — timesheet not required.</p>
           : <>
             <div className="emp-timesheet-stats">

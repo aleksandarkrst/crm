@@ -9,7 +9,7 @@ interface Summary {
   autoSubmittedCount: number;
   returnedWeekCount: number;
   recent: { weekStart: string; autoSubmitted: boolean; firstSubmittedAt: string | null; detail: string }[];
-  lastWeek: { weekStart: string; status: string; late: boolean };
+  lastWeek: { weekStart: string; status: string; statusLabel: string; late: boolean };
 }
 let owner: Session, employee: Session, manager: Session, senior: Session, peer: Session;
 let tenant: string, employeeId: string, managerId: string, seniorId: string, monday: string;
@@ -76,6 +76,20 @@ describe('employee timesheet summary (CD-161)', () => {
     const result = await summary(owner);
     expect(result.recent[0]!.firstSubmittedAt).toBe(`${last}T10:00:00.000Z`);
     expect(result.recent[0]!.detail).toMatch(/^1 day \d+ h late$/);
+  });
+  it('reads last week for a new starter and a leaver without an error, naming why there is nothing', async () => {
+    const starter = await signIn('employee-late-starter');
+    const starterId = await joinAsEmployee(owner, tenant, starter);
+    const lastWeek = addDays(monday, -7);
+    // Started this Monday: last week lies before their first day.
+    await asTenantSql(tenant, 'update employees set employment_start_date = $2 where id = $1', [starterId, monday]);
+    expect(await summary(owner, starterId)).toMatchObject({ applicable: true, lateCount: 0, recent: [], lastWeek: { weekStart: lastWeek, status: 'no_entry', statusLabel: 'Not yet employed', late: false } });
+    // Started on last week's Thursday: the employed days count, the earlier ones do not.
+    await asTenantSql(tenant, 'update employees set employment_start_date = $2 where id = $1', [starterId, addDays(lastWeek, 3)]);
+    expect((await summary(owner, starterId)).lastWeek).toMatchObject({ weekStart: lastWeek, status: 'not_submitted', late: false });
+    // Left two weeks ago: last week lies after their last day.
+    await asTenantSql(tenant, 'update employees set employment_start_date = null, employment_end_date = $2 where id = $1', [starterId, addDays(lastWeek, -7)]);
+    expect((await summary(owner, starterId)).lastWeek).toMatchObject({ weekStart: lastWeek, status: 'no_entry', statusLabel: 'Employment ended', late: false });
   });
   it('includes the first Monday inside the calendar window and excludes the preceding Monday', async () => {
     const from = (await summary(owner)).from;

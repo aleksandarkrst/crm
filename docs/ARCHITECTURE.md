@@ -1703,10 +1703,13 @@ the reminder and after-deadline emails (CD-154).
   Deadlines are derived from current workspace settings and holidays; historical settings are
   not stored, so changing them can change the displayed deadline/duration, never the Late count.
   The summary also returns last week's status and the count of weeks with currently Returned
-  (Rejected) days, counted once per week. Resubmitting them reduces that count.
+  (Rejected) days, counted once per week. Resubmitting them reduces that count. Last week
+  wholly before someone's first day or after their last reads "Not yet employed" or
+  "Employment ended" instead of a week view.
   `screens/employee/TimesheetSection.tsx` reads through the employee-card store action and
-  refreshes on timesheet and people revisions; forbidden summaries are hidden. The employee's
-  Open timesheet link opens their own last week. Manager links await the team view (CD-157).
+  refreshes on timesheet and people revisions; forbidden summaries are hidden. Nothing is shown
+  until the first answer, and a re-read keeps the figures (or the hidden state) on screen. The
+  employee's Open timesheet link opens their own last week. Manager links await the team view (CD-157).
 - **Screen** (`/timesheet?week=<Monday>`, Workforce's first page; `screens/Timesheet.tsx`,
   `screens/timesheet/`): week navigation, the status badge, "Submit by Fri 9 Oct, 17:00", Copy last
   week, "⋯" with Recall submission, Submit week. The grid: Project tasks, then Work orders (sub-line

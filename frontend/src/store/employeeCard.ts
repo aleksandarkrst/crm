@@ -126,17 +126,25 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
   const liveIds = new Set<string>();
   let liveTimer: ReturnType<typeof setTimeout> | undefined;
   const summaryRequests = new Map<string, number>();
+  /**
+   * The card's Timesheet block (CD-161). "loading" is only the state before the first answer: a
+   * re-read (timesheet and people live hints) keeps what is on screen, so the figures stay while
+   * they refresh and a hidden block stays hidden. A refused re-read hides the block; any other
+   * failure keeps the figures already shown.
+   */
   const loadTimesheetSummary = async (id: string) => {
     const request = (summaryRequests.get(id) ?? 0) + 1;
     summaryRequests.set(id, request);
     const putSummary = (result: TimesheetSummaryResult) => {
       if (summaryRequests.get(id) === request) set((x) => ({ employeeTimesheets: { ...x.employeeTimesheets, [id]: result } }));
     };
-    putSummary({ status: 'loading' });
+    const before = cur().employeeTimesheets[id];
+    if (!before || before.status === 'error') putSummary({ status: 'loading' });
     try {
       putSummary({ status: 'ready', summary: await employeeTimesheetSummary(id) });
     } catch (err) {
-      putSummary({ status: err instanceof ApiError && (err.status === 403 || err.status === 404) ? 'hidden' : 'error' });
+      if (err instanceof ApiError && (err.status === 403 || err.status === 404)) putSummary({ status: 'hidden' });
+      else if (before?.status !== 'ready') putSummary({ status: 'error' });
     }
   };
 
