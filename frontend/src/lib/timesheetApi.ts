@@ -48,6 +48,9 @@ export interface ApiTimesheetDay {
   returnedBy: string | null;
   approvedAt: string | null;
   approvedBy: string | null;
+  /** The employee resubmitted the returned day (CD-158): when, and their reply to the comment. */
+  resubmittedAt: string | null;
+  reply: string | null;
 }
 
 export interface ApiTimesheetWeek {
@@ -63,6 +66,8 @@ export interface ApiTimesheetWeek {
   status: WeekStatus;
   statusLabel: string;
   submittable: string[];
+  /** Rejected days "Resubmit rejected days" sends again (CD-158). */
+  resubmittable: string[];
   canRecall: boolean;
   /** First submitted after the deadline; submitted by the deadline job (CD-153). */
   late: boolean;
@@ -117,6 +122,8 @@ export interface ApiApprovalRow {
   /** Required days never submitted: "Not submitted" after the deadline. */
   missing: string[];
   waiting: number;
+  /** Of the waiting days, those resubmitted after a return (CD-158). */
+  resubmitted: number;
   returned: number;
   approvable: boolean;
 }
@@ -161,6 +168,9 @@ export const timesheetApi = {
   /** The week; with `date`, that day only (Day by day mode, CD-156). */
   submit: (weekStart: string, date?: string) => api<ApiTimesheetWeek>('/timesheet/submit', { method: 'POST', json: { weekStart, ...(date ? { date } : {}) } }),
   recall: (weekStart: string) => api<ApiTimesheetWeek>('/timesheet/recall', { method: 'POST', json: { weekStart } }),
+  /** The week's rejected days; with `date`, that day only (Day by day mode). `reply` goes to the approver (CD-158). */
+  resubmit: (weekStart: string, date?: string, reply?: string | null) =>
+    api<ApiTimesheetWeek>('/timesheet/resubmit', { method: 'POST', json: { weekStart, ...(date ? { date } : {}), ...(reply ? { reply } : {}) } }),
 };
 
 /**

@@ -15,6 +15,7 @@ import {
   isRequired,
   mondayOf,
   spanMinutes,
+  resubmittableDays,
   submittableDays,
   type WeekDay,
   weekLabel,
@@ -70,6 +71,17 @@ describe('expected hours and required days (spec 5.1)', () => {
     expect(submittableDays(days, '2026-10-07')).toEqual(['2026-10-05', '2026-10-11']);
     // A future week has nothing to submit.
     expect(submittableDays(days, '2026-09-30')).toEqual([]);
+  });
+
+  it('only Rejected days are resubmitted (spec 5.3 T5, CD-158)', () => {
+    const days: WeekDay[] = [
+      { date: '2026-10-05', status: 'approved', required: true, minutes: 480 },
+      { date: '2026-10-06', status: 'rejected', required: true, minutes: 480 },
+      { date: '2026-10-07', status: 'submitted', required: true, minutes: 480 },
+      { date: '2026-10-08', status: 'rejected', required: true, minutes: 0 },
+      { date: '2026-10-09', status: 'draft', required: true, minutes: 0 },
+    ];
+    expect(resubmittableDays(days)).toEqual(['2026-10-06', '2026-10-08']);
   });
 });
 

@@ -8,9 +8,10 @@ import { addDays, type ApiLoggable, type ApiTimesheetRow, type ApiTimesheetWeek,
 import { projectError } from '../store/projects';
 import { useStore } from '../store/store';
 import { useTimesheetWeek } from '../store/timesheet';
-import { WEEK_BADGE as BADGE } from './approvals/parts';
+import { WEEK_BADGE as BADGE, when } from './approvals/parts';
 import { CopyDialog, skippedText } from './timesheet/CopyDialog';
 import { Grid, type SaveCell } from './timesheet/Grid';
+import { ResubmitDialog } from './timesheet/ResubmitDialog';
 
 const LATE_NOTE = 'This week will be marked as submitted late.';
 
@@ -29,11 +30,13 @@ const listOf = (names: string[]) => (names.length < 2 ? names.join('') : `${name
  * match the database.
  */
 export function Timesheet() {
-  const { flash } = useStore();
+  const { s, flash } = useStore();
   const [params, setParams] = useSearchParams();
   const weekParam = params.get('week') ?? undefined;
   const { data: week, error, set } = useTimesheetWeek(weekParam);
   const [copying, setCopying] = useState(false);
+  /** The rejected days being resubmitted (CD-158): all of them, or one in Day by day mode. */
+  const [resubmitting, setResubmitting] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const menu = usePicker();
   const queue = useRef<Promise<unknown>>(Promise.resolve());
@@ -100,6 +103,19 @@ export function Timesheet() {
         flash(projectError(err));
       }
     });
+  };
+
+  /** Resubmit the rejected days (CD-158, spec 5.3 T5): all of them, or one in Day by day mode; never marks the week Late. */
+  const resubmit = async (w: ApiTimesheetWeek, dates: string[], reply: string | null): Promise<string | null> => {
+    const single = w.settings.approvalMode === 'day' && dates.length === 1 && w.resubmittable.length > 1 ? dates[0] : undefined;
+    try {
+      set(await timesheetApi.resubmit(w.weekStart, single, reply));
+      setResubmitting(null);
+      flash(dates.length === 1 ? `${dayLabel(dates[0]!)} resubmitted` : `${dates.length} days resubmitted`);
+      return null;
+    } catch (err) {
+      return projectError(err);
+    }
   };
 
   const recall = async (w: ApiTimesheetWeek) => {
@@ -183,6 +199,11 @@ export function Timesheet() {
             </div>
           )}
         </div>
+        {week.resubmittable.length > 0 && (
+          <button type="button" className={week.submittable.length ? 'btn-plain' : 'btn btn-primary'} data-testid="ts-resubmit" disabled={busy} onClick={() => setResubmitting(week.resubmittable)}>
+            Resubmit rejected days ({week.resubmittable.length})
+          </button>
+        )}
         <button
           type="button"
           className="btn btn-primary"
@@ -194,8 +215,23 @@ export function Timesheet() {
           {busy ? 'Submitting…' : week.lateIfSubmitted.length ? 'Submit late' : 'Submit week'}
         </button>
       </div>
-      <Grid week={week} onSave={onSave} onAdd={onAdd} onSubmitDay={week.settings.approvalMode === 'day' ? (date) => void submitDay(week, date) : undefined} />
+      {week.days
+        .filter((d) => d.status === 'rejected' && d.comment)
+        .map((d) => (
+          <div className="ts-rejected-note" key={d.date} data-testid="ts-rejected-note" data-date={d.date}>
+            <strong>{dayLabel(d.date)}</strong> was rejected{d.returnedBy ? ` by ${d.returnedBy}` : ''}
+            {d.returnedAt ? ` · ${when(d.returnedAt, s.workspace?.timezone)}` : ''}: <q>{d.comment}</q>
+          </div>
+        ))}
+      <Grid
+        week={week}
+        onSave={onSave}
+        onAdd={onAdd}
+        onSubmitDay={week.settings.approvalMode === 'day' ? (date) => void submitDay(week, date) : undefined}
+        onResubmitDay={week.settings.approvalMode === 'day' ? (date) => setResubmitting([date]) : undefined}
+      />
       <div className="ts-help">Type 7.5, 7,5 or 7:30 · saved when you leave the cell · arrows and Tab move · Shift+Enter opens the note</div>
+      {resubmitting && <ResubmitDialog dates={resubmitting} onClose={() => setResubmitting(null)} onResubmit={(reply) => resubmit(week, resubmitting, reply)} />}
       {copying && (
         <CopyDialog
           weekStart={week.weekStart}

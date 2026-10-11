@@ -56,6 +56,21 @@ export const SubmitWeek = z
   .refine((v) => !v.date || mondayOf(v.date) === v.weekStart, { message: 'The day must be in that week', path: ['date'] });
 export type SubmitWeek = z.infer<typeof SubmitWeek>;
 
+/** POST /api/timesheet/resubmit (CD-158): the week's Rejected days, or one of them (Day by day mode), with an optional reply to the approver. */
+export const ResubmitWeek = z
+  .object({
+    weekStart,
+    date: isoDate.optional(),
+    reply: z
+      .string()
+      .max(1000, 'A reply can have up to 1,000 characters')
+      .transform((v) => (v.trim() === '' ? null : v.trim()))
+      .nullable()
+      .optional(),
+  })
+  .refine((v) => !v.date || mondayOf(v.date) === v.weekStart, { message: 'The day must be in that week', path: ['date'] });
+export type ResubmitWeek = z.infer<typeof ResubmitWeek>;
+
 /** GET /api/timesheet/approvals?week=2026-10-05 (default: the latest week whose deadline passed). */
 export const ApprovalsQuery = z.object({ week: weekStart.optional() });
 export type ApprovalsQuery = z.infer<typeof ApprovalsQuery>;
