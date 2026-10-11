@@ -64,6 +64,11 @@ describe('entering time on behalf (CD-317)', () => {
     expect((await weekOf(marko, draganId)).status).toBe(403);
     expect((await cell(marko, draganId, monday, 480)).status).toBe(403);
     expect((await weekOf(owner, '00000000-0000-4000-8000-000000000000')).status).toBe(404);
+    // Another workspace's employee does not exist here, for an Admin either.
+    const other = await createTenant(peer, 'Other on-behalf tenant');
+    const stranger = await addEmployee(peer, other, { firstName: 'Else', lastName: 'Where' });
+    expect((await weekOf(owner, stranger)).status).toBe(404);
+    expect((await cell(owner, stranger, monday, 480)).status).toBe(404);
     const w = await weekOf(owner, nobodyId);
     expect(w.status).toBe(200);
     expect(w.body.employee).toMatchObject({ id: nobodyId, name: 'Nobody Offline' });
@@ -124,12 +129,15 @@ describe('entering time on behalf (CD-317)', () => {
       expect((await approve(owner, draganId)).status).toBe(403);
       expect((await approve(owner, draganId, [monday])).status).toBe(201);
       expect((await approve(marko, draganId, [tuesday])).status).toBe(201);
+      // Hours the Admin entered count even when the employee submits the day himself (spec 9.4: "entered").
+      const wednesday = addDays(monday, 2);
+      expect((await cell(owner, draganId, wednesday, 480)).status).toBe(200);
+      await ok('POST', '/timesheet/submit', { ...as(dragan), body: { weekStart: monday, date: wednesday } });
+      expect((await ok<Approver>('GET', `/timesheet/approvals/${draganId}/week?week=${monday}`, as(owner))).enteredByMe).toEqual([tuesday, wednesday]);
+      expect((await approve(owner, draganId, [wednesday])).status).toBe(403);
       // Returned and resubmitted on behalf: the resubmission is on behalf too, and Dragan sees the marker on his own week.
-      await ok('POST', '/timesheet/cells', { ...as(dragan), body: { date: addDays(monday, 2), taskId, minutes: 480 } }).catch(() => undefined);
-      await ok('PUT', '/timesheet/cells', { ...as(dragan), body: { date: addDays(monday, 2), taskId, minutes: 480 } });
-      await ok('POST', '/timesheet/submit', { ...as(dragan), body: { weekStart: monday, date: addDays(monday, 2) } });
-      await ok('POST', '/timesheet/approvals/return', { ...as(marko), body: { employeeId: draganId, weekStart: monday, dates: [addDays(monday, 2)], comment: 'Wednesday needs a note.' } });
-      expect((await cell(owner, draganId, addDays(monday, 2), 420)).status).toBe(200);
+      await ok('POST', '/timesheet/approvals/return', { ...as(marko), body: { employeeId: draganId, weekStart: monday, dates: [wednesday], comment: 'Wednesday needs a note.' } });
+      expect((await cell(owner, draganId, wednesday, 420)).status).toBe(200);
       const back = await call<Week>('POST', '/timesheet/resubmit', { ...as(owner), body: { weekStart: monday, date: addDays(monday, 2), employeeId: draganId, reply: 'Fixed by the office.' } });
       expect(back.status).toBe(201);
       expect(back.body.days[2]!.status).toBe('submitted');

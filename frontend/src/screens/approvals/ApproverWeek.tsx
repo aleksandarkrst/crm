@@ -111,7 +111,8 @@ export function ApproverWeek() {
   const waiting = w.days.filter((d) => d.status === 'submitted').map((d) => d.date);
   const blocked = w.days.some((d) => d.required && (d.status === 'draft' || d.status === 'rejected'));
   // Days the caller entered on the employee's behalf (CD-317) need another approver.
-  const canApproveWeek = right && waiting.length > 0 && (dayMode || !blocked) && !waiting.some((d) => enteredByMe.includes(d));
+  const blockedByMe = waiting.some((d) => enteredByMe.includes(d));
+  const canApproveWeek = right && waiting.length > 0 && (dayMode || !blocked) && !blockedByMe;
   const entered = w.days.reduce((a, d) => a + d.minutes, 0);
   const firstName = employee.name.split(' ')[0]!;
   const shown = w.days.filter((d) => d.required || d.minutes > 0);
@@ -156,7 +157,7 @@ export function ApproverWeek() {
               type="button"
               className="btn btn-primary"
               disabled={busy || !canApproveWeek}
-              title={canApproveWeek ? undefined : 'Approve the week once every required day is submitted'}
+              title={canApproveWeek ? undefined : blockedByMe ? 'Another approver must approve the days you entered' : 'Approve the week once every required day is submitted'}
               data-testid="ap-approve-week"
               onClick={() => void approve(w)}
             >

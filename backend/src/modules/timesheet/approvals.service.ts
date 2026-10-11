@@ -130,22 +130,33 @@ export class ApprovalsService {
     return approvalRight({ employeeId: access.employeeId, isAdmin: access.isAdmin }, e);
   }
 
-  /** The week's days `userId` submitted or resubmitted for `employeeId` (CD-317): their own account's submissions don't count. */
-  private async enteredBy(tx: Tx, employeeId: string, monday: string, userId: string): Promise<string[]> {
-    const rows = await tx
-      .select({ date: timesheetDayEvents.workDate })
-      .from(timesheetDayEvents)
-      .innerJoin(employees, eq(employees.id, timesheetDayEvents.employeeId))
-      .where(
-        and(
-          eq(timesheetDayEvents.employeeId, employeeId),
-          between(timesheetDayEvents.workDate, monday, addDays(monday, 6)),
-          inArray(timesheetDayEvents.kind, ['submitted', 'resubmitted']),
-          eq(timesheetDayEvents.actorUserId, userId),
-          or(isNull(employees.userId), ne(employees.userId, userId)),
+  /**
+   * The week's days `userId` entered for `employeeId` (CD-317, spec 9.4): submitted or resubmitted
+   * them, or changed their hours (the entry history), as someone other than the employee's own
+   * account. Those days need another approver, however they were submitted afterwards.
+   */
+  private async enteredBy(tx: Tx, employeeId: string, monday: string, userId: string, employeeUserId: string | null): Promise<string[]> {
+    if (employeeUserId === userId) return [];
+    const sunday = addDays(monday, 6);
+    const [events, { rows: changes }] = await Promise.all([
+      tx
+        .select({ date: timesheetDayEvents.workDate })
+        .from(timesheetDayEvents)
+        .where(
+          and(
+            eq(timesheetDayEvents.employeeId, employeeId),
+            between(timesheetDayEvents.workDate, monday, sunday),
+            inArray(timesheetDayEvents.kind, ['submitted', 'resubmitted']),
+            eq(timesheetDayEvents.actorUserId, userId),
+          ),
         ),
-      );
-    return [...new Set(rows.map((r) => r.date))].sort();
+      tx.execute<{ date: string }>(sql`
+        select distinct coalesce(c.new_value, c.old_value) ->> 'date' as date from record_changes c
+        where c.entity_type = 'time_entry' and c.actor_user_id = ${userId}
+          and coalesce(c.new_value, c.old_value) ->> 'employeeId' = ${employeeId}
+          and (c.new_value ->> 'date' between ${monday} and ${sunday} or c.old_value ->> 'date' between ${monday} and ${sunday})`),
+    ]);
+    return [...new Set([...events.map((r) => r.date), ...changes.map((r) => r.date)])].sort();
   }
 
   /** The list for one week (the latest whose deadline passed, by default): one row per employee, from three queries. */
@@ -244,7 +255,7 @@ export class ApprovalsService {
       const [p] = await this.target(tx, access, employeeId);
       const { settings, timeZone, now, today } = await this.context(tx, ctx.tenantId);
       const view = await readWeek(tx, await callerFor(tx, employeeId, today, settings, timeZone, now), week ?? mondayOf(today));
-      return { week: view, right: this.right(access, p), enteredByMe: await this.enteredBy(tx, employeeId, view.weekStart, ctx.userId) };
+      return { week: view, right: this.right(access, p), enteredByMe: await this.enteredBy(tx, employeeId, view.weekStart, ctx.userId, p.userId) };
     });
   }
 
@@ -327,7 +338,7 @@ export class ApprovalsService {
             tx,
           );
         }
-        return { week: await readWeek(tx, caller, weekStart), right: this.right(access, p), enteredByMe: await this.enteredBy(tx, employeeId, weekStart, ctx.userId) };
+        return { week: await readWeek(tx, caller, weekStart), right: this.right(access, p), enteredByMe: await this.enteredBy(tx, employeeId, weekStart, ctx.userId, p.userId) };
       })
       .catch(mapDbError);
   }
@@ -411,7 +422,7 @@ export class ApprovalsService {
         if ('error' in pick) throw pick.conflict ? new ConflictException(pick.error) : new BadRequestException(pick.error);
         // Days the caller submitted on the employee's behalf need another approver (CD-317, spec 9.4).
         if (action === 'approve') {
-          const mine = await this.enteredBy(tx, employeeId, weekStart, ctx.userId);
+          const mine = await this.enteredBy(tx, employeeId, weekStart, ctx.userId, p.userId);
           const clash = pick.dates.filter((d) => mine.includes(d));
           if (clash.length) throw new ForbiddenException(`You entered ${clash.length === 1 ? 'this day' : 'these days'} on behalf of ${p.name}; another approver must approve ${clash.length === 1 ? 'it' : 'them'}`);
         }
@@ -444,7 +455,7 @@ export class ApprovalsService {
             tx,
           );
         }
-        return { week: await readWeek(tx, caller, weekStart), right, enteredByMe: await this.enteredBy(tx, employeeId, weekStart, ctx.userId) };
+        return { week: await readWeek(tx, caller, weekStart), right, enteredByMe: await this.enteredBy(tx, employeeId, weekStart, ctx.userId, p.userId) };
       })
       .catch(mapDbError);
   }

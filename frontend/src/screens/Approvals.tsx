@@ -141,7 +141,7 @@ export function Approvals() {
                   {r.late && <span className="badge badge-danger">Late</span>}
                   {r.autoSubmitted && <span className="badge badge-neutral">Auto-submitted</span>}
                   {r.resubmitted > 0 && <span className="badge badge-neutral">Resubmitted</span>}
-                  {r.onBehalf && <span className="badge badge-neutral">On behalf</span>}
+                  {r.onBehalf && <span className="badge badge-neutral">Entered on behalf</span>}
                 </span>
                 <DaySquares days={r.days} />
                 <span>

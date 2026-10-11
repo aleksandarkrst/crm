@@ -17,6 +17,10 @@ const forEmployee = { employeeId: z.uuid().optional() };
 export const WeekQuery = z.object({ week: weekStart.optional(), ...forEmployee });
 export type WeekQuery = z.infer<typeof WeekQuery>;
 
+/** GET /api/timesheet/approvals/:employeeId/week and /history: the week alone (the employee is the path). */
+export const WeekOnlyQuery = z.object({ week: weekStart.optional() });
+export type WeekOnlyQuery = z.infer<typeof WeekOnlyQuery>;
+
 /** GET /api/timesheet/loggable?employeeId= (CD-317). */
 export const LoggableQuery = z.object(forEmployee);
 export type LoggableQuery = z.infer<typeof LoggableQuery>;
