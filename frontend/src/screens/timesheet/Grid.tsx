@@ -2,19 +2,7 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 're
 import { Link } from 'react-router-dom';
 import { Picker, PickerRow, usePicker } from '../../components/ui';
 import { paths } from '../../lib/paths';
-import {
-  type ApiCell,
-  type ApiLoggable,
-  type ApiTimesheetDay,
-  type ApiTimesheetRow,
-  type ApiTimesheetWeek,
-  dayLabel,
-  formatHours,
-  parseHours,
-  shortHours,
-  type TimeFormat,
-  timesheetApi,
-} from '../../lib/timesheetApi';
+import { type ApiCell, type ApiLoggable, type ApiTimesheetDay, type ApiTimesheetRow, type ApiTimesheetWeek, dayLabel, formatHours, parseHours, shortHours, type TimeFormat, timesheetApi } from '../../lib/timesheetApi';
 import { projectError } from '../../store/projects';
 import { useStore } from '../../store/store';
 
@@ -224,7 +212,7 @@ function NotePopover({
 }
 
 /** "+ Add task or work order": a search over what the person can log on now and isn't in the week yet. */
-function AddRow({ week, onAdd }: { week: ApiTimesheetWeek; onAdd: (item: ApiLoggable) => Promise<void> }) {
+function AddRow({ week, onAdd, employeeId }: { week: ApiTimesheetWeek; onAdd: (item: ApiLoggable) => Promise<void>; employeeId?: string }) {
   const picker = usePicker();
   const [items, setItems] = useState<ApiLoggable[] | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -232,14 +220,14 @@ function AddRow({ week, onAdd }: { week: ApiTimesheetWeek; onAdd: (item: ApiLogg
   useEffect(() => {
     if (!open) return;
     let alive = true;
-    timesheetApi.loggable().then(
+    timesheetApi.loggable(employeeId).then(
       (list) => alive && setItems(list),
       (err) => alive && setFailed(projectError(err)),
     );
     return () => {
       alive = false;
     };
-  }, [open]);
+  }, [open, employeeId]);
   const inWeek = new Set(week.rows.map((r) => r.id));
   const q = picker.search.trim().toLowerCase();
   const shown = (items ?? []).filter((i) => !inWeek.has(i.id) && (!q || `${i.code} ${i.name} ${i.path}`.toLowerCase().includes(q)));
@@ -308,6 +296,7 @@ export function Grid({
   onAdd,
   onSubmitDay,
   onResubmitDay,
+  employeeId,
 }: {
   week: ApiTimesheetWeek;
   onSave: SaveCell;
@@ -315,6 +304,8 @@ export function Grid({
   onSubmitDay?: (date: string) => void;
   /** Day by day mode (CD-158): a rejected day is resubmitted on its own. */
   onResubmitDay?: (date: string) => void;
+  /** An Admin entering time for this employee (CD-317): the picker lists what they can log on. */
+  employeeId?: string;
 }) {
   const format = week.settings.timeFormat;
   const wrap = useRef<HTMLDivElement>(null);
@@ -423,9 +414,7 @@ export function Grid({
               <span key={d.date} className={`ts-day${d.holiday ? ' ts-holiday' : isWeekend(d.date) ? ' ts-weekend' : ''}`} data-testid="ts-day" data-date={d.date} data-status={d.status}>
                 <span className="ts-day-name">{DAY_NAMES[i]}</span>
                 <span className="ts-day-date">{shortDate(d.date)}</span>
-                <span className={`ts-day-total${short ? ' short' : ''}`}>
-                  {d.holiday ? `${shortHours(d.minutes, format)} h · holiday` : d.minutes || d.expectedMinutes ? `${shortHours(d.minutes, format)} h` : '—'}
-                </span>
+                <span className={`ts-day-total${short ? ' short' : ''}`}>{d.holiday ? `${shortHours(d.minutes, format)} h · holiday` : d.minutes || d.expectedMinutes ? `${shortHours(d.minutes, format)} h` : '—'}</span>
                 {onSubmitDay && week.submittable.includes(d.date) && (
                   <button type="button" className="ts-day-submit" onClick={() => onSubmitDay(d.date)} data-testid="ts-submit-day" aria-label={`Submit ${dayLabel(d.date)}`}>
                     Submit
@@ -448,7 +437,7 @@ export function Grid({
         {tasks.map((row, i) => rowEl(row, i))}
         {orders.length > 0 && group('Work orders')}
         {orders.map((row, i) => rowEl(row, tasks.length + i))}
-        {canAdd && <AddRow week={week} onAdd={onAdd} />}
+        {canAdd && <AddRow week={week} onAdd={onAdd} employeeId={employeeId} />}
         {holidayNames.map((name) => (
           <div className="ts-row ts-soft" key={name} data-testid="ts-holiday-row">
             <span className="ts-label">
@@ -462,7 +451,12 @@ export function Grid({
                 <span className="ts-auto">{d.holiday?.name === name ? shortHours(d.holiday.minutes, format) : ''}</span>
               </span>
             ))}
-            <span className="ts-total">{shortHours(week.days.reduce((a, d) => a + (d.holiday?.name === name ? d.holiday.minutes : 0), 0), format)}</span>
+            <span className="ts-total">
+              {shortHours(
+                week.days.reduce((a, d) => a + (d.holiday?.name === name ? d.holiday.minutes : 0), 0),
+                format,
+              )}
+            </span>
           </div>
         ))}
         {sumRow('Total entered', 'Tasks and work orders', (d) => d.minutes, totalMinutes, { strong: true, testId: 'ts-total-entered' })}
@@ -470,16 +464,7 @@ export function Grid({
         {sumRow('Difference', 'Entered minus expected', (d) => d.minutes - d.expectedMinutes, totalMinutes - expected, { signed: true, testId: 'ts-difference' })}
       </div>
       {note && noteRow && noteDay && (
-        <NotePopover
-          key={`${note.key}:${note.date}`}
-          row={noteRow}
-          day={noteDay}
-          cell={noteRow.cells[note.date] ?? EMPTY}
-          format={format}
-          at={{ top: note.top, left: note.left }}
-          onSave={onSave}
-          onClose={closeNote}
-        />
+        <NotePopover key={`${note.key}:${note.date}`} row={noteRow} day={noteDay} cell={noteRow.cells[note.date] ?? EMPTY} format={format} at={{ top: note.top, left: note.left }} onSave={onSave} onClose={closeNote} />
       )}
     </div>
   );

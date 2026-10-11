@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, between, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, between, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
@@ -35,6 +35,8 @@ export interface ApprovalRow {
   returned: number;
   /** Approve week is possible now (Whole week mode: no required Draft or Rejected day left). */
   approvable: boolean;
+  /** A day was submitted or resubmitted by an Admin on the employee's behalf (CD-317). */
+  onBehalf: boolean;
 }
 
 export interface ApprovalsView {
@@ -53,6 +55,8 @@ export interface ApprovalsView {
 export interface ApproverWeek {
   week: WeekView;
   right: ApprovalRight;
+  /** Days the caller submitted or resubmitted on the employee's behalf (CD-317): someone else must approve them. */
+  enteredByMe: string[];
 }
 
 /** An entry as the history trigger snapshots it (`timesheet_entry_json`, drizzle/0091). */
@@ -67,8 +71,8 @@ interface EntrySnapshot {
 
 /** The week's history (spec 9.5): status events and entry changes, oldest first. */
 export interface WeekHistory {
-  events: { date: string; kind: string; actorName: string | null; comment: string | null; approvalMode: 'week' | 'day'; at: string }[];
-  changes: { at: string; actorName: string | null; date: string; action: 'created' | 'updated' | 'deleted'; field: string | null; from: unknown; to: unknown; row: string; minutes: number; note: string | null }[];
+  events: { date: string; kind: string; actorName: string | null; onBehalf: boolean; comment: string | null; approvalMode: 'week' | 'day'; at: string }[];
+  changes: { at: string; actorName: string | null; onBehalf: boolean; date: string; action: 'created' | 'updated' | 'deleted'; field: string | null; from: unknown; to: unknown; row: string; minutes: number; note: string | null }[];
 }
 
 const manager = alias(employees, 'manager');
@@ -99,7 +103,7 @@ export class ApprovalsService {
   /**
    * The employees whose weeks the caller sees: Admins every active employee with a required
    * timesheet, managers their direct and indirect reports; with their reporting line for the rule.
-   * shortcut: people without an app account are left out until CD-317 lets Admins enter for them, add them with it.
+   * People without an app account are listed too: an Admin enters their time on their behalf (CD-317).
    */
   private async visible(tx: Tx, access: CallerAccess) {
     const ids = access.isAdmin ? null : [...access.reportIds];
@@ -118,12 +122,41 @@ export class ApprovalsService {
       })
       .from(employees)
       .leftJoin(manager, eq(manager.id, employees.managerId))
-      .where(and(isNull(employees.deactivatedAt), eq(employees.timesheetRequired, true), isNotNull(employees.userId), ids ? inArray(employees.id, ids) : undefined))
+      .where(and(isNull(employees.deactivatedAt), eq(employees.timesheetRequired, true), ids ? inArray(employees.id, ids) : undefined))
       .orderBy(employees.fullName);
   }
 
   private right(access: CallerAccess, e: ApprovalTarget): ApprovalRight {
     return approvalRight({ employeeId: access.employeeId, isAdmin: access.isAdmin }, e);
+  }
+
+  /**
+   * The week's days `userId` entered for `employeeId` (CD-317, spec 9.4): submitted or resubmitted
+   * them, or changed their hours (the entry history), as someone other than the employee's own
+   * account. Those days need another approver, however they were submitted afterwards.
+   */
+  private async enteredBy(tx: Tx, employeeId: string, monday: string, userId: string, employeeUserId: string | null): Promise<string[]> {
+    if (employeeUserId === userId) return [];
+    const sunday = addDays(monday, 6);
+    const [events, { rows: changes }] = await Promise.all([
+      tx
+        .select({ date: timesheetDayEvents.workDate })
+        .from(timesheetDayEvents)
+        .where(
+          and(
+            eq(timesheetDayEvents.employeeId, employeeId),
+            between(timesheetDayEvents.workDate, monday, sunday),
+            inArray(timesheetDayEvents.kind, ['submitted', 'resubmitted']),
+            eq(timesheetDayEvents.actorUserId, userId),
+          ),
+        ),
+      tx.execute<{ date: string }>(sql`
+        select distinct coalesce(c.new_value, c.old_value) ->> 'date' as date from record_changes c
+        where c.entity_type = 'time_entry' and c.actor_user_id = ${userId}
+          and coalesce(c.new_value, c.old_value) ->> 'employeeId' = ${employeeId}
+          and (c.new_value ->> 'date' between ${monday} and ${sunday} or c.old_value ->> 'date' between ${monday} and ${sunday})`),
+    ]);
+    return [...new Set([...events.map((r) => r.date), ...changes.map((r) => r.date)])].sort();
   }
 
   /** The list for one week (the latest whose deadline passed, by default): one row per employee, from three queries. */
@@ -162,6 +195,26 @@ export class ApprovalsService {
       const statusOf = new Map(dayRows.map((d) => [`${d.employeeId}:${d.date}`, d.status]));
       const resubmittedOf = new Set(dayRows.filter((d) => d.status === 'submitted' && d.resubmittedAt).map((d) => `${d.employeeId}:${d.date}`));
       const flagsOf = new Map(flags.map((f) => [f.employeeId, f]));
+      // Weeks with a day submitted by someone other than the employee's own account (CD-317).
+      const onBehalfIds = new Set(
+        ids.length
+          ? (
+              await tx
+                .select({ employeeId: timesheetDayEvents.employeeId })
+                .from(timesheetDayEvents)
+                .innerJoin(employees, eq(employees.id, timesheetDayEvents.employeeId))
+                .where(
+                  and(
+                    inArray(timesheetDayEvents.employeeId, ids),
+                    between(timesheetDayEvents.workDate, monday, sunday),
+                    inArray(timesheetDayEvents.kind, ['submitted', 'resubmitted']),
+                    isNotNull(timesheetDayEvents.actorUserId),
+                    or(isNull(employees.userId), ne(employees.userId, timesheetDayEvents.actorUserId)),
+                  ),
+                )
+            ).map((r) => r.employeeId)
+          : [],
+      );
 
       const rows: ApprovalRow[] = people.map((p) => {
         const employment = { start: p.start, end: p.end };
@@ -179,6 +232,7 @@ export class ApprovalsService {
           statusLabel: label,
           late: !!flag?.lateAt,
           autoSubmitted: !!flag?.autoSubmittedAt,
+          onBehalf: onBehalfIds.has(p.id),
           days: days.map((d) => ({ date: d.date, status: d.status, required: d.required, minutes: d.minutes })),
           enteredMinutes: days.reduce((a, d) => a + d.minutes, 0),
           expectedMinutes: days.reduce((a, d) => a + d.expected, 0),
@@ -201,7 +255,7 @@ export class ApprovalsService {
       const [p] = await this.target(tx, access, employeeId);
       const { settings, timeZone, now, today } = await this.context(tx, ctx.tenantId);
       const view = await readWeek(tx, await callerFor(tx, employeeId, today, settings, timeZone, now), week ?? mondayOf(today));
-      return { week: view, right: this.right(access, p) };
+      return { week: view, right: this.right(access, p), enteredByMe: await this.enteredBy(tx, employeeId, view.weekStart, ctx.userId, p.userId) };
     });
   }
 
@@ -284,7 +338,7 @@ export class ApprovalsService {
             tx,
           );
         }
-        return { week: await readWeek(tx, caller, weekStart), right: this.right(access, p) };
+        return { week: await readWeek(tx, caller, weekStart), right: this.right(access, p), enteredByMe: await this.enteredBy(tx, employeeId, weekStart, ctx.userId, p.userId) };
       })
       .catch(mapDbError);
   }
@@ -298,17 +352,18 @@ export class ApprovalsService {
   history(ctx: TenantContext, employeeId: string, week?: string): Promise<WeekHistory> {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const access = await this.people.of(ctx, tx);
-      await this.target(tx, access, employeeId);
+      const [p] = await this.target(tx, access, employeeId);
+      const onBehalf = (actorUserId: string | null) => !!actorUserId && actorUserId !== p.userId;
       const { today } = await this.context(tx, ctx.tenantId);
       const monday = week ?? mondayOf(today);
       const sunday = addDays(monday, 6);
       const events = await tx
-        .select({ date: timesheetDayEvents.workDate, kind: timesheetDayEvents.kind, actorName: timesheetDayEvents.actorName, comment: timesheetDayEvents.comment, approvalMode: timesheetDayEvents.approvalMode, at: timesheetDayEvents.createdAt })
+        .select({ date: timesheetDayEvents.workDate, kind: timesheetDayEvents.kind, actorName: timesheetDayEvents.actorName, actorUserId: timesheetDayEvents.actorUserId, comment: timesheetDayEvents.comment, approvalMode: timesheetDayEvents.approvalMode, at: timesheetDayEvents.createdAt })
         .from(timesheetDayEvents)
         .where(and(eq(timesheetDayEvents.employeeId, employeeId), between(timesheetDayEvents.workDate, monday, sunday)))
         .orderBy(timesheetDayEvents.createdAt, timesheetDayEvents.workDate);
-      const { rows } = await tx.execute<{ id: string; action: string; field: string | null; old_value: EntrySnapshot | null; new_value: EntrySnapshot | null; changed_at: string | Date; actor_name: string | null }>(sql`
-        select c.id, c.action, c.field, c.old_value, c.new_value, c.changed_at, u.display_name as actor_name
+      const { rows } = await tx.execute<{ id: string; action: string; field: string | null; old_value: EntrySnapshot | null; new_value: EntrySnapshot | null; changed_at: string | Date; actor_name: string | null; actor_user_id: string | null }>(sql`
+        select c.id, c.action, c.field, c.old_value, c.new_value, c.changed_at, c.actor_user_id, u.display_name as actor_name
         from record_changes c left join users u on u.id = c.actor_user_id
         where c.entity_type = 'time_entry' and coalesce(c.new_value, c.old_value) ->> 'employeeId' = ${employeeId}
           and (c.new_value ->> 'date' between ${monday} and ${sunday} or c.old_value ->> 'date' between ${monday} and ${sunday})
@@ -329,12 +384,13 @@ export class ApprovalsService {
         return o ? `WO-${o.number} ${o.title}` : 'Deleted work order';
       };
       return {
-        events: events.map((e) => ({ ...e, at: e.at.toISOString() })),
+        events: events.map(({ actorUserId, ...e }) => ({ ...e, onBehalf: onBehalf(actorUserId), at: e.at.toISOString() })),
         changes: rows.map((r) => {
           const snap = (r.new_value ?? r.old_value)!;
           return {
             at: new Date(r.changed_at).toISOString(),
             actorName: r.actor_name,
+            onBehalf: onBehalf(r.actor_user_id),
             date: snap.date,
             action: r.action as 'created' | 'updated' | 'deleted',
             field: r.field,
@@ -364,6 +420,12 @@ export class ApprovalsService {
           settings,
         );
         if ('error' in pick) throw pick.conflict ? new ConflictException(pick.error) : new BadRequestException(pick.error);
+        // Days the caller submitted on the employee's behalf need another approver (CD-317, spec 9.4).
+        if (action === 'approve') {
+          const mine = await this.enteredBy(tx, employeeId, weekStart, ctx.userId, p.userId);
+          const clash = pick.dates.filter((d) => mine.includes(d));
+          if (clash.length) throw new ForbiddenException(`You entered ${clash.length === 1 ? 'this day' : 'these days'} on behalf of ${p.name}; another approver must approve ${clash.length === 1 ? 'it' : 'them'}`);
+        }
         const actor = { userId: ctx.userId, name: await actorNameOf(tx, ctx.userId) };
         // Only days still Submitted change: fewer rows than picked means the week changed meanwhile (spec 8.2, 8.4).
         const changed = await tx
@@ -393,7 +455,7 @@ export class ApprovalsService {
             tx,
           );
         }
-        return { week: await readWeek(tx, caller, weekStart), right };
+        return { week: await readWeek(tx, caller, weekStart), right, enteredByMe: await this.enteredBy(tx, employeeId, weekStart, ctx.userId, p.userId) };
       })
       .catch(mapDbError);
   }

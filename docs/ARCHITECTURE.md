@@ -1679,6 +1679,22 @@ the reminder and after-deadline emails (CD-154) and the approval screen (CD-157)
     button; the Timesheet's "⋯" has History too. Both open `screens/approvals/HistoryPanel.tsx`.
     Not built: the system return when time off or a trip changes (spec 9.3, milestone 16) and the
     payroll "Changes to earlier periods" (CD-160).
+  - **On behalf** (CD-317, spec 9.4). Every timesheet write (`GET week`, `GET loggable`, `PUT cells`,
+    `POST rows`, `GET`/`POST copy`, `POST submit`, `POST resubmit`) takes an optional `employeeId`:
+    an Admin (403 for anyone else, 404 for no such employee) acts for that employee under the
+    employee's own rules (the current week, employment, the daily maximum, who may log on what, the
+    locks). Recall stays the employee's own. Nothing is stored for it: the history's actor is the
+    Admin, and "on behalf" is derived wherever the actor isn't the employee's own account (or the
+    employee has none): the week's `onBehalf` flag (a submitted or resubmitted event by someone
+    else), the Approvals list row's `onBehalf`, the history's `onBehalf` per event and change, and
+    the audit rows' `onBehalf: true`. The approver's week answers `enteredByMe`, the days the
+    caller submitted or resubmitted on behalf; `POST approve` refuses them (403 "You entered this
+    day on behalf of …; another approver must approve it") and the screen hides Approve for them.
+    Employees without an app account are now listed on Approvals. Screens: "Enter time on behalf"
+    on the approver's week (Admins) and the employee card opens `/timesheet?employee=<id>`: the
+    Timesheet with a banner, the employee's name in the title, Recall disabled, every call carrying
+    the id; the week shows "Entered on behalf" to the employee and the approver; the History panel
+    reads "by <Admin> on behalf of <employee>".
   - **Late** (CD-155, spec 5.5): the week answers `deadlinePassed` and `lateIfSubmitted` (days Submit
     week would submit that never went in, after the deadline). Submitting one of them (the week or
     a single day) sets `timesheet_weeks.late_at` once (`markLate`); recalling and resubmitting days

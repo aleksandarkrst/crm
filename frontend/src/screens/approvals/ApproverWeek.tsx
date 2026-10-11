@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { askConfirm } from '../../components/ConfirmDialog';
 import { EmptyState } from '../../components/EmptyState';
 import { Screen } from '../../components/Layout';
@@ -105,12 +105,14 @@ export function ApproverWeek() {
       </Screen>
     );
   }
-  const { week: w, right } = data;
+  const { week: w, right, enteredByMe } = data;
   const employee = w.employee!;
   const dayMode = w.settings.approvalMode === 'day';
   const waiting = w.days.filter((d) => d.status === 'submitted').map((d) => d.date);
   const blocked = w.days.some((d) => d.required && (d.status === 'draft' || d.status === 'rejected'));
-  const canApproveWeek = right && waiting.length > 0 && (dayMode || !blocked);
+  // Days the caller entered on the employee's behalf (CD-317) need another approver.
+  const blockedByMe = waiting.some((d) => enteredByMe.includes(d));
+  const canApproveWeek = right && waiting.length > 0 && (dayMode || !blocked) && !blockedByMe;
   const entered = w.days.reduce((a, d) => a + d.minutes, 0);
   const firstName = employee.name.split(' ')[0]!;
   const shown = w.days.filter((d) => d.required || d.minutes > 0);
@@ -129,10 +131,20 @@ export function ApproverWeek() {
         </span>
         {w.late && <span className="badge badge-danger">Late</span>}
         {w.autoSubmitted && <span className="badge badge-neutral">Auto-submitted</span>}
+        {w.onBehalf && (
+          <span className="badge badge-neutral" data-testid="ap-on-behalf">
+            Entered on behalf
+          </span>
+        )}
         <span className="ts-due" data-testid="ap-week-summary">
           {shortHours(entered, w.settings.timeFormat)} h entered · {waiting.length} {waiting.length === 1 ? 'day' : 'days'} waiting {right ? 'for you' : 'for the approver'}
         </span>
         <span style={{ flex: 1 }} />
+        {admin && right && (
+          <Link className="btn-plain" to={paths.timesheet(w.weekStart, employee.id)} data-testid="ap-enter-on-behalf">
+            Enter time on behalf
+          </Link>
+        )}
         <button type="button" className="btn-plain" data-testid="ap-history" onClick={() => setShowHistory(true)}>
           History
         </button>
@@ -145,7 +157,7 @@ export function ApproverWeek() {
               type="button"
               className="btn btn-primary"
               disabled={busy || !canApproveWeek}
-              title={canApproveWeek ? undefined : 'Approve the week once every required day is submitted'}
+              title={canApproveWeek ? undefined : blockedByMe ? 'Another approver must approve the days you entered' : 'Approve the week once every required day is submitted'}
               data-testid="ap-approve-week"
               onClick={() => void approve(w)}
             >
@@ -155,6 +167,11 @@ export function ApproverWeek() {
         )}
       </div>
       {right === 'override' && <div className="ts-help">Their manager approves this timesheet; your decision is recorded as an Admin override.</div>}
+      {enteredByMe.length > 0 && (
+        <div className="ts-help" data-testid="ap-entered-by-me">
+          You entered {enteredByMe.length === 1 ? 'a day' : `${enteredByMe.length} days`} of this week on behalf of {firstName}; another approver must approve {enteredByMe.length === 1 ? 'it' : 'them'}.
+        </div>
+      )}
       {!right && <div className="ts-help">You can see this week but not approve it.</div>}
       {shown.length === 0 && <EmptyState title="No entry needed" text="No working day in this week falls inside the employment, and no hours were entered." />}
       {shown.map((d) => {
@@ -177,9 +194,11 @@ export function ApproverWeek() {
                   <button type="button" className="btn-plain" disabled={busy} data-testid="ap-reject-day" onClick={() => setRejecting({ dates: [d.date], whole: false })}>
                     Reject
                   </button>
-                  <button type="button" className="btn btn-primary" disabled={busy} data-testid="ap-approve-day" onClick={() => void approve(w, [d.date])}>
-                    Approve
-                  </button>
+                  {!enteredByMe.includes(d.date) && (
+                    <button type="button" className="btn btn-primary" disabled={busy} data-testid="ap-approve-day" onClick={() => void approve(w, [d.date])}>
+                      Approve
+                    </button>
+                  )}
                 </>
               )}
               {admin && right && d.status === 'approved' && (
@@ -262,7 +281,9 @@ export function ApproverWeek() {
         );
       })}
       {unlocking && <UnlockDialog date={unlocking} firstName={firstName} onClose={() => setUnlocking(null)} onUnlock={(reason) => unlock(w, unlocking, reason)} />}
-      {showHistory && <HistoryPanel employeeId={employee.id} week={w.weekStart} weekNumber={w.weekNumber} format={w.settings.timeFormat} timeZone={timeZone} onClose={() => setShowHistory(false)} />}
+      {showHistory && (
+        <HistoryPanel employeeId={employee.id} employeeName={employee.name} week={w.weekStart} weekNumber={w.weekNumber} format={w.settings.timeFormat} timeZone={timeZone} onClose={() => setShowHistory(false)} />
+      )}
       {rejecting && (
         <RejectDialog
           dates={rejecting.dates}

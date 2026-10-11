@@ -55,8 +55,8 @@ export const paths = {
   workOrder: (id: string) => '/work-orders/' + encodeURIComponent(id),
   /** Reports · Workload (CD-261): remaining task hours per person and week. */
   workload: '/workload',
-  /** My timesheet (CD-152); `week` is its Monday, this week without one. */
-  timesheet: (week?: string | null) => '/timesheet' + query({ week }),
+  /** My timesheet (CD-152); `week` is its Monday, this week without one. `employee` (CD-317): an Admin entering time on that employee's behalf. */
+  timesheet: (week?: string | null, employee?: string | null) => '/timesheet' + query({ week, employee }),
   /** Approvals (CD-157): the weeks the caller approves; without `week`, the latest whose deadline passed. */
   approvals: (week?: string | null) => '/approvals' + query({ week }),
   /** One person's week on Approvals. */

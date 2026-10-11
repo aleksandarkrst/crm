@@ -75,6 +75,8 @@ export interface ApiTimesheetWeek {
   /** First submitted after the deadline; submitted by the deadline job (CD-153). */
   late: boolean;
   autoSubmitted: boolean;
+  /** A day was submitted or resubmitted by an Admin on the employee's behalf (CD-317). */
+  onBehalf: boolean;
   /** The week's deadline has passed (CD-155). */
   deadlinePassed: boolean;
   /** Days never submitted that would make the week Late now (spec 5.5). */
@@ -129,6 +131,8 @@ export interface ApiApprovalRow {
   resubmitted: number;
   returned: number;
   approvable: boolean;
+  /** A day was submitted or resubmitted by an Admin on the employee's behalf (CD-317). */
+  onBehalf: boolean;
 }
 
 export interface ApiApprovals {
@@ -146,12 +150,14 @@ export interface ApiApprovals {
 export interface ApiApproverWeek {
   week: ApiTimesheetWeek;
   right: ApprovalRight;
+  /** Days the caller submitted on the employee's behalf (CD-317): someone else must approve them. */
+  enteredByMe: string[];
 }
 
-/** The week's history (CD-159, spec 9.5): status events and entry changes, oldest first. */
+/** The week's history (CD-159, spec 9.5): status events and entry changes, oldest first; `onBehalf`: done by an Admin for the employee (CD-317). */
 export interface ApiWeekHistory {
-  events: { date: string; kind: string; actorName: string | null; comment: string | null; approvalMode: 'week' | 'day'; at: string }[];
-  changes: { at: string; actorName: string | null; date: string; action: 'created' | 'updated' | 'deleted'; field: string | null; from: unknown; to: unknown; row: string; minutes: number; note: string | null }[];
+  events: { date: string; kind: string; actorName: string | null; onBehalf: boolean; comment: string | null; approvalMode: 'week' | 'day'; at: string }[];
+  changes: { at: string; actorName: string | null; onBehalf: boolean; date: string; action: 'created' | 'updated' | 'deleted'; field: string | null; from: unknown; to: unknown; row: string; minutes: number; note: string | null }[];
 }
 
 /** Approvals (CD-157, `/api/timesheet/approvals`): the weeks the caller approves. */
@@ -170,21 +176,31 @@ export const approvalsApi = {
   history: (employeeId: string, week?: string) => api<ApiWeekHistory>(`/timesheet/approvals/${employeeId}/history${week ? `?week=${week}` : ''}`),
 };
 
+/** `employeeId` on every call (CD-317): an Admin entering time on that employee's behalf; left out, the caller's own timesheet. */
+const forEmployee = (employeeId?: string) => (employeeId ? { employeeId } : {});
+const query = (params: Record<string, string | undefined>) => {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
+  const s = q.toString();
+  return s ? `?${s}` : '';
+};
+
 export const timesheetApi = {
-  week: (week?: string) => api<ApiTimesheetWeek>(`/timesheet/week${week ? `?week=${week}` : ''}`),
-  loggable: () => api<ApiLoggable[]>('/timesheet/loggable'),
+  week: (week?: string, employeeId?: string) => api<ApiTimesheetWeek>(`/timesheet/week${query({ week, employeeId })}`),
+  loggable: (employeeId?: string) => api<ApiLoggable[]>(`/timesheet/loggable${query({ employeeId })}`),
   /** `minutes` 0 clears the cell; `note` empty clears the note, left out keeps it. */
-  setCell: (date: string, target: RowTarget, minutes: number, note?: string | null) =>
-    api<ApiTimesheetWeek>('/timesheet/cells', { method: 'PUT', json: { date, ...target, minutes, ...(note !== undefined ? { note } : {}) } }),
-  addRow: (weekStart: string, target: RowTarget) => api<ApiTimesheetWeek>('/timesheet/rows', { method: 'POST', json: { weekStart, ...target } }),
-  copyPreview: (weekStart: string) => api<ApiCopyPreview>(`/timesheet/copy?weekStart=${weekStart}`),
-  copy: (weekStart: string, mode: 'rows' | 'hours') => api<ApiCopyResult>('/timesheet/copy', { method: 'POST', json: { weekStart, mode } }),
+  setCell: (date: string, target: RowTarget, minutes: number, note?: string | null, employeeId?: string) =>
+    api<ApiTimesheetWeek>('/timesheet/cells', { method: 'PUT', json: { date, ...target, minutes, ...(note !== undefined ? { note } : {}), ...forEmployee(employeeId) } }),
+  addRow: (weekStart: string, target: RowTarget, employeeId?: string) => api<ApiTimesheetWeek>('/timesheet/rows', { method: 'POST', json: { weekStart, ...target, ...forEmployee(employeeId) } }),
+  copyPreview: (weekStart: string, employeeId?: string) => api<ApiCopyPreview>(`/timesheet/copy${query({ weekStart, employeeId })}`),
+  copy: (weekStart: string, mode: 'rows' | 'hours', employeeId?: string) => api<ApiCopyResult>('/timesheet/copy', { method: 'POST', json: { weekStart, mode, ...forEmployee(employeeId) } }),
   /** The week; with `date`, that day only (Day by day mode, CD-156). */
-  submit: (weekStart: string, date?: string) => api<ApiTimesheetWeek>('/timesheet/submit', { method: 'POST', json: { weekStart, ...(date ? { date } : {}) } }),
+  submit: (weekStart: string, date?: string, employeeId?: string) =>
+    api<ApiTimesheetWeek>('/timesheet/submit', { method: 'POST', json: { weekStart, ...(date ? { date } : {}), ...forEmployee(employeeId) } }),
   recall: (weekStart: string) => api<ApiTimesheetWeek>('/timesheet/recall', { method: 'POST', json: { weekStart } }),
   /** The week's rejected days; with `date`, that day only (Day by day mode). `reply` goes to the approver (CD-158). */
-  resubmit: (weekStart: string, date?: string, reply?: string | null) =>
-    api<ApiTimesheetWeek>('/timesheet/resubmit', { method: 'POST', json: { weekStart, ...(date ? { date } : {}), ...(reply ? { reply } : {}) } }),
+  resubmit: (weekStart: string, date?: string, reply?: string | null, employeeId?: string) =>
+    api<ApiTimesheetWeek>('/timesheet/resubmit', { method: 'POST', json: { weekStart, ...(date ? { date } : {}), ...(reply ? { reply } : {}), ...forEmployee(employeeId) } }),
 };
 
 /**

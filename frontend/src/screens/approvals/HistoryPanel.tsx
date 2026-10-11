@@ -24,18 +24,36 @@ export function changeText(c: ApiWeekHistory['changes'][number], format: TimeFor
 }
 
 /** One list of what happened to the week, oldest first (spec 9.5): status events and entry changes merged by time. */
-export function historyLines(h: ApiWeekHistory, format: TimeFormat, timeZone: string | undefined): { key: string; at: string; date: string; text: string; who: string }[] {
+export function historyLines(h: ApiWeekHistory, format: TimeFormat, timeZone: string | undefined, employeeName: string): { key: string; at: string; date: string; text: string; who: string }[] {
+  // "by <Admin> on behalf of <employee>" (CD-317) when someone else acted for the employee.
+  const who = (actor: string | null, onBehalf: boolean) => `${actor ?? 'the system'}${onBehalf ? ` on behalf of ${employeeName}` : ''}`;
   const lines = [
-    ...h.events.map((e, i) => ({ key: `e${i}`, at: e.at, date: e.date, text: `${EVENT_LABEL[e.kind] ?? e.kind}${e.comment ? `: “${e.comment}”` : ''}`, who: e.actorName ?? 'the system' })),
-    ...h.changes.map((c, i) => ({ key: `c${i}`, at: c.at, date: c.date, text: changeText(c, format), who: c.actorName ?? 'the system' })),
+    ...h.events.map((e, i) => ({ key: `e${i}`, at: e.at, date: e.date, text: `${EVENT_LABEL[e.kind] ?? e.kind}${e.comment ? `: “${e.comment}”` : ''}`, who: who(e.actorName, e.onBehalf) })),
+    ...h.changes.map((c, i) => ({ key: `c${i}`, at: c.at, date: c.date, text: changeText(c, format), who: who(c.actorName, c.onBehalf) })),
   ];
   return lines.sort((a, b) => a.at.localeCompare(b.at)).map((l) => ({ ...l, who: `${l.who} · ${when(l.at, timeZone)}` }));
 }
 
 /** The week's History panel (CD-159, design `#cd-159` "Day history"): the employee, their approvers and Admins see the same list. */
-export function HistoryPanel({ employeeId, week, weekNumber, format, timeZone, onClose }: { employeeId: string; week: string; weekNumber: number; format: TimeFormat; timeZone: string | undefined; onClose: () => void }) {
+export function HistoryPanel({
+  employeeId,
+  employeeName,
+  week,
+  weekNumber,
+  format,
+  timeZone,
+  onClose,
+}: {
+  employeeId: string;
+  employeeName: string;
+  week: string;
+  weekNumber: number;
+  format: TimeFormat;
+  timeZone: string | undefined;
+  onClose: () => void;
+}) {
   const { data, error } = useWeekHistory(employeeId, week);
-  const lines = data ? historyLines(data, format, timeZone) : [];
+  const lines = data ? historyLines(data, format, timeZone, employeeName) : [];
   return (
     <Modal maxWidth={620} onBackdrop={onClose}>
       <ModalHeader title={`History · week ${weekNumber}`} sub="Every submission, decision and change of hours, oldest first. Nobody can edit or delete it." />

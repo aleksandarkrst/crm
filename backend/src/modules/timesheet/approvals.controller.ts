@@ -3,7 +3,7 @@ import { RequireTenant, Tenant, type TenantContext } from '../../shared/authoriz
 import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
 import { ApprovalsService } from './approvals.service';
-import { ApprovalsQuery, ApproveDays, ReturnDays, UnlockDays, WeekQuery } from './timesheet.schemas';
+import { ApprovalsQuery, ApproveDays, ReturnDays, UnlockDays, WeekOnlyQuery } from './timesheet.schemas';
 
 /**
  * Approvals (CD-157): the weeks the caller approves. The list: `{ weekStart, weekNumber, label,
@@ -24,7 +24,7 @@ export class ApprovalsController {
   }
 
   @Get(':employeeId/week')
-  personWeek(@Tenant() ctx: TenantContext, @Param('employeeId', new ZodPipe(UuidParam)) employeeId: string, @Query(new ZodPipe(WeekQuery)) query: WeekQuery) {
+  personWeek(@Tenant() ctx: TenantContext, @Param('employeeId', new ZodPipe(UuidParam)) employeeId: string, @Query(new ZodPipe(WeekOnlyQuery)) query: WeekOnlyQuery) {
     return this.approvals.personWeek(ctx, employeeId, query.week);
   }
 
@@ -48,7 +48,7 @@ export class ApprovalsController {
 
   /** The week's history (CD-159): `{ events, changes }`, oldest first; for the employee, their approvers and Admins. */
   @Get(':employeeId/history')
-  history(@Tenant() ctx: TenantContext, @Param('employeeId', new ZodPipe(UuidParam)) employeeId: string, @Query(new ZodPipe(WeekQuery)) query: WeekQuery) {
+  history(@Tenant() ctx: TenantContext, @Param('employeeId', new ZodPipe(UuidParam)) employeeId: string, @Query(new ZodPipe(WeekOnlyQuery)) query: WeekOnlyQuery) {
     return this.approvals.history(ctx, employeeId, query.week);
   }
 }
