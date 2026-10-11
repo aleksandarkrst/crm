@@ -11,7 +11,12 @@ import { useApproverWeek } from '../../store/timesheet';
 import { DAY_STATUS, WEEK_BADGE, when } from './parts';
 import { RejectDialog } from './RejectDialog';
 
-const DAY_BADGE = { draft: 'badge-neutral', submitted: 'badge-brand', rejected: 'badge-warn', approved: 'badge-brand' } as const;
+const DAY_BADGE = {
+  draft: 'badge-neutral',
+  submitted: 'badge-brand',
+  rejected: 'badge-warn',
+  approved: 'badge-brand',
+} as const;
 
 /**
  * One person's week for their approver (CD-157, design `#cd-157b`): the status and flags, one block
@@ -24,7 +29,10 @@ export function ApproverWeek() {
   const [params, setParams] = useSearchParams();
   const weekParam = params.get('week') ?? undefined;
   const { data, error, set } = useApproverWeek(id, weekParam);
-  const [rejecting, setRejecting] = useState<{ dates: string[]; whole: boolean } | null>(null);
+  const [rejecting, setRejecting] = useState<{
+    dates: string[];
+    whole: boolean;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const go = (monday: string) => setParams({ week: monday });
   const timeZone = s.workspace?.timezone;
@@ -33,7 +41,14 @@ export function ApproverWeek() {
     const waiting = dates ?? w.days.filter((d) => d.status === 'submitted').map((d) => d.date);
     const minutes = w.days.filter((d) => waiting.includes(d.date)).reduce((a, d) => a + d.minutes, 0);
     const title = !dates ? (w.settings.approvalMode === 'week' ? `Approve week ${w.weekNumber}?` : `Approve all ${waiting.length} waiting days?`) : `Approve ${dayName(dates[0]!)}?`;
-    if (!(await askConfirm({ title, message: `${waiting.length} ${waiting.length === 1 ? 'day' : 'days'} · ${shortHours(minutes, w.settings.timeFormat)} h entered`, confirmLabel: 'Approve' }))) return;
+    if (
+      !(await askConfirm({
+        title,
+        message: `${waiting.length} ${waiting.length === 1 ? 'day' : 'days'} · ${shortHours(minutes, w.settings.timeFormat)} h entered`,
+        confirmLabel: 'Approve',
+      }))
+    )
+      return;
     setBusy(true);
     try {
       set(await approvalsApi.approve(w.employee!.id, w.weekStart, w.settings.approvalMode === 'day' ? waiting : undefined));
@@ -95,7 +110,14 @@ export function ApproverWeek() {
             <button type="button" className="btn-plain" disabled={busy} data-testid="ap-reject-week" onClick={() => setRejecting({ dates: waiting, whole: true })}>
               {dayMode ? 'Reject all waiting days' : 'Reject week'}
             </button>
-            <button type="button" className="btn btn-primary" disabled={busy || !canApproveWeek} title={canApproveWeek ? undefined : 'Approve the week once every required day is submitted'} data-testid="ap-approve-week" onClick={() => void approve(w)}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={busy || !canApproveWeek}
+              title={canApproveWeek ? undefined : 'Approve the week once every required day is submitted'}
+              data-testid="ap-approve-week"
+              onClick={() => void approve(w)}
+            >
               {dayMode ? `Approve all waiting days (${waiting.length})` : 'Approve week'}
             </button>
           </>
@@ -140,40 +162,48 @@ export function ApproverWeek() {
               </p>
             )}
             {rows.length === 0 ? (
-              <p className="emp-note" style={{ padding: '10px 14px', margin: 0 }}>
-                No hours entered.
-              </p>
+              <p className="emp-note ap-empty">No hours entered.</p>
             ) : (
-              <table className="ap-entries">
-                <thead>
-                  <tr>
-                    <th>Project</th>
-                    <th>Task or work order</th>
-                    <th style={{ textAlign: 'right' }}>Hours</th>
-                    <th>Note</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => {
-                    const cell = r.cells[d.date]!;
-                    return (
-                      <tr key={r.key} data-testid="ap-entry">
-                        <td>{r.path}</td>
-                        <td>
-                          {r.code} {r.name}
-                        </td>
-                        <td className="num">{shortHours(cell.minutes, w.settings.timeFormat)}</td>
-                        <td className="emp-note">{cell.note ?? (cell.entries > 1 ? `${cell.entries} entries` : '')}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div className="ap-scroll">
+                <table className="ap-entries">
+                  <thead>
+                    <tr>
+                      <th className="th">Project</th>
+                      <th className="th">Task or work order</th>
+                      <th className="th num">Hours</th>
+                      <th className="th">Note</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => {
+                      const cell = r.cells[d.date]!;
+                      return (
+                        <tr key={r.key} data-testid="ap-entry">
+                          <td>{r.path}</td>
+                          <td>
+                            {r.code} {r.name}
+                          </td>
+                          <td className="num">{shortHours(cell.minutes, w.settings.timeFormat)}</td>
+                          <td className="emp-note">{cell.note ?? (cell.entries > 1 ? `${cell.entries} entries` : '')}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </section>
         );
       })}
-      {rejecting && <RejectDialog dates={rejecting.dates} whole={rejecting.whole && !dayMode} firstName={firstName} onClose={() => setRejecting(null)} onReject={(comment) => reject(w, rejecting.dates, rejecting.whole && !dayMode, comment)} />}
+      {rejecting && (
+        <RejectDialog
+          dates={rejecting.dates}
+          whole={rejecting.whole && !dayMode}
+          firstName={firstName}
+          onClose={() => setRejecting(null)}
+          onReject={(comment) => reject(w, rejecting.dates, rejecting.whole && !dayMode, comment)}
+        />
+      )}
     </Screen>
   );
 }

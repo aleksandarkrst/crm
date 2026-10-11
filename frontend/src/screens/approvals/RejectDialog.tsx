@@ -32,7 +32,7 @@ export function RejectDialog({ dates, whole, firstName, onClose, onReject }: { d
           {error}
         </div>
       )}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+      <div className="modal-actions">
         <button type="button" className="btn-plain" onClick={onClose}>
           Cancel
         </button>

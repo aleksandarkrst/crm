@@ -46,9 +46,9 @@ const events = (employeeId: string, kind: string) =>
   asTenantSql<{ work_date: string; actor_name: string; comment: string | null; approval_mode: string }>(tenant, `select work_date::text, actor_name, comment, approval_mode from timesheet_day_events where employee_id = $1 and kind = $2 order by work_date`, [employeeId, kind]);
 
 beforeAll(async () => {
-  [owner, senior, marko, dragan, bojan, vesna, peer] = await Promise.all(['owner', 'senior', 'marko', 'dragan', 'bojan', 'vesna', 'peer'].map((n) => signIn(`tsa-${n}`)));
+  [owner, senior, marko, dragan, bojan, vesna, peer] = (await Promise.all(['owner', 'senior', 'marko', 'dragan', 'bojan', 'vesna', 'peer'].map((n) => signIn(`tsa-${n}`)))) as [Session, Session, Session, Session, Session, Session, Session];
   tenant = await createTenant(owner, 'Approvals');
-  [seniorId, markoId, draganId, bojanId, vesnaId] = await Promise.all([senior, marko, dragan, bojan, vesna].map((s) => joinAsEmployee(owner, tenant, s)));
+  [seniorId, markoId, draganId, bojanId, vesnaId] = (await Promise.all([senior, marko, dragan, bojan, vesna].map((s) => joinAsEmployee(owner, tenant, s)))) as [string, string, string, string, string];
   await joinAsEmployee(owner, tenant, peer);
   // Senior → Marko → Dragan, Bojan and Vesna. The owner is an Admin without a manager.
   await asTenantSql(tenant, 'update employees set manager_id = $2 where id = any($1::uuid[])', [[draganId, bojanId, vesnaId], markoId]);
@@ -177,6 +177,11 @@ describe('the history table', () => {
     const other = await createTenant(peer, 'Other approvals tenant');
     expect((await asTenantSql<{ n: number }>(other, `select count(*)::int as n from timesheet_day_events`))[0]!.n).toBe(0);
     await expect(asTenantSql(other, `insert into timesheet_day_events (tenant_id, employee_id, work_date, kind, approval_mode) values ($1, $2, $3, 'approved', 'week')`, [tenant, draganId, monday])).rejects.toThrow();
-    await ok('GET', `/timesheet/approvals/${draganId}/week?week=${monday}`, { token: peer.token, tenant: other }, 404);
+    // Every approvals endpoint from the other workspace: nobody listed, Dragan not found.
+    const elsewhere = { token: peer.token, tenant: other };
+    expect((await ok<Approvals>('GET', `/timesheet/approvals?week=${monday}`, elsewhere)).rows.map((r) => r.employee.id)).not.toContain(draganId);
+    await ok('GET', `/timesheet/approvals/${draganId}/week?week=${monday}`, elsewhere, 404);
+    expect((await call('POST', '/timesheet/approvals/approve', { ...elsewhere, body: { employeeId: draganId, weekStart: monday } })).status).toBe(404);
+    expect((await call('POST', '/timesheet/approvals/return', { ...elsewhere, body: { employeeId: draganId, weekStart: monday, comment: 'x' } })).status).toBe(404);
   });
 });

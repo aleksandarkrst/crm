@@ -11,6 +11,8 @@ import { useApprovals } from '../store/timesheet';
 import { DaySquares, WEEK_BADGE } from './approvals/parts';
 
 const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+/** Employee · Status · Days · Entered · actions (the handoff's list columns). */
+const COLS = 'minmax(170px, 1.4fr) minmax(150px, 1fr) 150px 110px minmax(150px, auto)';
 const short = (date: string) => DAY_SHORT[(new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7]!;
 
 function Panel({ title, rows, testId, line }: { title: string; rows: ApiApprovalRow[]; testId: string; line: (r: ApiApprovalRow) => string }) {
@@ -53,7 +55,14 @@ export function Approvals() {
   const approve = async (a: ApiApprovals, r: ApiApprovalRow) => {
     const hours = shortHours(r.enteredMinutes, a.timeFormat);
     const title = a.approvalMode === 'week' ? `Approve week ${a.weekNumber} for ${r.employee.name}?` : `Approve ${r.waiting} waiting ${r.waiting === 1 ? 'day' : 'days'} of ${r.employee.name}?`;
-    if (!(await askConfirm({ title, message: `${r.waiting} ${r.waiting === 1 ? 'day' : 'days'} · ${hours} h entered`, confirmLabel: 'Approve' }))) return;
+    if (
+      !(await askConfirm({
+        title,
+        message: `${r.waiting} ${r.waiting === 1 ? 'day' : 'days'} · ${hours} h entered`,
+        confirmLabel: 'Approve',
+      }))
+    )
+      return;
     setBusy(r.employee.id);
     try {
       await approvalsApi.approve(r.employee.id, a.weekStart);
@@ -89,9 +98,7 @@ export function Approvals() {
         <span className="ts-week-label" data-testid="ap-week-label">
           {a.label}
         </span>
-        <span className="ts-due" style={a.deadlinePassed ? undefined : { color: 'var(--text-2)' }}>
-          {a.deadlinePassed ? `Deadline was ${deadline}` : `Due ${deadline}`}
-        </span>
+        <span className="ts-due">{a.deadlinePassed ? `Deadline was ${deadline}` : `Due ${deadline}`}</span>
       </div>
       {a.rows.length === 0 ? (
         <EmptyState title="Nobody to approve for" text="Approvals lists the timesheets of your direct reports. Admins see every employee with a required timesheet." testId="ap-empty" />
@@ -103,21 +110,26 @@ export function Approvals() {
             </div>
           ) : (
             <div className="ap-panels">
-              <Panel title={a.deadlinePassed ? 'Not submitted' : 'Not yet submitted'} rows={notSubmitted} testId="ap-not-submitted" line={(r) => `${shortHours(r.enteredMinutes, a.timeFormat)} of ${shortHours(r.expectedMinutes, a.timeFormat)} h · missing ${r.missing.map(short).join(', ')}`} />
+              <Panel
+                title={a.deadlinePassed ? 'Not submitted' : 'Not yet submitted'}
+                rows={notSubmitted}
+                testId="ap-not-submitted"
+                line={(r) => `${shortHours(r.enteredMinutes, a.timeFormat)} of ${shortHours(r.expectedMinutes, a.timeFormat)} h · missing ${r.missing.map(short).join(', ')}`}
+              />
               <Panel title="Late" rows={late} testId="ap-late" line={(r) => (r.autoSubmitted ? 'auto-submitted' : 'submitted late')} />
               <Panel title="Rejected, waiting for the employee" rows={returned} testId="ap-returned" line={(r) => `${r.returned} ${r.returned === 1 ? 'day' : 'days'}`} />
             </div>
           )}
           <div className="ap-table" data-testid="ap-table">
-            <div className="ap-row ap-head caps">
-              <span>Employee</span>
-              <span>Status</span>
-              <span>Days</span>
-              <span>Entered</span>
+            <div className="table-head ap-row" style={{ gridTemplateColumns: COLS }}>
+              <span className="th">Employee</span>
+              <span className="th">Status</span>
+              <span className="th">Days</span>
+              <span className="th">Entered</span>
               <span />
             </div>
             {a.rows.map((r) => (
-              <div className="ap-row" key={r.employee.id} data-testid="ap-row" data-employee={r.employee.id} data-status={r.status}>
+              <div className="table-row ap-row" style={{ gridTemplateColumns: COLS }} key={r.employee.id} data-testid="ap-row" data-employee={r.employee.id} data-status={r.status}>
                 <span className="ap-who">
                   <Link to={paths.approval(r.employee.id, a.weekStart)} className="ap-name">
                     {r.employee.name}
