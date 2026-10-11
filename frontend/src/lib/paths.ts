@@ -57,4 +57,8 @@ export const paths = {
   workload: '/workload',
   /** My timesheet (CD-152); `week` is its Monday, this week without one. */
   timesheet: (week?: string | null) => '/timesheet' + query({ week }),
+  /** Approvals (CD-157): the weeks the caller approves; without `week`, the latest whose deadline passed. */
+  approvals: (week?: string | null) => '/approvals' + query({ week }),
+  /** One person's week on Approvals. */
+  approval: (employeeId: string, week?: string | null) => '/approvals/' + encodeURIComponent(employeeId) + query({ week }),
 };

@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import { and, between, eq, inArray, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
@@ -12,10 +13,13 @@ import {
   tasks,
   tenants,
   timeEntries,
+  type TimesheetDayEventKind,
+  timesheetDayEvents,
   timesheetDays,
   timesheetRows,
   type TimesheetDayStatus,
   timesheetWeeks,
+  users,
   workOrders,
   workOrderTechnicians,
 } from '../../shared/database/schema';
@@ -90,6 +94,12 @@ export interface DayView {
   editable: boolean;
   /** A public holiday on a working day (CD-153): its name and the hours off; it lowers the expected hours. */
   holiday: { name: string; minutes: number } | null;
+  /** The approver's decision (CD-157): the latest comment, who returned or approved the day and when. */
+  comment: string | null;
+  returnedAt: string | null;
+  returnedBy: string | null;
+  approvedAt: string | null;
+  approvedBy: string | null;
 }
 
 export interface WeekView {
@@ -184,6 +194,9 @@ function refusalError(f: RowFacts): HttpException {
 }
 
 const keyOf = (kind: RowKind, id: string) => `${kind}:${id}`;
+/** The members who returned or approved a day, by name (CD-157). */
+const returner = alias(users, 'returner');
+const approver = alias(users, 'approver');
 
 /** One writer per person and day, so two tabs can't pass the daily maximum together. */
 const lockDay = (tx: Tx, employeeId: string, date: string) => tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${employeeId}:${date}`}, 0))`);
@@ -586,7 +599,7 @@ export class TimesheetService {
         const before = await readWeek(tx, caller, weekStart);
         const days = date ? before.submittable.filter((d) => d === date) : before.submittable;
         if (days.length === 0) throw new BadRequestException(date ? 'That day has nothing to submit' : 'Nothing to submit in this week');
-        await submitDays(tx, ctx.tenantId, employeeId, weekStart, days, ctx.userId, caller.now, { dropEmptyRows: !date });
+        await submitDays(tx, ctx.tenantId, employeeId, weekStart, days, ctx.userId, caller.now, { dropEmptyRows: !date, approvalMode: caller.settings.approvalMode, actorName: await actorNameOf(tx, ctx.userId) });
         // A required day submitted for the first time after the deadline makes the week Late, for good (spec 5.5).
         const late = days.some((d) => before.lateIfSubmitted.includes(d));
         if (late) await markLate(tx, ctx.tenantId, employeeId, weekStart, caller.now);
@@ -609,7 +622,9 @@ export class TimesheetService {
           .where(and(eq(timesheetDays.employeeId, employeeId), between(timesheetDays.workDate, weekStart, addDays(weekStart, 6)), eq(timesheetDays.status, 'submitted')))
           .returning({ date: timesheetDays.workDate });
         if (recalled.length === 0) throw new BadRequestException('Nothing to recall in this week');
-        await this.audit.record(tx, ctx, { action: 'timesheet.recalled', entityType: 'employee', entityId: employeeId, data: { weekStart, days: recalled.map((r) => r.date).sort() } });
+        const dates = recalled.map((r) => r.date).sort();
+        await recordDayEvents(tx, { tenantId: ctx.tenantId, employeeId, dates, kind: 'recalled', actor: { userId: ctx.userId, name: await actorNameOf(tx, ctx.userId) }, approvalMode: caller.settings.approvalMode });
+        await this.audit.record(tx, ctx, { action: 'timesheet.recalled', entityType: 'employee', entityId: employeeId, data: { weekStart, days: dates } });
         return readWeek(tx, caller, weekStart);
       })
       .catch(mapDbError);
@@ -797,8 +812,20 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
       .from(timesheetRows)
       .where(and(eq(timesheetRows.employeeId, employeeId), eq(timesheetRows.weekStart, monday))),
     tx
-      .select({ date: timesheetDays.workDate, status: timesheetDays.status, submittedAt: timesheetDays.submittedAt, firstSubmittedAt: timesheetDays.firstSubmittedAt })
+      .select({
+        date: timesheetDays.workDate,
+        status: timesheetDays.status,
+        submittedAt: timesheetDays.submittedAt,
+        firstSubmittedAt: timesheetDays.firstSubmittedAt,
+        comment: timesheetDays.comment,
+        returnedAt: timesheetDays.returnedAt,
+        returnedBy: returner.displayName,
+        approvedAt: timesheetDays.approvedAt,
+        approvedBy: approver.displayName,
+      })
       .from(timesheetDays)
+      .leftJoin(returner, eq(returner.id, timesheetDays.returnedByUserId))
+      .leftJoin(approver, eq(approver.id, timesheetDays.approvedByUserId))
       .where(and(eq(timesheetDays.employeeId, employeeId), between(timesheetDays.workDate, monday, sunday))),
     tx
       .select({ lateAt: timesheetWeeks.lateAt, autoSubmittedAt: timesheetWeeks.autoSubmittedAt })
@@ -859,6 +886,11 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
       date,
       status,
       submittedAt: statusOf.get(date)?.submittedAt?.toISOString() ?? null,
+      comment: statusOf.get(date)?.comment ?? null,
+      returnedAt: statusOf.get(date)?.returnedAt?.toISOString() ?? null,
+      returnedBy: statusOf.get(date)?.returnedBy ?? null,
+      approvedAt: statusOf.get(date)?.approvedAt?.toISOString() ?? null,
+      approvedBy: statusOf.get(date)?.approvedBy ?? null,
       expectedMinutes: expected,
       minutes,
       required: isRequired(expected, minutes),
@@ -899,12 +931,46 @@ export async function markLate(tx: Tx, tenantId: string, employeeId: string, wee
     });
 }
 
+/** Who acts, as the history names them (CD-157): the member's display name now, kept as it was. */
+export async function actorNameOf(tx: Tx, userId: string): Promise<string | null> {
+  const [u] = await tx.select({ name: users.displayName }).from(users).where(eq(users.id, userId));
+  return u?.name ?? null;
+}
+
+export interface DayEvents {
+  tenantId: string;
+  employeeId: string;
+  dates: string[];
+  kind: TimesheetDayEventKind;
+  /** Null user: the deadline job. */
+  actor: { userId: string | null; name: string | null };
+  comment?: string | null;
+  approvalMode: TimesheetSettings['approvalMode'];
+}
+
+/** Writes one history row per day (spec 9.5; `timesheet_day_events` is append-only). */
+export async function recordDayEvents(tx: Tx, e: DayEvents): Promise<void> {
+  if (!e.dates.length) return;
+  await tx.insert(timesheetDayEvents).values(
+    e.dates.map((workDate) => ({ tenantId: e.tenantId, employeeId: e.employeeId, workDate, kind: e.kind, actorUserId: e.actor.userId, actorName: e.actor.name, comment: e.comment ?? null, approvalMode: e.approvalMode })),
+  );
+}
+
 /**
  * Submits `days` of one person's week (spec 5.3 T1): they become Submitted (only Draft ones; a
  * Rejected or Approved day is left alone) and, for the whole week, rows still without hours go
- * (spec 4.4). `userId` null: the deadline job (CD-153).
+ * (spec 4.4). `userId` null: the deadline job (CD-153). Each day gets a history row (CD-157).
  */
-export async function submitDays(tx: Tx, tenantId: string, employeeId: string, weekStart: string, days: string[], userId: string | null, now: Date, opts: { dropEmptyRows?: boolean } = {}) {
+export async function submitDays(
+  tx: Tx,
+  tenantId: string,
+  employeeId: string,
+  weekStart: string,
+  days: string[],
+  userId: string | null,
+  now: Date,
+  opts: { dropEmptyRows?: boolean; approvalMode: TimesheetSettings['approvalMode']; actorName?: string | null },
+) {
   // A single day (CD-156) leaves the week's empty rows: the rest of the week isn't done.
   if (opts.dropEmptyRows !== false) await tx.execute(sql`
     delete from timesheet_rows r where r.employee_id = ${employeeId} and r.week_start = ${weekStart}
@@ -919,4 +985,5 @@ export async function submitDays(tx: Tx, tenantId: string, employeeId: string, w
       set: { status: 'submitted', submittedAt: now, submittedByUserId: userId, firstSubmittedAt: sql`coalesce(${timesheetDays.firstSubmittedAt}, excluded.first_submitted_at)` },
       setWhere: sql`${timesheetDays.status} = 'draft'`,
     });
+  await recordDayEvents(tx, { tenantId, employeeId, dates: days, kind: userId ? 'submitted' : 'auto_submitted', actor: { userId, name: opts.actorName ?? null }, approvalMode: opts.approvalMode });
 }

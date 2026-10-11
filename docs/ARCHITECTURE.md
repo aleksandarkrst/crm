@@ -1558,8 +1558,8 @@ The `timesheet` module (`modules/timesheet`, tables in `schema/timesheet.ts`, RL
 and live hints in `drizzle/0077_timesheet_rls.sql`). Spec: "Functional spec: 15 · Timesheet and
 approvals" in Linear; design `docs/design/Timesheet.dc.html`. Built so far: weekly time entry
 (CD-152), time from the task and work order pages (CD-276), the settings, public holidays and
-the deadline with auto submit (CD-153), the approval mode (CD-156), the Late status (CD-155) and
-the reminder and after-deadline emails (CD-154).
+the deadline with auto submit (CD-153), the approval mode (CD-156), the Late status (CD-155),
+the reminder and after-deadline emails (CD-154) and the approval screen (CD-157).
 
 - **Tables:**
   - `time_entries`: one person's hours on a task **or** a work order (a check) on a date, whole
@@ -1572,8 +1572,16 @@ the reminder and after-deadline emails (CD-154).
     (in the grid or as hours) moves the end; past midnight the times are dropped.
   - `timesheet_days`: a day's status once it was first submitted (`submitted`, `rejected`,
     `approved`, or `draft` after a Recall; without a row a day is Draft), who submitted it and
-    when, and `first_submitted_at` (CD-155, `drizzle/0082`, kept through Recall). The design's
-    Rejected is the spec's Returned.
+    when, `first_submitted_at` (CD-155, `drizzle/0082`, kept through Recall), and the approver's
+    decision (CD-157, `drizzle/0087`): `approved_at`/`approved_by_user_id`,
+    `returned_at`/`returned_by_user_id` and the latest `comment` (1 to 1,000 characters). The
+    design's Rejected is the spec's Returned.
+  - `timesheet_day_events` (CD-157, spec 9.5; RLS and an append-only trigger in `drizzle/0088`):
+    one row per day and status change (`submitted`, `auto_submitted`, `recalled`, `approved`,
+    `returned`, `resubmitted`, `unlocked`), with the actor's user id and their name at the time
+    (null actor: the deadline job), the comment of a return, and the approval mode it ran under.
+    Written by `recordDayEvents` from every path that changes a day's status; updates are refused
+    ("Timesheet history cannot be changed"), nothing deletes rows except the employee's cascade.
   - `timesheet_rows`: rows added to a week ("+ Add task or work order", Copy last week) so they
     show before they have hours. Rows still without hours go when the week is submitted.
 - **The lock** (`time_entries_lock`, BEFORE INSERT/UPDATE/DELETE, for the row before and after):
@@ -1672,7 +1680,45 @@ the reminder and after-deadline emails (CD-154).
     "Partly submitted (n of m days)" while some required days are Submitted or Approved and
     others Draft.
   - Every change answers with the whole week; submit, recall and copy are in the audit log
-    (`timesheet.submitted`, `timesheet.recalled`, `timesheet.copied`).
+    (`timesheet.submitted`, `timesheet.recalled`, `timesheet.copied`). The week's days also carry
+    `comment`, `returnedAt`/`returnedBy` and `approvedAt`/`approvedBy` (CD-157).
+- **Approvals** (CD-157, spec 8; `approvals.service.ts`, `approvals.controller.ts`, the pure rules in
+  `approval-rules.ts`, unit-tested): `/api/timesheet/approvals`, any member.
+  - **Who approves** (`approvalRight`, spec 8.3 and the 9 Oct decision): the employee's manager
+    when active with an account (`approver`); an Admin when the manager can't (`approver`) or
+    although they could (`override`, recorded in the audit row); never oneself; everyone else,
+    including indirect managers, only looks (`null`). Resolved from the reporting line at the time
+    of the action, never stored; `PeopleAccess.approversFor` is the same rule for the emails.
+  - `GET ?week=<Monday>` (default: the latest week whose deadline passed): one row per employee the
+    caller sees (Admins: every active employee with a required timesheet and an account; managers:
+    their direct and indirect reports) from three batched queries (hours per day, day statuses,
+    week flags) and the shared rules (`expectedMinutes`, `isRequired`, `weekStatus`,
+    `submittableDays`): `right`, the week status and flags, a status per day, entered and expected
+    minutes, `missing` (required Draft days: "Not submitted"), `waiting` (Submitted), `returned`
+    (Rejected) and `approvable`. `GET :employeeId/week?week=` is the person's week as
+    `GET /timesheet/week` gives it (`readWeek` for that employee) with `right`; 403 outside the
+    caller's reports, 404 for no such employee.
+  - `POST approve { employeeId, weekStart, dates? }` (spec 5.3 T3): Whole week mode approves every
+    Submitted day, only once no required day is Draft or Rejected, and takes no `dates` (400); Day
+    by day approves the chosen Submitted days, or all of them. `POST return { …, comment }` (T4, the
+    design's Reject): the chosen Submitted days, or all of them, become Rejected with the comment
+    (1 to 1,000 characters, required). Both update only rows still Submitted: fewer than picked, or
+    a picked day no longer Submitted, is 409 "This week changed, please review it again" (spec 8.2,
+    8.4). Each writes `timesheet_day_events`, the audit log (`timesheet.approved`,
+    `timesheet.returned`, with `override`), and a return queues "Your timesheet for week 41 was
+    returned" to the employee (`timesheet.notice-email`, kind `returned`, `returnedEmail`). Approved
+    days are then locked by the trigger (423). Resubmitting Rejected days is CD-158, unlocking
+    CD-159, entering for someone else CD-317.
+  - **Screens** (`screens/Approvals.tsx`, `screens/approvals/`; Workforce → Approvals, for owners,
+    admins and managers who see their team; `useApprovals`, `useApproverWeek` in
+    `store/timesheet.ts`, re-read on `timesheetRev`): the list with week navigation, the panels
+    Not submitted / Late / Rejected, one row per employee (status badge, Late and Auto-submitted,
+    a square per day, "32 of 40 h", Approve week or "Approve all (n)"), and one person's week
+    (`/approvals/:id?week=`): the badges, "39.5 h entered · 3 days waiting for you", one block per
+    required day with Project · Task or work order · Hours · Note, the return comment or "Approved
+    by … · locked", Approve / Reject per day in Day by day mode, Approve week / Reject week in
+    Whole week mode; Reject opens a dialog with the required comment. Not built: Send reminder,
+    the sidebar badge, warnings per row, bulk approval of several people and the Changes view.
   - **Entries** (CD-276; the task and work order pages): `POST entries` `{ taskId | workOrderId,
     date, minutes | startTime + endTime, note? }`, `PATCH entries/:id` (date, hours, Start → End,
     note), `DELETE entries/:id`. Always the caller's own (someone else's entry is 404); the same

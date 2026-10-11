@@ -74,7 +74,7 @@ export class TimesheetDeadlines {
         for (const { employee_id: employeeId } of rows) {
           const week = await readWeek(tx, await callerFor(tx, employeeId, today, settings, tz, now), due.weekStart);
           if (week.submittable.length === 0) continue;
-          await submitDays(tx, tenantId, employeeId, due.weekStart, week.submittable, null, now);
+          await submitDays(tx, tenantId, employeeId, due.weekStart, week.submittable, null, now, { approvalMode: settings.approvalMode });
           await tx
             .insert(timesheetWeeks)
             .values({ tenantId, employeeId, weekStart: due.weekStart, lateAt: now, autoSubmittedAt: now })

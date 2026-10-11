@@ -4,23 +4,13 @@ import { askConfirm } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Layout';
 import { usePicker } from '../components/ui';
-import { addDays, type ApiLoggable, type ApiTimesheetRow, type ApiTimesheetWeek, dayLabel, dayName, shortHours, targetOf, timesheetApi, type WeekStatus } from '../lib/timesheetApi';
+import { addDays, type ApiLoggable, type ApiTimesheetRow, type ApiTimesheetWeek, dayLabel, dayName, shortHours, targetOf, timesheetApi } from '../lib/timesheetApi';
 import { projectError } from '../store/projects';
 import { useStore } from '../store/store';
 import { useTimesheetWeek } from '../store/timesheet';
+import { WEEK_BADGE as BADGE } from './approvals/parts';
 import { CopyDialog, skippedText } from './timesheet/CopyDialog';
 import { Grid, type SaveCell } from './timesheet/Grid';
-
-const BADGE: Record<WeekStatus, string> = {
-  no_entry: 'badge-neutral',
-  not_submitted: 'badge-neutral',
-  draft: 'badge-neutral',
-  partly_submitted: 'badge-neutral',
-  submitted: 'badge-brand',
-  partly_approved: 'badge-neutral',
-  approved: 'badge-brand',
-  rejected: 'badge-warn',
-};
 
 const LATE_NOTE = 'This week will be marked as submitted late.';
 

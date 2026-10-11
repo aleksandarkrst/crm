@@ -119,7 +119,27 @@ export function lateSummaryEmail(c: Common, w: Pick<WeekFacts, 'weekStart' | 'we
     `Late timesheets for week ${w.weekNumber}`,
     [`${people.length === 1 ? 'This person' : 'These people'} you approve for missed the deadline for week ${w.weekNumber} (${range(w.weekStart)}).`],
     people.map((p) => [p.name, p.autoSubmitted ? 'auto-submitted (late)' : `not submitted · ${hours(p.enteredMinutes, c.timeFormat)}`]),
-    { label: 'Open Workforce', href: `${base(c.appUrl)}/org` },
+    { label: 'Open Approvals', href: `${base(c.appUrl)}/approvals?week=${w.weekStart}` },
     `You get this email because you approve timesheets in ${c.workspaceName} and its after-deadline emails are on (Settings → Workforce → Approvals).`,
+  );
+}
+
+export interface ReturnedDays {
+  days: string[];
+  comment: string;
+  approverName: string | null;
+}
+
+/** "Your timesheet for week 41 was returned" (CD-157, spec 5.3 T4): the days sent back and the approver's comment. */
+export function returnedEmail(c: Common, w: Pick<WeekFacts, 'weekStart' | 'weekNumber'>, r: ReturnedDays): MailMessage {
+  const who = r.approverName ?? 'Your approver';
+  const what = r.days.length === 1 ? dayLabel(r.days[0]!) : `${r.days.length} days (${r.days.map(dayLabel).join(', ')})`;
+  return message(
+    c,
+    `Your timesheet for week ${w.weekNumber} was returned`,
+    [`${who} returned ${what} of week ${w.weekNumber} (${range(w.weekStart)}) with a comment. Fix the hours on the returned ${r.days.length === 1 ? 'day' : 'days'} and resubmit them; the other days keep their status.`],
+    [['Comment', r.comment]],
+    { label: 'Open timesheet', href: `${base(c.appUrl)}/timesheet?week=${w.weekStart}` },
+    `You get this email because a day of your timesheet in ${c.workspaceName} was returned by your approver.`,
   );
 }

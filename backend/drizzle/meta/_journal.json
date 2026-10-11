@@ -610,6 +610,20 @@
       "when": 1791552298676,
       "tag": "0086_hour_limits_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1791715120738,
+      "tag": "0087_approvals",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1791715128046,
+      "tag": "0088_approvals_rls",
+      "breakpoints": true
     }
   ]
 }

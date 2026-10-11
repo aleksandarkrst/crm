@@ -86,12 +86,52 @@ export const timesheetDays = pgTable(
     submittedByUserId: uuid('submitted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     /** When the day was first submitted (CD-155): kept through Recall, so a later submission is only Late if it never went in. */
     firstSubmittedAt: timestamp('first_submitted_at', { withTimezone: true }),
+    /** The approver's decision (CD-157): when and who approved, or when and who returned it, with the latest comment. */
+    approvedAt: timestamp('approved_at', { withTimezone: true }),
+    approvedByUserId: uuid('approved_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    returnedAt: timestamp('returned_at', { withTimezone: true }),
+    returnedByUserId: uuid('returned_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    comment: text('comment'),
     ...timestamps,
   },
   (t) => [
     primaryKey({ columns: [t.tenantId, t.employeeId, t.workDate], name: 'timesheet_days_pk' }),
     foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'timesheet_days_employee_fk' }).onDelete('cascade'),
     check('timesheet_days_status_ck', sql`${t.status} in ('draft', 'submitted', 'rejected', 'approved')`),
+    check('timesheet_days_comment_ck', sql`${t.comment} is null or length(${t.comment}) between 1 and 1000`),
+  ],
+);
+
+/** What happened to a day (spec 9.5): every status change, by whom (null: the deadline job). */
+export const TIMESHEET_DAY_EVENT_KINDS = ['submitted', 'auto_submitted', 'recalled', 'approved', 'returned', 'resubmitted', 'unlocked'] as const;
+export type TimesheetDayEventKind = (typeof TIMESHEET_DAY_EVENT_KINDS)[number];
+
+/**
+ * The append-only history of a timesheet day (CD-157, spec 9.5): one row per day and status change,
+ * with the actor as they were named at the time (the name stays when the member goes), the comment
+ * of a return or the reason of an unlock, and the approval mode the action ran under. Nothing
+ * updates or deletes these rows; deleting the employee takes them along.
+ */
+export const timesheetDayEvents = pgTable(
+  'timesheet_day_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    employeeId: uuid('employee_id').notNull(),
+    workDate: date('work_date').notNull(),
+    kind: text('kind', { enum: TIMESHEET_DAY_EVENT_KINDS }).notNull(),
+    actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    actorName: text('actor_name'),
+    comment: text('comment'),
+    approvalMode: text('approval_mode', { enum: ['week', 'day'] }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('timesheet_day_events_day_idx').on(t.tenantId, t.employeeId, t.workDate),
+    foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'timesheet_day_events_employee_fk' }).onDelete('cascade'),
+    check('timesheet_day_events_kind_ck', sql`${t.kind} in ('submitted', 'auto_submitted', 'recalled', 'approved', 'returned', 'resubmitted', 'unlocked')`),
+    check('timesheet_day_events_mode_ck', sql`${t.approvalMode} in ('week', 'day')`),
+    check('timesheet_day_events_comment_ck', sql`${t.comment} is null or length(${t.comment}) between 1 and 1000`),
   ],
 );
 
