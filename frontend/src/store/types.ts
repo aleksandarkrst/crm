@@ -1,5 +1,6 @@
 import type { ApiCustomerEmailLanguage, ApiCustomField, ApiDateFormat, ApiLanguage, ApiOnboarding, ApiStageChange, ApiStartPage, CustomFieldEntity, CustomFieldValues, DealOutcome, LostReason, ApiVisitScope, WorkspaceTerms, ApiTimesheetSettings } from '../lib/api';
 import type { DealDoc, DocTemplate } from './documents';
+import type { TimesheetSummaryResult } from './employeeCard';
 import type { MeetingDialogSeed, MeetingList } from './meetings';
 import type { ApiEmployeeCard, ApiInternalMinutes, ApiMeeting } from '../lib/api';
 import type { PeoplePickers } from './employeeCard';
@@ -463,6 +464,7 @@ export interface State {
   meetings: Record<string, ApiMeeting>;
   /** Employee cards read so far, by id (CD-140; see store/employeeCard.ts). */
   employeeCards: Record<string, ApiEmployeeCard>;
+  employeeTimesheets: Record<string, TimesheetSummaryResult>;
   /** Active employees, org levels and units for the card's pickers; null until a card needs them. */
   peoplePickers: PeoplePickers | null;
   /** The signed-in member's own employee record (Profile → "My employee card"); undefined until read. */

@@ -19,6 +19,7 @@
  * hint without ids) are read again, and the pickers too when they are loaded.
  */
 import { askConfirm } from '../components/ConfirmDialog';
+import { employeeTimesheetSummary, type EmployeeTimesheetSummary } from '../lib/employeeTimesheetApi';
 import {
   type ApiEmployeeCard,
   type ApiEmployeeRow,
@@ -51,6 +52,8 @@ export const ROLE_LABEL: Record<FunctionalRole, string> = { employee: 'Employee'
 
 /** What a save or other card action answers. */
 export type CardResult = { card: ApiEmployeeCard } | { error: string; conflict?: boolean };
+
+export type TimesheetSummaryResult = { status: 'loading' | 'hidden' | 'error' } | { status: 'ready'; summary: EmployeeTimesheetSummary };
 
 interface Deps {
   cur: () => State;
@@ -122,9 +125,32 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
 
   const liveIds = new Set<string>();
   let liveTimer: ReturnType<typeof setTimeout> | undefined;
+  const summaryRequests = new Map<string, number>();
+  /**
+   * The card's Timesheet block (CD-161). "loading" is only the state before the first answer: a
+   * re-read (timesheet and people live hints) keeps what is on screen, so the figures stay while
+   * they refresh and a hidden block stays hidden. A refused re-read hides the block; any other
+   * failure keeps the figures already shown.
+   */
+  const loadTimesheetSummary = async (id: string) => {
+    const request = (summaryRequests.get(id) ?? 0) + 1;
+    summaryRequests.set(id, request);
+    const putSummary = (result: TimesheetSummaryResult) => {
+      if (summaryRequests.get(id) === request) set((x) => ({ employeeTimesheets: { ...x.employeeTimesheets, [id]: result } }));
+    };
+    const before = cur().employeeTimesheets[id];
+    if (!before || before.status === 'error') putSummary({ status: 'loading' });
+    try {
+      putSummary({ status: 'ready', summary: await employeeTimesheetSummary(id) });
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 403 || err.status === 404)) putSummary({ status: 'hidden' });
+      else if (before?.status !== 'ready') putSummary({ status: 'error' });
+    }
+  };
 
   return {
     load,
+    timesheetSummary: loadTimesheetSummary,
     /** Loads the pickers (the card's Work and Reporting fields, the deactivate dialog), again when the org changed since. */
     ensurePickers: () => (cur().peoplePickers && pickersRev === cur().orgRev ? Promise.resolve() : loadPickers()),
 
