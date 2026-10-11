@@ -108,14 +108,16 @@ export function Timesheet() {
   /** Resubmit the rejected days (CD-158, spec 5.3 T5): all of them, or one in Day by day mode; never marks the week Late. */
   const resubmit = async (w: ApiTimesheetWeek, dates: string[], reply: string | null): Promise<string | null> => {
     const single = w.settings.approvalMode === 'day' && dates.length === 1 && w.resubmittable.length > 1 ? dates[0] : undefined;
-    try {
-      set(await timesheetApi.resubmit(w.weekStart, single, reply));
-      setResubmitting(null);
-      flash(dates.length === 1 ? `${dayLabel(dates[0]!)} resubmitted` : `${dates.length} days resubmitted`);
-      return null;
-    } catch (err) {
-      return projectError(err);
-    }
+    return run(async () => {
+      try {
+        set(await timesheetApi.resubmit(w.weekStart, single, reply));
+        setResubmitting(null);
+        flash(dates.length === 1 ? `${dayLabel(dates[0]!)} resubmitted` : `${dates.length} days resubmitted`);
+        return null;
+      } catch (err) {
+        return projectError(err);
+      }
+    });
   };
 
   const recall = async (w: ApiTimesheetWeek) => {
@@ -204,23 +206,29 @@ export function Timesheet() {
             Resubmit rejected days ({week.resubmittable.length})
           </button>
         )}
-        <button
-          type="button"
-          className="btn btn-primary"
-          data-testid="ts-submit"
-          disabled={busy || week.submittable.length === 0}
-          title={future ? 'A week can be submitted once it has started' : week.submittable.length === 0 ? 'Nothing to submit in this week' : undefined}
-          onClick={() => void submit(week)}
-        >
-          {busy ? 'Submitting…' : week.lateIfSubmitted.length ? 'Submit late' : 'Submit week'}
-        </button>
+        {(week.submittable.length > 0 || week.resubmittable.length === 0) && (
+          <button
+            type="button"
+            className="btn btn-primary"
+            data-testid="ts-submit"
+            disabled={busy || week.submittable.length === 0}
+            title={future ? 'A week can be submitted once it has started' : week.submittable.length === 0 ? 'Nothing to submit in this week' : undefined}
+            onClick={() => void submit(week)}
+          >
+            {busy ? 'Submitting…' : week.lateIfSubmitted.length ? 'Submit late' : 'Submit week'}
+          </button>
+        )}
       </div>
       {week.days
         .filter((d) => d.status === 'rejected' && d.comment)
         .map((d) => (
           <div className="ts-rejected-note" key={d.date} data-testid="ts-rejected-note" data-date={d.date}>
-            <strong>{dayLabel(d.date)}</strong> was rejected{d.returnedBy ? ` by ${d.returnedBy}` : ''}
-            {d.returnedAt ? ` · ${when(d.returnedAt, s.workspace?.timezone)}` : ''}: <q>{d.comment}</q>
+            <div className="ts-rejected-head">
+              {dayName(d.date)}
+              {dayLabel(d.date).slice(3)} was rejected{d.returnedBy ? ` by ${d.returnedBy}` : ''}
+              {d.returnedAt ? ` · ${when(d.returnedAt, s.workspace?.timezone)}` : ''}
+            </div>
+            <q>{d.comment}</q>
           </div>
         ))}
       <Grid

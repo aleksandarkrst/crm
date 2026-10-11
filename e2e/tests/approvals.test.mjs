@@ -97,7 +97,8 @@ describe('approvals', () => {
     await bojan.goto(`${BASE_URL}/timesheet?week=${monday}`, { waitUntil: 'networkidle0' });
     await bojan.waitForSelector('[data-testid=ts-rejected-note]');
     assert.equal((await bojan.$$('[data-testid=ts-rejected-note]')).length, 5);
-    assert.match(await bojan.$eval('[data-testid=ts-rejected-note]', (el) => el.textContent), /was rejected by Marko Ilić · .*: The Agrokop inspection is missing\./);
+    assert.match(await bojan.$eval('[data-testid=ts-rejected-note]', (el) => el.textContent), /^Monday \d+ \w+ was rejected by Marko Ilić · .*The Agrokop inspection is missing\.$/);
+    assert.equal(await bojan.$('[data-testid=ts-submit]'), null);
     assert.equal(await bojan.$eval('[data-testid=ts-resubmit]', (el) => el.textContent), 'Resubmit rejected days (5)');
     await click(bojan, '[data-testid=ts-resubmit]');
     await bojan.waitForSelector('[data-testid=ts-resubmit-reply]');

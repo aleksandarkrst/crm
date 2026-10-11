@@ -65,10 +65,14 @@ describe('resubmitting returned days (CD-158)', () => {
     expect((await call('PUT', '/timesheet/cells', { ...as(dragan), body: { date: monday, taskId, minutes: 420 } })).status).toBe(409);
   });
 
-  it('refuses a single day in Whole week mode, someone with nothing rejected, and never touches other days', async () => {
+  it('refuses a single day in Whole week mode, someone with nothing rejected, another workspace, and never touches other days', async () => {
     expect((await resubmit(dragan, { date: addDays(monday, 1) })).status).toBe(400);
     expect((await resubmit(peer, {})).body.message).toBe('Nothing to resubmit in this week');
     expect((await call('POST', '/timesheet/submit', { ...as(dragan), body: { weekStart: monday } })).status).toBe(400);
+    // From a workspace Dragan is not a member of, nothing of his is reachable.
+    const other = await createTenant(peer, 'Other resubmit tenant');
+    expect([403, 404]).toContain((await call('POST', '/timesheet/resubmit', { token: dragan.token, tenant: other, body: { weekStart: monday } })).status);
+    expect((await week()).days[1]!.status).toBe('rejected');
   });
 
   it('resubmits exactly the rejected days with a reply: Submitted again, Late unchanged, history, audit and the approver email', async () => {
