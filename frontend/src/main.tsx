@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider, useRouteError } from 'react-router-dom';
 import { App } from './App';
+import { startAnalytics } from './lib/analytics';
 import { reportError, startErrorTracking } from './lib/monitoring';
 import './styles/global.css';
 import './styles/employee-timesheet.css';
@@ -30,3 +31,4 @@ createRoot(document.getElementById('root')!, {
 );
 
 startErrorTracking();
+startAnalytics();

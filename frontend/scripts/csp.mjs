@@ -21,22 +21,28 @@ function sentry() {
   }
 }
 
+// Amplitude's US-zone endpoints (CD-116): events, session replay, replay config, SDK diagnostics.
+const AMPLITUDE_HOSTS = ['https://api2.amplitude.com', 'https://api-sr.amplitude.com', 'https://sr-client-cfg.amplitude.com', 'https://diagnostics.prod.us-west-2.amplitude.com'];
+
 export function policy() {
   const s = sentry();
+  const a = !!env.VITE_AMPLITUDE_API_KEY;
   const directives = [
     ["default-src", "'self'"],
     // Cloudflare Web Analytics: Cloudflare adds its beacon script to the page and it reports to
-    // cloudflareinsights.com (Sentry CRM-FRONTEND-1).
-    ["script-src", "'self' https://static.cloudflareinsights.com"],
+    // cloudflareinsights.com (Sentry CRM-FRONTEND-1). Amplitude loads optional helper scripts
+    // (visual tagging, background capture) from its CDN.
+    ["script-src", ["'self' https://static.cloudflareinsights.com", a && 'https://cdn.amplitude.com'].filter(Boolean).join(' ')],
     // 'unsafe-inline' for style attributes: React renders inline styles throughout the app.
     ["style-src", "'self' 'unsafe-inline' https://fonts.googleapis.com"],
     ["font-src", "'self' https://fonts.gstatic.com"],
     ["img-src", "'self' data: blob:"],
     // The API is same-origin, sign-in included (CD-114: the backend talks to the provider); Sentry;
-    // Cloudflare Web Analytics.
-    ["connect-src", ["'self'", s?.host, 'https://cloudflareinsights.com'].filter(Boolean).join(' ')],
-    // The live-update worker is a bundled file.
-    ["worker-src", "'self'"],
+    // Cloudflare Web Analytics; Amplitude when a key is built in.
+    ["connect-src", ["'self'", s?.host, 'https://cloudflareinsights.com', ...(a ? AMPLITUDE_HOSTS : [])].filter(Boolean).join(' ')],
+    // The live-update worker is a bundled file. Session Replay compresses and sends in blob workers
+    // (it falls back to the main thread when they are blocked).
+    ["worker-src", a ? "'self' blob:" : "'self'"],
     ["frame-src", "'none'"],
     ["frame-ancestors", "'none'"],
     ["object-src", "'none'"],

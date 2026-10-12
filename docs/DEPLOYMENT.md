@@ -517,6 +517,29 @@ in `crm-frontend` with the deployed commit as its release. Resolve it afterwards
    still succeeds.
 4. Repeat the test error above: its stack trace now shows the source files and lines.
 
+### Product analytics (Amplitude, CD-116)
+
+The app sends product-usage events and session replays to Amplitude (`frontend/src/lib/analytics.ts`:
+Analytics with autocapture plus Session Replay at a 100 % sample rate), only in builds with an API key.
+- Add the repository **variable** `AMPLITUDE_API_KEY` with the production project's API key (an
+  Amplitude browser key is public by design, like the Sentry DSN). It is built into the next image.
+  `AMPLITUDE_API_KEY_STAGING` does the same for the staging image; leave it unset to keep staging out
+  of the production numbers, or point it at a separate Amplitude project.
+- The Content-Security-Policy (`frontend/scripts/csp.mjs`) allows Amplitude's US-zone hosts only when
+  a key is built in. A project created in the EU zone needs the `.eu.` hosts there and
+  `serverZone: 'EU'` in the init call.
+- Without a key the console says `Amplitude API key missing — analytics disabled` and nothing is sent.
+- Locally: put `VITE_AMPLITUDE_API_KEY=…` in `frontend/.env.local` (not committed).
+
+**Prove it works.** Sign in and open Pipeline: the explicit event `Viewed Pipeline` appears in the
+project's live event feed within seconds, and the Setup checklist in Amplitude flips. Autocapture
+adds page views, clicks and form interactions on its own.
+
+**Privacy.** Autocapture records element text and Session Replay records the screen, so both can
+carry CRM data. Keep the Amplitude project's privacy settings (masking of inputs and text) in line
+with CD-116's acceptance criterion that sensitive business data and personal information are
+excluded, and lower `sampleRate` once enough sessions are coming in.
+
 ### Logs off the server (Better Stack Logs, CD-102)
 
 Container logs live in `docker compose logs` on the server (20 MB x 5 per container). To keep them

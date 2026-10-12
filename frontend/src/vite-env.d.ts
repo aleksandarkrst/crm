@@ -6,6 +6,8 @@ interface ImportMetaEnv {
   readonly VITE_SENTRY_DSN?: string;
   /** production or staging: which deployment the errors come from (CD-105). */
   readonly VITE_SENTRY_ENVIRONMENT?: string;
+  /** The frontend's Amplitude project API key (CD-116); unset = no product analytics. */
+  readonly VITE_AMPLITUDE_API_KEY?: string;
   /** The deployed commit, sent with each error as its release. */
   readonly VITE_APP_VERSION?: string;
 }
