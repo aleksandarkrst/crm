@@ -111,6 +111,7 @@ jobs:
           build-args: |
             VITE_AUTH_MODE=${{ vars.AUTH_MODE || 'oidc' }}
             VITE_SENTRY_DSN=${{ vars.SENTRY_FRONTEND_DSN }}
+            VITE_AMPLITUDE_API_KEY=${{ vars.AMPLITUDE_API_KEY }}
             VITE_APP_VERSION=${{ github.sha }}
             CSP_ENFORCE=${{ vars.CSP_ENFORCE || 'false' }}
             SENTRY_ORG=${{ vars.SENTRY_ORG }}
@@ -133,6 +134,7 @@ jobs:
             VITE_AUTH_MODE=${{ vars.AUTH_MODE || 'oidc' }}
             VITE_SENTRY_DSN=${{ vars.SENTRY_FRONTEND_DSN }}
             VITE_SENTRY_ENVIRONMENT=staging
+            VITE_AMPLITUDE_API_KEY=${{ vars.AMPLITUDE_API_KEY_STAGING }}
             VITE_APP_VERSION=${{ github.sha }}
             # Staging enforces the Content-Security-Policy, so a violation breaks staging first.
             CSP_ENFORCE=${{ vars.STAGING_CSP_ENFORCE || 'true' }}

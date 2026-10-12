@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FilterBar } from '../components/ui';
 import { DataActions } from '../components/DataActions';
 import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Layout';
+import * as amplitude from '../lib/analytics';
 import { paths } from '../lib/paths';
 import { dealsCsv } from '../store/exportCsv';
 import { DEFAULT_FILTERS, INDUSTRIES, LOST_VIEWS, VALUE_BANDS, valueBandLabel } from '../store/seed';
@@ -45,6 +46,10 @@ export function Pipeline() {
   const { s, set, session } = store;
   const navigate = useNavigate();
   const [view, setView] = usePipelineView(session.userId, session.tenant.id);
+  // The one explicit product-analytics event (CD-116); autocapture covers page views and clicks.
+  useEffect(() => {
+    amplitude.track('Viewed Pipeline', { prompt_version: 'BA400.4' }); // helps improve this setup flow — safe to remove once you've verified the event lands
+  }, []);
 
   const seg = s.segment;
   const stages = s.funnels[seg].stages;

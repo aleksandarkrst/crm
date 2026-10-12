@@ -69,6 +69,10 @@ export default defineConfig({
             { name: 'router', test: /node_modules[\\/](react-router|react-router-dom|cookie|set-cookie-parser)[\\/]/ },
             // Error tracking (CD-8), loaded after startup and only when a Sentry DSN is built in.
             { name: 'sentry', test: /node_modules[\\/]@sentry[\\/]/ },
+            // Product analytics (CD-116): its own chunk, so the bundler does not fold it into the
+            // first lazy screen that tracks an event and load that screen at startup. The rrweb
+            // recorder packages stay out: Session Replay loads them lazily on its own.
+            { name: 'amplitude', test: /node_modules[\\/]@amplitude[\\/](?!rrweb)/ },
           ],
         },
       },
