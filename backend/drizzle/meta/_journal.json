@@ -652,6 +652,13 @@
       "when": 1791920750633,
       "tag": "0092_holiday_ranges",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1791921345067,
+      "tag": "0093_invitation_names",
+      "breakpoints": true
     }
   ]
 }

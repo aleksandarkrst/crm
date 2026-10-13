@@ -88,7 +88,7 @@ async function fillWorkEmail(tx: Tx, employeeId: string, email: string) {
  *   invited email, `created_from_invite` (names from the profile on joining; deleted if the
  *   invitation is withdrawn or expires first, `dropUnusedInvitedEmployees`).
  */
-export async function createInvitedEmployee(tx: Tx, tenantId: string, email: string): Promise<string | null> {
+export async function createInvitedEmployee(tx: Tx, tenantId: string, email: string, names: { firstName: string; lastName: string } | null = null): Promise<string | null> {
   const mail = email.trim().toLowerCase();
   const [same] = await tx
     .select({ id: employees.id, userId: employees.userId, deactivatedAt: employees.deactivatedAt })
@@ -98,7 +98,7 @@ export async function createInvitedEmployee(tx: Tx, tenantId: string, email: str
   const [settings] = await tx.select({ hours: tenants.employeeDefaultWeeklyHours }).from(tenants).where(eq(tenants.id, tenantId));
   const [row] = await tx
     .insert(employees)
-    .values({ tenantId, ...emailNames(mail), workEmail: mail, weeklyHours: settings?.hours ?? 40, createdFromInvite: true })
+    .values({ tenantId, ...(names ?? emailNames(mail)), workEmail: mail, weeklyHours: settings?.hours ?? 40, createdFromInvite: true })
     .returning({ id: employees.id });
   return row!.id;
 }
@@ -115,6 +115,30 @@ export function emailNames(email: string): { firstName: string; lastName: string
   if (!words.length) return { firstName: 'Invited', lastName: 'Person' };
   const last = words.length > 1 ? words.pop()! : words[0]!;
   return { firstName: words.join(' ').slice(0, 100), lastName: last.slice(0, 100) };
+}
+
+/**
+ * A member chose their name (onboarding "About you", the profile): their employee record takes it
+ * when its names still come from an email, the work email's or the sign-in email's (`emailNames`),
+ * as "Mkrzic Mkrzic" did (CD-318). Names someone typed on the card stay. Call inside `withTenant`.
+ */
+export async function syncMemberNames(tx: Tx, userId: string, displayName: string | null): Promise<boolean> {
+  const names = profileNames(displayName);
+  if (!names) return false;
+  const [user] = await tx.select({ email: users.email }).from(users).where(eq(users.id, userId));
+  const rows = await tx
+    .select({ id: employees.id, firstName: employees.firstName, lastName: employees.lastName, workEmail: employees.workEmail })
+    .from(employees)
+    .where(and(eq(employees.userId, userId), isNull(employees.deactivatedAt)));
+  let changed = false;
+  for (const row of rows) {
+    const fromEmail = [row.workEmail, user?.email].filter((m): m is string => !!m).map((m) => emailNames(m.trim().toLowerCase()));
+    const auto = fromEmail.some((n) => n.firstName === row.firstName && n.lastName === row.lastName);
+    if (!auto || (row.firstName === names.firstName && row.lastName === names.lastName)) continue;
+    await tx.update(employees).set(names).where(eq(employees.id, row.id));
+    changed = true;
+  }
+  return changed;
 }
 
 /**

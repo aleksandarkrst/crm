@@ -348,7 +348,7 @@ function TeamTab() {
                 {invited ? '@' : initialsOf(m.name)}
               </span>
               <span style={{ fontWeight: 600 }}>
-                {invited ? 'Invitation sent' : m.name}
+                {invited && m.name === m.email ? 'Invitation sent' : m.name}
                 {self && <span style={{ fontWeight: 400, color: 'var(--muted)' }}> (you)</span>}
               </span>
             </div>
@@ -453,6 +453,8 @@ function RemoveMemberDialog({ member, onClose }: { member: TeamMember; onClose: 
 /** Invite by email: the worker emails the link (CD-7); the link is also shown to copy as a fallback. */
 function InviteModal({ onClose }: { onClose: () => void }) {
   const { session, inviteMember } = useStore();
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'member' | 'admin'>('member');
   const [link, setLink] = useState<string | null>(null);
@@ -460,9 +462,10 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const send = async () => {
     setBusy(true);
-    setLink(await inviteMember(email.trim(), role));
+    setLink(await inviteMember(email.trim(), role, { firstName: firstName.trim(), lastName: lastName.trim() }));
     setBusy(false);
   };
+  const ready = email.includes('@') && !!firstName.trim() && !!lastName.trim();
   const copy = () =>
     navigator.clipboard
       .writeText(link!)
@@ -470,13 +473,23 @@ function InviteModal({ onClose }: { onClose: () => void }) {
       .catch(() => setCopied(false));
   return (
     <Modal maxWidth={520}>
-      <ModalHeader title="Invite a teammate" sub={`They join ${session.tenant.name} and see the same pipeline. The link works once, for this email address, for 7 days.`} />
+      <ModalHeader title="Invite a teammate" sub={`They join ${session.tenant.name} and see the same pipeline. The email greets them by first name; the link works once, for this email address, for 7 days.`} />
       {!link ? (
         <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <label className="form-label">
+              First name
+              <input className="form-input" autoFocus placeholder="Ana" value={firstName} maxLength={100} onChange={(e) => setFirstName(e.target.value)} data-testid="invite-first-name" />
+            </label>
+            <label className="form-label">
+              Last name
+              <input className="form-input" placeholder="Petrović" value={lastName} maxLength={100} onChange={(e) => setLastName(e.target.value)} data-testid="invite-last-name" />
+            </label>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px', gap: 12 }}>
             <label className="form-label">
               Email
-              <input className="form-input" type="email" autoFocus placeholder="name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <input className="form-input" type="email" placeholder="name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
             </label>
             <label className="form-label">
               Role
@@ -490,7 +503,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
             <button type="button" className="btn btn-secondary" onClick={onClose}>
               Cancel
             </button>
-            <button type="button" className={email.includes('@') && !busy ? 'btn btn-primary' : 'btn btn-disabled'} disabled={!email.includes('@') || busy} onClick={() => void send()}>
+            <button type="button" className={ready && !busy ? 'btn btn-primary' : 'btn btn-disabled'} disabled={!ready || busy} onClick={() => void send()}>
               {busy ? 'Inviting…' : 'Send invitation'}
             </button>
           </div>

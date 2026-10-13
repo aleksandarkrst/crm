@@ -37,6 +37,7 @@ export class InvitationEmailJob implements OnApplicationBootstrap {
       tx
         .select({
           email: invitations.email,
+          firstName: invitations.firstName,
           role: invitations.role,
           tokenSealed: invitations.tokenSealed,
           expiresAt: invitations.expiresAt,
@@ -69,6 +70,7 @@ export class InvitationEmailJob implements OnApplicationBootstrap {
 
     const message = invitationEmail({
       to: row.email,
+      firstName: row.firstName,
       workspaceName: row.workspaceName,
       inviterName: row.inviterName,
       inviterEmail: row.inviterEmail,

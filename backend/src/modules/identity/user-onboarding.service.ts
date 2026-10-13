@@ -3,7 +3,8 @@ import { and, asc, eq, gt, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { AuthUser } from '../../shared/authorization';
 import { DatabaseService } from '../../shared/database/database.service';
-import { invitations, type OnboardingUserStep, tenants, users } from '../../shared/database/schema';
+import { invitations, memberships, type OnboardingUserStep, tenants, users } from '../../shared/database/schema';
+import { syncMemberNames } from '../people';
 import { IdentityService } from './identity.service';
 
 export const OnboardingProfile = z.object({
@@ -64,6 +65,9 @@ export class UserOnboardingService {
       .set({ displayName: input.name, displayNameCustom: true, jobTitle: input.jobTitle, onboardingSteps: addStep('profile') })
       .where(eq(users.id, user.id));
     this.identity.forgetUser(user.authSubject);
+    // Their employee records in every workspace take the name when theirs came from an email (CD-318).
+    const joined = await this.database.db.select({ tenantId: memberships.tenantId }).from(memberships).where(eq(memberships.userId, user.id));
+    for (const { tenantId } of joined) await this.database.withTenant(tenantId, (tx) => syncMemberNames(tx, user.id, input.name));
     return this.completeIfDone(user);
   }
 

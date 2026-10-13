@@ -51,6 +51,33 @@ describe('accepting', () => {
     expect(team.members.find((m: { userId: string }) => m.userId === invitee.userId)?.role).toBe('admin');
   });
 
+  it('names the invitee (CD-318): the preview greets them, the employee record and the display name start with the names', async () => {
+    const invitee = await signIn('inv-named');
+    const { token } = await ok<{ token: string; invitation: { firstName: string; lastName: string } }>('POST', '/team/invitations', { ...as(), body: { email: invitee.email, role: 'member', firstName: ' Miloš ', lastName: 'Krstić' } });
+    expect(await ok('GET', `/invitations/${token}`, { token: invitee.token })).toMatchObject({ firstName: 'Miloš', lastName: 'Krstić' });
+    const pending = (await ok('GET', '/team', as())).invitations.find((i: { email: string }) => i.email === invitee.email);
+    expect(pending).toMatchObject({ firstName: 'Miloš', lastName: 'Krstić' });
+    await ok('POST', `/invitations/${token}/accept`, { token: invitee.token }, 200);
+    // The dev sign-in's name wasn't chosen by them, so the invitation's names become their display name.
+    expect((await ok('GET', '/me', { token: invitee.token })).user.displayName).toBe('Miloš Krstić');
+    const member = (await ok('GET', '/team', as())).members.find((m: { userId: string }) => m.userId === invitee.userId);
+    expect(await ok('GET', `/people/employees/${member.employeeId}`, as())).toMatchObject({ firstName: 'Miloš', lastName: 'Krstić', workEmail: invitee.email });
+    // A name they choose later reaches the record only while its names still came from an email.
+    await ok('PATCH', '/me', { token: invitee.token, tenant, body: { displayName: 'Milos K.' } });
+    expect(await ok('GET', `/people/employees/${member.employeeId}`, as())).toMatchObject({ firstName: 'Miloš', lastName: 'Krstić' });
+  });
+
+  it('a member whose record was named from their email gets the name they choose (CD-318)', async () => {
+    const invitee = await signIn('inv-fromemail');
+    const { token } = await invite(invitee.email);
+    await ok('POST', `/invitations/${token}/accept`, { token: invitee.token }, 200);
+    const member = (await ok('GET', '/team', as())).members.find((m: { userId: string }) => m.userId === invitee.userId);
+    // The dev sign-in has a two-word name, so the record took it on joining; make it look email-derived first.
+    await asTenantSql(tenant, `update employees set first_name = 'Inv-fromemail', last_name = 'Inv-fromemail' where id = '${member.employeeId}'`);
+    await ok('PATCH', '/me', { token: invitee.token, tenant, body: { displayName: 'Jovana Jović' } });
+    expect(await ok('GET', `/people/employees/${member.employeeId}`, as())).toMatchObject({ firstName: 'Jovana', lastName: 'Jović' });
+  });
+
   it('matches the email case-insensitively', async () => {
     const invitee = await signIn('inv-case');
     const { token, invitation } = await invite(invitee.email.toUpperCase());

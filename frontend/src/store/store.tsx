@@ -1541,9 +1541,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
 
       // ---------------------------------------------------------- team
       /** Creates an invitation, which the worker emails (CD-7), and returns its link to copy as a fallback. */
-      inviteMember: async (email: string, role: 'admin' | 'member'): Promise<string | null> => {
+      inviteMember: async (email: string, role: 'admin' | 'member', names?: { firstName: string; lastName: string }): Promise<string | null> => {
         try {
-          const { token } = await crmApi.invite(email, role);
+          const { token } = await crmApi.invite(email, role, names);
           await reload();
           return `${window.location.origin}/invite/${token}`;
         } catch (err) {

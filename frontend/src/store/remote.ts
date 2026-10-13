@@ -142,7 +142,7 @@ export const mapTeam = (apiTeam: { members: ApiMember[]; invitations: ApiInvitat
   ...apiTeam.members.map<TeamMember>((m) => ({ id: m.userId, name: m.displayName || m.email || 'Member', email: m.email ?? '', role: ROLE_LABEL[m.role], status: 'Active', employeeId: m.employeeId ?? null })),
   ...apiTeam.invitations.map<TeamMember>((i) => ({
     id: i.id,
-    name: i.email,
+    name: i.firstName && i.lastName ? `${i.firstName} ${i.lastName}` : i.email,
     email: i.email,
     role: ROLE_LABEL[i.role],
     status: 'Invited',
