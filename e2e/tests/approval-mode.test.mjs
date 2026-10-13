@@ -38,11 +38,12 @@ describe('approval mode', () => {
     assert.match(await page.$eval('[data-testid=approval-mode]', (el) => el.textContent), /Changing the mode never changes a day's status/);
   });
 
-  step('Day by day: Submit under Monday submits only Monday', async () => {
+  step('Day by day: employees still submit the whole week, never single days (CD-318)', async () => {
     await page.goto(BASE_URL + '/timesheet', { waitUntil: 'networkidle0' });
-    await click(page, `[data-testid=ts-day][data-date="${monday}"] [data-testid=ts-submit-day]`);
-    await page.waitForFunction(() => /^Partly submitted \(1 of \d days\)$/.test(document.querySelector('[data-testid=ts-status]')?.textContent ?? ''));
-    assert.match(await page.$eval(`[data-testid=ts-day][data-date="${monday}"]`, (el) => el.textContent), /Submitted/);
+    await page.waitForSelector('[data-testid=ts-grid]');
+    assert.equal(await page.$('[data-testid=ts-submit-day]'), null);
+    await click(page, '[data-testid=ts-submit]');
+    await page.waitForFunction((d) => document.querySelector(`[data-testid=ts-day][data-date="${d}"]`)?.dataset.status === 'submitted', {}, monday);
     await waitForToastToClear(page);
   });
 

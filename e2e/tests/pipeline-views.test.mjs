@@ -46,12 +46,19 @@ describe('pipeline views', () => {
     assert.ok(await page.$$eval('.filter-actions .btn-primary', (bs) => bs.some((b) => b.textContent.trim() === 'New deal')));
   });
 
-  step('the table groups the deals by stage and a row opens the deal', async () => {
+  step('the table is a flat list in stage order, sortable by a column, and a row opens the deal', async () => {
     await page.click('[data-testid=pipeline-view-table]');
     await page.waitForSelector('[data-testid=pipeline-table]');
-    const bands = await page.$$eval('.pipeline-table-band', (els) => els.map((el) => el.innerText.split('\n')[0]));
-    assert.deepEqual(bands, [funnel.stages[0].name, funnel.stages[1].name]);
-    const rows = await tableRows(page);
+    assert.equal(await page.$('.pipeline-table-band'), null, 'no stage bands (CD-318)');
+    let rows = await tableRows(page);
+    assert.deepEqual(rows.map((r) => r.text.split('\n')[0]), ['Alpha Ltd', 'Beta Ltd']);
+    // Sorting by Deal: a second click on the header sorts descending, a third goes back.
+    await page.click('[data-testid=pipeline-table] .sort-btn');
+    await page.click('[data-testid=pipeline-table] .sort-btn');
+    rows = await tableRows(page);
+    assert.deepEqual(rows.map((r) => r.text.split('\n')[0]), ['Beta Ltd', 'Alpha Ltd']);
+    await page.click('[data-testid=pipeline-table] .sort-btn');
+    rows = await tableRows(page);
     assert.equal(rows.length, 2, 'the lost deal is hidden like on the board');
     assert.match(rows[0].text, /Alpha Ltd/);
     assert.match(rows[0].text, /Alpha Ltd rollout/);

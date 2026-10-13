@@ -259,7 +259,7 @@ describe('module and workspace switcher', () => {
     await inModule('crm');
   });
 
-  step('modules turned off show "Not in this workspace"; Settings → General turns them on', async () => {
+  step('modules turned off show "Not in this workspace"; Settings → Modules turns them on (CD-318)', async () => {
     await click(page, LOGO);
     const rows = await modules();
     assert.deepEqual(
@@ -268,6 +268,8 @@ describe('module and workspace switcher', () => {
     );
     await click(page, `${POP} [data-module=settings]`);
     await page.waitForFunction(() => location.pathname.startsWith('/settings'));
+    await click(page, '[data-testid=settings-nav] [data-section=modules]');
+    await page.waitForSelector('[data-testid=workspace-modules]');
     await click(page, '[data-testid=workspace-modules] [data-module=projects] [role=switch]');
     await page.waitForFunction(async () => (await (await fetch('/api/workspace', { headers: { Authorization: 'Bearer ' + localStorage.getItem('crm.devToken'), 'X-Tenant-Id': localStorage.getItem('crm.tenantId') } })).json()).modules.includes('projects'));
     await click(page, LOGO);

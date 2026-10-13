@@ -31,6 +31,7 @@ export function Products() {
           setFrequency(ANY);
         }}
         extra={<DataActions type="products" count={rows.length} exportCsv={() => productsCsv(rows)} />}
+        action={{ label: 'New product', onClick: () => openProduct(null) }}
       />
       {s.catalog.length === 0 ? (
         <EmptyState

@@ -75,19 +75,16 @@ describe('live updates, conflicts and change history', () => {
     assert.equal((await api(olivia, `/crm/deals/${dealId}`)).title, 'Harbor refit (Olivia)');
   });
 
-  step('the deal lists its changes: who, which field, old and new value', async () => {
+  step('the deal\'s Activity names who moved it (CD-318: no Changes view)', async () => {
     const funnels = await api(olivia, '/crm/funnels');
     await api(olivia, `/crm/deals/${dealId}/move`, { method: 'POST', body: JSON.stringify({ stageId: funnels[0].stages[1].id }) });
     await openDeal(ana);
-    await ana.click('[data-testid="history-changes"]');
-    await ana.waitForSelector('[data-testid="change-row"]');
-    await ana.waitForFunction(() => document.querySelector('[data-testid="change-history"]')?.innerText.includes('Stage:'), { timeout: 10_000 });
-    const body = await ana.$eval('[data-testid="change-history"]', (el) => el.innerText);
-    assert.ok(body.includes('Title: “Harbor refit phase 2” → “Harbor refit (Olivia)”'), body);
-    assert.ok(body.includes(`Stage: ${funnels[0].stages[0].name} → ${funnels[0].stages[1].name}`), body);
-    assert.ok(body.includes('Created the deal “Harbor refit”'), body);
-    assert.ok(body.includes('Olivia Owner'), 'names who changed it');
-    assert.ok(!(await text(ana)).includes('Ana Member changed'), 'Ana made no change');
+    assert.equal(await ana.$('[data-testid="history-changes"]'), null, 'the Changes tab is gone');
+    await ana.waitForFunction((stage) => document.querySelector('[data-testid="deal-activity"]')?.innerText.includes(`Moved to ${stage}`), { timeout: 10_000 }, funnels[0].stages[1].name);
+    const body = await ana.$eval('[data-testid="deal-activity"]', (el) => el.innerText);
+    assert.ok(body.startsWith('Activity'), body);
+    assert.ok(body.includes('Olivia Owner'), 'names who moved it');
+    assert.ok(!body.includes('WhatsApp') && !body.includes('LinkedIn') && !body.includes('Calls'), 'no filters for integrations that are not live');
   });
 
   it('throws no uncaught errors in the pages', () => {

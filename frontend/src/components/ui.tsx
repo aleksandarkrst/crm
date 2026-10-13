@@ -1,11 +1,33 @@
-import { type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import {
+  type CSSProperties,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 
 // ---------------------------------------------------------------- icons
 
-export function XIcon({ size = 15, stroke = 2 }: { size?: number; stroke?: number }) {
+export function XIcon({
+  size = 15,
+  stroke = 2,
+}: {
+  size?: number;
+  stroke?: number;
+}) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={stroke}
+      strokeLinecap="round"
+    >
       <path d="M6 6l12 12M18 6L6 18" />
     </svg>
   );
@@ -13,28 +35,74 @@ export function XIcon({ size = 15, stroke = 2 }: { size?: number; stroke?: numbe
 
 export function Chevron() {
   return (
-    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M2.5 4.5 6 8l3.5-3.5" />
     </svg>
   );
 }
 
-export function RemoveButton({ onClick, title = 'Remove', size = 15, stroke, box = 26, style }: { onClick: (e: React.MouseEvent) => void; title?: string; size?: number; stroke?: number; box?: number; style?: CSSProperties }) {
+export function RemoveButton({
+  onClick,
+  title = "Remove",
+  size = 15,
+  stroke,
+  box = 26,
+  style,
+}: {
+  onClick: (e: React.MouseEvent) => void;
+  title?: string;
+  size?: number;
+  stroke?: number;
+  box?: number;
+  style?: CSSProperties;
+}) {
   return (
-    <button type="button" className="icon-btn" title={title} onClick={onClick} style={{ width: box, height: box, ...style }}>
+    <button
+      type="button"
+      className="icon-btn"
+      title={title}
+      onClick={onClick}
+      style={{ width: box, height: box, ...style }}
+    >
       <XIcon size={size} stroke={stroke} />
     </button>
   );
 }
 
 /** A destructive action (delete a record). Callers confirm before acting. */
-export function DangerButton({ children, onClick, title }: { children: ReactNode; onClick: () => void; title?: string }) {
+export function DangerButton({
+  children,
+  onClick,
+  title,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  title?: string;
+}) {
   return (
     <button
       type="button"
       title={title}
       onClick={onClick}
-      style={{ cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--danger)', fontSize: 12, padding: '6px 11px', borderRadius: 6, whiteSpace: 'nowrap' }}
+      style={{
+        cursor: "pointer",
+        border: "1px solid var(--border)",
+        background: "var(--white)",
+        color: "var(--danger)",
+        fontSize: 12,
+        padding: "6px 11px",
+        borderRadius: 6,
+        whiteSpace: "nowrap",
+      }}
     >
       {children}
     </button>
@@ -43,15 +111,29 @@ export function DangerButton({ children, onClick, title }: { children: ReactNode
 
 // ---------------------------------------------------------------- layout primitives
 
-export function Card({ children, style, pad = true }: { children: ReactNode; style?: CSSProperties; pad?: boolean }) {
+export function Card({
+  children,
+  style,
+  pad = true,
+}: {
+  children: ReactNode;
+  style?: CSSProperties;
+  pad?: boolean;
+}) {
   return (
-    <div className={pad ? 'card card-pad' : 'card'} style={style}>
+    <div className={pad ? "card card-pad" : "card"} style={style}>
       {children}
     </div>
   );
 }
 
-export function FieldRow({ label, children }: { label: string; children: ReactNode }) {
+export function FieldRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
   return (
     <div className="field-row">
       <span className="field-label">{label}</span>
@@ -60,11 +142,36 @@ export function FieldRow({ label, children }: { label: string; children: ReactNo
   );
 }
 
-export function Avatar({ initials, size = 26, font = 10, square = false, style }: { initials: string; size?: number; font?: number; square?: boolean; style?: CSSProperties }) {
+export function Avatar({
+  initials,
+  size = 26,
+  font = 10,
+  square = false,
+  style,
+}: {
+  initials: string;
+  size?: number;
+  font?: number;
+  square?: boolean;
+  style?: CSSProperties;
+}) {
   return (
     <span
       className="avatar"
-      style={{ width: size, height: size, fontSize: font, flex: `0 0 ${size}px`, ...(square ? { borderRadius: 6, background: 'var(--segment)', color: 'var(--text-2)' } : {}), ...style }}
+      style={{
+        width: size,
+        height: size,
+        fontSize: font,
+        flex: `0 0 ${size}px`,
+        ...(square
+          ? {
+              borderRadius: 6,
+              background: "var(--segment)",
+              color: "var(--text-2)",
+            }
+          : {}),
+        ...style,
+      }}
     >
       {initials}
     </span>
@@ -73,8 +180,65 @@ export function Avatar({ initials, size = 26, font = 10, square = false, style }
 
 // ---------------------------------------------------------------- inputs
 
-export function GhostInput({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
+export function GhostInput({
+  className = "",
+  ...props
+}: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={`ghost ${className}`} {...props} />;
+}
+
+/**
+ * A ghost date field (CD-318): empty, it reads as a prompt ("Add closed date") instead of the
+ * browser's dd/mm/yyyy mask; a click opens the picker. With a value it is the date input itself.
+ */
+export function GhostDate({
+  value,
+  placeholder,
+  className = "",
+  onChange,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement> & {
+  value: string;
+  placeholder: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!editing) return;
+    const el = ref.current;
+    if (!el) return;
+    el.focus();
+    try {
+      el.showPicker();
+    } catch {
+      // Not allowed here (no user gesture, or unsupported): the focused input still opens on Enter.
+    }
+  }, [editing]);
+  if (!value && !editing)
+    return (
+      <button
+        type="button"
+        className={`ghost ghost-date-empty ${className}`}
+        aria-label={props["aria-label"] ?? placeholder}
+        data-testid={
+          props["data-testid" as keyof typeof props] as string | undefined
+        }
+        onClick={() => setEditing(true)}
+      >
+        {placeholder}
+      </button>
+    );
+  return (
+    <input
+      ref={ref}
+      type="date"
+      className={`ghost ${className}`}
+      value={value}
+      onChange={onChange}
+      onBlur={() => setEditing(false)}
+      {...props}
+    />
+  );
 }
 
 /**
@@ -87,13 +251,22 @@ export function CheckedInput({
   check,
   onSave,
   ...props
-}: Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'onBlur'> & {
+}: Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "value" | "onChange" | "onBlur"
+> & {
   value: string;
-  check: (v: string) => { ok: true; value: string; hint?: string } | { ok: false; error: string };
+  check: (
+    v: string,
+  ) =>
+    { ok: true; value: string; hint?: string } | { ok: false; error: string };
   onSave: (v: string) => void;
 }) {
   const [draft, setDraft] = useState(value);
-  const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const [message, setMessage] = useState<{
+    text: string;
+    error: boolean;
+  } | null>(null);
   const [focused, setFocused] = useState(false);
   useEffect(() => {
     if (!focused && !message?.error) setDraft(value);
@@ -107,7 +280,9 @@ export function CheckedInput({
     if (r.value !== value) onSave(r.value);
   };
   return (
-    <span style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+    <span
+      style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}
+    >
       <input
         className="ghost"
         {...props}
@@ -120,12 +295,20 @@ export function CheckedInput({
         }}
         onBlur={commit}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur();
+          if (e.key === "Enter") e.currentTarget.blur();
         }}
-        style={message?.error ? { color: 'var(--danger)' } : undefined}
+        style={message?.error ? { color: "var(--danger)" } : undefined}
       />
       {message && (
-        <span role={message.error ? 'alert' : 'status'} data-testid={message.error ? 'field-error' : 'field-hint'} style={{ fontSize: 12, color: message.error ? 'var(--danger)' : 'var(--muted)', padding: '2px 0 0' }}>
+        <span
+          role={message.error ? "alert" : "status"}
+          data-testid={message.error ? "field-error" : "field-hint"}
+          style={{
+            fontSize: 12,
+            color: message.error ? "var(--danger)" : "var(--muted)",
+            padding: "2px 0 0",
+          }}
+        >
           {message.text}
         </span>
       )}
@@ -134,18 +317,27 @@ export function CheckedInput({
 }
 
 export type Opt = string | { value: string; label: string };
-const optValue = (o: Opt) => (typeof o === 'string' ? o : o.value);
-const optLabel = (o: Opt) => (typeof o === 'string' ? o : o.label);
+const optValue = (o: Opt) => (typeof o === "string" ? o : o.value);
+const optLabel = (o: Opt) => (typeof o === "string" ? o : o.label);
 
-export function GhostSelect({ options, className = '', chevron = false, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { options: Opt[]; chevron?: boolean }) {
+export function GhostSelect({
+  options,
+  className = "",
+  chevron = false,
+  ...props
+}: SelectHTMLAttributes<HTMLSelectElement> & {
+  options: Opt[];
+  chevron?: boolean;
+}) {
   // An empty or unknown value (e.g. a field never filled in) shows as "—" instead of the first option.
   const current = props.value === undefined ? undefined : String(props.value);
-  const unset = current !== undefined && !options.some((o) => optValue(o) === current);
+  const unset =
+    current !== undefined && !options.some((o) => optValue(o) === current);
   const select = (
     <select className={`ghost ${className}`} {...props}>
       {unset && (
         <option value={current} disabled>
-          {current && current !== '—' ? current : '—'}
+          {current && current !== "—" ? current : "—"}
         </option>
       )}
       {options.map((o) => (
@@ -166,9 +358,28 @@ export function GhostSelect({ options, className = '', chevron = false, ...props
   );
 }
 
-export function Switch({ on, onClick, label, disabled }: { on: boolean; onClick: () => void; label?: string; disabled?: boolean }) {
+export function Switch({
+  on,
+  onClick,
+  label,
+  disabled,
+}: {
+  on: boolean;
+  onClick: () => void;
+  label?: string;
+  disabled?: boolean;
+}) {
   return (
-    <button type="button" className={on ? 'switch on' : 'switch'} onClick={onClick} role="switch" aria-checked={on} aria-label={label} disabled={disabled} style={disabled ? { opacity: 0.5, cursor: 'default' } : undefined}>
+    <button
+      type="button"
+      className={on ? "switch on" : "switch"}
+      onClick={onClick}
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      disabled={disabled}
+      style={disabled ? { opacity: 0.5, cursor: "default" } : undefined}
+    >
       <span />
     </button>
   );
@@ -179,22 +390,22 @@ export function Switch({ on, onClick, label, disabled }: { on: boolean; onClick:
 /** Open/close state for a dropdown picker that closes on outside click (and clears its search). */
 export function usePicker() {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
-        setSearch('');
+        setSearch("");
       }
     };
-    document.addEventListener('mousedown', onDown, true);
-    return () => document.removeEventListener('mousedown', onDown, true);
+    document.addEventListener("mousedown", onDown, true);
+    return () => document.removeEventListener("mousedown", onDown, true);
   }, [open]);
   const close = () => {
     setOpen(false);
-    setSearch('');
+    setSearch("");
   };
   return { open, setOpen, search, setSearch, ref, close };
 }
@@ -214,9 +425,21 @@ export function Picker({
   footer?: ReactNode;
 }) {
   return (
-    <div ref={picker.ref} style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+    <div
+      ref={picker.ref}
+      style={{ flex: 1, minWidth: 0, position: "relative" }}
+    >
       <div className="picker-trigger">
-        <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            flexWrap: "wrap",
+          }}
+        >
           {children}
           <input
             className="picker-search"
@@ -229,7 +452,19 @@ export function Picker({
             onFocus={() => picker.setOpen(true)}
           />
         </span>
-        <button type="button" onClick={() => picker.setOpen(!picker.open)} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--ink)', padding: '2px 0', display: 'flex', alignItems: 'center' }}>
+        <button
+          type="button"
+          onClick={() => picker.setOpen(!picker.open)}
+          style={{
+            border: 0,
+            background: "transparent",
+            cursor: "pointer",
+            color: "var(--ink)",
+            padding: "2px 0",
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
           <Chevron />
         </button>
       </div>
@@ -243,27 +478,61 @@ export function Picker({
   );
 }
 
-export function PersonChip({ initials, label, onDrop }: { initials: string; label: string; onDrop: (e: React.MouseEvent) => void }) {
+export function PersonChip({
+  initials,
+  label,
+  onDrop,
+}: {
+  initials: string;
+  label: string;
+  onDrop: (e: React.MouseEvent) => void;
+}) {
   return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <Avatar initials={initials} size={20} font={9.5} />
-      <span style={{ whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{ whiteSpace: "nowrap" }}>{label}</span>
       <RemoveButton onClick={onDrop} box={22} />
     </span>
   );
 }
 
-export function PickerRow({ initials, title, subtitle, onPick, square, trailing, style }: { initials: string; title: string; subtitle?: string; onPick: () => void; square?: boolean; trailing?: ReactNode; style?: CSSProperties }) {
+export function PickerRow({
+  initials,
+  title,
+  subtitle,
+  onPick,
+  square,
+  trailing,
+  style,
+}: {
+  initials: string;
+  title: string;
+  subtitle?: string;
+  onPick: () => void;
+  square?: boolean;
+  trailing?: ReactNode;
+  style?: CSSProperties;
+}) {
   return (
     <div className="picker-item" onClick={onPick} style={style}>
       <Avatar initials={initials} size={22} font={9.5} square={square} />
       {subtitle !== undefined ? (
-        <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <span style={{ fontSize: 13, color: 'var(--ink)' }}>{title}</span>
-          <span style={{ fontSize: 11, color: 'var(--muted)' }}>{subtitle}</span>
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 1,
+          }}
+        >
+          <span style={{ fontSize: 13, color: "var(--ink)" }}>{title}</span>
+          <span style={{ fontSize: 11, color: "var(--muted)" }}>
+            {subtitle}
+          </span>
         </span>
       ) : (
-        <span style={{ fontSize: 13, color: 'var(--ink)' }}>{title}</span>
+        <span style={{ fontSize: 13, color: "var(--ink)" }}>{title}</span>
       )}
       {trailing}
     </div>
@@ -292,7 +561,11 @@ export function FilterBar({
 }: {
   /** Controls before the filters (e.g. the Pipeline's view toggle and funnel select). */
   lead?: ReactNode;
-  search?: { value: string; onChange: (v: string) => void; placeholder: string };
+  search?: {
+    value: string;
+    onChange: (v: string) => void;
+    placeholder: string;
+  };
   chips: BarChip[];
   dirty?: boolean;
   onClear?: () => void;
@@ -302,15 +575,42 @@ export function FilterBar({
   extra?: ReactNode;
 }) {
   return (
-    <div className="filter-bar" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+    <div
+      className="filter-bar"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        flexWrap: "wrap",
+        marginBottom: 16,
+      }}
+    >
       {lead}
       {search && (
-        <div className="filter-search" style={{ display: 'flex', alignItems: 'center', background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 11px', width: 230 }}>
+        <div
+          className="filter-search"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            background: "var(--white)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            padding: "8px 11px",
+            width: 230,
+          }}
+        >
           <input
             value={search.value}
             onChange={(e) => search.onChange(e.target.value)}
             placeholder={search.placeholder}
-            style={{ border: 0, outline: 0, background: 'transparent', fontSize: 13, width: '100%', color: 'var(--ink)' }}
+            style={{
+              border: 0,
+              outline: 0,
+              background: "transparent",
+              fontSize: 13,
+              width: "100%",
+              color: "var(--ink)",
+            }}
           />
         </div>
       )}
@@ -319,25 +619,63 @@ export function FilterBar({
           key={i}
           value={c.value}
           onChange={(e) => c.onChange(e.target.value)}
-          style={{ border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '9px 11px', fontSize: 13, color: 'var(--ink)' }}
+          style={{
+            border: "1px solid var(--border)",
+            background: "var(--white)",
+            borderRadius: 8,
+            padding: "9px 11px",
+            fontSize: 13,
+            color: "var(--ink)",
+          }}
         >
           {c.options.map((o, oi) => (
-            <option key={optValue(o)} value={optValue(o)} hidden={oi === 0 && !c.keepFirst}>
+            <option
+              key={optValue(o)}
+              value={optValue(o)}
+              hidden={oi === 0 && !c.keepFirst}
+            >
               {optLabel(o)}
             </option>
           ))}
         </select>
       ))}
       {dirty && (
-        <button type="button" className="btn btn-secondary" onClick={onClear} style={{ padding: '9px 13px' }}>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={onClear}
+          style={{ padding: "9px 13px" }}
+        >
           Clear filters
         </button>
       )}
-      <div className="filter-actions" style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
-        {meta && <span style={{ fontSize: 12.5, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{meta}</span>}
+      <div
+        className="filter-actions"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          marginLeft: "auto",
+        }}
+      >
+        {meta && (
+          <span
+            style={{
+              fontSize: 12.5,
+              color: "var(--text-2)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {meta}
+          </span>
+        )}
         {extra}
         {action && (
-          <button type="button" className="btn btn-primary" onClick={action.onClick}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={action.onClick}
+          >
             {action.label}
           </button>
         )}
@@ -357,16 +695,34 @@ let openModals = 0;
  * would otherwise be positioned and clipped by that element, and scrolling it showed the page with
  * no backdrop (CD-228).
  */
-export function Modal({ children, maxWidth, z = 45, gap = 16, onBackdrop }: { children: ReactNode; maxWidth: number; z?: number; gap?: number; onBackdrop?: () => void }) {
+export function Modal({
+  children,
+  maxWidth,
+  z = 45,
+  gap = 16,
+  onBackdrop,
+}: {
+  children: ReactNode;
+  maxWidth: number;
+  z?: number;
+  gap?: number;
+  onBackdrop?: () => void;
+}) {
   useEffect(() => {
-    if (++openModals === 1) document.documentElement.classList.add('modal-open');
+    if (++openModals === 1)
+      document.documentElement.classList.add("modal-open");
     return () => {
-      if (--openModals === 0) document.documentElement.classList.remove('modal-open');
+      if (--openModals === 0)
+        document.documentElement.classList.remove("modal-open");
     };
   }, []);
   return createPortal(
     <div className="overlay" style={{ zIndex: z }} onClick={onBackdrop}>
-      <div className="modal" style={{ maxWidth, gap }} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal"
+        style={{ maxWidth, gap }}
+        onClick={(e) => e.stopPropagation()}
+      >
         {children}
       </div>
     </div>,
@@ -384,17 +740,41 @@ export function ModalHeader({ title, sub }: { title: string; sub: string }) {
 }
 
 /** Sortable table header cell. */
-export function SortHeader({ label, active, dir, onClick }: { label: string; active: boolean; dir: 1 | -1; onClick: () => void }) {
+export function SortHeader({
+  label,
+  active,
+  dir,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  dir: 1 | -1;
+  onClick: () => void;
+}) {
   return (
-    <button type="button" className="sort-btn" onClick={onClick} style={{ color: active ? 'var(--ink)' : 'var(--text-2)' }}>
+    <button
+      type="button"
+      className="sort-btn"
+      onClick={onClick}
+      style={{ color: active ? "var(--ink)" : "var(--text-2)" }}
+    >
       <span>{label}</span>
-      <span style={{ fontSize: 10 }}>{active ? (dir === 1 ? '↑' : '↓') : ''}</span>
+      <span style={{ fontSize: 10 }}>
+        {active ? (dir === 1 ? "↑" : "↓") : ""}
+      </span>
     </button>
   );
 }
 
 export function useSort<K extends string>(initial: K) {
-  const [sort, setSort] = useState<{ key: K; dir: 1 | -1 }>({ key: initial, dir: 1 });
-  const toggle = (key: K) => setSort((cur) => ({ key, dir: cur.key === key ? (cur.dir === 1 ? -1 : 1) : 1 }));
+  const [sort, setSort] = useState<{ key: K; dir: 1 | -1 }>({
+    key: initial,
+    dir: 1,
+  });
+  const toggle = (key: K) =>
+    setSort((cur) => ({
+      key,
+      dir: cur.key === key ? (cur.dir === 1 ? -1 : 1) : 1,
+    }));
   return { sort, toggle };
 }

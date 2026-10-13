@@ -17,7 +17,7 @@ const REMINDERS = REMINDER_HOURS.map((hours) => ({ hours, label: reminderLabel(h
 /** The two approval modes (CD-156, design `#cd-156`). */
 const APPROVAL_MODES: { id: 'week' | 'day'; title: string; text: string }[] = [
   { id: 'week', title: 'Whole week', text: 'Employees submit the week. Managers approve it once every working day is submitted.' },
-  { id: 'day', title: 'Day by day', text: 'Employees can also submit single days. Managers approve or reject each submitted day.' },
+  { id: 'day', title: 'Day by day', text: 'Employees submit the week. Managers approve or reject each submitted day on its own.' },
 ];
 
 /** The workspace's timesheet settings and a save that sends them whole (one write after a pause, like every workspace setting). */

@@ -150,7 +150,7 @@ export const mapTeam = (apiTeam: { members: ApiMember[]; invitations: ApiInvitat
   })),
 ];
 
-export const mapActivity = (a: ApiActivity, tz?: string): LogEntry => ({ date: dateLabel(a.occurredAt, tz), channel: a.channel ?? SYSTEM_CHANNEL, title: a.title, detail: a.detail ?? '' });
+export const mapActivity = (a: ApiActivity, tz?: string): LogEntry => ({ date: dateLabel(a.occurredAt, tz), channel: a.channel ?? SYSTEM_CHANNEL, title: a.title, detail: a.detail ?? '', actor: a.actor?.name ?? null });
 
 export const mapStageChange = (c: ApiStageChange): StageChange => ({
   dealId: c.dealId,

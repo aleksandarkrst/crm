@@ -51,6 +51,7 @@ export function Contacts() {
           setBuyerRole('Buyer role');
         }}
         extra={<DataActions type="contacts" count={rows.length} exportCsv={() => contactsCsv(s, rows)} />}
+        action={{ label: 'New contact', onClick: () => set({ contactOpen: true }) }}
       />
       {allPeople(s).length === 0 ? (
         <EmptyState title="No contacts yet" text="Contacts are the people you talk to at your companies: who decides, who pays, who champions you." action={{ label: 'New contact', onClick: () => set({ contactOpen: true }) }} />

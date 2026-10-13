@@ -416,6 +416,8 @@ export interface ApiActivity {
   title: string;
   detail: string | null;
   occurredAt: string;
+  /** Who did it (CD-318): null for the system; a member who left is "Former member" (userId null). */
+  actor: { userId: string | null; name: string } | null;
 }
 export type ApiBillingFrequency = 'one_time' | 'weekly' | 'monthly' | 'quarterly' | 'annually';
 export type ApiTaxMode = 'exclusive' | 'inclusive' | 'none';

@@ -55,6 +55,7 @@ export function Companies() {
         }}
         meta={rows.length + (rows.length === 1 ? ' company' : ' companies')}
         extra={<DataActions type="companies" count={rows.length} exportCsv={() => companiesCsv(s, rows)} />}
+        action={{ label: 'New company', onClick: addCompany }}
       />
       {companyRecords(s).length === 0 ? (
         <EmptyState title="No companies yet" text="Companies are the organisations you sell to. Add one, or import a list from a CSV file." action={{ label: 'Add company', onClick: addCompany }} />

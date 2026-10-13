@@ -233,6 +233,8 @@ export interface LogEntry {
   channel: string;
   title: string;
   detail: string;
+  /** Who did it (CD-318); null for the system (the deadline job, an import). */
+  actor: string | null;
 }
 
 export interface TeamMember {

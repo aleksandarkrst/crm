@@ -95,6 +95,7 @@ export function Today() {
         onClear={() => {
           setOwner('Salesperson');
         }}
+        action={{ label: 'New task', onClick: () => set({ taskOpen: true }) }}
       />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {s.leads.length === 0 && (

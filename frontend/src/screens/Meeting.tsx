@@ -109,7 +109,7 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
               <>
                 <button
                   type="button"
-                  className="btn btn-won"
+                  className="btn btn-primary"
                   data-testid="meeting-held"
                   disabled={!started || busy}
                   title={started ? 'The meeting took place' : `You can mark it as held once it has started (${timeLabel(m.startsAt, tz)})`}
