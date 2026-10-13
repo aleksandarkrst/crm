@@ -5,6 +5,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, createTenant, ok, type Session, signIn } from './helpers';
 import { asTenantSql } from './people-helpers';
+import { emailNames } from '../../src/modules/people/linking';
 
 let owner: Session;
 let tenant: string;
@@ -73,7 +74,8 @@ describe('accepting', () => {
     await ok('POST', `/invitations/${token}/accept`, { token: invitee.token }, 200);
     const member = (await ok('GET', '/team', as())).members.find((m: { userId: string }) => m.userId === invitee.userId);
     // The dev sign-in has a two-word name, so the record took it on joining; make it look email-derived first.
-    await asTenantSql(tenant, `update employees set first_name = 'Inv-fromemail', last_name = 'Inv-fromemail' where id = '${member.employeeId}'`);
+    const derived = emailNames(invitee.email);
+    await asTenantSql(tenant, `update employees set first_name = '${derived.firstName}', last_name = '${derived.lastName}' where id = '${member.employeeId}'`);
     await ok('PATCH', '/profile', { token: invitee.token, tenant, body: { displayName: 'Jovana Jović' } });
     expect(await ok('GET', `/people/employees/${member.employeeId}`, as())).toMatchObject({ firstName: 'Jovana', lastName: 'Jović' });
   });

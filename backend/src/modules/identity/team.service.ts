@@ -200,11 +200,12 @@ export class TeamService {
       // The new member's employee record (spec 4.6): the one the invitation was sent from, else
       // one with their email, else a new one.
       if (joined) {
-        // The names the inviter typed become the display name of someone who hasn't chosen one yet (CD-318).
+        // The names the inviter typed become the display name of someone who hasn't chosen one yet
+        // (CD-318), and count as chosen so the next sign-in's token name doesn't replace them.
         if (row.firstName && row.lastName) {
           await tx
             .update(users)
-            .set({ displayName: `${row.firstName} ${row.lastName}` })
+            .set({ displayName: `${row.firstName} ${row.lastName}`, displayNameCustom: true })
             .where(and(eq(users.id, user.id), eq(users.displayNameCustom, false)));
         }
         await linkNewMember(tx, { tenantId: row.tenantId, userId: user.id, invitedEmployeeId: row.employeeId });
