@@ -32,6 +32,9 @@ describe('renaming a checklist item', () => {
 
   step('renames the item in the funnel builder', async () => {
     await page.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });
+    // Stage details open one at a time (CD-318): open every stage so the to-dos are in the page.
+    await page.waitForSelector('[data-testid=funnel-stage]');
+    await page.evaluate(() => [...document.querySelectorAll('[data-testid=funnel-stage]:not([data-open]) [data-testid=funnel-stage-toggle]')].forEach((b) => b.click()));
     const found = await page.evaluate(() => {
       const input = [...document.querySelectorAll('.gate-chip input')].find((i) => i.value === 'Website + socials reviewed');
       if (input) input.setAttribute('data-e2e', 'rename-me');

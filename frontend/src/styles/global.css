@@ -101,6 +101,7 @@ a.btn-plain:hover { color: var(--ink); text-decoration: none; }
 
 .icon-btn { border: 0; background: transparent; cursor: pointer; color: var(--muted); width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; padding: 0; }
 .icon-btn:hover { background: var(--danger-soft); color: var(--danger); }
+.icon-btn.icon-btn-plain:hover { background: var(--bg-soft); color: var(--ink); }
 
 .pill-x { flex: 0 0 18px; width: 18px; height: 18px; border: 0; border-radius: 50%; background: var(--border); color: var(--text-2); cursor: pointer; font-size: 11px; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; }
 .pill-x:hover { background: var(--danger); color: var(--white); }
