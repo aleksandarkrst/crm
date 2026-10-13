@@ -4,14 +4,14 @@ import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
 import { TimesheetDeadlines } from './deadlines';
 import { HolidaysService } from './holidays.service';
-import { CopyHolidays, CreateHoliday, HolidaysQuery, UpdateHoliday } from './timesheet.schemas';
+import { CreateHoliday, HolidaysQuery, UpdateHoliday } from './timesheet.schemas';
 
 const Id = new ZodPipe(UuidParam);
 
 /**
- * Public holidays (CD-153): `{ id, date, name, minutes }` (minutes off; null is the whole standard
- * day). Any member reads them; owners and admins change them. And the next submission deadline,
- * for Settings → Workforce → Approvals.
+ * Public holidays (CD-153): `{ id, date, endDate, name, minutes, since }` (minutes off; null is the
+ * whole standard day); each repeats every year from `since` (CD-318). Any member reads them; owners
+ * and admins change them. And the next submission deadline, for Settings → Workforce → Approvals.
  */
 @Controller('timesheet')
 @RequireTenant('member')
@@ -31,14 +31,6 @@ export class HolidaysController {
   @RequireTenant('admin')
   create(@Tenant() ctx: TenantContext, @Body(new ZodPipe(CreateHoliday)) body: CreateHoliday) {
     return this.holidays.create(ctx, body);
-  }
-
-  /** Copy from last year: `{ copied, holidays }` (the year's holidays). */
-  @Post('holidays/copy')
-  @RequireTenant('admin')
-  @HttpCode(200)
-  copy(@Tenant() ctx: TenantContext, @Body(new ZodPipe(CopyHolidays)) body: CopyHolidays) {
-    return this.holidays.copyFromLastYear(ctx, body.year);
   }
 
   @Patch('holidays/:id')

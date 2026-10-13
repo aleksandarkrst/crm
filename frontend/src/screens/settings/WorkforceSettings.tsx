@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { askConfirm } from '../../components/ConfirmDialog';
+import { type DateRange, DateRangePicker, rangeText } from '../../components/DateRangePicker';
 import { FieldRow, Switch } from '../../components/ui';
 import type { ApiTimesheetSettings } from '../../lib/api';
 import { type ApiHoliday, dayLabel, holidaysApi, parseHours, shortHours } from '../../lib/timesheetApi';
@@ -269,16 +270,26 @@ export function ApprovalsTab() {
   );
 }
 
-/** One holiday: shown, or edited inline (date, name, whole day or hours) with Cancel / Save. */
-function HolidayRow({ holiday, onChanged }: { holiday: ApiHoliday; onChanged: () => void }) {
+/** The last day of the year's month that is on screen, so the picker opens on a sensible month. */
+const monthIn = (year: number) => (year === new Date().getFullYear() ? new Date().toISOString().slice(0, 7) : `${year}-01`);
+
+/** One holiday: its dates and name with a ⋯ menu (Edit, Delete), or edited inline with Cancel / Save. */
+function HolidayRow({ holiday, year, onChanged }: { holiday: ApiHoliday; year: number; onChanged: () => void }) {
   const { flash } = useStore();
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState({ date: holiday.date, name: holiday.name, hours: holiday.minutes ? shortHours(holiday.minutes, 'decimal') : '' });
+  const [menu, setMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = useState<{ range: DateRange; name: string }>({ range: { from: holiday.date, to: holiday.endDate }, name: holiday.name });
+  useEffect(() => {
+    if (!menu) return;
+    const off = (e: MouseEvent) => !menuRef.current?.contains(e.target as Node) && setMenu(false);
+    document.addEventListener('mousedown', off);
+    return () => document.removeEventListener('mousedown', off);
+  }, [menu]);
   const save = async () => {
-    const minutes = draft.hours.trim() ? parseHours(draft.hours) : null;
-    if (draft.hours.trim() && !minutes) return flash('Type the hours off, like 4 or 4.5, or leave it empty for the whole day');
+    if (!draft.name.trim()) return flash('Enter a name');
     try {
-      await holidaysApi.update(holiday.id, { date: draft.date, name: draft.name.trim(), minutes });
+      await holidaysApi.update(holiday.id, { date: draft.range.from, endDate: draft.range.to === draft.range.from ? null : draft.range.to, name: draft.name.trim() });
       flash(`${draft.name.trim()} saved`);
       setEditing(false);
       onChanged();
@@ -287,10 +298,11 @@ function HolidayRow({ holiday, onChanged }: { holiday: ApiHoliday; onChanged: ()
     }
   };
   const remove = async () => {
-    if (!(await askConfirm({ title: `Remove ${holiday.name}?`, message: 'The Timesheet expects the standard day on this date again.', confirmLabel: 'Remove', danger: true }))) return;
+    setMenu(false);
+    if (!(await askConfirm({ title: `Delete ${holiday.name}?`, message: 'It goes from every year. The Timesheet expects the standard day on these dates again.', confirmLabel: 'Delete', danger: true }))) return;
     try {
       await holidaysApi.remove(holiday.id);
-      flash(`${holiday.name} removed`);
+      flash(`${holiday.name} deleted`);
       onChanged();
     } catch (err) {
       flash(projectError(err));
@@ -299,9 +311,8 @@ function HolidayRow({ holiday, onChanged }: { holiday: ApiHoliday; onChanged: ()
   if (editing) {
     return (
       <div className="holiday-row" data-testid="holiday-row">
-        <input className="form-input" type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} aria-label="Date" />
+        <DateRangePicker label="Dates" value={draft.range} month={monthIn(year)} onChange={(range) => setDraft({ ...draft, range })} testId="holiday-edit-dates" />
         <input className="form-input" value={draft.name} maxLength={100} onChange={(e) => setDraft({ ...draft, name: e.target.value })} aria-label="Name" />
-        <input className="form-input" value={draft.hours} inputMode="decimal" placeholder="Whole day" onChange={(e) => setDraft({ ...draft, hours: e.target.value })} aria-label="Hours off" />
         <span style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
           <button type="button" className="btn-plain" onClick={() => setEditing(false)}>
             Cancel
@@ -315,56 +326,66 @@ function HolidayRow({ holiday, onChanged }: { holiday: ApiHoliday; onChanged: ()
   }
   return (
     <div className="holiday-row" data-testid="holiday-row" data-date={holiday.date}>
-      <span style={{ fontSize: 13 }}>{dayLabel(holiday.date)}</span>
-      <span style={{ fontSize: 13, fontWeight: 500 }}>{holiday.name}</span>
-      <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{holiday.minutes ? `${shortHours(holiday.minutes, 'decimal')} h` : 'Whole day'}</span>
-      <span style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-        <button type="button" className="btn-outline" onClick={() => setEditing(true)} data-testid="holiday-edit">
-          Edit
+      <span style={{ fontSize: 13 }}>{rangeText({ from: holiday.date, to: holiday.endDate })}</span>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+        <span style={{ fontSize: 13, fontWeight: 500 }}>{holiday.name}</span>
+        <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
+          {holiday.minutes ? `${shortHours(holiday.minutes, 'decimal')} h off · ` : ''}
+          {holiday.since < year ? `every year since ${holiday.since}` : 'repeats every year'}
+        </span>
+      </span>
+      <span ref={menuRef} style={{ position: 'relative', justifySelf: 'end' }}>
+        <button type="button" className="btn btn-secondary" aria-label={`More actions for ${holiday.name}`} aria-expanded={menu} data-testid="holiday-menu" onClick={() => setMenu((m) => !m)} style={{ padding: '8px 11px' }}>
+          ⋯
         </button>
-        <button type="button" className="btn-outline" onClick={() => void remove()} data-testid="holiday-remove">
-          Remove
-        </button>
+        {menu && (
+          <div className="deal-menu row-menu" role="menu">
+            <button
+              type="button"
+              role="menuitem"
+              data-testid="holiday-edit"
+              onClick={() => {
+                setMenu(false);
+                setDraft({ range: { from: holiday.date, to: holiday.endDate }, name: holiday.name });
+                setEditing(true);
+              }}
+            >
+              Edit
+            </button>
+            <button type="button" role="menuitem" className="danger" data-testid="holiday-remove" onClick={() => void remove()}>
+              Delete
+            </button>
+          </div>
+        )}
       </span>
     </div>
   );
 }
 
 /**
- * Settings → Workforce → Holidays (CD-153): the workspace's public holidays by year, added, edited
- * and removed here (owners and admins); Copy from last year for holidays on fixed dates.
+ * Settings → Workforce → Holidays (CD-153, simplified in CD-318): the workspace's public holidays
+ * by year. A holiday is a day or a span of days picked in one calendar; it repeats every year from
+ * the year it was added, so nothing is copied. Owners and admins add, edit and delete them.
  */
 export function HolidaysTab() {
   const { flash } = useStore();
   const [year, setYear] = useState(() => new Date().getFullYear());
   const { data, error, reload } = useProjectsRead<ApiHoliday[]>(true, () => holidaysApi.list(year), `holidays:${year}`, 'timesheetRev');
-  const [draft, setDraft] = useState({ date: '', name: '', hours: '' });
+  const [draft, setDraft] = useState<{ range: DateRange | null; name: string }>({ range: null, name: '' });
   const [busy, setBusy] = useState(false);
-  useEffect(() => setDraft((d) => ({ ...d, date: '' })), [year]);
   const add = async () => {
-    if (!draft.date || !draft.name.trim()) return flash('Enter a date and a name');
-    const minutes = draft.hours.trim() ? parseHours(draft.hours) : null;
-    if (draft.hours.trim() && !minutes) return flash('Type the hours off, like 4 or 4.5, or leave it empty for the whole day');
+    if (!draft.range || !draft.name.trim()) return flash('Pick the dates and enter a name');
     setBusy(true);
     try {
-      const h = await holidaysApi.create({ date: draft.date, name: draft.name.trim(), minutes });
+      const h = await holidaysApi.create({ date: draft.range.from, endDate: draft.range.to === draft.range.from ? null : draft.range.to, name: draft.name.trim() });
       flash(`${h.name} added`);
-      setDraft({ date: '', name: '', hours: '' });
-      if (h.date.startsWith(String(year))) await reload();
-      else setYear(Number(h.date.slice(0, 4)));
+      setDraft({ range: null, name: '' });
+      if (h.since === year) await reload();
+      else setYear(h.since);
     } catch (err) {
       flash(projectError(err));
     }
     setBusy(false);
-  };
-  const copy = async () => {
-    try {
-      const res = await holidaysApi.copyFromLastYear(year);
-      flash(res.copied ? `Copied ${res.copied} ${res.copied === 1 ? 'holiday' : 'holidays'} from ${year - 1}` : `Nothing to copy: ${year} already has every date ${year - 1} had`);
-      await reload();
-    } catch (err) {
-      flash(projectError(err));
-    }
   };
   return (
     <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="holidays">
@@ -378,31 +399,25 @@ export function HolidaysTab() {
         <button type="button" className="btn-plain" style={{ padding: '7px 10px' }} aria-label="Next year" onClick={() => setYear(year + 1)}>
           →
         </button>
-        <span style={{ flex: 1 }} />
-        <button type="button" className="btn-plain" onClick={() => void copy()} data-testid="holidays-copy">
-          Copy from last year
-        </button>
       </div>
       <div className="holiday-row holiday-head">
-        <span className="th">Date</span>
+        <span className="th">Dates</span>
         <span className="th">Name</span>
-        <span className="th">Hours off</span>
         <span />
       </div>
       {error && <span style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</span>}
       {data?.length === 0 && <span style={{ fontSize: 13, color: 'var(--text-2)', padding: '8px 0' }}>No holidays in {year} yet.</span>}
-      {data?.map((h) => <HolidayRow key={`${h.id}:${h.date}:${h.name}:${h.minutes}`} holiday={h} onChanged={() => void reload()} />)}
+      {data?.map((h) => <HolidayRow key={`${h.id}:${h.date}:${h.endDate}:${h.name}:${h.minutes}`} holiday={h} year={year} onChanged={() => void reload()} />)}
       <div className="holiday-row" data-testid="holiday-add">
-        <input className="form-input" type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} aria-label="Date" data-testid="holiday-add-date" />
+        <DateRangePicker label="Dates" value={draft.range} month={monthIn(year)} onChange={(range) => setDraft({ ...draft, range })} placeholder="Pick the dates" testId="holiday-add-dates" />
         <input className="form-input" value={draft.name} maxLength={100} placeholder="Name, e.g. Statehood Day" onChange={(e) => setDraft({ ...draft, name: e.target.value })} aria-label="Name" data-testid="holiday-add-name" />
-        <input className="form-input" value={draft.hours} inputMode="decimal" placeholder="Whole day" onChange={(e) => setDraft({ ...draft, hours: e.target.value })} aria-label="Hours off" data-testid="holiday-add-hours" />
         <span style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void add()} data-testid="holiday-add-go">
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void add()} data-testid="holiday-add-go">
             Add holiday
           </button>
         </span>
       </div>
-      <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>Leave Hours off empty for the whole standard day. Changes are written to the audit log.</span>
+      <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>A holiday repeats every year from the year it is added. Changes are written to the audit log.</span>
     </div>
   );
 }

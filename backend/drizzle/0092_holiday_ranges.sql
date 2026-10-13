@@ -1,0 +1,2 @@
+ALTER TABLE "public_holidays" ADD COLUMN "end_date" date;--> statement-breakpoint
+ALTER TABLE "public_holidays" ADD CONSTRAINT "public_holidays_end_ck" CHECK ("public_holidays"."end_date" is null or ("public_holidays"."end_date" >= "public_holidays"."holiday_date" and "public_holidays"."end_date" <= "public_holidays"."holiday_date" + 60));

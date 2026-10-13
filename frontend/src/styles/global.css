@@ -349,6 +349,28 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .deal-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; background: var(--white); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 8px 24px rgba(13, 36, 28, 0.12); padding: 4px; min-width: 160px; }
 .deal-menu button { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; color: var(--danger); }
 .deal-menu button:hover { background: var(--danger-soft); }
+/* A row's ⋯ menu (CD-318): plain items, Delete in red. */
+.deal-menu.row-menu button { color: var(--ink); }
+.deal-menu.row-menu button:hover { background: var(--bg-soft); }
+.deal-menu.row-menu button.danger { color: var(--danger); }
+.deal-menu.row-menu button.danger:hover { background: var(--danger-soft); }
+
+/* Date range picker (CD-318): a field that opens a month calendar. */
+.drp { position: relative; min-width: 0; }
+.drp-field { width: 100%; text-align: left; cursor: pointer; box-sizing: border-box; }
+.drp-field.drp-empty { color: var(--muted); }
+.drp-pop { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; width: 280px; background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(13, 36, 28, 0.12); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.drp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.drp-nav { padding: 4px 9px; }
+.drp-month { font-size: 13px; font-weight: 600; }
+.drp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.drp-weekday { font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-2); text-align: center; padding: 2px 0 4px; }
+.drp-day { border: 0; background: transparent; border-radius: 6px; height: 30px; font-size: 12.5px; color: var(--ink); cursor: pointer; }
+.drp-day.other { color: var(--muted); }
+.drp-day:hover { background: var(--bg-soft); }
+.drp-day.on { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+.drp-day.edge { background: var(--brand); color: var(--white); }
+.drp-hint { font-size: 11.5px; color: var(--text-2); }
 @media (max-width: 700px) {
   .stage-chev:not(.current) { font-size: 0; padding: 0; }
   .stage-chev.current { flex: 4 1 0; }
@@ -1324,7 +1346,7 @@ a.task-card-project:hover { color: var(--brand); }
 .time-icon.danger:hover { background: var(--danger-soft); color: var(--danger); }
 
 /* ---------------------------------------------------------------- Settings → Workforce → Holidays (CD-153) */
-.holiday-row { display: grid; grid-template-columns: 170px minmax(0, 1fr) 120px 190px; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--divider); }
+.holiday-row { display: grid; grid-template-columns: 230px minmax(0, 1fr) 150px; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--divider); }
 .holiday-row.holiday-head { border-top: 0; padding-bottom: 0; }
 .holiday-row .form-input { width: 100%; min-width: 0; box-sizing: border-box; }
 @media (max-width: 700px) {

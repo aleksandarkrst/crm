@@ -645,6 +645,13 @@
       "when": 1791722406272,
       "tag": "0091_time_entry_history",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1791920750633,
+      "tag": "0092_holiday_ranges",
+      "breakpoints": true
     }
   ]
 }

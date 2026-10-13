@@ -17,6 +17,19 @@ describe('workforce settings', () => {
   let page;
   let task;
   let monday;
+  /** Picks `from` and `to` in the holiday form's range picker (CD-318): opens it, pages to each month, clicks the day. */
+  const pickDates = async (from, to) => {
+    await click(page, '[data-testid=holiday-add-dates-open]');
+    for (const date of [from, to]) {
+      for (let i = 0; i < 24 && !(await page.$(`[data-testid=holiday-add-dates] .drp-day:not(.other)[data-date="${date}"]`)); i++) {
+        const shown = await page.$eval('[data-testid=holiday-add-dates] .drp-month', (el) => el.textContent);
+        const shownIso = new Date(`1 ${shown} 00:00:00Z`).toISOString().slice(0, 7);
+        await click(page, `[data-testid=holiday-add-dates] [aria-label="${date.slice(0, 7) > shownIso ? 'Next month' : 'Previous month'}"]`);
+      }
+      await click(page, `[data-testid=holiday-add-dates] .drp-day:not(.other)[data-date="${date}"]`);
+    }
+    await page.waitForFunction(() => !document.querySelector('[data-testid=holiday-add-dates] .drp-pop'));
+  };
   const timesheet = async () => (await api(page, '/workspace')).timesheet;
 
   step('sets up a task to log time on', async () => {
@@ -56,7 +69,7 @@ describe('workforce settings', () => {
     await page.goto(BASE_URL + '/settings/holidays', { waitUntil: 'networkidle0' });
     const wed = addDays(monday, 2);
     if ((await page.$eval('[data-testid=holidays-year]', (el) => el.textContent)) !== wed.slice(0, 4)) await click(page, wed.slice(0, 4) > String(new Date().getFullYear()) ? '[aria-label="Next year"]' : '[aria-label="Previous year"]');
-    await setValue(page, '[data-testid=holiday-add-date]', wed);
+    await pickDates(wed, wed);
     await setValue(page, '[data-testid=holiday-add-name]', 'Statehood Day');
     await click(page, '[data-testid=holiday-add-go]');
     await page.waitForSelector(`[data-testid=holiday-row][data-date="${wed}"]`);
@@ -70,19 +83,24 @@ describe('workforce settings', () => {
     assert.match(await page.$eval('[data-testid=ts-expected]', (el) => el.textContent), /minus holidays/);
   });
 
-  step('Copy from last year says what it did', async () => {
+  step('a holiday spans days and repeats every year (CD-318): no Copy from last year', async () => {
     await page.goto(BASE_URL + '/settings/holidays', { waitUntil: 'networkidle0' });
-    await click(page, '[aria-label="Previous year"]');
-    const last = Number(await page.$eval('[data-testid=holidays-year]', (el) => el.textContent));
-    await setValue(page, '[data-testid=holiday-add-date]', `${last}-01-01`);
+    assert.equal(await page.$('[data-testid=holidays-copy]'), null);
+    const year = Number(await page.$eval('[data-testid=holidays-year]', (el) => el.textContent));
+    await pickDates(`${year}-12-31`, `${year + 1}-01-01`);
     await setValue(page, '[data-testid=holiday-add-name]', 'New Year');
     await click(page, '[data-testid=holiday-add-go]');
-    await page.waitForSelector(`[data-testid=holiday-row][data-date="${last}-01-01"]`);
+    await page.waitForSelector(`[data-testid=holiday-row][data-date="${year}-12-31"]`);
+    assert.match(await page.$eval(`[data-testid=holiday-row][data-date="${year}-12-31"]`, (el) => el.textContent), /31 Dec – .* 1 Jan/);
     await waitForToastToClear(page);
     await click(page, '[aria-label="Next year"]');
-    await click(page, '[data-testid=holidays-copy]');
-    await page.waitForSelector(`.toast::-p-text(Copied 1 holiday from ${last})`);
-    await page.waitForSelector(`[data-testid=holiday-row][data-date="${last + 1}-01-01"]`);
+    await page.waitForSelector(`[data-testid=holiday-row][data-date="${year + 1}-12-31"]`);
+    assert.match(await page.$eval(`[data-testid=holiday-row][data-date="${year + 1}-12-31"]`, (el) => el.textContent), new RegExp(`every year since ${year}`));
+    // Delete from the row's ⋯ menu.
+    await click(page, `[data-testid=holiday-row][data-date="${year + 1}-12-31"] [data-testid=holiday-menu]`);
+    await click(page, '[data-testid=holiday-remove]');
+    await click(page, '[data-testid=confirm-ok]');
+    await page.waitForFunction((d) => !document.querySelector(`[data-testid=holiday-row][data-date="${d}"]`), {}, `${year + 1}-12-31`);
   });
 
   step('Approvals: the deadline day and time, the live line, and "Submit by" in the Timesheet', async () => {

@@ -27,8 +27,10 @@ interface Week {
 interface Holiday {
   id: string;
   date: string;
+  endDate: string;
   name: string;
   minutes: number | null;
+  since: number;
 }
 
 let owner: Session;
@@ -132,16 +134,19 @@ describe('public holidays', () => {
     expect((await call('POST', '/timesheet/holidays', { ...as(), body: { date: `${year}-05-02`, name: 'x', minutes: 10 } })).status).toBe(400);
   });
 
-  it('Copy from last year copies only dates the year has none on', async () => {
-    await ok('POST', '/timesheet/holidays', { ...as(), body: { date: '2030-01-01', name: 'New Year' } });
-    await ok('POST', '/timesheet/holidays', { ...as(), body: { date: '2030-01-07', name: 'Orthodox Christmas' } });
-    await ok('POST', '/timesheet/holidays', { ...as(), body: { date: '2031-01-01', name: 'Already there' } });
-    const res = await ok<{ copied: number; holidays: Holiday[] }>('POST', '/timesheet/holidays/copy', { ...as(), body: { year: 2031 } }, 200);
-    expect(res.copied).toBe(1);
-    expect(res.holidays.map((x) => [x.date, x.name])).toEqual([
-      ['2031-01-01', 'Already there'],
-      ['2031-01-07', 'Orthodox Christmas'],
+  it('a holiday repeats every year from the year it was entered, over its span of days (CD-318)', async () => {
+    const created = await ok<Holiday>('POST', '/timesheet/holidays', { ...as(), body: { date: '2030-01-01', name: 'New Year' } });
+    expect(created).toMatchObject({ date: '2030-01-01', endDate: '2030-01-01', since: 2030 });
+    await ok('POST', '/timesheet/holidays', { ...as(), body: { date: '2030-01-07', endDate: '2030-01-08', name: 'Orthodox Christmas' } });
+    expect((await call('POST', '/timesheet/holidays', { ...as(), body: { date: '2030-02-10', endDate: '2030-02-09', name: 'Backwards' } })).status).toBe(400);
+    expect((await ok<Holiday[]>('GET', '/timesheet/holidays?year=2029', as())).map((x) => x.name)).not.toContain('New Year');
+    expect((await ok<Holiday[]>('GET', '/timesheet/holidays?year=2031', as())).map((x) => [x.date, x.endDate, x.name])).toEqual([
+      ['2031-01-01', '2031-01-01', 'New Year'],
+      ['2031-01-07', '2031-01-08', 'Orthodox Christmas'],
     ]);
+    // Editing the span changes every year.
+    await ok<Holiday>('PATCH', `/timesheet/holidays/${created.id}`, { ...as(), body: { endDate: '2030-01-02' } });
+    expect((await ok<Holiday[]>('GET', '/timesheet/holidays?year=2035', as())).find((x) => x.name === 'New Year')).toMatchObject({ date: '2035-01-01', endDate: '2035-01-02' });
   });
 
   it("another workspace never sees them (RLS)", async () => {
@@ -154,14 +159,17 @@ describe('public holidays', () => {
     const wed = addDays(monday, 2);
     const thu = addDays(monday, 3);
     const fri = addDays(monday, 4);
+    // Statehood Day was entered a year ago: it repeats this year (CD-318). The long weekend spans Friday and Saturday.
+    const lastYear = `${Number(wed.slice(0, 4)) - 1}${wed.slice(4)}`;
     const created = await Promise.all([
-      ok<Holiday>('POST', '/timesheet/holidays', { ...as(), body: { date: wed, name: 'Statehood Day' } }),
+      ok<Holiday>('POST', '/timesheet/holidays', { ...as(), body: { date: lastYear, name: 'Statehood Day' } }),
       ok<Holiday>('POST', '/timesheet/holidays', { ...as(), body: { date: thu, name: 'Half day', minutes: 240 } }),
-      ok<Holiday>('POST', '/timesheet/holidays', { ...as(), body: { date: fri, name: 'Long weekend' } }),
+      ok<Holiday>('POST', '/timesheet/holidays', { ...as(), body: { date: fri, endDate: addDays(fri, 1), name: 'Long weekend' } }),
     ]);
     const w = await week();
     expect(w.days[2]).toMatchObject({ holiday: { name: 'Statehood Day', minutes: 480 }, expectedMinutes: 0 });
     expect(w.days[3]).toMatchObject({ holiday: { name: 'Half day', minutes: 240 }, expectedMinutes: 240 });
+    expect(w.days[4]).toMatchObject({ holiday: { name: 'Long weekend', minutes: 480 }, expectedMinutes: 0 });
     // Friday is a holiday: the deadline moves past the weekend to Monday.
     expect(w.deadline).toEqual({ date: addDays(monday, 7), time: '17:00' });
     for (const h of created) await ok('DELETE', `/timesheet/holidays/${h.id}`, as(), 204);

@@ -150,14 +150,10 @@ const holidayMinutes = z
 export const HolidaysQuery = z.object({ year: z.coerce.number().int().min(2000).max(2100).optional() });
 export type HolidaysQuery = z.infer<typeof HolidaysQuery>;
 
-/** POST /api/timesheet/holidays (owners and admins). */
-export const CreateHoliday = z.object({ date: isoDate, name: holidayName, minutes: holidayMinutes.optional() });
+/** POST /api/timesheet/holidays (owners and admins): `date` is the first day, `endDate` the last of a span (CD-318). */
+export const CreateHoliday = z.object({ date: isoDate, endDate: isoDate.nullable().optional(), name: holidayName, minutes: holidayMinutes.optional() });
 export type CreateHoliday = z.infer<typeof CreateHoliday>;
 
 /** PATCH /api/timesheet/holidays/:id (owners and admins). */
-export const UpdateHoliday = nonEmptyPatch(z.object({ date: isoDate, name: holidayName, minutes: holidayMinutes }).partial());
+export const UpdateHoliday = nonEmptyPatch(z.object({ date: isoDate, endDate: isoDate.nullable(), name: holidayName, minutes: holidayMinutes }).partial());
 export type UpdateHoliday = z.infer<typeof UpdateHoliday>;
-
-/** POST /api/timesheet/holidays/copy: last year's holidays into `year`. */
-export const CopyHolidays = z.object({ year: z.number().int().min(2001).max(2100) });
-export type CopyHolidays = z.infer<typeof CopyHolidays>;
