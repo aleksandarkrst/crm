@@ -63,7 +63,7 @@ describe('accepting', () => {
     const member = (await ok('GET', '/team', as())).members.find((m: { userId: string }) => m.userId === invitee.userId);
     expect(await ok('GET', `/people/employees/${member.employeeId}`, as())).toMatchObject({ firstName: 'Miloš', lastName: 'Krstić', workEmail: invitee.email });
     // A name they choose later reaches the record only while its names still came from an email.
-    await ok('PATCH', '/me', { token: invitee.token, tenant, body: { displayName: 'Milos K.' } });
+    await ok('PATCH', '/profile', { token: invitee.token, tenant, body: { displayName: 'Milos K.' } });
     expect(await ok('GET', `/people/employees/${member.employeeId}`, as())).toMatchObject({ firstName: 'Miloš', lastName: 'Krstić' });
   });
 
@@ -74,7 +74,7 @@ describe('accepting', () => {
     const member = (await ok('GET', '/team', as())).members.find((m: { userId: string }) => m.userId === invitee.userId);
     // The dev sign-in has a two-word name, so the record took it on joining; make it look email-derived first.
     await asTenantSql(tenant, `update employees set first_name = 'Inv-fromemail', last_name = 'Inv-fromemail' where id = '${member.employeeId}'`);
-    await ok('PATCH', '/me', { token: invitee.token, tenant, body: { displayName: 'Jovana Jović' } });
+    await ok('PATCH', '/profile', { token: invitee.token, tenant, body: { displayName: 'Jovana Jović' } });
     expect(await ok('GET', `/people/employees/${member.employeeId}`, as())).toMatchObject({ firstName: 'Jovana', lastName: 'Jović' });
   });
 

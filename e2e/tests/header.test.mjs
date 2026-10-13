@@ -169,7 +169,7 @@ describe('command palette, + menu and account menu', () => {
     await click(page, '[data-testid=new-deal]');
     await page.waitForSelector('::-p-text(Create & start funnel)');
     assert.equal(new URL(page.url()).pathname, '/contacts', 'still on Contacts');
-    await setValue(page, '.modal select', '+ New company…');
+    await click(page, '[data-testid=new-deal-add-company]');
     await page.waitForSelector('input[placeholder="Company name"]');
     await page.type('input[placeholder="Company name"]', 'Menu Made d.o.o.');
     await page.type('input[placeholder="Full name"]', 'Mira Menić');
