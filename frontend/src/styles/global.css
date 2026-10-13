@@ -102,6 +102,10 @@ a.btn-plain:hover { color: var(--ink); text-decoration: none; }
 .icon-btn { border: 0; background: transparent; cursor: pointer; color: var(--muted); width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; padding: 0; }
 .icon-btn:hover { background: var(--danger-soft); color: var(--danger); }
 .icon-btn.icon-btn-plain:hover { background: var(--bg-soft); color: var(--ink); }
+@media (max-width: 700px) {
+  /* Funnel builder stage rows: keep the name readable on phones. */
+  .funnel-stage-meta { display: none; }
+}
 
 .pill-x { flex: 0 0 18px; width: 18px; height: 18px; border: 0; border-radius: 50%; background: var(--border); color: var(--text-2); cursor: pointer; font-size: 11px; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; }
 .pill-x:hover { background: var(--danger); color: var(--white); }
@@ -180,7 +184,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .hint-box { font-size: 12.5px; color: var(--text-2); background: var(--bg-soft); border-radius: 8px; padding: 12px 13px; line-height: 1.5; }
 /* A panel inside a form for a record made along the way (CD-318: New company / New contact in New deal). */
 .subform { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px dashed var(--dashed); border-radius: 9px; background: var(--bg-soft); }
-.subform-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--ink); }
+.subform-head { display: flex; align-items: center; justify-content: space-between; gap: 4px 8px; flex-wrap: wrap; font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--ink); }
 .subform-hint { font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--text-2); }
 .btn-link { border: 0; background: transparent; padding: 0; cursor: pointer; color: var(--brand); font-size: 12.5px; font-weight: 500; letter-spacing: 0; text-transform: none; align-self: flex-start; }
 .btn-link:hover { text-decoration: underline; }
@@ -365,7 +369,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .drp { position: relative; min-width: 0; }
 .drp-field { width: 100%; text-align: left; cursor: pointer; box-sizing: border-box; }
 .drp-field.drp-empty { color: var(--muted); }
-.drp-pop { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; width: 280px; background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(13, 36, 28, 0.12); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.drp-pop { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; width: 280px; max-width: calc(100vw - 24px); background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 .drp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .drp-nav { padding: 4px 9px; }
 .drp-month { font-size: 13px; font-weight: 600; }
@@ -1356,7 +1360,9 @@ a.task-card-project:hover { color: var(--brand); }
 .holiday-row.holiday-head { border-top: 0; padding-bottom: 0; }
 .holiday-row .form-input { width: 100%; min-width: 0; box-sizing: border-box; }
 @media (max-width: 700px) {
-  .holiday-row { grid-template-columns: 1fr 1fr; }
+  /* Phones: dates and the action side by side, the name on its own line under them. */
+  .holiday-row { grid-template-columns: minmax(0, 1fr) auto; grid-auto-flow: row dense; }
+  .holiday-row > :nth-child(2) { grid-column: 1 / -1; }
   .holiday-row.holiday-head { display: none; }
 }
 .ts-holiday { background: var(--chip); }

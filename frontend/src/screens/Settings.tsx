@@ -678,11 +678,13 @@ function FunnelStageRow({
         <span style={{ fontSize: 12, color: 'var(--muted)', width: 18 }}>{idx + 1}</span>
         <input className="ghost ghost-sm" value={st.name} disabled={!editable} aria-label="Stage name" onChange={(e) => store.editStage(idx, 'name', e.target.value)} style={{ flex: 1, minWidth: 0, fontWeight: 500 }} />
         {st.won && (
-          <span className="caps-muted" title="Deals are won by reaching this stage">
+          <span className="caps-muted funnel-stage-meta" title="Deals are won by reaching this stage">
             Won stage
           </span>
         )}
-        <span style={{ fontSize: 12, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{plural(deals, 'deal')}</span>
+        <span className="funnel-stage-meta" style={{ fontSize: 12, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>
+          {plural(deals, 'deal')}
+        </span>
         {editable && (
           <>
             <button type="button" className="icon-btn icon-btn-plain" aria-label="Move up" title="Move up" disabled={first} style={{ opacity: first ? 0.35 : 1 }} onClick={() => store.moveStage(idx, -1)}>

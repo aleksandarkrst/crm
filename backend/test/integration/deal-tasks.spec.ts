@@ -22,6 +22,9 @@ describe('deleting a task', () => {
       body: { stageId: funnel.stages[0]!.id, label: 'Send the offer', blocksAdvance: false, dueDate: '2030-01-15' },
     });
     expect(await titles(deal.id)).toContain('Task added: Send the offer');
+    // Each entry names who did it (CD-318).
+    const added = (await ok('GET', `/crm/deals/${deal.id}/activities`, as())).find((a: { title: string }) => a.title === 'Task added: Send the offer');
+    expect(added.actor).toEqual({ userId: owner.userId, name: owner.name });
 
     await ok('DELETE', `/crm/deal-tasks/${task.id}`, as());
     const after = await titles(deal.id);

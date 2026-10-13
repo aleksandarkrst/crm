@@ -184,7 +184,7 @@ export class TeamService {
     if (user.email.toLowerCase() !== row.email) throw new ForbiddenException(`This invitation is for ${row.email}. You are signed in as ${user.email}.`);
 
     const ctx: TenantContext = { tenantId: row.tenantId, userId: user.id, role: row.role };
-    return this.database.withTenant(row.tenantId, async (tx) => {
+    const result = await this.database.withTenant(row.tenantId, async (tx) => {
       const [claimed] = await tx
         .update(invitations)
         .set({ acceptedAt: new Date(), acceptedByUserId: user.id })
@@ -206,7 +206,6 @@ export class TeamService {
             .update(users)
             .set({ displayName: `${row.firstName} ${row.lastName}` })
             .where(and(eq(users.id, user.id), eq(users.displayNameCustom, false)));
-          this.identity.forgetUser(user.authSubject);
         }
         await linkNewMember(tx, { tenantId: row.tenantId, userId: user.id, invitedEmployeeId: row.employeeId });
       }
@@ -214,6 +213,9 @@ export class TeamService {
       await this.audit.record(tx, ctx, { action: 'invitation.accepted', entityType: 'invitation', entityId: row.id });
       return { id: row.tenantId, name: row.tenantName, slug: row.tenantSlug, role };
     });
+    // After the commit, so a concurrent request can't refill the cache with the old name.
+    if (row.firstName && row.lastName) this.identity.forgetUser(user.authSubject);
+    return result;
   }
 
   private findByToken(token: string) {

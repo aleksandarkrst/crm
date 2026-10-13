@@ -1,10 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { activities, CHANNELS, deals, users } from '../../../shared/database/schema';
+import { activities, CHANNELS, deals, memberships, users } from '../../../shared/database/schema';
 import { optionalText } from '../../../shared/validation/common';
 
 export const CreateActivity = z.object({
@@ -51,16 +51,18 @@ export class ActivitiesService {
   /** The deal's timeline, newest first, each entry with who did it (CD-318; null for the system). */
   list(ctx: TenantContext, dealId: string): Promise<ActivityView[]> {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
+      // The actor is named only while they are a member of this workspace; after that they are "Former member".
       const rows = await tx
-        .select({ ...activityColumns, actorName: sql<string | null>`coalesce(${users.displayName}, ${users.email})` })
+        .select({ ...activityColumns, memberId: memberships.userId, actorName: sql<string | null>`coalesce(${users.displayName}, ${users.email})` })
         .from(activities)
-        .leftJoin(users, eq(users.id, activities.actorUserId))
+        .leftJoin(memberships, and(eq(memberships.userId, activities.actorUserId), eq(memberships.tenantId, activities.tenantId)))
+        .leftJoin(users, eq(users.id, memberships.userId))
         .where(eq(activities.dealId, dealId))
         .orderBy(desc(activities.occurredAt))
         .limit(500);
-      return rows.map(({ actorName, ...row }) => ({
+      return rows.map(({ actorName, memberId, ...row }) => ({
         ...row,
-        actor: row.actorUserId ? { userId: actorName === null ? null : row.actorUserId, name: actorName ?? FORMER_MEMBER } : null,
+        actor: row.actorUserId ? (memberId && actorName ? { userId: memberId, name: actorName } : { userId: null, name: FORMER_MEMBER }) : null,
       }));
     });
   }

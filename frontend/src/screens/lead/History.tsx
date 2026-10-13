@@ -45,7 +45,7 @@ export function History({ lead }: { lead: Lead }) {
               <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45, whiteSpace: 'pre-line' }}>{e.detail}</div>
             </div>
             <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', whiteSpace: 'nowrap' }} data-testid="activity-actor">
+              <span className="pt-main" style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', maxWidth: 140 }} data-testid="activity-actor">
                 {e.actor ?? 'System'}
               </span>
               {e.channel !== SYSTEM_CHANNEL && <span className="badge badge-neutral">{activityChannelLabel(e.channel)}</span>}
