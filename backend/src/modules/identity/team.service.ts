@@ -9,12 +9,17 @@ import { DatabaseService, type Tx } from '../../shared/database/database.service
 import { employees, INVITATION_ROLES, invitations, MEMBERSHIP_ROLES, memberships, tenants, users } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import { createInvitedEmployee, dropUnusedInvitedEmployees, linkNewMember } from '../people';
+import { IdentityService } from './identity.service';
 import { inviteLinkBox } from './invitation-email';
 import { createInvitation, hashInviteToken, invitationColumns, inviteExpiry, keepAnOwner, pendingInvitation as pending, removeMembership } from './membership';
 
+const personName = z.string().trim().min(1).max(100);
 export const CreateInvitation = z.object({
   email: z.email().transform((e) => e.trim().toLowerCase()),
   role: z.enum(INVITATION_ROLES).default('member'),
+  /** The invitee's names (CD-318): the email greets them by first name; their employee record and display name start with them. */
+  firstName: personName.optional(),
+  lastName: personName.optional(),
 });
 export const UpdateMember = z.object({ role: z.enum(MEMBERSHIP_ROLES) });
 export type CreateInvitation = z.infer<typeof CreateInvitation>;
@@ -37,6 +42,7 @@ export class TeamService {
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
     private readonly jobs: JobsService,
+    private readonly identity: IdentityService,
     @Inject(ENV) private readonly env: Env,
   ) {
     this.box = inviteLinkBox(env);
@@ -69,7 +75,8 @@ export class TeamService {
    */
   invite(ctx: TenantContext, input: CreateInvitation) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
-      const employeeId = await createInvitedEmployee(tx, ctx.tenantId, input.email);
+      const names = input.firstName && input.lastName ? { firstName: input.firstName, lastName: input.lastName } : null;
+      const employeeId = await createInvitedEmployee(tx, ctx.tenantId, input.email, names);
       return createInvitation(tx, { jobs: this.jobs, audit: this.audit, env: this.env }, ctx, { ...input, employeeId });
     });
   }
@@ -154,7 +161,7 @@ export class TeamService {
     const [inviter] = row.invitedByUserId
       ? await this.database.db.select({ name: sql<string | null>`coalesce(${users.displayName}, ${users.email})` }).from(users).where(eq(users.id, row.invitedByUserId))
       : [];
-    return { tenantName: row.tenantName, email: row.email, role: row.role, invitedBy: inviter?.name ?? null, expiresAt: row.expiresAt };
+    return { tenantName: row.tenantName, email: row.email, role: row.role, invitedBy: inviter?.name ?? null, expiresAt: row.expiresAt, firstName: row.firstName, lastName: row.lastName };
   }
 
   /** Joins the tenant. The signed-in user's email must be the invited one. */
@@ -177,7 +184,7 @@ export class TeamService {
     if (user.email.toLowerCase() !== row.email) throw new ForbiddenException(`This invitation is for ${row.email}. You are signed in as ${user.email}.`);
 
     const ctx: TenantContext = { tenantId: row.tenantId, userId: user.id, role: row.role };
-    return this.database.withTenant(row.tenantId, async (tx) => {
+    const result = await this.database.withTenant(row.tenantId, async (tx) => {
       const [claimed] = await tx
         .update(invitations)
         .set({ acceptedAt: new Date(), acceptedByUserId: user.id })
@@ -193,12 +200,23 @@ export class TeamService {
       // The new member's employee record (spec 4.6): the one the invitation was sent from, else
       // one with their email, else a new one.
       if (joined) {
+        // The names the inviter typed become the display name of someone who hasn't chosen one yet
+        // (CD-318), and count as chosen so the next sign-in's token name doesn't replace them.
+        if (row.firstName && row.lastName) {
+          await tx
+            .update(users)
+            .set({ displayName: `${row.firstName} ${row.lastName}`, displayNameCustom: true })
+            .where(and(eq(users.id, user.id), eq(users.displayNameCustom, false)));
+        }
         await linkNewMember(tx, { tenantId: row.tenantId, userId: user.id, invitedEmployeeId: row.employeeId });
       }
       const role = (await this.memberRole(tx, row.tenantId, user.id))!;
       await this.audit.record(tx, ctx, { action: 'invitation.accepted', entityType: 'invitation', entityId: row.id });
       return { id: row.tenantId, name: row.tenantName, slug: row.tenantSlug, role };
     });
+    // After the commit, so a concurrent request can't refill the cache with the old name.
+    if (row.firstName && row.lastName) this.identity.forgetUser(user.authSubject);
+    return result;
   }
 
   private findByToken(token: string) {
@@ -216,6 +234,8 @@ export class TeamService {
         role: invitations.role,
         invitedByUserId: invitations.invitedByUserId,
         employeeId: invitations.employeeId,
+        firstName: invitations.firstName,
+        lastName: invitations.lastName,
         expiresAt: invitations.expiresAt,
         acceptedAt: invitations.acceptedAt,
         revokedAt: invitations.revokedAt,

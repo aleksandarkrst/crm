@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, Navigate, useParams } from 'react-router-dom';
+import { Navigate, useParams } from 'react-router-dom';
 import { Icon } from '../../components/icons';
 import { askConfirm } from '../../components/ConfirmDialog';
 import { Screen } from '../../components/Layout';
@@ -91,7 +91,6 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
   const wonStage = stages.find((st) => st.won);
   const lost = lead.outcome === 'lost';
   const days = lead.stageSince ? Math.max(0, Math.floor((Date.now() - Date.parse(lead.stageSince)) / DAY)) : null;
-  const funnel = s.funnels[lead.segment];
 
   const ownerOptions = [...memberLabels(s)].map(([value, label]) => ({ value, label }));
   if (lead.ownerId && !ownerOptions.some((o) => o.value === lead.ownerId)) ownerOptions.push({ value: lead.ownerId, label: memberName(s, lead.ownerId, lead.owner) });
@@ -110,13 +109,6 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
 
   return (
     <div className="card deal-header" style={{ padding: '16px 20px' }}>
-      <div className="deal-crumb" data-testid="deal-crumb">
-        <Link to={paths.pipeline} className="crumb-link">
-          {funnel?.label ?? 'Pipeline'}
-        </Link>
-        <span aria-hidden>→</span>
-        <span style={{ color: 'var(--ink)' }}>{stage.name}</span>
-      </div>
       <div className="deal-header-top">
         <input className="ghost deal-title" aria-label="Deal name" data-testid="deal-title" value={lead.title ?? ''} placeholder={lead.company} onChange={(e) => patchLead(lead.id, { title: e.target.value })} />
         <div className="deal-actions">

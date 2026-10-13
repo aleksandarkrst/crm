@@ -41,7 +41,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 /**
  * Projects (CD-234, design v2 §1): a board of the selected project type (its stages are the columns;
  * drag a card to move the project) and a list of every project. Filters: lead, health and status
- * (Open by default). Won deals without a project get a hint with "New project". The view is
+ * (Open by default) plus the project type, in both views. Won deals without a project get a hint with "New project". The view is
  * remembered per person and workspace in this browser.
  */
 export function Projects() {
@@ -83,8 +83,8 @@ export function Projects() {
     .filter((p) => lead === 'Lead' || p.leadUserId === lead)
     .filter((p) => health === 'Health' || p.health === health);
   const onBoard = shown.filter((p) => p.projectTypeId === type?.id);
-  // "Export filter results" (CD-278): the projects the current view shows.
-  const exported = view === 'board' ? onBoard : shown;
+  // "Export filter results" (CD-278): the projects the current view shows (the same in both views, CD-318).
+  const exported = onBoard;
   const dirty = lead !== 'Lead' || health !== 'Health' || status !== 'open';
   const linked = new Set((projects ?? []).map((p) => p.dealId).filter(Boolean));
   const unlinkedWon = s.leads.filter((l) => l.outcome === 'won' && l.companyId && !linked.has(l.id));
@@ -120,8 +120,8 @@ export function Projects() {
                 </button>
               ))}
             </div>
-            {view === 'board' && (
-              <div className="funnel-select">
+            {/* The type select stays in both views (CD-318): switching views never changes the filters. */}
+            <div className="funnel-select">
                 <select aria-label={`${t.Project} type`} data-testid="projects-type" value={type?.id ?? ''} onChange={(e) => setParams({ type: e.target.value }, { replace: true })}>
                   {(types ?? []).map((t) => (
                     <option key={t.id} value={t.id}>
@@ -134,8 +134,7 @@ export function Projects() {
                     <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />
                   </svg>
                 </button>
-              </div>
-            )}
+            </div>
           </>
         }
         chips={[
@@ -149,7 +148,7 @@ export function Projects() {
           setHealth('Health');
           setStatus('open');
         }}
-        meta={projects ? `${plural(view === 'board' ? onBoard.length : shown.length, `${STATUS_FILTER.find((x) => x.value === status)!.label.toLowerCase()} ${t.project}`, `${STATUS_FILTER.find((x) => x.value === status)!.label.toLowerCase()} ${t.projects}`)}` : undefined}
+        meta={projects ? `${plural(onBoard.length, `${STATUS_FILTER.find((x) => x.value === status)!.label.toLowerCase()} ${t.project}`, `${STATUS_FILTER.find((x) => x.value === status)!.label.toLowerCase()} ${t.projects}`)}` : undefined}
         action={{ label: `New ${t.project}`, onClick: () => set({ newProject: {} }) }}
         extra={projects ? <DataActions type="projects" count={exported.length} exportCsv={() => projectsCsv(exported)} /> : undefined}
       />
@@ -171,7 +170,7 @@ export function Projects() {
       {!projects ? (
         <div className="hint-box">{error ? `Couldn't load ${t.projects}: ${error}` : `Loading ${t.projects}`}</div>
       ) : view === 'list' ? (
-        <ProjectsList projects={shown} work={tasks ? work : null} onOpen={(id) => navigate(paths.project(id))} />
+        <ProjectsList projects={onBoard} work={tasks ? work : null} onOpen={(id) => navigate(paths.project(id))} />
       ) : (
         <div className="pipeline-board" style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '0 -30px -44px', padding: '0 30px', minHeight: 'calc(100vh - 118px)' }}>
           <div className="pipeline-columns" data-testid="projects-board" style={{ display: 'flex', gap: 14, overflowX: 'auto', alignItems: 'stretch', flex: 1, minHeight: 420 }}>
@@ -294,7 +293,7 @@ export function Projects() {
   );
 }
 
-/** The list view (design v2 §1): every project the filters show, all types. Rows open the project. */
+/** The list view (design v2 §1): the projects the filters show, of the selected type like the board (CD-318). Rows open the project. */
 function ProjectsList({ projects, work, onOpen }: { projects: ApiProject[]; work: Map<string, ProjectWork> | null; onOpen: (id: string) => void }) {
   const t = useTerms();
   const h = useHours();

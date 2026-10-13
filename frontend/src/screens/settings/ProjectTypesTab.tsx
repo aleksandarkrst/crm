@@ -86,7 +86,6 @@ export function ProjectTypesTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} data-testid="project-types">
-      <NamesCard editable={editable} />
       {!editable && (
         <span data-testid="project-types-read-only" style={{ fontSize: 12, color: 'var(--text-2)' }}>
           Only owners and admins can change project types and their stages.
@@ -388,6 +387,12 @@ function termErrors(t: WorkspaceTerms): Partial<Record<keyof WorkspaceTerms, str
 }
 
 const sameTerms = (a: WorkspaceTerms, b: WorkspaceTerms) => TERM_FIELDS.every(({ key }) => a[key].trim() === b[key].trim());
+
+/** Settings → Projects → Project hierarchy (CD-318): the Names card on a page of its own, above Project types. */
+export function ProjectHierarchyTab() {
+  const store = useStore();
+  return <NamesCard editable={store.canEditFunnels} />;
+}
 
 /**
  * What this workspace calls projects and tasks (CD-143): singular and plural, used everywhere the

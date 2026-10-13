@@ -1,6 +1,6 @@
 import { CustomFieldRows } from '../../components/CustomFields';
 import { IconRow } from '../../components/icons';
-import { GhostInput, GhostSelect, PersonChip, Picker, PickerRow, usePicker } from '../../components/ui';
+import { GhostDate, GhostSelect, PersonChip, Picker, PickerRow, usePicker } from '../../components/ui';
 import { SOURCES } from '../../store/seed';
 import { allPeople, closeIsoOf, companyOfPerson, contactsForLead, curOf, funnelOptions, initialsOf, linesOf, moneyExact, totalsOf, valueNum } from '../../store/selectors';
 import { useStore } from '../../store/store';
@@ -79,7 +79,7 @@ export function Summary({ lead, projects }: { lead: Lead; projects?: React.React
           </Picker>
         </IconRow>
         <IconRow icon="calendar" label="Closing date">
-          <GhostInput type="date" aria-label="Closing date" value={closeIsoOf(lead)} onChange={patch('closeDate')} />
+          <GhostDate aria-label="Closing date" placeholder="Add closed date" value={closeIsoOf(lead)} onChange={patch('closeDate')} />
         </IconRow>
         <IconRow icon="funnel" label="Funnel">
           <GhostSelect chevron aria-label="Funnel" value={lead.segment} onChange={(e) => store.patchLeadSegment(lead.id, e.target.value)} options={funnelOptions(s)} />

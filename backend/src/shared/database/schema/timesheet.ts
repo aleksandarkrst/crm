@@ -181,7 +181,10 @@ export const publicHolidays = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     tenantId: tenantId(),
+    /** The first day. Every holiday repeats on the same day and month every later year (CD-318). */
     holidayDate: date('holiday_date').notNull(),
+    /** The last day of a holiday that spans several days; null for a single day (CD-318). */
+    endDate: date('end_date'),
     name: text('name').notNull(),
     minutes: integer('minutes'),
     ...timestamps,
@@ -189,6 +192,7 @@ export const publicHolidays = pgTable(
   (t) => [
     uniqueIndex('public_holidays_date_uq').on(t.tenantId, t.holidayDate),
     check('public_holidays_name_ck', sql`length(btrim(${t.name})) between 1 and 100`),
+    check('public_holidays_end_ck', sql`${t.endDate} is null or (${t.endDate} >= ${t.holidayDate} and ${t.endDate} <= ${t.holidayDate} + 60)`),
     check('public_holidays_minutes_ck', sql`${t.minutes} is null or (${t.minutes} between 15 and 1440 and ${t.minutes} % 15 = 0)`),
   ],
 );

@@ -659,7 +659,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       else if (stage) flash('Moved to ' + stage.name + ' · next activity: ' + stage.activity);
     };
 
-    const pushLog = (leadId: string, entry: LogEntry) => {
+    /** A timeline entry made here, by the signed-in person unless `actor` says otherwise (CD-318). */
+    const pushLog = (leadId: string, draft: Omit<LogEntry, 'actor'> & { actor?: string | null }) => {
+      const entry: LogEntry = { actor: session.userName, ...draft };
       set((x) => ({ log: { ...x.log, [leadId]: [entry, ...(x.log[leadId] || [])] } }));
       void save(() => crmApi.logActivity(leadId, { channel: channelOf(entry.channel), title: entry.title, detail: entry.detail || null }), undefined, 'the timeline entry');
     };
@@ -1539,9 +1541,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
 
       // ---------------------------------------------------------- team
       /** Creates an invitation, which the worker emails (CD-7), and returns its link to copy as a fallback. */
-      inviteMember: async (email: string, role: 'admin' | 'member'): Promise<string | null> => {
+      inviteMember: async (email: string, role: 'admin' | 'member', names?: { firstName: string; lastName: string }): Promise<string | null> => {
         try {
-          const { token } = await crmApi.invite(email, role);
+          const { token } = await crmApi.invite(email, role, names);
           await reload();
           return `${window.location.origin}/invite/${token}`;
         } catch (err) {

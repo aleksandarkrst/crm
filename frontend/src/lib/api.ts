@@ -416,6 +416,8 @@ export interface ApiActivity {
   title: string;
   detail: string | null;
   occurredAt: string;
+  /** Who did it (CD-318): null for the system; a member who left is "Former member" (userId null). */
+  actor: { userId: string | null; name: string } | null;
 }
 export type ApiBillingFrequency = 'one_time' | 'weekly' | 'monthly' | 'quarterly' | 'annually';
 export type ApiTaxMode = 'exclusive' | 'inclusive' | 'none';
@@ -528,6 +530,9 @@ export interface ApiInvitation {
   emailError: string | null;
   /** False for invitations from before CD-7: their link can't be resent or copied. */
   hasLink: boolean;
+  /** The invitee's names as typed by the inviter (CD-318); null on older invitations. */
+  firstName: string | null;
+  lastName: string | null;
 }
 export interface ApiInvitePreview {
   tenantName: string;
@@ -535,6 +540,8 @@ export interface ApiInvitePreview {
   role: 'admin' | 'member';
   invitedBy: string | null;
   expiresAt: string;
+  firstName: string | null;
+  lastName: string | null;
 }
 
 /** One change of a deal, company or contact (CD-69), newest first from GET /crm/history. */
@@ -970,7 +977,7 @@ export const crmApi = {
   removeSampleData: () => api<ApiSampleRemoval>('/onboarding/sample-data', { method: 'DELETE' }),
 
   team: () => api<{ members: ApiMember[]; invitations: ApiInvitation[] }>('/team'),
-  invite: (email: string, role: 'admin' | 'member') => api<{ invitation: ApiInvitation; token: string }>('/team/invitations', { method: 'POST', json: { email, role } }),
+  invite: (email: string, role: 'admin' | 'member', names?: { firstName: string; lastName: string }) => api<{ invitation: ApiInvitation; token: string }>('/team/invitations', { method: 'POST', json: { email, role, ...names } }),
   revokeInvitation: (id: string) => api(`/team/invitations/${id}`, { method: 'DELETE' }),
   resendInvitation: (id: string) => api<ApiInvitation>(`/team/invitations/${id}/resend`, { method: 'POST' }),
   invitationLink: (id: string) => api<{ token: string }>(`/team/invitations/${id}/link`),

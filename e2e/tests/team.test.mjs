@@ -16,6 +16,8 @@ describe('team and invitations', () => {
   async function createInvite(page, address) {
     await page.goto(BASE_URL + '/settings/team', { waitUntil: 'networkidle0' });
     await clickButton(page, 'Invite member');
+    await page.type('[data-testid=invite-first-name]', 'Invited');
+    await page.type('[data-testid=invite-last-name]', 'Person');
     await page.type('input[placeholder="name@company.com"]', address);
     await clickButton(page, 'Send invitation');
     const input = await page.waitForSelector('input[readonly]');

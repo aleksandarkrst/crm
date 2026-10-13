@@ -286,20 +286,25 @@ export const entriesApi = {
   remove: (id: string) => api<null>(`/timesheet/entries/${id}`, { method: 'DELETE' }),
 };
 
-/** A public holiday (CD-153): `minutes` off, null for the whole standard day. */
+/**
+ * A public holiday (CD-153) as shown for one year: its first and last day in that year (the same
+ * for a single day), `minutes` off (null for the whole standard day), and the year it was entered,
+ * from which it repeats every year (CD-318).
+ */
 export interface ApiHoliday {
   id: string;
   date: string;
+  endDate: string;
   name: string;
   minutes: number | null;
+  since: number;
 }
 
 export const holidaysApi = {
   list: (year: number) => api<ApiHoliday[]>(`/timesheet/holidays?year=${year}`),
-  create: (h: { date: string; name: string; minutes?: number | null }) => api<ApiHoliday>('/timesheet/holidays', { method: 'POST', json: h }),
-  update: (id: string, patch: Partial<{ date: string; name: string; minutes: number | null }>) => api<ApiHoliday>(`/timesheet/holidays/${id}`, { method: 'PATCH', json: patch }),
+  create: (h: { date: string; endDate: string | null; name: string; minutes?: number | null }) => api<ApiHoliday>('/timesheet/holidays', { method: 'POST', json: h }),
+  update: (id: string, patch: Partial<{ date: string; endDate: string | null; name: string; minutes: number | null }>) => api<ApiHoliday>(`/timesheet/holidays/${id}`, { method: 'PATCH', json: patch }),
   remove: (id: string) => api<null>(`/timesheet/holidays/${id}`, { method: 'DELETE' }),
-  copyFromLastYear: (year: number) => api<{ copied: number; holidays: ApiHoliday[] }>('/timesheet/holidays/copy', { method: 'POST', json: { year } }),
   /** The first submission deadline that hasn't passed (Settings → Workforce → Approvals). */
   nextDeadline: () => api<{ weekStart: string; weekNumber: number; date: string; time: string }>('/timesheet/deadline'),
 };

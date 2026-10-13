@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FilterBar } from '../components/ui';
+import { FilterBar, SortHeader, useSort } from '../components/ui';
 import { DataActions } from '../components/DataActions';
 import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Layout';
@@ -8,7 +8,7 @@ import * as amplitude from '../lib/analytics';
 import { paths } from '../lib/paths';
 import { dealsCsv } from '../store/exportCsv';
 import { DEFAULT_FILTERS, INDUSTRIES, LOST_VIEWS, VALUE_BANDS, valueBandLabel } from '../store/seed';
-import { bandOf, champTotal, curOf, currencySymbol, funnelOptions, needsNextStep, ownerOf, salesPeople, stageOf, valueTotal } from '../store/selectors';
+import { bandOf, champTotal, curOf, currencySymbol, funnelOptions, needsNextStep, ownerOf, salesPeople, stageOf, valueNum, valueTotal } from '../store/selectors';
 import type { Lead, Stage, State } from '../store/types';
 import { useStore } from '../store/store';
 
@@ -238,65 +238,88 @@ function PipelineBoard({ stages, leads }: { stages: Stage[]; leads: Lead[] }) {
   );
 }
 
+type TableKey = 'company' | 'contact' | 'stage' | 'value' | 'fit' | 'stall' | 'owner' | 'next';
+const TABLE_HEADERS: { key: TableKey; label: string }[] = [
+  { key: 'company', label: 'Deal' },
+  { key: 'contact', label: 'Contact' },
+  { key: 'stage', label: 'Stage' },
+  { key: 'value', label: 'Value' },
+  { key: 'fit', label: 'Fit' },
+  { key: 'stall', label: 'Last contact' },
+  { key: 'owner', label: 'Owner' },
+  { key: 'next', label: 'Next step' },
+];
+
 /**
- * The Table view (CD-274): the same deals and filters as the board, one band per stage that has
- * deals, in stage order. A row opens the deal.
+ * The Table view (CD-274, flat since CD-318): the same deals and filters as the board as one list,
+ * sorted by the column header that was clicked (stage order by default). A row opens the deal.
  */
 function PipelineTable({ s, stages, leads, openLead }: { s: State; stages: Stage[]; leads: Lead[]; openLead: (id: string) => void }) {
-  const groups = stages.map((st) => ({ st, rows: leads.filter((l) => l.stage === st.id) })).filter((g) => g.rows.length > 0);
+  const { sort, toggle } = useSort<TableKey>('stage');
+  const order = new Map(stages.map((st, i) => [st.id, i]));
+  const sortValue = (l: Lead): string | number => {
+    switch (sort.key) {
+      case 'company':
+        return `${l.company} ${l.title ?? ''}`.toLowerCase();
+      case 'contact':
+        return (l.contact ?? '').toLowerCase();
+      case 'stage':
+        return order.get(l.stage) ?? stages.length;
+      case 'value':
+        return valueNum(l.value);
+      case 'fit':
+        return champTotal(s, l);
+      case 'stall':
+        return l.stall;
+      case 'owner':
+        return ownerOf(s, l).toLowerCase();
+      case 'next':
+        return l.outcome === 'lost' ? `~${l.lostReason ?? ''}` : (stageOf(s, l).activity ?? '').toLowerCase();
+    }
+  };
+  const rows = leads
+    .map((l) => ({ l, v: sortValue(l) }))
+    .sort((a, b) => (a.v > b.v ? 1 : a.v < b.v ? -1 : 0) * sort.dir || (order.get(a.l.stage) ?? 0) - (order.get(b.l.stage) ?? 0))
+    .map((x) => x.l);
   return (
     <div className="pipeline-table" data-testid="pipeline-table">
       <div className="pipeline-table-inner">
         <div className="table-head caps">
-          <span>Deal</span>
-          <span>Contact</span>
-          <span>Stage</span>
-          <span>Value</span>
-          <span>Fit</span>
-          <span>Last contact</span>
-          <span>Owner</span>
-          <span>Next step</span>
+          {TABLE_HEADERS.map((h) => (
+            <SortHeader key={h.key} label={h.label} active={sort.key === h.key} dir={sort.dir} onClick={() => toggle(h.key)} />
+          ))}
         </div>
-        {groups.length === 0 && <div className="pipeline-table-empty">No deals match these filters.</div>}
-        {groups.map(({ st, rows }) => (
-          <div key={st.id} data-testid="pipeline-table-group">
-            <div className="pipeline-table-band">
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{st.name}</span>
-              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                {valueTotal(s, rows.filter((l) => l.outcome !== 'lost'), true)} · {rows.length}
+        {rows.length === 0 && <div className="pipeline-table-empty">No deals match these filters.</div>}
+        {rows.map((l) => {
+          const lost = l.outcome === 'lost';
+          const st = stages.find((x) => x.id === l.stage) ?? stageOf(s, l);
+          return (
+            <div key={l.id} className="table-row clickable" data-testid="pipeline-table-row" data-lost={lost || undefined} onClick={() => openLead(l.id)}>
+              <span className="pt-cell">
+                <span className="pt-main" style={{ fontWeight: 600 }}>
+                  {l.company}
+                </span>
+                {l.title && <span className="pt-sub">{l.title}</span>}
+              </span>
+              <span className="pt-cell">
+                <span className="pt-main">{l.contact}</span>
+                {l.role && <span className="pt-sub">{l.role}</span>}
+              </span>
+              <span style={{ color: 'var(--text-2)' }}>{st.name}</span>
+              <span>{l.value}</span>
+              <span>
+                <FitBadge score={champTotal(s, l)} />
+              </span>
+              <span>
+                <StallLabel stall={l.stall} />
+              </span>
+              <span className="pt-main">{ownerOf(s, l)}</span>
+              <span className="pt-main" style={{ color: 'var(--text-2)' }}>
+                {lost ? <span className="badge badge-danger">Lost · {l.lostReason}</span> : needsNextStep(s, l) ? <NoNextStep /> : stageOf(s, l).activity}
               </span>
             </div>
-            {rows.map((l) => {
-              const lost = l.outcome === 'lost';
-              return (
-                <div key={l.id} className="table-row clickable" data-testid="pipeline-table-row" data-lost={lost || undefined} onClick={() => openLead(l.id)}>
-                  <span className="pt-cell">
-                    <span className="pt-main" style={{ fontWeight: 600 }}>
-                      {l.company}
-                    </span>
-                    {l.title && <span className="pt-sub">{l.title}</span>}
-                  </span>
-                  <span className="pt-cell">
-                    <span className="pt-main">{l.contact}</span>
-                    {l.role && <span className="pt-sub">{l.role}</span>}
-                  </span>
-                  <span style={{ color: 'var(--text-2)' }}>{st.name}</span>
-                  <span>{l.value}</span>
-                  <span>
-                    <FitBadge score={champTotal(s, l)} />
-                  </span>
-                  <span>
-                    <StallLabel stall={l.stall} />
-                  </span>
-                  <span className="pt-main">{ownerOf(s, l)}</span>
-                  <span className="pt-main" style={{ color: 'var(--text-2)' }}>
-                    {lost ? <span className="badge badge-danger">Lost · {l.lostReason}</span> : needsNextStep(s, l) ? <NoNextStep /> : stageOf(s, l).activity}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

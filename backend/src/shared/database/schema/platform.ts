@@ -223,6 +223,9 @@ export const invitations = pgTable(
      * drizzle/0039_people_rls.sql (ON DELETE SET NULL (employee_id)).
      */
     employeeId: uuid('employee_id'),
+    /** The invitee's names as the inviter typed them (CD-318): the email greets them by first name, their employee record and display name start with them. */
+    firstName: text('first_name'),
+    lastName: text('last_name'),
     /**
      * Administration / Payroll the inviting Admin ticked (CD-224). Unused since CD-225 removed those
      * roles: always empty for new invitations, ignored on acceptance; a later migration may drop it.

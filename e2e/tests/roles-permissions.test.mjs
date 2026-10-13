@@ -54,6 +54,8 @@ describe('roles and permissions', () => {
     const hana = await browser.person('hana');
     await olga.goto(`${BASE_URL}/settings/team`, { waitUntil: 'networkidle0' });
     await clickButton(olga, 'Invite member');
+    await olga.type('[data-testid=invite-first-name]', 'Invited');
+    await olga.type('[data-testid=invite-last-name]', 'Person');
     await olga.type('input[placeholder="name@company.com"]', email('roles-hana'));
     assert.equal(await olga.$('[data-testid=invite-roles]'), null, 'no Administration / Payroll checkboxes');
     await clickButton(olga, 'Send invitation');

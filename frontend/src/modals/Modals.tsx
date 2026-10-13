@@ -41,8 +41,9 @@ export function Modals() {
   );
 }
 
-const NEW_CO = '+ New company…';
-const NEW_CT = '+ New contact…';
+/** Sentinels for "make a new one" in the New deal dialog (never shown). */
+const NEW_CO = '\u0000new-company';
+const NEW_CT = '\u0000new-contact';
 
 function NewDealModal() {
   const { s, set, flash, createDeal } = useStore();
@@ -88,26 +89,67 @@ function NewDealModal() {
     <Modal maxWidth={560} gap={18} z={s.newLeadForMeeting ? 50 : undefined}>
       <ModalHeader title="New deal" sub="Pick the customer type and the funnel, activities and documents come with it." />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <label className="form-label">
+        {/* The company and contact (CD-318): pick one, or open a "New company" / "New contact" panel that is created with the deal. */}
+        <div className="form-label">
           Company
-          <select className="form-input" data-testid="new-deal-company" value={company} disabled={forMeeting} onChange={(e) => { setCompany(e.target.value); setContactPick(null); }}>
-            {[...companies, { value: NEW_CO, label: NEW_CO }].map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-          {companyIsNew && <input className="form-input" placeholder="Company name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />}
-        </label>
-        <label className="form-label">
+          {companyIsNew ? (
+            <div className="subform" data-testid="new-deal-new-company">
+              <div className="subform-head">
+                <span>New company</span>
+                {companies.length > 0 && !forMeeting && (
+                  <button type="button" className="btn-link" onClick={() => { setCompany(companies[0]!.value); setContactPick(null); }}>
+                    Pick an existing one
+                  </button>
+                )}
+              </div>
+              <input className="form-input" placeholder="Company name" autoFocus value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+              <span className="subform-hint">Created with the deal; its page fills in later.</span>
+            </div>
+          ) : (
+            <>
+              <select className="form-input" data-testid="new-deal-company" value={company} disabled={forMeeting} onChange={(e) => { setCompany(e.target.value); setContactPick(null); }}>
+                {companies.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              {!forMeeting && (
+                <button type="button" className="btn-link" data-testid="new-deal-add-company" onClick={() => { setCompany(NEW_CO); setContactPick(null); }}>
+                  + New company
+                </button>
+              )}
+            </>
+          )}
+        </div>
+        <div className="form-label">
           Primary contact
-          <select className="form-input" value={contact} onChange={(e) => setContactPick(e.target.value)}>
-            {contactOptions.map((o) => (
-              <option key={o}>{o}</option>
-            ))}
-          </select>
-          {contact === NEW_CT && <input className="form-input" placeholder="Full name" value={contactName} onChange={(e) => setContactName(e.target.value)} />}
-        </label>
+          {contact === NEW_CT ? (
+            <div className="subform" data-testid="new-deal-new-contact">
+              <div className="subform-head">
+                <span>New contact</span>
+                {people.length > 0 && (
+                  <button type="button" className="btn-link" onClick={() => setContactPick(people[0]!.name)}>
+                    Pick an existing one
+                  </button>
+                )}
+              </div>
+              <input className="form-input" placeholder="Full name" value={contactName} onChange={(e) => setContactName(e.target.value)} />
+              <span className="subform-hint">{companyIsNew ? 'Added to the new company.' : `Added to ${companyRec?.name ?? 'the company'}.`}</span>
+            </div>
+          ) : (
+            <>
+              <select className="form-input" data-testid="new-deal-contact" value={contact} onChange={(e) => setContactPick(e.target.value)}>
+                {people.map((p) => (
+                  <option key={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <button type="button" className="btn-link" data-testid="new-deal-add-contact" onClick={() => setContactPick(NEW_CT)}>
+                + New contact
+              </button>
+            </>
+          )}
+        </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         <span className="caps">Target customer type</span>

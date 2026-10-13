@@ -95,22 +95,6 @@ export function Timesheet() {
     setBusy(false);
   };
 
-  /** One day (Day by day mode, CD-156). */
-  const submitDay = async (w: ApiTimesheetWeek, date: string) => {
-    const day = w.days.find((d) => d.date === date);
-    const late = w.lateIfSubmitted.includes(date);
-    if (day && day.minutes === 0 && !(await askConfirm({ title: `${dayName(date)} has no hours. Submit anyway?`, message: late ? LATE_NOTE : undefined, confirmLabel: 'Submit day' }))) return;
-    if (late && day?.minutes && !(await askConfirm({ title: `Submit ${dayName(date)} late?`, message: LATE_NOTE, confirmLabel: 'Submit day' }))) return;
-    await run(async () => {
-      try {
-        set(await timesheetApi.submit(w.weekStart, date, employeeParam));
-        flash(`${dayLabel(date)} submitted`);
-      } catch (err) {
-        flash(projectError(err));
-      }
-    });
-  };
-
   /** Resubmit the rejected days (CD-158, spec 5.3 T5): all of them, or one in Day by day mode; never marks the week Late. */
   const resubmit = async (w: ApiTimesheetWeek, dates: string[], reply: string | null): Promise<string | null> => {
     const single = w.settings.approvalMode === 'day' && dates.length === 1 && w.resubmittable.length > 1 ? dates[0] : undefined;
@@ -263,7 +247,6 @@ export function Timesheet() {
         employeeId={employeeParam}
         onSave={onSave}
         onAdd={onAdd}
-        onSubmitDay={week.settings.approvalMode === 'day' ? (date) => void submitDay(week, date) : undefined}
         onResubmitDay={week.settings.approvalMode === 'day' ? (date) => setResubmitting([date]) : undefined}
       />
       <div className="ts-help">Type 7.5, 7,5 or 7:30 · saved when you leave the cell · arrows and Tab move · Shift+Enter opens the note</div>

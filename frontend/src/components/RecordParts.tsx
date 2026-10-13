@@ -101,7 +101,7 @@ export function RecordHeader({
               <span style={{ fontSize: 13, color: 'var(--ink)' }}>{memberName(s, ownerId, ownerName)}</span>
             )}
           </label>
-          <button type="button" className="btn btn-won" data-testid="record-new-deal" onClick={onNewDeal}>
+          <button type="button" className="btn btn-primary" data-testid="record-new-deal" onClick={onNewDeal}>
             + Deal
           </button>
           {onDelete && (

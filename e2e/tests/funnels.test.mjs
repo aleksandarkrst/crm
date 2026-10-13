@@ -82,21 +82,22 @@ describe('funnels and stages', () => {
     // Move the deal to Discovery through the API, then remove Discovery in the builder.
     await api(page, `/crm/deals/${dealId}/move`, { method: 'POST', body: JSON.stringify({ stageId: funnel.stages[1].id }) });
     await page.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });
-    assert.ok(await pickOption('Mid-market'), 'builder switches funnel');
+    // The builder lists the funnels on the left (CD-318): picking one shows it.
+    await page.waitForSelector('[data-testid=funnel-choice]');
+    await page.evaluate(() => [...document.querySelectorAll('[data-testid=funnel-choice]')].find((b) => b.textContent.includes('Mid-market')).click());
     await page.waitForFunction(() => [...document.querySelectorAll('input.ghost')].some((i) => i.value === 'Discovery'));
 
-    await clickButton(page, '+ Add stage to this funnel');
+    await clickButton(page, 'New stage');
     const added = await eventually(async () => (await funnelNow()).stages.map((s) => s.name).join(',') === 'New deal,Discovery,Proposal,New stage,Won');
     assert.ok(added, 'stage added before Won');
     await page.waitForFunction(() => [...document.querySelectorAll('input.ghost')].some((i) => i.value === 'New stage'));
     await waitForToastToClear(page);
 
-    // "Remove" on the Discovery card.
+    // "Remove stage" on the Discovery row.
     await page.evaluate(() => {
       const input = [...document.querySelectorAll('input.ghost')].find((i) => i.value === 'Discovery');
-      let card = input;
-      while (card && !card.classList.contains('card')) card = card.parentElement;
-      [...card.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Remove').click();
+      const row = input.closest('[data-testid=funnel-stage]');
+      row.querySelector('button[aria-label="Remove stage"]').click();
     });
     await page.waitForFunction(() => [...document.querySelectorAll('label')].some((l) => l.textContent.includes('Move its 1 deal to')));
     await page.evaluate(() => {

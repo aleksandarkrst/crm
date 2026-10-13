@@ -1,19 +1,20 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { FieldRow, GhostInput, GhostSelect, Modal, ModalHeader, RemoveButton, Switch } from '../components/ui';
+import { Icon } from '../components/icons';
 import { Screen } from '../components/Layout';
 import { MODULES, WORKSPACE_MODULES } from '../components/modules';
 import { paths } from '../lib/paths';
 import { canManageTemplates } from '../store/documents';
 import { ACTIVITIES, CHANNEL_LABELS, CHANNELS, CURRENCIES, DOCS, FIELD_TYPES, TEAM_ROLES } from '../store/seed';
-import { currencySymbol, curOf, customFieldsOf, funnelOptions, initialsOf, salesPeople } from '../store/selectors';
-import type { CustomFieldDef, Workspace } from '../store/types';
+import { currencySymbol, curOf, customFieldsOf, initialsOf, salesPeople } from '../store/selectors';
+import type { CustomFieldDef, Stage, Workspace } from '../store/types';
 import type { CustomFieldEntity } from '../lib/api';
 import { useStore } from '../store/store';
 import { TemplatesTab } from './DocumentTemplates';
 import { EmployeesTab } from './settings/EmployeesTab';
 import { ApprovalsTab, HolidaysTab } from './settings/WorkforceSettings';
-import { ProjectTypesTab } from './settings/ProjectTypesTab';
+import { ProjectHierarchyTab, ProjectTypesTab } from './settings/ProjectTypesTab';
 import { TechniciansTab } from './settings/TechniciansTab';
 import { RolesTab } from './settings/RolesTab';
 import type { TeamMember } from '../store/types';
@@ -26,7 +27,8 @@ import { useTerms } from '../store/terms';
  * comes when there are rates to set (a Linear follow-up).
  */
 const TABS = [
-  { k: 'workspace', group: 'Workspace', label: 'General', description: 'Name, currency, time zone and the modules this workspace uses.' },
+  { k: 'workspace', group: 'Workspace', label: 'General', description: 'Name, currency, time zone, fiscal year and the language of customer emails.' },
+  { k: 'modules', group: 'Workspace', label: 'Modules', description: 'The modules this workspace uses. A module that is off shows as "Not in this workspace" in the module switcher; its data is kept.' },
   { k: 'team', group: 'Workspace', label: 'Members', description: 'Who works in this workspace, their roles and the invitations still open.' },
   { k: 'roles', group: 'Workspace', label: 'Roles & permissions', description: 'What owners, admins and members can do.' },
   { k: 'notifications', group: 'Workspace', label: 'Notifications', description: 'The emails you get from this workspace.' },
@@ -34,6 +36,12 @@ const TABS = [
   { k: 'templates', group: 'CRM', label: 'Document templates', description: 'Templates hold the fixed story; merge fields pull the rest from the deal when someone generates a document.' },
   { k: 'fields', group: 'CRM', label: 'Customize fields', description: 'Custom fields show on deals, companies and contacts, in their create forms and in CSV exports. Everyone can fill them in.' },
   { k: 'bonuses', group: 'CRM', label: 'Sales bonuses', description: 'How salespeople earn bonuses on won deals.' },
+  {
+    k: 'project-hierarchy',
+    group: 'Projects',
+    label: 'Project hierarchy',
+    description: 'What this workspace calls projects and tasks, e.g. Job and Activity. The names show everywhere: the sidebar, pages, buttons and emails.',
+  },
   {
     k: 'project-types',
     group: 'Projects',
@@ -120,12 +128,14 @@ export function Settings() {
 
           {current === 'workspace' && <WorkspaceTab />}
           {current === 'workspace' && <GettingStartedCard />}
+          {current === 'modules' && <ModulesTab />}
           {current === 'team' && <TeamTab />}
           {current === 'roles' && <RolesTab />}
           {current === 'employees' && <EmployeesTab />}
           {current === 'approvals' && <ApprovalsTab />}
           {current === 'holidays' && <HolidaysTab />}
           {current === 'funnel' && <FunnelBuilder />}
+          {current === 'project-hierarchy' && <ProjectHierarchyTab />}
           {current === 'project-types' && <ProjectTypesTab />}
           {current === 'technicians' && <TechniciansTab />}
           {current === 'templates' && <TemplatesTab />}
@@ -194,21 +204,6 @@ function WorkspaceTab() {
         />
       </FieldRow>
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>Language of the fixed text in emails to customers, such as meeting minutes.</span>
-      <FieldRow label="Modules">
-        <span data-testid="workspace-modules" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 18px', padding: '6px 0' }}>
-          {WORKSPACE_MODULES.map((id) => {
-            const on = w.modules.includes(id);
-            const name = MODULES.find((m) => m.id === id)?.name ?? id;
-            return (
-              <span key={id} data-module={id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Switch on={on} disabled={ro} label={`${name} in this workspace`} onClick={() => setWorkspace({ modules: WORKSPACE_MODULES.filter((m) => (m === id ? !on : w.modules.includes(m))) })} />
-                <span style={{ fontSize: 13 }}>{name}</span>
-              </span>
-            );
-          })}
-        </span>
-      </FieldRow>
-      <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>Modules that are off show as "Not in this workspace" in the module switcher. Their data is kept.</span>
       <FieldRow label="Projects">
         <span data-testid="auto-create-projects" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
           <Switch on={w.autoCreateProjects} disabled={ro} onClick={() => setWorkspace({ autoCreateProjects: !w.autoCreateProjects })} label="Create a project when a deal is won" />
@@ -218,6 +213,45 @@ function WorkspaceTab() {
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>The project takes the deal's title and company, the first project type, and the deal owner as lead, who gets an email. Once per deal.</span>
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 8 }}>
         {ro ? 'Only owners and admins can change the workspace settings.' : 'Changes are saved as you make them.'}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Settings → Workspace → Modules (CD-318, moved out of General): one row per module with its
+ * description and a switch. Owners and admins change them; members see them read-only. A module
+ * that is off shows as "Not in this workspace" in the module switcher; its data is kept.
+ */
+function ModulesTab() {
+  const { s, setWorkspace, canEditWorkspace } = useStore();
+  const w = s.workspace;
+  const ro = !canEditWorkspace;
+  return (
+    <div className="card" data-testid="workspace-modules" style={{ padding: '4px 18px' }}>
+      {WORKSPACE_MODULES.map((id) => {
+        const on = w.modules.includes(id);
+        const def = MODULES.find((m) => m.id === id);
+        const name = def?.name ?? id;
+        const built = !!def && def.screens.length > 0;
+        return (
+          <div key={id} data-module={id} className="module-row">
+            <span className="module-row-icon" aria-hidden>
+              {def && <Icon name={def.icon} size={18} />}
+            </span>
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 600 }}>{name}</span>
+              <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
+                {def?.description}
+                {!built && ' · Coming soon'}
+              </span>
+            </span>
+            <Switch on={on} disabled={ro} label={`${name} in this workspace`} onClick={() => setWorkspace({ modules: WORKSPACE_MODULES.filter((m) => (m === id ? !on : w.modules.includes(m))) })} />
+          </div>
+        );
+      })}
+      <span style={{ display: 'block', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, padding: '12px 0 10px' }}>
+        {ro ? 'Only owners and admins can turn modules on or off.' : 'Changes are saved as you make them.'}
       </span>
     </div>
   );
@@ -314,7 +348,7 @@ function TeamTab() {
                 {invited ? '@' : initialsOf(m.name)}
               </span>
               <span style={{ fontWeight: 600 }}>
-                {invited ? 'Invitation sent' : m.name}
+                {invited && m.name === m.email ? 'Invitation sent' : m.name}
                 {self && <span style={{ fontWeight: 400, color: 'var(--muted)' }}> (you)</span>}
               </span>
             </div>
@@ -419,6 +453,8 @@ function RemoveMemberDialog({ member, onClose }: { member: TeamMember; onClose: 
 /** Invite by email: the worker emails the link (CD-7); the link is also shown to copy as a fallback. */
 function InviteModal({ onClose }: { onClose: () => void }) {
   const { session, inviteMember } = useStore();
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'member' | 'admin'>('member');
   const [link, setLink] = useState<string | null>(null);
@@ -426,9 +462,10 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const send = async () => {
     setBusy(true);
-    setLink(await inviteMember(email.trim(), role));
+    setLink(await inviteMember(email.trim(), role, { firstName: firstName.trim(), lastName: lastName.trim() }));
     setBusy(false);
   };
+  const ready = email.includes('@') && !!firstName.trim() && !!lastName.trim();
   const copy = () =>
     navigator.clipboard
       .writeText(link!)
@@ -436,13 +473,23 @@ function InviteModal({ onClose }: { onClose: () => void }) {
       .catch(() => setCopied(false));
   return (
     <Modal maxWidth={520}>
-      <ModalHeader title="Invite a teammate" sub={`They join ${session.tenant.name} and see the same pipeline. The link works once, for this email address, for 7 days.`} />
+      <ModalHeader title="Invite a teammate" sub={`They join ${session.tenant.name} and see the same pipeline. The email greets them by first name; the link works once, for this email address, for 7 days.`} />
       {!link ? (
         <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <label className="form-label">
+              First name
+              <input className="form-input" autoFocus placeholder="Ana" value={firstName} maxLength={100} onChange={(e) => setFirstName(e.target.value)} data-testid="invite-first-name" />
+            </label>
+            <label className="form-label">
+              Last name
+              <input className="form-input" placeholder="Petrović" value={lastName} maxLength={100} onChange={(e) => setLastName(e.target.value)} data-testid="invite-last-name" />
+            </label>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px', gap: 12 }}>
             <label className="form-label">
               Email
-              <input className="form-input" type="email" autoFocus placeholder="name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <input className="form-input" type="email" placeholder="name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
             </label>
             <label className="form-label">
               Role
@@ -456,7 +503,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
             <button type="button" className="btn btn-secondary" onClick={onClose}>
               Cancel
             </button>
-            <button type="button" className={email.includes('@') && !busy ? 'btn btn-primary' : 'btn btn-disabled'} disabled={!email.includes('@') || busy} onClick={() => void send()}>
+            <button type="button" className={ready && !busy ? 'btn btn-primary' : 'btn btn-disabled'} disabled={!ready || busy} onClick={() => void send()}>
               {busy ? 'Inviting…' : 'Send invitation'}
             </button>
           </div>
@@ -482,161 +529,240 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * Settings → CRM → Funnels (CD-318, laid out like Project types): the funnels on the left, the
+ * selected one on the right with its name, how they buy, its stages (each opens for its activity,
+ * channel, document, win probability and to-dos), a preview of the stage bar and Delete funnel.
+ * Picking a funnel here also makes it the Pipeline's funnel, as before.
+ */
 function FunnelBuilder() {
   const store = useStore();
   const { s, set } = store;
   const funnel = s.funnels[s.segment] ?? Object.values(s.funnels)[0]!;
   const stages = funnel.stages;
   const [removing, setRemoving] = useState<number | null>(null);
+  const [open, setOpen] = useState<string | null>(stages[0]?.id ?? null);
   const editable = store.canEditFunnels;
-  const dealCount = s.leads.filter((l) => l.segment === funnel.id).length;
+  const dealsIn = (id: string) => s.leads.filter((l) => l.segment === id).length;
+  const dealCount = dealsIn(funnel.id);
   const wonCount = stages.filter((st) => st.won).length;
-  const smallBtn = { border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--text-2)', cursor: 'pointer', fontSize: 11.5, padding: '6px 10px', borderRadius: 6 } as const;
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <select
-          value={funnel.id}
-          onChange={(e) => {
-            const v = e.target.value;
-            set((x) => ({ segment: v, filters: { ...x.filters, audience: v } }));
-          }}
-          style={{ border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '9px 11px', fontSize: 13, color: 'var(--ink)' }}
-        >
-          {funnelOptions(s).map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        {editable && (
-          <button type="button" className="btn btn-primary" style={{ flex: '0 0 auto' }} onClick={() => set({ personaOpen: true, personaBase: funnel.id })}>
-            New funnel
-          </button>
-        )}
-      </div>
+  const select = (id: string) => set((x) => ({ segment: id, filters: { ...x.filters, audience: id } }));
 
-      <div className="card" style={{ padding: '16px 17px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 12 }}>
-        <label className="form-label">
-          Funnel name
-          <input className="form-input" value={funnel.label} disabled={!editable} onChange={(e) => store.patchFunnel(funnel.id, { label: e.target.value })} />
-        </label>
-        <label className="form-label">
-          How they buy
-          <input className="form-input" value={funnel.note} disabled={!editable} placeholder="Who decides, how long it takes, what slows it down" onChange={(e) => store.patchFunnel(funnel.id, { note: e.target.value })} />
-        </label>
-        {!editable && (
-          <div data-testid="funnels-read-only" style={{ gridColumn: '1 / -1', fontSize: 12, color: 'var(--text-2)' }}>
-            Only owners and admins can change funnels, stages and their to-dos.
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} data-testid="funnel-builder">
+      {!editable && (
+        <span data-testid="funnels-read-only" style={{ fontSize: 12, color: 'var(--text-2)' }}>
+          Only owners and admins can change funnels, stages and their to-dos.
+        </span>
+      )}
+
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <div style={{ flex: '1 1 240px', maxWidth: 300, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {Object.values(s.funnels).map((f) => (
+            <button key={f.id} type="button" className={'choice' + (f.id === funnel.id ? ' on' : '')} data-testid="funnel-choice" onClick={() => select(f.id)}>
+              <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>{f.label}</span>
+              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                {plural(f.stages.length, 'stage')} · {plural(dealsIn(f.id), 'deal')}
+              </span>
+            </button>
+          ))}
+          {editable && (
+            <button type="button" className="btn-dashed" data-testid="new-funnel" onClick={() => set({ personaOpen: true, personaBase: funnel.id })}>
+              New funnel
+            </button>
+          )}
+        </div>
+
+        <div className="card" data-testid="funnel-card" style={{ flex: '999 1 460px', minWidth: 0, padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
+            <label className="form-label">
+              Funnel name
+              <input className="form-input" value={funnel.label} disabled={!editable} onChange={(e) => store.patchFunnel(funnel.id, { label: e.target.value })} />
+            </label>
+            <label className="form-label">
+              How they buy
+              <input className="form-input" value={funnel.note} disabled={!editable} placeholder="Who decides, how long it takes, what slows it down" onChange={(e) => store.patchFunnel(funnel.id, { note: e.target.value })} />
+            </label>
           </div>
-        )}
-        {editable && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, gridColumn: '1 / -1', fontSize: 12, color: 'var(--text-2)' }}>
-            <span>
-              {dealCount} deal{dealCount === 1 ? '' : 's'} in this funnel · {stages.length} stage{stages.length === 1 ? '' : 's'}
-            </span>
-            {dealCount === 0 && Object.keys(s.funnels).length > 1 && (
-              <button type="button" style={{ ...smallBtn, marginLeft: 'auto' }} onClick={() => void store.deleteFunnel(funnel.id)}>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span className="caps">Stages</span>
+            {stages.map((st, idx) => (
+              <FunnelStageRow
+                key={st.id}
+                idx={idx}
+                stage={st}
+                deals={s.leads.filter((l) => l.stage === st.id).length}
+                editable={editable}
+                open={open === st.id}
+                first={idx === 0}
+                last={idx === stages.length - 1}
+                removable={!(st.won && wonCount === 1) && stages.length > 1}
+                onToggle={() => setOpen(open === st.id ? null : st.id)}
+                onRemove={() => setRemoving(idx)}
+              />
+            ))}
+            {editable && (
+              <button type="button" className="btn-dashed" style={{ alignSelf: 'flex-start', whiteSpace: 'nowrap' }} data-testid="add-stage" onClick={store.addStage}>
+                New stage
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span className="caps">Preview</span>
+            <div className="stage-bar" data-testid="funnel-preview">
+              {stages.map((st, i) => (
+                <button key={st.id} type="button" className={'stage-chev' + (i === 0 ? ' current' : '')} disabled>
+                  {st.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--text-2)' }}>
+            <span>{dealCount ? `${plural(dealCount, 'deal')} in this funnel` : 'No deals in this funnel yet'}</span>
+            {editable && dealCount === 0 && Object.keys(s.funnels).length > 1 && (
+              <button type="button" className="btn btn-secondary" style={{ marginLeft: 'auto', padding: '6px 10px', fontSize: 12 }} onClick={() => void store.deleteFunnel(funnel.id)}>
                 Delete funnel
               </button>
             )}
           </div>
-        )}
+        </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {stages.map((st, idx) => (
-          <div key={st.id} className="card" style={{ padding: '16px 17px', display: 'grid', gridTemplateColumns: '34px 1fr', gap: 14 }}>
-            <div style={{ fontSize: 12, color: 'var(--muted)', paddingTop: 4 }}>{String(idx + 1).padStart(2, '0')}</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 13, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                <input className="ghost" value={st.name} disabled={!editable} onChange={(e) => store.editStage(idx, 'name', e.target.value)} style={{ fontSize: 15, fontWeight: 600, padding: '3px 7px', marginLeft: -7, minWidth: 180, width: 'auto' }} />
-                {editable && (
-                  <span style={{ display: 'inline-flex', gap: 6 }}>
-                    <button type="button" title="Move up" disabled={idx === 0} onClick={() => store.moveStage(idx, -1)} style={{ ...smallBtn, opacity: idx === 0 ? 0.4 : 1 }}>
-                      ↑
-                    </button>
-                    <button type="button" title="Move down" disabled={idx === stages.length - 1} onClick={() => store.moveStage(idx, 1)} style={{ ...smallBtn, opacity: idx === stages.length - 1 ? 0.4 : 1 }}>
-                      ↓
-                    </button>
-                    {st.won && wonCount === 1 ? (
-                      <span className="caps-muted" style={{ alignSelf: 'center' }} title="Deals are won by reaching this stage">
-                        Won stage
-                      </span>
-                    ) : (
-                      stages.length > 1 && (
-                        <button type="button" onClick={() => setRemoving(idx)} style={smallBtn}>
-                          Remove
-                        </button>
-                      )
-                    )}
-                  </span>
-                )}
-              </div>
+      {removing !== null && stages[removing] && <RemoveStageModal idx={removing} onClose={() => setRemoving(null)} />}
+    </div>
+  );
+}
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
-                <label className="form-label">
-                  Activity
-                  <select className="form-input" disabled={!editable} style={{ padding: '9px 10px' }} value={st.activity} onChange={(e) => store.editStage(idx, 'activity', e.target.value)}>
-                    {ACTIVITIES.map((o) => (
-                      <option key={o}>{o}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="form-label">
-                  Channel
-                  <select className="form-input" disabled={!editable} style={{ padding: '9px 10px' }} value={st.channel} onChange={(e) => store.editStage(idx, 'channel', e.target.value)}>
-                    {CHANNELS.map((c) => (
-                      <option key={c} value={c}>
-                        {CHANNEL_LABELS[c]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="form-label">
-                  Document on entry
-                  <select className="form-input" disabled={!editable} style={{ padding: '9px 10px' }} value={st.doc} onChange={(e) => store.editStage(idx, 'doc', e.target.value)}>
-                    {DOCS.map((o) => (
-                      <option key={o}>{o}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="form-label">
-                  Win probability
-                  <span style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--white)', padding: '0 10px 0 0' }}>
-                    <input type="number" disabled={!editable} min={0} max={100} step={5} value={st.prob} onChange={(e) => store.editProb(idx, e.target.value)} style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', padding: '9px 4px 9px 10px', fontSize: 13, color: 'var(--ink)', textTransform: 'none', letterSpacing: 0 }} />
-                    <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-2)', letterSpacing: 0 }}>%</span>
-                  </span>
-                </label>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                <span className="caps">To-Do</span>
-                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                  {st.checklist.map((c, gi) => (
-                    <span key={st.checklistIds[gi] ?? gi} className="gate-chip">
-                      <input value={c} disabled={!editable} onChange={(e) => store.renameGate(idx, gi, e.target.value)} style={{ border: 0, outline: 0, background: 'transparent', fontSize: 12, color: 'var(--ink)', width: Math.max(9, Math.min(34, c.length + 1)) + 'ch' }} />
-                      {editable && <button type="button" className="pill-x" title="Delete to-do" onClick={() => store.removeGate(idx, gi)}>
-                        ×
-                      </button>}
-                    </span>
-                  ))}
-                  {editable && <button type="button" onClick={() => store.addGate(idx)} style={{ fontSize: 12, border: '1px dashed var(--dashed)', background: 'transparent', color: 'var(--text-2)', cursor: 'pointer', borderRadius: 20, padding: '6px 11px' }}>
-                    + to-do
-                  </button>}
-                </div>
-              </div>
+/**
+ * One stage of the funnel: a row with its number, name, deals, and the move and delete buttons
+ * (like a project type's stage); the chevron opens its activity, channel, document on entry, win
+ * probability and to-dos.
+ */
+function FunnelStageRow({
+  idx,
+  stage: st,
+  deals,
+  editable,
+  open,
+  first,
+  last,
+  removable,
+  onToggle,
+  onRemove,
+}: {
+  idx: number;
+  stage: Stage;
+  deals: number;
+  editable: boolean;
+  open: boolean;
+  first: boolean;
+  last: boolean;
+  removable: boolean;
+  onToggle: () => void;
+  onRemove: () => void;
+}) {
+  const store = useStore();
+  const arrow = (d: string) => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d={d} />
+    </svg>
+  );
+  return (
+    <div data-testid="funnel-stage" data-open={open || undefined} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '6px 8px 6px 12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 12, color: 'var(--muted)', width: 18 }}>{idx + 1}</span>
+        <input className="ghost ghost-sm" value={st.name} disabled={!editable} aria-label="Stage name" onChange={(e) => store.editStage(idx, 'name', e.target.value)} style={{ flex: 1, minWidth: 0, fontWeight: 500 }} />
+        {st.won && (
+          <span className="caps-muted funnel-stage-meta" title="Deals are won by reaching this stage">
+            Won stage
+          </span>
+        )}
+        <span className="funnel-stage-meta" style={{ fontSize: 12, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>
+          {plural(deals, 'deal')}
+        </span>
+        {editable && (
+          <>
+            <button type="button" className="icon-btn icon-btn-plain" aria-label="Move up" title="Move up" disabled={first} style={{ opacity: first ? 0.35 : 1 }} onClick={() => store.moveStage(idx, -1)}>
+              {arrow('M6 15l6-6 6 6')}
+            </button>
+            <button type="button" className="icon-btn icon-btn-plain" aria-label="Move down" title="Move down" disabled={last} style={{ opacity: last ? 0.35 : 1 }} onClick={() => store.moveStage(idx, 1)}>
+              {arrow('M6 9l6 6 6-6')}
+            </button>
+            <button type="button" className="icon-btn" aria-label="Remove stage" title={removable ? 'Remove stage' : st.won ? 'The won stage stays' : 'A funnel needs at least one stage'} disabled={!removable} style={{ opacity: removable ? 1 : 0.35 }} onClick={onRemove}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <path d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            </button>
+          </>
+        )}
+        <button type="button" className="icon-btn icon-btn-plain" aria-label={open ? 'Hide stage details' : 'Show stage details'} aria-expanded={open} data-testid="funnel-stage-toggle" onClick={onToggle}>
+          {arrow(open ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6')}
+        </button>
+      </div>
+      {open && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '10px 4px 8px 26px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
+            <label className="form-label">
+              Activity
+              <select className="form-input" disabled={!editable} style={{ padding: '9px 10px' }} value={st.activity} onChange={(e) => store.editStage(idx, 'activity', e.target.value)}>
+                {ACTIVITIES.map((o) => (
+                  <option key={o}>{o}</option>
+                ))}
+              </select>
+            </label>
+            <label className="form-label">
+              Channel
+              <select className="form-input" disabled={!editable} style={{ padding: '9px 10px' }} value={st.channel} onChange={(e) => store.editStage(idx, 'channel', e.target.value)}>
+                {CHANNELS.map((c) => (
+                  <option key={c} value={c}>
+                    {CHANNEL_LABELS[c]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="form-label">
+              Document on entry
+              <select className="form-input" disabled={!editable} style={{ padding: '9px 10px' }} value={st.doc} onChange={(e) => store.editStage(idx, 'doc', e.target.value)}>
+                {DOCS.map((o) => (
+                  <option key={o}>{o}</option>
+                ))}
+              </select>
+            </label>
+            <label className="form-label">
+              Win probability
+              <span style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--white)', padding: '0 10px 0 0' }}>
+                <input type="number" disabled={!editable} min={0} max={100} step={5} value={st.prob} onChange={(e) => store.editProb(idx, e.target.value)} style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', padding: '9px 4px 9px 10px', fontSize: 13, color: 'var(--ink)', textTransform: 'none', letterSpacing: 0 }} />
+                <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-2)', letterSpacing: 0 }}>%</span>
+              </span>
+            </label>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            <span className="caps">To-do</span>
+            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+              {st.checklist.map((c, gi) => (
+                <span key={st.checklistIds[gi] ?? gi} className="gate-chip">
+                  <input value={c} disabled={!editable} onChange={(e) => store.renameGate(idx, gi, e.target.value)} style={{ border: 0, outline: 0, background: 'transparent', fontSize: 12, color: 'var(--ink)', width: Math.max(9, Math.min(34, c.length + 1)) + 'ch' }} />
+                  {editable && (
+                    <button type="button" className="pill-x" title="Delete to-do" onClick={() => store.removeGate(idx, gi)}>
+                      ×
+                    </button>
+                  )}
+                </span>
+              ))}
+              {editable && (
+                <button type="button" className="btn-dashed" style={{ borderRadius: 20, padding: '6px 11px', fontSize: 12 }} onClick={() => store.addGate(idx)}>
+                  + to-do
+                </button>
+              )}
             </div>
           </div>
-        ))}
-      </div>
-
-      {editable && (
-        <button type="button" onClick={store.addStage} style={{ alignSelf: 'flex-start', border: '1px dashed var(--dashed)', background: 'transparent', color: 'var(--brand)', cursor: 'pointer', fontSize: 13, fontWeight: 500, padding: '12px 18px', borderRadius: 9 }}>
-          + Add stage to this funnel
-        </button>
+        </div>
       )}
-      {removing !== null && stages[removing] && <RemoveStageModal idx={removing} onClose={() => setRemoving(null)} />}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import type { AuthUser, TenantContext } from '../../shared/authorization';
 import { DatabaseService } from '../../shared/database/database.service';
 import { JobsService } from '../../shared/events/jobs.service';
 import { employees, funnels, memberships, tenants, users } from '../../shared/database/schema';
-import { applyCeoRule } from '../people';
+import { applyCeoRule, syncMemberNames } from '../people';
 import { IdentityService } from './identity.service';
 import type { TimesheetSettingsInput, UpdateProfile, UpdateWorkspace, WorkspaceTerms } from './settings.schemas';
 
@@ -218,6 +218,11 @@ export class SettingsService {
           .where(and(eq(memberships.tenantId, ctx.tenantId), eq(memberships.userId, ctx.userId)));
       }
     });
+    // A new name reaches their employee records in every workspace when those came from an email (CD-318).
+    if (own.displayName !== undefined) {
+      const joined = await this.database.db.select({ tenantId: memberships.tenantId }).from(memberships).where(eq(memberships.userId, ctx.userId));
+      for (const { tenantId } of joined) await this.database.withTenant(tenantId, (tx) => syncMemberNames(tx, ctx.userId, own.displayName ?? null));
+    }
     // The cached user (name) must not outlive the change.
     this.identity.forgetUser(user.authSubject);
     return this.getProfile(ctx);

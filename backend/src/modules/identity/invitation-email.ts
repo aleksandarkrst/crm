@@ -17,6 +17,8 @@ export const inviteLink = (appUrl: string, token: string) => `${appUrl.replace(/
 
 export interface InvitationEmailInput {
   to: string;
+  /** Greets them by first name when the inviter typed it (CD-318). */
+  firstName?: string | null;
   workspaceName: string;
   inviterName: string | null;
   inviterEmail: string | null;
@@ -40,9 +42,10 @@ export function invitationEmail(input: InvitationEmailInput): MailMessage {
   const inviterFull = input.inviterName && input.inviterEmail && input.inviterName !== input.inviterEmail ? `${input.inviterName} (${input.inviterEmail})` : inviter;
   const role = input.role === 'admin' ? 'an admin' : 'a member';
   const until = dateLabel(input.expiresAt, input.timeZone);
+  const hi = input.firstName?.trim() ? `Hi ${input.firstName.trim()},` : 'Hi,';
   const subject = `${inviter} invited you to ${input.workspaceName} on Pultly`;
   const text = [
-    'Hi,',
+    hi,
     '',
     `${inviterFull} invited you to join ${input.workspaceName} on Pultly as ${role}. Pultly is where the team keeps its deals, companies and contacts.`,
     '',
@@ -55,7 +58,7 @@ export function invitationEmail(input: InvitationEmailInput): MailMessage {
   ].join('\n');
   const html = layoutHtml(
     [
-      `<p style="margin:0 0 12px">Hi,</p>`,
+      `<p style="margin:0 0 12px">${escapeHtml(hi)}</p>`,
       `<p style="margin:0 0 12px"><strong>${escapeHtml(inviterFull)}</strong> invited you to join <strong>${escapeHtml(input.workspaceName)}</strong> on Pultly as ${role}. Pultly is where the team keeps its deals, companies and contacts.</p>`,
       buttonHtml('Accept the invitation', input.link),
       `<p style="margin:0 0 12px">The link works once, until ${escapeHtml(until)}. Sign in with this email address (${escapeHtml(input.to)}) to accept it.</p>`,

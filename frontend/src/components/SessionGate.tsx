@@ -190,7 +190,7 @@ function AcceptInvite({ phase, onDone }: { phase: Extract<Phase, { kind: 'invite
   };
   return (
     <Centered
-      title={`Join ${preview.tenantName}`}
+      title={preview.firstName ? `Hi ${preview.firstName}, join ${preview.tenantName}` : `Join ${preview.tenantName}`}
       sub={`${preview.invitedBy ?? 'A teammate'} invited ${preview.email} to join as ${preview.role === 'admin' ? 'an admin' : 'a member'}.`}
     >
       {wrongUser && (

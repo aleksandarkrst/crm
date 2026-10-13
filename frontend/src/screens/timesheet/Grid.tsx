@@ -122,9 +122,22 @@ function TimeCell({
           }
         }}
       />
-      {cell.note && <span className="ts-note-mark" aria-hidden />}
-      {editable && cell.entries <= 1 && (
-        <button type="button" className="ts-note-btn" aria-label={`Note for ${row.code} ${dayLabel(day.date)}`} tabIndex={-1} data-testid="ts-note-open" onClick={(e) => onNote(e.currentTarget)} />
+      {editable && cell.entries <= 1 ? (
+        <button
+          type="button"
+          className={'ts-note-btn' + (cell.note ? ' has-note' : '')}
+          aria-label={`${cell.note ? 'Note' : 'Add a note'} for ${row.code} ${dayLabel(day.date)}`}
+          title={cell.note ? 'Note for the approver' : 'Add a note for the approver'}
+          tabIndex={-1}
+          data-testid="ts-note-open"
+          onClick={(e) => onNote(e.currentTarget)}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M5 4h14v12l-4 4H5z M9 10h6 M9 14h4 M15 20v-4h4" />
+          </svg>
+        </button>
+      ) : (
+        cell.note && <span className="ts-note-mark" aria-hidden />
       )}
     </span>
   );
@@ -294,14 +307,12 @@ export function Grid({
   week,
   onSave,
   onAdd,
-  onSubmitDay,
   onResubmitDay,
   employeeId,
 }: {
   week: ApiTimesheetWeek;
   onSave: SaveCell;
   onAdd: (item: ApiLoggable) => Promise<void>;
-  onSubmitDay?: (date: string) => void;
   /** Day by day mode (CD-158): a rejected day is resubmitted on its own. */
   onResubmitDay?: (date: string) => void;
   /** An Admin entering time for this employee (CD-317): the picker lists what they can log on. */
@@ -415,11 +426,6 @@ export function Grid({
                 <span className="ts-day-name">{DAY_NAMES[i]}</span>
                 <span className="ts-day-date">{shortDate(d.date)}</span>
                 <span className={`ts-day-total${short ? ' short' : ''}`}>{d.holiday ? `${shortHours(d.minutes, format)} h · holiday` : d.minutes || d.expectedMinutes ? `${shortHours(d.minutes, format)} h` : '—'}</span>
-                {onSubmitDay && week.submittable.includes(d.date) && (
-                  <button type="button" className="ts-day-submit" onClick={() => onSubmitDay(d.date)} data-testid="ts-submit-day" aria-label={`Submit ${dayLabel(d.date)}`}>
-                    Submit
-                  </button>
-                )}
                 {onResubmitDay && week.resubmittable.includes(d.date) && (
                   <button type="button" className="ts-day-submit" onClick={() => onResubmitDay(d.date)} data-testid="ts-resubmit-day" aria-label={`Resubmit ${dayLabel(d.date)}`}>
                     Resubmit

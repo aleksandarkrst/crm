@@ -78,6 +78,33 @@ export function GhostInput({ className = '', ...props }: InputHTMLAttributes<HTM
 }
 
 /**
+ * A ghost date field (CD-318): empty, it reads as a prompt ("Add closed date") instead of the
+ * browser's dd/mm/yyyy mask; a click opens the picker. With a value it is the date input itself.
+ */
+export function GhostDate({ value, placeholder, className = '', onChange, ...props }: InputHTMLAttributes<HTMLInputElement> & { value: string; placeholder: string }) {
+  const [editing, setEditing] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!editing) return;
+    const el = ref.current;
+    if (!el) return;
+    el.focus();
+    try {
+      el.showPicker();
+    } catch {
+      // Not allowed here (no user gesture, or unsupported): the focused input still opens on Enter.
+    }
+  }, [editing]);
+  if (!value && !editing)
+    return (
+      <button type="button" className={`ghost ghost-date-empty ${className}`} aria-label={props['aria-label'] ?? placeholder} onClick={() => setEditing(true)}>
+        {placeholder}
+      </button>
+    );
+  return <input ref={ref} type="date" className={`ghost ${className}`} value={value} onChange={onChange} onBlur={() => setEditing(false)} {...props} />;
+}
+
+/**
  * A ghost input checked when it is left (CD-224, B10): a valid value is saved cleaned up (with a
  * hint when it changed, e.g. "Saved as acme.com"), an invalid one shows its error under the field
  * and is not saved. Typing clears the message; the stored value comes back in when it changes elsewhere.

@@ -39,6 +39,8 @@ export const invitationColumns = {
   hasLink: sql<boolean>`${invitations.tokenSealed} is not null`,
   /** The employee card it was sent from (milestone 13), if any. */
   employeeId: invitations.employeeId,
+  firstName: invitations.firstName,
+  lastName: invitations.lastName,
 };
 
 export interface InvitationDeps {
@@ -52,6 +54,9 @@ export interface NewInvitation {
   role: InvitationRole;
   /** The employee record it is sent from (spec 4.7): accepting it links the new member to that record. */
   employeeId?: string | null;
+  /** The invitee's names (CD-318), when the inviter typed them. */
+  firstName?: string | null;
+  lastName?: string | null;
 }
 
 /**
@@ -88,6 +93,8 @@ export async function createInvitation(tx: Tx, deps: InvitationDeps, ctx: Tenant
       tokenSealed: box?.seal(token) ?? null,
       emailStatus: box ? 'queued' : null,
       employeeId: input.employeeId ?? null,
+      firstName: input.firstName ?? null,
+      lastName: input.lastName ?? null,
     })
     .returning(invitationColumns);
   if (box) await deps.jobs.send('identity.invitation-email', { tenantId: ctx.tenantId, invitationId: row!.id }, tx);
