@@ -250,12 +250,18 @@ describe('in SQL, as the runtime role', () => {
     const employeeA = await asTenant(tenantA, async () => (await db.query(`select id from employees limit 1`)).rows[0].id as string);
     await asTenant(tenantB, async () => {
       expect((await db.query(`select count(*)::int as n from timeoff_policies where id = $1`, [policyA])).rows[0].n).toBe(0);
-      // Planting rows in A's workspace (RLS WITH CHECK).
-      expect(await sqlError(db.query(`insert into timeoff_policies (tenant_id, name) values ($1, 'Planted')`, [tenantA]))).toBe('42501');
-      // Pointing B's rows at A's policy or employee (composite foreign keys).
-      expect(await sqlError(db.query(`insert into timeoff_policy_experience_rules (tenant_id, policy_id, from_years, extra_days) values ($1, $2, 1, 1)`, [tenantB, policyA]))).toBe('23503');
-      expect(await sqlError(db.query(`insert into employee_timeoff_profiles (tenant_id, employee_id, policy_id) values ($1, $2, $3)`, [tenantB, employeeA, policyA]))).toBe('23503');
-      expect(await sqlError(db.query(`insert into vacation_entitlements (tenant_id, employee_id, year, policy_id, base_days, annual_days, total_days) values ($1, $2, 2026, $3, 20, 20, 20)`, [tenantB, employeeA, policyA]))).toBe('23503');
     });
+    // Planting rows in A's workspace (RLS WITH CHECK). Each failing statement gets its own transaction.
+    expect(await asTenant(tenantB, () => sqlError(db.query(`insert into timeoff_policies (tenant_id, name) values ($1, 'Planted')`, [tenantA])))).toBe('42501');
+    // Pointing B's rows at A's policy or employee (composite foreign keys).
+    const cases: [string, string, unknown[]][] = [
+      ['rule → policy', `insert into timeoff_policy_experience_rules (tenant_id, policy_id, from_years, extra_days) values ($1, $2, 1, 1)`, [tenantB, policyA]],
+      ['profile → employee, policy', `insert into employee_timeoff_profiles (tenant_id, employee_id, policy_id) values ($1, $2, $3)`, [tenantB, employeeA, policyA]],
+      ['entitlement → employee, policy', `insert into vacation_entitlements (tenant_id, employee_id, year, policy_id, base_days, annual_days, total_days) values ($1, $2, 2026, $3, 20, 20, 20)`, [tenantB, employeeA, policyA]],
+    ];
+    for (const [name, text, params] of cases) {
+      const code = await asTenant(tenantB, () => sqlError(db.query(text, params)));
+      expect(code, name).toBe('23503');
+    }
   });
 });
