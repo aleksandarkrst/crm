@@ -176,6 +176,7 @@ export function initialState(): State {
     taskRev: 0,
     workOrderRev: 0,
     timesheetRev: 0,
+    timeOffRev: 0,
     people: emptyPeople(),
     peopleRev: 0,
   };

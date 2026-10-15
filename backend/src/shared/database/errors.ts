@@ -28,6 +28,9 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   project_stages_name_uq: 'This project type already has a stage with this name',
   projects_name_uq: 'This company already has an open project with this name',
   projects_code_uq: 'Another open project has this code',
+  timeoff_policies_name_uq: 'A policy with this name already exists',
+  timeoff_policies_default_uq: 'Another policy is already the default',
+  timeoff_policy_rules_from_uq: 'Two experience rows start at the same number of years',
 };
 
 /** Rules about employees' org fields that the database enforces as a last line (people). */

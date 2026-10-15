@@ -4,3 +4,4 @@ export * from './notifications';
 export * from './people';
 export * from './projects';
 export * from './timesheet';
+export * from './timeoff';

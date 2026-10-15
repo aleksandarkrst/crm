@@ -150,6 +150,9 @@ const PARTS_OF: Record<string, Part[]> = {
   project: [],
   // Renamed projects or tasks (CD-143): the workspace settings carry the names.
   workspace: ['workspace'],
+  // Time off (CD-163) isn't part of the workspace load: the screens showing it read it again (timeOffRev).
+  timeoff: [],
+  timeoff_policy: [],
 };
 /**
  * Which rows of each list a change hint names (CD-98), so a live update re-reads just those: by id,
@@ -522,6 +525,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       // Holidays (CD-153) and the workspace's timesheet settings change everyone's week.
       if (e.type === 'resync' || e.type === 'timesheet' || e.type === 'task' || e.type === 'work_order' || e.type === 'project' || e.type === 'holiday' || e.type === 'workspace')
         set((x) => ({ timesheetRev: x.timesheetRev + 1 }));
+      // Time off (CD-163): policies, profiles and entitlements; an employee's start date changes their entitlement too.
+      if (e.type === 'resync' || e.type === 'timeoff' || e.type === 'timeoff_policy' || e.type === 'employee' || e.type === 'workspace') set((x) => ({ timeOffRev: x.timeOffRev + 1 }));
       // People lists (Roles & permissions, CD-142) re-read on any employee or role change, this tab's own included.
       if (e.type === 'resync' || e.type === 'employee' || e.type === 'employee_role') set((x) => ({ peopleRev: x.peopleRev + 1 }));
       if (e.type === 'resync') return refreshAll();
