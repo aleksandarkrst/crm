@@ -60,9 +60,9 @@ describe('one employee’s balance (spec 6.3, 6.5)', () => {
     expect(kinds).toContain('carry_over');
     expect(kinds.includes('expired')).toBe(AFTER_JUNE);
     expect(b.history[b.history.length - 1].runningTotal).toBe(b.figures.remaining);
-    // Another year: last year's card has no carry-over (nothing before it) and its own history.
+    // Another year: last year's card carries the first year's proportional days (1 March 2024: 10 months, 17 days), all expired by its 1 July.
     const last = await ok('GET', `/timeoff/employees/${id.emp}/balance?year=${YEAR - 1}`, as(emp));
-    expect(last.figures).toMatchObject({ year: YEAR - 1, entitlement: 20, carriedOver: 0, remaining: 20 });
+    expect(last.figures).toMatchObject({ year: YEAR - 1, entitlement: 20, carriedOver: 17, expired: 17, remaining: 20 });
     // Without a start date there is no entitlement and nothing to carry.
     expect((await ok('GET', `/timeoff/employees/${id.owner}/balance`, as(owner))).figures).toMatchObject({ entitlement: 0, carriedOver: 0, total: 0, remaining: 0 });
   });
@@ -96,14 +96,14 @@ describe('adjustments (spec 6.4, AC3)', () => {
   it('a pool can’t go below zero; extra days add up; adjustments are append-only', async () => {
     const tooMuch = await call('POST', `/timeoff/employees/${id.emp}/adjustments`, { ...as(owner), body: { poolYear: YEAR, days: -20, kind: 'correction', reason: 'Oops' } });
     expect(tooMuch.status).toBe(409);
-    expect(tooMuch.body.message).toContain('below');
+    expect(tooMuch.body.message).toContain(`leave the ${YEAR} pool`);
     const b = await ok('POST', `/timeoff/employees/${id.emp}/adjustments`, { ...as(owner), body: { poolYear: YEAR, days: 2, kind: 'extra_days', reason: 'Reward' } });
     expect(b.figures.adjustments).toBe(-1);
     expect(b.history.filter((h: { kind: string }) => h.kind === 'adjustment')).toHaveLength(2);
-    // Last year's pool: an adjustment there changes this year's carry-over.
+    // Last year's pool: an adjustment there changes this year's carry-over, and the answer is this year's card.
     const c = await ok('POST', `/timeoff/employees/${id.emp}/adjustments`, { ...as(owner), body: { poolYear: YEAR - 1, days: -15, kind: 'opening_balance', reason: 'Used in the old system' } });
-    expect(c.figures).toMatchObject({ year: YEAR - 1, adjustments: -15, remaining: 5 });
-    expect((await ok('GET', `/timeoff/employees/${id.emp}/balance`, as(emp))).figures.carriedOver).toBe(5);
+    expect(c.figures).toMatchObject({ year: YEAR, carriedOver: 5, adjustments: -1 });
+    expect((await ok('GET', `/timeoff/employees/${id.emp}/balance?year=${YEAR - 1}`, as(emp))).figures).toMatchObject({ adjustments: -15, remaining: 5 });
   });
 
   it('the "Time off balance" toggle turns the email off', async () => {
@@ -138,8 +138,10 @@ describe('the Balances table (spec 6.5, AC2)', () => {
     expect(expiring.rows.length).toBe(AFTER_JUNE ? 0 : 3);
     const csv = await call('GET', '/timeoff/balances/csv', as(owner));
     expect(csv.status).toBe(200);
-    const text = String(csv.body);
-    expect(text.startsWith('﻿Employee,Job title,Unit,Policy,Entitlement')).toBe(true);
+    // fetch's text() drops the BOM the file starts with.
+    const raw = String(csv.body);
+    const text = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+    expect(text.startsWith('Employee,Job title,Unit,Policy,Entitlement')).toBe(true);
     expect(text.split('\r\n').filter(Boolean)).toHaveLength(5);
     expect((await call('GET', '/timeoff/balances/csv', as(emp))).status).toBe(403);
   });
@@ -185,7 +187,10 @@ describe('tenant isolation', () => {
     expect((await call('GET', `/timeoff/employees/${id.emp}/balance`, other)).status).toBe(404);
     expect((await call('POST', `/timeoff/employees/${id.emp}/adjustments`, { ...other, body: { poolYear: YEAR, days: 1, kind: 'correction', reason: 'x' } })).status).toBe(404);
     expect((await ok('GET', '/timeoff/balances', other)).rows.map((r: { employee: { id: string } }) => r.employee.id)).not.toContain(id.emp);
-    expect((await ok('POST', '/timeoff/balances/policy', { ...other, body: { employeeIds: [id.emp], policyId: technicians.id } }, 200)).changed).toBe(0);
+    // Another workspace's policy and employees are simply not found.
+    expect((await call('POST', '/timeoff/balances/policy', { ...other, body: { employeeIds: [id.emp], policyId: technicians.id } })).status).toBe(404);
+    const theirs = await ok('GET', '/timeoff/policies', other);
+    expect((await ok('POST', '/timeoff/balances/policy', { ...other, body: { employeeIds: [id.emp], policyId: theirs[0].id } }, 200)).changed).toBe(0);
     expect((await call('GET', '/timeoff/balances', { token: otherOwner.token, tenant })).status).toBe(403);
   });
 });

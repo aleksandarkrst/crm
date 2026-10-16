@@ -65,7 +65,7 @@ export class TimeoffController {
     return this.balances.balance(ctx, id, query.year);
   }
 
-  /** An adjustment (Admins, spec 6.4); answers the balance of the pool's year. */
+  /** An adjustment (Admins, spec 6.4); answers this year's balance (next year's for an adjustment of next year's pool). */
   @Post('employees/:id/adjustments')
   @RequireTenant('admin')
   adjust(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(CreateAdjustment)) body: CreateAdjustment) {
