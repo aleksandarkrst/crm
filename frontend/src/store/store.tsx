@@ -203,6 +203,7 @@ const WORKSPACE_FIELDS: Partial<Record<keyof Workspace, keyof WorkspaceInput>> =
   autoCreateProjects: 'autoCreateProjects',
   modules: 'modules',
   timesheet: 'timesheet',
+  country: 'country',
 };
 /** Profile fields as the API names them. */
 const PROFILE_FIELDS: Partial<Record<keyof Profile, keyof ProfileInput>> = {

@@ -192,7 +192,42 @@ export interface ApiTimeOffReason {
 }
 export interface ApiTimeOffSettings {
   paidLeaveYearlyLimit: number;
+  /** Vacation decision recipients besides the employee (CD-167, spec 12). */
+  decisionCopyAdmins: boolean;
+  decisionCopyEmails: string[];
 }
+
+/** A vacation decision document (CD-167, spec 11): the employee's own and Admins only. */
+export interface ApiDecision {
+  id: string;
+  number: string;
+  version: number;
+  status: 'queued' | 'running' | 'ready' | 'failed';
+  error: string | null;
+  state: 'valid' | 'outdated' | 'cancelled' | 'superseded';
+  year: number;
+  emailedTo: string[] | null;
+  emailedAt: string | null;
+  acknowledgedAt: string | null;
+  createdAt: string;
+}
+
+/** One row of the Decisions tab (Admins). */
+export interface ApiDecisionRow extends ApiDecision {
+  employee: { id: string; fullName: string };
+  requestId: string;
+  startDate: string;
+  endDate: string;
+  workingDays: number;
+}
+
+export const DECISION_STATE_LABEL: Record<ApiDecision['state'], string> = { valid: 'Valid', outdated: 'Outdated', cancelled: 'Cancelled', superseded: 'Superseded' };
+
+/** "Ready", "Generating", "Failed": where the PDF is. */
+export const decisionStatusLabel = (d: Pick<ApiDecision, 'status'>) => (d.status === 'ready' ? 'Ready' : d.status === 'failed' ? 'Failed' : 'Generating');
+
+/** The PDF's download name. */
+export const decisionFileName = (d: Pick<ApiDecision, 'number' | 'version'>) => `Resenje-${d.number}${d.version > 1 ? `-v${d.version}` : ''}.pdf`;
 
 export type TimeOffType = 'vacation' | 'paid_leave' | 'unpaid_leave' | 'other_absence';
 export const TIME_OFF_TYPE_LABEL: Record<TimeOffType, string> = { vacation: 'Vacation', paid_leave: 'Paid leave', unpaid_leave: 'Unpaid leave', other_absence: 'Other absence' };
@@ -229,6 +264,8 @@ export interface ApiTimeOffRequest {
   canWithdraw: boolean;
   canCancel: boolean;
   canShorten: boolean;
+  /** The vacation decision (CD-167): the employee's own and Admins only. */
+  decision: ApiDecision | null;
 }
 
 /** One row of the Approvals tab (spec 9.2). */
@@ -296,7 +333,17 @@ export const timeOffApi = {
     remove: (id: string) => api<null>(`/timeoff/reasons/${id}`, { method: 'DELETE' }),
   },
   settings: () => api<ApiTimeOffSettings>('/timeoff/settings'),
-  updateSettings: (patch: ApiTimeOffSettings) => api<ApiTimeOffSettings>('/timeoff/settings', { method: 'PATCH', json: patch }),
+  updateSettings: (patch: Partial<ApiTimeOffSettings>) => api<ApiTimeOffSettings>('/timeoff/settings', { method: 'PATCH', json: patch }),
+  decisions: {
+    list: (f: { year?: number; state?: ApiDecision['state'] }) => api<ApiDecisionRow[]>(`/timeoff/decisions?${new URLSearchParams(Object.entries({ year: f.year ? String(f.year) : '', state: f.state ?? '' }).filter(([, v]) => v)).toString()}`),
+    pdf: async (id: string): Promise<Blob> => {
+      const res = await authorizedFetch(`/timeoff/decisions/${id}/pdf`);
+      if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
+      return res.blob();
+    },
+    acknowledge: (id: string) => api<ApiDecision>(`/timeoff/decisions/${id}/acknowledge`, { method: 'POST' }),
+    regenerate: (id: string, email: boolean) => api<ApiDecision>(`/timeoff/decisions/${id}/regenerate`, { method: 'POST', json: { email } }),
+  },
   requests: {
     list: (f: RequestsFilters) => api<ApiTimeOffRequest[]>(`/timeoff/requests${requestsQuery(f)}`),
     get: (id: string) => api<ApiTimeOffRequest & { history: ApiTimeOffHistoryEntry[] }>(`/timeoff/requests/${id}`),

@@ -12,9 +12,10 @@ import { useStore } from '../store/store';
 import { BalanceCard, useBalance } from './timeoff/BalanceCard';
 import { ApprovalsTab, CalendarTab } from './timeoff/Approvals';
 import { RequestDialog } from './timeoff/RequestDialog';
+import { DecisionsTab } from './timeoff/Decisions';
 import { RequestsList } from './timeoff/RequestsList';
 
-type Tab = 'my' | 'approvals' | 'requests' | 'calendar' | 'balances';
+type Tab = 'my' | 'approvals' | 'requests' | 'calendar' | 'balances' | 'decisions';
 const tabStyle = (on: boolean) => ({ borderBottom: `2px solid ${on ? 'var(--brand)' : 'transparent'}`, fontWeight: on ? 600 : 500, color: on ? 'var(--brand)' : 'var(--text-2)' });
 
 /**
@@ -29,7 +30,7 @@ export function TimeOff() {
   const manager = !!s.people.access?.roles.includes('manager');
   const canSeeBalances = admin || manager;
   const wanted = params.get('tab');
-  const tab: Tab = wanted === 'calendar' ? 'calendar' : canSeeBalances && (wanted === 'balances' || wanted === 'requests' || wanted === 'approvals') ? wanted : 'my';
+  const tab: Tab = wanted === 'calendar' ? 'calendar' : canSeeBalances && (wanted === 'balances' || wanted === 'requests' || wanted === 'approvals') ? wanted : admin && wanted === 'decisions' ? 'decisions' : 'my';
   const month = params.get('month') && /^\d{4}-\d{2}$/.test(params.get('month')!) ? params.get('month')! : new Date().toISOString().slice(0, 7);
   useEffect(() => {
     void employeeCard.loadMyEmployeeId();
@@ -63,12 +64,18 @@ export function TimeOff() {
             Balances
           </button>
         )}
+        {admin && (
+          <button type="button" role="tab" aria-selected={tab === 'decisions'} className="composer-tab" style={tabStyle(tab === 'decisions')} onClick={() => go({ tab: 'decisions' })} data-testid="timeoff-tab-decisions">
+            Decisions
+          </button>
+        )}
       </div>
       {tab === 'my' && <MyTimeOff employeeId={s.myEmployeeId} year={params.get('year')} onYear={(y) => go({ year: y })} />}
       {tab === 'approvals' && <ApprovalsTab />}
       {tab === 'requests' && <RequestsTab admin={admin} myEmployeeId={s.myEmployeeId ?? null} />}
       {tab === 'calendar' && <CalendarTab month={month} onMonth={(m) => go({ month: m })} />}
       {tab === 'balances' && <Balances params={params} go={go} />}
+      {tab === 'decisions' && <DecisionsTab />}
     </Screen>
   );
 }

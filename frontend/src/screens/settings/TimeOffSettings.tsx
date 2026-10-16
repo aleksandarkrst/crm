@@ -4,6 +4,7 @@ import { Switch } from '../../components/ui';
 import { type ApiExperienceRule, type ApiPolicyInput, type ApiTimeOffPolicy, type ApiTimeOffReason, type ApiTimeOffSettings, carryOverLabel, experienceSummary, type ReasonKind, timeOffApi } from '../../lib/timeOffApi';
 import { projectError, useProjectsRead } from '../../store/projects';
 import { useStore } from '../../store/store';
+import { DecisionRecipientsCard } from '../timeoff/Decisions';
 
 /** The Labor Law's minimum (spec 3.3, A1) and the most a policy can give. */
 const MIN_BASE_DAYS = 20;
@@ -243,6 +244,7 @@ export function TimeOffTab() {
       <PoliciesCard />
       <ReasonsCard kind="paid_leave" />
       <ReasonsCard kind="other_absence" />
+      <DecisionRecipientsCard />
     </div>
   );
 }

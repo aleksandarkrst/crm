@@ -213,6 +213,10 @@ export interface ApiWorkspace {
   modules: string[];
   /** What the workspace calls projects and tasks (CD-143), singular and plural. */
   terms: WorkspaceTerms;
+  /** ISO 3166-1 alpha-2 (CD-167), or null. Serbia ('RS') issues vacation decision documents. */
+  country: string | null;
+  /** Printed on generated documents (CD-167, spec 10.1). */
+  company: ApiCompanyDetails;
   /** Timesheet settings (CD-153, Settings → Workforce → Employees and Approvals). */
   timesheet: ApiTimesheetSettings;
 }
@@ -260,9 +264,22 @@ export interface WorkspaceTerms {
   tasks: string;
 }
 export type ApiCustomerEmailLanguage = 'en' | 'sr';
+export interface ApiCompanyDetails {
+  legalName: string | null;
+  address: string | null;
+  pib: string | null;
+  mb: string | null;
+  place: string | null;
+  signatoryName: string | null;
+  signatoryTitle: string | null;
+  legalBasis: string;
+}
+
+/** A workspace without company details yet; the legal basis is the server's default. */
+export const EMPTY_COMPANY: ApiCompanyDetails = { legalName: null, address: null, pib: null, mb: null, place: null, signatoryName: null, signatoryTitle: null, legalBasis: '' };
 export type WorkspaceInput = Partial<
-  Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth' | 'customerEmailLanguage' | 'employeeDefaultWeeklyHours' | 'employeeNumberRequired' | 'employeeSelfEditBank' | 'ceoEmployeeId' | 'autoCreateProjects' | 'modules' | 'terms'>
-> & { timesheet?: Partial<ApiTimesheetSettings> };
+  Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth' | 'customerEmailLanguage' | 'employeeDefaultWeeklyHours' | 'employeeNumberRequired' | 'employeeSelfEditBank' | 'ceoEmployeeId' | 'autoCreateProjects' | 'modules' | 'terms' | 'country'>
+> & { timesheet?: Partial<ApiTimesheetSettings>; company?: Partial<ApiCompanyDetails> };
 export type ApiLanguage = 'en' | 'sr' | 'de';
 export type ApiDateFormat = 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
 export type ApiStartPage = 'pipeline' | 'overview' | 'today' | 'contacts';
