@@ -137,7 +137,9 @@ export interface JobPayloads {
    */
   'timeoff.notice-email':
     | { tenantId: string; kind: 'balance_adjusted'; employeeId: string; actorUserId: string | null; adjustment: { poolYear: number; days: number; kind: 'correction' | 'opening_balance' | 'extra_days'; reason: string }; remaining: number; available: number }
-    | { tenantId: string; kind: 'carry_over_expiring'; employeeId: string; year: number; expiring: number };
+    | { tenantId: string; kind: 'carry_over_expiring'; employeeId: string; year: number; expiring: number }
+    /** "Time off requested" to one approver (CD-165, spec 15.2); one job per approver. */
+    | { tenantId: string; kind: 'requested'; requestId: string; recipientUserId: string };
 }
 
 export type JobName = keyof JobPayloads;

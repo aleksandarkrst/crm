@@ -7,6 +7,7 @@ import { JobsService } from '../../shared/events/jobs.service';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
 import { PeopleModule, PeopleWorkerModule } from '../people';
 import { TimesheetDeadlines } from './deadlines';
+import { HolidaysService } from './holidays.service';
 import { TimesheetNoticeMailer, TimesheetNotices } from './notices';
 
 /** How often the worker looks at the deadlines. */
@@ -27,6 +28,7 @@ export class TimesheetJobs implements OnApplicationBootstrap {
     private readonly deadlines: TimesheetDeadlines,
     private readonly notices: TimesheetNotices,
     private readonly mailer: TimesheetNoticeMailer,
+    private readonly holidays: HolidaysService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -41,11 +43,14 @@ export class TimesheetJobs implements OnApplicationBootstrap {
       const submitted = await this.deadlines.autoSubmitDue(w.id, now);
       if (submitted) this.logger.log(`Auto-submitted ${submitted} timesheet week(s) in workspace ${w.id}`);
       await this.notices.queueDue(w.id, now);
+      // Milestone 16 (spec 4.3): the country's holidays of this year (and next year from 1 November), generated once.
+      const preloaded = await this.holidays.ensurePreloaded(w.id, now);
+      if (preloaded) this.logger.log(`Preloaded ${preloaded} public holiday(s) in workspace ${w.id}`);
     }
   }
 }
 
-@Module({ imports: [PeopleWorkerModule], providers: [TimesheetDeadlines, TimesheetNotices, TimesheetNoticeMailer, TimesheetJobs] })
+@Module({ imports: [PeopleWorkerModule], providers: [TimesheetDeadlines, TimesheetNotices, TimesheetNoticeMailer, HolidaysService, TimesheetJobs] })
 export class TimesheetWorkerModule {}
 
 const Tick = z.object({ now: z.iso.datetime().optional() });

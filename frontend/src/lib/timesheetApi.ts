@@ -298,6 +298,15 @@ export interface ApiHoliday {
   name: string;
   minutes: number | null;
   since: number;
+  /** False: holds in its own year only (Orthodox Easter, a moved Sunday holiday). */
+  repeats: boolean;
+  source: 'manual' | 'preload';
+}
+
+/** The holiday preload (milestone 16, spec 4.3): whose holidays, and the years already generated. */
+export interface ApiHolidayPreload {
+  country: 'none' | 'serbia';
+  years: number[];
 }
 
 export const holidaysApi = {
@@ -305,6 +314,9 @@ export const holidaysApi = {
   create: (h: { date: string; endDate: string | null; name: string; minutes?: number | null }) => api<ApiHoliday>('/timesheet/holidays', { method: 'POST', json: h }),
   update: (id: string, patch: Partial<{ date: string; endDate: string | null; name: string; minutes: number | null }>) => api<ApiHoliday>(`/timesheet/holidays/${id}`, { method: 'PATCH', json: patch }),
   remove: (id: string) => api<null>(`/timesheet/holidays/${id}`, { method: 'DELETE' }),
+  preload: () => api<ApiHolidayPreload>('/timesheet/holidays/preload'),
+  /** Sets the country and generates this year and next year (or `year`) at once (Admins). */
+  setPreload: (input: { country: 'none' | 'serbia'; year?: number }) => api<ApiHolidayPreload & { added: number }>('/timesheet/holidays/preload', { method: 'POST', json: input }),
   /** The first submission deadline that hasn't passed (Settings → Workforce → Approvals). */
   nextDeadline: () => api<{ weekStart: string; weekNumber: number; date: string; time: string }>('/timesheet/deadline'),
 };

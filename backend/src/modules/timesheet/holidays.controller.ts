@@ -4,7 +4,7 @@ import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
 import { TimesheetDeadlines } from './deadlines';
 import { HolidaysService } from './holidays.service';
-import { CreateHoliday, HolidaysQuery, UpdateHoliday } from './timesheet.schemas';
+import { CreateHoliday, HolidayPreloadInput, HolidaysQuery, UpdateHoliday } from './timesheet.schemas';
 
 const Id = new ZodPipe(UuidParam);
 
@@ -25,6 +25,20 @@ export class HolidaysController {
   @Get('holidays')
   list(@Query(new ZodPipe(HolidaysQuery)) query: HolidaysQuery, @Tenant() ctx: TenantContext) {
     return this.holidays.list(ctx, query.year ?? new Date().getUTCFullYear());
+  }
+
+  /** The preload setting (spec 4.3): `{ country, years }` (the years already generated). */
+  @Get('holidays/preload')
+  preload(@Tenant() ctx: TenantContext) {
+    return this.holidays.preloadState(ctx);
+  }
+
+  /** Sets the country and generates this year and next year (or `year`) at once; Admins. */
+  @Post('holidays/preload')
+  @RequireTenant('admin')
+  @HttpCode(200)
+  setPreload(@Tenant() ctx: TenantContext, @Body(new ZodPipe(HolidayPreloadInput)) body: HolidayPreloadInput) {
+    return this.holidays.setPreload(ctx, body);
   }
 
   @Post('holidays')

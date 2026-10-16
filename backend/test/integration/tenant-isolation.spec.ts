@@ -172,7 +172,7 @@ describe('in SQL, as the runtime role', () => {
 
   it('sees no tenant rows at all without a tenant set', async () => {
     await asTenant(null, async () => {
-      for (const table of ['deals', 'companies', 'contacts', 'deal_lines', 'deal_tasks', 'products', 'activities', 'timeoff_policies', 'timeoff_policy_experience_rules', 'employee_timeoff_profiles', 'vacation_entitlements', 'vacation_balance_adjustments', 'vacation_balance_expiries', 'timeoff_notices']) {
+      for (const table of ['deals', 'companies', 'contacts', 'deal_lines', 'deal_tasks', 'products', 'activities', 'timeoff_policies', 'timeoff_policy_experience_rules', 'employee_timeoff_profiles', 'vacation_entitlements', 'vacation_balance_adjustments', 'vacation_balance_expiries', 'timeoff_notices', 'timeoff_reasons', 'timeoff_requests', 'timeoff_request_days', 'public_holiday_preloads']) {
         const { rows } = await db.query(`select count(*)::int as n from ${table}`);
         expect(rows[0].n, table).toBe(0);
       }
@@ -275,6 +275,16 @@ describe('in SQL, as the runtime role', () => {
       ['notice → employee', `insert into timeoff_notices (tenant_id, kind, employee_id, period) values ($1, 'carry_over_expiring', $2, '2026-05')`, [tenantB, employeeA]],
     ];
     for (const [name, text, params] of cases) {
+      const code = await asTenant(tenantB, () => sqlError(db.query(text, params)));
+      expect(code, name).toBe('23503');
+    }
+    // Requests, their days and the reasons (CD-165): planted rows and cross-workspace references.
+    expect(await asTenant(tenantB, () => sqlError(db.query(`insert into timeoff_reasons (tenant_id, kind, name) values ($1, 'paid_leave', 'Planted')`, [tenantA])))).toBe('42501');
+    const requestCases: [string, string, unknown[]][] = [
+      ['request → employee', `insert into timeoff_requests (tenant_id, employee_id, type, start_date, end_date, working_days) values ($1, $2, 'vacation', '2026-06-01', '2026-06-02', 2)`, [tenantB, employeeA]],
+      ['request day → employee', `insert into timeoff_request_days (tenant_id, request_id, employee_id, date) values ($1, gen_random_uuid(), $2, '2026-06-01')`, [tenantB, employeeA]],
+    ];
+    for (const [name, text, params] of requestCases) {
       const code = await asTenant(tenantB, () => sqlError(db.query(text, params)));
       expect(code, name).toBe('23503');
     }

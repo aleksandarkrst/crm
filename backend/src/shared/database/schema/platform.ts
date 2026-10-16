@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, index, jsonb, pgTable, primaryKey, smallint, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, index, integer, jsonb, pgTable, primaryKey, smallint, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 /**
  * Platform tables (owned by the identity module). These are NOT tenant-scoped by RLS:
@@ -53,6 +53,10 @@ export const tenants = pgTable(
      * (flagged "Over limit"); `block` refuses an entry that takes them past it.
      */
     hourLimitMode: text('hour_limit_mode', { enum: ['warn', 'block'] }).notNull().default('warn'),
+    /** Whose public holidays are preloaded each year (milestone 16, spec 4.3): Serbia's, or none. New workspaces get Serbia. */
+    holidayPreload: text('holiday_preload', { enum: ['none', 'serbia'] }).notNull().default('none'),
+    /** Paid leave: working days per calendar year for the reasons that count toward the group limit (spec 7.2, A10). */
+    timeoffPaidLeaveYearlyLimit: integer('timeoff_paid_leave_yearly_limit').notNull().default(5),
     /**
      * What this workspace calls projects and tasks (CD-143, Settings → Project types): singular and
      * plural, shown everywhere the words appear (sidebar, screens, buttons, dialogs, emails).
@@ -88,6 +92,8 @@ export const tenants = pgTable(
   },
   (t) => [
     check('tenants_hour_limit_mode_ck', sql`${t.hourLimitMode} in ('warn', 'block')`),
+    check('tenants_holiday_preload_ck', sql`${t.holidayPreload} in ('none', 'serbia')`),
+    check('tenants_timeoff_paid_leave_limit_ck', sql`${t.timeoffPaidLeaveYearlyLimit} between 0 and 60`),
     check('tenants_fiscal_month_ck', sql`${t.fiscalYearStartMonth} between 1 and 12`),
     check('tenants_modules_ck', sql`${t.modules} <@ '{planning,crm,projects,workforce,finance,reporting}'::text[]`),
     check('tenants_customer_email_language_ck', sql`${t.customerEmailLanguage} in ('en', 'sr')`),
