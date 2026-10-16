@@ -187,7 +187,7 @@ function PreviewLine({ preview, error, type, forOther }: { preview: ApiRequestPr
           {preview.refusal.message}
         </span>
       )}
-      {preview.shortfall && (
+      {preview.shortfall && !preview.refusal && (
         <span className="emp-error" data-testid="request-shortfall">
           {forOther ? 'They have' : 'You have'} {preview.shortfall.available} {preview.shortfall.available === 1 ? 'day' : 'days'} available; this request needs {preview.shortfall.needed}.
         </span>
