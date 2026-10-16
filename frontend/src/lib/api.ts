@@ -290,6 +290,8 @@ export interface ApiProfile {
   notifyTaskAssigned: boolean;
   /** "Balance adjusted" and "Carry-over expiring" (CD-164). */
   notifyTimeoffBalance: boolean;
+  /** "Request waiting" and "Request withdrawn" as an approver (CD-166). */
+  notifyTimeoffApprovals: boolean;
 }
 /**
  * Getting started (CD-68): the workspace's activation steps (CD-115), derived from its records.

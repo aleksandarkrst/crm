@@ -1032,6 +1032,13 @@ function NotificationsTab() {
       on: p.timeOffBalance,
       toggle: () => patchProfile({ timeOffBalance: !p.timeOffBalance }),
     },
+    {
+      id: 'timeoff-approvals',
+      label: 'Approval reminders',
+      desc: 'As an approver: a daily summary of time off requests waiting for you, and a note when one is withdrawn.',
+      on: p.timeOffApprovals,
+      toggle: () => patchProfile({ timeOffApprovals: !p.timeOffApprovals }),
+    },
   ];
   const row = { display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--divider)' } as const;
   return (

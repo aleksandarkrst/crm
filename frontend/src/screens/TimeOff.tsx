@@ -10,10 +10,11 @@ import { type ApiBalanceRow, type ApiBalancesTable, type ApiTimeOffPolicy, type 
 import { projectError, useProjectsRead } from '../store/projects';
 import { useStore } from '../store/store';
 import { BalanceCard, useBalance } from './timeoff/BalanceCard';
+import { ApprovalsTab, CalendarTab } from './timeoff/Approvals';
 import { RequestDialog } from './timeoff/RequestDialog';
 import { RequestsList } from './timeoff/RequestsList';
 
-type Tab = 'my' | 'requests' | 'balances';
+type Tab = 'my' | 'approvals' | 'requests' | 'calendar' | 'balances';
 const tabStyle = (on: boolean) => ({ borderBottom: `2px solid ${on ? 'var(--brand)' : 'transparent'}`, fontWeight: on ? 600 : 500, color: on ? 'var(--brand)' : 'var(--text-2)' });
 
 /**
@@ -28,7 +29,8 @@ export function TimeOff() {
   const manager = !!s.people.access?.roles.includes('manager');
   const canSeeBalances = admin || manager;
   const wanted = params.get('tab');
-  const tab: Tab = canSeeBalances && (wanted === 'balances' || wanted === 'requests') ? wanted : 'my';
+  const tab: Tab = wanted === 'calendar' ? 'calendar' : canSeeBalances && (wanted === 'balances' || wanted === 'requests' || wanted === 'approvals') ? wanted : 'my';
+  const month = params.get('month') && /^\d{4}-\d{2}$/.test(params.get('month')!) ? params.get('month')! : new Date().toISOString().slice(0, 7);
   useEffect(() => {
     void employeeCard.loadMyEmployeeId();
   }, [employeeCard]);
@@ -39,21 +41,33 @@ export function TimeOff() {
   };
   return (
     <Screen title="Time off">
-      {canSeeBalances && (
-        <div className="report-tabs" role="tablist" data-testid="timeoff-tabs">
-          <button type="button" role="tab" aria-selected={tab === 'my'} className="composer-tab" style={tabStyle(tab === 'my')} onClick={() => go({ tab: null })}>
-            My time off
+      <div className="report-tabs" role="tablist" data-testid="timeoff-tabs">
+        <button type="button" role="tab" aria-selected={tab === 'my'} className="composer-tab" style={tabStyle(tab === 'my')} onClick={() => go({ tab: null })}>
+          My time off
+        </button>
+        {canSeeBalances && (
+          <button type="button" role="tab" aria-selected={tab === 'approvals'} className="composer-tab" style={tabStyle(tab === 'approvals')} onClick={() => go({ tab: 'approvals' })} data-testid="timeoff-tab-approvals">
+            Approvals
           </button>
+        )}
+        {canSeeBalances && (
           <button type="button" role="tab" aria-selected={tab === 'requests'} className="composer-tab" style={tabStyle(tab === 'requests')} onClick={() => go({ tab: 'requests' })} data-testid="timeoff-tab-requests">
             Requests
           </button>
+        )}
+        <button type="button" role="tab" aria-selected={tab === 'calendar'} className="composer-tab" style={tabStyle(tab === 'calendar')} onClick={() => go({ tab: 'calendar' })} data-testid="timeoff-tab-calendar">
+          Team calendar
+        </button>
+        {canSeeBalances && (
           <button type="button" role="tab" aria-selected={tab === 'balances'} className="composer-tab" style={tabStyle(tab === 'balances')} onClick={() => go({ tab: 'balances' })} data-testid="timeoff-tab-balances">
             Balances
           </button>
-        </div>
-      )}
+        )}
+      </div>
       {tab === 'my' && <MyTimeOff employeeId={s.myEmployeeId} year={params.get('year')} onYear={(y) => go({ year: y })} />}
+      {tab === 'approvals' && <ApprovalsTab />}
       {tab === 'requests' && <RequestsTab admin={admin} myEmployeeId={s.myEmployeeId ?? null} />}
+      {tab === 'calendar' && <CalendarTab month={month} onMonth={(m) => go({ month: m })} />}
       {tab === 'balances' && <Balances params={params} go={go} />}
     </Screen>
   );

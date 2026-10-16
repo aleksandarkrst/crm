@@ -13,7 +13,7 @@ import { reportingLineEmail } from './org-email';
 import { applyDeactivation, dueDeactivations, unitLeadsOf, zonedParts } from './lifecycle';
 import { dropUnusedInvitedEmployees } from './linking';
 import { lockReportingLines } from './reporting-lines';
-import { ABSENCE_SOURCE, nobodyAbsent } from './approvers';
+import { ABSENCE_SOURCE, absenceRegistry } from './approvers';
 import { PeopleAccess } from './people-access';
 
 /** How often the worker looks for workspaces where a day has ended (deactivations due). */
@@ -221,7 +221,7 @@ export class ReportingLineEmailJob implements OnApplicationBootstrap {
  * the timesheet emails, CD-154), with the same absence source as the API until milestone 16.
  */
 @Module({
-  providers: [BankAccountEmailJob, DeactivateDueJob, ReportingLineEmailJob, PeopleAccess, { provide: ABSENCE_SOURCE, useValue: nobodyAbsent }],
+  providers: [BankAccountEmailJob, DeactivateDueJob, ReportingLineEmailJob, PeopleAccess, { provide: ABSENCE_SOURCE, useValue: absenceRegistry }],
   exports: [PeopleAccess],
 })
 export class PeopleWorkerModule {}

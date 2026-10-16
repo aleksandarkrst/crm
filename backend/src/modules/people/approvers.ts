@@ -70,3 +70,23 @@ export const ABSENCE_SOURCE = Symbol('ABSENCE_SOURCE');
 export const nobodyAbsent: AbsenceSource = {
   absentOn: async () => new Set<string>(),
 };
+
+/**
+ * The provider behind ABSENCE_SOURCE: delegates to the source the time off module registers on
+ * start (`absenceRegistry.use`), and says nobody is absent until then. A registry rather than a
+ * DI override, so people needs no import of time off (modules import each other through their
+ * index only) and both the API and the worker get the real source.
+ */
+export class AbsenceRegistry implements AbsenceSource {
+  private source: AbsenceSource = nobodyAbsent;
+
+  use(source: AbsenceSource): void {
+    this.source = source;
+  }
+
+  absentOn(tx: Tx, tenantId: string, employeeIds: string[], date: string): Promise<Set<string>> {
+    return this.source.absentOn(tx, tenantId, employeeIds, date);
+  }
+}
+
+export const absenceRegistry = new AbsenceRegistry();

@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ABSENCE_SOURCE, nobodyAbsent } from './approvers';
+import { ABSENCE_SOURCE, absenceRegistry } from './approvers';
 import { nothingUsesUnits, UNIT_USAGE } from './unit-usage';
 import { EmployeesBulkController } from './employees-bulk.controller';
 import { EmployeesBulkService } from './employees-bulk.service';
@@ -29,7 +29,7 @@ import { RolesController } from './roles.controller';
     EmployeeLifecycleService,
     EmployeesBulkService,
     OrgService,
-    { provide: ABSENCE_SOURCE, useValue: nobodyAbsent },
+    { provide: ABSENCE_SOURCE, useValue: absenceRegistry },
     { provide: UNIT_USAGE, useValue: nothingUsesUnits },
   ],
   exports: [PeopleAccess],
