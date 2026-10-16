@@ -1410,6 +1410,7 @@ a.task-card-project:hover { color: var(--brand); }
   .req-row > :nth-child(3) { grid-column: 1 / -1; justify-self: start; }
   .reason-row { grid-template-columns: minmax(0, 1fr) auto; }
   .reason-row > :nth-child(3), .reason-row > :nth-child(4), .reason-row > :nth-child(5) { grid-column: 1 / -1; }
+  .reason-row > span:empty { display: none; }
   .reason-row.reason-head { display: none; }
 }
 

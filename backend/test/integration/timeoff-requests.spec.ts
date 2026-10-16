@@ -78,6 +78,9 @@ describe('reasons and the yearly limit (spec 7.2, 7.3, AC 7.4.3)', () => {
     expect(marriage).toMatchObject({ maxDays: 5, countsTowardLimit: true, active: true, used: 0 });
     expect((await ok('GET', '/timeoff/settings', as(emp))).paidLeaveYearlyLimit).toBe(5);
     expect((await call('POST', '/timeoff/reasons', { ...as(emp), body: { kind: 'paid_leave', name: 'Moving house' } })).status).toBe(403);
+    expect((await call('PATCH', `/timeoff/reasons/${marriage.id}`, { ...as(emp), body: { active: false } })).status).toBe(403);
+    expect((await call('DELETE', `/timeoff/reasons/${marriage.id}`, as(mgr))).status).toBe(403);
+    expect((await call('PATCH', '/timeoff/settings', { ...as(mgr), body: { paidLeaveYearlyLimit: 9 } })).status).toBe(403);
     const moving = await ok('POST', '/timeoff/reasons', { ...as(owner), body: { kind: 'paid_leave', name: 'Moving house', maxDays: 2 } });
     expect(moving).toMatchObject({ name: 'Moving house', maxDays: 2, countsTowardLimit: false });
     expect((await call('POST', '/timeoff/reasons', { ...as(owner), body: { kind: 'paid_leave', name: ' moving house ' } })).status).toBe(409);
@@ -141,6 +144,7 @@ describe('submitting (spec 8.3, AC 8.8)', () => {
     const mine = await ok('GET', `/timeoff/requests?year=${NEXT}`, as(emp));
     const pending = mine.find((x: { status: string }) => x.status === 'pending');
     expect((await call('POST', `/timeoff/requests/${pending.id}/withdraw`, as(peer))).status).toBe(404);
+    expect((await call('POST', `/timeoff/requests/${pending.id}/withdraw`, as(mgr))).status).toBe(403);
     const w = await ok('POST', `/timeoff/requests/${pending.id}/withdraw`, as(emp), 200);
     expect(w).toMatchObject({ status: 'withdrawn', canWithdraw: false });
     expect(w.days.every((x: { state: string }) => x.state === 'cancelled')).toBe(true);
@@ -155,6 +159,7 @@ describe('submitting (spec 8.3, AC 8.8)', () => {
     const p = await ok('POST', '/timeoff/requests/preview', { ...as(emp), body: { type: 'paid_leave', reasonId: donation.id, startDate: d('07-05'), endDate: d('07-09') } }, 200);
     expect(p.warnings.some((w: string) => w.startsWith('Exceeds the limit of 2 days'))).toBe(true);
     expect(p.balance).toBeNull();
+    expect(p.shortfall).toBeNull();
     const r = await ok('POST', '/timeoff/requests', { ...as(emp), body: { type: 'paid_leave', reasonId: marriage.id, startDate: d('08-02'), endDate: d('08-04') } });
     expect(r).toMatchObject({ type: 'paid_leave', reason: { name: 'Marriage' }, status: 'pending', warnings: [] });
     const u = await ok('POST', '/timeoff/requests', { ...as(emp), body: { type: 'unpaid_leave', startDate: d('08-09'), endDate: d('08-10') } });
@@ -169,6 +174,7 @@ describe('submitting (spec 8.3, AC 8.8)', () => {
   it('Admins request for anyone and record leave as approved at once; other absences are theirs only', async () => {
     expect((await call('POST', '/timeoff/requests', { ...as(mgr), body: { employeeId: id.emp, type: 'vacation', startDate: d('10-04'), endDate: d('10-05') } })).status).toBe(403);
     expect((await call('POST', '/timeoff/requests', { ...as(emp), body: { type: 'other_absence', startDate: d('10-04'), endDate: d('10-05') } })).status).toBe(403);
+    expect((await call('POST', '/timeoff/requests', { ...as(emp), body: { type: 'vacation', startDate: d('10-04'), endDate: d('10-05'), record: { reason: 'Mine' } } })).status).toBe(403);
     const recorded = await ok('POST', '/timeoff/requests', { ...as(owner), body: { employeeId: id.emp, type: 'vacation', startDate: `${YEAR}-02-02`, endDate: `${YEAR}-02-03`, record: { reason: 'Agreed on paper' } } });
     expect(recorded).toMatchObject({ status: 'approved', recorded: true, recordReason: 'Agreed on paper', decidedBy: { userId: owner.userId }, approver: null, canWithdraw: false });
     const b = await ok('GET', `/timeoff/employees/${id.emp}/balance`, as(emp));
@@ -206,5 +212,9 @@ describe('tenant isolation', () => {
     expect((await call('POST', `/timeoff/requests/${mine[0].id}/withdraw`, other)).status).toBe(404);
     expect((await call('POST', '/timeoff/requests', { ...other, body: { employeeId: id.emp, type: 'vacation', startDate: d('12-01'), endDate: d('12-02') } })).status).toBe(404);
     expect((await call('PATCH', `/timeoff/reasons/${marriage.id}`, { ...other, body: { active: false } })).status).toBe(404);
+    // Not a member of this workspace at all.
+    expect((await call('GET', '/timesheet/holidays/preload', { token: otherOwner.token, tenant })).status).toBe(403);
+    expect((await call('POST', '/timesheet/holidays/preload', { token: otherOwner.token, tenant, body: { country: 'none' } })).status).toBe(403);
+    expect((await call('PATCH', '/timeoff/settings', { token: otherOwner.token, tenant, body: { paidLeaveYearlyLimit: 1 } })).status).toBe(403);
   });
 });

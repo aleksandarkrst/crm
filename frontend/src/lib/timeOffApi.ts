@@ -235,6 +235,8 @@ export interface ApiRequestPreview {
   excluded: { date: string; name: string }[];
   refusal: { code: string; message: string } | null;
   balance: { before: ApiBalanceFigures; after: ApiBalanceFigures; pools: { poolYear: number; days: number }[] } | null;
+  /** Vacation: more days than available; the request can't be submitted. */
+  shortfall: { needed: number; available: number } | null;
   warnings: string[];
   approver: ApiApproverView | null;
 }

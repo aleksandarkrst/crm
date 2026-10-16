@@ -41,7 +41,7 @@ export function TimeOff() {
     <Screen title="Time off">
       {canSeeBalances && (
         <div className="report-tabs" role="tablist" data-testid="timeoff-tabs">
-          <button type="button" role="tab" aria-selected={tab === 'my'} className="composer-tab" style={{ borderBottom: `2px solid ${tab === 'my' ? 'var(--brand)' : 'transparent'}`, fontWeight: tab === 'my' ? 600 : 500, color: tab === 'my' ? 'var(--brand)' : 'var(--text-2)' }} onClick={() => go({ tab: null })}>
+          <button type="button" role="tab" aria-selected={tab === 'my'} className="composer-tab" style={tabStyle(tab === 'my')} onClick={() => go({ tab: null })}>
             My time off
           </button>
           <button type="button" role="tab" aria-selected={tab === 'requests'} className="composer-tab" style={tabStyle(tab === 'requests')} onClick={() => go({ tab: 'requests' })} data-testid="timeoff-tab-requests">
@@ -65,7 +65,7 @@ function MyTimeOff({ employeeId, year, onYear }: { employeeId: string | null | u
   const admin = session.tenant.role === 'owner' || session.tenant.role === 'admin';
   const y = year && /^\d{4}$/.test(year) ? Number(year) : undefined;
   const { data, error, set } = useBalance(employeeId ?? '', y);
-  const { data: requests, reload: reloadRequests } = useProjectsRead<ApiTimeOffRequest[]>(!!employeeId, () => timeOffApi.requests.list({ employeeId: employeeId ?? undefined, year: y ?? (data?.currentYear || undefined) }), `timeoff:requests:${employeeId ?? ''}:${y ?? ''}:${data?.currentYear ?? ''}`, 'timeOffRev');
+  const { data: requests, reload: reloadRequests } = useProjectsRead<ApiTimeOffRequest[]>(!!employeeId && (y !== undefined || !!data), () => timeOffApi.requests.list({ employeeId: employeeId ?? undefined, year: y ?? (data?.currentYear || undefined) }), `timeoff:requests:${employeeId ?? ''}:${y ?? ''}:${data?.currentYear ?? ''}`, 'timeOffRev');
   const [requesting, setRequesting] = useState(false);
   if (!employeeId) return <div className="ts-help">{employeeId === null ? 'You have no employee record in this workspace, so there is no time off balance.' : 'Loading'}</div>;
   if (error) return <EmptyState title="Your balance could not be loaded" text={error} />;

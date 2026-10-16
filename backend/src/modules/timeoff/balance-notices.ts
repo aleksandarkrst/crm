@@ -70,7 +70,12 @@ export class TimeoffNoticeMailer {
         })
         .from(timeoffRequests)
         .where(eq(timeoffRequests.id, data.requestId));
-      const [u] = await tx.select({ email: users.email, name: sql<string>`coalesce(${users.displayName}, ${users.email}, 'there')` }).from(users).where(eq(users.id, data.recipientUserId));
+      // Only a member of the workspace: an approver removed since submit gets nothing.
+      const [u] = await tx
+        .select({ email: users.email, name: sql<string>`coalesce(${users.displayName}, ${users.email}, 'there')` })
+        .from(users)
+        .innerJoin(memberships, and(eq(memberships.userId, users.id), eq(memberships.tenantId, data.tenantId)))
+        .where(eq(users.id, data.recipientUserId));
       return r && u?.email ? { ...r, to: u.email, approverName: u.name } : null;
     });
     if (!facts || facts.status !== 'pending') {

@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
 import { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
@@ -75,8 +75,12 @@ export class ReasonsService implements TenantProvisioner, OnModuleInit {
       .from(timeoffReasons)
       .where(and(kind ? eq(timeoffReasons.kind, kind) : undefined, id ? eq(timeoffReasons.id, id) : undefined))
       .orderBy(asc(timeoffReasons.kind), asc(timeoffReasons.position), asc(timeoffReasons.name));
-    const used = new Map<string, number>();
-    for (const r of await tx.select({ reasonId: timeoffRequests.reasonId }).from(timeoffRequests)) if (r.reasonId) used.set(r.reasonId, (used.get(r.reasonId) ?? 0) + 1);
+    const counts = await tx
+      .select({ reasonId: timeoffRequests.reasonId, n: sql<number>`count(*)::int` })
+      .from(timeoffRequests)
+      .where(isNotNull(timeoffRequests.reasonId))
+      .groupBy(timeoffRequests.reasonId);
+    const used = new Map(counts.map((c) => [c.reasonId!, c.n]));
     return rows.map((r) => ({ id: r.id, kind: r.kind, name: r.name, maxDays: r.maxDays, countsTowardLimit: r.countsTowardLimit, paidByEmployer: r.paidByEmployer, active: r.active, position: r.position, used: used.get(r.id) ?? 0 }));
   }
 

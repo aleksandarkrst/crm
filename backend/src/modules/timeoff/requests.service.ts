@@ -62,6 +62,8 @@ export interface RequestPreview {
   refusal: RequestRefusal | null;
   /** Vacation: the balance of the first day's year before and after, and the pools the days use. */
   balance: { before: Balance; after: Balance; pools: { poolYear: number; days: number }[] } | null;
+  /** Vacation: more days than available (spec 8.3); the request can't be submitted. */
+  shortfall: { needed: number; available: number } | null;
   warnings: string[];
   approver: ApproverView | null;
 }
@@ -278,7 +280,8 @@ export class RequestsService {
       excluded: wd.excluded,
       refusal: refusal ?? (overlap ? { code: 'no_working_days', message: `These dates overlap a ${overlap.status} request (${overlap.startDate} to ${overlap.endDate})` } : null),
       balance,
-      warnings: shortfall ? [...warnings, `You have ${shortfall.available} ${shortfall.available === 1 ? 'day' : 'days'} available; this request needs ${shortfall.needed}.`] : warnings,
+      shortfall,
+      warnings,
       approver,
     };
     return { preview, reason, overlap: overlap ?? null, assignment, shortfall };

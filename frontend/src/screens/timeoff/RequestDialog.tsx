@@ -53,7 +53,8 @@ export function RequestDialog({ employeeId, employees, admin, onClose }: { emplo
   }, [employee, type, reasonId, startDate, endDate, needsReason]);
 
   const types: TimeOffType[] = admin ? ['vacation', 'paid_leave', 'unpaid_leave', 'other_absence'] : ['vacation', 'paid_leave', 'unpaid_leave'];
-  const blocked = !preview || !!preview.refusal || (preview.balance !== null && preview.balance.pools.length === 0 && preview.workingDays > 0);
+  const blocked = !preview || !!preview.refusal || !!preview.shortfall;
+  const forOther = employee !== employeeId;
   const submit = async () => {
     if (!startDate || !endDate) return setProblem('Pick the dates');
     if (needsReason && !reasonId) return setProblem('Pick a reason');
@@ -130,7 +131,7 @@ export function RequestDialog({ employeeId, employees, admin, onClose }: { emplo
             <input className="form-input" type="date" value={endDate} min={startDate || undefined} onChange={(e) => setEndDate(e.target.value)} data-testid="request-end" />
           </label>
         </div>
-        <PreviewLine preview={preview} error={previewError} type={type} />
+        <PreviewLine preview={preview} error={previewError} type={type} forOther={forOther} />
         <label className="policy-field">
           <span className="th">Note to the approver</span>
           <textarea className="form-input" rows={2} maxLength={500} value={note} placeholder="Optional. Do not enter health information." onChange={(e) => setNote(e.target.value)} data-testid="request-note" />
@@ -163,11 +164,12 @@ export function RequestDialog({ employeeId, employees, admin, onClose }: { emplo
 }
 
 /** "6 working days (excludes 1 May Praznik rada) · 20 → 14 days left · goes to Ana Petrović". */
-function PreviewLine({ preview, error, type }: { preview: ApiRequestPreview | null; error: string | null; type: TimeOffType }) {
+function PreviewLine({ preview, error, type, forOther }: { preview: ApiRequestPreview | null; error: string | null; type: TimeOffType; forOther: boolean }) {
   if (error) return <span className="emp-error">{error}</span>;
   if (!preview) return <span className="emp-note">Pick the dates to see the working days.</span>;
   const excluded = preview.excluded.length ? ` (excludes ${preview.excluded.map((x) => `${dateLabel(x.date)} ${x.name.replace(/\s*\(.*\)$/, '')}`).join(', ')})` : '';
-  const approver = preview.approver ? (preview.approver.kind === 'self' ? 'You approve it yourself (no other Admin)' : `Your request goes to ${preview.approver.approvers.map((a) => a.fullName).join(', ') || 'the Admins'}`) : null;
+  const whose = forOther ? 'The request' : 'Your request';
+  const approver = preview.approver ? (preview.approver.kind === 'self' ? (forOther ? 'They approve it themselves (no other Admin)' : 'You approve it yourself (no other Admin)') : `${whose} goes to ${preview.approver.approvers.map((a) => a.fullName).join(', ') || 'the Admins'}`) : null;
   return (
     <div className="request-preview" data-testid="request-preview">
       <span style={{ fontSize: 13, fontWeight: 500 }}>
@@ -185,12 +187,17 @@ function PreviewLine({ preview, error, type }: { preview: ApiRequestPreview | nu
           {preview.refusal.message}
         </span>
       )}
+      {preview.shortfall && (
+        <span className="emp-error" data-testid="request-shortfall">
+          {forOther ? 'They have' : 'You have'} {preview.shortfall.available} {preview.shortfall.available === 1 ? 'day' : 'days'} available; this request needs {preview.shortfall.needed}.
+        </span>
+      )}
       {preview.warnings.map((w) => (
         <span key={w} className="emp-note emp-warn">
           {w}
         </span>
       ))}
-      {type === 'vacation' && !preview.refusal && <span className="emp-note">The decision is issued when your manager approves.</span>}
+      {type === 'vacation' && !preview.refusal && !preview.shortfall && <span className="emp-note">{forOther ? 'The decision is issued when the manager approves.' : 'The decision is issued when your manager approves.'}</span>}
       {approver && <span className="emp-note">{approver}</span>}
     </div>
   );

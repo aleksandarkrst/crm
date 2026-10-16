@@ -52,6 +52,11 @@ beforeAll(async () => {
   [owner, ana, marko] = await Promise.all([signIn('tss-owner'), signIn('tss-ana'), signIn('tss-marko')]);
   tenant = await createTenant(owner, 'Timesheet settings');
   other = await createTenant(owner, 'Timesheet settings other');
+  // A new workspace comes with Serbia's holidays preloaded (milestone 16); these tests build their own calendar.
+  for (const t of [tenant, other]) {
+    await ok('POST', '/timesheet/holidays/preload', { token: owner.token, tenant: t, body: { country: 'none' } }, 200);
+    await asTenantSql(t, `delete from public_holidays where tenant_id = $1 and source = 'preload'`, [t]);
+  }
   await addMember(owner, tenant, ana, 'member');
   await addMember(owner, tenant, marko, 'member');
   anaId = (await accessOf(ana, tenant)).employeeId;
