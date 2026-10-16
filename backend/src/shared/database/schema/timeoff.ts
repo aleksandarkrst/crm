@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, foreignKey, index, integer, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, date, foreignKey, index, integer, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { employees } from './people';
 import { tenants, users } from './platform';
 
@@ -230,6 +230,131 @@ export const timeoffNotices = pgTable(
   ],
 );
 
+/** The kinds of reason an Admin keeps (spec 7.2, 7.3; sick leave types come with CD-169). */
+export const REASON_KINDS = ['paid_leave', 'other_absence'] as const;
+export type ReasonKind = (typeof REASON_KINDS)[number];
+
+/**
+ * A reason for paid leave ("Marriage", "Blood donation"…) or an other absence ("Maternity leave"…),
+ * spec 7.2 and 7.3. Paid leave reasons carry the most working days per case and whether they count
+ * toward the yearly group limit (`tenants.timeoff_paid_leave_yearly_limit`); other absences whether
+ * the employer pays. A reason used in a request can't be deleted (the request's FK restricts it);
+ * it is deactivated instead. The defaults are provisioned for new workspaces and were backfilled.
+ */
+export const timeoffReasons = pgTable(
+  'timeoff_reasons',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    kind: text('kind', { enum: REASON_KINDS }).notNull(),
+    name: text('name').notNull(),
+    /** Paid leave: the most working days per case (a warning, not a block); null is no limit. */
+    maxDays: integer('max_days'),
+    /** Paid leave: counts toward the yearly group limit (A10). */
+    countsTowardLimit: boolean('counts_toward_limit').notNull().default(false),
+    /** Other absence: paid by the employer (shown to Payroll). */
+    paidByEmployer: boolean('paid_by_employer').notNull().default(false),
+    active: boolean('active').notNull().default(true),
+    position: integer('position').notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [
+    unique('timeoff_reasons_tenant_id_uq').on(t.tenantId, t.id),
+    uniqueIndex('timeoff_reasons_name_uq').on(t.tenantId, t.kind, sql`lower(btrim(${t.name}))`),
+    check('timeoff_reasons_kind_ck', sql`${t.kind} in ('paid_leave', 'other_absence')`),
+    check('timeoff_reasons_name_ck', sql`length(btrim(${t.name})) between 1 and 100`),
+    check('timeoff_reasons_max_days_ck', sql`${t.maxDays} is null or ${t.maxDays} between 1 and 60`),
+  ],
+);
+
+/** The time off types (spec 7.1). Sick leave is a record of its own (CD-169). */
+export const TIMEOFF_TYPES = ['vacation', 'paid_leave', 'unpaid_leave', 'other_absence'] as const;
+export type TimeoffType = (typeof TIMEOFF_TYPES)[number];
+/** The status flow (spec 9.4): Pending → Approved | Rejected | Withdrawn; Approved → Cancelled. */
+export const TIMEOFF_REQUEST_STATUSES = ['pending', 'approved', 'rejected', 'withdrawn', 'cancelled'] as const;
+export type TimeoffRequestStatus = (typeof TIMEOFF_REQUEST_STATUSES)[number];
+
+/**
+ * A time off request (spec 8.2): whole working days of vacation, paid leave (with a reason), unpaid
+ * leave or an other absence (Admins only). `working_days` is the count at submission, recomputed
+ * when the holiday calendar changes (spec 8.6). `recorded` marks leave an Admin recorded as
+ * approved directly (spec 8.7), with their reason. The approver is resolved when someone looks
+ * (PeopleAccess.approversFor), never stored. The decision fields are CD-166's.
+ */
+export const timeoffRequests = pgTable(
+  'timeoff_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    employeeId: uuid('employee_id').notNull(),
+    type: text('type', { enum: TIMEOFF_TYPES }).notNull(),
+    reasonId: uuid('reason_id'),
+    startDate: date('start_date').notNull(),
+    endDate: date('end_date').notNull(),
+    workingDays: integer('working_days').notNull(),
+    note: text('note'),
+    status: text('status', { enum: TIMEOFF_REQUEST_STATUSES }).notNull().default('pending'),
+    submittedByUserId: uuid('submitted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Recorded as approved by an Admin (spec 8.7), with why. */
+    recorded: boolean('recorded').notNull().default(false),
+    recordReason: text('record_reason'),
+    decidedByUserId: uuid('decided_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    decisionComment: text('decision_comment'),
+    ...timestamps,
+  },
+  (t) => [
+    unique('timeoff_requests_tenant_id_uq').on(t.tenantId, t.id),
+    index('timeoff_requests_employee_idx').on(t.tenantId, t.employeeId, t.startDate),
+    index('timeoff_requests_status_idx').on(t.tenantId, t.status, t.startDate),
+    index('timeoff_requests_reason_idx').on(t.tenantId, t.reasonId),
+    foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'timeoff_requests_employee_fk' }).onDelete('cascade'),
+    foreignKey({ columns: [t.tenantId, t.reasonId], foreignColumns: [timeoffReasons.tenantId, timeoffReasons.id], name: 'timeoff_requests_reason_fk' }).onDelete('restrict'),
+    check('timeoff_requests_type_ck', sql`${t.type} in ('vacation', 'paid_leave', 'unpaid_leave', 'other_absence')`),
+    check('timeoff_requests_status_ck', sql`${t.status} in ('pending', 'approved', 'rejected', 'withdrawn', 'cancelled')`),
+    check('timeoff_requests_dates_ck', sql`${t.endDate} >= ${t.startDate} and ${t.endDate} <= ${t.startDate} + 366`),
+    check('timeoff_requests_reason_ck', sql`(${t.type} in ('paid_leave', 'other_absence')) = (${t.reasonId} is not null)`),
+    check('timeoff_requests_days_ck', sql`${t.workingDays} between 0 and 260`),
+    check('timeoff_requests_note_ck', sql`${t.note} is null or length(${t.note}) <= 500`),
+    check('timeoff_requests_record_ck', sql`${t.recordReason} is null or length(btrim(${t.recordReason})) between 1 and 300`),
+    check('timeoff_requests_comment_ck', sql`${t.decisionComment} is null or length(${t.decisionComment}) <= 500`),
+  ],
+);
+
+/** A request day's state (spec 15.4): counted, or taken out again (sick leave, a shortened or cancelled request). */
+export const REQUEST_DAY_STATES = ['counted', 'interrupted', 'cancelled', 'returned'] as const;
+export type RequestDayState = (typeof REQUEST_DAY_STATES)[number];
+
+/**
+ * One working day of a request (spec 15.4): the date, its pool year (vacation only) and whether it
+ * still counts. The balance is computed from these rows and the adjustments, so it can't drift. A
+ * counted day is unique per employee and date: two requests can't overlap (spec 8.3).
+ */
+export const timeoffRequestDays = pgTable(
+  'timeoff_request_days',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    requestId: uuid('request_id').notNull(),
+    employeeId: uuid('employee_id').notNull(),
+    date: date('date').notNull(),
+    poolYear: integer('pool_year'),
+    state: text('state', { enum: REQUEST_DAY_STATES }).notNull().default('counted'),
+  },
+  (t) => [
+    uniqueIndex('timeoff_request_days_counted_uq').on(t.tenantId, t.employeeId, t.date).where(sql`${t.state} = 'counted'`),
+    index('timeoff_request_days_request_idx').on(t.tenantId, t.requestId),
+    index('timeoff_request_days_employee_idx').on(t.tenantId, t.employeeId, t.date),
+    foreignKey({ columns: [t.tenantId, t.requestId], foreignColumns: [timeoffRequests.tenantId, timeoffRequests.id], name: 'timeoff_request_days_request_fk' }).onDelete('cascade'),
+    foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'timeoff_request_days_employee_fk' }).onDelete('cascade'),
+    check('timeoff_request_days_state_ck', sql`${t.state} in ('counted', 'interrupted', 'cancelled', 'returned')`),
+    check('timeoff_request_days_pool_ck', sql`${t.poolYear} is null or ${t.poolYear} between 2000 and 2100`),
+  ],
+);
+
 export type TimeoffPolicyRow = typeof timeoffPolicies.$inferSelect;
+export type TimeoffReasonRow = typeof timeoffReasons.$inferSelect;
+export type TimeoffRequestRow = typeof timeoffRequests.$inferSelect;
 export type VacationEntitlementRow = typeof vacationEntitlements.$inferSelect;
 export type VacationBalanceAdjustmentRow = typeof vacationBalanceAdjustments.$inferSelect;

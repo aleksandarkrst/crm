@@ -3,7 +3,7 @@ import { askConfirm } from '../../components/ConfirmDialog';
 import { type DateRange, DateRangePicker, rangeText } from '../../components/DateRangePicker';
 import { FieldRow, Switch } from '../../components/ui';
 import type { ApiTimesheetSettings } from '../../lib/api';
-import { type ApiHoliday, dayLabel, holidaysApi, parseHours, shortHours } from '../../lib/timesheetApi';
+import { type ApiHoliday, type ApiHolidayPreload, dayLabel, holidaysApi, parseHours, shortHours } from '../../lib/timesheetApi';
 import { projectError, useProjectsRead } from '../../store/projects';
 import { useStore } from '../../store/store';
 
@@ -331,7 +331,8 @@ function HolidayRow({ holiday, year, onChanged }: { holiday: ApiHoliday; year: n
         <span style={{ fontSize: 13, fontWeight: 500 }}>{holiday.name}</span>
         <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
           {holiday.minutes ? `${shortHours(holiday.minutes, 'decimal')} h off · ` : ''}
-          {holiday.since < year ? `every year since ${holiday.since}` : 'repeats every year'}
+          {!holiday.repeats ? `${holiday.since} only` : holiday.since < year ? `every year since ${holiday.since}` : 'repeats every year'}
+          {holiday.source === 'preload' ? ' · preloaded' : ''}
         </span>
       </span>
       <span ref={menuRef} style={{ position: 'relative', justifySelf: 'end' }}>
@@ -417,7 +418,47 @@ export function HolidaysTab() {
           </button>
         </span>
       </div>
-      <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>A holiday repeats every year from the year it is added. Changes are written to the audit log.</span>
+      <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>A holiday repeats every year from the year it is added; a preloaded moving day (Orthodox Easter, a moved Sunday holiday) holds in its year only. Changes are written to the audit log.</span>
+      <PreloadControl year={year} onChanged={() => void reload()} />
+    </div>
+  );
+}
+
+/**
+ * "Preload holidays for: Serbia / None" (milestone 16, spec 4.3): the country whose non-working
+ * days are generated once per year (Orthodox Easter and moved Sunday holidays included), with a
+ * button to generate the year on screen now. A generated year is never overwritten.
+ */
+function PreloadControl({ year, onChanged }: { year: number; onChanged: () => void }) {
+  const { flash } = useStore();
+  const { data, set } = useProjectsRead<ApiHolidayPreload>(true, () => holidaysApi.preload(), 'holidays:preload', 'timesheetRev');
+  const [busy, setBusy] = useState(false);
+  if (!data) return null;
+  const change = async (country: 'none' | 'serbia', only?: number) => {
+    setBusy(true);
+    try {
+      const res = await holidaysApi.setPreload({ country, ...(only ? { year: only } : {}) });
+      set({ country: res.country, years: res.years });
+      flash(country === 'none' ? 'Holidays are no longer preloaded' : res.added ? `${res.added} ${res.added === 1 ? 'holiday' : 'holidays'} added` : 'Nothing to add: these years were generated already');
+      onChanged();
+    } catch (err) {
+      flash(projectError(err));
+    }
+    setBusy(false);
+  };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', paddingTop: 10, borderTop: '1px solid var(--divider)' }} data-testid="holiday-preload">
+      <span style={{ fontSize: 13 }}>Preload holidays for</span>
+      <select className="form-input" style={{ padding: '7px 10px' }} value={data.country} disabled={busy} onChange={(e) => void change(e.target.value as 'none' | 'serbia')} aria-label="Preload holidays for" data-testid="holiday-preload-country">
+        <option value="serbia">Serbia</option>
+        <option value="none">None</option>
+      </select>
+      {data.country !== 'none' && !data.years.includes(year) && (
+        <button type="button" className="btn-plain" disabled={busy} onClick={() => void change(data.country, year)} data-testid="holiday-preload-year">
+          Preload {year}
+        </button>
+      )}
+      <span className="emp-note">{data.years.length ? `Generated: ${data.years.join(', ')}. Next year is added on 1 November.` : 'Nothing generated yet.'}</span>
     </div>
   );
 }

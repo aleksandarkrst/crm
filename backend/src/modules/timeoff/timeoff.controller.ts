@@ -5,7 +5,29 @@ import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
 import { BalancesService } from './balances.service';
 import { EntitlementsService } from './entitlements.service';
 import { TimeoffPoliciesService } from './policies.service';
-import { BalanceQuery, BalancesQuery, BulkChangePolicy, BulkRecalculate, CreateAdjustment, CreatePolicy, HistoryQuery, Recalculate, UpdateEntitlement, UpdatePolicy, UpdateProfile, YearParam } from './timeoff.schemas';
+import { ReasonsService } from './reasons.service';
+import { RequestsService } from './requests.service';
+import {
+  BalanceQuery,
+  BalancesQuery,
+  BulkChangePolicy,
+  BulkRecalculate,
+  CreateAdjustment,
+  CreatePolicy,
+  CreateReason,
+  CreateRequest,
+  HistoryQuery,
+  PreviewRequest,
+  ReasonsQuery,
+  Recalculate,
+  RequestsQuery,
+  UpdateEntitlement,
+  UpdatePolicy,
+  UpdateProfile,
+  UpdateReason,
+  UpdateTimeoffSettings,
+  YearParam,
+} from './timeoff.schemas';
 
 const Id = new ZodPipe(UuidParam);
 const Year = new ZodPipe(YearParam);
@@ -24,7 +46,82 @@ export class TimeoffController {
     private readonly policies: TimeoffPoliciesService,
     private readonly entitlements: EntitlementsService,
     private readonly balances: BalancesService,
+    private readonly reasons: ReasonsService,
+    private readonly requests: RequestsService,
   ) {}
+
+  // ---------------------------------------------------------------- reasons and settings (CD-165, spec 7.2, 7.3)
+
+  @Get('reasons')
+  listReasons(@Tenant() ctx: TenantContext, @Query(new ZodPipe(ReasonsQuery)) query: ReasonsQuery) {
+    return this.reasons.list(ctx, query.kind);
+  }
+
+  @Post('reasons')
+  @RequireTenant('admin')
+  createReason(@Tenant() ctx: TenantContext, @Body(new ZodPipe(CreateReason)) body: CreateReason) {
+    return this.reasons.create(ctx, body);
+  }
+
+  @Patch('reasons/:id')
+  @RequireTenant('admin')
+  updateReason(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(UpdateReason)) body: UpdateReason) {
+    return this.reasons.update(ctx, id, body);
+  }
+
+  /** Only an unused reason (409 otherwise: deactivate it). */
+  @Delete('reasons/:id')
+  @RequireTenant('admin')
+  @HttpCode(204)
+  removeReason(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.reasons.remove(ctx, id);
+  }
+
+  /** `{ paidLeaveYearlyLimit }`. */
+  @Get('settings')
+  settings(@Tenant() ctx: TenantContext) {
+    return this.reasons.settings(ctx);
+  }
+
+  @Patch('settings')
+  @RequireTenant('admin')
+  updateSettings(@Tenant() ctx: TenantContext, @Body(new ZodPipe(UpdateTimeoffSettings)) body: UpdateTimeoffSettings) {
+    return this.reasons.updateSettings(ctx, body);
+  }
+
+  // ---------------------------------------------------------------- requests (CD-165, spec 8)
+
+  /** Own by default; `?employeeId=` a report's (managers) or anyone's (Admins); `?all=true` everyone the caller may see. */
+  @Get('requests')
+  listRequests(@Tenant() ctx: TenantContext, @Query(new ZodPipe(RequestsQuery)) query: RequestsQuery) {
+    return this.requests.list(ctx, query);
+  }
+
+  /** The working days, holidays inside, the balance before and after, warnings and the approver (spec 8.4). */
+  @Post('requests/preview')
+  @HttpCode(200)
+  previewRequest(@Tenant() ctx: TenantContext, @Body(new ZodPipe(PreviewRequest)) body: PreviewRequest) {
+    return this.requests.preview(ctx, body);
+  }
+
+  /** Submit (spec 8.3); Admins may request for anyone and `record` leave as approved (spec 8.7). */
+  @Post('requests')
+  createRequest(@Tenant() ctx: TenantContext, @Body(new ZodPipe(CreateRequest)) body: CreateRequest) {
+    return this.requests.create(ctx, body);
+  }
+
+  /** The request with its history (self, the managers above, Admins). */
+  @Get('requests/:id')
+  getRequest(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.requests.get(ctx, id);
+  }
+
+  /** A pending request is withdrawn by the employee or an Admin (spec 9.4). */
+  @Post('requests/:id/withdraw')
+  @HttpCode(200)
+  withdrawRequest(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.requests.withdraw(ctx, id);
+  }
 
   // ---------------------------------------------------------------- balances (CD-164)
 

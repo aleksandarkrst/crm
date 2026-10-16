@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ADJUSTMENT_KINDS, MAX_BASE_DAYS, MIN_BASE_DAYS } from '../../shared/database/schema';
+import { ADJUSTMENT_KINDS, MAX_BASE_DAYS, MIN_BASE_DAYS, REASON_KINDS, TIMEOFF_REQUEST_STATUSES, TIMEOFF_TYPES } from '../../shared/database/schema';
 import { nonEmptyPatch, optionalText } from '../../shared/validation/common';
 
 /** "From N years: +X days" (spec 5.2). */
@@ -61,6 +61,81 @@ export const Recalculate = z.object({ preview: z.boolean().default(false) });
 export type Recalculate = z.infer<typeof Recalculate>;
 
 export const YearParam = z.coerce.number().int().min(2000).max(2100);
+
+// ---------------------------------------------------------------- reasons and settings (spec 7.2, 7.3)
+
+const reasonFields = {
+  name: z.string().trim().min(1, 'A name is needed').max(100),
+  maxDays: z.number().int().min(1).max(60).nullable(),
+  countsTowardLimit: z.boolean(),
+  paidByEmployer: z.boolean(),
+  active: z.boolean(),
+};
+
+/** POST /api/timeoff/reasons (Admins). */
+export const CreateReason = z.object({
+  kind: z.enum(REASON_KINDS),
+  name: reasonFields.name,
+  maxDays: reasonFields.maxDays.default(null),
+  countsTowardLimit: reasonFields.countsTowardLimit.default(false),
+  paidByEmployer: reasonFields.paidByEmployer.default(false),
+});
+export type CreateReason = z.infer<typeof CreateReason>;
+
+/** PATCH /api/timeoff/reasons/:id (Admins). */
+export const UpdateReason = nonEmptyPatch(z.object(reasonFields).partial());
+export type UpdateReason = z.infer<typeof UpdateReason>;
+
+export const ReasonsQuery = z.object({ kind: z.enum(REASON_KINDS).optional() });
+export type ReasonsQuery = z.infer<typeof ReasonsQuery>;
+
+/** PATCH /api/timeoff/settings (Admins). */
+export const UpdateTimeoffSettings = z.object({ paidLeaveYearlyLimit: z.number().int().min(0).max(60) });
+export type UpdateTimeoffSettings = z.infer<typeof UpdateTimeoffSettings>;
+
+// ---------------------------------------------------------------- requests (spec 8)
+
+const requestFields = {
+  /** Someone else's record: Admins only. */
+  employeeId: z.uuid().optional(),
+  type: z.enum(TIMEOFF_TYPES),
+  reasonId: z.uuid().nullable().optional(),
+  startDate: z.iso.date(),
+  endDate: z.iso.date(),
+};
+const datesInOrder = (v: { startDate: string; endDate: string }) => v.endDate >= v.startDate;
+const DATES = { message: 'The end date is before the start date', path: ['endDate'] };
+
+/** POST /api/timeoff/requests/preview: the working days, the balance before and after and the approver, before submitting. */
+export const PreviewRequest = z.object(requestFields).refine(datesInOrder, DATES);
+export type PreviewRequest = z.infer<typeof PreviewRequest>;
+
+/**
+ * POST /api/timeoff/requests. `record` (Admins, spec 8.7): recorded as approved at once, with why;
+ * `generateDecision` is for CD-167 and stored with the request's history.
+ */
+export const CreateRequest = z
+  .object({
+    ...requestFields,
+    note: optionalText(500),
+    record: z.object({ reason: z.string().trim().min(1, 'Say why you record it').max(300) }).optional(),
+  })
+  .refine(datesInOrder, DATES);
+export type CreateRequest = z.infer<typeof CreateRequest>;
+
+/** GET /api/timeoff/requests?employeeId=&year=&status=&type= (own by default). */
+export const RequestsQuery = z.object({
+  employeeId: z.uuid().optional(),
+  year: YearParam.optional(),
+  status: z.enum(TIMEOFF_REQUEST_STATUSES).optional(),
+  type: z.enum(TIMEOFF_TYPES).optional(),
+  /** Admins and managers: every request they may see, not only one employee's. */
+  all: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
+});
+export type RequestsQuery = z.infer<typeof RequestsQuery>;
 
 /** GET …/balance?year= (this year by default). */
 export const BalanceQuery = z.object({ year: YearParam.optional() });

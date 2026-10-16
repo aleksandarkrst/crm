@@ -58,6 +58,43 @@ export interface CarryOverExpiringEmailInput {
   expiring: number;
 }
 
+export interface RequestedEmailInput {
+  to: string;
+  approverName: string;
+  employeeName: string;
+  workspaceName: string;
+  appUrl: string;
+  /** "vacation", "paid leave (Marriage)", "unpaid leave". */
+  what: string;
+  startDate: string;
+  endDate: string;
+  workingDays: number;
+  note: string | null;
+  /** Vacation: the balance after approval, from the preview. */
+  balanceAfter: number | null;
+  requestId: string;
+}
+
+const dateLabel = (date: string) => new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+/** "Time off requested" (spec 15.2): to each approver when a request is submitted. Can't be turned off. */
+export function requestedEmail(input: RequestedEmailInput): MailMessage {
+  const period = input.startDate === input.endDate ? dateLabel(input.startDate) : `${dateLabel(input.startDate)} to ${dateLabel(input.endDate)}`;
+  const subject = `Time off requested: ${input.employeeName}, ${period} (${plural(input.workingDays, 'working day')})`;
+  const greeting = `Hi ${input.approverName.split(' ')[0]},`;
+  const intro = `${input.employeeName} requested ${input.what} in ${input.workspaceName}: ${period}, ${plural(input.workingDays, 'working day')}.`;
+  const rows = [...(input.note ? [`Note: ${input.note}`] : []), ...(input.balanceAfter !== null ? [`Vacation days left after approval: ${input.balanceAfter}`] : [])];
+  const url = link(input.appUrl, `/timeoff?tab=requests&request=${input.requestId}`);
+  const footer = 'You get this email because you approve this person\'s time off. It cannot be turned off.';
+  const text = [greeting, '', intro, ...(rows.length ? ['', ...rows.map((r) => `- ${r}`)] : []), '', `Open the request: ${url}`, '', footer].join('\n');
+  const html = layoutHtml(
+    [`<p style="margin:0 0 12px">${escapeHtml(greeting)}</p>`, `<p style="margin:0 0 12px">${escapeHtml(intro)}</p>`, ...(rows.length ? [`<ul style="margin:0 0 12px;padding-left:20px">${rows.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul>`] : []), buttonHtml('Open the request', url)].join('\n'),
+    footer,
+    input.appUrl,
+  );
+  return { to: input.to, subject, text, html };
+}
+
 /** "Carry-over expiring" (spec 15.2): on 1 May and 1 June, to employees with unused carry-over. */
 export function carryOverExpiringEmail(input: CarryOverExpiringEmailInput): MailMessage {
   const subject = `${plural(input.expiring, 'vacation day')} from ${input.year - 1} expire on 30 June`;

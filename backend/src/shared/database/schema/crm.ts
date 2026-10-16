@@ -867,7 +867,7 @@ export type PeopleHistoryEntityType = (typeof PEOPLE_HISTORY_ENTITY_TYPES)[numbe
 /** `time_entry` (CD-159): every change to someone's hours, written by `timesheet_entry_history` (drizzle/0091) with whole-row snapshots. */
 export const TASK_HISTORY_ENTITY_TYPES = ['task', 'work_order', 'time_entry'] as const;
 /** Time off (milestone 16, CD-163): a policy (with its experience rules), an employee's profile and a year's entitlement. */
-export const TIMEOFF_HISTORY_ENTITY_TYPES = ['timeoff_policy', 'timeoff_profile', 'vacation_entitlement'] as const;
+export const TIMEOFF_HISTORY_ENTITY_TYPES = ['timeoff_policy', 'timeoff_profile', 'vacation_entitlement', 'timeoff_reason', 'timeoff_request'] as const;
 export type TimeoffHistoryEntityType = (typeof TIMEOFF_HISTORY_ENTITY_TYPES)[number];
 export type TaskHistoryEntityType = (typeof TASK_HISTORY_ENTITY_TYPES)[number];
 /** `imported`: a record created by the employee import (CD-141), in place of `created` (drizzle/0040). */

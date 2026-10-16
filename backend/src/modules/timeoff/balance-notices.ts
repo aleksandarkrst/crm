@@ -3,9 +3,9 @@ import { and, eq, sql } from 'drizzle-orm';
 import { ENV, type Env } from '../../infrastructure/config/config.module';
 import { Mailer } from '../../infrastructure/mail/mailer';
 import { DatabaseService } from '../../shared/database/database.service';
-import { employees, memberships, tenants, users } from '../../shared/database/schema';
+import { employees, memberships, tenants, timeoffReasons, timeoffRequests, users } from '../../shared/database/schema';
 import type { JobPayloads } from '../../shared/events/job-types';
-import { balanceAdjustedEmail, carryOverExpiringEmail } from './balance-emails';
+import { balanceAdjustedEmail, carryOverExpiringEmail, requestedEmail } from './balance-emails';
 
 /**
  * Sends one `timeoff.notice-email` (CD-164, spec 15.2). The address and the "Time off balance"
@@ -23,6 +23,7 @@ export class TimeoffNoticeMailer {
   ) {}
 
   async send(data: JobPayloads['timeoff.notice-email']): Promise<void> {
+    if (data.kind === 'requested') return this.sendRequested(data);
     const row = await this.database.withTenant(data.tenantId, async (tx) => {
       const [e] = await tx
         .select({
@@ -50,5 +51,38 @@ export class TimeoffNoticeMailer {
         ? balanceAdjustedEmail({ ...base, actorName: row.actorName, poolYear: data.adjustment.poolYear, days: data.adjustment.days, kind: data.adjustment.kind, reason: data.adjustment.reason, remaining: data.remaining, available: data.available })
         : carryOverExpiringEmail({ ...base, year: data.year, expiring: data.expiring }),
     );
+  }
+
+  /** "Time off requested" (CD-165) to one approver, read when sending: a request withdrawn meanwhile sends nothing. */
+  private async sendRequested(data: Extract<JobPayloads['timeoff.notice-email'], { kind: 'requested' }>): Promise<void> {
+    const facts = await this.database.withTenant(data.tenantId, async (tx) => {
+      const [r] = await tx
+        .select({
+          status: timeoffRequests.status,
+          type: timeoffRequests.type,
+          startDate: timeoffRequests.startDate,
+          endDate: timeoffRequests.endDate,
+          workingDays: timeoffRequests.workingDays,
+          note: timeoffRequests.note,
+          employeeName: sql<string>`(select e.full_name from ${employees} e where e.id = ${timeoffRequests.employeeId})`,
+          reasonName: sql<string | null>`(select x.name from ${timeoffReasons} x where x.id = ${timeoffRequests.reasonId})`,
+          workspaceName: sql<string>`(select t.name from ${tenants} t where t.id = ${timeoffRequests.tenantId})`,
+        })
+        .from(timeoffRequests)
+        .where(eq(timeoffRequests.id, data.requestId));
+      // Only a member of the workspace: an approver removed since submit gets nothing.
+      const [u] = await tx
+        .select({ email: users.email, name: sql<string>`coalesce(${users.displayName}, ${users.email}, 'there')` })
+        .from(users)
+        .innerJoin(memberships, and(eq(memberships.userId, users.id), eq(memberships.tenantId, data.tenantId)))
+        .where(eq(users.id, data.recipientUserId));
+      return r && u?.email ? { ...r, to: u.email, approverName: u.name } : null;
+    });
+    if (!facts || facts.status !== 'pending') {
+      this.logger.log(`Time off request ${data.requestId}: ${!facts ? 'nobody to email' : `no longer pending (${facts.status})`}`);
+      return;
+    }
+    const what = facts.type === 'vacation' ? 'vacation' : facts.type === 'paid_leave' ? `paid leave (${facts.reasonName ?? 'reason'})` : facts.type === 'unpaid_leave' ? 'unpaid leave' : `an absence (${facts.reasonName ?? 'reason'})`;
+    await this.mailer.send(requestedEmail({ to: facts.to, approverName: facts.approverName, employeeName: facts.employeeName, workspaceName: facts.workspaceName, appUrl: this.env.APP_URL, what, startDate: facts.startDate, endDate: facts.endDate, workingDays: facts.workingDays, note: facts.note, balanceAfter: null, requestId: data.requestId }));
   }
 }

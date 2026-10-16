@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import type { Tx } from '../../shared/database/database.service';
-import { publicHolidays, tenants } from '../../shared/database/schema';
+import { type HolidaySource, publicHolidays, tenants } from '../../shared/database/schema';
 import { addDays, DEFAULT_TIMESHEET_SETTINGS, type Holiday, type TimesheetSettings } from './timesheet-rules';
 
 /** The timesheet columns of `tenants` (CD-153), for reads and the workspace settings API. */
@@ -48,9 +48,12 @@ export interface HolidayRule {
   endDate: string | null;
   name: string;
   minutes: number | null;
+  /** False: holds in its own year only (Orthodox Easter, a moved Sunday holiday; milestone 16). */
+  repeats: boolean;
+  source: HolidaySource;
 }
 
-export const holidayColumns = { id: publicHolidays.id, date: publicHolidays.holidayDate, endDate: publicHolidays.endDate, name: publicHolidays.name, minutes: publicHolidays.minutes };
+export const holidayColumns = { id: publicHolidays.id, date: publicHolidays.holidayDate, endDate: publicHolidays.endDate, name: publicHolidays.name, minutes: publicHolidays.minutes, repeats: publicHolidays.repeats, source: publicHolidays.source };
 
 /** The same day and month in `year`, or null when the year has no such day (29 February). */
 export function sameDayIn(date: string, year: number): string | null {
@@ -64,6 +67,7 @@ export function sameDayIn(date: string, year: number): string | null {
  */
 export function holidayDaysIn(rule: HolidayRule, year: number): string[] {
   if (year < Number(rule.date.slice(0, 4))) return [];
+  if (!rule.repeats && year !== Number(rule.date.slice(0, 4))) return [];
   const start = sameDayIn(rule.date, year);
   if (!start) return [];
   const span = rule.endDate ? Math.max(0, Math.round((Date.parse(`${rule.endDate}T00:00:00Z`) - Date.parse(`${rule.date}T00:00:00Z`)) / 86_400_000)) : 0;

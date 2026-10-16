@@ -154,6 +154,10 @@ export type HolidaysQuery = z.infer<typeof HolidaysQuery>;
 export const CreateHoliday = z.object({ date: isoDate, endDate: isoDate.nullable().optional(), name: holidayName, minutes: holidayMinutes.optional() });
 export type CreateHoliday = z.infer<typeof CreateHoliday>;
 
+/** POST /api/timesheet/holidays/preload (Admins): the country, and optionally one year to generate now. */
+export const HolidayPreloadInput = z.object({ country: z.enum(['none', 'serbia']), year: z.number().int().min(2000).max(2100).optional() });
+export type HolidayPreloadInput = z.infer<typeof HolidayPreloadInput>;
+
 /** PATCH /api/timesheet/holidays/:id (owners and admins). */
 export const UpdateHoliday = nonEmptyPatch(z.object({ date: isoDate, endDate: isoDate.nullable(), name: holidayName, minutes: holidayMinutes }).partial());
 export type UpdateHoliday = z.infer<typeof UpdateHoliday>;

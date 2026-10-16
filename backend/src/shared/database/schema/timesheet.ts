@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { check, date, foreignKey, index, integer, pgTable, primaryKey, text, time, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, date, foreignKey, index, integer, pgTable, primaryKey, text, time, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { employees } from './people';
 import { tenants, users } from './platform';
 import { tasks, workOrders } from './projects';
@@ -26,6 +26,9 @@ const tenantId = () =>
 
 /** A day's status (spec 5.2; the design says Rejected where the spec says Returned). */
 export const TIMESHEET_DAY_STATUSES = ['draft', 'submitted', 'rejected', 'approved'] as const;
+/** Where a public holiday came from (milestone 16, spec 4.2). */
+export const HOLIDAY_SOURCES = ['manual', 'preload'] as const;
+export type HolidaySource = (typeof HOLIDAY_SOURCES)[number];
 export type TimesheetDayStatus = (typeof TIMESHEET_DAY_STATUSES)[number];
 
 /**
@@ -187,6 +190,10 @@ export const publicHolidays = pgTable(
     endDate: date('end_date'),
     name: text('name').notNull(),
     minutes: integer('minutes'),
+    /** False for a day that holds in its own year only: Orthodox Easter and a moved Sunday holiday (milestone 16, spec 4.3). */
+    repeats: boolean('repeats').notNull().default(true),
+    /** Preloaded for the country (spec 4.2), or added by an Admin. */
+    source: text('source', { enum: HOLIDAY_SOURCES }).notNull().default('manual'),
     ...timestamps,
   },
   (t) => [
@@ -194,7 +201,23 @@ export const publicHolidays = pgTable(
     check('public_holidays_name_ck', sql`length(btrim(${t.name})) between 1 and 100`),
     check('public_holidays_end_ck', sql`${t.endDate} is null or (${t.endDate} >= ${t.holidayDate} and ${t.endDate} <= ${t.holidayDate} + 60)`),
     check('public_holidays_minutes_ck', sql`${t.minutes} is null or (${t.minutes} between 15 and 1440 and ${t.minutes} % 15 = 0)`),
+    check('public_holidays_source_ck', sql`${t.source} in ('manual', 'preload')`),
   ],
+);
+
+/**
+ * The years whose public holidays were preloaded for the workspace's country (spec 4.3): a year is
+ * generated once, so an Admin's later edits and deletions are never undone by the next run.
+ */
+export const publicHolidayPreloads = pgTable(
+  'public_holiday_preloads',
+  {
+    tenantId: tenantId(),
+    year: integer('year').notNull(),
+    country: text('country').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.year], name: 'public_holiday_preloads_pk' }), check('public_holiday_preloads_year_ck', sql`${t.year} between 2000 and 2100`)],
 );
 
 /**

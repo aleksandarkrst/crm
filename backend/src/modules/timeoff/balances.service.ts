@@ -13,6 +13,8 @@ import {
   orgUnits,
   timeoffNotices,
   timeoffPolicies,
+  timeoffRequestDays,
+  timeoffRequests,
   users,
   vacationBalanceAdjustments,
   vacationBalanceExpiries,
@@ -363,7 +365,12 @@ export class BalancesService {
   }
 
   /** The facts of `employeeIds` around `year` (pools year-1 and year), in a handful of queries. */
-  private async facts(tx: Tx, tenantId: string, employeeIds: string[], year: number, now = new Date()): Promise<Facts> {
+  private facts(tx: Tx, tenantId: string, employeeIds: string[], year: number, now = new Date()): Promise<Facts> {
+    return this.factsFor(tx, tenantId, employeeIds, [year - 1, year], now);
+  }
+
+  /** The facts for any set of pool `years`. */
+  private async factsFor(tx: Tx, tenantId: string, employeeIds: string[], years: number[], now = new Date()): Promise<Facts> {
     const today = await workspaceToday(tx, tenantId, now);
     const currentYear = Number(today.slice(0, 4));
     const policyRows = await tx.select({ id: timeoffPolicies.id, name: timeoffPolicies.name, carryOver: timeoffPolicies.carryOver, carryOverCap: timeoffPolicies.carryOverCap, isDefault: timeoffPolicies.isDefault }).from(timeoffPolicies);
@@ -390,7 +397,6 @@ export class BalancesService {
           .where(inArray(employees.id, employeeIds))
           .orderBy(asc(employees.lastName), asc(employees.firstName))
       : [];
-    const years = [year - 1, year];
     const entitlements = new Map<string, EntitlementFacts>();
     const adjustments = new Map<string, number>();
     if (rows.length) {
@@ -409,11 +415,32 @@ export class BalancesService {
   }
 
   /**
-   * The employees' vacation days charged to the pools of `years` (CD-165's `timeoff_request_days`:
-   * approved and pending days with their pool). Until requests exist there are none.
+   * The employees' vacation days charged to the pools of `years` (CD-165, `timeoff_request_days`):
+   * the counted days of pending and approved vacation requests, with their pool year.
    */
-  private async vacationDays(_tx: Tx, employeeIds: string[], _years: number[]): Promise<Map<string, VacationDay[]>> {
-    return new Map(employeeIds.map((id) => [id, []]));
+  private async vacationDays(tx: Tx, employeeIds: string[], years: number[]): Promise<Map<string, VacationDay[]>> {
+    const out = new Map<string, VacationDay[]>(employeeIds.map((id) => [id, []]));
+    if (!employeeIds.length) return out;
+    const rows = await tx
+      .select({ employeeId: timeoffRequestDays.employeeId, date: timeoffRequestDays.date, poolYear: timeoffRequestDays.poolYear, requestId: timeoffRequestDays.requestId, status: timeoffRequests.status })
+      .from(timeoffRequestDays)
+      .innerJoin(timeoffRequests, eq(timeoffRequests.id, timeoffRequestDays.requestId))
+      .where(and(inArray(timeoffRequestDays.employeeId, employeeIds), eq(timeoffRequestDays.state, 'counted'), eq(timeoffRequests.type, 'vacation'), inArray(timeoffRequests.status, ['pending', 'approved']), inArray(timeoffRequestDays.poolYear, years)));
+    for (const r of rows) out.get(r.employeeId)!.push({ date: r.date, poolYear: r.poolYear!, status: r.status === 'approved' ? 'approved' : 'pending', requestId: r.requestId });
+    return out;
+  }
+
+  /**
+   * What `assignPools` needs for one employee (CD-165, the request transaction): the policy's
+   * carry-over rule, the pool facts of `years` and the employee's vacation days around them. Call
+   * inside the caller's transaction, after locking the employee's requests.
+   */
+  async poolContext(tx: Tx, tenantId: string, employeeId: string, years: number[]): Promise<{ today: string; policy: { carryOver: boolean; carryOverCap: number | null }; pools: (year: number) => PoolFacts; days: VacationDay[]; balance: (year: number) => Balance } | null> {
+    const facts = await this.factsFor(tx, tenantId, [employeeId], years);
+    const e = facts.employees[0];
+    if (!e) return null;
+    const policy = this.policyOf(facts, e);
+    return { today: facts.today, policy, pools: (y) => this.pool(facts, e.id, y), days: facts.days.get(e.id) ?? [], balance: (y) => this.row(facts, e, y).figures };
   }
 
   private policyOf(facts: Facts, e: EmployeeRow): PolicyRule {

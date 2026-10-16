@@ -176,7 +176,114 @@ const balancesQuery = (f: BalancesFilters) => {
   return s ? `?${s}` : '';
 };
 
+// ---------------------------------------------------------------- reasons, settings and requests (CD-165)
+
+export type ReasonKind = 'paid_leave' | 'other_absence';
+export interface ApiTimeOffReason {
+  id: string;
+  kind: ReasonKind;
+  name: string;
+  maxDays: number | null;
+  countsTowardLimit: boolean;
+  paidByEmployer: boolean;
+  active: boolean;
+  position: number;
+  used: number;
+}
+export interface ApiTimeOffSettings {
+  paidLeaveYearlyLimit: number;
+}
+
+export type TimeOffType = 'vacation' | 'paid_leave' | 'unpaid_leave' | 'other_absence';
+export const TIME_OFF_TYPE_LABEL: Record<TimeOffType, string> = { vacation: 'Vacation', paid_leave: 'Paid leave', unpaid_leave: 'Unpaid leave', other_absence: 'Other absence' };
+export type TimeOffRequestStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn' | 'cancelled';
+export const REQUEST_STATUS_LABEL: Record<TimeOffRequestStatus, string> = { pending: 'Pending', approved: 'Approved', rejected: 'Rejected', withdrawn: 'Withdrawn', cancelled: 'Cancelled' };
+
+export interface ApiApproverView {
+  kind: 'manager' | 'admins' | 'self';
+  reason: string;
+  approvers: { userId: string; employeeId: string | null; fullName: string }[];
+  selfApproved: boolean;
+}
+
+export interface ApiTimeOffRequest {
+  id: string;
+  employee: { id: string; fullName: string };
+  type: TimeOffType;
+  reason: { id: string; name: string } | null;
+  startDate: string;
+  endDate: string;
+  workingDays: number;
+  note: string | null;
+  status: TimeOffRequestStatus;
+  submittedBy: { userId: string; name: string } | null;
+  submittedAt: string;
+  recorded: boolean;
+  recordReason: string | null;
+  decidedBy: { userId: string; name: string } | null;
+  decidedAt: string | null;
+  decisionComment: string | null;
+  approver: ApiApproverView | null;
+  days: { date: string; poolYear: number | null; state: string }[];
+  warnings: string[];
+  canWithdraw: boolean;
+}
+
+export interface ApiRequestPreview {
+  workingDays: number;
+  dates: string[];
+  excluded: { date: string; name: string }[];
+  refusal: { code: string; message: string } | null;
+  balance: { before: ApiBalanceFigures; after: ApiBalanceFigures; pools: { poolYear: number; days: number }[] } | null;
+  /** Vacation: more days than available; the request can't be submitted. */
+  shortfall: { needed: number; available: number } | null;
+  warnings: string[];
+  approver: ApiApproverView | null;
+}
+
+export interface RequestInput {
+  employeeId?: string;
+  type: TimeOffType;
+  reasonId?: string | null;
+  startDate: string;
+  endDate: string;
+}
+
+export interface RequestsFilters {
+  employeeId?: string;
+  year?: number;
+  status?: TimeOffRequestStatus;
+  type?: TimeOffType;
+  all?: boolean;
+}
+
+const requestsQuery = (f: RequestsFilters) => {
+  const q = new URLSearchParams();
+  if (f.employeeId) q.set('employeeId', f.employeeId);
+  if (f.year) q.set('year', String(f.year));
+  if (f.status) q.set('status', f.status);
+  if (f.type) q.set('type', f.type);
+  if (f.all) q.set('all', 'true');
+  const s = q.toString();
+  return s ? `?${s}` : '';
+};
+
 export const timeOffApi = {
+  reasons: {
+    list: (kind?: ReasonKind) => api<ApiTimeOffReason[]>(`/timeoff/reasons${kind ? `?kind=${kind}` : ''}`),
+    create: (input: { kind: ReasonKind; name: string; maxDays?: number | null; countsTowardLimit?: boolean; paidByEmployer?: boolean }) => api<ApiTimeOffReason>('/timeoff/reasons', { method: 'POST', json: input }),
+    update: (id: string, patch: Partial<{ name: string; maxDays: number | null; countsTowardLimit: boolean; paidByEmployer: boolean; active: boolean }>) => api<ApiTimeOffReason>(`/timeoff/reasons/${id}`, { method: 'PATCH', json: patch }),
+    remove: (id: string) => api<null>(`/timeoff/reasons/${id}`, { method: 'DELETE' }),
+  },
+  settings: () => api<ApiTimeOffSettings>('/timeoff/settings'),
+  updateSettings: (patch: ApiTimeOffSettings) => api<ApiTimeOffSettings>('/timeoff/settings', { method: 'PATCH', json: patch }),
+  requests: {
+    list: (f: RequestsFilters) => api<ApiTimeOffRequest[]>(`/timeoff/requests${requestsQuery(f)}`),
+    get: (id: string) => api<ApiTimeOffRequest & { history: ApiTimeOffHistoryEntry[] }>(`/timeoff/requests/${id}`),
+    preview: (input: RequestInput) => api<ApiRequestPreview>('/timeoff/requests/preview', { method: 'POST', json: input }),
+    create: (input: RequestInput & { note?: string | null; record?: { reason: string } }) => api<ApiTimeOffRequest>('/timeoff/requests', { method: 'POST', json: input }),
+    withdraw: (id: string) => api<ApiTimeOffRequest>(`/timeoff/requests/${id}/withdraw`, { method: 'POST' }),
+  },
   balance: (employeeId: string, year?: number) => api<ApiBalance>(`/timeoff/employees/${employeeId}/balance${year ? `?year=${year}` : ''}`),
   adjust: (employeeId: string, body: { poolYear: number; days: number; kind: AdjustmentKind; reason: string }) => api<ApiBalance>(`/timeoff/employees/${employeeId}/adjustments`, { method: 'POST', json: body }),
   balances: (f: BalancesFilters) => api<ApiBalancesTable>(`/timeoff/balances${balancesQuery(f)}`),
