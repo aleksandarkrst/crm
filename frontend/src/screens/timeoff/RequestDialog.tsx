@@ -15,8 +15,9 @@ const days = (n: number) => `${n} ${n === 1 ? 'working day' : 'working days'}`;
  * approved at once with a reason (spec 8.7).
  */
 export function RequestDialog({ employeeId, employees, admin, onClose }: { employeeId: string; employees?: { id: string; fullName: string }[]; admin: boolean; onClose: (saved?: ApiTimeOffRequest) => void }) {
-  const { flash } = useStore();
+  const { s, flash } = useStore();
   const [employee, setEmployee] = useState(employeeId);
+  const [decision, setDecision] = useState(true);
   const [type, setType] = useState<TimeOffType>('vacation');
   const [reasonId, setReasonId] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -62,7 +63,7 @@ export function RequestDialog({ employeeId, employees, admin, onClose }: { emplo
     setBusy(true);
     setProblem(null);
     try {
-      const saved = await timeOffApi.requests.create({ employeeId: employee, type, reasonId: needsReason ? reasonId : null, startDate, endDate, note: note.trim() || null, ...(record ? { record: { reason: recordReason.trim() } } : {}) });
+      const saved = await timeOffApi.requests.create({ employeeId: employee, type, reasonId: needsReason ? reasonId : null, startDate, endDate, note: note.trim() || null, ...(record ? { record: { reason: recordReason.trim(), decision } } : {}) });
       flash(record ? `Recorded: ${days(saved.workingDays)} of ${TIME_OFF_TYPE_LABEL[saved.type].toLowerCase()}` : `Request sent: ${days(saved.workingDays)}`);
       onClose(saved);
     } catch (err) {
@@ -143,6 +144,12 @@ export function RequestDialog({ employeeId, employees, admin, onClose }: { emplo
               Record as approved (leave agreed outside Pultly, or past days)
             </label>
             {record && <input className="form-input" value={recordReason} maxLength={300} placeholder="Why, e.g. Agreed on paper on 3 March" onChange={(e) => setRecordReason(e.target.value)} data-testid="request-record-reason" />}
+            {record && type === 'vacation' && s.workspace.country === 'RS' && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                <input type="checkbox" checked={decision} onChange={(e) => setDecision(e.target.checked)} data-testid="request-record-decision" />
+                Generate the vacation decision (rešenje) and email it
+              </label>
+            )}
           </div>
         )}
         {problem && (

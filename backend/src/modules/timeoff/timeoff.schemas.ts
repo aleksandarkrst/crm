@@ -143,7 +143,8 @@ export const CreateRequest = z
   .object({
     ...requestFields,
     note: optionalText(500),
-    record: z.object({ reason: z.string().trim().min(1, 'Say why you record it').max(300) }).optional(),
+    // `decision`: "Generate decision" (CD-167, spec 11.1) for recorded vacation in a Serbian workspace; on unless turned off.
+    record: z.object({ reason: z.string().trim().min(1, 'Say why you record it').max(300), decision: z.boolean().default(true) }).optional(),
   })
   .refine(datesInOrder, DATES);
 export type CreateRequest = z.infer<typeof CreateRequest>;

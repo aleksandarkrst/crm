@@ -137,6 +137,13 @@ describe('generation, delivery and receipt (spec 11)', () => {
     expect((await call('POST', `/timeoff/decisions/${da.id}/regenerate`, { ...as(owner), body: {} })).status).toBe(409);
   });
 
+  it('recorded vacation gets one too, unless "Generate decision" is off', async () => {
+    const yes = await ok<{ id: string }>('POST', '/timeoff/requests', { ...as(owner), body: { employeeId: id.emp, type: 'vacation', startDate: d('07-06'), endDate: d('07-06'), record: { reason: 'Agreed on paper' } } });
+    expect((await decisionOf(yes.id)).status).toBe('ready');
+    const no = await ok<{ id: string }>('POST', '/timeoff/requests', { ...as(owner), body: { employeeId: id.emp, type: 'vacation', startDate: d('07-13'), endDate: d('07-13'), record: { reason: 'Agreed on paper', decision: false } } });
+    expect((await ok<{ decision: Decision | null }>('GET', `/timeoff/requests/${no.id}`, as(emp))).decision).toBeNull();
+  });
+
   it('no decision outside Serbia, and none for other time off', async () => {
     const paid = await ok<{ id: string }>('POST', '/timeoff/requests', { ...as(emp), body: { type: 'unpaid_leave', startDate: d('06-01'), endDate: d('06-01') } });
     await approve(paid.id);

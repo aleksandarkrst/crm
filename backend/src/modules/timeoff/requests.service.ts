@@ -192,6 +192,8 @@ export class RequestsService {
         const poolOf = new Map((facts.assignment ?? []).map((a) => [a.date, a.poolYear]));
         if (p.dates.length) await tx.insert(timeoffRequestDays).values(p.dates.map((date) => ({ tenantId: ctx.tenantId, requestId: row!.id, employeeId, date, poolYear: poolOf.get(date) ?? null, state: 'counted' as const })));
         await this.audit.record(tx, ctx, { action: recorded ? 'timeoff.request_recorded' : 'timeoff.request_submitted', entityType: 'timeoff_request', entityId: row!.id, data: { employeeId, type: input.type, startDate: input.startDate, endDate: input.endDate, workingDays: p.workingDays, recordReason: input.record?.reason } });
+        // Recorded vacation gets its decision like an approved one (spec 11.1, "Generate decision").
+        if (recorded && input.type === 'vacation' && input.record?.decision !== false) await this.decisions.queueFor(tx, ctx, row!);
         if (!recorded && p.approver) {
           for (const a of p.approver.approvers) {
             if (a.userId === ctx.userId) continue;
