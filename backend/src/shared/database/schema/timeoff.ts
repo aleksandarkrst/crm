@@ -420,6 +420,7 @@ export const sickLeaves = pgTable(
     index('sick_leaves_employee_idx').on(t.tenantId, t.employeeId, t.startDate),
     index('sick_leaves_status_idx').on(t.tenantId, t.status, t.startDate),
     index('sick_leaves_type_idx').on(t.tenantId, t.typeId),
+    index('sick_leaves_continuation_idx').on(t.tenantId, t.continuationOfId),
     foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'sick_leaves_employee_fk' }).onDelete('cascade'),
     foreignKey({ columns: [t.tenantId, t.typeId], foreignColumns: [sickLeaveTypes.tenantId, sickLeaveTypes.id], name: 'sick_leaves_type_fk' }).onDelete('restrict'),
     foreignKey({ columns: [t.tenantId, t.continuationOfId], foreignColumns: [t.tenantId, t.id], name: 'sick_leaves_continuation_fk' }),

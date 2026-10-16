@@ -171,7 +171,7 @@ function SickDialog({ state, onClose }: { state: DialogState; onClose: (saved?: 
   const showFull = state.kind === 'report' || state.kind === 'edit';
   return (
     <Modal maxWidth={500} onBackdrop={() => !busy && onClose()}>
-      <ModalHeader title={title} sub={record ? `${record.employee.fullName} · ${sickPeriod(record)}` : 'Leave the last day empty while you don\'t know when you\'re back.'} />
+      <ModalHeader title={title} sub={record ? `${record.employee.fullName} · ${sickPeriod(record)}` : 'Leave the last day empty until the return date is known.'} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="sick-dialog">
         {state.kind === 'report' && !state.employeeId && pickable.length > 1 && (
           <label className="policy-field">
@@ -230,7 +230,7 @@ function SickDialog({ state, onClose }: { state: DialogState; onClose: (saved?: 
         {admin && showFull && (
           <label className="policy-field">
             <span className="th">Note</span>
-            <input className="form-input" value={note} maxLength={500} placeholder={NO_MEDICAL} onChange={(e) => setNote(e.target.value)} data-testid="sick-note" />
+            <input className="form-input" value={note} maxLength={500} placeholder="e.g. Sick note arrives by post" onChange={(e) => setNote(e.target.value)} data-testid="sick-note" />
             <span className="emp-note">{NO_MEDICAL}</span>
           </label>
         )}
@@ -247,7 +247,7 @@ function SickDialog({ state, onClose }: { state: DialogState; onClose: (saved?: 
             <span className="emp-note">Interrupted time off days still ahead go back to their requests.</span>
           </label>
         )}
-        {state.kind === 'report' && <span className="emp-note">Approved time off on these days is interrupted and the days go back to the balance. Your manager and the Admins are told.</span>}
+        {state.kind === 'report' && <span className="emp-note">Approved time off on these days is interrupted and the days go back to the balance. The manager and the Admins are told.</span>}
         {problem && (
           <span className="emp-error" role="alert">
             {problem}
@@ -349,6 +349,7 @@ export function SickLeaveTypesCard() {
   const { flash, canEditWorkspace } = useStore();
   const { data, reload } = useProjectsRead<ApiSickLeaveType[]>(true, () => timeOffApi.sickLeave.types(), 'timeoff:sick-types', 'timeOffRev');
   const [name, setName] = useState('');
+  const [payerNote, setPayerNote] = useState('');
   const run = async (action: () => Promise<unknown>, done: string) => {
     try {
       await action();
@@ -392,16 +393,18 @@ export function SickLeaveTypesCard() {
         </div>
       ))}
       {canEditWorkspace && (
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input className="form-input" value={name} maxLength={100} placeholder="New type" onChange={(e) => setName(e.target.value)} aria-label="New sick leave type" />
+          <input className="form-input" value={payerNote} maxLength={300} placeholder="Payer note, e.g. RFZO from the first day" onChange={(e) => setPayerNote(e.target.value)} aria-label="Payer note" />
           <button
             type="button"
             className="btn btn-secondary"
             disabled={!name.trim()}
             onClick={() =>
               void run(async () => {
-                await timeOffApi.sickLeave.createType({ name: name.trim() });
+                await timeOffApi.sickLeave.createType({ name: name.trim(), payerNote: payerNote.trim() || null });
                 setName('');
+                setPayerNote('');
               }, 'Type added')
             }
           >

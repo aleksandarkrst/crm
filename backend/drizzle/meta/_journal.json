@@ -743,6 +743,13 @@
       "when": 1792184365478,
       "tag": "0105_sick_leave_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1792185475884,
+      "tag": "0106_sick_leave_continuation_idx",
+      "breakpoints": true
     }
   ]
 }

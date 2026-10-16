@@ -59,7 +59,7 @@ export function RequestsList({ requests, withEmployee, onChanged }: { requests: 
               </span>
             )}
             {r.decision && <DecisionLine decision={r.decision} own={r.employee.id === s.myEmployeeId} onChanged={onChanged} />}
-            {r.days.some((d) => d.state === 'interrupted') && <span className="emp-note">{r.days.filter((d) => d.state === 'interrupted').length} interrupted by sick leave: back in the balance</span>}
+            {r.days.some((d) => d.state === 'interrupted') && <span className="emp-note">{r.days.filter((d) => d.state === 'interrupted').length} {r.days.filter((d) => d.state === 'interrupted').length === 1 ? 'day' : 'days'} interrupted by sick leave: back in the balance</span>}
             {r.warnings.map((w) => (
               <span key={w} className="emp-note emp-warn">
                 {w}

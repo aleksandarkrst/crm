@@ -102,7 +102,9 @@ export class SickLeaveMailer {
 
   private async weekly(tx: Tx, data: Of<'weekly_check'>, base: { workspaceName: string; appUrl: string }): Promise<MailMessage[]> {
     const who = await this.member(tx, data.tenantId, data.recipientUserId, true);
-    if (!who) return [];
+    // Still an owner or admin when it goes out (the list names employees).
+    const [role] = await tx.select({ role: memberships.role }).from(memberships).where(and(eq(memberships.tenantId, data.tenantId), eq(memberships.userId, data.recipientUserId)));
+    if (!who || (role?.role !== 'owner' && role?.role !== 'admin')) return [];
     const rows = await tx
       .select({ status: sickLeaves.status, startDate: sickLeaves.startDate, endDate: sickLeaves.endDate, employeeName: employees.fullName })
       .from(sickLeaves)

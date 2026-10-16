@@ -14,9 +14,10 @@ let mgr: Session;
 let emp: Session;
 let peer: Session;
 let other: Session;
+let boss: Session;
 let tenant: string;
 let otherTenant: string;
-const id = {} as Record<'owner' | 'mgr' | 'emp' | 'peer', string>;
+const id = {} as Record<'owner' | 'mgr' | 'emp' | 'peer' | 'boss', string>;
 const as = (s: Session) => ({ token: s.token, tenant });
 const NEXT = new Date().getUTCFullYear() + 1;
 const d = (md: string) => `${NEXT}-${md}`;
@@ -62,11 +63,13 @@ const vacation = async (s: Session, startDate: string, endDate: string) => {
 const request = (rid: string) => ok<{ workingDays: number; days: { date: string; state: string }[] }>('GET', `/timeoff/requests/${rid}`, as(owner));
 
 beforeAll(async () => {
-  [owner, mgr, emp, peer, other] = (await Promise.all(['sick-owner', 'sick-mgr', 'sick-emp', 'sick-peer', 'sick-other'].map((l) => signIn(l)))) as [Session, Session, Session, Session, Session];
+  [owner, mgr, emp, peer, other, boss] = (await Promise.all(['sick-owner', 'sick-mgr', 'sick-emp', 'sick-peer', 'sick-other', 'sick-boss'].map((l) => signIn(l)))) as [Session, Session, Session, Session, Session, Session];
   tenant = await createTenant(owner, 'Sick leave');
   otherTenant = await createTenant(other, 'Sick leave elsewhere');
   id.owner = (await ok('GET', '/people/access', as(owner))).employeeId;
-  for (const [key, s] of [['mgr', mgr], ['emp', emp], ['peer', peer]] as const) id[key] = await joinAsEmployee(owner, tenant, s);
+  for (const [key, s] of [['mgr', mgr], ['emp', emp], ['peer', peer], ['boss', boss]] as const) id[key] = await joinAsEmployee(owner, tenant, s);
+  // boss manages mgr: an indirect manager of emp and peer.
+  await ok('PATCH', `/people/employees/${id.mgr}`, { ...as(owner), body: { managerId: id.boss } }, 200);
   for (const key of ['mgr', 'emp', 'peer', 'owner'] as const) await ok('PATCH', `/people/employees/${id[key]}`, { ...as(owner), body: { employmentStartDate: START, ...(key === 'emp' || key === 'peer' ? { managerId: id.mgr } : {}) } }, 200);
   types = await ok<SickType[]>('GET', '/timeoff/sick-leave-types', as(emp));
 });
@@ -193,6 +196,49 @@ describe('the team calendar, the absent manager, the weekly check', () => {
     const mail = await eventually(async () => (await mailsAbout(owner.email, 'Sick leave to check'))[0] ?? null, 'the weekly check');
     expect(mail.text).toContain('Sick-peer Tester');
     expect(mail.text).not.toContain('Illness');
+  });
+});
+
+describe('permissions and the toggle (spec 13.4, 15.1, 15.2)', () => {
+  it('only the employee and the direct manager report and set the end date; managers set nothing else', async () => {
+    expect((await call('POST', '/timeoff/sick-leave', { ...as(boss), body: { employeeId: id.emp, startDate: plus(-40) } })).status).toBe(403);
+    expect((await call('POST', '/timeoff/sick-leave', { ...as(mgr), body: { employeeId: id.emp, startDate: plus(-40), note: 'x' } })).status).toBe(403);
+    expect((await call('POST', '/timeoff/sick-leave', { ...as(mgr), body: { employeeId: id.emp, startDate: plus(-40), confirm: true } })).status).toBe(403);
+    const r = await report(emp, { startDate: plus(-40), endDate: plus(-39) });
+    expect((await call('PATCH', `/timeoff/sick-leave/${r.id}`, { ...as(boss), body: { endDate: plus(-38) } })).status).toBe(403);
+    expect((await call('PATCH', `/timeoff/sick-leave/${r.id}`, { ...as(mgr), body: { startDate: plus(-41) } })).status).toBe(403);
+    expect((await call('PATCH', `/timeoff/sick-leave/${r.id}`, { ...as(emp), body: { endDate: null } })).status).toBe(403);
+    expect((await ok<Sick>('PATCH', `/timeoff/sick-leave/${r.id}`, { ...as(mgr), body: { endDate: plus(-38) } })).endDate).toBe(plus(-38));
+    expect((await call('GET', '/timeoff/sick-leave/csv?all=true', as(mgr))).status).toBe(403);
+    expect((await call('PATCH', `/timeoff/sick-leave-types/${types[1]!.id}`, { ...as(mgr), body: { active: false } })).status).toBe(403);
+    expect((await call('DELETE', `/timeoff/sick-leave-types/${types[1]!.id}`, as(mgr))).status).toBe(403);
+    expect((await call('GET', '/timeoff/sick-leave/csv?all=true', as(owner))).status).toBe(200);
+  });
+
+  it('an inactive type is refused', async () => {
+    const t = await ok<SickType>('POST', '/timeoff/sick-leave-types', { ...as(owner), body: { name: 'Retired type' } });
+    await ok('PATCH', `/timeoff/sick-leave-types/${t.id}`, { ...as(owner), body: { active: false } });
+    expect((await call('POST', '/timeoff/sick-leave', { ...as(owner), body: { employeeId: id.peer, startDate: d('10-04'), endDate: d('10-04'), typeId: t.id, confirm: true } })).status).toBe(400);
+  });
+
+  it('time off approved on days sick leave covers is interrupted at once', async () => {
+    const sick = await report(owner, { employeeId: id.peer, startDate: d('11-02'), endDate: d('11-03'), typeId: types[0]!.id, confirm: true });
+    const v = await vacation(peer, d('11-01'), d('11-05'));
+    expect((await request(v.id)).days.filter((x) => x.state === 'interrupted').map((x) => x.date)).toEqual([d('11-02'), d('11-03')].filter(weekday));
+    await ok('POST', `/timeoff/requests/${v.id}/cancel`, { ...as(peer), body: {} }, 200);
+    await ok('POST', `/timeoff/sick-leave/${sick.id}/cancel`, { ...as(owner), body: { reason: 'Test' } }, 200);
+  });
+
+  it('with "Sick leave notices" off the manager gets no "reported" email; the Admins still do', async () => {
+    await ok('PATCH', '/profile', { ...as(mgr), body: { notifySickLeave: false } }, 200);
+    const day = plus(-50);
+    const label = new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+    const r = await report(emp, { startDate: day, endDate: day });
+    const subject = `Sick leave reported: Sick-emp Tester, ${label}`;
+    await eventually(async () => (await mailsAbout(owner.email, subject))[0] ?? null, 'the Admins email');
+    expect(await mailsAbout(mgr.email, subject)).toEqual([]);
+    await ok('PATCH', '/profile', { ...as(mgr), body: { notifySickLeave: true } }, 200);
+    await ok('POST', `/timeoff/sick-leave/${r.id}/cancel`, { ...as(owner), body: { reason: 'Test' } }, 200);
   });
 });
 

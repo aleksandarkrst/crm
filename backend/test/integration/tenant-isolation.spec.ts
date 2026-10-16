@@ -285,6 +285,8 @@ describe('in SQL, as the runtime role', () => {
       ['request day → employee', `insert into timeoff_request_days (tenant_id, request_id, employee_id, date) values ($1, gen_random_uuid(), $2, '2026-06-01')`, [tenantB, employeeA]],
       ['sick leave → employee', `insert into sick_leaves (tenant_id, employee_id, start_date) values ($1, $2, '2026-06-01')`, [tenantB, employeeA]],
       ['sick leave → type', `insert into sick_leaves (tenant_id, employee_id, start_date, type_id) values ($1, (select id from employees limit 1), '2026-06-01', gen_random_uuid())`, [tenantB]],
+      ['sick leave → continued record', `insert into sick_leaves (tenant_id, employee_id, start_date, continuation_of_id) values ($1, (select id from employees limit 1), '2026-06-01', gen_random_uuid())`, [tenantB]],
+      ['request day → sick leave', `insert into timeoff_request_days (tenant_id, request_id, employee_id, date, sick_leave_id) values ($1, gen_random_uuid(), (select id from employees limit 1), '2026-06-01', gen_random_uuid())`, [tenantB]],
     ];
     for (const [name, text, params] of requestCases) {
       const code = await asTenant(tenantB, () => sqlError(db.query(text, params)));

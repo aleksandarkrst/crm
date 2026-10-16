@@ -10,6 +10,8 @@ import { TenantProvisioning, type TenantProvisioner } from '../../shared/events/
 import { type CallerAccess, PeopleAccess } from '../people';
 import { holidaysBetween, timesheetSettings } from '../timesheet';
 import { csvCell, type CsvValue } from './csv';
+import { assignPools } from './balance';
+import { BalancesService } from './balances.service';
 import { DecisionsService } from './decisions.service';
 import { addDays, workingDaysBetween } from './request-rules';
 import { calendarDays, continues, countedEnd, day31, periodsOverlap } from './sick-leave-rules';
@@ -94,6 +96,7 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
     private readonly jobs: JobsService,
     private readonly access: PeopleAccess,
     private readonly decisions: DecisionsService,
+    private readonly balances: BalancesService,
     private readonly provisioning: TenantProvisioning,
   ) {}
 
@@ -218,6 +221,7 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
         if (!employeeId) throw new ForbiddenException('You have no employee record in this workspace');
         const [employee] = await tx.select({ id: employees.id, deactivatedAt: employees.deactivatedAt }).from(employees).where(eq(employees.id, employeeId));
         if (!employee || !access.canSeeEmployment(employeeId)) throw new NotFoundException('Employee not found');
+        if (employee.deactivatedAt) throw new ConflictException('This employee has left; their sick leave can\'t be reported any more');
         if (!access.isAdmin) {
           if (!access.isSelf(employeeId) && !access.isDirectReport(employeeId)) throw new ForbiddenException('Managers report sick leave for their direct reports only');
           if (input.typeId || input.sickNoteRef || input.note || input.confirm || input.continuationOfId) throw new ForbiddenException('Only Admins set the type, the sick note reference, the note, the continuation, or confirm');
@@ -226,7 +230,8 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
         if (!access.isAdmin && input.startDate < addDays(today, -PAST_LIMIT_DAYS)) throw new BadRequestException(`Sick leave can be reported up to ${PAST_LIMIT_DAYS} days back; ask an Admin for older records`);
         if (input.endDate && input.endDate < input.startDate) throw new BadRequestException('The last day is before the first day');
         if (input.confirm && !input.typeId) throw new BadRequestException('Pick the type to confirm the record');
-        await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${employeeId}))`);
+        if (input.typeId) await this.activeType(tx, input.typeId);
+        await this.lock(tx, employeeId);
         await this.refuseOverlap(tx, employeeId, { startDate: input.startDate, endDate: input.endDate ?? null }, null);
         if (input.continuationOfId) await this.checkContinuation(tx, employeeId, input.continuationOfId, input.startDate);
         const confirmed = !!input.confirm;
@@ -262,9 +267,10 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const access = await this.access.of(ctx, tx);
-        const row = await this.visible(tx, access, id);
+        const row = await this.lockedRow(tx, access, id);
         if (row.status === 'cancelled') throw new ConflictException('This record was cancelled');
         if (!access.isAdmin) {
+          if (input.endDate === null) throw new ForbiddenException('Only Admins reopen a record');
           if (!this.mayReport(access, row.employeeId)) throw new ForbiddenException('Only the employee, their manager and Admins change sick leave');
           const others = Object.entries(input).filter(([k, v]) => k !== 'endDate' && v !== undefined);
           if (others.length) throw new ForbiddenException('Only Admins change anything but the end date');
@@ -272,7 +278,7 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
         }
         const next = { startDate: input.startDate ?? row.startDate, endDate: input.endDate === undefined ? row.endDate : input.endDate };
         if (next.endDate && next.endDate < next.startDate) throw new BadRequestException('The last day is before the first day');
-        await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${row.employeeId}))`);
+        if (input.typeId && input.typeId !== row.typeId) await this.activeType(tx, input.typeId);
         await this.refuseOverlap(tx, row.employeeId, next, row.id);
         const continuationOfId = input.continuationOfId === undefined ? row.continuationOfId : input.continuationOfId;
         if (continuationOfId) await this.checkContinuation(tx, row.employeeId, continuationOfId, next.startDate, row.id);
@@ -293,11 +299,11 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const access = await this.access.of(ctx, tx);
-        const row = await this.visible(tx, access, id);
+        const row = await this.lockedRow(tx, access, id);
         if (row.status !== 'reported') throw new ConflictException(`This record is ${row.status}, not reported`);
         const endDate = input.endDate === undefined ? row.endDate : input.endDate;
         if (endDate && endDate < row.startDate) throw new BadRequestException('The last day is before the first day');
-        await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${row.employeeId}))`);
+        await this.activeType(tx, input.typeId);
         await this.refuseOverlap(tx, row.employeeId, { startDate: row.startDate, endDate }, row.id);
         const continuationOfId = input.continuationOfId === undefined ? row.continuationOfId : input.continuationOfId;
         if (continuationOfId) await this.checkContinuation(tx, row.employeeId, continuationOfId, row.startDate, row.id);
@@ -320,16 +326,18 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
    * back to their requests; past ones stay returned and `notRestored` says how many.
    */
   cancel(ctx: TenantContext, id: string, input: CancelSickLeave): Promise<SickLeaveView & { notRestored: number }> {
-    return this.database.withTenant(ctx.tenantId, async (tx) => {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
       const access = await this.access.of(ctx, tx);
-      const row = await this.visible(tx, access, id);
+      const row = await this.lockedRow(tx, access, id);
       if (row.status === 'cancelled') throw new ConflictException('This record was cancelled already');
       const [updated] = await tx.update(sickLeaves).set({ status: 'cancelled', cancelReason: input.reason }).where(eq(sickLeaves.id, id)).returning();
       await this.audit.record(tx, ctx, { action: 'timeoff.sick_leave_cancelled', entityType: 'sick_leave', entityId: id, data: { employeeId: row.employeeId, reason: input.reason } });
       const today = await workspaceToday(tx, ctx.tenantId);
       const { notRestored } = await this.applyInterruptions(tx, ctx.tenantId, updated!, today);
       return { ...(await this.views(tx, ctx, access, [updated!], today))[0]!, notRestored };
-    });
+      })
+      .catch(mapDbError);
   }
 
   /** CSV for Admins (spec 13.5): the list with the same filters. */
@@ -374,7 +382,11 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
     return this.database.withTenant(tenantId, async (tx) => {
       const today = await workspaceToday(tx, tenantId, now);
       const open = await tx.select().from(sickLeaves).where(and(isNull(sickLeaves.endDate), inArray(sickLeaves.status, [...ACTIVE]), lte(sickLeaves.startDate, today)));
-      for (const row of open) await this.applyInterruptions(tx, tenantId, row, today);
+      for (const row of open) {
+        await this.lock(tx, row.employeeId);
+        const [fresh] = await tx.select().from(sickLeaves).where(eq(sickLeaves.id, row.id));
+        if (fresh && fresh.status !== 'cancelled') await this.applyInterruptions(tx, tenantId, fresh, today);
+      }
       return open.length;
     });
   }
@@ -423,13 +435,15 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
     const touched = new Set<string>();
     let notRestored = 0;
     const mine = await tx
-      .select({ id: timeoffRequestDays.id, date: timeoffRequestDays.date, requestId: timeoffRequestDays.requestId, status: timeoffRequests.status })
+      .select({ id: timeoffRequestDays.id, date: timeoffRequestDays.date, requestId: timeoffRequestDays.requestId, status: timeoffRequests.status, type: timeoffRequests.type, startDate: timeoffRequests.startDate, endDate: timeoffRequests.endDate })
       .from(timeoffRequestDays)
       .innerJoin(timeoffRequests, eq(timeoffRequests.id, timeoffRequestDays.requestId))
       .where(and(eq(timeoffRequestDays.sickLeaveId, sick.id), eq(timeoffRequestDays.state, 'interrupted')));
+    const restorable: typeof mine = [];
     for (const d of mine) {
       if (end !== null && d.date >= sick.startDate && d.date <= end) continue;
-      if (d.date < today || d.status !== 'approved') {
+      // Past days stay returned; so do days of a request no longer approved or shortened since.
+      if (d.date < today || d.status !== 'approved' || d.date < d.startDate || d.date > d.endDate) {
         notRestored++;
         continue;
       }
@@ -438,7 +452,26 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
         notRestored++;
         continue;
       }
-      await tx.update(timeoffRequestDays).set({ state: 'counted', sickLeaveId: null }).where(eq(timeoffRequestDays.id, d.id));
+      restorable.push(d);
+    }
+    // Vacation days come back only while the balance has room (the freed days may be booked elsewhere since).
+    const vacation = restorable.filter((d) => d.type === 'vacation');
+    let pools = new Map<string, number>();
+    if (vacation.length) {
+      const years = [...new Set(vacation.map((d) => Number(d.date.slice(0, 4))))];
+      const pc = await this.balances.poolContext(tx, tenantId, sick.employeeId, [...new Set(years.flatMap((y) => [y - 1, y]))]);
+      const fit = pc ? assignPools(vacation.map((d) => d.date).sort(), { today: pc.today, policy: pc.policy, pools: pc.pools, days: pc.days }) : null;
+      if (fit?.ok) pools = new Map(fit.days.map((a) => [a.date, a.poolYear]));
+    }
+    for (const d of restorable) {
+      if (d.type === 'vacation' && !pools.has(d.date)) {
+        notRestored++;
+        continue;
+      }
+      await tx
+        .update(timeoffRequestDays)
+        .set({ state: 'counted', sickLeaveId: null, ...(d.type === 'vacation' ? { poolYear: pools.get(d.date)! } : {}) })
+        .where(eq(timeoffRequestDays.id, d.id));
       touched.add(d.requestId);
     }
     const interrupted = new Map<string, string[]>();
@@ -487,6 +520,37 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
     const [earlier] = await tx.select({ employeeId: sickLeaves.employeeId, endDate: sickLeaves.endDate, status: sickLeaves.status }).from(sickLeaves).where(eq(sickLeaves.id, continuationOfId));
     if (!earlier || earlier.employeeId !== employeeId || earlier.status === 'cancelled') throw new BadRequestException('The continued record must be an earlier record of the same employee');
     if (!earlier.endDate || earlier.endDate >= startDate) throw new BadRequestException('The continued record must end before this one starts');
+  }
+
+  /**
+   * Time off approved or recorded on days an active sick leave already covers (spec 13.4): the
+   * same interruption as when the sick leave came first. Called in the approval's transaction.
+   */
+  async reapplyFor(tx: Tx, tenantId: string, employeeId: string, from: string, to: string): Promise<void> {
+    const today = await workspaceToday(tx, tenantId);
+    const rows = await tx
+      .select()
+      .from(sickLeaves)
+      .where(and(eq(sickLeaves.employeeId, employeeId), inArray(sickLeaves.status, [...ACTIVE]), lte(sickLeaves.startDate, to), or(isNull(sickLeaves.endDate), gte(sickLeaves.endDate, from))));
+    for (const row of rows) await this.applyInterruptions(tx, tenantId, row, today);
+  }
+
+  private lock(tx: Tx, employeeId: string) {
+    return tx.execute(sql`select pg_advisory_xact_lock(hashtext(${employeeId}))`);
+  }
+
+  /** The record read again under its employee's lock, so checks see what the change will change. */
+  private async lockedRow(tx: Tx, access: CallerAccess, id: string): Promise<SickLeaveRow> {
+    const first = await this.visible(tx, access, id);
+    await this.lock(tx, first.employeeId);
+    const [row] = await tx.select().from(sickLeaves).where(eq(sickLeaves.id, id));
+    return row!;
+  }
+
+  private async activeType(tx: Tx, typeId: string): Promise<void> {
+    const [type] = await tx.select({ active: sickLeaveTypes.active }).from(sickLeaveTypes).where(eq(sickLeaveTypes.id, typeId));
+    if (!type) throw new BadRequestException('Sick leave type not found');
+    if (!type.active) throw new BadRequestException('This sick leave type is inactive');
   }
 
   private mayReport(access: CallerAccess, employeeId: string): boolean {

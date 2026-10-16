@@ -272,7 +272,7 @@ export function CalendarTab({ month, onMonth }: { month: string; onMonth: (m: st
                     const holiday = holidays.get(date);
                     return (
                       <td key={date} className={holiday ? 'cal-holiday' : off ? 'cal-off' : undefined} title={cell ? `${cellLabel(cell.type)}${cell.status === 'pending' ? (cell.type === 'sick_leave' ? ' (not confirmed yet)' : ' (pending)') : ''}` : holiday}>
-                        {cell && <span className="cal-day" data-type={cell.type} data-status={cell.status} aria-label={`${e.fullName}: ${cellLabel(cell.type)}${cell.status === 'pending' ? ', pending' : ''}`} />}
+                        {cell && <span className="cal-day" data-type={cell.type} data-status={cell.status} aria-label={`${e.fullName}: ${cellLabel(cell.type)}${cell.status === 'pending' ? (cell.type === 'sick_leave' ? ', not confirmed yet' : ', pending') : ''}`} />}
                       </td>
                     );
                   })}
