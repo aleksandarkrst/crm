@@ -1678,7 +1678,8 @@ the reminder and after-deadline emails (CD-154) and the approval screen (CD-157)
     with the reason), "Approved by … · at approval 8 of 8 h · locked", the Changes list under a
     resubmitted day (entry changes since it was last returned or unlocked, spec 5.6), and a History
     button; the Timesheet's "⋯" has History too. Both open `screens/approvals/HistoryPanel.tsx`.
-    Not built: the system return when time off or a trip changes (spec 9.3, milestone 16) and the
+    Not built: the system return when a trip changes (spec 9.3, milestone 17; time off changes are
+    traced instead, CD-170) and the
     payroll "Changes to earlier periods" (CD-160).
   - **On behalf** (CD-317, spec 9.4). Every timesheet write (`GET week`, `GET loggable`, `PUT cells`,
     `POST rows`, `GET`/`POST copy`, `POST submit`, `POST resubmit`) takes an optional `employeeId`:
@@ -2203,6 +2204,49 @@ information".
   refused fields, visibility per role, confirm, overlap, interruption and restore with the email,
   the open record extended by the daily job and the end date email, day 31 and the suggestion, the
   calendar and the absent manager, the weekly check, another workspace).
+
+### Time off in the timesheet (CD-170)
+
+Spec 14. Approved time off and sick leave fill the timesheet, so nobody logs those days.
+
+- **Lines** (`timesheet_absences`, owned by the timesheet module, RLS, live hint `timesheet`): at
+  most one per person and working day, with the kind (vacation, paid leave, unpaid leave, other
+  absence, sick leave), the label ("Vacation", "Paid leave: Marriage", "Sick leave", never the type
+  of sick leave), the standard day's minutes less a part-day holiday, and the request or sick leave
+  record it came from. A line counts as entered hours (Total entered, the approvals list, the
+  week status), so the day needs no task hours; Expected doesn't change.
+- **Sync** (`timeoff.sync-timesheet { tenantId, employeeId?, from, to }`): queued in the same
+  transaction as every change that affects absences: approving, recording, cancelling and
+  shortening a request; creating, editing, confirming and cancelling sick leave (the dates it covers
+  now and covered before); the daily extension of open sick leave; holiday calendar edits (without
+  `employeeId`: everyone with absences this year and next). In the worker
+  `TimesheetSyncService.linesFor` works out the lines (counted days of approved requests, sick
+  leave's working days up to today while open; sick leave wins a day both claim) and
+  `TimesheetAbsencesService.sync` makes the timesheet match. Idempotent: a second run changes
+  nothing. Dev only: `POST /api/dev/timeoff/sync-timesheet { employeeId, from, to }` runs it now.
+- **Pending requests** show as a grey hint without hours ("Vacation pending"): the time off module
+  registers itself as the timesheet's `pendingAbsenceRegistry` source, so the timesheet reads no
+  time off table.
+- **Task hours on absence days** (spec 14.2) are refused with 409 ("Vacation on this day: no task
+  hours. Cancel or shorten the absence first.") by `PUT cells` (more hours only), `POST entries` and
+  `PATCH entries` (a new date or more hours); Copy last week skips those days. On a public holiday
+  task hours stay allowed.
+- **Submitted and approved days** (spec 14.3): absences are authoritative, so the sync writes
+  through the lock (lines aren't time entries; task hours are never touched). On a Submitted or
+  Approved day each change is an `absence_changed` day event by "Time off" ("Sick leave added"),
+  shown in the History panel. The week's days carry `flags` (`absenceFlags`, unit-tested):
+  "Changed after submission: …", "Changed after approval: …", "Conflict: absence and task hours"
+  (approved, with both), "Missing hours after absence removed" (approved, left without hours). The
+  approver's week shows them as badges; the Timesheet lists them under the grid.
+- **Screens**: the Timesheet grid gets one read-only row per absence ("From Time off") and a row per
+  pending hint; cells on absence days take no input. The approver's week shows the absence and
+  the flags on the day.
+- **Not built**: the payroll email's "Changes to earlier periods" (CD-160, Q17); business trips
+  (milestone 17). Holidays keep lowering Expected (CD-153) instead of becoming lines.
+- **Tests**: `test/integration/timeoff-timesheet.spec.ts` (pending hint, line, approver's view,
+  removal on cancel; recorded paid leave and sick leave with task hours refused; idempotent sync;
+  flags on submitted and approved days with the trace in the history; a holiday removing a line),
+  `test/timesheet-absence-flags.spec.ts`.
 
 ## Products, deal products and currency (CD-83)
 

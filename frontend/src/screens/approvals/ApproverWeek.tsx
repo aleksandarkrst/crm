@@ -188,6 +188,17 @@ export function ApproverWeek() {
                 {shortHours(d.minutes, w.settings.timeFormat)} of {shortHours(d.expectedMinutes, w.settings.timeFormat)} h
               </span>
               {d.holiday && <span className="emp-note">Public holiday · {d.holiday.name}</span>}
+              {d.absence && (
+                <span className="emp-note" data-testid="ap-absence">
+                  {d.absence.label} · {shortHours(d.absence.minutes, w.settings.timeFormat)} h
+                </span>
+              )}
+              {d.pendingAbsence && <span className="emp-note">{d.pendingAbsence}</span>}
+              {d.flags.map((f) => (
+                <span key={f} className="badge badge-warn" data-testid="ap-absence-flag">
+                  {f}
+                </span>
+              ))}
               <span style={{ flex: 1 }} />
               {dayMode && right && d.status === 'submitted' && (
                 <>
