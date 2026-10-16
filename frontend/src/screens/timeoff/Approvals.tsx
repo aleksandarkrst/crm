@@ -173,12 +173,14 @@ const shiftMonth = (month: string, by: number) => {
   const d = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1 + by, 1));
   return d.toISOString().slice(0, 7);
 };
-const LEGEND: { type: TimeOffType; label: string }[] = [
+const LEGEND: { type: TimeOffType | 'sick_leave'; label: string }[] = [
   { type: 'vacation', label: 'Vacation' },
   { type: 'paid_leave', label: 'Paid leave' },
   { type: 'unpaid_leave', label: 'Unpaid leave' },
   { type: 'other_absence', label: 'Other absence' },
+  { type: 'sick_leave', label: 'Sick leave' },
 ];
+const cellLabel = (type: TimeOffType | 'sick_leave') => (type === 'sick_leave' ? 'Sick leave' : TIME_OFF_TYPE_LABEL[type]);
 
 /**
  * The team calendar (CD-166, spec 9.5): a month, employees as rows and days as columns, weekends
@@ -269,8 +271,8 @@ export function CalendarTab({ month, onMonth }: { month: string; onMonth: (m: st
                     const off = weekday(date) >= 5;
                     const holiday = holidays.get(date);
                     return (
-                      <td key={date} className={holiday ? 'cal-holiday' : off ? 'cal-off' : undefined} title={cell ? `${TIME_OFF_TYPE_LABEL[cell.type]}${cell.status === 'pending' ? ' (pending)' : ''}` : holiday}>
-                        {cell && <span className="cal-day" data-type={cell.type} data-status={cell.status} aria-label={`${e.fullName}: ${TIME_OFF_TYPE_LABEL[cell.type]}${cell.status === 'pending' ? ', pending' : ''}`} />}
+                      <td key={date} className={holiday ? 'cal-holiday' : off ? 'cal-off' : undefined} title={cell ? `${cellLabel(cell.type)}${cell.status === 'pending' ? (cell.type === 'sick_leave' ? ' (not confirmed yet)' : ' (pending)') : ''}` : holiday}>
+                        {cell && <span className="cal-day" data-type={cell.type} data-status={cell.status} aria-label={`${e.fullName}: ${cellLabel(cell.type)}${cell.status === 'pending' ? ', pending' : ''}`} />}
                       </td>
                     );
                   })}

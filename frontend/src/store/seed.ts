@@ -114,7 +114,7 @@ export function initialState(): State {
     customValues: { deal: {}, company: {}, contact: {} },
     // Replaced by the saved settings when the workspace loads (store/remote.ts).
     workspace: { name: '', currency: 'EUR', timezone: 'Europe/Belgrade', fiscalMonth: 1, customerEmailLanguage: 'en', employeeDefaultWeeklyHours: 40, employeeNumberRequired: false, employeeSelfEditBank: true, ceoEmployeeId: null, autoCreateProjects: false, modules: ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting'], terms: { project: 'Project', projects: 'Projects', task: 'Task', tasks: 'Tasks' }, timesheet: DEFAULT_TIMESHEET_SETTINGS, country: null, company: EMPTY_COMPANY },
-    profile: { name: '', title: '', email: '', phone: '', language: 'en', dateFormat: 'DD.MM.YYYY', startPage: 'pipeline', defaultFunnelId: '', digest: true, dealAssigned: true, meetingInvites: true, visitPlans: true, orgChanges: true, taskAssigned: true, timeOffBalance: true, timeOffApprovals: true },
+    profile: { name: '', title: '', email: '', phone: '', language: 'en', dateFormat: 'DD.MM.YYYY', startPage: 'pipeline', defaultFunnelId: '', digest: true, dealAssigned: true, meetingInvites: true, visitPlans: true, orgChanges: true, taskAssigned: true, timeOffBalance: true, timeOffApprovals: true, sickLeaveNotices: true },
     onboarding: null,
     visitPlans: [], // loaded from the API (CD-134)
     visitScope: { all: false, manageAll: false, seesTeam: false, visibleUserIds: [], manageableUserIds: [] },

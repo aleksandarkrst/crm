@@ -14,8 +14,9 @@ import { ApprovalsTab, CalendarTab } from './timeoff/Approvals';
 import { RequestDialog } from './timeoff/RequestDialog';
 import { DecisionsTab } from './timeoff/Decisions';
 import { RequestsList } from './timeoff/RequestsList';
+import { EmployeeSickLeave, SickLeaveTab } from './timeoff/SickLeave';
 
-type Tab = 'my' | 'approvals' | 'requests' | 'calendar' | 'balances' | 'decisions';
+type Tab = 'my' | 'approvals' | 'requests' | 'calendar' | 'balances' | 'decisions' | 'sick';
 const tabStyle = (on: boolean) => ({ borderBottom: `2px solid ${on ? 'var(--brand)' : 'transparent'}`, fontWeight: on ? 600 : 500, color: on ? 'var(--brand)' : 'var(--text-2)' });
 
 /**
@@ -30,7 +31,7 @@ export function TimeOff() {
   const manager = !!s.people.access?.roles.includes('manager');
   const canSeeBalances = admin || manager;
   const wanted = params.get('tab');
-  const tab: Tab = wanted === 'calendar' ? 'calendar' : canSeeBalances && (wanted === 'balances' || wanted === 'requests' || wanted === 'approvals') ? wanted : admin && wanted === 'decisions' ? 'decisions' : 'my';
+  const tab: Tab = wanted === 'calendar' ? 'calendar' : canSeeBalances && (wanted === 'balances' || wanted === 'requests' || wanted === 'approvals' || wanted === 'sick') ? wanted : admin && wanted === 'decisions' ? 'decisions' : 'my';
   const month = params.get('month') && /^\d{4}-\d{2}$/.test(params.get('month')!) ? params.get('month')! : new Date().toISOString().slice(0, 7);
   useEffect(() => {
     void employeeCard.loadMyEmployeeId();
@@ -60,6 +61,11 @@ export function TimeOff() {
           Team calendar
         </button>
         {canSeeBalances && (
+          <button type="button" role="tab" aria-selected={tab === 'sick'} className="composer-tab" style={tabStyle(tab === 'sick')} onClick={() => go({ tab: 'sick' })} data-testid="timeoff-tab-sick">
+            Sick leave
+          </button>
+        )}
+        {canSeeBalances && (
           <button type="button" role="tab" aria-selected={tab === 'balances'} className="composer-tab" style={tabStyle(tab === 'balances')} onClick={() => go({ tab: 'balances' })} data-testid="timeoff-tab-balances">
             Balances
           </button>
@@ -76,6 +82,7 @@ export function TimeOff() {
       {tab === 'calendar' && <CalendarTab month={month} onMonth={(m) => go({ month: m })} />}
       {tab === 'balances' && <Balances params={params} go={go} />}
       {tab === 'decisions' && <DecisionsTab />}
+      {tab === 'sick' && <SickLeaveTab admin={admin} />}
     </Screen>
   );
 }
@@ -110,7 +117,7 @@ function MyTimeOff({ employeeId, year, onYear }: { employeeId: string | null | u
         <span style={{ fontSize: 15, fontWeight: 600 }}>Requests {data.year}</span>
         {requests ? <RequestsList requests={requests} onChanged={() => void reloadRequests()} /> : <span className="emp-note">Loading</span>}
       </section>
-      <span className="emp-note">Sick leave comes with the next release of this module.</span>
+      <EmployeeSickLeave employeeId={employeeId} canReport />
       {requesting && (
         <RequestDialog
           employeeId={employeeId}

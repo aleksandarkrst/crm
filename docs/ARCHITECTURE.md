@@ -2144,6 +2144,66 @@ vacation. Spec sections 10 to 12.
   concurrent approvals getting consecutive numbers, cancel marking it cancelled, nothing outside
   Serbia or for other time off).
 
+### Sick leave (CD-169)
+
+`SickLeaveService` (spec 13). **No medical data**: there is no field for a diagnosis, doctor or
+clinic and no attachment; the request schemas are strict (`z.strictObject`), so unknown fields
+are refused with 400, and the note carries the hint "Do not enter a diagnosis or any medical
+information".
+
+- **Tables**: `sick_leave_types` (name, payer note, active; five defaults from spec 13.3,
+  provisioned for new workspaces and inserted for existing ones in 0105) and `sick_leaves`
+  (employee, start, end or null for "open, until return", type, continuation of an earlier record,
+  sick note reference, note, status reported, confirmed or cancelled with a reason). Both with RLS,
+  composite FKs, history (note and reference left out) and live hints. `timeoff_request_days`
+  gains `sick_leave_id`: the record that interrupted the day.
+- **Who** (spec 15.1, with Administration and Payroll folded into Admins by CD-225): the employee
+  reports their own and a manager their direct reports', up to 60 days back, without type, note
+  or reference; Admins create any (and Confirmed at once with `confirm` and a type), confirm,
+  edit every field and cancel with a reason. The employee and the direct manager may set the end
+  date while it isn't set or the record isn't confirmed.
+- **Visibility** (spec 13.6, enforced in the views): dates and status for the employee, their
+  managers and Admins; the type for the employee and Admins, never managers; note and sick note
+  reference for Admins only. Other people get 404.
+- **Calculated**: calendar and working days (the workspace's working week and holidays), an open
+  record counting up to today; the **day-31 date** across the records a record continues
+  (`continuation_of_id`, at most 20 links); a suggested continuation for Admins when an earlier
+  record ended the day before or with only non-working days between; "Still open" after 30
+  days without a change. Pure rules in `sick-leave-rules.ts` (`test/sick-leave-rules.spec.ts`).
+- **No overlap** between two active records of the same employee (an open one overlaps
+  everything after its start); a 409 names the other record. Checks run under the employee's
+  advisory lock.
+- **Time off interrupted** (spec 13.4, A9): `applyInterruptions` runs after every create, edit,
+  confirm and cancel. Counted days of approved requests inside the record's period (up to today
+  while open) become `interrupted` and go back to the balance; days it no longer covers that are
+  still ahead become `counted` again unless the employee booked that day meanwhile (cancel answers
+  `notRestored` for the rest). The request stays Approved with its working days recounted and its
+  vacation decision marked Outdated. Each newly interrupted request emails the employee, the
+  approvers and the Admins.
+- **Daily job**: open records reach the new day (`extendOpen`, interrupting the time off on it);
+  on Mondays each Admin with an employee record gets the "Sick leave to check" list (records
+  still Reported, or open and unchanged for 30 days; claimed in `timeoff_notices`, kind
+  `sick_leave_check`).
+- **Other modules**: `AbsenceService` counts sick leave as absent (an approver on sick leave hands
+  requests to the Admins); the team calendar shows `sick_leave` cells without the type.
+- **Emails** (`timeoff.sick-email`, `sick-leave-emails.ts`, `test/sick-leave-emails.spec.ts`):
+  "Sick leave reported" to the direct manager and the Admins, "Sick leave ended" to the manager,
+  "Time off interrupted by sick leave" (can't be turned off), the weekly check. The toggle is
+  `memberships.notify_sick_leave` ("Sick leave notices"). No email names the type.
+- **Routes** (`/api/timeoff`): `GET/POST sick-leave`, `GET sick-leave/:id`, `PATCH sick-leave/:id`,
+  `POST sick-leave/:id/confirm|cancel` (Admins), `GET sick-leave/csv` (Admins),
+  `GET/POST/PATCH/DELETE sick-leave-types` (Admins change).
+- **Screens**: My time off and the employee card get a Sick leave section with "Report sick
+  leave"; Time off gets a **Sick leave** tab for managers and Admins (filters, CSV, Confirm, Edit,
+  Set end date, Cancel); Settings → Time off gets Sick leave types; Settings → Notifications gets
+  "Sick leave notices"; the request list says how many days sick leave interrupted.
+- **Not yet**: timesheet lines for sick leave (CD-170), the business trip conflict flag
+  (milestone 17), the Payroll view (no Payroll role since CD-225).
+- **Tests**: `test/integration/timeoff-sick-leave.spec.ts` (types, reporting per role and the
+  refused fields, visibility per role, confirm, overlap, interruption and restore with the email,
+  the open record extended by the daily job and the end date email, day 31 and the suggestion, the
+  calendar and the absent manager, the weekly check, another workspace).
+
 ## Products, deal products and currency (CD-83)
 
 Replaces the CD-77 model (products with a currency of their own, payment schedules and
