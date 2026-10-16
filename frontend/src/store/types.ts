@@ -1,4 +1,4 @@
-import type { ApiCustomerEmailLanguage, ApiCustomField, ApiDateFormat, ApiLanguage, ApiOnboarding, ApiStageChange, ApiStartPage, CustomFieldEntity, CustomFieldValues, DealOutcome, LostReason, ApiVisitScope, WorkspaceTerms, ApiTimesheetSettings } from '../lib/api';
+import type { ApiCustomerEmailLanguage, ApiCustomField, ApiDateFormat, ApiLanguage, ApiOnboarding, ApiStageChange, ApiStartPage, CustomFieldEntity, CustomFieldValues, DealOutcome, LostReason, ApiVisitScope, WorkspaceTerms, ApiTimesheetSettings, ApiCompanyDetails } from '../lib/api';
 import type { DealDoc, DocTemplate } from './documents';
 import type { TimesheetSummaryResult } from './employeeCard';
 import type { MeetingDialogSeed, MeetingList } from './meetings';
@@ -279,6 +279,10 @@ export interface Workspace {
   terms: WorkspaceTerms;
   /** Timesheet settings (CD-153, Settings → Workforce). */
   timesheet: ApiTimesheetSettings;
+  /** The company's country (CD-167): 'RS' turns vacation decisions on. */
+  country: string | null;
+  /** Company details printed on generated documents (CD-167). */
+  company: ApiCompanyDetails;
 }
 
 /** The signed-in user's profile (see ApiProfile). */

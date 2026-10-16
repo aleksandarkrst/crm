@@ -5,6 +5,7 @@ import { type ApiTimeOffRequest, REQUEST_STATUS_LABEL, TIME_OFF_TYPE_LABEL, time
 import { projectError } from '../../store/projects';
 import { useStore } from '../../store/store';
 import { dateLabel } from '../employee/parts';
+import { DecisionLine } from './Decisions';
 
 const BADGE: Record<ApiTimeOffRequest['status'], string> = { pending: 'badge badge-warn', approved: 'badge badge-brand', rejected: 'badge badge-danger', withdrawn: 'badge badge-neutral', cancelled: 'badge badge-neutral' };
 
@@ -17,7 +18,7 @@ export const periodLabel = (r: Pick<ApiTimeOffRequest, 'startDate' | 'endDate'>)
  * Requests tab of managers and Admins).
  */
 export function RequestsList({ requests, withEmployee, onChanged }: { requests: ApiTimeOffRequest[]; withEmployee?: boolean; onChanged: () => void }) {
-  const { flash } = useStore();
+  const { s, flash } = useStore();
   const [busy, setBusy] = useState<string | null>(null);
   const [dialog, setDialog] = useState<{ kind: 'cancel' | 'shorten'; request: ApiTimeOffRequest } | null>(null);
   const withdraw = async (r: ApiTimeOffRequest) => {
@@ -57,6 +58,7 @@ export function RequestsList({ requests, withEmployee, onChanged }: { requests: 
                 {r.decisionComment ? `: ${r.decisionComment}` : ''}
               </span>
             )}
+            {r.decision && <DecisionLine decision={r.decision} own={r.employee.id === s.myEmployeeId} onChanged={onChanged} />}
             {r.warnings.map((w) => (
               <span key={w} className="emp-note emp-warn">
                 {w}

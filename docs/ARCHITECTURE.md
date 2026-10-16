@@ -2087,6 +2087,63 @@ Admins, and the requester alone when they are the only Admin.
   days returned, the list's extras and the count, the calendar per role, the absent manager
   handing over with the daily notice, the reminder once a day, the toggle, the emails).
 
+### Vacation decisions and the document engine (CD-167)
+
+Serbian employers issue a written decision (rešenje o korišćenju godišnjeg odmora) for every
+vacation. Spec sections 10 to 12.
+
+- **Country and company details** (Settings → Workspace): `tenants.country` (ISO 3166-1 alpha-2,
+  null when unset) turns decisions on when it is `RS`. The Company details card holds the legal
+  name, address, PIB and MB (check digits validated by `pibValid` and `mbValid` in
+  `identity/settings.schemas.ts`), the place of issue, the signatory and their title, and the
+  editable legal basis (`decision_legal_basis`, prefilled with article 75 of the Labor Law). They
+  travel as `company` on `GET/PATCH /api/workspace`; Admins edit.
+- **Recipients** (Settings → Time off → Vacation decisions, spec 12): `decision_copy_admins`
+  (the owners and admins) and `decision_copy_emails` (up to five addresses), on
+  `PATCH /api/timeoff/settings`. The employee always gets the decision; recipients are resolved
+  when the email job runs.
+- **The engine** (`modules/hr-documents`, exported through its `index.ts`, so milestone 17's
+  travel orders reuse it): one table `hr_documents` (RLS, composite FK to the employee) with one
+  row per version: type, source (the request), number, year and sequence, status
+  (queued, running, ready, failed with a readable error), state (valid, outdated, cancelled,
+  superseded), the data snapshot (JSON) and template version, the file's key, size and SHA-256,
+  who emailed and when, and when the employee acknowledged it. `queue` takes the next number of
+  the type and year under an advisory lock (two approvals at once get consecutive numbers,
+  `GO-2027-0001`) and sends `documents.generate-pdf` in the caller's transaction. The worker
+  renders the type's `PdfDocumentSpec` with PDFKit and the DejaVu Sans font from
+  `dejavu-fonts-ttf` (Serbian Latin and Cyrillic, no internet needed), stores
+  `<tenant>/hr-documents/<id>-v<version>.pdf` and sends `documents.email`. A `DocumentDataError`
+  (missing company details) fails the document with its reason and emails the Admins; nothing
+  retries it. A retried job takes over a running document; the time off daily job fails documents
+  running for over an hour. Each type registers a `DocumentRenderer` in `documentRenderers` on
+  start, so the engine imports no module.
+- **The vacation decision** (`timeoff/decision-document.ts`, pure, tested by extracting the PDF's
+  text in `test/vacation-decision.spec.ts`): Serbian, Latin script, from a snapshot taken at
+  approval: company details, the employee's name and job title, the year (the first day's pool),
+  the year's entitlement with its parts (base, experience, individual, proportional months), the
+  period and working days, the pools when two years are used, the holidays inside, the return
+  date (the next working day), "ceo" or "deo godišnjeg odmora" (whole when nothing remains),
+  the legal remedy note and the signatory. Dates as `16.10.2026.`.
+- **When** (`DecisionsService`): approving a vacation request in a Serbian workspace queues one
+  decision in the approval's transaction. Not for other types (spec Q5). Cancelling approved leave
+  marks every version Cancelled, shortening marks it Outdated; the PDF is never changed and
+  documents are never deleted.
+- **Routes** (`/api/timeoff/decisions`): `GET` the Decisions tab (Admins, filters year and
+  state), `GET :id/pdf` (the employee's own and Admins; 404 for managers and anyone else, 409 while
+  not ready), `POST :id/acknowledge` ("Confirm receipt", the employee only), `POST :id/regenerate
+  { email }` (Admins: a new version from today's data, the same number, the earlier version
+  superseded and still downloadable). Request views carry `decision` for the employee and Admins
+  only.
+- **Screens**: the request list shows the decision with Download PDF and Confirm receipt; Time off
+  gets a **Decisions** tab for Admins (Download, Generate again with "email it"); Settings →
+  Workspace gets Country and the Company details card; Settings → Time off gets Vacation
+  decisions.
+- **Tests**: `test/integration/timeoff-decisions.spec.ts` (settings validation and permissions,
+  the failure without company details and its email, regeneration keeping the number, the email
+  with the PDF attached, download and receipt per role and workspace, the recipients, two
+  concurrent approvals getting consecutive numbers, cancel marking it cancelled, nothing outside
+  Serbia or for other time off).
+
 ## Products, deal products and currency (CD-83)
 
 Replaces the CD-77 model (products with a currency of their own, payment schedules and

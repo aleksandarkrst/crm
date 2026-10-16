@@ -10,6 +10,7 @@ import { IdentityModule } from './modules/identity';
 import { NotificationsDevModule, NotificationsModule } from './modules/notifications';
 import { PeopleDevModule, PeopleModule } from './modules/people';
 import { ProjectsDevModule, ProjectsModule } from './modules/projects';
+import { HrDocumentsModule } from './modules/hr-documents';
 import { TimeoffDevModule, TimeoffModule } from './modules/timeoff';
 import { TimesheetDevModule, TimesheetModule } from './modules/timesheet';
 import { RealtimeModule } from './modules/realtime';
@@ -37,6 +38,7 @@ import { RateLimitModule } from './shared/rate-limit';
     PeopleModule,
     ProjectsModule,
     TimesheetModule,
+    HrDocumentsModule,
     TimeoffModule,
     // Development only: the emails the log mail driver "sent" (GET /api/dev/mail), and sending
     // your daily digest now (POST /api/dev/digest), the daily deactivation job (POST /api/dev/people/deactivate-due),

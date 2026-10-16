@@ -7,7 +7,7 @@ import { JobsService } from '../../shared/events/jobs.service';
 import { employees, funnels, memberships, tenants, users } from '../../shared/database/schema';
 import { applyCeoRule, syncMemberNames } from '../people';
 import { IdentityService } from './identity.service';
-import type { TimesheetSettingsInput, UpdateProfile, UpdateWorkspace, WorkspaceTerms } from './settings.schemas';
+import type { CompanyInput, TimesheetSettingsInput, UpdateProfile, UpdateWorkspace, WorkspaceTerms } from './settings.schemas';
 
 const workspaceColumns = {
   id: tenants.id,
@@ -28,6 +28,16 @@ const workspaceColumns = {
   projectTermPlural: tenants.projectTermPlural,
   taskTerm: tenants.taskTerm,
   taskTermPlural: tenants.taskTermPlural,
+  country: tenants.country,
+  // Company details (CD-167), returned as `company`.
+  coLegalName: tenants.companyLegalName,
+  coAddress: tenants.companyAddress,
+  coPib: tenants.companyPib,
+  coMb: tenants.companyMb,
+  coPlace: tenants.companyPlace,
+  coSignatoryName: tenants.companySignatoryName,
+  coSignatoryTitle: tenants.companySignatoryTitle,
+  coLegalBasis: tenants.decisionLegalBasis,
   // Timesheet settings (CD-153), returned as `timesheet`.
   tsDayMinutes: tenants.timesheetDayMinutes,
   tsDayStart: tenants.timesheetDayStart,
@@ -44,6 +54,7 @@ const workspaceColumns = {
   tsAfterDeadlineEmails: tenants.timesheetAfterDeadlineEmails,
 };
 type TermColumns = { projectTerm: string; projectTermPlural: string; taskTerm: string; taskTermPlural: string };
+type CompanyColumns = { coLegalName: string | null; coAddress: string | null; coPib: string | null; coMb: string | null; coPlace: string | null; coSignatoryName: string | null; coSignatoryTitle: string | null; coLegalBasis: string };
 type TimesheetColumns = {
   tsDayMinutes: number;
   tsDayStart: string;
@@ -61,10 +72,18 @@ type TimesheetColumns = {
 };
 
 /** The row as the API returns it: the four names as `terms` (CD-143), the timesheet settings as `timesheet` (CD-153). */
-function present<T extends TermColumns & TimesheetColumns>(r: T) {
-  const { projectTerm, projectTermPlural, taskTerm, taskTermPlural, tsDayMinutes, tsDayStart, tsDayEnd, tsWorkingDays, tsTimeFormat, tsMaxDayHours, tsDeadlineWeekday, tsDeadlineTime, tsDeadlineWeek, tsAutoSubmit, tsApprovalMode, tsReminderHours, tsAfterDeadlineEmails, ...row } = r;
+/** The company details (CD-167) as `tenants` columns: only the fields sent. */
+function companyPatch(c: CompanyInput | undefined) {
+  if (!c) return {};
+  const cols = { legalName: 'companyLegalName', address: 'companyAddress', pib: 'companyPib', mb: 'companyMb', place: 'companyPlace', signatoryName: 'companySignatoryName', signatoryTitle: 'companySignatoryTitle', legalBasis: 'decisionLegalBasis' } as const;
+  return Object.fromEntries(Object.entries(c).map(([k, v]) => [cols[k as keyof typeof cols], v]));
+}
+
+function present<T extends TermColumns & TimesheetColumns & CompanyColumns>(r: T) {
+  const { coLegalName, coAddress, coPib, coMb, coPlace, coSignatoryName, coSignatoryTitle, coLegalBasis, projectTerm, projectTermPlural, taskTerm, taskTermPlural, tsDayMinutes, tsDayStart, tsDayEnd, tsWorkingDays, tsTimeFormat, tsMaxDayHours, tsDeadlineWeekday, tsDeadlineTime, tsDeadlineWeek, tsAutoSubmit, tsApprovalMode, tsReminderHours, tsAfterDeadlineEmails, ...row } = r;
   return {
     ...row,
+    company: { legalName: coLegalName, address: coAddress, pib: coPib, mb: coMb, place: coPlace, signatoryName: coSignatoryName, signatoryTitle: coSignatoryTitle, legalBasis: coLegalBasis },
     terms: { project: projectTerm, projects: projectTermPlural, task: taskTerm, tasks: taskTermPlural } satisfies WorkspaceTerms,
     timesheet: {
       dayMinutes: tsDayMinutes,
@@ -142,14 +161,14 @@ export class SettingsService {
         if (ceo.deactivatedAt) throw new BadRequestException('The CEO must be an active employee');
       }
       const [before] = input.ceoEmployeeId || input.terms || input.timesheet ? await tx.select(workspaceColumns).from(tenants).where(eq(tenants.id, ctx.tenantId)) : [];
-      const { terms, timesheet, ...rest } = input;
+      const { terms, timesheet, company, ...rest } = input;
       const names = terms ? { projectTerm: terms.project, projectTermPlural: terms.projects, taskTerm: terms.task, taskTermPlural: terms.tasks } : {};
       if (timesheet && before && (timesheet.dayEnd ?? before.tsDayEnd) <= (timesheet.dayStart ?? before.tsDayStart)) {
         throw new BadRequestException('The working day must end after it starts');
       }
       const [row] = await tx
         .update(tenants)
-        .set({ ...rest, ...names, ...timesheetPatch(timesheet, before) })
+        .set({ ...rest, ...names, ...timesheetPatch(timesheet, before), ...companyPatch(company) })
         .where(eq(tenants.id, ctx.tenantId))
         .returning(workspaceColumns);
       if (!row) throw new NotFoundException('Workspace not found');

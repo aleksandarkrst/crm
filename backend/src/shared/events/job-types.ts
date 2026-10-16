@@ -129,6 +129,10 @@ export interface JobPayloads {
    * (POST /api/dev/timeoff/daily) only.
    */
   'timeoff.daily': { now?: string; tenantId?: string };
+  /** Renders and stores a generated legal document (CD-167, spec 10.3): a vacation decision PDF, queued by the approval. */
+  'documents.generate-pdf': { tenantId: string; documentId: string };
+  /** `ready`: the PDF to the employee and the decision recipients (spec 11.3, 12); `failed`: "could not be generated" to the Admins. */
+  'documents.email': { tenantId: string; documentId: string; kind: 'ready' | 'failed' };
   /**
    * One time off email (CD-164, spec 15.2): "Balance adjusted" to the employee (queued by the
    * adjustment, unless they adjusted their own) or "Carry-over expiring" (queued by the daily job
@@ -161,6 +165,8 @@ export const JOB_NAMES = [
   'crm.meeting-invite',
   'crm.meeting-minutes-email',
   'crm.visit-plan-email',
+  'documents.generate-pdf',
+  'documents.email',
   'identity.invitation-email',
   'identity.member-removed',
   'identity.signup-email',
@@ -183,4 +189,4 @@ export const JOB_NAMES = [
 ] as const satisfies readonly JobName[];
 
 /** Jobs that send email: retried MAIL_RETRY_LIMIT times with backoff from MAIL_RETRY_DELAY_SECONDS. */
-export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed', 'projects.project-created-email', 'projects.task-assigned', 'projects.limit-alert', 'timesheet.notice-email', 'timeoff.notice-email']);
+export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed', 'projects.project-created-email', 'projects.task-assigned', 'projects.limit-alert', 'timesheet.notice-email', 'timeoff.notice-email', 'documents.email']);

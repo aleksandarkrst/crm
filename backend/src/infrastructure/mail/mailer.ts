@@ -1,11 +1,13 @@
 /**
- * A file sent with an email, as text (calendar invitations, CD-131). `contentType` is the full
- * header value, e.g. "text/calendar; charset=utf-8; method=REQUEST".
+ * A file sent with an email: text (calendar invitations, CD-131) or, with `encoding: 'base64'`,
+ * a binary file such as a PDF (CD-167). `contentType` is the full header value, e.g.
+ * "text/calendar; charset=utf-8; method=REQUEST".
  */
 export interface MailAttachment {
   filename: string;
   contentType: string;
   content: string;
+  encoding?: 'base64';
 }
 
 /** One email: plain text plus a simple HTML version of the same content, and optional attachments. */

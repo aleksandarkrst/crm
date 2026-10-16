@@ -1,9 +1,11 @@
-import { Body, Controller, Delete, Get, Header, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, Param, Patch, Post, Query, Res, StreamableFile } from '@nestjs/common';
+import type { Response } from 'express';
 import { RequireTenant, Tenant, type TenantContext } from '../../shared/authorization';
 import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
 import { ApprovalsService } from './approvals.service';
 import { BalancesService } from './balances.service';
+import { DecisionsService } from './decisions.service';
 import { EntitlementsService } from './entitlements.service';
 import { TimeoffPoliciesService } from './policies.service';
 import { ReasonsService } from './reasons.service';
@@ -21,10 +23,12 @@ import {
   CreatePolicy,
   CreateReason,
   CreateRequest,
+  DecisionsQuery,
   HistoryQuery,
   PreviewRequest,
   ReasonsQuery,
   Recalculate,
+  Regenerate,
   Reject,
   RequestsQuery,
   Shorten,
@@ -56,7 +60,42 @@ export class TimeoffController {
     private readonly reasons: ReasonsService,
     private readonly requests: RequestsService,
     private readonly approvals: ApprovalsService,
+    private readonly decisions: DecisionsService,
   ) {}
+
+  // ---------------------------------------------------------------- vacation decisions (CD-167, spec 11)
+
+  /** The Decisions tab (Admins): every decision version, newest first. */
+  @Get('decisions')
+  @RequireTenant('admin')
+  listDecisions(@Tenant() ctx: TenantContext, @Query(new ZodPipe(DecisionsQuery)) query: DecisionsQuery) {
+    return this.decisions.list(ctx, query);
+  }
+
+  /** The PDF: the employee's own, any for Admins (404 for everyone else). */
+  @Get('decisions/:id/pdf')
+  async decisionPdf(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Res({ passthrough: true }) res: Response) {
+    const { name, content } = await this.decisions.pdf(ctx, id);
+    const ascii = name.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, "'");
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    return new StreamableFile(content);
+  }
+
+  /** "Confirm receipt" (spec 11.4): the employee. */
+  @Post('decisions/:id/acknowledge')
+  @HttpCode(200)
+  acknowledgeDecision(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.decisions.acknowledge(ctx, id);
+  }
+
+  /** A new version with the same number (spec 11.5), Admins. */
+  @Post('decisions/:id/regenerate')
+  @RequireTenant('admin')
+  regenerateDecision(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(Regenerate)) body: Regenerate) {
+    return this.decisions.regenerate(ctx, id, body.email);
+  }
 
   // ---------------------------------------------------------------- approvals (CD-166, spec 9)
 

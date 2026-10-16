@@ -26,7 +26,7 @@ export class SmtpMailer extends Mailer {
       subject: message.subject,
       text: message.text,
       html: message.html,
-      attachments: message.attachments?.map((a) => ({ filename: a.filename, content: a.content, contentType: a.contentType })),
+      attachments: message.attachments?.map((a) => ({ filename: a.filename, content: a.content, contentType: a.contentType, encoding: a.encoding })),
     });
     return { rejected: (info.rejected ?? []).map((r) => (typeof r === 'string' ? r : r.address)) };
   }

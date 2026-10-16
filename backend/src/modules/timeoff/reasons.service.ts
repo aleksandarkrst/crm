@@ -26,6 +26,9 @@ export interface ReasonView {
 export interface TimeoffSettingsView {
   /** Paid leave: working days per calendar year for the reasons that count toward it (A10). */
   paidLeaveYearlyLimit: number;
+  /** Vacation decision recipients besides the employee (CD-167, spec 12). */
+  decisionCopyAdmins: boolean;
+  decisionCopyEmails: string[];
 }
 
 /** The defaults of a new workspace (spec 7.2, 7.3; the migration gave them to existing ones). */
@@ -131,13 +134,13 @@ export class ReasonsService implements TenantProvisioner, OnModuleInit {
   }
 
   async settingsIn(tx: Tx, tenantId: string): Promise<TimeoffSettingsView> {
-    const [t] = await tx.select({ limit: tenants.timeoffPaidLeaveYearlyLimit }).from(tenants).where(eq(tenants.id, tenantId));
-    return { paidLeaveYearlyLimit: t?.limit ?? 5 };
+    const [t] = await tx.select({ limit: tenants.timeoffPaidLeaveYearlyLimit, copyAdmins: tenants.decisionCopyAdmins, copyEmails: tenants.decisionCopyEmails }).from(tenants).where(eq(tenants.id, tenantId));
+    return { paidLeaveYearlyLimit: t?.limit ?? 5, decisionCopyAdmins: t?.copyAdmins ?? false, decisionCopyEmails: t?.copyEmails ?? [] };
   }
 
   updateSettings(ctx: TenantContext, input: UpdateTimeoffSettings): Promise<TimeoffSettingsView> {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
-      await tx.update(tenants).set({ timeoffPaidLeaveYearlyLimit: input.paidLeaveYearlyLimit }).where(eq(tenants.id, ctx.tenantId));
+      await tx.update(tenants).set({ timeoffPaidLeaveYearlyLimit: input.paidLeaveYearlyLimit, decisionCopyAdmins: input.decisionCopyAdmins, decisionCopyEmails: input.decisionCopyEmails }).where(eq(tenants.id, ctx.tenantId));
       await this.audit.record(tx, ctx, { action: 'timeoff.settings_updated', entityType: 'workspace', entityId: ctx.tenantId, data: { ...input } });
       return this.settingsIn(tx, ctx.tenantId);
     });

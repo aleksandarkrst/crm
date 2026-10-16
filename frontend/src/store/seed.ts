@@ -2,7 +2,7 @@
  * Reference data from the Mini CRM v2 design (pick lists, labels, sales scripts) and the store's
  * starting state. No demo records: deals, funnels and products come from the API (CD-103).
  */
-import { DEFAULT_TIMESHEET_SETTINGS } from '../lib/api';
+import { DEFAULT_TIMESHEET_SETTINGS, EMPTY_COMPANY } from '../lib/api';
 import { emptyPeople } from './people';
 import type { Filters, State } from './types';
 
@@ -113,7 +113,7 @@ export function initialState(): State {
     customFields: [],
     customValues: { deal: {}, company: {}, contact: {} },
     // Replaced by the saved settings when the workspace loads (store/remote.ts).
-    workspace: { name: '', currency: 'EUR', timezone: 'Europe/Belgrade', fiscalMonth: 1, customerEmailLanguage: 'en', employeeDefaultWeeklyHours: 40, employeeNumberRequired: false, employeeSelfEditBank: true, ceoEmployeeId: null, autoCreateProjects: false, modules: ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting'], terms: { project: 'Project', projects: 'Projects', task: 'Task', tasks: 'Tasks' }, timesheet: DEFAULT_TIMESHEET_SETTINGS },
+    workspace: { name: '', currency: 'EUR', timezone: 'Europe/Belgrade', fiscalMonth: 1, customerEmailLanguage: 'en', employeeDefaultWeeklyHours: 40, employeeNumberRequired: false, employeeSelfEditBank: true, ceoEmployeeId: null, autoCreateProjects: false, modules: ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting'], terms: { project: 'Project', projects: 'Projects', task: 'Task', tasks: 'Tasks' }, timesheet: DEFAULT_TIMESHEET_SETTINGS, country: null, company: EMPTY_COMPANY },
     profile: { name: '', title: '', email: '', phone: '', language: 'en', dateFormat: 'DD.MM.YYYY', startPage: 'pipeline', defaultFunnelId: '', digest: true, dealAssigned: true, meetingInvites: true, visitPlans: true, orgChanges: true, taskAssigned: true, timeOffBalance: true, timeOffApprovals: true },
     onboarding: null,
     visitPlans: [], // loaded from the API (CD-134)

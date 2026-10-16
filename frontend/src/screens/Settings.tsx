@@ -13,6 +13,7 @@ import type { CustomFieldEntity } from '../lib/api';
 import { useStore } from '../store/store';
 import { TemplatesTab } from './DocumentTemplates';
 import { EmployeesTab } from './settings/EmployeesTab';
+import { CompanyCard, COUNTRY_OPTIONS } from './settings/CompanyCard';
 import { TimeOffTab } from './settings/TimeOffSettings';
 import { ApprovalsTab, HolidaysTab } from './settings/WorkforceSettings';
 import { ProjectHierarchyTab, ProjectTypesTab } from './settings/ProjectTypesTab';
@@ -129,6 +130,7 @@ export function Settings() {
           </div>
 
           {current === 'workspace' && <WorkspaceTab />}
+          {current === 'workspace' && <CompanyCard />}
           {current === 'workspace' && <GettingStartedCard />}
           {current === 'modules' && <ModulesTab />}
           {current === 'team' && <TeamTab />}
@@ -194,6 +196,10 @@ function WorkspaceTab() {
       <FieldRow label="Time zone">
         <GhostSelect value={w.timezone} disabled={ro} onChange={(e) => setWorkspace({ timezone: e.target.value })} options={TIME_ZONES} />
       </FieldRow>
+      <FieldRow label="Country">
+        <GhostSelect aria-label="Country" value={w.country ?? ''} disabled={ro} onChange={(e) => setWorkspace({ country: e.target.value || null })} options={COUNTRY_OPTIONS} data-testid="workspace-country" />
+      </FieldRow>
+      <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>Serbia turns on the vacation decision document (rešenje) sent when vacation is approved.</span>
       <FieldRow label="Fiscal year starts">
         <GhostSelect value={String(w.fiscalMonth)} disabled={ro} onChange={(e) => setWorkspace({ fiscalMonth: Number(e.target.value) })} options={MONTHS} />
       </FieldRow>

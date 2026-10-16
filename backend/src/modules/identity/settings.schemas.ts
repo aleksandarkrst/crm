@@ -73,6 +73,50 @@ export const TimesheetSettingsInput = z
   .partial();
 export type TimesheetSettingsInput = z.infer<typeof TimesheetSettingsInput>;
 
+/** A Serbian PIB (tax id): nine digits, the last the ISO 7064 MOD 11,10 check digit. */
+export function pibValid(pib: string): boolean {
+  if (!/^\d{9}$/.test(pib)) return false;
+  let r = 10;
+  for (const ch of pib.slice(0, 8)) {
+    r = (r + Number(ch)) % 10 || 10;
+    r = (r * 2) % 11;
+  }
+  return (11 - r) % 10 === Number(pib[8]);
+}
+
+/** A Serbian MB (registration number): eight digits, the last a MOD 11 check digit (weights 2, 7, 6, 5, 4, 3, 2). */
+export function mbValid(mb: string): boolean {
+  if (!/^\d{8}$/.test(mb)) return false;
+  const weights = [2, 7, 6, 5, 4, 3, 2];
+  const r = [...mb.slice(0, 7)].reduce((sum, ch, i) => sum + Number(ch) * weights[i]!, 0) % 11;
+  const check = 11 - r > 9 ? 0 : 11 - r;
+  return check === Number(mb[7]);
+}
+
+/** Empty text clears a company detail. */
+const detail = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform((v) => v || null)
+    .nullable();
+
+/** Settings → Workspace → Company (CD-167, spec 10.1): printed on generated documents. Any subset. */
+export const CompanyInput = z
+  .object({
+    legalName: detail(200),
+    address: detail(300),
+    pib: detail(9).refine((v) => v === null || pibValid(v), 'PIB is 9 digits with a valid check digit'),
+    mb: detail(8).refine((v) => v === null || mbValid(v), 'MB is 8 digits with a valid check digit'),
+    place: detail(100),
+    signatoryName: detail(150),
+    signatoryTitle: detail(100),
+    legalBasis: z.string().trim().min(10, 'The legal basis is needed on every decision').max(1000),
+  })
+  .partial();
+export type CompanyInput = z.infer<typeof CompanyInput>;
+
 export const UpdateWorkspace = z
   .object({
     name: z.string().trim().min(1).max(100),
@@ -100,6 +144,14 @@ export const UpdateWorkspace = z
     terms: WorkspaceTerms,
     // Settings → Workforce (CD-153): any of the timesheet settings.
     timesheet: TimesheetSettingsInput,
+    // The company's country (CD-167): ISO 3166-1 alpha-2, or null. Serbia ('RS') issues vacation decisions.
+    country: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{2}$/, 'A two-letter country code, e.g. RS')
+      .nullable(),
+    company: CompanyInput,
   })
   .partial()
   .refine(atLeastOne, 'Nothing to update');
