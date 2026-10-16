@@ -1962,6 +1962,71 @@ pure model (`test/timeoff-balance.spec.ts`), `BalancesService` reads the facts a
   bulk actions, the job's expiry record and May reminder, isolation);
   `tenant-isolation.spec.ts` covers the three tables and the append-only policy in SQL.
 
+### Requests, reasons and the holiday calendar (CD-165)
+
+- **Holiday calendar** (spec 4, in the timesheet module, which owns `public_holidays`):
+  `serbian-holidays.ts` (pure, `test/serbian-holidays.spec.ts` against the spec's 2026 to 2029
+  table and the Orthodox Easter dates to 2035) generates Serbia's non-working days of a year:
+  the fixed state and religious holidays as yearly repeating spans, Orthodox Good Friday, Easter
+  and Easter Monday (Meeus's Julian algorithm plus 13 days) and the moved days of state holidays
+  that fall on a Sunday (the next day that is neither a weekend nor a holiday) as one-year
+  entries. `public_holidays.repeats` (false: holds in its own year) and `source` (`manual` or
+  `preload`) came with `drizzle/0099`; `holidayDaysIn` honours `repeats`. `tenants.holiday_preload`
+  (`none` or `serbia`; new workspaces are provisioned with Serbia and this year and next year
+  generated) and `public_holiday_preloads` (the years generated, once: an Admin's later edits and
+  deletions are never undone; a day a repeating holiday already covers is skipped). `GET
+  /api/timesheet/holidays/preload` answers `{ country, years }`; `POST` (Admins) sets the country and
+  generates this year and next year, or one `year`. The worker's `timesheet.tick` generates this
+  year and, from 1 November, next year for workspaces with a country. Settings → Holidays shows
+  "<year> only · preloaded" on such days and the "Preload holidays for" control. The timesheet
+  module exports `holidaysBetween` and `timesheetSettings` for the request's working days.
+- **Reasons** (spec 7.2, 7.3; `timeoff_reasons`, RLS and history in `drizzle/0100`): paid leave
+  reasons with the most working days per case and whether they count toward the yearly group
+  limit (`tenants.timeoff_paid_leave_yearly_limit`, default 5, A10), and other absence reasons
+  with "paid by employer". The defaults of 7.2 and 7.3 are provisioned (`ReasonsService.provision`)
+  and were backfilled. `GET /api/timeoff/reasons?kind=` (members), `POST`, `PATCH /:id`,
+  `DELETE /:id` (Admins; a used reason is 409: deactivate it), `GET/PATCH /api/timeoff/settings`
+  (`paidLeaveYearlyLimit`). Limits are warnings, never blocks (`paidLeaveWarnings`, pure).
+- **Requests** (spec 8; `timeoff_requests` and `timeoff_request_days`, `drizzle/0099`, RLS,
+  versions, history (`timeoff_request`) and the `timeoff` hint in `0100`): type (vacation, paid
+  leave, unpaid leave, other absence: Admins only), reason (paid leave and other absence), dates,
+  `working_days`, note, status (`pending`, `approved`, `rejected`, `withdrawn`, `cancelled`), who
+  submitted it and when, `recorded` with `record_reason` (an Admin recorded it as approved, spec
+  8.7), and CD-166's decision fields. One row per working day in `timeoff_request_days` with the
+  pool year (vacation) and a state; a counted day is unique per employee and date (partial unique
+  index), so requests can't overlap even under a race. The balance reads the counted days of
+  pending and approved vacation requests (`BalancesService.vacationDays`).
+  - `request-rules.ts` (pure, `test/timeoff-request-rules.spec.ts`): `workingDaysBetween` (the
+    standard week's weekdays minus holidays, naming the excluded ones), `checkRequest` (at least
+    one working day; employees from today to the end of next year, Admins any date; vacation needs
+    a start date and one month of work, A2, unless an Admin records it).
+  - `RequestsService.create` runs in one transaction under `pg_advisory_xact_lock(hashtext(employee))`:
+    the working days, the checks, the overlap with pending or approved requests (409 naming it),
+    and for vacation the pools through `assignPools` (409 "You have 4 days available; this request
+    needs 6."); the pools' entitlement rows are made first if missing (as the system's). Admins
+    request for anyone and may `record` leave as approved at once with a reason (past dates
+    allowed). "Time off requested" (`requestedEmail`) goes to each approver (one job per
+    approver, read when sending: a request withdrawn meanwhile sends nothing). `preview` answers
+    the same facts without writing: working days, excluded holidays, the refusal, the vacation
+    balance before and after with the pools used, the paid leave warnings and the approver
+    (`PeopleAccess.approversFor`, resolved on every read, never stored). `withdraw`: a pending
+    request, by the employee or an Admin; its days become `cancelled`.
+  - API: `GET /api/timeoff/requests?employeeId=&year=&status=&type=` (own; a report's for
+    managers; anyone's for Admins; `all=true` everyone the caller may see), `GET requests/:id` (with
+    the history), `POST requests/preview`, `POST requests`, `POST requests/:id/withdraw`.
+- **Screens**: Time off → My time off has **New request** (`screens/timeoff/RequestDialog.tsx`:
+  type, reason, dates, note; a live preview "6 working days (excludes 1 May Praznik rada)", the
+  vacation days available now and after, the warnings, "Your request goes to …"; Admins pick the
+  employee and may record as approved) and the year's requests (`RequestsList.tsx`: type and
+  reason, dates, working days, status badge, who decides, Withdraw). A **Requests** tab for
+  managers and Admins lists everyone they may see, with **Record time off** for Admins. Settings →
+  Time off adds Paid leave reasons (with the yearly limit) and Other absence reasons; Settings →
+  Holidays the preload control.
+- **Tests**: `test/integration/timeoff-requests.spec.ts` (the preload and a generated year's
+  permanence, reasons and the limit, the preview, every refusal, submitting with the pool and
+  the approver email, overlap and withdraw, paid and unpaid leave and the warnings, Admins
+  recording, the race for the last days, who sees whose, isolation).
+
 ## Products, deal products and currency (CD-83)
 
 Replaces the CD-77 model (products with a currency of their own, payment schedules and

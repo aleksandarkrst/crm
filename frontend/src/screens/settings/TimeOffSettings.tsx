@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { askConfirm } from '../../components/ConfirmDialog';
 import { Switch } from '../../components/ui';
-import { type ApiExperienceRule, type ApiPolicyInput, type ApiTimeOffPolicy, carryOverLabel, experienceSummary, timeOffApi } from '../../lib/timeOffApi';
+import { type ApiExperienceRule, type ApiPolicyInput, type ApiTimeOffPolicy, type ApiTimeOffReason, type ApiTimeOffSettings, carryOverLabel, experienceSummary, type ReasonKind, timeOffApi } from '../../lib/timeOffApi';
 import { projectError, useProjectsRead } from '../../store/projects';
 import { useStore } from '../../store/store';
 
@@ -238,6 +238,16 @@ function PolicyRow({ policy, onChanged }: { policy: ApiTimeOffPolicy; onChanged:
  * on). Admins only (the section is hidden from members and the API answers 403).
  */
 export function TimeOffTab() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <PoliciesCard />
+      <ReasonsCard kind="paid_leave" />
+      <ReasonsCard kind="other_absence" />
+    </div>
+  );
+}
+
+function PoliciesCard() {
   const { data, error, reload } = useProjectsRead<ApiTimeOffPolicy[]>(true, () => timeOffApi.policies.list(), 'timeoff:policies', 'timeOffRev');
   const [adding, setAdding] = useState(false);
   return (
@@ -275,6 +285,184 @@ export function TimeOffTab() {
       </div>
       {error && <span style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</span>}
       {data?.map((p) => <PolicyRow key={`${p.id}:${p.updatedAt}`} policy={p} onChanged={() => void reload()} />)}
+    </div>
+  );
+}
+
+const KIND_TEXT: Record<ReasonKind, { title: string; text: string }> = {
+  paid_leave: { title: 'Paid leave reasons', text: 'A paid leave request names one of these. The days per case and the yearly limit (for the reasons that count toward it) are warnings to the employee and the approver, never blocks: contracts may grant more.' },
+  other_absence: { title: 'Other absence reasons', text: 'Long absences Admins record for an employee: maternity leave, child care leave, military service. No approval and no balance. "Paid by employer" is shown to payroll.' },
+};
+
+/** One reason, shown or edited inline (name, days per case, counts toward the limit or paid by the employer, active). */
+function ReasonRow({ reason, onChanged }: { reason: ApiTimeOffReason; onChanged: () => void }) {
+  const { flash } = useStore();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ name: reason.name, maxDays: reason.maxDays === null ? '' : String(reason.maxDays), countsTowardLimit: reason.countsTowardLimit, paidByEmployer: reason.paidByEmployer });
+  const paid = reason.kind === 'paid_leave';
+  const save = async () => {
+    if (!draft.name.trim()) return flash('Enter a name');
+    const maxDays = draft.maxDays.trim() === '' ? null : /^\d+$/.test(draft.maxDays.trim()) ? Number(draft.maxDays.trim()) : NaN;
+    if (Number.isNaN(maxDays) || (maxDays !== null && (maxDays < 1 || maxDays > 60))) return flash('Days per case are 1 to 60, or empty for no limit');
+    try {
+      await timeOffApi.reasons.update(reason.id, { name: draft.name.trim(), ...(paid ? { maxDays, countsTowardLimit: draft.countsTowardLimit } : { paidByEmployer: draft.paidByEmployer }) });
+      flash('Saved');
+      setEditing(false);
+      onChanged();
+    } catch (err) {
+      flash(projectError(err));
+    }
+  };
+  const toggleActive = async () => {
+    try {
+      await timeOffApi.reasons.update(reason.id, { active: !reason.active });
+      onChanged();
+    } catch (err) {
+      flash(projectError(err));
+    }
+  };
+  const remove = async () => {
+    if (!(await askConfirm({ title: `Delete ${reason.name}?`, message: 'No request uses it. A used reason can only be deactivated.', confirmLabel: 'Delete', danger: true }))) return;
+    try {
+      await timeOffApi.reasons.remove(reason.id);
+      flash(`${reason.name} deleted`);
+      onChanged();
+    } catch (err) {
+      flash(projectError(err));
+    }
+  };
+  if (editing)
+    return (
+      <div className="reason-row" data-testid="reason-row">
+        <input className="form-input" value={draft.name} maxLength={100} onChange={(e) => setDraft({ ...draft, name: e.target.value })} aria-label="Name" />
+        {paid ? <input className="form-input" inputMode="numeric" value={draft.maxDays} placeholder="No limit" onChange={(e) => setDraft({ ...draft, maxDays: e.target.value })} aria-label="Days per case" /> : <span />}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+          {paid ? (
+            <>
+              <input type="checkbox" checked={draft.countsTowardLimit} onChange={(e) => setDraft({ ...draft, countsTowardLimit: e.target.checked })} /> Counts toward the yearly limit
+            </>
+          ) : (
+            <>
+              <input type="checkbox" checked={draft.paidByEmployer} onChange={(e) => setDraft({ ...draft, paidByEmployer: e.target.checked })} /> Paid by employer
+            </>
+          )}
+        </label>
+        <span />
+        <span style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+          <button type="button" className="btn btn-secondary" onClick={() => setEditing(false)}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn-primary" onClick={() => void save()} data-testid="reason-save">
+            Save
+          </button>
+        </span>
+      </div>
+    );
+  return (
+    <div className="reason-row" data-testid="reason-row" data-name={reason.name} data-active={reason.active}>
+      <span style={{ fontSize: 13, fontWeight: 500, color: reason.active ? undefined : 'var(--muted)' }}>
+        {reason.name}
+        {!reason.active && <span className="badge badge-neutral" style={{ marginLeft: 8 }}>Inactive</span>}
+      </span>
+      <span style={{ fontSize: 13 }}>{paid ? (reason.maxDays === null ? 'No limit' : `${reason.maxDays} ${reason.maxDays === 1 ? 'day' : 'days'}`) : ''}</span>
+      <span style={{ fontSize: 13 }}>{paid ? (reason.countsTowardLimit ? 'Counts toward the limit' : '') : reason.paidByEmployer ? 'Paid by employer' : 'Not paid by employer'}</span>
+      <span className="emp-note">{reason.used ? `${reason.used} ${reason.used === 1 ? 'request' : 'requests'}` : 'Not used'}</span>
+      <span style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <button type="button" className="btn-outline" onClick={() => setEditing(true)} data-testid="reason-edit">
+          Edit
+        </button>
+        <button type="button" className="btn-plain" onClick={() => void toggleActive()} data-testid="reason-toggle">
+          {reason.active ? 'Deactivate' : 'Activate'}
+        </button>
+        {!reason.used && (
+          <button type="button" className="btn-plain" onClick={() => void remove()} data-testid="reason-delete">
+            Delete
+          </button>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/** Settings → Time off → Paid leave reasons / Other absence reasons (CD-165, spec 7.2, 7.3), with the yearly limit for paid leave. */
+function ReasonsCard({ kind }: { kind: ReasonKind }) {
+  const { flash } = useStore();
+  const { data, error, reload } = useProjectsRead<ApiTimeOffReason[]>(true, () => timeOffApi.reasons.list(kind), `timeoff:reasons:${kind}`, 'timeOffRev');
+  const { data: settings, set: setSettings } = useProjectsRead<ApiTimeOffSettings>(kind === 'paid_leave', () => timeOffApi.settings(), 'timeoff:settings', 'timeOffRev');
+  const [name, setName] = useState('');
+  const [limit, setLimit] = useState<string | null>(null);
+  const add = async () => {
+    if (!name.trim()) return flash('Enter a name');
+    try {
+      const r = await timeOffApi.reasons.create({ kind, name: name.trim() });
+      flash(`${r.name} added`);
+      setName('');
+      await reload();
+    } catch (err) {
+      flash(projectError(err));
+    }
+  };
+  const saveLimit = async () => {
+    const n = limit !== null && /^\d+$/.test(limit.trim()) ? Number(limit.trim()) : NaN;
+    if (Number.isNaN(n) || n > 60) return flash('The yearly limit is 0 to 60 days');
+    try {
+      setSettings(await timeOffApi.updateSettings({ paidLeaveYearlyLimit: n }));
+      setLimit(null);
+      flash('Saved');
+    } catch (err) {
+      flash(projectError(err));
+    }
+  };
+  const paid = kind === 'paid_leave';
+  return (
+    <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid={`timeoff-reasons-${kind}`}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span style={{ fontSize: 15, fontWeight: 600 }}>{KIND_TEXT[kind].title}</span>
+        <span className="emp-note">{KIND_TEXT[kind].text}</span>
+      </div>
+      {paid && settings && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 13 }}>
+          <span>Yearly limit for the reasons that count toward it:</span>
+          {limit === null ? (
+            <>
+              <strong data-testid="paid-leave-limit">{settings.paidLeaveYearlyLimit} days</strong>
+              <button type="button" className="btn-plain" onClick={() => setLimit(String(settings.paidLeaveYearlyLimit))}>
+                Change
+              </button>
+            </>
+          ) : (
+            <>
+              <input className="form-input timeoff-num" inputMode="numeric" value={limit} onChange={(e) => setLimit(e.target.value)} aria-label="Yearly limit" />
+              <button type="button" className="btn btn-secondary" onClick={() => setLimit(null)}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-primary" onClick={() => void saveLimit()}>
+                Save
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      <div className="reason-row reason-head">
+        <span className="th">Reason</span>
+        <span className="th">{paid ? 'Days per case' : ''}</span>
+        <span className="th">{paid ? 'Yearly limit' : 'Pay'}</span>
+        <span className="th">Used</span>
+        <span />
+      </div>
+      {error && <span style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</span>}
+      {data?.map((r) => <ReasonRow key={`${r.id}:${r.name}:${r.maxDays}:${r.countsTowardLimit}:${r.paidByEmployer}:${r.active}`} reason={r} onChanged={() => void reload()} />)}
+      <div className="reason-row">
+        <input className="form-input" value={name} maxLength={100} placeholder="New reason" onChange={(e) => setName(e.target.value)} aria-label="New reason" data-testid={`reason-add-${kind}`} />
+        <span />
+        <span />
+        <span />
+        <span style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button type="button" className="btn btn-primary" onClick={() => void add()} data-testid={`reason-add-go-${kind}`}>
+            Add reason
+          </button>
+        </span>
+      </div>
     </div>
   );
 }

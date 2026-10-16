@@ -1396,6 +1396,23 @@ a.task-card-project:hover { color: var(--brand); }
   .bal-history-row > :nth-child(4) { display: none; }
 }
 
+/* requests (CD-165): the list and the form's live preview */
+.req-list { display: flex; flex-direction: column; }
+.req-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--divider); }
+.req-row:first-child { border-top: 0; padding-top: 0; }
+.req-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.request-preview { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 8px; background: var(--bg-soft); }
+.reason-row { display: grid; grid-template-columns: minmax(0, 1.5fr) 110px 150px 140px auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--divider); }
+.reason-row.reason-head { border-top: 0; padding-bottom: 0; }
+.reason-row .form-input { width: 100%; box-sizing: border-box; }
+@media (max-width: 760px) {
+  .req-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .req-row > :nth-child(3) { grid-column: 1 / -1; justify-self: start; }
+  .reason-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .reason-row > :nth-child(3), .reason-row > :nth-child(4), .reason-row > :nth-child(5) { grid-column: 1 / -1; }
+  .reason-row.reason-head { display: none; }
+}
+
 /* the employee card's Time off section (CD-163) */
 .timeoff-year { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; margin-top: 6px; }
 .timeoff-year-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
