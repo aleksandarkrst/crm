@@ -129,6 +129,14 @@ export function carryOverDays(unused: number, policy: Pick<PolicyRules, 'carryOv
   return policy.carryOverCap === null ? unused : Math.min(unused, policy.carryOverCap);
 }
 
+/** "20 base + 2 for 5 years of experience + 3 individual": an entitlement's parts, as the card and the history show them. */
+export function entitlementParts(e: Pick<Entitlement, 'baseDays' | 'experienceDays' | 'experienceYears' | 'individualDays'>): string {
+  const parts = [`${e.baseDays} base`];
+  if (e.experienceDays) parts.push(`${e.experienceDays} for ${e.experienceYears} ${e.experienceYears === 1 ? 'year' : 'years'} of experience`);
+  if (e.individualDays) parts.push(`${e.individualDays} individual`);
+  return parts.join(' + ');
+}
+
 /** "5 years 3 months", "7 months", "0 months": prior experience as the card shows it. */
 export function experienceLabel(months: number): string {
   const years = Math.floor(months / 12);

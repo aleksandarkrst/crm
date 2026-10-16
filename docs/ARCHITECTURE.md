@@ -1900,6 +1900,68 @@ decision PDF, sick leave and the timesheet lines are CD-164 to CD-170.
   Recalculate, individual days, the history, the daily job and tenant isolation);
   `tenant-isolation.spec.ts` covers the four tables in SQL.
 
+### Balances (CD-164)
+
+The day balance (spec 6): what an employee has, used, scheduled, pending and left in a year, with
+carry-over until 30 June, expiry, manual adjustments and the Balances screen. `balance.ts` is the
+pure model (`test/timeoff-balance.spec.ts`), `BalancesService` reads the facts and serves the API.
+
+- **Pools.** The days of one entitlement year: `entitlement + adjustments` of that year. A vacation
+  day (CD-165's `timeoff_request_days`: date, pool year, approved or pending, request) belongs to
+  exactly one pool. A day on or before 30 June uses last year's pool first (while the policy's
+  carry-over is on and days are left, at most the cap), else its own year's (`assignPools`;
+  pending days count, so two requests can't both take the last days). Year Y's card covers pool Y
+  plus the carry-over of pool Y-1 used in Y: **Carried over** = last year's unused days after the
+  cap (`carriedOverInto`, known once the year started); **Used** and **Scheduled** are the approved
+  days dated in Y up to and after today; **Pending** likewise; **Expired** = carry-over not used by
+  30 June (0 until 1 July; a late approval of days before 1 July lowers it); **Remaining** = total
+  − used − scheduled − expired; **Available** = remaining − pending; `carryRemaining` is the part
+  of Remaining that expires on 30 June. Days of pool Y dated in Y+1 show on Y+1's card, so Y's
+  remaining at year end is what carries over. The two-week part (A5) is one approved request with
+  ten working days in the year. Until requests exist (CD-165) the days are empty, so used,
+  scheduled and pending are 0.
+- **Tables** (`drizzle/0097`, RLS and hints in `0098`): `vacation_balance_adjustments` (employee,
+  pool year, days −60 to 60 and never 0, kind `correction | opening_balance | extra_days`, a
+  reason of 1 to 300 characters, who and when; **append-only**: the policy allows SELECT and
+  INSERT only, a wrong one is undone by an opposite one), `vacation_balance_expiries` (one row per
+  employee and pool: the carry-over the daily job found unused on 1 July, the history's "Expired"
+  record; the figure itself is always derived), `timeoff_notices` (kind, employee, period: the
+  "Carry-over expiring" email claimed once per May and June), and
+  `memberships.notify_timeoff_balance` (the profile toggle "Time off balance").
+- **API** (`/api/timeoff`): `GET employees/:id/balance?year=` (self, the managers above, Admins:
+  the figures, the balance history in date order with a running total (entitlement, carry-over,
+  each adjustment with who and why, the expiry), the years with rows, `canAdjust`);
+  `POST employees/:id/adjustments` (Admins; the pool year is last, this or next year; a pool can't
+  go below the days approved on it, 409 naming them; audit `timeoff.balance_adjusted`; queues the
+  "Balance adjusted" email unless the Admin adjusted their own); `GET balances?year=&unitId=&managerId=&policyId=&expiring=true`
+  (Admins everyone, managers their reports, others 403; one row per active shown employee with the
+  figures) and `GET balances/csv`; `POST balances/policy { employeeIds, policyId }` (Change policy
+  in bulk, from next year like the card) and `POST balances/recalculate { employeeIds, year }`.
+  Reads make the entitlement rows of the year and the one before under the system actor, as the
+  profile read does.
+- **Daily job** (`timeoff.daily`, after the entitlements): from 1 July, `recordExpiries` writes
+  the expiry rows once per employee and pool; from 1 May and 1 June (up to a week late after
+  downtime) `queueExpiringReminders` claims `timeoff_notices` and queues `timeoff.notice-email`
+  for everyone with carry-over left. `TimeoffNoticeMailer` sends it (and "Balance adjusted"):
+  to the sign-in email, else the work email; a member who turned "Time off balance" off gets
+  nothing. Emails in `balance-emails.ts` (pure, `test/timeoff-balance-emails.spec.ts`). Dev:
+  `POST /api/dev/timeoff/daily { now? }` answers `{ changed, expired, reminders }`.
+- **Screens**: Workforce → **Time off** (`/timeoff`, `screens/TimeOff.tsx`): *My time off* (the
+  balance card for a year with the year buttons and the balance history; requests come with
+  CD-165) and, for managers and Admins, *Balances* (`?tab=balances`): the table with filters (year,
+  unit, manager, policy, "Has expiring days"), a checkbox per row for the Admin actions Change
+  policy (a dialog) and Recalculate (after `askConfirm`), Export CSV (fetched with the session
+  headers and saved by the browser); a row opens the employee card. The balance card
+  (`screens/timeoff/BalanceCard.tsx`): Remaining ("of which n carried over (expire 30 Jun)"),
+  Available to request, Used, Scheduled, then Entitlement, Carried over, Adjustments, Total and
+  Expired, the two-week part and the policy's carry-over rule; Admins **Adjust balance** (a modal:
+  pool year, type, days, reason). The employee card's Time off section shows the current year's
+  card in compact form with a link to Time off. Settings → Notifications: "Time off balance".
+- **Tests**: `test/integration/timeoff-balances.spec.ts` (visibility per role, the figures and
+  history, adjustments and their refusals, the email and its toggle, the table, filters, CSV and
+  bulk actions, the job's expiry record and May reminder, isolation);
+  `tenant-isolation.spec.ts` covers the three tables and the append-only policy in SQL.
+
 ## Products, deal products and currency (CD-83)
 
 Replaces the CD-77 model (products with a currency of their own, payment schedules and

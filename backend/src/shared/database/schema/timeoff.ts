@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, foreignKey, index, integer, pgTable, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, foreignKey, index, integer, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { employees } from './people';
-import { tenants } from './platform';
+import { tenants, users } from './platform';
 
 /**
  * Time off tables (owned by the timeoff module, milestone 16). Every table carries tenant_id, has
@@ -151,5 +151,85 @@ export const vacationEntitlements = pgTable(
   ],
 );
 
+/** Why a balance was adjusted by hand (spec 6.4). */
+export const ADJUSTMENT_KINDS = ['correction', 'opening_balance', 'extra_days'] as const;
+export type AdjustmentKind = (typeof ADJUSTMENT_KINDS)[number];
+
+/**
+ * A manual change to one employee's pool (CD-164, spec 6.4): a correction, an opening balance when
+ * the company starts using Pultly (days already used as a negative number, or carry-over from
+ * before on last year's pool) or extra days granted once. Append-only (the policy allows SELECT and
+ * INSERT only): a wrong one is undone by a new opposite one, so the history stays whole.
+ */
+export const vacationBalanceAdjustments = pgTable(
+  'vacation_balance_adjustments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    employeeId: uuid('employee_id').notNull(),
+    poolYear: integer('pool_year').notNull(),
+    days: integer('days').notNull(),
+    kind: text('kind', { enum: ADJUSTMENT_KINDS }).notNull(),
+    reason: text('reason').notNull(),
+    createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('vacation_balance_adjustments_employee_idx').on(t.tenantId, t.employeeId, t.poolYear),
+    foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'vacation_balance_adjustments_employee_fk' }).onDelete('cascade'),
+    check('vacation_balance_adjustments_days_ck', sql`${t.days} between -60 and 60 and ${t.days} <> 0`),
+    check('vacation_balance_adjustments_kind_ck', sql`${t.kind} in ('correction', 'opening_balance', 'extra_days')`),
+    check('vacation_balance_adjustments_reason_ck', sql`length(btrim(${t.reason})) between 1 and 300`),
+    check('vacation_balance_adjustments_year_ck', sql`${t.poolYear} between 2000 and 2100`),
+  ],
+);
+
+/**
+ * What the daily job recorded on 1 July (spec 6.2): the carry-over of pool `pool_year` an employee
+ * had not used by 30 June. The balance derives "Expired" from the facts (a late approval of days
+ * before 1 July lowers it); this row is the history entry of the moment, written once.
+ */
+export const vacationBalanceExpiries = pgTable(
+  'vacation_balance_expiries',
+  {
+    tenantId: tenantId(),
+    employeeId: uuid('employee_id').notNull(),
+    poolYear: integer('pool_year').notNull(),
+    days: integer('days').notNull(),
+    recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.employeeId, t.poolYear], name: 'vacation_balance_expiries_pk' }),
+    foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'vacation_balance_expiries_employee_fk' }).onDelete('cascade'),
+    check('vacation_balance_expiries_days_ck', sql`${t.days} >= 0`),
+  ],
+);
+
+/** The time off emails sent once per period (spec 15.2). */
+export const TIMEOFF_NOTICE_KINDS = ['carry_over_expiring'] as const;
+export type TimeoffNoticeKind = (typeof TIMEOFF_NOTICE_KINDS)[number];
+
+/**
+ * One time off email per kind, employee and period (CD-164: "Carry-over expiring" on 1 May and
+ * 1 June, period "2026-05"), claimed in the transaction that queues it, so a daily job run twice,
+ * or after downtime, sends it once.
+ */
+export const timeoffNotices = pgTable(
+  'timeoff_notices',
+  {
+    tenantId: tenantId(),
+    kind: text('kind', { enum: TIMEOFF_NOTICE_KINDS }).notNull(),
+    employeeId: uuid('employee_id').notNull(),
+    period: text('period').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.kind, t.employeeId, t.period], name: 'timeoff_notices_pk' }),
+    foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'timeoff_notices_employee_fk' }).onDelete('cascade'),
+    check('timeoff_notices_kind_ck', sql`${t.kind} in ('carry_over_expiring')`),
+  ],
+);
+
 export type TimeoffPolicyRow = typeof timeoffPolicies.$inferSelect;
 export type VacationEntitlementRow = typeof vacationEntitlements.$inferSelect;
+export type VacationBalanceAdjustmentRow = typeof vacationBalanceAdjustments.$inferSelect;

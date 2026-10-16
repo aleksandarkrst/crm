@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MAX_BASE_DAYS, MIN_BASE_DAYS } from '../../shared/database/schema';
+import { ADJUSTMENT_KINDS, MAX_BASE_DAYS, MIN_BASE_DAYS } from '../../shared/database/schema';
 import { nonEmptyPatch, optionalText } from '../../shared/validation/common';
 
 /** "From N years: +X days" (spec 5.2). */
@@ -61,6 +61,48 @@ export const Recalculate = z.object({ preview: z.boolean().default(false) });
 export type Recalculate = z.infer<typeof Recalculate>;
 
 export const YearParam = z.coerce.number().int().min(2000).max(2100);
+
+/** GET …/balance?year= (this year by default). */
+export const BalanceQuery = z.object({ year: YearParam.optional() });
+export type BalanceQuery = z.infer<typeof BalanceQuery>;
+
+/** POST /api/timeoff/employees/:id/adjustments (Admins, spec 6.4): append-only, a reason always. */
+export const CreateAdjustment = z.object({
+  poolYear: YearParam,
+  days: z
+    .number()
+    .int()
+    .min(-60)
+    .max(60)
+    .refine((d) => d !== 0, 'Enter a number of days other than 0'),
+  kind: z.enum(ADJUSTMENT_KINDS),
+  reason: z.string().trim().min(1, 'A reason is needed').max(300),
+});
+export type CreateAdjustment = z.infer<typeof CreateAdjustment>;
+
+/** GET /api/timeoff/balances: the table (spec 6.5), with its filters. */
+export const BalancesQuery = z.object({
+  year: YearParam.optional(),
+  unitId: z.uuid().optional(),
+  managerId: z.uuid().optional(),
+  policyId: z.uuid().optional(),
+  /** Only employees with carry-over that expires on 30 June. */
+  expiring: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
+});
+export type BalancesQuery = z.infer<typeof BalancesQuery>;
+
+const employeeIds = z.array(z.uuid()).min(1).max(500);
+
+/** POST /api/timeoff/balances/policy (Admins): "Change policy" for the selected employees. */
+export const BulkChangePolicy = z.object({ employeeIds, policyId: z.uuid() });
+export type BulkChangePolicy = z.infer<typeof BulkChangePolicy>;
+
+/** POST /api/timeoff/balances/recalculate (Admins): Recalculate the year for the selected employees. */
+export const BulkRecalculate = z.object({ employeeIds, year: YearParam });
+export type BulkRecalculate = z.infer<typeof BulkRecalculate>;
 
 /** GET …/history?limit=&offset=. */
 export const HistoryQuery = z.object({

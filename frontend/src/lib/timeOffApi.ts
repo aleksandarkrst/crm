@@ -1,5 +1,5 @@
 /** Time off (milestone 16, `/api/timeoff`): vacation policies and the employee's entitlement (CD-163). */
-import { api } from './api';
+import { api, ApiError, authorizedFetch } from './api';
 
 /** "From N years of work experience: +X days". The highest row reached applies. */
 export interface ApiExperienceRule {
@@ -93,7 +93,101 @@ export interface ApiRecalculation {
   profile: ApiTimeOffProfile | null;
 }
 
+/** The figures of spec 6.3, in working days. */
+export interface ApiBalanceFigures {
+  year: number;
+  entitlement: number;
+  carriedOver: number;
+  carryExpiresOn: string;
+  adjustments: number;
+  total: number;
+  used: number;
+  scheduled: number;
+  pending: number;
+  expired: number;
+  remaining: number;
+  available: number;
+  /** The part of `remaining` that expires on 30 June. */
+  carryRemaining: number;
+  twoWeekPart: boolean;
+}
+
+export type AdjustmentKind = 'correction' | 'opening_balance' | 'extra_days';
+export const ADJUSTMENT_KIND_LABEL: Record<AdjustmentKind, string> = { correction: 'Correction', opening_balance: 'Opening balance', extra_days: 'Extra days granted' };
+
+export interface ApiBalanceHistoryEntry {
+  date: string;
+  kind: 'entitlement' | 'carry_over' | 'adjustment' | 'expired';
+  label: string;
+  days: number;
+  runningTotal: number;
+  actor?: { userId: string | null; name: string } | null;
+  reason?: string;
+  adjustmentKind?: AdjustmentKind;
+}
+
+/** GET /timeoff/employees/:id/balance?year= (spec 6.3, 6.5). */
+export interface ApiBalance {
+  employeeId: string;
+  fullName: string;
+  year: number;
+  currentYear: number;
+  years: number[];
+  policy: { id: string; name: string; carryOver: boolean; carryOverCap: number | null };
+  hasStartDate: boolean;
+  figures: ApiBalanceFigures;
+  history: ApiBalanceHistoryEntry[];
+  expiryRecordedAt: string | null;
+  canAdjust: boolean;
+}
+
+/** One row of the Balances table (spec 6.5). */
+export interface ApiBalanceRow {
+  employee: { id: string; fullName: string; jobTitle: string | null; hasStartDate: boolean };
+  unit: { id: string; name: string } | null;
+  managerId: string | null;
+  policy: { id: string; name: string };
+  figures: ApiBalanceFigures;
+}
+
+export interface ApiBalancesTable {
+  year: number;
+  currentYear: number;
+  rows: ApiBalanceRow[];
+  canAdjust: boolean;
+}
+
+export interface BalancesFilters {
+  year?: number;
+  unitId?: string;
+  managerId?: string;
+  policyId?: string;
+  expiring?: boolean;
+}
+
+const balancesQuery = (f: BalancesFilters) => {
+  const q = new URLSearchParams();
+  if (f.year) q.set('year', String(f.year));
+  if (f.unitId) q.set('unitId', f.unitId);
+  if (f.managerId) q.set('managerId', f.managerId);
+  if (f.policyId) q.set('policyId', f.policyId);
+  if (f.expiring) q.set('expiring', 'true');
+  const s = q.toString();
+  return s ? `?${s}` : '';
+};
+
 export const timeOffApi = {
+  balance: (employeeId: string, year?: number) => api<ApiBalance>(`/timeoff/employees/${employeeId}/balance${year ? `?year=${year}` : ''}`),
+  adjust: (employeeId: string, body: { poolYear: number; days: number; kind: AdjustmentKind; reason: string }) => api<ApiBalance>(`/timeoff/employees/${employeeId}/adjustments`, { method: 'POST', json: body }),
+  balances: (f: BalancesFilters) => api<ApiBalancesTable>(`/timeoff/balances${balancesQuery(f)}`),
+  /** The table as a CSV file (the screen hands it to `downloadBlob`). */
+  balancesCsv: async (f: BalancesFilters): Promise<Blob> => {
+    const res = await authorizedFetch(`/timeoff/balances/csv${balancesQuery(f)}`);
+    if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
+    return res.blob();
+  },
+  bulkPolicy: (employeeIds: string[], policyId: string) => api<{ changed: number }>('/timeoff/balances/policy', { method: 'POST', json: { employeeIds, policyId } }),
+  bulkRecalculate: (employeeIds: string[], year: number) => api<{ changed: number }>('/timeoff/balances/recalculate', { method: 'POST', json: { employeeIds, year } }),
   policies: {
     list: () => api<ApiTimeOffPolicy[]>('/timeoff/policies'),
     create: (input: ApiPolicyInput) => api<ApiTimeOffPolicy>('/timeoff/policies', { method: 'POST', json: input }),

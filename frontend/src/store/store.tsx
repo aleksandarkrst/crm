@@ -216,6 +216,7 @@ const PROFILE_FIELDS: Partial<Record<keyof Profile, keyof ProfileInput>> = {
   visitPlans: 'notifyVisitPlans',
   orgChanges: 'notifyOrgChanges',
   taskAssigned: 'notifyTaskAssigned',
+  timeOffBalance: 'notifyTimeoffBalance',
 };
 
 function useStoreImpl(data: WorkspaceData, session: Session) {

@@ -1025,6 +1025,13 @@ function NotificationsTab() {
       on: p.orgChanges,
       toggle: () => patchProfile({ orgChanges: !p.orgChanges }),
     },
+    {
+      id: 'timeoff-balance',
+      label: 'Time off balance',
+      desc: 'An email when someone adjusts your vacation balance, and on 1 May and 1 June when carried-over days are about to expire.',
+      on: p.timeOffBalance,
+      toggle: () => patchProfile({ timeOffBalance: !p.timeOffBalance }),
+    },
   ];
   const row = { display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--divider)' } as const;
   return (

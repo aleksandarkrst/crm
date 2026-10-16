@@ -55,6 +55,8 @@ export const paths = {
   workOrder: (id: string) => '/work-orders/' + encodeURIComponent(id),
   /** Reports · Workload (CD-261): remaining task hours per person and week. */
   workload: '/workload',
+  /** Time off (milestone 16): `tab` my (the balance, CD-164) or balances (managers and Admins); `year` for the balance shown. */
+  timeOff: (params: Partial<Record<'tab' | 'year' | 'unit' | 'manager' | 'policy' | 'expiring', string | null | undefined>> = {}) => '/timeoff' + query(params),
   /** My timesheet (CD-152); `week` is its Monday, this week without one. `employee` (CD-317): an Admin entering time on that employee's behalf. */
   timesheet: (week?: string | null, employee?: string | null) => '/timesheet' + query({ week, employee }),
   /** Approvals (CD-157): the weeks the caller approves; without `week`, the latest whose deadline passed. */

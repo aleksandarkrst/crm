@@ -135,6 +135,7 @@ export const mapProfile = (p: ApiProfile): Profile => ({
   visitPlans: p.notifyVisitPlans,
   orgChanges: p.notifyOrgChanges,
   taskAssigned: p.notifyTaskAssigned,
+  timeOffBalance: p.notifyTimeoffBalance,
 });
 
 /** Members, then pending invitations with their email status. */

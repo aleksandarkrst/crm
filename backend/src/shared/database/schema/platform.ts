@@ -166,6 +166,8 @@ export const memberships = pgTable(
     notifyTaskAssigned: boolean('notify_task_assigned').notNull().default(true),
     // Email me "Hour limit almost reached" and "Hour limit reached" (CD-149).
     notifyHourLimits: boolean('notify_hour_limits').notNull().default(true),
+    // Email me when someone adjusts my vacation balance, and when my carry-over is about to expire (CD-164).
+    notifyTimeoffBalance: boolean('notify_timeoff_balance').notNull().default(true),
     /** The getting-started checklist (CD-68) is dismissed per user, so each admin decides for themselves. */
     onboardingDismissedAt: timestamp('onboarding_dismissed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
