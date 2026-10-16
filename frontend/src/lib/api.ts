@@ -288,6 +288,8 @@ export interface ApiProfile {
   notifyOrgChanges: boolean;
   /** Email me when someone else assigns me to a task (CD-146). */
   notifyTaskAssigned: boolean;
+  /** "Balance adjusted" and "Carry-over expiring" (CD-164). */
+  notifyTimeoffBalance: boolean;
 }
 /**
  * Getting started (CD-68): the workspace's activation steps (CD-115), derived from its records.

@@ -1373,6 +1373,32 @@ a.task-card-project:hover { color: var(--brand); }
   .policy-field-row { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* Time off: the balance card, My time off and Balances (CD-164) */
+.bal-page { display: flex; flex-direction: column; gap: 14px; }
+.bal-tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--divider); }
+.bal-tab { border: 0; background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--text-2); padding: 8px 12px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.bal-tab:hover { color: var(--ink); }
+.bal-tab.on { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600; }
+.bal-card { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--white); }
+.bal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.bal-figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+.bal-figures-small .bal-figure strong { font-size: 15px; }
+.bal-figure { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bal-figure strong { font-size: 18px; font-weight: 600; }
+.bal-history { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--divider); }
+.bal-history-row { display: grid; grid-template-columns: 90px minmax(0, 1fr) 50px 50px; gap: 10px; font-size: 13px; align-items: baseline; }
+.bal-history-row > :nth-child(3), .bal-history-row > :nth-child(4) { text-align: right; }
+.bal-neg { color: var(--danger); }
+.bal-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.bal-filters .form-input { padding: 8px 10px; }
+.bal-row { min-width: 1100px; }
+.bal-row .num { text-align: right; }
+.btn-plain.on { border-color: var(--brand); color: var(--brand); background: var(--brand-tint); }
+@media (max-width: 760px) {
+  .bal-history-row { grid-template-columns: 80px minmax(0, 1fr) 44px; }
+  .bal-history-row > :nth-child(4) { display: none; }
+}
+
 /* the employee card's Time off section (CD-163) */
 .timeoff-year { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; margin-top: 6px; }
 .timeoff-year-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }

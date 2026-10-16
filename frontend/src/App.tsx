@@ -21,6 +21,7 @@ const NewMeeting = lazy(() => loadChunk(() => import('./screens/NewMeeting')).th
 const LeadScreen = lazy(() => loadChunk(() => import('./screens/lead/LeadScreen')).then((m) => ({ default: m.LeadScreen })));
 const Timesheet = lazy(() => loadChunk(() => import('./screens/Timesheet')).then((m) => ({ default: m.Timesheet })));
 const Approvals = lazy(() => loadChunk(() => import('./screens/Approvals')).then((m) => ({ default: m.Approvals })));
+const TimeOff = lazy(() => loadChunk(() => import('./screens/TimeOff')).then((m) => ({ default: m.TimeOff })));
 const ApproverWeek = lazy(() => loadChunk(() => import('./screens/approvals/ApproverWeek')).then((m) => ({ default: m.ApproverWeek })));
 const OrgStructure = lazy(() => loadChunk(() => import('./screens/OrgStructure')).then((m) => ({ default: m.OrgStructure })));
 const Pipeline = lazy(() => loadChunk(() => import('./screens/Pipeline')).then((m) => ({ default: m.Pipeline })));
@@ -167,6 +168,7 @@ function AppRoutes() {
           <Route path="timesheet" element={<Timesheet />} />
           <Route path="approvals" element={<Approvals />} />
           <Route path="approvals/:id" element={<ApproverWeek />} />
+          <Route path="timeoff" element={<TimeOff />} />
           <Route path="org" element={<OrgStructure />} />
           <Route path="people/:id" element={<EmployeeCard />} />
           <Route path="reports" element={<Navigate to={paths.reports()} replace />} />

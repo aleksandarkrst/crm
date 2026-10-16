@@ -302,6 +302,8 @@ export interface Profile {
   orgChanges: boolean;
   /** "Assigned to a task" emails (CD-146). */
   taskAssigned: boolean;
+  /** "Balance adjusted" and "Carry-over expiring" emails (CD-164). */
+  timeOffBalance: boolean;
 }
 
 export interface BonusRule {

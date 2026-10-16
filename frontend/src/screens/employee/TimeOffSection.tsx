@@ -1,5 +1,8 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { askConfirm } from '../../components/ConfirmDialog';
+import { paths } from '../../lib/paths';
+import { BalanceCard, useBalance } from '../timeoff/BalanceCard';
 import { ApiError } from '../../lib/api';
 import { type ApiEntitlement, type ApiTimeOffPolicy, type ApiTimeOffProfile, entitlementParts, timeOffApi } from '../../lib/timeOffApi';
 import { projectError, useProjectsRead } from '../../store/projects';
@@ -53,6 +56,20 @@ export function TimeOffSection({ id }: { id: string }) {
   );
 }
 
+/** The current year's balance (CD-164) under the profile, with Adjust balance for Admins. */
+function BalanceBlock({ employeeId }: { employeeId: string }) {
+  const { data, set } = useBalance(employeeId);
+  if (!data) return null;
+  return (
+    <>
+      <BalanceCard balance={data} compact onChanged={(b) => b && set(b)} />
+      <Link className="emp-note" to={paths.timeOff()} style={{ color: 'var(--brand)' }}>
+        Balance history and other years on Time off
+      </Link>
+    </>
+  );
+}
+
 function ProfileView({ profile, onChanged }: { profile: ApiTimeOffProfile; onChanged: (p?: ApiTimeOffProfile) => void }) {
   return (
     <>
@@ -68,6 +85,7 @@ function ProfileView({ profile, onChanged }: { profile: ApiTimeOffProfile; onCha
           Start date missing. The vacation entitlement is calculated once the employment start date is set in Work.
         </p>
       )}
+      {profile.startDate && <BalanceBlock employeeId={profile.employeeId} />}
       {profile.entitlements
         .filter((e) => e.year >= profile.currentYear)
         .map((e) => <EntitlementCard key={e.id} profile={profile} e={e} onChanged={onChanged} />)}

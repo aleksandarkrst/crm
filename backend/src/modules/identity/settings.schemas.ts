@@ -132,6 +132,7 @@ export const UpdateProfile = z
     notifyOrgChanges: z.boolean(),
     notifyTaskAssigned: z.boolean(),
     notifyHourLimits: z.boolean(),
+    notifyTimeoffBalance: z.boolean(),
   })
   .partial()
   .refine(atLeastOne, 'Nothing to update');

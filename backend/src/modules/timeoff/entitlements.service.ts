@@ -213,6 +213,13 @@ export class EntitlementsService {
       .catch(mapDbError);
   }
 
+  /** Recalculate inside an open transaction (the Balances screen's bulk action, CD-164): the row written, or null when nothing changed. */
+  async recalculateIn(tx: Tx, tenantId: string, employeeId: string, year: number): Promise<VacationEntitlementRow | null> {
+    const facts = await this.facts(tx, employeeId);
+    if (!facts) return null;
+    return this.ensureYear(tx, tenantId, facts, year, { force: true, switchPolicy: true });
+  }
+
   /** The profile's and the entitlements' history (triggers of drizzle/0096): self and Admins. */
   history(ctx: TenantContext, employeeId: string, query: HistoryQuery) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
@@ -294,6 +301,20 @@ export class EntitlementsService {
   }
 
   // ------------------------------------------------------------------ the rows
+
+  /**
+   * For the balance reads (CD-164): the rows of `years` for `employeeIds`, made or brought up to
+   * date like a profile read does. Run it under the system actor (`requestActor.run({})`) and
+   * in its own transaction, as `profile` does, so a reader is never the author of a row.
+   */
+  async ensureEmployees(tx: Tx, tenantId: string, employeeIds: readonly string[], years: readonly number[]): Promise<number> {
+    let changed = 0;
+    for (const id of employeeIds) {
+      const facts = await this.facts(tx, id);
+      if (facts) changed += await this.ensureYears(tx, tenantId, facts, [...years], {});
+    }
+    return changed;
+  }
 
   /** This year, and next year from 1 October (workspace time). */
   dueYears(today: string): number[] {

@@ -129,6 +129,15 @@ export interface JobPayloads {
    * (POST /api/dev/timeoff/daily) only.
    */
   'timeoff.daily': { now?: string; tenantId?: string };
+  /**
+   * One time off email (CD-164, spec 15.2): "Balance adjusted" to the employee (queued by the
+   * adjustment, unless they adjusted their own) or "Carry-over expiring" (queued by the daily job
+   * on 1 May and 1 June, claimed in timeoff_notices). The recipient's address and their "Time off
+   * balance" toggle are read when sending; an employee without an account gets it at their work email.
+   */
+  'timeoff.notice-email':
+    | { tenantId: string; kind: 'balance_adjusted'; employeeId: string; actorUserId: string | null; adjustment: { poolYear: number; days: number; kind: 'correction' | 'opening_balance' | 'extra_days'; reason: string }; remaining: number; available: number }
+    | { tenantId: string; kind: 'carry_over_expiring'; employeeId: string; year: number; expiring: number };
 }
 
 export type JobName = keyof JobPayloads;
@@ -155,10 +164,11 @@ export const JOB_NAMES = [
   'projects.limit-alert',
   'reporting.nightly',
   'timeoff.daily',
+  'timeoff.notice-email',
   'timesheet.tick',
   'timesheet.notice-email',
   'timesheet.task-hours-changed',
 ] as const satisfies readonly JobName[];
 
 /** Jobs that send email: retried MAIL_RETRY_LIMIT times with backoff from MAIL_RETRY_DELAY_SECONDS. */
-export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed', 'projects.project-created-email', 'projects.task-assigned', 'projects.limit-alert', 'timesheet.notice-email']);
+export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed', 'projects.project-created-email', 'projects.task-assigned', 'projects.limit-alert', 'timesheet.notice-email', 'timeoff.notice-email']);

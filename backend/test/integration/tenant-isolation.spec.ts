@@ -172,7 +172,7 @@ describe('in SQL, as the runtime role', () => {
 
   it('sees no tenant rows at all without a tenant set', async () => {
     await asTenant(null, async () => {
-      for (const table of ['deals', 'companies', 'contacts', 'deal_lines', 'deal_tasks', 'products', 'activities', 'timeoff_policies', 'timeoff_policy_experience_rules', 'employee_timeoff_profiles', 'vacation_entitlements']) {
+      for (const table of ['deals', 'companies', 'contacts', 'deal_lines', 'deal_tasks', 'products', 'activities', 'timeoff_policies', 'timeoff_policy_experience_rules', 'employee_timeoff_profiles', 'vacation_entitlements', 'vacation_balance_adjustments', 'vacation_balance_expiries', 'timeoff_notices']) {
         const { rows } = await db.query(`select count(*)::int as n from ${table}`);
         expect(rows[0].n, table).toBe(0);
       }
@@ -263,5 +263,26 @@ describe('in SQL, as the runtime role', () => {
       const code = await asTenant(tenantB, () => sqlError(db.query(text, params)));
       expect(code, name).toBe('23503');
     }
+  });
+
+  it('isolates the balance tables (CD-164) and keeps adjustments append-only', async () => {
+    const employeeA = await asTenant(tenantA, async () => (await db.query(`select id from employees limit 1`)).rows[0].id as string);
+    const employeeB = await asTenant(tenantB, async () => (await db.query(`select id from employees limit 1`)).rows[0].id as string);
+    expect(await asTenant(tenantB, () => sqlError(db.query(`insert into vacation_balance_adjustments (tenant_id, employee_id, pool_year, days, kind, reason) values ($1, $2, 2026, 1, 'correction', 'x')`, [tenantA, employeeA])))).toBe('42501');
+    const cases: [string, string, unknown[]][] = [
+      ['adjustment → employee', `insert into vacation_balance_adjustments (tenant_id, employee_id, pool_year, days, kind, reason) values ($1, $2, 2026, 1, 'correction', 'x')`, [tenantB, employeeA]],
+      ['expiry → employee', `insert into vacation_balance_expiries (tenant_id, employee_id, pool_year, days) values ($1, $2, 2025, 1)`, [tenantB, employeeA]],
+      ['notice → employee', `insert into timeoff_notices (tenant_id, kind, employee_id, period) values ($1, 'carry_over_expiring', $2, '2026-05')`, [tenantB, employeeA]],
+    ];
+    for (const [name, text, params] of cases) {
+      const code = await asTenant(tenantB, () => sqlError(db.query(text, params)));
+      expect(code, name).toBe('23503');
+    }
+    // Append-only: the app can add and read, never change or delete (no such policy).
+    await asTenant(tenantB, async () => {
+      const { rows } = await db.query(`insert into vacation_balance_adjustments (tenant_id, employee_id, pool_year, days, kind, reason) values ($1, $2, 2026, 1, 'correction', 'x') returning id`, [tenantB, employeeB]);
+      expect((await db.query(`update vacation_balance_adjustments set days = 2 where id = $1`, [rows[0].id])).rowCount).toBe(0);
+      expect((await db.query(`delete from vacation_balance_adjustments where id = $1`, [rows[0].id])).rowCount).toBe(0);
+    });
   });
 });

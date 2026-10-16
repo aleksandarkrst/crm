@@ -1,10 +1,11 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { RequireTenant, Tenant, type TenantContext } from '../../shared/authorization';
 import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
+import { BalancesService } from './balances.service';
 import { EntitlementsService } from './entitlements.service';
 import { TimeoffPoliciesService } from './policies.service';
-import { CreatePolicy, HistoryQuery, Recalculate, UpdateEntitlement, UpdatePolicy, UpdateProfile, YearParam } from './timeoff.schemas';
+import { BalanceQuery, BalancesQuery, BulkChangePolicy, BulkRecalculate, CreateAdjustment, CreatePolicy, HistoryQuery, Recalculate, UpdateEntitlement, UpdatePolicy, UpdateProfile, YearParam } from './timeoff.schemas';
 
 const Id = new ZodPipe(UuidParam);
 const Year = new ZodPipe(YearParam);
@@ -22,7 +23,54 @@ export class TimeoffController {
   constructor(
     private readonly policies: TimeoffPoliciesService,
     private readonly entitlements: EntitlementsService,
+    private readonly balances: BalancesService,
   ) {}
+
+  // ---------------------------------------------------------------- balances (CD-164)
+
+  /** The Balances table (spec 6.5): Admins everyone, managers their reports. `?year=&unitId=&managerId=&policyId=&expiring=true`. */
+  @Get('balances')
+  balancesTable(@Tenant() ctx: TenantContext, @Query(new ZodPipe(BalancesQuery)) query: BalancesQuery) {
+    return this.balances.table(ctx, query);
+  }
+
+  /** The same table as CSV (UTF-8 with a BOM). */
+  @Get('balances/csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="pultly-vacation-balances.csv"')
+  @Header('Cache-Control', 'private, no-store')
+  balancesCsv(@Tenant() ctx: TenantContext, @Query(new ZodPipe(BalancesQuery)) query: BalancesQuery) {
+    return this.balances.csv(ctx, query);
+  }
+
+  /** "Change policy" for the selected employees (Admins): `{ changed }`. */
+  @Post('balances/policy')
+  @RequireTenant('admin')
+  @HttpCode(200)
+  bulkPolicy(@Tenant() ctx: TenantContext, @Body(new ZodPipe(BulkChangePolicy)) body: BulkChangePolicy) {
+    return this.balances.bulkChangePolicy(ctx, body);
+  }
+
+  /** Recalculate the year for the selected employees (Admins): `{ changed }`. */
+  @Post('balances/recalculate')
+  @RequireTenant('admin')
+  @HttpCode(200)
+  bulkRecalculate(@Tenant() ctx: TenantContext, @Body(new ZodPipe(BulkRecalculate)) body: BulkRecalculate) {
+    return this.balances.bulkRecalculate(ctx, body);
+  }
+
+  /** One employee's balance and history for `?year=` (this year by default): self, the managers above, Admins. */
+  @Get('employees/:id/balance')
+  balance(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Query(new ZodPipe(BalanceQuery)) query: BalanceQuery) {
+    return this.balances.balance(ctx, id, query.year);
+  }
+
+  /** An adjustment (Admins, spec 6.4); answers the balance of the pool's year. */
+  @Post('employees/:id/adjustments')
+  @RequireTenant('admin')
+  adjust(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(CreateAdjustment)) body: CreateAdjustment) {
+    return this.balances.adjust(ctx, id, body);
+  }
 
   // ---------------------------------------------------------------- policies (Settings → Time off)
 

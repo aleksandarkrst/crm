@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PeopleModule } from '../people';
+import { BalancesService } from './balances.service';
 import { EntitlementsService } from './entitlements.service';
 import { TimeoffPoliciesService } from './policies.service';
 import { TimeoffController } from './timeoff.controller';
@@ -13,7 +14,7 @@ import { TimeoffController } from './timeoff.controller';
 @Module({
   imports: [PeopleModule],
   controllers: [TimeoffController],
-  providers: [TimeoffPoliciesService, EntitlementsService],
-  exports: [EntitlementsService],
+  providers: [TimeoffPoliciesService, EntitlementsService, BalancesService],
+  exports: [EntitlementsService, BalancesService],
 })
 export class TimeoffModule {}
