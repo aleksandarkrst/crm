@@ -1,3 +1,4 @@
+import { absencesIn } from './absences';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { and, between, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -192,6 +193,10 @@ export class ApprovalsService {
           ])
         : [[], [], []];
       const minutesOf = new Map(sums.map((s) => [`${s.employeeId}:${s.date}`, s.minutes]));
+      // Absence hours count as entered (CD-170, spec 14.1).
+      for (const [employeeId, days] of await absencesIn(tx, ids, monday, sunday)) {
+        for (const a of days.values()) minutesOf.set(`${employeeId}:${a.date}`, (minutesOf.get(`${employeeId}:${a.date}`) ?? 0) + a.minutes);
+      }
       const statusOf = new Map(dayRows.map((d) => [`${d.employeeId}:${d.date}`, d.status]));
       const resubmittedOf = new Set(dayRows.filter((d) => d.status === 'submitted' && d.resubmittedAt).map((d) => `${d.employeeId}:${d.date}`));
       const flagsOf = new Map(flags.map((f) => [f.employeeId, f]));

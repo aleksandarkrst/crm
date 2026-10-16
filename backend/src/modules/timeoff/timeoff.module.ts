@@ -1,5 +1,7 @@
+import { TimesheetSyncService } from './timesheet-sync';
 import { Module } from '@nestjs/common';
 import { HrDocumentsModule } from '../hr-documents';
+import { TimesheetAbsencesService } from '../timesheet';
 import { PeopleModule } from '../people';
 import { AbsenceService } from './absence.service';
 import { ApprovalsService } from './approvals.service';
@@ -21,7 +23,7 @@ import { TimeoffController } from './timeoff.controller';
 @Module({
   imports: [PeopleModule, HrDocumentsModule],
   controllers: [TimeoffController],
-  providers: [TimeoffPoliciesService, EntitlementsService, BalancesService, ReasonsService, RequestsService, ApprovalsService, AbsenceService, DecisionsService, SickLeaveService],
-  exports: [EntitlementsService, BalancesService, RequestsService, ApprovalsService, SickLeaveService],
+  providers: [TimeoffPoliciesService, EntitlementsService, BalancesService, ReasonsService, RequestsService, ApprovalsService, AbsenceService, DecisionsService, SickLeaveService, TimesheetSyncService, TimesheetAbsencesService],
+  exports: [EntitlementsService, BalancesService, RequestsService, ApprovalsService, SickLeaveService, TimesheetSyncService],
 })
 export class TimeoffModule {}

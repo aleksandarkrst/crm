@@ -1,3 +1,4 @@
+import { TimesheetSyncService } from './timesheet-sync';
 import { Body, Controller, HttpCode, Injectable, Logger, Module, type OnApplicationBootstrap, Post } from '@nestjs/common';
 import { z } from 'zod';
 import { RequireTenant, Tenant, type TenantContext } from '../../shared/authorization';
@@ -6,6 +7,7 @@ import { tenants } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
 import { HrDocumentsService, HrDocumentsWorkerModule } from '../hr-documents';
+import { TimesheetAbsencesService } from '../timesheet';
 import { PeopleModule, PeopleWorkerModule } from '../people';
 import { AbsenceService } from './absence.service';
 import { ApprovalsService } from './approvals.service';
@@ -44,6 +46,7 @@ export class TimeoffJobs implements OnApplicationBootstrap {
     private readonly documents: HrDocumentsService,
     private readonly sick: SickLeaveService,
     private readonly sickMailer: SickLeaveMailer,
+    private readonly timesheet: TimesheetSyncService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -52,6 +55,9 @@ export class TimeoffJobs implements OnApplicationBootstrap {
     });
     await this.jobs.work('timeoff.notice-email', (data) => this.mailer.send(data));
     await this.jobs.work('timeoff.sick-email', (data) => this.sickMailer.send(data));
+    await this.jobs.work('timeoff.sync-timesheet', async (data) => {
+      await this.timesheet.run(data);
+    });
     await this.jobs.schedule('timeoff.daily', TIMEOFF_DAILY_CRON);
   }
 
@@ -91,10 +97,12 @@ export interface DailyResult {
   sickChecks?: number;
 }
 
-@Module({ imports: [PeopleWorkerModule, HrDocumentsWorkerModule], providers: [EntitlementsService, BalancesService, ReasonsService, RequestsService, ApprovalsService, AbsenceService, DecisionsService, SickLeaveService, SickLeaveMailer, TimeoffRequestMailer, TimeoffNoticeMailer, TimeoffJobs] })
+@Module({ imports: [PeopleWorkerModule, HrDocumentsWorkerModule], providers: [EntitlementsService, BalancesService, ReasonsService, RequestsService, ApprovalsService, AbsenceService, DecisionsService, SickLeaveService, SickLeaveMailer, TimesheetSyncService, TimesheetAbsencesService, TimeoffRequestMailer, TimeoffNoticeMailer, TimeoffJobs] })
 export class TimeoffWorkerModule {}
 
 const Daily = z.object({ now: z.iso.datetime().optional() });
+const SyncTimesheet = z.object({ employeeId: z.uuid(), from: z.iso.date(), to: z.iso.date() });
+type SyncTimesheet = z.infer<typeof SyncTimesheet>;
 type Daily = z.infer<typeof Daily>;
 
 /** Development only (AUTH_MODE=dev): the daily job for the caller's workspace at `now` (tests). */
@@ -105,7 +113,16 @@ export class DevTimeoffController {
     private readonly balances: BalancesService,
     private readonly approvals: ApprovalsService,
     private readonly sick: SickLeaveService,
+    private readonly timesheetSync: TimesheetSyncService,
   ) {}
+
+  /** The timesheet sync for one person and period, run now (tests: idempotency, spec 14.5.4). */
+  @Post('sync-timesheet')
+  @RequireTenant('member')
+  @HttpCode(200)
+  async syncTimesheet(@Tenant() ctx: TenantContext, @Body(new ZodPipe(SyncTimesheet)) body: SyncTimesheet): Promise<{ changed: number }> {
+    return { changed: await this.timesheetSync.run({ tenantId: ctx.tenantId, ...body }) };
+  }
 
   @Post('daily')
   @RequireTenant('member')

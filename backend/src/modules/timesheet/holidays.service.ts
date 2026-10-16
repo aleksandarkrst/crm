@@ -1,3 +1,4 @@
+import { JobsService } from '../../shared/events/jobs.service';
 import { BadRequestException, Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { AuditService } from '../../shared/audit/audit.service';
@@ -44,7 +45,14 @@ export class HolidaysService implements TenantProvisioner, OnModuleInit {
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
     private readonly provisioning: TenantProvisioning,
+    private readonly jobs: JobsService,
   ) {}
+
+  /** Absence lines follow the calendar (CD-170): this year and the next, for everyone with absences then. */
+  private resyncAbsences(tx: Tx, tenantId: string): Promise<void> {
+    const year = new Date().getUTCFullYear();
+    return this.jobs.send('timeoff.sync-timesheet', { tenantId, from: `${year}-01-01`, to: `${year + 1}-12-31` }, tx);
+  }
 
   onModuleInit(): void {
     this.provisioning.register(this);
@@ -143,6 +151,7 @@ export class HolidaysService implements TenantProvisioner, OnModuleInit {
           .values({ tenantId: ctx.tenantId, holidayDate: input.date, endDate, name: input.name, minutes: input.minutes ?? null })
           .returning(holidayColumns);
         await this.audit.record(tx, ctx, { action: 'holiday.created', entityType: 'holiday', entityId: row!.id, data: { ...input, endDate } });
+        await this.resyncAbsences(tx, ctx.tenantId);
         return view(row!, holidayDaysIn(row!, Number(row!.date.slice(0, 4))));
       })
       .catch(mapDbError);
@@ -161,6 +170,7 @@ export class HolidaysService implements TenantProvisioner, OnModuleInit {
           .where(eq(publicHolidays.id, id))
           .returning(holidayColumns);
         await this.audit.record(tx, ctx, { action: 'holiday.updated', entityType: 'holiday', entityId: id, data: { ...input } });
+        await this.resyncAbsences(tx, ctx.tenantId);
         return view(row!, holidayDaysIn(row!, Number(row!.date.slice(0, 4))));
       })
       .catch(mapDbError);
@@ -171,6 +181,7 @@ export class HolidaysService implements TenantProvisioner, OnModuleInit {
       const [row] = await tx.delete(publicHolidays).where(eq(publicHolidays.id, id)).returning(holidayColumns);
       if (!row) throw new NotFoundException('Holiday not found');
       await this.audit.record(tx, ctx, { action: 'holiday.deleted', entityType: 'holiday', entityId: id, data: { date: row.date, name: row.name } });
+      await this.resyncAbsences(tx, ctx.tenantId);
     });
   }
 }

@@ -7,3 +7,5 @@ export { TimesheetService } from './timesheet.service';
 export { holidaysBetween, timesheetSettings } from './timesheet-settings';
 export type { Holiday, TimesheetSettings } from './timesheet-rules';
 export { HolidaysService } from './holidays.service';
+// Absence lines (CD-170): the time off module keeps them in step and registers the pending hints.
+export { type AbsenceLine, type PendingAbsenceSource, pendingAbsenceRegistry, TimesheetAbsencesService } from './absences';

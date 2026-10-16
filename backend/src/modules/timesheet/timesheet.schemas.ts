@@ -4,7 +4,8 @@ import { mondayOf } from './timesheet-rules';
 
 const isoDate = z.iso.date();
 /** A week is its Monday. */
-const weekStart = isoDate.refine((d) => mondayOf(d) === d, 'A week starts on a Monday');
+// Zod still runs the refinement after a failed date check: an empty or bad value must not reach mondayOf (it threw a 500).
+const weekStart = isoDate.refine((d) => !Number.isNaN(Date.parse(`${d}T00:00:00Z`)) && mondayOf(d) === d, 'A week starts on a Monday');
 /** A task or a work order, never both (time_entries_target_ck). */
 const target = { taskId: z.uuid().optional(), workOrderId: z.uuid().optional() };
 const oneTarget = (v: { taskId?: string; workOrderId?: string }) => !!v.taskId !== !!v.workOrderId;

@@ -1,3 +1,4 @@
+import { TimesheetSyncService } from './timesheet-sync';
 import { type DecisionView, DecisionsService } from './decisions.service';
 import { SickLeaveService } from './sick-leave.service';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
@@ -100,6 +101,7 @@ export class RequestsService {
     private readonly reasons: ReasonsService,
     private readonly decisions: DecisionsService,
     private readonly sick: SickLeaveService,
+    private readonly timesheet: TimesheetSyncService,
   ) {}
 
   // ------------------------------------------------------------------ reads
@@ -197,6 +199,7 @@ export class RequestsService {
         // Recorded vacation gets its decision like an approved one (spec 11.1, "Generate decision").
         if (recorded && input.type === 'vacation' && input.record?.decision !== false) await this.decisions.queueFor(tx, ctx, row!);
         if (recorded) await this.sick.reapplyFor(tx, ctx.tenantId, employeeId, input.startDate, input.endDate);
+        if (recorded) await this.timesheet.queue(tx, ctx.tenantId, employeeId, input.startDate, input.endDate);
         if (!recorded && p.approver) {
           for (const a of p.approver.approvers) {
             if (a.userId === ctx.userId) continue;

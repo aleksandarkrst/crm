@@ -1,5 +1,6 @@
+import { type AbsenceLine, absencesIn, pendingAbsenceRegistry, refuseAbsenceDay } from './absences';
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, between, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, between, eq, inArray, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
@@ -95,6 +96,15 @@ export interface DayView {
   editable: boolean;
   /** A public holiday on a working day (CD-153): its name and the hours off; it lowers the expected hours. */
   holiday: { name: string; minutes: number } | null;
+  /** A full-day absence (CD-170, spec 14.1): read-only, its hours count as entered, no task hours on the day. */
+  absence: { kind: string; label: string; minutes: number } | null;
+  /** Time off waiting for approval on the day, as a hint without hours ("Vacation pending"). */
+  pendingAbsence: string | null;
+  /**
+   * What the approver should know (spec 14.3): "Changed after submission: Vacation added",
+   * "Changed after approval: …", "Conflict: absence and task hours", "Missing hours after absence removed".
+   */
+  flags: string[];
   /** The approver's decision (CD-157): the latest comment, who returned or approved the day and when. */
   comment: string | null;
   returnedAt: string | null;
@@ -212,7 +222,7 @@ const returner = alias(users, 'returner');
 const approver = alias(users, 'approver');
 
 /** One writer per person and day, so two tabs can't pass the daily maximum together. */
-const lockDay = (tx: Tx, employeeId: string, date: string) => tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${employeeId}:${date}`}, 0))`);
+export const lockDay = (tx: Tx, employeeId: string, date: string) => tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${employeeId}:${date}`}, 0))`);
 
 /** An entry as the entry endpoints answer (CD-276). */
 export interface EntryView {
@@ -384,6 +394,7 @@ export class TimesheetService {
         if (existing.length > 1) throw new ConflictException(`This day has ${existing.length} entries on ${facts.code}. Change them on its page.`);
         const entry = existing[0];
         const note = input.note === undefined ? (entry?.note ?? null) : input.note;
+        if (input.minutes > (entry?.minutes ?? 0)) await refuseAbsenceDay(tx, employeeId, input.date);
         if (input.minutes === 0) {
           if (entry) await tx.delete(timeEntries).where(eq(timeEntries.id, entry.id));
         } else {
@@ -419,6 +430,7 @@ export class TimesheetService {
         const [facts] = await rowFacts(tx, employeeId, input.taskId ? [input.taskId] : [], input.workOrderId ? [input.workOrderId] : []);
         if (!facts) throw new NotFoundException(input.taskId ? 'Task not found' : 'Work order not found');
         if (facts.refusal) throw refusalError(facts);
+        await refuseAbsenceDay(tx, employeeId, input.date);
         await this.checkDayLimit(tx, caller, employeeId, input.date, span.minutes, null);
         await this.checkHourLimit(tx, ctx.tenantId, employeeId, input.taskId ?? null, span.minutes);
         const [row] = await tx
@@ -463,6 +475,7 @@ export class TimesheetService {
         const [facts] = await rowFacts(tx, employeeId, entry.taskId ? [entry.taskId] : [], entry.workOrderId ? [entry.workOrderId] : []);
         // Hours already there can be corrected after someone was unassigned (spec 4.4); closed rows are the trigger's.
         if (facts?.refusal && facts.refusal !== 'not_assigned' && facts.refusal !== 'not_technician') throw refusalError(facts);
+        if (date !== entry.workDate || span.minutes > entry.minutes) await refuseAbsenceDay(tx, employeeId, date);
         await this.checkDayLimit(tx, caller, employeeId, date, span.minutes, date === entry.workDate ? entry : null);
         if (span.minutes > entry.minutes) await this.checkHourLimit(tx, ctx.tenantId, employeeId, entry.taskId, span.minutes, [entry.id]);
         const [row] = await tx
@@ -569,7 +582,9 @@ export class TimesheetService {
         const cells = [];
         // Block mode (CD-149): hours that would take someone past their limit on a task aren't copied.
         const added = new Map<string, number>();
-        for (const c of plan.cells.filter((c) => employed(c.date, caller.employment))) {
+        // Nothing is copied onto a full-day absence (CD-170, spec 14.2).
+        const away = (await absencesIn(tx, [employeeId], input.weekStart, addDays(input.weekStart, 6))).get(employeeId) ?? new Map();
+        for (const c of plan.cells.filter((c) => employed(c.date, caller.employment) && !away.has(c.date))) {
           const { taskId } = split(c.key);
           if (taskId) {
             const more = (added.get(taskId) ?? 0) + c.minutes;
@@ -908,6 +923,15 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
           and e.kind in ('submitted', 'resubmitted') and e.actor_user_id is not null
           and (p.user_id is null or p.user_id <> e.actor_user_id)) as on_behalf`),
   ]);
+  const [absences, pending, absenceEvents] = await Promise.all([
+    absencesIn(tx, [employeeId], monday, sunday).then((m) => m.get(employeeId) ?? new Map<string, AbsenceLine>()),
+    pendingAbsenceRegistry.pendingIn(tx, employeeId, monday, sunday),
+    tx
+      .select({ date: timesheetDayEvents.workDate, kind: timesheetDayEvents.kind, comment: timesheetDayEvents.comment })
+      .from(timesheetDayEvents)
+      .where(and(eq(timesheetDayEvents.employeeId, employeeId), between(timesheetDayEvents.workDate, monday, sunday)))
+      .orderBy(asc(timesheetDayEvents.createdAt)),
+  ]);
   const taskIds = [...new Set([...entries, ...added].flatMap((e) => (e.taskId ? [e.taskId] : [])))];
   const orderIds = [...new Set([...entries, ...added].flatMap((e) => (e.workOrderId ? [e.workOrderId] : [])))];
   const facts = await rowFacts(tx, employeeId, taskIds, orderIds);
@@ -955,10 +979,16 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
     const holiday = holidays.get(date);
     const off = holidayMinutes(date, settings, holiday);
     const expected = expectedMinutes(date, settings, caller.employment, holiday);
-    const minutes = perDay[date] ?? 0;
+    const absence = absences.get(date) ?? null;
+    const taskMinutes = perDay[date] ?? 0;
+    // An absence's hours count as entered (spec 14.1): the day needs no task hours.
+    const minutes = taskMinutes + (absence?.minutes ?? 0);
     const status = statusOf.get(date)?.status ?? 'draft';
     return {
       holiday: holiday && off > 0 ? { name: holiday.name, minutes: off } : null,
+      absence: absence ? { kind: absence.kind, label: absence.label, minutes: absence.minutes } : null,
+      pendingAbsence: absence ? null : (pending.get(date) ?? null),
+      flags: absenceFlags(status, absenceEvents.filter((e) => e.date === date), !!absence, taskMinutes, expected),
       date,
       status,
       submittedAt: statusOf.get(date)?.submittedAt?.toISOString() ?? null,
@@ -1068,4 +1098,22 @@ export async function submitDays(
       setWhere: sql`${timesheetDays.status} = 'draft'`,
     });
   await recordDayEvents(tx, { tenantId, employeeId, dates: days, kind: userId ? 'submitted' : 'auto_submitted', actor: { userId, name: opts.actorName ?? null }, approvalMode: opts.approvalMode });
+}
+
+/**
+ * What the approver should know about a day's absence (spec 14.3), from its history: changes the
+ * time off module made since the day was last submitted or approved, a locked day carrying both an
+ * absence and task hours, and a locked day left without hours after its absence was removed.
+ */
+export function absenceFlags(status: TimesheetDayStatus, events: readonly { kind: string; comment: string | null }[], hasAbsence: boolean, taskMinutes: number, expected: number): string[] {
+  const flags: string[] = [];
+  let last = -1;
+  events.forEach((e, i) => {
+    if (e.kind !== 'absence_changed') last = i;
+  });
+  const since = events.slice(last + 1).filter((e) => e.kind === 'absence_changed' && e.comment);
+  if (since.length && (status === 'submitted' || status === 'approved')) flags.push(`Changed after ${status === 'submitted' ? 'submission' : 'approval'}: ${since.map((e) => e.comment).join(', ')}`);
+  if (status === 'approved' && hasAbsence && taskMinutes > 0) flags.push('Conflict: absence and task hours');
+  if (status === 'approved' && !hasAbsence && taskMinutes === 0 && expected > 0 && since.some((e) => e.comment!.endsWith('removed'))) flags.push('Missing hours after absence removed');
+  return flags;
 }
