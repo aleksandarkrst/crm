@@ -229,8 +229,18 @@ describe('tenant isolation', () => {
     const policies = await ok('GET', '/timeoff/policies', other);
     expect(policies).toHaveLength(1);
     expect(policies[0].name).toBe('Standard');
-    expect((await call('GET', `/timeoff/employees/${id.emp}/profile`, other)).status).toBe(404);
-    expect((await call('PATCH', `/timeoff/policies/${technicians.id}`, { ...other, body: { name: 'Stolen' } })).status).toBe(404);
+    const cases: [string, string, unknown?][] = [
+      ['GET', `/timeoff/employees/${id.emp}/profile`],
+      ['PATCH', `/timeoff/employees/${id.emp}/profile`, { priorExperienceMonths: 1 }],
+      ['PATCH', `/timeoff/employees/${id.emp}/entitlements/${YEAR}`, { individualDays: 1, individualReason: 'x' }],
+      ['POST', `/timeoff/employees/${id.emp}/entitlements/${YEAR}/recalculate`, {}],
+      ['GET', `/timeoff/employees/${id.emp}/history`],
+      ['PATCH', `/timeoff/policies/${technicians.id}`, { name: 'Stolen' }],
+      ['DELETE', `/timeoff/policies/${technicians.id}`],
+      ['POST', `/timeoff/policies/${technicians.id}/default`],
+      ['GET', `/timeoff/policies/${technicians.id}/history`],
+    ];
+    for (const [method, path, body] of cases) expect((await call(method, path, { ...other, body })).status, `${method} ${path}`).toBe(404);
     expect((await call('GET', '/timeoff/policies', { token: otherOwner.token, tenant })).status).toBe(403);
   });
 });

@@ -72,17 +72,20 @@ export class TimeoffController {
   }
 
   @Patch('employees/:id/profile')
+  @RequireTenant('admin')
   updateProfile(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(UpdateProfile)) body: UpdateProfile) {
     return this.entitlements.updateProfile(ctx, id, body);
   }
 
   @Patch('employees/:id/entitlements/:year')
+  @RequireTenant('admin')
   updateEntitlement(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Param('year', Year) year: number, @Body(new ZodPipe(UpdateEntitlement)) body: UpdateEntitlement) {
     return this.entitlements.updateEntitlement(ctx, id, year, body);
   }
 
   /** `{ preview: true }` answers `{ before, after }` without saving. */
   @Post('employees/:id/entitlements/:year/recalculate')
+  @RequireTenant('admin')
   @HttpCode(200)
   recalculate(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Param('year', Year) year: number, @Body(new ZodPipe(Recalculate)) body: Recalculate) {
     return this.entitlements.recalculate(ctx, id, year, body.preview);

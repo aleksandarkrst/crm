@@ -4,6 +4,7 @@ import { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
+import { requestActor } from '../../shared/database/request-context';
 import { employeeTimeoffProfiles, employees, invitations, tenants, timeoffPolicies, timeoffPolicyExperienceRules, type VacationEntitlementRow, vacationEntitlements } from '../../shared/database/schema';
 import { zonedParts } from '../../shared/time/zoned-time';
 import { PeopleAccess } from '../people';
@@ -85,16 +86,18 @@ export class EntitlementsService {
   // ------------------------------------------------------------------ reads
 
   /** The card's Time off section: self, the managers above and Admins (spec 15.1). */
-  profile(ctx: TenantContext, employeeId: string): Promise<ProfileView> {
-    return this.database.withTenant(ctx.tenantId, async (tx) => {
+  async profile(ctx: TenantContext, employeeId: string): Promise<ProfileView> {
+    const { facts, today, isAdmin } = await this.database.withTenant(ctx.tenantId, async (tx) => {
       const access = await this.access.of(ctx, tx);
       const facts = await this.facts(tx, employeeId);
       if (!facts || (facts.deactivatedAt && !access.canSeeInactive)) throw new NotFoundException('Employee not found');
       if (!access.canSeeEmployment(employeeId)) throw new ForbiddenException('Only the employee, their managers and Admins see their time off');
-      const today = await this.today(tx, ctx.tenantId);
-      await this.ensureYears(tx, ctx.tenantId, facts, this.dueYears(today), {});
-      return this.present(tx, facts, today, access.isAdmin);
+      return { facts, today: await this.today(tx, ctx.tenantId), isAdmin: access.isAdmin };
     });
+    // Rows a read brings up to date are the system's doing, not the reader's (who may not be an
+    // Admin): their history rows carry no actor, like the daily job's.
+    await requestActor.run({}, () => this.database.withTenant(ctx.tenantId, (tx) => this.ensureYears(tx, ctx.tenantId, facts, this.dueYears(today), {})));
+    return this.database.withTenant(ctx.tenantId, (tx) => this.present(tx, facts, today, isAdmin));
   }
 
   private async present(tx: Tx, facts: EmployeeFacts, today: string, canEdit: boolean): Promise<ProfileView> {

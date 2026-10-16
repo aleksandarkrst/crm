@@ -38,7 +38,7 @@ function inputOf(d: PolicyDraft): ApiPolicyInput | string {
   const baseDays = int(d.baseDays);
   if (baseDays === null || baseDays < MIN_BASE_DAYS || baseDays > MAX_BASE_DAYS) return `Base days are between ${MIN_BASE_DAYS} (the Labor Law's minimum) and ${MAX_BASE_DAYS}`;
   const maxDays = d.maxDays.trim() === '' ? null : int(d.maxDays);
-  if (maxDays !== null && (maxDays === null || maxDays < baseDays || maxDays > 100)) return 'The maximum is at least the base days and at most 100';
+  if (d.maxDays.trim() !== '' && (maxDays === null || maxDays < baseDays || maxDays > 100)) return 'The maximum is at least the base days and at most 100';
   const carryOverCap = d.carryOverCap.trim() === '' ? null : int(d.carryOverCap);
   if (d.carryOverCap.trim() !== '' && (carryOverCap === null || carryOverCap > 60)) return 'The carry-over cap is 0 to 60 days';
   const experienceRules: ApiExperienceRule[] = [];
@@ -125,7 +125,8 @@ function PolicyEditor({ policy, onDone }: { policy?: ApiTimeOffPolicy; onDone: (
       <div className="policy-field">
         <span className="th">Carry-over</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <Switch on={d.carryOver} onClick={() => set({ carryOver: !d.carryOver })} label="Unused days can be used until 30 June of the next year" />
+          <Switch on={d.carryOver} onClick={() => set({ carryOver: !d.carryOver })} label="Carry-over" />
+          <span style={{ fontSize: 13 }}>Unused days can be used until 30 June of the next year</span>
         </div>
         {d.carryOver && (
           <label className="policy-field" style={{ maxWidth: 260 }}>

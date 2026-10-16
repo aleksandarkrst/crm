@@ -133,12 +133,16 @@ function EntitlementCard({ profile, e, onChanged }: { profile: ApiTimeOffProfile
         {e.policy.id !== profile.policy.id ? ` · calculated with ${e.policy.name}` : ''}
       </span>
       {e.individualDays > 0 && e.individualReason && <span className="emp-note">Individual days: {e.individualReason}</span>}
-      {e.frozen && <span className="badge badge-neutral">Days approved: only Recalculate changes it</span>}
+      {e.frozen && (
+        <span className="emp-note">
+          <span className="badge badge-neutral">Days approved</span> Only Recalculate changes this year now.
+        </span>
+      )}
       {e.policyOutdated && <span className="emp-note emp-warn">The policy changed to {profile.policy.name}. It applies from next year; Recalculate applies it to {e.year}.</span>}
       {profile.canEdit &&
         (individual ? (
           <div className="timeoff-individual" data-testid="timeoff-individual">
-            <input className="form-input" inputMode="numeric" value={individual.days} onChange={(ev) => setIndividual({ ...individual, days: ev.target.value })} aria-label="Individual extra days" style={{ width: 70 }} />
+            <input className="form-input timeoff-num" inputMode="numeric" value={individual.days} onChange={(ev) => setIndividual({ ...individual, days: ev.target.value })} aria-label="Individual extra days" />
             <input
               className="form-input"
               value={individual.reason}
@@ -210,9 +214,9 @@ function ProfileEditor({ profile, onDone }: { profile: ApiTimeOffProfile; onDone
       {policyId !== profile.policy.id && <span className="emp-note">A new policy takes effect from next year. Recalculate on a year applies it there too.</span>}
       <Row label="Prior work experience">
         <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input className="form-input" inputMode="numeric" value={years} onChange={(e) => setYears(e.target.value)} aria-label="Years" style={{ width: 64 }} data-testid="timeoff-prior-years" />
+          <input className="form-input timeoff-num" inputMode="numeric" value={years} onChange={(e) => setYears(e.target.value)} aria-label="Years" data-testid="timeoff-prior-years" />
           <span style={{ fontSize: 13 }}>years</span>
-          <input className="form-input" inputMode="numeric" value={months} onChange={(e) => setMonths(e.target.value)} aria-label="Months" style={{ width: 64 }} data-testid="timeoff-prior-months" />
+          <input className="form-input timeoff-num" inputMode="numeric" value={months} onChange={(e) => setMonths(e.target.value)} aria-label="Months" data-testid="timeoff-prior-months" />
           <span style={{ fontSize: 13 }}>months</span>
         </span>
       </Row>

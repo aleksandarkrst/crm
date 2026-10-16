@@ -1364,7 +1364,7 @@ a.task-card-project:hover { color: var(--brand); }
 .policy-field .form-input { width: 100%; box-sizing: border-box; }
 .policy-field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .policy-rule { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.policy-rule .form-input { width: 64px; }
+.policy-rule .form-input, .timeoff-num { width: 64px; box-sizing: border-box; }
 @media (max-width: 760px) {
   /* Phones: the name and days side by side, the rest under them. */
   .policy-row { grid-template-columns: minmax(0, 1fr) auto; }
