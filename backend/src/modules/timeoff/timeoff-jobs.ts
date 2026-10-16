@@ -5,11 +5,13 @@ import { DatabaseService } from '../../shared/database/database.service';
 import { tenants } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
+import { HrDocumentsService, HrDocumentsWorkerModule } from '../hr-documents';
 import { PeopleModule, PeopleWorkerModule } from '../people';
 import { AbsenceService } from './absence.service';
 import { ApprovalsService } from './approvals.service';
 import { TimeoffNoticeMailer } from './balance-notices';
 import { BalancesService } from './balances.service';
+import { DecisionsService } from './decisions.service';
 import { EntitlementsService } from './entitlements.service';
 import { ReasonsService } from './reasons.service';
 import { TimeoffRequestMailer } from './request-notices';
@@ -37,6 +39,7 @@ export class TimeoffJobs implements OnApplicationBootstrap {
     private readonly balances: BalancesService,
     private readonly approvals: ApprovalsService,
     private readonly mailer: TimeoffNoticeMailer,
+    private readonly documents: HrDocumentsService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -56,6 +59,7 @@ export class TimeoffJobs implements OnApplicationBootstrap {
       const reminders = await this.balances.queueExpiringReminders(w.id, now);
       const approvals = await this.approvals.queueApprovalReminders(w.id, now);
       const absent = await this.approvals.queueManagerAbsentNotices(w.id, now);
+      await this.documents.failInterrupted(w.id);
       if (changed || expired || reminders || approvals || absent) this.logger.log(`Workspace ${w.id}: ${changed} entitlement(s) updated, ${expired} expiry record(s), ${reminders} carry-over reminder(s), ${approvals} approval reminder(s), ${absent} manager-absent notice(s)`);
       total.changed += changed;
       total.expired += expired;
@@ -76,7 +80,7 @@ export interface DailyResult {
   absent: number;
 }
 
-@Module({ imports: [PeopleWorkerModule], providers: [EntitlementsService, BalancesService, ReasonsService, RequestsService, ApprovalsService, AbsenceService, TimeoffRequestMailer, TimeoffNoticeMailer, TimeoffJobs] })
+@Module({ imports: [PeopleWorkerModule, HrDocumentsWorkerModule], providers: [EntitlementsService, BalancesService, ReasonsService, RequestsService, ApprovalsService, AbsenceService, DecisionsService, TimeoffRequestMailer, TimeoffNoticeMailer, TimeoffJobs] })
 export class TimeoffWorkerModule {}
 
 const Daily = z.object({ now: z.iso.datetime().optional() });

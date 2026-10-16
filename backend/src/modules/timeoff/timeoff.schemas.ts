@@ -90,8 +90,33 @@ export const ReasonsQuery = z.object({ kind: z.enum(REASON_KINDS).optional() });
 export type ReasonsQuery = z.infer<typeof ReasonsQuery>;
 
 /** PATCH /api/timeoff/settings (Admins). */
-export const UpdateTimeoffSettings = z.object({ paidLeaveYearlyLimit: z.number().int().min(0).max(60) });
+export const UpdateTimeoffSettings = nonEmptyPatch(
+  z
+    .object({
+      paidLeaveYearlyLimit: z.number().int().min(0).max(60),
+      // Vacation decision recipients besides the employee (CD-167, spec 12): the Admins, and up to five addresses.
+      decisionCopyAdmins: z.boolean(),
+      decisionCopyEmails: z
+        .array(z.email('Not a valid email address').max(254).transform((e) => e.toLowerCase()))
+        .max(5, 'Up to 5 addresses')
+        .refine((a) => new Set(a).size === a.length, 'Each address once'),
+    })
+    .partial(),
+);
 export type UpdateTimeoffSettings = z.infer<typeof UpdateTimeoffSettings>;
+
+// ---------------------------------------------------------------- decisions (CD-167, spec 11.5)
+
+export const DecisionsQuery = z.object({
+  year: z.coerce.number().int().min(2000).max(2100).optional(),
+  state: z.enum(['valid', 'outdated', 'cancelled', 'superseded']).optional(),
+  employeeId: z.uuid().optional(),
+});
+export type DecisionsQuery = z.infer<typeof DecisionsQuery>;
+
+/** POST /api/timeoff/decisions/:id/regenerate: email the new version too. */
+export const Regenerate = z.object({ email: z.boolean().default(false) });
+export type Regenerate = z.infer<typeof Regenerate>;
 
 // ---------------------------------------------------------------- requests (spec 8)
 

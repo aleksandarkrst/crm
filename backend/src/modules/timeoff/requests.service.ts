@@ -1,3 +1,4 @@
+import { type DecisionView, DecisionsService } from './decisions.service';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { AuditService } from '../../shared/audit/audit.service';
@@ -47,6 +48,8 @@ export interface RequestView {
   canCancel: boolean;
   /** Approved, started and not over: the managers above and Admins. */
   canShorten: boolean;
+  /** The vacation decision document (CD-167): the employee's own and Admins only (spec 15.1). */
+  decision: DecisionView | null;
 }
 
 export interface ApproverView {
@@ -94,6 +97,7 @@ export class RequestsService {
     private readonly balances: BalancesService,
     private readonly entitlements: EntitlementsService,
     private readonly reasons: ReasonsService,
+    private readonly decisions: DecisionsService,
   ) {}
 
   // ------------------------------------------------------------------ reads
@@ -344,6 +348,7 @@ export class RequestsService {
     const names = new Map(userIds.length ? (await tx.select({ id: users.id, name: sql<string>`coalesce(${users.displayName}, ${users.email}, 'Member')` }).from(users).where(inArray(users.id, userIds))).map((u) => [u.id, u.name]) : []);
     const limit = rows.some((r) => r.type === 'paid_leave') ? await this.reasons.settingsIn(tx, ctx.tenantId) : null;
     const today = await workspaceToday(tx, ctx.tenantId);
+    const decisions = await this.decisions.viewsFor(tx, rows.filter((r) => access.isAdmin || access.isSelf(r.employeeId)).map((r) => r.id));
     const out: RequestView[] = [];
     for (const r of rows) {
       const reason = r.reasonId ? reasons.get(r.reasonId) : undefined;
@@ -381,6 +386,7 @@ export class RequestsService {
         canWithdraw: r.status === 'pending' && (access.isAdmin || access.isSelf(r.employeeId)),
         canCancel: r.status === 'approved' && r.startDate > today && (access.isSelf(r.employeeId) || decides),
         canShorten: r.status === 'approved' && r.startDate <= today && r.endDate >= today && decides,
+        decision: decisions.get(r.id) ?? null,
       });
     }
     return out;

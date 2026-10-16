@@ -19,6 +19,9 @@ export const DEADLINE_WEEKS = ['same', 'next'] as const;
 export const APPROVAL_MODES = ['week', 'day'] as const;
 export type CustomerEmailLanguage = (typeof CUSTOMER_EMAIL_LANGUAGES)[number];
 
+/** The legal basis of a vacation decision (spec 11.2): article 75 of the Labor Law with its amendments. */
+export const DEFAULT_LEGAL_BASIS = 'člana 75. Zakona o radu („Službeni glasnik RS“, br. 24/2005, 61/2005, 54/2009, 32/2013, 75/2014, 13/2017 – odluka US, 113/2017 i 95/2018 – autentično tumačenje)';
+
 export const tenants = pgTable(
   'tenants',
   {
@@ -57,6 +60,28 @@ export const tenants = pgTable(
     holidayPreload: text('holiday_preload', { enum: ['none', 'serbia'] }).notNull().default('none'),
     /** Paid leave: working days per calendar year for the reasons that count toward the group limit (spec 7.2, A10). */
     timeoffPaidLeaveYearlyLimit: integer('timeoff_paid_leave_yearly_limit').notNull().default(5),
+    /**
+     * The company's country (CD-167, Settings → Workspace), ISO 3166-1 alpha-2, or null when not
+     * set. Serbia ('RS') turns the vacation decision document on: Serbian employers must issue one.
+     */
+    country: text('country'),
+    // Company details printed on generated documents (spec 10.1, Settings → Workspace → Company).
+    companyLegalName: text('company_legal_name'),
+    /** Street and number, postal code and city, on one line. */
+    companyAddress: text('company_address'),
+    /** PIB, the tax id: 9 digits with a check digit. */
+    companyPib: text('company_pib'),
+    /** MB, the registration number: 8 digits. */
+    companyMb: text('company_mb'),
+    /** Place of issue printed on documents ("Beograd"). */
+    companyPlace: text('company_place'),
+    companySignatoryName: text('company_signatory_name'),
+    companySignatoryTitle: text('company_signatory_title'),
+    /** The Labor Law citation printed on decisions; editable, the gazette numbers change. */
+    decisionLegalBasis: text('decision_legal_basis').notNull().default(DEFAULT_LEGAL_BASIS),
+    // Who gets a copy of decision documents besides the employee (spec 12): the Admins, and up to five addresses.
+    decisionCopyAdmins: boolean('decision_copy_admins').notNull().default(false),
+    decisionCopyEmails: text('decision_copy_emails').array().notNull().default(sql`'{}'::text[]`),
     /**
      * What this workspace calls projects and tasks (CD-143, Settings → Project types): singular and
      * plural, shown everywhere the words appear (sidebar, screens, buttons, dialogs, emails).

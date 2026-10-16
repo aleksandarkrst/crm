@@ -172,7 +172,7 @@ describe('in SQL, as the runtime role', () => {
 
   it('sees no tenant rows at all without a tenant set', async () => {
     await asTenant(null, async () => {
-      for (const table of ['deals', 'companies', 'contacts', 'deal_lines', 'deal_tasks', 'products', 'activities', 'timeoff_policies', 'timeoff_policy_experience_rules', 'employee_timeoff_profiles', 'vacation_entitlements', 'vacation_balance_adjustments', 'vacation_balance_expiries', 'timeoff_notices', 'timeoff_reasons', 'timeoff_requests', 'timeoff_request_days', 'public_holiday_preloads']) {
+      for (const table of ['deals', 'companies', 'contacts', 'deal_lines', 'deal_tasks', 'products', 'activities', 'timeoff_policies', 'timeoff_policy_experience_rules', 'employee_timeoff_profiles', 'vacation_entitlements', 'vacation_balance_adjustments', 'vacation_balance_expiries', 'timeoff_notices', 'timeoff_reasons', 'timeoff_requests', 'timeoff_request_days', 'public_holiday_preloads', 'hr_documents']) {
         const { rows } = await db.query(`select count(*)::int as n from ${table}`);
         expect(rows[0].n, table).toBe(0);
       }
