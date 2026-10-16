@@ -103,7 +103,7 @@ function MyTimeOff({ employeeId, year, onYear }: { employeeId: string | null | u
         <span style={{ fontSize: 15, fontWeight: 600 }}>Requests {data.year}</span>
         {requests ? <RequestsList requests={requests} onChanged={() => void reloadRequests()} /> : <span className="emp-note">Loading</span>}
       </section>
-      <span className="emp-note">Approvals, the team calendar and sick leave come with the next releases of this module.</span>
+      <span className="emp-note">Sick leave comes with the next release of this module.</span>
       {requesting && (
         <RequestDialog
           employeeId={employeeId}
@@ -145,7 +145,7 @@ function RequestsTab({ admin, myEmployeeId }: { admin: boolean; myEmployeeId: st
         )}
       </div>
       {data ? <RequestsList requests={data} withEmployee onChanged={() => void reload()} /> : <div className="ts-help">Loading</div>}
-      <span className="emp-note">Managers see their direct and indirect reports; Admins see everyone. Approving and rejecting come with the next release.</span>
+      <span className="emp-note">Managers see their direct and indirect reports; Admins see everyone. Decisions are made on the Approvals tab.</span>
       {recording && (
         <RequestDialog
           employeeId={myEmployeeId ?? employees[0]?.id ?? ''}

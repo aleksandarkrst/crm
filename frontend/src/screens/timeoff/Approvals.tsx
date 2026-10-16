@@ -87,7 +87,6 @@ export function ApprovalsTab() {
               </span>
               <span style={{ fontSize: 13 }}>
                 {periodLabel(r)} · {days(r.workingDays)} · submitted {dateLabel(r.submittedAt.slice(0, 10))}
-                {r.submittedBy && r.submittedBy.userId !== r.employee.id ? '' : ''}
               </span>
               {r.note && <span className="emp-note">Note: {r.note}</span>}
               {r.balanceAfter !== null && <span className="emp-note">Vacation days left after approval: {r.balanceAfter}</span>}
@@ -293,8 +292,12 @@ export function CalendarTab({ month, onMonth }: { month: string; onMonth: (m: st
           Pending
         </span>
         <span>
+          <span className="cal-day cal-off" style={{ border: '1px solid var(--border)', boxSizing: 'border-box' }} />
+          Weekend
+        </span>
+        <span>
           <span className="cal-day cal-holiday" style={{ border: '1px solid var(--border)', boxSizing: 'border-box' }} />
-          Weekend or holiday
+          Holiday
         </span>
       </div>
     </div>

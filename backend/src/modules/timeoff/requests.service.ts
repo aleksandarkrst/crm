@@ -354,6 +354,9 @@ export class RequestsService {
         const used = reason.countsTowardLimit ? (await this.paidLeaveUsed(tx, r.employeeId, year)) - mine : 0;
         warnings.push(...paidLeaveWarnings({ maxDays: reason.maxDays, countsTowardLimit: reason.countsTowardLimit, yearlyLimit: limit.paidLeaveYearlyLimit, days: mine, usedTowardLimit: Math.max(0, used) }));
       }
+      // The same rule as the decisions (ApprovalsService): the resolved approver, or an Admin.
+      const approver = r.status === 'pending' || r.status === 'approved' ? await this.approver(tx, ctx.tenantId, r.employeeId, today) : null;
+      const decides = access.isAdmin || !!approver?.approvers.some((a) => a.userId === ctx.userId);
       out.push({
         id: r.id,
         employee: { id: r.employeeId, fullName: people.get(r.employeeId) ?? 'Employee' },
@@ -372,12 +375,12 @@ export class RequestsService {
         decidedAt: r.decidedAt,
         decisionComment: r.decisionComment,
         // Resolved now (spec 9.1): an absent manager hands over while away.
-        approver: r.status === 'pending' ? await this.approver(tx, ctx.tenantId, r.employeeId, today) : null,
+        approver: r.status === 'pending' ? approver : null,
         days: days.filter((d) => d.requestId === r.id).map((d) => ({ date: d.date, poolYear: d.poolYear, state: d.state })),
         warnings,
         canWithdraw: r.status === 'pending' && (access.isAdmin || access.isSelf(r.employeeId)),
-        canCancel: r.status === 'approved' && r.startDate > today && (access.isAdmin || access.isSelf(r.employeeId) || access.isReport(r.employeeId)),
-        canShorten: r.status === 'approved' && r.startDate <= today && r.endDate >= today && !access.isSelf(r.employeeId) && (access.isAdmin || access.isReport(r.employeeId)),
+        canCancel: r.status === 'approved' && r.startDate > today && (access.isSelf(r.employeeId) || decides),
+        canShorten: r.status === 'approved' && r.startDate <= today && r.endDate >= today && decides,
       });
     }
     return out;

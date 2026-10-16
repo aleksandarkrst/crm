@@ -97,7 +97,7 @@ export function RequestsList({ requests, withEmployee, onChanged }: { requests: 
   );
 }
 
-/** Working days (Monday to Friday) from `from` to `to` inclusive, for the five-day warning (A8). */
+/** Working days (Monday to Friday) from `from` up to but not including `to`, for the five-day warning (A8). */
 const weekdaysUntil = (from: string, to: string) => {
   let n = 0;
   for (let t = Date.parse(`${from}T00:00:00Z`); t < Date.parse(`${to}T00:00:00Z`); t += 86_400_000) if (![0, 6].includes(new Date(t).getUTCDay())) n++;

@@ -1419,7 +1419,7 @@ a.task-card-project:hover { color: var(--brand); }
 .apr-row:first-child { border-top: 0; padding-top: 0; }
 .apr-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .cal-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--white); }
-.cal-table { border-collapse: collapse; font-size: 12px; min-width: 100%; }
+.cal-table { border-collapse: separate; border-spacing: 0; font-size: 12px; min-width: 100%; }
 .cal-table th, .cal-table td { border-bottom: 1px solid var(--divider); padding: 0; }
 .cal-table th { font-weight: 500; color: var(--text-2); text-align: center; height: 34px; min-width: 24px; }
 .cal-table th.cal-name, .cal-table td.cal-name { position: sticky; left: 0; background: var(--white); text-align: left; padding: 0 12px; min-width: 150px; white-space: nowrap; z-index: 1; }

@@ -16,6 +16,7 @@ let emp: Session;
 let peer: Session;
 let other: Session;
 let tenant: string;
+let otherTenant: string;
 const id = {} as Record<'owner' | 'mgr' | 'emp' | 'peer' | 'other', string>;
 const as = (s: Session) => ({ token: s.token, tenant });
 const YEAR = new Date().getUTCFullYear();
@@ -38,6 +39,7 @@ const mailsAbout = async (to: string, subjectStart: string) => (await mailTo(own
 beforeAll(async () => {
   [owner, mgr, emp, peer, other] = (await Promise.all(['ap-owner', 'ap-mgr', 'ap-emp', 'ap-peer', 'ap-other'].map((l) => signIn(l)))) as [Session, Session, Session, Session, Session];
   tenant = await createTenant(owner, 'Time off approvals');
+  otherTenant = await createTenant(other, 'Approvals elsewhere');
   id.owner = (await ok('GET', '/people/access', as(owner))).employeeId;
   for (const [key, s] of [['mgr', mgr], ['emp', emp], ['peer', peer], ['other', other]] as const) id[key] = await joinAsEmployee(owner, tenant, s);
   for (const key of ['mgr', 'emp', 'peer', 'other', 'owner'] as const) await ok('PATCH', `/people/employees/${id[key]}`, { ...as(owner), body: { employmentStartDate: START, ...(key === 'emp' || key === 'peer' ? { managerId: id.mgr } : {}) } }, 200);
@@ -193,9 +195,32 @@ describe('an absent manager and the reminders (spec 9.1, 15.2)', () => {
     expect((await ok('POST', '/dev/timeoff/daily', { ...as(owner), body: { now } }, 200)).approvals).toBe(0);
     const mail = await eventually(async () => (await mailsAbout(mgr.email, '1 time off request waiting for you'))[0] ?? null, 'the reminder');
     expect(mail.text).toContain('unpaid leave');
+    // With the toggle off the next day's reminder is queued but not sent; back on, the day after's arrives.
     await ok('PATCH', '/profile', { ...as(mgr), body: { notifyTimeoffApprovals: false } }, 200);
     expect((await ok('GET', '/profile', as(mgr))).notifyTimeoffApprovals).toBe(false);
+    expect((await ok('POST', '/dev/timeoff/daily', { ...as(owner), body: { now: `${plus(n - 1)}T06:00:00Z` } }, 200)).approvals).toBeGreaterThanOrEqual(1);
+    // The toggle is read when the email is sent: wait for a later email on the same queue before turning it on.
+    const marker = await submit(peer, { type: 'unpaid_leave', startDate: d('10-05'), endDate: d('10-05') });
+    await ok('POST', `/timeoff/requests/${marker.id}/reject`, { ...as(mgr), body: { comment: 'Queue marker' } }, 200);
+    await eventually(async () => (await mailsAbout(peer.email, 'Time off rejected')).find((m) => m.text.includes('Queue marker')) ?? null, 'the marker email');
     await ok('PATCH', '/profile', { ...as(mgr), body: { notifyTimeoffApprovals: true } }, 200);
+    expect((await ok('POST', '/dev/timeoff/daily', { ...as(owner), body: { now: `${date}T06:00:00Z` } }, 200)).approvals).toBeGreaterThanOrEqual(1);
+    await eventually(async () => ((await mailsAbout(mgr.email, '1 time off request waiting for you')).length >= 2 ? true : null), 'the second reminder');
+    expect(await mailsAbout(mgr.email, '1 time off request waiting for you')).toHaveLength(2);
     await ok('POST', `/timeoff/requests/${soon.id}/withdraw`, as(peer), 200);
+  });
+});
+
+describe('tenant isolation', () => {
+  it('another workspace sees none of it', async () => {
+    const r = await submit(emp, { startDate: d('12-13'), endDate: d('12-14') });
+    const elsewhere = { token: other.token, tenant: otherTenant };
+    for (const action of ['approve', 'reject', 'cancel'] as const) expect((await call('POST', `/timeoff/requests/${r.id}/${action}`, { ...elsewhere, body: { comment: 'No' } })).status).toBe(404);
+    expect((await call('POST', `/timeoff/requests/${r.id}/shorten`, { ...elsewhere, body: { endDate: d('12-13'), comment: 'No' } })).status).toBe(404);
+    expect((await ok('POST', '/timeoff/approvals/approve', { ...elsewhere, body: { ids: [r.id] } }, 200)).failed).toHaveLength(1);
+    expect(await ok('GET', '/timeoff/approvals', elsewhere)).toEqual([]);
+    expect((await ok('GET', '/timeoff/approvals/count', elsewhere)).pending).toBe(0);
+    expect((await ok('GET', `/timeoff/calendar?month=${NEXT}-12`, elsewhere)).employees.every((e: { id: string }) => e.id !== id.emp)).toBe(true);
+    await ok('POST', `/timeoff/requests/${r.id}/withdraw`, as(emp), 200);
   });
 });

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
@@ -86,7 +86,7 @@ export class ApprovalsService {
         await this.approve(ctx, id, comment);
         approved.push(id);
       } catch (err) {
-        failed.push({ id, message: err instanceof Error ? err.message : String(err) });
+        failed.push({ id, message: err instanceof HttpException ? err.message : 'Something went wrong' });
       }
     }
     return { approved, failed };
