@@ -43,6 +43,7 @@ grep the heading below, then read from that line to the next heading of the same
   - [Report tab and Workload (CD-261)](#report-tab-and-workload-cd-261)
   - [Effective time and hour limits (CD-149)](#effective-time-and-hour-limits-cd-149)
 - [Timesheet (milestone 15)](#timesheet-milestone-15)
+- [Time off (milestone 16)](#time-off-milestone-16)
 - [Products, deal products and currency (CD-83)](#products-deal-products-and-currency-cd-83)
 - [Header, command palette and record pages (CD-80)](#header-command-palette-and-record-pages-cd-80)
 - [Module and workspace switcher (CD-214)](#module-and-workspace-switcher-cd-214)
@@ -1815,6 +1816,89 @@ the reminder and after-deadline emails (CD-154) and the approval screen (CD-157)
   the note popover; submitted cells are blue, approved green, rejected days amber. Saves run one
   after another and the answer replaces the week, so totals always match the database. On phones
   the days scroll sideways under a pinned first column (the spec's day view is not built).
+
+## Time off (milestone 16)
+
+The `timeoff` module (`modules/timeoff`, tables in `schema/timeoff.ts`, RLS, versions, history and
+live hints in `drizzle/0096_timeoff_policies_rls.sql`). Spec: "Functional spec: 16 · Time off and
+sick leave" in Linear. Where the spec says Administration, read Admin: CD-225 removed the
+Administration and Payroll roles, only Admins do HR work. Built so far: vacation policies, the
+employee's time off profile and the yearly entitlement (CD-163). Balances, requests, approvals, the
+decision PDF, sick leave and the timesheet lines are CD-164 to CD-170.
+
+- **Tables** (all `(tenant_id, id)` keyed, composite foreign keys, `drizzle/0095`):
+  - `timeoff_policies`: a set of vacation rules (spec 5.2): name (unique per workspace, case and
+    space insensitive), `base_days` (20 to 60; 20 is the Labor Law's minimum, A1), `max_days`
+    (caps base + extra + individual; null is no cap), `carry_over` and `carry_over_cap` (unused
+    days usable until 30 June of the next year, at most the cap; the rule itself is CD-164),
+    `is_default` (exactly one per workspace: partial unique index `timeoff_policies_default_uq`),
+    a note. New workspaces get "Standard" (20 days, carry-over on; `TimeoffPoliciesService.provision`);
+    `0096` gave it to every existing workspace.
+  - `timeoff_policy_experience_rules`: "from N years of work experience: +X days", one row per
+    threshold (1 to 50 years, 1 to 20 days). Rows don't add up: the highest one reached applies.
+  - `employee_timeoff_profiles`: the employee's policy and `prior_experience_months` (work
+    experience before joining, 0 to 600). Without a row: the default policy, no prior experience.
+    The policy FK is `RESTRICT`, so a policy someone is on can't be deleted.
+  - `vacation_entitlements`: one row per employee and year (unique): the policy it was computed
+    with, `base_days`, `experience_years` and `experience_days`, `individual_days` with a required
+    `individual_reason` (check), `months_worked` (null: the whole year), `annual_days` (the full
+    year's total, capped) and `total_days` (proportional in a first or last year), `frozen` (set by
+    an approval in CD-166; then only Recalculate changes the row).
+- **Rules** (`entitlement.ts`, pure, `test/timeoff-entitlement.spec.ts`): work experience = prior
+  months + full months of service, evaluated on 1 January of the year, or on the start date for a
+  new hire; whole years pick the experience row. Annual = base + extra + individual, capped. In the
+  year employment starts or ends (`employees.employment_start_date`, `employment_end_date`) the
+  total is annual × full months of work / 12, rounded halves up (A3, Q2); a full month counts from
+  the start date (15 March to 14 April is one month). `carryOverDays(unused, policy)` is the
+  carry-over rule CD-164 applies.
+- **When rows are made and recomputed** (`EntitlementsService`): on every read of a profile and by
+  the worker's `timeoff.daily` (02:30 UTC): this year for every active employee the app shows, and
+  next year from 1 October workspace time (`dueYears`), so people can plan ahead. A row not frozen
+  is recomputed whenever its inputs changed (start date, prior experience, the policy's days); only
+  rows whose values differ are written, so a read changes nothing in the history. The policy a row
+  was computed with stays: changing an employee's policy applies from next year (`policyOutdated`
+  on this year's row), unless an Admin presses **Recalculate** (`force` + `switchPolicy`), which
+  also recomputes a frozen row. Editing a policy's days recomputes this year's rows on it that
+  aren't frozen and every later year, and answers `recalculated` (employees whose days changed).
+  Making another policy the default moves the employees without a profile row the same way.
+- **API** (`/api/timeoff`, any member):
+  - `GET policies` (default first, with `employees`: active shown employees on it, the default
+    counting those without a profile row); Admins: `POST policies`, `PATCH policies/:id` (any
+    field; `experienceRules` replaces the rows), `DELETE policies/:id` (409 for the default, a
+    policy with employees, or one that entitlements were computed with), `POST policies/:id/default`,
+    `GET policies/:id/history`.
+  - `GET employees/:id/profile` (self, the managers above, Admins, as `canSeeEmployment`; others
+    403, a hidden or unknown record 404): the policy, `hasProfile`, prior experience, the dates and
+    the entitlements of last year to next year with `canEdit`. Admins: `PATCH …/profile`
+    (`policyId`, `priorExperienceMonths`), `PATCH …/entitlements/:year` (`individualDays` with a
+    reason), `POST …/entitlements/:year/recalculate` (`{ preview }` answers `before` and `after`
+    without saving), and `GET …/history` (self and Admins: the profile's and the entitlements'
+    rows, policy ids named).
+  - Dev only: `POST /api/dev/timeoff/daily { now? }` runs the daily job for the caller's workspace.
+- **History and audit**: `record_changes` rows by trigger for `timeoff_policy`, `timeoff_profile`
+  and `vacation_entitlement` (`crm_record_changes`, versions by `crm_touch_version`); a policy's
+  experience rows are written by the service as one `experienceRules` change. Every Admin action is
+  in the audit log (`timeoff.policy_created`, `…_updated`, `…_deleted`, `…_default_set`,
+  `timeoff.profile_updated`, `timeoff.entitlement_updated`, `timeoff.entitlement_recalculated`).
+  A recomputation triggered by a read is attributed to the reader; the daily job's to the system.
+- **Live hints**: `timeoff_policy` (policies and their rules) and `timeoff` (profiles and
+  entitlements, ids are employee ids). The store raises `timeOffRev` on them, on `employee` (a start
+  date changes the entitlement) and on `workspace`; Settings → Time off and the card's section read
+  again (`useProjectsRead(…, 'timeOffRev')`).
+- **Screens**: Settings → Workforce → **Time off** (`screens/settings/TimeOffSettings.tsx`, Admins):
+  the policies with days, experience rows, carry-over and employee counts; New policy, Edit (inline
+  form, with how many employees' days changed after saving), Make default, Delete (only with no
+  employees). The employee card's **Time off** section (`screens/employee/TimeOffSection.tsx`,
+  `lib/timeOffApi.ts`): the policy (", the default" without a row), prior experience, "Start date
+  missing" when there is none, and a block per year (this year, next year from October) with the
+  total, its parts, the months in a partial year, "calculated with <policy>" and the outdated-policy
+  note; Admins Edit the policy and prior experience, set Individual days with a reason, and
+  Recalculate after a preview ("20 days now; 25 days after …", `askConfirm`). A 403 hides the
+  section.
+- **Tests**: `test/timeoff-entitlement.spec.ts` (the rules, AC 5.6.2 and 5.6.3) and
+  `test/integration/timeoff-policies.spec.ts` (the API per role, the entitlement through the API,
+  Recalculate, individual days, the history, the daily job and tenant isolation);
+  `tenant-isolation.spec.ts` covers the four tables in SQL.
 
 ## Products, deal products and currency (CD-83)
 

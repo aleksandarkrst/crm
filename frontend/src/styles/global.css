@@ -1355,6 +1355,33 @@ a.task-card-project:hover { color: var(--brand); }
 .time-icon.danger { color: var(--muted); }
 .time-icon.danger:hover { background: var(--danger-soft); color: var(--danger); }
 
+/* ---------------------------------------------------------------- Settings → Workforce → Time off (CD-163) */
+.policy-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.2fr) minmax(0, 1fr) 80px auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--divider); }
+.policy-row.policy-head { border-top: 0; padding-bottom: 0; }
+.policy-row.policy-row-editing { display: block; }
+.policy-editor { display: flex; flex-direction: column; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-soft); }
+.policy-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.policy-field .form-input { width: 100%; box-sizing: border-box; }
+.policy-field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.policy-rule { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.policy-rule .form-input, .timeoff-num { width: 64px; box-sizing: border-box; }
+@media (max-width: 760px) {
+  /* Phones: the name and days side by side, the rest under them. */
+  .policy-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .policy-row > :nth-child(3), .policy-row > :nth-child(4), .policy-row > :nth-child(5) { grid-column: 1 / -1; }
+  .policy-row.policy-head { display: none; }
+  .policy-field-row { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* the employee card's Time off section (CD-163) */
+.timeoff-year { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; margin-top: 6px; }
+.timeoff-year-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.timeoff-individual { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
+@media (max-width: 760px) {
+  .timeoff-individual { grid-template-columns: minmax(0, 1fr) auto; }
+  .timeoff-individual > :nth-child(2) { grid-column: 1 / -1; }
+}
+
 /* ---------------------------------------------------------------- Settings → Workforce → Holidays (CD-153) */
 .holiday-row { display: grid; grid-template-columns: 230px minmax(0, 1fr) 150px; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--divider); }
 .holiday-row.holiday-head { border-top: 0; padding-bottom: 0; }

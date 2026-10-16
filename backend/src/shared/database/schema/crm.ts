@@ -866,6 +866,9 @@ export type PeopleHistoryEntityType = (typeof PEOPLE_HISTORY_ENTITY_TYPES)[numbe
 /** Project tasks (CD-146) and work orders (CD-266). Served only by their own history endpoints, with their access rules. */
 /** `time_entry` (CD-159): every change to someone's hours, written by `timesheet_entry_history` (drizzle/0091) with whole-row snapshots. */
 export const TASK_HISTORY_ENTITY_TYPES = ['task', 'work_order', 'time_entry'] as const;
+/** Time off (milestone 16, CD-163): a policy (with its experience rules), an employee's profile and a year's entitlement. */
+export const TIMEOFF_HISTORY_ENTITY_TYPES = ['timeoff_policy', 'timeoff_profile', 'vacation_entitlement'] as const;
+export type TimeoffHistoryEntityType = (typeof TIMEOFF_HISTORY_ENTITY_TYPES)[number];
 export type TaskHistoryEntityType = (typeof TASK_HISTORY_ENTITY_TYPES)[number];
 /** `imported`: a record created by the employee import (CD-141), in place of `created` (drizzle/0040). */
 export const RECORD_CHANGE_ACTIONS = ['created', 'imported', 'updated', 'deleted', 'line_added', 'line_changed', 'line_removed', 'participant_added', 'participant_removed'] as const;
@@ -884,7 +887,7 @@ export const recordChanges = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     tenantId: tenantId(),
-    entityType: text('entity_type', { enum: [...HISTORY_ENTITY_TYPES, ...PEOPLE_HISTORY_ENTITY_TYPES, ...TASK_HISTORY_ENTITY_TYPES] }).notNull(),
+    entityType: text('entity_type', { enum: [...HISTORY_ENTITY_TYPES, ...PEOPLE_HISTORY_ENTITY_TYPES, ...TASK_HISTORY_ENTITY_TYPES, ...TIMEOFF_HISTORY_ENTITY_TYPES] }).notNull(),
     entityId: uuid('entity_id').notNull(),
     action: text('action', { enum: RECORD_CHANGE_ACTIONS }).notNull(),
     field: text('field'),

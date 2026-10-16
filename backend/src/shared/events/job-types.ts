@@ -122,6 +122,13 @@ export interface JobPayloads {
   };
   /** Scheduled nightly by the worker: fails document generations that were interrupted (CD-100). Placeholder for reporting snapshots. */
   'reporting.nightly': Record<string, never>;
+  /**
+   * Cron (daily, 02:30 UTC; milestone 16, spec 5.4): in every workspace, makes sure each active
+   * employee has this year's vacation entitlement and, from 1 October (workspace time), next
+   * year's, recomputing the ones not frozen yet. `now` and `tenantId` are for the dev trigger
+   * (POST /api/dev/timeoff/daily) only.
+   */
+  'timeoff.daily': { now?: string; tenantId?: string };
 }
 
 export type JobName = keyof JobPayloads;
@@ -147,6 +154,7 @@ export const JOB_NAMES = [
   'projects.task-assigned',
   'projects.limit-alert',
   'reporting.nightly',
+  'timeoff.daily',
   'timesheet.tick',
   'timesheet.notice-email',
   'timesheet.task-hours-changed',
