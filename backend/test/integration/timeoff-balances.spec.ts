@@ -60,9 +60,9 @@ describe('one employee’s balance (spec 6.3, 6.5)', () => {
     expect(kinds).toContain('carry_over');
     expect(kinds.includes('expired')).toBe(AFTER_JUNE);
     expect(b.history[b.history.length - 1].runningTotal).toBe(b.figures.remaining);
-    // Another year: last year's card carries the first year's proportional days (1 March 2024: 10 months, 17 days), all expired by its 1 July.
+    // Last year's card: the year before it is outside the rows a read makes (last, this and next year), so nothing carries into it.
     const last = await ok('GET', `/timeoff/employees/${id.emp}/balance?year=${YEAR - 1}`, as(emp));
-    expect(last.figures).toMatchObject({ year: YEAR - 1, entitlement: 20, carriedOver: 17, expired: 17, remaining: 20 });
+    expect(last.figures).toMatchObject({ year: YEAR - 1, entitlement: 20, carriedOver: 0, expired: 0, remaining: 20 });
     // Without a start date there is no entitlement and nothing to carry.
     expect((await ok('GET', `/timeoff/employees/${id.owner}/balance`, as(owner))).figures).toMatchObject({ entitlement: 0, carriedOver: 0, total: 0, remaining: 0 });
   });
@@ -191,6 +191,14 @@ describe('tenant isolation', () => {
     expect((await call('POST', '/timeoff/balances/policy', { ...other, body: { employeeIds: [id.emp], policyId: technicians.id } })).status).toBe(404);
     const theirs = await ok('GET', '/timeoff/policies', other);
     expect((await ok('POST', '/timeoff/balances/policy', { ...other, body: { employeeIds: [id.emp], policyId: theirs[0].id } }, 200)).changed).toBe(0);
+    expect((await ok('POST', '/timeoff/balances/recalculate', { ...other, body: { employeeIds: [id.emp], year: YEAR } }, 200)).changed).toBe(0);
     expect((await call('GET', '/timeoff/balances', { token: otherOwner.token, tenant })).status).toBe(403);
+  });
+
+  it('a year far away shows what exists and makes no rows', async () => {
+    const b = await ok('GET', `/timeoff/employees/${id.emp}/balance?year=2010`, as(emp));
+    expect(b.figures).toMatchObject({ year: 2010, entitlement: 0, total: 0 });
+    expect(b.years).not.toContain(2010);
+    expect(b.years).not.toContain(2009);
   });
 });

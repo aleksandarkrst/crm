@@ -1,5 +1,5 @@
 /** Time off (milestone 16, `/api/timeoff`): vacation policies and the employee's entitlement (CD-163). */
-import { api } from './api';
+import { api, ApiError, authorizedFetch } from './api';
 
 /** "From N years of work experience: +X days". The highest row reached applies. */
 export interface ApiExperienceRule {
@@ -180,8 +180,12 @@ export const timeOffApi = {
   balance: (employeeId: string, year?: number) => api<ApiBalance>(`/timeoff/employees/${employeeId}/balance${year ? `?year=${year}` : ''}`),
   adjust: (employeeId: string, body: { poolYear: number; days: number; kind: AdjustmentKind; reason: string }) => api<ApiBalance>(`/timeoff/employees/${employeeId}/adjustments`, { method: 'POST', json: body }),
   balances: (f: BalancesFilters) => api<ApiBalancesTable>(`/timeoff/balances${balancesQuery(f)}`),
-  /** The CSV's URL (opened by the browser, which sends the headers through `authorizedFetch`). */
-  balancesCsvPath: (f: BalancesFilters) => `/timeoff/balances/csv${balancesQuery(f)}`,
+  /** The table as a CSV file (the screen hands it to `downloadBlob`). */
+  balancesCsv: async (f: BalancesFilters): Promise<Blob> => {
+    const res = await authorizedFetch(`/timeoff/balances/csv${balancesQuery(f)}`);
+    if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
+    return res.blob();
+  },
   bulkPolicy: (employeeIds: string[], policyId: string) => api<{ changed: number }>('/timeoff/balances/policy', { method: 'POST', json: { employeeIds, policyId } }),
   bulkRecalculate: (employeeIds: string[], year: number) => api<{ changed: number }>('/timeoff/balances/recalculate', { method: 'POST', json: { employeeIds, year } }),
   policies: {

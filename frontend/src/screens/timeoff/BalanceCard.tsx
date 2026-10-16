@@ -12,7 +12,7 @@ const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`);
 /** Reads one employee's balance for a year; a 403 or 404 answers null (the section hides). */
 export function useBalance(employeeId: string, year?: number) {
   return useProjectsRead<ApiBalance | null>(
-    true,
+    !!employeeId,
     () => timeOffApi.balance(employeeId, year).catch((err) => (err instanceof ApiError && (err.status === 403 || err.status === 404) ? null : Promise.reject(err))),
     `timeoff:balance:${employeeId}:${year ?? ''}`,
     'timeOffRev',

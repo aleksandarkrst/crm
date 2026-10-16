@@ -111,7 +111,7 @@ const WORKSPACES: Workspace[] = [
 
 /** Tenant tables in an order that satisfies the restrict foreign keys; cascades take their children. */
 const PURGE_ORDER = [
-  'vacation_entitlements', 'employee_timeoff_profiles', 'timeoff_policy_experience_rules', 'timeoff_policies',
+  'timeoff_notices', 'vacation_balance_expiries', 'vacation_entitlements', 'employee_timeoff_profiles', 'timeoff_policy_experience_rules', 'timeoff_policies',
   'time_entries', 'timesheet_rows', 'timesheet_days', 'timesheet_weeks', 'timesheet_notices', 'timesheet_deadline_runs', 'public_holidays',
   'task_limit_alerts', 'task_time_fixtures', 'tasks', 'task_counters', 'work_orders', 'work_order_counters', 'projects', 'project_types',
   'meetings', 'visit_plans', 'deals', 'contacts', 'companies', 'products', 'custom_field_defs', 'sales_bonus_rules', 'sales_bonus_settings',

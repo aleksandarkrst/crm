@@ -4,7 +4,7 @@ import { askConfirm } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Layout';
 import { Modal, ModalHeader } from '../components/ui';
-import { authorizedFetch } from '../lib/api';
+import { downloadBlob } from '../lib/csv';
 import { paths } from '../lib/paths';
 import { type ApiBalanceRow, type ApiBalancesTable, type ApiTimeOffPolicy, type BalancesFilters, timeOffApi } from '../lib/timeOffApi';
 import { projectError, useProjectsRead } from '../store/projects';
@@ -36,11 +36,11 @@ export function TimeOff() {
   return (
     <Screen title="Time off">
       {canSeeBalances && (
-        <div className="bal-tabs" role="tablist" data-testid="timeoff-tabs">
-          <button type="button" role="tab" aria-selected={tab === 'my'} className={'bal-tab' + (tab === 'my' ? ' on' : '')} onClick={() => go({ tab: null })}>
+        <div className="report-tabs" role="tablist" data-testid="timeoff-tabs">
+          <button type="button" role="tab" aria-selected={tab === 'my'} className="composer-tab" style={{ borderBottom: `2px solid ${tab === 'my' ? 'var(--brand)' : 'transparent'}`, fontWeight: tab === 'my' ? 600 : 500, color: tab === 'my' ? 'var(--brand)' : 'var(--text-2)' }} onClick={() => go({ tab: null })}>
             My time off
           </button>
-          <button type="button" role="tab" aria-selected={tab === 'balances'} className={'bal-tab' + (tab === 'balances' ? ' on' : '')} onClick={() => go({ tab: 'balances' })} data-testid="timeoff-tab-balances">
+          <button type="button" role="tab" aria-selected={tab === 'balances'} className="composer-tab" style={{ borderBottom: `2px solid ${tab === 'balances' ? 'var(--brand)' : 'transparent'}`, fontWeight: tab === 'balances' ? 600 : 500, color: tab === 'balances' ? 'var(--brand)' : 'var(--text-2)' }} onClick={() => go({ tab: 'balances' })} data-testid="timeoff-tab-balances">
             Balances
           </button>
         </div>
@@ -143,15 +143,7 @@ function Balances({ params, go }: { params: URLSearchParams; go: (next: Partial<
   const exportCsv = async () => {
     setBusy(true);
     try {
-      const res = await authorizedFetch(timeOffApi.balancesCsvPath(filters));
-      if (!res.ok) throw new Error(`Export failed (${res.status})`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `pultly-vacation-balances-${year}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadBlob(`pultly-vacation-balances-${year}.csv`, await timeOffApi.balancesCsv(filters));
     } catch (err) {
       flash(projectError(err));
     }

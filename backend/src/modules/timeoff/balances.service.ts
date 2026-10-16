@@ -20,7 +20,7 @@ import {
 } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import { type CallerAccess, PeopleAccess } from '../people';
-import { type Balance, carriedOverInto, computeBalance, type PoolFacts, type VacationDay } from './balance';
+import { type Balance, computeBalance, type PoolFacts, type VacationDay } from './balance';
 import { ADJUSTMENT_LABEL } from './balance-emails';
 import { csvCell, type CsvValue } from './csv';
 import { entitlementParts } from './entitlement';
@@ -158,7 +158,7 @@ export class BalancesService {
       return { access, today: await workspaceToday(tx, ctx.tenantId) };
     });
     const y = year ?? Number(today.slice(0, 4));
-    await this.ensureRows(ctx.tenantId, [employeeId], [y - 1, y]);
+    await this.ensureRows(ctx.tenantId, [employeeId], this.yearsToEnsure(today, y));
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const facts = await this.facts(tx, ctx.tenantId, [employeeId], y);
       const row = facts.employees[0];
@@ -171,7 +171,7 @@ export class BalancesService {
   async table(ctx: TenantContext, query: BalancesQuery): Promise<BalancesTable> {
     const { access, ids, today } = await this.scope(ctx);
     const year = query.year ?? Number(today.slice(0, 4));
-    await this.ensureRows(ctx.tenantId, ids, [year - 1, year]);
+    await this.ensureRows(ctx.tenantId, ids, this.yearsToEnsure(today, year));
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const facts = await this.facts(tx, ctx.tenantId, ids, year);
       const rows = facts.employees
@@ -347,9 +347,18 @@ export class BalancesService {
     });
   }
 
+  /**
+   * The rows a read of `year` may bring into being: the year and the one before, but only last
+   * year, this year and next year. A `?year=` further away shows what exists and makes nothing.
+   */
+  private yearsToEnsure(today: string, year: number): number[] {
+    const current = Number(today.slice(0, 4));
+    return [year - 1, year].filter((y) => y >= current - 1 && y <= current + 1);
+  }
+
   /** Entitlement rows the reads need, made under the system actor so a reader never authors them. */
   private ensureRows(tenantId: string, employeeIds: string[], years: number[]): Promise<number> {
-    if (!employeeIds.length) return Promise.resolve(0);
+    if (!employeeIds.length || !years.length) return Promise.resolve(0);
     return requestActor.run({}, () => this.database.withTenant(tenantId, (tx) => this.entitlements.ensureEmployees(tx, tenantId, employeeIds, years)));
   }
 
@@ -463,10 +472,5 @@ export class BalancesService {
     entries.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     let total = 0;
     return entries.map((x) => ({ ...x, runningTotal: (total += x.days) }));
-  }
-
-  /** The carry-over an employee has into `year` (the daily job's reminders look at it). */
-  private carriedOver(facts: Facts, e: EmployeeRow, year: number): number {
-    return carriedOverInto(year, facts.today, this.policyOf(facts, e), (y) => this.pool(facts, e.id, y), facts.days.get(e.id) ?? []);
   }
 }
