@@ -201,6 +201,8 @@ export const memberships = pgTable(
     notifyTimeoffBalance: boolean('notify_timeoff_balance').notNull().default(true),
     // Email me the "Request waiting" summary and "Request withdrawn" as an approver (CD-166, spec 15.2 "Approval reminders").
     notifyTimeoffApprovals: boolean('notify_timeoff_approvals').notNull().default(true),
+    // "Sick leave notices" (CD-169, spec 15.2): sick leave reported, ended, and the Admins' weekly check.
+    notifySickLeave: boolean('notify_sick_leave').notNull().default(true),
     /** The getting-started checklist (CD-68) is dismissed per user, so each admin decides for themselves. */
     onboardingDismissedAt: timestamp('onboarding_dismissed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

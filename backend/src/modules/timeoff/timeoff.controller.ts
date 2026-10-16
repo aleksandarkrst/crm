@@ -6,6 +6,7 @@ import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
 import { ApprovalsService } from './approvals.service';
 import { BalancesService } from './balances.service';
 import { DecisionsService } from './decisions.service';
+import { SickLeaveService } from './sick-leave.service';
 import { EntitlementsService } from './entitlements.service';
 import { TimeoffPoliciesService } from './policies.service';
 import { ReasonsService } from './reasons.service';
@@ -19,10 +20,14 @@ import {
   BulkRecalculate,
   CalendarQuery,
   Cancel,
+  CancelSickLeave,
+  ConfirmSickLeave,
   CreateAdjustment,
   CreatePolicy,
   CreateReason,
   CreateRequest,
+  CreateSickLeave,
+  CreateSickLeaveType,
   DecisionsQuery,
   HistoryQuery,
   PreviewRequest,
@@ -32,10 +37,13 @@ import {
   Reject,
   RequestsQuery,
   Shorten,
+  SickLeaveQuery,
   UpdateEntitlement,
   UpdatePolicy,
   UpdateProfile,
   UpdateReason,
+  UpdateSickLeave,
+  UpdateSickLeaveType,
   UpdateTimeoffSettings,
   YearParam,
 } from './timeoff.schemas';
@@ -61,7 +69,82 @@ export class TimeoffController {
     private readonly requests: RequestsService,
     private readonly approvals: ApprovalsService,
     private readonly decisions: DecisionsService,
+    private readonly sick: SickLeaveService,
   ) {}
+
+  // ---------------------------------------------------------------- sick leave (CD-169, spec 13)
+
+  /** Any member reads the types; Admins keep them (Settings → Time off). */
+  @Get('sick-leave-types')
+  sickLeaveTypes(@Tenant() ctx: TenantContext) {
+    return this.sick.types(ctx);
+  }
+
+  @Post('sick-leave-types')
+  @RequireTenant('admin')
+  createSickLeaveType(@Tenant() ctx: TenantContext, @Body(new ZodPipe(CreateSickLeaveType)) body: CreateSickLeaveType) {
+    return this.sick.createType(ctx, body);
+  }
+
+  @Patch('sick-leave-types/:id')
+  @RequireTenant('admin')
+  updateSickLeaveType(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(UpdateSickLeaveType)) body: UpdateSickLeaveType) {
+    return this.sick.updateType(ctx, id, body);
+  }
+
+  @Delete('sick-leave-types/:id')
+  @RequireTenant('admin')
+  @HttpCode(204)
+  removeSickLeaveType(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.sick.removeType(ctx, id);
+  }
+
+  /** Own records; `?employeeId=` someone the caller may see; `?all=true` the Sick leave tab (managers: reports, without type). */
+  @Get('sick-leave')
+  listSickLeave(@Tenant() ctx: TenantContext, @Query(new ZodPipe(SickLeaveQuery)) query: SickLeaveQuery) {
+    return this.sick.list(ctx, query);
+  }
+
+  /** The Sick leave tab as CSV (Admins). */
+  @Get('sick-leave/csv')
+  @RequireTenant('admin')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="pultly-sick-leave.csv"')
+  @Header('Cache-Control', 'private, no-store')
+  sickLeaveCsv(@Tenant() ctx: TenantContext, @Query(new ZodPipe(SickLeaveQuery)) query: SickLeaveQuery) {
+    return this.sick.csv(ctx, query);
+  }
+
+  @Get('sick-leave/:id')
+  getSickLeave(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.sick.get(ctx, id);
+  }
+
+  /** Report sick leave: the employee, a manager for a direct report, Admins for anyone (and confirmed at once). */
+  @Post('sick-leave')
+  createSickLeave(@Tenant() ctx: TenantContext, @Body(new ZodPipe(CreateSickLeave)) body: CreateSickLeave) {
+    return this.sick.create(ctx, body);
+  }
+
+  /** Admins change any field; the employee and their manager only set the end date. */
+  @Patch('sick-leave/:id')
+  updateSickLeave(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(UpdateSickLeave)) body: UpdateSickLeave) {
+    return this.sick.update(ctx, id, body);
+  }
+
+  @Post('sick-leave/:id/confirm')
+  @RequireTenant('admin')
+  @HttpCode(200)
+  confirmSickLeave(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(ConfirmSickLeave)) body: ConfirmSickLeave) {
+    return this.sick.confirm(ctx, id, body);
+  }
+
+  @Post('sick-leave/:id/cancel')
+  @RequireTenant('admin')
+  @HttpCode(200)
+  cancelSickLeave(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(CancelSickLeave)) body: CancelSickLeave) {
+    return this.sick.cancel(ctx, id, body);
+  }
 
   // ---------------------------------------------------------------- vacation decisions (CD-167, spec 11)
 

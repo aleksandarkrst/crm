@@ -729,6 +729,20 @@
       "when": 1792181530148,
       "tag": "0103_hr_documents_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1792184362052,
+      "tag": "0104_sick_leave",
+      "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1792184365478,
+      "tag": "0105_sick_leave_rls",
+      "breakpoints": true
     }
   ]
 }

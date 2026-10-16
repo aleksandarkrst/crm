@@ -12,6 +12,8 @@ import { ApprovalsService } from './approvals.service';
 import { TimeoffNoticeMailer } from './balance-notices';
 import { BalancesService } from './balances.service';
 import { DecisionsService } from './decisions.service';
+import { SickLeaveMailer } from './sick-leave-notices';
+import { SickLeaveService } from './sick-leave.service';
 import { EntitlementsService } from './entitlements.service';
 import { ReasonsService } from './reasons.service';
 import { TimeoffRequestMailer } from './request-notices';
@@ -40,6 +42,8 @@ export class TimeoffJobs implements OnApplicationBootstrap {
     private readonly approvals: ApprovalsService,
     private readonly mailer: TimeoffNoticeMailer,
     private readonly documents: HrDocumentsService,
+    private readonly sick: SickLeaveService,
+    private readonly sickMailer: SickLeaveMailer,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -47,6 +51,7 @@ export class TimeoffJobs implements OnApplicationBootstrap {
       await this.daily(data.now ? new Date(data.now) : new Date(), data.tenantId);
     });
     await this.jobs.work('timeoff.notice-email', (data) => this.mailer.send(data));
+    await this.jobs.work('timeoff.sick-email', (data) => this.sickMailer.send(data));
     await this.jobs.schedule('timeoff.daily', TIMEOFF_DAILY_CRON);
   }
 
@@ -60,6 +65,9 @@ export class TimeoffJobs implements OnApplicationBootstrap {
       const approvals = await this.approvals.queueApprovalReminders(w.id, now);
       const absent = await this.approvals.queueManagerAbsentNotices(w.id, now);
       await this.documents.failInterrupted(w.id);
+      const sick = await this.sick.extendOpen(w.id, now);
+      const sickChecks = await this.sick.queueWeeklyCheck(w.id, now);
+      if (sick || sickChecks) this.logger.log(`Workspace ${w.id}: ${sick} open sick leave record(s) extended, ${sickChecks} weekly check(s) queued`);
       if (changed || expired || reminders || approvals || absent) this.logger.log(`Workspace ${w.id}: ${changed} entitlement(s) updated, ${expired} expiry record(s), ${reminders} carry-over reminder(s), ${approvals} approval reminder(s), ${absent} manager-absent notice(s)`);
       total.changed += changed;
       total.expired += expired;
@@ -78,9 +86,12 @@ export interface DailyResult {
   /** "Request waiting" summaries and "Manager absent" notices queued (CD-166). */
   approvals: number;
   absent: number;
+  /** Open sick leave records extended and Monday's checks queued (CD-169; the dev trigger reports them). */
+  sick?: number;
+  sickChecks?: number;
 }
 
-@Module({ imports: [PeopleWorkerModule, HrDocumentsWorkerModule], providers: [EntitlementsService, BalancesService, ReasonsService, RequestsService, ApprovalsService, AbsenceService, DecisionsService, TimeoffRequestMailer, TimeoffNoticeMailer, TimeoffJobs] })
+@Module({ imports: [PeopleWorkerModule, HrDocumentsWorkerModule], providers: [EntitlementsService, BalancesService, ReasonsService, RequestsService, ApprovalsService, AbsenceService, DecisionsService, SickLeaveService, SickLeaveMailer, TimeoffRequestMailer, TimeoffNoticeMailer, TimeoffJobs] })
 export class TimeoffWorkerModule {}
 
 const Daily = z.object({ now: z.iso.datetime().optional() });
@@ -93,6 +104,7 @@ export class DevTimeoffController {
     private readonly entitlements: EntitlementsService,
     private readonly balances: BalancesService,
     private readonly approvals: ApprovalsService,
+    private readonly sick: SickLeaveService,
   ) {}
 
   @Post('daily')
@@ -105,7 +117,9 @@ export class DevTimeoffController {
     const reminders = await this.balances.queueExpiringReminders(ctx.tenantId, now);
     const approvals = await this.approvals.queueApprovalReminders(ctx.tenantId, now);
     const absent = await this.approvals.queueManagerAbsentNotices(ctx.tenantId, now);
-    return { changed, expired, reminders, approvals, absent };
+    const sick = await this.sick.extendOpen(ctx.tenantId, now);
+    const sickChecks = await this.sick.queueWeeklyCheck(ctx.tenantId, now);
+    return { changed, expired, reminders, approvals, absent, sick, sickChecks };
   }
 }
 

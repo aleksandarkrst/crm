@@ -172,7 +172,7 @@ describe('in SQL, as the runtime role', () => {
 
   it('sees no tenant rows at all without a tenant set', async () => {
     await asTenant(null, async () => {
-      for (const table of ['deals', 'companies', 'contacts', 'deal_lines', 'deal_tasks', 'products', 'activities', 'timeoff_policies', 'timeoff_policy_experience_rules', 'employee_timeoff_profiles', 'vacation_entitlements', 'vacation_balance_adjustments', 'vacation_balance_expiries', 'timeoff_notices', 'timeoff_reasons', 'timeoff_requests', 'timeoff_request_days', 'public_holiday_preloads', 'hr_documents']) {
+      for (const table of ['deals', 'companies', 'contacts', 'deal_lines', 'deal_tasks', 'products', 'activities', 'timeoff_policies', 'timeoff_policy_experience_rules', 'employee_timeoff_profiles', 'vacation_entitlements', 'vacation_balance_adjustments', 'vacation_balance_expiries', 'timeoff_notices', 'timeoff_reasons', 'timeoff_requests', 'timeoff_request_days', 'public_holiday_preloads', 'hr_documents', 'sick_leaves', 'sick_leave_types']) {
         const { rows } = await db.query(`select count(*)::int as n from ${table}`);
         expect(rows[0].n, table).toBe(0);
       }
@@ -283,6 +283,8 @@ describe('in SQL, as the runtime role', () => {
     const requestCases: [string, string, unknown[]][] = [
       ['request → employee', `insert into timeoff_requests (tenant_id, employee_id, type, start_date, end_date, working_days) values ($1, $2, 'vacation', '2026-06-01', '2026-06-02', 2)`, [tenantB, employeeA]],
       ['request day → employee', `insert into timeoff_request_days (tenant_id, request_id, employee_id, date) values ($1, gen_random_uuid(), $2, '2026-06-01')`, [tenantB, employeeA]],
+      ['sick leave → employee', `insert into sick_leaves (tenant_id, employee_id, start_date) values ($1, $2, '2026-06-01')`, [tenantB, employeeA]],
+      ['sick leave → type', `insert into sick_leaves (tenant_id, employee_id, start_date, type_id) values ($1, (select id from employees limit 1), '2026-06-01', gen_random_uuid())`, [tenantB]],
     ];
     for (const [name, text, params] of requestCases) {
       const code = await asTenant(tenantB, () => sqlError(db.query(text, params)));

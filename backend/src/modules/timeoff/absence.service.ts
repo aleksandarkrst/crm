@@ -3,15 +3,18 @@ import { and, eq, inArray } from 'drizzle-orm';
 import type { Tx } from '../../shared/database/database.service';
 import { timeoffRequestDays, timeoffRequests } from '../../shared/database/schema';
 import { type AbsenceSource, absenceRegistry } from '../people';
+import { SickLeaveService } from './sick-leave.service';
 
 /**
  * Who is absent on a date (spec 9.1, "manager absent"): employees with an approved time off day
- * then (sick leave joins in CD-169). Registered with the people module's absence registry on start,
+ * then, or on sick leave (CD-169). Registered with the people module's absence registry on start,
  * in the API and in the worker, so the approver rule sends a request to the Admins while the
  * manager is away. Runs in the caller's tenant transaction.
  */
 @Injectable()
 export class AbsenceService implements AbsenceSource, OnModuleInit {
+  constructor(private readonly sick: SickLeaveService) {}
+
   onModuleInit(): void {
     absenceRegistry.use(this);
   }
@@ -23,6 +26,7 @@ export class AbsenceService implements AbsenceSource, OnModuleInit {
       .from(timeoffRequestDays)
       .innerJoin(timeoffRequests, eq(timeoffRequests.id, timeoffRequestDays.requestId))
       .where(and(inArray(timeoffRequestDays.employeeId, employeeIds), eq(timeoffRequestDays.date, date), eq(timeoffRequestDays.state, 'counted'), eq(timeoffRequests.status, 'approved')));
-    return new Set(rows.map((r) => r.employeeId));
+    // Sick leave covering the day makes a manager absent too (spec 13.4).
+    return new Set([...rows.map((r) => r.employeeId), ...(await this.sick.sickOn(tx, employeeIds, date))]);
   }
 }

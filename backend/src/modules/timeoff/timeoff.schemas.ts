@@ -238,6 +238,64 @@ export const BulkRecalculate = z.object({ employeeIds, year: YearParam });
 export type BulkRecalculate = z.infer<typeof BulkRecalculate>;
 
 /** GET …/history?limit=&offset=. */
+// ---------------------------------------------------------------- sick leave (CD-169, spec 13)
+
+/** Strict: the API refuses unknown fields, so nothing like a diagnosis can be sent along (spec 13.7.2). */
+const sickNoteRef = z.string().trim().max(50).transform((v) => v || null).nullable();
+const sickNote = z.string().trim().max(500).transform((v) => v || null).nullable();
+
+export const CreateSickLeave = z.strictObject({
+  employeeId: z.uuid().optional(),
+  startDate: z.iso.date(),
+  endDate: z.iso.date().nullish(),
+  // Admins only:
+  typeId: z.uuid().optional(),
+  continuationOfId: z.uuid().optional(),
+  sickNoteRef: sickNoteRef.optional(),
+  note: sickNote.optional(),
+  confirm: z.boolean().optional(),
+});
+export type CreateSickLeave = z.infer<typeof CreateSickLeave>;
+
+export const UpdateSickLeave = nonEmptyPatch(
+  z.strictObject({
+    startDate: z.iso.date(),
+    endDate: z.iso.date().nullable(),
+    typeId: z.uuid().nullable(),
+    continuationOfId: z.uuid().nullable(),
+    sickNoteRef,
+    note: sickNote,
+  }).partial(),
+);
+export type UpdateSickLeave = z.infer<typeof UpdateSickLeave>;
+
+export const ConfirmSickLeave = z.strictObject({
+  typeId: z.uuid(),
+  endDate: z.iso.date().nullable().optional(),
+  continuationOfId: z.uuid().nullable().optional(),
+  sickNoteRef: sickNoteRef.optional(),
+});
+export type ConfirmSickLeave = z.infer<typeof ConfirmSickLeave>;
+
+export const CancelSickLeave = z.strictObject({ reason: z.string().trim().min(1, 'Say why it is cancelled').max(300) });
+export type CancelSickLeave = z.infer<typeof CancelSickLeave>;
+
+export const SickLeaveQuery = z.object({
+  employeeId: z.uuid().optional(),
+  all: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  status: z.enum(['reported', 'confirmed', 'cancelled']).optional(),
+  open: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Use yyyy-mm').optional(),
+  typeId: z.uuid().optional(),
+  unitId: z.uuid().optional(),
+});
+export type SickLeaveQuery = { employeeId?: string; all?: boolean; status?: 'reported' | 'confirmed' | 'cancelled'; open?: boolean; month?: string; typeId?: string; unitId?: string };
+
+export const CreateSickLeaveType = z.strictObject({ name: z.string().trim().min(1).max(100), payerNote: z.string().trim().max(300).nullish() });
+export type CreateSickLeaveType = z.infer<typeof CreateSickLeaveType>;
+export const UpdateSickLeaveType = nonEmptyPatch(z.strictObject({ name: z.string().trim().min(1).max(100), payerNote: z.string().trim().max(300).nullable(), active: z.boolean() }).partial());
+export type UpdateSickLeaveType = z.infer<typeof UpdateSickLeaveType>;
+
 export const HistoryQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),

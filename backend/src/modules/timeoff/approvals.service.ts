@@ -11,6 +11,7 @@ import { holidaysBetween } from '../timesheet';
 import { assignPools } from './balance';
 import { BalancesService } from './balances.service';
 import { DecisionsService } from './decisions.service';
+import { SickLeaveService } from './sick-leave.service';
 import { addDays } from './request-rules';
 import { type ApproverView, describeType, RequestsService, type RequestView } from './requests.service';
 import { workspaceToday } from './today';
@@ -33,7 +34,8 @@ export interface CalendarView {
   from: string;
   to: string;
   employees: { id: string; fullName: string; unitName: string | null }[];
-  cells: { employeeId: string; date: string; type: TimeoffType; status: 'approved' | 'pending'; requestId: string }[];
+  /** Time off by type; sick leave as `sick_leave` without its type (spec 13.5), `requestId` then the record's id. */
+  cells: { employeeId: string; date: string; type: TimeoffType | 'sick_leave'; status: 'approved' | 'pending'; requestId: string }[];
   holidays: { date: string; name: string }[];
 }
 
@@ -64,6 +66,7 @@ export class ApprovalsService {
     private readonly requests: RequestsService,
     private readonly balances: BalancesService,
     private readonly decisions: DecisionsService,
+    private readonly sick: SickLeaveService,
   ) {}
 
   // ------------------------------------------------------------------ decisions
@@ -251,12 +254,16 @@ export class ApprovalsService {
             .where(and(inArray(timeoffRequestDays.employeeId, ids), eq(timeoffRequestDays.state, 'counted'), inArray(timeoffRequests.status, ['pending', 'approved']), gte(timeoffRequestDays.date, from), lte(timeoffRequestDays.date, to)))
         : [];
       const holidays = [...(await holidaysBetween(tx, from, to)).values()].map((h) => ({ date: h.date, name: h.name }));
+      const sick = await this.sick.daysIn(tx, ctx.tenantId, ids, from, to);
       return {
         month: query.month,
         from,
         to,
         employees: people.map((p) => ({ id: p.id, fullName: p.fullName, unitName: p.unitName })),
-        cells: cells.map((c) => ({ employeeId: c.employeeId, date: c.date, type: c.type, status: c.status === 'approved' ? 'approved' : 'pending', requestId: c.requestId })),
+        cells: [
+          ...cells.map((c) => ({ employeeId: c.employeeId, date: c.date, type: c.type, status: c.status === 'approved' ? ('approved' as const) : ('pending' as const), requestId: c.requestId })),
+          ...sick.map((s) => ({ employeeId: s.employeeId, date: s.date, type: 'sick_leave' as const, status: s.status === 'confirmed' ? ('approved' as const) : ('pending' as const), requestId: s.sickLeaveId })),
+        ],
         holidays,
       };
     });

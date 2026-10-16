@@ -186,6 +186,7 @@ export const UpdateProfile = z
     notifyHourLimits: z.boolean(),
     notifyTimeoffBalance: z.boolean(),
     notifyTimeoffApprovals: z.boolean(),
+    notifySickLeave: z.boolean(),
   })
   .partial()
   .refine(atLeastOne, 'Nothing to update');

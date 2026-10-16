@@ -210,7 +210,7 @@ export const vacationBalanceExpiries = pgTable(
  * month), the approver's "Request waiting" summary and the Admins' "Manager absent" notice (per
  * recipient's employee record and day; CD-166).
  */
-export const TIMEOFF_NOTICE_KINDS = ['carry_over_expiring', 'approval_reminder', 'manager_absent'] as const;
+export const TIMEOFF_NOTICE_KINDS = ['carry_over_expiring', 'approval_reminder', 'manager_absent', 'sick_leave_check'] as const;
 export type TimeoffNoticeKind = (typeof TIMEOFF_NOTICE_KINDS)[number];
 
 /**
@@ -230,7 +230,7 @@ export const timeoffNotices = pgTable(
   (t) => [
     primaryKey({ columns: [t.tenantId, t.kind, t.employeeId, t.period], name: 'timeoff_notices_pk' }),
     foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'timeoff_notices_employee_fk' }).onDelete('cascade'),
-    check('timeoff_notices_kind_ck', sql`${t.kind} in ('carry_over_expiring', 'approval_reminder', 'manager_absent')`),
+    check('timeoff_notices_kind_ck', sql`${t.kind} in ('carry_over_expiring', 'approval_reminder', 'manager_absent', 'sick_leave_check')`),
   ],
 );
 
@@ -345,6 +345,8 @@ export const timeoffRequestDays = pgTable(
     date: date('date').notNull(),
     poolYear: integer('pool_year'),
     state: text('state', { enum: REQUEST_DAY_STATES }).notNull().default('counted'),
+    /** The sick leave that interrupted the day (CD-169, spec 13.4, A9), while `state` is `interrupted`. */
+    sickLeaveId: uuid('sick_leave_id'),
   },
   (t) => [
     uniqueIndex('timeoff_request_days_counted_uq').on(t.tenantId, t.employeeId, t.date).where(sql`${t.state} = 'counted'`),
@@ -354,8 +356,85 @@ export const timeoffRequestDays = pgTable(
     foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'timeoff_request_days_employee_fk' }).onDelete('cascade'),
     check('timeoff_request_days_state_ck', sql`${t.state} in ('counted', 'interrupted', 'cancelled', 'returned')`),
     check('timeoff_request_days_pool_ck', sql`${t.poolYear} is null or ${t.poolYear} between 2000 and 2100`),
+    index('timeoff_request_days_sick_idx').on(t.tenantId, t.sickLeaveId),
+    foreignKey({ columns: [t.tenantId, t.sickLeaveId], foreignColumns: [sickLeaves.tenantId, sickLeaves.id], name: 'timeoff_request_days_sick_leave_fk' }),
   ],
 );
+
+/**
+ * Sick leave types (CD-169, spec 13.3): the assumed payer is information for Payroll, never used to
+ * calculate money. New workspaces get the defaults (SickLeaveService provisions them; the migration
+ * gave them to existing ones). A used type can't be deleted, only deactivated.
+ */
+export const sickLeaveTypes = pgTable(
+  'sick_leave_types',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    name: text('name').notNull(),
+    payerNote: text('payer_note'),
+    position: integer('position').notNull().default(0),
+    active: boolean('active').notNull().default(true),
+    ...timestamps,
+  },
+  (t) => [
+    unique('sick_leave_types_tenant_id_uq').on(t.tenantId, t.id),
+    uniqueIndex('sick_leave_types_name_uq').on(t.tenantId, sql`lower(${t.name})`),
+    check('sick_leave_types_name_ck', sql`length(btrim(${t.name})) between 1 and 100`),
+    check('sick_leave_types_payer_ck', sql`${t.payerNote} is null or length(${t.payerNote}) <= 300`),
+  ],
+);
+
+export const SICK_LEAVE_STATUSES = ['reported', 'confirmed', 'cancelled'] as const;
+export type SickLeaveStatus = (typeof SICK_LEAVE_STATUSES)[number];
+
+/**
+ * A sick leave record (CD-169, spec 13): the employee, the period (no end date = open, "until
+ * return"), the type once an Admin confirms it, an optional link to the record it continues (for
+ * the day-31 count) and the sick note's reference. **No medical data**: no diagnosis, doctor or
+ * attachment, and the note carries the hint not to enter any. Overlapping approved time off is
+ * interrupted (timeoff_request_days.sick_leave_id). Records are never deleted; a wrong one is
+ * cancelled with a reason.
+ */
+export const sickLeaves = pgTable(
+  'sick_leaves',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    employeeId: uuid('employee_id').notNull(),
+    startDate: date('start_date').notNull(),
+    endDate: date('end_date'),
+    typeId: uuid('type_id'),
+    continuationOfId: uuid('continuation_of_id'),
+    sickNoteRef: text('sick_note_ref'),
+    note: text('note'),
+    status: text('status', { enum: SICK_LEAVE_STATUSES }).notNull().default('reported'),
+    cancelReason: text('cancel_reason'),
+    reportedByUserId: uuid('reported_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    confirmedByUserId: uuid('confirmed_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    unique('sick_leaves_tenant_id_uq').on(t.tenantId, t.id),
+    index('sick_leaves_employee_idx').on(t.tenantId, t.employeeId, t.startDate),
+    index('sick_leaves_status_idx').on(t.tenantId, t.status, t.startDate),
+    index('sick_leaves_type_idx').on(t.tenantId, t.typeId),
+    foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'sick_leaves_employee_fk' }).onDelete('cascade'),
+    foreignKey({ columns: [t.tenantId, t.typeId], foreignColumns: [sickLeaveTypes.tenantId, sickLeaveTypes.id], name: 'sick_leaves_type_fk' }).onDelete('restrict'),
+    foreignKey({ columns: [t.tenantId, t.continuationOfId], foreignColumns: [t.tenantId, t.id], name: 'sick_leaves_continuation_fk' }),
+    check('sick_leaves_status_ck', sql`${t.status} in ('reported', 'confirmed', 'cancelled')`),
+    check('sick_leaves_dates_ck', sql`${t.endDate} is null or ${t.endDate} >= ${t.startDate}`),
+    check('sick_leaves_confirmed_ck', sql`${t.status} <> 'confirmed' or ${t.typeId} is not null`),
+    check('sick_leaves_ref_ck', sql`${t.sickNoteRef} is null or length(${t.sickNoteRef}) <= 50`),
+    check('sick_leaves_note_ck', sql`${t.note} is null or length(${t.note}) <= 500`),
+    check('sick_leaves_cancel_ck', sql`${t.status} <> 'cancelled' or ${t.cancelReason} is not null`),
+    check('sick_leaves_continuation_ck', sql`${t.continuationOfId} is null or ${t.continuationOfId} <> ${t.id}`),
+  ],
+);
+
+export type SickLeaveRow = typeof sickLeaves.$inferSelect;
+export type SickLeaveTypeRow = typeof sickLeaveTypes.$inferSelect;
 
 export type TimeoffPolicyRow = typeof timeoffPolicies.$inferSelect;
 export type TimeoffReasonRow = typeof timeoffReasons.$inferSelect;
