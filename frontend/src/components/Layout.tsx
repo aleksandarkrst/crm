@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { paths } from '../lib/paths';
 import { Modals } from '../modals/Modals';
 import { overdueTasks } from '../store/selectors';
+import { usePendingApprovals } from '../screens/timeoff/Approvals';
 import { useStore } from '../store/store';
 import { useTerms } from '../store/terms';
 import { GettingStarted } from './GettingStarted';
@@ -34,7 +35,7 @@ const onPage = (pathname: string, to: string) => {
  * One sidebar item. `badge`: a count on the icon (overdue tasks on Today). `className`: where it
  * shows (`nav-desktop`: not in the phone bar; `nav-overflow`: under "More" on desktop).
  */
-function NavItem({ to, label, icon, badge, className = '' }: { to: string; label: string; icon: string; badge?: number; className?: string }) {
+function NavItem({ to, label, icon, badge, badgeTitle = 'overdue', className = '' }: { to: string; label: string; icon: string; badge?: number; badgeTitle?: string; className?: string }) {
   return (
     <NavLink to={to} className={('nav-item ' + className).trim()} style={{ textDecoration: 'none', width: '100%' }}>
       {({ isActive }) => {
@@ -46,7 +47,7 @@ function NavItem({ to, label, icon, badge, className = '' }: { to: string; label
                 <path d={icon} />
               </svg>
               {!!badge && (
-                <span data-testid="nav-badge" title={`${badge} overdue`} style={{ position: 'absolute', top: 0, right: 14, minWidth: 17, height: 17, padding: '0 5px', borderRadius: 9, background: '#B42318', color: '#FFFFFF', fontSize: 10.5, fontWeight: 600, lineHeight: '17px', textAlign: 'center' }}>
+                <span data-testid="nav-badge" title={`${badge} ${badgeTitle}`} style={{ position: 'absolute', top: 0, right: 14, minWidth: 17, height: 17, padding: '0 5px', borderRadius: 9, background: '#B42318', color: '#FFFFFF', fontSize: 10.5, fontWeight: 600, lineHeight: '17px', textAlign: 'center' }}>
                   {badge}
                 </span>
               )}
@@ -96,6 +97,7 @@ function Sidebar() {
   // The profile name follows edits on the Profile screen; the session name is the signed-in user.
   const name = s.profile.name || session.userName;
   const overdue = overdueTasks(s).length;
+  const pendingApprovals = usePendingApprovals(session.tenant.role === 'owner' || session.tenant.role === 'admin' || s.visitScope.seesTeam);
   const module = currentModule(pathname, session.userId);
   const terms = useTerms();
   const items = navFor(module, session.tenant.role, s.visitScope.seesTeam, terms);
@@ -156,7 +158,7 @@ function Sidebar() {
       {switcher && <ModuleSwitcher onClose={closeSwitcher} trigger={trigger} />}
       <nav ref={nav} aria-label={module.name} className="side-nav" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: NAV_GAP, width: '100%', flex: '1 1 0', minHeight: 0 }}>
         {items.map((n, i) => (
-          <NavItem key={n.to} {...n} badge={n.to === paths.today ? overdue : undefined} className={(n.phone ? '' : 'nav-desktop ') + (i >= fit ? 'nav-overflow' : '')} />
+          <NavItem key={n.to} {...n} badge={n.to === paths.today ? overdue : n.to === paths.timeOff() ? pendingApprovals : undefined} badgeTitle={n.to === paths.timeOff() ? 'waiting for approval' : undefined} className={(n.phone ? '' : 'nav-desktop ') + (i >= fit ? 'nav-overflow' : '')} />
         ))}
         {fit < items.length && <SideMore items={items.slice(fit)} />}
         <MoreMenu name={name} items={items.filter((n) => !n.phone)} onModules={() => setSwitcher(true)} />

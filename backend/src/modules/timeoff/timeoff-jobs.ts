@@ -6,9 +6,15 @@ import { tenants } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
 import { PeopleModule, PeopleWorkerModule } from '../people';
+import { AbsenceService } from './absence.service';
+import { ApprovalsService } from './approvals.service';
 import { TimeoffNoticeMailer } from './balance-notices';
 import { BalancesService } from './balances.service';
 import { EntitlementsService } from './entitlements.service';
+import { ReasonsService } from './reasons.service';
+import { TimeoffRequestMailer } from './request-notices';
+import { RequestsService } from './requests.service';
+import { TimeoffModule } from './timeoff.module';
 
 /** Daily at 02:30 UTC: after midnight everywhere the app is used, before the working day. */
 export const TIMEOFF_DAILY_CRON = '30 2 * * *';
@@ -29,6 +35,7 @@ export class TimeoffJobs implements OnApplicationBootstrap {
     private readonly database: DatabaseService,
     private readonly entitlements: EntitlementsService,
     private readonly balances: BalancesService,
+    private readonly approvals: ApprovalsService,
     private readonly mailer: TimeoffNoticeMailer,
   ) {}
 
@@ -42,15 +49,19 @@ export class TimeoffJobs implements OnApplicationBootstrap {
 
   async daily(now: Date, onlyTenantId?: string): Promise<DailyResult> {
     const workspaces = onlyTenantId ? [{ id: onlyTenantId }] : await this.database.db.select({ id: tenants.id }).from(tenants);
-    const total: DailyResult = { changed: 0, expired: 0, reminders: 0 };
+    const total: DailyResult = { changed: 0, expired: 0, reminders: 0, approvals: 0, absent: 0 };
     for (const w of workspaces) {
       const changed = await this.entitlements.ensureWorkspace(w.id, now);
       const expired = await this.balances.recordExpiries(w.id, now);
       const reminders = await this.balances.queueExpiringReminders(w.id, now);
-      if (changed || expired || reminders) this.logger.log(`Workspace ${w.id}: ${changed} entitlement(s) updated, ${expired} expiry record(s), ${reminders} carry-over reminder(s)`);
+      const approvals = await this.approvals.queueApprovalReminders(w.id, now);
+      const absent = await this.approvals.queueManagerAbsentNotices(w.id, now);
+      if (changed || expired || reminders || approvals || absent) this.logger.log(`Workspace ${w.id}: ${changed} entitlement(s) updated, ${expired} expiry record(s), ${reminders} carry-over reminder(s), ${approvals} approval reminder(s), ${absent} manager-absent notice(s)`);
       total.changed += changed;
       total.expired += expired;
       total.reminders += reminders;
+      total.approvals += approvals;
+      total.absent += absent;
     }
     return total;
   }
@@ -60,9 +71,12 @@ export interface DailyResult {
   changed: number;
   expired: number;
   reminders: number;
+  /** "Request waiting" summaries and "Manager absent" notices queued (CD-166). */
+  approvals: number;
+  absent: number;
 }
 
-@Module({ imports: [PeopleWorkerModule], providers: [EntitlementsService, BalancesService, TimeoffNoticeMailer, TimeoffJobs] })
+@Module({ imports: [PeopleWorkerModule], providers: [EntitlementsService, BalancesService, ReasonsService, RequestsService, ApprovalsService, AbsenceService, TimeoffRequestMailer, TimeoffNoticeMailer, TimeoffJobs] })
 export class TimeoffWorkerModule {}
 
 const Daily = z.object({ now: z.iso.datetime().optional() });
@@ -74,6 +88,7 @@ export class DevTimeoffController {
   constructor(
     private readonly entitlements: EntitlementsService,
     private readonly balances: BalancesService,
+    private readonly approvals: ApprovalsService,
   ) {}
 
   @Post('daily')
@@ -84,9 +99,12 @@ export class DevTimeoffController {
     const changed = await this.entitlements.ensureWorkspace(ctx.tenantId, now);
     const expired = await this.balances.recordExpiries(ctx.tenantId, now);
     const reminders = await this.balances.queueExpiringReminders(ctx.tenantId, now);
-    return { changed, expired, reminders };
+    const approvals = await this.approvals.queueApprovalReminders(ctx.tenantId, now);
+    const absent = await this.approvals.queueManagerAbsentNotices(ctx.tenantId, now);
+    return { changed, expired, reminders, approvals, absent };
   }
 }
 
-@Module({ imports: [PeopleModule], controllers: [DevTimeoffController], providers: [EntitlementsService, BalancesService] })
+// The services come from TimeoffModule (one instance each: a second ReasonsService would provision the defaults twice).
+@Module({ imports: [PeopleModule, TimeoffModule], controllers: [DevTimeoffController] })
 export class TimeoffDevModule {}

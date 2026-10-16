@@ -123,6 +123,38 @@ export const CreateRequest = z
   .refine(datesInOrder, DATES);
 export type CreateRequest = z.infer<typeof CreateRequest>;
 
+// ---------------------------------------------------------------- decisions (spec 9)
+
+const comment = z.string().trim().min(1, 'A comment is needed').max(500);
+
+/** POST /api/timeoff/requests/:id/approve: an optional comment. */
+export const Approve = z.object({ comment: optionalText(500) });
+export type Approve = z.infer<typeof Approve>;
+
+/** POST /api/timeoff/requests/:id/reject: the comment the employee reads (spec 9.2). */
+export const Reject = z.object({ comment });
+export type Reject = z.infer<typeof Reject>;
+
+/** POST /api/timeoff/requests/:id/cancel: the employee needs no comment; the approver and Admins do (spec 9.4). */
+export const Cancel = z.object({ comment: optionalText(500) });
+export type Cancel = z.infer<typeof Cancel>;
+
+/** POST /api/timeoff/requests/:id/shorten: the new last day (not before today) and a comment. */
+export const Shorten = z.object({ endDate: z.iso.date(), comment });
+export type Shorten = z.infer<typeof Shorten>;
+
+/** POST /api/timeoff/approvals/approve: "Approve selected". */
+export const BulkApprove = z.object({ ids: z.array(z.uuid()).min(1).max(100), comment: optionalText(500) });
+export type BulkApprove = z.infer<typeof BulkApprove>;
+
+/** GET /api/timeoff/calendar?month=2026-10&unitId=&managerId= (spec 9.5). */
+export const CalendarQuery = z.object({
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Use yyyy-mm'),
+  unitId: z.uuid().optional(),
+  managerId: z.uuid().optional(),
+});
+export type CalendarQuery = z.infer<typeof CalendarQuery>;
+
 /** GET /api/timeoff/requests?employeeId=&year=&status=&type= (own by default). */
 export const RequestsQuery = z.object({
   employeeId: z.uuid().optional(),

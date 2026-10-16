@@ -227,6 +227,26 @@ export interface ApiTimeOffRequest {
   days: { date: string; poolYear: number | null; state: string }[];
   warnings: string[];
   canWithdraw: boolean;
+  canCancel: boolean;
+  canShorten: boolean;
+}
+
+/** One row of the Approvals tab (spec 9.2). */
+export interface ApiApprovalRow extends ApiTimeOffRequest {
+  balanceAfter: number | null;
+  alsoAway: { employeeId: string; fullName: string; what: string; startDate: string; endDate: string; status: 'approved' | 'pending' }[];
+  startDatePassed: boolean;
+  twoWeekPartMissing: boolean;
+}
+
+/** The team calendar (spec 9.5). */
+export interface ApiCalendar {
+  month: string;
+  from: string;
+  to: string;
+  employees: { id: string; fullName: string; unitName: string | null }[];
+  cells: { employeeId: string; date: string; type: TimeOffType; status: 'approved' | 'pending'; requestId: string }[];
+  holidays: { date: string; name: string }[];
 }
 
 export interface ApiRequestPreview {
@@ -283,6 +303,21 @@ export const timeOffApi = {
     preview: (input: RequestInput) => api<ApiRequestPreview>('/timeoff/requests/preview', { method: 'POST', json: input }),
     create: (input: RequestInput & { note?: string | null; record?: { reason: string } }) => api<ApiTimeOffRequest>('/timeoff/requests', { method: 'POST', json: input }),
     withdraw: (id: string) => api<ApiTimeOffRequest>(`/timeoff/requests/${id}/withdraw`, { method: 'POST' }),
+    approve: (id: string, comment?: string | null) => api<ApiTimeOffRequest>(`/timeoff/requests/${id}/approve`, { method: 'POST', json: { comment: comment ?? null } }),
+    reject: (id: string, comment: string) => api<ApiTimeOffRequest>(`/timeoff/requests/${id}/reject`, { method: 'POST', json: { comment } }),
+    cancel: (id: string, comment?: string | null) => api<ApiTimeOffRequest>(`/timeoff/requests/${id}/cancel`, { method: 'POST', json: { comment: comment ?? null } }),
+    shorten: (id: string, endDate: string, comment: string) => api<ApiTimeOffRequest>(`/timeoff/requests/${id}/shorten`, { method: 'POST', json: { endDate, comment } }),
+  },
+  approvals: {
+    list: () => api<ApiApprovalRow[]>('/timeoff/approvals'),
+    count: () => api<{ pending: number }>('/timeoff/approvals/count'),
+    approveMany: (ids: string[], comment?: string | null) => api<{ approved: string[]; failed: { id: string; message: string }[] }>('/timeoff/approvals/approve', { method: 'POST', json: { ids, comment: comment ?? null } }),
+  },
+  calendar: (month: string, f: { unitId?: string; managerId?: string } = {}) => {
+    const q = new URLSearchParams({ month });
+    if (f.unitId) q.set('unitId', f.unitId);
+    if (f.managerId) q.set('managerId', f.managerId);
+    return api<ApiCalendar>(`/timeoff/calendar?${q.toString()}`);
   },
   balance: (employeeId: string, year?: number) => api<ApiBalance>(`/timeoff/employees/${employeeId}/balance${year ? `?year=${year}` : ''}`),
   adjust: (employeeId: string, body: { poolYear: number; days: number; kind: AdjustmentKind; reason: string }) => api<ApiBalance>(`/timeoff/employees/${employeeId}/adjustments`, { method: 'POST', json: body }),

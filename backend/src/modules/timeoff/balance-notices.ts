@@ -6,6 +6,7 @@ import { DatabaseService } from '../../shared/database/database.service';
 import { employees, memberships, tenants, timeoffReasons, timeoffRequests, users } from '../../shared/database/schema';
 import type { JobPayloads } from '../../shared/events/job-types';
 import { balanceAdjustedEmail, carryOverExpiringEmail, requestedEmail } from './balance-emails';
+import { TimeoffRequestMailer } from './request-notices';
 
 /**
  * Sends one `timeoff.notice-email` (CD-164, spec 15.2). The address and the "Time off balance"
@@ -19,11 +20,13 @@ export class TimeoffNoticeMailer {
   constructor(
     private readonly database: DatabaseService,
     private readonly mailer: Mailer,
+    private readonly requestMailer: TimeoffRequestMailer,
     @Inject(ENV) private readonly env: Env,
   ) {}
 
   async send(data: JobPayloads['timeoff.notice-email']): Promise<void> {
     if (data.kind === 'requested') return this.sendRequested(data);
+    if (data.kind === 'decided' || data.kind === 'withdrawn' || data.kind === 'changed' || data.kind === 'approval_reminder' || data.kind === 'manager_absent') return this.requestMailer.send(data);
     const row = await this.database.withTenant(data.tenantId, async (tx) => {
       const [e] = await tx
         .select({

@@ -2027,6 +2027,66 @@ pure model (`test/timeoff-balance.spec.ts`), `BalancesService` reads the facts a
   the approver email, overlap and withdraw, paid and unpaid leave and the warnings, Admins
   recording, the race for the last days, who sees whose, isolation).
 
+### Approvals, cancelling and shortening, the team calendar (CD-166)
+
+`ApprovalsService` (spec 9). Who decides is the approver rule of milestone 13 (`PeopleAccess.approversFor`),
+resolved with today's date on every read and decision, never stored: the direct manager, else the
+Admins, and the requester alone when they are the only Admin.
+
+- **Absent manager** (spec 9.1): `AbsenceService` answers `absentOn` from the counted days of
+  approved requests (sick leave joins in CD-169) and registers itself with the people module's
+  `absenceRegistry` on start, in the API and the worker, so the rule hands a request to the Admins
+  while the manager is away. The registry replaced the `nobodyAbsent` stub as the `ABSENCE_SOURCE`
+  provider; people needs no import of time off.
+- **Decisions** (`POST /api/timeoff/requests/:id/…`, each 403 for anyone but an approver of the
+  request, 409 when the status doesn't allow it):
+  - `approve` (an optional comment): under the employee's advisory lock the vacation days are
+    assigned to pools again without the request's own pending days (`assignPools`; an adjustment
+    meanwhile can make it 409 "The days no longer fit the balance"), the pool years are written to
+    the days for good, the pools' entitlements are **frozen** (spec 5.4), the request becomes
+    Approved with who and when, and "Time off approved" goes to the employee with the days left.
+    `POST approvals/approve { ids }` is "Approve selected": each in its own transaction, the ones
+    that fail named.
+  - `reject` (a comment, the employee reads it): Rejected, the days `cancelled` (released), "Time
+    off rejected" with the comment.
+  - `cancel` (spec 9.4): Approved leave before its first day; the employee without a comment, the
+    approver and Admins with one; leave that started is 409 ("shorten it instead"), leave that is
+    over too. The days become `cancelled`; "Time off cancelled" to the employee and the approvers,
+    the actor left out. The form warns when fewer than five working days are left (A8) but saves.
+  - `shorten { endDate, comment }`: approvers and Admins, leave that started and isn't over; the new
+    last day is between today (or the first day) and the current end; the days after become
+    `returned`, `working_days` and `end_date` follow; "Time off shortened" likewise.
+  - `withdraw` (CD-165) now emails the approvers "Request withdrawn" when they had been told over
+    an hour earlier (toggle "Approval reminders").
+- **The Approvals tab** (`GET /api/timeoff/approvals`, spec 9.2): the pending requests whose
+  resolved approvers include the caller (managers among their reports, Admins everywhere), each
+  with the vacation balance after approval, `alsoAway` (the requester's unit and the approver's
+  direct reports with pending or approved leave on any of the days), `startDatePassed`,
+  `twoWeekPartMissing` (a vacation under ten days from October on while the two-week part isn't
+  taken) and the paid leave warnings. `GET approvals/count` feeds the sidebar badge on Time off
+  (`usePendingApprovals` in the sidebar, managers and Admins).
+- **The team calendar** (`GET /api/timeoff/calendar?month=&unitId=&managerId=`, spec 9.5):
+  employees see themselves, managers their reports (and themselves), Admins everyone with the
+  filters; one cell per counted day of a pending or approved request with its type, plus the
+  month's holidays. `screens/timeoff/Approvals.tsx` draws it as a table (employees as rows, days as
+  columns, weekends and holidays shaded, pending lighter) with a legend.
+- **Daily job** (spec 15.2, after the balances): `queueApprovalReminders` sends each approver one
+  "Request waiting" summary a day for requests pending two working days or starting within three
+  (claimed in `timeoff_notices`, kind `approval_reminder`, by the approver's employee record and
+  day; toggle `memberships.notify_timeoff_approvals`, "Approval reminders"); `queueManagerAbsentNotices`
+  sends each Admin "Manager absent, requests waiting" once a day for the pending requests the rule
+  hands over (`manager_absent`). `TimeoffRequestMailer` sends the five request kinds, reading
+  everything at send time (a request decided meanwhile, a recipient who left, a toggle off).
+  Emails in `request-emails.ts` (pure, `test/timeoff-request-emails.spec.ts`).
+- **Screens**: Time off gets the **Approvals** tab (rows with Approve, Reject with a comment, select
+  and "Approve selected") and the **Team calendar** tab (everyone sees it: their own scope); the
+  request list gets **Cancel leave** and **Shorten** (one dialog, the five-day note); Settings →
+  Notifications gets "Approval reminders".
+- **Tests**: `test/integration/timeoff-approvals.spec.ts` (the rule on decisions, approve with the
+  re-check and the freeze, reject, cancel by the employee and by the approver, shorten with the
+  days returned, the list's extras and the count, the calendar per role, the absent manager
+  handing over with the daily notice, the reminder once a day, the toggle, the emails).
+
 ## Products, deal products and currency (CD-83)
 
 Replaces the CD-77 model (products with a currency of their own, payment schedules and

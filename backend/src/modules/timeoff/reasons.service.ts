@@ -62,7 +62,10 @@ export class ReasonsService implements TenantProvisioner, OnModuleInit {
   }
 
   async provision(tx: Tx, tenantId: string): Promise<void> {
-    await tx.insert(timeoffReasons).values(DEFAULT_REASONS.map((r, i) => ({ tenantId, ...r, position: i + 1 })));
+    await tx
+      .insert(timeoffReasons)
+      .values(DEFAULT_REASONS.map((r, i) => ({ tenantId, ...r, position: i + 1 })))
+      .onConflictDoNothing();
   }
 
   list(ctx: TenantContext, kind?: ReasonKind): Promise<ReasonView[]> {

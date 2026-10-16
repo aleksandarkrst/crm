@@ -205,8 +205,12 @@ export const vacationBalanceExpiries = pgTable(
   ],
 );
 
-/** The time off emails sent once per period (spec 15.2). */
-export const TIMEOFF_NOTICE_KINDS = ['carry_over_expiring'] as const;
+/**
+ * The time off emails sent once per period (spec 15.2): the carry-over reminder (per employee and
+ * month), the approver's "Request waiting" summary and the Admins' "Manager absent" notice (per
+ * recipient's employee record and day; CD-166).
+ */
+export const TIMEOFF_NOTICE_KINDS = ['carry_over_expiring', 'approval_reminder', 'manager_absent'] as const;
 export type TimeoffNoticeKind = (typeof TIMEOFF_NOTICE_KINDS)[number];
 
 /**
@@ -226,7 +230,7 @@ export const timeoffNotices = pgTable(
   (t) => [
     primaryKey({ columns: [t.tenantId, t.kind, t.employeeId, t.period], name: 'timeoff_notices_pk' }),
     foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'timeoff_notices_employee_fk' }).onDelete('cascade'),
-    check('timeoff_notices_kind_ck', sql`${t.kind} in ('carry_over_expiring')`),
+    check('timeoff_notices_kind_ck', sql`${t.kind} in ('carry_over_expiring', 'approval_reminder', 'manager_absent')`),
   ],
 );
 

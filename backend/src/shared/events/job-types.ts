@@ -139,7 +139,17 @@ export interface JobPayloads {
     | { tenantId: string; kind: 'balance_adjusted'; employeeId: string; actorUserId: string | null; adjustment: { poolYear: number; days: number; kind: 'correction' | 'opening_balance' | 'extra_days'; reason: string }; remaining: number; available: number }
     | { tenantId: string; kind: 'carry_over_expiring'; employeeId: string; year: number; expiring: number }
     /** "Time off requested" to one approver (CD-165, spec 15.2); one job per approver. */
-    | { tenantId: string; kind: 'requested'; requestId: string; recipientUserId: string };
+    | { tenantId: string; kind: 'requested'; requestId: string; recipientUserId: string }
+    /** "Time off approved" or "rejected" to the employee (CD-166). */
+    | { tenantId: string; kind: 'decided'; requestId: string }
+    /** "Request withdrawn" to one approver who had been notified over an hour earlier (CD-166, toggle "Approval reminders"). */
+    | { tenantId: string; kind: 'withdrawn'; requestId: string; recipientUserId: string; employeeName: string; what: string; startDate: string; endDate: string }
+    /** Approved time off cancelled or shortened: to the employee (`recipientUserId` null: their work email) or an approver, the actor left out. */
+    | { tenantId: string; kind: 'changed'; requestId: string; change: 'cancelled' | 'shortened'; recipientUserId: string | null; actorUserId: string }
+    /** The approver's daily "Request waiting" summary (toggle "Approval reminders"). */
+    | { tenantId: string; kind: 'approval_reminder'; recipientUserId: string; requestIds: string[] }
+    /** "Manager absent, requests waiting" to one Admin. */
+    | { tenantId: string; kind: 'manager_absent'; recipientUserId: string; requestIds: string[] };
 }
 
 export type JobName = keyof JobPayloads;

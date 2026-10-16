@@ -174,6 +174,8 @@ export const memberships = pgTable(
     notifyHourLimits: boolean('notify_hour_limits').notNull().default(true),
     // Email me when someone adjusts my vacation balance, and when my carry-over is about to expire (CD-164).
     notifyTimeoffBalance: boolean('notify_timeoff_balance').notNull().default(true),
+    // Email me the "Request waiting" summary and "Request withdrawn" as an approver (CD-166, spec 15.2 "Approval reminders").
+    notifyTimeoffApprovals: boolean('notify_timeoff_approvals').notNull().default(true),
     /** The getting-started checklist (CD-68) is dismissed per user, so each admin decides for themselves. */
     onboardingDismissedAt: timestamp('onboarding_dismissed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

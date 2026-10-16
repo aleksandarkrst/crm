@@ -1414,6 +1414,31 @@ a.task-card-project:hover { color: var(--brand); }
   .reason-row.reason-head { display: none; }
 }
 
+/* approvals and the team calendar (CD-166) */
+.apr-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px 0; border-top: 1px solid var(--divider); }
+.apr-row:first-child { border-top: 0; padding-top: 0; }
+.apr-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.cal-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--white); }
+.cal-table { border-collapse: separate; border-spacing: 0; font-size: 12px; min-width: 100%; }
+.cal-table th, .cal-table td { border-bottom: 1px solid var(--divider); padding: 0; }
+.cal-table th { font-weight: 500; color: var(--text-2); text-align: center; height: 34px; min-width: 24px; }
+.cal-table th.cal-name, .cal-table td.cal-name { position: sticky; left: 0; background: var(--white); text-align: left; padding: 0 12px; min-width: 150px; white-space: nowrap; z-index: 1; }
+.cal-table td { height: 30px; text-align: center; }
+.cal-day { display: block; width: 22px; height: 22px; margin: 0 auto; border-radius: 5px; }
+.cal-off { background: var(--panel); }
+.cal-holiday { background: repeating-linear-gradient(45deg, var(--panel) 0 3px, var(--white) 3px 6px); }
+.cal-day[data-type='vacation'] { background: var(--brand); }
+.cal-day[data-type='paid_leave'] { background: var(--stage-done); }
+.cal-day[data-type='unpaid_leave'] { background: var(--chip); border: 1px solid var(--border); box-sizing: border-box; }
+.cal-day[data-type='other_absence'] { background: var(--warn-soft); border: 1px solid var(--warn); box-sizing: border-box; }
+.cal-day[data-status='pending'] { opacity: 0.45; }
+.cal-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-2); align-items: center; }
+.cal-legend .cal-day { display: inline-block; width: 14px; height: 14px; margin: 0 6px 0 0; vertical-align: middle; }
+@media (max-width: 760px) {
+  .apr-row { grid-template-columns: auto minmax(0, 1fr); }
+  .apr-row > :nth-child(3) { grid-column: 2; justify-content: flex-start; }
+}
+
 /* the employee card's Time off section (CD-163) */
 .timeoff-year { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; margin-top: 6px; }
 .timeoff-year-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }

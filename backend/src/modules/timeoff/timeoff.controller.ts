@@ -2,16 +2,21 @@ import { Body, Controller, Delete, Get, Header, HttpCode, Param, Patch, Post, Qu
 import { RequireTenant, Tenant, type TenantContext } from '../../shared/authorization';
 import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
+import { ApprovalsService } from './approvals.service';
 import { BalancesService } from './balances.service';
 import { EntitlementsService } from './entitlements.service';
 import { TimeoffPoliciesService } from './policies.service';
 import { ReasonsService } from './reasons.service';
 import { RequestsService } from './requests.service';
 import {
+  Approve,
   BalanceQuery,
   BalancesQuery,
+  BulkApprove,
   BulkChangePolicy,
   BulkRecalculate,
+  CalendarQuery,
+  Cancel,
   CreateAdjustment,
   CreatePolicy,
   CreateReason,
@@ -20,7 +25,9 @@ import {
   PreviewRequest,
   ReasonsQuery,
   Recalculate,
+  Reject,
   RequestsQuery,
+  Shorten,
   UpdateEntitlement,
   UpdatePolicy,
   UpdateProfile,
@@ -48,7 +55,61 @@ export class TimeoffController {
     private readonly balances: BalancesService,
     private readonly reasons: ReasonsService,
     private readonly requests: RequestsService,
+    private readonly approvals: ApprovalsService,
   ) {}
+
+  // ---------------------------------------------------------------- approvals (CD-166, spec 9)
+
+  /** The pending requests the caller decides, with the balance after, who else is away and the warnings (spec 9.2). */
+  @Get('approvals')
+  listApprovals(@Tenant() ctx: TenantContext) {
+    return this.approvals.list(ctx);
+  }
+
+  /** `{ pending }` for the sidebar badge. */
+  @Get('approvals/count')
+  approvalsCount(@Tenant() ctx: TenantContext) {
+    return this.approvals.count(ctx);
+  }
+
+  /** "Approve selected": `{ approved: ids, failed: [{ id, message }] }`. */
+  @Post('approvals/approve')
+  @HttpCode(200)
+  approveMany(@Tenant() ctx: TenantContext, @Body(new ZodPipe(BulkApprove)) body: BulkApprove) {
+    return this.approvals.approveMany(ctx, body.ids, body.comment ?? null);
+  }
+
+  @Post('requests/:id/approve')
+  @HttpCode(200)
+  approve(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(Approve)) body: Approve) {
+    return this.approvals.approve(ctx, id, body.comment ?? null);
+  }
+
+  @Post('requests/:id/reject')
+  @HttpCode(200)
+  reject(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(Reject)) body: Reject) {
+    return this.approvals.reject(ctx, id, body.comment);
+  }
+
+  /** Cancel approved leave before it starts (spec 9.4). */
+  @Post('requests/:id/cancel')
+  @HttpCode(200)
+  cancel(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(Cancel)) body: Cancel) {
+    return this.approvals.cancel(ctx, id, body.comment ?? null);
+  }
+
+  /** Shorten leave that started (spec 9.4): approvers and Admins. */
+  @Post('requests/:id/shorten')
+  @HttpCode(200)
+  shorten(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(Shorten)) body: Shorten) {
+    return this.approvals.shorten(ctx, id, body.endDate, body.comment);
+  }
+
+  /** The team calendar (spec 9.5). */
+  @Get('calendar')
+  calendar(@Tenant() ctx: TenantContext, @Query(new ZodPipe(CalendarQuery)) query: CalendarQuery) {
+    return this.approvals.calendar(ctx, query);
+  }
 
   // ---------------------------------------------------------------- reasons and settings (CD-165, spec 7.2, 7.3)
 

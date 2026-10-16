@@ -43,6 +43,10 @@ export interface RequestView {
   /** Paid leave limits (spec 7.2): warnings, never blocks. */
   warnings: string[];
   canWithdraw: boolean;
+  /** Approved and not started: the employee, the managers above and Admins (the API checks the approver rule). */
+  canCancel: boolean;
+  /** Approved, started and not over: the managers above and Admins. */
+  canShorten: boolean;
 }
 
 export interface ApproverView {
@@ -69,6 +73,9 @@ export interface RequestPreview {
 }
 
 const OPEN: TimeoffRequestStatus[] = ['pending', 'approved'];
+
+/** "vacation", "paid leave (Marriage)", "unpaid leave", "an absence (Maternity leave)". */
+export const describeType = (type: TimeoffType, reason: string | null) => (type === 'vacation' ? 'vacation' : type === 'paid_leave' ? `paid leave (${reason ?? 'reason'})` : type === 'unpaid_leave' ? 'unpaid leave' : `an absence (${reason ?? 'reason'})`);
 
 /**
  * Time off requests (CD-165, spec 8): submit (the employee, or an Admin for anyone, who may also
@@ -204,6 +211,16 @@ export class RequestsService {
       const [updated] = await tx.update(timeoffRequests).set({ status: 'withdrawn' }).where(eq(timeoffRequests.id, id)).returning();
       await tx.update(timeoffRequestDays).set({ state: 'cancelled' }).where(and(eq(timeoffRequestDays.requestId, id), eq(timeoffRequestDays.state, 'counted')));
       await this.audit.record(tx, ctx, { action: 'timeoff.request_withdrawn', entityType: 'timeoff_request', entityId: id, data: { employeeId: row.employeeId } });
+      // The approvers hear about it only if they were told over an hour ago (spec 9.4).
+      if (Date.now() - row.submittedAt.getTime() > 3_600_000) {
+        const approver = await this.approver(tx, ctx.tenantId, row.employeeId, row.startDate);
+        const [employee] = await tx.select({ fullName: employees.fullName }).from(employees).where(eq(employees.id, row.employeeId));
+        const reason = row.reasonId ? (await tx.select({ name: timeoffReasons.name }).from(timeoffReasons).where(eq(timeoffReasons.id, row.reasonId)))[0]?.name : null;
+        for (const a of approver?.approvers ?? []) {
+          if (a.userId === ctx.userId) continue;
+          await this.jobs.send('timeoff.notice-email', { tenantId: ctx.tenantId, kind: 'withdrawn', requestId: id, recipientUserId: a.userId, employeeName: employee?.fullName ?? 'An employee', what: describeType(row.type, reason ?? null), startDate: row.startDate, endDate: row.endDate }, tx);
+        }
+      }
       const [view] = await this.views(tx, ctx, access, [updated!]);
       return view!;
     });
@@ -306,7 +323,7 @@ export class RequestsService {
     return row?.n ?? 0;
   }
 
-  private async approver(tx: Tx, tenantId: string, employeeId: string, date: string): Promise<ApproverView | null> {
+  async approver(tx: Tx, tenantId: string, employeeId: string, date: string): Promise<ApproverView | null> {
     const result = await this.access.approversFor(tenantId, employeeId, date, tx);
     if (!result) return null;
     const ids = result.approvers.map((a) => a.userId);
@@ -315,7 +332,7 @@ export class RequestsService {
     return { kind: result.kind, reason: result.reason, approvers: result.approvers.map((a) => ({ ...a, fullName: names.get(a.userId) ?? 'Member' })), selfApproved: result.selfApproved };
   }
 
-  private async views(tx: Tx, ctx: TenantContext, access: CallerAccess, rows: TimeoffRequestRow[]): Promise<RequestView[]> {
+  async views(tx: Tx, ctx: TenantContext, access: CallerAccess, rows: TimeoffRequestRow[]): Promise<RequestView[]> {
     if (!rows.length) return [];
     const ids = rows.map((r) => r.id);
     const days = await tx.select().from(timeoffRequestDays).where(inArray(timeoffRequestDays.requestId, ids)).orderBy(asc(timeoffRequestDays.date));
@@ -326,6 +343,7 @@ export class RequestsService {
     const userIds = [...new Set(rows.flatMap((r) => [r.submittedByUserId, r.decidedByUserId]).filter((x): x is string => !!x))];
     const names = new Map(userIds.length ? (await tx.select({ id: users.id, name: sql<string>`coalesce(${users.displayName}, ${users.email}, 'Member')` }).from(users).where(inArray(users.id, userIds))).map((u) => [u.id, u.name]) : []);
     const limit = rows.some((r) => r.type === 'paid_leave') ? await this.reasons.settingsIn(tx, ctx.tenantId) : null;
+    const today = await workspaceToday(tx, ctx.tenantId);
     const out: RequestView[] = [];
     for (const r of rows) {
       const reason = r.reasonId ? reasons.get(r.reasonId) : undefined;
@@ -336,6 +354,9 @@ export class RequestsService {
         const used = reason.countsTowardLimit ? (await this.paidLeaveUsed(tx, r.employeeId, year)) - mine : 0;
         warnings.push(...paidLeaveWarnings({ maxDays: reason.maxDays, countsTowardLimit: reason.countsTowardLimit, yearlyLimit: limit.paidLeaveYearlyLimit, days: mine, usedTowardLimit: Math.max(0, used) }));
       }
+      // The same rule as the decisions (ApprovalsService): the resolved approver, or an Admin.
+      const approver = r.status === 'pending' || r.status === 'approved' ? await this.approver(tx, ctx.tenantId, r.employeeId, today) : null;
+      const decides = access.isAdmin || !!approver?.approvers.some((a) => a.userId === ctx.userId);
       out.push({
         id: r.id,
         employee: { id: r.employeeId, fullName: people.get(r.employeeId) ?? 'Employee' },
@@ -353,10 +374,13 @@ export class RequestsService {
         decidedBy: r.decidedByUserId ? { userId: r.decidedByUserId, name: names.get(r.decidedByUserId) ?? 'Former member' } : null,
         decidedAt: r.decidedAt,
         decisionComment: r.decisionComment,
-        approver: r.status === 'pending' ? await this.approver(tx, ctx.tenantId, r.employeeId, r.startDate) : null,
+        // Resolved now (spec 9.1): an absent manager hands over while away.
+        approver: r.status === 'pending' ? approver : null,
         days: days.filter((d) => d.requestId === r.id).map((d) => ({ date: d.date, poolYear: d.poolYear, state: d.state })),
         warnings,
         canWithdraw: r.status === 'pending' && (access.isAdmin || access.isSelf(r.employeeId)),
+        canCancel: r.status === 'approved' && r.startDate > today && (access.isSelf(r.employeeId) || decides),
+        canShorten: r.status === 'approved' && r.startDate <= today && r.endDate >= today && decides,
       });
     }
     return out;

@@ -304,6 +304,8 @@ export interface Profile {
   taskAssigned: boolean;
   /** "Balance adjusted" and "Carry-over expiring" emails (CD-164). */
   timeOffBalance: boolean;
+  /** "Request waiting" and "Request withdrawn" emails as an approver (CD-166). */
+  timeOffApprovals: boolean;
 }
 
 export interface BonusRule {
