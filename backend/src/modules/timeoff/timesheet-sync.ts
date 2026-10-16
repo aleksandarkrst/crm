@@ -46,8 +46,7 @@ export class TimesheetSyncService implements PendingAbsenceSource, OnModuleInit 
     const people = data.employeeId ? [data.employeeId] : await this.database.withTenant(data.tenantId, (tx) => this.affected(tx, data.from, data.to));
     let changed = 0;
     for (const employeeId of people) {
-      const lines = await this.database.withTenant(data.tenantId, (tx) => this.linesFor(tx, data.tenantId, employeeId, data.from, data.to));
-      changed += (await this.absences.sync(data.tenantId, employeeId, data.from, data.to, lines)).length;
+      changed += (await this.absences.sync(data.tenantId, employeeId, data.from, data.to, (tx) => this.linesFor(tx, data.tenantId, employeeId, data.from, data.to))).length;
     }
     return changed;
   }

@@ -195,7 +195,7 @@ export function ApproverWeek() {
               )}
               {d.pendingAbsence && <span className="emp-note">{d.pendingAbsence}</span>}
               {d.flags.map((f) => (
-                <span key={f} className="badge badge-warn" data-testid="ap-absence-flag">
+                <span key={f} className="emp-note emp-warn" data-testid="ap-absence-flag">
                   {f}
                 </span>
               ))}
@@ -258,7 +258,7 @@ export function ApproverWeek() {
               </p>
             )}
             {rows.length === 0 ? (
-              <p className="emp-note ap-empty">No hours entered.</p>
+              <p className="emp-note ap-empty">{d.absence ? 'No task hours: the day is time off.' : 'No hours entered.'}</p>
             ) : (
               <div className="ap-scroll">
                 <table className="ap-entries">

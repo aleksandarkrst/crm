@@ -430,7 +430,7 @@ export function Grid({
               <span key={d.date} className={`ts-day${d.holiday ? ' ts-holiday' : isWeekend(d.date) ? ' ts-weekend' : ''}`} data-testid="ts-day" data-date={d.date} data-status={d.status}>
                 <span className="ts-day-name">{DAY_NAMES[i]}</span>
                 <span className="ts-day-date">{shortDate(d.date)}</span>
-                <span className={`ts-day-total${short ? ' short' : ''}`}>{d.holiday ? `${shortHours(d.minutes, format)} h · holiday` : d.minutes || d.expectedMinutes ? `${shortHours(d.minutes, format)} h` : '—'}</span>
+                <span className={`ts-day-total${short ? ' short' : ''}`}>{d.absence ? `${shortHours(d.minutes, format)} h · ${d.absence.kind === 'sick_leave' ? 'sick leave' : 'time off'}` : d.holiday ? `${shortHours(d.minutes, format)} h · holiday` : d.minutes || d.expectedMinutes ? `${shortHours(d.minutes, format)} h` : '—'}</span>
                 {onResubmitDay && week.resubmittable.includes(d.date) && (
                   <button type="button" className="ts-day-submit" onClick={() => onResubmitDay(d.date)} data-testid="ts-resubmit-day" aria-label={`Resubmit ${dayLabel(d.date)}`}>
                     Resubmit
@@ -473,7 +473,7 @@ export function Grid({
         {absenceLabels.map((label) => (
           <div className="ts-row ts-soft" key={label} data-testid="ts-absence-row">
             <span className="ts-label">
-              <span className="ts-label-main" style={{ color: 'var(--text-2)' }}>
+              <span className="ts-label-main" style={{ color: 'var(--text-2)' }} title={label}>
                 {label}
               </span>
               <span className="ts-label-sub">From Time off</span>
@@ -494,7 +494,7 @@ export function Grid({
         {pendingLabels.map((label) => (
           <div className="ts-row ts-soft" key={label} data-testid="ts-pending-row">
             <span className="ts-label">
-              <span className="ts-label-main" style={{ color: 'var(--muted)' }}>
+              <span className="ts-label-main" style={{ color: 'var(--muted)' }} title={label}>
                 {label}
               </span>
               <span className="ts-label-sub">No hours until it is approved</span>

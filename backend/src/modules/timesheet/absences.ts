@@ -1,5 +1,5 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { and, between, eq, inArray } from 'drizzle-orm';
+import { and, between, eq, inArray, sql } from 'drizzle-orm';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { type TimesheetAbsenceKind, timesheetAbsences, timesheetDays } from '../../shared/database/schema';
 import { timesheetSettings } from './timesheet-settings';
@@ -79,8 +79,12 @@ export class TimesheetAbsencesService {
    * as `absence_changed` ("Vacation added"), which the approver sees; task hours are never touched.
    * Returns the dates that changed.
    */
-  sync(tenantId: string, employeeId: string, from: string, to: string, lines: AbsenceLine[]): Promise<string[]> {
+  sync(tenantId: string, employeeId: string, from: string, to: string, linesOf: (tx: Tx) => Promise<AbsenceLine[]>): Promise<string[]> {
     return this.database.withTenant(tenantId, async (tx) => {
+      // The person's lock (the one time off changes take): two syncs, or a sync and a cancel, never
+      // interleave, so a stale run can't write back a line a newer one removed.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${employeeId}))`);
+      const lines = await linesOf(tx);
       const wanted = new Map(lines.filter((l) => l.date >= from && l.date <= to).map((l) => [l.date, l]));
       const have = (await absencesIn(tx, [employeeId], from, to)).get(employeeId) ?? new Map<string, AbsenceLine>();
       const changed: { date: string; text: string }[] = [];

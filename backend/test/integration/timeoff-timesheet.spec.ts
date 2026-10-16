@@ -75,8 +75,11 @@ describe('lines from time off (spec 14.1, 14.2)', () => {
     const refused = await call('PUT', '/timesheet/cells', { ...as(emp), body: { date: addDays(monday, 1), taskId, minutes: 60 } });
     expect(refused.status).toBe(409);
     expect((await call('POST', '/timesheet/entries', { ...as(emp), body: { date: monday, taskId, minutes: 60 } })).status).toBe(409);
-    // Other days take task hours as before.
+    // Other days take task hours as before; an entry can't move onto an absence day.
     await ok('PUT', '/timesheet/cells', { ...as(emp), body: { date: addDays(monday, 2), taskId, minutes: 480 } });
+    const moving = await ok<{ id: string }>('POST', '/timesheet/entries', { ...as(emp), body: { date: addDays(monday, 2), taskId, minutes: 15 } });
+    expect((await call('PATCH', `/timesheet/entries/${moving.id}`, { ...as(emp), body: { date: addDays(monday, 1) } })).status).toBe(409);
+    await ok('DELETE', `/timesheet/entries/${moving.id}`, as(emp));
   });
 
   it('the sync is idempotent', async () => {
@@ -115,14 +118,24 @@ describe('submitted and approved days (spec 14.3)', () => {
   });
 });
 
-describe('the holiday calendar (spec 14.1)', () => {
-  it('a new holiday on an absence day takes its line away', async () => {
+describe('the holiday calendar and the standard day (spec 14.1)', () => {
+  it('a new holiday on an absence day takes its line away; deleting it brings the line back', async () => {
     const start = addDays(next, 7);
     const r = await ok<{ id: string }>('POST', '/timeoff/requests', { ...as(emp), body: { type: 'vacation', startDate: start, endDate: addDays(start, 1) } });
     await ok('POST', `/timeoff/requests/${r.id}/approve`, { ...as(mgr), body: {} }, 200);
     await settled(addDays(start, 1), (d) => !!d.absence, 'the vacation line');
-    await ok('POST', '/timesheet/holidays', { ...as(owner), body: { date: addDays(start, 1), name: 'Company day' } });
+    const holiday = await ok<{ id: string }>('POST', '/timesheet/holidays', { ...as(owner), body: { date: addDays(start, 1), name: 'Company day' } });
     await settled(addDays(start, 1), (d) => !d.absence, 'the line removed by the holiday');
     expect((await day(start)).absence?.label).toBe('Vacation');
+    await ok('DELETE', `/timesheet/holidays/${holiday.id}`, as(owner));
+    await settled(addDays(start, 1), (d) => !!d.absence, 'the line back after the holiday went');
+  });
+
+  it('a shorter standard day changes the lines\' hours', async () => {
+    const start = addDays(next, 7);
+    await ok('PATCH', '/workspace', { ...as(owner), body: { timesheet: { dayMinutes: 420 } } });
+    expect((await settled(start, (d) => d.absence?.minutes === 420, 'the 7 h line')).minutes).toBe(420);
+    await ok('PATCH', '/workspace', { ...as(owner), body: { timesheet: { dayMinutes: 480 } } });
+    await settled(start, (d) => d.absence?.minutes === 480, 'the 8 h line again');
   });
 });
