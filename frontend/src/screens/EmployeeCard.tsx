@@ -13,6 +13,7 @@ import { DeactivateDialog, ReactivateDialog } from './employee/dialogs';
 import { CardEditContext, dateLabel } from './employee/parts';
 import { BankSection, cardInitial, cardPatch, PersonalSection, WorkSection } from './employee/sections';
 import { TimeOffSection } from './employee/TimeOffSection';
+import { EmployeeSickLeave } from './timeoff/SickLeave';
 import { TimesheetSection } from './employee/TimesheetSection';
 
 /** The Org structure page (CD-137). */
@@ -137,6 +138,7 @@ function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => 
           <div className="emp-col">
             <WorkSection card={card} />
             <TimeOffSection id={card.id} />
+            <CardSickLeave employeeId={card.id} />
             <TimesheetSection id={card.id} />
           </div>
           <div className="emp-col">
@@ -260,4 +262,12 @@ function CardHeader({ card, open, canSave, dirty, busy, onSave }: { card: ApiEmp
       </div>
     </div>
   );
+}
+
+/** The card's Sick leave section (CD-169, spec 13.5): the employee, their managers and Admins; reporting for themselves, a direct report, or anyone as an Admin. */
+function CardSickLeave({ employeeId }: { employeeId: string }) {
+  const { s, session } = useStore();
+  const admin = session.tenant.role === 'owner' || session.tenant.role === 'admin';
+  const canReport = admin || employeeId === s.myEmployeeId || !!s.people.access?.directReportIds.includes(employeeId);
+  return <EmployeeSickLeave employeeId={employeeId} canReport={canReport} />;
 }

@@ -129,6 +129,16 @@ export interface JobPayloads {
    * (POST /api/dev/timeoff/daily) only.
    */
   'timeoff.daily': { now?: string; tenantId?: string };
+  /**
+   * One sick leave email (CD-169, spec 15.2): `reported` to the manager and the Admins, `ended` to
+   * the manager, `interrupted` (time off interrupted by sick leave) to the employee, the approvers
+   * and the Admins, `weekly_check` to one Admin on Mondays. Recipients and toggles are read when sending.
+   */
+  'timeoff.sick-email':
+    | { tenantId: string; kind: 'reported'; sickLeaveId: string; actorUserId: string }
+    | { tenantId: string; kind: 'ended'; sickLeaveId: string; actorUserId: string }
+    | { tenantId: string; kind: 'interrupted'; sickLeaveId: string; requestId: string; dates: string[] }
+    | { tenantId: string; kind: 'weekly_check'; recipientUserId: string; sickLeaveIds: string[] };
   /** Renders and stores a generated legal document (CD-167, spec 10.3): a vacation decision PDF, queued by the approval. */
   'documents.generate-pdf': { tenantId: string; documentId: string };
   /** `ready`: the PDF to the employee and the decision recipients (spec 11.3, 12); `failed`: "could not be generated" to the Admins. */
@@ -183,10 +193,11 @@ export const JOB_NAMES = [
   'reporting.nightly',
   'timeoff.daily',
   'timeoff.notice-email',
+  'timeoff.sick-email',
   'timesheet.tick',
   'timesheet.notice-email',
   'timesheet.task-hours-changed',
 ] as const satisfies readonly JobName[];
 
 /** Jobs that send email: retried MAIL_RETRY_LIMIT times with backoff from MAIL_RETRY_DELAY_SECONDS. */
-export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed', 'projects.project-created-email', 'projects.task-assigned', 'projects.limit-alert', 'timesheet.notice-email', 'timeoff.notice-email', 'documents.email']);
+export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed', 'projects.project-created-email', 'projects.task-assigned', 'projects.limit-alert', 'timesheet.notice-email', 'timeoff.notice-email', 'timeoff.sick-email', 'documents.email']);

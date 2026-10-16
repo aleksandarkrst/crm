@@ -1045,6 +1045,13 @@ function NotificationsTab() {
       on: p.timeOffApprovals,
       toggle: () => patchProfile({ timeOffApprovals: !p.timeOffApprovals }),
     },
+    {
+      id: 'sick-leave',
+      label: 'Sick leave notices',
+      desc: 'As a manager or Admin: sick leave reported or ended in your team, and the Admins\' weekly list of records to check.',
+      on: p.sickLeaveNotices,
+      toggle: () => patchProfile({ sickLeaveNotices: !p.sickLeaveNotices }),
+    },
   ];
   const row = { display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--divider)' } as const;
   return (

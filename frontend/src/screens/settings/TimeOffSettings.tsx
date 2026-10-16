@@ -5,6 +5,7 @@ import { type ApiExperienceRule, type ApiPolicyInput, type ApiTimeOffPolicy, typ
 import { projectError, useProjectsRead } from '../../store/projects';
 import { useStore } from '../../store/store';
 import { DecisionRecipientsCard } from '../timeoff/Decisions';
+import { SickLeaveTypesCard } from '../timeoff/SickLeave';
 
 /** The Labor Law's minimum (spec 3.3, A1) and the most a policy can give. */
 const MIN_BASE_DAYS = 20;
@@ -244,6 +245,7 @@ export function TimeOffTab() {
       <PoliciesCard />
       <ReasonsCard kind="paid_leave" />
       <ReasonsCard kind="other_absence" />
+      <SickLeaveTypesCard />
       <DecisionRecipientsCard />
     </div>
   );

@@ -309,6 +309,7 @@ export interface ApiProfile {
   notifyTimeoffBalance: boolean;
   /** "Request waiting" and "Request withdrawn" as an approver (CD-166). */
   notifyTimeoffApprovals: boolean;
+  notifySickLeave: boolean;
 }
 /**
  * Getting started (CD-68): the workspace's activation steps (CD-115), derived from its records.

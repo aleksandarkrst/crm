@@ -222,6 +222,7 @@ const PROFILE_FIELDS: Partial<Record<keyof Profile, keyof ProfileInput>> = {
   taskAssigned: 'notifyTaskAssigned',
   timeOffBalance: 'notifyTimeoffBalance',
   timeOffApprovals: 'notifyTimeoffApprovals',
+  sickLeaveNotices: 'notifySickLeave',
 };
 
 function useStoreImpl(data: WorkspaceData, session: Session) {

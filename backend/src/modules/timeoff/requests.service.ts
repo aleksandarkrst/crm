@@ -1,4 +1,5 @@
 import { type DecisionView, DecisionsService } from './decisions.service';
+import { SickLeaveService } from './sick-leave.service';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { AuditService } from '../../shared/audit/audit.service';
@@ -98,6 +99,7 @@ export class RequestsService {
     private readonly entitlements: EntitlementsService,
     private readonly reasons: ReasonsService,
     private readonly decisions: DecisionsService,
+    private readonly sick: SickLeaveService,
   ) {}
 
   // ------------------------------------------------------------------ reads
@@ -194,6 +196,7 @@ export class RequestsService {
         await this.audit.record(tx, ctx, { action: recorded ? 'timeoff.request_recorded' : 'timeoff.request_submitted', entityType: 'timeoff_request', entityId: row!.id, data: { employeeId, type: input.type, startDate: input.startDate, endDate: input.endDate, workingDays: p.workingDays, recordReason: input.record?.reason } });
         // Recorded vacation gets its decision like an approved one (spec 11.1, "Generate decision").
         if (recorded && input.type === 'vacation' && input.record?.decision !== false) await this.decisions.queueFor(tx, ctx, row!);
+        if (recorded) await this.sick.reapplyFor(tx, ctx.tenantId, employeeId, input.startDate, input.endDate);
         if (!recorded && p.approver) {
           for (const a of p.approver.approvers) {
             if (a.userId === ctx.userId) continue;

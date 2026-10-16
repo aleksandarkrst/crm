@@ -231,6 +231,67 @@ export const decisionFileName = (d: Pick<ApiDecision, 'number' | 'version'>) => 
 
 export type TimeOffType = 'vacation' | 'paid_leave' | 'unpaid_leave' | 'other_absence';
 export const TIME_OFF_TYPE_LABEL: Record<TimeOffType, string> = { vacation: 'Vacation', paid_leave: 'Paid leave', unpaid_leave: 'Unpaid leave', other_absence: 'Other absence' };
+
+/** A sick leave type (CD-169, spec 13.3): the payer note is information, never used for money. */
+export interface ApiSickLeaveType {
+  id: string;
+  name: string;
+  payerNote: string | null;
+  active: boolean;
+  used: number;
+}
+
+/** A sick leave record as the caller may see it (spec 13.6): type for the employee and Admins, note and reference for Admins. */
+export interface ApiSickLeave {
+  id: string;
+  employee: { id: string; fullName: string };
+  startDate: string;
+  endDate: string | null;
+  status: 'reported' | 'confirmed' | 'cancelled';
+  type: { id: string; name: string } | null;
+  sickNoteRef: string | null;
+  note: string | null;
+  cancelReason: string | null;
+  continuationOfId: string | null;
+  suggestedContinuationId: string | null;
+  calendarDays: number;
+  workingDays: number;
+  day31: string | null;
+  stillOpen: boolean;
+  interruptedDays: number;
+  canEdit: boolean;
+  canSetEnd: boolean;
+  canConfirm: boolean;
+  canCancel: boolean;
+}
+
+export interface SickLeaveFilters {
+  employeeId?: string;
+  all?: boolean;
+  status?: ApiSickLeave['status'];
+  open?: boolean;
+  month?: string;
+  typeId?: string;
+}
+
+export interface SickLeaveInput {
+  employeeId?: string;
+  startDate?: string;
+  endDate?: string | null;
+  typeId?: string | null;
+  continuationOfId?: string | null;
+  sickNoteRef?: string | null;
+  note?: string | null;
+}
+
+export const SICK_STATUS_LABEL: Record<ApiSickLeave['status'], string> = { reported: 'Reported', confirmed: 'Confirmed', cancelled: 'Cancelled' };
+
+const sickQuery = (f: SickLeaveFilters) => {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(f)) if (v !== undefined && v !== '' && v !== false) q.set(k, String(v));
+  const s = q.toString();
+  return s ? `?${s}` : '';
+};
 export type TimeOffRequestStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn' | 'cancelled';
 export const REQUEST_STATUS_LABEL: Record<TimeOffRequestStatus, string> = { pending: 'Pending', approved: 'Approved', rejected: 'Rejected', withdrawn: 'Withdrawn', cancelled: 'Cancelled' };
 
@@ -282,7 +343,8 @@ export interface ApiCalendar {
   from: string;
   to: string;
   employees: { id: string; fullName: string; unitName: string | null }[];
-  cells: { employeeId: string; date: string; type: TimeOffType; status: 'approved' | 'pending'; requestId: string }[];
+  /** Sick leave comes as `sick_leave` without its type; `requestId` is then the record's id. */
+  cells: { employeeId: string; date: string; type: TimeOffType | 'sick_leave'; status: 'approved' | 'pending'; requestId: string }[];
   holidays: { date: string; name: string }[];
 }
 
@@ -334,6 +396,22 @@ export const timeOffApi = {
   },
   settings: () => api<ApiTimeOffSettings>('/timeoff/settings'),
   updateSettings: (patch: Partial<ApiTimeOffSettings>) => api<ApiTimeOffSettings>('/timeoff/settings', { method: 'PATCH', json: patch }),
+  sickLeave: {
+    list: (f: SickLeaveFilters) => api<ApiSickLeave[]>(`/timeoff/sick-leave${sickQuery(f)}`),
+    create: (input: SickLeaveInput & { startDate: string; confirm?: boolean }) => api<ApiSickLeave>('/timeoff/sick-leave', { method: 'POST', json: input }),
+    update: (id: string, patch: SickLeaveInput) => api<ApiSickLeave>(`/timeoff/sick-leave/${id}`, { method: 'PATCH', json: patch }),
+    confirm: (id: string, input: { typeId: string; endDate?: string | null; continuationOfId?: string | null; sickNoteRef?: string | null }) => api<ApiSickLeave>(`/timeoff/sick-leave/${id}/confirm`, { method: 'POST', json: input }),
+    cancel: (id: string, reason: string) => api<ApiSickLeave & { notRestored: number }>(`/timeoff/sick-leave/${id}/cancel`, { method: 'POST', json: { reason } }),
+    csv: async (f: SickLeaveFilters): Promise<Blob> => {
+      const res = await authorizedFetch(`/timeoff/sick-leave/csv${sickQuery(f)}`);
+      if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
+      return res.blob();
+    },
+    types: () => api<ApiSickLeaveType[]>('/timeoff/sick-leave-types'),
+    createType: (input: { name: string; payerNote?: string | null }) => api<ApiSickLeaveType>('/timeoff/sick-leave-types', { method: 'POST', json: input }),
+    updateType: (id: string, patch: Partial<Pick<ApiSickLeaveType, 'name' | 'payerNote' | 'active'>>) => api<ApiSickLeaveType>(`/timeoff/sick-leave-types/${id}`, { method: 'PATCH', json: patch }),
+    removeType: (id: string) => api<void>(`/timeoff/sick-leave-types/${id}`, { method: 'DELETE' }),
+  },
   decisions: {
     list: (f: { year?: number; state?: ApiDecision['state'] }) => api<ApiDecisionRow[]>(`/timeoff/decisions?${new URLSearchParams(Object.entries({ year: f.year ? String(f.year) : '', state: f.state ?? '' }).filter(([, v]) => v)).toString()}`),
     pdf: async (id: string): Promise<Blob> => {

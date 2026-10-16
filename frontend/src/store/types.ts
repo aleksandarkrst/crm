@@ -310,6 +310,8 @@ export interface Profile {
   timeOffBalance: boolean;
   /** "Request waiting" and "Request withdrawn" emails as an approver (CD-166). */
   timeOffApprovals: boolean;
+  /** "Sick leave notices" (CD-169): reported, ended, and the Admins' weekly check. */
+  sickLeaveNotices: boolean;
 }
 
 export interface BonusRule {

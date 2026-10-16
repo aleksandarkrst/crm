@@ -1,0 +1,1 @@
+CREATE INDEX "sick_leaves_continuation_idx" ON "sick_leaves" USING btree ("tenant_id","continuation_of_id");
