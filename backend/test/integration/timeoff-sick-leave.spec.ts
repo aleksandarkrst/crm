@@ -180,7 +180,8 @@ describe('the team calendar, the absent manager, the weekly check', () => {
   it('the calendar shows sick leave without its type; a manager on sick leave today hands requests to the Admins', async () => {
     const cal = await ok<{ cells: { employeeId: string; date: string; type: string }[] }>('GET', `/timeoff/calendar?month=${NEXT}-02`, as(mgr));
     expect(cal.cells.filter((c) => c.employeeId === id.emp && c.type === 'sick_leave').map((c) => c.date)).toEqual([d('02-02'), d('02-03'), d('02-04')]);
-    const away = await report(mgr, { startDate: plus(0), endDate: plus(0) });
+    // Yesterday to tomorrow: the workspace's today (Belgrade) is inside whatever the UTC hour.
+    const away = await report(mgr, { startDate: plus(-1), endDate: plus(1) });
     const r = await ok<{ id: string; approver: { kind: string } }>('POST', '/timeoff/requests', { ...as(emp), body: { type: 'unpaid_leave', startDate: d('09-01'), endDate: d('09-01') } });
     expect(r.approver.kind).toBe('admins');
     await ok('POST', `/timeoff/requests/${r.id}/withdraw`, as(emp), 200);
