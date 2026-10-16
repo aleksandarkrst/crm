@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput, type WorkspaceTerms } from '../lib/api';
+import { type ApiCompanyDetails, type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput, type WorkspaceTerms } from '../lib/api';
 import { paths } from '../lib/paths';
 import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference } from './documents';
 import { employeeCardActions } from './employeeCard';
@@ -1770,6 +1770,16 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             if (key in terms) out[key] = i.message;
           }
           return Object.keys(out).length ? out : { project: errText(err) };
+        }
+      },
+      /** Saves the company details (CD-167, owners and admins); returns the API's message when it refuses them, else null. */
+      saveCompany: async (company: Partial<ApiCompanyDetails>): Promise<string | null> => {
+        try {
+          const ws = await crmApi.updateWorkspace({ company });
+          set((x) => ({ workspace: { ...x.workspace, company: ws.company } }));
+          return null;
+        } catch (err) {
+          return errText(err);
         }
       },
       /** Edits your own profile and saves it (one write per field after a pause). */

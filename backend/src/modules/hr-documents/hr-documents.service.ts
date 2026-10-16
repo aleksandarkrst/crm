@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import { ENV, type Env } from '../../infrastructure/config/config.module';
@@ -16,7 +16,8 @@ export class DocumentDataError extends Error {}
 /**
  * How each document type turns its snapshot into a document, and what its emails say. The owning
  * module registers its type on start (the timeoff module for `vacation_decision`), so this module
- * imports none of them.
+ * imports none of them. The registering service must be provided in the worker too
+ * (TimeoffWorkerModule provides DecisionsService), or that type's documents fail to generate.
  */
 export interface DocumentRenderer<S = unknown> {
   render(snapshot: S, doc: HrDocumentRow): PdfDocumentSpec;
@@ -83,6 +84,9 @@ export class HrDocumentsService {
 
   /** A new version of `current` with the same number (spec 11.5); the earlier one becomes superseded and stays downloadable. */
   async newVersion(tx: Tx, current: HrDocumentRow, snapshot: unknown, createdByUserId: string | null, email: boolean): Promise<HrDocumentRow> {
+    // Two Admins regenerating at once: the second waits here and then finds the row superseded.
+    const [locked] = await tx.select({ state: hrDocuments.state }).from(hrDocuments).where(eq(hrDocuments.id, current.id)).for('update');
+    if (locked?.state === 'superseded' || locked?.state === 'cancelled') throw new ConflictException('A newer version exists, or the decision was cancelled');
     await tx.update(hrDocuments).set({ state: 'superseded' }).where(eq(hrDocuments.id, current.id));
     const [row] = await tx
       .insert(hrDocuments)
@@ -191,13 +195,16 @@ export class HrDocumentsService {
       for (const to of facts.admins) await mailer.send({ to, subject, text, html: html(text) });
       return;
     }
-    if (doc.status !== 'ready') return; // regenerated meanwhile: that version sends its own
+    // Regenerated meanwhile (that version sends its own) or cancelled: nothing to send.
+    if (doc.status !== 'ready' || doc.state === 'superseded' || doc.state === 'cancelled') return;
     const file = await this.file(doc);
     if (!file) return;
     const attachment: MailAttachment = { filename: file.name, contentType: 'application/pdf', content: file.content.toString('base64'), encoding: 'base64' };
     const { subject, intro } = renderer.email(doc, doc.snapshot);
-    const recipients = [...new Set([facts.employeeEmail, ...facts.admins, ...facts.copyEmails].filter((a): a is string => !!a))];
-    const sent: string[] = [];
+    // A retry after a partial send skips the addresses that already got it.
+    const done = doc.emailedTo ?? [];
+    const recipients = [...new Set([facts.employeeEmail, ...facts.admins, ...facts.copyEmails].filter((a): a is string => !!a && !done.includes(a)))];
+    const sent: string[] = [...done];
     for (const to of recipients) {
       const forEmployee = to === facts.employeeEmail;
       const text = `${intro}\n\nThe document is attached as a PDF (${file.name}).${forEmployee ? `\n\nPlease confirm receipt on your request in Pultly: ${link}` : ` Sent to ${facts.employeeName}${facts.employeeEmail ? '' : ' (no email address: hand it over in person)'} and, as a copy, to you.`}\n\nWorkspace: ${facts.workspaceName}`;
@@ -209,7 +216,8 @@ export class HrDocumentsService {
       }
     }
     await this.database.withTenant(data.tenantId, (tx) => tx.update(hrDocuments).set({ emailedTo: sent, emailedAt: sent.length ? new Date() : null }).where(eq(hrDocuments.id, doc.id)));
-    if (sent.length < recipients.length) throw new Error(`Document ${doc.id}: ${recipients.length - sent.length} of ${recipients.length} email(s) not sent`);
+    const missed = recipients.filter((a) => !sent.includes(a)).length;
+    if (missed) throw new Error(`Document ${doc.id}: ${missed} of ${recipients.length} email(s) not sent`);
   }
 
   /** The backstop (spec 10.3): documents running for over an hour in this workspace fail with a reason; Admins regenerate. */

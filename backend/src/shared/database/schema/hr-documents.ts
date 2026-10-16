@@ -27,7 +27,11 @@ export const hrDocuments = pgTable(
       .notNull()
       .references(() => tenants.id, { onDelete: 'cascade' }),
     type: text('type', { enum: HR_DOCUMENT_TYPES }).notNull(),
-    /** The record the document was made from (a time off request). */
+    /**
+     * The record the document was made from (a time off request). Deliberately no foreign key: the
+     * column points at a different table per `type` (travel orders in milestone 17); requests are
+     * never deleted, and reads join it within the workspace (RLS on both tables).
+     */
     sourceId: uuid('source_id').notNull(),
     employeeId: uuid('employee_id').notNull(),
     /** "GO-2026-0001": the type's prefix, the year and the sequence. */

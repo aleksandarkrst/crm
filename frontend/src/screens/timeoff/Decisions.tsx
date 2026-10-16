@@ -82,7 +82,7 @@ export function DecisionsTab() {
           ))}
         </select>
         <select className="form-input" value={state} onChange={(e) => setState(e.target.value as ApiDecision['state'] | '')} aria-label="State">
-          <option value="">Every state</option>
+          <option value="">All states</option>
           {Object.entries(DECISION_STATE_LABEL).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
@@ -167,7 +167,7 @@ function RegenerateDialog({ decision, onClose }: { decision: ApiDecisionRow; onC
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <span className="emp-note">A new version is made from today's data with the same number. This version stays and can still be downloaded.</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Switch on={email} onClick={() => setEmail(!email)} label="Email the new version" />
+          <Switch on={email} onClick={() => setEmail(!email)} label="Email it to the employee and the decision recipients" />
           <span style={{ fontSize: 13 }}>Email it to the employee and the decision recipients</span>
         </span>
         {problem && (
@@ -211,7 +211,7 @@ export function DecisionRecipientsCard() {
         <span className="emp-note">The decision PDF always goes to the employee. Choose who else gets a copy. Changes apply to later decisions only.</span>
       </div>
       <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <Switch on={data.decisionCopyAdmins} disabled={!canEditWorkspace} onClick={() => void save({ decisionCopyAdmins: !data.decisionCopyAdmins })} label="Copy to the Admins" />
+        <Switch on={data.decisionCopyAdmins} disabled={!canEditWorkspace} onClick={() => void save({ decisionCopyAdmins: !data.decisionCopyAdmins })} label="Copy to the workspace's owners and admins" />
         <span style={{ fontSize: 13 }}>Copy to the workspace's owners and admins</span>
       </span>
       <label className="policy-field">

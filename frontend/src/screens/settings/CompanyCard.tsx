@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { type ApiCompanyDetails, crmApi } from '../../lib/api';
-import { projectError } from '../../store/projects';
+import type { ApiCompanyDetails } from '../../lib/api';
 import { useStore } from '../../store/store';
 
 /** Countries offered in Settings → Workspace (CD-167): Serbia first, it turns vacation decisions on. */
@@ -34,7 +33,7 @@ const draftOf = (c: ApiCompanyDetails): Draft => ({ legalName: c.legalName ?? ''
  * checked by the server (check digits).
  */
 export function CompanyCard() {
-  const { s, setWorkspace, canEditWorkspace, flash } = useStore();
+  const { s, saveCompany, canEditWorkspace, flash } = useStore();
   const company = s.workspace.company;
   const [draft, setDraft] = useState<Draft>(() => draftOf(company));
   const [busy, setBusy] = useState(false);
@@ -45,13 +44,9 @@ export function CompanyCard() {
   const save = async () => {
     setBusy(true);
     setProblem(null);
-    try {
-      const ws = await crmApi.updateWorkspace({ company: { ...draft, legalBasis: draft.legalBasis.trim() || undefined } });
-      setWorkspace({ company: ws.company });
-      flash('Company details saved');
-    } catch (err) {
-      setProblem(projectError(err));
-    }
+    const error = await saveCompany({ ...draft, legalBasis: draft.legalBasis.trim() || undefined });
+    if (error) setProblem(error);
+    else flash('Company details saved');
     setBusy(false);
   };
   return (
