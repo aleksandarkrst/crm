@@ -38,7 +38,7 @@ export function StatusBadge({ status, label }: { status: ApiDayStatus; label: st
   return <span className={BADGE[status]}>{label}</span>;
 }
 
-/** Last week's timesheet: its status, and Late or Not submitted. */
+/** Last week's timesheet: its status and Not submitted (no Late flag: nothing records when someone starts work, CD-350). */
 export function TimesheetCell({ t }: { t: ApiStatusRow['timesheet'] }) {
   if (!t) return <span className="emp-note">—</span>;
   return (
@@ -46,7 +46,6 @@ export function TimesheetCell({ t }: { t: ApiStatusRow['timesheet'] }) {
       <Link to={paths.approvals(t.weekStart)} className="emp-note">
         {t.label}
       </Link>
-      {t.late && <span className="badge badge-warn">Late</span>}
       {t.notSubmitted && t.label !== 'Not submitted' && <span className="badge badge-danger">Not submitted</span>}
     </span>
   );

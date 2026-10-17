@@ -1280,6 +1280,9 @@ a.task-card-project:hover { color: var(--brand); }
 .ts-sum { display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--text-2); border-left: 1px solid var(--divider); }
 .ts-sum.strong { color: var(--ink); font-weight: 600; }
 .ts-sum.below { color: var(--danger); }
+.ts-total.below { color: var(--danger); }
+/* The one Total row (CD-351) closes the grid. */
+.ts-total-row { border-top: 1px solid var(--border); }
 .ts-sum.above { color: #2F6FB5; }
 
 /* Approvals (CD-157): the top panels, the team list and one person's week. */
@@ -1516,3 +1519,24 @@ a.task-card-project:hover { color: var(--brand); }
   .tst-cell[data-label]::before { content: attr(data-label); display: block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-2); margin-bottom: 2px; }
   .tst-updated { margin-left: 0; }
 }
+
+/* My time off (CD-350): one tile per policy, sick leave alongside. */
+.to-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.to-tile { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--white); min-width: 0; }
+.to-tile-figure { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin: 2px 0 4px; }
+.to-tile-figure strong { font-family: var(--font-display); font-size: 28px; font-weight: 600; color: var(--ink); }
+.to-tile-link { align-self: flex-start; margin-top: 6px; padding: 6px 10px; font-size: 12.5px; }
+.to-section-title { font-size: 15px; font-weight: 600; margin-top: 6px; }
+
+/* Time off → Approvals table (CD-350). */
+.rq-row { grid-template-columns: minmax(150px, 1.2fr) minmax(140px, 1.2fr) minmax(170px, 1.2fr) 100px 140px minmax(200px, auto); align-items: center; }
+.rq-row .num { text-align: right; }
+.rq-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .ap-table > .table-head.rq-row { display: none; }
+  .rq-row { grid-template-columns: minmax(0, 1fr) !important; gap: 4px; }
+  .rq-row .num { text-align: left; }
+  .rq-cell[data-label]::before { content: attr(data-label); display: block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-2); }
+  .rq-actions { justify-content: flex-start; }
+}
+.rq-details { padding: 4px 16px 12px; background: var(--panel); border-bottom: 1px solid var(--divider); }

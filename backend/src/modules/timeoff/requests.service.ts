@@ -7,7 +7,7 @@ import { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
-import { employees, type TimeoffRequestRow, type TimeoffRequestStatus, type TimeoffType, timeoffReasons, timeoffRequestDays, timeoffRequests, users } from '../../shared/database/schema';
+import { employees, tenants, type TimeoffRequestRow, type TimeoffRequestStatus, type TimeoffType, timeoffReasons, timeoffRequestDays, timeoffRequests, users } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import { type ApproverResult, type CallerAccess, PeopleAccess } from '../people';
 import { holidaysBetween, timesheetSettings } from '../timesheet';
@@ -75,6 +75,8 @@ export interface RequestPreview {
   shortfall: { needed: number; available: number } | null;
   warnings: string[];
   approver: ApproverView | null;
+  /** The workspace's CEO (CD-350): their own time off is approved automatically; everyone else's waits for its approver. */
+  autoApproved: boolean;
 }
 
 const OPEN: TimeoffRequestStatus[] = ['pending', 'approved'];
@@ -175,6 +177,8 @@ export class RequestsService {
         if (p.refusal) throw new BadRequestException(p.refusal.message);
         if (facts.shortfall) throw new ConflictException(`You have ${facts.shortfall.available} ${facts.shortfall.available === 1 ? 'day' : 'days'} available; this request needs ${facts.shortfall.needed}.`);
         const recorded = !!input.record;
+        // Only the CEO's own time off is approved automatically (CD-350): nobody above them decides.
+        const approved = recorded || p.autoApproved;
         const [row] = await tx
           .insert(timeoffRequests)
           .values({
@@ -186,21 +190,21 @@ export class RequestsService {
             endDate: input.endDate,
             workingDays: p.workingDays,
             note: input.note ?? null,
-            status: recorded ? 'approved' : 'pending',
+            status: approved ? 'approved' : 'pending',
             submittedByUserId: ctx.userId,
             recorded,
             recordReason: input.record?.reason ?? null,
-            ...(recorded ? { decidedByUserId: ctx.userId, decidedAt: new Date() } : {}),
+            ...(approved ? { decidedByUserId: ctx.userId, decidedAt: new Date() } : {}),
           })
           .returning();
         const poolOf = new Map((facts.assignment ?? []).map((a) => [a.date, a.poolYear]));
         if (p.dates.length) await tx.insert(timeoffRequestDays).values(p.dates.map((date) => ({ tenantId: ctx.tenantId, requestId: row!.id, employeeId, date, poolYear: poolOf.get(date) ?? null, state: 'counted' as const })));
-        await this.audit.record(tx, ctx, { action: recorded ? 'timeoff.request_recorded' : 'timeoff.request_submitted', entityType: 'timeoff_request', entityId: row!.id, data: { employeeId, type: input.type, startDate: input.startDate, endDate: input.endDate, workingDays: p.workingDays, recordReason: input.record?.reason } });
+        await this.audit.record(tx, ctx, { action: recorded ? 'timeoff.request_recorded' : approved ? 'timeoff.request_auto_approved' : 'timeoff.request_submitted', entityType: 'timeoff_request', entityId: row!.id, data: { employeeId, type: input.type, startDate: input.startDate, endDate: input.endDate, workingDays: p.workingDays, recordReason: input.record?.reason } });
         // Recorded vacation gets its decision like an approved one (spec 11.1, "Generate decision").
-        if (recorded && input.type === 'vacation' && input.record?.decision !== false) await this.decisions.queueFor(tx, ctx, row!);
-        if (recorded) await this.sick.reapplyFor(tx, ctx.tenantId, employeeId, input.startDate, input.endDate);
-        if (recorded) await this.timesheet.queue(tx, ctx.tenantId, employeeId, input.startDate, input.endDate);
-        if (!recorded && p.approver) {
+        if (approved && input.type === 'vacation' && input.record?.decision !== false) await this.decisions.queueFor(tx, ctx, row!);
+        if (approved) await this.sick.reapplyFor(tx, ctx.tenantId, employeeId, input.startDate, input.endDate);
+        if (approved) await this.timesheet.queue(tx, ctx.tenantId, employeeId, input.startDate, input.endDate);
+        if (!approved && p.approver) {
           for (const a of p.approver.approvers) {
             if (a.userId === ctx.userId) continue;
             await this.jobs.send('timeoff.notice-email', { tenantId: ctx.tenantId, kind: 'requested', requestId: row!.id, recipientUserId: a.userId }, tx);
@@ -210,6 +214,12 @@ export class RequestsService {
         return view!;
       })
       .catch(mapDbError);
+  }
+
+  /** Whether the employee is the workspace's CEO (the org chart's company node, CD-225). */
+  private async isCeo(tx: Tx, tenantId: string, employeeId: string): Promise<boolean> {
+    const [t] = await tx.select({ ceo: tenants.ceoEmployeeId }).from(tenants).where(eq(tenants.id, tenantId));
+    return !!t?.ceo && t.ceo === employeeId;
   }
 
   /** A pending request is withdrawn by the employee or an Admin (spec 9.4); its days stop counting. */
@@ -303,7 +313,9 @@ export class RequestsService {
       warnings.push(...paidLeaveWarnings({ maxDays: reason.maxDays, countsTowardLimit: reason.countsTowardLimit, yearlyLimit: limit.paidLeaveYearlyLimit, days: wd.dates.length, usedTowardLimit: used }));
     }
     const approver = await this.approver(tx, ctx.tenantId, employeeId, input.startDate);
+    const autoApproved = await this.isCeo(tx, ctx.tenantId, employeeId);
     const preview: RequestPreview = {
+      autoApproved,
       workingDays: wd.dates.length,
       dates: wd.dates,
       excluded: wd.excluded,

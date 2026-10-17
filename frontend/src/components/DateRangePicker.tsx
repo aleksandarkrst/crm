@@ -42,8 +42,9 @@ const shiftMonth = (month: string, by: number) => {
  * One field for a span of days (CD-318, Holidays): a button that reads the chosen dates and opens
  * a month calendar. The first click picks the first day, the second the last (a single day is
  * both); Escape or a click outside closes it. `month` is the month it opens on without a value.
+ * `single` (CD-350, sick leave with no end date yet): one click picks one day.
  */
-export function DateRangePicker({ value, onChange, month, placeholder = 'Pick dates', testId, label }: { value: DateRange | null; onChange: (r: DateRange) => void; month: string; placeholder?: string; testId?: string; label: string }) {
+export function DateRangePicker({ value, onChange, month, placeholder = 'Pick dates', testId, label, single }: { value: DateRange | null; onChange: (r: DateRange) => void; month: string; placeholder?: string; testId?: string; label: string; single?: boolean }) {
   const [open, setOpen] = useState(false);
   const [shown, setShown] = useState(value?.from.slice(0, 7) ?? month);
   const [start, setStart] = useState<string | null>(null);
@@ -67,6 +68,11 @@ export function DateRangePicker({ value, onChange, month, placeholder = 'Pick da
     setOpen(!open);
   };
   const pick = (day: string) => {
+    if (single) {
+      onChange({ from: day, to: day });
+      setOpen(false);
+      return;
+    }
     if (!start) return setStart(day);
     onChange(day < start ? { from: day, to: start } : { from: start, to: day });
     setStart(null);

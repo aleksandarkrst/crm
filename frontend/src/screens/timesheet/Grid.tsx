@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Picker, PickerRow, usePicker } from '../../components/ui';
 import { paths } from '../../lib/paths';
-import { type ApiCell, type ApiLoggable, type ApiTimesheetDay, type ApiTimesheetRow, type ApiTimesheetWeek, dayLabel, formatHours, parseHours, shortHours, type TimeFormat, timesheetApi } from '../../lib/timesheetApi';
-import { projectError } from '../../store/projects';
+import { type ApiCell, type ApiLoggable, type ApiTimesheetDay, type ApiTimesheetRow, type ApiTimesheetWeek, dayLabel, formatHours, parseHours, shortHours, type TimeFormat } from '../../lib/timesheetApi';
 import { useStore } from '../../store/store';
+import { AddRowDialog } from './AddRowDialog';
 
 const DAY_NAMES = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -230,76 +229,18 @@ function NotePopover({
   );
 }
 
-/** "+ Add task or work order": a search over what the person can log on now and isn't in the week yet. */
+/** "+ Add row" (CD-351): opens the dialog that picks a project, then a task or work order. */
 function AddRow({ week, onAdd, employeeId }: { week: ApiTimesheetWeek; onAdd: (item: ApiLoggable) => Promise<void>; employeeId?: string }) {
-  const picker = usePicker();
-  const [items, setItems] = useState<ApiLoggable[] | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (!open) return;
-    let alive = true;
-    timesheetApi.loggable(employeeId).then(
-      (list) => alive && setItems(list),
-      (err) => alive && setFailed(projectError(err)),
-    );
-    return () => {
-      alive = false;
-    };
-  }, [open, employeeId]);
-  const inWeek = new Set(week.rows.map((r) => r.id));
-  const q = picker.search.trim().toLowerCase();
-  const shown = (items ?? []).filter((i) => !inWeek.has(i.id) && (!q || `${i.code} ${i.name} ${i.path}`.toLowerCase().includes(q)));
   return (
     <div className="ts-row">
       <div style={{ gridColumn: '1 / -1' }}>
-        <button
-          type="button"
-          className="ts-add ts-label"
-          data-testid="ts-add-row"
-          onClick={() => {
-            setOpen((o) => !o);
-            picker.setOpen(true);
-          }}
-        >
-          <span className="ts-label-main">+ Add task or work order</span>
-          <span className="ts-label-sub">Tasks you are assigned to with time logging on, and open work orders you are on</span>
+        <button type="button" className="ts-add ts-label" data-testid="ts-add-row" onClick={() => setOpen(true)}>
+          <span className="ts-label-main">+ Add row</span>
+          <span className="ts-label-sub">A task or work order on one of your projects</span>
         </button>
-        {open && (
-          <div className="ts-add-picker">
-            <Picker
-              picker={picker}
-              placeholder="Search by number, name, company or project"
-              items={
-                failed ? (
-                  <div className="picker-item">{failed}</div>
-                ) : items === null ? (
-                  <div className="picker-item">Loading</div>
-                ) : shown.length === 0 ? (
-                  <div className="picker-item" style={{ color: 'var(--text-2)' }}>
-                    {employeeId ? (items.length ? `Everything ${week.employee?.name ?? 'they'} can log on is in this week` : `Nothing to log time on yet: ${week.employee?.name ?? 'they'} is on no open task or work order`) : items.length ? 'Everything you can log on is in this week' : 'Nothing to log time on yet: you are on no open task or work order'}
-                  </div>
-                ) : (
-                  shown.map((i) => (
-                    <PickerRow
-                      key={i.id}
-                      initials={i.kind === 'task' ? 'T' : 'WO'}
-                      square
-                      title={`${i.code} ${i.name}`}
-                      subtitle={i.path}
-                      onPick={() => {
-                        picker.close();
-                        setOpen(false);
-                        void onAdd(i);
-                      }}
-                    />
-                  ))
-                )
-              }
-            />
-          </div>
-        )}
       </div>
+      {open && <AddRowDialog week={week} employeeId={employeeId} onAdd={onAdd} onClose={() => setOpen(false)} />}
     </div>
   );
 }
@@ -401,25 +342,36 @@ export function Grid({
     </div>
   );
 
-  const sumRow = (label: string, sub: string, value: (d: ApiTimesheetDay) => number, total: number, opts: { strong?: boolean; signed?: boolean; testId: string }) => (
-    <div className="ts-row ts-soft" data-testid={opts.testId}>
+  /**
+   * The one Total row (CD-351, like Clockify's): each day's hours, absences included, and the week's.
+   * A day short of its expected hours (on or before today) is marked; the week's expected hours are
+   * the row's note, and each day carries its own in a tooltip (`data-expected`).
+   */
+  const shortOf = (d: ApiTimesheetDay) => d.expectedMinutes > 0 && d.minutes < d.expectedMinutes && d.date <= today;
+  const weekShort = week.days.some(shortOf);
+  const totalRow = (
+    <div className="ts-row ts-soft ts-total-row" data-testid="ts-total-entered">
       <span className="ts-label">
-        <span className="ts-label-main" style={{ fontWeight: opts.strong ? 600 : 500, color: opts.strong ? 'var(--ink)' : 'var(--text-2)' }}>
-          {label}
+        <span className="ts-label-main" style={{ fontWeight: 600, color: 'var(--ink)' }}>
+          Total
         </span>
-        <span className="ts-label-sub">{sub}</span>
+        <span className="ts-label-sub" data-testid="ts-expected-note">
+          Expected {shortHours(expected, format)} h{holidayNames.length ? ', minus holidays' : ''}
+        </span>
       </span>
-      {week.days.map((d) => {
-        const v = value(d);
-        const tone = opts.signed && d.date <= today && v !== 0 ? (v < 0 ? ' below' : ' above') : '';
-        const empty = !opts.signed && v === 0 && d.expectedMinutes === 0 && !d.holiday;
-        return (
-          <span key={d.date} className={`ts-sum${opts.strong ? ' strong' : ''}${tone}${isWeekend(d.date) ? ' ts-weekend' : ''}`}>
-            {empty || (opts.signed && d.expectedMinutes === 0 && d.minutes === 0) ? '' : shortHours(v, format, opts.signed)}
-          </span>
-        );
-      })}
-      <span className="ts-total">{shortHours(total, format, opts.signed)}</span>
+      {week.days.map((d) => (
+        <span
+          key={d.date}
+          className={`ts-sum strong${shortOf(d) ? ' below' : ''}${isWeekend(d.date) ? ' ts-weekend' : ''}`}
+          data-expected={shortHours(d.expectedMinutes, format)}
+          title={d.expectedMinutes ? `${shortHours(d.minutes, format)} of ${shortHours(d.expectedMinutes, format)} h expected` : undefined}
+        >
+          {d.minutes === 0 && d.expectedMinutes === 0 ? '' : shortHours(d.minutes, format)}
+        </span>
+      ))}
+      <span className={`ts-total${weekShort ? ' below' : ''}`} title={`${shortHours(totalMinutes, format)} of ${shortHours(expected, format)} h expected`}>
+        {shortHours(totalMinutes, format)}
+      </span>
     </div>
   );
 
@@ -431,12 +383,12 @@ export function Grid({
             Task or work order
           </span>
           {week.days.map((d, i) => {
-            const short = d.expectedMinutes > 0 && d.minutes < d.expectedMinutes && d.date <= today;
             return (
               <span key={d.date} className={`ts-day${d.holiday ? ' ts-holiday' : isWeekend(d.date) ? ' ts-weekend' : ''}`} data-testid="ts-day" data-date={d.date} data-status={d.status}>
                 <span className="ts-day-name">{DAY_NAMES[i]}</span>
                 <span className="ts-day-date">{shortDate(d.date)}</span>
-                <span className={`ts-day-total${short ? ' short' : ''}`}>{d.absence ? `${shortHours(d.minutes, format)} h · ${d.absence.kind === 'sick_leave' ? 'sick leave' : 'time off'}` : d.holiday ? `${shortHours(d.minutes, format)} h · holiday` : d.minutes || d.expectedMinutes ? `${shortHours(d.minutes, format)} h` : '—'}</span>
+                {/* Totals live in the one Total row (CD-351, as in Clockify); the header only names the day. */}
+                {d.holiday && <span className="ts-day-total">Holiday</span>}
                 {onResubmitDay && week.resubmittable.includes(d.date) && (
                   <button type="button" className="ts-day-submit" onClick={() => onResubmitDay(d.date)} data-testid="ts-resubmit-day" aria-label={`Resubmit ${dayLabel(d.date)}`}>
                     Resubmit
@@ -454,7 +406,6 @@ export function Grid({
         {tasks.map((row, i) => rowEl(row, i))}
         {orders.length > 0 && group('Work orders')}
         {orders.map((row, i) => rowEl(row, tasks.length + i))}
-        {canAdd && <AddRow week={week} onAdd={onAdd} employeeId={employeeId} />}
         {holidayNames.map((name) => (
           <div className="ts-row ts-soft" key={name} data-testid="ts-holiday-row">
             <span className="ts-label">
@@ -513,9 +464,8 @@ export function Grid({
             <span className="ts-total" />
           </div>
         ))}
-        {sumRow('Total entered', absenceLabels.length ? 'Tasks, work orders and time off' : 'Tasks and work orders', (d) => d.minutes, totalMinutes, { strong: true, testId: 'ts-total-entered' })}
-        {sumRow('Expected', `Standard day ${shortHours(week.settings.dayMinutes, format)} h${holidayNames.length ? ', minus holidays' : ''}`, (d) => d.expectedMinutes, expected, { testId: 'ts-expected' })}
-        {sumRow('Difference', 'Entered minus expected', (d) => d.minutes - d.expectedMinutes, totalMinutes - expected, { signed: true, testId: 'ts-difference' })}
+        {canAdd && <AddRow week={week} onAdd={onAdd} employeeId={employeeId} />}
+        {totalRow}
       </div>
       {flagged.length > 0 && (
         <div className="ts-flags" data-testid="ts-absence-flags">
