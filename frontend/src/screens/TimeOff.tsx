@@ -21,7 +21,7 @@ const tabStyle = (on: boolean) => ({ borderBottom: `2px solid ${on ? 'var(--bran
  * Time off (milestone 16, Workforce; simplified in CD-350): My time off (one tile per policy and sick
  * leave, the year's requests), Approvals for managers and Admins (what waits for a decision, every
  * request, sick leave records), the Timeline (who is away when, sick leave included), Balances
- * (everyone's figures, bulk actions, CSV) and, for Admins, Decisions.
+ * (everyone's figures, bulk actions, CSV) and, for Admins in Serbian workspaces, Decisions.
  */
 export function TimeOff() {
   const { s, session, employeeCard } = useStore();
@@ -29,6 +29,8 @@ export function TimeOff() {
   const admin = session.tenant.role === 'owner' || session.tenant.role === 'admin';
   const manager = !!s.people.access?.roles.includes('manager');
   const canSeeBalances = admin || manager;
+  // Vacation decisions (rešenje) exist only in Serbian workspaces (CD-167); the tab shows only there.
+  const seesDecisions = admin && s.workspace?.country === 'RS';
   const wanted = params.get('tab');
   // CD-350: Requests and Sick leave live in Approvals, the Team calendar is the Timeline; old links still land.
   const tab: Tab =
@@ -38,7 +40,7 @@ export function TimeOff() {
         ? 'approvals'
         : canSeeBalances && wanted === 'balances'
           ? 'balances'
-          : admin && wanted === 'decisions'
+          : seesDecisions && wanted === 'decisions'
             ? 'decisions'
             : 'my';
   const month = params.get('month') && /^\d{4}-\d{2}$/.test(params.get('month')!) ? params.get('month')! : new Date().toISOString().slice(0, 7);
@@ -69,7 +71,7 @@ export function TimeOff() {
             Balances
           </button>
         )}
-        {admin && (
+        {seesDecisions && (
           <button type="button" role="tab" aria-selected={tab === 'decisions'} className="composer-tab" style={tabStyle(tab === 'decisions')} onClick={() => go({ tab: 'decisions' })} data-testid="timeoff-tab-decisions">
             Decisions
           </button>
