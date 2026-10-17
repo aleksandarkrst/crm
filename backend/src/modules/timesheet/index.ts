@@ -9,3 +9,5 @@ export type { Holiday, TimesheetSettings } from './timesheet-rules';
 export { HolidaysService } from './holidays.service';
 // Absence lines (CD-170): the time off module keeps them in step and registers the pending hints.
 export { type AbsenceLine, type PendingAbsenceSource, pendingAbsenceRegistry, TimesheetAbsencesService } from './absences';
+// Today's status (CD-162): time off (and later trips) register what covers a date.
+export { type StatusAbsence, statusAbsenceRegistry, type StatusAbsenceSource } from './team-status';

@@ -5,6 +5,8 @@ import { ApprovalsService } from './approvals.service';
 import { TimesheetDeadlines } from './deadlines';
 import { HolidaysController } from './holidays.controller';
 import { HolidaysService } from './holidays.service';
+import { TeamStatusController } from './team-status.controller';
+import { TeamStatusService } from './team-status.service';
 import { TimesheetController } from './timesheet.controller';
 import { TimesheetService } from './timesheet.service';
 
@@ -15,7 +17,7 @@ import { TimesheetService } from './timesheet.service';
  */
 @Module({
   imports: [PeopleModule],
-  controllers: [TimesheetController, HolidaysController, ApprovalsController],
-  providers: [TimesheetService, HolidaysService, TimesheetDeadlines, ApprovalsService],
+  controllers: [TimesheetController, HolidaysController, ApprovalsController, TeamStatusController],
+  providers: [TimesheetService, HolidaysService, TimesheetDeadlines, ApprovalsService, TeamStatusService],
 })
 export class TimesheetModule {}
