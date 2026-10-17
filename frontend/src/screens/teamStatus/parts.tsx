@@ -49,7 +49,7 @@ export function TimesheetCell({ t }: { t: ApiStatusRow['timesheet'] }) {
         {t.label}
       </Link>
       {t.late && <span className="badge badge-warn">Late</span>}
-      {t.notSubmitted && <span className="badge badge-danger">Not submitted</span>}
+      {t.notSubmitted && t.label !== 'Not submitted' && <span className="badge badge-danger">Not submitted</span>}
     </span>
   );
 }
