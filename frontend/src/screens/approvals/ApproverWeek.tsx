@@ -301,7 +301,7 @@ export function ApproverWeek() {
                           <td className="num">
                             {shortHours(cell.minutes, w.settings.timeFormat)}
                             {overLimit.has(`${r.key}:${d.date}`) && (
-                              <span className="emp-warn ap-over" data-testid="ap-over-limit" title={`Over the ${shortHours(r.limit!.limitMinutes, w.settings.timeFormat)} h limit`}>
+                              <span className="emp-warn" data-testid="ap-over-limit" title={`Over the ${shortHours(r.limit!.limitMinutes, w.settings.timeFormat)} h limit`}>
                                 {' '}
                                 over limit
                               </span>

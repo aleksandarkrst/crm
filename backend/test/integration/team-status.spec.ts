@@ -7,7 +7,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, createTenant, ok, type Session, signIn } from './helpers';
-import { addEmployee, asTenantSql, createDepartment, createTeam, joinAsEmployee, START } from './people-helpers';
+import { addEmployee, asTenantSql, createDepartment, createTeam, joinAsEmployee, showInApp, START } from './people-helpers';
 
 interface Row {
   id: string;
@@ -106,6 +106,13 @@ describe('who can open it (spec 12.1, 12.3)', () => {
     expect(await row(owner, gone, addDays(today, -5))).toMatchObject({ status: expect.any(String) });
     expect(await row(mgr, gone)).toBeUndefined();
     expect(await row(mgr, gone, addDays(today, -5))).toBeUndefined();
+  });
+
+  it("leaves out records the app doesn't show: no account, no pending invitation (CD-226, CD-336)", async () => {
+    const [hidden] = await asTenantSql<{ id: string }>(tenant, `insert into employees (tenant_id, first_name, last_name, employment_start_date) values ($1, 'Pera', 'Peric', '2024-01-01') returning id`, [tenant]);
+    expect(await row(owner, hidden!.id)).toBeUndefined();
+    await showInApp(tenant, hidden!.id);
+    expect(await row(owner, hidden!.id)).toBeDefined();
   });
 
   it('another workspace sees none of these people', async () => {

@@ -12,7 +12,7 @@ const shortDate = (date: string) => `${Number(date.slice(8))} ${MONTHS[Number(da
 const EMPTY: ApiCell = { minutes: 0, note: null, entries: 0 };
 const DAY_STATUS = { draft: 'Draft', submitted: 'Submitted', rejected: 'Rejected', approved: 'Approved' } as const;
 
-/** true: saved; false: refused (the cell stays red with the message flashed); null: cancelled at a confirmation (back to the saved value). */
+/** true: saved; false: refused (the reason is flashed); null: cancelled at a confirmation. Either way a cell goes back to its saved hours. */
 export type SaveCell = (row: ApiTimesheetRow, date: string, minutes: number, note?: string | null) => Promise<boolean | null>;
 
 /** The row's second line (design): its path, then the limit ("4 h left of 6", "1.5 h over your limit of 16") or why it's locked. */
@@ -177,6 +177,8 @@ function NotePopover({
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
+      // A confirmation opened by Save (the over-limit question, CD-336) is not "outside": answering it keeps the note.
+      if ((e.target as Element).closest?.('.overlay')) return;
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
     document.addEventListener('mousedown', onDown, true);

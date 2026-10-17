@@ -362,10 +362,10 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .deal-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; background: var(--white); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 8px 24px rgba(13, 36, 28, 0.12); padding: 4px; min-width: 160px; }
 .deal-menu button { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; color: var(--danger); }
 .deal-menu button:hover { background: var(--danger-soft); }
-.deal-menu button:disabled, .deal-menu button:disabled:hover { color: var(--muted); background: transparent; cursor: not-allowed; }
 /* A row's ⋯ menu (CD-318): plain items, Delete in red. */
 .deal-menu.row-menu button { color: var(--ink); }
 .deal-menu.row-menu button:hover { background: var(--bg-soft); }
+.deal-menu button:disabled, .deal-menu button:disabled:hover, .deal-menu.row-menu button:disabled { color: var(--muted); background: transparent; cursor: not-allowed; }
 .deal-menu.row-menu button.danger { color: var(--danger); }
 .deal-menu.row-menu button.danger:hover { background: var(--danger-soft); }
 

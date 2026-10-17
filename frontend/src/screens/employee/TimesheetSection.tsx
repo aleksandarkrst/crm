@@ -2,13 +2,13 @@ import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { paths } from '../../lib/paths';
 import { useStore } from '../../store/store';
+import { dateLabel, Row } from './parts';
 
 /** "10 Oct 2026, 11:34" on the workspace's clock: the same form as the deadline next to it (CD-336). */
 function instantLabel(iso: string, timeZone: string | undefined): string {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: timeZone ?? 'UTC', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(iso)).map((p) => [p.type, p.value]));
   return `${dateLabel(`${parts.year}-${parts.month}-${parts.day}`)}, ${parts.hour}:${parts.minute}`;
 }
-import { dateLabel, Row } from './parts';
 
 /**
  * The read-only CD-161 block; server permissions decide whether it is visible. Nothing is shown
