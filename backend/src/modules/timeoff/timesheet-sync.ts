@@ -9,9 +9,9 @@ import { countedEnd } from './sick-leave-rules';
 import { workspaceToday } from './today';
 
 const isoWeekday = (date: string) => ((new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
-const TYPE_LABEL = { vacation: 'Vacation', paid_leave: 'Paid leave', unpaid_leave: 'Unpaid leave', other_absence: 'Other absence' } as const;
+export const TYPE_LABEL = { vacation: 'Vacation', paid_leave: 'Paid leave', unpaid_leave: 'Unpaid leave', other_absence: 'Other absence' } as const;
 /** "Vacation", "Paid leave: Marriage", "Other absence: Maternity leave". */
-const labelOf = (type: keyof typeof TYPE_LABEL, reason: string | null) => (reason && (type === 'paid_leave' || type === 'other_absence') ? `${TYPE_LABEL[type]}: ${reason}` : TYPE_LABEL[type]);
+export const labelOf = (type: keyof typeof TYPE_LABEL, reason: string | null) => (reason && (type === 'paid_leave' || type === 'other_absence') ? `${TYPE_LABEL[type]}: ${reason}` : TYPE_LABEL[type]);
 
 /**
  * Time off in the timesheet (CD-170, spec 14.1). Every change that affects absences queues

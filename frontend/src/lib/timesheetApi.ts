@@ -326,3 +326,39 @@ export const holidaysApi = {
   /** The first submission deadline that hasn't passed (Settings → Workforce → Approvals). */
   nextDeadline: () => api<{ weekStart: string; weekNumber: number; date: string; time: string }>('/timesheet/deadline'),
 };
+
+/** Today's status (CD-162): what each employee is doing on a date. `out_of_office`: an absence whose type the caller may not see. */
+export type ApiDayStatus = 'not_employed' | 'public_holiday' | 'sick_leave' | 'time_off' | 'business_trip' | 'out_of_office' | 'non_working' | 'working';
+
+export interface ApiStatusRow {
+  id: string;
+  name: string;
+  jobTitle: string | null;
+  department: { id: string; name: string } | null;
+  team: { id: string; name: string } | null;
+  manager: { id: string; name: string } | null;
+  status: ApiDayStatus;
+  label: string;
+  detail: string | null;
+  /** "Vacation requested": a request waiting for a decision. */
+  note: string | null;
+  /** A direct or indirect report of the caller. */
+  report: boolean;
+  /** Last week's timesheet: the employee's managers and Admins only. */
+  timesheet: { weekStart: string; label: string; late: boolean; notSubmitted: boolean } | null;
+}
+
+export interface ApiTeamStatus {
+  date: string;
+  today: string;
+  minDate: string;
+  maxDate: string;
+  scope: 'all' | 'reports';
+  updatedAt: string;
+  rows: ApiStatusRow[];
+}
+
+export const teamStatusApi = {
+  /** Managers and Admins only (403 otherwise). `scope: 'reports'` keeps the caller's reports (the Today screen's card). */
+  list: (date?: string, scope?: 'reports') => api<ApiTeamStatus>(`/timesheet/status${date || scope ? `?${new URLSearchParams({ ...(date ? { date } : {}), ...(scope ? { scope } : {}) })}` : ''}`),
+};

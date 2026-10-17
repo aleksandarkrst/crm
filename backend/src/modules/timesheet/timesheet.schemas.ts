@@ -162,3 +162,7 @@ export type HolidayPreloadInput = z.infer<typeof HolidayPreloadInput>;
 /** PATCH /api/timesheet/holidays/:id (owners and admins). */
 export const UpdateHoliday = nonEmptyPatch(z.object({ date: isoDate, endDate: isoDate.nullable(), name: holidayName, minutes: holidayMinutes }).partial());
 export type UpdateHoliday = z.infer<typeof UpdateHoliday>;
+
+/** GET /api/timesheet/status?date=2026-10-13&scope=reports (CD-162): default today and everyone the caller may see. */
+export const TeamStatusQuery = z.object({ date: isoDate.optional(), scope: z.enum(['all', 'reports']).optional() });
+export type TeamStatusQuery = z.infer<typeof TeamStatusQuery>;

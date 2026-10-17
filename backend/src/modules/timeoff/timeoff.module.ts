@@ -1,3 +1,4 @@
+import { TeamStatusSource } from './team-status-source';
 import { TimesheetSyncService } from './timesheet-sync';
 import { Module } from '@nestjs/common';
 import { HrDocumentsModule } from '../hr-documents';
@@ -23,7 +24,7 @@ import { TimeoffController } from './timeoff.controller';
 @Module({
   imports: [PeopleModule, HrDocumentsModule],
   controllers: [TimeoffController],
-  providers: [TimeoffPoliciesService, EntitlementsService, BalancesService, ReasonsService, RequestsService, ApprovalsService, AbsenceService, DecisionsService, SickLeaveService, TimesheetSyncService, TimesheetAbsencesService],
+  providers: [TimeoffPoliciesService, EntitlementsService, BalancesService, ReasonsService, RequestsService, ApprovalsService, AbsenceService, DecisionsService, SickLeaveService, TimesheetSyncService, TimesheetAbsencesService, TeamStatusSource],
   exports: [EntitlementsService, BalancesService, RequestsService, ApprovalsService, SickLeaveService, TimesheetSyncService],
 })
 export class TimeoffModule {}

@@ -535,6 +535,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       // Time off (CD-163): policies, profiles and entitlements; an employee's start date changes their entitlement too.
       // Reasons and holidays (CD-165) change what a request form shows and counts.
       if (e.type === 'resync' || e.type === 'timeoff' || e.type === 'timeoff_policy' || e.type === 'timeoff_reason' || e.type === 'holiday' || e.type === 'employee' || e.type === 'workspace') set((x) => ({ timeOffRev: x.timeOffRev + 1 }));
+      // Today's status (CD-162): approved and pending time off, sick leave and absence lines, hours, holidays, settings and people.
+      if (e.type === 'resync' || e.type === 'timeoff' || e.type === 'timesheet' || e.type === 'holiday' || e.type === 'workspace' || PEOPLE_HINTS.has(e.type)) set((x) => ({ statusRev: x.statusRev + 1 }));
       // People lists (Roles & permissions, CD-142) re-read on any employee or role change, this tab's own included.
       if (e.type === 'resync' || e.type === 'employee' || e.type === 'employee_role') set((x) => ({ peopleRev: x.peopleRev + 1 }));
       if (e.type === 'resync') return refreshAll();
