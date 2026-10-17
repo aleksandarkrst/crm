@@ -12,7 +12,8 @@ const shortDate = (date: string) => `${Number(date.slice(8))} ${MONTHS[Number(da
 const EMPTY: ApiCell = { minutes: 0, note: null, entries: 0 };
 const DAY_STATUS = { draft: 'Draft', submitted: 'Submitted', rejected: 'Rejected', approved: 'Approved' } as const;
 
-export type SaveCell = (row: ApiTimesheetRow, date: string, minutes: number, note?: string | null) => Promise<boolean>;
+/** true: saved; false: refused (the reason is flashed); null: cancelled at a confirmation. Either way a cell goes back to its saved hours. */
+export type SaveCell = (row: ApiTimesheetRow, date: string, minutes: number, note?: string | null) => Promise<boolean | null>;
 
 /** The row's second line (design): its path, then the limit ("4 h left of 6", "1.5 h over your limit of 16") or why it's locked. */
 function subLine(row: ApiTimesheetRow, format: TimeFormat): { text: string; over: boolean } {
@@ -86,7 +87,9 @@ function TimeCell({
     // Shown rounded at once ("7:20" becomes 7:15); the saved week replaces it.
     setText(minutes ? shortHours(minutes, format) : '');
     const saved = await onSave(row, day.date, minutes);
-    setError(!saved);
+    // Cancelled or refused (the reason is flashed, CD-336): back to the saved hours, not the refused ones.
+    if (!saved) setText(shown);
+    setError(false);
   };
 
   const title = cell.entries > 1 ? `${cell.entries} entries on this day: change them on the ${row.kind === 'task' ? 'task' : 'work order'} page` : !editable && row.lockedReason ? row.lockedReason : undefined;
@@ -174,6 +177,8 @@ function NotePopover({
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
+      // A confirmation opened by Save (the over-limit question, CD-336) is not "outside": answering it keeps the note.
+      if ((e.target as Element).closest?.('.overlay')) return;
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
     document.addEventListener('mousedown', onDown, true);
@@ -272,7 +277,7 @@ function AddRow({ week, onAdd, employeeId }: { week: ApiTimesheetWeek; onAdd: (i
                   <div className="picker-item">Loading</div>
                 ) : shown.length === 0 ? (
                   <div className="picker-item" style={{ color: 'var(--text-2)' }}>
-                    {items.length ? 'Everything you can log on is in this week' : 'Nothing to log time on yet: you are on no open task or work order'}
+                    {employeeId ? (items.length ? `Everything ${week.employee?.name ?? 'they'} can log on is in this week` : `Nothing to log time on yet: ${week.employee?.name ?? 'they'} is on no open task or work order`) : items.length ? 'Everything you can log on is in this week' : 'Nothing to log time on yet: you are on no open task or work order'}
                   </div>
                 ) : (
                   shown.map((i) => (
@@ -326,7 +331,8 @@ export function Grid({
   const orders = week.rows.filter((r) => r.kind === 'work_order');
   const ordered = [...tasks, ...orders];
   const closeNote = useCallback(() => setNote(null), []);
-  const canAdd = week.days.some((d) => d.editable);
+  // A submitted or approved week takes no new rows (CD-336); a future one has no editable day.
+  const canAdd = week.days.some((d) => d.editable) && !['submitted', 'partly_approved', 'approved'].includes(week.status);
 
   const openNote = (row: ApiTimesheetRow, date: string, el: HTMLElement) => {
     const box = el.closest('.ts-box')!.getBoundingClientRect();

@@ -273,6 +273,8 @@ export interface Workspace {
   ceoEmployeeId: string | null;
   /** "Create a project when a deal is won" (CD-233): the projects worker creates the deal's project. */
   autoCreateProjects: boolean;
+  /** Hour limit mode (CD-149, Settings → Projects): `warn` asks before saving time beyond a limit, `block` refuses it. */
+  hourLimitMode: 'warn' | 'block';
   /** The modules turned on for this workspace (CD-279, Settings → General → Modules). */
   modules: string[];
   /** What the workspace calls projects and tasks (CD-143, Settings → Project types). */
@@ -312,6 +314,8 @@ export interface Profile {
   timeOffApprovals: boolean;
   /** "Sick leave notices" (CD-169): reported, ended, and the Admins' weekly check. */
   sickLeaveNotices: boolean;
+  /** Hour limit warnings (CD-149): emails at 80 % and 100 % of an hour limit on a task. */
+  hourLimits: boolean;
 }
 
 export interface BonusRule {

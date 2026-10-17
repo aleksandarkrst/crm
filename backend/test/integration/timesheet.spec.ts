@@ -174,7 +174,12 @@ describe('rows and hours', () => {
     const t = await newTask('Limited');
     await ok('PATCH', `/tasks/${t}/assignees/${anaId}`, { ...as(owner), body: { hourLimit: 6 } });
     const w = await ok<Week>('PUT', '/timesheet/cells', { ...as(), body: { date: monday, taskId: t, minutes: 120 } });
-    expect(w.rows.find((r) => r.id === t)!.limit).toEqual({ limitMinutes: 360, loggedMinutes: 120 });
+    expect(w.rows.find((r) => r.id === t)!.limit).toEqual({ limitMinutes: 360, loggedMinutes: 120, beforeMinutes: 0 });
+    // Hours of an earlier week count as before this one: the approver sees which day went over (CD-336).
+    await ok('PUT', '/timesheet/cells', { ...as(), body: { date: addDays(monday, -7), taskId: t, minutes: 60 } });
+    expect((await week(ana, monday)).rows.find((r) => r.id === t)!.limit).toEqual({ limitMinutes: 360, loggedMinutes: 180, beforeMinutes: 60 });
+    expect((await week(ana, addDays(monday, -7))).rows.find((r) => r.id === t)!.limit).toMatchObject({ beforeMinutes: 0 });
+    await ok('PUT', '/timesheet/cells', { ...as(), body: { date: addDays(monday, -7), taskId: t, minutes: 0 } });
     await ok('PUT', '/timesheet/cells', { ...as(), body: { date: monday, taskId: t, minutes: 0 } });
   });
 

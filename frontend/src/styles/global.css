@@ -95,6 +95,9 @@ input[type="date"]::-webkit-calendar-picker-indicator { width: 11px; height: 11p
 .btn-outline { border: 1px solid var(--brand); background: var(--white); color: var(--brand); cursor: pointer; font-size: 12.5px; font-weight: 500; padding: 8px 13px; border-radius: 7px; }
 .btn-plain { border: 1px solid var(--border); background: var(--white); color: var(--ink); cursor: pointer; font-size: 13px; font-weight: 500; padding: 8px 13px; border-radius: 8px; white-space: nowrap; }
 .btn-plain:hover { background: var(--bg-soft); }
+/* A disabled button looks it (CD-336): greyed and not clickable, as .btn-disabled. */
+.btn-primary:disabled, .btn-primary:disabled:hover { background: var(--chip); color: var(--muted); cursor: not-allowed; }
+.btn-plain:disabled, .btn-plain:disabled:hover, .btn-outline:disabled, .btn-secondary:disabled { background: var(--white); color: var(--muted); border-color: var(--divider); cursor: not-allowed; }
 /* A link styled as a plain button keeps the button's look on hover, not the link's underline. */
 a.btn-plain:hover { color: var(--ink); text-decoration: none; }
 .btn-dashed { border: 1px dashed var(--dashed); background: transparent; color: var(--text-2); cursor: pointer; font-size: 12.5px; padding: 8px 13px; border-radius: 8px; }
@@ -362,6 +365,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 /* A row's ⋯ menu (CD-318): plain items, Delete in red. */
 .deal-menu.row-menu button { color: var(--ink); }
 .deal-menu.row-menu button:hover { background: var(--bg-soft); }
+.deal-menu button:disabled, .deal-menu button:disabled:hover, .deal-menu.row-menu button:disabled { color: var(--muted); background: transparent; cursor: not-allowed; }
 .deal-menu.row-menu button.danger { color: var(--danger); }
 .deal-menu.row-menu button.danger:hover { background: var(--danger-soft); }
 

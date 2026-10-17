@@ -115,6 +115,7 @@ export const mapWorkspace = (w: ApiWorkspace): Workspace => ({
   employeeSelfEditBank: w.employeeSelfEditBank,
   ceoEmployeeId: w.ceoEmployeeId ?? null,
   autoCreateProjects: w.autoCreateProjects ?? false,
+  hourLimitMode: w.hourLimitMode ?? 'warn',
   modules: w.modules ?? ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting'],
   terms: w.terms ?? DEFAULT_TERMS,
   timesheet: w.timesheet ?? DEFAULT_TIMESHEET_SETTINGS,
@@ -140,6 +141,7 @@ export const mapProfile = (p: ApiProfile): Profile => ({
   timeOffBalance: p.notifyTimeoffBalance,
   timeOffApprovals: p.notifyTimeoffApprovals,
   sickLeaveNotices: p.notifySickLeave ?? true,
+  hourLimits: p.notifyHourLimits ?? true,
 });
 
 /** Members, then pending invitations with their email status. */

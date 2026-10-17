@@ -11,6 +11,8 @@ export { UNIT_USAGE, type UnitUsage } from './unit-usage';
 export { applyCeoRule } from './org.service';
 export { domesticFromIban, formatIban, maskIban, parseBankAccount, type ParsedAccount, shortMaskIban } from './iban';
 export { cleanName, normalizeForSearch } from './search';
+// The people the app shows (CD-226): Approvals and Today's status list the same (CD-336).
+export { shownEmployee } from './employees.service';
 export { allows, PERMISSION_MODULES, type PermissionRelation, type PermissionScope, permissionRow, relationsFor } from './permissions';
 // The staging seed (src/seed-staging.ts, CD-313).
 export { EmployeesService } from './employees.service';

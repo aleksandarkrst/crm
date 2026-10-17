@@ -391,7 +391,48 @@ const sameTerms = (a: WorkspaceTerms, b: WorkspaceTerms) => TERM_FIELDS.every(({
 /** Settings → Projects → Project hierarchy (CD-318): the Names card on a page of its own, above Project types. */
 export function ProjectHierarchyTab() {
   const store = useStore();
-  return <NamesCard editable={store.canEditFunnels} />;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <NamesCard editable={store.canEditFunnels} />
+      <HourLimitCard />
+    </div>
+  );
+}
+
+const LIMIT_MODES = [
+  { mode: 'warn', label: 'Warn', text: "Time beyond someone's hour limit on a task is saved after a confirmation and flagged for their approver." },
+  { mode: 'block', label: 'Block', text: "Time beyond someone's hour limit on a task is refused; their manager raises the limit first." },
+] as const;
+
+/** Hour limit mode (CD-149, spec 10.4): Warn (default) or Block. Owners and admins change it. */
+function HourLimitCard() {
+  const { s, setWorkspace, canEditWorkspace } = useStore();
+  const mode = s.workspace.hourLimitMode;
+  return (
+    <div className="card" data-testid="hour-limit-mode" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span className="caps">Hour limit mode</span>
+        <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>What happens when someone logs more hours on a task than their hour limit.</span>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {LIMIT_MODES.map((m) => (
+          <button
+            key={m.mode}
+            type="button"
+            className={`choice-pill${mode === m.mode ? ' on' : ''}`}
+            aria-pressed={mode === m.mode}
+            disabled={!canEditWorkspace}
+            onClick={() => mode !== m.mode && setWorkspace({ hourLimitMode: m.mode })}
+            data-testid={`hour-limit-${m.mode}`}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+      <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{LIMIT_MODES.find((m) => m.mode === mode)?.text}</span>
+      {!canEditWorkspace && <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Only owners and admins can change this.</span>}
+    </div>
+  );
 }
 
 /**

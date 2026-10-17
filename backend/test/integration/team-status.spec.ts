@@ -7,7 +7,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, createTenant, ok, type Session, signIn } from './helpers';
-import { asTenantSql, createDepartment, createTeam, joinAsEmployee, START } from './people-helpers';
+import { addEmployee, asTenantSql, createDepartment, createTeam, joinAsEmployee, showInApp, START } from './people-helpers';
 
 interface Row {
   id: string;
@@ -51,7 +51,7 @@ beforeAll(async () => {
   await ok('POST', '/timesheet/holidays/preload', { ...as(owner), body: { country: 'none' } }, 200);
   await asTenantSql(tenant, `delete from public_holidays where source = 'preload'`, []);
   today = (await status(owner)).today;
-  futureId = (await ok<{ id: string }>('POST', '/people/employees', { ...as(owner), body: { firstName: 'Nova', lastName: 'Future', employmentStartDate: addDays(today, 200) } })).id;
+  futureId = await addEmployee(owner, tenant, { firstName: 'Nova', lastName: 'Future', employmentStartDate: addDays(today, 200) });
   monday = mondayOf(today);
 });
 
@@ -85,27 +85,34 @@ describe('who can open it (spec 12.1, 12.3)', () => {
   });
 
   it("a report's employment dates apply for their manager: not employed before the start and after the end", async () => {
-    const soon = (await ok<{ id: string }>('POST', '/people/employees', { ...as(owner), body: { firstName: 'Sanja', lastName: 'Soon', employmentStartDate: addDays(today, 10), managerId: mgrId } })).id;
-    const leaving = (await ok<{ id: string }>('POST', '/people/employees', { ...as(owner), body: { firstName: 'Lena', lastName: 'Leaving', employmentStartDate: START, managerId: mgrId } })).id;
+    const soon = await addEmployee(owner, tenant, { firstName: 'Sanja', lastName: 'Soon', employmentStartDate: addDays(today, 10), managerId: mgrId });
+    const leaving = await addEmployee(owner, tenant, { firstName: 'Lena', lastName: 'Leaving', employmentStartDate: START, managerId: mgrId });
     await asTenantSql(tenant, `update employees set employment_end_date = $1 where id = $2`, [addDays(today, 5), leaving]);
     expect(await row(mgr, soon)).toMatchObject({ status: 'not_employed', detail: expect.stringMatching(/^Starts /) });
     expect(await row(mgr, soon, addDays(today, 20))).toMatchObject({ status: 'working' });
     expect(await row(mgr, leaving, addDays(today, 10))).toMatchObject({ status: 'not_employed' });
     expect(await row(owner, leaving, addDays(today, 10))).toMatchObject({ status: 'not_employed' });
     // Not anyone's report: Admins only.
-    const other = (await ok<{ id: string }>('POST', '/people/employees', { ...as(owner), body: { firstName: 'Olga', lastName: 'Other', employmentStartDate: START } })).id;
+    const other = await addEmployee(owner, tenant, { firstName: 'Olga', lastName: 'Other', employmentStartDate: START });
     expect(await row(owner, other)).toBeDefined();
     expect(await row(mgr, other)).toBeUndefined();
     await asTenantSql(tenant, `update employees set manager_id = null where id = any($1::uuid[])`, [[soon, leaving]]);
   });
 
   it('deactivated people: shown to Admins, hidden from managers', async () => {
-    const gone = (await ok<{ id: string }>('POST', '/people/employees', { ...as(owner), body: { firstName: 'Dejan', lastName: 'Deactivated', employmentStartDate: START, managerId: mgrId } })).id;
+    const gone = await addEmployee(owner, tenant, { firstName: 'Dejan', lastName: 'Deactivated', employmentStartDate: START, managerId: mgrId });
     await asTenantSql(tenant, `update employees set deactivated_at = now() - interval '2 days', employment_end_date = $1 where id = $2`, [addDays(today, -2), gone]);
     expect(await row(owner, gone)).toMatchObject({ status: 'not_employed' });
     expect(await row(owner, gone, addDays(today, -5))).toMatchObject({ status: expect.any(String) });
     expect(await row(mgr, gone)).toBeUndefined();
     expect(await row(mgr, gone, addDays(today, -5))).toBeUndefined();
+  });
+
+  it("leaves out records the app doesn't show: no account, no pending invitation (CD-226, CD-336)", async () => {
+    const [hidden] = await asTenantSql<{ id: string }>(tenant, `insert into employees (tenant_id, first_name, last_name, employment_start_date) values ($1, 'Pera', 'Peric', '2024-01-01') returning id`, [tenant]);
+    expect(await row(owner, hidden!.id)).toBeUndefined();
+    await showInApp(tenant, hidden!.id);
+    expect(await row(owner, hidden!.id)).toBeDefined();
   });
 
   it('another workspace sees none of these people', async () => {

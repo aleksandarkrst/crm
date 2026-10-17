@@ -4,7 +4,7 @@ import type { TenantContext } from '../../shared/authorization';
 import { DatabaseService } from '../../shared/database/database.service';
 import { employees, orgUnits, tenants, timeEntries } from '../../shared/database/schema';
 import { zonedParts } from '../../shared/time/zoned-time';
-import { PeopleAccess } from '../people';
+import { PeopleAccess, shownEmployee } from '../people';
 import { ApprovalsService } from './approvals.service';
 import { type DayStatus, dayStatus, nextWorkingDayAfter, statusAbsenceRegistry } from './team-status';
 import { addDays, mondayOf } from './timesheet-rules';
@@ -89,6 +89,8 @@ export class TeamStatusService {
           timesheetRequired: employees.timesheetRequired,
         })
         .from(employees)
+        // Only the people the app shows (CD-226, CD-336), as on the Org structure.
+        .where(shownEmployee)
         .orderBy(employees.fullName);
       const tz = tenant?.timezone ?? 'UTC';
       // A deactivated person's last day is their end date, or the day they were deactivated.

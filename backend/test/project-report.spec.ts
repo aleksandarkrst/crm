@@ -33,6 +33,15 @@ describe('project Report tab (CD-261, design v2 §2)', () => {
     expect(r.summary).toMatchObject({ estimateMinutes: h(20), loggedMinutes: h(14), remainingMinutes: h(8), donePercent: 40, variancePercent: 25, budgetMinutes: h(100) });
   });
 
+  it('Logged is red when the row logged more than its estimate, open tasks included (CD-336)', () => {
+    const open = report([task({ stageId: 'design', estimateMinutes: h(1.5), logged: new Map([['ana', h(72.5)]]) })]);
+    expect(open.stages[0]).toMatchObject({ estimateMinutes: h(1.5), loggedMinutes: h(72.5), overEstimate: true });
+    const under = report([task({ stageId: 'design', estimateMinutes: h(10), logged: new Map([['ana', h(4)]]) })]);
+    expect(under.stages[0]!.overEstimate).toBe(false);
+    const none = report([task({ stageId: 'design', estimateMinutes: null, logged: new Map([['ana', h(4)]]) })]);
+    expect(none.stages[0]!.overEstimate).toBe(false);
+  });
+
   it('by person: the estimate is shared by the current people, logged is their own, vs estimate on done tasks only', () => {
     const r = report([
       task({ status: 'done', estimateMinutes: h(10), assigneeIds: ['ana', 'marko'], logged: new Map([['ana', h(6)], ['marko', h(4)]]) }),
