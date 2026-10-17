@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Picker, PickerRow, usePicker } from '../../components/ui';
 import { paths } from '../../lib/paths';
-import { type ApiCell, type ApiLoggable, type ApiTimesheetDay, type ApiTimesheetRow, type ApiTimesheetWeek, dayLabel, formatHours, parseHours, shortHours, type TimeFormat, timesheetApi } from '../../lib/timesheetApi';
-import { projectError } from '../../store/projects';
+import { type ApiCell, type ApiLoggable, type ApiTimesheetDay, type ApiTimesheetRow, type ApiTimesheetWeek, dayLabel, formatHours, parseHours, shortHours, type TimeFormat } from '../../lib/timesheetApi';
 import { useStore } from '../../store/store';
+import { AddRowDialog } from './AddRowDialog';
 
 const DAY_NAMES = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -230,76 +229,18 @@ function NotePopover({
   );
 }
 
-/** "+ Add task or work order": a search over what the person can log on now and isn't in the week yet. */
+/** "+ Add row" (CD-351): opens the dialog that picks a project, then a task or work order. */
 function AddRow({ week, onAdd, employeeId }: { week: ApiTimesheetWeek; onAdd: (item: ApiLoggable) => Promise<void>; employeeId?: string }) {
-  const picker = usePicker();
-  const [items, setItems] = useState<ApiLoggable[] | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (!open) return;
-    let alive = true;
-    timesheetApi.loggable(employeeId).then(
-      (list) => alive && setItems(list),
-      (err) => alive && setFailed(projectError(err)),
-    );
-    return () => {
-      alive = false;
-    };
-  }, [open, employeeId]);
-  const inWeek = new Set(week.rows.map((r) => r.id));
-  const q = picker.search.trim().toLowerCase();
-  const shown = (items ?? []).filter((i) => !inWeek.has(i.id) && (!q || `${i.code} ${i.name} ${i.path}`.toLowerCase().includes(q)));
   return (
     <div className="ts-row">
       <div style={{ gridColumn: '1 / -1' }}>
-        <button
-          type="button"
-          className="ts-add ts-label"
-          data-testid="ts-add-row"
-          onClick={() => {
-            setOpen((o) => !o);
-            picker.setOpen(true);
-          }}
-        >
-          <span className="ts-label-main">+ Add task or work order</span>
-          <span className="ts-label-sub">Tasks you are assigned to with time logging on, and open work orders you are on</span>
+        <button type="button" className="ts-add ts-label" data-testid="ts-add-row" onClick={() => setOpen(true)}>
+          <span className="ts-label-main">+ Add row</span>
+          <span className="ts-label-sub">A task or work order on one of your projects</span>
         </button>
-        {open && (
-          <div className="ts-add-picker">
-            <Picker
-              picker={picker}
-              placeholder="Search by number, name, company or project"
-              items={
-                failed ? (
-                  <div className="picker-item">{failed}</div>
-                ) : items === null ? (
-                  <div className="picker-item">Loading</div>
-                ) : shown.length === 0 ? (
-                  <div className="picker-item" style={{ color: 'var(--text-2)' }}>
-                    {employeeId ? (items.length ? `Everything ${week.employee?.name ?? 'they'} can log on is in this week` : `Nothing to log time on yet: ${week.employee?.name ?? 'they'} is on no open task or work order`) : items.length ? 'Everything you can log on is in this week' : 'Nothing to log time on yet: you are on no open task or work order'}
-                  </div>
-                ) : (
-                  shown.map((i) => (
-                    <PickerRow
-                      key={i.id}
-                      initials={i.kind === 'task' ? 'T' : 'WO'}
-                      square
-                      title={`${i.code} ${i.name}`}
-                      subtitle={i.path}
-                      onPick={() => {
-                        picker.close();
-                        setOpen(false);
-                        void onAdd(i);
-                      }}
-                    />
-                  ))
-                )
-              }
-            />
-          </div>
-        )}
       </div>
+      {open && <AddRowDialog week={week} employeeId={employeeId} onAdd={onAdd} onClose={() => setOpen(false)} />}
     </div>
   );
 }
