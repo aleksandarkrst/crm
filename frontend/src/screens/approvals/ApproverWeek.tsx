@@ -106,6 +106,20 @@ export function ApproverWeek() {
     );
   }
   const { week: w, right, enteredByMe } = data;
+  /**
+   * Entries that take the person over their hour limit on a task (CD-149 Warn mode, CD-336): their
+   * hours before the week, then day by day; a cell is marked once the running total passes the limit.
+   */
+  const overLimit = new Set<string>();
+  for (const r of w.rows) {
+    if (!r.limit) continue;
+    let running = r.limit.beforeMinutes ?? r.limit.loggedMinutes - r.minutes;
+    for (const d of w.days) {
+      const m = r.cells[d.date]?.minutes ?? 0;
+      running += m;
+      if (m > 0 && running > r.limit.limitMinutes) overLimit.add(`${r.key}:${d.date}`);
+    }
+  }
   const employee = w.employee!;
   const dayMode = w.settings.approvalMode === 'day';
   const waiting = w.days.filter((d) => d.status === 'submitted').map((d) => d.date);
@@ -173,6 +187,11 @@ export function ApproverWeek() {
         </div>
       )}
       {!right && <div className="ts-help">You can see this week but not approve it.</div>}
+      {overLimit.size > 0 && (
+        <div className="ts-help emp-warn" data-testid="ap-over-limit-note">
+          Some hours go over {firstName}'s hour limit on a task; those entries are marked.
+        </div>
+      )}
       {shown.length === 0 && <EmptyState title="No entry needed" text="No working day in this week falls inside the employment, and no hours were entered." />}
       {shown.map((d) => {
         const rows = w.rows.filter((r) => r.cells[d.date]);
@@ -279,7 +298,15 @@ export function ApproverWeek() {
                           <td>
                             {r.code} {r.name}
                           </td>
-                          <td className="num">{shortHours(cell.minutes, w.settings.timeFormat)}</td>
+                          <td className="num">
+                            {shortHours(cell.minutes, w.settings.timeFormat)}
+                            {overLimit.has(`${r.key}:${d.date}`) && (
+                              <span className="emp-warn ap-over" data-testid="ap-over-limit" title={`Over the ${shortHours(r.limit!.limitMinutes, w.settings.timeFormat)} h limit`}>
+                                {' '}
+                                over limit
+                              </span>
+                            )}
+                          </td>
                           <td className="emp-note">{cell.note ?? (cell.entries > 1 ? `${cell.entries} entries` : '')}</td>
                         </tr>
                       );

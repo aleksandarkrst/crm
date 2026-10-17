@@ -209,6 +209,8 @@ export interface ApiWorkspace {
   ceoEmployeeId: string | null;
   /** "Create a project when a deal is won" (CD-233). */
   autoCreateProjects: boolean;
+  /** Hour limit mode (CD-149, Settings → Projects): Warn saves time beyond someone's limit after a confirmation, Block refuses it. */
+  hourLimitMode?: 'warn' | 'block';
   /** The modules turned on (CD-279): planning, crm, projects, workforce, finance, reporting. */
   modules: string[];
   /** What the workspace calls projects and tasks (CD-143), singular and plural. */
@@ -278,7 +280,7 @@ export interface ApiCompanyDetails {
 /** A workspace without company details yet; the legal basis is the server's default. */
 export const EMPTY_COMPANY: ApiCompanyDetails = { legalName: null, address: null, pib: null, mb: null, place: null, signatoryName: null, signatoryTitle: null, legalBasis: '' };
 export type WorkspaceInput = Partial<
-  Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth' | 'customerEmailLanguage' | 'employeeDefaultWeeklyHours' | 'employeeNumberRequired' | 'employeeSelfEditBank' | 'ceoEmployeeId' | 'autoCreateProjects' | 'modules' | 'terms' | 'country'>
+  Pick<ApiWorkspace, 'name' | 'currency' | 'timezone' | 'fiscalYearStartMonth' | 'customerEmailLanguage' | 'employeeDefaultWeeklyHours' | 'employeeNumberRequired' | 'employeeSelfEditBank' | 'ceoEmployeeId' | 'autoCreateProjects' | 'hourLimitMode' | 'modules' | 'terms' | 'country'>
 > & { timesheet?: Partial<ApiTimesheetSettings>; company?: Partial<ApiCompanyDetails> };
 export type ApiLanguage = 'en' | 'sr' | 'de';
 export type ApiDateFormat = 'DD.MM.YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
@@ -310,6 +312,8 @@ export interface ApiProfile {
   /** "Request waiting" and "Request withdrawn" as an approver (CD-166). */
   notifyTimeoffApprovals: boolean;
   notifySickLeave: boolean;
+  /** "Hour limit almost reached" and "Hour limit reached" (CD-149). */
+  notifyHourLimits?: boolean;
 }
 /**
  * Getting started (CD-68): the workspace's activation steps (CD-115), derived from its records.

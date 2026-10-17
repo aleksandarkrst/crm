@@ -2,6 +2,12 @@ import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { paths } from '../../lib/paths';
 import { useStore } from '../../store/store';
+
+/** "10 Oct 2026, 11:34" on the workspace's clock: the same form as the deadline next to it (CD-336). */
+function instantLabel(iso: string, timeZone: string | undefined): string {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: timeZone ?? 'UTC', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(iso)).map((p) => [p.type, p.value]));
+  return `${dateLabel(`${parts.year}-${parts.month}-${parts.day}`)}, ${parts.hour}:${parts.minute}`;
+}
 import { dateLabel, Row } from './parts';
 
 /**
@@ -64,8 +70,9 @@ export function TimesheetSection({ id }: { id: string }) {
                 <span className="emp-note">
                   Deadline: {dateLabel(week.deadline.date)}, {week.deadline.time}
                 </span>
-                {week.firstSubmittedAt && <span className="emp-note">First submitted: {new Date(week.firstSubmittedAt).toLocaleString('en-GB', { timeZone: s.workspace?.timezone ?? 'UTC' })}</span>}
+                {week.firstSubmittedAt && <span className="emp-note">First submitted: {instantLabel(week.firstSubmittedAt, s.workspace?.timezone)}</span>}
                 <span className={week.autoSubmitted ? 'badge badge-neutral' : 'badge badge-danger'}>{week.detail}</span>
+                {week.onBehalf && <span className="badge badge-neutral">Entered on behalf</span>}
               </div>
             ))
           )}

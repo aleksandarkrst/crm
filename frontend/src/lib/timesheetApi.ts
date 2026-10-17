@@ -27,7 +27,8 @@ export interface ApiTimesheetRow {
   lockedReason: string | null;
   /** Any day's hours, only hours already there (unassigned since), or nothing. */
   edit: 'any' | 'existing' | 'none';
-  limit: { limitMinutes: number; loggedMinutes: number } | null;
+  /** `beforeMinutes`: their hours on it before this week (CD-336: which day went over). */
+  limit: { limitMinutes: number; loggedMinutes: number; beforeMinutes?: number } | null;
   cells: Record<string, ApiCell>;
   minutes: number;
 }
@@ -231,11 +232,11 @@ export function formatHours(minutes: number, format: TimeFormat): string {
   return (minutes / 60).toFixed(2);
 }
 
-/** Short, for totals and cells: "8", "7.5" or "7:30"; with a sign for differences when `signed`. */
+/** Short, for totals and cells: "8" or "7.5", and in clock format always "8:00", "7:30", "0:00" (CD-336); with a sign for differences when `signed`. */
 export function shortHours(minutes: number, format: TimeFormat, signed = false): string {
   const sign = signed ? (minutes > 0 ? '+' : minutes < 0 ? '−' : '') : minutes < 0 ? '−' : '';
   const m = Math.abs(minutes);
-  const body = format === 'clock' ? (m % 60 ? formatHours(m, 'clock') : String(m / 60)) : String(Math.round((m / 60) * 100) / 100);
+  const body = format === 'clock' ? formatHours(m, 'clock') : String(Math.round((m / 60) * 100) / 100);
   return sign + body;
 }
 

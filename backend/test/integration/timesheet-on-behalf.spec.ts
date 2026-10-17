@@ -156,5 +156,8 @@ describe('entering time on behalf (CD-317)', () => {
     expect(res.body.onBehalf).toBe(true);
     const [audit] = await asTenantSql<{ data: { late: boolean; onBehalf: boolean } }>(tenant, `select data from audit_logs where action = 'timesheet.submitted' and entity_id = $1 and data ->> 'weekStart' = $2`, [nobodyId, lastWeek]);
     expect(audit!.data).toMatchObject({ late: true, onBehalf: true });
+    // The employee card's late weeks say so too (CD-336).
+    const card = await ok<{ recent: { weekStart: string; onBehalf: boolean }[] }>('GET', `/timesheet/employees/${nobodyId}/late`, as(owner));
+    expect(card.recent.find((w) => w.weekStart === lastWeek)).toMatchObject({ onBehalf: true });
   });
 });

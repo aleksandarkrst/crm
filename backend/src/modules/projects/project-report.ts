@@ -27,7 +27,7 @@ export interface Stats {
   remainingMinutes: number;
   /** Estimate of the done tasks as a share of the whole estimate ("Done, by estimate"). */
   donePercent: number;
-  /** Logged on done tasks above their estimate (logged turns red). */
+  /** Logged turns red (CD-261 AC 3, CD-336): more logged than estimated on the row, or on its done tasks. */
   overEstimate: boolean;
   /** Logged vs estimate on done tasks, in percent (+12 = 12 % over); null without done estimates. */
   variancePercent: number | null;
@@ -56,7 +56,7 @@ function stats(lines: Line[]): Stats {
     loggedMinutes: sum(lines, (l) => l.logged),
     remainingMinutes: sum(open, (l) => Math.max(l.estimate - l.logged, 0)),
     donePercent: estimate ? Math.round((doneEst / estimate) * 100) : 0,
-    overEstimate: doneLog > doneEst,
+    overEstimate: (estimate > 0 && sum(lines, (l) => l.logged) > estimate) || doneLog > doneEst,
     variancePercent: doneEst ? Math.round(((doneLog - doneEst) / doneEst) * 100) : null,
     lateTasks: open.filter((l) => l.late).length,
   };

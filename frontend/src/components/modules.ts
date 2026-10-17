@@ -61,10 +61,11 @@ const CRM_NAV: NavDef[] = [
   { to: paths.reports(), label: 'Reports', icon: 'M5 20V10M10 20V4M15 20v-7M20 20v-4M3 20h18', managers: true },
 ];
 
-/** Projects' pages: the board and list (CD-234), Tasks (CD-283) and Work orders (CD-265). */
+/** Projects' pages: the board and list (CD-234), Tasks (CD-283), Work orders (CD-265) and the Workload report (CD-261, linked since CD-336). */
 const PROJECTS_NAV: NavDef[] = [
   { to: paths.projects, label: 'Projects', term: 'Projects', icon: 'M4 4h5v16H4zM10 4h5v10h-5zM16 4h4v7h-4z', phone: true },
   { to: paths.tasks, label: 'Tasks', term: 'Tasks', icon: 'M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2', phone: true },
+  { to: paths.workload, label: 'Workload', icon: 'M4 20V10M9 20V4M14 20v-7M19 20v-4M3 20h18' },
   { to: paths.workOrders, label: 'Work orders', icon: 'M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.3-.7-.7-2.3 2.4-2.4Z', phone: true },
 ];
 

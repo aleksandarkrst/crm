@@ -7,7 +7,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, createTenant, eventually, type Mail, mailTo, ok, type Session, signIn } from './helpers';
-import { accessOf, asTenantSql, joinAsEmployee } from './people-helpers';
+import { accessOf, asTenantSql, joinAsEmployee, showInApp } from './people-helpers';
 
 interface Row {
   employee: { id: string; name: string };
@@ -80,6 +80,15 @@ describe('the Approvals list', () => {
     expect(rows.find((r) => r.employee.id === seniorId)!.right).toBe('approver');
     const me = (await accessOf(owner, tenant)).employeeId;
     expect(rows.find((r) => r.employee.id === me)!.right).toBeNull();
+  });
+
+  it("leaves out records the app doesn't show: no account, no pending invitation (CD-226, CD-336)", async () => {
+    const [hidden] = await asTenantSql<{ id: string }>(tenant, `insert into employees (tenant_id, first_name, last_name, employment_start_date) values ($1, 'Pera', 'Peric', '2024-01-01') returning id`, [tenant]);
+    expect((await list(owner)).rows.map((r) => r.employee.id)).not.toContain(hidden!.id);
+    await showInApp(tenant, hidden!.id);
+    expect((await list(owner)).rows.map((r) => r.employee.id)).toContain(hidden!.id);
+    await asTenantSql(tenant, `delete from invitations where employee_id = $1`, [hidden!.id]);
+    await asTenantSql(tenant, `delete from employees where id = $1`, [hidden!.id]);
   });
   it('defaults to the latest week whose deadline passed and reads one person week for those allowed', async () => {
     const latest = await ok<Approvals>('GET', '/timesheet/approvals', as(marko));

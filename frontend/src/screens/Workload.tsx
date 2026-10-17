@@ -7,7 +7,7 @@ import { dueText } from '../store/tasks';
  * Reports · Workload (CD-261, design v2 §9 `#workload`): remaining task hours per person and week
  * across open projects, by team, read-only. A task's remaining hours are its estimate (shared by its
  * people) minus what each logged, spread from its start (or today) to its due date. More than 40 h
- * in a week is red. Not in the sidebar: Ctrl/⌘K → Go to → Workload.
+ * in a week is red. In the Projects sidebar (CD-336).
  */
 
 const CAP_MINUTES = 40 * 60;

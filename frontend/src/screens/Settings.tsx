@@ -1025,6 +1025,13 @@ function NotificationsTab() {
     { id: 'visit-plans', label: 'Visit plans', desc: 'An email when someone else creates or changes your visit plan.', on: p.visitPlans, toggle: () => patchProfile({ visitPlans: !p.visitPlans }) },
     { id: 'task-assignments', label: 'Task assignments', desc: 'An email when someone else assigns you to a task.', on: p.taskAssigned, toggle: () => patchProfile({ taskAssigned: !p.taskAssigned }) },
     {
+      id: 'hour-limits',
+      label: 'Hour limit warnings',
+      desc: 'An email when the hours on a task reach 80 % and 100 % of an hour limit.',
+      on: p.hourLimits,
+      toggle: () => patchProfile({ hourLimits: !p.hourLimits }),
+    },
+    {
       id: 'org-changes',
       label: 'Org changes',
       desc: 'An email when someone else changes who you report to, or gives you a new direct report.',

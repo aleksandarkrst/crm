@@ -16,6 +16,8 @@ import { ResubmitDialog } from './timesheet/ResubmitDialog';
 import { HistoryPanel } from './approvals/HistoryPanel';
 
 const LATE_NOTE = 'This week will be marked as submitted late.';
+/** Week statuses with every required day sent: Submit week has nothing left to do. */
+const SENT: ReadonlySet<ApiTimesheetWeek['status']> = new Set(['submitted', 'partly_approved', 'approved']);
 
 /** "today", "yesterday", "3 days ago": how long ago the deadline passed. */
 function sinceText(date: string, today: string): string {
@@ -55,8 +57,24 @@ export function Timesheet() {
     return next;
   };
 
-  const onSave: SaveCell = (row: ApiTimesheetRow, date: string, minutes: number, note?: string | null) =>
-    run(async () => {
+  /**
+   * Warn mode (CD-149 AC 4, TC 11): hours that take the person over their limit on a task are saved
+   * only after a confirmation, then flagged. Block mode is the API's refusal, flashed like any other.
+   */
+  const confirmOverLimit = async (row: ApiTimesheetRow, date: string, minutes: number): Promise<boolean> => {
+    if (row.kind !== 'task' || !row.limit || s.workspace.hourLimitMode === 'block' || !week) return true;
+    const after = row.limit.loggedMinutes - (row.cells[date]?.minutes ?? 0) + minutes;
+    if (after <= row.limit.limitMinutes || after <= row.limit.loggedMinutes) return true;
+    const format = week.settings.timeFormat;
+    const over = shortHours(after - row.limit.limitMinutes, format);
+    const limit = shortHours(row.limit.limitMinutes, format);
+    const who = employeeParam && week.employee ? { subject: week.employee.name, own: 'their' } : { subject: 'you', own: 'your' };
+    return askConfirm({ title: `This puts ${who.subject} ${over} h over ${who.own} ${limit} h limit on ${row.code}. Save anyway?`, confirmLabel: 'Save anyway' });
+  };
+
+  const onSave: SaveCell = async (row: ApiTimesheetRow, date: string, minutes: number, note?: string | null) => {
+    if (!(await confirmOverLimit(row, date, minutes))) return null;
+    return run(async () => {
       try {
         set(await timesheetApi.setCell(date, targetOf(row), minutes, note, employeeParam));
         return true;
@@ -65,6 +83,7 @@ export function Timesheet() {
         return false;
       }
     });
+  };
 
   const onAdd = (item: ApiLoggable) =>
     run(async () => {
@@ -139,6 +158,8 @@ export function Timesheet() {
 
   const deadline = `${dayLabel(week.deadline.date)}, ${week.deadline.time}`;
   const future = week.weekStart > week.thisWeek;
+  /** Recall is the employee's own action (an Admin on behalf can't), and only once something is submitted. */
+  const canRecall = week.canRecall && !employeeParam;
   return (
     <Screen title={employeeParam ? `${week.employee.name} · Timesheet` : 'Timesheet'} parent={employeeParam ? { label: 'Approvals', to: paths.approval(week.employee.id, week.weekStart) } : undefined}>
       {employeeParam && (
@@ -195,9 +216,11 @@ export function Timesheet() {
           </button>
           {menu.open && (
             <div className="deal-menu" role="menu">
-              <button type="button" role="menuitem" data-testid="ts-recall" disabled={!week.canRecall || !!employeeParam} onClick={() => void recall(week)}>
-                Recall submission
-              </button>
+              {canRecall && week.submittable.length > 0 && (
+                <button type="button" role="menuitem" data-testid="ts-recall" onClick={() => void recall(week)}>
+                  Recall submission
+                </button>
+              )}
               <button
                 type="button"
                 role="menuitem"
@@ -217,19 +240,30 @@ export function Timesheet() {
             Resubmit rejected days ({week.resubmittable.length})
           </button>
         )}
-        {(week.submittable.length > 0 || week.resubmittable.length === 0) && (
-          <button
-            type="button"
-            className="btn btn-primary"
-            data-testid="ts-submit"
-            disabled={busy || week.submittable.length === 0}
-            title={future ? 'A week can be submitted once it has started' : week.submittable.length === 0 ? 'Nothing to submit in this week' : undefined}
-            onClick={() => void submit(week)}
-          >
+        {week.submittable.length > 0 ? (
+          <button type="button" className="btn btn-primary" data-testid="ts-submit" disabled={busy} onClick={() => void submit(week)}>
             {busy ? 'Submitting…' : week.lateIfSubmitted.length ? 'Submit late' : 'Submit week'}
           </button>
+        ) : canRecall ? (
+          // Everything is submitted (CD-336): the week's action is taking it back, not submitting it again.
+          <button type="button" className="btn-plain" data-testid="ts-recall-button" disabled={busy} onClick={() => void recall(week)}>
+            Recall submission
+          </button>
+        ) : (
+          !future &&
+          week.resubmittable.length === 0 &&
+          !SENT.has(week.status) && (
+            <button type="button" className="btn btn-primary" data-testid="ts-submit" disabled title="Nothing to submit in this week">
+              Submit week
+            </button>
+          )
         )}
       </div>
+      {future && (
+        <div className="ts-help" data-testid="ts-future" style={{ marginBottom: 10 }}>
+          You can log time up to the current week. This week opens on {dayLabel(week.weekStart)}.
+        </div>
+      )}
       {week.days
         .filter((d) => d.status === 'rejected' && d.comment)
         .map((d) => (

@@ -9,7 +9,7 @@ import { mapDbError } from '../../shared/database/errors';
 import { employees, tasks, tenants, timeEntries, timesheetDayEvents, timesheetDays, type TimesheetDayStatus, timesheetWeeks, workOrders } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import { zonedDayStart, zonedParts } from '../../shared/time/zoned-time';
-import { type CallerAccess, PeopleAccess } from '../people';
+import { type CallerAccess, PeopleAccess, shownEmployee } from '../people';
 import { approvableDays, type ApprovalRight, approvalRight, type ApprovalTarget, type DayPick, returnableDays, unlockableDays } from './approval-rules';
 import { callerFor } from './deadlines';
 import { addDays, deadlineInstant, deadlineOf, expectedMinutes, isoWeek, isRequired, mondayOf, submittableDays, type TimesheetSettings, type WeekDay, weekDates, weekLabel, weekStatus, type WeekStatus } from './timesheet-rules';
@@ -104,7 +104,9 @@ export class ApprovalsService {
   /**
    * The employees whose weeks the caller sees: Admins every active employee with a required
    * timesheet, managers their direct and indirect reports; with their reporting line for the rule.
-   * People without an app account are listed too: an Admin enters their time on their behalf (CD-317).
+   * People without an app account are listed too: an Admin enters their time on their behalf (CD-317),
+   * as long as the app shows them (CD-226 `shownEmployee`: a member or a pending invitation), so the
+   * list never counts records the Org structure doesn't show (CD-336).
    */
   private async visible(tx: Tx, access: CallerAccess) {
     const ids = access.isAdmin ? null : [...access.reportIds];
@@ -123,7 +125,7 @@ export class ApprovalsService {
       })
       .from(employees)
       .leftJoin(manager, eq(manager.id, employees.managerId))
-      .where(and(isNull(employees.deactivatedAt), eq(employees.timesheetRequired, true), ids ? inArray(employees.id, ids) : undefined))
+      .where(and(isNull(employees.deactivatedAt), eq(employees.timesheetRequired, true), shownEmployee, ids ? inArray(employees.id, ids) : undefined))
       .orderBy(employees.fullName);
   }
 

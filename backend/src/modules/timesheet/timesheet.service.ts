@@ -79,8 +79,11 @@ export interface RowView {
   lockedReason: string | null;
   /** What the person may change: any day's hours, only hours already there (unassigned since, spec 4.4), or nothing. */
   edit: 'any' | 'existing' | 'none';
-  /** The person's own hour limit on a task (CD-147) and all their hours on it, in minutes. */
-  limit: { limitMinutes: number; loggedMinutes: number } | null;
+  /**
+   * The person's own hour limit on a task (CD-147), all their hours on it, and those before this
+   * week (so the approver sees which day went over, CD-336), in minutes.
+   */
+  limit: { limitMinutes: number; loggedMinutes: number; beforeMinutes: number } | null;
   cells: Record<string, CellView>;
   minutes: number;
 }
@@ -311,10 +314,15 @@ export class TimesheetService {
       const year = Number(caller.today.slice(0, 4)) - 1;
       const anniversary = `${year}${caller.today.slice(4)}`;
       const from = caller.today.endsWith('-02-29') ? `${year}-02-28` : anniversary;
-      const { rows } = await tx.execute<{ week_start: string; late_at: string; auto_submitted_at: string | null; first_submitted_at: string | null }>(sql`
+      const { rows } = await tx.execute<{ week_start: string; late_at: string; auto_submitted_at: string | null; first_submitted_at: string | null; on_behalf: boolean }>(sql`
         select w.week_start::text, w.late_at, w.auto_submitted_at,
           (select min(d.first_submitted_at) from timesheet_days d
-           where d.employee_id = w.employee_id and d.work_date between w.week_start and w.week_start + 6) as first_submitted_at
+           where d.employee_id = w.employee_id and d.work_date between w.week_start and w.week_start + 6) as first_submitted_at,
+          -- Submitted by someone other than the employee's own account (CD-317, CD-336).
+          exists (select 1 from timesheet_day_events ev join employees e on e.id = ev.employee_id
+            where ev.employee_id = w.employee_id and ev.work_date between w.week_start and w.week_start + 6
+              and ev.kind in ('submitted', 'resubmitted') and ev.actor_user_id is not null
+              and (e.user_id is null or e.user_id <> ev.actor_user_id)) as on_behalf
         from timesheet_weeks w where w.employee_id = ${employeeId}
           and w.week_start between ${from}::date and ${thisWeek}::date and w.late_at is not null
         order by w.week_start desc`);
@@ -334,6 +342,7 @@ export class TimesheetService {
           weekStart: w.week_start, label: weekLabel(w.week_start), deadline,
           firstSubmittedAt: first?.toISOString() ?? null,
           autoSubmitted: !!w.auto_submitted_at,
+          onBehalf: !!w.on_behalf,
           detail: w.auto_submitted_at ? 'Auto-submitted' : hours < 1 ? 'Less than 1 h late' : `${hours >= 24 ? `${Math.floor(hours / 24)} ${hours >= 48 ? 'days' : 'day'} ` : ''}${hours % 24} h late`,
         };
       });
@@ -937,13 +946,21 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
   const facts = await rowFacts(tx, employeeId, taskIds, orderIds);
   const limited = facts.filter((f) => f.limitMinutes != null).map((f) => f.id);
   const logged = new Map<string, number>();
+  const before = new Map<string, number>();
   if (limited.length) {
     const sums = await tx
-      .select({ taskId: timeEntries.taskId, minutes: sql<number>`sum(${timeEntries.minutes})::int` })
+      .select({
+        taskId: timeEntries.taskId,
+        minutes: sql<number>`sum(${timeEntries.minutes})::int`,
+        before: sql<number>`coalesce(sum(${timeEntries.minutes}) filter (where ${timeEntries.workDate} < ${monday}), 0)::int`,
+      })
       .from(timeEntries)
       .where(and(eq(timeEntries.employeeId, employeeId), inArray(timeEntries.taskId, limited)))
       .groupBy(timeEntries.taskId);
-    for (const s of sums) logged.set(s.taskId!, s.minutes);
+    for (const s of sums) {
+      logged.set(s.taskId!, s.minutes);
+      before.set(s.taskId!, s.before);
+    }
   }
 
   const rows = new Map<string, RowView>();
@@ -957,7 +974,7 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
       path: f.path,
       lockedReason: reasonOf(f),
       edit: !f.refusal ? 'any' : f.refusal === 'not_assigned' || f.refusal === 'not_technician' ? 'existing' : 'none',
-      limit: f.limitMinutes != null ? { limitMinutes: f.limitMinutes, loggedMinutes: logged.get(f.id) ?? 0 } : null,
+      limit: f.limitMinutes != null ? { limitMinutes: f.limitMinutes, loggedMinutes: logged.get(f.id) ?? 0, beforeMinutes: before.get(f.id) ?? 0 } : null,
       cells: {},
       minutes: 0,
     });
