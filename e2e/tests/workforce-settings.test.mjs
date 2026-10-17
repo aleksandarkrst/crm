@@ -59,9 +59,10 @@ describe('workforce settings', () => {
   step('the Timesheet follows them: 7:30 a day Monday to Saturday, hours shown as 7:30', async () => {
     await api(page, '/timesheet/cells', { method: 'PUT', body: JSON.stringify({ date: monday, taskId: task.id, minutes: 450 }) });
     await page.goto(BASE_URL + '/timesheet', { waitUntil: 'networkidle0' });
-    await page.waitForSelector('[data-testid=ts-expected]');
-    const expected = await page.$$eval('[data-testid=ts-expected] .ts-sum', (els) => els.map((el) => el.textContent));
-    assert.deepEqual(expected, ['7:30', '7:30', '7:30', '7:30', '7:30', '7:30', '']);
+    await page.waitForSelector('[data-testid=ts-total-entered]');
+    // Expected hours sit on the Total row's day cells (CD-351: no Expected row).
+    const expected = await page.$$eval('[data-testid=ts-total-entered] .ts-sum', (els) => els.map((el) => el.dataset.expected));
+    assert.deepEqual(expected, ['7:30', '7:30', '7:30', '7:30', '7:30', '7:30', '0:00']);
     assert.equal(await page.$eval(`[data-testid=ts-cell][data-row="${task.id}"][data-date="${monday}"]`, (el) => el.value), '7:30');
   });
 
@@ -77,10 +78,10 @@ describe('workforce settings', () => {
     await page.goto(BASE_URL + '/timesheet', { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=ts-holiday-row]');
     assert.match(await page.$eval('[data-testid=ts-holiday-row]', (el) => el.textContent), /Public holiday · Statehood Day/);
-    assert.match(await page.$eval(`[data-testid=ts-day][data-date="${wed}"]`, (el) => el.textContent), /· holiday/);
-    const expected = await page.$$eval('[data-testid=ts-expected] .ts-sum', (els) => els.map((el) => el.textContent));
-    assert.equal(expected[2], '0');
-    assert.match(await page.$eval('[data-testid=ts-expected]', (el) => el.textContent), /minus holidays/);
+    assert.match(await page.$eval(`[data-testid=ts-day][data-date="${wed}"]`, (el) => el.textContent), /Holiday/);
+    const expected = await page.$$eval('[data-testid=ts-total-entered] .ts-sum', (els) => els.map((el) => el.dataset.expected));
+    assert.equal(expected[2], '0:00');
+    assert.match(await page.$eval('[data-testid=ts-expected-note]', (el) => el.textContent), /minus holidays/);
   });
 
   step('a holiday spans days and repeats every year (CD-318): no Copy from last year', async () => {

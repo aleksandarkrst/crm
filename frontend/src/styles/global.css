@@ -1280,6 +1280,9 @@ a.task-card-project:hover { color: var(--brand); }
 .ts-sum { display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--text-2); border-left: 1px solid var(--divider); }
 .ts-sum.strong { color: var(--ink); font-weight: 600; }
 .ts-sum.below { color: var(--danger); }
+.ts-total.below { color: var(--danger); }
+/* The one Total row (CD-351) closes the grid. */
+.ts-total-row { border-top: 1px solid var(--border); }
 .ts-sum.above { color: #2F6FB5; }
 
 /* Approvals (CD-157): the top panels, the team list and one person's week. */
