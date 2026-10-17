@@ -87,8 +87,9 @@ function TimeCell({
     // Shown rounded at once ("7:20" becomes 7:15); the saved week replaces it.
     setText(minutes ? shortHours(minutes, format) : '');
     const saved = await onSave(row, day.date, minutes);
-    if (saved === null) setText(shown);
-    setError(saved === false);
+    // Cancelled or refused (the reason is flashed, CD-336): back to the saved hours, not the refused ones.
+    if (!saved) setText(shown);
+    setError(false);
   };
 
   const title = cell.entries > 1 ? `${cell.entries} entries on this day: change them on the ${row.kind === 'task' ? 'task' : 'work order'} page` : !editable && row.lockedReason ? row.lockedReason : undefined;
