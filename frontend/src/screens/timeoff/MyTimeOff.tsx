@@ -157,7 +157,9 @@ export function MyTimeOff({ employeeId, year, onYear }: { employeeId: string | n
       {details && <BalanceCard balance={data} onChanged={(b) => b && set(b)} />}
 
       <section className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }} data-testid="timeoff-history">
-        <span style={{ fontSize: 15, fontWeight: 600 }}>Your time off in {data.year}</span>
+        <span className="to-section-title" style={{ marginTop: 0 }}>
+          Your time off in {data.year}
+        </span>
         <span className="caps">Requests</span>
         {requests ? <RequestsList requests={requests} onChanged={() => void reloadRequests()} /> : <span className="emp-note">Loading</span>}
         <span className="caps" style={{ marginTop: 6 }}>
