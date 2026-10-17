@@ -42,7 +42,7 @@ const sickStatus = (s: ApiSickLeave['status']): Exclude<Status, ''> => (s === 'r
  * Time off → Approvals (CD-350): one table of every request and sick leave record the caller may
  * see (managers their reports, Admins everyone), filtered by status (Pending by default). Pending
  * requests the caller decides have Approve and Reject; a reported sick leave an Admin may confirm
- * has Confirm. Record time off and the sick leave CSV are for Admins.
+ * has Confirm. Requesting for an employee and the sick leave CSV are for Admins.
  */
 export function RequestsTable({ admin, myEmployeeId }: { admin: boolean; myEmployeeId: string | null }) {
   const { s, flash, employeeCard } = useStore();
@@ -132,7 +132,7 @@ export function RequestsTable({ admin, myEmployeeId }: { admin: boolean; myEmplo
           <ReportSickButton onReported={reload} />
           {admin && (
             <button type="button" className="btn btn-primary" onClick={() => setRecording(true)} disabled={!employees.length} data-testid="request-record-new">
-              Record time off
+              Request for an employee
             </button>
           )}
         </span>

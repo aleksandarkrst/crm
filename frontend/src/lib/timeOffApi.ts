@@ -358,6 +358,8 @@ export interface ApiRequestPreview {
   shortfall: { needed: number; available: number } | null;
   warnings: string[];
   approver: ApiApproverView | null;
+  /** The CEO's own request (CD-350): approved automatically, nobody decides it. */
+  autoApproved?: boolean;
 }
 
 export interface RequestInput {

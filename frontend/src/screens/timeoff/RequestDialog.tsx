@@ -14,20 +14,17 @@ const todayMonth = () => new Date().toISOString().slice(0, 7);
  * leave, other absence), dates and a note.
  * While the dates are picked the form shows the working days ("6 working days (excludes 1 May
  * Praznik rada)"), the vacation balance before and after, the paid leave warnings and who
- * approves; what can't be submitted says why. Admins pick the employee and may record leave as
- * approved at once with a reason (spec 8.7).
+ * approves; what can't be submitted says why. Admins pick the employee. Every request waits for its
+ * approver except the CEO's own, which is approved automatically (CD-350).
  */
 export function RequestDialog({ employeeId, employees, admin, onClose }: { employeeId: string; employees?: { id: string; fullName: string }[]; admin: boolean; onClose: (saved?: ApiTimeOffRequest) => void }) {
-  const { s, flash } = useStore();
+  const { flash } = useStore();
   const [employee, setEmployee] = useState(employeeId);
-  const [decision, setDecision] = useState(true);
   const [type, setType] = useState<TimeOffType>('vacation');
   const [reasonId, setReasonId] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [note, setNote] = useState('');
-  const [record, setRecord] = useState(false);
-  const [recordReason, setRecordReason] = useState('');
   const [preview, setPreview] = useState<ApiRequestPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -62,12 +59,11 @@ export function RequestDialog({ employeeId, employees, admin, onClose }: { emplo
   const submit = async () => {
     if (!startDate || !endDate) return setProblem('Pick the dates');
     if (needsReason && !reasonId) return setProblem('Pick a reason');
-    if (record && !recordReason.trim()) return setProblem('Say why you record it as approved');
     setBusy(true);
     setProblem(null);
     try {
-      const saved = await timeOffApi.requests.create({ employeeId: employee, type, reasonId: needsReason ? reasonId : null, startDate, endDate, note: note.trim() || null, ...(record ? { record: { reason: recordReason.trim(), decision } } : {}) });
-      flash(record ? `Recorded: ${days(saved.workingDays)} of ${TIME_OFF_TYPE_LABEL[saved.type].toLowerCase()}` : `Request sent: ${days(saved.workingDays)}`);
+      const saved = await timeOffApi.requests.create({ employeeId: employee, type, reasonId: needsReason ? reasonId : null, startDate, endDate, note: note.trim() || null });
+      flash(saved.status === 'approved' ? `Approved: ${days(saved.workingDays)} of ${TIME_OFF_TYPE_LABEL[saved.type].toLowerCase()}` : `Request sent: ${days(saved.workingDays)}`);
       onClose(saved);
     } catch (err) {
       setProblem(projectError(err));
@@ -77,7 +73,7 @@ export function RequestDialog({ employeeId, employees, admin, onClose }: { emplo
 
   return (
     <Modal maxWidth={520} onBackdrop={() => !busy && onClose()}>
-      <ModalHeader title={record ? 'Record time off' : 'Request time off'} sub="Whole working days. Weekends and public holidays are not counted." />
+      <ModalHeader title="Request time off" sub="Whole working days. Weekends and public holidays are not counted." />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="request-dialog">
         {admin && employees && (
           <label className="policy-field">
@@ -145,21 +141,6 @@ export function RequestDialog({ employeeId, employees, admin, onClose }: { emplo
           <span className="th">Note to the approver</span>
           <textarea className="form-input" rows={2} maxLength={500} value={note} placeholder="Optional. Do not enter health information." onChange={(e) => setNote(e.target.value)} data-testid="request-note" />
         </label>
-        {admin && (
-          <div className="policy-field">
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-              <input type="checkbox" checked={record} onChange={(e) => setRecord(e.target.checked)} data-testid="request-record" />
-              Record as approved (leave agreed outside Pultly, or past days)
-            </label>
-            {record && <input className="form-input" value={recordReason} maxLength={300} placeholder="Why, e.g. Agreed on paper on 3 March" onChange={(e) => setRecordReason(e.target.value)} data-testid="request-record-reason" />}
-            {record && type === 'vacation' && s.workspace.country === 'RS' && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-                <input type="checkbox" checked={decision} onChange={(e) => setDecision(e.target.checked)} data-testid="request-record-decision" />
-                Generate the vacation decision (rešenje) and email it
-              </label>
-            )}
-          </div>
-        )}
         {problem && (
           <span className="emp-error" role="alert" data-testid="request-problem">
             {problem}
@@ -170,7 +151,7 @@ export function RequestDialog({ employeeId, employees, admin, onClose }: { emplo
             Cancel
           </button>
           <button type="button" className="btn btn-primary" disabled={busy || blocked} onClick={() => void submit()} data-testid="request-submit">
-            {busy ? 'Sending…' : record ? 'Record' : 'Send request'}
+            {busy ? 'Sending…' : preview?.autoApproved ? 'Take time off' : 'Send request'}
           </button>
         </div>
       </div>
@@ -184,7 +165,7 @@ function PreviewLine({ preview, error, type, forOther }: { preview: ApiRequestPr
   if (!preview) return <span className="emp-note">Pick the dates to see the working days.</span>;
   const excluded = preview.excluded.length ? ` (excludes ${preview.excluded.map((x) => `${dateLabel(x.date)} ${x.name.replace(/\s*\(.*\)$/, '')}`).join(', ')})` : '';
   const whose = forOther ? 'The request' : 'Your request';
-  const approver = preview.approver ? (preview.approver.kind === 'self' ? (forOther ? 'They approve it themselves (no other Admin)' : 'You approve it yourself (no other Admin)') : `${whose} goes to ${preview.approver.approvers.map((a) => a.fullName).join(', ') || 'the Admins'}`) : null;
+  const approver = preview.autoApproved ? (forOther ? 'Approved automatically: they are the CEO' : "Approved automatically: you're the CEO") : preview.approver ? (preview.approver.kind === 'self' ? (forOther ? 'They approve it themselves (no other Admin)' : 'You approve it yourself (no other Admin)') : `${whose} goes to ${preview.approver.approvers.map((a) => a.fullName).join(', ') || 'the Admins'}`) : null;
   return (
     <div className="request-preview" data-testid="request-preview">
       <span style={{ fontSize: 13, fontWeight: 500 }}>
@@ -212,7 +193,7 @@ function PreviewLine({ preview, error, type, forOther }: { preview: ApiRequestPr
           {w}
         </span>
       ))}
-      {type === 'vacation' && !preview.refusal && !preview.shortfall && <span className="emp-note">{forOther ? 'The decision is issued when the manager approves.' : 'The decision is issued when your manager approves.'}</span>}
+      {type === 'vacation' && !preview.refusal && !preview.shortfall && !preview.autoApproved && <span className="emp-note">{forOther ? 'The decision is issued when the manager approves.' : 'The decision is issued when your manager approves.'}</span>}
       {approver && <span className="emp-note">{approver}</span>}
     </div>
   );
