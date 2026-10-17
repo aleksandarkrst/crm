@@ -2264,9 +2264,9 @@ Spec 15 section 12: who is working, away or off on a date (90 days back to 60 ah
   `TeamStatusSource` on start (approved requests from their first to their last counted day,
   weekends inside included, except cancelled, returned or interrupted days; active sick leave).
   Trips (milestone 17) add their own source the same way. Half-day time off doesn't exist yet.
-- **Visibility (12.3):** the type for the caller, their reports and Admins; "Out of office"
-  otherwise. Managers never see deactivated people, and people outside their reports are listed by
-  today's employment with no employment dates applied, so moving the date reveals no start or last day.
+- **Visibility (12.3, decided 17 Oct 2026):** managers see their direct and indirect reports (not
+  themselves), Admins every employee, both with exact absence types. Deactivated people are for
+  Admins only.
 - **Frontend:** Workforce → Today's status (`screens/TeamStatus.tsx`): counters (a counter filters
   the list), department, team, manager and status filters, search, grouping by department, all
   kept in the address; the Today screen's Team today card (`scope=reports`). Both re-read on

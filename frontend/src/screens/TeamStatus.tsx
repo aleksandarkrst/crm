@@ -47,8 +47,8 @@ const uniq = <T extends { id: string; name: string }>(items: (T | null)[]) => [.
  * Today's status (CD-162, spec 15 section 12, design `Timesheet.dc.html#cd-162`): who is working,
  * away or off on a date, for managers and Admins. Counters on top (a counter filters the list),
  * then one row per employee grouped by department, with the filters of 12.1 kept in the address.
- * Managers see the absence type for their reports only ("Out of office" for others); the
- * timesheet column shows last week for the people the caller approves.
+ * Managers see their direct and indirect reports, Admins everyone; the timesheet column shows
+ * last week for the people the caller approves.
  */
 export function TeamStatus() {
   const { s } = useStore();
@@ -248,7 +248,7 @@ export function TeamStatus() {
           ))}
         </div>
         <span className="emp-note">
-          Working means expected at work; it does not prove presence. Managers see the type of absence for their reports, others show as Out of office; Admins see every type. Sick leave never shows its type. Last week's timesheet shows for the people you approve.
+          Working means expected at work; it does not prove presence. Managers see their direct and indirect reports; Admins see everyone. Sick leave never shows its type. Last week's timesheet shows for the people you approve.
         </span>
       </div>
     </Screen>

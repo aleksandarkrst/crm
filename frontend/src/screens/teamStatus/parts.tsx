@@ -6,14 +6,13 @@ import { useTeamStatus } from '../../store/timesheet';
 
 /**
  * The counters of Today's status (spec 12.1), in the design's order. `always`: shown even at 0;
- * Out of office (absences whose type the caller may not see) and Not employed only when there are any.
+ * Not employed only when there are any.
  */
 export const STATUS_COUNTERS: { status: ApiDayStatus; label: string; dot: string; always?: boolean }[] = [
   { status: 'working', label: 'Working', dot: 'var(--green-500)', always: true },
   { status: 'business_trip', label: 'Business trip', dot: 'var(--lime)', always: true },
   { status: 'time_off', label: 'Vacation and other time off', dot: 'var(--warn)', always: true },
   { status: 'sick_leave', label: 'Sick leave', dot: 'var(--danger)', always: true },
-  { status: 'out_of_office', label: 'Out of office', dot: 'var(--text-2)' },
   { status: 'public_holiday', label: 'Public holiday', dot: 'var(--brand)', always: true },
   { status: 'non_working', label: 'Not a working day', dot: 'var(--muted)', always: true },
   { status: 'not_employed', label: 'Not employed', dot: 'var(--dashed)' },
@@ -30,7 +29,6 @@ const BADGE: Record<ApiDayStatus, string> = {
   business_trip: 'badge tst-badge-trip',
   time_off: 'badge badge-warn',
   sick_leave: 'badge badge-danger',
-  out_of_office: 'badge badge-neutral',
   public_holiday: 'badge badge-neutral',
   non_working: 'badge badge-neutral',
   not_employed: 'badge badge-neutral',
@@ -54,7 +52,7 @@ export function TimesheetCell({ t }: { t: ApiStatusRow['timesheet'] }) {
   );
 }
 
-const AWAY: ReadonlySet<ApiDayStatus> = new Set(['business_trip', 'time_off', 'sick_leave', 'out_of_office']);
+const AWAY: ReadonlySet<ApiDayStatus> = new Set(['business_trip', 'time_off', 'sick_leave']);
 
 /**
  * The Today screen's "Team today" card (spec 12.1): for managers, the counters for their direct
