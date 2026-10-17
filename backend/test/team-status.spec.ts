@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dayStatus, maskAbsence, nextWorkingDayAfter, shortDate, type StatusAbsence, type StatusInput } from '../src/modules/timesheet/team-status';
+import { dayStatus, nextWorkingDayAfter, shortDate, type StatusAbsence, type StatusInput } from '../src/modules/timesheet/team-status';
 
 const WEEKDAYS = [1, 2, 3, 4, 5];
 // 2026-10-12 is a Monday; 17 and 18 Oct are the weekend.
@@ -71,13 +71,5 @@ describe("Today's status rule (CD-162, spec 12.2)", () => {
   it('follows the workspace working days', () => {
     expect(dayStatus(base({ date: '2026-10-17', workingDays: [1, 2, 3, 4, 5, 6] })).status).toBe('working');
     expect(dayStatus(base({ workingDays: [1, 2, 4, 5] })).status).toBe('non_working');
-  });
-
-  it('masks absence types as "Out of office" and leaves other statuses alone (spec 12.3)', () => {
-    expect(maskAbsence(dayStatus(base({ absences: [sick] })))).toEqual({ status: 'out_of_office', label: 'Out of office', detail: null });
-    expect(maskAbsence(dayStatus(base({ absences: [vacation] }))).status).toBe('out_of_office');
-    expect(maskAbsence(dayStatus(base({ date: '2026-10-16', absences: [trip] }))).status).toBe('out_of_office');
-    expect(maskAbsence(dayStatus(base())).status).toBe('working');
-    expect(maskAbsence(dayStatus(base({ holiday: { date: '2026-10-14', name: 'Armistice Day', minutes: null } }))).status).toBe('public_holiday');
   });
 });

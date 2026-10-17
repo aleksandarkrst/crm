@@ -1,8 +1,8 @@
 /**
  * Today's status (CD-162, spec 15 section 12): managers and Admins only; the status of each
  * employee on a date by the rules and order of 12.2 (a holiday inside a vacation, sick leave over
- * time off, a vacation over a weekend, weekend work); absence types for the caller's reports and
- * Admins, "Out of office" for the rest (12.3); pending requests as a note; last week's timesheet
+ * time off, a vacation over a weekend, weekend work); managers see their reports, Admins everyone
+ * (decided 17 Oct 2026); pending requests as a note; last week's timesheet
  * for managers above and Admins; the date picker's range.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -61,7 +61,9 @@ describe('who can open it (spec 12.1, 12.3)', () => {
     expect((await call('GET', '/timesheet/status', as(peer))).status).toBe(403);
     const mine = await status(mgr);
     expect(mine.date).toBe(today);
-    expect(mine.rows.map((r) => r.id)).toEqual(expect.arrayContaining([mgrId, empId, peerId]));
+    // Only their direct and indirect reports: not themselves, not anyone else.
+    expect(mine.rows.map((r) => r.id)).toEqual([empId]);
+    expect((await status(owner)).rows.map((r) => r.id)).toEqual(expect.arrayContaining([mgrId, empId, peerId]));
   });
 
   it('the date picker reaches 90 days back and 60 ahead', async () => {
@@ -77,32 +79,28 @@ describe('who can open it (spec 12.1, 12.3)', () => {
     expect((await status(mgr, undefined, 'reports')).rows.map((r) => r.id)).toEqual([empId]);
   });
 
-  it('future employees: Not employed for Admins, left out for managers above nobody', async () => {
+  it("future employees: Not employed for Admins, left out for managers they don't report to", async () => {
     expect(await row(owner, futureId)).toMatchObject({ status: 'not_employed', detail: expect.stringMatching(/^Starts /) });
     expect(await row(mgr, futureId)).toBeUndefined();
   });
 
-  it("a manager can't learn a non-report's start or last day by moving the date", async () => {
-    const soon = (await ok<{ id: string }>('POST', '/people/employees', { ...as(owner), body: { firstName: 'Sanja', lastName: 'Soon', employmentStartDate: addDays(today, 10) } })).id;
-    const ended = (await ok<{ id: string }>('POST', '/people/employees', { ...as(owner), body: { firstName: 'Petar', lastName: 'Past', employmentStartDate: START } })).id;
-    await asTenantSql(tenant, `update employees set employment_end_date = $1 where id = $2`, [addDays(today, -5), ended]);
-    const leaving = (await ok<{ id: string }>('POST', '/people/employees', { ...as(owner), body: { firstName: 'Lena', lastName: 'Leaving', employmentStartDate: START } })).id;
+  it("a report's employment dates apply for their manager: not employed before the start and after the end", async () => {
+    const soon = (await ok<{ id: string }>('POST', '/people/employees', { ...as(owner), body: { firstName: 'Sanja', lastName: 'Soon', employmentStartDate: addDays(today, 10), managerId: mgrId } })).id;
+    const leaving = (await ok<{ id: string }>('POST', '/people/employees', { ...as(owner), body: { firstName: 'Lena', lastName: 'Leaving', employmentStartDate: START, managerId: mgrId } })).id;
     await asTenantSql(tenant, `update employees set employment_end_date = $1 where id = $2`, [addDays(today, 5), leaving]);
-    // Admins see employment on every date.
-    expect(await row(owner, soon, addDays(today, 20))).toMatchObject({ status: 'working' });
-    expect(await row(owner, ended, addDays(today, -10))).toMatchObject({ status: 'working' });
-    expect(await row(owner, ended)).toMatchObject({ status: 'not_employed' });
+    expect(await row(mgr, soon)).toMatchObject({ status: 'not_employed', detail: expect.stringMatching(/^Starts /) });
+    expect(await row(mgr, soon, addDays(today, 20))).toMatchObject({ status: 'working' });
+    expect(await row(mgr, leaving, addDays(today, 10))).toMatchObject({ status: 'not_employed' });
     expect(await row(owner, leaving, addDays(today, 10))).toMatchObject({ status: 'not_employed' });
-    // A manager above nobody: listed by today's employment only, the same on every date.
-    for (const d of [addDays(today, -10), today, addDays(today, 20)]) {
-      expect(await row(mgr, soon, d)).toBeUndefined();
-      expect(await row(mgr, ended, d)).toBeUndefined();
-    }
-    expect(await row(mgr, leaving, addDays(today, 10))).toMatchObject({ status: expect.not.stringMatching(/^not_employed$/) });
+    // Not anyone's report: Admins only.
+    const other = (await ok<{ id: string }>('POST', '/people/employees', { ...as(owner), body: { firstName: 'Olga', lastName: 'Other', employmentStartDate: START } })).id;
+    expect(await row(owner, other)).toBeDefined();
+    expect(await row(mgr, other)).toBeUndefined();
+    await asTenantSql(tenant, `update employees set manager_id = null where id = any($1::uuid[])`, [[soon, leaving]]);
   });
 
   it('deactivated people: shown to Admins, hidden from managers', async () => {
-    const gone = (await ok<{ id: string }>('POST', '/people/employees', { ...as(owner), body: { firstName: 'Dejan', lastName: 'Deactivated', employmentStartDate: START } })).id;
+    const gone = (await ok<{ id: string }>('POST', '/people/employees', { ...as(owner), body: { firstName: 'Dejan', lastName: 'Deactivated', employmentStartDate: START, managerId: mgrId } })).id;
     await asTenantSql(tenant, `update employees set deactivated_at = now() - interval '2 days', employment_end_date = $1 where id = $2`, [addDays(today, -2), gone]);
     expect(await row(owner, gone)).toMatchObject({ status: 'not_employed' });
     expect(await row(owner, gone, addDays(today, -5))).toMatchObject({ status: expect.any(String) });
@@ -148,27 +146,18 @@ describe('the rules in order (spec 12.2)', () => {
     expect(await row(owner, empId, addDays(start, 7))).toMatchObject({ status: 'time_off' });
   });
 
-  it('a manager sees the exact type for reports and "Out of office" for others; Admins for everyone', async () => {
+  it("a manager sees their reports' absences with the exact type; others' only Admins see", async () => {
     await ok('POST', '/timeoff/requests', { ...as(owner), body: { employeeId: peerId, type: 'vacation', startDate: start, endDate: start, record: { reason: 'Agreed on paper' } } });
     expect(await row(mgr, empId, start)).toMatchObject({ status: 'time_off', label: 'Vacation' });
-    expect(await row(mgr, peerId, start)).toEqual(expect.objectContaining({ status: 'out_of_office', label: 'Out of office', detail: null, note: null }));
+    expect(await row(mgr, peerId, start)).toBeUndefined();
     expect(await row(owner, peerId, start)).toMatchObject({ status: 'time_off', label: 'Vacation' });
   });
 
-  it("a non-report's sick leave is Out of office for a manager, with no detail", async () => {
-    const types = await ok<{ id: string }[]>('GET', '/timeoff/sick-leave-types', as(owner));
-    const day = addDays(start, 14);
-    await ok('POST', '/timeoff/sick-leave', { ...as(owner), body: { employeeId: peerId, startDate: day, endDate: day, typeId: types[0]!.id, confirm: true } });
-    expect(await row(mgr, peerId, day)).toEqual(expect.objectContaining({ status: 'out_of_office', label: 'Out of office', detail: null }));
-    expect(await row(owner, peerId, day)).toMatchObject({ status: 'sick_leave', label: 'Sick leave' });
-  });
-
-  it('a pending request is a note for those who see types, and doesn\'t change the status', async () => {
+  it("a pending request is a note, and doesn't change the status", async () => {
     const later = addDays(start, 21);
     await ok('POST', '/timeoff/requests', { ...as(emp), body: { type: 'vacation', startDate: later, endDate: later } });
     await ok('POST', '/timeoff/requests', { ...as(peer), body: { type: 'vacation', startDate: later, endDate: later } });
     expect(await row(mgr, empId, later)).toMatchObject({ status: 'working', note: 'Vacation requested' });
-    expect(await row(mgr, peerId, later)).toMatchObject({ status: 'working', note: null });
     expect(await row(owner, peerId, later)).toMatchObject({ note: 'Vacation requested' });
   });
 
@@ -189,9 +178,6 @@ describe('the timesheet column (spec 12.3)', () => {
     const mine = await status(mgr);
     const lastWeek = addDays(monday, -7);
     expect(mine.rows.find((r) => r.id === empId)!.timesheet).toMatchObject({ weekStart: lastWeek, label: expect.any(String) });
-    expect(mine.rows.find((r) => r.id === peerId)!.timesheet).toBeNull();
-    // Not their own: the timesheet column is for the people they approve.
-    expect(mine.rows.find((r) => r.id === mgrId)!.timesheet).toBeNull();
     expect((await row(owner, peerId))!.timesheet).toMatchObject({ weekStart: lastWeek });
   });
 });

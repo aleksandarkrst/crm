@@ -9,7 +9,7 @@ import { addDays, type Holiday, isoWeekday } from './timesheet-rules';
  * add theirs the same way.
  */
 
-export const DAY_STATUSES = ['not_employed', 'public_holiday', 'sick_leave', 'time_off', 'business_trip', 'out_of_office', 'non_working', 'working'] as const;
+export const DAY_STATUSES = ['not_employed', 'public_holiday', 'sick_leave', 'time_off', 'business_trip', 'non_working', 'working'] as const;
 export type DayStatus = (typeof DAY_STATUSES)[number];
 
 /** An approved absence or trip covering the date: `from` and `to` are its first and last day (`to` null: open sick leave). */
@@ -53,7 +53,6 @@ export const STATUS_LABEL: Record<DayStatus, string> = {
   sick_leave: 'Sick leave',
   time_off: 'Time off',
   business_trip: 'Business trip',
-  out_of_office: 'Out of office',
   non_working: 'Not a working day',
   working: 'Working',
 };
@@ -85,14 +84,6 @@ export function dayStatus(input: StatusInput): StatusResult {
   if (!workingDay && input.enteredMinutes <= 0) return { status: 'non_working', label: STATUS_LABEL.non_working, detail: null };
   const detail = !workingDay ? 'Weekend work' : input.holiday ? `${input.holiday.name} (part day)` : null;
   return { status: 'working', label: STATUS_LABEL.working, detail };
-}
-
-/**
- * What a viewer who may not see the absence type gets instead (spec 12.3): a manager looking at
- * someone outside their reports sees "Out of office" for sick leave, time off and trips.
- */
-export function maskAbsence(result: StatusResult): StatusResult {
-  return result.status === 'sick_leave' || result.status === 'time_off' || result.status === 'business_trip' ? { status: 'out_of_office', label: STATUS_LABEL.out_of_office, detail: null } : result;
 }
 
 /** The first working day after `date` that isn't a full-day holiday (at most 60 days on). */
