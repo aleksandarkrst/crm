@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { DateRangePicker } from '../../components/DateRangePicker';
 import { Modal, ModalHeader } from '../../components/ui';
 import { type ApiRequestPreview, type ApiTimeOffReason, type ApiTimeOffRequest, TIME_OFF_TYPE_LABEL, type TimeOffType, timeOffApi } from '../../lib/timeOffApi';
 import { projectError, useProjectsRead } from '../../store/projects';
@@ -6,9 +7,11 @@ import { useStore } from '../../store/store';
 import { dateLabel } from '../employee/parts';
 
 const days = (n: number) => `${n} ${n === 1 ? 'working day' : 'working days'}`;
+const todayMonth = () => new Date().toISOString().slice(0, 7);
 
 /**
- * New request (CD-165, spec 8.4): type, reason (paid leave, other absence), dates and a note.
+ * Request time off (CD-165, spec 8.4; one date range picker since CD-350): type, reason (paid
+ * leave, other absence), dates and a note.
  * While the dates are picked the form shows the working days ("6 working days (excludes 1 May
  * Praznik rada)"), the vacation balance before and after, the paid leave warnings and who
  * approves; what can't be submitted says why. Admins pick the employee and may record leave as
@@ -74,7 +77,7 @@ export function RequestDialog({ employeeId, employees, admin, onClose }: { emplo
 
   return (
     <Modal maxWidth={520} onBackdrop={() => !busy && onClose()}>
-      <ModalHeader title={record ? 'Record time off' : 'New request'} sub="Whole working days. Weekends and public holidays are not counted." />
+      <ModalHeader title={record ? 'Record time off' : 'Request time off'} sub="Whole working days. Weekends and public holidays are not counted." />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="request-dialog">
         {admin && employees && (
           <label className="policy-field">
@@ -122,15 +125,20 @@ export function RequestDialog({ employeeId, employees, admin, onClose }: { emplo
             </label>
           )}
         </div>
-        <div className="policy-field-row">
-          <label className="policy-field">
-            <span className="th">First day</span>
-            <input className="form-input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} data-testid="request-start" />
-          </label>
-          <label className="policy-field">
-            <span className="th">Last day</span>
-            <input className="form-input" type="date" value={endDate} min={startDate || undefined} onChange={(e) => setEndDate(e.target.value)} data-testid="request-end" />
-          </label>
+        <div className="policy-field">
+          <span className="th">Dates</span>
+          {/* One picker for the first and last day (CD-350): click a day, then another; one click twice is a single day. */}
+          <DateRangePicker
+            label="Dates"
+            value={startDate && endDate ? { from: startDate, to: endDate } : null}
+            month={(startDate || todayMonth()).slice(0, 7)}
+            placeholder="Pick the first and last day"
+            onChange={(range) => {
+              setStartDate(range.from);
+              setEndDate(range.to);
+            }}
+            testId="request-dates"
+          />
         </div>
         <PreviewLine preview={preview} error={previewError} type={type} forOther={forOther} />
         <label className="policy-field">

@@ -9,20 +9,21 @@ import { paths } from '../lib/paths';
 import { type ApiBalanceRow, type ApiBalancesTable, type ApiTimeOffPolicy, type ApiTimeOffRequest, type BalancesFilters, timeOffApi } from '../lib/timeOffApi';
 import { projectError, useProjectsRead } from '../store/projects';
 import { useStore } from '../store/store';
-import { BalanceCard, useBalance } from './timeoff/BalanceCard';
 import { ApprovalsTab, CalendarTab } from './timeoff/Approvals';
 import { RequestDialog } from './timeoff/RequestDialog';
 import { DecisionsTab } from './timeoff/Decisions';
 import { RequestsList } from './timeoff/RequestsList';
-import { EmployeeSickLeave, SickLeaveTab } from './timeoff/SickLeave';
+import { MyTimeOff } from './timeoff/MyTimeOff';
+import { SickLeaveTab } from './timeoff/SickLeave';
 
-type Tab = 'my' | 'approvals' | 'requests' | 'calendar' | 'balances' | 'decisions' | 'sick';
+type Tab = 'my' | 'approvals' | 'timeline' | 'balances' | 'decisions';
 const tabStyle = (on: boolean) => ({ borderBottom: `2px solid ${on ? 'var(--brand)' : 'transparent'}`, fontWeight: on ? 600 : 500, color: on ? 'var(--brand)' : 'var(--text-2)' });
 
 /**
- * Time off (milestone 16, Workforce): My time off (the balance card and history, CD-164; requests
- * come with CD-165) and, for managers and Admins, Balances: everyone's figures for a year with
- * filters, Adjust balance, Change policy and Recalculate in bulk, and a CSV export (spec 6.5).
+ * Time off (milestone 16, Workforce; simplified in CD-350): My time off (one tile per policy and sick
+ * leave, the year's requests), Approvals for managers and Admins (what waits for a decision, every
+ * request, sick leave records), the Timeline (who is away when, sick leave included), Balances
+ * (everyone's figures, bulk actions, CSV) and, for Admins, Decisions.
  */
 export function TimeOff() {
   const { s, session, employeeCard } = useStore();
@@ -31,7 +32,17 @@ export function TimeOff() {
   const manager = !!s.people.access?.roles.includes('manager');
   const canSeeBalances = admin || manager;
   const wanted = params.get('tab');
-  const tab: Tab = wanted === 'calendar' ? 'calendar' : canSeeBalances && (wanted === 'balances' || wanted === 'requests' || wanted === 'approvals' || wanted === 'sick') ? wanted : admin && wanted === 'decisions' ? 'decisions' : 'my';
+  // CD-350: Requests and Sick leave live in Approvals, the Team calendar is the Timeline; old links still land.
+  const tab: Tab =
+    wanted === 'timeline' || wanted === 'calendar'
+      ? 'timeline'
+      : canSeeBalances && (wanted === 'approvals' || wanted === 'requests' || wanted === 'sick')
+        ? 'approvals'
+        : canSeeBalances && wanted === 'balances'
+          ? 'balances'
+          : admin && wanted === 'decisions'
+            ? 'decisions'
+            : 'my';
   const month = params.get('month') && /^\d{4}-\d{2}$/.test(params.get('month')!) ? params.get('month')! : new Date().toISOString().slice(0, 7);
   useEffect(() => {
     void employeeCard.loadMyEmployeeId();
@@ -52,19 +63,9 @@ export function TimeOff() {
             Approvals
           </button>
         )}
-        {canSeeBalances && (
-          <button type="button" role="tab" aria-selected={tab === 'requests'} className="composer-tab" style={tabStyle(tab === 'requests')} onClick={() => go({ tab: 'requests' })} data-testid="timeoff-tab-requests">
-            Requests
-          </button>
-        )}
-        <button type="button" role="tab" aria-selected={tab === 'calendar'} className="composer-tab" style={tabStyle(tab === 'calendar')} onClick={() => go({ tab: 'calendar' })} data-testid="timeoff-tab-calendar">
-          Team calendar
+        <button type="button" role="tab" aria-selected={tab === 'timeline'} className="composer-tab" style={tabStyle(tab === 'timeline')} onClick={() => go({ tab: 'timeline' })} data-testid="timeoff-tab-timeline">
+          Timeline
         </button>
-        {canSeeBalances && (
-          <button type="button" role="tab" aria-selected={tab === 'sick'} className="composer-tab" style={tabStyle(tab === 'sick')} onClick={() => go({ tab: 'sick' })} data-testid="timeoff-tab-sick">
-            Sick leave
-          </button>
-        )}
         {canSeeBalances && (
           <button type="button" role="tab" aria-selected={tab === 'balances'} className="composer-tab" style={tabStyle(tab === 'balances')} onClick={() => go({ tab: 'balances' })} data-testid="timeoff-tab-balances">
             Balances
@@ -77,65 +78,27 @@ export function TimeOff() {
         )}
       </div>
       {tab === 'my' && <MyTimeOff employeeId={s.myEmployeeId} year={params.get('year')} onYear={(y) => go({ year: y })} />}
-      {tab === 'approvals' && <ApprovalsTab />}
-      {tab === 'requests' && <RequestsTab admin={admin} myEmployeeId={s.myEmployeeId ?? null} />}
-      {tab === 'calendar' && <CalendarTab month={month} onMonth={(m) => go({ month: m })} />}
+      {tab === 'approvals' && (
+        <div className="bal-page" data-testid="approvals-page">
+          <span className="to-section-title">Waiting for your decision</span>
+          <ApprovalsTab />
+          <span className="to-section-title">All requests</span>
+          <RequestsTab admin={admin} myEmployeeId={s.myEmployeeId ?? null} />
+          <span className="to-section-title">Sick leave</span>
+          <SickLeaveTab admin={admin} />
+        </div>
+      )}
+      {tab === 'timeline' && <CalendarTab month={month} onMonth={(m) => go({ month: m })} />}
       {tab === 'balances' && <Balances params={params} go={go} />}
       {tab === 'decisions' && <DecisionsTab />}
-      {tab === 'sick' && <SickLeaveTab admin={admin} />}
     </Screen>
-  );
-}
-
-/** My time off (spec 6.5, 8.5): the balance card for a year with the history, New request, and the requests of the year. */
-function MyTimeOff({ employeeId, year, onYear }: { employeeId: string | null | undefined; year: string | null; onYear: (y: string | null) => void }) {
-  const { session } = useStore();
-  const admin = session.tenant.role === 'owner' || session.tenant.role === 'admin';
-  const y = year && /^\d{4}$/.test(year) ? Number(year) : undefined;
-  const { data, error, set } = useBalance(employeeId ?? '', y);
-  const { data: requests, reload: reloadRequests } = useProjectsRead<ApiTimeOffRequest[]>(!!employeeId && (y !== undefined || !!data), () => timeOffApi.requests.list({ employeeId: employeeId ?? undefined, year: y ?? (data?.currentYear || undefined) }), `timeoff:requests:${employeeId ?? ''}:${y ?? ''}:${data?.currentYear ?? ''}`, 'timeOffRev');
-  const [requesting, setRequesting] = useState(false);
-  if (!employeeId) return <div className="ts-help">{employeeId === null ? 'You have no employee record in this workspace, so there is no time off balance.' : 'Loading'}</div>;
-  if (error) return <EmptyState title="Your balance could not be loaded" text={error} />;
-  if (data === null) return <EmptyState title="No balance" text="You have no employee record in this workspace." />;
-  if (!data) return <div className="ts-help">Loading</div>;
-  const years = Array.from(new Set([...data.years, data.currentYear])).sort();
-  return (
-    <div className="bal-page" data-testid="my-timeoff">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        {years.map((yr) => (
-          <button key={yr} type="button" className={'btn-plain' + (yr === data.year ? ' on' : '')} aria-pressed={yr === data.year} onClick={() => onYear(yr === data.currentYear ? null : String(yr))} data-testid={`balance-year-${yr}`}>
-            {yr}
-          </button>
-        ))}
-        <button type="button" className="btn btn-primary" style={{ marginLeft: 'auto' }} onClick={() => setRequesting(true)} data-testid="request-new">
-          New request
-        </button>
-      </div>
-      <BalanceCard balance={data} onChanged={(b) => b && set(b)} />
-      <section className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <span style={{ fontSize: 15, fontWeight: 600 }}>Requests {data.year}</span>
-        {requests ? <RequestsList requests={requests} onChanged={() => void reloadRequests()} /> : <span className="emp-note">Loading</span>}
-      </section>
-      <EmployeeSickLeave employeeId={employeeId} canReport />
-      {requesting && (
-        <RequestDialog
-          employeeId={employeeId}
-          admin={admin}
-          onClose={(saved) => {
-            setRequesting(false);
-            if (saved) void reloadRequests();
-          }}
-        />
-      )}
-    </div>
   );
 }
 
 /** Requests (managers and Admins, spec 8.7, 15.1): everyone the caller may see, with Record time off for Admins. */
 function RequestsTab({ admin, myEmployeeId }: { admin: boolean; myEmployeeId: string | null }) {
   const { s, employeeCard } = useStore();
-  const [status, setStatus] = useState<string>('pending');
+  const [status, setStatus] = useState<string>('');
   const [recording, setRecording] = useState(false);
   const { data, error, reload } = useProjectsRead<ApiTimeOffRequest[]>(true, () => timeOffApi.requests.list({ all: true, ...(status ? { status: status as ApiTimeOffRequest['status'] } : {}) }), `timeoff:requests:all:${status}`, 'timeOffRev');
   const orgRev = s.orgRev;
@@ -159,7 +122,7 @@ function RequestsTab({ admin, myEmployeeId }: { admin: boolean; myEmployeeId: st
         )}
       </div>
       {data ? <RequestsList requests={data} withEmployee onChanged={() => void reload()} /> : <div className="ts-help">Loading</div>}
-      <span className="emp-note">Managers see their direct and indirect reports; Admins see everyone. Decisions are made on the Approvals tab.</span>
+      <span className="emp-note">Managers see their direct and indirect reports; Admins see everyone. Decide pending requests above.</span>
       {recording && (
         <RequestDialog
           employeeId={myEmployeeId ?? employees[0]?.id ?? ''}
