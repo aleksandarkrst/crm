@@ -62,7 +62,7 @@ export const paths = {
   /** Approvals (CD-157): the weeks the caller approves; without `week`, the latest whose deadline passed. */
   approvals: (week?: string | null) => '/approvals' + query({ week }),
   /** Today's status (CD-162): a date other than today and the list's filters. */
-  teamStatus: (params: Partial<Record<'date' | 'department' | 'team' | 'manager' | 'status' | 'q' | 'all', string | null | undefined>> = {}) => '/team-status' + query(params),
+  teamStatus: (params: Partial<Record<'date' | 'department' | 'team' | 'manager' | 'status' | 'q' | 'all' | 'group', string | null | undefined>> = {}) => '/team-status' + query(params),
   /** One person's week on Approvals. */
   approval: (employeeId: string, week?: string | null) => '/approvals/' + encodeURIComponent(employeeId) + query({ week }),
 };

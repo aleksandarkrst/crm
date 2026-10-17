@@ -81,6 +81,44 @@ describe('who can open it (spec 12.1, 12.3)', () => {
     expect(await row(owner, futureId)).toMatchObject({ status: 'not_employed', detail: expect.stringMatching(/^Starts /) });
     expect(await row(mgr, futureId)).toBeUndefined();
   });
+
+  it("a manager can't learn a non-report's start or last day by moving the date", async () => {
+    const soon = (await ok<{ id: string }>('POST', '/people/employees', { ...as(owner), body: { firstName: 'Sanja', lastName: 'Soon', employmentStartDate: addDays(today, 10) } })).id;
+    const ended = (await ok<{ id: string }>('POST', '/people/employees', { ...as(owner), body: { firstName: 'Petar', lastName: 'Past', employmentStartDate: START } })).id;
+    await asTenantSql(tenant, `update employees set employment_end_date = $1 where id = $2`, [addDays(today, -5), ended]);
+    const leaving = (await ok<{ id: string }>('POST', '/people/employees', { ...as(owner), body: { firstName: 'Lena', lastName: 'Leaving', employmentStartDate: START } })).id;
+    await asTenantSql(tenant, `update employees set employment_end_date = $1 where id = $2`, [addDays(today, 5), leaving]);
+    // Admins see employment on every date.
+    expect(await row(owner, soon, addDays(today, 20))).toMatchObject({ status: 'working' });
+    expect(await row(owner, ended, addDays(today, -10))).toMatchObject({ status: 'working' });
+    expect(await row(owner, ended)).toMatchObject({ status: 'not_employed' });
+    expect(await row(owner, leaving, addDays(today, 10))).toMatchObject({ status: 'not_employed' });
+    // A manager above nobody: listed by today's employment only, the same on every date.
+    for (const d of [addDays(today, -10), today, addDays(today, 20)]) {
+      expect(await row(mgr, soon, d)).toBeUndefined();
+      expect(await row(mgr, ended, d)).toBeUndefined();
+    }
+    expect(await row(mgr, leaving, addDays(today, 10))).toMatchObject({ status: expect.not.stringMatching(/^not_employed$/) });
+  });
+
+  it('deactivated people: shown to Admins, hidden from managers', async () => {
+    const gone = (await ok<{ id: string }>('POST', '/people/employees', { ...as(owner), body: { firstName: 'Dejan', lastName: 'Deactivated', employmentStartDate: START } })).id;
+    await asTenantSql(tenant, `update employees set deactivated_at = now() - interval '2 days', employment_end_date = $1 where id = $2`, [addDays(today, -2), gone]);
+    expect(await row(owner, gone)).toMatchObject({ status: 'not_employed' });
+    expect(await row(owner, gone, addDays(today, -5))).toMatchObject({ status: expect.any(String) });
+    expect(await row(mgr, gone)).toBeUndefined();
+    expect(await row(mgr, gone, addDays(today, -5))).toBeUndefined();
+  });
+
+  it('another workspace sees none of these people', async () => {
+    const stranger = await signIn('tst-stranger');
+    const theirs = await createTenant(stranger, 'Elsewhere');
+    const view = await ok<View>('GET', '/timesheet/status', { token: stranger.token, tenant: theirs });
+    expect(view.rows.map((r) => r.id)).not.toEqual(expect.arrayContaining([mgrId]));
+    expect(view.rows.filter((r) => [mgrId, empId, peerId, futureId].includes(r.id))).toEqual([]);
+    // And this workspace's id with the stranger's token is refused.
+    expect((await call('GET', '/timesheet/status', { token: stranger.token, tenant })).status).toBe(403);
+  });
 });
 
 describe('the rules in order (spec 12.2)', () => {
@@ -117,6 +155,14 @@ describe('the rules in order (spec 12.2)', () => {
     expect(await row(owner, peerId, start)).toMatchObject({ status: 'time_off', label: 'Vacation' });
   });
 
+  it("a non-report's sick leave is Out of office for a manager, with no detail", async () => {
+    const types = await ok<{ id: string }[]>('GET', '/timeoff/sick-leave-types', as(owner));
+    const day = addDays(start, 14);
+    await ok('POST', '/timeoff/sick-leave', { ...as(owner), body: { employeeId: peerId, startDate: day, endDate: day, typeId: types[0]!.id, confirm: true } });
+    expect(await row(mgr, peerId, day)).toEqual(expect.objectContaining({ status: 'out_of_office', label: 'Out of office', detail: null }));
+    expect(await row(owner, peerId, day)).toMatchObject({ status: 'sick_leave', label: 'Sick leave' });
+  });
+
   it('a pending request is a note for those who see types, and doesn\'t change the status', async () => {
     const later = addDays(start, 21);
     await ok('POST', '/timeoff/requests', { ...as(emp), body: { type: 'vacation', startDate: later, endDate: later } });
@@ -144,6 +190,8 @@ describe('the timesheet column (spec 12.3)', () => {
     const lastWeek = addDays(monday, -7);
     expect(mine.rows.find((r) => r.id === empId)!.timesheet).toMatchObject({ weekStart: lastWeek, label: expect.any(String) });
     expect(mine.rows.find((r) => r.id === peerId)!.timesheet).toBeNull();
+    // Not their own: the timesheet column is for the people they approve.
+    expect(mine.rows.find((r) => r.id === mgrId)!.timesheet).toBeNull();
     expect((await row(owner, peerId))!.timesheet).toMatchObject({ weekStart: lastWeek });
   });
 });

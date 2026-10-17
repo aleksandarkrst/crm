@@ -2248,6 +2248,30 @@ Spec 14. Approved time off and sick leave fill the timesheet, so nobody logs tho
   flags on submitted and approved days with the trace in the history; a holiday removing a line),
   `test/timesheet-absence-flags.spec.ts`.
 
+### Today's status (CD-162)
+
+Spec 15 section 12: who is working, away or off on a date (90 days back to 60 ahead), for managers
+(anyone with reports) and Admins; everyone else gets 403 and no sidebar entry.
+
+- **API:** `GET /api/timesheet/status?date=&scope=reports` (timesheet module, `TeamStatusService`).
+  One row per employee: department and team (the top two units of their org line), manager,
+  `status`, `label`, `detail`, a pending-request `note`, `report`, and last week's `timesheet`
+  (taken from the Approvals list, so only for the people the caller approves).
+- **The rule** is pure (`team-status.ts`, `dayStatus`, unit-tested): Not employed, full-day public
+  holiday, sick leave, time off, business trip, non-working day without hours, Working ("Weekend
+  work" with hours on a non-working day; a part-day holiday's name otherwise). First match wins.
+- **Absences** come through `statusAbsenceRegistry`: the time off module registers
+  `TeamStatusSource` on start (approved requests from their first to their last counted day,
+  weekends inside included, except cancelled, returned or interrupted days; active sick leave).
+  Trips (milestone 17) add their own source the same way. Half-day time off doesn't exist yet.
+- **Visibility (12.3):** the type for the caller, their reports and Admins; "Out of office"
+  otherwise. Managers never see deactivated people, and people outside their reports are listed by
+  today's employment with no employment dates applied, so moving the date reveals no start or last day.
+- **Frontend:** Workforce → Today's status (`screens/TeamStatus.tsx`): counters (a counter filters
+  the list), department, team, manager and status filters, search, grouping by department, all
+  kept in the address; the Today screen's Team today card (`scope=reports`). Both re-read on
+  `statusRev` (time off, timesheet, holiday, workspace and people hints).
+
 ## Products, deal products and currency (CD-83)
 
 Replaces the CD-77 model (products with a currency of their own, payment schedules and
@@ -2371,8 +2395,8 @@ Settings at the bottom, as in the Workforce design.
 
 - **Pages per module** (`nav` in `modules.ts`): CRM has Overview, Pipeline, Today, Calendar, Visit
   plans, Companies, Contacts, Products and Reports (Reports only for owners, admins and managers who
-  see their team, CD-142: `navFor`); Workforce has Timesheet (CD-152) and Org structure
-  (Approvals, Today's status, Time off and Utilisation later). Add a module's page there and it shows in the sidebar, the phone bar
+  see their team, CD-142: `navFor`); Workforce has Timesheet (CD-152), Approvals and Today's status
+  (CD-157, CD-162: managers and Admins), Time off and Org structure (Utilisation later). Add a module's page there and it shows in the sidebar, the phone bar
   (`phone: true`) or its "More".
 - **The current module** comes from the route (`screens` prefixes): meetings, deals, companies,
   contacts, products and reports are CRM; `/org` and employee cards (`/people/:id`) are Workforce.

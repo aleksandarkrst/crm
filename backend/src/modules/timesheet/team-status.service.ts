@@ -48,8 +48,8 @@ export interface TeamStatusView {
  * Today's status (CD-162, spec 15 section 12). Managers (anyone with reports) and Admins only.
  * Everyone sees every employee (spec 12.3); the absence type is shown for the caller's own row,
  * their direct and indirect reports, and to Admins for everyone, "Out of office" otherwise.
- * Managers don't see deactivated people, nor anyone outside their reports who isn't employed on the
- * date (employment dates are for managers above and Admins, spec 9.3).
+ * Managers don't see deactivated people; people outside their reports are listed when employed
+ * today, with no employment dates applied (those are for managers above and Admins, spec 9.3).
  */
 @Injectable()
 export class TeamStatusService {
@@ -92,9 +92,17 @@ export class TeamStatusService {
         })
         .from(employees)
         .orderBy(employees.fullName);
-      const names = new Map(all.map((e) => [e.id, e.name]));
       const exact = (id: string) => access.isAdmin || access.isSelf(id) || access.isReport(id);
-      const people = all.filter((e) => (scope === 'reports' ? access.isReport(e.id) : true) && (!e.deactivatedAt || access.canSeeInactive));
+      const tz = tenant?.timezone ?? 'UTC';
+      // A deactivated person's last day is their end date, or the day they were deactivated.
+      const endOf = (e: (typeof all)[number]) => e.end ?? (e.deactivatedAt ? zonedParts(e.deactivatedAt, tz).date : null);
+      const employedOn = (e: (typeof all)[number], d: string) => (!e.start || e.start <= d) && (!endOf(e) || endOf(e)! >= d);
+      // Employment dates are for managers above and Admins (spec 9.3): for anyone else, whether a
+      // person is listed is decided by today alone, so stepping through dates reveals no start or last day.
+      const people = all.filter(
+        (e) => (scope === 'reports' ? access.isReport(e.id) : true) && (!e.deactivatedAt || access.canSeeInactive) && (access.canSeeEmployment(e.id) || employedOn(e, today)),
+      );
+      const names = new Map(people.map((e) => [e.id, e.name]));
       const ids = people.map((e) => e.id);
 
       const units = await tx.select({ id: orgUnits.id, name: orgUnits.name, parentId: orgUnits.parentId }).from(orgUnits);
@@ -121,11 +129,9 @@ export class TeamStatusService {
 
       const rows: (TeamStatusRow & { timesheetRequired: boolean })[] = [];
       for (const e of people) {
-        // A deactivated person's last day is their end date, or the day they were deactivated.
-        const end = e.end ?? (e.deactivatedAt ? zonedParts(e.deactivatedAt, tenant?.timezone ?? 'UTC').date : null);
         const result = dayStatus({
           date: day,
-          employment: { start: e.start, end },
+          employment: access.canSeeEmployment(e.id) ? { start: e.start, end: endOf(e) } : { start: null, end: null },
           holiday: holidays.get(day),
           dayMinutes: settings.dayMinutes,
           workingDays: settings.workingDays,
@@ -133,7 +139,6 @@ export class TeamStatusService {
           enteredMinutes: minutesOf.get(e.id) ?? 0,
           nextWorkingDay: (d) => nextWorkingDayAfter(d, settings.workingDays, fullHoliday),
         });
-        if (result.status === 'not_employed' && !access.canSeeEmployment(e.id)) continue;
         const shown = exact(e.id) ? result : maskAbsence(result);
         const line = lineOf(e.unitId);
         rows.push({
@@ -142,7 +147,7 @@ export class TeamStatusService {
           jobTitle: e.jobTitle,
           department: line[0] ?? null,
           team: line[1] ?? null,
-          manager: e.managerId ? { id: e.managerId, name: names.get(e.managerId) ?? '' } : null,
+          manager: e.managerId && names.has(e.managerId) ? { id: e.managerId, name: names.get(e.managerId)! } : null,
           ...shown,
           note: exact(e.id) && shown.status !== 'time_off' && shown.status !== 'sick_leave' ? (requested.get(e.id) ?? null) : null,
           report: access.isReport(e.id),
