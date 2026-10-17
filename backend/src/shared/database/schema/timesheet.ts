@@ -113,7 +113,8 @@ export const timesheetDays = pgTable(
 );
 
 /** What happened to a day (spec 9.5): every status change, by whom (null: the deadline job). */
-export const TIMESHEET_DAY_EVENT_KINDS = ['submitted', 'auto_submitted', 'recalled', 'approved', 'returned', 'resubmitted', 'unlocked'] as const;
+/** `absence_changed` (CD-170, spec 14.3): the time off module added or removed an absence line on a submitted or approved day. */
+export const TIMESHEET_DAY_EVENT_KINDS = ['submitted', 'auto_submitted', 'recalled', 'approved', 'returned', 'resubmitted', 'unlocked', 'absence_changed'] as const;
 export type TimesheetDayEventKind = (typeof TIMESHEET_DAY_EVENT_KINDS)[number];
 
 /**
@@ -139,7 +140,7 @@ export const timesheetDayEvents = pgTable(
   (t) => [
     index('timesheet_day_events_day_idx').on(t.tenantId, t.employeeId, t.workDate),
     foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'timesheet_day_events_employee_fk' }).onDelete('cascade'),
-    check('timesheet_day_events_kind_ck', sql`${t.kind} in ('submitted', 'auto_submitted', 'recalled', 'approved', 'returned', 'resubmitted', 'unlocked')`),
+    check('timesheet_day_events_kind_ck', sql`${t.kind} in ('submitted', 'auto_submitted', 'recalled', 'approved', 'returned', 'resubmitted', 'unlocked', 'absence_changed')`),
     check('timesheet_day_events_mode_ck', sql`${t.approvalMode} in ('week', 'day')`),
     check('timesheet_day_events_comment_ck', sql`${t.comment} is null or length(${t.comment}) between 1 and 1000`),
   ],
@@ -275,5 +276,42 @@ export const timesheetNotices = pgTable(
   (t) => [
     primaryKey({ columns: [t.tenantId, t.weekStart, t.kind, t.recipient], name: 'timesheet_notices_pk' }),
     check('timesheet_notices_kind_ck', sql`${t.kind} in ('reminder', 'late', 'auto_submitted', 'late_summary')`),
+  ],
+);
+
+/** The absences a timesheet day can carry (CD-170, spec 14.1). */
+export const TIMESHEET_ABSENCE_KINDS = ['vacation', 'paid_leave', 'unpaid_leave', 'other_absence', 'sick_leave'] as const;
+export type TimesheetAbsenceKind = (typeof TIMESHEET_ABSENCE_KINDS)[number];
+
+/**
+ * A full-day absence in one person's timesheet (CD-170, spec 14.1): approved time off or sick
+ * leave on a working day, with the standard day's hours. Written only by the time off module's
+ * sync (`timeoff.sync-timesheet`, through `TimesheetAbsencesService.sync`), read-only for everyone
+ * in the timesheet; the hours count as entered and no task hours go on the day. At most one per
+ * person and day. `source_id` is the request or the sick leave record (no foreign key: it points at
+ * either table). The label never names the type of sick leave.
+ */
+export const timesheetAbsences = pgTable(
+  'timesheet_absences',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    employeeId: uuid('employee_id').notNull(),
+    workDate: date('work_date').notNull(),
+    kind: text('kind', { enum: TIMESHEET_ABSENCE_KINDS }).notNull(),
+    /** "Vacation", "Paid leave: Marriage", "Sick leave". */
+    label: text('label').notNull(),
+    minutes: integer('minutes').notNull(),
+    sourceId: uuid('source_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('timesheet_absences_day_uq').on(t.tenantId, t.employeeId, t.workDate),
+    index('timesheet_absences_source_idx').on(t.tenantId, t.sourceId),
+    foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'timesheet_absences_employee_fk' }).onDelete('cascade'),
+    check('timesheet_absences_kind_ck', sql`${t.kind} in ('vacation', 'paid_leave', 'unpaid_leave', 'other_absence', 'sick_leave')`),
+    check('timesheet_absences_minutes_ck', sql`${t.minutes} between 1 and 1440`),
+    check('timesheet_absences_label_ck', sql`length(${t.label}) between 1 and 200`),
   ],
 );

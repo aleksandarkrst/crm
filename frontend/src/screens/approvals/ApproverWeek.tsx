@@ -188,6 +188,17 @@ export function ApproverWeek() {
                 {shortHours(d.minutes, w.settings.timeFormat)} of {shortHours(d.expectedMinutes, w.settings.timeFormat)} h
               </span>
               {d.holiday && <span className="emp-note">Public holiday · {d.holiday.name}</span>}
+              {d.absence && (
+                <span className="emp-note" data-testid="ap-absence">
+                  {d.absence.label} · {shortHours(d.absence.minutes, w.settings.timeFormat)} h
+                </span>
+              )}
+              {d.pendingAbsence && <span className="emp-note">{d.pendingAbsence}</span>}
+              {d.flags.map((f) => (
+                <span key={f} className="emp-note emp-warn" data-testid="ap-absence-flag">
+                  {f}
+                </span>
+              ))}
               <span style={{ flex: 1 }} />
               {dayMode && right && d.status === 'submitted' && (
                 <>
@@ -247,7 +258,7 @@ export function ApproverWeek() {
               </p>
             )}
             {rows.length === 0 ? (
-              <p className="emp-note ap-empty">No hours entered.</p>
+              <p className="emp-note ap-empty">{d.absence ? 'No task hours: the day is time off.' : 'No hours entered.'}</p>
             ) : (
               <div className="ap-scroll">
                 <table className="ap-entries">

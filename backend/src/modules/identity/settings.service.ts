@@ -172,6 +172,11 @@ export class SettingsService {
         .where(eq(tenants.id, ctx.tenantId))
         .returning(workspaceColumns);
       if (!row) throw new NotFoundException('Workspace not found');
+      // Absence lines carry the standard day's hours on working days (CD-170): resync when either changes.
+      if (timesheet && (timesheet.dayMinutes !== undefined || timesheet.workingDays !== undefined)) {
+        const year = new Date().getUTCFullYear();
+        await this.jobs.send('timeoff.sync-timesheet', { tenantId: ctx.tenantId, from: `${year - 1}-01-01`, to: `${year + 1}-12-31` }, tx);
+      }
       if (input.ceoEmployeeId) await applyCeoRule(tx, this.jobs, ctx.tenantId, ctx.userId, input.ceoEmployeeId, before?.ceoEmployeeId ?? null);
       // Renamed projects or tasks (CD-143): the audit keeps the old names too.
       const data = terms && before ? { ...input, previousTerms: present(before).terms } : input;

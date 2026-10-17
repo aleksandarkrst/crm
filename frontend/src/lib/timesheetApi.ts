@@ -42,6 +42,12 @@ export interface ApiTimesheetDay {
   editable: boolean;
   /** A public holiday on a working day (CD-153): its name and the hours off. */
   holiday: { name: string; minutes: number } | null;
+  /** A full-day absence from time off (CD-170): read-only, its hours count as entered, no task hours that day. */
+  absence: { kind: string; label: string; minutes: number } | null;
+  /** Time off waiting for approval on the day: a hint without hours ("Vacation pending"). */
+  pendingAbsence: string | null;
+  /** For the approver (spec 14.3): "Changed after submission: Vacation added", "Conflict: absence and task hours", … */
+  flags: string[];
   /** The approver's decision (CD-157): the latest comment, who returned or approved the day and when. */
   comment: string | null;
   returnedAt: string | null;

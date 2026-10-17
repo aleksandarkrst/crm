@@ -31,7 +31,8 @@ function subLine(row: ApiTimesheetRow, format: TimeFormat): { text: string; over
 function cellState(row: ApiTimesheetRow, day: ApiTimesheetDay, cell: ApiCell): { editable: boolean; tone: string } {
   const statusTone = day.status === 'submitted' || day.status === 'approved' ? day.status : '';
   const rowAllows = row.edit === 'any' || (row.edit === 'existing' && cell.minutes > 0);
-  const editable = day.editable && rowAllows && cell.entries <= 1;
+  // No task hours on a full-day absence (CD-170, spec 14.2); hours already there can still be lowered by clearing them on the task page.
+  const editable = day.editable && rowAllows && cell.entries <= 1 && !day.absence;
   if (statusTone) return { editable: false, tone: statusTone };
   if (!editable) return { editable, tone: 'locked' };
   if (cell.minutes > 0 && day.minutes > day.expectedMinutes) return { editable, tone: 'warn' };
@@ -353,6 +354,10 @@ export function Grid({
 
   const today = week.today;
   const holidayNames = [...new Set(week.days.flatMap((d) => (d.holiday ? [d.holiday.name] : [])))];
+  // One read-only row per absence (CD-170): "Vacation", "Sick leave", "Paid leave: Marriage"; pending ones as hints.
+  const absenceLabels = [...new Set(week.days.flatMap((d) => (d.absence ? [d.absence.label] : [])))];
+  const pendingLabels = [...new Set(week.days.flatMap((d) => (d.pendingAbsence ? [d.pendingAbsence] : [])))];
+  const flagged = week.days.filter((d) => d.flags.length);
   const totalMinutes = week.days.reduce((a, d) => a + d.minutes, 0);
   const expected = week.days.reduce((a, d) => a + d.expectedMinutes, 0);
   const noteRow = note && week.rows.find((r) => r.key === note.key);
@@ -425,7 +430,7 @@ export function Grid({
               <span key={d.date} className={`ts-day${d.holiday ? ' ts-holiday' : isWeekend(d.date) ? ' ts-weekend' : ''}`} data-testid="ts-day" data-date={d.date} data-status={d.status}>
                 <span className="ts-day-name">{DAY_NAMES[i]}</span>
                 <span className="ts-day-date">{shortDate(d.date)}</span>
-                <span className={`ts-day-total${short ? ' short' : ''}`}>{d.holiday ? `${shortHours(d.minutes, format)} h · holiday` : d.minutes || d.expectedMinutes ? `${shortHours(d.minutes, format)} h` : '—'}</span>
+                <span className={`ts-day-total${short ? ' short' : ''}`}>{d.absence ? `${shortHours(d.minutes, format)} h · ${d.absence.kind === 'sick_leave' ? 'sick leave' : 'time off'}` : d.holiday ? `${shortHours(d.minutes, format)} h · holiday` : d.minutes || d.expectedMinutes ? `${shortHours(d.minutes, format)} h` : '—'}</span>
                 {onResubmitDay && week.resubmittable.includes(d.date) && (
                   <button type="button" className="ts-day-submit" onClick={() => onResubmitDay(d.date)} data-testid="ts-resubmit-day" aria-label={`Resubmit ${dayLabel(d.date)}`}>
                     Resubmit
@@ -465,10 +470,56 @@ export function Grid({
             </span>
           </div>
         ))}
-        {sumRow('Total entered', 'Tasks and work orders', (d) => d.minutes, totalMinutes, { strong: true, testId: 'ts-total-entered' })}
+        {absenceLabels.map((label) => (
+          <div className="ts-row ts-soft" key={label} data-testid="ts-absence-row">
+            <span className="ts-label">
+              <span className="ts-label-main" style={{ color: 'var(--text-2)' }} title={label}>
+                {label}
+              </span>
+              <span className="ts-label-sub">From Time off</span>
+            </span>
+            {week.days.map((d) => (
+              <span key={d.date} className={`ts-box${isWeekend(d.date) ? ' ts-weekend' : ''}`}>
+                <span className="ts-auto">{d.absence?.label === label ? shortHours(d.absence.minutes, format) : ''}</span>
+              </span>
+            ))}
+            <span className="ts-total">
+              {shortHours(
+                week.days.reduce((a, d) => a + (d.absence?.label === label ? d.absence.minutes : 0), 0),
+                format,
+              )}
+            </span>
+          </div>
+        ))}
+        {pendingLabels.map((label) => (
+          <div className="ts-row ts-soft" key={label} data-testid="ts-pending-row">
+            <span className="ts-label">
+              <span className="ts-label-main" style={{ color: 'var(--muted)' }} title={label}>
+                {label}
+              </span>
+              <span className="ts-label-sub">No hours until it is approved</span>
+            </span>
+            {week.days.map((d) => (
+              <span key={d.date} className={`ts-box${isWeekend(d.date) ? ' ts-weekend' : ''}`}>
+                <span className="ts-auto" style={{ color: 'var(--muted)' }}>{d.pendingAbsence === label ? 'pending' : ''}</span>
+              </span>
+            ))}
+            <span className="ts-total" />
+          </div>
+        ))}
+        {sumRow('Total entered', absenceLabels.length ? 'Tasks, work orders and time off' : 'Tasks and work orders', (d) => d.minutes, totalMinutes, { strong: true, testId: 'ts-total-entered' })}
         {sumRow('Expected', `Standard day ${shortHours(week.settings.dayMinutes, format)} h${holidayNames.length ? ', minus holidays' : ''}`, (d) => d.expectedMinutes, expected, { testId: 'ts-expected' })}
         {sumRow('Difference', 'Entered minus expected', (d) => d.minutes - d.expectedMinutes, totalMinutes - expected, { signed: true, testId: 'ts-difference' })}
       </div>
+      {flagged.length > 0 && (
+        <div className="ts-flags" data-testid="ts-absence-flags">
+          {flagged.map((d) => (
+            <span key={d.date} className="emp-note emp-warn">
+              {dayLabel(d.date)}: {d.flags.join(' · ')}
+            </span>
+          ))}
+        </div>
+      )}
       {note && noteRow && noteDay && (
         <NotePopover key={`${note.key}:${note.date}`} row={noteRow} day={noteDay} cell={noteRow.cells[note.date] ?? EMPTY} format={format} at={{ top: note.top, left: note.left }} onSave={onSave} onClose={closeNote} />
       )}

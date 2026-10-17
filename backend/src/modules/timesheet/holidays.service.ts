@@ -1,3 +1,4 @@
+import { JobsService } from '../../shared/events/jobs.service';
 import { BadRequestException, Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { AuditService } from '../../shared/audit/audit.service';
@@ -44,7 +45,18 @@ export class HolidaysService implements TenantProvisioner, OnModuleInit {
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
     private readonly provisioning: TenantProvisioning,
+    private readonly jobs: JobsService,
   ) {}
+
+  /**
+   * Absence lines follow the calendar (CD-170), for everyone with absences then: from the earliest
+   * year a change touched (a repeating holiday reaches every later year) to the end of next year.
+   */
+  private resyncAbsences(tx: Tx, tenantId: string, dates: string[]): Promise<void> {
+    const year = new Date().getUTCFullYear();
+    const first = Math.min(year - 1, ...dates.map((d) => Number(d.slice(0, 4))));
+    return this.jobs.send('timeoff.sync-timesheet', { tenantId, from: `${first}-01-01`, to: `${year + 1}-12-31` }, tx);
+  }
 
   onModuleInit(): void {
     this.provisioning.register(this);
@@ -77,6 +89,7 @@ export class HolidaysService implements TenantProvisioner, OnModuleInit {
       await tx.update(tenants).set({ holidayPreload: input.country }).where(eq(tenants.id, ctx.tenantId));
       const year = new Date().getUTCFullYear();
       const added = input.country === 'none' ? 0 : await this.preloadIn(tx, ctx.tenantId, input.country, input.year ? [input.year] : [year, year + 1]);
+      if (added) await this.resyncAbsences(tx, ctx.tenantId, input.year ? [`${input.year}-01-01`] : []);
       await this.audit.record(tx, ctx, { action: 'holiday.preload', entityType: 'holiday', data: { ...input, added } });
       const years = (await tx.select({ year: publicHolidayPreloads.year }).from(publicHolidayPreloads).orderBy(publicHolidayPreloads.year)).map((r) => r.year);
       return { country: input.country, years, added };
@@ -90,7 +103,9 @@ export class HolidaysService implements TenantProvisioner, OnModuleInit {
       if (!t || t.country === 'none') return 0;
       const today = zonedParts(now, t.timezone).date;
       const year = Number(today.slice(0, 4));
-      return this.preloadIn(tx, tenantId, t.country as HolidayCountry, today.slice(5) >= '11-01' ? [year, year + 1] : [year]);
+      const added = await this.preloadIn(tx, tenantId, t.country as HolidayCountry, today.slice(5) >= '11-01' ? [year, year + 1] : [year]);
+      if (added) await this.resyncAbsences(tx, tenantId, []);
+      return added;
     });
   }
 
@@ -143,6 +158,7 @@ export class HolidaysService implements TenantProvisioner, OnModuleInit {
           .values({ tenantId: ctx.tenantId, holidayDate: input.date, endDate, name: input.name, minutes: input.minutes ?? null })
           .returning(holidayColumns);
         await this.audit.record(tx, ctx, { action: 'holiday.created', entityType: 'holiday', entityId: row!.id, data: { ...input, endDate } });
+        await this.resyncAbsences(tx, ctx.tenantId, [row!.date]);
         return view(row!, holidayDaysIn(row!, Number(row!.date.slice(0, 4))));
       })
       .catch(mapDbError);
@@ -161,6 +177,7 @@ export class HolidaysService implements TenantProvisioner, OnModuleInit {
           .where(eq(publicHolidays.id, id))
           .returning(holidayColumns);
         await this.audit.record(tx, ctx, { action: 'holiday.updated', entityType: 'holiday', entityId: id, data: { ...input } });
+        await this.resyncAbsences(tx, ctx.tenantId, [current.date, row!.date]);
         return view(row!, holidayDaysIn(row!, Number(row!.date.slice(0, 4))));
       })
       .catch(mapDbError);
@@ -171,6 +188,7 @@ export class HolidaysService implements TenantProvisioner, OnModuleInit {
       const [row] = await tx.delete(publicHolidays).where(eq(publicHolidays.id, id)).returning(holidayColumns);
       if (!row) throw new NotFoundException('Holiday not found');
       await this.audit.record(tx, ctx, { action: 'holiday.deleted', entityType: 'holiday', entityId: id, data: { date: row.date, name: row.name } });
+      await this.resyncAbsences(tx, ctx.tenantId, [row.date]);
     });
   }
 }

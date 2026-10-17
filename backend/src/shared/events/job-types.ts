@@ -130,6 +130,12 @@ export interface JobPayloads {
    */
   'timeoff.daily': { now?: string; tenantId?: string };
   /**
+   * Makes one person's timesheet absences match their approved time off and sick leave between two
+   * dates (CD-170, spec 14.1), queued in the same transaction as every change that affects them;
+   * without `employeeId` (a holiday calendar change) everyone with absences in the period.
+   */
+  'timeoff.sync-timesheet': { tenantId: string; employeeId?: string; from: string; to: string };
+  /**
    * One sick leave email (CD-169, spec 15.2): `reported` to the manager and the Admins, `ended` to
    * the manager, `interrupted` (time off interrupted by sick leave) to the employee, the approvers
    * and the Admins, `weekly_check` to one Admin on Mondays. Recipients and toggles are read when sending.
@@ -194,6 +200,7 @@ export const JOB_NAMES = [
   'timeoff.daily',
   'timeoff.notice-email',
   'timeoff.sick-email',
+  'timeoff.sync-timesheet',
   'timesheet.tick',
   'timesheet.notice-email',
   'timesheet.task-hours-changed',

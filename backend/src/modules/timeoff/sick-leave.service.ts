@@ -1,3 +1,4 @@
+import { TimesheetSyncService } from './timesheet-sync';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
 import { and, asc, desc, eq, gte, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm';
 import { AuditService } from '../../shared/audit/audit.service';
@@ -98,6 +99,7 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
     private readonly decisions: DecisionsService,
     private readonly balances: BalancesService,
     private readonly provisioning: TenantProvisioning,
+    private readonly timesheet: TimesheetSyncService,
   ) {}
 
   onModuleInit(): void {
@@ -253,6 +255,7 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
           .returning();
         await this.audit.record(tx, ctx, { action: 'timeoff.sick_leave_reported', entityType: 'sick_leave', entityId: row!.id, data: { employeeId, startDate: row!.startDate, endDate: row!.endDate, status: row!.status } });
         await this.applyInterruptions(tx, ctx.tenantId, row!, today);
+        await this.queueSync(tx, ctx.tenantId, row!, null, today);
         if (!confirmed) await this.jobs.send('timeoff.sick-email', { tenantId: ctx.tenantId, kind: 'reported', sickLeaveId: row!.id, actorUserId: ctx.userId }, tx);
         return (await this.views(tx, ctx, access, [row!], today))[0]!;
       })
@@ -288,6 +291,7 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
         await this.audit.record(tx, ctx, { action: 'timeoff.sick_leave_updated', entityType: 'sick_leave', entityId: id, data: { employeeId: row.employeeId, ...input } });
         const today = await workspaceToday(tx, ctx.tenantId);
         await this.applyInterruptions(tx, ctx.tenantId, updated!, today);
+        await this.queueSync(tx, ctx.tenantId, updated!, row, today);
         if (row.endDate === null && updated!.endDate !== null) await this.jobs.send('timeoff.sick-email', { tenantId: ctx.tenantId, kind: 'ended', sickLeaveId: id, actorUserId: ctx.userId }, tx);
         return (await this.views(tx, ctx, access, [updated!], today))[0]!;
       })
@@ -315,6 +319,7 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
         await this.audit.record(tx, ctx, { action: 'timeoff.sick_leave_confirmed', entityType: 'sick_leave', entityId: id, data: { employeeId: row.employeeId, typeId: input.typeId, endDate } });
         const today = await workspaceToday(tx, ctx.tenantId);
         await this.applyInterruptions(tx, ctx.tenantId, updated!, today);
+        await this.queueSync(tx, ctx.tenantId, updated!, row, today);
         if (row.endDate === null && endDate !== null) await this.jobs.send('timeoff.sick-email', { tenantId: ctx.tenantId, kind: 'ended', sickLeaveId: id, actorUserId: ctx.userId }, tx);
         return (await this.views(tx, ctx, access, [updated!], today))[0]!;
       })
@@ -335,6 +340,7 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
       await this.audit.record(tx, ctx, { action: 'timeoff.sick_leave_cancelled', entityType: 'sick_leave', entityId: id, data: { employeeId: row.employeeId, reason: input.reason } });
       const today = await workspaceToday(tx, ctx.tenantId);
       const { notRestored } = await this.applyInterruptions(tx, ctx.tenantId, updated!, today);
+      await this.queueSync(tx, ctx.tenantId, updated!, row, today);
       return { ...(await this.views(tx, ctx, access, [updated!], today))[0]!, notRestored };
       })
       .catch(mapDbError);
@@ -385,7 +391,11 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
       for (const row of open) {
         await this.lock(tx, row.employeeId);
         const [fresh] = await tx.select().from(sickLeaves).where(eq(sickLeaves.id, row.id));
-        if (fresh && fresh.status !== 'cancelled') await this.applyInterruptions(tx, tenantId, fresh, today);
+        if (fresh && fresh.status !== 'cancelled') {
+          await this.applyInterruptions(tx, tenantId, fresh, today);
+          // The new day gets its line each morning (spec 14.5.5).
+          await this.timesheet.queue(tx, tenantId, fresh.employeeId, fresh.startDate, today);
+        }
       }
       return open.length;
     });
@@ -533,6 +543,20 @@ export class SickLeaveService implements TenantProvisioner, OnModuleInit {
       .from(sickLeaves)
       .where(and(eq(sickLeaves.employeeId, employeeId), inArray(sickLeaves.status, [...ACTIVE]), lte(sickLeaves.startDate, to), or(isNull(sickLeaves.endDate), gte(sickLeaves.endDate, from))));
     for (const row of rows) await this.applyInterruptions(tx, tenantId, row, today);
+  }
+
+  /**
+   * The timesheet follows (CD-170): the dates the record covers now or covered before, up to today
+   * while open. Interrupted and restored request days fall inside them.
+   */
+  private queueSync(tx: Tx, tenantId: string, now: SickLeaveRow, before: SickLeaveRow | null, today: string): Promise<void> {
+    const spans = [now, ...(before ? [before] : [])];
+    const from = spans.reduce((m, r) => (r.startDate < m ? r.startDate : m), now.startDate);
+    const to = spans.reduce((m, r) => {
+      const end = r.endDate ?? today;
+      return end > m ? end : m;
+    }, from);
+    return this.timesheet.queue(tx, tenantId, now.employeeId, from, to);
   }
 
   private lock(tx: Tx, employeeId: string) {

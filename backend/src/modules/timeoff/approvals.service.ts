@@ -1,3 +1,4 @@
+import { TimesheetSyncService } from './timesheet-sync';
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { AuditService } from '../../shared/audit/audit.service';
@@ -67,6 +68,7 @@ export class ApprovalsService {
     private readonly balances: BalancesService,
     private readonly decisions: DecisionsService,
     private readonly sick: SickLeaveService,
+    private readonly timesheet: TimesheetSyncService,
   ) {}
 
   // ------------------------------------------------------------------ decisions
@@ -123,6 +125,7 @@ export class ApprovalsService {
     if (row.type === 'vacation') await this.decisions.queueFor(tx, ctx, updated!);
     // Approved on days sick leave already covers: those days are interrupted at once (spec 13.4).
     await this.sick.reapplyFor(tx, ctx.tenantId, row.employeeId, row.startDate, row.endDate);
+    await this.timesheet.queue(tx, ctx.tenantId, row.employeeId, row.startDate, row.endDate);
     const [view] = await this.requests.views(tx, ctx, access, [updated!]);
     return view!;
   }
@@ -161,6 +164,7 @@ export class ApprovalsService {
       await this.audit.record(tx, ctx, { action: 'timeoff.request_cancelled', entityType: 'timeoff_request', entityId: id, data: { employeeId: row.employeeId, returned, comment, self } });
       await this.notifyChanged(tx, ctx, row, 'cancelled');
       await this.decisions.sourceChanged(tx, id, 'cancelled');
+      await this.timesheet.queue(tx, ctx.tenantId, row.employeeId, row.startDate, row.endDate);
       const [view] = await this.requests.views(tx, ctx, access, [updated!]);
       return view!;
     });
@@ -189,6 +193,7 @@ export class ApprovalsService {
       await this.audit.record(tx, ctx, { action: 'timeoff.request_shortened', entityType: 'timeoff_request', entityId: id, data: { employeeId: row.employeeId, endDate, returned, comment } });
       await this.notifyChanged(tx, ctx, row, 'shortened');
       await this.decisions.sourceChanged(tx, id, 'outdated');
+      await this.timesheet.queue(tx, ctx.tenantId, row.employeeId, row.startDate, row.endDate);
       const [view] = await this.requests.views(tx, ctx, access, [updated!]);
       return view!;
     });
