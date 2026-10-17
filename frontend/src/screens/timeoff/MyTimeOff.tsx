@@ -4,7 +4,7 @@ import { type ApiSickLeave, type ApiTimeOffReason, type ApiTimeOffRequest, timeO
 import { useProjectsRead } from '../../store/projects';
 import { useStore } from '../../store/store';
 import { dateLabel } from '../employee/parts';
-import { BalanceCard, useBalance } from './BalanceCard';
+import { useBalance } from './BalanceCard';
 import { RequestDialog } from './RequestDialog';
 import { RequestsList } from './RequestsList';
 import { ReportSickButton, SickLeaveList } from './SickLeave';
@@ -61,13 +61,13 @@ function Tile({ title, figure, unit, lines, testId, children }: { title: string;
  * My time off (CD-350, simplified from spec 6.5 and 8.5): one tile per policy with what is left and
  * what was used this year (Vacation, Paid leave, Unpaid leave, Other absence when used) and sick
  * leave alongside them; Request time off and Report sick leave; then the year's requests and sick
- * leave. The full vacation breakdown and its history fold out under "Vacation details".
+ * leave.
  */
 export function MyTimeOff({ employeeId, year, onYear }: { employeeId: string | null | undefined; year: string | null; onYear: (y: string | null) => void }) {
   const { s, session } = useStore();
   const admin = session.tenant.role === 'owner' || session.tenant.role === 'admin';
   const y = year && /^\d{4}$/.test(year) ? Number(year) : undefined;
-  const { data, error, set } = useBalance(employeeId ?? '', y);
+  const { data, error } = useBalance(employeeId ?? '', y);
   const shownYear = y ?? data?.currentYear;
   const { data: requests, reload: reloadRequests } = useProjectsRead<ApiTimeOffRequest[]>(
     !!employeeId && !!shownYear,
@@ -78,7 +78,6 @@ export function MyTimeOff({ employeeId, year, onYear }: { employeeId: string | n
   const { data: sick, reload: reloadSick } = useProjectsRead<ApiSickLeave[]>(!!employeeId, () => timeOffApi.sickLeave.list({ employeeId: employeeId ?? undefined }), `timeoff:sick:${employeeId ?? ''}`, 'timeOffRev');
   const { data: reasons } = useProjectsRead<ApiTimeOffReason[]>(!!employeeId, () => timeOffApi.reasons.list('paid_leave'), 'timeoff:reasons:paid_leave', 'timeOffRev');
   const [requesting, setRequesting] = useState(false);
-  const [details, setDetails] = useState(false);
 
   if (!employeeId) return <div className="ts-help">{employeeId === null ? 'You have no employee record in this workspace, so there is no time off.' : 'Loading'}</div>;
   if (error) return <EmptyState title="Your time off could not be loaded" text={error} />;
@@ -123,11 +122,7 @@ export function MyTimeOff({ employeeId, year, onYear }: { employeeId: string | n
           unit={`${f.remaining === 1 ? 'day' : 'days'} left of ${f.total - f.expired}`}
           testId="policy-vacation"
           lines={[`Used ${days(f.used)}`, f.scheduled > 0 && `Booked ${days(f.scheduled)}`, f.pending > 0 && `Waiting for approval ${days(f.pending)}`, f.carryRemaining > 0 && `${days(f.carryRemaining)} carried over, use by ${dateLabel(f.carryExpiresOn)}`]}
-        >
-          <button type="button" className="btn-plain to-tile-link" aria-expanded={details} onClick={() => setDetails(!details)} data-testid="vacation-details">
-            {details ? 'Hide details' : 'Vacation details'}
-          </button>
-        </Tile>
+        />
         <Tile
           title="Paid leave"
           figure={usage.paid_leave.used}
@@ -154,7 +149,6 @@ export function MyTimeOff({ employeeId, year, onYear }: { employeeId: string | n
         />
       </div>
 
-      {details && <BalanceCard balance={data} onChanged={(b) => b && set(b)} />}
 
       <section className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }} data-testid="timeoff-history">
         <span className="to-section-title" style={{ marginTop: 0 }}>

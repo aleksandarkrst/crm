@@ -6,15 +6,13 @@ import { Screen } from '../components/Layout';
 import { Modal, ModalHeader } from '../components/ui';
 import { downloadBlob } from '../lib/csv';
 import { paths } from '../lib/paths';
-import { type ApiBalanceRow, type ApiBalancesTable, type ApiTimeOffPolicy, type ApiTimeOffRequest, type BalancesFilters, timeOffApi } from '../lib/timeOffApi';
+import { type ApiBalanceRow, type ApiBalancesTable, type ApiTimeOffPolicy, type BalancesFilters, timeOffApi } from '../lib/timeOffApi';
 import { projectError, useProjectsRead } from '../store/projects';
 import { useStore } from '../store/store';
-import { ApprovalsTab, CalendarTab } from './timeoff/Approvals';
-import { RequestDialog } from './timeoff/RequestDialog';
+import { CalendarTab } from './timeoff/Approvals';
 import { DecisionsTab } from './timeoff/Decisions';
-import { RequestsList } from './timeoff/RequestsList';
 import { MyTimeOff } from './timeoff/MyTimeOff';
-import { SickLeaveTab } from './timeoff/SickLeave';
+import { RequestsTable } from './timeoff/RequestsTable';
 
 type Tab = 'my' | 'approvals' | 'timeline' | 'balances' | 'decisions';
 const tabStyle = (on: boolean) => ({ borderBottom: `2px solid ${on ? 'var(--brand)' : 'transparent'}`, fontWeight: on ? 600 : 500, color: on ? 'var(--brand)' : 'var(--text-2)' });
@@ -78,63 +76,11 @@ export function TimeOff() {
         )}
       </div>
       {tab === 'my' && <MyTimeOff employeeId={s.myEmployeeId} year={params.get('year')} onYear={(y) => go({ year: y })} />}
-      {tab === 'approvals' && (
-        <div className="bal-page" data-testid="approvals-page">
-          <span className="to-section-title">Waiting for your decision</span>
-          <ApprovalsTab />
-          <span className="to-section-title">All requests</span>
-          <RequestsTab admin={admin} myEmployeeId={s.myEmployeeId ?? null} />
-          <span className="to-section-title">Sick leave</span>
-          <SickLeaveTab admin={admin} />
-        </div>
-      )}
+      {tab === 'approvals' && <RequestsTable admin={admin} myEmployeeId={s.myEmployeeId ?? null} />}
       {tab === 'timeline' && <CalendarTab month={month} onMonth={(m) => go({ month: m })} />}
       {tab === 'balances' && <Balances params={params} go={go} />}
       {tab === 'decisions' && <DecisionsTab />}
     </Screen>
-  );
-}
-
-/** Requests (managers and Admins, spec 8.7, 15.1): everyone the caller may see, with Record time off for Admins. */
-function RequestsTab({ admin, myEmployeeId }: { admin: boolean; myEmployeeId: string | null }) {
-  const { s, employeeCard } = useStore();
-  const [status, setStatus] = useState<string>('');
-  const [recording, setRecording] = useState(false);
-  const { data, error, reload } = useProjectsRead<ApiTimeOffRequest[]>(true, () => timeOffApi.requests.list({ all: true, ...(status ? { status: status as ApiTimeOffRequest['status'] } : {}) }), `timeoff:requests:all:${status}`, 'timeOffRev');
-  const orgRev = s.orgRev;
-  useEffect(() => {
-    if (admin) void employeeCard.ensurePickers();
-  }, [admin, employeeCard, orgRev]);
-  if (error) return <EmptyState title="Requests could not be loaded" text={error} />;
-  const employees = (s.peoplePickers?.employees ?? []).filter((e) => e.status !== 'inactive').map((e) => ({ id: e.id, fullName: e.fullName }));
-  return (
-    <div className="bal-page" data-testid="requests-tab">
-      <div className="bal-filters">
-        <select className="form-input" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
-          <option value="pending">Pending</option>
-          <option value="approved">Approved</option>
-          <option value="">All statuses</option>
-        </select>
-        {admin && (
-          <button type="button" className="btn btn-primary" style={{ marginLeft: 'auto' }} onClick={() => setRecording(true)} disabled={!employees.length} data-testid="request-record-new">
-            Record time off
-          </button>
-        )}
-      </div>
-      {data ? <RequestsList requests={data} withEmployee onChanged={() => void reload()} /> : <div className="ts-help">Loading</div>}
-      <span className="emp-note">Managers see their direct and indirect reports; Admins see everyone. Decide pending requests above.</span>
-      {recording && (
-        <RequestDialog
-          employeeId={myEmployeeId ?? employees[0]?.id ?? ''}
-          employees={employees}
-          admin={admin}
-          onClose={(saved) => {
-            setRecording(false);
-            if (saved) void reload();
-          }}
-        />
-      )}
-    </div>
   );
 }
 

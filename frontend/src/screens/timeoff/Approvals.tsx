@@ -124,7 +124,7 @@ export function ApprovalsTab() {
 }
 
 /** Reject: the comment the employee reads (spec 9.2). */
-function RejectDialog({ request, onClose }: { request: ApiTimeOffRequest; onClose: (done?: boolean) => void }) {
+export function RejectDialog({ request, onClose }: { request: ApiTimeOffRequest; onClose: (done?: boolean) => void }) {
   const { flash } = useStore();
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);

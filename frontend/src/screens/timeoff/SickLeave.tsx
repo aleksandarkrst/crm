@@ -19,7 +19,7 @@ function useSickTypes(enabled: boolean): ApiSickLeaveType[] {
   return useProjectsRead<ApiSickLeaveType[]>(enabled, () => timeOffApi.sickLeave.types(), 'timeoff:sick-types', 'timeOffRev').data ?? [];
 }
 
-type DialogState = { kind: 'report'; employeeId?: string } | { kind: 'confirm' | 'edit' | 'end' | 'cancel'; record: ApiSickLeave };
+export type DialogState = { kind: 'report'; employeeId?: string } | { kind: 'confirm' | 'edit' | 'end' | 'cancel'; record: ApiSickLeave };
 
 /**
  * Sick leave records (CD-169, spec 13.5): period, calendar and working days, status, type (the
@@ -111,7 +111,7 @@ export function ReportSickButton({ employeeId, onReported, label = 'Report sick 
  * report, Admins for anyone and with the type at once), confirm, edit (Admins), set the end date,
  * cancel with a reason (Admins). Admins see the note with its "no medical information" hint.
  */
-function SickDialog({ state, onClose }: { state: DialogState; onClose: (saved?: boolean) => void }) {
+export function SickDialog({ state, onClose }: { state: DialogState; onClose: (saved?: boolean) => void }) {
   const { s, session, employeeCard, flash } = useStore();
   const admin = session.tenant.role === 'owner' || session.tenant.role === 'admin';
   const record = state.kind === 'report' ? null : state.record;
