@@ -327,8 +327,8 @@ export const holidaysApi = {
   nextDeadline: () => api<{ weekStart: string; weekNumber: number; date: string; time: string }>('/timesheet/deadline'),
 };
 
-/** Today's status (CD-162): what each employee is doing on a date. `out_of_office`: an absence whose type the caller may not see. */
-export type ApiDayStatus = 'not_employed' | 'public_holiday' | 'sick_leave' | 'time_off' | 'business_trip' | 'out_of_office' | 'non_working' | 'working';
+/** Today's status (CD-162): what each employee is doing on a date. */
+export type ApiDayStatus = 'not_employed' | 'public_holiday' | 'sick_leave' | 'time_off' | 'business_trip' | 'non_working' | 'working';
 
 export interface ApiStatusRow {
   id: string;
@@ -359,6 +359,6 @@ export interface ApiTeamStatus {
 }
 
 export const teamStatusApi = {
-  /** Managers and Admins only (403 otherwise). `scope: 'reports'` keeps the caller's reports (the Today screen's card). */
+  /** Managers (their reports) and Admins (everyone) only, 403 otherwise. `scope: 'reports'` keeps the caller's reports (the Today screen's card). */
   list: (date?: string, scope?: 'reports') => api<ApiTeamStatus>(`/timesheet/status${date || scope ? `?${new URLSearchParams({ ...(date ? { date } : {}), ...(scope ? { scope } : {}) })}` : ''}`),
 };
