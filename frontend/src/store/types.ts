@@ -510,6 +510,8 @@ export interface State {
   timesheetRev: number;
   /** Raised by time off changes (CD-163: policies, profiles, entitlements) and employee changes: Settings → Time off and the card's Time off section read again. */
   timeOffRev: number;
+  /** Raised by time off, sick leave, timesheet, holiday and people changes: Today's status reads again (CD-162). */
+  statusRev: number;
   /** Employees, org levels and units (milestone 13; see store/people.ts), read when a screen needs them. */
   people: PeopleState;
   /** Goes up on every employee and role change (live hints, resync): people lists re-read (CD-142). */

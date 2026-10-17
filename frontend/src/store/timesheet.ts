@@ -1,5 +1,5 @@
 import { api } from '../lib/api';
-import { type ApiApprovals, type ApiApproverWeek, approvalsApi, type ApiTimeCard, type ApiTimesheetWeek, type ApiWeekHistory, timesheetApi } from '../lib/timesheetApi';
+import { type ApiApprovals, type ApiApproverWeek, approvalsApi, type ApiTeamStatus, type ApiTimeCard, type ApiTimesheetWeek, type ApiWeekHistory, teamStatusApi, timesheetApi } from '../lib/timesheetApi';
 import { useProjectsRead } from './projects';
 
 /** The caller's timesheet week (CD-152), read again after any timesheet, task, work order or project change (`s.timesheetRev`). */
@@ -22,3 +22,7 @@ export const useTaskTime = (id: string | undefined) => useProjectsRead<ApiTimeCa
 
 /** A work order's Track time card (CD-276), read again after any work order or time change. */
 export const useWorkOrderTime = (id: string | undefined) => useProjectsRead<ApiTimeCard>(!!id, () => api<ApiTimeCard>(`/work-orders/${id}/time`), `work-order-time:${id ?? ''}`, 'workOrderRev');
+
+/** Today's status (CD-162) for a date, everyone or (`reports`) the caller's reports; read again on any change it shows (`s.statusRev`). */
+export const useTeamStatus = (enabled: boolean, date: string | undefined, scope?: 'reports') =>
+  useProjectsRead<ApiTeamStatus>(enabled, () => teamStatusApi.list(date, scope), `team-status:${date ?? ''}:${scope ?? ''}`, 'statusRev');
