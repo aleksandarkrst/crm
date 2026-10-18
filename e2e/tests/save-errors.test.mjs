@@ -12,7 +12,7 @@ describe('failed saves', () => {
   let companyId;
   let failDealPatches = false;
 
-  step('sets up a deal and makes saving the deal fail', async () => {
+  step('sets up an opportunity and makes saving the opportunity fail', async () => {
     page = await browser.person('fiona');
     await newUserWithWorkspace(page, { label: 'fiona', name: 'Fiona Fail', workspace: 'Failing Co' });
     dealId = await createDealInUi(page, { company: 'Sturdy d.o.o.', contact: 'Petar Petrović' });

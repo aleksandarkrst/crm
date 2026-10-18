@@ -19,20 +19,20 @@ describe('custom fields', () => {
   let dealId;
   let field;
 
-  step('sets up a workspace and a deal', async () => {
+  step('sets up a workspace and an opportunity', async () => {
     page = await browser.person('cf-owner');
     await newUserWithWorkspace(page, { label: 'cf-owner', name: 'Fiona Fields', workspace: 'Fields Co' });
     dealId = await createDealInUi(page, { company: 'Globex', contact: 'Hank Scorpio' });
     await waitForToastToClear(page);
   });
 
-  step('adds a deal field in Settings → Customize Fields', async () => {
+  step('adds an opportunity field in Settings → Customize Fields', async () => {
     await page.goto(BASE_URL + '/settings/fields', { waitUntil: 'networkidle0' });
     assert.ok(!(await text(page)).includes('for this session only'), 'no "session only" note any more');
     await clickButton(page, 'New field');
     await page.type('input[placeholder="e.g. Contract end date"]', 'PO number');
     await clickButton(page, 'Add field');
-    await page.waitForFunction(() => document.querySelector('.toast')?.textContent.includes('PO number added to deals'));
+    await page.waitForFunction(() => document.querySelector('.toast')?.textContent.includes('PO number added to opportunities'));
     field = await eventually(async () => (await api(page, '/crm/custom-fields')).find((f) => f.label === 'PO number'));
     assert.ok(field, 'field saved');
     assert.equal(field.entity, 'deal');
@@ -41,11 +41,11 @@ describe('custom fields', () => {
     await waitForToastToClear(page);
   });
 
-  step('fills the field on the deal', async () => {
+  step('fills the field on the opportunity', async () => {
     await page.goto(`${BASE_URL}/deals/${dealId}`, { waitUntil: 'networkidle0' });
     await fillCustom(page, 'PO number', 'PO-4711');
     const saved = await eventually(async () => (await api(page, '/crm/deals/' + dealId)).customFields?.[field.id] === 'PO-4711');
-    assert.ok(saved, 'value saved on the deal');
+    assert.ok(saved, 'value saved on the opportunity');
   });
 
   step('the value survives a reload', async () => {
@@ -73,7 +73,7 @@ describe('custom fields', () => {
     assert.ok(saved, 'member saved a value');
   });
 
-  step('deleting the field asks first and hides it from the deal', async () => {
+  step('deleting the field asks first and hides it from the opportunity', async () => {
     await page.goto(BASE_URL + '/settings/fields', { waitUntil: 'networkidle0' });
     // The harness accepts every dialog; just read the question.
     let question = '';
@@ -82,7 +82,7 @@ describe('custom fields', () => {
     await eventually(async () => !(await api(page, '/crm/custom-fields')).some((f) => f.id === field.id));
     assert.match(question, /Values already entered are kept/);
     await page.goto(`${BASE_URL}/deals/${dealId}`, { waitUntil: 'networkidle0' });
-    assert.equal(await page.$('[data-custom-field="PO number"]'), null, 'field hidden on the deal');
+    assert.equal(await page.$('[data-custom-field="PO number"]'), null, 'field hidden on the opportunity');
   });
 
   it('throws no uncaught errors in the page', () => {

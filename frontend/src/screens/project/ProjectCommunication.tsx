@@ -32,18 +32,18 @@ export function ProjectCommunication({ project }: { project: ApiProject }) {
   if (!deal) {
     return (
       <div className="hint-box" data-testid="project-comms-empty">
-        Emails come from the project's deal. Link a deal in the Linked card to see its emails here.
+        Emails come from the project's opportunity. Link an opportunity in the Linked card to see its emails here.
       </div>
     );
   }
 
   const current = composing ? null : emails[Math.min(selected, emails.length - 1)];
-  const to = deal.contact && deal.contact !== 'No primary contact' ? `${deal.contact}${deal.email ? ` · ${deal.email}` : ''}` : 'the deal’s contact';
+  const to = deal.contact && deal.contact !== 'No primary contact' ? `${deal.contact}${deal.email ? ` · ${deal.email}` : ''}` : 'the opportunity’s contact';
   const send = () => {
     const text = body.trim();
     if (!subject.trim() || !text) return store.flash('Write a subject and a message first.');
     store.pushLog(deal.id, { date: todayLabel(s.workspace.timezone), channel: 'EM', title: 'Email sent · ' + subject.trim(), detail: text.slice(0, 180) });
-    store.flash('Email logged on the deal');
+    store.flash('Email logged on the opportunity');
     setSubject('');
     setBody('');
     setComposing(false);
@@ -78,13 +78,13 @@ export function ProjectCommunication({ project }: { project: ApiProject }) {
             <span className="pt-sub">{e.detail}</span>
           </button>
         ))}
-        {emails.length === 0 && <span style={{ padding: '12px 14px', fontSize: 13, color: 'var(--text-2)' }}>No emails on the deal yet.</span>}
+        {emails.length === 0 && <span style={{ padding: '12px 14px', fontSize: 13, color: 'var(--text-2)' }}>No emails on the opportunity yet.</span>}
       </div>
       <div className="comms-thread">
         <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 3 }}>
           <span style={{ fontSize: 15, fontWeight: 600 }}>{composing ? 'New email' : current ? subjectOf(current) : 'No conversations yet'}</span>
           <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
-            From the deal{' '}
+            From the opportunity{' '}
             <Link to={paths.lead(deal.id)} className="crumb-link">
               {deal.title || deal.company}
             </Link>
@@ -92,7 +92,7 @@ export function ProjectCommunication({ project }: { project: ApiProject }) {
         </div>
         <div style={{ flex: 1, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {composing ? (
-            <span style={{ fontSize: 13, color: 'var(--text-2)' }}>The email is logged on the deal&apos;s timeline when you send it.</span>
+            <span style={{ fontSize: 13, color: 'var(--text-2)' }}>The email is logged on the opportunity&apos;s timeline when you send it.</span>
           ) : current ? (
             <div className="comms-message">
               <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{current.date}</span>

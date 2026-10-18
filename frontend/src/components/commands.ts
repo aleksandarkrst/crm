@@ -64,11 +64,11 @@ export function useCommands(): Command[] {
   const inProjects = currentModule(useLocation().pathname, session.userId).id === 'projects';
 
   const create: Command[] = [
-    { id: 'new-deal', group: 'Create', label: 'Deal', hint: 'Starts a funnel', key: 'D', icon: 'deal', keywords: 'new create add opportunity lead', run: () => set({ newLeadOpen: true }) },
+    { id: 'new-deal', group: 'Create', label: 'Opportunity', hint: 'Starts a funnel', key: 'D', icon: 'deal', keywords: 'new create add deal opportunity lead', run: () => set({ newLeadOpen: true }) },
     { id: 'new-contact', group: 'Create', label: 'Contact', hint: 'A person at a company', key: 'P', icon: 'contact', keywords: 'new create add person people', run: () => set(onDeal ? { contactOpen: true, contactCompany: onDeal } : { contactOpen: true }) },
     { id: 'new-company', group: 'Create', label: 'Company', hint: 'Opens the new record', key: 'O', icon: 'company', keywords: 'new create add organization organisation', run: addCompany },
     // "Deal task" since projects have tasks too (spec Q8, CD-144).
-    { id: 'new-task', group: 'Create', label: 'Deal task', hint: 'Shows in Today', key: 'T', icon: 'task', keywords: 'new create add activity to-do todo call meeting', run: () => set(onDeal ? { taskOpen: true, taskLeadId: onDeal } : { taskOpen: true }) },
+    { id: 'new-task', group: 'Create', label: 'Opportunity task', hint: 'Shows in Today', key: 'T', icon: 'task', keywords: 'new create add activity to-do todo call meeting', run: () => set(onDeal ? { taskOpen: true, taskLeadId: onDeal } : { taskOpen: true }) },
     { id: 'new-meeting', group: 'Create', label: 'Meeting', hint: 'On the calendar', key: 'M', icon: 'calendar', keywords: 'new create add meeting visit call schedule calendar', run: () => meetings.openDialog(meetingSeed) },
     { id: 'new-product', group: 'Create', label: 'Product', hint: 'Adds to the catalog', key: 'R', icon: 'product', keywords: 'new create add service catalog', run: () => set({ productOpen: true, productEditId: null }) },
     // On a company's page or a won deal's, the project starts out for it (CD-234).
@@ -78,7 +78,7 @@ export function useCommands(): Command[] {
   ];
   const goTo: Command[] = [
     { id: 'go-overview', group: 'Go to', label: 'Overview', hint: 'Numbers and forecasts', icon: 'overview', keywords: 'dashboard reports', run: go(paths.overview) },
-    { id: 'go-pipeline', group: 'Go to', label: 'Pipeline', hint: 'Deals by stage', icon: 'pipeline', keywords: 'deals board funnel', run: go(paths.pipeline) },
+    { id: 'go-pipeline', group: 'Go to', label: 'Pipeline', hint: 'Opportunities by stage', icon: 'pipeline', keywords: 'deals opportunities board funnel', run: go(paths.pipeline) },
     { id: 'go-today', group: 'Go to', label: 'Today', hint: 'Tasks due and overdue', icon: 'task', keywords: 'tasks agenda', run: go(paths.today) },
     { id: 'go-calendar', group: 'Go to', label: 'Calendar', hint: 'Meetings by day, week and month', icon: 'calendar', keywords: 'meetings visits schedule agenda', run: go(paths.calendar()) },
     { id: 'go-visit-plans', group: 'Go to', label: 'Visit plans', hint: 'Customer visits per salesperson', icon: 'visitPlan', keywords: 'visits targets plan customers', run: go(paths.visitPlans) },

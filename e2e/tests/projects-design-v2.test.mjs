@@ -65,7 +65,7 @@ describe('projects design v2', () => {
     await page.waitForFunction((id) => location.pathname === '/work-orders/' + id, {}, order.id);
   });
 
-  step('a project from a won deal can start with a task per product', async () => {
+  step('a project from a won opportunity can start with a task per product', async () => {
     const [funnel] = await api(page, '/crm/funnels');
     const deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'AC rollout', funnelId: funnel.id, companyId: company.id }) });
     dealId = deal.id;

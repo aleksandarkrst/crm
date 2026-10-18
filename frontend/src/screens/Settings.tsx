@@ -34,10 +34,10 @@ const TABS = [
   { k: 'team', group: 'Workspace', label: 'Members', description: 'Who works in this workspace, their roles and the invitations still open.' },
   { k: 'roles', group: 'Workspace', label: 'Roles & permissions', description: 'What owners, admins and members can do.' },
   { k: 'notifications', group: 'Workspace', label: 'Notifications', description: 'The emails you get from this workspace.' },
-  { k: 'funnel', group: 'CRM', label: 'Funnels', description: 'The stages deals move through, with their activities and to-dos.' },
-  { k: 'templates', group: 'CRM', label: 'Document templates', description: 'Templates hold the fixed story; merge fields pull the rest from the deal when someone generates a document.' },
-  { k: 'fields', group: 'CRM', label: 'Customize fields', description: 'Custom fields show on deals, companies and contacts, in their create forms and in CSV exports. Everyone can fill them in.' },
-  { k: 'bonuses', group: 'CRM', label: 'Sales bonuses', description: 'How salespeople earn bonuses on won deals.' },
+  { k: 'funnel', group: 'CRM', label: 'Funnels', description: 'The stages opportunities move through, with their activities and to-dos.' },
+  { k: 'templates', group: 'CRM', label: 'Document templates', description: 'Templates hold the fixed story; merge fields pull the rest from the opportunity when someone generates a document.' },
+  { k: 'fields', group: 'CRM', label: 'Customize fields', description: 'Custom fields show on opportunities, companies and contacts, in their create forms and in CSV exports. Everyone can fill them in.' },
+  { k: 'bonuses', group: 'CRM', label: 'Sales bonuses', description: 'How salespeople earn bonuses on won opportunities.' },
   {
     k: 'project-hierarchy',
     group: 'Projects',
@@ -215,11 +215,11 @@ function WorkspaceTab() {
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>Language of the fixed text in emails to customers, such as meeting minutes.</span>
       <FieldRow label="Projects">
         <span data-testid="auto-create-projects" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
-          <Switch on={w.autoCreateProjects} disabled={ro} onClick={() => setWorkspace({ autoCreateProjects: !w.autoCreateProjects })} label="Create a project when a deal is won" />
-          <span style={{ fontSize: 13 }}>Create a project when a deal is won</span>
+          <Switch on={w.autoCreateProjects} disabled={ro} onClick={() => setWorkspace({ autoCreateProjects: !w.autoCreateProjects })} label="Create a project when an opportunity is won" />
+          <span style={{ fontSize: 13 }}>Create a project when an opportunity is won</span>
         </span>
       </FieldRow>
-      <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>The project takes the deal's title and company, the first project type, and the deal owner as lead, who gets an email. Once per deal.</span>
+      <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>The project takes the opportunity's title and company, the first project type, and the opportunity owner as lead, who gets an email. Once per opportunity.</span>
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 8 }}>
         {ro ? 'Only owners and admins can change the workspace settings.' : 'Changes are saved as you make them.'}
       </span>
@@ -293,8 +293,8 @@ function GettingStartedCard() {
       <div className="card-title">Getting started and sample data</div>
       <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>
         {ob.sampleData.loaded
-          ? `Sample data is loaded: ${c.company} companies, ${c.contact} contacts, ${c.product} products and ${c.deal} deals. Removing it deletes exactly those records; your own stay.`
-          : 'Sample data adds a few companies, contacts, products and deals (with tasks) to look around with. It is marked, so you can remove exactly those records again in one click.'}
+          ? `Sample data is loaded: ${c.company} companies, ${c.contact} contacts, ${c.product} products and ${c.deal} opportunities. Removing it deletes exactly those records; your own stay.`
+          : 'Sample data adds a few companies, contacts, products and opportunities (with tasks) to look around with. It is marked, so you can remove exactly those records again in one click.'}
       </span>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {ob.sampleData.loaded ? (
@@ -573,7 +573,7 @@ function FunnelBuilder() {
             <button key={f.id} type="button" className={'choice' + (f.id === funnel.id ? ' on' : '')} data-testid="funnel-choice" onClick={() => select(f.id)}>
               <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>{f.label}</span>
               <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                {plural(f.stages.length, 'stage')} · {plural(dealsIn(f.id), 'deal')}
+                {plural(f.stages.length, 'stage')} · {plural(dealsIn(f.id), 'opportunity', 'opportunities')}
               </span>
             </button>
           ))}
@@ -632,7 +632,7 @@ function FunnelBuilder() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--text-2)' }}>
-            <span>{dealCount ? `${plural(dealCount, 'deal')} in this funnel` : 'No deals in this funnel yet'}</span>
+            <span>{dealCount ? `${plural(dealCount, 'opportunity', 'opportunities')} in this funnel` : 'No opportunities in this funnel yet'}</span>
             {editable && dealCount === 0 && Object.keys(s.funnels).length > 1 && (
               <button type="button" className="btn btn-secondary" style={{ marginLeft: 'auto', padding: '6px 10px', fontSize: 12 }} onClick={() => void store.deleteFunnel(funnel.id)}>
                 Delete funnel
@@ -687,12 +687,12 @@ function FunnelStageRow({
         <span style={{ fontSize: 12, color: 'var(--muted)', width: 18 }}>{idx + 1}</span>
         <input className="ghost ghost-sm" value={st.name} disabled={!editable} aria-label="Stage name" onChange={(e) => store.editStage(idx, 'name', e.target.value)} style={{ flex: 1, minWidth: 0, fontWeight: 500 }} />
         {st.won && (
-          <span className="caps-muted funnel-stage-meta" title="Deals are won by reaching this stage">
+          <span className="caps-muted funnel-stage-meta" title="Opportunities are won by reaching this stage">
             Won stage
           </span>
         )}
         <span className="funnel-stage-meta" style={{ fontSize: 12, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>
-          {plural(deals, 'deal')}
+          {plural(deals, 'opportunity', 'opportunities')}
         </span>
         {editable && (
           <>
@@ -792,10 +792,10 @@ function RemoveStageModal({ idx, onClose }: { idx: number; onClose: () => void }
   const blocked = deals.length > 0 && !target;
   return (
     <Modal maxWidth={480} onBackdrop={onClose}>
-      <ModalHeader title={`Remove ${st.name}?`} sub="The stage leaves this funnel. Deals keep their stage history, including the time they spent here." />
+      <ModalHeader title={`Remove ${st.name}?`} sub="The stage leaves this funnel. Opportunities keep their stage history, including the time they spent here." />
       {deals.length > 0 ? (
         <label className="form-label">
-          Move its {deals.length} deal{deals.length === 1 ? '' : 's'} to
+          Move its {deals.length} {deals.length === 1 ? 'opportunity' : 'opportunities'} to
           <select className="form-input" value={target} onChange={(e) => setTarget(e.target.value)}>
             {targets.map((x) => (
               <option key={x.id} value={x.id}>
@@ -805,9 +805,9 @@ function RemoveStageModal({ idx, onClose }: { idx: number; onClose: () => void }
           </select>
         </label>
       ) : (
-        <div className="hint-box">No deals are in this stage.</div>
+        <div className="hint-box">No opportunities are in this stage.</div>
       )}
-      {hasLost && <div className="hint-box">Lost deals can't go to the won stage, so it isn't offered.</div>}
+      {hasLost && <div className="hint-box">Lost opportunities can't go to the won stage, so it isn't offered.</div>}
       <div className="modal-actions">
         <button type="button" className="btn btn-secondary" onClick={onClose}>
           Cancel
@@ -830,12 +830,12 @@ function RemoveStageModal({ idx, onClose }: { idx: number; onClose: () => void }
 
 /** The built-in fields of each record type, listed next to the custom ones. */
 const STANDARD_FIELDS: Record<CustomFieldEntity, string> = {
-  deal: 'Company, Contacts, Owner, Deal value, Currency, Closing date, Funnel, Source, discovery notes',
+  deal: 'Company, Contacts, Owner, Opportunity value, Currency, Closing date, Funnel, Source, discovery notes',
   company: 'Name, Industry, HQ, Team size, Source, Owner',
   contact: 'Full name, Role, Company, Role in the decision, Email, Phone, LinkedIn, Owner',
 };
 const ENTITIES: { k: CustomFieldEntity; label: string; desc: string }[] = [
-  { k: 'deal', label: 'Deals', desc: 'Shown on the deal record and in the New deal form.' },
+  { k: 'deal', label: 'Opportunities', desc: 'Shown on the opportunity record and in the New opportunity form.' },
   { k: 'company', label: 'Companies', desc: 'Shown on the company record.' },
   { k: 'contact', label: 'Contacts', desc: 'Shown on the contact record and in the New contact form.' },
 ];
@@ -878,7 +878,7 @@ function FieldDefRow({ field: fl, first, last }: { field: CustomFieldDef; first:
   const { canEditFields, updateCustomField, moveCustomField, deleteCustomField } = useStore();
   const [editing, setEditing] = useState<{ id?: string; label: string }[] | null>(null);
   const pill = (on: boolean) => ({ cursor: canEditFields ? 'pointer' : 'default', border: `1px solid ${on ? '#14503C' : '#E2E8E4'}`, background: on ? '#E7F2EE' : '#FFFFFF', color: on ? '#14503C' : '#475750', fontSize: 12, padding: '6px 11px', borderRadius: 6 });
-  const entityLabel = { deal: 'deal', company: 'company', contact: 'contact' }[fl.entity];
+  const entityLabel = { deal: 'opportunity', company: 'company', contact: 'contact' }[fl.entity];
   const onDelete = () => {
     const question = `Delete the field "${fl.label}"? It disappears from every ${entityLabel}, from the ${entityLabel} forms and from CSV exports. Values already entered are kept in the records but no longer shown, and the field can't be brought back from here.`;
     if (window.confirm(question)) deleteCustomField(fl.id);
@@ -969,7 +969,7 @@ function BonusesTab() {
           <GhostSelect value={s.bonusTrigger} onChange={(e) => setBonusTrigger(e.target.value)} options={['On contract signed', 'When fully billed']} />
         </FieldRow>
         <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 8 }}>
-          Only owners and admins can see these rules and the bonus figures on Overview. A won deal earns the rate on its net value; a deal under the minimum earns the flat amount instead. The minimum and the flat amount are in {s.workspace.currency}; deals in another currency earn the rate only. Changes are saved as you make them.
+          Only owners and admins can see these rules and the bonus figures on Overview. A won opportunity earns the rate on its net value; an opportunity under the minimum earns the flat amount instead. The minimum and the flat amount are in {s.workspace.currency}; opportunities in another currency earn the rate only. Changes are saved as you make them.
         </span>
       </div>
       <div className="card" style={{ overflowX: 'auto' }}>
@@ -977,7 +977,7 @@ function BonusesTab() {
           <div className="table-head th" style={{ gridTemplateColumns: BONUS_COLS }}>
             <span>Salesperson</span>
             <span>Rate %</span>
-            <span>Min deal ({symbol})</span>
+            <span>Min opportunity ({symbol})</span>
             <span>Flat under min ({symbol})</span>
           </div>
           {salesPeople(s)
@@ -1010,11 +1010,11 @@ function NotificationsTab() {
     {
       id: 'digest',
       label: 'Daily digest email',
-      desc: `Every morning at 8:00 (${s.workspace.timezone}): your overdue tasks, tasks due today and your open deals with no next step. Not sent when there is nothing to report.`,
+      desc: `Every morning at 8:00 (${s.workspace.timezone}): your overdue tasks, tasks due today and your open opportunities with no next step. Not sent when there is nothing to report.`,
       on: p.digest,
       toggle: () => patchProfile({ digest: !p.digest }),
     },
-    { id: 'assigned', label: 'Deal assigned to you', desc: 'An email when someone else makes you the owner of a deal.', on: p.dealAssigned, toggle: () => patchProfile({ dealAssigned: !p.dealAssigned }) },
+    { id: 'assigned', label: 'Opportunity assigned to you', desc: 'An email when someone else makes you the owner of an opportunity.', on: p.dealAssigned, toggle: () => patchProfile({ dealAssigned: !p.dealAssigned }) },
     {
       id: 'meetings',
       label: 'Meeting invitations',

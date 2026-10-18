@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { api, BASE_URL, click, clickButton, createDealInUi, eventually, newUserWithWorkspace, setValue, steps, text, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
 
-describe('deal currency', () => {
+describe('opportunity currency', () => {
   const browser = useBrowser();
   const step = steps(browser, 'currency');
   let page;
@@ -17,7 +17,7 @@ describe('deal currency', () => {
     assert.equal((await api(page, '/workspace')).currency, 'GBP');
   });
 
-  step('a product and a deal', async () => {
+  step('a product and an opportunity', async () => {
     await api(page, '/crm/products', { method: 'POST', body: JSON.stringify({ name: 'Audit', unitPrice: 1000 }) });
     await page.reload({ waitUntil: 'networkidle0' });
     dealId = await createDealInUi(page, { company: 'Dollar Corp', contact: 'Dora Dollar' });
@@ -31,7 +31,7 @@ describe('deal currency', () => {
     assert.match(await text(page), /1,000\.00/);
   });
 
-  step('the products dialog sets the deal currency to USD and adds the product', async () => {
+  step('the products dialog sets the opportunity currency to USD and adds the product', async () => {
     await page.goto(`${BASE_URL}/deals/${dealId}`, { waitUntil: 'networkidle0' });
     await click(page, '[data-testid=open-products]');
     await page.waitForSelector('.modal');
@@ -45,11 +45,11 @@ describe('deal currency', () => {
       const d = await api(page, '/crm/deals/' + dealId);
       return d.currency === 'USD' && Number(d.amount) === 1000 && d;
     });
-    assert.ok(deal, 'deal saved in USD with the product');
+    assert.ok(deal, 'opportunity saved in USD with the product');
     await page.waitForFunction(() => document.querySelector('[data-testid=deal-value]')?.textContent.includes('US$1,000.00'));
   });
 
-  step('the same product stays when the deal switches to RSD (no currency on products)', async () => {
+  step('the same product stays when the opportunity switches to RSD (no currency on products)', async () => {
     await waitForToastToClear(page);
     await click(page, '[data-testid=open-products]');
     await page.waitForSelector('[data-testid=deal-line]');

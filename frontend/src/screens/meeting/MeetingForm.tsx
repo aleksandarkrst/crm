@@ -245,7 +245,7 @@ export function MeetingForm({
   if (end <= start) errors.time = 'The end must be after the start.';
   if (!d.companyId) errors.company = 'Pick the customer company.';
   if (!d.organizer) errors.organizer = 'Pick an organizer.';
-  if (d.companyId && !d.dealId) errors.deal = deals.length ? 'Pick the deal this meeting is for.' : 'This company has no deals yet. Add one with + New deal.';
+  if (d.companyId && !d.dealId) errors.deal = deals.length ? 'Pick the opportunity this meeting is for.' : 'This company has no opportunities yet. Add one with + New opportunity.';
   if (d.location.length > 300) errors.location = 'The location can be at most 300 characters.';
   if (d.agenda.length > 5000) errors.agenda = 'The agenda can be at most 5,000 characters.';
   const invalid = Object.keys(errors).length > 0;
@@ -375,15 +375,15 @@ export function MeetingForm({
   const dealSelect =
     d.companyId && deals.length === 0 ? (
       <span className="meeting-no-deals" data-testid="meeting-no-deals">
-        <span className="meeting-muted">This company has no deals yet</span>
+        <span className="meeting-muted">This company has no opportunities yet</span>
         <button type="button" className="btn-plain" data-testid="meeting-new-deal" onClick={newDeal}>
-          + New deal
+          + New opportunity
         </button>
       </span>
     ) : (
-      <select className="mf-input" aria-label="Deal" data-testid="meeting-deal" value={d.dealId} onChange={(e) => setDeal(e.target.value)} disabled={!d.companyId}>
+      <select className="mf-input" aria-label="Opportunity" data-testid="meeting-deal" value={d.dealId} onChange={(e) => setDeal(e.target.value)} disabled={!d.companyId}>
         <option value="" disabled>
-          {d.companyId ? 'Pick a deal' : 'Pick a company first'}
+          {d.companyId ? 'Pick an opportunity' : 'Pick a company first'}
         </option>
         {deals.map((l) => (
           <option key={l.id} value={l.id}>
@@ -474,7 +474,7 @@ export function MeetingForm({
         <Row icon="company" label="Company">
           {companySelect}
         </Row>
-        <Row icon="value" label="Deal">
+        <Row icon="value" label="Opportunity">
           {dealSelect}
         </Row>
         {notes}
@@ -511,7 +511,7 @@ export function MeetingForm({
             {companySelect}
             {shown('company')}
           </Row>
-          <Row icon="value" label="Deal">
+          <Row icon="value" label="Opportunity">
             {dealSelect}
             {shown('deal')}
           </Row>

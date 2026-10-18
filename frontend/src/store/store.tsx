@@ -666,7 +666,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const lead = leadById(cur(), leadId);
       if (!lead || lead.stage === stageId) return;
       if (lead.outcome === 'lost') {
-        flash('This deal is lost. Reopen it before moving it to another stage.');
+        flash('This opportunity is lost. Reopen it before moving it to another stage.');
         return;
       }
       const stage = stagesFor(cur(), lead.segment).find((st) => st.id === stageId);
@@ -724,7 +724,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           }),
         }));
       } catch (err) {
-        flash('Not saved: the deal products (' + errText(err) + ')', 7000);
+        flash('Not saved: the opportunity products (' + errText(err) + ')', 7000);
         return false;
       } finally {
         inFlight.current--;
@@ -1023,9 +1023,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           mapLead(leadId, (l) => ({ ...l, ...outcomeOf(deal) }));
         },
         () => refreshLog(leadId),
-        'reopening the deal',
+        'reopening the opportunity',
       );
-      flash('Deal reopened');
+      flash('Opportunity reopened');
     };
 
     // ------------------------------------------------------------ funnel builder
@@ -1114,7 +1114,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const moved = cur().leads.filter((l) => l.stage === st.id).length;
       const target = funnel.stages.find((x) => x.id === moveTo);
       reshape(() => crmApi.deleteStage(funnel.id, st.id, moveTo), 'removing ' + st.name, () =>
-        flash(st.name + ' removed' + (moved && target ? ` · ${moved} deal${moved === 1 ? '' : 's'} moved to ${target.name}` : '')),
+        flash(st.name + ' removed' + (moved && target ? ` · ${moved} ${moved === 1 ? 'opportunity' : 'opportunities'} moved to ${target.name}` : '')),
       );
     };
     /** New funnel from a copy of another one's stages (or a small default set); opens it. */
@@ -1192,9 +1192,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       if (hq !== undefined && companyId) setCompanyField(companyId, 'hq', hq);
       if (size !== undefined && companyId) setCompanyField(companyId, 'size', size);
       const { title, closeDate, source, ownerId } = dealPatch;
-      if (title !== undefined && title.trim()) saveLater('title:' + id, () => crmApi.updateDeal(id, { title: title.trim() }, ver('deal', id)), 'the deal title');
+      if (title !== undefined && title.trim()) saveLater('title:' + id, () => crmApi.updateDeal(id, { title: title.trim() }, ver('deal', id)), 'the opportunity title');
       if (closeDate !== undefined) saveLater('close:' + id, () => crmApi.updateDeal(id, { closeDate: closeDate || null }, ver('deal', id)), 'the closing date');
-      if (source !== undefined) saveLater('source:' + id, () => crmApi.updateDeal(id, { source }, ver('deal', id)), 'the deal source');
+      if (source !== undefined) saveLater('source:' + id, () => crmApi.updateDeal(id, { source }, ver('deal', id)), 'the opportunity source');
       // Discovery notes (merged into the proposal). Empty text clears the field.
       for (const key of DISCOVERY_FIELDS) {
         const v = dealPatch[key];
@@ -1205,11 +1205,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         const rec = target ? companyRecords(cur()).find((c) => c.id === target) : undefined;
         if (target && !rec) return;
         dealPatch.company = rec?.name ?? 'No company';
-        void save(() => crmApi.updateDeal(id, { companyId: target }, ver('deal', id)), reload, 'the company of this deal');
+        void save(() => crmApi.updateDeal(id, { companyId: target }, ver('deal', id)), reload, 'the company of this opportunity');
       }
       if (ownerId !== undefined && ownerId !== lead.ownerId) {
         dealPatch.owner = cur().team.find((m) => m.status === 'Active' && m.id === ownerId)?.name;
-        void save(() => crmApi.updateDeal(id, { ownerUserId: ownerId }, ver('deal', id)), undefined, 'the deal owner');
+        void save(() => crmApi.updateDeal(id, { ownerUserId: ownerId }, ver('deal', id)), undefined, 'the opportunity owner');
       }
       mapLead(id, (l) => ({ ...l, ...dealPatch }));
     };
@@ -1317,7 +1317,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         const funnelId = cur().funnels[seg]?.id;
         if (!funnelId) return;
         if (leadById(cur(), id)?.outcome === 'lost') {
-          flash('This deal is lost. Reopen it before changing its funnel.');
+          flash('This opportunity is lost. Reopen it before changing its funnel.');
           return;
         }
         mapLead(id, (l) => ({ ...l, segment: seg, stage: stagesFor(cur(), seg)[0]!.id }));

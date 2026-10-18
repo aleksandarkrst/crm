@@ -102,7 +102,7 @@ export function RecordHeader({
             )}
           </label>
           <button type="button" className="btn btn-primary" data-testid="record-new-deal" onClick={onNewDeal}>
-            + Deal
+            + Opportunity
           </button>
           {onDelete && (
             <div ref={menuRef} style={{ position: 'relative' }}>
@@ -151,8 +151,8 @@ export function DealsSection({ leads, onAdd }: { leads: Lead[]; onAdd: () => voi
     </button>
   );
   return (
-    <Section title="Deals" testId="record-deals" action={<AddButton label="Add a deal" onClick={onAdd} />}>
-      <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Open deals ({open.length})</span>
+    <Section title="Opportunities" testId="record-deals" action={<AddButton label="Add an opportunity" onClick={onAdd} />}>
+      <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Open opportunities ({open.length})</span>
       {open.map(row)}
       {closed > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
@@ -173,7 +173,7 @@ export function DealsSection({ leads, onAdd }: { leads: Lead[]; onAdd: () => voi
           {[...won, ...lost].map(row)}
         </div>
       )}
-      {leads.length === 0 && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>No deals yet.</span>}
+      {leads.length === 0 && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>No opportunities yet.</span>}
     </Section>
   );
 }

@@ -36,7 +36,7 @@ export function ProductModal() {
   };
   const onDelete = () => {
     if (!editing) return;
-    if (usedOn) return flash(`${editing.name} is on ${usedOn === 1 ? '1 deal' : usedOn + ' deals'}. Remove it there first.`);
+    if (usedOn) return flash(`${editing.name} is on ${usedOn === 1 ? '1 opportunity' : usedOn + ' opportunities'}. Remove it there first.`);
     if (!window.confirm(`Delete ${editing.name} from the catalog?`)) return;
     removeProduct(editing.id);
     close();
@@ -45,7 +45,7 @@ export function ProductModal() {
 
   return (
     <Modal maxWidth={560} z={46} gap={18} onBackdrop={close}>
-      <ModalHeader title={editing ? editing.name : 'New product or service'} sub="Deals start from these values and can change them. Prices are in the currency of the deal." />
+      <ModalHeader title={editing ? editing.name : 'New product or service'} sub="Opportunities start from these values and can change them. Prices are in the currency of the opportunity." />
       <label className="form-label">
         Name
         <input className="form-input" autoFocus={!editing} placeholder="e.g. Brand identity sprint" value={p.name} onChange={field('name')} />

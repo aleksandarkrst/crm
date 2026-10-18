@@ -5,14 +5,14 @@ import assert from 'node:assert/strict';
 import { describe } from 'node:test';
 import { api, BASE_URL, click, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
 
-describe('won deal → project', () => {
+describe('won opportunity → project', () => {
   const browser = useBrowser();
   const step = steps(browser, 'won-deal-project');
   let page;
   let dealId;
   let projectId;
 
-  step('sets up a won deal of a company, and an open one', async () => {
+  step('sets up a won opportunity of a company, and an open one', async () => {
     page = await browser.person('wes');
     await newUserWithWorkspace(page, { label: 'wonproj', name: 'Wes Winner', workspace: 'Won Co' });
     const [funnel] = await api(page, '/crm/funnels');
@@ -22,7 +22,7 @@ describe('won deal → project', () => {
     dealId = deal.id;
   });
 
-  step('a won deal offers "Create project"; an open deal does not', async () => {
+  step('a won opportunity offers "Create project"; an open opportunity does not', async () => {
     await page.goto(BASE_URL + '/deals/' + dealId, { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=won-state]');
     await page.waitForSelector('[data-testid=create-project]');
@@ -30,10 +30,10 @@ describe('won deal → project', () => {
     assert.equal(await page.$('[data-testid=deal-projects]'), null, 'no Project row yet');
   });
 
-  step('the dialog is prefilled from the deal', async () => {
+  step('the dialog is prefilled from the opportunity', async () => {
     await click(page, '[data-testid=create-project]');
     await page.waitForSelector('.modal [data-testid=project-name]');
-    assert.equal(await page.$eval('.modal-title', (el) => el.textContent), 'New project from deal');
+    assert.equal(await page.$eval('.modal-title', (el) => el.textContent), 'New project from opportunity');
     const summary = await page.$eval('[data-testid=project-deal-summary]', (el) => el.textContent.replace(/\s+/g, ' '));
     assert.match(summary, /Northwind Logistics ?· ?Website and CRM rollout/);
     assert.equal(await page.$eval('[data-testid=project-name]', (el) => el.value), 'Website and CRM rollout');
@@ -44,7 +44,7 @@ describe('won deal → project', () => {
     await page.waitForFunction(() => document.querySelector('[data-testid=project-stages]')?.textContent === 'Planning → In progress → Review');
   });
 
-  step('creating opens the project, linked to the company and the deal', async () => {
+  step('creating opens the project, linked to the company and the opportunity', async () => {
     await setValue(page, '[data-testid=project-name]', 'Northwind rollout');
     await click(page, '[data-testid=create-project-submit]');
     await page.waitForFunction(() => location.pathname.startsWith('/projects/'));
@@ -74,7 +74,7 @@ describe('won deal → project', () => {
     await page.waitForFunction(() => document.querySelector('[data-testid=project-stage-bar] .current')?.textContent === 'Review');
   });
 
-  step('the deal now offers "Open project" and lists it in the Summary', async () => {
+  step('the opportunity now offers "Open project" and lists it in the Summary', async () => {
     await click(page, '[data-testid=project-deal-link]');
     await page.waitForFunction(() => location.pathname.startsWith('/deals/'));
     await page.waitForSelector('[data-testid=open-project]');

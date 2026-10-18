@@ -75,7 +75,7 @@ describe('phones and tablets', () => {
     assert.deepEqual(header, [true, true, true, true]);
   });
 
-  step("a deal's to-do can be ticked on a phone", async () => {
+  step("an opportunity's to-do can be ticked on a phone", async () => {
     await page.goto(`${BASE_URL}/deals/${deal.id}`, { waitUntil: 'networkidle0' });
     const box = await page.waitForSelector('.lead-main button[title="Mark done"]');
     // To-dos come before the deal's details on a phone.

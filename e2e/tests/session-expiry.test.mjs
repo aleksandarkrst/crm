@@ -12,7 +12,7 @@ describe('the session ends mid-work', () => {
   let page;
   let dealId;
 
-  step('sets up a deal', async () => {
+  step('sets up an opportunity', async () => {
     page = await browser.person('sam');
     await newUserWithWorkspace(page, { label: 'sam', name: 'Sam Session', workspace: 'Session Co' });
     dealId = await createDealInUi(page, { company: 'Longday d.o.o.', contact: 'Ana Anić' });

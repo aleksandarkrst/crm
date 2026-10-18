@@ -72,7 +72,7 @@ describe('calendar quick create and in-place editing', () => {
     await page.waitForFunction((scope, name) => document.querySelector(`${scope} [data-testid=meeting-guests-list]`)?.innerText.includes(name), {}, scope, name);
   }
 
-  step('sets up three companies with contacts and deals', async () => {
+  step('sets up three companies with contacts and opportunities', async () => {
     page = await browser.person('quinn');
     await newUserWithWorkspace(page, { label: 'quick', name: 'Quinn Quick', workspace: 'Quick Co' });
     alpha = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: `Quick Alpha ${RUN}`, hq: 'Novi Sad' }) });
@@ -243,10 +243,10 @@ describe('calendar quick create and in-place editing', () => {
     await page.waitForFunction(() => location.pathname === '/calendar' && !document.querySelector('[data-testid=meeting-form]'));
   });
 
-  step('picking a deal invites its primary contact', async () => {
+  step('picking an opportunity invites its primary contact', async () => {
     await page.goto(`${BASE_URL}/meetings/new?companyId=${gamma.id}`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=new-meeting] [data-testid=meeting-form]');
-    assert.equal(await value('[data-testid=meeting-deal]'), '', 'two open deals: none is picked');
+    assert.equal(await value('[data-testid=meeting-deal]'), '', 'two open opportunities: none is picked');
     assert.ok(!(await page.$eval('[data-testid=meeting-guests-list]', (el) => el.innerText)).includes('Gita Gamma'));
     await setValue(page, '[data-testid=meeting-deal]', gammaOne.id);
     await page.waitForFunction(() => document.querySelector('[data-testid=meeting-guests-list]')?.innerText.includes('Gita Gamma'));

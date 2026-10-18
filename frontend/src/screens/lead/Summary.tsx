@@ -30,7 +30,7 @@ export function Summary({ lead, projects }: { lead: Lead; projects?: React.React
     <div className="card card-pad">
       <span style={{ fontSize: 15, fontWeight: 600 }}>Summary</span>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--divider)' }}>
-        <IconRow icon="value" label="Deal value">
+        <IconRow icon="value" label="Opportunity value">
           <span style={{ padding: '6px 9px', display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
             <span style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
               <span data-testid="deal-value" style={{ fontSize: 16, fontWeight: 600 }}>

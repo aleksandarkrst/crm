@@ -37,7 +37,7 @@ export function LeadScreen() {
   const totalFg = total >= 80 ? '#14503C' : total >= 55 ? '#B4531B' : '#B42318';
 
   return (
-    <Screen title="Deal" parent={{ label: 'Pipeline', to: paths.pipeline }}>
+    <Screen title="Opportunity" parent={{ label: 'Pipeline', to: paths.pipeline }}>
       <div key={lead.id} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <DealHeader lead={lead} projects={projects} />
 
@@ -99,7 +99,7 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
     setMenu(false);
     const name = lead.title || lead.company;
     const yes = await askConfirm({
-      title: `Delete the deal "${name}"?`,
+      title: `Delete the opportunity "${name}"?`,
       message: "Its products, to-dos and activity history are deleted too. The company and contacts are kept. This can't be undone.",
       confirmLabel: 'Delete',
       danger: true,
@@ -110,7 +110,7 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
   return (
     <div className="card deal-header" style={{ padding: '16px 20px' }}>
       <div className="deal-header-top">
-        <input className="ghost deal-title" aria-label="Deal name" data-testid="deal-title" value={lead.title ?? ''} placeholder={lead.company} onChange={(e) => patchLead(lead.id, { title: e.target.value })} />
+        <input className="ghost deal-title" aria-label="Opportunity name" data-testid="deal-title" value={lead.title ?? ''} placeholder={lead.company} onChange={(e) => patchLead(lead.id, { title: e.target.value })} />
         <div className="deal-actions">
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-2)' }} title="Owner">
             <Icon name="owner" title="Owner" />
@@ -164,7 +164,7 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
               {menu && (
                 <div className="deal-menu" role="menu">
                   <button type="button" role="menuitem" data-testid="delete-deal" onClick={() => void onDelete()}>
-                    Delete deal
+                    Delete opportunity
                   </button>
                 </div>
               )}

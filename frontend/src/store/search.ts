@@ -25,7 +25,7 @@ export interface SearchGroup {
 }
 
 const GROUPS: { kind: SearchKind; label: string }[] = [
-  { kind: 'deal', label: 'Deals' },
+  { kind: 'deal', label: 'Opportunities' },
   { kind: 'company', label: 'Companies' },
   { kind: 'contact', label: 'Contacts' },
 ];
@@ -87,7 +87,7 @@ export function searchWorkspace(s: State, query: string, perGroup = 5): SearchGr
     );
     if (!score) continue;
     const outcome = l.outcome === 'lost' ? 'Lost' : l.outcome === 'won' ? 'Won' : stageOf(s, l).name;
-    const title = l.title || l.company || 'Untitled deal';
+    const title = l.title || l.company || 'Untitled opportunity';
     hits.push({
       kind: 'deal',
       id: l.id,
@@ -101,7 +101,7 @@ export function searchWorkspace(s: State, query: string, perGroup = 5): SearchGr
   for (const c of companyRecords(s)) {
     const score = best([{ value: c.name }], q, qDigits);
     if (!score) continue;
-    const deals = c.oppCount === 1 ? '1 deal' : `${c.oppCount} deals`;
+    const deals = c.oppCount === 1 ? '1 opportunity' : `${c.oppCount} opportunities`;
     hits.push({ kind: 'company', id: c.id, title: c.name, subtitle: joinParts([c.industry, c.hq, deals]), initials: initialsOf(c.name), score });
   }
 

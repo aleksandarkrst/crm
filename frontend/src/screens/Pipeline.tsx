@@ -107,14 +107,14 @@ export function Pipeline() {
         ]}
         dirty={dirty}
         onClear={() => set((x) => ({ filters: { ...x.filters, ...DEFAULT_FILTERS } }))}
-        meta={`${segLeads.length} ${segLeads.length === 1 ? 'lead' : 'leads'} · ${pipelineValue} open${lostHidden ? ` · ${lostHidden} lost hidden` : ''}`}
+        meta={`${segLeads.length} ${segLeads.length === 1 ? 'opportunity' : 'opportunities'} · ${pipelineValue} open${lostHidden ? ` · ${lostHidden} lost hidden` : ''}`}
         extra={<DataActions type="deals" count={segLeads.length} exportCsv={() => dealsCsv(s, segLeads)} />}
-        action={{ label: 'New deal', onClick: () => set({ newLeadOpen: true }) }}
+        action={{ label: 'New opportunity', onClick: () => set({ newLeadOpen: true }) }}
       />
 
       {s.leads.length === 0 && (
         <div style={{ marginBottom: 14 }}>
-          <EmptyState title="No deals yet" text="Deals move through your funnel's stages, left to right. Add your first one, or import deals from a CSV file." action={{ label: 'New deal', onClick: () => set({ newLeadOpen: true }) }} />
+          <EmptyState title="No opportunities yet" text="Opportunities move through your funnel's stages, left to right. Add your first one, or import opportunities from a CSV file." action={{ label: 'New opportunity', onClick: () => set({ newLeadOpen: true }) }} />
         </div>
       )}
       {view === 'table' ? s.leads.length > 0 && <PipelineTable s={s} stages={visible} leads={segLeads} openLead={store.openLead} /> : <PipelineBoard stages={visible} leads={segLeads} />}
@@ -228,7 +228,7 @@ function PipelineBoard({ stages, leads }: { stages: Stage[]; leads: Lead[] }) {
                     </div>
                   );
                 })}
-                {cards.length === 0 && <div className="empty-dashed">Drop a deal here</div>}
+                {cards.length === 0 && <div className="empty-dashed">Drop an opportunity here</div>}
               </div>
             </div>
           );
@@ -240,7 +240,7 @@ function PipelineBoard({ stages, leads }: { stages: Stage[]; leads: Lead[] }) {
 
 type TableKey = 'company' | 'contact' | 'stage' | 'value' | 'fit' | 'stall' | 'owner' | 'next';
 const TABLE_HEADERS: { key: TableKey; label: string }[] = [
-  { key: 'company', label: 'Deal' },
+  { key: 'company', label: 'Opportunity' },
   { key: 'contact', label: 'Contact' },
   { key: 'stage', label: 'Stage' },
   { key: 'value', label: 'Value' },
@@ -289,7 +289,7 @@ function PipelineTable({ s, stages, leads, openLead }: { s: State; stages: Stage
             <SortHeader key={h.key} label={h.label} active={sort.key === h.key} dir={sort.dir} onClick={() => toggle(h.key)} />
           ))}
         </div>
-        {rows.length === 0 && <div className="pipeline-table-empty">No deals match these filters.</div>}
+        {rows.length === 0 && <div className="pipeline-table-empty">No opportunities match these filters.</div>}
         {rows.map((l) => {
           const lost = l.outcome === 'lost';
           const st = stages.find((x) => x.id === l.stage) ?? stageOf(s, l);
@@ -348,7 +348,7 @@ function StallLabel({ stall }: { stall: number }) {
 
 function NoNextStep() {
   return (
-    <span className="badge badge-warn" data-testid="no-next-step" title="No dated open task and no planned meeting on this deal. Stage to-dos are not scheduled next steps.">
+    <span className="badge badge-warn" data-testid="no-next-step" title="No dated open task and no planned meeting on this opportunity. Stage to-dos are not scheduled next steps.">
       No next step
     </span>
   );

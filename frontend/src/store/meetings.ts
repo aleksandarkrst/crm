@@ -484,7 +484,7 @@ export function meetingActions(ctx: Ctx) {
       const res = await crmApi.meetings.stepTask(id, stepId);
       minutesLoaded(id, res.minutes);
       ctx.tasksChanged(res.task.dealId);
-      flash('Task created on the deal');
+      flash('Task created on the opportunity');
       return res;
     } catch (err) {
       flash('Task not created: ' + ctx.errText(err), 7000);

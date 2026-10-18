@@ -43,7 +43,7 @@ const FIELD_LABELS: Record<string, string> = {
   endsAt: 'End',
   location: 'Location',
   agenda: 'Agenda',
-  dealId: 'Deal',
+  dealId: 'Opportunity',
   organizerUserId: 'Organizer',
   status: 'Status',
   cancelReason: 'Cancellation reason',
@@ -136,7 +136,7 @@ const FREQUENCY_TEXT: Record<string, string> = { one_time: 'One time', weekly: '
 const TAX_TEXT: Record<string, string> = { exclusive: 'Tax exclusive', inclusive: 'Tax inclusive', none: 'No tax' };
 const DATE_FIELDS = new Set(['closeDate', 'discoveryDate', 'startDate', 'endDate', 'periodStart', 'dueDate', 'scheduledDate']);
 const PERIOD_TEXT: Record<string, string> = { month: 'Month', quarter: 'Quarter' };
-const NOUN: Record<HistoryEntity, string> = { deal: 'deal', company: 'company', contact: 'contact', meeting: 'meeting', visit_plan: 'visit plan', project: 'project', task: 'task', work_order: 'work order' };
+const NOUN: Record<HistoryEntity, string> = { deal: 'opportunity', company: 'company', contact: 'contact', meeting: 'meeting', visit_plan: 'visit plan', project: 'project', task: 'task', work_order: 'work order' };
 const PAGE = 30;
 
 const empty = <span style={{ color: 'var(--muted)' }}>empty</span>;

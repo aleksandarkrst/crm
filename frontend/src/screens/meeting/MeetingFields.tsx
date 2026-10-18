@@ -207,7 +207,7 @@ export function MeetingDetails({ m, editable }: { m: ApiMeeting; editable: boole
     setSavingDeal(true);
     const input: MeetingInput = { dealId };
     if (company !== m.companyId) input.companyId = company;
-    const ok = await save(input, company !== m.companyId ? 'the company' : 'the deal');
+    const ok = await save(input, company !== m.companyId ? 'the company' : 'the opportunity');
     setSavingDeal(false);
     if (ok) setMovingTo(null);
   };
@@ -275,22 +275,22 @@ export function MeetingDetails({ m, editable }: { m: ApiMeeting; editable: boole
           Open
         </Link>
       </IconRow>
-      <IconRow icon="value" label="Deal">
+      <IconRow icon="value" label="Opportunity">
         {movingTo && deals.length === 0 ? (
           <span className="meeting-no-deals" data-testid="meeting-field-no-deals" style={{ flex: 1 }}>
-            <span className="meeting-muted">{companyName} has no deals yet</span>
+            <span className="meeting-muted">{companyName} has no opportunities yet</span>
             <button type="button" className="btn-plain" onClick={() => set({ newLeadOpen: true, newLeadCompanyId: movingTo, newLeadContactId: null, newLeadForMeeting: true, newLeadMade: null })}>
-              + New deal
+              + New opportunity
             </button>
           </span>
         ) : (
-          <select className="ghost" aria-label="Deal" data-testid="meeting-field-deal" value={movingTo ? '' : (m.dealId ?? '')} disabled={!editable || savingDeal} onChange={(e) => e.target.value && void saveDeal(e.target.value)}>
+          <select className="ghost" aria-label="Opportunity" data-testid="meeting-field-deal" value={movingTo ? '' : (m.dealId ?? '')} disabled={!editable || savingDeal} onChange={(e) => e.target.value && void saveDeal(e.target.value)}>
             {(movingTo || !m.dealId) && (
               <option value="" disabled>
-                {movingTo ? `Pick a deal of ${companyName} to move the meeting` : 'No deal'}
+                {movingTo ? `Pick an opportunity of ${companyName} to move the meeting` : 'No opportunity'}
               </option>
             )}
-            {!movingTo && m.dealId && !deals.some((l) => l.id === m.dealId) && <option value={m.dealId}>{m.dealTitle ?? 'Deal'}</option>}
+            {!movingTo && m.dealId && !deals.some((l) => l.id === m.dealId) && <option value={m.dealId}>{m.dealTitle ?? 'Opportunity'}</option>}
             {deals.map((l) => (
               <option key={l.id} value={l.id}>
                 {(l.title || l.company) + (l.outcome === 'open' ? '' : l.outcome === 'won' ? ' · won' : ' · lost')}
@@ -299,7 +299,7 @@ export function MeetingDetails({ m, editable }: { m: ApiMeeting; editable: boole
           </select>
         )}
         {m.dealId && !movingTo && (
-          <Link to={paths.lead(m.dealId)} className="meeting-field-link" title={deal?.title || deal?.company || m.dealTitle || 'Deal'}>
+          <Link to={paths.lead(m.dealId)} className="meeting-field-link" title={deal?.title || deal?.company || m.dealTitle || 'Opportunity'}>
             Open
           </Link>
         )}

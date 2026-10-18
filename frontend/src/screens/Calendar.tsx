@@ -192,7 +192,7 @@ export function Calendar() {
     const labels = companyLabels(records);
     return records.map((c) => ({ value: c.id, label: labels.get(c.id) ?? c.name })).sort((a, b) => a.label.localeCompare(b.label));
   }, [records]);
-  const dealLabel = deal ? (s.leads.find((l) => l.id === deal)?.title || s.leads.find((l) => l.id === deal)?.company || rows.find((m) => m.dealId === deal)?.dealTitle || 'Deal') : '';
+  const dealLabel = deal ? (s.leads.find((l) => l.id === deal)?.title || s.leads.find((l) => l.id === deal)?.company || rows.find((m) => m.dealId === deal)?.dealTitle || 'Opportunity') : '';
   const contactLabel = contact ? (allPeople(s).find((p) => p.contactId === contact)?.name ?? 'Contact') : '';
   const dirty = reportCount > 0 || user !== (admin ? 'all' : 'me') || types.length > 0 || params.has('status') || !!company || !!deal || !!contact || notClosed || missingMinutes;
 
@@ -347,8 +347,8 @@ export function Calendar() {
           )}
           {deal && (
             <span className="cal-chip-filter" data-testid="chip-deal">
-              Deal: {dealLabel}
-              <button type="button" aria-label="Remove the deal filter" onClick={() => update({ deal: null })}>
+              Opportunity: {dealLabel}
+              <button type="button" aria-label="Remove the opportunity filter" onClick={() => update({ deal: null })}>
                 <XIcon size={11} />
               </button>
             </span>

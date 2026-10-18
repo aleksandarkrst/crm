@@ -72,7 +72,7 @@ export function DealProductsDialog() {
   const submit = async () => {
     if (draft.lines.some((l) => !l.itemId)) return setError('Pick a product on every line.');
     if (draft.lines.some((l) => l.discountKind === 'percent' && num(l.discount) > 100) || draft.discounts.some((x) => x.kind === 'percent' && num(x.value) > 100)) return setError('A percentage discount is at most 100%.');
-    if (draft.installments.length && recurring) return setError('Installments are for deals with one-time products only. Remove the recurring products or the installments.');
+    if (draft.installments.length && recurring) return setError('Installments are for opportunities with one-time products only. Remove the recurring products or the installments.');
     const minIso = closeIsoOf(lead);
     if (minIso && (draft.lines.some((l) => l.start && l.start < minIso) || draft.installments.some((i) => i.date && i.date < minIso))) return setError('Billing dates must fall after the closing date.');
     setBusy(true);
@@ -80,7 +80,7 @@ export function DealProductsDialog() {
     setBusy(false);
     if (ok) {
       close();
-      flash('Products saved · deal value ' + moneyExact(totals.subtotal, cur));
+      flash('Products saved · opportunity value ' + moneyExact(totals.subtotal, cur));
     }
   };
 
@@ -101,7 +101,7 @@ export function DealProductsDialog() {
     <Modal maxWidth={1060} z={46} gap={16}>
       <div>
         <div className="modal-title" style={{ fontSize: 20 }}>
-          Add products to deal · {lead.title || lead.company}
+          Add products to opportunity · {lead.title || lead.company}
         </div>
       </div>
       <div role="tablist" style={{ display: 'flex', gap: 22, borderBottom: '1px solid var(--divider)' }}>
@@ -113,7 +113,7 @@ export function DealProductsDialog() {
         <>
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <label className="form-label" style={{ minWidth: 200 }}>
-              Deal currency
+              Opportunity currency
               <select className="form-input" value={draft.currency} onChange={(e) => patch((d) => ({ ...d, currency: e.target.value }))}>
                 {currencyOptions(draft.currency).map((o) => (
                   <option key={o.value} value={o.value}>
@@ -143,7 +143,7 @@ export function DealProductsDialog() {
                   </span>
                 ))}
               </div>
-              {draft.lines.length === 0 && <div className="empty-state">No products on this deal yet.</div>}
+              {draft.lines.length === 0 && <div className="empty-state">No products on this opportunity yet.</div>}
               {draft.lines.map((l, i) => {
                 const it = s.catalog.find((c) => c.id === l.itemId);
                 const t = totals.lines[i]!;
@@ -228,10 +228,10 @@ export function DealProductsDialog() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {recurring ? (
             <div className="hint-box" data-testid="installments-blocked">
-              Installments are for deals with one-time products only. This deal has recurring products: they are billed on their own schedule.
+              Installments are for opportunities with one-time products only. This opportunity has recurring products: they are billed on their own schedule.
             </div>
           ) : (
-            <div style={{ fontSize: 12.5, color: 'var(--text-2)' }}>Split the one-time products into dated payments. With installments, the deal can't have recurring products.</div>
+            <div style={{ fontSize: 12.5, color: 'var(--text-2)' }}>Split the one-time products into dated payments. With installments, the opportunity can't have recurring products.</div>
           )}
           {draft.installments.length > 0 && (
             <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10 }}>

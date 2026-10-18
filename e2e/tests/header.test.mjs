@@ -32,7 +32,7 @@ describe('command palette, + menu and account menu', () => {
   let page;
   let northwindId;
 
-  step('sets up a workspace with two deals', async () => {
+  step('sets up a workspace with two opportunities', async () => {
     page = await browser.person('hana');
     await newUserWithWorkspace(page, { label: 'hana', name: 'Hana Header', workspace: firstWorkspace });
     northwindId = await createDealInUi(page, { company: 'Northwind d.o.o.', contact: 'Ana Marković' });
@@ -54,18 +54,18 @@ describe('command palette, + menu and account menu', () => {
     const focused = await page.evaluate(() => document.activeElement?.getAttribute('data-testid'));
     assert.equal(focused, 'palette-input');
     const rows = await results(page);
-    for (const title of ['Create deal', 'Create contact', 'Create company', 'Create deal task', 'Create product', 'Pipeline', 'Workspace settings']) {
+    for (const title of ['Create opportunity', 'Create contact', 'Create company', 'Create opportunity task', 'Create product', 'Pipeline', 'Workspace settings']) {
       assert.ok(rows.some((r) => r.title === title), `${title} in ${JSON.stringify(rows)}`);
     }
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('[data-testid=palette]'));
   });
 
-  step('finds a deal by part of its name and opens it with Enter', async () => {
+  step('finds an opportunity by part of its name and opens it with Enter', async () => {
     const rows = await search(page, 'northw');
-    assert.deepEqual(rows[0], { group: 'Deals', title: 'Northwind d.o.o.', selected: true }, JSON.stringify(rows));
+    assert.deepEqual(rows[0], { group: 'Opportunities', title: 'Northwind d.o.o.', selected: true }, JSON.stringify(rows));
     assert.ok(rows.some((r) => r.group === 'Companies' && r.title === 'Northwind d.o.o.'), 'company group lists the company');
-    assert.ok(!rows.some((r) => r.title === 'Bluefin Labs'), 'other deals are not listed');
+    assert.ok(!rows.some((r) => r.title === 'Bluefin Labs'), 'other opportunities are not listed');
     await page.keyboard.press('Enter');
     await page.waitForFunction((id) => location.pathname === '/deals/' + id, {}, northwindId);
     await page.waitForSelector('[data-testid=mark-lost]');
@@ -163,7 +163,7 @@ describe('command palette, + menu and account menu', () => {
     await page.waitForFunction(() => location.pathname === '/profile');
   });
 
-  step('opens the New deal dialog from the Contacts screen', async () => {
+  step('opens the New opportunity dialog from the Contacts screen', async () => {
     await page.goto(BASE_URL + '/contacts', { waitUntil: 'networkidle0' });
     await click(page, '[data-testid=new-menu]');
     await click(page, '[data-testid=new-deal]');

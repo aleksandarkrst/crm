@@ -132,10 +132,10 @@ export function Composer({ lead }: { lead: Lead }) {
             // A real meeting on the calendar (CD-130): with the deal, its company and primary contact.
             <MeetingForm key={meetingForm} variant="inline" seed={{ dealId: lead.id, companyId: lead.companyId, contactId: lead.contactId }} submitLabel="Schedule meeting" onDone={() => setMeetingForm((n) => n + 1)} />
           ) : (
-            <div className="hint-box">Every meeting belongs to a customer company. Pick this deal's company in Summary first.</div>
+            <div className="hint-box">Every meeting belongs to a customer company. Pick this opportunity's company in Summary first.</div>
           ))}
 
-        {tab === 'note' && <textarea className="box-input" rows={5} placeholder="Write a note about this deal. Only your team sees it." value={body} onChange={setDraft('body')} style={{ background: 'var(--note)' }} />}
+        {tab === 'note' && <textarea className="box-input" rows={5} placeholder="Write a note about this opportunity. Only your team sees it." value={body} onChange={setDraft('body')} style={{ background: 'var(--note)' }} />}
 
 
         {tab === 'docs' && <DealDocuments lead={lead} />}

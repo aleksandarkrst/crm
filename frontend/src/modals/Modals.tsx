@@ -87,7 +87,7 @@ function NewDealModal() {
 
   return (
     <Modal maxWidth={560} gap={18} z={s.newLeadForMeeting ? 50 : undefined}>
-      <ModalHeader title="New deal" sub="Pick the customer type and the funnel, activities and documents come with it." />
+      <ModalHeader title="New opportunity" sub="Pick the customer type and the funnel, activities and documents come with it." />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         {/* The company and contact (CD-318): pick one, or open a "New company" / "New contact" panel that is created with the deal. */}
         <div className="form-label">
@@ -103,7 +103,7 @@ function NewDealModal() {
                 )}
               </div>
               <input className="form-input" placeholder="Company name" autoFocus value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
-              <span className="subform-hint">Created with the deal; its page fills in later.</span>
+              <span className="subform-hint">Created with the opportunity; its page fills in later.</span>
             </div>
           ) : (
             <>
@@ -207,7 +207,7 @@ function NewTaskModal() {
   };
   const submit = async () => {
     if (!title.trim()) return setError('Give the task a title.');
-    if (!lead) return setError('Pick the company and deal this task belongs to.');
+    if (!lead) return setError('Pick the company and opportunity this task belongs to.');
     setError('');
     if (editing) {
       updateLeadTask(editing.id, { title, channel, due, ownerId, note });
@@ -234,7 +234,7 @@ function NewTaskModal() {
         <label className="form-label">
           Company
           <select className="form-input" value={leadId} disabled={!!editing} onChange={(e) => pickLead(e.target.value)}>
-            {!lead && <option value="">No deals yet</option>}
+            {!lead && <option value="">No opportunities yet</option>}
             {s.leads.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.company} · {stageOf(s, l).name}
@@ -282,7 +282,7 @@ function NewTaskModal() {
         Notes
         <textarea className="form-input" rows={3} placeholder="Context the next person needs" value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
-      <div className="hint-box">Off-playbook task on {lead ? lead.company : 'a deal'}. It appears in Today and on the lead timeline, and does not block stage advance.</div>
+      <div className="hint-box">Off-playbook task on {lead ? lead.company : 'an opportunity'}. It appears in Today and on the opportunity timeline, and does not block stage advance.</div>
       {error && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{error}</div>}
       <div className="modal-actions">
         <button type="button" className="btn btn-secondary" onClick={close}>
@@ -320,7 +320,7 @@ function NewContactModal() {
   };
   return (
     <Modal maxWidth={580}>
-      <ModalHeader title="New contact" sub="Every contact belongs to a company, so multi-threading shows up on the lead record." />
+      <ModalHeader title="New contact" sub="Every contact belongs to a company, so multi-threading shows up on the opportunity record." />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <label className="form-label">
           Full name
@@ -349,7 +349,7 @@ function NewContactModal() {
           </label>
         ) : (
           <label className="form-label">
-            Linked lead
+            Linked opportunity
             <select className="form-input" value={s.contactCompany} onChange={(e) => set({ contactCompany: e.target.value })}>
               {s.leads.map((l) => (
                 <option key={l.id} value={l.id}>
@@ -372,7 +372,7 @@ function NewContactModal() {
       <CustomFieldInputs entity="contact" values={custom} onChange={setCustom} />
       <label className="form-label">
         Notes
-        <textarea className="form-input" rows={3} placeholder="How they influence the deal" value={nc.notes} onChange={(e) => set((x) => ({ newContact: { ...x.newContact, notes: e.target.value } }))} />
+        <textarea className="form-input" rows={3} placeholder="How they influence the opportunity" value={nc.notes} onChange={(e) => set((x) => ({ newContact: { ...x.newContact, notes: e.target.value } }))} />
       </label>
       <div className="modal-actions">
         <button type="button" className="btn btn-secondary" onClick={() => set({ contactOpen: false, contactCompanyId: null })}>
@@ -393,7 +393,8 @@ function NewPersonaModal() {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const bases = [
-    ...Object.values(s.funnels).map((f) => ({ k: f.id, name: f.label, desc: `Copy its ${f.stages.length} stages, with their activities and to-dos. Deals stay where they are.` })),
+    ...Object.values(s.funnels).map((f) => ({ k: f.id, name: f.label, desc: `Copy its ${f.stages.length} stages, with their activities and to-dos. Opportunities stay where they are.` })),
+    // The backend's default stage names (default-funnels.ts); its first stage becomes New opportunity in CD-364.
     { k: 'blank', name: 'Default stages', desc: 'Start from New deal, Discovery, Proposal and Won, and build it yourself.' },
   ];
   const create = async () => {
@@ -442,7 +443,7 @@ function NewFieldModal() {
   const reset = { label: '', type: 'text' as CustomFieldType, entity: nf.entity, required: false, options: '' };
   const patch = (p: Partial<typeof nf>) => set((x) => ({ newField: { ...x.newField, ...p } }));
   const options = nf.options.split('\n').map((o) => o.trim()).filter(Boolean);
-  const entityLabel = { deal: 'deals', company: 'companies', contact: 'contacts' }[nf.entity];
+  const entityLabel = { deal: 'opportunities', company: 'companies', contact: 'contacts' }[nf.entity];
   const add = async () => {
     if (!nf.label.trim() || busy) return;
     if (nf.type === 'select' && options.length === 0) return flash('Add at least one option, one per line');
@@ -465,7 +466,7 @@ function NewFieldModal() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {(['deal', 'company', 'contact'] as const).map((en) => (
             <button key={en} type="button" className={nf.entity === en ? 'choice-pill on' : 'choice-pill'} onClick={() => patch({ entity: en })}>
-              {{ deal: 'Deals', company: 'Companies', contact: 'Contacts' }[en]}
+              {{ deal: 'Opportunities', company: 'Companies', contact: 'Contacts' }[en]}
             </button>
           ))}
         </div>
@@ -516,7 +517,7 @@ function DrillModal() {
           <span style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em' }}>{d.title}</span>
           <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
             {rows.length}
-            {rows.length === 1 ? ' lead · ' : ' leads · '}
+            {rows.length === 1 ? ' opportunity · ' : ' opportunities · '}
             {total} open
           </span>
         </div>
@@ -524,7 +525,7 @@ function DrillModal() {
           ×
         </button>
       </div>
-      {rows.length === 0 && <span style={{ fontSize: 13, color: 'var(--text-2)' }}>No leads here right now.</span>}
+      {rows.length === 0 && <span style={{ fontSize: 13, color: 'var(--text-2)' }}>No opportunities here right now.</span>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {rows.map((l) => (
           <button
@@ -561,7 +562,7 @@ function MarkLostModal() {
   const close = () => set({ lostLeadId: null });
   if (!lead) return null;
   const submit = async () => {
-    if (!reason) return setError('Pick the reason the deal was lost.');
+    if (!reason) return setError('Pick the reason the opportunity was lost.');
     setError('');
     setBusy(true);
     const ok = await markLost(lead.id, reason, note);

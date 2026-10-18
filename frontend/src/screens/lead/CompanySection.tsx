@@ -29,7 +29,7 @@ export function CompanySection({ lead }: { lead: Lead }) {
                 square
                 initials={initialsOf(c.name)}
                 title={labels.get(c.id) ?? c.name}
-                subtitle={c.oppCount ? c.oppCount + (c.oppCount === 1 ? ' deal' : ' deals') : 'No deals yet'}
+                subtitle={c.oppCount ? c.oppCount + (c.oppCount === 1 ? ' opportunity' : ' opportunities') : 'No opportunities yet'}
                 onPick={() => {
                   store.patchLead(lead.id, { companyId: c.id });
                   picker.close();

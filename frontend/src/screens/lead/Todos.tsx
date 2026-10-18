@@ -49,8 +49,8 @@ export function Todos({ lead }: { lead: Lead }) {
           <div className="card-title">To-Do</div>
           <div className="card-sub" style={{ marginTop: 3 }}>
             {GATE_STAGE_ADVANCE
-              ? `Everything done for this lead, stage by stage. All of ${current.name} must be closed to advance.`
-              : 'Everything done for this lead, stage by stage. Advancing is not blocked.'}
+              ? `Everything done for this opportunity, stage by stage. All of ${current.name} must be closed to advance.`
+              : 'Everything done for this opportunity, stage by stage. Advancing is not blocked.'}
           </div>
         </div>
         <span className="tag" style={{ fontSize: 10.5, color: 'var(--text-2)', padding: 0 }}>
@@ -196,7 +196,7 @@ export function Todos({ lead }: { lead: Lead }) {
             {g.isCurrent && (
               <>
                 <button type="button" className="btn-dashed" style={{ alignSelf: 'flex-start' }} onClick={() => store.addTodo(lead.id, g.st.id)}>
-                  + Add a to-do for this lead
+                  + Add a to-do for this opportunity
                 </button>
                 <button
                   type="button"

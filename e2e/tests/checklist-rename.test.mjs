@@ -18,7 +18,7 @@ describe('renaming a checklist item', () => {
       return row;
     }, label);
 
-  step('ticks a playbook to-do on a new deal', async () => {
+  step('ticks a playbook to-do on a new opportunity', async () => {
     page = await browser.person('rhea');
     await newUserWithWorkspace(page, { label: 'rename', name: 'Rhea Tester', workspace: 'Rename Co' });
     dealId = await createDealInUi(page, { company: 'Globex', contact: 'Hank Scorpio' });
@@ -49,7 +49,7 @@ describe('renaming a checklist item', () => {
     assert.ok(stage, 'rename saved');
   });
 
-  step('the deal still has the tick, under the new name, after a reload', async () => {
+  step('the opportunity still has the tick, under the new name, after a reload', async () => {
     await page.goto(BASE_URL + '/deals/' + dealId, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.body.innerText.includes('Socials checked'));
     const status = await (await todoRow('Socials checked')).evaluate((el) => el.innerText);

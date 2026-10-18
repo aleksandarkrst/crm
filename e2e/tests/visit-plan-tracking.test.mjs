@@ -30,7 +30,7 @@ describe('visit plan tracking', () => {
     alphaId = (await api(olga, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Alpha Track' }) })).id;
     // Its one open deal (Olga's): the meeting dialog picks it (a meeting needs a deal, CD-213).
     const funnels = await api(olga, '/crm/funnels');
-    alphaDealId = (await api(olga, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Alpha deal', funnelId: funnels[0].id, companyId: alphaId }) })).id;
+    alphaDealId = (await api(olga, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Alpha opportunity', funnelId: funnels[0].id, companyId: alphaId }) })).id;
     const { token } = await api(olga, '/team/invitations', { method: 'POST', body: JSON.stringify({ email: email('track-mia'), role: 'member' }) });
     mia = await browser.person('mia');
     await mia.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });

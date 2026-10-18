@@ -6,9 +6,9 @@ import { useStore } from '../store/store';
 
 /** The workspace's activation steps (CD-115). */
 const STEPS: Record<ApiOnboardingStep, { label: string; hint: string; to: string }> = {
-  invite: { label: 'Invite your team', hint: 'Work on deals together', to: paths.settings('team') },
-  records: { label: 'Add your first records', hint: 'A contact, a company, a product and a deal', to: paths.pipeline },
-  template: { label: 'Set up a document template', hint: 'Proposals and quotes filled from a deal', to: paths.settings('templates') },
+  invite: { label: 'Invite your team', hint: 'Work on opportunities together', to: paths.settings('team') },
+  records: { label: 'Add your first records', hint: 'A contact, a company, a product and an opportunity', to: paths.pipeline },
+  template: { label: 'Set up a document template', hint: 'Proposals and quotes filled from an opportunity', to: paths.settings('templates') },
   funnel: { label: 'Set up your funnel', hint: 'Rename stages, set their to-dos', to: paths.settings('funnel') },
 };
 /** The parts of "Add your first records", each with the screen where it is added. */
@@ -16,7 +16,7 @@ const RECORDS: Record<ApiSampleKind, { label: string; to: string }> = {
   contact: { label: 'Contact', to: paths.contacts },
   company: { label: 'Company', to: paths.companies },
   product: { label: 'Product', to: paths.products },
-  deal: { label: 'Deal', to: paths.pipeline },
+  deal: { label: 'Opportunity', to: paths.pipeline },
 };
 
 /** The main screens show it; a deal, contact or settings page is left to the task at hand. */
@@ -115,7 +115,7 @@ export function GettingStarted() {
           );
         })}
       </ol>
-      {!sample && <span className="getting-started-note">Want to look around first? Sample data adds a few companies, contacts and deals, and removes them again in one click.</span>}
+      {!sample && <span className="getting-started-note">Want to look around first? Sample data adds a few companies, contacts and opportunities, and removes them again in one click.</span>}
     </section>
   );
 }

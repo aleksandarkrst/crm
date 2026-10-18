@@ -30,7 +30,7 @@ describe('stage conversion on Overview', () => {
   let page;
   let funnels;
 
-  step('shows the empty state while no deal has moved', async () => {
+  step('shows the empty state while no opportunity has moved', async () => {
     page = await browser.person('cora');
     await newUserWithWorkspace(page, { label: 'conversion', name: 'Cora Tester', workspace: 'Conversion Co' });
     funnels = await api(page, '/crm/funnels');
@@ -41,7 +41,7 @@ describe('stage conversion on Overview', () => {
     assert.match(await card(page), /Conversion rates appear once at least 5 deals in view have moved between stages \(0 so far\)/);
   });
 
-  step('moves deals through the SMB funnel (one won, one lost)', async () => {
+  step('moves opportunities through the SMB funnel (one won, one lost)', async () => {
     const smb = funnels.find((f) => f.key === 'smb');
     const st = smb.stages; // New deal, First touch, Discovery call, Proposal, Negotiation, Won
     // How far each deal moves, one stage at a time; "Idle" above stays in New deal.

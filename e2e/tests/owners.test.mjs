@@ -33,7 +33,7 @@ describe('owners by id', () => {
   let samA;
   let samB;
 
-  step('two members named Sam Seller each own a deal', async () => {
+  step('two members named Sam Seller each own an opportunity', async () => {
     page = await browser.person('olga');
     await newUserWithWorkspace(page, { label: 'olga', name: 'Olga Owner', workspace: 'Namesakes' });
     samA = await devUser('sam-a', 'Sam Seller');
@@ -73,7 +73,7 @@ describe('owners by id', () => {
     assert.ok((await text(page)).includes('Bravo Owned'));
   });
 
-  step('a removed member still owns their deal and shows as a former member', async () => {
+  step('a removed member still owns their opportunity and shows as a former member', async () => {
     await api(page, '/team/members/' + samB.id, { method: 'DELETE' });
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.body.innerText.includes('Bravo Owned'));

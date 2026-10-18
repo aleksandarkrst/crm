@@ -86,7 +86,7 @@ describe('emails: invitations and notification settings', () => {
     await page.waitForSelector('[data-notification="digest"] .switch');
     for (const id of SETTINGS) assert.equal(await isOn(page, id), true, id);
     const body = await text(page);
-    for (const label of ['Daily digest email', 'Deal assigned to you', 'Meeting invitations', 'Visit plans']) assert.ok(body.includes(label), label);
+    for (const label of ['Daily digest email', 'Opportunity assigned to you', 'Meeting invitations', 'Visit plans']) assert.ok(body.includes(label), label);
     assert.ok(!/Coming soon/i.test(body), 'no coming-soon rows');
     assert.ok(!body.includes('Weekly pipeline report') && !body.includes('Document activity'), 'placeholders removed');
   });

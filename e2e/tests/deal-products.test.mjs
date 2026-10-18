@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { api, BASE_URL, click, clickButton, confirmInApp, createDealInUi, eventually, newUserWithWorkspace, setValue, steps, text, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
 
-describe('products and the deal page', () => {
+describe('products and the opportunity page', () => {
   const browser = useBrowser();
   const step = steps(browser, 'deal-products');
   let page;
@@ -47,24 +47,24 @@ describe('products and the deal page', () => {
     await api(page, '/crm/products', { method: 'POST', body: JSON.stringify({ name: 'Setup', unitPrice: 1000, vatRate: 20 }) });
   });
 
-  step('the deal page: name in the header, not in the screen title; no Products tab', async () => {
+  step('the opportunity page: name in the header, not in the screen title; no Products tab', async () => {
     await page.reload({ waitUntil: 'networkidle0' });
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     dealId = await createDealInUi(page, { company: 'Globex', contact: 'Hank Scorpio' });
     await waitForToastToClear(page);
     assert.equal(await page.$eval('[data-testid=deal-title]', (el) => el.value), 'Globex');
-    assert.equal(await page.$eval('header h1', (el) => el.textContent), 'Deal');
+    assert.equal(await page.$eval('header h1', (el) => el.textContent), 'Opportunity');
     assert.match(await page.$eval('[data-testid=deal-crumb]', (el) => el.innerText), /→/);
     assert.ok(await page.$('[data-testid=stage-bar] .stage-chev.current'), 'the stage bar marks the current stage');
     const tabs = await page.$$eval('.composer-tab', (els) => els.map((el) => el.textContent.trim()));
     assert.ok(!tabs.some((t) => t.startsWith('Products')), JSON.stringify(tabs));
     // No WhatsApp or LinkedIn tabs until those integrations exist (CD-224).
     assert.ok(!tabs.some((t) => t.startsWith('WhatsApp') || t.startsWith('LinkedIn')), JSON.stringify(tabs));
-    assert.ok(!(await text(page)).includes('Delete deal'), 'Delete deal is in the menu, not on the page');
+    assert.ok(!(await text(page)).includes('Delete opportunity'), 'Delete opportunity is in the menu, not on the page');
     assert.ok(await page.$('[data-testid=company-section]'));
   });
 
-  step('one-time products with tax included and a deal discount', async () => {
+  step('one-time products with tax included and an opportunity discount', async () => {
     await click(page, '[data-testid=open-products]');
     await click(page, '[data-testid=add-line]');
     await page.waitForSelector('[data-testid=deal-line]');
@@ -91,7 +91,7 @@ describe('products and the deal page', () => {
     assert.equal(deal.discounts.length, 1);
   });
 
-  step('installments that don\'t add up get a warning; saved ones show on the deal', async () => {
+  step('installments that don\'t add up get a warning; saved ones show on the opportunity', async () => {
     await waitForToastToClear(page);
     await click(page, '[data-testid=open-products]');
     await clickButton(page, 'Installments (0)');
@@ -139,7 +139,7 @@ describe('products and the deal page', () => {
     assert.equal((await api(page, '/crm/deal-lines')).filter((l) => l.dealId === dealId).length, 1);
   });
 
-  step('Won moves the deal to the won stage', async () => {
+  step('Won moves the opportunity to the won stage', async () => {
     await click(page, '[data-testid=mark-won]');
     await page.waitForSelector('[data-testid=won-state]');
     const deal = await eventually(async () => {
@@ -149,14 +149,14 @@ describe('products and the deal page', () => {
     assert.ok(deal, 'won in the API');
   });
 
-  step('the owner deletes the deal from the header menu', async () => {
+  step('the owner deletes the opportunity from the header menu', async () => {
     await click(page, 'button[aria-label="More actions"]');
-    await clickButton(page, 'Delete deal');
+    await clickButton(page, 'Delete opportunity');
     // The app's own confirm (CD-278), not the browser's.
     assert.match(await confirmInApp(page), /^Delete the deal ".*"\?$/);
     await page.waitForFunction(() => location.pathname.startsWith('/pipeline'));
     const gone = await eventually(async () => !(await api(page, '/crm/deals')).some((d) => d.deal.id === dealId));
-    assert.ok(gone, 'deal deleted');
+    assert.ok(gone, 'opportunity deleted');
   });
 
   it('throws no uncaught errors in the page', () => {

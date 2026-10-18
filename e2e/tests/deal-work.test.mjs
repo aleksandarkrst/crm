@@ -17,7 +17,7 @@ import {
   waitForToastToClear,
 } from '../lib/harness.mjs';
 
-describe('deal products and stage to-dos', () => {
+describe('opportunity products and stage to-dos', () => {
   const browser = useBrowser();
   const step = steps(browser, 'deal-work');
   let page;
@@ -32,7 +32,7 @@ describe('deal products and stage to-dos', () => {
       return row;
     }, label);
 
-  step('sets up a workspace with a product and a deal', async () => {
+  step('sets up a workspace with a product and an opportunity', async () => {
     page = await browser.person('lina');
     await newUserWithWorkspace(page, { label: 'lines', name: 'Lina Tester', workspace: 'Lines Co' });
     await api(page, '/crm/products', { method: 'POST', body: JSON.stringify({ name: 'Website', unitPrice: 5000, vatRate: 20 }) });
@@ -71,7 +71,7 @@ describe('deal products and stage to-dos', () => {
     assert.equal(line.startDate, '2026-12-16'); // the day after the closing date
   });
 
-  step('the backend recalculates the deal amount', async () => {
+  step('the backend recalculates the opportunity amount', async () => {
     const amount = await eventually(async () => Number((await api(page, '/crm/deals/' + dealId)).amount) === 60000);
     assert.ok(amount, 'amount is 3 × 5000 × 4 cycles');
   });
@@ -114,7 +114,7 @@ describe('deal products and stage to-dos', () => {
     assert.ok(gone, 'to-do deleted');
   });
 
-  step("won't delete a product that is on a deal", async () => {
+  step("won't delete a product that is on an opportunity", async () => {
     await page.goto(BASE_URL + '/products', { waitUntil: 'networkidle0' });
     await waitForToastToClear(page);
     await click(page, '[data-testid=product-row]');
