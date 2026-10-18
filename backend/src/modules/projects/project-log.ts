@@ -1,11 +1,11 @@
 import { and, asc, eq, or, sql } from 'drizzle-orm';
 import type { Tx } from '../../shared/database/database.service';
-import { companies, employees, projectMembers, projects } from '../../shared/database/schema';
+import { companies, employees, projectMembers, projects, taskAssignments, tasks } from '../../shared/database/schema';
 
 /**
  * Who may log time on a project without a task (CD-350): only when the workspace allows it
  * (Settings → Workforce, `timesheet_project_time`), on an open project, by someone on the
- * project's team or its lead. Hour limits are per task, so none apply here. Call inside
+ * project's team, its lead, or anyone assigned to one of its tasks (owner, 18 Oct). Hour limits are per task, so none apply here. Call inside
  * `DatabaseService.withTenant` (RLS).
  */
 
@@ -15,7 +15,7 @@ export interface ProjectLogFacts {
   /** The workspace setting. */
   allowed: boolean;
   projectStatus: string;
-  /** On the project's team (project_members) or its lead. */
+  /** On the project's team (project_members), its lead, or assigned to one of its tasks. */
   onTeam: boolean;
 }
 
@@ -28,10 +28,11 @@ export function projectLogRefusal(facts: ProjectLogFacts | null): ProjectLogRefu
   return null;
 }
 
-/** On the team or the lead: one SQL condition for the checks and the picker. */
+/** On the team, the lead, or an active assignee of one of its tasks: one SQL condition for the checks and the picker. */
 const onTeam = (employeeId: string) =>
   or(
     sql`exists (select 1 from ${projectMembers} m where m.project_id = ${projects.id} and m.employee_id = ${employeeId})`,
+    sql`exists (select 1 from ${taskAssignments} a join ${tasks} t on t.id = a.task_id where t.project_id = ${projects.id} and a.employee_id = ${employeeId} and a.active)`,
     sql`${projects.leadUserId} is not null and ${projects.leadUserId} = (select e.user_id from ${employees} e where e.id = ${employeeId})`,
   );
 

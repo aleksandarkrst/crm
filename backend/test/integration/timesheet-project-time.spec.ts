@@ -54,6 +54,13 @@ describe('time on a project without a task (CD-350)', () => {
     expect(saved.status).toBe(200);
     expect(saved.body.rows.find((r) => r.kind === 'project' && r.id === projectId)).toMatchObject({ minutes: 120, lockedReason: null });
     expect((await cell(marko, 60)).status).toBe(403);
+    // Someone assigned to one of its tasks may log on the project too (owner, 18 Oct).
+    const markoId = (await accessOf(marko, tenant)).employeeId;
+    const task = await ok<{ id: string }>('POST', '/tasks', { ...as(), body: { projectId, name: 'Survey', assigneeIds: [markoId] } });
+    expect((await ok<Loggable[]>('GET', '/timesheet/loggable', as(marko))).filter((i) => i.kind === 'project').map((i) => i.id)).toEqual([projectId]);
+    expect((await cell(marko, 60)).status).toBe(200);
+    await cell(marko, 0);
+    await ok('PATCH', `/tasks/${task.id}/assignees/${markoId}`, { ...as(), body: { active: false } }).catch(() => undefined);
     // An empty row can be added from the dialog too.
     expect((await call('POST', '/timesheet/rows', { ...as(ana), body: { weekStart: (await ok<{ thisWeek: string }>('GET', '/timesheet/week', as(ana))).thisWeek, projectId } })).status).toBe(201);
   });

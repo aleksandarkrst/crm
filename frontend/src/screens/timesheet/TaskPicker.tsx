@@ -125,7 +125,7 @@ export function TaskPicker({ week, employeeId, onAdd }: { week: ApiTimesheetWeek
                 <div key={c.name} className="ts-picker-client">
                   <span className="caps ts-picker-client-name">
                     {c.name}
-                    <span className="emp-note">
+                    <span className="ts-picker-client-count">
                       {' '}
                       · {c.projects.length} {c.projects.length === 1 ? 'project' : 'projects'}
                     </span>

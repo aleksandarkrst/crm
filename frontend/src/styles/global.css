@@ -1544,7 +1544,9 @@ a.task-card-project:hover { color: var(--brand); }
 /* Timesheet like Clockify (CD-354): the row's X, the hover dots and the Task @Project dropdown. */
 .ts-row-x { border: 0; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; align-self: center; justify-self: center; width: 28px; height: 28px; border-radius: 6px; }
 .ts-row-x:hover { background: var(--danger-soft); color: var(--danger); }
-.ts-dots { opacity: 0; width: 14px; }
+/* Inside the cell's box (owner, 18 Oct): a few pixels from its right edge, centred, no background past the border. */
+.ts-dots { opacity: 0; width: 12px; height: 20px; top: 50%; right: 9px; transform: translateY(-50%); }
+.ts-dots:hover { background: transparent; }
 .ts-box:hover .ts-dots, .ts-box:focus-within .ts-dots, .ts-dots.has-note { opacity: 1; }
 .ts-add-row .ts-label { padding: 8px 14px; }
 .ts-task-picker-btn { display: inline-flex; align-items: center; gap: 8px; border: 0; background: transparent; cursor: pointer; padding: 4px 0; font-family: inherit; color: var(--brand); }
@@ -1553,6 +1555,7 @@ a.task-card-project:hover { color: var(--brand); }
 .ts-picker-list { max-height: 360px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 .ts-picker-client { display: flex; flex-direction: column; gap: 2px; }
 .ts-picker-client-name { padding: 2px 6px; }
+.ts-picker-client-count { font-size: 9.5px; color: var(--muted); }
 .ts-picker-project { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .ts-picker-name, .ts-picker-task, .ts-picker-count { border: 0; background: transparent; cursor: pointer; font-family: inherit; text-align: left; border-radius: 6px; }
 .ts-picker-name { flex: 1; min-width: 0; padding: 6px; font-size: 13.5px; color: var(--brand); font-weight: 500; }
