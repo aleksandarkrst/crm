@@ -337,7 +337,7 @@ export function Grid({
         </span>
         {/* The row's X (CD-354): gone from the week with its hours, unless some are on a submitted or approved day. */}
         {onRemove && removable(row) ? (
-          <button type="button" className="ts-row-x" aria-label={`Remove ${row.code} ${row.name} from this week`} title="Remove this row and its hours from the week" onClick={() => void onRemove(row)} data-testid="ts-row-remove">
+          <button type="button" className="ts-row-x" aria-label={`Remove ${row.kind === 'project' ? `${row.path.split(' › ').pop()} · no task` : `${row.code} ${row.name}`} from this week`} title="Remove this row and its hours from the week" onClick={() => void onRemove(row)} data-testid="ts-row-remove">
             ×
           </button>
         ) : (
@@ -419,6 +419,7 @@ export function Grid({
         {tasks.map((row, i) => rowEl(row, i))}
         {orders.length > 0 && group('Work orders')}
         {orders.map((row, i) => rowEl(row, tasks.length + i))}
+        {canAdd && <AddRow week={week} onAdd={onAdd} employeeId={employeeId} />}
         {holidayNames.map((name) => (
           <div className="ts-row ts-soft" key={name} data-testid="ts-holiday-row">
             <span className="ts-label">
@@ -477,7 +478,6 @@ export function Grid({
             <span className="ts-total" />
           </div>
         ))}
-        {canAdd && <AddRow week={week} onAdd={onAdd} employeeId={employeeId} />}
         {totalRow}
       </div>
       {flagged.length > 0 && (

@@ -373,7 +373,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .drp { position: relative; min-width: 0; }
 .drp-field { width: 100%; text-align: left; cursor: pointer; box-sizing: border-box; }
 .drp-field.drp-empty { color: var(--muted); }
-.drp-pop { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; width: 280px; max-width: calc(100vw - 24px); background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.drp-pop { position: fixed; z-index: 60; width: 280px; max-width: calc(100vw - 24px); background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 .drp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .drp-nav { padding: 4px 9px; }
 .drp-month { font-size: 13px; font-weight: 600; }
@@ -1258,7 +1258,6 @@ a.task-card-project:hover { color: var(--brand); }
 .ts-day-name { font-size: 10.5px; font-weight: 600; color: var(--muted-2); letter-spacing: 0.06em; }
 .ts-day-date { font-size: 12.5px; font-weight: 600; }
 .ts-day-total { font-size: 11px; color: var(--text-2); }
-.ts-day-total.short { color: var(--warn); }
 .ts-box { border-left: 1px solid var(--divider); padding: 5px; display: flex; position: relative; }
 .ts-weekend { background: #F7F9F8; }
 .ts-input { flex: 1; width: 100%; min-width: 0; text-align: center; border-radius: 7px; border: 1px solid var(--border); font: inherit; font-size: 13px; padding: 6px 2px; background: var(--white); color: var(--ink); }
@@ -1283,7 +1282,6 @@ a.task-card-project:hover { color: var(--brand); }
 .ts-total.below { color: var(--danger); }
 /* The one Total row (CD-351) closes the grid. */
 .ts-total-row { border-top: 1px solid var(--border); }
-.ts-sum.above { color: #2F6FB5; }
 
 /* Approvals (CD-157): the top panels, the team list and one person's week. */
 .ap-panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 14px; }
@@ -1332,7 +1330,6 @@ a.task-card-project:hover { color: var(--brand); }
 .ts-rejected-note q { display: block; font-style: italic; }
 .ts-add { border: 0; background: transparent; cursor: pointer; text-align: left; padding: 8px 14px; font: inherit; width: 100%; }
 .ts-add .ts-label-main { color: var(--brand); font-weight: 600; }
-.ts-add-picker { padding: 6px 14px 10px; grid-column: 1 / -1; position: relative; max-width: 520px; }
 .ts-help { font-size: 12px; color: var(--text-2); margin-top: 12px; }
 .ts-note-pop { position: absolute; width: 280px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); z-index: 20; }
 .ts-note-pop .form-label { font-size: 12px; }
@@ -1525,16 +1522,15 @@ a.task-card-project:hover { color: var(--brand); }
 .to-tile { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--white); min-width: 0; }
 .to-tile-figure { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin: 2px 0 4px; }
 .to-tile-figure strong { font-family: var(--font-display); font-size: 28px; font-weight: 600; color: var(--ink); }
-.to-tile-link { align-self: flex-start; margin-top: 6px; padding: 6px 10px; font-size: 12.5px; }
 .to-section-title { font-size: 15px; font-weight: 600; margin-top: 6px; }
 
 /* Time off → Approvals table (CD-350). */
-.rq-row { grid-template-columns: minmax(150px, 1.2fr) minmax(140px, 1.2fr) minmax(170px, 1.2fr) 100px 140px minmax(200px, auto); align-items: center; }
+.rq-row { grid-template-columns: minmax(150px, 1.2fr) minmax(140px, 1.2fr) minmax(170px, 1.2fr) 100px 140px minmax(200px, auto); align-items: center; min-width: 920px; }
 .rq-row .num { text-align: right; }
 .rq-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 @media (max-width: 760px) {
   .ap-table > .table-head.rq-row { display: none; }
-  .rq-row { grid-template-columns: minmax(0, 1fr) !important; gap: 4px; }
+  .rq-row { grid-template-columns: minmax(0, 1fr) !important; gap: 4px; min-width: 0; }
   .rq-row .num { text-align: left; }
   .rq-cell[data-label]::before { content: attr(data-label); display: block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-2); }
   .rq-actions { justify-content: flex-start; }

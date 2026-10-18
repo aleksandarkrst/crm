@@ -60,9 +60,33 @@ describe('time on a project without a task (CD-350)', () => {
     expect((await ok<Loggable[]>('GET', '/timesheet/loggable', as(marko))).filter((i) => i.kind === 'project').map((i) => i.id)).toEqual([projectId]);
     expect((await cell(marko, 60)).status).toBe(200);
     await cell(marko, 0);
-    await ok('PATCH', `/tasks/${task.id}/assignees/${markoId}`, { ...as(), body: { active: false } }).catch(() => undefined);
+    // An assignee who comes off the task loses it again.
+    await ok('DELETE', `/tasks/${task.id}/assignees/${markoId}`, as(), 200);
+    expect((await ok<Loggable[]>('GET', '/timesheet/loggable', as(marko))).filter((i) => i.kind === 'project')).toEqual([]);
+    expect((await cell(marko, 60)).status).toBe(403);
     // An empty row can be added from the dialog too.
     expect((await call('POST', '/timesheet/rows', { ...as(ana), body: { weekStart: (await ok<{ thisWeek: string }>('GET', '/timesheet/week', as(ana))).thisWeek, projectId } })).status).toBe(201);
+  });
+
+  it("the project's lead may log on it too", async () => {
+    const markoUser = (await ok<{ user: { id: string } }>('GET', '/me', { token: marko.token })).user.id;
+    await ok('PATCH', `/projects/${projectId}`, { ...as(), body: { leadUserId: markoUser } });
+    expect((await ok<Loggable[]>('GET', '/timesheet/loggable', as(marko))).map((i) => i.id)).toContain(projectId);
+    expect((await cell(marko, 30)).status).toBe(200);
+    await cell(marko, 0);
+    await ok('PATCH', `/projects/${projectId}`, { ...as(), body: { leadUserId: owner.userId } });
+  });
+
+  it("another workspace's project is not found, and its people don't see this one", async () => {
+    const stranger = await signIn('tpt-stranger');
+    const theirs = await createTenant(stranger, 'Elsewhere');
+    await ok('PATCH', '/workspace', { token: stranger.token, tenant: theirs, body: { timesheet: { projectTime: true } } });
+    const asStranger = { token: stranger.token, tenant: theirs };
+    expect((await ok<Loggable[]>('GET', '/timesheet/loggable', asStranger)).map((i) => i.id)).not.toContain(projectId);
+    const today2 = (await ok<Week>('GET', '/timesheet/week', asStranger)).today;
+    const own = await call('PUT', '/timesheet/cells', { ...asStranger, body: { date: today2, projectId, minutes: 60 } });
+    expect([403, 404]).toContain(own.status);
+    expect(own.status).not.toBe(200);
   });
 
   it('counts toward the project: its logged hours, the Report tab and the time report', async () => {
@@ -73,6 +97,8 @@ describe('time on a project without a task (CD-350)', () => {
     expect(report.stages).toContainEqual(expect.objectContaining({ name: 'No task', loggedMinutes: 120 }));
     const time = await ok<unknown>('GET', '/time-report?period=all', as());
     expect(JSON.stringify(time)).toContain('No task');
+    // A member who isn't the lead, Ana's manager or Ana sees none of her project time.
+    expect(JSON.stringify(await ok<unknown>('GET', '/time-report?period=all', as(marko)))).not.toContain('No task');
   });
 
   it('a closed project takes no more time on it', async () => {
@@ -83,7 +109,9 @@ describe('time on a project without a task (CD-350)', () => {
 
   it('turned off again, the hours stay but no new ones go on', async () => {
     await setting(false);
-    expect((await cell(ana, 180)).status).toBe(403);
+    // No new hours on another day; the hours already there can still be corrected, as for a task after unassignment.
+    const yesterday = new Date(Date.parse(`${today}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+    expect((await call('PUT', '/timesheet/cells', { ...as(ana), body: { date: yesterday, projectId, minutes: 60 } })).status).toBe(403);
     expect((await ok<{ loggedMinutes: number }>('GET', `/projects/${projectId}`, as())).loggedMinutes).toBe(120);
   });
 });

@@ -51,6 +51,24 @@ describe("the row's X (CD-354)", () => {
     expect(res.body.rows[0]!.minutes).toBe(60);
   });
 
+  it("a member can't remove someone else's row; an Admin on their behalf removes only theirs", async () => {
+    const res = await call('POST', '/timesheet/rows/remove', { ...as(ana), body: { weekStart: monday, taskId: otherTaskId, employeeId: (await accessOf(owner, tenant)).employeeId } });
+    expect(res.status).toBe(403);
+    await ok('POST', '/timesheet/rows', { ...as(owner), body: { weekStart: monday, taskId, employeeId: anaId } });
+    const onBehalf = await call<Week>('POST', '/timesheet/rows/remove', { ...as(owner), body: { weekStart: monday, taskId, employeeId: anaId } });
+    expect(onBehalf.status).toBe(200);
+    expect((await week()).rows.map((r) => r.id)).toEqual([otherTaskId]);
+  });
+
+  it("another workspace can't touch these rows", async () => {
+    const stranger = await signIn('trr-stranger');
+    const theirs = await createTenant(stranger, 'Elsewhere');
+    const res = await call<Week>('POST', '/timesheet/rows/remove', { token: stranger.token, tenant: theirs, body: { weekStart: monday, taskId: otherTaskId } });
+    expect(res.status).toBe(200);
+    expect((await week()).rows.map((r) => r.id)).toEqual([otherTaskId]);
+    expect((await week()).rows[0]!.minutes).toBe(60);
+  });
+
   it('keeps a row with hours on a submitted day', async () => {
     await ok('POST', '/timesheet/submit', { ...as(ana), body: { weekStart: monday } });
     const res = await remove(otherTaskId);

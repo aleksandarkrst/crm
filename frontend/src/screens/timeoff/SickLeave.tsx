@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import { askConfirm } from '../../components/ConfirmDialog';
-import { EmptyState } from '../../components/EmptyState';
 import { DateRangePicker } from '../../components/DateRangePicker';
 import { Modal, ModalHeader } from '../../components/ui';
-import { downloadBlob } from '../../lib/csv';
-import { type ApiSickLeave, type ApiSickLeaveType, SICK_STATUS_LABEL, type SickLeaveFilters, timeOffApi } from '../../lib/timeOffApi';
+import { type ApiSickLeave, type ApiSickLeaveType, SICK_STATUS_LABEL, timeOffApi } from '../../lib/timeOffApi';
 import { projectError, useProjectsRead } from '../../store/projects';
 import { useStore } from '../../store/store';
 import { dateLabel } from '../employee/parts';
@@ -294,68 +292,6 @@ export function EmployeeSickLeave({ employeeId, canReport }: { employeeId: strin
       </div>
       {data ? <SickLeaveList records={data} onChanged={() => void reload()} /> : <span className="emp-note">Loading</span>}
     </section>
-  );
-}
-
-/**
- * Time off → Sick leave (CD-169, spec 13.5): managers see their reports' records without the type;
- * Admins see everyone with the type, confirm, edit, cancel and export a CSV.
- */
-export function SickLeaveTab({ admin }: { admin: boolean }) {
-  const { flash } = useStore();
-  const [status, setStatus] = useState<ApiSickLeave['status'] | ''>('');
-  const [open, setOpen] = useState(false);
-  const [month, setMonth] = useState('');
-  const [typeId, setTypeId] = useState('');
-  const types = useSickTypes(admin);
-  const filters: SickLeaveFilters = { all: true, status: status || undefined, open: open || undefined, month: month || undefined, typeId: typeId || undefined };
-  const { data, error, reload } = useProjectsRead<ApiSickLeave[]>(true, () => timeOffApi.sickLeave.list(filters), `timeoff:sick:all:${status}:${open}:${month}:${typeId}`, 'timeOffRev');
-  const exportCsv = async () => {
-    try {
-      downloadBlob('pultly-sick-leave.csv', await timeOffApi.sickLeave.csv(filters));
-    } catch (err) {
-      flash(projectError(err));
-    }
-  };
-  if (error) return <EmptyState title="Sick leave could not be loaded" text={error} />;
-  return (
-    <div className="bal-page" data-testid="sick-tab">
-      <div className="bal-filters">
-        <select className="form-input" value={status} onChange={(e) => setStatus(e.target.value as ApiSickLeave['status'] | '')} aria-label="Status">
-          <option value="">All statuses</option>
-          {Object.entries(SICK_STATUS_LABEL).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <input className="form-input" type="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month" />
-        {admin && (
-          <select className="form-input" value={typeId} onChange={(e) => setTypeId(e.target.value)} aria-label="Type">
-            <option value="">All types</option>
-            {types.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        )}
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-          <input type="checkbox" checked={open} onChange={(e) => setOpen(e.target.checked)} />
-          Open only
-        </label>
-        <span style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
-          {admin && (
-            <button type="button" className="btn btn-secondary" onClick={() => void exportCsv()}>
-              Export CSV
-            </button>
-          )}
-          <ReportSickButton onReported={() => void reload()} />
-        </span>
-      </div>
-      <div className="card card-pad">{data ? <SickLeaveList records={data} withEmployee onChanged={() => void reload()} /> : <span className="emp-note">Loading</span>}</div>
-      {!admin && <span className="emp-note">Managers see their direct and indirect reports' sick leave without its type.</span>}
-    </div>
   );
 }
 

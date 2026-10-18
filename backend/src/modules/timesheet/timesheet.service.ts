@@ -435,7 +435,7 @@ export class TimesheetService {
         const [facts] = await rowFacts(tx, employeeId, kind === 'task' ? [id] : [], kind === 'work_order' ? [id] : [], kind === 'project' ? [id] : [], caller.settings.projectTime);
         if (!facts) throw new NotFoundException(kind === 'task' ? 'Task not found' : kind === 'project' ? 'Project not found' : 'Work order not found');
         // Hours already there can be corrected after someone was unassigned (spec 4.4); new ones need the rule.
-        const correcting = existing.length > 0 && (facts.refusal === 'not_assigned' || facts.refusal === 'not_technician');
+        const correcting = existing.length > 0 && (facts.refusal === 'not_assigned' || facts.refusal === 'not_technician' || facts.refusal === 'not_on_team' || facts.refusal === 'not_allowed');
         if (facts.refusal && !correcting) throw refusalError(facts);
         if (existing.length > 1) throw new ConflictException(`This day has ${existing.length} entries on ${facts.code}. Change them on its page.`);
         const entry = existing[0];

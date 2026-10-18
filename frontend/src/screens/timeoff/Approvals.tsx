@@ -3,124 +3,15 @@ import { Link } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
 import { Modal, ModalHeader } from '../../components/ui';
 import { paths } from '../../lib/paths';
-import { type ApiApprovalRow, type ApiCalendar, type ApiTimeOffRequest, TIME_OFF_TYPE_LABEL, timeOffApi, type TimeOffType } from '../../lib/timeOffApi';
+import { type ApiCalendar, type ApiTimeOffRequest, TIME_OFF_TYPE_LABEL, timeOffApi, type TimeOffType } from '../../lib/timeOffApi';
 import { projectError, useProjectsRead } from '../../store/projects';
 import { useStore } from '../../store/store';
-import { dateLabel } from '../employee/parts';
 import { periodLabel } from './RequestsList';
 
 /** The pending approvals of the caller (managers and Admins), for the sidebar badge. */
 export function usePendingApprovals(enabled: boolean): number {
   const { data } = useProjectsRead<{ pending: number }>(enabled, () => timeOffApi.approvals.count(), 'timeoff:approvals:count', 'timeOffRev');
   return data?.pending ?? 0;
-}
-
-const days = (n: number) => `${n} ${n === 1 ? 'working day' : 'working days'}`;
-
-/**
- * The Approvals tab (CD-166, spec 9.2): one row per pending request the caller decides, with the
- * type and reason, dates, working days, when it was submitted, the note, the vacation balance after
- * approval, who else is away ("Also away: Marko (vacation 12 to 16 Oct)") and the warnings; Approve
- * (one click), Reject (a comment), and "Approve selected". On phones the rows become cards.
- */
-export function ApprovalsTab() {
-  const { flash } = useStore();
-  const { data, error, reload } = useProjectsRead<ApiApprovalRow[]>(true, () => timeOffApi.approvals.list(), 'timeoff:approvals', 'timeOffRev');
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [busy, setBusy] = useState<string | null>(null);
-  const [rejecting, setRejecting] = useState<ApiTimeOffRequest | null>(null);
-  if (error) return <EmptyState title="Approvals could not be loaded" text={error} />;
-  if (!data) return <div className="ts-help">Loading</div>;
-  const toggle = (id: string) =>
-    setSelected((cur) => {
-      const next = new Set(cur);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  const ids = [...selected].filter((id) => data.some((r) => r.id === id));
-  const approve = async (r: ApiApprovalRow) => {
-    setBusy(r.id);
-    try {
-      await timeOffApi.requests.approve(r.id);
-      flash(`Approved: ${r.employee.fullName}, ${periodLabel(r)}`);
-      await reload();
-    } catch (err) {
-      flash(projectError(err));
-    }
-    setBusy(null);
-  };
-  const approveSelected = async () => {
-    setBusy('bulk');
-    try {
-      const res = await timeOffApi.approvals.approveMany(ids);
-      flash(res.failed.length ? `${res.approved.length} approved; ${res.failed.length} could not be: ${res.failed.map((f) => f.message).join('; ')}` : `${res.approved.length} ${res.approved.length === 1 ? 'request' : 'requests'} approved`);
-      setSelected(new Set());
-      await reload();
-    } catch (err) {
-      flash(projectError(err));
-    }
-    setBusy(null);
-  };
-  return (
-    <div className="bal-page" data-testid="approvals-tab">
-      {data.length > 1 && (
-        <div className="bal-filters">
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-            <input type="checkbox" checked={ids.length === data.length} onChange={() => setSelected(ids.length === data.length ? new Set() : new Set(data.map((r) => r.id)))} aria-label="Select all" />
-            Select all
-          </label>
-          <button type="button" className="btn btn-primary" style={{ marginLeft: 'auto' }} disabled={!ids.length || busy !== null} onClick={() => void approveSelected()} data-testid="approve-selected">
-            Approve selected{ids.length ? ` (${ids.length})` : ''}
-          </button>
-        </div>
-      )}
-      <section className="card card-pad" style={{ display: 'flex', flexDirection: 'column' }}>
-        {data.length === 0 && <span className="emp-note">Nothing waiting for your decision.</span>}
-        {data.map((r) => (
-          <div key={r.id} className="apr-row" data-testid="approval-row" data-request={r.id}>
-            <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} aria-label={`Select ${r.employee.fullName}`} style={{ marginTop: 3 }} />
-            <div className="req-main">
-              <span style={{ fontSize: 13, fontWeight: 500 }}>
-                <Link to={paths.employee(r.employee.id)}>{r.employee.fullName}</Link> · {TIME_OFF_TYPE_LABEL[r.type]}
-                {r.reason ? ` · ${r.reason.name}` : ''}
-              </span>
-              <span style={{ fontSize: 13 }}>
-                {periodLabel(r)} · {days(r.workingDays)} · submitted {dateLabel(r.submittedAt.slice(0, 10))}
-              </span>
-              {r.note && <span className="emp-note">Note: {r.note}</span>}
-              {r.balanceAfter !== null && <span className="emp-note">Vacation days left after approval: {r.balanceAfter}</span>}
-              {r.alsoAway.length > 0 && <span className="emp-note">Also away: {r.alsoAway.map((a) => `${a.fullName} (${a.what} ${periodLabel(a)}${a.status === 'pending' ? ', pending' : ''})`).join(', ')}</span>}
-              {r.startDatePassed && <span className="emp-note emp-warn">Start date passed</span>}
-              {r.twoWeekPartMissing && <span className="emp-note emp-warn">The two-week part of this year's leave was not taken yet</span>}
-              {r.warnings.map((w) => (
-                <span key={w} className="emp-note emp-warn">
-                  {w}
-                </span>
-              ))}
-            </div>
-            <span className="apr-actions">
-              <button type="button" className="btn-plain" disabled={busy !== null} onClick={() => setRejecting(r)} data-testid="approval-reject">
-                Reject
-              </button>
-              <button type="button" className="btn btn-primary" disabled={busy !== null} onClick={() => void approve(r)} data-testid="approval-approve">
-                Approve
-              </button>
-            </span>
-          </div>
-        ))}
-      </section>
-      {rejecting && (
-        <RejectDialog
-          request={rejecting}
-          onClose={(done) => {
-            setRejecting(null);
-            if (done) void reload();
-          }}
-        />
-      )}
-    </div>
-  );
 }
 
 /** Reject: the comment the employee reads (spec 9.2). */

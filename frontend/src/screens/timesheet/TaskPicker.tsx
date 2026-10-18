@@ -60,14 +60,18 @@ export function TaskPicker({ week, employeeId, onAdd }: { week: ApiTimesheetWeek
     const off = (e: MouseEvent) => !pop.current?.contains(e.target as Node) && !button.current?.contains(e.target as Node) && setOpen(false);
     const key = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
     const away = () => setOpen(false);
+    // Fixed under its button: scrolling the page or the grid (not the list) closes it.
+    const scroll = (e: Event) => !pop.current?.contains(e.target as Node) && setOpen(false);
     document.addEventListener('mousedown', off);
     document.addEventListener('keydown', key);
     window.addEventListener('resize', away);
+    window.addEventListener('scroll', scroll, true);
     return () => {
       alive = false;
       document.removeEventListener('mousedown', off);
       document.removeEventListener('keydown', key);
       window.removeEventListener('resize', away);
+      window.removeEventListener('scroll', scroll, true);
     };
   }, [open, employeeId]);
 
