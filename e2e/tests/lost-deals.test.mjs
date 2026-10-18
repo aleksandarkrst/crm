@@ -74,15 +74,15 @@ describe('lost opportunities', () => {
     assert.match(await text(page), /1 lost hidden/);
   });
 
-  step('shows it with the "Include lost opportunities" view, marked as lost', async () => {
-    assert.ok(await pickView(page, 'Include lost opportunities'), 'lost view chip found');
+  step('shows it with the "Include lost" view, marked as lost', async () => {
+    assert.ok(await pickView(page, 'Include lost'), 'lost view chip found');
     await page.waitForFunction(() => document.body.innerText.includes('Gone Away'));
     const lost = (await boardCards(page)).find((c) => c.text.includes('Gone Away'));
     assert.ok(lost.lost, 'the card is marked as lost');
     assert.match(lost.text, /Lost · Chose a competitor/);
     assert.ok((await boardCards(page)).some((c) => c.text.includes('Keeper Ltd')), 'open opportunities still shown');
 
-    assert.ok(await pickView(page, 'Lost opportunities only'));
+    assert.ok(await pickView(page, 'Lost only'));
     await page.waitForFunction(() => !document.body.innerText.includes('Keeper Ltd'));
     assert.ok((await boardCards(page)).some((c) => c.text.includes('Gone Away')));
   });
@@ -100,7 +100,7 @@ describe('lost opportunities', () => {
     await page.waitForFunction(() => document.body.innerText.includes('Reopened'));
 
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
-    assert.ok(await pickView(page, 'Open & won opportunities'));
+    assert.ok(await pickView(page, 'Open & won'));
     await page.waitForFunction(() => [...document.querySelectorAll('[draggable]')].some((el) => el.innerText.includes('Gone Away')));
     const history = await api(page, '/crm/deal-stage-history?dealId=' + dealId);
     assert.deepEqual(

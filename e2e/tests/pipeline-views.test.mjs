@@ -75,15 +75,15 @@ describe('pipeline views', () => {
   });
 
   step('the board filters apply to the table, with an empty state', async () => {
-    assert.ok(await pick(page, 'Include lost opportunities'));
+    assert.ok(await pick(page, 'Include lost'));
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=pipeline-table-row]').length === 3);
     const lost = (await tableRows(page)).find((r) => r.text.includes('Gamma Ltd'));
     assert.ok(lost.lost);
     assert.match(lost.text, /Lost · No budget/);
 
-    assert.ok(await pick(page, 'Lost opportunities only'));
+    assert.ok(await pick(page, 'Lost only'));
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=pipeline-table-row]').length === 1);
-    assert.ok(await pick(page, 'Open & won opportunities'));
+    assert.ok(await pick(page, 'Open & won'));
     const band = await page.evaluate(() => {
       const el = [...document.querySelectorAll('select')].find((s) => s.options[0]?.value === 'Value');
       return el.options[el.options.length - 1].value;
