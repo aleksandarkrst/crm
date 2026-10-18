@@ -6,7 +6,7 @@ import { AuditService } from '../../shared/audit/audit.service';
 import type { TenantContext } from '../../shared/authorization';
 import { DatabaseService, type Tx } from '../../shared/database/database.service';
 import { mapDbError } from '../../shared/database/errors';
-import { employees, tasks, tenants, timeEntries, timesheetDayEvents, timesheetDays, type TimesheetDayStatus, timesheetWeeks, workOrders } from '../../shared/database/schema';
+import { employees, projects, tasks, tenants, timeEntries, timesheetDayEvents, timesheetDays, type TimesheetDayStatus, timesheetWeeks, workOrders } from '../../shared/database/schema';
 import { JobsService } from '../../shared/events/jobs.service';
 import { zonedDayStart, zonedParts } from '../../shared/time/zoned-time';
 import { type CallerAccess, PeopleAccess, shownEmployee } from '../people';
@@ -66,6 +66,8 @@ interface EntrySnapshot {
   date: string;
   taskId: string | null;
   workOrderId: string | null;
+  /** Time on the project itself (CD-350); absent in snapshots written before it. */
+  projectId?: string | null;
   minutes: number;
   note: string | null;
 }
@@ -382,7 +384,14 @@ export class ApprovalsService {
         taskIds.length ? tx.select({ id: tasks.id, number: tasks.number, name: tasks.name }).from(tasks).where(inArray(tasks.id, taskIds)) : [],
         orderIds.length ? tx.select({ id: workOrders.id, number: workOrders.number, title: workOrders.title }).from(workOrders).where(inArray(workOrders.id, orderIds)) : [],
       ]);
+      const projectIds = [...new Set(snaps.flatMap((s) => (s.projectId ? [s.projectId] : [])))];
+      const projectRows = projectIds.length ? await tx.select({ id: projects.id, name: projects.name }).from(projects).where(inArray(projects.id, projectIds)) : [];
       const rowOf = (s: EntrySnapshot) => {
+        // Time on the project itself (CD-350).
+        if (s.projectId) {
+          const p = projectRows.find((x) => x.id === s.projectId);
+          return p ? `${p.name} (no task)` : 'Deleted project';
+        }
         if (s.taskId) {
           const t = taskRows.find((x) => x.id === s.taskId);
           return t ? `T-${t.number} ${t.name}` : 'Deleted task';

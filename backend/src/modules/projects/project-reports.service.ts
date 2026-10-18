@@ -46,10 +46,16 @@ export class ProjectReportsService {
         sql`select id, name, position from project_stages where project_type_id = ${project.project_type_id}`,
       );
       const tasks = await reportTasks(tx, sql`t.project_id = ${projectId}`);
-      const ids = [...new Set(tasks.flatMap((t) => [...t.assigneeIds, ...t.logged.keys()]))];
+      // Time on the project itself (CD-350), by employee.
+      const { rows: own } = await tx.execute<{ employee_id: string; minutes: number }>(
+        sql`select employee_id, sum(minutes)::int as minutes from time_entries where project_id = ${projectId} group by employee_id`,
+      );
+      const projectTime = new Map(own.map((r) => [r.employee_id, r.minutes]));
+      const ids = [...new Set([...tasks.flatMap((t) => [...t.assigneeIds, ...t.logged.keys()]), ...projectTime.keys()])];
       const people = await names(tx, ids);
       return projectReport({
         tasks,
+        projectTime,
         stages,
         people: new Map([...people].map(([id, p]) => [id, p.name])),
         today: await today(tx, ctx.tenantId),

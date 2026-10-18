@@ -44,16 +44,16 @@ const columns = {
   team: sql<{ employeeId: string; name: string }[]>`coalesce((select json_agg(json_build_object('employeeId', e.id, 'name', e.full_name) order by e.full_name)
     from project_members m join employees e on e.id = m.employee_id where m.project_id = "projects"."id"), '[]'::json)`,
   /**
-   * Logged time (CD-277): every time entry on its tasks and work orders (draft, submitted, rejected
+   * Logged time (CD-277): every time entry on its tasks, work orders and the project itself (CD-350; draft, submitted, rejected
    * and approved days), in minutes, and this calendar month's in the workspace's time zone.
    */
   loggedMinutes: sql<number>`(select coalesce(sum(e.minutes), 0)::int from time_entries e
     left join tasks t on t.id = e.task_id left join work_orders w on w.id = e.work_order_id
-    where coalesce(t.project_id, w.project_id) = "projects"."id")`,
+    where coalesce(e.project_id, t.project_id, w.project_id) = "projects"."id")`,
   monthMinutes: sql<number>`(select coalesce(sum(e.minutes), 0)::int from time_entries e
     left join tasks t on t.id = e.task_id left join work_orders w on w.id = e.work_order_id
     cross join lateral (select date_trunc('month', now() at time zone (select timezone from tenants where id = "projects"."tenant_id"))::date as m) month
-    where coalesce(t.project_id, w.project_id) = "projects"."id" and e.work_date >= month.m and e.work_date < (month.m + interval '1 month')::date)`,
+    where coalesce(e.project_id, t.project_id, w.project_id) = "projects"."id" and e.work_date >= month.m and e.work_date < (month.m + interval '1 month')::date)`,
   createdAt: projects.createdAt,
   version: projects.updatedAt,
 };
@@ -302,7 +302,7 @@ export class ProjectsService {
       .withTenant(ctx.tenantId, async (tx) => {
         // Its files' rows go with it (FK cascade); the stored bytes are removed after the commit.
         const logged = await tx.execute(sql`
-          select 1 from time_entries e where e.task_id in (select id from tasks where project_id = ${id}) limit 1`);
+          select 1 from time_entries e where e.task_id in (select id from tasks where project_id = ${id}) or e.project_id = ${id} limit 1`);
         if (logged.rows.length) throw new ConflictException('This project has logged hours. Complete or cancel it instead.');
         const files = await tx.select({ key: projectFiles.storageKey }).from(projectFiles).where(eq(projectFiles.projectId, id));
         const [row] = await tx.delete(projects).where(eq(projects.id, id)).returning({ id: projects.id, name: projects.name });

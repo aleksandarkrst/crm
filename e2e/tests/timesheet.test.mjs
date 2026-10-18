@@ -48,11 +48,11 @@ describe('timesheet', () => {
     assert.equal((await page.$$('[data-testid=ts-row]')).length, 0);
   });
 
-  step('+ Add task or work order lists what you can log on', async () => {
+  step('+ Task @Project: search, then pick the task under its client and project (CD-354)', async () => {
     await click(page, '[data-testid=ts-add-row]');
-    await page.waitForSelector('.picker-item::-p-text(Update the spare parts price list)');
-    await page.type('.ts-add-picker .picker-search', 'spare');
-    await click(page, '.picker-item::-p-text(Update the spare parts price list)');
+    await page.waitForSelector('[data-testid=ts-picker-search]');
+    await page.type('[data-testid=ts-picker-search]', 'spare');
+    await click(page, `[data-testid=ts-picker-task][data-id="${task.id}"]`);
     await page.waitForSelector(cell(task.id, monday));
     assert.match(await page.$eval(`[data-testid=ts-row][data-row="${task.id}"] [data-testid=ts-row-sub]`, (el) => el.textContent), /Kovin Pančevo › Service contract 2026 · no limit/);
   });

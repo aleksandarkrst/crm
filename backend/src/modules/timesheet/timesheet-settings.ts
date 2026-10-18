@@ -19,6 +19,7 @@ export const timesheetColumns = {
   approvalMode: tenants.timesheetApprovalMode,
   reminderHours: tenants.timesheetReminderHours,
   afterDeadlineEmails: tenants.timesheetAfterDeadlineEmails,
+  projectTime: tenants.timesheetProjectTime,
 };
 
 /** The workspace's timesheet settings (CD-153): the one read every rule uses. */
@@ -38,6 +39,7 @@ export async function timesheetSettings(tx: Tx, tenantId: string): Promise<Times
     approvalMode: row.approvalMode,
     reminderHours: row.reminderHours,
     afterDeadlineEmails: row.afterDeadlineEmails,
+    projectTime: row.projectTime,
   };
 }
 

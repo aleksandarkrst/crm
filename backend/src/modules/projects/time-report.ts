@@ -147,7 +147,7 @@ const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompar
 const leafLimit = (l: ReportLeaf): Limit => ({ limitMinutes: l.limitMinutes, limitPartial: false });
 const personLeaf = (l: ReportLeaf) => node('person', l.employeeId, l.personName, null, leafLimit(l), [], [l], { notAssigned: !l.active });
 const taskOf = (ls: ReportLeaf[], limit: Limit, children: ReportNode[], extra: Partial<ReportNode> = {}) =>
-  node('task', ls[0]!.taskId, ls[0]!.taskName, `T-${ls[0]!.taskNumber}`, limit, children, ls, { status: ls[0]!.taskStatus, ...extra });
+  node('task', ls[0]!.taskId, ls[0]!.taskName, ls[0]!.taskNumber ? `T-${ls[0]!.taskNumber}` : '', limit, children, ls, { status: ls[0]!.taskStatus, ...extra });
 const byNumber = (ls: ReportLeaf[][]) => ls.sort((a, b) => a[0]!.taskNumber - b[0]!.taskNumber);
 
 /** Project › Stage › Task › Person: tasks without a stage sit right under the project. */

@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Picker, PickerRow, usePicker } from '../../components/ui';
 import { paths } from '../../lib/paths';
-import { type ApiCell, type ApiLoggable, type ApiTimesheetDay, type ApiTimesheetRow, type ApiTimesheetWeek, dayLabel, formatHours, parseHours, shortHours, type TimeFormat, timesheetApi } from '../../lib/timesheetApi';
-import { projectError } from '../../store/projects';
+import { type ApiCell, type ApiLoggable, type ApiTimesheetDay, type ApiTimesheetRow, type ApiTimesheetWeek, dayLabel, formatHours, parseHours, shortHours, type TimeFormat } from '../../lib/timesheetApi';
 import { useStore } from '../../store/store';
+import { TaskPicker } from './TaskPicker';
 
 const DAY_NAMES = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -92,7 +91,7 @@ function TimeCell({
     setError(false);
   };
 
-  const title = cell.entries > 1 ? `${cell.entries} entries on this day: change them on the ${row.kind === 'task' ? 'task' : 'work order'} page` : !editable && row.lockedReason ? row.lockedReason : undefined;
+  const title = cell.entries > 1 ? `${cell.entries} entries on this day: change them on the ${row.kind === 'task' ? 'task' : row.kind === 'project' ? 'project' : 'work order'} page` : !editable && row.lockedReason ? row.lockedReason : undefined;
   return (
     <span className={`ts-box${isWeekend(day.date) ? ' ts-weekend' : ''}`}>
       <input
@@ -126,18 +125,20 @@ function TimeCell({
           }
         }}
       />
-      {editable && cell.entries <= 1 ? (
+      {editable && cell.entries <= 1 && (cell.minutes > 0 || cell.note) ? (
         <button
           type="button"
-          className={'ts-note-btn' + (cell.note ? ' has-note' : '')}
+          className={'ts-note-btn ts-dots' + (cell.note ? ' has-note' : '')}
           aria-label={`${cell.note ? 'Note' : 'Add a note'} for ${row.code} ${dayLabel(day.date)}`}
-          title={cell.note ? 'Note for the approver' : 'Add a note for the approver'}
+          title={cell.note ? 'More: the note for the approver' : 'More: add a note for the approver'}
           tabIndex={-1}
           data-testid="ts-note-open"
           onClick={(e) => onNote(e.currentTarget)}
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M5 4h14v12l-4 4H5z M9 10h6 M9 14h4 M15 20v-4h4" />
+          <svg width="4" height="14" viewBox="0 0 4 14" fill="currentColor" aria-hidden>
+            <circle cx="2" cy="2" r="1.5" />
+            <circle cx="2" cy="7" r="1.5" />
+            <circle cx="2" cy="12" r="1.5" />
           </svg>
         </button>
       ) : (
@@ -230,76 +231,13 @@ function NotePopover({
   );
 }
 
-/** "+ Add task or work order": a search over what the person can log on now and isn't in the week yet. */
+/** "+ Task @Project" (CD-354, like Clockify): the dropdown row under the week's rows. */
 function AddRow({ week, onAdd, employeeId }: { week: ApiTimesheetWeek; onAdd: (item: ApiLoggable) => Promise<void>; employeeId?: string }) {
-  const picker = usePicker();
-  const [items, setItems] = useState<ApiLoggable[] | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (!open) return;
-    let alive = true;
-    timesheetApi.loggable(employeeId).then(
-      (list) => alive && setItems(list),
-      (err) => alive && setFailed(projectError(err)),
-    );
-    return () => {
-      alive = false;
-    };
-  }, [open, employeeId]);
-  const inWeek = new Set(week.rows.map((r) => r.id));
-  const q = picker.search.trim().toLowerCase();
-  const shown = (items ?? []).filter((i) => !inWeek.has(i.id) && (!q || `${i.code} ${i.name} ${i.path}`.toLowerCase().includes(q)));
   return (
-    <div className="ts-row">
-      <div style={{ gridColumn: '1 / -1' }}>
-        <button
-          type="button"
-          className="ts-add ts-label"
-          data-testid="ts-add-row"
-          onClick={() => {
-            setOpen((o) => !o);
-            picker.setOpen(true);
-          }}
-        >
-          <span className="ts-label-main">+ Add task or work order</span>
-          <span className="ts-label-sub">Tasks you are assigned to with time logging on, and open work orders you are on</span>
-        </button>
-        {open && (
-          <div className="ts-add-picker">
-            <Picker
-              picker={picker}
-              placeholder="Search by number, name, company or project"
-              items={
-                failed ? (
-                  <div className="picker-item">{failed}</div>
-                ) : items === null ? (
-                  <div className="picker-item">Loading</div>
-                ) : shown.length === 0 ? (
-                  <div className="picker-item" style={{ color: 'var(--text-2)' }}>
-                    {employeeId ? (items.length ? `Everything ${week.employee?.name ?? 'they'} can log on is in this week` : `Nothing to log time on yet: ${week.employee?.name ?? 'they'} is on no open task or work order`) : items.length ? 'Everything you can log on is in this week' : 'Nothing to log time on yet: you are on no open task or work order'}
-                  </div>
-                ) : (
-                  shown.map((i) => (
-                    <PickerRow
-                      key={i.id}
-                      initials={i.kind === 'task' ? 'T' : 'WO'}
-                      square
-                      title={`${i.code} ${i.name}`}
-                      subtitle={i.path}
-                      onPick={() => {
-                        picker.close();
-                        setOpen(false);
-                        void onAdd(i);
-                      }}
-                    />
-                  ))
-                )
-              }
-            />
-          </div>
-        )}
-      </div>
+    <div className="ts-row ts-add-row">
+      <span className="ts-label">
+        <TaskPicker week={week} employeeId={employeeId} onAdd={onAdd} />
+      </span>
     </div>
   );
 }
@@ -313,12 +251,15 @@ export function Grid({
   week,
   onSave,
   onAdd,
+  onRemove,
   onResubmitDay,
   employeeId,
 }: {
   week: ApiTimesheetWeek;
   onSave: SaveCell;
   onAdd: (item: ApiLoggable) => Promise<void>;
+  /** The row's X (CD-354). */
+  onRemove?: (row: ApiTimesheetRow) => Promise<void>;
   /** Day by day mode (CD-158): a rejected day is resubmitted on its own. */
   onResubmitDay?: (date: string) => void;
   /** An Admin entering time for this employee (CD-317): the picker lists what they can log on. */
@@ -327,7 +268,8 @@ export function Grid({
   const format = week.settings.timeFormat;
   const wrap = useRef<HTMLDivElement>(null);
   const [note, setNote] = useState<{ key: string; date: string; top: number; left: number } | null>(null);
-  const tasks = week.rows.filter((r) => r.kind === 'task');
+  // Time on the project itself (CD-350) sits with its tasks, first under the project.
+  const tasks = week.rows.filter((r) => r.kind === 'task' || r.kind === 'project');
   const orders = week.rows.filter((r) => r.kind === 'work_order');
   const ordered = [...tasks, ...orders];
   const closeNote = useCallback(() => setNote(null), []);
@@ -369,14 +311,18 @@ export function Grid({
   const noteRow = note && week.rows.find((r) => r.key === note.key);
   const noteDay = note && week.days.find((d) => d.date === note.date);
 
+  /** A row can go while none of its hours are on a submitted or approved day. */
+  const removable = (row: ApiTimesheetRow) => week.days.every((d) => !(row.cells[d.date]?.minutes ?? 0) || d.status === 'draft' || d.status === 'rejected');
+
   const rowEl = (row: ApiTimesheetRow, r: number) => {
     const sub = subLine(row, format);
     return (
       <div className="ts-row" key={row.key} data-testid="ts-row" data-row={row.id}>
         <span className="ts-label">
           <span className="ts-label-main" title={`${row.code} ${row.name}`}>
-            <Link to={row.kind === 'task' ? paths.task(row.id) : paths.workOrder(row.id)}>
-              {row.code} {row.name}
+            <Link to={row.kind === 'task' ? paths.task(row.id) : row.kind === 'project' ? paths.project(row.id) : paths.workOrder(row.id)}>
+              {/* The project's own row (CD-350): its name, then "no task". */}
+              {row.kind === 'project' ? `${row.path.split(' › ').pop()} · no task` : `${row.code} ${row.name}`}
             </Link>
           </span>
           <span className={`ts-label-sub${sub.over ? ' over' : ''}`} data-testid="ts-row-sub">
@@ -389,6 +335,14 @@ export function Grid({
         <span className="ts-total" data-testid="ts-row-total">
           {row.minutes ? shortHours(row.minutes, format) : ''}
         </span>
+        {/* The row's X (CD-354): gone from the week with its hours, unless some are on a submitted or approved day. */}
+        {onRemove && removable(row) ? (
+          <button type="button" className="ts-row-x" aria-label={`Remove ${row.kind === 'project' ? `${row.path.split(' › ').pop()} · no task` : `${row.code} ${row.name}`} from this week`} title="Remove this row and its hours from the week" onClick={() => void onRemove(row)} data-testid="ts-row-remove">
+            ×
+          </button>
+        ) : (
+          <span className="ts-row-x-empty" />
+        )}
       </div>
     );
   };
@@ -401,25 +355,36 @@ export function Grid({
     </div>
   );
 
-  const sumRow = (label: string, sub: string, value: (d: ApiTimesheetDay) => number, total: number, opts: { strong?: boolean; signed?: boolean; testId: string }) => (
-    <div className="ts-row ts-soft" data-testid={opts.testId}>
+  /**
+   * The one Total row (CD-351, like Clockify's): each day's hours, absences included, and the week's.
+   * A day short of its expected hours (on or before today) is marked; the week's expected hours are
+   * the row's note, and each day carries its own in a tooltip (`data-expected`).
+   */
+  const shortOf = (d: ApiTimesheetDay) => d.expectedMinutes > 0 && d.minutes < d.expectedMinutes && d.date <= today;
+  const weekShort = week.days.some(shortOf);
+  const totalRow = (
+    <div className="ts-row ts-soft ts-total-row" data-testid="ts-total-entered">
       <span className="ts-label">
-        <span className="ts-label-main" style={{ fontWeight: opts.strong ? 600 : 500, color: opts.strong ? 'var(--ink)' : 'var(--text-2)' }}>
-          {label}
+        <span className="ts-label-main" style={{ fontWeight: 600, color: 'var(--ink)' }}>
+          Total
         </span>
-        <span className="ts-label-sub">{sub}</span>
+        <span className="ts-label-sub" data-testid="ts-expected-note">
+          Expected {shortHours(expected, format)} h{holidayNames.length ? ', minus holidays' : ''}
+        </span>
       </span>
-      {week.days.map((d) => {
-        const v = value(d);
-        const tone = opts.signed && d.date <= today && v !== 0 ? (v < 0 ? ' below' : ' above') : '';
-        const empty = !opts.signed && v === 0 && d.expectedMinutes === 0 && !d.holiday;
-        return (
-          <span key={d.date} className={`ts-sum${opts.strong ? ' strong' : ''}${tone}${isWeekend(d.date) ? ' ts-weekend' : ''}`}>
-            {empty || (opts.signed && d.expectedMinutes === 0 && d.minutes === 0) ? '' : shortHours(v, format, opts.signed)}
-          </span>
-        );
-      })}
-      <span className="ts-total">{shortHours(total, format, opts.signed)}</span>
+      {week.days.map((d) => (
+        <span
+          key={d.date}
+          className={`ts-sum strong${shortOf(d) ? ' below' : ''}${isWeekend(d.date) ? ' ts-weekend' : ''}`}
+          data-expected={shortHours(d.expectedMinutes, format)}
+          title={d.expectedMinutes ? `${shortHours(d.minutes, format)} of ${shortHours(d.expectedMinutes, format)} h expected` : undefined}
+        >
+          {d.minutes === 0 && d.expectedMinutes === 0 ? '' : shortHours(d.minutes, format)}
+        </span>
+      ))}
+      <span className={`ts-total${weekShort ? ' below' : ''}`} title={`${shortHours(totalMinutes, format)} of ${shortHours(expected, format)} h expected`}>
+        {shortHours(totalMinutes, format)}
+      </span>
     </div>
   );
 
@@ -431,12 +396,12 @@ export function Grid({
             Task or work order
           </span>
           {week.days.map((d, i) => {
-            const short = d.expectedMinutes > 0 && d.minutes < d.expectedMinutes && d.date <= today;
             return (
               <span key={d.date} className={`ts-day${d.holiday ? ' ts-holiday' : isWeekend(d.date) ? ' ts-weekend' : ''}`} data-testid="ts-day" data-date={d.date} data-status={d.status}>
                 <span className="ts-day-name">{DAY_NAMES[i]}</span>
                 <span className="ts-day-date">{shortDate(d.date)}</span>
-                <span className={`ts-day-total${short ? ' short' : ''}`}>{d.absence ? `${shortHours(d.minutes, format)} h · ${d.absence.kind === 'sick_leave' ? 'sick leave' : 'time off'}` : d.holiday ? `${shortHours(d.minutes, format)} h · holiday` : d.minutes || d.expectedMinutes ? `${shortHours(d.minutes, format)} h` : '—'}</span>
+                {/* Totals live in the one Total row (CD-351, as in Clockify); the header only names the day. */}
+                {d.holiday && <span className="ts-day-total">Holiday</span>}
                 {onResubmitDay && week.resubmittable.includes(d.date) && (
                   <button type="button" className="ts-day-submit" onClick={() => onResubmitDay(d.date)} data-testid="ts-resubmit-day" aria-label={`Resubmit ${dayLabel(d.date)}`}>
                     Resubmit
@@ -450,7 +415,7 @@ export function Grid({
             Total
           </span>
         </div>
-        {tasks.length > 0 && group('Project tasks')}
+        {tasks.length > 0 && group('Projects')}
         {tasks.map((row, i) => rowEl(row, i))}
         {orders.length > 0 && group('Work orders')}
         {orders.map((row, i) => rowEl(row, tasks.length + i))}
@@ -513,9 +478,7 @@ export function Grid({
             <span className="ts-total" />
           </div>
         ))}
-        {sumRow('Total entered', absenceLabels.length ? 'Tasks, work orders and time off' : 'Tasks and work orders', (d) => d.minutes, totalMinutes, { strong: true, testId: 'ts-total-entered' })}
-        {sumRow('Expected', `Standard day ${shortHours(week.settings.dayMinutes, format)} h${holidayNames.length ? ', minus holidays' : ''}`, (d) => d.expectedMinutes, expected, { testId: 'ts-expected' })}
-        {sumRow('Difference', 'Entered minus expected', (d) => d.minutes - d.expectedMinutes, totalMinutes - expected, { signed: true, testId: 'ts-difference' })}
+        {totalRow}
       </div>
       {flagged.length > 0 && (
         <div className="ts-flags" data-testid="ts-absence-flags">

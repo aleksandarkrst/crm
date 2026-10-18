@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { askConfirm } from '../../components/ConfirmDialog';
-import { EmptyState } from '../../components/EmptyState';
-import { Modal, ModalHeader, Switch } from '../../components/ui';
-import { downloadBlob } from '../../lib/csv';
-import { type ApiSickLeave, type ApiSickLeaveType, SICK_STATUS_LABEL, type SickLeaveFilters, timeOffApi } from '../../lib/timeOffApi';
+import { DateRangePicker } from '../../components/DateRangePicker';
+import { Modal, ModalHeader } from '../../components/ui';
+import { type ApiSickLeave, type ApiSickLeaveType, SICK_STATUS_LABEL, timeOffApi } from '../../lib/timeOffApi';
 import { projectError, useProjectsRead } from '../../store/projects';
 import { useStore } from '../../store/store';
 import { dateLabel } from '../employee/parts';
@@ -19,7 +18,7 @@ function useSickTypes(enabled: boolean): ApiSickLeaveType[] {
   return useProjectsRead<ApiSickLeaveType[]>(enabled, () => timeOffApi.sickLeave.types(), 'timeoff:sick-types', 'timeOffRev').data ?? [];
 }
 
-type DialogState = { kind: 'report'; employeeId?: string } | { kind: 'confirm' | 'edit' | 'end' | 'cancel'; record: ApiSickLeave };
+export type DialogState = { kind: 'report'; employeeId?: string } | { kind: 'confirm' | 'edit' | 'end' | 'cancel'; record: ApiSickLeave };
 
 /**
  * Sick leave records (CD-169, spec 13.5): period, calendar and working days, status, type (the
@@ -111,7 +110,7 @@ export function ReportSickButton({ employeeId, onReported, label = 'Report sick 
  * report, Admins for anyone and with the type at once), confirm, edit (Admins), set the end date,
  * cancel with a reason (Admins). Admins see the note with its "no medical information" hint.
  */
-function SickDialog({ state, onClose }: { state: DialogState; onClose: (saved?: boolean) => void }) {
+export function SickDialog({ state, onClose }: { state: DialogState; onClose: (saved?: boolean) => void }) {
   const { s, session, employeeCard, flash } = useStore();
   const admin = session.tenant.role === 'owner' || session.tenant.role === 'admin';
   const record = state.kind === 'report' ? null : state.record;
@@ -124,11 +123,13 @@ function SickDialog({ state, onClose }: { state: DialogState; onClose: (saved?: 
   const [employeeId, setEmployeeId] = useState(state.kind === 'report' ? (state.employeeId ?? s.myEmployeeId ?? '') : (record?.employee.id ?? ''));
   const [startDate, setStartDate] = useState(record?.startDate ?? new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState(record?.endDate ?? '');
+  /** No last day yet (CD-350): the picker takes the first sick day only, and the record stays open. */
+  const [openEnded, setOpenEnded] = useState(!record?.endDate);
   const [typeId, setTypeId] = useState(record?.type?.id ?? '');
   const [continuationOfId, setContinuationOfId] = useState(record?.continuationOfId ?? record?.suggestedContinuationId ?? '');
-  const [sickNoteRef, setSickNoteRef] = useState(record?.sickNoteRef ?? '');
+  // No field since CD-350: a reference already on the record is kept as it is.
+  const sickNoteRef = record?.sickNoteRef ?? '';
   const [note, setNote] = useState(record?.note ?? '');
-  const [confirmNow, setConfirmNow] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -136,7 +137,7 @@ function SickDialog({ state, onClose }: { state: DialogState; onClose: (saved?: 
   const title = { report: 'Report sick leave', confirm: 'Confirm sick leave', edit: 'Edit sick leave', end: 'Set the end date', cancel: 'Cancel this sick leave?' }[state.kind];
   const save = async () => {
     setProblem(null);
-    if ((state.kind === 'confirm' || (state.kind === 'report' && confirmNow)) && !typeId) return setProblem('Pick the type to confirm it');
+    if (state.kind === 'confirm' && !typeId) return setProblem('Pick the type to confirm it');
     if (state.kind === 'end' && !endDate) return setProblem('Pick the last sick day');
     if (state.kind === 'cancel' && !reason.trim()) return setProblem('Say why it is cancelled');
     setBusy(true);
@@ -146,7 +147,7 @@ function SickDialog({ state, onClose }: { state: DialogState; onClose: (saved?: 
           ...(employeeId && employeeId !== s.myEmployeeId ? { employeeId } : {}),
           startDate,
           endDate: endDate || null,
-          ...(admin ? { typeId: typeId || undefined, sickNoteRef: sickNoteRef || null, note: note || null, confirm: confirmNow } : {}),
+          ...(admin ? { typeId: typeId || undefined, sickNoteRef: sickNoteRef || null, note: note || null } : {}),
         });
         flash('Sick leave reported');
       } else if (state.kind === 'confirm') {
@@ -171,7 +172,7 @@ function SickDialog({ state, onClose }: { state: DialogState; onClose: (saved?: 
   const showFull = state.kind === 'report' || state.kind === 'edit';
   return (
     <Modal maxWidth={500} onBackdrop={() => !busy && onClose()}>
-      <ModalHeader title={title} sub={record ? `${record.employee.fullName} · ${sickPeriod(record)}` : 'Leave the last day empty until the return date is known.'} />
+      <ModalHeader title={title} sub={record ? `${record.employee.fullName} · ${sickPeriod(record)}` : "Tick “The last day isn't known yet” until the return date is known."} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="sick-dialog">
         {state.kind === 'report' && !state.employeeId && pickable.length > 1 && (
           <label className="policy-field">
@@ -185,19 +186,41 @@ function SickDialog({ state, onClose }: { state: DialogState; onClose: (saved?: 
             </select>
           </label>
         )}
-        {(showFull || state.kind === 'confirm' || state.kind === 'end') && (
-          <div className="policy-field-row">
-            {showFull && (
-              <label className="policy-field">
-                <span className="th">First sick day</span>
-                <input className="form-input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} data-testid="sick-start" />
-              </label>
-            )}
-            <label className="policy-field">
-              <span className="th">Last sick day</span>
-              <input className="form-input" type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} data-testid="sick-end-date" />
+        {showFull && (
+          <div className="policy-field">
+            <span className="th">{openEnded ? 'First sick day' : 'Sick days'}</span>
+            {/* One picker for the first and last sick day (CD-350); without a last day, one click picks the first. */}
+            <DateRangePicker
+              label={openEnded ? 'First sick day' : 'Sick days'}
+              single={openEnded}
+              value={startDate ? { from: startDate, to: openEnded || !endDate ? startDate : endDate } : null}
+              month={(startDate || new Date().toISOString()).slice(0, 7)}
+              placeholder={openEnded ? 'Pick the first sick day' : 'Pick the first and last sick day'}
+              onChange={(range) => {
+                setStartDate(range.from);
+                setEndDate(openEnded ? '' : range.to);
+              }}
+              testId="sick-dates"
+            />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+              <input
+                type="checkbox"
+                checked={openEnded}
+                onChange={(e) => {
+                  setOpenEnded(e.target.checked);
+                  setEndDate(e.target.checked ? '' : startDate);
+                }}
+                data-testid="sick-open-ended"
+              />
+              The last day isn't known yet
             </label>
           </div>
+        )}
+        {(state.kind === 'confirm' || state.kind === 'end') && (
+          <label className="policy-field">
+            <span className="th">Last sick day</span>
+            <input className="form-input" type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} data-testid="sick-end-date" />
+          </label>
         )}
         {admin && (showFull || state.kind === 'confirm') && (
           <>
@@ -215,10 +238,6 @@ function SickDialog({ state, onClose }: { state: DialogState; onClose: (saved?: 
               </select>
               {types.find((t) => t.id === typeId)?.payerNote && <span className="emp-note">{types.find((t) => t.id === typeId)!.payerNote}</span>}
             </label>
-            <label className="policy-field">
-              <span className="th">Sick note reference</span>
-              <input className="form-input" value={sickNoteRef} maxLength={50} placeholder="e.g. the eBolovanje number" onChange={(e) => setSickNoteRef(e.target.value)} data-testid="sick-ref" />
-            </label>
             {record && (record.suggestedContinuationId || record.continuationOfId) && (
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
                 <input type="checkbox" checked={!!continuationOfId} onChange={(e) => setContinuationOfId(e.target.checked ? (record.continuationOfId ?? record.suggestedContinuationId ?? '') : '')} data-testid="sick-continuation" />
@@ -233,12 +252,6 @@ function SickDialog({ state, onClose }: { state: DialogState; onClose: (saved?: 
             <input className="form-input" value={note} maxLength={500} placeholder="e.g. Sick note arrives by post" onChange={(e) => setNote(e.target.value)} data-testid="sick-note" />
             <span className="emp-note">{NO_MEDICAL}</span>
           </label>
-        )}
-        {admin && state.kind === 'report' && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Switch on={confirmNow} onClick={() => setConfirmNow(!confirmNow)} label="Confirm it now (the sick note is here)" />
-            <span style={{ fontSize: 13 }}>Confirm it now (the sick note is here)</span>
-          </span>
         )}
         {state.kind === 'cancel' && (
           <label className="policy-field">
@@ -279,68 +292,6 @@ export function EmployeeSickLeave({ employeeId, canReport }: { employeeId: strin
       </div>
       {data ? <SickLeaveList records={data} onChanged={() => void reload()} /> : <span className="emp-note">Loading</span>}
     </section>
-  );
-}
-
-/**
- * Time off → Sick leave (CD-169, spec 13.5): managers see their reports' records without the type;
- * Admins see everyone with the type, confirm, edit, cancel and export a CSV.
- */
-export function SickLeaveTab({ admin }: { admin: boolean }) {
-  const { flash } = useStore();
-  const [status, setStatus] = useState<ApiSickLeave['status'] | ''>('');
-  const [open, setOpen] = useState(false);
-  const [month, setMonth] = useState('');
-  const [typeId, setTypeId] = useState('');
-  const types = useSickTypes(admin);
-  const filters: SickLeaveFilters = { all: true, status: status || undefined, open: open || undefined, month: month || undefined, typeId: typeId || undefined };
-  const { data, error, reload } = useProjectsRead<ApiSickLeave[]>(true, () => timeOffApi.sickLeave.list(filters), `timeoff:sick:all:${status}:${open}:${month}:${typeId}`, 'timeOffRev');
-  const exportCsv = async () => {
-    try {
-      downloadBlob('pultly-sick-leave.csv', await timeOffApi.sickLeave.csv(filters));
-    } catch (err) {
-      flash(projectError(err));
-    }
-  };
-  if (error) return <EmptyState title="Sick leave could not be loaded" text={error} />;
-  return (
-    <div className="bal-page" data-testid="sick-tab">
-      <div className="bal-filters">
-        <select className="form-input" value={status} onChange={(e) => setStatus(e.target.value as ApiSickLeave['status'] | '')} aria-label="Status">
-          <option value="">All statuses</option>
-          {Object.entries(SICK_STATUS_LABEL).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <input className="form-input" type="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month" />
-        {admin && (
-          <select className="form-input" value={typeId} onChange={(e) => setTypeId(e.target.value)} aria-label="Type">
-            <option value="">All types</option>
-            {types.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        )}
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-          <input type="checkbox" checked={open} onChange={(e) => setOpen(e.target.checked)} />
-          Open only
-        </label>
-        <span style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
-          {admin && (
-            <button type="button" className="btn btn-secondary" onClick={() => void exportCsv()}>
-              Export CSV
-            </button>
-          )}
-          <ReportSickButton onReported={() => void reload()} />
-        </span>
-      </div>
-      <div className="card card-pad">{data ? <SickLeaveList records={data} withEmployee onChanged={() => void reload()} /> : <span className="emp-note">Loading</span>}</div>
-      {!admin && <span className="emp-note">Managers see their direct and indirect reports' sick leave without its type.</span>}
-    </div>
   );
 }
 

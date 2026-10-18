@@ -3,7 +3,8 @@ import { api } from './api';
 
 export type DayStatus = 'draft' | 'submitted' | 'rejected' | 'approved';
 export type WeekStatus = 'no_entry' | 'rejected' | 'draft' | 'not_submitted' | 'partly_submitted' | 'submitted' | 'partly_approved' | 'approved';
-export type RowKind = 'task' | 'work_order';
+/** A row's target; `project`: time on the project itself, without a task (CD-350). */
+export type RowKind = 'task' | 'work_order' | 'project';
 export type TimeFormat = 'decimal' | 'clock';
 
 export interface ApiCell {
@@ -115,8 +116,8 @@ export interface ApiCopyResult {
   fullDays: string[];
 }
 
-export type RowTarget = { taskId: string } | { workOrderId: string };
-export const targetOf = (row: { kind: RowKind; id: string }): RowTarget => (row.kind === 'task' ? { taskId: row.id } : { workOrderId: row.id });
+export type RowTarget = { taskId: string } | { workOrderId: string } | { projectId: string };
+export const targetOf = (row: { kind: RowKind; id: string }): RowTarget => (row.kind === 'task' ? { taskId: row.id } : row.kind === 'project' ? { projectId: row.id } : { workOrderId: row.id });
 
 /** What the caller may do with someone's week (CD-157): approve and return, the same as an Admin override, or only look. */
 export type ApprovalRight = 'approver' | 'override' | null;
@@ -199,6 +200,8 @@ export const timesheetApi = {
   setCell: (date: string, target: RowTarget, minutes: number, note?: string | null, employeeId?: string) =>
     api<ApiTimesheetWeek>('/timesheet/cells', { method: 'PUT', json: { date, ...target, minutes, ...(note !== undefined ? { note } : {}), ...forEmployee(employeeId) } }),
   addRow: (weekStart: string, target: RowTarget, employeeId?: string) => api<ApiTimesheetWeek>('/timesheet/rows', { method: 'POST', json: { weekStart, ...target, ...forEmployee(employeeId) } }),
+  /** The row's X (CD-354): the row and its hours this week. */
+  removeRow: (weekStart: string, target: RowTarget, employeeId?: string) => api<ApiTimesheetWeek>('/timesheet/rows/remove', { method: 'POST', json: { weekStart, ...target, ...forEmployee(employeeId) } }),
   copyPreview: (weekStart: string, employeeId?: string) => api<ApiCopyPreview>(`/timesheet/copy${query({ weekStart, employeeId })}`),
   copy: (weekStart: string, mode: 'rows' | 'hours', employeeId?: string) => api<ApiCopyResult>('/timesheet/copy', { method: 'POST', json: { weekStart, mode, ...forEmployee(employeeId) } }),
   /** The week; with `date`, that day only (Day by day mode, CD-156). */

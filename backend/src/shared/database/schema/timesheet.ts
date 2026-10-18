@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { boolean, check, date, foreignKey, index, integer, pgTable, primaryKey, text, time, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { employees } from './people';
 import { tenants, users } from './platform';
-import { tasks, workOrders } from './projects';
+import { projects, tasks, workOrders } from './projects';
 
 /**
  * Timesheet tables (owned by the timesheet module, milestone 15). Every table carries tenant_id and
@@ -46,6 +46,8 @@ export const timeEntries = pgTable(
     workDate: date('work_date').notNull(),
     taskId: uuid('task_id'),
     workOrderId: uuid('work_order_id'),
+    /** Time on the project itself, without a task (CD-350, when the workspace allows it). */
+    projectId: uuid('project_id'),
     minutes: integer('minutes').notNull(),
     note: text('note'),
     /** Start → End on the work order page (CD-276): both or neither; then `minutes` is their difference. */
@@ -60,10 +62,13 @@ export const timeEntries = pgTable(
     // Someone's hours on a task: limits, alerts and the time report (CD-149).
     index('time_entries_task_employee_idx').on(t.tenantId, t.taskId, t.employeeId),
     index('time_entries_work_order_idx').on(t.tenantId, t.workOrderId),
+    index('time_entries_project_idx').on(t.tenantId, t.projectId),
     foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'time_entries_employee_fk' }).onDelete('cascade'),
+    foreignKey({ columns: [t.tenantId, t.projectId], foreignColumns: [projects.tenantId, projects.id], name: 'time_entries_project_fk' }).onDelete('restrict'),
     foreignKey({ columns: [t.tenantId, t.taskId], foreignColumns: [tasks.tenantId, tasks.id], name: 'time_entries_task_fk' }).onDelete('restrict'),
     foreignKey({ columns: [t.tenantId, t.workOrderId], foreignColumns: [workOrders.tenantId, workOrders.id], name: 'time_entries_work_order_fk' }).onDelete('restrict'),
-    check('time_entries_target_ck', sql`(${t.taskId} is null) <> (${t.workOrderId} is null)`),
+    // Exactly one of a task, a work order or the project itself (CD-350).
+    check('time_entries_target_ck', sql`num_nonnulls(${t.taskId}, ${t.workOrderId}, ${t.projectId}) = 1`),
     check('time_entries_minutes_ck', sql`${t.minutes} between 15 and 1440 and ${t.minutes} % 15 = 0`),
     check('time_entries_note_ck', sql`${t.note} is null or length(${t.note}) <= 500`),
     check(
@@ -160,15 +165,18 @@ export const timesheetRows = pgTable(
     weekStart: date('week_start').notNull(),
     taskId: uuid('task_id'),
     workOrderId: uuid('work_order_id'),
+    projectId: uuid('project_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex('timesheet_rows_task_uq').on(t.tenantId, t.employeeId, t.weekStart, t.taskId).where(sql`${t.taskId} is not null`),
     uniqueIndex('timesheet_rows_work_order_uq').on(t.tenantId, t.employeeId, t.weekStart, t.workOrderId).where(sql`${t.workOrderId} is not null`),
+    uniqueIndex('timesheet_rows_project_uq').on(t.tenantId, t.employeeId, t.weekStart, t.projectId).where(sql`${t.projectId} is not null`),
     foreignKey({ columns: [t.tenantId, t.employeeId], foreignColumns: [employees.tenantId, employees.id], name: 'timesheet_rows_employee_fk' }).onDelete('cascade'),
     foreignKey({ columns: [t.tenantId, t.taskId], foreignColumns: [tasks.tenantId, tasks.id], name: 'timesheet_rows_task_fk' }).onDelete('cascade'),
     foreignKey({ columns: [t.tenantId, t.workOrderId], foreignColumns: [workOrders.tenantId, workOrders.id], name: 'timesheet_rows_work_order_fk' }).onDelete('cascade'),
-    check('timesheet_rows_target_ck', sql`(${t.taskId} is null) <> (${t.workOrderId} is null)`),
+    foreignKey({ columns: [t.tenantId, t.projectId], foreignColumns: [projects.tenantId, projects.id], name: 'timesheet_rows_project_fk' }).onDelete('cascade'),
+    check('timesheet_rows_target_ck', sql`num_nonnulls(${t.taskId}, ${t.workOrderId}, ${t.projectId}) = 1`),
     check('timesheet_rows_monday_ck', sql`extract(isodow from ${t.weekStart}) = 1`),
   ],
 );

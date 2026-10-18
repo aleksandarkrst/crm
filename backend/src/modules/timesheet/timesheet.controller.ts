@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query
 import { RequireTenant, Tenant, type TenantContext } from '../../shared/authorization';
 import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
-import { AddRow, CopyWeek, CreateEntry, LoggableQuery, ResubmitWeek, SetCell, SubmitWeek, UpdateEntry, WeekAction, WeekQuery } from './timesheet.schemas';
+import { AddRow, CopyWeek, RemoveRow, CreateEntry, LoggableQuery, ResubmitWeek, SetCell, SubmitWeek, UpdateEntry, WeekAction, WeekQuery } from './timesheet.schemas';
 import { TimesheetService } from './timesheet.service';
 
 /**
@@ -43,6 +43,13 @@ export class TimesheetController {
   @Post('rows')
   addRow(@Tenant() ctx: TenantContext, @Body(new ZodPipe(AddRow)) body: AddRow) {
     return this.timesheet.addRow(ctx, body);
+  }
+
+  /** The row's X (CD-354): removes the row and its hours this week; answers with the week. */
+  @Post('rows/remove')
+  @HttpCode(200)
+  removeRow(@Tenant() ctx: TenantContext, @Body(new ZodPipe(RemoveRow)) body: RemoveRow) {
+    return this.timesheet.removeRow(ctx, body);
   }
 
   /** Copy last week's dialog: `{ fromWeek, toWeek, rows, skipped: { label, reason }[] }`. */

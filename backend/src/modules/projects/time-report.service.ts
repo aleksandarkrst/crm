@@ -170,5 +170,48 @@ export async function reportLeaves(tx: Tx, caller: CallerAccess, userId: string,
       allTimeMinutes: h.all_time,
     });
   }
+  // Time on a project itself, without a task (CD-350): a "No task" line under the project. A task
+  // status filter leaves it out; hour limits don't apply.
+  if (!q.status) {
+    const projectFilters = taskFilters.filter((f) => f !== null);
+    const { rows: own } = await tx.execute<{ project_id: string; project_name: string; project_code: string | null; lead_user_id: string | null; company_name: string; employee_id: string; logged: number; approved: number; all_time: number }>(sql`
+      select pr.id as project_id, pr.name as project_name, pr.code as project_code, pr.lead_user_id, c.name as company_name, e.employee_id,
+        coalesce(sum(e.minutes) filter (where ${inPeriod}), 0)::int as logged,
+        coalesce(sum(e.minutes) filter (where ${inPeriod} and d.status = 'approved'), 0)::int as approved,
+        sum(e.minutes)::int as all_time
+      from time_entries e
+      join projects pr on pr.id = e.project_id
+      join companies c on c.id = pr.company_id
+      left join timesheet_days d on d.tenant_id = e.tenant_id and d.employee_id = e.employee_id and d.work_date = e.work_date
+      where e.project_id is not null ${q.employeeId ? sql`and e.employee_id = ${q.employeeId}` : sql``}
+        ${projectFilters.length ? sql`and ${sql.join(projectFilters, sql` and `)}` : sql``}
+      group by pr.id, c.name, e.employee_id`);
+    for (const h of own) {
+      const personName = names.get(h.employee_id);
+      if (personName === undefined) continue;
+      const visible = caller.isAdmin || h.lead_user_id === userId || h.employee_id === caller.employeeId || caller.reportIds.has(h.employee_id);
+      if (!visible) continue;
+      leaves.push({
+        projectId: h.project_id,
+        projectName: h.project_name,
+        projectCode: h.project_code,
+        companyName: h.company_name,
+        stageId: null,
+        stageName: null,
+        stagePosition: null,
+        taskId: `project:${h.project_id}`,
+        taskNumber: 0,
+        taskName: 'No task',
+        taskStatus: 'in_progress',
+        employeeId: h.employee_id,
+        personName,
+        active: true,
+        limitMinutes: null,
+        loggedMinutes: h.logged,
+        approvedMinutes: h.approved,
+        allTimeMinutes: h.all_time,
+      });
+    }
+  }
   return leaves;
 }

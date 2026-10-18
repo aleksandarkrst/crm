@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { addDays } from '../store/time';
 
 export interface DateRange {
@@ -42,31 +43,54 @@ const shiftMonth = (month: string, by: number) => {
  * One field for a span of days (CD-318, Holidays): a button that reads the chosen dates and opens
  * a month calendar. The first click picks the first day, the second the last (a single day is
  * both); Escape or a click outside closes it. `month` is the month it opens on without a value.
+ * `single` (CD-350, sick leave with no end date yet): one click picks one day.
  */
-export function DateRangePicker({ value, onChange, month, placeholder = 'Pick dates', testId, label }: { value: DateRange | null; onChange: (r: DateRange) => void; month: string; placeholder?: string; testId?: string; label: string }) {
+export function DateRangePicker({ value, onChange, month, placeholder = 'Pick dates', testId, label, single }: { value: DateRange | null; onChange: (r: DateRange) => void; month: string; placeholder?: string; testId?: string; label: string; single?: boolean }) {
   const [open, setOpen] = useState(false);
   const [shown, setShown] = useState(value?.from.slice(0, 7) ?? month);
   const [start, setStart] = useState<string | null>(null);
+  /** Where the calendar opens, on the viewport (CD-354): fixed, so a dialog's scroll area doesn't cut it off. */
+  const [at, setAt] = useState<{ top: number; left: number } | null>(null);
+  const field = useRef<HTMLButtonElement>(null);
+  /** The calendar, rendered at the top of the page (a dialog's animation would otherwise make it the frame and clip it). */
+  const pop = useRef<HTMLDivElement>(null);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const off = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const off = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && !pop.current?.contains(e.target as Node) && setOpen(false);
     const key = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    // A fixed calendar would drift from its field: scrolling anything but the calendar closes it.
+    const scroll = (e: Event) => !pop.current?.contains(e.target as Node) && setOpen(false);
     document.addEventListener('mousedown', off);
     document.addEventListener('keydown', key);
+    window.addEventListener('scroll', scroll, true);
+    window.addEventListener('resize', scroll);
     return () => {
       document.removeEventListener('mousedown', off);
       document.removeEventListener('keydown', key);
+      window.removeEventListener('scroll', scroll, true);
+      window.removeEventListener('resize', scroll);
     };
   }, [open]);
   const toggle = () => {
     if (!open) {
       setShown(value?.from.slice(0, 7) ?? month);
       setStart(null);
+      const r = field.current?.getBoundingClientRect();
+      if (r) {
+        const height = 340;
+        const below = r.bottom + 4 + height <= window.innerHeight;
+        setAt({ top: below ? r.bottom + 4 : Math.max(8, r.top - 4 - height), left: Math.max(8, Math.min(r.left, window.innerWidth - 288)) });
+      }
     }
     setOpen(!open);
   };
   const pick = (day: string) => {
+    if (single) {
+      onChange({ from: day, to: day });
+      setOpen(false);
+      return;
+    }
     if (!start) return setStart(day);
     onChange(day < start ? { from: day, to: start } : { from: start, to: day });
     setStart(null);
@@ -76,11 +100,12 @@ export function DateRangePicker({ value, onChange, month, placeholder = 'Pick da
   const inRange = (d: string) => (start ? d === start : !!value && d >= value.from && d <= value.to);
   return (
     <div ref={ref} className="drp" data-testid={testId}>
-      <button type="button" className={'form-input drp-field' + (value ? '' : ' drp-empty')} aria-label={label} aria-expanded={open} onClick={toggle} data-testid={testId ? `${testId}-open` : undefined}>
+      <button ref={field} type="button" className={'form-input drp-field' + (value ? '' : ' drp-empty')} aria-label={label} aria-expanded={open} onClick={toggle} data-testid={testId ? `${testId}-open` : undefined}>
         {value ? rangeText(value) : placeholder}
       </button>
-      {open && (
-        <div className="drp-pop" role="dialog" aria-label={label}>
+      {open &&
+        createPortal(
+        <div ref={pop} className="drp-pop" role="dialog" aria-label={label} style={at ? { top: at.top, left: at.left } : undefined} data-testid={testId ? `${testId}-calendar` : undefined}>
           <div className="drp-head">
             <button type="button" className="btn-plain drp-nav" aria-label="Previous month" onClick={() => setShown(shiftMonth(shown, -1))}>
               ←
@@ -111,8 +136,9 @@ export function DateRangePicker({ value, onChange, month, placeholder = 'Pick da
               </button>
             ))}
           </div>
-          <span className="drp-hint">{start ? `From ${dayText(start)}: pick the last day, or the same day again.` : 'Pick the first day, then the last.'}</span>
-        </div>
+          <span className="drp-hint">{single ? 'Pick the day.' : start ? `From ${dayText(start)}: pick the last day, or the same day again.` : 'Pick the first day, then the last.'}</span>
+        </div>,
+        document.body,
       )}
     </div>
   );

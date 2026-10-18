@@ -113,6 +113,8 @@ export const tenants = pgTable(
     /** Reminders (CD-154): hours before the deadline (null: off), and the emails after it. */
     timesheetReminderHours: smallint('timesheet_reminder_hours').default(2),
     timesheetAfterDeadlineEmails: boolean('timesheet_after_deadline_emails').notNull().default(true),
+    /** Time on a project without a task (CD-350, Settings → Workforce): off by default. */
+    timesheetProjectTime: boolean('timesheet_project_time').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

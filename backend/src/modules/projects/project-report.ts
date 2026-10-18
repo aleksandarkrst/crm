@@ -105,8 +105,12 @@ export function projectReport(input: {
   budgetHours: number | null;
   endDate: string | null;
   open: boolean;
+  /** Time on the project itself, without a task (CD-350), by employee. */
+  projectTime?: Map<string, number>;
 }): ProjectReport {
   const { tasks, today } = input;
+  const projectTime = input.projectTime ?? new Map<string, number>();
+  const projectMinutes = [...projectTime.values()].reduce((a, m) => a + m, 0);
   const taskLine = (t: ReportTask): Line => ({ done: t.status === 'done', late: isLate(t, today), estimate: t.estimateMinutes ?? 0, logged: allLogged(t) });
   const all = stats(tasks.map(taskLine));
   const groups = [...[...input.stages].sort((a, b) => a.position - b.position), { id: null, name: 'No stage', position: Infinity }];
@@ -114,12 +118,15 @@ export function projectReport(input: {
     .map((g) => ({ g, ts: tasks.filter((t) => t.stageId === g.id || (g.id === null && !input.stages.some((s) => s.id === t.stageId))) }))
     .filter(({ ts }) => ts.length > 0)
     .map(({ g, ts }) => ({ id: g.id, name: g.name, dueDate: ts.reduce<string | null>((m, t) => (t.dueDate && (!m || t.dueDate > m) ? t.dueDate : m), null), ...stats(ts.map(taskLine)) }));
-  const ids = new Set(tasks.flatMap((t) => [...t.assigneeIds, ...[...t.logged.entries()].filter(([, m]) => m > 0).map(([id]) => id)]));
+  // A "No task" line for time on the project itself (CD-350): logged hours only, no tasks or estimate.
+  if (projectMinutes > 0) stages.push({ id: 'no-task', name: 'No task', dueDate: null, ...stats([]), loggedMinutes: projectMinutes });
+  const ids = new Set([...tasks.flatMap((t) => [...t.assigneeIds, ...[...t.logged.entries()].filter(([, m]) => m > 0).map(([id]) => id)]), ...[...projectTime.entries()].filter(([, m]) => m > 0).map(([id]) => id)]);
   const people = [...ids]
     .map((id) => {
       const mine = tasks.filter((t) => t.assigneeIds.includes(id) || (t.logged.get(id) ?? 0) > 0);
       const lines = mine.map((t) => ({ done: t.status === 'done', late: isLate(t, today) && t.assigneeIds.includes(id), estimate: shareOf(t, id), logged: t.logged.get(id) ?? 0 }));
       const s = stats(lines);
+      s.loggedMinutes += projectTime.get(id) ?? 0;
       // Open tasks count only the ones they're still on.
       return { employeeId: id, name: input.people.get(id) ?? 'Former employee', ...s, openTasks: mine.filter((t) => t.status !== 'done' && t.assigneeIds.includes(id)).length };
     })
@@ -130,6 +137,7 @@ export function projectReport(input: {
   return {
     summary: {
       ...all,
+      loggedMinutes: all.loggedMinutes + projectMinutes,
       budgetMinutes: input.budgetHours == null ? null : Math.round(input.budgetHours * 60),
       onHoldTasks: onHold,
       forecast: input.open && input.endDate ? { slipDays: slip, date: addDays(input.endDate, slip) } : null,

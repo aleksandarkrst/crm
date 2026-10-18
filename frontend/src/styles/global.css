@@ -373,7 +373,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .drp { position: relative; min-width: 0; }
 .drp-field { width: 100%; text-align: left; cursor: pointer; box-sizing: border-box; }
 .drp-field.drp-empty { color: var(--muted); }
-.drp-pop { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; width: 280px; max-width: calc(100vw - 24px); background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.drp-pop { position: fixed; z-index: 60; width: 280px; max-width: calc(100vw - 24px); background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 .drp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .drp-nav { padding: 4px 9px; }
 .drp-month { font-size: 13px; font-weight: 600; }
@@ -1244,7 +1244,7 @@ a.task-card-project:hover { color: var(--brand); }
 .ts-week-label { font-size: 15px; font-weight: 600; }
 .ts-due { font-size: 12.5px; color: var(--text-2); }
 .ts-grid { border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; position: relative; }
-.ts-row { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(7, 82px) 84px; border-bottom: 1px solid var(--divider); min-width: 878px; background: var(--white); }
+.ts-row { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(7, 82px) 84px 36px; border-bottom: 1px solid var(--divider); min-width: 914px; background: var(--white); }
 .ts-row:last-child { border-bottom: 0; }
 .ts-row.ts-head { background: var(--panel); border-bottom: 1px solid var(--border); }
 .ts-row.ts-soft { background: var(--panel); }
@@ -1258,7 +1258,6 @@ a.task-card-project:hover { color: var(--brand); }
 .ts-day-name { font-size: 10.5px; font-weight: 600; color: var(--muted-2); letter-spacing: 0.06em; }
 .ts-day-date { font-size: 12.5px; font-weight: 600; }
 .ts-day-total { font-size: 11px; color: var(--text-2); }
-.ts-day-total.short { color: var(--warn); }
 .ts-box { border-left: 1px solid var(--divider); padding: 5px; display: flex; position: relative; }
 .ts-weekend { background: #F7F9F8; }
 .ts-input { flex: 1; width: 100%; min-width: 0; text-align: center; border-radius: 7px; border: 1px solid var(--border); font: inherit; font-size: 13px; padding: 6px 2px; background: var(--white); color: var(--ink); }
@@ -1280,7 +1279,9 @@ a.task-card-project:hover { color: var(--brand); }
 .ts-sum { display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--text-2); border-left: 1px solid var(--divider); }
 .ts-sum.strong { color: var(--ink); font-weight: 600; }
 .ts-sum.below { color: var(--danger); }
-.ts-sum.above { color: #2F6FB5; }
+.ts-total.below { color: var(--danger); }
+/* The one Total row (CD-351) closes the grid. */
+.ts-total-row { border-top: 1px solid var(--border); }
 
 /* Approvals (CD-157): the top panels, the team list and one person's week. */
 .ap-panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 14px; }
@@ -1329,7 +1330,6 @@ a.task-card-project:hover { color: var(--brand); }
 .ts-rejected-note q { display: block; font-style: italic; }
 .ts-add { border: 0; background: transparent; cursor: pointer; text-align: left; padding: 8px 14px; font: inherit; width: 100%; }
 .ts-add .ts-label-main { color: var(--brand); font-weight: 600; }
-.ts-add-picker { padding: 6px 14px 10px; grid-column: 1 / -1; position: relative; max-width: 520px; }
 .ts-help { font-size: 12px; color: var(--text-2); margin-top: 12px; }
 .ts-note-pop { position: absolute; width: 280px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); z-index: 20; }
 .ts-note-pop .form-label { font-size: 12px; }
@@ -1341,7 +1341,7 @@ a.task-card-project:hover { color: var(--brand); }
 @media (max-width: 700px) {
   .ts-toolbar .ts-spacer { display: none; }
   /* The days scroll sideways under the task or work order, which stays in view. */
-  .ts-row { grid-template-columns: 160px repeat(7, 72px) 64px; min-width: 728px; }
+  .ts-row { grid-template-columns: 160px repeat(7, 72px) 64px 32px; min-width: 760px; }
   .ts-row > .ts-label, .ts-row.ts-head > .th:first-child { position: sticky; left: 0; z-index: 1; background: inherit; border-right: 1px solid var(--divider); }
 }
 
@@ -1516,3 +1516,46 @@ a.task-card-project:hover { color: var(--brand); }
   .tst-cell[data-label]::before { content: attr(data-label); display: block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-2); margin-bottom: 2px; }
   .tst-updated { margin-left: 0; }
 }
+
+/* My time off (CD-350): one tile per policy, sick leave alongside. */
+.to-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.to-tile { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--white); min-width: 0; }
+.to-tile-figure { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin: 2px 0 4px; }
+.to-tile-figure strong { font-family: var(--font-display); font-size: 28px; font-weight: 600; color: var(--ink); }
+.to-section-title { font-size: 15px; font-weight: 600; margin-top: 6px; }
+
+/* Time off → Approvals table (CD-350). */
+.rq-row { grid-template-columns: minmax(150px, 1.2fr) minmax(140px, 1.2fr) minmax(170px, 1.2fr) 100px 140px minmax(200px, auto); align-items: center; min-width: 920px; }
+.rq-row .num { text-align: right; }
+.rq-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .ap-table > .table-head.rq-row { display: none; }
+  .rq-row { grid-template-columns: minmax(0, 1fr) !important; gap: 4px; min-width: 0; }
+  .rq-row .num { text-align: left; }
+  .rq-cell[data-label]::before { content: attr(data-label); display: block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-2); }
+  .rq-actions { justify-content: flex-start; }
+}
+.rq-details { padding: 4px 16px 12px; background: var(--panel); border-bottom: 1px solid var(--divider); }
+
+/* Timesheet like Clockify (CD-354): the row's X, the hover dots and the Task @Project dropdown. */
+.ts-row-x { border: 0; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; align-self: center; justify-self: center; width: 28px; height: 28px; border-radius: 6px; }
+.ts-row-x:hover { background: var(--danger-soft); color: var(--danger); }
+/* Inside the cell's box (owner, 18 Oct): a few pixels from its right edge, centred, no background past the border. */
+.ts-dots { opacity: 0; width: 12px; height: 20px; top: 50%; right: 9px; transform: translateY(-50%); }
+.ts-dots:hover { background: transparent; }
+.ts-box:hover .ts-dots, .ts-box:focus-within .ts-dots, .ts-dots.has-note { opacity: 1; }
+.ts-add-row .ts-label { padding: 8px 14px; }
+.ts-task-picker-btn { display: inline-flex; align-items: center; gap: 8px; border: 0; background: transparent; cursor: pointer; padding: 4px 0; font-family: inherit; color: var(--brand); }
+.ts-add-plus { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--brand); display: inline-flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; }
+.ts-picker-pop { position: fixed; z-index: 40; width: 380px; max-width: calc(100vw - 16px); background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.ts-picker-list { max-height: 360px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.ts-picker-client { display: flex; flex-direction: column; gap: 2px; }
+.ts-picker-client-name { padding: 2px 6px; }
+.ts-picker-client-count { font-size: 9.5px; color: var(--muted); }
+.ts-picker-project { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ts-picker-name, .ts-picker-task, .ts-picker-count { border: 0; background: transparent; cursor: pointer; font-family: inherit; text-align: left; border-radius: 6px; }
+.ts-picker-name { flex: 1; min-width: 0; padding: 6px; font-size: 13.5px; color: var(--brand); font-weight: 500; }
+.ts-picker-name.muted { color: var(--ink); }
+.ts-picker-count { padding: 6px; font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
+.ts-picker-task { display: block; width: 100%; padding: 6px 6px 6px 22px; font-size: 13px; color: var(--ink); }
+.ts-picker-name:hover, .ts-picker-task:hover, .ts-picker-count:hover { background: var(--bg-soft); }

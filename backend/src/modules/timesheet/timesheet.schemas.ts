@@ -10,6 +10,10 @@ const weekStart = isoDate.refine((d) => !Number.isNaN(Date.parse(`${d}T00:00:00Z
 const target = { taskId: z.uuid().optional(), workOrderId: z.uuid().optional() };
 const oneTarget = (v: { taskId?: string; workOrderId?: string }) => !!v.taskId !== !!v.workOrderId;
 const ONE_TARGET = { message: 'Pick a task or a work order' };
+/** The Timesheet's rows may also be the project itself (CD-350): exactly one of the three. */
+const rowTarget = { ...target, projectId: z.uuid().optional() };
+const oneRowTarget = (v: { taskId?: string; workOrderId?: string; projectId?: string }) => [v.taskId, v.workOrderId, v.projectId].filter(Boolean).length === 1;
+const ONE_ROW_TARGET = { message: 'Pick a task, a work order or a project' };
 
 /** Someone else's timesheet (CD-317): Admins only; left out, the caller's own. */
 const forEmployee = { employeeId: z.uuid().optional() };
@@ -33,7 +37,7 @@ export type LoggableQuery = z.infer<typeof LoggableQuery>;
 export const SetCell = z
   .object({
     date: isoDate,
-    ...target,
+    ...rowTarget,
     ...forEmployee,
     minutes: z
       .number()
@@ -48,12 +52,16 @@ export const SetCell = z
       .nullable()
       .optional(),
   })
-  .refine(oneTarget, ONE_TARGET);
+  .refine(oneRowTarget, ONE_ROW_TARGET);
 export type SetCell = z.infer<typeof SetCell>;
 
 /** POST /api/timesheet/rows: "+ Add task or work order". */
-export const AddRow = z.object({ weekStart, ...target, ...forEmployee }).refine(oneTarget, ONE_TARGET);
+export const AddRow = z.object({ weekStart, ...rowTarget, ...forEmployee }).refine(oneRowTarget, ONE_ROW_TARGET);
 export type AddRow = z.infer<typeof AddRow>;
+
+/** POST /api/timesheet/rows/remove (CD-354): the row's X, the row and the person's hours on it this week. */
+export const RemoveRow = AddRow;
+export type RemoveRow = z.infer<typeof RemoveRow>;
 
 /** POST /api/timesheet/copy: Copy last week into `weekStart`, rows only or rows and hours. */
 export const CopyWeek = z.object({ weekStart, mode: z.enum(['rows', 'hours']), ...forEmployee });

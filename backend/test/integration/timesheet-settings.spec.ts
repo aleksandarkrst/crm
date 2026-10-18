@@ -87,6 +87,7 @@ describe('the settings', () => {
       approvalMode: 'week',
       reminderHours: 2,
       afterDeadlineEmails: true,
+      projectTime: false,
     });
   });
 

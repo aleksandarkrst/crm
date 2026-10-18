@@ -69,6 +69,8 @@ export const TimesheetSettingsInput = z
     // Reminders (CD-154): hours before the deadline (null: off), and the emails after it.
     reminderHours: z.number().int().min(1, 'Between 1 and 72 hours').max(72, 'Between 1 and 72 hours').nullable(),
     afterDeadlineEmails: z.boolean(),
+    // Time on a project without a task (CD-350).
+    projectTime: z.boolean(),
   })
   .partial();
 export type TimesheetSettingsInput = z.infer<typeof TimesheetSettingsInput>;

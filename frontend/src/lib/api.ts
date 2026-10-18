@@ -243,6 +243,8 @@ export interface ApiTimesheetSettings {
   /** Reminders (CD-154): hours before the deadline (null: off), and the emails after it. */
   reminderHours: number | null;
   afterDeadlineEmails: boolean;
+  /** Time on a project without a task (CD-350): off unless the workspace turns it on. */
+  projectTime?: boolean;
 }
 export const DEFAULT_TIMESHEET_SETTINGS: ApiTimesheetSettings = {
   dayMinutes: 480,
@@ -258,6 +260,7 @@ export const DEFAULT_TIMESHEET_SETTINGS: ApiTimesheetSettings = {
   approvalMode: 'week',
   reminderHours: 2,
   afterDeadlineEmails: true,
+  projectTime: false,
 };
 export interface WorkspaceTerms {
   project: string;
