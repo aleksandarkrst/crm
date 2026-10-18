@@ -21,14 +21,14 @@ describe('workforce settings', () => {
   const pickDates = async (from, to) => {
     await click(page, '[data-testid=holiday-add-dates-open]');
     for (const date of [from, to]) {
-      for (let i = 0; i < 24 && !(await page.$(`[data-testid=holiday-add-dates] .drp-day:not(.other)[data-date="${date}"]`)); i++) {
-        const shown = await page.$eval('[data-testid=holiday-add-dates] .drp-month', (el) => el.textContent);
+      for (let i = 0; i < 24 && !(await page.$(`[data-testid=holiday-add-dates-calendar] .drp-day:not(.other)[data-date="${date}"]`)); i++) {
+        const shown = await page.$eval('[data-testid=holiday-add-dates-calendar] .drp-month', (el) => el.textContent);
         const shownIso = new Date(`1 ${shown} 00:00:00Z`).toISOString().slice(0, 7);
-        await click(page, `[data-testid=holiday-add-dates] [aria-label="${date.slice(0, 7) > shownIso ? 'Next month' : 'Previous month'}"]`);
+        await click(page, `[data-testid=holiday-add-dates-calendar] [aria-label="${date.slice(0, 7) > shownIso ? 'Next month' : 'Previous month'}"]`);
       }
-      await click(page, `[data-testid=holiday-add-dates] .drp-day:not(.other)[data-date="${date}"]`);
+      await click(page, `[data-testid=holiday-add-dates-calendar] .drp-day:not(.other)[data-date="${date}"]`);
     }
-    await page.waitForFunction(() => !document.querySelector('[data-testid=holiday-add-dates] .drp-pop'));
+    await page.waitForFunction(() => !document.querySelector('[data-testid=holiday-add-dates-calendar]'));
   };
   const timesheet = async () => (await api(page, '/workspace')).timesheet;
 
