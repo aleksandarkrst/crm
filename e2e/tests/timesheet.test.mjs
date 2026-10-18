@@ -43,8 +43,8 @@ describe('timesheet', () => {
     await click(page, 'nav a[href="/timesheet"]');
     await page.waitForSelector('[data-testid=ts-grid]');
     assert.match(await page.$eval('[data-testid=ts-week-label]', (el) => el.textContent), /^Week \d+ · /);
-    assert.equal(await page.$eval('[data-testid=ts-status]', (el) => el.textContent), 'Not submitted');
-    assert.match(await page.$eval('.ts-toolbar', (el) => el.textContent), /Submit by Fri \d+ \w{3}, 17:00/);
+    // From Friday 17:00 to Sunday the week's deadline has passed (CD-155), so the toolbar says so instead.
+    assert.match(await page.$eval('.ts-toolbar', (el) => el.textContent), /Submit by Fri \d+ \w{3}, 17:00|Deadline passed/);
     assert.equal((await page.$$('[data-testid=ts-row]')).length, 0);
   });
 
@@ -85,7 +85,8 @@ describe('timesheet', () => {
     await click(page, '[data-testid=ts-note-save]');
     await page.waitForFunction(() => !document.querySelector('[data-testid=ts-note]'));
     assert.equal((await week()).rows[0].cells[monday].note, 'Waited for the seal kit');
-    await page.waitForSelector(`${cell(task.id, monday)} ~ .ts-note-mark`);
+    // An editable cell shows its note as the three dots, kept visible (CD-354).
+    await page.waitForSelector(`${cell(task.id, monday)} ~ .ts-dots.has-note`);
   });
 
   step('more than 12 h on one day is refused', async () => {
@@ -94,7 +95,8 @@ describe('timesheet', () => {
     await typeInto(cell(order.id, monday), '5');
     await page.keyboard.press('Tab');
     await page.waitForSelector('.toast::-p-text(Maximum 12 h per day)');
-    await page.waitForSelector(`${cell(order.id, monday)}.error`);
+    // Refused: the cell goes back to the saved hours, here none (CD-336).
+    await page.waitForFunction((sel) => document.querySelector(sel).value === '', {}, cell(order.id, monday));
     assert.equal((await week()).rows.find((r) => r.id === order.id).cells[monday], undefined);
     await waitForToastToClear(page);
     await page.$eval(cell(order.id, monday), (el) => el.focus());
@@ -129,8 +131,8 @@ describe('timesheet', () => {
     await page.waitForFunction(() => document.querySelector('[data-testid=ts-status]')?.textContent === 'Submitted');
     assert.ok(await page.$eval(cell(task.id, monday), (el) => el.readOnly && el.classList.contains('submitted')));
     await waitForToastToClear(page);
-    await click(page, '[data-testid=ts-menu]');
-    await click(page, '[data-testid=ts-recall]');
+    // All submitted: Recall takes the Submit button's place (CD-336).
+    await click(page, '[data-testid=ts-recall-button]');
     await page.waitForFunction(() => document.querySelector('[data-testid=ts-status]')?.textContent === 'Draft');
     assert.ok(await page.$eval(cell(task.id, monday), (el) => !el.readOnly));
   });
