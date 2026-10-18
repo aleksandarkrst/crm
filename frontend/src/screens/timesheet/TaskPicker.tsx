@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { type ApiLoggable, type ApiTimesheetWeek, timesheetApi } from '../../lib/timesheetApi';
+import { Popover } from '../../components/Popover';
 import { projectError } from '../../store/projects';
 import { fold } from '../../store/search';
 
@@ -38,17 +39,15 @@ function groupsOf(items: ApiLoggable[]): ClientGroup[] {
  * "+ Task @Project" (CD-354, like Clockify): a searchable dropdown of what the person can log on,
  * by client; a project opens to its tasks and work orders, and picking the project itself adds
  * "No task" where the workspace allows it (CD-350). Opens below the button, closes on a pick, a
- * click outside or Escape. Not a modal: nothing stacks over it.
+ * click outside, Escape or scrolling (the shared Popover, CD-355). Not a modal: nothing stacks over it.
  */
 export function TaskPicker({ week, employeeId, onAdd }: { week: ApiTimesheetWeek; employeeId?: string; onAdd: (item: ApiLoggable) => Promise<void> }) {
   const [open, setOpen] = useState(false);
-  const [at, setAt] = useState<{ top: number; left: number } | null>(null);
   const [items, setItems] = useState<ApiLoggable[] | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const button = useRef<HTMLButtonElement>(null);
-  const pop = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -57,21 +56,8 @@ export function TaskPicker({ week, employeeId, onAdd }: { week: ApiTimesheetWeek
       (list) => alive && setItems(list),
       (err) => alive && setFailed(projectError(err)),
     );
-    const off = (e: MouseEvent) => !pop.current?.contains(e.target as Node) && !button.current?.contains(e.target as Node) && setOpen(false);
-    const key = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
-    const away = () => setOpen(false);
-    // Fixed under its button: scrolling the page or the grid (not the list) closes it.
-    const scroll = (e: Event) => !pop.current?.contains(e.target as Node) && setOpen(false);
-    document.addEventListener('mousedown', off);
-    document.addEventListener('keydown', key);
-    window.addEventListener('resize', away);
-    window.addEventListener('scroll', scroll, true);
     return () => {
       alive = false;
-      document.removeEventListener('mousedown', off);
-      document.removeEventListener('keydown', key);
-      window.removeEventListener('resize', away);
-      window.removeEventListener('scroll', scroll, true);
     };
   }, [open, employeeId]);
 
@@ -83,9 +69,7 @@ export function TaskPicker({ week, employeeId, onAdd }: { week: ApiTimesheetWeek
   }, [items, inWeek, query]);
 
   const toggle = () => {
-    if (!open && button.current) {
-      const r = button.current.getBoundingClientRect();
-      setAt({ top: r.bottom + 4, left: Math.max(8, Math.min(r.left, window.innerWidth - 400)) });
+    if (!open) {
       setQ('');
       setExpanded(new Set());
     }
@@ -112,8 +96,9 @@ export function TaskPicker({ week, employeeId, onAdd }: { week: ApiTimesheetWeek
         </span>
         <span className="ts-label-main">Task @Project</span>
       </button>
-      {open && at && (
-        <div ref={pop} className="ts-picker-pop" style={{ top: at.top, left: at.left }} role="dialog" aria-label="Pick a task or project" data-testid="ts-picker">
+      {/* The shared popover (CD-355): at the top of the page, under the button or above it. */}
+      {open && (
+        <Popover anchor={button} onClose={() => setOpen(false)} className="ts-picker-pop" label="Pick a task or project" testId="ts-picker">
           <input className="form-input" autoFocus placeholder="Search task @project or client" value={q} onChange={(e) => setQ(e.target.value)} data-testid="ts-picker-search" />
           <div className="ts-picker-list">
             {failed ? (
@@ -168,7 +153,7 @@ export function TaskPicker({ week, employeeId, onAdd }: { week: ApiTimesheetWeek
               ))
             )}
           </div>
-        </div>
+        </Popover>
       )}
     </>
   );

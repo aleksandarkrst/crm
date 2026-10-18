@@ -373,7 +373,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .drp { position: relative; min-width: 0; }
 .drp-field { width: 100%; text-align: left; cursor: pointer; box-sizing: border-box; }
 .drp-field.drp-empty { color: var(--muted); }
-.drp-pop { position: fixed; z-index: 60; width: 280px; max-width: calc(100vw - 24px); background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.drp-pop { width: 280px; max-width: calc(100vw - 24px); background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 .drp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .drp-nav { padding: 4px 9px; }
 .drp-month { font-size: 13px; font-weight: 600; }
@@ -1547,7 +1547,7 @@ a.task-card-project:hover { color: var(--brand); }
 .ts-add-row .ts-label { padding: 8px 14px; }
 .ts-task-picker-btn { display: inline-flex; align-items: center; gap: 8px; border: 0; background: transparent; cursor: pointer; padding: 4px 0; font-family: inherit; color: var(--brand); }
 .ts-add-plus { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--brand); display: inline-flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; }
-.ts-picker-pop { position: fixed; z-index: 40; width: 380px; max-width: calc(100vw - 16px); background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.ts-picker-pop { width: 380px; max-width: calc(100vw - 16px); background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 .ts-picker-list { max-height: 360px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 .ts-picker-client { display: flex; flex-direction: column; gap: 2px; }
 .ts-picker-client-name { padding: 2px 6px; }
@@ -1559,3 +1559,6 @@ a.task-card-project:hover { color: var(--brand); }
 .ts-picker-count { padding: 6px; font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
 .ts-picker-task { display: block; width: 100%; padding: 6px 6px 6px 22px; font-size: 13px; color: var(--ink); }
 .ts-picker-name:hover, .ts-picker-task:hover, .ts-picker-count:hover { background: var(--bg-soft); }
+
+/* The shared floating panel (CD-355): at the top of the page, above dialogs (z 45). */
+.popover { position: fixed; z-index: 60; }
