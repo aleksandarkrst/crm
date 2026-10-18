@@ -127,7 +127,7 @@ function PlaceholderReferenceCard() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))' }}>
         {[...groups].map(([group, fields]) => (
           <div key={group} style={{ padding: '14px 18px', borderBottom: '1px solid var(--divider-2)', display: 'flex', flexDirection: 'column', gap: 7 }}>
-            <span className="caps-muted">{group === 'Opportunity lines' ? 'Opportunity lines · inside {{#lines}}' : group}</span>
+            <span className="caps-muted">{group === 'Deal lines' ? 'Opportunity lines · inside {{#lines}}' : group}</span>
             {fields.map((f) => (
               <div key={f.tag} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 10, fontSize: 12.5, alignItems: 'baseline' }}>
                 <code style={{ overflowWrap: 'anywhere' }}>{`{{${f.tag}}}`}</code>

@@ -22,7 +22,7 @@ const TIME_BUCKETS = [
   { label: 'Now', range: [-999, 0.5] },
 ] as const;
 const BONUS_COLS = 'minmax(0,1.6fr) 90px 120px 120px 120px 120px';
-const CONV_COLS = 'minmax(0,1.3fr) minmax(0,1fr) 44px 64px 84px';
+const CONV_COLS = 'minmax(0,1.3fr) minmax(0,1fr) 44px 104px 84px';
 const clip = 'polygon(0 0, 100% 0, calc(100% - 14px) 100%, 14px 100%)';
 const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 const pct = (r: number | null) => (r === null ? '—' : Math.round(r * 100) + '%');
@@ -59,7 +59,7 @@ export function Dashboard() {
   const weighted = moneyTotal(s, openLeads.map((l) => ({ currency: l.currency, amount: (valueNum(l.value) * num(stageOf(s, l).prob)) / 100 })), true);
   const stalled = openLeads.filter((l) => l.stall >= 3);
   const metrics = [
-    { label: 'Open pipeline', value: openValue, note: plural(openLeads.length, 'open opportunity') + ' in the current filter' },
+    { label: 'Open pipeline', value: openValue, note: plural(openLeads.length, 'open opportunity', 'open opportunities') + ' in the current filter' },
     { label: 'Weighted pipeline', value: weighted, note: "Open value × each stage's win probability" },
     { label: 'Won', value: wonValue, note: plural(wonLeads.length, 'opportunity', 'opportunities') + ' in the won stage' },
     { label: 'Stalled', value: String(stalled.length), note: 'Open opportunities with no contact for 3+ days' },
@@ -228,7 +228,7 @@ export function Dashboard() {
           <div style={{ overflowX: 'auto' }}>
             <div style={{ minWidth: 640 }}>
               <div style={{ display: 'grid', gridTemplateColumns: BONUS_COLS, gap: 12, padding: '9px 0', borderBottom: '1px solid var(--border)' }}>
-                {['Salesperson', 'Rate %', `Min opportunity (${currencySymbol(curOf(s))})`, 'Flat under min', 'Earned', 'Pending'].map((h) => (
+                {['Salesperson', 'Rate %', `Minimum (${currencySymbol(curOf(s))})`, 'Flat under min', 'Earned', 'Pending'].map((h) => (
                   <span key={h} className="th">
                     {h}
                   </span>

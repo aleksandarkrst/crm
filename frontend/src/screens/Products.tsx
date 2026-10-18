@@ -43,7 +43,7 @@ export function Products() {
         <div className="card" style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 900 }}>
             <div className="table-head" style={{ gridTemplateColumns: COLS }}>
-              {['Name', 'Unit price', 'Unit', 'Price', 'Tax', 'Billing frequency', 'On opportunities'].map((h) => (
+              {['Name', 'Unit price', 'Unit', 'Price', 'Tax', 'Billing frequency', 'In use'].map((h) => (
                 <span key={h} className="th">
                   {h}
                 </span>

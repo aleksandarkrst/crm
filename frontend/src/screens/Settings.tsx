@@ -977,7 +977,7 @@ function BonusesTab() {
           <div className="table-head th" style={{ gridTemplateColumns: BONUS_COLS }}>
             <span>Salesperson</span>
             <span>Rate %</span>
-            <span>Min opportunity ({symbol})</span>
+            <span>Minimum ({symbol})</span>
             <span>Flat under min ({symbol})</span>
           </div>
           {salesPeople(s)
