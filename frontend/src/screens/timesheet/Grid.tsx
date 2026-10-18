@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { paths } from '../../lib/paths';
 import { type ApiCell, type ApiLoggable, type ApiTimesheetDay, type ApiTimesheetRow, type ApiTimesheetWeek, dayLabel, formatHours, parseHours, shortHours, type TimeFormat } from '../../lib/timesheetApi';
 import { useStore } from '../../store/store';
-import { AddRowDialog } from './AddRowDialog';
+import { TaskPicker } from './TaskPicker';
 
 const DAY_NAMES = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -125,18 +125,20 @@ function TimeCell({
           }
         }}
       />
-      {editable && cell.entries <= 1 ? (
+      {editable && cell.entries <= 1 && (cell.minutes > 0 || cell.note) ? (
         <button
           type="button"
-          className={'ts-note-btn' + (cell.note ? ' has-note' : '')}
+          className={'ts-note-btn ts-dots' + (cell.note ? ' has-note' : '')}
           aria-label={`${cell.note ? 'Note' : 'Add a note'} for ${row.code} ${dayLabel(day.date)}`}
-          title={cell.note ? 'Note for the approver' : 'Add a note for the approver'}
+          title={cell.note ? 'More: the note for the approver' : 'More: add a note for the approver'}
           tabIndex={-1}
           data-testid="ts-note-open"
           onClick={(e) => onNote(e.currentTarget)}
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M5 4h14v12l-4 4H5z M9 10h6 M9 14h4 M15 20v-4h4" />
+          <svg width="4" height="14" viewBox="0 0 4 14" fill="currentColor" aria-hidden>
+            <circle cx="2" cy="2" r="1.5" />
+            <circle cx="2" cy="7" r="1.5" />
+            <circle cx="2" cy="12" r="1.5" />
           </svg>
         </button>
       ) : (
@@ -229,18 +231,13 @@ function NotePopover({
   );
 }
 
-/** "+ Add row" (CD-351): opens the dialog that picks a project, then a task or work order. */
+/** "+ Task @Project" (CD-354, like Clockify): the dropdown row under the week's rows. */
 function AddRow({ week, onAdd, employeeId }: { week: ApiTimesheetWeek; onAdd: (item: ApiLoggable) => Promise<void>; employeeId?: string }) {
-  const [open, setOpen] = useState(false);
   return (
-    <div className="ts-row">
-      <div style={{ gridColumn: '1 / -1' }}>
-        <button type="button" className="ts-add ts-label" data-testid="ts-add-row" onClick={() => setOpen(true)}>
-          <span className="ts-label-main">+ Add row</span>
-          <span className="ts-label-sub">A task or work order on one of your projects</span>
-        </button>
-      </div>
-      {open && <AddRowDialog week={week} employeeId={employeeId} onAdd={onAdd} onClose={() => setOpen(false)} />}
+    <div className="ts-row ts-add-row">
+      <span className="ts-label">
+        <TaskPicker week={week} employeeId={employeeId} onAdd={onAdd} />
+      </span>
     </div>
   );
 }
@@ -254,12 +251,15 @@ export function Grid({
   week,
   onSave,
   onAdd,
+  onRemove,
   onResubmitDay,
   employeeId,
 }: {
   week: ApiTimesheetWeek;
   onSave: SaveCell;
   onAdd: (item: ApiLoggable) => Promise<void>;
+  /** The row's X (CD-354). */
+  onRemove?: (row: ApiTimesheetRow) => Promise<void>;
   /** Day by day mode (CD-158): a rejected day is resubmitted on its own. */
   onResubmitDay?: (date: string) => void;
   /** An Admin entering time for this employee (CD-317): the picker lists what they can log on. */
@@ -311,6 +311,9 @@ export function Grid({
   const noteRow = note && week.rows.find((r) => r.key === note.key);
   const noteDay = note && week.days.find((d) => d.date === note.date);
 
+  /** A row can go while none of its hours are on a submitted or approved day. */
+  const removable = (row: ApiTimesheetRow) => week.days.every((d) => !(row.cells[d.date]?.minutes ?? 0) || d.status === 'draft' || d.status === 'rejected');
+
   const rowEl = (row: ApiTimesheetRow, r: number) => {
     const sub = subLine(row, format);
     return (
@@ -332,6 +335,14 @@ export function Grid({
         <span className="ts-total" data-testid="ts-row-total">
           {row.minutes ? shortHours(row.minutes, format) : ''}
         </span>
+        {/* The row's X (CD-354): gone from the week with its hours, unless some are on a submitted or approved day. */}
+        {onRemove && removable(row) ? (
+          <button type="button" className="ts-row-x" aria-label={`Remove ${row.code} ${row.name} from this week`} title="Remove this row and its hours from the week" onClick={() => void onRemove(row)} data-testid="ts-row-remove">
+            ×
+          </button>
+        ) : (
+          <span className="ts-row-x-empty" />
+        )}
       </div>
     );
   };

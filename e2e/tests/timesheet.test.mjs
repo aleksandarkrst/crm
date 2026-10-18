@@ -48,13 +48,11 @@ describe('timesheet', () => {
     assert.equal((await page.$$('[data-testid=ts-row]')).length, 0);
   });
 
-  step('+ Add row: pick the project, then the task (CD-351)', async () => {
+  step('+ Task @Project: search, then pick the task under its client and project (CD-354)', async () => {
     await click(page, '[data-testid=ts-add-row]');
-    await page.waitForSelector('[data-testid=ts-add-project] option[value="Kovin Pančevo › Service contract 2026"]');
-    await page.select('[data-testid=ts-add-project]', 'Kovin Pančevo › Service contract 2026');
-    await page.waitForSelector(`[data-testid=ts-add-item] option[value="${task.id}"]`);
-    await page.select('[data-testid=ts-add-item]', task.id);
-    await click(page, '[data-testid=ts-add-go]');
+    await page.waitForSelector('[data-testid=ts-picker-search]');
+    await page.type('[data-testid=ts-picker-search]', 'spare');
+    await click(page, `[data-testid=ts-picker-task][data-id="${task.id}"]`);
     await page.waitForSelector(cell(task.id, monday));
     assert.match(await page.$eval(`[data-testid=ts-row][data-row="${task.id}"] [data-testid=ts-row-sub]`, (el) => el.textContent), /Kovin Pančevo › Service contract 2026 · no limit/);
   });

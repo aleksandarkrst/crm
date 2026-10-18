@@ -1244,7 +1244,7 @@ a.task-card-project:hover { color: var(--brand); }
 .ts-week-label { font-size: 15px; font-weight: 600; }
 .ts-due { font-size: 12.5px; color: var(--text-2); }
 .ts-grid { border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; position: relative; }
-.ts-row { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(7, 82px) 84px; border-bottom: 1px solid var(--divider); min-width: 878px; background: var(--white); }
+.ts-row { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(7, 82px) 84px 36px; border-bottom: 1px solid var(--divider); min-width: 914px; background: var(--white); }
 .ts-row:last-child { border-bottom: 0; }
 .ts-row.ts-head { background: var(--panel); border-bottom: 1px solid var(--border); }
 .ts-row.ts-soft { background: var(--panel); }
@@ -1344,7 +1344,7 @@ a.task-card-project:hover { color: var(--brand); }
 @media (max-width: 700px) {
   .ts-toolbar .ts-spacer { display: none; }
   /* The days scroll sideways under the task or work order, which stays in view. */
-  .ts-row { grid-template-columns: 160px repeat(7, 72px) 64px; min-width: 728px; }
+  .ts-row { grid-template-columns: 160px repeat(7, 72px) 64px 32px; min-width: 760px; }
   .ts-row > .ts-label, .ts-row.ts-head > .th:first-child { position: sticky; left: 0; z-index: 1; background: inherit; border-right: 1px solid var(--divider); }
 }
 
@@ -1540,3 +1540,23 @@ a.task-card-project:hover { color: var(--brand); }
   .rq-actions { justify-content: flex-start; }
 }
 .rq-details { padding: 4px 16px 12px; background: var(--panel); border-bottom: 1px solid var(--divider); }
+
+/* Timesheet like Clockify (CD-354): the row's X, the hover dots and the Task @Project dropdown. */
+.ts-row-x { border: 0; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; align-self: center; justify-self: center; width: 28px; height: 28px; border-radius: 6px; }
+.ts-row-x:hover { background: var(--danger-soft); color: var(--danger); }
+.ts-dots { opacity: 0; width: 14px; }
+.ts-box:hover .ts-dots, .ts-box:focus-within .ts-dots, .ts-dots.has-note { opacity: 1; }
+.ts-add-row .ts-label { padding: 8px 14px; }
+.ts-task-picker-btn { display: inline-flex; align-items: center; gap: 8px; border: 0; background: transparent; cursor: pointer; padding: 4px 0; font-family: inherit; color: var(--brand); }
+.ts-add-plus { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--brand); display: inline-flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; }
+.ts-picker-pop { position: fixed; z-index: 40; width: 380px; max-width: calc(100vw - 16px); background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.ts-picker-list { max-height: 360px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.ts-picker-client { display: flex; flex-direction: column; gap: 2px; }
+.ts-picker-client-name { padding: 2px 6px; }
+.ts-picker-project { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ts-picker-name, .ts-picker-task, .ts-picker-count { border: 0; background: transparent; cursor: pointer; font-family: inherit; text-align: left; border-radius: 6px; }
+.ts-picker-name { flex: 1; min-width: 0; padding: 6px; font-size: 13.5px; color: var(--brand); font-weight: 500; }
+.ts-picker-name.muted { color: var(--ink); }
+.ts-picker-count { padding: 6px; font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
+.ts-picker-task { display: block; width: 100%; padding: 6px 6px 6px 22px; font-size: 13px; color: var(--ink); }
+.ts-picker-name:hover, .ts-picker-task:hover, .ts-picker-count:hover { background: var(--bg-soft); }

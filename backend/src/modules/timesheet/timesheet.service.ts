@@ -53,7 +53,7 @@ import {
   weekStatus,
   type WeekStatus,
 } from './timesheet-rules';
-import type { AddRow, CopyWeek, CreateEntry, SetCell, UpdateEntry } from './timesheet.schemas';
+import type { AddRow, CopyWeek, CreateEntry, RemoveRow, SetCell, UpdateEntry } from './timesheet.schemas';
 import { holidaysBetween, timesheetSettings } from './timesheet-settings';
 
 export type RowKind = 'task' | 'work_order' | 'project';
@@ -574,6 +574,39 @@ export class TimesheetService {
   }
 
   /** "+ Add task or work order": an empty row in the week, for something the caller can log on now. */
+  /**
+   * The row's X (CD-354): the row goes from the week with the person's hours on it. Hours on a
+   * submitted or approved day keep the row (recall or unlock first); the lock trigger would refuse
+   * them anyway, this says why first.
+   */
+  removeRow(ctx: TenantContext, input: RemoveRow): Promise<WeekView> {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        const caller = await this.caller(ctx, tx, input.employeeId);
+        const employeeId = this.ownEmployee(caller);
+        const sunday = addDays(input.weekStart, 6);
+        for (const date of weekDates(input.weekStart)) await lockDay(tx, employeeId, date);
+        const target = input.taskId ? eq(timeEntries.taskId, input.taskId) : input.projectId ? eq(timeEntries.projectId, input.projectId) : eq(timeEntries.workOrderId, input.workOrderId!);
+        const entries = await tx
+          .select({ id: timeEntries.id, date: timeEntries.workDate })
+          .from(timeEntries)
+          .where(and(eq(timeEntries.employeeId, employeeId), between(timeEntries.workDate, input.weekStart, sunday), target));
+        if (entries.length) {
+          const locked = await tx
+            .select({ date: timesheetDays.workDate })
+            .from(timesheetDays)
+            .where(and(eq(timesheetDays.employeeId, employeeId), inArray(timesheetDays.workDate, entries.map((e) => e.date)), inArray(timesheetDays.status, ['submitted', 'approved'])));
+          if (locked.length) throw new ConflictException('This row has hours on a submitted or approved day. Recall the week first.');
+          await tx.delete(timeEntries).where(inArray(timeEntries.id, entries.map((e) => e.id)));
+        }
+        const rowTarget = input.taskId ? eq(timesheetRows.taskId, input.taskId) : input.projectId ? eq(timesheetRows.projectId, input.projectId) : eq(timesheetRows.workOrderId, input.workOrderId!);
+        await tx.delete(timesheetRows).where(and(eq(timesheetRows.employeeId, employeeId), eq(timesheetRows.weekStart, input.weekStart), rowTarget));
+        if (entries.length && input.taskId) await this.hoursChanged(tx, ctx.tenantId, employeeId, [input.taskId]);
+        return readWeek(tx, caller, input.weekStart);
+      })
+      .catch(mapDbError);
+  }
+
   addRow(ctx: TenantContext, input: AddRow): Promise<WeekView> {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {

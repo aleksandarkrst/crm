@@ -85,6 +85,21 @@ export function Timesheet() {
     });
   };
 
+  /** The row's X (CD-354): asks first when the row has hours; the answer is the week without it. */
+  const onRemove = async (row: ApiTimesheetRow) => {
+    if (!week) return;
+    const label = row.kind === 'project' ? `${row.path.split(' › ').pop()} · no task` : `${row.code} ${row.name}`;
+    if (row.minutes > 0 && !(await askConfirm({ title: `Remove ${label} from this week?`, message: `Its ${shortHours(row.minutes, week.settings.timeFormat)} h this week are deleted too.`, confirmLabel: 'Remove', danger: true }))) return;
+    await run(async () => {
+      try {
+        set(await timesheetApi.removeRow(week.weekStart, targetOf(row), employeeParam));
+        flash(`${label} removed from the week`);
+      } catch (err) {
+        flash(projectError(err));
+      }
+    });
+  };
+
   const onAdd = (item: ApiLoggable) =>
     run(async () => {
       if (!week) return;
@@ -281,6 +296,7 @@ export function Timesheet() {
         employeeId={employeeParam}
         onSave={onSave}
         onAdd={onAdd}
+        onRemove={onRemove}
         onResubmitDay={week.settings.approvalMode === 'day' ? (date) => setResubmitting([date]) : undefined}
       />
       <div className="ts-help">Type 7.5, 7,5 or 7:30 · saved when you leave the cell · arrows and Tab move · Shift+Enter opens the note</div>

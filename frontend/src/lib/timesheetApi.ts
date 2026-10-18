@@ -200,6 +200,8 @@ export const timesheetApi = {
   setCell: (date: string, target: RowTarget, minutes: number, note?: string | null, employeeId?: string) =>
     api<ApiTimesheetWeek>('/timesheet/cells', { method: 'PUT', json: { date, ...target, minutes, ...(note !== undefined ? { note } : {}), ...forEmployee(employeeId) } }),
   addRow: (weekStart: string, target: RowTarget, employeeId?: string) => api<ApiTimesheetWeek>('/timesheet/rows', { method: 'POST', json: { weekStart, ...target, ...forEmployee(employeeId) } }),
+  /** The row's X (CD-354): the row and its hours this week. */
+  removeRow: (weekStart: string, target: RowTarget, employeeId?: string) => api<ApiTimesheetWeek>('/timesheet/rows/remove', { method: 'POST', json: { weekStart, ...target, ...forEmployee(employeeId) } }),
   copyPreview: (weekStart: string, employeeId?: string) => api<ApiCopyPreview>(`/timesheet/copy${query({ weekStart, employeeId })}`),
   copy: (weekStart: string, mode: 'rows' | 'hours', employeeId?: string) => api<ApiCopyResult>('/timesheet/copy', { method: 'POST', json: { weekStart, mode, ...forEmployee(employeeId) } }),
   /** The week; with `date`, that day only (Day by day mode, CD-156). */

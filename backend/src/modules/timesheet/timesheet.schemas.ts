@@ -59,6 +59,10 @@ export type SetCell = z.infer<typeof SetCell>;
 export const AddRow = z.object({ weekStart, ...rowTarget, ...forEmployee }).refine(oneRowTarget, ONE_ROW_TARGET);
 export type AddRow = z.infer<typeof AddRow>;
 
+/** POST /api/timesheet/rows/remove (CD-354): the row's X, the row and the person's hours on it this week. */
+export const RemoveRow = AddRow;
+export type RemoveRow = z.infer<typeof RemoveRow>;
+
 /** POST /api/timesheet/copy: Copy last week into `weekStart`, rows only or rows and hours. */
 export const CopyWeek = z.object({ weekStart, mode: z.enum(['rows', 'hours']), ...forEmployee });
 export type CopyWeek = z.infer<typeof CopyWeek>;
