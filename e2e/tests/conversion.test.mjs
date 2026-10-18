@@ -38,7 +38,7 @@ describe('stage conversion on Overview', () => {
     await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Idle', funnelId: smb.id }) });
     await page.goto(BASE_URL + '/overview', { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.querySelector('[data-testid=stage-conversion]')?.innerText.includes('so far'));
-    assert.match(await card(page), /Conversion rates appear once at least 5 deals in view have moved between stages \(0 so far\)/);
+    assert.match(await card(page), /Conversion rates appear once at least 5 opportunities in view have moved between stages \(0 so far\)/);
   });
 
   step('moves opportunities through the SMB funnel (one won, one lost)', async () => {
@@ -72,8 +72,8 @@ describe('stage conversion on Overview', () => {
     assert.deepEqual(await row(page, 'Negotiation'), ['100%', '1/1']);
     const text = await card(page);
     assert.match(text, /Win rate\s+50%\s+1 won · 1 lost/i);
-    assert.match(text, /To proposal[\s\S]*3 deals/i);
-    assert.match(text, /Deals that moved\s+5\s+of 6 deals in view/i);
+    assert.match(text, /To proposal[\s\S]*3 opportunities/i);
+    assert.match(text, /Opportunities that moved\s+5\s+of 6 opportunities in view/i);
   });
 
   step('respects the Overview filters', async () => {

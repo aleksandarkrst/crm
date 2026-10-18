@@ -145,7 +145,7 @@ describe('settings and discovery fields', () => {
     assert.equal(await valueByLabel(page, 'Proposal headline'), 'One story across six markets');
 
     await page.goto(`${BASE_URL}/settings/templates`, { waitUntil: 'networkidle0' });
-    await clickButton(page, 'Preview with a lead');
+    await clickButton(page, 'Preview with an opportunity');
     await page.waitForFunction(() => document.body.textContent.includes('What you told us'));
     const doc = await text(page);
     assert.ok(doc.includes('One story across six markets'), 'headline in the proposal');

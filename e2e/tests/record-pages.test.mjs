@@ -32,7 +32,7 @@ describe('company and contact pages', () => {
     await page.goto(`${BASE_URL}/companies/${company.id}`, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.querySelector('[data-testid=record-name]')?.value === 'Umbrella d.o.o.');
     assert.equal(await page.$eval('header h1', (el) => el.textContent), 'Company');
-    assert.match(await page.$eval('[data-testid=record-deals]', (el) => el.innerText), /Open deals \(1\)[\s\S]*Umbrella rollout/);
+    assert.match(await page.$eval('[data-testid=record-deals]', (el) => el.innerText), /Open opportunities \(1\)[\s\S]*Umbrella rollout/);
     assert.match(await page.$eval('[data-testid=company-contacts]', (el) => el.innerText), /Alice Abernathy/);
     assert.ok(!(await text(page)).includes('Delete company'), 'Delete is in the menu');
     assert.ok(await setByLabel(page, 'HQ', 'Beograd'), 'HQ field found');

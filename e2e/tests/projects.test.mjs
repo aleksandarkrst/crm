@@ -56,7 +56,7 @@ describe('projects', () => {
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await click(page, '[data-testid=new-menu]');
     const items = await page.$$eval('.new-menu-pop [role=menuitem]', (els) => els.map((el) => el.innerText.replace(/\s+/g, ' ').trim()));
-    assert.ok(items.some((t) => /^Deal task/.test(t) && /\bT$/.test(t)), items.join(' | '));
+    assert.ok(items.some((t) => /^Opportunity task/.test(t) && /\bT$/.test(t)), items.join(' | '));
     assert.ok(items.some((t) => /^Project/.test(t) && /\bJ$/.test(t)), items.join(' | '));
     await page.keyboard.press('j');
     await page.waitForSelector('[data-testid=project-company]');

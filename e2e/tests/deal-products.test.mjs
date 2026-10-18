@@ -153,7 +153,7 @@ describe('products and the opportunity page', () => {
     await click(page, 'button[aria-label="More actions"]');
     await clickButton(page, 'Delete opportunity');
     // The app's own confirm (CD-278), not the browser's.
-    assert.match(await confirmInApp(page), /^Delete the deal ".*"\?$/);
+    assert.match(await confirmInApp(page), /^Delete the opportunity ".*"\?$/);
     await page.waitForFunction(() => location.pathname.startsWith('/pipeline'));
     const gone = await eventually(async () => !(await api(page, '/crm/deals')).some((d) => d.deal.id === dealId));
     assert.ok(gone, 'opportunity deleted');

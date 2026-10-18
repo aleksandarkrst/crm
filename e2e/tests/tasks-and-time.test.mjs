@@ -108,9 +108,9 @@ describe('workspace currency, fiscal year and counters', () => {
     assert.equal(deal.currency, 'USD');
   });
 
-  step('Pipeline says "1 lead" and totals in dollars', async () => {
+  step('Pipeline says "1 opportunity" and totals in dollars', async () => {
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
-    await page.waitForFunction(() => document.body.innerText.includes('1 lead · $12,000 open'));
+    await page.waitForFunction(() => document.body.innerText.includes('1 opportunity · $12,000 open'));
     assert.ok(!(await text(page)).includes('€'), 'no euro sign anywhere on the board');
   });
 

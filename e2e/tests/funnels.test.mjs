@@ -75,7 +75,7 @@ describe('funnels and stages', () => {
     await page.waitForFunction(() => document.body.innerText.includes('Umbrella Corp'));
     await page.goto(BASE_URL + '/overview', { waitUntil: 'networkidle0' });
     assert.ok(await pickOption('Mid-market'), 'audience filter lists it');
-    await page.waitForFunction(() => /1 deal in view/.test(document.body.innerText));
+    await page.waitForFunction(() => /1 opportunity in view/.test(document.body.innerText));
   });
 
   step('adds a stage, then removes a stage with the opportunity in it (the opportunity moves)', async () => {

@@ -86,7 +86,7 @@ describe('CSV import and export', () => {
     const file = csvFile('deals.csv', `Opportunity,Company,Stage,Value,Closing date,Contact,Contact email\nWebsite ${RUN},${globex.toUpperCase()},${second.name},"14,000",31.12.2026,Gina Globex,gina-${RUN}@example.test\nRetainer ${RUN},${initech},,2500,,,\n`);
     await upload(page, file);
     // Opened from the Pipeline, the dialog imports deals into the funnel on screen.
-    assert.match(await modalText(page), /Import deals/);
+    assert.match(await modalText(page), /Import opportunities/);
     await clickButton(page, 'Preview');
     await page.waitForSelector('[data-testid=import-counts]');
     const counts = await page.$eval('[data-testid=import-counts]', (el) => el.innerText);

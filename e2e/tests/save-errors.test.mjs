@@ -52,7 +52,7 @@ describe('failed saves', () => {
     assert.notEqual(title, 'Renamed but not saved');
 
     // The message names the change that failed, why, and that it was reset.
-    assert.match(toast, /Not saved: the deal title/);
+    assert.match(toast, /Not saved: the opportunity title/);
     assert.match(toast, /Simulated failure/);
     assert.match(toast, /reset to the saved value/);
   });

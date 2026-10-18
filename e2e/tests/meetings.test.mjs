@@ -288,11 +288,11 @@ describe('meeting calendar', () => {
       await page.waitForSelector('[data-testid=new-meeting] [data-testid=meeting-form]');
     };
     await openNew();
-    assert.match(await page.$eval('[data-testid=meeting-no-deals]', (el) => el.innerText), /This company has no deals yet/);
+    assert.match(await page.$eval('[data-testid=meeting-no-deals]', (el) => el.innerText), /This company has no opportunities yet/);
     // Saving is blocked until there is a deal.
     await click(page, '[data-testid=meeting-save]');
     await page.waitForSelector('[data-testid=meeting-errors]');
-    assert.match(await page.$eval('[data-testid=meeting-errors]', (el) => el.innerText), /no deals yet/);
+    assert.match(await page.$eval('[data-testid=meeting-errors]', (el) => el.innerText), /no opportunities yet/);
     assert.ok(await page.$('[data-testid=new-meeting] [data-testid=meeting-form]'), 'still open');
     assert.deepEqual((await api(page, `/crm/meetings?companyId=${other.id}`)).meetings, []);
 
@@ -320,7 +320,7 @@ describe('meeting calendar', () => {
     assert.equal(await page.$eval('[data-testid=meeting-deal]', (el) => el.value), '');
     await click(page, '[data-testid=meeting-save]');
     await page.waitForSelector('[data-testid=meeting-errors]');
-    assert.match(await page.$eval('[data-testid=meeting-errors]', (el) => el.innerText), /Pick the deal this meeting is for/);
+    assert.match(await page.$eval('[data-testid=meeting-errors]', (el) => el.innerText), /Pick the opportunity this meeting is for/);
     await setValue(page, '[data-testid=meeting-deal]', second.id);
     await click(page, '[data-testid=meeting-save]');
     await page.waitForFunction(() => !document.querySelector('[data-testid=meeting-form]'), { timeout: 10_000 });

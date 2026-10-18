@@ -121,7 +121,7 @@ describe('opportunity products and stage to-dos', () => {
     await clickButton(page, 'Delete');
     const toast = await page.waitForSelector('.toast');
     const message = await toast.evaluate((el) => el.textContent);
-    assert.match(message, /is on 1 deal/);
+    assert.match(message, /is on 1 opportunity/);
     assert.equal((await api(page, '/crm/products')).length, 1);
   });
 
