@@ -5,7 +5,7 @@ import { projectError } from '../../store/projects';
 
 /**
  * Add a row to the week (CD-351, replaces the inline search): pick the project, then a task or
- * work order on it. Projects are the ones the person can log on now ("Company › Project"; a work
+ * work order on it, or "No task" for time on the project itself where the workspace allows it (CD-350). Projects are the ones the person can log on now ("Company › Project"; a work
  * order without a project goes under its company); what is already in the week is left out.
  */
 export function AddRowDialog({ week, employeeId, onAdd, onClose }: { week: ApiTimesheetWeek; employeeId?: string; onAdd: (item: ApiLoggable) => Promise<void>; onClose: () => void }) {
@@ -28,7 +28,8 @@ export function AddRowDialog({ week, employeeId, onAdd, onClose }: { week: ApiTi
   const inWeek = useMemo(() => new Set(week.rows.map((r) => r.id)), [week.rows]);
   const open = useMemo(() => (items ?? []).filter((i) => !inWeek.has(i.id)), [items, inWeek]);
   const projects = useMemo(() => [...new Set(open.map((i) => i.path))].sort((a, b) => a.localeCompare(b)), [open]);
-  const onProject = open.filter((i) => i.path === project).sort((a, b) => (a.kind === b.kind ? a.code.localeCompare(b.code, undefined, { numeric: true }) : a.kind === 'task' ? -1 : 1));
+  const rank = { project: 0, task: 1, work_order: 2 } as const;
+  const onProject = open.filter((i) => i.path === project).sort((a, b) => rank[a.kind] - rank[b.kind] || a.code.localeCompare(b.code, undefined, { numeric: true }));
   // One project: it is picked already.
   useEffect(() => {
     if (projects.length === 1 && !project) setProject(projects[0]!);
@@ -46,7 +47,7 @@ export function AddRowDialog({ week, employeeId, onAdd, onClose }: { week: ApiTi
 
   return (
     <Modal maxWidth={480} onBackdrop={() => !busy && onClose()}>
-      <ModalHeader title="Add a row" sub="Choose the project, then the task or work order to log time on." />
+      <ModalHeader title="Add a row" sub="Choose the project, then the task or work order to log time on, or the project itself when your workspace allows it." />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="ts-add-dialog">
         {failed ? (
           <span className="emp-error">{failed}</span>
@@ -78,13 +79,12 @@ export function AddRowDialog({ week, employeeId, onAdd, onClose }: { week: ApiTi
               </select>
             </label>
             <label className="policy-field">
-              <span className="th">Task or work order</span>
+              <span className="th">{onProject.some((i) => i.kind === 'project') ? 'Task (optional)' : 'Task or work order'}</span>
               <select className="form-input" value={itemId} disabled={!project} onChange={(e) => setItemId(e.target.value)} data-testid="ts-add-item">
                 <option value="">{project ? 'Pick a task or work order' : 'Pick a project first'}</option>
                 {onProject.map((i) => (
                   <option key={i.id} value={i.id}>
-                    {i.code} {i.name}
-                    {i.kind === 'work_order' ? ' (work order)' : ''}
+                    {i.kind === 'project' ? 'No task (time on the project)' : `${i.code} ${i.name}${i.kind === 'work_order' ? ' (work order)' : ''}`}
                   </option>
                 ))}
               </select>

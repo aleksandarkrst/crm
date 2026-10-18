@@ -79,3 +79,22 @@ describe('Workload (CD-261, design v2 §9)', () => {
     expect(workloadCells([{ startDate: null, dueDate: null, remainingMinutes: 0 }], weeks, '2026-10-09')).toEqual([0, 0, 0]);
   });
 });
+
+import { projectLogRefusal } from '../src/modules/projects/project-log';
+
+describe('time on a project without a task (CD-350)', () => {
+  it('needs the workspace setting, the team or the lead, and an open project', () => {
+    expect(projectLogRefusal({ allowed: false, projectStatus: 'open', onTeam: true })).toBe('not_allowed');
+    expect(projectLogRefusal(null)).toBe('not_found');
+    expect(projectLogRefusal({ allowed: true, projectStatus: 'open', onTeam: false })).toBe('not_on_team');
+    expect(projectLogRefusal({ allowed: true, projectStatus: 'completed', onTeam: true })).toBe('project_closed');
+    expect(projectLogRefusal({ allowed: true, projectStatus: 'open', onTeam: true })).toBeNull();
+  });
+
+  it('puts project time on a "No task" line of the Report tab, in the summary and per person', () => {
+    const r = projectReport({ tasks: [], stages: [], people: new Map([['ana', 'Ana']]), today: '2026-10-09', budgetHours: null, endDate: null, open: true, projectTime: new Map([['ana', 120]]) });
+    expect(r.summary.loggedMinutes).toBe(120);
+    expect(r.stages).toEqual([expect.objectContaining({ id: 'no-task', name: 'No task', tasks: 0, loggedMinutes: 120 })]);
+    expect(r.people).toEqual([expect.objectContaining({ employeeId: 'ana', loggedMinutes: 120 })]);
+  });
+});

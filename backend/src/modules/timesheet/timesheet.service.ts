@@ -27,7 +27,7 @@ import {
 import { zonedDayStart, zonedParts } from '../../shared/time/zoned-time';
 import { PeopleAccess } from '../people';
 import { JobsService } from '../../shared/events/jobs.service';
-import { hourLimitBlock, loggableTasks, loggableWorkOrders, type LogTimeRefusal, logTimeRefusal, type WorkOrderLogRefusal, workOrderLogRefusal } from '../projects';
+import { hourLimitBlock, loggableProjects, loggableTasks, loggableWorkOrders, type LogTimeRefusal, logTimeRefusal, type ProjectLogRefusal, projectLogRefusalFor, type WorkOrderLogRefusal, workOrderLogRefusal } from '../projects';
 import {
   addDays,
   copyPlan,
@@ -56,7 +56,27 @@ import {
 import type { AddRow, CopyWeek, CreateEntry, SetCell, UpdateEntry } from './timesheet.schemas';
 import { holidaysBetween, timesheetSettings } from './timesheet-settings';
 
-export type RowKind = 'task' | 'work_order';
+export type RowKind = 'task' | 'work_order' | 'project';
+
+/** A row's or entry's target: a task, a work order, or the project itself (CD-350). */
+interface Target {
+  taskId: string | null;
+  workOrderId: string | null;
+  projectId?: string | null;
+}
+const kindOfTarget = (t: Target): RowKind => (t.taskId ? 'task' : t.workOrderId ? 'work_order' : 'project');
+const idOfTarget = (t: Target) => (t.taskId ?? t.workOrderId ?? t.projectId)!;
+/** The task, work order and project ids among `targets`, for rowFacts. */
+const idsOf = (targets: readonly Target[]) => ({
+  taskIds: [...new Set(targets.flatMap((e) => (e.taskId ? [e.taskId] : [])))],
+  orderIds: [...new Set(targets.flatMap((e) => (e.workOrderId ? [e.workOrderId] : [])))],
+  projectIds: [...new Set(targets.flatMap((e) => (e.projectId ? [e.projectId] : [])))],
+});
+/** A row key back to its columns. */
+const splitKey = (key: string) => {
+  const [kind, id] = key.split(':') as [RowKind, string];
+  return { taskId: kind === 'task' ? id : null, workOrderId: kind === 'work_order' ? id : null, projectId: kind === 'project' ? id : null };
+};
 
 /** One cell: the person's hours on that row and day, the note when there is one entry, how many entries. */
 export interface CellView {
@@ -180,7 +200,7 @@ interface RowFacts {
   code: string;
   name: string;
   path: string;
-  refusal: LogTimeRefusal | WorkOrderLogRefusal | 'project_closed' | null;
+  refusal: LogTimeRefusal | WorkOrderLogRefusal | ProjectLogRefusal | 'project_closed' | null;
   limitMinutes: number | null;
 }
 
@@ -197,7 +217,14 @@ const WORK_ORDER_REASONS: Record<WorkOrderLogRefusal | 'project_closed', string>
   completed: 'Work order completed',
   project_closed: 'Project closed',
 };
-const reasonOf = (f: RowFacts) => (f.refusal ? (f.kind === 'task' ? TASK_REASONS[f.refusal as LogTimeRefusal] : WORK_ORDER_REASONS[f.refusal as WorkOrderLogRefusal]) : null);
+const PROJECT_REASONS: Record<ProjectLogRefusal, string> = {
+  not_allowed: 'Time on a project without a task is turned off',
+  not_found: 'Not found',
+  not_on_team: "You aren't on the project's team",
+  project_closed: 'Project closed',
+};
+const reasonOf = (f: RowFacts) =>
+  f.refusal ? (f.kind === 'task' ? TASK_REASONS[f.refusal as LogTimeRefusal] : f.kind === 'project' ? PROJECT_REASONS[f.refusal as ProjectLogRefusal] : WORK_ORDER_REASONS[f.refusal as WorkOrderLogRefusal]) : null;
 
 /** Why Copy last week skips a row, in the dialog's words ("#129 is closed"). */
 const COPY_REASONS: Record<string, string> = {
@@ -207,12 +234,16 @@ const COPY_REASONS: Record<string, string> = {
   not_technician: "you aren't on it any more",
   completed: 'is completed',
   not_found: 'was deleted',
+  not_on_team: "you aren't on the project's team any more",
+  not_allowed: 'time on a project without a task is turned off',
 };
 
 /** Refusing to log on a row: not yours is 403, closed or completed is 423 (spec 9.1, CD-277). */
 function refusalError(f: RowFacts): HttpException {
   const reason = reasonOf(f) ?? 'Not allowed';
-  if (f.refusal === 'not_found') return new NotFoundException(f.kind === 'task' ? 'Task not found' : 'Work order not found');
+  if (f.refusal === 'not_found') return new NotFoundException(f.kind === 'task' ? 'Task not found' : f.kind === 'project' ? 'Project not found' : 'Work order not found');
+  if (f.refusal === 'not_on_team') return new ForbiddenException("You aren't on this project's team");
+  if (f.refusal === 'not_allowed') return new ForbiddenException('Time on a project without a task is turned off in this workspace');
   if (f.refusal === 'not_assigned') return new ForbiddenException("You aren't assigned to this task");
   if (f.refusal === 'not_technician') return new ForbiddenException("You aren't a technician on this work order");
   if (f.refusal === 'project_closed') return new HttpException('Project is closed', 423);
@@ -365,8 +396,14 @@ export class TimesheetService {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const caller = await this.caller(ctx, tx, employeeId);
       if (!caller.employeeId) return [];
-      const [taskRows, orderRows] = await Promise.all([loggableTasks(tx, caller.employeeId), loggableWorkOrders(tx, caller.employeeId)]);
+      const [taskRows, orderRows, projectRows] = await Promise.all([
+        loggableTasks(tx, caller.employeeId),
+        loggableWorkOrders(tx, caller.employeeId),
+        caller.settings.projectTime ? loggableProjects(tx, caller.employeeId) : Promise.resolve([]),
+      ]);
       return [
+        // Time on the project itself (CD-350): the same path as its tasks, so the picker groups them.
+        ...projectRows.map((p) => ({ kind: 'project' as const, id: p.id, code: p.code ?? '', name: 'No task', path: pathOf(p.companyName, p.name) })),
         ...taskRows.map((t) => ({ kind: 'task' as const, id: t.id, code: `T-${t.number}`, name: t.name, path: pathOf(t.companyName, t.projectName) })),
         ...orderRows.map((w) => ({ kind: 'work_order' as const, id: w.id, code: `WO-${w.number}`, name: w.title, path: pathOf(w.companyName, w.projectName) })),
       ];
@@ -384,19 +421,19 @@ export class TimesheetService {
       .withTenant(ctx.tenantId, async (tx) => {
         const caller = await this.caller(ctx, tx, input.employeeId);
         const employeeId = this.ownEmployee(caller);
-        const kind: RowKind = input.taskId ? 'task' : 'work_order';
-        const id = (input.taskId ?? input.workOrderId)!;
+        const kind = kindOfTarget({ taskId: input.taskId ?? null, workOrderId: input.workOrderId ?? null, projectId: input.projectId ?? null });
+        const id = idOfTarget({ taskId: input.taskId ?? null, workOrderId: input.workOrderId ?? null, projectId: input.projectId ?? null });
         if (input.date > caller.thisWeekEnd) throw new BadRequestException('Hours can be entered up to the end of this week');
         if (!employed(input.date, caller.employment)) throw new BadRequestException("You weren't employed on this day");
         await lockDay(tx, employeeId, input.date);
-        const target = kind === 'task' ? eq(timeEntries.taskId, id) : eq(timeEntries.workOrderId, id);
+        const target = kind === 'task' ? eq(timeEntries.taskId, id) : kind === 'project' ? eq(timeEntries.projectId, id) : eq(timeEntries.workOrderId, id);
         const mine = and(eq(timeEntries.employeeId, employeeId), eq(timeEntries.workDate, input.date));
         const existing = await tx
           .select({ id: timeEntries.id, minutes: timeEntries.minutes, note: timeEntries.note, startTime: timeEntries.startTime })
           .from(timeEntries)
           .where(and(mine, target));
-        const [facts] = await rowFacts(tx, employeeId, kind === 'task' ? [id] : [], kind === 'work_order' ? [id] : []);
-        if (!facts) throw new NotFoundException(kind === 'task' ? 'Task not found' : 'Work order not found');
+        const [facts] = await rowFacts(tx, employeeId, kind === 'task' ? [id] : [], kind === 'work_order' ? [id] : [], kind === 'project' ? [id] : [], caller.settings.projectTime);
+        if (!facts) throw new NotFoundException(kind === 'task' ? 'Task not found' : kind === 'project' ? 'Project not found' : 'Work order not found');
         // Hours already there can be corrected after someone was unassigned (spec 4.4); new ones need the rule.
         const correcting = existing.length > 0 && (facts.refusal === 'not_assigned' || facts.refusal === 'not_technician');
         if (facts.refusal && !correcting) throw refusalError(facts);
@@ -415,7 +452,7 @@ export class TimesheetService {
           if (refusal) throw new BadRequestException(refusal);
           if (!entry || input.minutes > entry.minutes) await this.checkHourLimit(tx, ctx.tenantId, employeeId, input.taskId ?? null, input.minutes, entry ? [entry.id] : []);
           if (entry) await tx.update(timeEntries).set({ minutes: input.minutes, note, ...keepSpan(entry.startTime, input.minutes) }).where(eq(timeEntries.id, entry.id));
-          else await tx.insert(timeEntries).values({ tenantId: ctx.tenantId, employeeId, workDate: input.date, taskId: input.taskId ?? null, workOrderId: input.workOrderId ?? null, minutes: input.minutes, note, createdByUserId: ctx.userId });
+          else await tx.insert(timeEntries).values({ tenantId: ctx.tenantId, employeeId, workDate: input.date, taskId: input.taskId ?? null, workOrderId: input.workOrderId ?? null, projectId: input.projectId ?? null, minutes: input.minutes, note, createdByUserId: ctx.userId });
         }
         if (entry || input.minutes > 0) await this.hoursChanged(tx, ctx.tenantId, employeeId, [input.taskId ?? null]);
         return readWeek(tx, caller, mondayOf(input.date));
@@ -542,12 +579,12 @@ export class TimesheetService {
       .withTenant(ctx.tenantId, async (tx) => {
         const caller = await this.caller(ctx, tx, input.employeeId);
         const employeeId = this.ownEmployee(caller);
-        const [facts] = await rowFacts(tx, employeeId, input.taskId ? [input.taskId] : [], input.workOrderId ? [input.workOrderId] : []);
-        if (!facts) throw new NotFoundException(input.taskId ? 'Task not found' : 'Work order not found');
+        const [facts] = await rowFacts(tx, employeeId, input.taskId ? [input.taskId] : [], input.workOrderId ? [input.workOrderId] : [], input.projectId ? [input.projectId] : [], caller.settings.projectTime);
+        if (!facts) throw new NotFoundException(input.taskId ? 'Task not found' : input.projectId ? 'Project not found' : 'Work order not found');
         if (facts.refusal) throw refusalError(facts);
         await tx
           .insert(timesheetRows)
-          .values({ tenantId: ctx.tenantId, employeeId, weekStart: input.weekStart, taskId: input.taskId ?? null, workOrderId: input.workOrderId ?? null })
+          .values({ tenantId: ctx.tenantId, employeeId, weekStart: input.weekStart, taskId: input.taskId ?? null, workOrderId: input.workOrderId ?? null, projectId: input.projectId ?? null })
           .onConflictDoNothing();
         return readWeek(tx, caller, input.weekStart);
       })
@@ -559,7 +596,7 @@ export class TimesheetService {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const caller = await this.caller(ctx, tx, forEmployeeId);
       const employeeId = this.ownEmployee(caller);
-      const plan = copyPlan(await this.copySource(tx, employeeId, weekStart), await this.copyTarget(tx, caller, employeeId, weekStart), false, caller.settings);
+      const plan = copyPlan(await this.copySource(tx, employeeId, weekStart, caller.settings.projectTime), await this.copyTarget(tx, caller, employeeId, weekStart), false, caller.settings);
       return { fromWeek: isoWeek(addDays(weekStart, -7)), toWeek: isoWeek(weekStart), rows: plan.rows.length, skipped: plan.skippedRows };
     });
   }
@@ -573,15 +610,12 @@ export class TimesheetService {
         await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${employeeId}:week:${input.weekStart}`}, 0))`);
         for (const date of weekDates(input.weekStart)) await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${employeeId}:${date}`}, 0))`);
         const plan = copyPlan(
-          await this.copySource(tx, employeeId, input.weekStart),
+          await this.copySource(tx, employeeId, input.weekStart, caller.settings.projectTime),
           await this.copyTarget(tx, caller, employeeId, input.weekStart),
           input.mode === 'hours',
           caller.settings,
         );
-        const split = (key: string) => {
-          const [kind, id] = key.split(':') as [RowKind, string];
-          return { taskId: kind === 'task' ? id : null, workOrderId: kind === 'work_order' ? id : null };
-        };
+        const split = splitKey;
         if (plan.rows.length) {
           await tx
             .insert(timesheetRows)
@@ -746,31 +780,26 @@ export class TimesheetService {
   }
 
   /** Last week's rows (entries and added rows), with why each can't be copied. */
-  private async copySource(tx: Tx, employeeId: string, weekStart: string): Promise<CopySourceRow[]> {
+  private async copySource(tx: Tx, employeeId: string, weekStart: string, projectTime = false): Promise<CopySourceRow[]> {
     const from = addDays(weekStart, -7);
     const [entries, added] = await Promise.all([
       tx
-        .select({ date: timeEntries.workDate, taskId: timeEntries.taskId, workOrderId: timeEntries.workOrderId, minutes: timeEntries.minutes })
+        .select({ date: timeEntries.workDate, taskId: timeEntries.taskId, workOrderId: timeEntries.workOrderId, projectId: timeEntries.projectId, minutes: timeEntries.minutes })
         .from(timeEntries)
         .where(and(eq(timeEntries.employeeId, employeeId), between(timeEntries.workDate, from, addDays(from, 6)))),
       tx
-        .select({ taskId: timesheetRows.taskId, workOrderId: timesheetRows.workOrderId })
+        .select({ taskId: timesheetRows.taskId, workOrderId: timesheetRows.workOrderId, projectId: timesheetRows.projectId })
         .from(timesheetRows)
         .where(and(eq(timesheetRows.employeeId, employeeId), eq(timesheetRows.weekStart, from))),
     ]);
-    const all = [...entries, ...added];
-    const facts = await rowFacts(
-      tx,
-      employeeId,
-      [...new Set(all.flatMap((e) => (e.taskId ? [e.taskId] : [])))],
-      [...new Set(all.flatMap((e) => (e.workOrderId ? [e.workOrderId] : [])))],
-    );
+    const ids = idsOf([...entries, ...added]);
+    const facts = await rowFacts(tx, employeeId, ids.taskIds, ids.orderIds, ids.projectIds, projectTime);
     return facts
       .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'task' ? -1 : 1) || a.code.localeCompare(b.code, undefined, { numeric: true }))
       .map((f) => {
         const minutes: Record<string, number> = {};
-        for (const e of entries) if ((f.kind === 'task' ? e.taskId : e.workOrderId) === f.id) minutes[e.date] = (minutes[e.date] ?? 0) + e.minutes;
-        const label = f.kind === 'task' ? `task ${f.code}` : f.code;
+        for (const e of entries) if (keyOf(kindOfTarget(e), idOfTarget(e)) === keyOf(f.kind, f.id)) minutes[e.date] = (minutes[e.date] ?? 0) + e.minutes;
+        const label = f.kind === 'task' ? `task ${f.code}` : f.kind === 'project' ? `${f.path} (no task)` : f.code;
         return { key: keyOf(f.kind, f.id), label, refusal: f.refusal ? COPY_REASONS[f.refusal] ?? 'is closed' : null, minutes };
       });
   }
@@ -779,7 +808,7 @@ export class TimesheetService {
     const sunday = addDays(weekStart, 6);
     const [entries, dayRows] = await Promise.all([
       tx
-        .select({ date: timeEntries.workDate, taskId: timeEntries.taskId, workOrderId: timeEntries.workOrderId, minutes: timeEntries.minutes })
+        .select({ date: timeEntries.workDate, taskId: timeEntries.taskId, workOrderId: timeEntries.workOrderId, projectId: timeEntries.projectId, minutes: timeEntries.minutes })
         .from(timeEntries)
         .where(and(eq(timeEntries.employeeId, employeeId), between(timeEntries.workDate, weekStart, sunday))),
       tx
@@ -790,7 +819,7 @@ export class TimesheetService {
     const cells = new Map<string, number>();
     const dayMinutes: Record<string, number> = {};
     for (const e of entries) {
-      const key = `${e.taskId ? keyOf('task', e.taskId) : keyOf('work_order', e.workOrderId!)}|${e.date}`;
+      const key = `${keyOf(kindOfTarget(e), idOfTarget(e))}|${e.date}`;
       cells.set(key, (cells.get(key) ?? 0) + e.minutes);
       dayMinutes[e.date] = (dayMinutes[e.date] ?? 0) + e.minutes;
     }
@@ -805,8 +834,18 @@ export class TimesheetService {
 }
 
 /** The facts about tasks and work orders for one person: names, paths, whether they can log on them, their limit. */
-export async function rowFacts(tx: Tx, employeeId: string, taskIds: string[], orderIds: string[]): Promise<RowFacts[]> {
+export async function rowFacts(tx: Tx, employeeId: string, taskIds: string[], orderIds: string[], projectIds: string[] = [], projectTime = false): Promise<RowFacts[]> {
   const facts: RowFacts[] = [];
+  // Time on the project itself (CD-350): its team and lead, while the workspace allows it.
+  for (const projectId of projectIds) {
+    const [p] = await tx
+      .select({ id: projects.id, code: projects.code, name: projects.name, companyName: companies.name })
+      .from(projects)
+      .innerJoin(companies, eq(companies.id, projects.companyId))
+      .where(eq(projects.id, projectId));
+    if (!p) continue;
+    facts.push({ kind: 'project', id: p.id, code: p.code ?? '', name: 'No task', path: pathOf(p.companyName, p.name), refusal: await projectLogRefusalFor(tx, employeeId, p.id, projectTime), limitMinutes: null });
+  }
   if (taskIds.length) {
     const rows = await tx
       .select({
@@ -894,11 +933,11 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
   }
   const [entries, added, dayRows, [flags], onBehalfRows] = await Promise.all([
     tx
-      .select({ date: timeEntries.workDate, taskId: timeEntries.taskId, workOrderId: timeEntries.workOrderId, minutes: timeEntries.minutes, note: timeEntries.note })
+      .select({ date: timeEntries.workDate, taskId: timeEntries.taskId, workOrderId: timeEntries.workOrderId, projectId: timeEntries.projectId, minutes: timeEntries.minutes, note: timeEntries.note })
       .from(timeEntries)
       .where(and(eq(timeEntries.employeeId, employeeId), between(timeEntries.workDate, monday, sunday))),
     tx
-      .select({ taskId: timesheetRows.taskId, workOrderId: timesheetRows.workOrderId, createdAt: timesheetRows.createdAt })
+      .select({ taskId: timesheetRows.taskId, workOrderId: timesheetRows.workOrderId, projectId: timesheetRows.projectId, createdAt: timesheetRows.createdAt })
       .from(timesheetRows)
       .where(and(eq(timesheetRows.employeeId, employeeId), eq(timesheetRows.weekStart, monday))),
     tx
@@ -941,9 +980,8 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
       .where(and(eq(timesheetDayEvents.employeeId, employeeId), between(timesheetDayEvents.workDate, monday, sunday)))
       .orderBy(asc(timesheetDayEvents.createdAt)),
   ]);
-  const taskIds = [...new Set([...entries, ...added].flatMap((e) => (e.taskId ? [e.taskId] : [])))];
-  const orderIds = [...new Set([...entries, ...added].flatMap((e) => (e.workOrderId ? [e.workOrderId] : [])))];
-  const facts = await rowFacts(tx, employeeId, taskIds, orderIds);
+  const { taskIds, orderIds, projectIds } = idsOf([...entries, ...added]);
+  const facts = await rowFacts(tx, employeeId, taskIds, orderIds, projectIds, settings.projectTime);
   const limited = facts.filter((f) => f.limitMinutes != null).map((f) => f.id);
   const logged = new Map<string, number>();
   const before = new Map<string, number>();
@@ -981,7 +1019,7 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
   }
   const perDay: Record<string, number> = {};
   for (const e of entries) {
-    const row = rows.get(e.taskId ? keyOf('task', e.taskId) : keyOf('work_order', e.workOrderId!));
+    const row = rows.get(keyOf(kindOfTarget(e), idOfTarget(e)));
     if (!row) continue;
     const cell = (row.cells[e.date] ??= { minutes: 0, note: null, entries: 0 });
     cell.minutes += e.minutes;
@@ -1027,9 +1065,14 @@ export async function readWeek(tx: Tx, caller: Caller, monday: string): Promise<
   const weekDays: WeekDay[] = days.map((d) => ({ date: d.date, status: d.status, required: d.required, minutes: d.minutes }));
   const { status, label } = weekStatus(weekDays);
   const submittable = submittableDays(weekDays, caller.today);
-  // Tasks first, then work orders; each by its path, then its number.
+  // Projects' own time and tasks first, then work orders; each by its path, the project's own row first, then by number.
+  const rank: Record<RowKind, number> = { project: 0, task: 0, work_order: 1 };
   const ordered = [...rows.values()].sort(
-    (a, b) => (a.kind === b.kind ? 0 : a.kind === 'task' ? -1 : 1) || a.path.localeCompare(b.path) || a.code.localeCompare(b.code, undefined, { numeric: true }),
+    (a, b) =>
+      rank[a.kind] - rank[b.kind] ||
+      a.path.localeCompare(b.path) ||
+      (a.kind === b.kind ? 0 : a.kind === 'project' ? -1 : 1) ||
+      a.code.localeCompare(b.code, undefined, { numeric: true }),
   );
   return {
     ...base,
@@ -1104,7 +1147,7 @@ export async function submitDays(
   if (opts.dropEmptyRows !== false) await tx.execute(sql`
     delete from timesheet_rows r where r.employee_id = ${employeeId} and r.week_start = ${weekStart}
       and not exists (select 1 from time_entries e where e.employee_id = r.employee_id and e.work_date between ${weekStart} and ${addDays(weekStart, 6)}
-        and (e.task_id = r.task_id or e.work_order_id = r.work_order_id))`);
+        and (e.task_id = r.task_id or e.work_order_id = r.work_order_id or e.project_id = r.project_id))`);
   if (!days.length) return;
   await tx
     .insert(timesheetDays)

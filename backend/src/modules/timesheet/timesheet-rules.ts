@@ -30,6 +30,8 @@ export interface TimesheetSettings {
   /** The reminder before the deadline, in hours (null: off), and the emails after it (CD-154). */
   reminderHours: number | null;
   afterDeadlineEmails: boolean;
+  /** Time on a project without a task (CD-350). */
+  projectTime: boolean;
 }
 
 export const DEFAULT_TIMESHEET_SETTINGS: TimesheetSettings = {
@@ -45,6 +47,7 @@ export const DEFAULT_TIMESHEET_SETTINGS: TimesheetSettings = {
   approvalMode: 'week',
   reminderHours: 2,
   afterDeadlineEmails: true,
+  projectTime: false,
 };
 
 /** A public holiday (CD-153): `minutes` off, or null for the whole standard day. */

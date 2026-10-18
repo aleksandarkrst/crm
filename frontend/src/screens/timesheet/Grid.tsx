@@ -91,7 +91,7 @@ function TimeCell({
     setError(false);
   };
 
-  const title = cell.entries > 1 ? `${cell.entries} entries on this day: change them on the ${row.kind === 'task' ? 'task' : 'work order'} page` : !editable && row.lockedReason ? row.lockedReason : undefined;
+  const title = cell.entries > 1 ? `${cell.entries} entries on this day: change them on the ${row.kind === 'task' ? 'task' : row.kind === 'project' ? 'project' : 'work order'} page` : !editable && row.lockedReason ? row.lockedReason : undefined;
   return (
     <span className={`ts-box${isWeekend(day.date) ? ' ts-weekend' : ''}`}>
       <input
@@ -268,7 +268,8 @@ export function Grid({
   const format = week.settings.timeFormat;
   const wrap = useRef<HTMLDivElement>(null);
   const [note, setNote] = useState<{ key: string; date: string; top: number; left: number } | null>(null);
-  const tasks = week.rows.filter((r) => r.kind === 'task');
+  // Time on the project itself (CD-350) sits with its tasks, first under the project.
+  const tasks = week.rows.filter((r) => r.kind === 'task' || r.kind === 'project');
   const orders = week.rows.filter((r) => r.kind === 'work_order');
   const ordered = [...tasks, ...orders];
   const closeNote = useCallback(() => setNote(null), []);
@@ -316,8 +317,9 @@ export function Grid({
       <div className="ts-row" key={row.key} data-testid="ts-row" data-row={row.id}>
         <span className="ts-label">
           <span className="ts-label-main" title={`${row.code} ${row.name}`}>
-            <Link to={row.kind === 'task' ? paths.task(row.id) : paths.workOrder(row.id)}>
-              {row.code} {row.name}
+            <Link to={row.kind === 'task' ? paths.task(row.id) : row.kind === 'project' ? paths.project(row.id) : paths.workOrder(row.id)}>
+              {/* The project's own row (CD-350): its name, then "no task". */}
+              {row.kind === 'project' ? `${row.path.split(' › ').pop()} · no task` : `${row.code} ${row.name}`}
             </Link>
           </span>
           <span className={`ts-label-sub${sub.over ? ' over' : ''}`} data-testid="ts-row-sub">
@@ -402,7 +404,7 @@ export function Grid({
             Total
           </span>
         </div>
-        {tasks.length > 0 && group('Project tasks')}
+        {tasks.length > 0 && group('Projects')}
         {tasks.map((row, i) => rowEl(row, i))}
         {orders.length > 0 && group('Work orders')}
         {orders.map((row, i) => rowEl(row, tasks.length + i))}

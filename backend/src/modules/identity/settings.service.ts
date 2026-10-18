@@ -52,6 +52,7 @@ const workspaceColumns = {
   tsApprovalMode: tenants.timesheetApprovalMode,
   tsReminderHours: tenants.timesheetReminderHours,
   tsAfterDeadlineEmails: tenants.timesheetAfterDeadlineEmails,
+  tsProjectTime: tenants.timesheetProjectTime,
 };
 type TermColumns = { projectTerm: string; projectTermPlural: string; taskTerm: string; taskTermPlural: string };
 type CompanyColumns = { coLegalName: string | null; coAddress: string | null; coPib: string | null; coMb: string | null; coPlace: string | null; coSignatoryName: string | null; coSignatoryTitle: string | null; coLegalBasis: string };
@@ -69,6 +70,7 @@ type TimesheetColumns = {
   tsApprovalMode: 'week' | 'day';
   tsReminderHours: number | null;
   tsAfterDeadlineEmails: boolean;
+  tsProjectTime: boolean;
 };
 
 /** The row as the API returns it: the four names as `terms` (CD-143), the timesheet settings as `timesheet` (CD-153). */
@@ -80,7 +82,7 @@ function companyPatch(c: CompanyInput | undefined) {
 }
 
 function present<T extends TermColumns & TimesheetColumns & CompanyColumns>(r: T) {
-  const { coLegalName, coAddress, coPib, coMb, coPlace, coSignatoryName, coSignatoryTitle, coLegalBasis, projectTerm, projectTermPlural, taskTerm, taskTermPlural, tsDayMinutes, tsDayStart, tsDayEnd, tsWorkingDays, tsTimeFormat, tsMaxDayHours, tsDeadlineWeekday, tsDeadlineTime, tsDeadlineWeek, tsAutoSubmit, tsApprovalMode, tsReminderHours, tsAfterDeadlineEmails, ...row } = r;
+  const { coLegalName, coAddress, coPib, coMb, coPlace, coSignatoryName, coSignatoryTitle, coLegalBasis, projectTerm, projectTermPlural, taskTerm, taskTermPlural, tsDayMinutes, tsDayStart, tsDayEnd, tsWorkingDays, tsTimeFormat, tsMaxDayHours, tsDeadlineWeekday, tsDeadlineTime, tsDeadlineWeek, tsAutoSubmit, tsApprovalMode, tsReminderHours, tsAfterDeadlineEmails, tsProjectTime, ...row } = r;
   return {
     ...row,
     company: { legalName: coLegalName, address: coAddress, pib: coPib, mb: coMb, place: coPlace, signatoryName: coSignatoryName, signatoryTitle: coSignatoryTitle, legalBasis: coLegalBasis },
@@ -99,6 +101,7 @@ function present<T extends TermColumns & TimesheetColumns & CompanyColumns>(r: T
       approvalMode: tsApprovalMode,
       reminderHours: tsReminderHours,
       afterDeadlineEmails: tsAfterDeadlineEmails,
+      projectTime: tsProjectTime,
     } satisfies Required<TimesheetSettingsInput>,
   };
 }
@@ -120,6 +123,7 @@ function timesheetPatch(t: TimesheetSettingsInput | undefined, before: Timesheet
     timesheetApprovalMode: t.approvalMode,
     timesheetReminderHours: t.reminderHours,
     timesheetAfterDeadlineEmails: t.afterDeadlineEmails,
+    timesheetProjectTime: t.projectTime,
     ...(t.autoSubmit === true && !before?.tsAutoSubmit ? { timesheetAutoSubmitSince: new Date() } : {}),
     ...(t.autoSubmit === false ? { timesheetAutoSubmitSince: null } : {}),
   };

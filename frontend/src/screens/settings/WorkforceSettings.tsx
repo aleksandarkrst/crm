@@ -236,6 +236,13 @@ export function ApprovalsTab() {
           </span>
           <Switch on={t.autoSubmit} onClick={() => save({ autoSubmit: !t.autoSubmit })} label="Auto submit at the deadline" />
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 0 0', borderTop: '1px solid var(--divider)' }} data-setting="project-time">
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>Time on a project without a task</span>
+            <span style={{ fontSize: 13, color: 'var(--text-2)' }}>People on a project's team, and its lead, can log hours on the project itself. In the Timesheet's Add row the task becomes optional.</span>
+          </span>
+          <Switch on={!!t.projectTime} onClick={() => save({ projectTime: !t.projectTime })} label="Time on a project without a task" />
+        </div>
       </div>
       <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="reminders-card">
         <span className="card-title">Reminders</span>
