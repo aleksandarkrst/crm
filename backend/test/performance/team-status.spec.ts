@@ -25,6 +25,16 @@ beforeAll(async () => {
      select $1, 'Person', 'No ' || g, '2024-01-01', ($2::uuid[])[1 + (g - 1) / 25] from generate_series(1, 500) g`,
     [tenant, teams],
   );
+  // The app lists only members, people with a pending invitation and people who left (CD-226,
+  // CD-336), Today's status included: each generated person gets a pending invitation, as
+  // showInApp in test/integration/people-helpers.ts does for one.
+  await asTenantSql(
+    tenant,
+    `insert into invitations (tenant_id, email, role, token_hash, expires_at, employee_id)
+     select $1, 'shown-' || id || '@example.test', 'member', encode(sha256(('shown-' || id)::bytea), 'hex'), now() + interval '7 days', id
+     from employees where tenant_id = $1 and first_name = 'Person'`,
+    [tenant],
+  );
   await asTenantSql(
     tenant,
     `with e as (select id, unit_id, row_number() over (partition by unit_id order by last_name) as n from employees where tenant_id = $1 and first_name = 'Person')
@@ -62,11 +72,16 @@ const timed = async (path: string) => {
 };
 
 describe("Today's status performance (spec 13)", () => {
-  it('answers for 500 employees in under 1 second', async () => {
-    await timed('/timesheet/status'); // warm up
-    const { status, ms, rows } = await timed('/timesheet/status');
+  it('lists the 500 generated people', async () => {
+    const { status, rows } = await timed('/timesheet/status');
     expect(status).toBe(200);
     expect(rows).toBeGreaterThanOrEqual(500);
+  });
+
+  it('answers for 500 employees in under 1 second', async () => {
+    await timed('/timesheet/status'); // warm up
+    const { status, ms } = await timed('/timesheet/status');
+    expect(status).toBe(200);
     expect(ms).toBeLessThan(1_000);
   });
 });
