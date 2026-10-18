@@ -89,7 +89,8 @@ describe('who can open it (spec 12.1, 12.3)', () => {
     const leaving = await addEmployee(owner, tenant, { firstName: 'Lena', lastName: 'Leaving', employmentStartDate: START, managerId: mgrId });
     await asTenantSql(tenant, `update employees set employment_end_date = $1 where id = $2`, [addDays(today, 5), leaving]);
     expect(await row(mgr, soon)).toMatchObject({ status: 'not_employed', detail: expect.stringMatching(/^Starts /) });
-    expect(await row(mgr, soon, addDays(today, 20))).toMatchObject({ status: 'working' });
+    // A working day after the start: the Monday three weeks ahead (20 days from a Sunday is a Saturday).
+    expect(await row(mgr, soon, addDays(monday, 21))).toMatchObject({ status: 'working' });
     expect(await row(mgr, leaving, addDays(today, 10))).toMatchObject({ status: 'not_employed' });
     expect(await row(owner, leaving, addDays(today, 10))).toMatchObject({ status: 'not_employed' });
     // Not anyone's report: Admins only.

@@ -171,7 +171,7 @@ describe('the team calendar (spec 9.5, AC 9.6.6)', () => {
 
 describe('an absent manager and the reminders (spec 9.1, 15.2)', () => {
   it('while the manager is away the request goes to the Admins, who get the daily notice once', async () => {
-    const day = plus(20);
+    const { date: day } = weekdayAfter(20); // a one-day vacation needs a working day (20 days from a Sunday is a Saturday)
     await ok('POST', '/timeoff/requests', { ...as(owner), body: { employeeId: id.mgr, type: 'vacation', startDate: day, endDate: day, record: { reason: 'Away' } } });
     const r = await submit(other, { type: 'unpaid_leave', startDate: d('11-01'), endDate: d('11-02') });
     expect(r.approver.kind).toBe('admins');
