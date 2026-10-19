@@ -55,7 +55,7 @@ describe('funnels and stages', () => {
     assert.ok(await eventually(async () => (await funnelNow()).label === 'Mid-market'), 'rename saved');
   });
 
-  step('adds a deal to the third funnel with the New deal dialog', async () => {
+  step('adds an opportunity to the third funnel with the New opportunity dialog', async () => {
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await createNew(page, 'deal');
     await clickButton(page, 'Mid-market');
@@ -69,16 +69,16 @@ describe('funnels and stages', () => {
     assert.equal(deal.stageId, funnel.stages[0].id);
   });
 
-  step('the Pipeline and Overview show the third funnel and its deal', async () => {
+  step('the Pipeline and Overview show the third funnel and its opportunity', async () => {
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     assert.ok(await pickOption('Mid-market'), 'funnel switcher lists it');
     await page.waitForFunction(() => document.body.innerText.includes('Umbrella Corp'));
     await page.goto(BASE_URL + '/overview', { waitUntil: 'networkidle0' });
     assert.ok(await pickOption('Mid-market'), 'audience filter lists it');
-    await page.waitForFunction(() => /1 deal in view/.test(document.body.innerText));
+    await page.waitForFunction(() => /1 opportunity in view/.test(document.body.innerText));
   });
 
-  step('adds a stage, then removes a stage with the deal in it (the deal moves)', async () => {
+  step('adds a stage, then removes a stage with the opportunity in it (the opportunity moves)', async () => {
     // Move the deal to Discovery through the API, then remove Discovery in the builder.
     await api(page, `/crm/deals/${dealId}/move`, { method: 'POST', body: JSON.stringify({ stageId: funnel.stages[1].id }) });
     await page.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });
@@ -99,9 +99,9 @@ describe('funnels and stages', () => {
       const row = input.closest('[data-testid=funnel-stage]');
       row.querySelector('button[aria-label="Remove stage"]').click();
     });
-    await page.waitForFunction(() => [...document.querySelectorAll('label')].some((l) => l.textContent.includes('Move its 1 deal to')));
+    await page.waitForFunction(() => [...document.querySelectorAll('label')].some((l) => l.textContent.includes('Move its 1 opportunity to')));
     await page.evaluate(() => {
-      const label = [...document.querySelectorAll('label')].find((l) => l.textContent.includes('Move its 1 deal to'));
+      const label = [...document.querySelectorAll('label')].find((l) => l.textContent.includes('Move its 1 opportunity to'));
       label.querySelector('select').setAttribute('data-e2e', 'move-to');
     });
     await setValue(page, 'select[data-e2e=move-to]', funnel.stages[2].id);
@@ -116,7 +116,7 @@ describe('funnels and stages', () => {
       ['New deal', 'Proposal', 'New stage', 'Won'],
     );
     const deal = await api(page, '/crm/deals/' + dealId);
-    assert.equal(deal.stageId, funnel.stages[2].id, 'deal moved to Proposal');
+    assert.equal(deal.stageId, funnel.stages[2].id, 'opportunity moved to Proposal');
     const history = await api(page, '/crm/deal-stage-history?dealId=' + dealId);
     assert.deepEqual(
       history.at(-1) && [history.at(-1).kind, history.at(-1).fromStageId, history.at(-1).toStageId],
@@ -125,7 +125,7 @@ describe('funnels and stages', () => {
     assert.ok(!(await text(page)).includes('not supported yet'));
   });
 
-  step('the deal screen shows the move on its timeline', async () => {
+  step('the opportunity screen shows the move on its timeline', async () => {
     await page.goto(BASE_URL + '/deals/' + dealId, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.body.innerText.includes('The stage Discovery was deleted.'));
     assert.match(await text(page), /Moved to Proposal/);

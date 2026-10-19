@@ -166,8 +166,8 @@ export function CommandPalette() {
             ref={input}
             data-testid="palette-input"
             type="search"
-            placeholder="Search deals, companies, contacts, people and actions…"
-            aria-label="Search deals, companies, contacts, people and actions"
+            placeholder="Search opportunities, companies, contacts, people and actions…"
+            aria-label="Search opportunities, companies, contacts, people and actions"
             role="combobox"
             aria-expanded
             aria-controls="palette-results"

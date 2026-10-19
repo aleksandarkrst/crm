@@ -54,7 +54,7 @@ describe('calendar performance', () => {
     await newUserWithWorkspace(page, { label: 'calendar-perf', name: 'Pia Performance', workspace: 'Busy Co' });
     companyId = (await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: `Busy Customer ${RUN}` }) })).id;
     const funnels = await api(page, '/crm/funnels');
-    dealId = (await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Busy deal', funnelId: funnels[0].id, companyId }) })).id;
+    dealId = (await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Busy opportunity', funnelId: funnels[0].id, companyId }) })).id;
     await seed(0, COUNT, 'Load');
     const { meetings, more } = await api(page, `/crm/meetings?companyId=${companyId}&limit=1000`);
     assert.equal(meetings.length, COUNT);

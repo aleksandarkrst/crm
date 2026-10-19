@@ -87,7 +87,7 @@ export const MODULES: ModuleDef[] = [
   {
     id: 'crm',
     name: 'CRM',
-    description: 'Pipeline, deals, contacts',
+    description: 'Pipeline, opportunities, contacts',
     icon: 'crm',
     to: paths.pipeline,
     screens: ['/overview', '/pipeline', '/today', '/calendar', '/meetings', '/visit-plans', '/companies', '/contacts', '/products', '/deals', '/reports'],

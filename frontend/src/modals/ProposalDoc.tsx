@@ -52,7 +52,7 @@ export function ProposalDoc() {
   const eyebrow = { fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: '#475750' };
 
   // Discovery notes saved on the deal. Anything not captured yet shows as a bracketed gap to fill in.
-  const gap = (what: string) => `[${what} — add it under Discovery on the deal]`;
+  const gap = (what: string) => `[${what} — add it under Discovery on the opportunity]`;
   const headline = lead.headline || lead.title || lead.company;
   const callDate = lead.discoveryDate ? new Date(lead.discoveryDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : gap('call date');
   const need = lead.need.trim() ? lead.need.trim().replace(/([^.!?])$/, '$1.') : gap('need') + '.';
@@ -157,7 +157,7 @@ export function ProposalDoc() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <span style={eyebrow}>05 — Billing schedule</span>
-              {billing.length === 0 && <span style={{ fontSize: 14, color: '#475750' }}>Billing is set once products and services are added to the deal.</span>}
+              {billing.length === 0 && <span style={{ fontSize: 14, color: '#475750' }}>Billing is set once products and services are added to the opportunity.</span>}
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {billing.map((b, i) => (
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '120px minmax(0,1fr) auto', gap: 18, alignItems: 'baseline', padding: '11px 0', borderBottom: '1px solid #EBF0ED' }}>

@@ -12,7 +12,7 @@ describe('failed saves', () => {
   let companyId;
   let failDealPatches = false;
 
-  step('sets up a deal and makes saving the deal fail', async () => {
+  step('sets up an opportunity and makes saving the opportunity fail', async () => {
     page = await browser.person('fiona');
     await newUserWithWorkspace(page, { label: 'fiona', name: 'Fiona Fail', workspace: 'Failing Co' });
     dealId = await createDealInUi(page, { company: 'Sturdy d.o.o.', contact: 'Petar Petrović' });
@@ -52,7 +52,7 @@ describe('failed saves', () => {
     assert.notEqual(title, 'Renamed but not saved');
 
     // The message names the change that failed, why, and that it was reset.
-    assert.match(toast, /Not saved: the deal title/);
+    assert.match(toast, /Not saved: the opportunity title/);
     assert.match(toast, /Simulated failure/);
     assert.match(toast, /reset to the saved value/);
   });

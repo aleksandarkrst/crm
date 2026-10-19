@@ -266,12 +266,12 @@ function StepTask({ m, st, task, editable, busy, onCreate }: { m: ApiMeeting; st
   if (st.taskId && m.dealId)
     return (
       <Link to={paths.lead(m.dealId)} className="minutes-task-link" data-testid="step-task-link">
-        {task?.done ? 'Task done' : 'Task on the deal'} ›
+        {task?.done ? 'Task done' : 'Task on the opportunity'} ›
       </Link>
     );
   if (!editable || !m.dealId) return null;
   return (
-    <button type="button" className="btn-plain" data-testid="step-create-task" disabled={busy || !st.text.trim()} title={st.text.trim() ? 'Add this step as a task on the deal' : 'Write the step first'} onClick={onCreate}>
+    <button type="button" className="btn-plain" data-testid="step-create-task" disabled={busy || !st.text.trim()} title={st.text.trim() ? 'Add this step as a task on the opportunity' : 'Write the step first'} onClick={onCreate}>
       {busy ? 'Creating' : 'Create task'}
     </button>
   );

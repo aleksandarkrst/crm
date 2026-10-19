@@ -26,12 +26,12 @@ describe('first-run onboarding', () => {
 
   step('each main screen has an empty state with the action that fills it', async () => {
     const screens = [
-      ['/pipeline', 'No deals yet', 'New deal'],
+      ['/pipeline', 'No opportunities yet', 'New opportunity'],
       ['/companies', 'No companies yet', 'Add company'],
       ['/contacts', 'No contacts yet', 'New contact'],
       ['/products', 'No products or services yet', 'New product'],
-      ['/today', 'Nothing to do yet', 'New deal'],
-      ['/overview', 'Nothing to measure yet', 'New deal'],
+      ['/today', 'Nothing to do yet', 'New opportunity'],
+      ['/overview', 'Nothing to measure yet', 'New opportunity'],
     ];
     for (const [path, title, action] of screens) {
       await page.goto(BASE_URL + path, { waitUntil: 'networkidle0' });
@@ -64,7 +64,7 @@ describe('first-run onboarding', () => {
   step('real work ticks the checklist, and removing sample data keeps it', async () => {
     await waitForToastToClear(page);
     const funnels = await api(page, '/crm/funnels');
-    await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'My own deal', funnelId: funnels[0].id }) });
+    await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'My own opportunity', funnelId: funnels[0].id }) });
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=getting-started] [data-part=deal][data-done=true]');
     assert.deepEqual(await partsDone(), { contact: false, company: false, product: false, deal: true });
@@ -76,8 +76,8 @@ describe('first-run onboarding', () => {
       const d = await api(page, '/crm/deals');
       return d.length === 1 && d;
     });
-    assert.ok(left, 'only the real deal is left');
-    assert.equal(left[0].deal.title, 'My own deal');
+    assert.ok(left, 'only the real opportunity is left');
+    assert.equal(left[0].deal.title, 'My own opportunity');
     assert.equal((await api(page, '/crm/companies')).length, 0);
     assert.equal((await api(page, '/crm/contacts')).length, 0);
   });

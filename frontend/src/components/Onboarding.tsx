@@ -175,7 +175,7 @@ function CreateWorkspace({
               </option>
             ))}
           </select>
-          <span style={hint}>Reports add up deals in this currency. Each deal can have its own.</span>
+          <span style={hint}>Reports add up opportunities in this currency. Each opportunity can have its own.</span>
         </label>
         <label className="form-label">
           Time zone
@@ -223,7 +223,7 @@ function ProfileStep({ me, workspace, progress, onDone }: { me: ApiMe; workspace
     }
   };
   return (
-    <Centered title="About you" sub={`This is how your colleagues in ${workspace} see you on deals, tasks and emails.`}>
+    <Centered title="About you" sub={`This is how your colleagues in ${workspace} see you on opportunities, tasks and emails.`}>
       {progress}
       <form onSubmit={(e) => void submit(e)} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <label className="form-label">

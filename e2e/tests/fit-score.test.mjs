@@ -9,7 +9,7 @@ describe('fit score (CHAMP)', () => {
   let page;
   let dealId;
 
-  step('creates a deal', async () => {
+  step('creates an opportunity', async () => {
     page = await browser.person('champ');
     await newUserWithWorkspace(page, { label: 'champ', workspace: 'Champ Co' });
     dealId = await createDealInUi(page, { company: 'Globex', contact: 'Hank Scorpio' });

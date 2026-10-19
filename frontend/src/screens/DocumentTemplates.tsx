@@ -39,7 +39,7 @@ export function TemplatesTab() {
                 </span>
               </div>
               <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>
-                {t.placeholders.length ? `${t.placeholders.length - unknown.length} merge field${t.placeholders.length - unknown.length === 1 ? '' : 's'} filled from the deal.` : 'No merge fields: generating copies the document as it is.'}
+                {t.placeholders.length ? `${t.placeholders.length - unknown.length} merge field${t.placeholders.length - unknown.length === 1 ? '' : 's'} filled from the opportunity.` : 'No merge fields: generating copies the document as it is.'}
                 {unknown.length > 0 && <span style={{ color: 'var(--danger)' }}> {unknown.length} not recognised, left as written.</span>}
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -68,16 +68,16 @@ export function TemplatesTab() {
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <span style={{ fontSize: 15, fontWeight: 600 }}>Proposal v4</span>
-              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{lead ? 'Built in · a preview in the browser, not saved' : 'Built in · add a deal to preview it'}</span>
+              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{lead ? 'Built in · a preview in the browser, not saved' : 'Built in · add an opportunity to preview it'}</span>
             </div>
             <span className="tag" style={{ padding: '4px 6px', background: '#F2F5F3', color: '#475750' }}>
               built-in
             </span>
           </div>
-          <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>The design's proposal, assembled from the deal's discovery notes and lines. To send a Word file, upload your own template.</div>
+          <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>The design's proposal, assembled from the opportunity's discovery notes and lines. To send a Word file, upload your own template.</div>
           {lead && (
             <button type="button" className="btn-outline" style={{ alignSelf: 'flex-start', marginTop: 'auto' }} onClick={() => openDoc(lead.id)}>
-              Preview with a lead
+              Preview with an opportunity
             </button>
           )}
         </div>
@@ -115,7 +115,7 @@ function PlaceholderReferenceCard() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: '1 1 320px' }}>
           <span style={{ fontSize: 15, fontWeight: 600 }}>Merge fields</span>
           <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>
-            Type them into a Word document in double braces. Amounts come out in the deal's currency; a field the deal has no value for is left empty and named on the document. Deal lines repeat with{' '}
+            Type them into a Word document in double braces. Amounts come out in the opportunity's currency; a field the opportunity has no value for is left empty and named on the document. Opportunity lines repeat with{' '}
             <code>{'{{#lines}} … {{/lines}}'}</code>: put the opening tag in the first cell of a table row and the closing tag in its last cell, and the row repeats once per line.
           </span>
         </div>
@@ -127,7 +127,7 @@ function PlaceholderReferenceCard() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))' }}>
         {[...groups].map(([group, fields]) => (
           <div key={group} style={{ padding: '14px 18px', borderBottom: '1px solid var(--divider-2)', display: 'flex', flexDirection: 'column', gap: 7 }}>
-            <span className="caps-muted">{group === 'Deal lines' ? 'Deal lines · inside {{#lines}}' : group}</span>
+            <span className="caps-muted">{group === 'Deal lines' ? 'Opportunity lines · inside {{#lines}}' : group}</span>
             {fields.map((f) => (
               <div key={f.tag} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 10, fontSize: 12.5, alignItems: 'baseline' }}>
                 <code style={{ overflowWrap: 'anywhere' }}>{`{{${f.tag}}}`}</code>

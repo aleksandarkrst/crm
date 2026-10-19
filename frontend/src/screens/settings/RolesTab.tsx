@@ -2,8 +2,8 @@ import { TEAM_ROLES } from '../../store/seed';
 
 /** What each workspace role may do. Enforced by the API with the workspace role. */
 const ROLE_RULES: { label: string; roles: (typeof TEAM_ROLES)[number][] }[] = [
-  { label: 'View and edit deals, companies, contacts and products', roles: ['Owner', 'Admin', 'Member'] },
-  { label: 'Delete deals, companies, contacts and products', roles: ['Owner', 'Admin'] },
+  { label: 'View and edit opportunities, companies, contacts and products', roles: ['Owner', 'Admin', 'Member'] },
+  { label: 'Delete opportunities, companies, contacts and products', roles: ['Owner', 'Admin'] },
   { label: 'Edit funnels and stages', roles: ['Owner', 'Admin'] },
   { label: 'Define custom fields (everyone fills them in)', roles: ['Owner', 'Admin'] },
   { label: 'See and set sales bonus rules and bonus figures', roles: ['Owner', 'Admin'] },

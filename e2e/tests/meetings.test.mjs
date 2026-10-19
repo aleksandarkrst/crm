@@ -33,7 +33,7 @@ describe('meeting calendar', () => {
     await page.waitForFunction((entry) => document.body.innerText.includes(entry), { timeout: 10_000 }, entry);
   }
 
-  step('sets up a company with a contact and a deal', async () => {
+  step('sets up a company with a contact and an opportunity', async () => {
     page = await browser.person('mia');
     await newUserWithWorkspace(page, { label: 'meetings', name: 'Mia Meetings', workspace: 'Meetings Co' });
     company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: COMPANY, hq: 'Belgrade, Knez Mihailova 1' }) });
@@ -76,7 +76,7 @@ describe('meeting calendar', () => {
 
     await setValue(page, '[data-testid=meeting-company]', company.id);
     await page.waitForFunction((name) => document.querySelector('[data-testid=meeting-title]').value === `Meeting with ${name}`, {}, COMPANY);
-    assert.equal(await page.$eval('[data-testid=meeting-deal]', (el) => el.value), deal.id, 'the company’s only open deal');
+    assert.equal(await page.$eval('[data-testid=meeting-deal]', (el) => el.value), deal.id, 'the company’s only open opportunity');
     assert.equal(await page.$eval('[data-testid=meeting-type]', (el) => el.dataset.value), 'visit');
     assert.equal(await page.$eval('[data-testid=meeting-location]', (el) => el.value), 'Belgrade, Knez Mihailova 1', 'a visit is at the HQ');
     // Picking the deal invites its primary contact (CD-221); this test wants a visit without one.
@@ -141,7 +141,7 @@ describe('meeting calendar', () => {
     assert.equal(new URL(page.url()).searchParams.get('date'), DAY.slice(0, 8) + '01');
   });
 
-  step('the deal timeline says the meeting was scheduled', async () => {
+  step('the opportunity timeline says the meeting was scheduled', async () => {
     await timelineHas(`Meeting scheduled · Meeting with ${COMPANY}`);
   });
 
@@ -155,7 +155,7 @@ describe('meeting calendar', () => {
     assert.equal(await statusOf(), 'Planned');
     assert.equal(await page.$eval('[data-testid=meeting-held]', (el) => el.disabled), true);
     const picked = (selector) => page.$eval(selector, (el) => el.selectedOptions[0]?.textContent ?? '');
-    assert.equal(await picked('[data-testid=meeting-field-deal]'), 'Acme showroom lights', 'the deal is shown');
+    assert.equal(await picked('[data-testid=meeting-field-deal]'), 'Acme showroom lights', 'the opportunity is shown');
     assert.equal(await picked('[data-testid=meeting-field-organizer]'), 'Mia Meetings', 'the organizer is shown');
   });
 
@@ -166,7 +166,7 @@ describe('meeting calendar', () => {
     await page.waitForFunction(() => document.querySelector('[data-testid=meeting-title-input]')?.value === 'Showroom walkthrough');
   });
 
-  step('marks it held once it has started; the deal timeline says so', async () => {
+  step('marks it held once it has started; the opportunity timeline says so', async () => {
     const start = new Date(Date.now() - 3 * 3_600_000);
     const end = new Date(Date.now() - 2 * 3_600_000);
     await api(page, `/crm/meetings/${meetingId}`, { method: 'PATCH', body: JSON.stringify({ startsAt: start.toISOString(), endsAt: end.toISOString() }) });
@@ -247,12 +247,12 @@ describe('meeting calendar', () => {
     assert.equal(await page.$eval('[data-testid=filter-company]', (el) => el.value), company.id);
   });
 
-  step('without a planned meeting to come, the deal has no next step', async () => {
+  step('without a planned meeting to come, the opportunity has no next step', async () => {
     await page.goto(`${BASE_URL}/pipeline`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=no-next-step]');
   });
 
-  step("the deal's Composer schedules a real meeting", async () => {
+  step("the opportunity's Composer schedules a real meeting", async () => {
     await page.goto(`${BASE_URL}/deals/${deal.id}`, { waitUntil: 'networkidle0' });
     await click(page, '.composer-tab::-p-text(Meeting)');
     await page.waitForSelector('.lead-main [data-testid=meeting-form]');
@@ -268,19 +268,19 @@ describe('meeting calendar', () => {
     assert.equal(await page.$eval('.lead-main [data-testid=meeting-save]', (el) => el.innerText.trim()), 'Schedule meeting');
     await click(page, '.lead-main [data-testid=meeting-save]');
     const created = await eventually(async () => (await dealMeetings()).find((m) => m.id !== meetingId));
-    assert.ok(created, 'a second meeting on the deal');
+    assert.ok(created, 'a second meeting on the opportunity');
     assert.equal(created.participants.filter((p) => p.kind === 'external').map((p) => p.contactId).join(), contact.id);
     await page.waitForFunction((id) => !!document.querySelector(`[data-testid=meetings-card] [data-meeting-id="${id}"]`), { timeout: 10_000 }, created.id);
     // A second "Meeting scheduled" on the timeline.
     await page.waitForFunction(() => document.body.innerText.split('Meeting scheduled · ').length > 2, { timeout: 10_000 });
   });
 
-  step('a deal with a planned meeting to come has a next step', async () => {
+  step('an opportunity with a planned meeting to come has a next step', async () => {
     await page.goto(`${BASE_URL}/pipeline`, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => !document.querySelector('[data-testid=no-next-step]'), { timeout: 10_000 });
   });
 
-  step('a meeting needs a deal: a company without one gets "+ New deal", which is picked after creating it', async () => {
+  step('a meeting needs an opportunity: a company without one gets "+ New opportunity", which is picked after creating it', async () => {
     const other = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: `Nodeal Works ${RUN}` }) });
     const start = new Date(Math.ceil((Date.now() + 9 * 86_400_000) / 3_600_000) * 3_600_000).toISOString();
     const openNew = async () => {
@@ -288,11 +288,11 @@ describe('meeting calendar', () => {
       await page.waitForSelector('[data-testid=new-meeting] [data-testid=meeting-form]');
     };
     await openNew();
-    assert.match(await page.$eval('[data-testid=meeting-no-deals]', (el) => el.innerText), /This company has no deals yet/);
+    assert.match(await page.$eval('[data-testid=meeting-no-deals]', (el) => el.innerText), /This company has no opportunities yet/);
     // Saving is blocked until there is a deal.
     await click(page, '[data-testid=meeting-save]');
     await page.waitForSelector('[data-testid=meeting-errors]');
-    assert.match(await page.$eval('[data-testid=meeting-errors]', (el) => el.innerText), /no deals yet/);
+    assert.match(await page.$eval('[data-testid=meeting-errors]', (el) => el.innerText), /no opportunities yet/);
     assert.ok(await page.$('[data-testid=new-meeting] [data-testid=meeting-form]'), 'still open');
     assert.deepEqual((await api(page, `/crm/meetings?companyId=${other.id}`)).meetings, []);
 
@@ -304,7 +304,7 @@ describe('meeting calendar', () => {
     await click(page, '[data-testid=new-deal-create]');
     await page.waitForFunction(() => !document.querySelector('[data-testid=new-deal-create]'), { timeout: 10_000 });
     const made = await eventually(async () => (await api(page, '/crm/deals')).find((r) => r.deal.companyId === other.id)?.deal);
-    assert.ok(made, 'the deal was created');
+    assert.ok(made, 'the opportunity was created');
     await page.waitForFunction((id) => document.querySelector('[data-testid=meeting-deal]')?.value === id, { timeout: 10_000 }, made.id);
     assert.equal(new URL(page.url()).pathname, '/meetings/new', 'stays on the meeting');
     await click(page, '[data-testid=meeting-save]');
@@ -315,16 +315,16 @@ describe('meeting calendar', () => {
 
     // With two open deals nothing is picked for you: saving asks for one.
     const funnels = await api(page, '/crm/funnels');
-    const second = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Nodeal second deal', funnelId: funnels[0].id, companyId: other.id }) });
+    const second = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Nodeal second opportunity', funnelId: funnels[0].id, companyId: other.id }) });
     await openNew();
     assert.equal(await page.$eval('[data-testid=meeting-deal]', (el) => el.value), '');
     await click(page, '[data-testid=meeting-save]');
     await page.waitForSelector('[data-testid=meeting-errors]');
-    assert.match(await page.$eval('[data-testid=meeting-errors]', (el) => el.innerText), /Pick the deal this meeting is for/);
+    assert.match(await page.$eval('[data-testid=meeting-errors]', (el) => el.innerText), /Pick the opportunity this meeting is for/);
     await setValue(page, '[data-testid=meeting-deal]', second.id);
     await click(page, '[data-testid=meeting-save]');
     await page.waitForFunction(() => !document.querySelector('[data-testid=meeting-form]'), { timeout: 10_000 });
-    assert.ok(await eventually(async () => (await api(page, `/crm/meetings?dealId=${second.id}`)).meetings.length === 1), 'saved on the picked deal');
+    assert.ok(await eventually(async () => (await api(page, `/crm/meetings?dealId=${second.id}`)).meetings.length === 1), 'saved on the picked opportunity');
   });
 
   step('on a phone: Day by default, Week as a list, nothing scrolls sideways', async () => {

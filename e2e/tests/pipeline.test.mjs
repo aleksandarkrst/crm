@@ -49,7 +49,7 @@ describe('pipeline journey', () => {
     assert.equal(Number(saved.unitPrice), 9000);
   });
 
-  step('creates a deal with a new company and contact', async () => {
+  step('creates an opportunity with a new company and contact', async () => {
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     dealId = await createDealInUi(page, { company: 'Northwind d.o.o.', contact: 'Ana Marković' });
     await page.waitForFunction(() => document.body.innerText.includes('Deal created'));
@@ -88,7 +88,7 @@ describe('pipeline journey', () => {
     assert.ok(note, 'note saved as an activity');
   });
 
-  step('moves the deal to the next stage by drag and drop', async () => {
+  step('moves the opportunity to the next stage by drag and drop', async () => {
     const funnels = await api(page, '/crm/funnels');
     const deal = await api(page, '/crm/deals/' + dealId);
     const funnel = funnels.find((f) => f.id === deal.funnelId);
@@ -109,7 +109,7 @@ describe('pipeline journey', () => {
     }, next.name);
     assert.equal(result, 'ok');
     const moved = await eventually(async () => (await api(page, '/crm/deals/' + dealId)).stageId === next.id);
-    assert.ok(moved, `deal moved to "${next.name}"`);
+    assert.ok(moved, `opportunity moved to "${next.name}"`);
   });
 
   step('shows everything again after a reload', async () => {

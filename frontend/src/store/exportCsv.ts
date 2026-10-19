@@ -31,8 +31,8 @@ export function dealsCsv(s: State, leads: Lead[]): string {
   const stages = new Map<string, { stage: string; funnel: string }>();
   for (const f of Object.values(s.funnels) as Funnel[]) for (const st of f.stages) stages.set(st.id, { stage: st.name, funnel: f.label });
   return toCsv(leads, [
-    { header: 'Deal ID', value: (l) => l.id },
-    { header: 'Deal', value: (l) => l.title || l.company },
+    { header: 'Opportunity ID', value: (l) => l.id },
+    { header: 'Opportunity', value: (l) => l.title || l.company },
     { header: 'Company ID', value: (l) => l.companyId ?? '' },
     { header: 'Company', value: (l) => clean(l.company) },
     { header: 'Contact', value: (l) => clean(l.contact) },

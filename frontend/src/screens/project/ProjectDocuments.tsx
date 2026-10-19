@@ -213,12 +213,12 @@ export function ProjectDocuments({
                     <span className="pt-main" style={{ fontWeight: 600 }}>
                       {d.name}
                     </span>
-                    <span className="pt-sub">From the deal · {d.docType}</span>
+                    <span className="pt-sub">From the opportunity · {d.docType}</span>
                   </span>
                 </button>
                 <span style={{ color: 'var(--text-2)' }}>Contract</span>
                 <span className="pt-main" style={{ color: 'var(--text-2)' }}>
-                  Deal · {dealTitle}
+                  Opportunity · {dealTitle}
                 </span>
                 <span className="pt-main" style={{ color: 'var(--text-2)' }}>
                   {d.createdByName ?? '—'}

@@ -85,7 +85,7 @@ export const CHAMP = [
 export const CHAMP_LEVELS = [{ label: 'None', v: 0 }, { label: 'Weak', v: 8 }, { label: 'Partial', v: 17 }, { label: 'Strong', v: 25 }];
 
 /** Pipeline board views: lost deals are hidden by default. */
-export const LOST_VIEWS = ['Open & won deals', 'Include lost deals', 'Lost deals only'] as const;
+export const LOST_VIEWS = ['Open & won', 'Include lost', 'Lost only'] as const;
 export const DEFAULT_FILTERS: Filters = { audience: 'Audience', owner: 'Salesperson', dates: 'Any closing date', source: 'Source', stage: 'Stage', industry: 'Industry', stalled: 'Status', band: 'Value', lost: LOST_VIEWS[0] };
 
 export function initialState(): State {

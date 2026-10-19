@@ -28,7 +28,7 @@ describe('tasks: overdue, editing and channels', () => {
   let deal;
   let task;
 
-  step('sets up a deal with a task that was due three days ago', async () => {
+  step('sets up an opportunity with a task that was due three days ago', async () => {
     page = await browser.person('tara');
     await newUserWithWorkspace(page, { label: 'tasks', name: 'Tara Tester', workspace: 'Tasks Co' });
     const funnels = await api(page, '/crm/funnels');
@@ -50,7 +50,7 @@ describe('tasks: overdue, editing and channels', () => {
     assert.ok(!todayGroup.includes('Chase the signed NDA'), 'not also under Today');
   });
 
-  step('the deal screen highlights the overdue task', async () => {
+  step('the opportunity screen highlights the overdue task', async () => {
     await page.goto(BASE_URL + '/deals/' + deal.id, { waitUntil: 'networkidle0' });
     await page.waitForSelector(`[data-lead-task="${task.id}"][data-overdue]`);
     assert.match(await page.$eval(`[data-lead-task="${task.id}"]`, (el) => el.innerText), /Overdue · due/);
@@ -99,7 +99,7 @@ describe('workspace currency, fiscal year and counters', () => {
   let page;
   let smb;
 
-  step('a workspace in USD with one deal', async () => {
+  step('a workspace in USD with one opportunity', async () => {
     page = await browser.person('uma');
     await newUserWithWorkspace(page, { label: 'usd', name: 'Uma Tester', workspace: 'Dollar Co' });
     await api(page, '/workspace', { method: 'PATCH', body: JSON.stringify({ currency: 'USD', fiscalYearStartMonth: 4 }) });
@@ -108,9 +108,9 @@ describe('workspace currency, fiscal year and counters', () => {
     assert.equal(deal.currency, 'USD');
   });
 
-  step('Pipeline says "1 lead" and totals in dollars', async () => {
+  step('Pipeline says "1 opportunity" and totals in dollars', async () => {
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
-    await page.waitForFunction(() => document.body.innerText.includes('1 lead · $12,000 open'));
+    await page.waitForFunction(() => document.body.innerText.includes('1 opportunity · $12,000 open'));
     assert.ok(!(await text(page)).includes('€'), 'no euro sign anywhere on the board');
   });
 
@@ -135,7 +135,7 @@ describe('workspace currency, fiscal year and counters', () => {
     const labels = await page.evaluate(() => [...document.querySelectorAll('option')].map((o) => o.textContent));
     assert.ok(labels.includes('Closing this fiscal year') && labels.includes('Closing this fiscal quarter'), 'fiscal labels shown');
     assert.ok(await pickOption(page, 'Closing this year'), 'date filter found');
-    await page.waitForFunction(() => document.body.innerText.includes('1 deal in view · closing this fiscal year'));
+    await page.waitForFunction(() => document.body.innerText.includes('1 opportunity in view · closing this fiscal year'));
   });
 
   it('throws no uncaught errors in the page', () => {

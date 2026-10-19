@@ -36,14 +36,14 @@ export function Products() {
       {s.catalog.length === 0 ? (
         <EmptyState
           title="No products or services yet"
-          text="Your catalog is what you put on deals: products and services with their prices, tax and billing. A deal gives them its currency. Add them one by one, or import a CSV file from the ⋯ menu."
+          text="Your catalog is what you put on opportunities: products and services with their prices, tax and billing. An opportunity gives them its currency. Add them one by one, or import a CSV file from the ⋯ menu."
           action={{ label: 'New product', onClick: () => openProduct(null) }}
         />
       ) : (
         <div className="card" style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 900 }}>
             <div className="table-head" style={{ gridTemplateColumns: COLS }}>
-              {['Name', 'Unit price', 'Unit', 'Price', 'Tax', 'Billing frequency', 'On deals'].map((h) => (
+              {['Name', 'Unit price', 'Unit', 'Price', 'Tax', 'Billing frequency', 'In use'].map((h) => (
                 <span key={h} className="th">
                   {h}
                 </span>
@@ -76,7 +76,7 @@ export function Products() {
                   <span style={{ fontSize: 13, color: 'var(--text-2)' }}>{billingText(c.frequency, c.cycles)}</span>
                   <span
                     className="hover-underline"
-                    title="Show the deals using this"
+                    title="Show the opportunities using this"
                     onClick={(e) => {
                       if (!used.length) return;
                       e.stopPropagation();
@@ -84,7 +84,7 @@ export function Products() {
                     }}
                     style={{ fontSize: 12.5, color: used.length ? 'var(--brand)' : 'var(--muted)', cursor: used.length ? 'pointer' : 'default' }}
                   >
-                    {used.length === 0 ? '—' : used.length === 1 ? '1 deal' : used.length + ' deals'}
+                    {used.length === 0 ? '—' : used.length === 1 ? '1 opportunity' : used.length + ' opportunities'}
                   </span>
                 </div>
               );

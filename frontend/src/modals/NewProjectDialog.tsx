@@ -48,7 +48,7 @@ export function NewProjectDialog() {
     .sort((a, b) => Number(b.outcome === 'won') - Number(a.outcome === 'won') || (a.title || '').localeCompare(b.title || ''));
   const dealName = fromDeal ? fromDeal.title || fromDeal.company : '';
   const blocked = fromDeal && !fromDeal.companyId
-    ? `Add a company to the deal first: ${terms.aProject} always belongs to a company.`
+    ? `Add a company to the opportunity first: ${terms.aProject} always belongs to a company.`
     : !companyId
       ? `Pick the company the ${terms.project} is for.`
       : !name.trim()
@@ -85,8 +85,8 @@ export function NewProjectDialog() {
   return (
     <Modal maxWidth={600} onBackdrop={close}>
       <ModalHeader
-        title={fromDeal ? `New ${terms.project} from deal` : `New ${terms.project}`}
-        sub={fromDeal ? `The company, contact, emails and files from the deal are linked to the ${terms.project}.` : `${terms.AProject} for one of your companies, optionally linked to the deal it came from. Nothing is created until you save.`}
+        title={fromDeal ? `New ${terms.project} from opportunity` : `New ${terms.project}`}
+        sub={fromDeal ? `The company, contact, emails and files from the opportunity are linked to the ${terms.project}.` : `${terms.AProject} for one of your companies, optionally linked to the opportunity it came from. Nothing is created until you save.`}
       />
       {fromDeal ? (
         <div className="hint-box" data-testid="project-deal-summary" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -122,7 +122,7 @@ export function NewProjectDialog() {
             )}
           </label>
           <label className="form-label">
-            Deal
+            Opportunity
             <select
               className="form-input"
               data-testid="project-deal"
@@ -134,7 +134,7 @@ export function NewProjectDialog() {
                 if (d && !name.trim()) setName(d.title || d.company);
               }}
             >
-              <option value="">No deal</option>
+              <option value="">No opportunity</option>
               {companyDeals.map((l) => (
                 <option key={l.id} value={l.id}>
                   {(l.title || l.company) + (l.outcome === 'won' ? '' : ' · Open')}
@@ -198,7 +198,7 @@ export function NewProjectDialog() {
           <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span style={{ fontSize: 13.5, fontWeight: 500 }}>Add starter tasks from the products</span>
             <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
-              {s.dealLines[dealId]?.length === 0 ? 'The deal has no products yet.' : 'A task per product of the deal, at the first stage. Products sold in hours set the estimate.'}
+              {s.dealLines[dealId]?.length === 0 ? 'The opportunity has no products yet.' : 'A task per product of the opportunity, at the first stage. Products sold in hours set the estimate.'}
             </span>
           </span>
         </div>

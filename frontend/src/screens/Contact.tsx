@@ -58,9 +58,9 @@ export function Contact() {
   const onDelete = () => {
     const primaryOf = p.contactId ? s.leads.filter((l) => l.contactId === p.contactId) : [];
     const note = primaryOf.length
-      ? ` ${primaryOf.length === 1 ? 'The deal' : primaryOf.length + ' deals'} where they are the primary contact (${primaryOf.map((l) => l.title || l.company).join(', ')}) will be kept without a primary contact.`
+      ? ` ${primaryOf.length === 1 ? 'The opportunity' : primaryOf.length + ' opportunities'} where they are the primary contact (${primaryOf.map((l) => l.title || l.company).join(', ')}) will be kept without a primary contact.`
       : '';
-    if (window.confirm(`Delete ${p.name}? They are removed from every deal.${note} This can't be undone.`)) void store.deleteContact(p.id);
+    if (window.confirm(`Delete ${p.name}? They are removed from every opportunity.${note} This can't be undone.`)) void store.deleteContact(p.id);
   };
 
   return (
@@ -142,7 +142,7 @@ export function Contact() {
                 <GhostSelect chevron aria-label="Role in the decision" value={p.buyerRole || 'Influencer'} onChange={setField('buyerRole')} options={BUYER_ROLES} />
               </IconRow>
               <IconRow icon="note" label="Notes">
-                <textarea className="ghost" aria-label="Notes" rows={2} value={p.notes ?? ''} onChange={setField('notes')} placeholder="How they influence the deal" style={{ resize: 'vertical', lineHeight: 1.5, flex: 1 }} />
+                <textarea className="ghost" aria-label="Notes" rows={2} value={p.notes ?? ''} onChange={setField('notes')} placeholder="How they influence the opportunity" style={{ resize: 'vertical', lineHeight: 1.5, flex: 1 }} />
               </IconRow>
               <IconRow icon="calendar" label="Last touch">
                 <span className="field-value">{!c ? '—' : c.stall === 0 ? 'Last touch today' : c.stall === 1 ? 'Last touch 1 day ago' : `Last touch ${c.stall} days ago`}</span>

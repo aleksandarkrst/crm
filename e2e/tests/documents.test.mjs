@@ -80,7 +80,7 @@ describe('document templates and generated documents', () => {
     assert.deepEqual(templates.map((t) => t.name), ['E2E proposal']);
   });
 
-  step('generates a proposal on a deal and lists it when the worker is done', async () => {
+  step('generates a proposal on an opportunity and lists it when the worker is done', async () => {
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await createDealInUi(page, { company, contact: 'Petra Proposal' });
     await click(page, 'button.composer-tab::-p-text(Documents)');
@@ -94,7 +94,7 @@ describe('document templates and generated documents', () => {
     await page.waitForFunction(() => document.body.innerText.includes('Document generated'), { timeout: 10_000 });
   });
 
-  step('downloads the generated document with the deal filled in', async () => {
+  step('downloads the generated document with the opportunity filled in', async () => {
     await click(page, `[data-doc="E2E proposal — ${company}"] button::-p-text(Download .docx)`);
     const file = await downloaded(downloads, /^E2E proposal — .*\.docx$/);
     const body = docxText(readFileSync(file));

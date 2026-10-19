@@ -25,7 +25,7 @@ describe('internal minutes', () => {
   const minutes = () => api(mia, `/crm/meetings/${meeting.id}/minutes/internal`);
   const saved = (page) => page.waitForFunction(() => document.querySelector('[data-testid=minutes-save-state]')?.textContent === 'Saved', { timeout: 10_000 });
 
-  step('sets up a held meeting on a deal, and a colleague who is not at it', async () => {
+  step('sets up a held meeting on an opportunity, and a colleague who is not at it', async () => {
     mia = await browser.person('mia');
     await newUserWithWorkspace(mia, { label: 'minutes-mia', name: 'Mia Minutes', workspace: 'Minutes Co' });
     miaId = (await api(mia, '/team')).members.find((m) => m.displayName === 'Mia Minutes').userId;
@@ -93,13 +93,13 @@ describe('internal minutes', () => {
     assert.equal(steps[0].taskId, null);
   });
 
-  step('"Create task" makes a task on the deal, linked from the step, and it shows on Today', async () => {
+  step('"Create task" makes a task on the opportunity, linked from the step, and it shows on Today', async () => {
     await click(mia, '[data-testid=step-create-task]');
     await mia.waitForSelector('[data-testid=step-task-link]', { timeout: 10_000 });
     const { nextSteps } = await minutes();
     assert.ok(nextSteps[0].taskId, 'the step links to its task');
     const task = (await api(mia, `/crm/deal-tasks?dealIds=${deal.id}`)).find((t) => t.id === nextSteps[0].taskId);
-    assert.ok(task, 'the task is on the deal');
+    assert.ok(task, 'the task is on the opportunity');
     assert.equal(task.channel, 'MT');
     assert.equal(task.label, STEP);
     assert.equal(task.assigneeUserId, miaId);

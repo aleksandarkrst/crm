@@ -13,12 +13,12 @@ describe('contact notes and read-only funnels', () => {
     page = await browser.person('sam');
     await newUserWithWorkspace(page, { label: 'fixes', name: 'Sam Owner', workspace: 'Fixes Co' });
     const funnels = await api(page, '/crm/funnels');
-    await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Notes deal', funnelId: funnels[0].id }) });
+    await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Notes opportunity', funnelId: funnels[0].id }) });
     await page.goto(BASE_URL + '/contacts', { waitUntil: 'networkidle0' });
     await createNew(page, 'contact');
     await page.waitForSelector('input[placeholder="e.g. Ana Marković"]');
     await page.type('input[placeholder="e.g. Ana Marković"]', 'Nina Notes');
-    await setValue(page, 'textarea[placeholder="How they influence the deal"]', 'Signs off on budgets over 10k');
+    await setValue(page, 'textarea[placeholder="How they influence the opportunity"]', 'Signs off on budgets over 10k');
     await clickButton(page, 'Add contact');
     const saved = await eventually(async () => (await api(page, '/crm/contacts')).find((c) => c.fullName === 'Nina Notes'));
     assert.ok(saved, 'contact saved');

@@ -20,7 +20,7 @@ import { useStore } from '../store/store';
 const TYPES: { key: ImportType; label: string; sub: string }[] = [
   { key: 'companies', label: 'Companies', sub: 'Duplicates are matched by name' },
   { key: 'contacts', label: 'Contacts', sub: 'Duplicates are matched by email' },
-  { key: 'deals', label: 'Deals', sub: 'Matched to companies, funnels, stages and owners' },
+  { key: 'deals', label: 'Opportunities', sub: 'Matched to companies, funnels, stages and owners' },
   { key: 'products', label: 'Products', sub: 'Duplicates are matched by name' },
 ];
 const STEPS = ['File', 'Columns', 'Preview', 'Done'] as const;

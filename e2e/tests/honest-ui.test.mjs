@@ -52,7 +52,7 @@ describe('honest UI', () => {
     assert.ok(!(await text(page)).includes('MJ'), 'no sample initials');
   });
 
-  step('creates one deal closing soon and one without a closing date', async () => {
+  step('creates one opportunity closing soon and one without a closing date', async () => {
     datedId = await createDealInUi(page, { company: 'Dated d.o.o.', contact: 'Dana Dated' });
     await page.waitForSelector('input[type=date]');
     await setClosingDate(page, isoIn(5));
@@ -61,7 +61,7 @@ describe('honest UI', () => {
     // The second deal through the API (the New deal dialog is covered elsewhere), in the same funnel.
     const { funnelId } = await api(page, '/crm/deals/' + datedId);
     const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Undated d.o.o.' }) });
-    const deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Undated deal', funnelId, companyId: company.id }) });
+    const deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Undated opportunity', funnelId, companyId: company.id }) });
     undatedId = deal.id;
     assert.equal(deal.closeDate, null);
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
@@ -74,24 +74,24 @@ describe('honest UI', () => {
     await page.waitForFunction(() => document.body.innerText.includes('so far)'));
     const body = await text(page);
     for (const fake of ['41%', 'Proposal → won', 'Days to proposal', 'Docs generated', 'Up from 24%', '57h saved', 'nudge sent automatically']) assert.ok(!body.includes(fake), `no "${fake}"`);
-    assert.ok(body.includes('Conversion rates appear once at least 5 deals in view have moved between stages (0 so far)'), 'conversion empty state');
+    assert.ok(body.includes('Conversion rates appear once at least 5 opportunities in view have moved between stages (0 so far)'), 'conversion empty state');
     assert.ok(body.includes('Document counts appear once'), 'documents empty state');
-    assert.match(body, /2 open deals in the current filter/);
-    assert.match(await metaText(page), /^2 deals in view · any closing date$/);
+    assert.match(body, /2 open opportunities in the current filter/);
+    assert.match(await metaText(page), /^2 opportunities in view · any closing date$/);
   });
 
   step('the closing-date filter changes what Overview counts', async () => {
     assert.ok(await pickChip(page, 'Closing in 30 days'), 'date chip found');
-    await page.waitForFunction(() => document.body.innerText.includes('1 deal in view'));
-    assert.match(await metaText(page), /^1 deal in view · closing in 30 days · 1 without a closing date hidden$/);
-    assert.match(await text(page), /1 open deal in the current filter/);
+    await page.waitForFunction(() => document.body.innerText.includes('1 opportunity in view'));
+    assert.match(await metaText(page), /^1 opportunity in view · closing in 30 days · 1 without a closing date hidden$/);
+    assert.match(await text(page), /1 open opportunity in the current filter/);
 
     assert.ok(await pickChip(page, 'Closing date passed'));
-    await page.waitForFunction(() => document.body.innerText.includes('0 deals in view'));
-    assert.match(await text(page), /0 open deals in the current filter/);
+    await page.waitForFunction(() => document.body.innerText.includes('0 opportunities in view'));
+    assert.match(await text(page), /0 open opportunities in the current filter/);
 
     assert.ok(await pickChip(page, 'Any closing date'));
-    await page.waitForFunction(() => document.body.innerText.includes('2 deals in view'));
+    await page.waitForFunction(() => document.body.innerText.includes('2 opportunities in view'));
   });
 
   step('templates and funnels can be created, and nothing is made up', async () => {
@@ -118,7 +118,7 @@ describe('honest UI', () => {
     await clickButton(page, 'Add field');
     await page.waitForSelector('.toast');
     const toast = await page.$eval('.toast', (el) => el.textContent);
-    assert.match(toast, /Renewal date added to deals/);
+    assert.match(toast, /Renewal date added to opportunities/);
     assert.ok(!/session only|not saved/.test(toast), 'no "not saved" note');
     assert.ok((await api(page, '/crm/custom-fields')).some((f) => f.label === 'Renewal date'), 'field saved');
     await waitForToastToClear(page);
@@ -126,7 +126,7 @@ describe('honest UI', () => {
 
   step('marking a proposal as sent does not claim an email or a task', async () => {
     await page.goto(BASE_URL + '/settings/templates', { waitUntil: 'networkidle0' });
-    await clickButton(page, 'Preview with a lead');
+    await clickButton(page, 'Preview with an opportunity');
     await click(page, 'button::-p-text(Mark as sent)');
     await page.waitForSelector('.toast');
     const toast = await page.$eval('.toast', (el) => el.textContent);

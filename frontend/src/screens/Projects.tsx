@@ -156,7 +156,7 @@ export function Projects() {
       {unlinkedWon.length > 0 && (
         <div className="hint-box" data-testid="won-without-project" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
           <span style={{ flex: '1 1 300px' }}>
-            {unlinkedWon.length === 1 ? `1 won deal has no ${t.project} yet: ` : `${unlinkedWon.length} won deals have no ${t.project} yet, for example `}
+            {unlinkedWon.length === 1 ? `1 won opportunity has no ${t.project} yet: ` : `${unlinkedWon.length} won opportunities have no ${t.project} yet, for example `}
             <b style={{ color: 'var(--ink)' }}>
               {unlinkedWon[0]!.company} · {unlinkedWon[0]!.title || unlinkedWon[0]!.company}
             </b>
@@ -255,7 +255,7 @@ export function Projects() {
                         </span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           {p.status === 'open' ? <HealthBadge health={p.health} /> : <ProjectStatusBadge status={p.status} />}
-                          {p.dealLost && <span className="badge badge-danger">Deal lost</span>}
+                          {p.dealLost && <span className="badge badge-danger">Opportunity lost</span>}
                           {tasks && <Progress work={work.get(p.id)} />}
                         </span>
                         {p.monthMinutes > 0 && (

@@ -39,7 +39,7 @@ describe('team and invitations', () => {
       selector,
     );
 
-  step('the owner sets up a workspace with a deal', async () => {
+  step('the owner sets up a workspace with an opportunity', async () => {
     owner = await browser.person('olivia');
     await owner.goto(BASE_URL, { waitUntil: 'networkidle0' });
     await signIn(owner, email('olivia'), 'Olivia Owner');
@@ -81,7 +81,7 @@ describe('team and invitations', () => {
       const list = await api(bob, '/crm/deals?limit=50');
       return list.length === 1 && list;
     });
-    assert.ok(deals, 'sees the one shared deal');
+    assert.ok(deals, 'sees the one shared opportunity');
     assert.equal(deals[0].deal.title, 'Acme rebrand');
     await bob.waitForFunction(() => document.body.innerText.includes('No company'));
     assert.equal((await api(bob, '/me')).tenants.length, 1);

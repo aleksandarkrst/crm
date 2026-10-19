@@ -22,7 +22,7 @@ const TIME_BUCKETS = [
   { label: 'Now', range: [-999, 0.5] },
 ] as const;
 const BONUS_COLS = 'minmax(0,1.6fr) 90px 120px 120px 120px 120px';
-const CONV_COLS = 'minmax(0,1.3fr) minmax(0,1fr) 44px 64px 84px';
+const CONV_COLS = 'minmax(0,1.3fr) minmax(0,1fr) 44px 104px 84px';
 const clip = 'polygon(0 0, 100% 0, calc(100% - 14px) 100%, 14px 100%)';
 const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 const pct = (r: number | null) => (r === null ? '—' : Math.round(r * 100) + '%');
@@ -59,10 +59,10 @@ export function Dashboard() {
   const weighted = moneyTotal(s, openLeads.map((l) => ({ currency: l.currency, amount: (valueNum(l.value) * num(stageOf(s, l).prob)) / 100 })), true);
   const stalled = openLeads.filter((l) => l.stall >= 3);
   const metrics = [
-    { label: 'Open pipeline', value: openValue, note: plural(openLeads.length, 'open deal') + ' in the current filter' },
+    { label: 'Open pipeline', value: openValue, note: plural(openLeads.length, 'open opportunity', 'open opportunities') + ' in the current filter' },
     { label: 'Weighted pipeline', value: weighted, note: "Open value × each stage's win probability" },
-    { label: 'Won', value: wonValue, note: plural(wonLeads.length, 'deal') + ' in the won stage' },
-    { label: 'Stalled', value: String(stalled.length), note: 'Open deals with no contact for 3+ days' },
+    { label: 'Won', value: wonValue, note: plural(wonLeads.length, 'opportunity', 'opportunities') + ' in the won stage' },
+    { label: 'Stalled', value: String(stalled.length), note: 'Open opportunities with no contact for 3+ days' },
   ];
 
   const stages = stagesFor(s, dashSeg);
@@ -71,7 +71,7 @@ export function Dashboard() {
     return {
       name: x.name,
       ids: rows.map((l) => l.id),
-      meta: plural(rows.length, 'deal') + ' · ' + valueTotal(s, rows),
+      meta: plural(rows.length, 'opportunity', 'opportunities') + ' · ' + valueTotal(s, rows),
       width: 100 - i * (58 / Math.max(1, stages.length - 1)) + '%',
       bg: STAGE_SHADES[Math.min(i, STAGE_SHADES.length - 1)],
       fg: i >= 4 ? '#F5F7F6' : '#0F1B16',
@@ -147,12 +147,12 @@ export function Dashboard() {
         ]}
         dirty={dirty}
         onClear={() => set((x) => ({ filters: { ...x.filters, ...DEFAULT_FILTERS } }))}
-        meta={`${plural(dashLeads.length, 'deal')} in view · ${range ? rangeLabel(f.dates).toLowerCase() : 'any closing date'}${undatedHidden ? ` · ${undatedHidden} without a closing date hidden` : ''}`}
+        meta={`${plural(dashLeads.length, 'opportunity', 'opportunities')} in view · ${range ? rangeLabel(f.dates).toLowerCase() : 'any closing date'}${undatedHidden ? ` · ${undatedHidden} without a closing date hidden` : ''}`}
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
         {s.leads.length === 0 && (
-          <EmptyState title="Nothing to measure yet" text="Overview measures your deals: open and weighted pipeline, wins, conversion and time in each stage. It fills in as deals move." action={{ label: 'New deal', onClick: () => set({ newLeadOpen: true }) }} />
+          <EmptyState title="Nothing to measure yet" text="Overview measures your opportunities: open and weighted pipeline, wins, conversion and time in each stage. It fills in as opportunities move." action={{ label: 'New opportunity', onClick: () => set({ newLeadOpen: true }) }} />
         )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14 }}>
           {metrics.map((m) => (
@@ -172,7 +172,7 @@ export function Dashboard() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <span className="card-title">Pipeline funnel</span>
-                <span className="card-sub">Deals and value by stage</span>
+                <span className="card-sub">Opportunities and value by stage</span>
               </div>
               <select value={dashSeg} onChange={(e) => setDashSeg(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '8px 11px', fontSize: 12.5, color: 'var(--ink)' }}>
                 {funnelOptions(s).map((o) => (
@@ -196,7 +196,7 @@ export function Dashboard() {
             <div className="card-title" style={{ marginBottom: 4 }}>Funnel by payment due date</div>
             <div className="card-sub" style={{ marginBottom: 16 }}>
               Product and service payments falling due inside each horizon, incl. VAT
-              {undatedDeals ? ` · ${plural(undatedDeals, 'deal')} without billing dates left out` : ''}
+              {undatedDeals ? ` · ${plural(undatedDeals, 'opportunity', 'opportunities')} without billing dates left out` : ''}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
               {timeFunnel.map((b) => (
@@ -215,7 +215,7 @@ export function Dashboard() {
             <div>
               <div className="card-title" style={{ marginBottom: 4 }}>Sales bonuses</div>
               <div className="card-sub">
-                Rate per salesperson, with a flat amount on deals under the minimum · earned {trigger.toLowerCase()} · only owners and admins see this ·{' '}
+                Rate per salesperson, with a flat amount on opportunities under the minimum · earned {trigger.toLowerCase()} · only owners and admins see this ·{' '}
                 <Link to={paths.settings('bonuses')} style={{ color: 'var(--brand)' }}>
                   Edit the rules
                 </Link>
@@ -228,7 +228,7 @@ export function Dashboard() {
           <div style={{ overflowX: 'auto' }}>
             <div style={{ minWidth: 640 }}>
               <div style={{ display: 'grid', gridTemplateColumns: BONUS_COLS, gap: 12, padding: '9px 0', borderBottom: '1px solid var(--border)' }}>
-                {['Salesperson', 'Rate %', `Min deal (${currencySymbol(curOf(s))})`, 'Flat under min', 'Earned', 'Pending'].map((h) => (
+                {['Salesperson', 'Rate %', `Minimum (${currencySymbol(curOf(s))})`, 'Flat under min', 'Earned', 'Pending'].map((h) => (
                   <span key={h} className="th">
                     {h}
                   </span>
@@ -281,13 +281,13 @@ function StageConversion({ leads, initialSeg }: { leads: Lead[]; initialSeg: Seg
   const m = s.stageHistory ? conversionMetrics(stages, inFunnel, s.stageHistory) : null;
   const drill = (title: string, leadIds: string[]) => leadIds.length && set({ drill: { kicker: 'Stage conversion', title, leadIds } });
   const stats = m && [
-    { label: 'Win rate', value: pct(m.winRate), note: m.won + m.lost ? `${m.won} won · ${m.lost} lost` : 'No won or lost deals yet' },
+    { label: 'Win rate', value: pct(m.winRate), note: m.won + m.lost ? `${m.won} won · ${m.lost} lost` : 'No won or lost opportunities yet' },
     {
       label: m.proposal ? `To ${m.proposal.name.toLowerCase()}` : 'To proposal',
       value: daysLabel(m.toProposalDays),
-      note: !m.proposal ? 'This funnel has no proposal stage' : m.toProposalDeals ? `Average from ${stages[0]!.name.toLowerCase()}, ${plural(m.toProposalDeals, 'deal')}` : 'No deal has reached it yet',
+      note: !m.proposal ? 'This funnel has no proposal stage' : m.toProposalDeals ? `Average from ${stages[0]!.name.toLowerCase()}, ${plural(m.toProposalDeals, 'opportunity', 'opportunities')}` : 'No opportunity has reached it yet',
     },
-    { label: 'Deals that moved', value: String(m.moved), note: `of ${plural(inFunnel.length, 'deal')} in view` },
+    { label: 'Opportunities that moved', value: String(m.moved), note: `of ${plural(inFunnel.length, 'opportunity', 'opportunities')} in view` },
   ];
 
   return (
@@ -295,7 +295,7 @@ function StageConversion({ leads, initialSeg }: { leads: Lead[]; initialSeg: Seg
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 auto', minWidth: 0 }}>
           <span className="card-title">Stage conversion</span>
-          <span className="card-sub">Share of deals that reached a stage and moved on to a later one</span>
+          <span className="card-sub">Share of opportunities that reached a stage and moved on to a later one</span>
         </div>
         <select value={seg} onChange={(e) => setSeg(e.target.value)} style={{ flex: '0 1 auto', minWidth: 0, maxWidth: '55%', border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '8px 11px', fontSize: 12.5, color: 'var(--ink)' }}>
           {funnelOptions(s).map((o) => (
@@ -309,7 +309,7 @@ function StageConversion({ leads, initialSeg }: { leads: Lead[]; initialSeg: Seg
         <div className="empty-dashed">Loading the stage history…</div>
       ) : m.moved < MIN_MOVED_DEALS ? (
         <div className="empty-dashed">
-          Conversion rates appear once at least {MIN_MOVED_DEALS} deals in view have moved between stages ({m.moved} so far).
+          Conversion rates appear once at least {MIN_MOVED_DEALS} opportunities in view have moved between stages ({m.moved} so far).
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -324,7 +324,7 @@ function StageConversion({ leads, initialSeg }: { leads: Lead[]; initialSeg: Seg
           </div>
           <div>
             <div style={{ display: 'grid', gridTemplateColumns: CONV_COLS, gap: 10, padding: '0 0 8px', borderBottom: '1px solid var(--border)' }}>
-              {['Stage', 'Moved on', '', 'Deals', 'Avg in stage'].map((h, i) => (
+              {['Stage', 'Moved on', '', 'Opportunities', 'Avg in stage'].map((h, i) => (
                 <span key={i} className="th" style={{ textAlign: i >= 2 ? 'right' : undefined }}>
                   {h}
                 </span>
@@ -359,9 +359,9 @@ function StalledLeads({ rows }: { rows: { id: string; company: string; stageName
   const { openLead } = useStore();
   return (
     <div className="card" style={{ padding: 18 }}>
-      <div className="card-title" style={{ marginBottom: 14 }}>Stalled deals — no contact for 3+ days</div>
+      <div className="card-title" style={{ marginBottom: 14 }}>Stalled opportunities — no contact for 3+ days</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {rows.length === 0 && <div className="empty-dashed">No stalled deals in the current filter.</div>}
+        {rows.length === 0 && <div className="empty-dashed">No stalled opportunities in the current filter.</div>}
         {rows.map((r) => (
           <div key={r.id} onClick={() => openLead(r.id)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, cursor: 'pointer', border: '1px solid var(--divider)', borderRadius: 8, padding: '11px 13px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>

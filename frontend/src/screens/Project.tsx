@@ -97,7 +97,7 @@ export function Project() {
 
   const remove = async () => {
     setMenu(false);
-    const yes = await askConfirm({ title: `Delete ${project.name}?`, message: `The ${t.project} and its history are deleted. The company and the deal are kept.`, confirmLabel: `Delete ${t.project}`, danger: true });
+    const yes = await askConfirm({ title: `Delete ${project.name}?`, message: `The ${t.project} and its history are deleted. The company and the opportunity are kept.`, confirmLabel: `Delete ${t.project}`, danger: true });
     if (!yes) return;
     try {
       await projectsApi.deleteProject(project.id);
@@ -363,7 +363,7 @@ function LinkedCard({ project, canEdit, busy, update }: { project: ApiProject; c
     if (companyId === project.companyId) return;
     const name = records.find((r) => r.id === companyId)?.name ?? 'the other company';
     if (project.dealId) {
-      const yes = await askConfirm({ title: `Move ${project.name} to ${name}?`, message: `The link to the deal ${project.dealTitle ?? ''} is removed: a ${t.project}'s deal is always one of its company's.`, confirmLabel: `Move ${t.project}` });
+      const yes = await askConfirm({ title: `Move ${project.name} to ${name}?`, message: `The link to the opportunity ${project.dealTitle ?? ''} is removed: a ${t.project}'s opportunity is always one of its company's.`, confirmLabel: `Move ${t.project}` });
       if (!yes) return;
     }
     await update({ companyId }, (p) => `${p.name} moved to ${p.companyName}`);
@@ -395,14 +395,14 @@ function LinkedCard({ project, canEdit, busy, update }: { project: ApiProject; c
               {project.contactName}
             </Link>
           ) : (
-            <span style={{ color: 'var(--text-2)', fontSize: 13 }}>{project.dealId ? 'The deal has no contact' : 'Comes with the deal'}</span>
+            <span style={{ color: 'var(--text-2)', fontSize: 13 }}>{project.dealId ? 'The opportunity has no contact' : 'Comes with the opportunity'}</span>
           )}
         </Row>
-        <Row label="Deal">
+        <Row label="Opportunity">
           <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
             {canEdit ? (
-              <select className="ghost ghost-sm" aria-label="Deal" data-testid="project-deal-field" value={project.dealId ?? ''} disabled={busy} onChange={(e) => void update({ dealId: e.target.value || null })} style={{ flex: 1, minWidth: 0 }}>
-                <option value="">No deal</option>
+              <select className="ghost ghost-sm" aria-label="Opportunity" data-testid="project-deal-field" value={project.dealId ?? ''} disabled={busy} onChange={(e) => void update({ dealId: e.target.value || null })} style={{ flex: 1, minWidth: 0 }}>
+                <option value="">No opportunity</option>
                 {deals.map((l) => (
                   <option key={l.id} value={l.id}>
                     {(l.title || l.company) + (l.outcome === 'open' ? ' · Open' : l.outcome === 'lost' ? ' · Lost' : '')}
@@ -412,14 +412,14 @@ function LinkedCard({ project, canEdit, busy, update }: { project: ApiProject; c
             ) : project.dealId ? (
               <span>{project.dealTitle}</span>
             ) : (
-              <span style={{ color: 'var(--text-2)' }}>No deal</span>
+              <span style={{ color: 'var(--text-2)' }}>No opportunity</span>
             )}
             {project.dealId && (
               <Link to={paths.lead(project.dealId)} className="crumb-link" data-testid="project-deal-link" style={{ whiteSpace: 'nowrap', fontSize: 12.5 }}>
-                Open deal
+                Open opportunity
               </Link>
             )}
-            {project.dealLost && <span className="badge badge-danger">Deal lost</span>}
+            {project.dealLost && <span className="badge badge-danger">Opportunity lost</span>}
           </span>
         </Row>
       </div>

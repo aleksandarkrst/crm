@@ -22,7 +22,7 @@ describe('settings and discovery fields', () => {
   let dealId;
   const workspaceName = `Renamed Studio ${RUN}`;
 
-  step('sets up a workspace and a deal', async () => {
+  step('sets up a workspace and an opportunity', async () => {
     page = await browser.person('owner');
     await newUserWithWorkspace(page, { label: 'settings-owner', name: 'Olga Owner', workspace: 'Settings Co' });
     dealId = await createDealInUi(page, { company: 'Umbrella', contact: 'Albert Wesker' });
@@ -113,7 +113,7 @@ describe('settings and discovery fields', () => {
     await page.waitForFunction(() => location.pathname === '/today');
   });
 
-  step('saves the discovery fields of a deal', async () => {
+  step('saves the discovery fields of an opportunity', async () => {
     await page.goto(`${BASE_URL}/deals/${dealId}`, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.body.innerText.includes('Discovery'));
     assert.ok(await setByLabel(page, 'Discovery date', '2026-09-03'));
@@ -145,7 +145,7 @@ describe('settings and discovery fields', () => {
     assert.equal(await valueByLabel(page, 'Proposal headline'), 'One story across six markets');
 
     await page.goto(`${BASE_URL}/settings/templates`, { waitUntil: 'networkidle0' });
-    await clickButton(page, 'Preview with a lead');
+    await clickButton(page, 'Preview with an opportunity');
     await page.waitForFunction(() => document.body.textContent.includes('What you told us'));
     const doc = await text(page);
     assert.ok(doc.includes('One story across six markets'), 'headline in the proposal');

@@ -22,7 +22,7 @@ describe('live updates, conflicts and change history', () => {
   }
   const titleOf = (page) => page.$eval(TITLE, (el) => el.value);
 
-  step('the owner sets up a workspace with a deal and a colleague joins', async () => {
+  step('the owner sets up a workspace with an opportunity and a colleague joins', async () => {
     olivia = await browser.person('olivia');
     await olivia.goto(BASE_URL, { waitUntil: 'networkidle0' });
     await signIn(olivia, email('live-olivia'), 'Olivia Owner');
@@ -75,7 +75,7 @@ describe('live updates, conflicts and change history', () => {
     assert.equal((await api(olivia, `/crm/deals/${dealId}`)).title, 'Harbor refit (Olivia)');
   });
 
-  step('the deal\'s Activity names who moved it (CD-318: no Changes view)', async () => {
+  step('the opportunity\'s Activity names who moved it (CD-318: no Changes view)', async () => {
     const funnels = await api(olivia, '/crm/funnels');
     await api(olivia, `/crm/deals/${dealId}/move`, { method: 'POST', body: JSON.stringify({ stageId: funnels[0].stages[1].id }) });
     await openDeal(ana);

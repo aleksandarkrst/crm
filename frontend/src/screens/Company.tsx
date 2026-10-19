@@ -64,7 +64,7 @@ export function Company() {
   /** Deals keep a company, so a company with deals can't be deleted; its contacts are kept. */
   const onDelete = () => {
     if (rec.leads.length) {
-      const what = rec.leads.length === 1 ? 'a deal' : rec.leads.length + ' deals';
+      const what = rec.leads.length === 1 ? 'an opportunity' : rec.leads.length + ' opportunities';
       window.alert(`${rec.name} has ${what}. Delete them or move them to another company first.`);
       return;
     }

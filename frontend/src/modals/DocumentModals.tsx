@@ -26,8 +26,8 @@ export function GenerationModal() {
   const steps = doc
     ? [
         { label: 'Queued for the worker', done: doc.status !== 'queued' },
-        { label: `Filling in ${template ? template.placeholders.filter((p) => p.known).length + ' merge fields' : 'the merge fields'} from this deal`, done: doc.status === 'ready' || doc.status === 'failed' },
-        { label: 'Saved on the deal, under Documents', done: doc.status === 'ready' },
+        { label: `Filling in ${template ? template.placeholders.filter((p) => p.known).length + ' merge fields' : 'the merge fields'} from this opportunity`, done: doc.status === 'ready' || doc.status === 'failed' },
+        { label: 'Saved on the opportunity, under Documents', done: doc.status === 'ready' },
       ]
     : [];
 
@@ -39,7 +39,7 @@ export function GenerationModal() {
           {doc ? `Building ${doc.name}` : `Generate a document for ${lead.company || lead.title}`}
         </div>
         <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5 }}>
-          {doc ? `Template: ${doc.templateName}` : 'The template is filled in with this deal: company, contact, discovery notes, products and amounts in the deal currency.'}
+          {doc ? `Template: ${doc.templateName}` : 'The template is filled in with this opportunity: company, contact, discovery notes, products and amounts in the opportunity currency.'}
         </div>
       </div>
 
@@ -83,7 +83,7 @@ export function GenerationModal() {
           })}
           {doc.status === 'failed' && <div style={{ fontSize: 12.5, color: 'var(--danger)', lineHeight: 1.5 }}>{doc.error || 'The document could not be generated.'}</div>}
           {doc.status === 'ready' && doc.missingFields.length > 0 && (
-            <div style={{ fontSize: 12.5, color: 'var(--warn)', lineHeight: 1.5 }}>Left empty because the deal has no value yet: {doc.missingFields.join(', ')}.</div>
+            <div style={{ fontSize: 12.5, color: 'var(--warn)', lineHeight: 1.5 }}>Left empty because the opportunity has no value yet: {doc.missingFields.join(', ')}.</div>
           )}
         </div>
       )}
@@ -191,7 +191,7 @@ export function NewTemplateModal() {
 
   return (
     <Modal maxWidth={600}>
-      <ModalHeader title="New template" sub="Upload the Word document you already use. Every {{parameter}} it contains becomes a merge field the CRM fills from the deal." />
+      <ModalHeader title="New template" sub="Upload the Word document you already use. Every {{parameter}} it contains becomes a merge field the CRM fills from the opportunity." />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         <span className="caps">Document type</span>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>

@@ -22,7 +22,7 @@ describe('pipeline views', () => {
   let page;
   let funnel;
 
-  step('sets up a workspace with deals in two stages, one of them lost', async () => {
+  step('sets up a workspace with opportunities in two stages, one of them lost', async () => {
     page = await browser.person('vic');
     await newUserWithWorkspace(page, { label: 'views', name: 'Vic Viewer', workspace: 'Views Co' });
     [funnel] = await api(page, '/crm/funnels');
@@ -38,15 +38,15 @@ describe('pipeline views', () => {
     await api(page, `/crm/deals/${gone.id}/lost`, { method: 'POST', body: JSON.stringify({ reason: 'No budget' }) });
   });
 
-  step('starts on the board, with the funnel select and New deal in the bar', async () => {
+  step('starts on the board, with the funnel select and New opportunity in the bar', async () => {
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=pipeline-view-board][aria-pressed=true]');
     assert.equal(await page.$('[data-testid=pipeline-table]'), null);
     assert.equal(await page.$eval('[data-testid=pipeline-funnel]', (el) => el.value), funnel.id);
-    assert.ok(await page.$$eval('.filter-actions .btn-primary', (bs) => bs.some((b) => b.textContent.trim() === 'New deal')));
+    assert.ok(await page.$$eval('.filter-actions .btn-primary', (bs) => bs.some((b) => b.textContent.trim() === 'New opportunity')));
   });
 
-  step('the table is a flat list in stage order, sortable by a column, and a row opens the deal', async () => {
+  step('the table is a flat list in stage order, sortable by a column, and a row opens the opportunity', async () => {
     await page.click('[data-testid=pipeline-view-table]');
     await page.waitForSelector('[data-testid=pipeline-table]');
     assert.equal(await page.$('.pipeline-table-band'), null, 'no stage bands (CD-318)');
@@ -59,7 +59,7 @@ describe('pipeline views', () => {
     assert.deepEqual(rows.map((r) => r.text.split('\n')[0]), ['Beta Ltd', 'Alpha Ltd']);
     await page.click('[data-testid=pipeline-table] .sort-btn');
     rows = await tableRows(page);
-    assert.equal(rows.length, 2, 'the lost deal is hidden like on the board');
+    assert.equal(rows.length, 2, 'the lost opportunity is hidden like on the board');
     assert.match(rows[0].text, /Alpha Ltd/);
     assert.match(rows[0].text, /Alpha Ltd rollout/);
     assert.match(rows[0].text, /Vic Viewer/, 'owner column');
@@ -75,21 +75,21 @@ describe('pipeline views', () => {
   });
 
   step('the board filters apply to the table, with an empty state', async () => {
-    assert.ok(await pick(page, 'Include lost deals'));
+    assert.ok(await pick(page, 'Include lost'));
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=pipeline-table-row]').length === 3);
     const lost = (await tableRows(page)).find((r) => r.text.includes('Gamma Ltd'));
     assert.ok(lost.lost);
     assert.match(lost.text, /Lost · No budget/);
 
-    assert.ok(await pick(page, 'Lost deals only'));
+    assert.ok(await pick(page, 'Lost only'));
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=pipeline-table-row]').length === 1);
-    assert.ok(await pick(page, 'Open & won deals'));
+    assert.ok(await pick(page, 'Open & won'));
     const band = await page.evaluate(() => {
       const el = [...document.querySelectorAll('select')].find((s) => s.options[0]?.value === 'Value');
       return el.options[el.options.length - 1].value;
     });
     assert.ok(await pick(page, band));
-    await page.waitForFunction(() => document.querySelector('.pipeline-table-empty')?.textContent === 'No deals match these filters.');
+    await page.waitForFunction(() => document.querySelector('.pipeline-table-empty')?.textContent === 'No opportunities match these filters.');
   });
 
   step('the pencil opens the Funnel builder', async () => {

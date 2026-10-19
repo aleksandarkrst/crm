@@ -77,16 +77,16 @@ describe('CSV import and export', () => {
     await page.waitForFunction((names) => names.every((n) => document.body.innerText.includes(n)), {}, [acme, globex]);
   });
 
-  step('imports deals from the Pipeline: company matched or created, stage by name', async () => {
+  step('imports opportunities from the Pipeline: company matched or created, stage by name', async () => {
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     const funnels = await api(page, '/crm/funnels');
     const funnel = funnels[0];
     const second = funnel.stages[1];
     const initech = `Initech ${RUN}`;
-    const file = csvFile('deals.csv', `Deal,Company,Stage,Value,Closing date,Contact,Contact email\nWebsite ${RUN},${globex.toUpperCase()},${second.name},"14,000",31.12.2026,Gina Globex,gina-${RUN}@example.test\nRetainer ${RUN},${initech},,2500,,,\n`);
+    const file = csvFile('deals.csv', `Opportunity,Company,Stage,Value,Closing date,Contact,Contact email\nWebsite ${RUN},${globex.toUpperCase()},${second.name},"14,000",31.12.2026,Gina Globex,gina-${RUN}@example.test\nRetainer ${RUN},${initech},,2500,,,\n`);
     await upload(page, file);
     // Opened from the Pipeline, the dialog imports deals into the funnel on screen.
-    assert.match(await modalText(page), /Import deals/);
+    assert.match(await modalText(page), /Import opportunities/);
     await clickButton(page, 'Preview');
     await page.waitForSelector('[data-testid=import-counts]');
     const counts = await page.$eval('[data-testid=import-counts]', (el) => el.innerText);

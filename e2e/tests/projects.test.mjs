@@ -15,13 +15,13 @@ describe('projects', () => {
   let dealId;
   let projectId;
 
-  step('sets up two companies and a won deal of the first', async () => {
+  step('sets up two companies and a won opportunity of the first', async () => {
     page = await browser.person('pia');
     await newUserWithWorkspace(page, { label: 'projects', name: 'Pia Projects', workspace: 'Projects Co' });
     const [funnel] = await api(page, '/crm/funnels');
     acme = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Acme' }) });
     beta = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Beta' }) });
-    const deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Acme service deal', funnelId: funnel.id, companyId: acme.id }) });
+    const deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Acme service opportunity', funnelId: funnel.id, companyId: acme.id }) });
     await api(page, `/crm/deals/${deal.id}/move`, { method: 'POST', body: JSON.stringify({ stageId: funnel.stages.find((s) => s.isWon).id }) });
     dealId = deal.id;
   });
@@ -34,7 +34,7 @@ describe('projects', () => {
     assert.equal(await page.$eval('[data-testid=project-company-fixed]', (el) => el.value), 'Acme');
     // The deal picker offers the won deal.
     const deals = await page.$$eval('[data-testid=project-deal] option', (els) => els.map((el) => el.textContent));
-    assert.deepEqual(deals, ['No deal', 'Acme service deal']);
+    assert.deepEqual(deals, ['No opportunity', 'Acme service opportunity']);
     await page.type('[data-testid=project-name]', 'Service 2026');
     await page.type('[data-testid=project-code]', 'SRV-26');
     await setValue(page, '[data-testid=project-deal]', dealId);
@@ -52,11 +52,11 @@ describe('projects', () => {
     await page.waitForFunction(() => document.querySelector('[data-testid=company-project]')?.innerText.includes('SRV-26 · Service 2026'));
   });
 
-  step('the "+" menu has "Deal task" (T) and "Project" (J); J opens New project (TC 16)', async () => {
+  step('the "+" menu has "Opportunity task" (T) and "Project" (J); J opens New project (TC 16)', async () => {
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await click(page, '[data-testid=new-menu]');
     const items = await page.$$eval('.new-menu-pop [role=menuitem]', (els) => els.map((el) => el.innerText.replace(/\s+/g, ' ').trim()));
-    assert.ok(items.some((t) => /^Deal task/.test(t) && /\bT$/.test(t)), items.join(' | '));
+    assert.ok(items.some((t) => /^Opportunity task/.test(t) && /\bT$/.test(t)), items.join(' | '));
     assert.ok(items.some((t) => /^Project/.test(t) && /\bJ$/.test(t)), items.join(' | '));
     await page.keyboard.press('j');
     await page.waitForSelector('[data-testid=project-company]');
@@ -74,7 +74,7 @@ describe('projects', () => {
     await click(page, '[data-testid=module-switcher-pop] [data-module=projects]');
     await page.waitForFunction(() => location.pathname === '/projects');
     await page.waitForFunction(() => document.querySelector('[data-testid=module-switcher]')?.getAttribute('data-current-module') === 'projects');
-    await page.waitForFunction(() => document.querySelector('.search-trigger-text')?.textContent === 'Search projects, tasks, deals');
+    await page.waitForFunction(() => document.querySelector('.search-trigger-text')?.textContent === 'Search projects, tasks, opportunities');
     // "+" is "Create in Projects": Project, Task (CD-283) and Work order (CD-265).
     await click(page, '[data-testid=new-menu]');
     assert.match(await page.$eval('.new-menu-pop', (el) => el.textContent), /Create in Projects/);
@@ -198,9 +198,9 @@ describe('projects', () => {
     assert.ok(await eventually(async () => (await api(page, `/projects/${projectId}/files`))[0]?.folder === 'Client material'));
   });
 
-  step('the Communication tab: the deal\'s emails, and New email logs one there (CD-271)', async () => {
+  step('the Communication tab: the opportunity\'s emails, and New email logs one there (CD-271)', async () => {
     await click(page, '[data-testid=project-tab-communication]');
-    await page.waitForFunction(() => document.querySelector('[data-testid=project-comms]')?.innerText.includes('No emails on the deal yet.'));
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-comms]')?.innerText.includes('No emails on the opportunity yet.'));
     await click(page, '[data-testid=new-email]');
     await page.type('[data-testid=email-subject]', 'Kickoff dates');
     await page.type('[data-testid=email-body]', 'Hi, can we start on Monday?');
@@ -208,10 +208,10 @@ describe('projects', () => {
     await page.waitForFunction(() => document.querySelector('[data-testid=email-thread]')?.innerText.includes('Kickoff dates'));
     await page.waitForFunction(() => document.querySelector('[data-testid=project-tab-communication]')?.textContent === 'Communication · 1');
     const logged = await eventually(async () => (await api(page, `/crm/deals/${dealId}/activities`)).some((a) => a.title === 'Email sent · Kickoff dates'));
-    assert.ok(logged, 'logged on the deal');
+    assert.ok(logged, 'logged on the opportunity');
   });
 
-  step('another company clears the deal, after a confirmation (TC 5)', async () => {
+  step('another company clears the opportunity, after a confirmation (TC 5)', async () => {
     await setValue(page, '[data-testid=project-company-field]', beta.id);
     assert.equal(await confirmInApp(page), 'Move Service 2026 to Beta?');
     const moved = await eventually(async () => {
@@ -222,7 +222,7 @@ describe('projects', () => {
     assert.equal(moved.dealId, null);
   });
 
-  step('Settings → Workspace has "Create a project when a deal is won"', async () => {
+  step('Settings → Workspace has "Create a project when an opportunity is won"', async () => {
     await page.goto(BASE_URL + '/settings/workspace', { waitUntil: 'networkidle0' });
     await click(page, '[data-testid=auto-create-projects] [role=switch]');
     assert.ok(await eventually(async () => (await api(page, '/workspace')).autoCreateProjects === true));
