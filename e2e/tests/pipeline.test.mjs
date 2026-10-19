@@ -52,7 +52,7 @@ describe('pipeline journey', () => {
   step('creates an opportunity with a new company and contact', async () => {
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     dealId = await createDealInUi(page, { company: 'Northwind d.o.o.', contact: 'Ana Marković' });
-    await page.waitForFunction(() => document.body.innerText.includes('Opportunity created'));
+    await page.waitForFunction(() => document.body.innerText.includes('Deal created'));
     const body = await text(page);
     assert.ok(body.includes('Northwind d.o.o.') && body.includes('Ana Marković'), 'lead screen shows company and contact');
 
