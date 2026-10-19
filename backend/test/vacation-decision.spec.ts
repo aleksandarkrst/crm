@@ -1,7 +1,5 @@
+import { PDFParse } from 'pdf-parse';
 import { describe, expect, it } from 'vitest';
-// pdf-parse's index runs a self-test on import; the library file doesn't.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse/lib/pdf-parse.js') as (data: Buffer) => Promise<{ text: string; numpages: number }>;
 import { renderPdf } from '../src/modules/hr-documents';
 import { mbValid, pibValid } from '../src/modules/identity/settings.schemas';
 import { buildVacationDecision, missingCompanyDetails, srDate, type VacationDecisionData } from '../src/modules/timeoff/decision-document';
@@ -29,9 +27,14 @@ const base: VacationDecisionData = {
 async function textOf(data: VacationDecisionData, number = 'GO-2026-0007'): Promise<string> {
   const pdf = await renderPdf(buildVacationDecision(data, number));
   expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
-  const parsed = await pdfParse(pdf);
-  expect(parsed.numpages).toBe(1);
-  return parsed.text.replace(/\s+/g, ' ');
+  const parser = new PDFParse({ data: pdf });
+  try {
+    const parsed = await parser.getText();
+    expect(parsed.total).toBe(1);
+    return parsed.text.replace(/\s+/g, ' ');
+  } finally {
+    await parser.destroy();
+  }
 }
 
 describe('the vacation decision PDF (spec 11.2, 11.6)', () => {
@@ -45,7 +48,7 @@ describe('the vacation decision PDF (spec 11.2, 11.6)', () => {
       'Broj: GO-2026-0007',
       'Novi Sad, 16.10.2026.',
       'zahteva zaposlenog od 12.10.2026.',
-      'REŠENJE',
+      'R E Š E N J E', // the title is letter-spaced; pdf-parse reads the gaps as spaces
       'o korišćenju godišnjeg odmora za 2026. godinu',
       'Zaposlenom Đorđe Šćepanović, raspoređenom na poslove Serviser',
       'u trajanju od 23 radna dana',
