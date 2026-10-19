@@ -4,7 +4,7 @@
  * deleting the project removes its files.
  */
 import { beforeAll, describe, expect, inject, it } from 'vitest';
-import { addMember, call, createTenant, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let member: Session;
@@ -40,7 +40,7 @@ beforeAll(async () => {
   [tenant, otherTenant] = await Promise.all([createTenant(owner, 'Project files'), createTenant(stranger, 'Project files other')]);
   await addMember(owner, tenant, member, 'member');
   await addMember(owner, tenant, other, 'member');
-  const company = await ok('POST', '/crm/companies', { ...as(), body: { name: 'Acme' } });
+  const company = await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Acme' } });
   const [type] = await ok('GET', '/project-types', as());
   projectId = (await ok('POST', '/projects', { ...as(), body: { name: 'Files project', projectTypeId: type.id, companyId: company.id } })).id;
 });

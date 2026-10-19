@@ -5,7 +5,7 @@
  * with the owner gone the first admin leads it; with the setting off nothing is created.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, eventually, firstFunnel, type Funnel, mailTo, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, eventually, firstFunnel, type Funnel, mailTo, ok, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let seller: Session;
@@ -15,7 +15,7 @@ const as = (s: Session = owner) => ({ token: s.token, tenant });
 
 const wonStage = () => funnel.stages.find((s) => s.isWon)!;
 async function newDeal(title: string, ownerUserId = owner.userId, withCompany = true) {
-  const company = withCompany ? await ok('POST', '/crm/companies', { ...as(), body: { name: `${title} Ltd` } }) : null;
+  const company = withCompany ? await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: `${title} Ltd` } }) : null;
   return ok('POST', '/crm/deals', { ...as(), body: { title, funnelId: funnel.id, companyId: company?.id ?? null, ownerUserId } });
 }
 const win = (dealId: string) => ok('POST', `/crm/deals/${dealId}/move`, { ...as(), body: { stageId: wonStage().id } }, 200);

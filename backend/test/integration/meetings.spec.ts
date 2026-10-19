@@ -5,7 +5,7 @@
  * meeting has a deal of its company (CD-213).
  */
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { addMember, call, createTenant, firstFunnel, type Funnel, type Json, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, firstFunnel, type Funnel, type Json, ok, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let admin: Session;
@@ -25,7 +25,7 @@ const startOfDayIn = (timeZone: string, at: number) => {
   return at - ((part('hour') * 60 + part('minute')) * 60 + part('second')) * 1000 - (at % 1000);
 };
 
-const company = (name: string) => ok('POST', '/crm/companies', { ...as(owner), body: { name } });
+const company = (name: string) => ok('POST', '/crm/companies', { ...as(owner), body: { pib: testPib(), name } });
 const deal = (title: string, companyId: string | null) => ok('POST', '/crm/deals', { ...as(owner), body: { title, funnelId: funnel.id, companyId } });
 const contact = (fullName: string, companyId: string, email: string | null = null) => ok('POST', '/crm/contacts', { ...as(owner), body: { fullName, companyId, email } });
 

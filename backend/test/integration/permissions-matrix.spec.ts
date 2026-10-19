@@ -11,7 +11,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { allows, type PermissionRelation, PERMISSION_MODULES, permissionMatrix, permissionRow } from '../../src/modules/people/permissions';
 import type { FunctionalRole } from '../../src/modules/people/caller-access';
-import { call, createTenant, firstFunnel, ok, type Session, signIn } from './helpers';
+import { call, createTenant, firstFunnel, ok, type Session, signIn, testPib } from './helpers';
 import { asTenantSql, createDepartment, grantRole, IBAN, joinAsEmployee, levelAt, START } from './people-helpers';
 
 type Caller = 'employee' | 'manager' | 'admin';
@@ -73,7 +73,7 @@ beforeAll(async () => {
   departmentId = await createDepartment(tenant, 'Sales');
   topLevelId = await levelAt(tenant, 1);
   const funnel = await firstFunnel(who.admin, tenant);
-  companyId = (await ok('POST', '/crm/companies', { ...as('admin'), body: { name: 'Matrix Co' } })).id;
+  companyId = (await ok('POST', '/crm/companies', { ...as('admin'), body: { pib: testPib(), name: 'Matrix Co' } })).id;
   dealId = (await ok('POST', '/crm/deals', { ...as('admin'), body: { title: 'Matrix deal', funnelId: funnel.id, companyId } })).id;
   for (const p of people) {
     const plan = await ok('POST', '/crm/visit-plans', { ...as('admin'), body: { salespersonUserId: who[p].userId, periodStart: PLAN_MONTH, lines: [{ companyId, plannedVisits: 2 }] } });
@@ -119,7 +119,7 @@ const CASES: Record<string, Case> = {
   'crm.records': {
     relations: ['other'],
     probe: async (c) => {
-      const created = await call('POST', '/crm/companies', { ...as(c), body: { name: `Made by ${c}` } });
+      const created = await call('POST', '/crm/companies', { ...as(c), body: { pib: testPib(), name: `Made by ${c}` } });
       if (created.status !== 201) return false;
       return (await call('PATCH', `/crm/companies/${created.body.id}`, { ...as(c), body: { industry: 'Retail' } })).status === 200;
     },
@@ -127,7 +127,7 @@ const CASES: Record<string, Case> = {
   'crm.admin': {
     relations: ['other'],
     probe: async (c) => {
-      const co = await ok('POST', '/crm/companies', { ...as('admin'), body: { name: `Delete me ${c}` } });
+      const co = await ok('POST', '/crm/companies', { ...as('admin'), body: { pib: testPib(), name: `Delete me ${c}` } });
       const r = await call('DELETE', `/crm/companies/${co.id}`, as(c));
       if (r.status !== 204) await ok('DELETE', `/crm/companies/${co.id}`, as('admin'));
       return allowedBy(r.status, 204);

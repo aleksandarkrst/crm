@@ -6,7 +6,7 @@
  * is idempotent; a holiday change resyncs.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { call, createTenant, eventually, ok, type Session, signIn } from './helpers';
+import { call, createTenant, eventually, ok, type Session, signIn, testPib } from './helpers';
 import { asTenantSql, joinAsEmployee, START } from './people-helpers';
 
 interface Day {
@@ -41,7 +41,7 @@ beforeAll(async () => {
   // No preloaded holidays: every weekday is a full working day in these tests.
   await ok('POST', '/timesheet/holidays/preload', { ...as(owner), body: { country: 'none' } }, 200);
   await asTenantSql(tenant, `delete from public_holidays where source = 'preload'`, []);
-  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(owner), body: { name: 'Hidrogradnja' } });
+  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(owner), body: { pib: testPib(), name: 'Hidrogradnja' } });
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as(owner));
   const project = await ok<{ id: string }>('POST', '/projects', { ...as(owner), body: { name: 'Engine overhaul', projectTypeId: type!.id, companyId: company.id } });
   taskId = (await ok<{ id: string }>('POST', '/tasks', { ...as(owner), body: { projectId: project.id, name: 'Inspect engine', assigneeIds: [empId] } })).id;

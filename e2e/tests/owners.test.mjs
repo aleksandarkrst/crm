@@ -2,7 +2,7 @@
 // filtered separately, and a member who left still shows (and filters) as a former member.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, email, eventually, newUserWithWorkspace, steps, text, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, email, eventually, newUserWithWorkspace, steps, text, useBrowser, testPib } from '../lib/harness.mjs';
 
 /** Signs a user in through the dev login from Node (no browser needed for them). */
 async function devUser(label, name) {
@@ -49,7 +49,7 @@ describe('owners by id', () => {
       [samA, 'Alpha Owned'],
       [samB, 'Bravo Owned'],
     ]) {
-      const c = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: company }) });
+      const c = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: company }) });
       await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: company, funnelId, companyId: c.id, ownerUserId: sam.id }) });
     }
   });

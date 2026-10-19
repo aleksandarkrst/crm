@@ -4,7 +4,7 @@
  * last-write-wins.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, firstFunnel, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, firstFunnel, ok, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let ana: Session;
@@ -83,7 +83,7 @@ describe('conflicting updates', () => {
   });
 
   it('applies to companies and contacts too', async () => {
-    const company = await ok('POST', '/crm/companies', { ...asOwner(), body: { name: 'Conflict Co' } });
+    const company = await ok('POST', '/crm/companies', { ...asOwner(), body: { pib: testPib(), name: 'Conflict Co' } });
     await ok('PATCH', `/crm/companies/${company.id}`, { ...asAna(), body: { industry: 'Retail' } });
     const c409 = await call('PATCH', `/crm/companies/${company.id}`, { ...asOwner(ifMatch(company.updatedAt)), body: { industry: 'Finance' } });
     expect(c409.status).toBe(409);

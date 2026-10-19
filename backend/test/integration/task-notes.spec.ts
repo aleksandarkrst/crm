@@ -5,7 +5,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { inject } from 'vitest';
-import { addMember, call, createTenant, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 import { accessOf } from './people-helpers';
 
 interface Item {
@@ -49,7 +49,7 @@ beforeAll(async () => {
   // Ana reports to Marko, Marko to Petar: Petar only reads Ana's task.
   await ok('POST', '/people/reporting-lines', { ...as(), body: { employeeIds: [emp.ana], managerId: emp.marko } }, 200);
   await ok('POST', '/people/reporting-lines', { ...as(), body: { employeeIds: [emp.marko], managerId: emp.petar } }, 200);
-  const company = await ok('POST', '/crm/companies', { ...as(), body: { name: 'Northwind' } });
+  const company = await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Northwind' } });
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as());
   projectId = (await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name: 'Fit-out', projectTypeId: type!.id, companyId: company.id, leadUserId: lead.userId } })).id;
   taskId = (await ok<{ id: string }>('POST', '/tasks', { ...as(lead), body: { projectId, name: 'Survey', assigneeIds: [emp.ana!] } })).id;
@@ -100,7 +100,7 @@ describe('files', () => {
     const files = await ok<{ id: string; taskId: string | null; taskNumber: number | null }[]>('GET', `/projects/${projectId}/files`, as());
     expect(files.find((f) => f.id === added.body.id)).toMatchObject({ taskId, taskNumber: t.number });
     // Another project's task is refused.
-    const company = await ok('POST', '/crm/companies', { ...as(), body: { name: 'Other' } });
+    const company = await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Other' } });
     const [type] = await ok<{ id: string }[]>('GET', '/project-types', as());
     const other = await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name: 'Other job', projectTypeId: type!.id, companyId: company.id } });
     const otherTask = await ok<{ id: string }>('POST', '/tasks', { ...as(), body: { projectId: other.id, name: 'Elsewhere' } });

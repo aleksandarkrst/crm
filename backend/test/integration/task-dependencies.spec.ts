@@ -3,7 +3,7 @@
  * lists (Waits for / Blocks) on the task, deleting or moving clears them, and the history names them.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 
 interface Brief {
   id: string;
@@ -32,7 +32,7 @@ beforeAll(async () => {
   [owner, member] = await Promise.all([signIn('deps-owner'), signIn('deps-member')]);
   tenant = await createTenant(owner, 'Dependencies');
   await addMember(owner, tenant, member, 'member');
-  const company = await ok('POST', '/crm/companies', { ...as(), body: { name: 'Warehouse Co' } });
+  const company = await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Warehouse Co' } });
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as());
   projectA = (await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name: 'AC fit-out', projectTypeId: type!.id, companyId: company.id } })).id;
   projectB = (await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name: 'Booking site', projectTypeId: type!.id, companyId: company.id } })).id;

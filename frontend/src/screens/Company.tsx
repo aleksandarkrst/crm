@@ -7,11 +7,13 @@ import { Screen } from '../components/Layout';
 import { CompanyProjects } from './CompanyProjects';
 import { AddButton, DealsSection, FocusTasks, RecordHeader, RecordHistory, Section } from '../components/RecordParts';
 import { CheckedInput, GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
+import { mapsSearchUrl } from '../lib/maps';
+import { checkActivityCode, checkMb, checkPib } from '../lib/serbianIds';
 import { checkDomain } from '../lib/validate';
 import { paths } from '../lib/paths';
 import { INDUSTRIES, SOURCES, TEAM_SIZES } from '../store/seed';
 import { allPeople, companyOfPerson, companyRecords, contactsForLead, curOf, initialsOf, timelineFor } from '../store/selectors';
-import { useStore } from '../store/store';
+import { type CompanyFieldKey, useStore } from '../store/store';
 import type { Person } from '../store/types';
 
 /** The website of a domain such as "acme.com" (or a full http(s) address); '' when it isn't one. */
@@ -56,9 +58,11 @@ export function Company() {
   const target = rec.leads[0];
 
   const activities = rec.leads.flatMap((l) => timelineFor(s, l.id)).slice(0, 30);
-  const setField = (key: 'name' | 'industry' | 'hq' | 'size' | 'source' | 'domain' | 'notes') => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => store.setCompanyField(rec.id, key, e.target.value);
+  const setField = (key: CompanyFieldKey) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => store.setCompanyField(rec.id, key, e.target.value);
   const domain = extra?.domain ?? '';
   const website = websiteHref(domain);
+  const pib = extra?.pib ?? '';
+  const map = mapsSearchUrl(rec.name, extra?.address, extra?.city || rec.hq);
   const newDeal = () => set({ newLeadOpen: true, newLeadCompanyId: rec.id, newLeadContactId: null });
 
   /** Deals keep a company, so a company with deals can't be deleted; its contacts are kept. */
@@ -96,7 +100,14 @@ export function Company() {
                 <GhostSelect chevron aria-label="Industry" value={rec.industry} onChange={setField('industry')} options={INDUSTRIES} />
               </IconRow>
               <IconRow icon="location" label="HQ">
-                <GhostInput aria-label="HQ" value={rec.hq} onChange={setField('hq')} />
+                <span className="contact-field">
+                  <GhostInput aria-label="HQ" value={rec.hq} onChange={setField('hq')} />
+                  {map && (extra?.address || extra?.city || (rec.hq && rec.hq !== '—')) && (
+                    <a className="contact-action" href={map} target="_blank" rel="noopener noreferrer" aria-label={`Show ${rec.name} on a map`}>
+                      Map
+                    </a>
+                  )}
+                </span>
               </IconRow>
               <IconRow icon="team" label="Team size">
                 <GhostSelect chevron aria-label="Team size" value={rec.size} onChange={setField('size')} options={TEAM_SIZES} />
@@ -118,6 +129,30 @@ export function Company() {
                 <textarea className="ghost" aria-label="Notes" rows={2} value={extra?.notes ?? ''} onChange={setField('notes')} placeholder="What to know about this company" style={{ resize: 'vertical', lineHeight: 1.5, flex: 1 }} />
               </IconRow>
               <CustomFieldRows entity="company" recordId={rec.id} />
+            </Section>
+
+            <Section title="Identity" testId="company-identity" action={<span style={{ fontSize: 12, color: 'var(--text-2)' }}>As registered in APR</span>}>
+              <IdentityRow label="Company ID (PIB)" missing={!pib} badge={pib ? undefined : 'No PIB'}>
+                <CheckedInput aria-label="Company ID (PIB)" inputMode="numeric" placeholder="9 digits" value={pib} check={checkPib} onSave={(v) => store.setCompanyField(rec.id, 'pib', v)} />
+              </IdentityRow>
+              <IdentityRow label="Matični broj" missing={!extra?.mb}>
+                <CheckedInput aria-label="Matični broj" inputMode="numeric" placeholder="8 digits" value={extra?.mb ?? ''} check={checkMb} onSave={(v) => store.setCompanyField(rec.id, 'mb', v)} />
+              </IdentityRow>
+              <IdentityRow label="Šifra delatnosti" missing={!extra?.activityCode}>
+                <CheckedInput aria-label="Šifra delatnosti" inputMode="numeric" placeholder="4 digits, e.g. 6201" value={extra?.activityCode ?? ''} check={checkActivityCode} onSave={(v) => store.setCompanyField(rec.id, 'activityCode', v)} />
+              </IdentityRow>
+              <IdentityRow label="Ownership">
+                <GhostSelect chevron aria-label="Ownership" value={extra?.ownershipType ?? ''} onChange={setField('ownershipType')} options={[{ value: 'private', label: 'Private' }, { value: 'state', label: 'State' }]} />
+              </IdentityRow>
+              <IdentityRow label="Street" missing={!extra?.address}>
+                <GhostInput aria-label="Street" placeholder="Street and number" value={extra?.address ?? ''} onChange={setField('address')} />
+              </IdentityRow>
+              <IdentityRow label="City" missing={!extra?.city}>
+                <GhostInput aria-label="City" value={extra?.city ?? ''} onChange={setField('city')} />
+              </IdentityRow>
+              <IdentityRow label="Postal code" missing={!extra?.postalCode}>
+                <GhostInput aria-label="Postal code" inputMode="numeric" placeholder="21000" value={extra?.postalCode ?? ''} onChange={setField('postalCode')} />
+              </IdentityRow>
             </Section>
 
             <DealsSection leads={rec.leads} onAdd={newDeal} />
@@ -166,10 +201,23 @@ export function Company() {
 
           <div className="lead-main" style={{ flex: '999 1 480px', display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
             <FocusTasks leadIds={rec.leads.map((l) => l.id)} />
-            <RecordHistory entries={activities} entity="company" id={rec.id} cur={curOf(s)} rev={JSON.stringify([rec.name, rec.industry, rec.hq, rec.size, rec.source, extra?.ownerId, extra?.domain, extra?.notes])} />
+            <RecordHistory entries={activities} entity="company" id={rec.id} cur={curOf(s)} rev={JSON.stringify([rec.name, rec.industry, rec.hq, rec.size, rec.source, extra?.ownerId, extra?.domain, extra?.notes, pib, extra?.mb, extra?.activityCode, extra?.ownershipType, extra?.address, extra?.city, extra?.postalCode])} />
           </div>
         </div>
       </div>
     </Screen>
+  );
+}
+
+/** A row of the Identity card (CD-357): the label, the field, and "Missing" while it is empty. */
+function IdentityRow({ label, missing, badge, children }: { label: string; missing?: boolean; badge?: string; children: React.ReactNode }) {
+  return (
+    <div className="field-row">
+      <span className="field-label">{label}</span>
+      <span className="contact-field">
+        {children}
+        {missing && <span className="badge badge-warn">{badge ?? 'Missing'}</span>}
+      </span>
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { and, asc, count, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
@@ -153,10 +153,11 @@ export class OnboardingService {
           marks.push({ kind: 'product', recordId: row!.id });
         }
         const companyIds = new Map<string, string>();
-        for (const { key, ...c } of SAMPLE_COMPANIES) {
+        const taken = new Set((await tx.select({ pib: companies.pib }).from(companies).where(isNotNull(companies.pib))).map((r) => r.pib));
+        for (const { key, pib, ...c } of SAMPLE_COMPANIES) {
           const [row] = await tx
             .insert(companies)
-            .values({ ...c, source: SAMPLE_SOURCE, ownerUserId: ctx.userId, tenantId: ctx.tenantId })
+            .values({ ...c, pib: taken.has(pib) ? null : pib, source: SAMPLE_SOURCE, ownerUserId: ctx.userId, tenantId: ctx.tenantId })
             .returning({ id: companies.id });
           companyIds.set(key, row!.id);
           marks.push({ kind: 'company', recordId: row!.id });

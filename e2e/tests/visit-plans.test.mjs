@@ -4,7 +4,7 @@
 // also on a phone; plans are monthly and a quarter in Reports adds up its months (CD-212).
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, clickButton, createWorkspace, email, eventually, finishOnboarding, setValue, signIn, steps, text, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, createWorkspace, email, eventually, finishOnboarding, setValue, signIn, steps, text, useBrowser, testPib } from '../lib/harness.mjs';
 // The app's own rule for where a visit from a plan starts (B9, unit-tested in frontend/test).
 import { startInPeriod } from '../../frontend/src/store/meetingTime.ts';
 
@@ -42,7 +42,7 @@ describe('visit plans', () => {
     await signIn(olga, email('plans-olga'), 'Olga Owner');
     await createWorkspace(olga, 'Plans Co');
     const ids = [];
-    for (const name of ['Alpha Visits', 'Bravo Visits']) ids.push((await api(olga, '/crm/companies', { method: 'POST', body: JSON.stringify({ name }) })).id);
+    for (const name of ['Alpha Visits', 'Bravo Visits']) ids.push((await api(olga, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name }) })).id);
     // Alpha's one open deal: "Schedule visit" picks it (a meeting needs a deal, CD-213).
     const funnels = await api(olga, '/crm/funnels');
     await api(olga, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Alpha opportunity', funnelId: funnels[0].id, companyId: ids[0] }) });

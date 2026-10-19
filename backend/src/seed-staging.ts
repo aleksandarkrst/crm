@@ -12,7 +12,14 @@ import { TimesheetService } from './modules/timesheet';
 import type { TenantContext } from './shared/authorization';
 import { DatabaseService } from './shared/database/database.service';
 import { requestActor } from './shared/database/request-context';
+import { pibCheckDigit } from './shared/validation/serbian-ids';
 import { employees, invitations as invitationsTable, type MembershipRole, memberships, tenants, users } from './shared/database/schema';
+
+/** A valid PIB per seeded company (CD-357): unique within a workspace, the check digit computed. */
+const seedPib = (n: number) => {
+  const first8 = String(10_000_000 + n * 7_919);
+  return first8 + pibCheckDigit(first8);
+};
 
 /**
  * The staging seed (CD-313): two workspaces, each with an owner, an admin and a member, and a few
@@ -250,7 +257,7 @@ class Seed {
     // CRM: companies with a contact each, products, deals in the first funnel, one meeting.
     const companyIds: string[] = [];
     for (const c of ws.companies) {
-      const company = await as(owner, (x) => this.s.companies.create(x, { name: c.name, industry: c.industry, hq: c.hq }));
+      const company = await as(owner, (x) => this.s.companies.create(x, { name: c.name, pib: seedPib(companyIds.length), industry: c.industry, hq: c.hq }));
       companyIds.push(company.id);
       await as(admin, (x) => this.s.contacts.create(x, { fullName: c.contact, companyId: company.id, jobTitle: c.contactTitle, buyerRole: 'Decision maker' }));
     }

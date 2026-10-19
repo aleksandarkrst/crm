@@ -4,7 +4,7 @@
  * and not lost; the deal's timeline says so), who may change what, and workspace isolation.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, eventually, firstFunnel, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, eventually, firstFunnel, ok, type Session, signIn, testPib } from './helpers';
 
 interface StageView {
   id: string;
@@ -29,7 +29,7 @@ let otherTenant: string;
 const as = (s: Session = owner) => ({ token: s.token, tenant });
 
 const typesNow = () => ok<TypeView[]>('GET', '/project-types', as(member));
-const newCompany = (name: string) => ok('POST', '/crm/companies', { ...as(), body: { name } });
+const newCompany = (name: string) => ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name } });
 const newDeal = async (title: string, companyId: string) => ok('POST', '/crm/deals', { ...as(), body: { title, funnelId: (await firstFunnel(owner, tenant)).id, companyId } });
 
 beforeAll(async () => {

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
-import { activities, BILLING_FREQUENCIES, type BillingFrequency, BUYER_ROLES, companies, contacts, dealStageHistory, deals, funnels, funnelStages, memberships, products, tenants, users } from '../../../shared/database/schema';
+import { activities, BILLING_FREQUENCIES, type BillingFrequency, BUYER_ROLES, companies, contacts, dealStageHistory, deals, funnels, funnelStages, memberships, type OwnershipType, products, tenants, users } from '../../../shared/database/schema';
 import { CreateCompany } from '../companies/companies.service';
 import { CreateContact } from '../contacts/contacts.service';
 import { CreateDeal } from '../deals/deals.service';
@@ -41,6 +41,10 @@ interface Funnel {
 interface Lookups {
   /** lower(trim(name)) → id of the oldest company with that name. */
   companiesByName: Map<string, string>;
+  /** PIB → company id (CD-357): the PIB is the company's ID, unique per workspace. */
+  companiesByPib: Map<string, string>;
+  /** Company id → its PIB, for the companies that have one. */
+  pibOf: Map<string, string>;
   /** lower(email) → contact id. */
   contactsByEmail: Map<string, string>;
   /** lower(trim(name)) → id of the oldest product with that name (CD-81). */
@@ -55,8 +59,11 @@ interface Lookups {
 }
 
 /** Writes rows (commit) or pretends to (preview, which returns placeholder ids). */
+/** A company as the import writes it: an opportunity row may create one by name only, without a PIB. */
+type CompanyWrite = Omit<CreateCompany, 'pib'> & { pib?: string };
+
 interface Writer {
-  createCompany(input: CreateCompany): Promise<string>;
+  createCompany(input: CompanyWrite): Promise<string>;
   updateCompany(id: string, patch: Partial<CreateCompany>): Promise<void>;
   createContact(input: CreateContact): Promise<string>;
   updateContact(id: string, patch: Partial<CreateContact>): Promise<void>;
@@ -258,8 +265,14 @@ export class ImportService {
 
   private async loadLookups(tx: Tx, ctx: TenantContext, type: ImportType): Promise<Lookups> {
     const companiesByName = new Map<string, string>();
-    for (const c of await tx.select({ id: companies.id, name: companies.name }).from(companies).orderBy(asc(companies.createdAt), asc(companies.id))) {
+    const companiesByPib = new Map<string, string>();
+    const pibOf = new Map<string, string>();
+    for (const c of await tx.select({ id: companies.id, name: companies.name, pib: companies.pib }).from(companies).orderBy(asc(companies.createdAt), asc(companies.id))) {
       if (!companiesByName.has(key(c.name))) companiesByName.set(key(c.name), c.id);
+      if (c.pib) {
+        companiesByPib.set(c.pib, c.id);
+        pibOf.set(c.id, c.pib);
+      }
     }
     const contactsByEmail = new Map<string, string>();
     for (const c of await tx.select({ id: contacts.id, email: contacts.email }).from(contacts).where(isNotNull(contacts.email)).orderBy(asc(contacts.createdAt), asc(contacts.id))) {
@@ -293,7 +306,7 @@ export class ImportService {
     }
     // tenants has no RLS either.
     const [workspace] = await tx.select({ currency: tenants.currency }).from(tenants).where(eq(tenants.id, ctx.tenantId));
-    return { companiesByName, contactsByEmail, productsByName, productFrequency, members, funnels: fs, currency: workspace?.currency ?? 'EUR' };
+    return { companiesByName, companiesByPib, pibOf, contactsByEmail, productsByName, productFrequency, members, funnels: fs, currency: workspace?.currency ?? 'EUR' };
   }
 
   private defaultFunnel(type: ImportType, lookups: Lookups, funnelId: string | undefined): Funnel | null {
@@ -409,22 +422,60 @@ export class ImportService {
     zodErrors: (err: z.ZodError) => string[],
     invalid: (m: string[]) => RowResult,
   ): Promise<RowResult> {
-    const parsed = CreateCompany.safeParse({ name: v.name, industry: v.industry, hq: v.hq, teamSize: v.teamSize, source: v.source, domain: v.domain, notes: v.notes, ownerUserId });
-    if (!parsed.success) errors.push(...zodErrors(parsed.error).filter((m) => !(v.name === '' && m.startsWith('Name:'))));
+    let ownershipType: OwnershipType | undefined;
+    if (v.ownershipType) {
+      ownershipType = ownershipOf(v.ownershipType);
+      if (!ownershipType) errors.push(`Ownership: "${v.ownershipType}" is not Private or State`);
+    }
+    const parsed = CreateCompany.safeParse({
+      name: v.name,
+      pib: v.pib || undefined,
+      mb: v.mb,
+      industry: v.industry,
+      hq: v.hq,
+      address: v.address,
+      city: v.city,
+      postalCode: v.postalCode,
+      activityCode: v.activityCode,
+      ownershipType,
+      teamSize: v.teamSize,
+      source: v.source,
+      domain: v.domain,
+      notes: v.notes,
+      ownerUserId,
+    });
+    // An empty name or PIB already reads "… is required".
+    if (!parsed.success) errors.push(...zodErrors(parsed.error).filter((m) => !(v.name === '' && m.startsWith('Name:')) && !(v.pib === '' && m.startsWith('Company ID (PIB):'))));
     if (errors.length || !parsed.success) return invalid(errors);
 
+    // The PIB is the company's ID (CD-357): a row matches the company with its PIB, else a company
+    // with its name that has no PIB yet (which the row then gives one). A same-named company with
+    // another PIB is a different legal entity, so the row creates a new one.
     const input = parsed.data;
-    const existing = lk.companiesByName.get(key(input.name));
+    const byPib = lk.companiesByPib.get(input.pib);
+    const byNameId = lk.companiesByName.get(key(input.name));
+    const byName = byNameId && !lk.pibOf.get(byNameId) ? byNameId : undefined;
+    if (byPib && byName && byPib !== byName) return invalid([`Company ID (PIB): ${input.pib} belongs to another company than the one named "${input.name}"`]);
+    const existing = byPib ?? byName;
     if (existing) {
-      // The name is the match key; the existing company keeps its spelling.
+      // The existing company keeps its name spelling.
       const patch = present({ ...input, name: undefined });
-      if (duplicates === 'skip') return { ...result, status: 'skip', messages: [`A company named "${input.name}" already exists`] };
-      if (Object.keys(patch).length === 0) return { ...result, status: 'skip', messages: [`"${input.name}" already exists and the row has nothing else to update`] };
+      const what = byPib ? `with the PIB ${input.pib}` : `named "${input.name}"`;
+      if (duplicates === 'skip') return { ...result, status: 'skip', messages: [`A company ${what} already exists`] };
+      if (byPib && Object.keys(present({ ...patch, pib: undefined })).length === 0) return { ...result, status: 'skip', messages: [`The company ${what} already exists and the row has nothing else to update`] };
       await w.updateCompany(existing, patch);
-      return { ...result, status: 'update', notes: [`Updates the existing company "${input.name}"`] };
+      result.effects.push(() => {
+        lk.companiesByPib.set(input.pib, existing);
+        lk.pibOf.set(existing, input.pib);
+      });
+      return { ...result, status: 'update', notes: [`Updates the existing company ${what}`] };
     }
     const id = await w.createCompany(input);
-    result.effects.push(() => lk.companiesByName.set(key(input.name), id));
+    result.effects.push(() => {
+      if (!lk.companiesByName.has(key(input.name))) lk.companiesByName.set(key(input.name), id);
+      lk.companiesByPib.set(input.pib, id);
+      lk.pibOf.set(id, input.pib);
+    });
     return result;
   }
 
@@ -633,14 +684,26 @@ interface Queue {
 }
 const emptyQueue = (): Queue => ({ companies: [], contacts: [], deals: [], history: [], activities: [], products: [], updates: [] });
 
+/** Ownership by label (CD-357): Private / State, in English or Serbian. */
+function ownershipOf(text: string): OwnershipType | undefined {
+  const t = text.trim().toLowerCase();
+  if (['private', 'privately owned', 'privatno', 'privatna', 'privatni'].includes(t)) return 'private';
+  if (['state', 'state-owned', 'state owned', 'public', 'državno', 'drzavno', 'državna', 'drzavna', 'državni', 'drzavni'].includes(t)) return 'state';
+  return undefined;
+}
+
 const cloneLookups = (lk: Lookups) => ({
   companiesByName: new Map(lk.companiesByName),
+  companiesByPib: new Map(lk.companiesByPib),
+  pibOf: new Map(lk.pibOf),
   contactsByEmail: new Map(lk.contactsByEmail),
   productsByName: new Map(lk.productsByName),
   productFrequency: new Map(lk.productFrequency),
 });
 function restoreLookups(lk: Lookups, saved: ReturnType<typeof cloneLookups>) {
   lk.companiesByName = saved.companiesByName;
+  lk.companiesByPib = saved.companiesByPib;
+  lk.pibOf = saved.pibOf;
   lk.contactsByEmail = saved.contactsByEmail;
   lk.productsByName = saved.productsByName;
   lk.productFrequency = saved.productFrequency;

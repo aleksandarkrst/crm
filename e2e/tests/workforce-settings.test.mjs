@@ -4,7 +4,7 @@
 // header, and "Submit by".
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
 
 const addDays = (date, n) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 const DAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -36,7 +36,7 @@ describe('workforce settings', () => {
     page = await browser.person('wanda');
     await newUserWithWorkspace(page, { label: 'wf-settings', name: 'Wanda Admin', workspace: 'Workforce Co' });
     const me = (await api(page, '/people/access')).employeeId;
-    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Kovin Pančevo' }) });
+    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Kovin Pančevo' }) });
     const [type] = await api(page, '/project-types');
     const project = await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Service contract 2026', projectTypeId: type.id, companyId: company.id }) });
     task = await api(page, '/tasks', { method: 'POST', body: JSON.stringify({ projectId: project.id, name: 'Parts price list', assigneeIds: [me] }) });

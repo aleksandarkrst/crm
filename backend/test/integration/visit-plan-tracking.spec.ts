@@ -6,7 +6,7 @@
  * (members always get their own).
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, firstFunnel, type Json, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, firstFunnel, type Json, ok, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let seller: Session; // member with plans
@@ -47,7 +47,7 @@ beforeAll(async () => {
   tenant = await createTenant(owner, 'Tracking');
   await addMember(owner, tenant, seller, 'member');
   await addMember(owner, tenant, other, 'member');
-  for (const name of ['Alpha', 'Beta', 'Gamma', 'Delta']) companies[name] = (await ok('POST', '/crm/companies', { ...as(owner), body: { name: `${name} Track` } })).id;
+  for (const name of ['Alpha', 'Beta', 'Gamma', 'Delta']) companies[name] = (await ok('POST', '/crm/companies', { ...as(owner), body: { pib: testPib(), name: `${name} Track` } })).id;
   const funnel = await firstFunnel(owner, tenant);
   for (const name of Object.keys(companies)) {
     companyDeals[name] = (await ok('POST', '/crm/deals', { ...as(owner), body: { title: `${name} owner deal`, funnelId: funnel.id, companyId: companies[name] } })).id;

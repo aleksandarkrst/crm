@@ -9,7 +9,7 @@
  */
 import { PgBoss } from 'pg-boss';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { addMember, call, createTenant, eventually, mailTo, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, eventually, mailTo, ok, type Session, signIn, testPib } from './helpers';
 import { accessOf, asTenantSql } from './people-helpers';
 
 interface Node {
@@ -65,7 +65,7 @@ beforeAll(async () => {
   await asTenantSql(tenant, `update employees set employment_start_date = '2024-01-01', work_type = 'both'`);
   // Marko manages Ana; Lena leads the project; Vesna has nothing to do with it.
   await ok('POST', '/people/reporting-lines', { ...as(), body: { employeeIds: [ids.ana], managerId: ids.marko } }, 200);
-  companyId = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { name: 'Kovin Pančevo' } })).id;
+  companyId = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Kovin Pančevo' } })).id;
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as());
   projectId = (await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name: 'Service contract 2026', projectTypeId: type!.id, companyId, leadUserId: lena.userId } })).id;
   task = await ok<{ id: string; number: number }>('POST', '/tasks', { ...as(), body: { projectId, name: 'Hydraulic leak', assigneeIds: [ids.ana, ids.marko] } });

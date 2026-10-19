@@ -4,7 +4,7 @@
  * week shows the mix ("Partly submitted"), and switching the mode keeps every day's status.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 import { accessOf, asTenantSql } from './people-helpers';
 
 interface Week {
@@ -35,7 +35,7 @@ beforeAll(async () => {
   tenant = await createTenant(owner, 'Approval mode');
   await addMember(owner, tenant, ana, 'member');
   const anaId = (await accessOf(ana, tenant)).employeeId;
-  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { name: 'Hidrogradnja' } });
+  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Hidrogradnja' } });
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as());
   const project = await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name: 'Engine overhaul', projectTypeId: type!.id, companyId: company.id } });
   taskId = (await ok<{ id: string }>('POST', '/tasks', { ...as(), body: { projectId: project.id, name: 'Inspect engine', assigneeIds: [anaId] } })).id;

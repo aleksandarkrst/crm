@@ -3,7 +3,7 @@
  * name; technicians changed one by one with a new lead, all in the history; the checklist.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 import { accessOf } from './people-helpers';
 
 interface WorkOrder {
@@ -41,7 +41,7 @@ beforeAll(async () => {
     emp[name] = (await accessOf(s, tenant)).employeeId;
     if (name !== 'cara') await ok('PATCH', `/people/employees/${emp[name]}`, { ...as(), body: { workType: 'service' } }, 200);
   }
-  const companyId = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { name: 'Northwind' } })).id;
+  const companyId = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Northwind' } })).id;
   order = await ok<WorkOrder>('POST', '/work-orders', { ...as(), body: { title: 'Install 3 split AC units', companyId, technicianIds: [emp.ana] } });
 });
 

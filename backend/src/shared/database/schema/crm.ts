@@ -82,6 +82,10 @@ export const customFieldDefs = pgTable(
 
 // ---------------------------------------------------------------- companies & contacts
 
+/** Company ownership (CD-357): private or state-owned. */
+export const OWNERSHIP_TYPES = ['private', 'state'] as const;
+export type OwnershipType = (typeof OWNERSHIP_TYPES)[number];
+
 export const companies = pgTable(
   'companies',
   {
@@ -93,13 +97,26 @@ export const companies = pgTable(
     teamSize: text('team_size'), // "11–50 staff"
     source: text('source'), // "Referral", "Inbound web form", ...
     domain: text('domain'),
+    // Identity (CD-357). PIB is the company's ID, unique per workspace; required by the API but
+    // nullable here until every existing company has one (then SET NOT NULL in its own PR).
+    pib: text('pib'),
+    mb: text('mb'),
+    address: text('address'),
+    city: text('city'),
+    postalCode: text('postal_code'),
+    activityCode: text('activity_code'), // šifra delatnosti, 4 digits
+    ownershipType: text('ownership_type', { enum: OWNERSHIP_TYPES }),
     ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
     notes: text('notes'),
     /** Custom field values (CD-15), keyed by custom_field_defs.id; see CustomFieldsService. */
     customFields: jsonb('custom_fields').$type<CustomFieldValues>().notNull().default({}),
     ...timestamps,
   },
-  (t) => [unique('companies_tenant_id_uq').on(t.tenantId, t.id), index('companies_tenant_name_idx').on(t.tenantId, t.name)],
+  (t) => [
+    unique('companies_tenant_id_uq').on(t.tenantId, t.id),
+    index('companies_tenant_name_idx').on(t.tenantId, t.name),
+    uniqueIndex('companies_tenant_pib_uq').on(t.tenantId, t.pib).where(sql`${t.pib} is not null`),
+  ],
 );
 
 export const BUYER_ROLES = ['Decision maker', 'Economic buyer', 'Champion', 'Influencer', 'Gatekeeper', 'End user'] as const;

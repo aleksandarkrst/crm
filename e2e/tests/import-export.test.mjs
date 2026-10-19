@@ -128,7 +128,7 @@ describe('CSV import and export', () => {
     const bytes = readFileSync(join(downloads, name));
     assert.deepEqual([...bytes.subarray(0, 3)], [0xef, 0xbb, 0xbf], 'starts with a UTF-8 BOM');
     const lines = bytes.subarray(3).toString('utf8').split('\r\n');
-    assert.equal(lines[0], 'Contact ID,Full name,Job title,Company ID,Company,Email,Phone,LinkedIn,Buyer role,Owner');
+    assert.equal(lines[0], 'Contact ID,Full name,Job title,Company record ID,Company,Email,Phone,LinkedIn,Buyer role,Owner');
     assert.equal(lines.at(-1), '', 'ends with a line break');
     const rows = lines.slice(1, -1);
     assert.equal(rows.length, 2, 'the imported contact and the new one');

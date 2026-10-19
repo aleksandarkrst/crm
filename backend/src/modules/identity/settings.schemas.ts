@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { APPROVAL_MODES, CUSTOMER_EMAIL_LANGUAGES, DATE_FORMATS, DEADLINE_WEEKS, PROFILE_LANGUAGES, START_PAGES, TIME_FORMATS, WORKSPACE_MODULES } from '../../shared/database/schema';
+import { MB_MESSAGE, mbValid, PIB_MESSAGE, pibValid } from '../../shared/validation/serbian-ids';
 
 // ICU's lists (Node ships full ICU): every ISO 4217 code and every canonical IANA zone.
 const CURRENCIES = new Set(Intl.supportedValuesOf('currency'));
@@ -75,26 +76,6 @@ export const TimesheetSettingsInput = z
   .partial();
 export type TimesheetSettingsInput = z.infer<typeof TimesheetSettingsInput>;
 
-/** A Serbian PIB (tax id): nine digits, the last the ISO 7064 MOD 11,10 check digit. */
-export function pibValid(pib: string): boolean {
-  if (!/^\d{9}$/.test(pib)) return false;
-  let r = 10;
-  for (const ch of pib.slice(0, 8)) {
-    r = (r + Number(ch)) % 10 || 10;
-    r = (r * 2) % 11;
-  }
-  return (11 - r) % 10 === Number(pib[8]);
-}
-
-/** A Serbian MB (registration number): eight digits, the last a MOD 11 check digit (weights 2, 7, 6, 5, 4, 3, 2). */
-export function mbValid(mb: string): boolean {
-  if (!/^\d{8}$/.test(mb)) return false;
-  const weights = [2, 7, 6, 5, 4, 3, 2];
-  const r = [...mb.slice(0, 7)].reduce((sum, ch, i) => sum + Number(ch) * weights[i]!, 0) % 11;
-  const check = 11 - r > 9 ? 0 : 11 - r;
-  return check === Number(mb[7]);
-}
-
 /** Empty text clears a company detail. */
 const detail = (max: number) =>
   z
@@ -109,8 +90,8 @@ export const CompanyInput = z
   .object({
     legalName: detail(200),
     address: detail(300),
-    pib: detail(9).refine((v) => v === null || pibValid(v), 'PIB is 9 digits with a valid check digit'),
-    mb: detail(8).refine((v) => v === null || mbValid(v), 'MB is 8 digits with a valid check digit'),
+    pib: detail(9).refine((v) => v === null || pibValid(v), PIB_MESSAGE),
+    mb: detail(8).refine((v) => v === null || mbValid(v), MB_MESSAGE),
     place: detail(100),
     signatoryName: detail(150),
     signatoryTitle: detail(100),

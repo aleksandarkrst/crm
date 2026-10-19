@@ -6,7 +6,7 @@
  * deadline (Late and Auto-submitted, weeks without hours and rejected days left alone, once).
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 import { accessOf, asTenantSql } from './people-helpers';
 
 interface Day {
@@ -63,7 +63,7 @@ beforeAll(async () => {
   markoId = (await accessOf(marko, tenant)).employeeId;
   // Marko manages Ana: a manager still can't change the settings.
   await ok('POST', '/people/reporting-lines', { ...as(), body: { employeeIds: [anaId], managerId: markoId } }, 200);
-  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { name: 'Kovin Pančevo' } });
+  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Kovin Pančevo' } });
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as());
   const project = await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name: 'Service contract 2026', projectTypeId: type!.id, companyId: company.id } });
   taskId = (await ok<{ id: string }>('POST', '/tasks', { ...as(), body: { projectId: project.id, name: 'Parts price list', assigneeIds: [anaId, markoId] } })).id;

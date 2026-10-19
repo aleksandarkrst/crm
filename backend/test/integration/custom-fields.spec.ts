@@ -4,7 +4,7 @@
  * workspaces.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, firstFunnel, type Json, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, firstFunnel, type Json, ok, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let admin: Session;
@@ -129,7 +129,7 @@ describe('values', () => {
   });
 
   it('renaming a field or an option keeps the values; a used option cannot be removed', async () => {
-    const co = await ok('POST', '/crm/companies', { ...as(), body: { name: 'Keeper' } });
+    const co = await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Keeper' } });
     const tier = await field({ entity: 'company', label: 'Segment', type: 'select', options: [{ label: 'A' }, { label: 'B' }] });
     const [a, b] = tier.options;
     await ok('PATCH', `/crm/companies/${co.id}`, { ...as(), body: { customFields: { [tier.id]: a.id } } });
@@ -149,7 +149,7 @@ describe('values', () => {
 
   it('a deleted field keeps its values hidden in the record but no longer accepts writes', async () => {
     const f = await field({ entity: 'company', label: 'Legacy id', type: 'text' });
-    const co = await ok('POST', '/crm/companies', { ...as(), body: { name: 'Legacy', customFields: { [f.id]: 'L-1' } } });
+    const co = await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Legacy', customFields: { [f.id]: 'L-1' } } });
     await ok('DELETE', `/crm/custom-fields/${f.id}`, as());
     expect((await call('PATCH', `/crm/companies/${co.id}`, { ...as(), body: { customFields: { [f.id]: 'L-2' } } })).status).toBe(400);
     expect((await ok('GET', `/crm/companies/${co.id}`, as())).customFields[f.id]).toBe('L-1');

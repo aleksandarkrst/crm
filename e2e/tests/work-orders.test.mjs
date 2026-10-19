@@ -3,7 +3,7 @@
 // status (On hold asks why).
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, setValue, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, eventually, newUserWithWorkspace, setValue, steps, useBrowser, testPib } from '../lib/harness.mjs';
 
 describe('work orders', () => {
   const browser = useBrowser();
@@ -20,7 +20,7 @@ describe('work orders', () => {
     me = (await api(page, '/people/access')).employeeId;
     crew = (await api(page, '/people/employees')).employees.find((e) => e.id !== me).id;
     await api(page, '/people/employees/' + crew, { method: 'PATCH', body: JSON.stringify({ workType: 'service' }) });
-    company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Northwind' }) });
+    company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Northwind' }) });
   });
 
   step('New work order: only service people are listed; with a time it is Scheduled', async () => {

@@ -132,6 +132,14 @@ export interface CompanyExtra {
   /** Website domain, e.g. "acme.com" (CD-209); '' when none. */
   domain: string;
   notes: string;
+  /** Identity (CD-357), '' when not filled in; ownershipType is 'private', 'state' or ''. */
+  pib: string;
+  mb: string;
+  address: string;
+  city: string;
+  postalCode: string;
+  activityCode: string;
+  ownershipType: string;
   /** Last known name of the owner, from the API (see memberName). */
   owner: string;
   ownerId?: string | null;
@@ -429,6 +437,8 @@ export interface State {
   showMerge: boolean;
   sent: boolean;
   newLeadOpen: boolean;
+  /** The New company dialog (CD-357). */
+  newCompanyOpen: boolean;
   /**
    * The New project dialog (CD-234), open with what it starts from: a company (its page's "+ Project")
    * or a won deal ("Create project"); null when closed.

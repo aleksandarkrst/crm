@@ -5,7 +5,7 @@
 // log, and the meeting can no longer be set back to planned or deleted.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, RUN, setValue, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, eventually, newUserWithWorkspace, RUN, setValue, steps, useBrowser, testPib } from '../lib/harness.mjs';
 
 describe('external minutes by email', () => {
   const browser = useBrowser();
@@ -22,7 +22,7 @@ describe('external minutes by email', () => {
     page = await browser.person('erin');
     await newUserWithWorkspace(page, { label: 'mme-erin', name: 'Erin Sender', workspace: 'Minutes Email Co' });
     me = (await api(page, '/me')).user;
-    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: `Initech ${RUN}` }) });
+    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: `Initech ${RUN}` }) });
     const funnels = await api(page, '/crm/funnels');
     const deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Initech pilot', funnelId: funnels[0].id, companyId: company.id }) });
     jovan = await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ fullName: 'Jovan Customer', companyId: company.id, email: CUSTOMER }) });

@@ -6,7 +6,7 @@
  * conflicts when the week changed, the history rows, and the new table's isolation.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { call, createTenant, eventually, type Mail, mailTo, ok, type Session, signIn } from './helpers';
+import { call, createTenant, eventually, type Mail, mailTo, ok, type Session, signIn, testPib } from './helpers';
 import { accessOf, asTenantSql, joinAsEmployee, showInApp } from './people-helpers';
 
 interface Row {
@@ -53,7 +53,7 @@ beforeAll(async () => {
   // Senior → Marko → Dragan, Bojan and Vesna. The owner is an Admin without a manager.
   await asTenantSql(tenant, 'update employees set manager_id = $2 where id = any($1::uuid[])', [[draganId, bojanId, vesnaId], markoId]);
   await asTenantSql(tenant, 'update employees set manager_id = $2 where id = $1', [markoId, seniorId]);
-  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(owner), body: { name: 'Hidrogradnja' } });
+  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(owner), body: { pib: testPib(), name: 'Hidrogradnja' } });
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as(owner));
   const project = await ok<{ id: string }>('POST', '/projects', { ...as(owner), body: { name: 'Engine overhaul', projectTypeId: type!.id, companyId: company.id } });
   const task = await ok<{ id: string }>('POST', '/tasks', { ...as(owner), body: { projectId: project.id, name: 'Inspect engine', assigneeIds: [draganId, bojanId, vesnaId] } });

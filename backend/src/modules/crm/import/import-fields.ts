@@ -18,9 +18,16 @@ const owner: ImportField = {
 
 export const IMPORT_FIELDS: Record<ImportType, ImportField[]> = {
   companies: [
-    { key: 'name', label: 'Name', required: true, aliases: ['company', 'company name', 'organisation', 'organization', 'account', 'account name'], example: 'Northwind Studio' },
+    { key: 'name', label: 'Name', required: true, aliases: ['company', 'company name', 'organisation', 'organization', 'account', 'account name', 'naziv'], example: 'Northwind Studio' },
+    { key: 'pib', label: 'Company ID (PIB)', required: true, aliases: ['pib', 'company id', 'company id (pib)', 'tax id', 'tax number', 'vat id', 'vat number', 'poreski broj', 'poreski identifikacioni broj'], hint: 'Companies are matched by PIB, then by name', example: '104052135' },
+    { key: 'mb', label: 'MB', required: false, aliases: ['matični broj', 'maticni broj', 'registration number', 'company number'], example: '20084693' },
     { key: 'industry', label: 'Industry', required: false, aliases: ['sector', 'vertical'], example: 'Architecture' },
-    { key: 'hq', label: 'HQ', required: false, aliases: ['headquarters', 'city', 'location', 'country', 'address'], example: 'Belgrade' },
+    { key: 'hq', label: 'HQ', required: false, aliases: ['headquarters', 'location', 'country'], example: 'Belgrade' },
+    { key: 'address', label: 'Street address', required: false, aliases: ['address', 'street', 'adresa', 'ulica'], example: 'Bulevar Mihajla Pupina 10' },
+    { key: 'city', label: 'City', required: false, aliases: ['town', 'grad', 'mesto'], example: 'Novi Sad' },
+    { key: 'postalCode', label: 'Postal code', required: false, aliases: ['zip', 'zip code', 'postcode', 'post code', 'poštanski broj', 'postanski broj'], example: '21000' },
+    { key: 'activityCode', label: 'Activity code', required: false, aliases: ['šifra delatnosti', 'sifra delatnosti', 'activity', 'nace', 'nace code'], hint: '4 digits', example: '6201' },
+    { key: 'ownershipType', label: 'Ownership', required: false, aliases: ['ownership type', 'vlasništvo', 'vlasnistvo'], hint: 'Private or State', example: 'Private' },
     { key: 'teamSize', label: 'Team size', required: false, aliases: ['size', 'company size', 'employees', 'headcount', 'staff'], example: '11–50 staff' },
     { key: 'source', label: 'Source', required: false, aliases: ['lead source', 'channel'], example: 'Referral' },
     { key: 'domain', label: 'Domain', required: false, aliases: ['website', 'web', 'url', 'site'], example: 'northwind.example' },

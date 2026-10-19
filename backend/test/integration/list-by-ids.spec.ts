@@ -4,7 +4,7 @@
  * still limited to the caller's workspace.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { call, createTenant, firstFunnel, ok, productLine, saveProducts, type Session, signIn } from './helpers';
+import { call, createTenant, firstFunnel, ok, productLine, saveProducts, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let outsider: Session;
@@ -16,7 +16,7 @@ let theirDeal: string;
 async function seed(s: Session, t: string, n: number, into?: typeof mine) {
   const funnel = await firstFunnel(s, t);
   for (let i = 0; i < n; i++) {
-    const company = await ok<{ id: string }>('POST', '/crm/companies', { token: s.token, tenant: t, body: { name: `Co ${i}` } });
+    const company = await ok<{ id: string }>('POST', '/crm/companies', { token: s.token, tenant: t, body: { pib: testPib(), name: `Co ${i}` } });
     const contact = await ok<{ id: string }>('POST', '/crm/contacts', { token: s.token, tenant: t, body: { fullName: `Person ${i}`, companyId: company.id } });
     const product = await ok<{ id: string }>('POST', '/crm/products', { token: s.token, tenant: t, body: { name: `Product ${i}`, unitPrice: 100 } });
     const deal = await ok<{ id: string }>('POST', '/crm/deals', { token: s.token, tenant: t, body: { title: `Deal ${i}`, funnelId: funnel.id, companyId: company.id } });

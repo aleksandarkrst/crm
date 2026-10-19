@@ -10,7 +10,7 @@ import { PgBoss } from 'pg-boss';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildDocx, docxText, MAX_TEMPLATE_BYTES, starterTemplate } from '../../src/modules/crm/documents/docx';
 import { DEFAULT_MIGRATION_DATABASE_URL } from './env';
-import { addMember, call, createTenant, firstFunnel, ok, productLine, saveProducts, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, firstFunnel, ok, productLine, saveProducts, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let admin: Session;
@@ -167,7 +167,7 @@ describe('generating a document', () => {
 
   beforeAll(async () => {
     template = await upload(owner, tenant, starterTemplate(), 'Proposal — generation');
-    const company = await ok<{ id: string }>('POST', '/crm/companies', { token: owner.token, tenant, body: { name: 'Acme d.o.o.' } });
+    const company = await ok<{ id: string }>('POST', '/crm/companies', { token: owner.token, tenant, body: { pib: testPib(), name: 'Acme d.o.o.' } });
     const contact = await ok<{ id: string }>('POST', '/crm/contacts', { token: owner.token, tenant, body: { fullName: 'Ivana Radić', jobTitle: 'CMO', companyId: company.id } });
     const deal = await newDeal(owner, tenant, funnelId, {
       companyId: company.id,

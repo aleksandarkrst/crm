@@ -3,6 +3,7 @@ import { CustomFieldInputs, customFieldsForCreate } from '../components/CustomFi
 import { Modal, ModalHeader } from '../components/ui';
 import { type CustomFieldPatch, type CustomFieldType, LOST_REASONS, type LostReason } from '../lib/api';
 import { paths } from '../lib/paths';
+import { pibProblem } from '../lib/serbianIds';
 import { BUYER_ROLES, CHANNEL_LABELS, FIELD_TYPES } from '../store/seed';
 import { allPeople, companyLabels, companyRecords, customFieldsOf, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
@@ -10,6 +11,7 @@ import type { ChannelCode, Lead } from '../store/types';
 import { GenerationModal, NewTemplateModal } from './DocumentModals';
 import { DealProductsDialog } from './DealProductsDialog';
 import { MeetingDialog } from './MeetingDialog';
+import { NewCompanyDialog } from './NewCompanyDialog';
 import { NewProjectDialog } from './NewProjectDialog';
 import { NewTaskDialog } from './NewTaskDialog';
 import { NewWorkOrderDialog } from './NewWorkOrderDialog';
@@ -24,6 +26,7 @@ export function Modals() {
       {s.genOpen && <GenerationModal />}
       {s.docOpen && <ProposalDoc />}
       {s.newLeadOpen && <NewDealModal />}
+      {s.newCompanyOpen && <NewCompanyDialog />}
       {s.taskOpen && <NewTaskModal />}
       {s.contactOpen && <NewContactModal />}
       {s.personaOpen && <NewPersonaModal />}
@@ -54,6 +57,8 @@ function NewDealModal() {
   // The selected company's id, or NEW_CO.
   const [company, setCompany] = useState((s.newLeadCompanyId && companies.some((c) => c.value === s.newLeadCompanyId) ? s.newLeadCompanyId : companies[0]?.value) || NEW_CO);
   const [companyName, setCompanyName] = useState('');
+  const [companyPib, setCompanyPib] = useState('');
+  const [pibTouched, setPibTouched] = useState(false);
   const [contactPick, setContactPick] = useState<string | null>(() => allPeople(s).find((p) => p.contactId && p.contactId === s.newLeadContactId)?.name ?? null);
   const [contactName, setContactName] = useState('');
   const type = s.funnels[s.newLeadType] ? s.newLeadType : Object.keys(s.funnels)[0]!;
@@ -72,12 +77,14 @@ function NewDealModal() {
   const create = async () => {
     const fields = customFieldsForCreate(customFieldsOf(s, 'deal'), custom);
     if ('missing' in fields) return flash(`Fill in ${fields.missing} first`);
+    // A new company needs its PIB (CD-357), checked here before anything is created.
+    if (companyIsNew && pibProblem(companyPib)) return setPibTouched(true);
     const coName = companyIsNew ? companyName.trim() || 'New company' : (companyRec?.name ?? '');
     const ctName = contact === NEW_CT ? contactName.trim() : contact;
     const person = people.find((p) => p.name === ctName);
     setBusy(true);
     await createDeal({
-      company: { id: companyIsNew ? undefined : companyId, name: coName },
+      company: companyIsNew ? { name: coName, pib: companyPib.replace(/\s/g, '') } : { id: companyId, name: coName },
       contact: person ? { contactId: person.contactId, name: person.name } : ctName ? { name: ctName } : null,
       segment: type,
       ...(customFieldsOf(s, 'deal').length ? { customFields: fields.values } : {}),
@@ -102,8 +109,14 @@ function NewDealModal() {
                   </button>
                 )}
               </div>
-              <input className="form-input" placeholder="Company name" autoFocus value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
-              <span className="subform-hint">Created with the opportunity; its page fills in later.</span>
+              <input className="form-input" placeholder="Name as registered in APR" autoFocus value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+              <input className="form-input" data-testid="new-deal-company-pib" inputMode="numeric" placeholder="Company ID (PIB), 9 digits" aria-label="Company ID (PIB)" value={companyPib} aria-invalid={pibTouched && !!pibProblem(companyPib)} onChange={(e) => setCompanyPib(e.target.value)} onBlur={() => setPibTouched(true)} />
+              {pibTouched && pibProblem(companyPib) && (
+                <span className="subform-hint" role="alert" style={{ color: 'var(--danger)' }}>
+                  {pibProblem(companyPib)}
+                </span>
+              )}
+              <span className="subform-hint">Created as a lead with the opportunity; its page fills in later.</span>
             </div>
           ) : (
             <>

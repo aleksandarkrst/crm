@@ -3,7 +3,7 @@
  * endpoints and team management, what admins can't do to owners, and last-owner protection.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, firstFunnel, type Funnel, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, firstFunnel, type Funnel, ok, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let admin: Session;
@@ -22,7 +22,7 @@ beforeAll(async () => {
 
 /** Fresh rows to try deleting. */
 async function makeRows(by: Session) {
-  const company = await ok('POST', '/crm/companies', { ...as(by), body: { name: 'Doomed Co' } });
+  const company = await ok('POST', '/crm/companies', { ...as(by), body: { pib: testPib(), name: 'Doomed Co' } });
   const contact = await ok('POST', '/crm/contacts', { ...as(by), body: { fullName: 'Doomed Person' } });
   const product = await ok('POST', '/crm/products', { ...as(by), body: { name: 'Doomed Product' } });
   const deal = await ok('POST', '/crm/deals', { ...as(by), body: { title: 'Doomed Deal', funnelId: funnel.id } });

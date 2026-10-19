@@ -185,6 +185,11 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .modal-sub { font-size: 13px; color: var(--text-2); margin-top: 5px; line-height: 1.5; }
 .modal-actions { display: flex; gap: 9px; justify-content: flex-end; }
 .hint-box { font-size: 12.5px; color: var(--text-2); background: var(--bg-soft); border-radius: 8px; padding: 12px 13px; line-height: 1.5; }
+/* A warning in a dialog (CD-357): what went wrong and what to do instead. */
+.notice-warn { font-size: 12.5px; color: var(--ink); background: var(--warn-soft); border-radius: 8px; padding: 12px 13px; line-height: 1.5; display: flex; flex-direction: column; gap: 4px; }
+/* Two fields side by side in a dialog, one under the other on a phone. */
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 520px) { .form-grid-2 { grid-template-columns: 1fr; } }
 /* A panel inside a form for a record made along the way (CD-318: New company / New contact in New deal). */
 .subform { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px dashed var(--dashed); border-radius: 9px; background: var(--bg-soft); }
 .subform-head { display: flex; align-items: center; justify-content: space-between; gap: 4px 8px; flex-wrap: wrap; font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--ink); }

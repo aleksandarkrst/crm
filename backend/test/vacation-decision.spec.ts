@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require('pdf-parse/lib/pdf-parse.js') as (data: Buffer) => Promise<{ text: string; numpages: number }>;
 import { renderPdf } from '../src/modules/hr-documents';
-import { mbValid, pibValid } from '../src/modules/identity/settings.schemas';
+import { mbValid, pibValid } from '../src/shared/validation/serbian-ids';
 import { buildVacationDecision, missingCompanyDetails, srDate, type VacationDecisionData } from '../src/modules/timeoff/decision-document';
 import { DEFAULT_LEGAL_BASIS } from '../src/shared/database/schema';
 

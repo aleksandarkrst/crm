@@ -6,7 +6,7 @@
  * and Admins, oldest first.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { call, createTenant, eventually, type Mail, mailTo, ok, type Session, signIn } from './helpers';
+import { call, createTenant, eventually, type Mail, mailTo, ok, type Session, signIn, testPib } from './helpers';
 import { asTenantSql, joinAsEmployee } from './people-helpers';
 
 interface Day {
@@ -45,7 +45,7 @@ beforeAll(async () => {
   await joinAsEmployee(owner, tenant, peer);
   ownerId = (await ok<{ employeeId: string }>('GET', '/people/access', as(owner))).employeeId;
   await asTenantSql(tenant, 'update employees set manager_id = $2 where id = $1', [draganId, markoId]);
-  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(owner), body: { name: 'Hidrogradnja' } });
+  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(owner), body: { pib: testPib(), name: 'Hidrogradnja' } });
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as(owner));
   const project = await ok<{ id: string }>('POST', '/projects', { ...as(owner), body: { name: 'Engine overhaul', projectTypeId: type!.id, companyId: company.id } });
   taskId = (await ok<{ id: string }>('POST', '/tasks', { ...as(owner), body: { projectId: project.id, name: 'Inspect engine', assigneeIds: [draganId] } })).id;

@@ -3,7 +3,7 @@
 // deleting a type (its projects move to another type).
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, clickButton, confirmInApp, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, confirmInApp, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
 
 const typeNames = (page) => page.$$eval('[data-testid=project-type]', (els) => els.map((el) => el.innerText.split('\n')[0]));
 const stageNames = (page) => page.$$eval('[data-testid=project-stage] input', (els) => els.map((el) => el.value));
@@ -66,7 +66,7 @@ describe('project types', () => {
 
   step('a stage in use can\'t be deleted: the button is disabled with its reason (CD-280 TC 4)', async () => {
     const web = (await typesNow(page)).find((t) => t.name === 'Website');
-    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Northwind' }) });
+    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Northwind' }) });
     await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Northwind site', projectTypeId: web.id, companyId: company.id }) });
     await page.waitForFunction(() => document.querySelector('[data-testid=project-stage]')?.innerText.includes('1 project'));
     const del = await page.$eval('[data-testid=project-stage] button[aria-label="Delete stage"]', (el) => ({ disabled: el.disabled, title: el.title }));

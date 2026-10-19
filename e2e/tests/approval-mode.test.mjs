@@ -3,7 +3,7 @@
 // and switching back keeps that day Submitted.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, eventually, newUserWithWorkspace, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
 
 describe('approval mode', () => {
   const browser = useBrowser();
@@ -16,7 +16,7 @@ describe('approval mode', () => {
     page = await browser.person('ada');
     await newUserWithWorkspace(page, { label: 'approval-mode', name: 'Ada Days', workspace: 'Days Co' });
     const me = (await api(page, '/people/access')).employeeId;
-    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Hidrogradnja' }) });
+    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Hidrogradnja' }) });
     const [type] = await api(page, '/project-types');
     const project = await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Engine overhaul', projectTypeId: type.id, companyId: company.id }) });
     const task = await api(page, '/tasks', { method: 'POST', body: JSON.stringify({ projectId: project.id, name: 'Inspect engine', assigneeIds: [me] }) });

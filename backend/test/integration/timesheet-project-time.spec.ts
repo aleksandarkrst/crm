@@ -5,7 +5,7 @@
  * Report tab and the time report on a "No task" line.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 import { accessOf } from './people-helpers';
 
 interface Loggable {
@@ -31,7 +31,7 @@ beforeAll(async () => {
   await addMember(owner, tenant, ana, 'member');
   await addMember(owner, tenant, marko, 'member');
   anaId = (await accessOf(ana, tenant)).employeeId;
-  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { name: 'Kovin Pančevo' } });
+  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Kovin Pančevo' } });
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as());
   projectId = (await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name: 'Service contract 2026', projectTypeId: type!.id, companyId: company.id } })).id;
   await ok('POST', `/projects/${projectId}/members`, { ...as(), body: { employeeIds: [anaId] } });

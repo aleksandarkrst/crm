@@ -3,7 +3,7 @@
 // remaining hours per person and week.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, newUserWithWorkspace, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, newUserWithWorkspace, steps, useBrowser, testPib } from '../lib/harness.mjs';
 
 describe('project report', () => {
   const browser = useBrowser();
@@ -15,7 +15,7 @@ describe('project report', () => {
     page = await browser.person('rhea');
     await newUserWithWorkspace(page, { label: 'project-report', name: 'Rhea Report', workspace: 'Report Projects' });
     const me = (await api(page, '/people/access')).employeeId;
-    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Kovin Pančevo' }) });
+    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Kovin Pančevo' }) });
     const [type] = await api(page, '/project-types');
     project = await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Service contract 2026', code: 'SC-26', projectTypeId: type.id, companyId: company.id, budgetHours: 40 }) });
     const task = await api(page, '/tasks', { method: 'POST', body: JSON.stringify({ projectId: project.id, name: 'Hydraulic leak', stageId: type.stages[0].id, estimateHours: 10, assigneeIds: [me] }) });

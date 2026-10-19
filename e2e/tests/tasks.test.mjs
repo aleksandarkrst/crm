@@ -5,7 +5,7 @@
 // assignments" setting and the task page at 375 px.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
 
 /** HTML5 drag and drop, as the browser fires it (Puppeteer's mouse doesn't start a native drag). */
 async function htmlDrag(page, from, to) {
@@ -38,7 +38,7 @@ describe('tasks', () => {
   step('sets up a project of a company', async () => {
     page = await browser.person('tara');
     await newUserWithWorkspace(page, { label: 'tasks', name: 'Tara Tasks', workspace: 'Tasks Co' });
-    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Northwind' }) });
+    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Northwind' }) });
     const [type] = await api(page, '/project-types');
     me = (await api(page, '/people/access')).employeeId;
     project = await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Warehouse fit-out', projectTypeId: type.id, companyId: company.id }) });

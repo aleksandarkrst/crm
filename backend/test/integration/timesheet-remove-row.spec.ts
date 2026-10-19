@@ -3,7 +3,7 @@
  * submitted day keep it until the week is recalled; nobody else's hours are touched.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 import { accessOf } from './people-helpers';
 
 interface Week {
@@ -23,7 +23,7 @@ beforeAll(async () => {
   tenant = await createTenant(owner, 'Remove a row');
   await addMember(owner, tenant, ana, 'member');
   anaId = (await accessOf(ana, tenant)).employeeId;
-  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { name: 'Kovin Pančevo' } });
+  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Kovin Pančevo' } });
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as());
   const project = await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name: 'Service contract 2026', projectTypeId: type!.id, companyId: company.id } });
   taskId = (await ok<{ id: string }>('POST', '/tasks', { ...as(), body: { projectId: project.id, name: 'Survey', assigneeIds: [anaId] } })).id;

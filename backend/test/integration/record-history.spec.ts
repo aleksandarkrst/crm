@@ -3,7 +3,7 @@
  * to what; readable names; members can read it; isolated per tenant.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, type Funnel, firstFunnel, ok, productLine, saveProducts, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, type Funnel, firstFunnel, ok, productLine, saveProducts, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let seller: Session;
@@ -101,7 +101,7 @@ describe('deal history', () => {
 
 describe('company and contact history', () => {
   it('records their creation and field changes, with company names for ids', async () => {
-    const company = await ok('POST', '/crm/companies', { ...asOwner(), body: { name: 'History Co' } });
+    const company = await ok('POST', '/crm/companies', { ...asOwner(), body: { pib: testPib(), name: 'History Co' } });
     await ok('PATCH', `/crm/companies/${company.id}`, { ...asSeller(), body: { industry: 'Logistics', name: 'History Company' } });
     const c = await history('company', company.id);
     expect(c.entries.map((e) => [e.action, e.field])).toEqual(expect.arrayContaining([['created', null], ['updated', 'industry'], ['updated', 'name']]));

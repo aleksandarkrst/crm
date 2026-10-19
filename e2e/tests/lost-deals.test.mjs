@@ -2,7 +2,7 @@
 // again with the "Include lost deals" view), the timeline says why, and it can be reopened.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, clickButton, createDealInUi, eventually, newUserWithWorkspace, setValue, steps, text, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, createDealInUi, eventually, newUserWithWorkspace, setValue, steps, text, useBrowser, testPib } from '../lib/harness.mjs';
 
 /** Picks an option in the Pipeline filter bar's select that offers `option`. */
 const pickView = (page, option) =>
@@ -28,7 +28,7 @@ describe('lost opportunities', () => {
     dealId = await createDealInUi(page, { company: 'Gone Away d.o.o.', contact: 'Gina Gone' });
     // The second deal through the API (the New deal dialog offers existing companies first).
     const funnels = await api(page, '/crm/funnels');
-    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Keeper Ltd' }) });
+    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Keeper Ltd' }) });
     await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Keeper Ltd', funnelId: funnels[0].id, companyId: company.id }) });
     await page.reload({ waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=mark-lost]');

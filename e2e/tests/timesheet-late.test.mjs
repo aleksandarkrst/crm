@@ -3,7 +3,7 @@
 // week is then Late.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, newUserWithWorkspace, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, newUserWithWorkspace, steps, useBrowser, testPib } from '../lib/harness.mjs';
 
 const addDays = (date, n) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
@@ -19,7 +19,7 @@ describe('timesheet late', () => {
     await newUserWithWorkspace(page, { label: 'ts-late', name: 'Lou Late', workspace: 'Late Co' });
     const me = (await api(page, '/people/access')).employeeId;
     employeeId = me;
-    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Hidrogradnja' }) });
+    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Hidrogradnja' }) });
     const [type] = await api(page, '/project-types');
     const project = await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Engine overhaul', projectTypeId: type.id, companyId: company.id }) });
     const task = await api(page, '/tasks', { method: 'POST', body: JSON.stringify({ projectId: project.id, name: 'Inspect engine', assigneeIds: [me] }) });

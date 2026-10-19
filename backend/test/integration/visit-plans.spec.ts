@@ -6,7 +6,7 @@
  * are isolated.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, eventually, mailTo, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, eventually, mailTo, ok, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let admin: Session;
@@ -52,7 +52,7 @@ beforeAll(async () => {
   await addMember(owner, tenant, admin, 'admin');
   await addMember(owner, tenant, seller, 'member');
   await addMember(owner, tenant, other, 'member');
-  for (const name of ['Alpha', 'Beta', 'Gamma', 'Delta']) companies[name] = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(owner), body: { name: `${name} Plans` } })).id;
+  for (const name of ['Alpha', 'Beta', 'Gamma', 'Delta']) companies[name] = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(owner), body: { pib: testPib(), name: `${name} Plans` } })).id;
 });
 
 describe('visit plans', () => {
@@ -232,7 +232,7 @@ describe('visit plans', () => {
     expect((await ok<{ plans: Plan[] }>('GET', '/crm/visit-plans', as(outsider, otherTenant))).plans).toEqual([]);
     expect((await call('PATCH', `/crm/visit-plans/${p.id}`, { ...as(outsider, otherTenant), body: { note: 'x' } })).status).toBe(404);
     // A company of another workspace can't be put in a plan.
-    const foreign = await ok<{ id: string }>('POST', '/crm/companies', { ...as(outsider, otherTenant), body: { name: 'Foreign' } });
+    const foreign = await ok<{ id: string }>('POST', '/crm/companies', { ...as(outsider, otherTenant), body: { pib: testPib(), name: 'Foreign' } });
     expect((await call('POST', '/crm/visit-plans', { ...as(outsider, otherTenant), body: { salespersonUserId: outsider.userId, periodType: 'month', periodStart: '2027-08-01', lines: [{ companyId: companies.Alpha, plannedVisits: 1 }] } })).status).toBe(400);
     expect((await call('PATCH', `/crm/visit-plans/${p.id}`, { ...as(owner), body: { lines: [{ companyId: foreign.id, plannedVisits: 1 }] } })).status).toBe(400);
     // Not a member at all.

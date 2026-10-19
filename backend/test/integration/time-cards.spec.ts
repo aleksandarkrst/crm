@@ -6,7 +6,7 @@
  * project: 423).
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 import { accessOf, asTenantSql } from './people-helpers';
 
 interface Entry {
@@ -57,7 +57,7 @@ beforeAll(async () => {
   const petarId = (await accessOf(petar, tenant)).employeeId;
   await ok('POST', '/people/reporting-lines', { ...as(owner), body: { employeeIds: [markoId], managerId: petarId } }, 200);
   for (const id of [anaId, markoId]) await ok('PATCH', `/people/employees/${id}`, { ...as(owner), body: { workType: 'both' } });
-  companyId = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(owner), body: { name: 'Hidrogradnja' } })).id;
+  companyId = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(owner), body: { pib: testPib(), name: 'Hidrogradnja' } })).id;
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as(owner));
   projectId = (await ok<{ id: string }>('POST', '/projects', { ...as(owner), body: { name: 'Engine overhaul, CAT 336', projectTypeId: type!.id, companyId, leadUserId: owner.userId } })).id;
   monday = (await ok<{ thisWeek: string }>('GET', '/timesheet/week', as(ana))).thisWeek;

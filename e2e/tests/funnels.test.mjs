@@ -1,7 +1,7 @@
 // More than two funnels (CD-10) and adding and removing stages (CD-9) in the funnel builder.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, clickButton, eventually, newUserWithWorkspace, setValue, steps, text, useBrowser, waitForToastToClear, createNew } from '../lib/harness.mjs';
+import { api, BASE_URL, clickButton, eventually, newUserWithWorkspace, setValue, steps, text, useBrowser, waitForToastToClear, createNew, testPib } from '../lib/harness.mjs';
 
 describe('funnels and stages', () => {
   const browser = useBrowser();
@@ -59,7 +59,8 @@ describe('funnels and stages', () => {
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await createNew(page, 'deal');
     await clickButton(page, 'Mid-market');
-    await page.type('input[placeholder="Company name"]', 'Umbrella Corp');
+    await page.type('input[placeholder="Name as registered in APR"]', 'Umbrella Corp');
+    await page.type('[data-testid=new-deal-company-pib]', testPib());
     await page.type('input[placeholder="Full name"]', 'Albert Wesker');
     await clickButton(page, 'Create & start funnel');
     await page.waitForFunction(() => location.pathname.startsWith('/deals/'));

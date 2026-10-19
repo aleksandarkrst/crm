@@ -133,6 +133,7 @@ export function initialState(): State {
     showMerge: true,
     sent: false,
     newLeadOpen: false,
+    newCompanyOpen: false,
     newProject: null,
     newTask: null,
     newWorkOrder: null,

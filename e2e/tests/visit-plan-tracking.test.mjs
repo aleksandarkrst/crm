@@ -6,7 +6,7 @@
 // the quarter's visits (the quarter adds up its monthly plans, CD-212).
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, clickButton, createWorkspace, email, eventually, finishOnboarding, signIn, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, createWorkspace, email, eventually, finishOnboarding, signIn, steps, useBrowser, testPib } from '../lib/harness.mjs';
 
 describe('visit plan tracking', () => {
   const browser = useBrowser();
@@ -27,7 +27,7 @@ describe('visit plan tracking', () => {
     await olga.goto(BASE_URL, { waitUntil: 'networkidle0' });
     await signIn(olga, email('track-olga'), 'Olga Owner');
     await createWorkspace(olga, 'Tracking Co');
-    alphaId = (await api(olga, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Alpha Track' }) })).id;
+    alphaId = (await api(olga, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Alpha Track' }) })).id;
     // Its one open deal (Olga's): the meeting dialog picks it (a meeting needs a deal, CD-213).
     const funnels = await api(olga, '/crm/funnels');
     alphaDealId = (await api(olga, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Alpha opportunity', funnelId: funnels[0].id, companyId: alphaId }) })).id;

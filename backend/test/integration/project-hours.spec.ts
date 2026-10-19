@@ -5,7 +5,7 @@
  * tasks can't be deleted.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 import { accessOf, asTenantSql } from './people-helpers';
 
 interface Project {
@@ -34,7 +34,7 @@ beforeAll(async () => {
   await addMember(owner, tenant, ana, 'member');
   anaId = (await accessOf(ana, tenant)).employeeId;
   await ok('PATCH', `/people/employees/${anaId}`, { ...as(), body: { workType: 'both' } });
-  companyId = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { name: 'Kovin Pančevo' } })).id;
+  companyId = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Kovin Pančevo' } })).id;
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as());
   const create = async (name: string) => (await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name, projectTypeId: type!.id, companyId, budgetHours: 40 } })).id;
   projectId = await create('Service contract 2026');

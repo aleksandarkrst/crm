@@ -3,7 +3,7 @@
 // column, and the Gantt with an arrow and "Starts before T-1 is due".
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, setValue, steps, useBrowser, newUserWithWorkspace, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, setValue, steps, useBrowser, newUserWithWorkspace, waitForToastToClear, testPib } from '../lib/harness.mjs';
 
 describe('task dependencies', () => {
   const browser = useBrowser();
@@ -16,7 +16,7 @@ describe('task dependencies', () => {
   step('sets up two dated tasks of a project', async () => {
     page = await browser.person('dora');
     await newUserWithWorkspace(page, { label: 'deps', name: 'Dora Deps', workspace: 'Deps Co' });
-    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Warehouse Co' }) });
+    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Warehouse Co' }) });
     const [type] = await api(page, '/project-types');
     project = await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'AC fit-out', projectTypeId: type.id, companyId: company.id }) });
     const task = (body) => api(page, '/tasks', { method: 'POST', body: JSON.stringify({ projectId: project.id, ...body }) });

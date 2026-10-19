@@ -9,7 +9,7 @@
 // place on one line.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, RUN, setValue, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, eventually, newUserWithWorkspace, RUN, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
 
 const TZ = 'Europe/Belgrade'; // new workspaces use it
 const HOUR = 48; // px per hour of the time grid
@@ -75,9 +75,9 @@ describe('calendar quick create and in-place editing', () => {
   step('sets up three companies with contacts and opportunities', async () => {
     page = await browser.person('quinn');
     await newUserWithWorkspace(page, { label: 'quick', name: 'Quinn Quick', workspace: 'Quick Co' });
-    alpha = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: `Quick Alpha ${RUN}`, hq: 'Novi Sad' }) });
-    beta = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: `Quick Beta ${RUN}` }) });
-    gamma = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: `Quick Gamma ${RUN}` }) });
+    alpha = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: `Quick Alpha ${RUN}`, hq: 'Novi Sad' }) });
+    beta = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: `Quick Beta ${RUN}` }) });
+    gamma = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: `Quick Gamma ${RUN}` }) });
     await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ fullName: 'Ana Alpha', companyId: alpha.id }) });
     await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ fullName: 'Boris Beta', companyId: beta.id }) });
     gita = await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ fullName: 'Gita Gamma', companyId: gamma.id, email: 'gita@gamma.example.com' }) });
