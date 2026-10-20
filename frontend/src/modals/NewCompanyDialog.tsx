@@ -64,7 +64,7 @@ export function NewCompanyDialog() {
         )}
         <span className="subform-hint">Use the exact name from the APR register (Agencija za privredne registre).</span>
       </label>
-      <div className="form-grid-2">
+      <div className="policy-field-row">
         <label className="form-label">
           Company ID (PIB)
           <input className="form-input" data-testid="new-company-pib" inputMode="numeric" placeholder="9 digits" value={pib} aria-invalid={!!pibError} onChange={(e) => setPib(e.target.value)} style={pibError ? { borderColor: 'var(--danger)' } : undefined} />
@@ -85,7 +85,7 @@ export function NewCompanyDialog() {
           )}
         </label>
       </div>
-      <div className="form-grid-2">
+      <div className="policy-field-row">
         <label className="form-label">
           Industry
           <select className="form-input" value={industry} onChange={(e) => setIndustry(e.target.value)}>
@@ -104,7 +104,7 @@ export function NewCompanyDialog() {
           </select>
         </label>
       </div>
-      <div className="form-grid-2">
+      <div className="policy-field-row">
         <label className="form-label">
           Owner
           <select className="form-input" value={owner} onChange={(e) => setOwner(e.target.value)}>

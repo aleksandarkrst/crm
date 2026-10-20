@@ -92,11 +92,11 @@ function loadInitial(data: WorkspaceData): State {
 }
 
 const channelOf = (c: string): Channel => ((CHANNELS as readonly string[]).includes(c) ? (c as Channel) : 'NT');
-/** The API's message, plus the first field problem when validation failed. */
 /** The company fields edited on its page (CD-80, CD-357). */
 export type CompanyFieldKey = 'name' | 'industry' | 'hq' | 'size' | 'source' | 'domain' | 'notes' | 'pib' | 'mb' | 'address' | 'city' | 'postalCode' | 'activityCode' | 'ownershipType';
 const COMPANY_FIELD_LABELS: Partial<Record<CompanyFieldKey, string>> = { hq: 'HQ', size: 'team size', pib: 'PIB', mb: 'MB', address: 'street address', postalCode: 'postal code', activityCode: 'activity code', ownershipType: 'ownership' };
 
+/** The API's message, plus the first field problem when validation failed. */
 const errText = (err: unknown) => {
   if (!(err instanceof Error)) return String(err);
   const issue = err instanceof ApiError ? (err.body as { issues?: { path?: string; message?: string }[] } | null)?.issues?.[0] : undefined;

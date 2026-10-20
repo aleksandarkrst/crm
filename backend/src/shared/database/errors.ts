@@ -14,6 +14,7 @@ const RULES_WITH_MESSAGES = new Set(['deals_lost_not_won', 'deals_stage_not_dele
 
 /** Unique constraints whose violation the people module explains (milestone 13). */
 const UNIQUE_MESSAGES: Record<string, string> = {
+  companies_tenant_pib_uq: 'A company with this PIB already exists',
   employees_work_email_uq: 'Another employee already has this work email',
   employees_number_uq: 'Another employee already has this employee number',
   employees_user_uq: 'This member is already linked to another employee',

@@ -212,7 +212,7 @@ export function Company() {
 /** A row of the Identity card (CD-357): the label, the field, and "Missing" while it is empty. */
 function IdentityRow({ label, missing, badge, children }: { label: string; missing?: boolean; badge?: string; children: React.ReactNode }) {
   return (
-    <div className="field-row">
+    <div className="field-row identity-row">
       <span className="field-label">{label}</span>
       <span className="contact-field">
         {children}
