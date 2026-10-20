@@ -2,6 +2,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ApiError, type ApiInvitePreview, type ApiMe, crmApi, getTenantId, setTenantId } from '../lib/api';
 import { getAccessToken, onSessionEnded, signOut } from '../lib/auth';
+import { pathAfterSignIn } from '../lib/pathAfterSignIn';
 import { loadWorkspace, type WorkspaceData } from '../store/remote';
 import { type Session, StoreProvider } from '../store/store';
 import { Centered, ForgotPassword, ResetPassword, SignIn, SignUp, VerifySignup } from './AuthScreens';
@@ -75,15 +76,9 @@ export function SessionGate({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // A refused refresh while the app is not open yet: the sign-in page, once (CD-445).
-  useEffect(
-    () =>
-      onSessionEnded(() => {
-        navigate('/login', { replace: true });
-        setPhase({ kind: 'signed-out' });
-      }),
-    [navigate],
-  );
+  // A refused refresh while the app is not open yet: show sign-in here, once (CD-445).
+  // The address stays, so a deep link is still there after signing in.
+  useEffect(() => onSessionEnded(() => setPhase({ kind: 'signed-out' })), []);
 
   useEffect(() => {
     void start();
@@ -138,7 +133,8 @@ export function SessionGate({ children }: { children: ReactNode }) {
       <SignIn
         invited={!!sessionStorage.getItem(INVITE_KEY)}
         onDone={() => {
-          if (pathname === '/login') navigate('/', { replace: true });
+          const next = pathAfterSignIn(pathname);
+          if (next !== pathname) navigate(next, { replace: true });
           void start();
         }}
       />

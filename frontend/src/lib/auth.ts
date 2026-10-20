@@ -10,13 +10,10 @@
  */
 import { canSignInAgain, sessionEnded } from './session.ts';
 
-const MODE = (import.meta.env?.VITE_AUTH_MODE as string | undefined) ?? 'dev';
+const MODE = (import.meta.env.VITE_AUTH_MODE as string | undefined) ?? 'dev';
 const DEV_TOKEN_KEY = 'crm.devToken';
 
 export const authMode = MODE;
-
-let modeOverride: string | null = null;
-const currentMode = () => modeOverride ?? MODE;
 
 /** What signing in returns: the access token and for how many seconds it works. */
 export interface SignedIn {
@@ -38,7 +35,6 @@ export class SignInError extends Error {
 let access: { token: string; expiresAt: number } | null = null;
 /** /refresh answered 401: the cookie session is over, so this page does not ask again. */
 let ended = false;
-let redirected = false;
 const sessionEndedListeners = new Set<() => void>();
 
 const AUTH_SCREEN = /^\/(login|signup|forgot-password|reset-password|auth)(\/|$)/;
@@ -48,7 +44,7 @@ function onAuthScreen(): boolean {
   return AUTH_SCREEN.test(path);
 }
 
-/** Fires once when a refused refresh should leave the app for the sign-in page. */
+/** Fires once when a refused refresh should show sign-in on the page that is already open. */
 export function onSessionEnded(listener: () => void): () => void {
   sessionEndedListeners.add(listener);
   return () => sessionEndedListeners.delete(listener);
@@ -56,13 +52,13 @@ export function onSessionEnded(listener: () => void): () => void {
 
 function clearEnded(): void {
   ended = false;
-  redirected = false;
 }
 
 /**
- * The server refused the cookie. Remember it, and send the person to sign in once.
+ * The server refused the cookie. Remember it, so this page does not ask `/refresh` again.
  * While the app is open the sign-in dialog takes over, so an edit in progress stays (CD-88).
  * Pages that are already sign-in stay put: a missing cookie there is the normal signed-out state.
+ * Otherwise listeners show sign-in where the person already is, so a deep link stays in the address.
  */
 function noteSessionEnded(): void {
   if (ended) return;
@@ -72,19 +68,14 @@ function noteSessionEnded(): void {
     sessionEnded();
     return;
   }
-  if (onAuthScreen() || redirected) return;
-  redirected = true;
-  if (sessionEndedListeners.size > 0) {
-    for (const listener of [...sessionEndedListeners]) listener();
-    return;
-  }
-  globalThis.location?.assign('/login');
+  if (onAuthScreen()) return;
+  for (const listener of [...sessionEndedListeners]) listener();
 }
 
 /** Takes a fresh access token into use: in memory (oidc), or in localStorage (dev). */
 export function adoptSession({ accessToken, expiresIn }: SignedIn) {
   clearEnded();
-  if (currentMode() === 'oidc') access = { token: accessToken, expiresAt: Date.now() + expiresIn * 1000 };
+  if (MODE === 'oidc') access = { token: accessToken, expiresAt: Date.now() + expiresIn * 1000 };
   else localStorage.setItem(DEV_TOKEN_KEY, accessToken);
 }
 
@@ -104,7 +95,7 @@ async function post<T>(path: string, json: unknown = {}): Promise<T> {
 }
 
 export async function getAccessToken(): Promise<string | null> {
-  if (currentMode() !== 'oidc') return localStorage.getItem(DEV_TOKEN_KEY);
+  if (MODE !== 'oidc') return localStorage.getItem(DEV_TOKEN_KEY);
   if (ended) return null;
   // A little before it runs out, so a request doesn't leave with a token that expires on the way.
   if (access && access.expiresAt > Date.now() + 30_000) return access.token;
@@ -119,7 +110,7 @@ export async function getAccessToken(): Promise<string | null> {
  */
 let renewing: Promise<boolean> | null = null;
 export function renewSession(): Promise<boolean> {
-  if (currentMode() !== 'oidc') return Promise.resolve(false);
+  if (MODE !== 'oidc') return Promise.resolve(false);
   if (ended) return Promise.resolve(false);
   const renew = async () => {
     try {
@@ -192,7 +183,7 @@ function tokenEmail(token: string | null): string | null {
  * still the same person.
  */
 export async function signInAgain(how: { email: string; name: string; password?: string; google?: boolean }): Promise<string | null> {
-  if (currentMode() !== 'oidc') {
+  if (MODE !== 'oidc') {
     await devLogin(how.email, how.name);
     return how.email;
   }
@@ -240,21 +231,15 @@ export function takeSignInProblem(): string {
 }
 
 export async function signOut(): Promise<void> {
-  if (currentMode() === 'oidc') {
+  if (MODE === 'oidc') {
     access = null;
     await post('/logout').catch(() => {});
   } else localStorage.removeItem(DEV_TOKEN_KEY);
 }
 
-export function setAuthModeForTests(next: 'dev' | 'oidc' | null): void {
-  modeOverride = next;
-}
-
 export function resetAuthForTests(): void {
   access = null;
   ended = false;
-  redirected = false;
   renewing = null;
-  modeOverride = null;
   sessionEndedListeners.clear();
 }
