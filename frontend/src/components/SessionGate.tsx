@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ApiError, type ApiInvitePreview, type ApiMe, crmApi, getTenantId, setTenantId } from '../lib/api';
-import { getAccessToken, signOut } from '../lib/auth';
+import { getAccessToken, onSessionEnded, signOut } from '../lib/auth';
 import { loadWorkspace, type WorkspaceData } from '../store/remote';
 import { type Session, StoreProvider } from '../store/store';
 import { Centered, ForgotPassword, ResetPassword, SignIn, SignUp, VerifySignup } from './AuthScreens';
@@ -74,6 +74,16 @@ export function SessionGate({ children }: { children: ReactNode }) {
       setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
     }
   }, []);
+
+  // A refused refresh while the app is not open yet: the sign-in page, once (CD-445).
+  useEffect(
+    () =>
+      onSessionEnded(() => {
+        navigate('/login', { replace: true });
+        setPhase({ kind: 'signed-out' });
+      }),
+    [navigate],
+  );
 
   useEffect(() => {
     void start();

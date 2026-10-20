@@ -8,10 +8,15 @@
  *                          cookie. This tab holds only the short-lived access token, in memory,
  *                          and gets a new one from /api/auth/refresh when it runs out.
  */
-const MODE = (import.meta.env.VITE_AUTH_MODE as string | undefined) ?? 'dev';
+import { canSignInAgain, sessionEnded } from './session.ts';
+
+const MODE = (import.meta.env?.VITE_AUTH_MODE as string | undefined) ?? 'dev';
 const DEV_TOKEN_KEY = 'crm.devToken';
 
 export const authMode = MODE;
+
+let modeOverride: string | null = null;
+const currentMode = () => modeOverride ?? MODE;
 
 /** What signing in returns: the access token and for how many seconds it works. */
 export interface SignedIn {
@@ -21,20 +26,65 @@ export interface SignedIn {
 
 /** Why signing in didn't work. `message` is written for the person signing in. */
 export class SignInError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly status: number,
-  ) {
+  readonly code: string;
+  readonly status: number;
+  constructor(code: string, message: string, status: number) {
     super(message);
+    this.code = code;
+    this.status = status;
   }
 }
 
 let access: { token: string; expiresAt: number } | null = null;
+/** /refresh answered 401: the cookie session is over, so this page does not ask again. */
+let ended = false;
+let redirected = false;
+const sessionEndedListeners = new Set<() => void>();
+
+const AUTH_SCREEN = /^\/(login|signup|forgot-password|reset-password|auth)(\/|$)/;
+
+function onAuthScreen(): boolean {
+  const path = globalThis.location?.pathname ?? '';
+  return AUTH_SCREEN.test(path);
+}
+
+/** Fires once when a refused refresh should leave the app for the sign-in page. */
+export function onSessionEnded(listener: () => void): () => void {
+  sessionEndedListeners.add(listener);
+  return () => sessionEndedListeners.delete(listener);
+}
+
+function clearEnded(): void {
+  ended = false;
+  redirected = false;
+}
+
+/**
+ * The server refused the cookie. Remember it, and send the person to sign in once.
+ * While the app is open the sign-in dialog takes over, so an edit in progress stays (CD-88).
+ * Pages that are already sign-in stay put: a missing cookie there is the normal signed-out state.
+ */
+function noteSessionEnded(): void {
+  if (ended) return;
+  ended = true;
+  access = null;
+  if (canSignInAgain()) {
+    sessionEnded();
+    return;
+  }
+  if (onAuthScreen() || redirected) return;
+  redirected = true;
+  if (sessionEndedListeners.size > 0) {
+    for (const listener of [...sessionEndedListeners]) listener();
+    return;
+  }
+  globalThis.location?.assign('/login');
+}
 
 /** Takes a fresh access token into use: in memory (oidc), or in localStorage (dev). */
 export function adoptSession({ accessToken, expiresIn }: SignedIn) {
-  if (MODE === 'oidc') access = { token: accessToken, expiresAt: Date.now() + expiresIn * 1000 };
+  clearEnded();
+  if (currentMode() === 'oidc') access = { token: accessToken, expiresAt: Date.now() + expiresIn * 1000 };
   else localStorage.setItem(DEV_TOKEN_KEY, accessToken);
 }
 
@@ -54,7 +104,8 @@ async function post<T>(path: string, json: unknown = {}): Promise<T> {
 }
 
 export async function getAccessToken(): Promise<string | null> {
-  if (MODE !== 'oidc') return localStorage.getItem(DEV_TOKEN_KEY);
+  if (currentMode() !== 'oidc') return localStorage.getItem(DEV_TOKEN_KEY);
+  if (ended) return null;
   // A little before it runs out, so a request doesn't leave with a token that expires on the way.
   if (access && access.expiresAt > Date.now() + 30_000) return access.token;
   return (await renewSession()) ? (access?.token ?? null) : null;
@@ -62,22 +113,26 @@ export async function getAccessToken(): Promise<string | null> {
 
 /**
  * Gets a new access token for the session in the cookie, without leaving the page. False when
- * there is none or it ended (revoked, expired): then the user has to sign in again. Concurrent
- * callers share one renewal, and tabs take turns (the provider rotates the refresh token).
+ * there is none or it ended (revoked, expired): then the user has to sign in again, and this page
+ * does not ask `/refresh` again. Concurrent callers share one renewal, and tabs take turns (the
+ * provider rotates the refresh token).
  */
 let renewing: Promise<boolean> | null = null;
 export function renewSession(): Promise<boolean> {
-  if (MODE !== 'oidc') return Promise.resolve(false);
+  if (currentMode() !== 'oidc') return Promise.resolve(false);
+  if (ended) return Promise.resolve(false);
   const renew = async () => {
     try {
       adoptSession(await post<SignedIn>('/refresh'));
       return true;
-    } catch {
+    } catch (err) {
       access = null;
+      if (err instanceof SignInError && err.status === 401) noteSessionEnded();
       return false;
     }
   };
-  renewing ??= (navigator.locks ? navigator.locks.request('crm.renew-session', renew) : renew()).finally(() => {
+  const locks = globalThis.navigator?.locks;
+  renewing ??= (locks ? locks.request('crm.renew-session', renew) : renew()).finally(() => {
     renewing = null;
   });
   return renewing;
@@ -137,12 +192,14 @@ function tokenEmail(token: string | null): string | null {
  * still the same person.
  */
 export async function signInAgain(how: { email: string; name: string; password?: string; google?: boolean }): Promise<string | null> {
-  if (MODE !== 'oidc') {
+  if (currentMode() !== 'oidc') {
     await devLogin(how.email, how.name);
     return how.email;
   }
   if (how.google) {
     await googlePopup();
+    // The popup's callback stored a new cookie. Ask for it, even if an older refresh was refused.
+    clearEnded();
     if (!(await renewSession())) throw new SignInError('failed', signInProblemText('failed'), 0);
   } else {
     await passwordSignIn(how.email, how.password ?? '');
@@ -183,8 +240,21 @@ export function takeSignInProblem(): string {
 }
 
 export async function signOut(): Promise<void> {
-  if (MODE === 'oidc') {
+  if (currentMode() === 'oidc') {
     access = null;
     await post('/logout').catch(() => {});
   } else localStorage.removeItem(DEV_TOKEN_KEY);
+}
+
+export function setAuthModeForTests(next: 'dev' | 'oidc' | null): void {
+  modeOverride = next;
+}
+
+export function resetAuthForTests(): void {
+  access = null;
+  ended = false;
+  redirected = false;
+  renewing = null;
+  modeOverride = null;
+  sessionEndedListeners.clear();
 }
