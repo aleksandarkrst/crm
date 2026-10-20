@@ -409,8 +409,7 @@ function NewPersonaModal() {
   const [busy, setBusy] = useState(false);
   const bases = [
     ...Object.values(s.funnels).map((f) => ({ k: f.id, name: f.label, desc: `Copy its ${f.stages.length} stages, with their activities and to-dos. Opportunities stay where they are.` })),
-    // The backend's default stage names (default-funnels.ts); its first stage becomes New opportunity in CD-364.
-    { k: 'blank', name: 'Default stages', desc: 'Start from New deal, Discovery, Proposal and Won, and build it yourself.' },
+    { k: 'blank', name: 'Default stages', desc: 'Start from New opportunity, Discovery, Proposal and Won, and build it yourself.' },
   ];
   const create = async () => {
     if (!label.trim() || busy) return;

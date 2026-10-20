@@ -195,7 +195,7 @@ describe('next steps as deal tasks', () => {
     const timeline = await ok('GET', `/crm/deals/${d.id}/activities`, as(owner));
     expect(timeline.find((a: Json) => a.title === 'Task added: Send the pilot contract')).toMatchObject({ channel: 'MT', detail: `Due 2026-12-01 · Owner ${bo.name}` });
     // System entries have no channel, so they aren't labelled "Research task" (CD-222).
-    expect(timeline.find((a: Json) => a.title === 'Deal created')).toMatchObject({ channel: null });
+    expect(timeline.find((a: Json) => a.title === 'Opportunity created')).toMatchObject({ channel: null });
 
     // Without an owner the caller gets it; without a due date it has none.
     const second = await ok('POST', `/crm/meetings/${m.id}/minutes/next-steps/${noOwner.id}/task`, as(ana));

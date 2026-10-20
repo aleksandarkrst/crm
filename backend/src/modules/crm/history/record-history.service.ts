@@ -67,7 +67,7 @@ const FIELD_NAMES: Record<string, string> = {
   endsAt: 'the end',
   location: 'the location',
   agenda: 'the agenda',
-  dealId: 'the deal',
+  dealId: 'the opportunity',
   organizerUserId: 'the organizer',
   status: 'the status',
   cancelReason: 'the cancellation reason',
@@ -81,7 +81,7 @@ const FIELD_NAMES: Record<string, string> = {
   periodStart: 'the period',
   note: 'the note',
 };
-const ENTITY_NAMES: Record<HistoryEntityType, string> = { deal: 'deal', company: 'company', contact: 'contact', meeting: 'meeting', visit_plan: 'visit plan', project: 'project' };
+const ENTITY_NAMES: Record<HistoryEntityType, string> = { deal: 'opportunity', company: 'company', contact: 'contact', meeting: 'meeting', visit_plan: 'visit plan', project: 'project' };
 
 /** A patch field → the history field it changes (the fit score is stored from the CHAMP scores). */
 const historyField = (field: string) => (field === 'champ' ? 'fitScore' : field);
@@ -259,7 +259,7 @@ export class RecordHistoryService {
           : field === 'primaryContactId'
             ? 'Deleted contact'
             : field === 'dealId'
-              ? 'Deleted deal'
+              ? 'Deleted opportunity'
               : 'Deleted';
       return names.get(value) ?? fallback;
     };

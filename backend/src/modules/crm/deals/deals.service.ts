@@ -130,7 +130,7 @@ export class DealsService {
   get(ctx: TenantContext, id: string) {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const [found] = await tx.select().from(deals).where(eq(deals.id, id));
-      if (!found) throw new NotFoundException('Deal not found');
+      if (!found) throw new NotFoundException('Opportunity not found');
       const row = await this.present(tx, found);
       const linked = await tx
         .select({ contact: contacts })
@@ -157,7 +157,7 @@ export class DealsService {
           .values({ ownerUserId: ctx.userId, currency: workspace?.currency, ...fields, customFields: cf.set, tenantId: ctx.tenantId, stageId: first.id, closedAt: first.isWon ? new Date() : null })
           .returning();
         await this.history.record(tx, ctx, { dealId: row!.id, kind: 'created', fromStageId: null, toStageId: first.id, outcome: first.isWon ? 'won' : 'open' }, row!.createdAt);
-        await this.log(tx, ctx, row!.id, null, 'Deal created', input.source ? `Source: ${input.source}` : null);
+        await this.log(tx, ctx, row!.id, null, 'Opportunity created', input.source ? `Source: ${input.source}` : null);
         await this.audit.record(tx, ctx, { action: 'deal.created', entityType: 'deal', entityId: row!.id });
         await this.notifyAssigned(tx, ctx, row!.id, null, row!.ownerUserId);
         return { ...row!, outcome: dealOutcome(row!, first.isWon) };
@@ -175,7 +175,7 @@ export class DealsService {
       .withTenant(ctx.tenantId, async (tx) => {
         if (version) {
           const [locked] = await tx.select().from(deals).where(eq(deals.id, id)).for('update');
-          if (!locked) throw new NotFoundException('Deal not found');
+          if (!locked) throw new NotFoundException('Opportunity not found');
           await this.changes.assertNoConflict(tx, ctx, 'deal', locked, input, version);
         }
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
@@ -187,10 +187,10 @@ export class DealsService {
         let funnelChange: { from: string; to: typeof funnelStages.$inferSelect; funnel: string; at: Date } | null = null;
         if (input.funnelId) {
           const [current] = await tx.select({ funnelId: deals.funnelId, stageId: deals.stageId, lostAt: deals.lostAt }).from(deals).where(eq(deals.id, id));
-          if (!current) throw new NotFoundException('Deal not found');
+          if (!current) throw new NotFoundException('Opportunity not found');
           if (current.funnelId === input.funnelId) delete patch.funnelId;
           else {
-            if (current.lostAt) throw new ConflictException('This deal is lost. Reopen it before changing its funnel.');
+            if (current.lostAt) throw new ConflictException('This opportunity is lost. Reopen it before changing its funnel.');
             const first = await this.firstStage(tx, input.funnelId);
             const [funnel] = await tx.select({ label: funnels.label }).from(funnels).where(eq(funnels.id, input.funnelId));
             const now = new Date();
@@ -202,7 +202,7 @@ export class DealsService {
         const [row] = Object.keys(patch).length
           ? await tx.update(deals).set(patch).where(eq(deals.id, id)).returning()
           : await tx.select().from(deals).where(eq(deals.id, id));
-        if (!row) throw new NotFoundException('Deal not found');
+        if (!row) throw new NotFoundException('Opportunity not found');
         if (funnelChange) {
           const { from, to, funnel, at } = funnelChange;
           await this.history.record(tx, ctx, { dealId: id, kind: 'funnel_changed', fromStageId: from, toStageId: to.id, outcome: to.isWon ? 'won' : 'open' }, at);
@@ -232,13 +232,13 @@ export class DealsService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const [deal] = await tx.select().from(deals).where(eq(deals.id, id));
-        if (!deal) throw new NotFoundException('Deal not found');
+        if (!deal) throw new NotFoundException('Opportunity not found');
         const [stage] = await tx
           .select()
           .from(funnelStages)
           .where(and(eq(funnelStages.id, stageId), eq(funnelStages.funnelId, deal.funnelId), isNull(funnelStages.deletedAt)));
-        if (!stage) throw new BadRequestException("Stage does not belong to this deal's funnel");
-        if (deal.lostAt) throw new ConflictException('This deal is lost. Reopen it before moving it to another stage.');
+        if (!stage) throw new BadRequestException("Stage does not belong to this opportunity's funnel");
+        if (deal.lostAt) throw new ConflictException('This opportunity is lost. Reopen it before moving it to another stage.');
         if (stage.id === deal.stageId) return { ...deal, outcome: dealOutcome(deal, stage.isWon) };
 
         const now = new Date();
@@ -268,10 +268,10 @@ export class DealsService {
           .from(deals)
           .innerJoin(funnelStages, eq(funnelStages.id, deals.stageId))
           .where(eq(deals.id, id));
-        if (!current) throw new NotFoundException('Deal not found');
+        if (!current) throw new NotFoundException('Opportunity not found');
         const { deal, stageIsWon } = current;
-        if (deal.lostAt) throw new ConflictException('This deal is already marked as lost.');
-        if (stageIsWon) throw new ConflictException("A won deal can't be marked as lost. Move it out of the won stage first.");
+        if (deal.lostAt) throw new ConflictException('This opportunity is already marked as lost.');
+        if (stageIsWon) throw new ConflictException("A won opportunity can't be marked as lost. Move it out of the won stage first.");
 
         const now = new Date();
         const [row] = await tx
@@ -296,9 +296,9 @@ export class DealsService {
           .from(deals)
           .innerJoin(funnelStages, eq(funnelStages.id, deals.stageId))
           .where(eq(deals.id, id));
-        if (!current) throw new NotFoundException('Deal not found');
+        if (!current) throw new NotFoundException('Opportunity not found');
         const { deal, stage } = current;
-        if (!deal.lostAt) throw new ConflictException('Only lost deals can be reopened.');
+        if (!deal.lostAt) throw new ConflictException('Only lost opportunities can be reopened.');
 
         const now = new Date();
         const [row] = await tx.update(deals).set({ lostAt: null, lostReason: null, lostNote: null }).where(eq(deals.id, id)).returning();
@@ -338,15 +338,15 @@ export class DealsService {
     const files = await this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const [deal] = await tx.select({ title: deals.title }).from(deals).where(eq(deals.id, id));
-        if (!deal) throw new NotFoundException('Deal not found');
+        if (!deal) throw new NotFoundException('Opportunity not found');
         const [booked] = await tx.select({ n: count() }).from(meetings).where(eq(meetings.dealId, id));
         if (booked && booked.n > 0) {
           const what = booked.n === 1 ? '1 meeting' : `${booked.n} meetings`;
-          throw new ConflictException(`${deal.title} has ${what}. Delete them or move them to another deal first.`);
+          throw new ConflictException(`${deal.title} has ${what}. Delete them or move them to another opportunity first.`);
         }
         const docs = await tx.select({ key: dealDocuments.storageKey }).from(dealDocuments).where(eq(dealDocuments.dealId, id));
         const [row] = await tx.delete(deals).where(eq(deals.id, id)).returning({ id: deals.id });
-        if (!row) throw new NotFoundException('Deal not found');
+        if (!row) throw new NotFoundException('Opportunity not found');
         await this.audit.record(tx, ctx, { action: 'deal.deleted', entityType: 'deal', entityId: id });
         return docs.flatMap((d) => (d.key ? [d.key] : []));
       })

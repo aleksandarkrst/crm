@@ -91,27 +91,27 @@ describe('daily digest', () => {
   it("has the member's overdue and due-today tasks and deals without a next step, by the workspace's date", async () => {
     const funnel = await firstFunnel(owner, east);
     const today = localDate(EAST);
-    const busy = await deal(owner, east, funnel, 'Busy deal');
+    const busy = await deal(owner, east, funnel, 'Busy renewal');
     await task(owner, east, busy, 'Due today', today, owner.userId);
     await task(owner, east, busy, 'Overdue', localDate(EAST, -2), owner.userId);
     await task(owner, east, busy, 'Tomorrow', localDate(EAST, 1), owner.userId);
     await task(owner, east, busy, 'Done already', localDate(EAST, -1), owner.userId, true);
     await task(owner, east, busy, "Member's task", today, member.userId);
-    const idle = await deal(owner, east, funnel, 'Idle deal');
-    const lost = await deal(owner, east, funnel, 'Lost deal');
+    const idle = await deal(owner, east, funnel, 'Idle renewal');
+    const lost = await deal(owner, east, funnel, 'Lost renewal');
     await ok('POST', `/crm/deals/${lost.id}/lost`, { ...as(owner, east), body: { reason: 'Price' } }, 200);
-    await deal(owner, east, funnel, "Member's deal", member.userId);
+    await deal(owner, east, funnel, "Member's renewal", member.userId);
 
     const digest = await ok('GET', '/notifications/digest', as(owner, east));
     expect(digest.date).toBe(today);
     expect(digest.overdue.map((t: { title: string }) => t.title)).toEqual(['Overdue']);
     expect(digest.dueToday.map((t: { title: string }) => t.title)).toEqual(['Due today']);
-    expect(digest.dueToday[0]).toMatchObject({ dealId: busy.id, dealTitle: 'Busy deal', dueDate: today });
+    expect(digest.dueToday[0]).toMatchObject({ dealId: busy.id, dealTitle: 'Busy renewal', dueDate: today });
     expect(digest.noNextStep.map((d: { id: string }) => d.id)).toEqual([idle.id]);
 
     const theirs = await ok('GET', '/notifications/digest', as(member, east));
     expect(theirs.dueToday.map((t: { title: string }) => t.title)).toEqual(["Member's task"]);
-    expect(theirs.noNextStep.map((d: { title: string }) => d.title)).toEqual(["Member's deal"]);
+    expect(theirs.noNextStep.map((d: { title: string }) => d.title)).toEqual(["Member's renewal"]);
   });
 
   it("uses the workspace's time zone for today", async () => {
@@ -130,10 +130,12 @@ describe('daily digest', () => {
   it('is emailed by the worker with the items and links', async () => {
     await ok('POST', '/dev/digest', as(owner, east), 202);
     const mail = await eventually(async () => (await mailTo(owner, owner.email)).find((m) => m.subject.startsWith('Your day in Digest East')), 'the digest email');
-    expect(mail.subject).toMatch(/: 1 overdue, 1 due today, 1 deal without a next step$/);
+    expect(mail.subject).toMatch(/: 1 overdue, 1 due today, 1 opportunity without a next step$/);
     expect(mail.text).toContain('Overdue tasks (1)');
-    expect(mail.text).toContain('- Due today · Busy deal');
-    expect(mail.text).toContain('Idle deal');
+    expect(mail.text).toContain('- Due today · Busy renewal');
+    expect(mail.text).toContain('Idle renewal');
+    expect(mail.text).toContain('Opportunities with no next step');
+    expect(`${mail.subject}\n${mail.text}\n${mail.html}`.replace(/https?:\/\/\S+/g, '')).not.toMatch(/deal/i);
     expect(mail.text).toContain('http://app.example.test/deals/');
     expect(mail.text).not.toContain('Tomorrow');
     expect(mail.text).not.toContain("Member's task");
@@ -187,6 +189,8 @@ describe('deal assigned to you', () => {
     const mail = await eventually(async () => (await mailTo(member, member.email)).find((m) => m.subject.endsWith('assigned you Assigned on create')), 'assignment email');
     expect(mail.subject).toBe(`${owner.name} assigned you Assigned on create`);
     expect(mail.text).toContain(`http://app.example.test/deals/${created.id}`);
+    expect(mail.text).toContain('Open the opportunity:');
+    expect(`${mail.subject}\n${mail.text}\n${mail.html}`.replace(/https?:\/\/\S+/g, '')).not.toMatch(/deal/i);
 
     const own = await deal(owner, tenant, funnel, 'Reassigned later');
     await ok('PATCH', `/crm/deals/${own.id}`, { ...as(owner), body: { ownerUserId: member.userId } });

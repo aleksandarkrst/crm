@@ -118,7 +118,7 @@ describe('saving a deal’s products', () => {
     expect((await dealOf(deal)).installments).toEqual(installments.map((i) => ({ ...i, id: expect.any(String) })));
     const refused = await call('PUT', `/crm/deals/${deal}/products`, { ...as(), body: { taxMode: 'exclusive', lines: [productLine(p.id), productLine(p.id, { billingFrequency: 'weekly' })], installments } });
     expect(refused.status).toBe(400);
-    expect(refused.body.message).toContain('Installments are for deals with one-time products only');
+    expect(refused.body.message).toContain('Installments are for opportunities with one-time products only');
     // Nothing of the refused save was kept.
     expect(await linesOf(deal)).toHaveLength(1);
   });

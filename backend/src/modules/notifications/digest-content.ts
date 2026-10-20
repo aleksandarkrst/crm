@@ -157,7 +157,7 @@ export function digestEmail({ to, memberName, workspaceName, appUrl, digest }: D
     digest.dueToday.length ? `${digest.dueToday.length} due today` : null,
     digest.notClosed.length ? plural(digest.notClosed.length, 'meeting') + ' not closed' : null,
     digest.minutesMissing.length ? plural(digest.minutesMissing.length, 'meeting') + ' without minutes' : null,
-    digest.noNextStep.length ? plural(digest.noNextStep.length, 'deal') + ' without a next step' : null,
+    digest.noNextStep.length ? plural(digest.noNextStep.length, 'opportunity', 'opportunities') + ' without a next step' : null,
   ].filter(Boolean);
   const subject = `Your day in ${workspaceName}: ${counts.join(', ')}`;
 
@@ -185,7 +185,7 @@ export function digestEmail({ to, memberName, workspaceName, appUrl, digest }: D
       title: 'Minutes missing',
       lines: digest.minutesMissing.map((m) => ({ text: `${m.title} · ${m.company} (held ${shortDay(clock(m.startsAt).date)})`, href: meetingUrl(m.id) })),
     },
-    { title: 'Deals with no next step', lines: digest.noNextStep.map((d) => ({ text: `${onDeal(d.title, d.company)} · ${d.stage}`, href: dealUrl(d.id) })) },
+    { title: 'Opportunities with no next step', lines: digest.noNextStep.map((d) => ({ text: `${onDeal(d.title, d.company)} · ${d.stage}`, href: dealUrl(d.id) })) },
     {
       title: 'Visit plan progress',
       lines: digest.visitPlans.map((p) => ({ text: `Visits planned this period (${p.periodLabel}): ${p.held} of ${p.planned} held`, href: `${base}/visit-plans/${p.planId}` })),
@@ -246,14 +246,14 @@ export function dealAssignedEmail({ to, assigneeName, actorName, workspaceName, 
   ].filter((f): f is string => !!f);
   const greeting = assigneeName ? `Hi ${assigneeName.split(' ')[0]},` : 'Hi,';
   const intro = `${actorName} made you the owner of ${deal.title} in ${workspaceName}.`;
-  const footer = `You get this email because "Deal assigned to you" is on in Settings → Notifications for ${workspaceName}.`;
-  const text = [greeting, '', intro, '', ...facts, '', `Open the deal: ${link}`, '', footer].join('\n');
+  const footer = `You get this email because "Opportunity assigned to you" is on in Settings → Notifications for ${workspaceName}.`;
+  const text = [greeting, '', intro, '', ...facts, '', `Open the opportunity: ${link}`, '', footer].join('\n');
   const html = layoutHtml(
     [
       `<p style="margin:0 0 12px">${escapeHtml(greeting)}</p>`,
       `<p style="margin:0 0 12px">${escapeHtml(intro)}</p>`,
       `<p style="margin:0 0 12px;color:#475750">${facts.map(escapeHtml).join('<br>')}</p>`,
-      buttonHtml('Open the deal', link),
+      buttonHtml('Open the opportunity', link),
     ].join('\n'),
     footer,
     appUrl,

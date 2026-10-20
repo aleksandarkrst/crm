@@ -311,7 +311,7 @@ describe('importing deals', () => {
     const history = await ok<Json[]>('GET', `/crm/deal-stage-history?dealId=${two.deal.id}`, as());
     expect(history.map((h) => [h.kind, h.fromStageId, h.toStageId, h.outcome, h.changedByUserId])).toEqual([['created', null, stage.id, 'open', owner.userId]]);
     const activities = await ok<Json[]>('GET', `/crm/deals/${two.deal.id}/activities`, as());
-    expect(activities.map((a) => [a.title, a.detail])).toEqual([['Deal created', 'Imported from CSV']]);
+    expect(activities.map((a) => [a.title, a.detail])).toEqual([['Opportunity created', 'Imported from CSV']]);
   });
 
   it('gives imported deals the workspace currency, like the create endpoint', async () => {

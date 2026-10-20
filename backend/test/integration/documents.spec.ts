@@ -116,7 +116,8 @@ describe('templates: roles and limits', () => {
     const list = await ok<Template[]>('GET', '/crm/document-templates', { token: member.token, tenant });
     expect(list.map((t) => t.name)).toEqual(expect.arrayContaining(['Owner template', 'Admin template']));
     const ref = await ok<{ fields: { tag: string }[]; lineFields: { tag: string }[] }>('GET', '/crm/document-templates/placeholders', { token: member.token, tenant });
-    expect(ref.fields.map((f) => f.tag)).toContain('deal.amount');
+    expect(ref.fields.map((f) => f.tag)).toContain('opportunity.amount');
+    expect(JSON.stringify(ref)).not.toMatch(/deal/i);
     expect(ref.lineFields.map((f) => f.tag)).toContain('line.product');
   });
 

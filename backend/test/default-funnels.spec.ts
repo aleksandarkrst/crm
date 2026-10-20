@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { BLANK_FUNNEL_STAGES, DEFAULT_FUNNELS } from '../src/modules/crm/funnels/default-funnels';
 
 describe('DEFAULT_FUNNELS', () => {
+  it('starts both seeded funnels and a blank one at New opportunity, and keeps the key', () => {
+    for (const funnel of [...DEFAULT_FUNNELS, { key: 'blank', stages: BLANK_FUNNEL_STAGES }]) {
+      expect(funnel.stages[0], funnel.key).toMatchObject({ key: 'new', name: 'New opportunity' });
+    }
+  });
+
   it.each([...DEFAULT_FUNNELS, { key: 'blank', label: '', note: '', stages: BLANK_FUNNEL_STAGES }].map((f) => [f.key, f] as const))('%s: unique stage keys, rising probability, ends in won', (_key, funnel) => {
     const keys = funnel.stages.map((s) => s.key);
     expect(new Set(keys).size).toBe(keys.length);

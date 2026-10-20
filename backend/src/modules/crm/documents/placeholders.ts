@@ -3,8 +3,8 @@
  * and the pure function that turns a deal into their values. No I/O here, so it is unit tested
  * (test/document-placeholders.spec.ts).
  *
- * Templates write fields in double braces, as the design's template dialog says: `{{deal.title}}`.
- * Deal lines repeat with a loop, usually around one table row:
+ * Templates write fields in double braces: `{{opportunity.title}}`. `{{deal.title}}` fills the same
+ * value. Opportunity lines repeat with a loop, usually around one table row:
  * `{{#lines}} {{line.product}} … {{line.total}} {{/lines}}`.
  */
 
@@ -20,6 +20,21 @@ export interface PlaceholderDef {
 
 const P = (group: string, tag: string, label: string, example: string): PlaceholderDef => ({ group, tag, label, example });
 
+/** `{{opportunity.*}}` is what the help lists. `{{deal.*}}` is the same field, kept for saved templates. */
+const OPPORTUNITY_FIELDS = [
+  ['title', 'Opportunity title', 'ESG communications'],
+  ['headline', 'Proposal headline (the opportunity title when empty)', 'An ESG story investors can verify'],
+  ['amount', 'Opportunity value without tax, in the opportunity currency', '€78,000'],
+  ['vat', 'Tax on the opportunity', '€15,600'],
+  ['total', 'Total with tax', '€93,600'],
+  ['discount', 'Opportunity discount on one-time products', '€2,000'],
+  ['currency', 'Currency code', 'EUR'],
+  ['closing_date', 'Closing date', '31 October 2026'],
+  ['stage', 'Stage', 'Proposal'],
+  ['funnel', 'Funnel', 'Enterprise'],
+  ['source', 'Source', 'Conference'],
+] as const;
+
 /** Every field a template can use outside the lines loop. */
 export const PLACEHOLDERS: readonly PlaceholderDef[] = [
   P('Company', 'company.name', 'Company name', 'Voltek Energy'),
@@ -31,22 +46,12 @@ export const PLACEHOLDERS: readonly PlaceholderDef[] = [
   P('Contact', 'contact.job_title', 'Contact job title', 'Communications Lead'),
   P('Contact', 'contact.email', 'Contact email', 'i.radic@voltek.eu'),
   P('Contact', 'contact.phone', 'Contact phone', '+381 21 660 118'),
-  P('Deal', 'deal.title', 'Deal title', 'ESG communications'),
-  P('Deal', 'deal.headline', 'Proposal headline (the deal title when empty)', 'An ESG story investors can verify'),
-  P('Deal', 'deal.amount', 'Deal value without tax, in the deal currency', '€78,000'),
-  P('Deal', 'deal.vat', 'Tax on the deal', '€15,600'),
-  P('Deal', 'deal.total', 'Total with tax', '€93,600'),
-  P('Deal', 'deal.discount', 'Deal discount on one-time products', '€2,000'),
-  P('Deal', 'deal.currency', 'Currency code', 'EUR'),
-  P('Deal', 'deal.closing_date', 'Closing date', '31 October 2026'),
-  P('Deal', 'deal.stage', 'Stage', 'Proposal'),
-  P('Deal', 'deal.funnel', 'Funnel', 'Enterprise'),
-  P('Deal', 'deal.source', 'Source', 'Conference'),
+  ...OPPORTUNITY_FIELDS.map(([field, label, example]) => P('Opportunity', `opportunity.${field}`, label, example)),
   P('Discovery', 'discovery.need', 'Need', 'an ESG communications programme…'),
   P('Discovery', 'discovery.constraint', 'Constraint', 'investor day in March'),
   P('Discovery', 'discovery.decision_maker', 'Decision maker', 'the CEO with board visibility'),
   P('Discovery', 'discovery.date', 'Discovery call date', '5 September 2026'),
-  P('Owner', 'owner.name', 'Deal owner', 'Mila Jovanović'),
+  P('Owner', 'owner.name', 'Opportunity owner', 'Mila Jovanović'),
   P('Owner', 'owner.email', 'Owner email', 'mila@studio.rs'),
   P('Owner', 'owner.job_title', 'Owner job title', 'Account Director'),
   P('Owner', 'owner.phone', 'Owner phone', '+381 60 123 4567'),
@@ -54,37 +59,45 @@ export const PLACEHOLDERS: readonly PlaceholderDef[] = [
   P('Workspace', 'today', "Today's date", '24 September 2026'),
 ];
 
-/** Fields inside `{{#lines}} … {{/lines}}`, one repetition per deal line. */
+/** Fields inside `{{#lines}} … {{/lines}}`, one repetition per opportunity line. */
 export const LINE_PLACEHOLDERS: readonly PlaceholderDef[] = [
-  P('Deal lines', 'line.product', 'Product or service', 'Communications strategy'),
-  P('Deal lines', 'line.description', 'Line description', 'Strategy, messaging and launch plan'),
-  P('Deal lines', 'line.quantity', 'Quantity', '12'),
-  P('Deal lines', 'line.unit', 'Unit of the product', 'hour'),
-  P('Deal lines', 'line.unit_price', 'Unit price', '€2,400'),
-  P('Deal lines', 'line.discount', 'Line discount', '10%'),
-  P('Deal lines', 'line.vat_rate', 'Tax rate', '20%'),
-  P('Deal lines', 'line.net', 'Line value without tax (all billing cycles)', '€28,800'),
-  P('Deal lines', 'line.vat', 'Line tax', '€5,760'),
-  P('Deal lines', 'line.total', 'Line total with tax', '€34,560'),
-  P('Deal lines', 'line.schedule', 'Billing', 'Monthly, 12 cycles'),
-  P('Deal lines', 'line.start_date', 'Billing start date', '1 November 2026'),
+  P('Opportunity lines', 'line.product', 'Product or service', 'Communications strategy'),
+  P('Opportunity lines', 'line.description', 'Line description', 'Strategy, messaging and launch plan'),
+  P('Opportunity lines', 'line.quantity', 'Quantity', '12'),
+  P('Opportunity lines', 'line.unit', 'Unit of the product', 'hour'),
+  P('Opportunity lines', 'line.unit_price', 'Unit price', '€2,400'),
+  P('Opportunity lines', 'line.discount', 'Line discount', '10%'),
+  P('Opportunity lines', 'line.vat_rate', 'Tax rate', '20%'),
+  P('Opportunity lines', 'line.net', 'Line value without tax (all billing cycles)', '€28,800'),
+  P('Opportunity lines', 'line.vat', 'Line tax', '€5,760'),
+  P('Opportunity lines', 'line.total', 'Line total with tax', '€34,560'),
+  P('Opportunity lines', 'line.schedule', 'Billing', 'Monthly, 12 cycles'),
+  P('Opportunity lines', 'line.start_date', 'Billing start date', '1 November 2026'),
 ];
 
-/** The loop over deal lines. */
+/** The loop over opportunity lines. */
 export const LINES_LOOP = 'lines';
 
 /** Short forms, as the design's examples write them. */
 export const ALIASES: Readonly<Record<string, string>> = {
   company: 'company.name',
   contact_name: 'contact.name',
-  price: 'deal.amount',
-  total: 'deal.total',
+  price: 'opportunity.amount',
+  total: 'opportunity.total',
   need: 'discovery.need',
 };
 
 const LABELS = new Map<string, string>([...PLACEHOLDERS, ...LINE_PLACEHOLDERS].map((p) => [p.tag, p.label]));
 for (const [alias, tag] of Object.entries(ALIASES)) LABELS.set(alias, LABELS.get(tag)!);
-LABELS.set(LINES_LOOP, 'Deal lines');
+for (const [field] of OPPORTUNITY_FIELDS) LABELS.set(`deal.${field}`, LABELS.get(`opportunity.${field}`)!);
+LABELS.set(LINES_LOOP, 'Opportunity lines');
+
+/** `deal.X` and a short alias of it count as the `opportunity.X` field in missing-field lists. */
+const CANONICAL = new Map<string, string>(OPPORTUNITY_FIELDS.map(([field]) => [`deal.${field}`, `opportunity.${field}`]));
+const canonicalTag = (tag: string): string => {
+  const resolved = ALIASES[tag] ?? tag;
+  return CANONICAL.get(resolved) ?? resolved;
+};
 
 /** A field found in a template, and whether the CRM fills it. */
 export interface FoundPlaceholder {
@@ -265,6 +278,7 @@ export function buildTemplateData(src: DocumentSource): TemplateData {
     'workspace.name': text(src.workspace.name),
     today: formatToday(src.now, src.workspace.timezone),
   };
+  for (const [field] of OPPORTUNITY_FIELDS) values[`opportunity.${field}`] = values[`deal.${field}`]!;
   for (const [alias, tag] of Object.entries(ALIASES)) values[alias] = values[tag]!;
   return { ...values, [LINES_LOOP]: lines };
 }
@@ -278,7 +292,7 @@ export function missingFields(usedTags: Iterable<string>, data: TemplateData): s
       continue;
     }
     if (tag.startsWith('line.')) continue; // per line; an empty cell in one row isn't worth a warning
-    if (data[tag] === '') out.add(ALIASES[tag] ?? tag);
+    if (data[tag] === '') out.add(canonicalTag(tag));
   }
   // In the order of the reference, so the list reads the same for every document.
   return ORDER.filter((tag) => out.has(tag)).map((tag) => LABELS.get(tag)!);

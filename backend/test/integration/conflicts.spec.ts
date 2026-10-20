@@ -32,7 +32,7 @@ describe('conflicting updates', () => {
 
     const res = await call('PATCH', `/crm/deals/${deal.id}`, { ...asOwner(ifMatch(deal.updatedAt)), body: { title: 'Owner’s title' } });
     expect(res.status).toBe(409);
-    expect(res.body.message).toBe(`${ana.name} changed this deal while you were editing. Your change to the title wasn't saved.`);
+    expect(res.body.message).toBe(`${ana.name} changed this opportunity while you were editing. Your change to the title wasn't saved.`);
     expect(res.body.conflicts).toEqual([expect.objectContaining({ field: 'title', value: 'Ana’s title', changedBy: ana.name })]);
     expect(res.body.current).toMatchObject({ id: deal.id, title: 'Ana’s title' });
 
@@ -60,7 +60,7 @@ describe('conflicting updates', () => {
     // Another tab of the same user does conflict, and is told so.
     const res = await call('PATCH', `/crm/deals/${deal.id}`, { ...asOwner({ 'x-client-id': 'tab-conflict-test-2', ...ifMatch(deal.updatedAt) }), body: { title: 'Other tab' } });
     expect(res.status).toBe(409);
-    expect(res.body.message).toBe("You changed this deal in another window while you were editing. Your change to the title wasn't saved.");
+    expect(res.body.message).toBe("You changed this opportunity in another window while you were editing. Your change to the title wasn't saved.");
   });
 
   it('keeps last-write-wins for clients that send no version, and rejects a malformed one', async () => {

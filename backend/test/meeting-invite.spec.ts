@@ -132,7 +132,7 @@ describe('the meeting emails to internal participants', () => {
     expect(mail.text).toContain('Time: 10:00–11:00 (Europe/Belgrade)');
     expect(mail.text).toContain('Location: Acme HQ');
     expect(mail.text).toContain('Company: Acme d.o.o.');
-    expect(mail.text).toContain('Deal: Acme renewal');
+    expect(mail.text).toContain('Opportunity: Acme renewal');
     expect(mail.text).toContain('https://app.example.com/meetings/m-1');
     expect(mail.text).toContain('"Meeting invitations"');
     expect(mail.html).toContain('href="https://app.example.com/meetings/m-1"');
@@ -147,7 +147,8 @@ describe('the meeting emails to internal participants', () => {
     expect(lines).toContain('DTSTART:20261006T080000Z');
     expect(lines).toContain('ORGANIZER;CN="Ana Petrović":mailto:no-reply@pultly.com');
     expect(prop(ics!.content, 'ATTENDEE')).toContain('mailto:bo@example.com');
-    expect(prop(ics!.content, 'DESCRIPTION')).toBe('DESCRIPTION:Company: Acme d.o.o.\\nDeal: Acme renewal\\nOpen in Pultly: https://app.example.com/meetings/m-1');
+    expect(prop(ics!.content, 'DESCRIPTION')).toBe('DESCRIPTION:Company: Acme d.o.o.\\nOpportunity: Acme renewal\\nOpen in Pultly: https://app.example.com/meetings/m-1');
+    expect(`${mail.subject}\n${mail.text}\n${mail.html}\n${ics!.content}`.replace(/https?:\/\/\S+/g, '')).not.toMatch(/deal/i);
   });
 
   it('an update carries the new sequence; a cancellation cancels the event', () => {
@@ -166,7 +167,7 @@ describe('the meeting emails to internal participants', () => {
   it('says when the organizer left, and leaves out a missing deal and location', () => {
     const mail = meetingInviteEmail({ ...input, meeting: { ...input.meeting, organizerName: null, dealTitle: null, location: null } });
     expect(mail.text).toContain('Organizer: left the workspace');
-    expect(mail.text).not.toContain('Deal:');
+    expect(mail.text).not.toContain('Opportunity:');
     expect(mail.text).not.toContain('Location:');
     expect(prop(mail.attachments![0]!.content, 'ORGANIZER')).toBe('ORGANIZER;CN="Acme <Studio>":mailto:no-reply@pultly.com');
   });

@@ -132,7 +132,7 @@ export class OnboardingService {
         if (already) throw new ConflictException('Sample data is already loaded. Remove it first to load it again.');
 
         const [funnel] = await tx.select({ id: funnels.id }).from(funnels).orderBy(asc(funnels.position), asc(funnels.createdAt)).limit(1);
-        if (!funnel) throw new ConflictException('This workspace has no funnel to put the sample deals in.');
+        if (!funnel) throw new ConflictException('This workspace has no funnel to put the sample opportunities in.');
         const stages = await tx
           .select()
           .from(funnelStages)
@@ -140,7 +140,7 @@ export class OnboardingService {
           .orderBy(asc(funnelStages.position));
         const open = stages.filter((s) => !s.isWon);
         const won = stages.find((s) => s.isWon);
-        if (open.length === 0) throw new ConflictException('The first funnel has no open stages to put the sample deals in.');
+        if (open.length === 0) throw new ConflictException('The first funnel has no open stages to put the sample opportunities in.');
         const [workspace] = await tx.select({ currency: tenants.currency, timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId));
         const currency = workspace?.currency ?? 'EUR';
         const timezone = workspace?.timezone ?? 'UTC';
@@ -318,7 +318,7 @@ export class OnboardingService {
 
     const log = (channel: (typeof activities.$inferInsert)['channel'], title: string, detail: string | null, occurredAt: Date) =>
       tx.insert(activities).values({ tenantId: ctx.tenantId, dealId, actorUserId: ctx.userId, channel, title, detail, occurredAt });
-    await log(null, 'Deal created', `Source: ${SAMPLE_SOURCE}`, created);
+    await log(null, 'Opportunity created', `Source: ${SAMPLE_SOURCE}`, created);
     if (refs.stage.id !== refs.first.id) await log(null, `Moved to ${refs.stage.name}`, null, moved);
     if (d.activity) await log(d.activity.channel, d.activity.title, d.activity.detail, at(d.activity.daysAgo));
     if (d.lost) await log('NT', `Marked as lost: ${d.lost.reason}`, d.lost.note, at(d.lastContactDays));

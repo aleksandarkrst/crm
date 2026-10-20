@@ -136,7 +136,7 @@ export class MeetingMinutesService {
       .withTenant(ctx.tenantId, async (tx) => {
         const meeting = await this.meetings.lockForChange(tx, ctx, meetingId, 'edit');
         // Only a meeting saved without a deal before CD-213 (staging); editing it asks for one.
-        if (!meeting.dealId) throw new ConflictException('Pick a deal for this meeting (Edit) to create tasks from its next steps.');
+        if (!meeting.dealId) throw new ConflictException('Pick an opportunity for this meeting (Edit) to create tasks from its next steps.');
         const current = await this.lockMinutes(tx, meetingId);
         const step = current?.nextSteps.find((s) => s.id === stepId);
         if (!current || !step) throw new NotFoundException('Next step not found');
@@ -147,7 +147,7 @@ export class MeetingMinutesService {
         const text = step.text.trim();
         if (!text) throw new BadRequestException('Write the next step before creating a task from it.');
         const [deal] = await tx.select({ stageId: deals.stageId }).from(deals).where(eq(deals.id, meeting.dealId));
-        if (!deal) throw new ConflictException('Link a deal to this meeting to create tasks from its next steps.');
+        if (!deal) throw new ConflictException('Link an opportunity to this meeting to create tasks from its next steps.');
 
         const task = await this.tasks.insertExtra(tx, ctx, meeting.dealId, {
           stageId: deal.stageId,

@@ -178,14 +178,14 @@ export function meetingInviteEmail(input: InviteEmailInput): MailMessage {
     `Time: ${time}`,
     m.location ? `Location: ${m.location}` : null,
     `Company: ${m.companyName}`,
-    m.dealTitle ? `Deal: ${m.dealTitle}` : null,
+    m.dealTitle ? `Opportunity: ${m.dealTitle}` : null,
     `Organizer: ${m.organizerName ?? 'left the workspace'}`,
   ].filter((f): f is string => !!f);
   const calendarNote = kind === 'cancelled' ? 'The attached meeting.ics removes it from your calendar.' : 'Open the attached meeting.ics to add it to your calendar, or update it there.';
   const greeting = input.recipientName ? `Hi ${input.recipientName.split(' ')[0]},` : 'Hi,';
   const footer = `You get this email because "Meeting invitations" is on in Settings → Notifications for ${workspaceName}.`;
 
-  const description = [`Company: ${m.companyName}`, m.dealTitle ? `Deal: ${m.dealTitle}` : null, `Open in Pultly: ${link}`].filter(Boolean).join('\n');
+  const description = [`Company: ${m.companyName}`, m.dealTitle ? `Opportunity: ${m.dealTitle}` : null, `Open in Pultly: ${link}`].filter(Boolean).join('\n');
   const method = kind === 'cancelled' ? 'CANCEL' : 'REQUEST';
   const ics = buildIcs({
     uid: meetingUid(m.id),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildDocx, docxText, inspectTemplate, renderTemplate, starterTemplate, TemplateFileError } from '../src/modules/crm/documents/docx';
-import { buildTemplateData, describeTags, type DocumentSource, formatDate, formatMoney, formatToday, missingFields, PLACEHOLDERS } from '../src/modules/crm/documents/placeholders';
+import { ALIASES, buildTemplateData, describeTags, type DocumentSource, formatDate, formatMoney, formatToday, LINE_PLACEHOLDERS, missingFields, PLACEHOLDERS } from '../src/modules/crm/documents/placeholders';
 
 const source = (over: Partial<DocumentSource> = {}): DocumentSource => ({
   workspace: { name: 'Studio Kap', currency: 'EUR', timezone: 'Europe/Belgrade' },
@@ -127,16 +127,63 @@ describe('missingFields', () => {
   it('lists the used fields that were empty, in reference order, aliases included', () => {
     const data = buildTemplateData(source({ lines: [] }));
     const used = ['discovery.decision_maker', 'company.name', 'discovery.constraint', 'lines', 'line.product', 'contact_name', 'company.industry', 'unknown.field'];
-    expect(missingFields(used, data)).toEqual(['Industry', 'Constraint', 'Decision maker', 'Deal lines']);
+    expect(missingFields(used, data)).toEqual(['Industry', 'Constraint', 'Decision maker', 'Opportunity lines']);
+  });
+
+  it('lists an empty opportunity tag once, with the opportunity label, even when the legacy tag is used too', () => {
+    const data = buildTemplateData(source({ deal: { ...source().deal, title: '  ', headline: ' ', source: null } }));
+    expect(data['opportunity.title']).toBe('');
+    expect(data['deal.title']).toBe('');
+    expect(missingFields(['opportunity.title', 'deal.title', 'opportunity.source', 'deal.source'], data)).toEqual(['Opportunity title', 'Source']);
+  });
+});
+
+describe('opportunity aliases', () => {
+  const fields = ['title', 'headline', 'amount', 'vat', 'total', 'discount', 'currency', 'closing_date', 'stage', 'funnel', 'source'] as const;
+
+  it('renders {{opportunity.X}} the same as {{deal.X}} for every tag, and a legacy-only template the same as before', () => {
+    const data = buildTemplateData(source());
+    for (const field of fields) expect(data[`opportunity.${field}`], field).toBe(data[`deal.${field}`]);
+    expect(data.price).toBe(data['deal.amount']);
+    expect(data.total).toBe(data['deal.total']);
+
+    const legacy = `{{deal.title}} · {{deal.amount}} · {{price}}`;
+    const next = `{{opportunity.title}} · {{opportunity.amount}} · {{price}}`;
+    const legacyText = docxText(renderTemplate(buildDocx([{ text: legacy }]), data).file);
+    const nextText = docxText(renderTemplate(buildDocx([{ text: next }]), data).file);
+    expect(legacyText).toBe('Brand refresh · €3,001 · €3,001');
+    expect(nextText).toBe(legacyText);
+
+    const allLegacy = fields.map((field) => `{{deal.${field}}}`).join(' | ');
+    const allNext = fields.map((field) => `{{opportunity.${field}}}`).join(' | ');
+    expect(docxText(renderTemplate(buildDocx([{ text: allNext }]), data).file)).toBe(docxText(renderTemplate(buildDocx([{ text: allLegacy }]), data).file));
+  });
+
+  it('lists opportunity names in the help, and no Deal wording in labels or groups', () => {
+    const listed = [...PLACEHOLDERS, ...LINE_PLACEHOLDERS];
+    expect(listed.map((p) => p.tag)).toEqual(expect.arrayContaining(fields.map((field) => `opportunity.${field}`)));
+    expect(listed.some((p) => p.tag.startsWith('deal.'))).toBe(false);
+    for (const p of listed) {
+      expect(p.label).not.toMatch(/deal/i);
+      expect(p.group).not.toMatch(/deal/i);
+    }
+    expect(PLACEHOLDERS.find((p) => p.tag === 'opportunity.title')).toMatchObject({ group: 'Opportunity', label: 'Opportunity title' });
+    expect(PLACEHOLDERS.find((p) => p.tag === 'opportunity.amount')?.label).toMatch(/^Opportunity value/);
+    expect(PLACEHOLDERS.find((p) => p.tag === 'owner.name')?.label).toBe('Opportunity owner');
+    expect(LINE_PLACEHOLDERS[0]?.group).toBe('Opportunity lines');
+    expect(ALIASES.price).toBe('opportunity.amount');
+    expect(ALIASES.total).toBe('opportunity.total');
+    expect(Object.values(ALIASES).join(' ')).not.toMatch(/deal/i);
   });
 });
 
 describe('describeTags', () => {
   it('marks fields the CRM fills and ones it does not', () => {
-    expect(describeTags(['deal.title', 'total', 'lines', 'typo.field', 'deal.title'])).toEqual([
-      { tag: 'deal.title', known: true, label: 'Deal title' },
+    expect(describeTags(['deal.title', 'opportunity.title', 'total', 'lines', 'typo.field', 'deal.title'])).toEqual([
+      { tag: 'deal.title', known: true, label: 'Opportunity title' },
+      { tag: 'opportunity.title', known: true, label: 'Opportunity title' },
       { tag: 'total', known: true, label: 'Total with tax' },
-      { tag: 'lines', known: true, label: 'Deal lines' },
+      { tag: 'lines', known: true, label: 'Opportunity lines' },
       { tag: 'typo.field', known: false, label: null },
     ]);
   });

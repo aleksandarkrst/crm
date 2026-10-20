@@ -34,10 +34,17 @@ beforeAll(async () => {
 });
 
 describe('creating and renaming funnels', () => {
+  it('seeds both default funnels with New opportunity as the first stage', async () => {
+    const funnels = await funnelsNow();
+    for (const key of ['smb', 'ent']) {
+      expect(funnels.find((f) => f.key === key)!.stages[0]).toMatchObject({ key: 'new', name: 'New opportunity' });
+    }
+  });
+
   it('creates a third funnel with a small default set of stages, and takes deals', async () => {
     const f = await newFunnel({ label: 'Mid-market — CMO', note: 'Marketing lead decides' });
     expect(f).toMatchObject({ label: 'Mid-market — CMO', note: 'Marketing lead decides', key: 'mid-market-cmo' });
-    expect(f.stages.map((s) => s.name)).toEqual(['New deal', 'Discovery', 'Proposal', 'Won']);
+    expect(f.stages.map((s) => s.name)).toEqual(['New opportunity', 'Discovery', 'Proposal', 'Won']);
     expect(f.stages.filter((s) => s.isWon).map((s) => s.name)).toEqual(['Won']);
     expect(f.stages.map((s) => s.position)).toEqual([0, 1, 2, 3]);
     const funnels = await funnelsNow();
@@ -104,7 +111,7 @@ describe('deleting funnels', () => {
     const deal = await newDeal(f.id);
     const res = await call('DELETE', `/crm/funnels/${f.id}`, as());
     expect(res.status).toBe(409);
-    expect(res.body.message).toMatch(/1 deal/);
+    expect(res.body.message).toMatch(/1 opportunity/);
     // Moved to another funnel: its history still points at this one.
     const smb = (await funnelsNow()).find((x) => x.key === 'smb')!;
     await ok('PATCH', `/crm/deals/${deal.id}`, { ...as(), body: { funnelId: smb.id } }, 200);
@@ -126,14 +133,14 @@ describe('adding and reordering stages', () => {
   it('adds a stage before the won stage by default, or at a position', async () => {
     const f = await newFunnel({ label: 'Stages' });
     const after = await ok<Funnel>('POST', `/crm/funnels/${f.id}/stages`, { ...as(admin), body: { name: 'Negotiation', checklistItems: [{ label: 'Terms agreed' }] } });
-    expect(after.stages.map((s) => s.name)).toEqual(['New deal', 'Discovery', 'Proposal', 'Negotiation', 'Won']);
+    expect(after.stages.map((s) => s.name)).toEqual(['New opportunity', 'Discovery', 'Proposal', 'Negotiation', 'Won']);
     const added = after.stages[3]!;
     expect(added).toMatchObject({ key: 'negotiation', activity: 'Negotiation', channel: 'EM', winProbability: 25, isWon: false });
     expect(added.checklistItems.map((i) => i.label)).toEqual(['Terms agreed']);
     expect(added.checklistItems[0]!.id).toMatch(/^[0-9a-f-]{36}$/);
 
     const first = await ok<Funnel>('POST', `/crm/funnels/${f.id}/stages`, { ...as(), body: { name: 'Research', position: 0, channel: 'RS', winProbability: 5 } });
-    expect(first.stages.map((s) => s.name)).toEqual(['Research', 'New deal', 'Discovery', 'Proposal', 'Negotiation', 'Won']);
+    expect(first.stages.map((s) => s.name)).toEqual(['Research', 'New opportunity', 'Discovery', 'Proposal', 'Negotiation', 'Won']);
     expect(first.stages.map((s) => s.position)).toEqual([0, 1, 2, 3, 4, 5]);
     // New deals start in the (new) first stage.
     expect((await newDeal(f.id)).stageId).toBe(first.stages[0]!.id);
@@ -178,14 +185,14 @@ describe('deleting stages', () => {
 
     const missing = await call('DELETE', `/crm/funnels/${f.id}/stages/${discovery!.id}`, as(admin));
     expect(missing.status).toBe(400);
-    expect(missing.body.message).toMatch(/2 deals/);
+    expect(missing.body.message).toMatch(/2 opportunities/);
     expect((await call('DELETE', `/crm/funnels/${f.id}/stages/${discovery!.id}?moveDealsTo=${discovery!.id}`, as())).status).toBe(400);
     const smb = (await funnelsNow()).find((x) => x.key === 'smb')!;
     expect((await call('DELETE', `/crm/funnels/${f.id}/stages/${discovery!.id}?moveDealsTo=${smb.stages[1]!.id}`, as())).status).toBe(400);
     expect((await call('DELETE', `/crm/funnels/${f.id}/stages/${discovery!.id}?moveDealsTo=nope`, as())).status).toBe(400);
 
     const after = await ok<Funnel>('DELETE', `/crm/funnels/${f.id}/stages/${discovery!.id}?moveDealsTo=${proposal!.id}`, as(admin), 200);
-    expect(after.stages.map((s) => s.name)).toEqual(['New deal', 'Proposal', 'Won']);
+    expect(after.stages.map((s) => s.name)).toEqual(['New opportunity', 'Proposal', 'Won']);
     expect(after.stages.map((s) => s.position)).toEqual([0, 1, 2]);
 
     expect(await ok('GET', `/crm/deals/${open.id}`, as())).toMatchObject({ stageId: proposal!.id, outcome: 'open' });

@@ -16,6 +16,7 @@ describe('document template merge fields', () => {
   it('renames the group heading and the descriptions, and leaves other groups', () => {
     assert.equal(mergeFieldGroupHeading('Deal'), 'Opportunity');
     assert.equal(mergeFieldGroupHeading('Deal lines'), 'Opportunity lines · inside {{#lines}}');
+    assert.equal(mergeFieldGroupHeading('Opportunity lines'), 'Opportunity lines · inside {{#lines}}');
     assert.equal(mergeFieldGroupHeading('Company'), 'Company');
     assert.equal(mergeFieldGroupHeading('Owner'), 'Owner');
   });
