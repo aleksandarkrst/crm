@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { DEFAULT_MIGRATION_DATABASE_URL } from './env';
-import { createTenant, ok, signIn } from './helpers';
+import { createTenant, ok, signIn, testPib } from './helpers';
 
 // Vitest runs from backend/ (vitest.integration.config.mts), where dist/ and storage/ live.
 const backendDir = process.cwd();
@@ -71,7 +71,7 @@ describe('staging seed', () => {
     // A workspace that is not the seed's, with a record of its own, which the seed must leave alone.
     const owner = await signIn('seed-bystander');
     const tenant = await createTenant(owner, 'Bystander');
-    const company = await ok('POST', '/crm/companies', { token: owner.token, tenant, body: { name: 'Bystander Co' } });
+    const company = await ok('POST', '/crm/companies', { token: owner.token, tenant, body: { pib: testPib(), name: 'Bystander Co' } });
     other = { tenant, company: company.id };
   });
 

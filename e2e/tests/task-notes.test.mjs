@@ -6,7 +6,7 @@ import { writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, newUserWithWorkspace, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, newUserWithWorkspace, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
 
 describe('task notes', () => {
   const browser = useBrowser();
@@ -18,7 +18,7 @@ describe('task notes', () => {
   step('sets up a task', async () => {
     page = await browser.person('nora');
     await newUserWithWorkspace(page, { label: 'notes', name: 'Nora Notes', workspace: 'Notes Co' });
-    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Northwind' }) });
+    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Northwind' }) });
     const [type] = await api(page, '/project-types');
     project = await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Fit-out', projectTypeId: type.id, companyId: company.id }) });
     task = await api(page, '/tasks', { method: 'POST', body: JSON.stringify({ projectId: project.id, name: 'Survey' }) });

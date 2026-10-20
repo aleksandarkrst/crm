@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiCompanyDetails, type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput, type WorkspaceTerms } from '../lib/api';
+import { type ApiCompanyDetails, type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, type CompanyInput, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput, type WorkspaceTerms } from '../lib/api';
 import { paths } from '../lib/paths';
 import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference } from './documents';
 import { employeeCardActions } from './employeeCard';
@@ -92,6 +92,10 @@ function loadInitial(data: WorkspaceData): State {
 }
 
 const channelOf = (c: string): Channel => ((CHANNELS as readonly string[]).includes(c) ? (c as Channel) : 'NT');
+/** The company fields edited on its page (CD-80, CD-357). */
+export type CompanyFieldKey = 'name' | 'industry' | 'hq' | 'size' | 'source' | 'domain' | 'notes' | 'pib' | 'mb' | 'address' | 'city' | 'postalCode' | 'activityCode' | 'ownershipType';
+const COMPANY_FIELD_LABELS: Partial<Record<CompanyFieldKey, string>> = { hq: 'HQ', size: 'team size', pib: 'PIB', mb: 'MB', address: 'street address', postalCode: 'postal code', activityCode: 'activity code', ownershipType: 'ownership' };
+
 /** The API's message, plus the first field problem when validation failed. */
 const errText = (err: unknown) => {
   if (!(err instanceof Error)) return String(err);
@@ -1158,10 +1162,13 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
      * Companies are identified by id (names aren't unique), so renaming one keeps its route. Domain
      * and notes (CD-209) live on the company only; the other fields are also copied onto its deals.
      */
-    const setCompanyField = (companyId: string, key: 'name' | 'industry' | 'hq' | 'size' | 'source' | 'domain' | 'notes', v: string) => {
+    const setCompanyField = (companyId: string, key: CompanyFieldKey, v: string) => {
       const field = key === 'size' ? 'teamSize' : key;
-      if (!(key === 'name' && !v.trim())) saveLater(`company:${companyId}:${field}`, () => crmApi.updateCompany(companyId, { [field]: v }, ver('company', companyId)), `the company ${key === 'hq' ? 'HQ' : key === 'size' ? 'team size' : key}`);
-      const onDeals = key !== 'domain' && key !== 'notes';
+      // An empty name or PIB is never sent (the API refuses both); no ownership is null.
+      const value = key === 'ownershipType' ? v || null : v;
+      if (!((key === 'name' || key === 'pib') && !v.trim())) saveLater(`company:${companyId}:${field}`, () => crmApi.updateCompany(companyId, { [field]: value }, ver('company', companyId)), `the company ${COMPANY_FIELD_LABELS[key] ?? key}`);
+      // Industry, HQ and team size are shown on its opportunities too; the identity stays on the company.
+      const onDeals = key === 'name' || key === 'industry' || key === 'hq' || key === 'size' || key === 'source';
       set((x) => ({
         leads: onDeals ? x.leads.map((l) => (l.companyId === companyId ? { ...l, ...(key === 'name' ? { company: v } : { [key]: v }) } : l)) : x.leads,
         extraCompanies: x.extraCompanies.map((c) => (c.id === companyId ? { ...c, [key]: v } : c)),
@@ -1446,20 +1453,24 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         ),
       setCompanyField,
       setCompanyOwner,
-      addCompany: () => {
-        const taken = new Set(companyRecords(cur()).map((c) => c.name));
-        let name = 'New company';
-        for (let i = 2; taken.has(name); i++) name = 'New company ' + i;
-        let created: { id: string } | undefined;
-        // Reload after the write (in `then`): reload waits for writes in flight, this one included.
-        void save(
-          async () => void (created = await crmApi.createCompany({ name })),
-          async () => {
-            await reload();
-            if (created) navigate(paths.company(created.id));
-          },
-          'the new company',
-        );
+      /** Opens the New company dialog (CD-357): a company needs its name and PIB to exist. */
+      addCompany: () => set({ newCompanyOpen: true }),
+      /**
+       * Creates a company from the New company dialog and opens it. A PIB already in the workspace
+       * comes back as the existing company's id, so the dialog can offer to open that one instead.
+       */
+      createCompany: async (input: CompanyInput & { name: string; pib: string }): Promise<{ ok: true } | { ok: false; error: string; existingId?: string }> => {
+        try {
+          const created = await crmApi.createCompany(input);
+          await reload();
+          set({ newCompanyOpen: false });
+          navigate(paths.company(created.id));
+          flash(input.name + ' added as a lead');
+          return { ok: true };
+        } catch (err) {
+          const existingId = err instanceof ApiError && err.status === 409 ? (err.body as { existingCompanyId?: string } | null)?.existingCompanyId : undefined;
+          return { ok: false, error: errText(err), existingId };
+        }
       },
       canDelete,
       createVisitPlan,
@@ -1475,11 +1486,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
        * New deal; creates the company and the primary contact first when they are new. Opened from
        * the meeting form (CD-213), it stays there and the form picks the new deal.
        */
-      createDeal: async (input: { company: { id?: string; name: string }; contact: { contactId?: string; name: string } | null; segment: SegKey; customFields?: CustomFieldPatch }) => {
+      createDeal: async (input: { company: { id: string; name: string } | { name: string; pib: string }; contact: { contactId?: string; name: string } | null; segment: SegKey; customFields?: CustomFieldPatch }) => {
         const funnelId = cur().funnels[input.segment]?.id;
         if (!funnelId) return;
         try {
-          const companyId = input.company.id ?? (await crmApi.createCompany({ name: input.company.name })).id;
+          const companyId = 'id' in input.company ? input.company.id : (await crmApi.createCompany({ name: input.company.name, pib: input.company.pib })).id;
           let primaryContactId = input.contact?.contactId;
           if (input.contact && !primaryContactId) primaryContactId = (await crmApi.createContact({ fullName: input.contact.name, companyId, buyerRole: 'Decision maker' })).id;
           const deal = await crmApi.createDeal({ title: input.company.name, funnelId, companyId, primaryContactId: primaryContactId ?? null, ...(input.customFields ? { customFields: input.customFields } : {}) });

@@ -5,7 +5,7 @@
  * completed work orders, closed projects), deletes refused once time is logged, and tenant isolation.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 import { accessOf, asTenantSql } from './people-helpers';
 
 interface Cell {
@@ -79,7 +79,7 @@ beforeAll(async () => {
   markoId = (await accessOf(marko, tenant)).employeeId;
   // Work orders need Service (or Both) technicians (CD-268).
   await ok('PATCH', `/people/employees/${anaId}`, { ...as(owner), body: { workType: 'both' } });
-  companyId = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(owner), body: { name: 'Kovin Pančevo' } })).id;
+  companyId = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(owner), body: { pib: testPib(), name: 'Kovin Pančevo' } })).id;
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as(owner));
   projectId = (await ok<{ id: string }>('POST', '/projects', { ...as(owner), body: { name: 'Service contract 2026', projectTypeId: type!.id, companyId, leadUserId: owner.userId } })).id;
   monday = (await week()).thisWeek;

@@ -4,7 +4,7 @@
  * checklist) until Reopen, which needs no reason; status changes are in the history.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 import { accessOf } from './people-helpers';
 
 interface WorkOrder {
@@ -33,7 +33,7 @@ beforeAll(async () => {
   for (const s of [tech, creator, lead]) await addMember(owner, tenant, s, 'member');
   techId = (await accessOf(tech, tenant)).employeeId;
   await ok('PATCH', `/people/employees/${techId}`, { ...as(), body: { workType: 'service' } }, 200);
-  companyId = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { name: 'Northwind' } })).id;
+  companyId = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Northwind' } })).id;
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as());
   projectId = (await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name: 'Fit-out', projectTypeId: type!.id, companyId, leadUserId: lead.userId } })).id;
 });

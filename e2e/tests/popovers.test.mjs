@@ -5,7 +5,7 @@
 // Run locally before every PR that touches the frontend: `npm test -- --test-name-pattern=popovers`.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, newUserWithWorkspace, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, newUserWithWorkspace, steps, useBrowser, testPib } from '../lib/harness.mjs';
 
 /** The panel is inside the window and the topmost element at its centre and near its corners. */
 async function assertOnTop(page, selector) {
@@ -42,7 +42,7 @@ describe('popovers', () => {
     await newUserWithWorkspace(page, { label: 'popovers', name: 'Poppy Panel', workspace: 'Panel Co' });
     const me = (await api(page, '/people/access')).employeeId;
     await api(page, '/people/employees/' + me, { method: 'PATCH', body: JSON.stringify({ employmentStartDate: '2024-03-01' }) });
-    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Kovin Pančevo' }) });
+    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Kovin Pančevo' }) });
     const [type] = await api(page, '/project-types');
     const project = await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Service contract 2026', projectTypeId: type.id, companyId: company.id }) });
     task = await api(page, '/tasks', { method: 'POST', body: JSON.stringify({ projectId: project.id, name: 'Inspect the pumps', assigneeIds: [me] }) });

@@ -4,7 +4,7 @@
  * admins, the creator, the project lead and the technicians change them.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 import { accessOf } from './people-helpers';
 
 interface WorkOrder {
@@ -39,7 +39,7 @@ beforeAll(async () => {
   anaId = (await accessOf(ana, tenant)).employeeId;
   boId = (await accessOf(bo, tenant)).employeeId;
   await ok('PATCH', `/people/employees/${anaId}`, { ...as(), body: { workType: 'service' } }, 200);
-  companyId = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { name: 'Northwind' } })).id;
+  companyId = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Northwind' } })).id;
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as());
   projectId = (await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name: 'Fit-out', projectTypeId: type!.id, companyId } })).id;
 });
@@ -64,7 +64,7 @@ describe('creating', () => {
     expect((await call('POST', '/work-orders', { ...as(), body: { title: 'x', companyId, technicianIds: [boId] } })).status).toBe(400);
     expect((await call('POST', '/work-orders', { ...as(), body: { title: 'x', companyId, scheduledDate: '2026-10-12' } })).status).toBe(400);
     expect((await call('POST', '/work-orders', { ...as(), body: { title: 'x', companyId, durationHours: 0.3 } })).status).toBe(400);
-    const other = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { name: 'Other Ltd' } })).id;
+    const other = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Other Ltd' } })).id;
     expect((await call('POST', '/work-orders', { ...as(), body: { title: 'x', companyId: other, projectId } })).status).toBe(400);
   });
 });

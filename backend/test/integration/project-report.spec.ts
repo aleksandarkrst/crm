@@ -4,7 +4,7 @@
  * person and week across open projects.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, createTenant, ok, type Session, signIn } from './helpers';
+import { addMember, createTenant, ok, type Session, signIn, testPib } from './helpers';
 import { accessOf, asTenantSql } from './people-helpers';
 
 interface Stats {
@@ -43,7 +43,7 @@ beforeAll(async () => {
   await addMember(owner, tenant, ana, 'member');
   anaId = (await accessOf(ana, tenant)).employeeId;
   ownerId = (await accessOf(owner, tenant)).employeeId;
-  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { name: 'Kovin Pančevo' } });
+  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Kovin Pančevo' } });
   const [type] = await ok<{ id: string; stages: { id: string; name: string }[] }[]>('GET', '/project-types', as());
   projectId = (await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name: 'Service contract 2026', code: 'SC-26', projectTypeId: type!.id, companyId: company.id, budgetHours: 100 } })).id;
   const [first, second] = type!.stages;

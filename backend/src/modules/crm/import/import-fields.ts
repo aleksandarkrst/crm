@@ -16,11 +16,28 @@ const owner: ImportField = {
   example: '',
 };
 
+/** A contact's or deal's company by its PIB (CD-357): required only when the company is new. */
+const companyPib: ImportField = {
+  key: 'companyPib',
+  label: 'Company ID (PIB)',
+  required: false,
+  aliases: ['pib', 'company id', 'company id (pib)', 'company pib', 'tax id', 'vat id', 'poreski broj'],
+  hint: 'Needed only for a company the workspace does not have yet',
+  example: '104052135',
+};
+
 export const IMPORT_FIELDS: Record<ImportType, ImportField[]> = {
   companies: [
-    { key: 'name', label: 'Name', required: true, aliases: ['company', 'company name', 'organisation', 'organization', 'account', 'account name'], example: 'Northwind Studio' },
+    { key: 'name', label: 'Name', required: true, aliases: ['company', 'company name', 'organisation', 'organization', 'account', 'account name', 'naziv'], example: 'Northwind Studio' },
+    { key: 'pib', label: 'Company ID (PIB)', required: true, aliases: ['pib', 'company id', 'company id (pib)', 'tax id', 'tax number', 'vat id', 'vat number', 'poreski broj', 'poreski identifikacioni broj'], hint: 'Companies are matched by PIB, then by name', example: '104052135' },
+    { key: 'mb', label: 'MB', required: false, aliases: ['matični broj', 'maticni broj', 'registration number', 'company number'], example: '20084693' },
     { key: 'industry', label: 'Industry', required: false, aliases: ['sector', 'vertical'], example: 'Architecture' },
-    { key: 'hq', label: 'HQ', required: false, aliases: ['headquarters', 'city', 'location', 'country', 'address'], example: 'Belgrade' },
+    { key: 'hq', label: 'HQ', required: false, aliases: ['headquarters', 'location', 'country'], example: 'Belgrade' },
+    { key: 'address', label: 'Street address', required: false, aliases: ['address', 'street', 'adresa', 'ulica'], example: 'Bulevar Mihajla Pupina 10' },
+    { key: 'city', label: 'City', required: false, aliases: ['town', 'grad', 'mesto'], example: 'Novi Sad' },
+    { key: 'postalCode', label: 'Postal code', required: false, aliases: ['zip', 'zip code', 'postcode', 'post code', 'poštanski broj', 'postanski broj'], example: '21000' },
+    { key: 'activityCode', label: 'Activity code', required: false, aliases: ['šifra delatnosti', 'sifra delatnosti', 'activity', 'nace', 'nace code'], hint: '4 digits', example: '6201' },
+    { key: 'ownershipType', label: 'Ownership', required: false, aliases: ['ownership type', 'vlasništvo', 'vlasnistvo'], hint: 'Private or State', example: 'Private' },
     { key: 'teamSize', label: 'Team size', required: false, aliases: ['size', 'company size', 'employees', 'headcount', 'staff'], example: '11–50 staff' },
     { key: 'source', label: 'Source', required: false, aliases: ['lead source', 'channel'], example: 'Referral' },
     { key: 'domain', label: 'Domain', required: false, aliases: ['website', 'web', 'url', 'site'], example: 'northwind.example' },
@@ -34,12 +51,14 @@ export const IMPORT_FIELDS: Record<ImportType, ImportField[]> = {
     { key: 'phone', label: 'Phone', required: false, aliases: ['telephone', 'mobile', 'phone number', 'tel'], example: '+381 60 000 0000' },
     { key: 'linkedin', label: 'LinkedIn', required: false, aliases: ['linkedin url', 'linkedin profile'], example: '' },
     { key: 'buyerRole', label: 'Buyer role', required: false, aliases: [], hint: 'Decision maker, Economic buyer, Champion, Influencer, Gatekeeper or End user', example: 'Decision maker' },
-    { key: 'company', label: 'Company', required: false, aliases: ['company name', 'organisation', 'organization', 'account', 'account name'], hint: 'Matched by name, created if new', example: 'Northwind Studio' },
+    { key: 'company', label: 'Company', required: false, aliases: ['company name', 'organisation', 'organization', 'account', 'account name'], hint: 'Matched by PIB, then by name; a new one needs its PIB', example: 'Northwind Studio' },
+    companyPib,
     owner,
   ],
   deals: [
     { key: 'title', label: 'Deal', required: true, aliases: ['deal name', 'deal title', 'title', 'name', 'opportunity', 'opportunity name'], example: 'Website redesign' },
-    { key: 'company', label: 'Company', required: true, aliases: ['company name', 'organisation', 'organization', 'account', 'account name', 'customer'], hint: 'Matched by name, created if new', example: 'Northwind Studio' },
+    { key: 'company', label: 'Company', required: true, aliases: ['company name', 'organisation', 'organization', 'account', 'account name', 'customer'], hint: 'Matched by PIB, then by name; a new one needs its PIB', example: 'Northwind Studio' },
+    companyPib,
     { key: 'funnel', label: 'Funnel', required: false, aliases: ['pipeline', 'audience'], hint: 'Matched by name; empty means the funnel picked above', example: '' },
     { key: 'stage', label: 'Stage', required: false, aliases: ['deal stage', 'pipeline stage', 'status'], hint: "Matched by name; empty means the funnel's first stage", example: '' },
     { key: 'amount', label: 'Value', required: false, aliases: ['amount', 'deal value', 'value', 'price', 'total'], example: '14000' },

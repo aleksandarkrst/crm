@@ -33,7 +33,7 @@ export function dealsCsv(s: State, leads: Lead[]): string {
   return toCsv(leads, [
     { header: 'Opportunity ID', value: (l) => l.id },
     { header: 'Opportunity', value: (l) => l.title || l.company },
-    { header: 'Company ID', value: (l) => l.companyId ?? '' },
+    { header: 'Company record ID', value: (l) => l.companyId ?? '' },
     { header: 'Company', value: (l) => clean(l.company) },
     { header: 'Contact', value: (l) => clean(l.contact) },
     { header: 'Contact email', value: (l) => clean(l.email) },
@@ -54,11 +54,21 @@ export function dealsCsv(s: State, leads: Lead[]): string {
 
 /** Companies as the Companies screen lists them. */
 export function companiesCsv(s: State, records: CompanyRecord[]): string {
+  const extras = new Map(s.extraCompanies.map((c) => [c.id, c]));
+  const extra = (c: CompanyRecord) => extras.get(c.id);
   return toCsv(records, [
-    { header: 'Company ID', value: (c) => c.id },
+    // Company ID means the PIB (CD-357); the record's own id has its own column.
+    { header: 'Company record ID', value: (c) => c.id },
     { header: 'Name', value: (c) => c.name },
+    { header: 'Company ID (PIB)', value: (c) => c.pib },
+    { header: 'MB', value: (c) => extra(c)?.mb ?? '' },
     { header: 'Industry', value: (c) => clean(c.industry) },
     { header: 'HQ', value: (c) => clean(c.hq) },
+    { header: 'Street address', value: (c) => extra(c)?.address ?? '' },
+    { header: 'City', value: (c) => extra(c)?.city ?? '' },
+    { header: 'Postal code', value: (c) => extra(c)?.postalCode ?? '' },
+    { header: 'Activity code', value: (c) => extra(c)?.activityCode ?? '' },
+    { header: 'Ownership', value: (c) => c.ownership },
     { header: 'Team size', value: (c) => clean(c.size) },
     { header: 'Source', value: (c) => clean(c.source) },
     { header: 'Owner', value: (c) => clean(c.owner) },
@@ -78,7 +88,7 @@ export function contactsCsv(s: State, rows: { id: string; company: string; compa
     { header: 'Contact ID', value: ({ p }) => p!.contactId ?? '' },
     { header: 'Full name', value: ({ p }) => p!.name },
     { header: 'Job title', value: ({ p }) => clean(p!.role) },
-    { header: 'Company ID', value: ({ row }) => row.companyId ?? '' },
+    { header: 'Company record ID', value: ({ row }) => row.companyId ?? '' },
     { header: 'Company', value: ({ row }) => clean(row.company) },
     { header: 'Email', value: ({ p }) => clean(p!.email) },
     { header: 'Phone', value: ({ p }) => clean(p!.phone) },

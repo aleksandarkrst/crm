@@ -3,7 +3,7 @@
 // This month and Logged / budget columns, and "this month" on the board's cards.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, newUserWithWorkspace, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, newUserWithWorkspace, steps, useBrowser, testPib } from '../lib/harness.mjs';
 
 describe('project hours', () => {
   const browser = useBrowser();
@@ -16,7 +16,7 @@ describe('project hours', () => {
     page = await browser.person('hana');
     await newUserWithWorkspace(page, { label: 'project-hours', name: 'Hana Hours', workspace: 'Hours Projects' });
     const me = (await api(page, '/people/access')).employeeId;
-    company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Kovin Pančevo' }) });
+    company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Kovin Pančevo' }) });
     const [type] = await api(page, '/project-types');
     project = await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Service contract 2026', projectTypeId: type.id, companyId: company.id, budgetHours: 10 }) });
     const task = await api(page, '/tasks', { method: 'POST', body: JSON.stringify({ projectId: project.id, name: 'Hydraulic leak', assigneeIds: [me] }) });

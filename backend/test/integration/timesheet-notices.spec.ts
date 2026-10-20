@@ -6,7 +6,7 @@
  * moments next week (the workspace on UTC, so the times are exact); the worker sends the mail.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, createTenant, eventually, mailTo, type Mail, ok, type Session, signIn } from './helpers';
+import { addMember, createTenant, eventually, mailTo, type Mail, ok, type Session, signIn, testPib } from './helpers';
 import { accessOf, asTenantSql } from './people-helpers';
 
 let owner: Session;
@@ -41,7 +41,7 @@ beforeAll(async () => {
   // Marko approves Ana; Marko and Petar have no manager, so the Admins (the owner) approve them.
   await ok('POST', '/people/reporting-lines', { ...as(), body: { employeeIds: [ids.ana], managerId: ids.marko } }, 200);
   await ok('PATCH', '/workspace', { ...as(), body: { timezone: 'UTC' } });
-  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { name: 'Kovin Pančevo' } });
+  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Kovin Pančevo' } });
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as());
   const project = await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name: 'Service contract 2026', projectTypeId: type!.id, companyId: company.id } });
   taskId = (await ok<{ id: string }>('POST', '/tasks', { ...as(), body: { projectId: project.id, name: 'Hydraulic leak', assigneeIds: [ids.ana, ids.marko, ids.petar] } })).id;

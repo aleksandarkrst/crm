@@ -337,6 +337,7 @@ export interface ApiSampleRemoval {
   state: ApiOnboarding;
 }
 export type ProfileInput = Partial<Omit<ApiProfile, 'userId' | 'email'>>;
+export type ApiOwnership = 'private' | 'state';
 export interface ApiCompany {
   id: string;
   name: string;
@@ -345,6 +346,14 @@ export interface ApiCompany {
   teamSize: string | null;
   source: string | null;
   domain: string | null;
+  /** Identity (CD-357): the PIB is the company's ID, unique in the workspace; null only on older companies. */
+  pib: string | null;
+  mb: string | null;
+  address: string | null;
+  city: string | null;
+  postalCode: string | null;
+  activityCode: string | null;
+  ownershipType: ApiOwnership | null;
   ownerUserId: string | null;
   notes: string | null;
   /** Custom field values by field id (CD-15). */
@@ -1027,7 +1036,7 @@ export const crmApi = {
     api<ApiFunnel>(`/crm/funnels/${funnelId}/stages/${stageId}${moveDealsTo ? '?moveDealsTo=' + moveDealsTo : ''}`, { method: 'DELETE' }),
 
   companies: (ids?: readonly string[]) => all<ApiCompany>(only('/crm/companies', 'ids', ids)),
-  createCompany: (input: CompanyInput & { name: string }) => api<ApiCompany>('/crm/companies', { method: 'POST', json: input }),
+  createCompany: (input: CompanyInput & { name: string; pib: string }) => api<ApiCompany>('/crm/companies', { method: 'POST', json: input }),
   updateCompany: (id: string, input: CompanyInput, version?: string) => api<ApiCompany>(`/crm/companies/${id}`, { method: 'PATCH', json: input, headers: ifMatch(version) }),
   deleteCompany: (id: string) => api(`/crm/companies/${id}`, { method: 'DELETE' }),
 

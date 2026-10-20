@@ -5,7 +5,7 @@
  */
 import { beforeAll, describe, expect, inject, it } from 'vitest';
 import { starterTemplate } from '../../src/modules/crm/documents/docx';
-import { addMember, call, createTenant, type Funnel, type Json, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, type Funnel, type Json, ok, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let admin: Session;
@@ -68,7 +68,7 @@ describe('the checklist', () => {
     expect(items(st)).toEqual({ contact: false, company: false, product: true, deal: false });
     // A deal with a new company and contact adds all three.
     await ok('POST', '/crm/deals', { ...as(), body: { title: 'Real deal', funnelId: funnel.id } });
-    const company = await ok('POST', '/crm/companies', { ...as(), body: { name: 'Real company' } });
+    const company = await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Real company' } });
     expect(items(await state())).toEqual({ contact: false, company: true, product: true, deal: true });
     await ok('POST', '/crm/contacts', { ...as(), body: { fullName: 'Real Person', companyId: company.id } });
     st = await state();
@@ -150,7 +150,7 @@ describe('sample data', () => {
   it('removes exactly the sample records; real records, and sample ones they use, stay', async () => {
     const funnel = (await ok<Funnel[]>('GET', '/crm/funnels', asT()))[0]!;
     const sampleCompany = (await list('/crm/companies', owner, t)).find((c) => c.name === 'Tidewater Foods')!;
-    const realCompany = await ok('POST', '/crm/companies', { ...asT(), body: { name: 'Real Co' } });
+    const realCompany = await ok('POST', '/crm/companies', { ...asT(), body: { pib: testPib(), name: 'Real Co' } });
     const realContact = await ok('POST', '/crm/contacts', { ...asT(), body: { fullName: 'Real Person', companyId: realCompany.id } });
     const realDeal = await ok('POST', '/crm/deals', { ...asT(), body: { title: 'Real deal at a sample company', funnelId: funnel.id, companyId: sampleCompany.id } });
     const realProduct = await ok('POST', '/crm/products', { ...asT(), body: { name: 'Real product', unitPrice: 5 } });

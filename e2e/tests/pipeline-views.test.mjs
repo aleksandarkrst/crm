@@ -2,7 +2,7 @@
 // filters as the board, the remembered view, the funnel select's pencil and the New deal button.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, newUserWithWorkspace, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, newUserWithWorkspace, steps, useBrowser, testPib } from '../lib/harness.mjs';
 
 /** Picks an option in the Pipeline filter bar's select that offers `option`. */
 const pick = (page, option) =>
@@ -27,7 +27,7 @@ describe('pipeline views', () => {
     await newUserWithWorkspace(page, { label: 'views', name: 'Vic Viewer', workspace: 'Views Co' });
     [funnel] = await api(page, '/crm/funnels');
     const deal = async (name, stageIdx) => {
-      const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name }) });
+      const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name }) });
       const d = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: name + ' rollout', funnelId: funnel.id, companyId: company.id }) });
       if (stageIdx) await api(page, `/crm/deals/${d.id}/move`, { method: 'POST', body: JSON.stringify({ stageId: funnel.stages[stageIdx].id }) });
       return d;

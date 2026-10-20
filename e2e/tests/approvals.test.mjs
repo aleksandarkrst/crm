@@ -3,7 +3,7 @@
 // required comment; the employee then sees the comment on the rejected day.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, clickButton, email, eventually, finishOnboarding, newUserWithWorkspace, signIn, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, email, eventually, finishOnboarding, newUserWithWorkspace, signIn, steps, useBrowser, testPib } from '../lib/harness.mjs';
 
 const addDays = (date, n) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
@@ -25,7 +25,7 @@ describe('approvals', () => {
     const me = (await api(page, '/people/access')).employeeId;
     const boss = (await api(manager, '/people/access')).employeeId;
     await api(manager, `/people/employees/${me}`, { method: 'PATCH', body: JSON.stringify({ managerId: boss }) });
-    const company = await api(manager, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: `Client of ${name}` }) });
+    const company = await api(manager, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: `Client of ${name}` }) });
     const [type] = await api(manager, '/project-types');
     const project = await api(manager, '/projects', { method: 'POST', body: JSON.stringify({ name: `Project of ${name}`, projectTypeId: type.id, companyId: company.id }) });
     const task = await api(manager, '/tasks', { method: 'POST', body: JSON.stringify({ projectId: project.id, name: 'Inspect engine', assigneeIds: [me] }) });

@@ -7,7 +7,7 @@
  * own submission would. Checked per approval mode.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { call, createTenant, ok, type Session, signIn } from './helpers';
+import { call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 import { addEmployee, asTenantSql, joinAsEmployee } from './people-helpers';
 
 interface Week {
@@ -50,7 +50,7 @@ beforeAll(async () => {
   // Nobody has no app account: only an Admin can enter their time.
   nobodyId = await addEmployee(owner, tenant, { firstName: 'Nobody', lastName: 'Offline', jobTitle: 'Technician' });
   await asTenantSql(tenant, 'update employees set manager_id = $2, timesheet_required = true where id = any($1::uuid[])', [[draganId, nobodyId], markoId]);
-  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(owner), body: { name: 'Hidrogradnja' } });
+  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(owner), body: { pib: testPib(), name: 'Hidrogradnja' } });
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as(owner));
   const project = await ok<{ id: string }>('POST', '/projects', { ...as(owner), body: { name: 'Engine overhaul', projectTypeId: type!.id, companyId: company.id } });
   taskId = (await ok<{ id: string }>('POST', '/tasks', { ...as(owner), body: { projectId: project.id, name: 'Inspect engine', assigneeIds: [draganId, nobodyId] } })).id;

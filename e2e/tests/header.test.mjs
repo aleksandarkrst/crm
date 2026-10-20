@@ -3,7 +3,7 @@
 // sidebar's module and workspace switcher is in module-switcher.test.mjs (CD-214).
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, clickButton, createDealInUi, newUserWithWorkspace, RUN, setValue, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, createDealInUi, newUserWithWorkspace, RUN, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
 
 /** The search results as { group, title, selected } rows, in screen order. */
 const results = (page) =>
@@ -38,7 +38,7 @@ describe('command palette, + menu and account menu', () => {
     northwindId = await createDealInUi(page, { company: 'Northwind d.o.o.', contact: 'Ana Marković' });
     // The second deal through the API (the New deal dialog offers existing companies first).
     const funnels = await api(page, '/crm/funnels');
-    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Bluefin Labs' }) });
+    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Bluefin Labs' }) });
     const contact = await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ fullName: 'Petar Petrović', companyId: company.id, email: 'petar@bluefin.test' }) });
     await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Bluefin Labs', funnelId: funnels[0].id, companyId: company.id, primaryContactId: contact.id }) });
     await page.reload({ waitUntil: 'networkidle0' });
@@ -170,8 +170,9 @@ describe('command palette, + menu and account menu', () => {
     await page.waitForSelector('::-p-text(Create & start funnel)');
     assert.equal(new URL(page.url()).pathname, '/contacts', 'still on Contacts');
     await click(page, '[data-testid=new-deal-add-company]');
-    await page.waitForSelector('input[placeholder="Company name"]');
-    await page.type('input[placeholder="Company name"]', 'Menu Made d.o.o.');
+    await page.waitForSelector('input[placeholder="Name as registered in APR"]');
+    await page.type('input[placeholder="Name as registered in APR"]', 'Menu Made d.o.o.');
+    await page.type('[data-testid=new-deal-company-pib]', testPib());
     await page.type('input[placeholder="Full name"]', 'Mira Menić');
     await clickButton(page, 'Create & start funnel');
     await page.waitForFunction(() => location.pathname.startsWith('/deals/'));

@@ -4,7 +4,7 @@
 // with Done, and no add row once Completed).
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
 
 describe('time cards', () => {
   const browser = useBrowser();
@@ -29,7 +29,7 @@ describe('time cards', () => {
     await newUserWithWorkspace(page, { label: 'time-cards', name: 'Tina Field', workspace: 'Field Co' });
     me = (await api(page, '/people/access')).employeeId;
     await api(page, '/people/employees/' + me, { method: 'PATCH', body: JSON.stringify({ workType: 'both' }) });
-    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Hidrogradnja' }) });
+    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Hidrogradnja' }) });
     const [type] = await api(page, '/project-types');
     project = await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Engine overhaul, CAT 336', projectTypeId: type.id, companyId: company.id }) });
     task = await api(page, '/tasks', { method: 'POST', body: JSON.stringify({ projectId: project.id, name: 'Dismantle and inspect engine', assigneeIds: [me], estimateHours: 4 }) });

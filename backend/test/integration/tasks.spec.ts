@@ -4,7 +4,7 @@
  * list behind canLogTime, the "Assigned to a task" email and history.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, eventually, mailTo, ok, type Session, signIn, waitForMail } from './helpers';
+import { addMember, call, createTenant, eventually, mailTo, ok, type Session, signIn, waitForMail, testPib } from './helpers';
 import { accessOf, addEmployee } from './people-helpers';
 
 interface Assignee {
@@ -66,7 +66,7 @@ beforeAll(async () => {
   await ok('POST', '/people/reporting-lines', { ...as(), body: { employeeIds: [emp.marko], managerId: emp.petar } }, 200);
   noAccount = await addEmployee(owner, tenant, { firstName: 'Noah', lastName: 'Noaccount' });
 
-  const company = await ok('POST', '/crm/companies', { ...as(), body: { name: 'Northwind Logistics' } });
+  const company = await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Northwind Logistics' } });
   const types = await ok<{ id: string; stages: { id: string }[] }[]>('GET', '/project-types', as());
   projectA = await ok('POST', '/projects', { ...as(), body: { name: 'Warehouse AC fit-out', projectTypeId: types[0]!.id, companyId: company.id, leadUserId: lead.userId } });
   projectB = await ok('POST', '/projects', { ...as(), body: { name: 'Booking website', projectTypeId: types[0]!.id, companyId: company.id, leadUserId: lead.userId } });

@@ -3,7 +3,7 @@
 // who doesn't take part seeing the minutes read-only.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, clickButton, email, eventually, finishOnboarding, newUserWithWorkspace, RUN, setValue, signIn, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, email, eventually, finishOnboarding, newUserWithWorkspace, RUN, setValue, signIn, steps, useBrowser, testPib } from '../lib/harness.mjs';
 
 const TZ = 'Europe/Belgrade'; // new workspaces use it
 
@@ -29,7 +29,7 @@ describe('internal minutes', () => {
     mia = await browser.person('mia');
     await newUserWithWorkspace(mia, { label: 'minutes-mia', name: 'Mia Minutes', workspace: 'Minutes Co' });
     miaId = (await api(mia, '/team')).members.find((m) => m.displayName === 'Mia Minutes').userId;
-    const company = await api(mia, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: `Globex ${RUN}` }) });
+    const company = await api(mia, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: `Globex ${RUN}` }) });
     const funnels = await api(mia, '/crm/funnels');
     deal = await api(mia, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Globex pilot', funnelId: funnels[0].id, companyId: company.id }) });
     const start = Date.now() - 2 * 3_600_000;

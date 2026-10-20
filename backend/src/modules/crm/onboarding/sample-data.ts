@@ -14,11 +14,12 @@ export const SAMPLE_PRODUCTS = [
 ] as const;
 export type SampleProductKey = (typeof SAMPLE_PRODUCTS)[number]['key'];
 
+/** Made-up PIBs with valid check digits (CD-357); one the workspace already uses is left out. */
 export const SAMPLE_COMPANIES = [
-  { key: 'brightline', name: 'Brightline Studio', industry: 'Design agency', hq: 'Novi Sad', teamSize: '11–50 staff', domain: 'brightline.example.com' },
-  { key: 'kestrel', name: 'Kestrel Logistics', industry: 'Logistics', hq: 'Belgrade', teamSize: '51–200 staff', domain: 'kestrel.example.com' },
-  { key: 'orchard', name: 'Orchard Dental Group', industry: 'Healthcare', hq: 'Niš', teamSize: '11–50 staff', domain: 'orchard.example.com' },
-  { key: 'tidewater', name: 'Tidewater Foods', industry: 'Food production', hq: 'Subotica', teamSize: '201–500 staff', domain: 'tidewater.example.com' },
+  { key: 'brightline', pib: '990000019', name: 'Brightline Studio', industry: 'Design agency', hq: 'Novi Sad', teamSize: '11–50 staff', domain: 'brightline.example.com' },
+  { key: 'kestrel', pib: '990000027', name: 'Kestrel Logistics', industry: 'Logistics', hq: 'Belgrade', teamSize: '51–200 staff', domain: 'kestrel.example.com' },
+  { key: 'orchard', pib: '990000035', name: 'Orchard Dental Group', industry: 'Healthcare', hq: 'Niš', teamSize: '11–50 staff', domain: 'orchard.example.com' },
+  { key: 'tidewater', pib: '990000043', name: 'Tidewater Foods', industry: 'Food production', hq: 'Subotica', teamSize: '201–500 staff', domain: 'tidewater.example.com' },
 ] as const;
 export type SampleCompanyKey = (typeof SAMPLE_COMPANIES)[number]['key'];
 

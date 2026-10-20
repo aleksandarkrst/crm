@@ -3,7 +3,7 @@
 // only, one lead); the shared checklist; Report and sign-off (needs the customer's name); history.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
 
 describe('work order page', () => {
   const browser = useBrowser();
@@ -20,7 +20,7 @@ describe('work order page', () => {
     await api(page, '/team/invitations', { method: 'POST', body: JSON.stringify({ email: `crew-${Date.now()}@example.test`, role: 'member' }) });
     crew = (await api(page, '/people/employees')).employees.find((e) => e.id !== me).id;
     for (const id of [me, crew]) await api(page, '/people/employees/' + id, { method: 'PATCH', body: JSON.stringify({ workType: 'service' }) });
-    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Northwind Logistics' }) });
+    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Northwind Logistics' }) });
     order = await api(page, '/work-orders', {
       method: 'POST',
       body: JSON.stringify({ title: 'Install 3 split AC units', companyId: company.id, technicianIds: [me], scheduledDate: '2026-11-04', scheduledStart: '08:00', durationHours: 8 }),

@@ -4,7 +4,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { inject } from 'vitest';
-import { addMember, call, createTenant, firstFunnel, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, firstFunnel, ok, type Session, signIn, testPib } from './helpers';
 
 interface ChangeEvent {
   type: string;
@@ -89,7 +89,7 @@ describe('event stream', () => {
     const update = await mine.waitFor((e) => e.type === 'deal' && e.op === 'update');
     expect(update).toMatchObject({ ids: [deal.id], client: 'tab-events-owner' });
 
-    const company = await ok('POST', '/crm/companies', { token: owner.token, tenant, body: { name: 'Live Co' } });
+    const company = await ok('POST', '/crm/companies', { token: owner.token, tenant, body: { pib: testPib(), name: 'Live Co' } });
     await mine.waitFor((e) => e.type === 'company' && !!e.ids?.includes(company.id));
     const task = await ok('POST', `/crm/deals/${deal.id}/tasks`, { token: owner.token, tenant, body: { stageId: funnel.stages[0]!.id, label: 'Call', blocksAdvance: false } });
     await mine.waitFor((e) => e.type === 'task' && !!e.ids?.includes(task.id) && !!e.dealIds?.includes(deal.id));
@@ -103,10 +103,10 @@ describe('event stream', () => {
     const mine = await openStream(owner, tenant);
     streams.push(mine);
 
-    const secret = await ok('POST', '/crm/companies', { token: owner.token, tenant, body: { name: 'Secret Co' } });
+    const secret = await ok('POST', '/crm/companies', { token: owner.token, tenant, body: { pib: testPib(), name: 'Secret Co' } });
     await mine.waitFor((e) => !!e.ids?.includes(secret.id));
     // A change in the other workspace arrives there, which proves its stream is live...
-    const own = await ok('POST', '/crm/companies', { token: outsider.token, tenant: otherTenant, body: { name: 'Their Co' } });
+    const own = await ok('POST', '/crm/companies', { token: outsider.token, tenant: otherTenant, body: { pib: testPib(), name: 'Their Co' } });
     await theirs.waitFor((e) => !!e.ids?.includes(own.id));
     // ...and nothing of the first workspace ever did.
     expect(theirs.events.some((e) => e.ids?.includes(secret.id))).toBe(false);

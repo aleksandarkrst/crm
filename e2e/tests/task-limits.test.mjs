@@ -3,7 +3,7 @@
 // limit edit (Enter saves, Escape cancels) with its history row, and a limit set while assigning.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, newUserWithWorkspace, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, newUserWithWorkspace, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
 
 describe('task limits', () => {
   const browser = useBrowser();
@@ -27,7 +27,7 @@ describe('task limits', () => {
     // An invited colleague (no account yet): listed in the org chart, so the picker offers them.
     await api(page, '/team/invitations', { method: 'POST', body: JSON.stringify({ email: `crew-${Date.now()}@example.test`, role: 'member' }) });
     crew = (await api(page, '/people/employees')).employees.find((e) => e.id !== me).id;
-    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Delta Engines' }) });
+    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Delta Engines' }) });
     const [type] = await api(page, '/project-types');
     const project = await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Engine overhaul', projectTypeId: type.id, companyId: company.id }) });
     task = await api(page, '/tasks', { method: 'POST', body: JSON.stringify({ projectId: project.id, name: 'Overhaul engine 2' }) });

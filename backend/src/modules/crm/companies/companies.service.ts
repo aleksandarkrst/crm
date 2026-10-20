@@ -1,16 +1,19 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, count, eq, getTableColumns, ilike, inArray, or } from 'drizzle-orm';
+import { and, asc, count, eq, getTableColumns, ilike, inArray, ne, or } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
-import { DatabaseService } from '../../../shared/database/database.service';
+import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { companies, contacts, deals, meetings, projects, visitPlanLines } from '../../../shared/database/schema';
+import { companies, contacts, deals, meetings, OWNERSHIP_TYPES, projects, visitPlanLines } from '../../../shared/database/schema';
 import { type ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
+import { MB_MESSAGE, mbValid, PIB_MESSAGE, pibValid } from '../../../shared/validation/serbian-ids';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
 import { RecordHistoryService } from '../history/record-history.service';
 import { assertOwnerIsMember, userNameOf } from '../owner';
+
+const noSpaces = (v: unknown) => (typeof v === 'string' ? v.replace(/\s/g, '') : v);
 
 export const CreateCompany = z.object({
   name: z.string().trim().min(1).max(200),
@@ -19,6 +22,15 @@ export const CreateCompany = z.object({
   teamSize: optionalText(40),
   source: optionalText(80),
   domain: optionalText(253),
+  // Identity (CD-357). The PIB is required and, once set, can't be cleared (a PATCH may change it, not null it).
+  // Spaces are dropped ("104 052 135" is 104052135), as the dialogs do, so a spreadsheet's formatting passes.
+  pib: z.preprocess(noSpaces, z.string({ error: 'PIB is required' }).refine(pibValid, PIB_MESSAGE)),
+  mb: z.preprocess(noSpaces, optionalText(8).refine((v) => v == null || mbValid(v), MB_MESSAGE)),
+  address: optionalText(200),
+  city: optionalText(100),
+  postalCode: optionalText(12),
+  activityCode: optionalText(4).refine((v) => v == null || /^\d{4}$/.test(v), 'The activity code is 4 digits'),
+  ownershipType: z.enum(OWNERSHIP_TYPES).nullish(),
   ownerUserId: z.uuid().nullish(),
   /** Custom field values by field id (CD-15); null or '' clears one. */
   customFields: CustomFieldValuesInput,
@@ -27,6 +39,18 @@ export const CreateCompany = z.object({
 export const UpdateCompany = nonEmptyPatch(CreateCompany.partial());
 export type CreateCompany = z.infer<typeof CreateCompany>;
 export type UpdateCompany = z.infer<typeof UpdateCompany>;
+
+/**
+ * Two companies in one workspace never share a PIB (CD-357): a 409 that names the existing one, so
+ * the New company dialog can offer to open it. The unique index catches a race (a plain 409).
+ */
+async function assertPibFree(tx: Tx, pib: string, exceptId?: string) {
+  const [taken] = await tx
+    .select({ id: companies.id, name: companies.name })
+    .from(companies)
+    .where(and(eq(companies.pib, pib), exceptId ? ne(companies.id, exceptId) : undefined));
+  if (taken) throw new ConflictException({ statusCode: 409, error: 'Conflict', message: `A company with this PIB already exists: ${taken.name}`, existingCompanyId: taken.id });
+}
 
 /**
  * Reference pattern for a tenant-scoped CRUD service:
@@ -49,7 +73,7 @@ export class CompaniesService {
       tx
         .select({ ...getTableColumns(companies), ownerName: userNameOf(companies.ownerUserId) })
         .from(companies)
-        .where(and(like ? or(ilike(companies.name, like), ilike(companies.industry, like), ilike(companies.hq, like)) : undefined, page.ids ? inArray(companies.id, page.ids) : undefined))
+        .where(and(like ? or(ilike(companies.name, like), ilike(companies.industry, like), ilike(companies.hq, like), ilike(companies.pib, like)) : undefined, page.ids ? inArray(companies.id, page.ids) : undefined))
         .orderBy(asc(companies.name))
         .limit(page.limit)
         .offset(page.offset),
@@ -68,6 +92,7 @@ export class CompaniesService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
+        await assertPibFree(tx, input.pib);
         // A create that sends custom field values (a create form) must fill the required ones.
         const { customFields: cfInput, ...fields } = input;
         const cf = await this.customFields.validate(tx, 'company', cfInput, { requireAll: cfInput !== undefined });
@@ -91,6 +116,7 @@ export class CompaniesService {
           await this.changes.assertNoConflict(tx, ctx, 'company', locked, input, version);
         }
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
+        if (input.pib) await assertPibFree(tx, input.pib, id);
         const { customFields: cfInput, ...fields } = input;
         const patch: PgUpdateSetSource<typeof companies> = { ...fields };
         if (cfInput !== undefined) patch.customFields = this.customFields.merged(companies.customFields, await this.customFields.validate(tx, 'company', cfInput));

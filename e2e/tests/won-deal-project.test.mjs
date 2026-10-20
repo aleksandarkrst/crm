@@ -3,7 +3,7 @@
 // the deal then offers "Open project" and its Summary lists the project with its status.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
 
 describe('won opportunity → project', () => {
   const browser = useBrowser();
@@ -16,7 +16,7 @@ describe('won opportunity → project', () => {
     page = await browser.person('wes');
     await newUserWithWorkspace(page, { label: 'wonproj', name: 'Wes Winner', workspace: 'Won Co' });
     const [funnel] = await api(page, '/crm/funnels');
-    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Northwind Logistics' }) });
+    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Northwind Logistics' }) });
     const deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Website and CRM rollout', funnelId: funnel.id, companyId: company.id }) });
     await api(page, `/crm/deals/${deal.id}/move`, { method: 'POST', body: JSON.stringify({ stageId: funnel.stages.find((s) => s.isWon).id }) });
     dealId = deal.id;

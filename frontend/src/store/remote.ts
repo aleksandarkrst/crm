@@ -364,6 +364,13 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
     source: c.source ?? '',
     domain: c.domain ?? '',
     notes: c.notes ?? '',
+    pib: c.pib ?? '',
+    mb: c.mb ?? '',
+    address: c.address ?? '',
+    city: c.city ?? '',
+    postalCode: c.postalCode ?? '',
+    activityCode: c.activityCode ?? '',
+    ownershipType: c.ownershipType ?? '',
     owner: c.ownerName ?? '',
     ownerId: c.ownerUserId,
   }));

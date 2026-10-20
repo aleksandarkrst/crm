@@ -6,7 +6,7 @@
  * for managers above and Admins; the date picker's range.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { call, createTenant, ok, type Session, signIn } from './helpers';
+import { call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 import { addEmployee, asTenantSql, createDepartment, createTeam, joinAsEmployee, showInApp, START } from './people-helpers';
 
 interface Row {
@@ -170,7 +170,7 @@ describe('the rules in order (spec 12.2)', () => {
   });
 
   it('hours on a non-working day are weekend work', async () => {
-    const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(owner), body: { name: 'Hidrogradnja' } });
+    const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(owner), body: { pib: testPib(), name: 'Hidrogradnja' } });
     const [type] = await ok<{ id: string }[]>('GET', '/project-types', as(owner));
     const project = await ok<{ id: string }>('POST', '/projects', { ...as(owner), body: { name: 'Engine overhaul', projectTypeId: type!.id, companyId: company.id } });
     const task = await ok<{ id: string }>('POST', '/tasks', { ...as(owner), body: { projectId: project.id, name: 'Inspect engine', assigneeIds: [peerId] } });

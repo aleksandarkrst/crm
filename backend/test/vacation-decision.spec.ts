@@ -1,7 +1,7 @@
 import { PDFParse } from 'pdf-parse';
 import { describe, expect, it } from 'vitest';
 import { renderPdf } from '../src/modules/hr-documents';
-import { mbValid, pibValid } from '../src/modules/identity/settings.schemas';
+import { mbValid, pibValid } from '../src/shared/validation/serbian-ids';
 import { buildVacationDecision, missingCompanyDetails, srDate, type VacationDecisionData } from '../src/modules/timeoff/decision-document';
 import { DEFAULT_LEGAL_BASIS } from '../src/shared/database/schema';
 

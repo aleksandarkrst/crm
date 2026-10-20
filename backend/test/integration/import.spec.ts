@@ -5,7 +5,8 @@
 import { Client } from 'pg';
 import { beforeAll, describe, expect, inject, it } from 'vitest';
 import { DEFAULT_MIGRATION_DATABASE_URL } from './env';
-import { addMember, call, createTenant, type Funnel, type Json, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, type Funnel, type Json, ok, type Session, signIn, testPib, testPibs } from './helpers';
+import { asTenantSql } from './people-helpers';
 
 let owner: Session;
 let admin: Session;
@@ -38,7 +39,7 @@ beforeAll(async () => {
 
 describe('who can import', () => {
   it('owners and admins; members get 403 on every import route, outsiders too', async () => {
-    const csv = `Name\n${uniq('Role check')}\n`;
+    const csv = `Name,PIB\n${uniq('Role check')},${testPib()}\n`;
     for (const s of [member]) {
       expect((await call('POST', '/crm/import/companies/preview', { ...as(s), body: { csv } })).status).toBe(403);
       expect((await call('POST', '/crm/import/companies/commit', { ...as(s), body: { csv } })).status).toBe(403);
@@ -57,9 +58,9 @@ describe('who can import', () => {
 describe('templates', () => {
   it('serves a CSV with a BOM and the field labels for each type', async () => {
     for (const [type, header] of [
-      ['companies', 'Name,Industry,HQ'],
+      ['companies', 'Name,Company ID (PIB),MB,Industry,HQ'],
       ['contacts', 'Full name,Email'],
-      ['deals', 'Deal,Company,Funnel,Stage,Value,Closing date'],
+      ['deals', 'Deal,Company,Company ID (PIB),Funnel,Stage,Value,Closing date'],
       ['products', 'Name,Description,Unit price,Unit,Quantity,Tax %,Billing frequency,Billing cycles'],
     ] as const) {
       const res = await fetch(`${inject('apiUrl')}/api/crm/import/${type}/template`, { headers: { authorization: `Bearer ${owner.token}`, 'x-tenant-id': tenant } });
@@ -77,15 +78,15 @@ describe('preview', () => {
   it('guesses the mapping, validates every row with the create rules, and writes nothing', async () => {
     const good = uniq('Preview Good');
     const csv = [
-      'Company name,Website,Employees,Owner,Notes',
-      `${good},good.example,11–50,${admin.email},`,
-      `,nobody.example,,,`,
-      `${'x'.repeat(201)},,,,`,
-      `${uniq('Preview Bad owner')},,,someone-else@example.test,`,
+      'Company name,Website,Employees,Owner,Notes,PIB',
+      `${good},good.example,11–50,${admin.email},,${testPib()}`,
+      `,nobody.example,,,,${testPib()}`,
+      `${'x'.repeat(201)},,,,,${testPib()}`,
+      `${uniq('Preview Bad owner')},,,someone-else@example.test,,${testPib()}`,
     ].join('\n');
     const res = await preview('companies', { csv });
-    expect(res.mapping).toMatchObject({ name: 0, domain: 1, teamSize: 2, ownerEmail: 3, notes: 4, industry: null });
-    expect(res.headers).toEqual(['Company name', 'Website', 'Employees', 'Owner', 'Notes']);
+    expect(res.mapping).toMatchObject({ name: 0, domain: 1, teamSize: 2, ownerEmail: 3, notes: 4, pib: 5, industry: null });
+    expect(res.headers).toEqual(['Company name', 'Website', 'Employees', 'Owner', 'Notes', 'PIB']);
     expect(res.counts).toMatchObject({ rows: 4, create: 1, invalid: 3, update: 0, skip: 0 });
     expect(res.rows.map((r: Json) => [r.line, r.status])).toEqual([
       [2, 'create'],
@@ -105,8 +106,9 @@ describe('preview', () => {
     const contacts = await preview('contacts', { csv: `Full name,Email,Buyer role\nAna,not-an-email,Champion\nBo,bo@example.test,Boss\nCy,,decision MAKER\n` });
     expect(contacts.rows.map((r: Json) => r.messages)).toEqual([['Email: Invalid email address'], [expect.stringMatching(/^Buyer role: /)], []]);
 
+    const acme = testPib();
     const deals = await preview('deals', {
-      csv: `Deal,Company,Stage,Value,Closing date,Funnel\nA,Acme,No such stage,100,2026-01-01,\nB,Acme,,lots,31.12.2026,\nC,Acme,,1.000,2026-13-45,\nD,,,,,\nE,Acme,,,,Nope\n`,
+      csv: `Deal,Company,Stage,Value,Closing date,Funnel,Company ID (PIB)\nA,Acme,No such stage,100,2026-01-01,,${acme}\nB,Acme,,lots,31.12.2026,,${acme}\nC,Acme,,1.000,2026-13-45,,${acme}\nD,,,,,,\nE,Acme,,,,Nope,${acme}\n`,
     });
     const messages = deals.rows.map((r: Json) => r.messages);
     expect(messages[0]).toEqual([`Stage: "${(funnels[0] as Json).label}" has no stage named "No such stage"`]);
@@ -132,43 +134,82 @@ describe('importing companies', () => {
   it('creates valid rows, reports failed rows with line and reason, and uses the mapping sent', async () => {
     const a = uniq('Import A');
     const b = uniq('Import B');
-    const csv = `Kolona,Grana,Vlasnik\n${a},Retail,${admin.email}\n,Energy,\n${b},,\n`;
-    const res = await commit('companies', { csv, mapping: { name: 0, industry: 1, ownerEmail: 2 } });
-    expect(res).toMatchObject({ created: 2, updated: 0, skipped: 0, failed: 1, headers: ['Kolona', 'Grana', 'Vlasnik'] });
-    expect(res.failures).toEqual([{ line: 3, reason: 'Name is required', cells: ['', 'Energy', ''] }]);
+    const [pa, pBad, pb] = testPibs(3);
+    const csv = `Kolona,Grana,Vlasnik,Broj\n${a},Retail,${admin.email},${pa}\n,Energy,,${pBad}\n${b},,,${pb}\n`;
+    const res = await commit('companies', { csv, mapping: { name: 0, industry: 1, ownerEmail: 2, pib: 3 } });
+    expect(res).toMatchObject({ created: 2, updated: 0, skipped: 0, failed: 1, headers: ['Kolona', 'Grana', 'Vlasnik', 'Broj'] });
+    expect(res.failures).toEqual([{ line: 3, reason: 'Name is required', cells: ['', 'Energy', '', pBad] }]);
     const [ca] = await companiesNamed(a);
     expect(ca).toMatchObject({ industry: 'Retail', ownerUserId: admin.userId });
     // Without an owner column, the importer owns the rows (as with "Add company").
     expect((await companiesNamed(b))[0]).toMatchObject({ ownerUserId: owner.userId, industry: null });
   });
 
-  it('duplicates by name, case-insensitive: skipped by default, also within the file', async () => {
+  it('duplicates by PIB (the Company ID, CD-357): skipped by default, also within the file', async () => {
     const name = uniq('Dup Co');
-    await ok('POST', '/crm/companies', { ...as(), body: { name, industry: 'Old' } });
-    const fresh = uniq('Fresh Co');
-    const csv = `Name,Industry\n${name.toUpperCase()},New\n${fresh},One\n  ${fresh.toLowerCase()} ,Two\n`;
+    const [taken, fresh] = testPibs(2);
+    await ok('POST', '/crm/companies', { ...as(), body: { pib: taken, name, industry: 'Old' } });
+    const other = uniq('Fresh Co');
+    // The first row has another spelling of the name: the PIB decides.
+    const csv = `Name,PIB,Industry\n${name.toUpperCase()},${taken},New\n${other},${fresh},One\n${other} again,${fresh},Two\n`;
     const pre = await preview('companies', { csv });
     expect(pre.counts).toMatchObject({ create: 1, skip: 2 });
     const res = await commit('companies', { csv });
     expect(res).toMatchObject({ created: 1, skipped: 2, updated: 0, failed: 0 });
     expect(res.skippedRows).toEqual([
-      { line: 2, reason: `A company named "${name.toUpperCase()}" already exists` },
-      { line: 4, reason: `A company named "${fresh.toLowerCase()}" already exists` },
+      { line: 2, reason: `A company with the PIB ${taken} already exists` },
+      { line: 4, reason: `A company with the PIB ${fresh} already exists` },
     ]);
     expect((await companiesNamed(name)).map((c) => c.industry)).toEqual(['Old']);
-    expect((await companiesNamed(fresh)).map((c) => c.industry)).toEqual(['One']);
+    expect((await companiesNamed(other)).map((c) => c.industry)).toEqual(['One']);
   });
 
   it('updates duplicates when asked, only with the values the row has', async () => {
     const name = uniq('Upd Co');
-    await ok('POST', '/crm/companies', { ...as(), body: { name, industry: 'Old', hq: 'Belgrade', domain: 'old.example' } });
-    const csv = `Name,Industry,HQ,Domain\n${name.toLowerCase()},New,,new.example\n${name},,,\n`;
+    const pib = testPib();
+    await ok('POST', '/crm/companies', { ...as(), body: { pib, name, industry: 'Old', hq: 'Belgrade', domain: 'old.example' } });
+    const csv = `Name,PIB,Industry,HQ,Domain,City\n${name.toLowerCase()},${pib},New,,new.example,Novi Sad\n${name},${pib},,,,\n`;
     const pre = await preview('companies', { csv, duplicates: 'update' });
     expect(pre.rows.map((r: Json) => r.status)).toEqual(['update', 'skip']);
     const res = await commit('companies', { csv, duplicates: 'update' });
     expect(res).toMatchObject({ created: 0, updated: 1, skipped: 1, failed: 0 });
     const [c] = await companiesNamed(name);
-    expect(c).toMatchObject({ name, industry: 'New', hq: 'Belgrade', domain: 'new.example' });
+    expect(c).toMatchObject({ name, pib, industry: 'New', hq: 'Belgrade', domain: 'new.example', city: 'Novi Sad' });
+  });
+
+  it('PIB is required and checked; identity columns are imported', async () => {
+    const [good, , clash] = testPibs(3);
+    const name = uniq('Ident Co');
+    const csv = [
+      'Name,PIB,MB,Activity code,Ownership,Street,Postal code',
+      `${name},${good},20084693,6201,State,Bulevar 10,21000`,
+      `${uniq('No PIB')},,,,,,`,
+      `${uniq('Bad PIB')},104052136,,,,,`,
+      `${uniq('Bad rest')},${clash},20084694,62,Mixed,,`,
+    ].join('\n');
+    const res = await preview('companies', { csv });
+    expect(res.rows.map((r: Json) => r.status)).toEqual(['create', 'invalid', 'invalid', 'invalid']);
+    expect(res.rows[1].messages).toEqual(['Company ID (PIB) is required']);
+    expect(res.rows[2].messages).toEqual(['Company ID (PIB): PIB is 9 digits with a valid check digit']);
+    expect(res.rows[3].messages).toEqual([
+      'Ownership: "Mixed" is not Private or State',
+      'MB: MB is 8 digits with a valid check digit',
+      'Activity code: The activity code is 4 digits',
+    ]);
+    await commit('companies', { csv });
+    expect((await companiesNamed(name))[0]).toMatchObject({ pib: good, mb: '20084693', activityCode: '6201', ownershipType: 'state', address: 'Bulevar 10', postalCode: '21000' });
+  });
+
+  it('an older company without a PIB is matched by name and gets it; a PIB that belongs to another company is refused', async () => {
+    const legacy = uniq('Legacy Co');
+    const holder = uniq('Holder Co');
+    const [legacyPib, holderPib] = testPibs(2);
+    await asTenantSql(tenant, `insert into companies (tenant_id, name) values ($1, $2)`, [tenant, legacy]);
+    await ok('POST', '/crm/companies', { ...as(), body: { pib: holderPib, name: holder } });
+    const res = await commit('companies', { csv: `Name,PIB\n${legacy},${holderPib}\n${legacy},${legacyPib}\n`, duplicates: 'update' });
+    expect(res).toMatchObject({ created: 0, updated: 1, failed: 1 });
+    expect(res.failures[0]).toMatchObject({ line: 2, reason: `Company ID (PIB): ${holderPib} belongs to another company than the one named "${legacy}"` });
+    expect((await companiesNamed(legacy)).map((c) => c.pib)).toEqual([legacyPib]);
   });
 });
 
@@ -186,10 +227,11 @@ describe('a batch the database refuses (CD-78)', () => {
         BEGIN IF NEW.name = '${refused}' THEN RAISE EXCEPTION 'Refused by the test trigger'; END IF; RETURN NEW; END $$`);
       await admin.query(`CREATE TRIGGER ${fn} BEFORE INSERT ON companies FOR EACH ROW EXECUTE FUNCTION ${fn}()`);
 
-      const res = await commit('companies', { csv: `Name,Industry\n${a},Retail\n${refused},Energy\n${b},Media\n` });
+      const [pa, pRefused, pb] = testPibs(3);
+      const res = await commit('companies', { csv: `Name,Industry,PIB\n${a},Retail,${pa}\n${refused},Energy,${pRefused}\n${b},Media,${pb}\n` });
       expect(res).toMatchObject({ created: 2, failed: 1, skipped: 0, updated: 0 });
       expect(res.failures).toHaveLength(1);
-      expect(res.failures[0]).toMatchObject({ line: 3, cells: [refused, 'Energy'] });
+      expect(res.failures[0]).toMatchObject({ line: 3, cells: [refused, 'Energy', pRefused] });
       expect(await companiesNamed(a)).toHaveLength(1);
       expect(await companiesNamed(b)).toHaveLength(1);
       expect(await companiesNamed(refused)).toHaveLength(0);
@@ -207,7 +249,8 @@ describe('importing contacts', () => {
     const company = uniq('Contact Co');
     await ok('POST', '/crm/contacts', { ...as(), body: { fullName: 'Existing Person', email, jobTitle: 'Old title' } });
     const newEmail = `${uniq('new').replace(/\W/g, '')}@example.test`;
-    const csv = `Name,E-mail,Title,Company,Buyer role\nRenamed,${email.toUpperCase()},New title,${company},\nNew Person,${newEmail},CTO,${company.toLowerCase()},champion\nNo Email,,,,\n`;
+    const pib = testPib();
+    const csv = `Name,E-mail,Title,Company,Company ID (PIB),Buyer role\nRenamed,${email.toUpperCase()},New title,${company},${pib},\nNew Person,${newEmail},CTO,${company.toLowerCase()},${pib},champion\nNo Email,,,,,\n`;
 
     const skip = await commit('contacts', { csv });
     expect(skip).toMatchObject({ created: 2, skipped: 1, updated: 0, failed: 0, newCompanies: 1 });
@@ -217,6 +260,7 @@ describe('importing contacts', () => {
     expect(created).toMatchObject({ fullName: 'New Person', jobTitle: 'CTO', buyerRole: 'Champion' });
     const [co] = await companiesNamed(company);
     expect(created.companyId).toBe(co.id);
+    expect(co.pib).toBe(pib);
 
     const update = await commit('contacts', { csv: csv.split('\n').slice(0, 2).join('\n'), duplicates: 'update' });
     expect(update).toMatchObject({ created: 0, updated: 1, newCompanies: 0 });
@@ -228,7 +272,7 @@ describe('importing deals', () => {
   it('matches or creates the company, matches funnel, stage, owner and contact, and records history', async () => {
     const [first, second] = funnels as [Funnel, Funnel];
     const existingCo = uniq('Deal Existing Co');
-    const co = await ok('POST', '/crm/companies', { ...as(), body: { name: existingCo } });
+    const co = await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: existingCo } });
     const contactEmail = `${uniq('dealc').replace(/\W/g, '')}@example.test`;
     const contact = await ok('POST', '/crm/contacts', { ...as(), body: { fullName: 'Deal Contact', email: contactEmail } });
     const newCo = uniq('Deal New Co');
@@ -236,10 +280,10 @@ describe('importing deals', () => {
     const stage = second.stages[2]!;
     const won = first.stages[first.stages.length - 1]!;
     const csv = [
-      'Deal,Company,Funnel,Stage,Value,Closing date,Owner email,Contact,Contact email,Source',
-      `${tag} one,${existingCo.toUpperCase()},,,"14,000.50",31.12.2026,${admin.email},,${contactEmail.toUpperCase()},Referral`,
-      `${tag} two,${newCo},${(second as Json).label.toUpperCase()},${stage.name.toLowerCase()},900,,,New Buyer,new-${contactEmail},`,
-      `${tag} three,${newCo},,${won.name},1000,2026-01-15,,,,`,
+      'Deal,Company,Funnel,Stage,Value,Closing date,Owner email,Contact,Contact email,Source,Company ID (PIB)',
+      `${tag} one,${existingCo.toUpperCase()},,,"14,000.50",31.12.2026,${admin.email},,${contactEmail.toUpperCase()},Referral,`,
+      `${tag} two,${newCo},${(second as Json).label.toUpperCase()},${stage.name.toLowerCase()},900,,,New Buyer,new-${contactEmail},,${testPib()}`,
+      `${tag} three,${newCo},,${won.name},1000,2026-01-15,,,,,`,
     ].join('\n');
     const res = await commit('deals', { csv, funnelId: first.id });
     expect(res).toMatchObject({ created: 3, failed: 0, newCompanies: 1, newContacts: 1 });
@@ -266,7 +310,7 @@ describe('importing deals', () => {
     await ok('PATCH', '/workspace', { token: owner.token, tenant: usd, body: { currency: 'USD' } });
     const [funnel] = await ok<Funnel[]>('GET', '/crm/funnels', { token: owner.token, tenant: usd });
     const tag = uniq('UsdRow').replace(/\W/g, '');
-    const res = await ok('POST', '/crm/import/deals/commit', { token: owner.token, tenant: usd, body: { csv: `Deal,Company,Value\n${tag},${uniq('Usd Co')},500`, funnelId: funnel!.id } }, 200);
+    const res = await ok('POST', '/crm/import/deals/commit', { token: owner.token, tenant: usd, body: { csv: `Deal,Company,Value,Company ID (PIB)\n${tag},${uniq('Usd Co')},500,${testPib()}`, funnelId: funnel!.id } }, 200);
     expect(res).toMatchObject({ created: 1, failed: 0 });
     const [row] = await ok<Json[]>('GET', `/crm/deals?q=${tag}`, { token: owner.token, tenant: usd });
     expect(row.deal.currency).toBe('USD');
@@ -284,9 +328,34 @@ describe('importing deals', () => {
   });
 
   it('fails a row whose contact email is unknown and no name is given', async () => {
-    const res = await commit('deals', { csv: `Deal,Company,Contact email\nX,${uniq('Nobody Co')},nobody-${Date.now()}@example.test\n` });
+    const res = await commit('deals', { csv: `Deal,Company,Company ID (PIB),Contact email\nX,${uniq('Nobody Co')},${testPib()},nobody-${Date.now()}@example.test\n` });
     expect(res).toMatchObject({ created: 0, failed: 1, newCompanies: 0 });
     expect(res.failures[0].reason).toMatch(/^Contact email: no contact has the email /);
+  });
+
+  it('a company the workspace lacks needs its PIB (CD-357); a PIB finds a company under another name, spaces ignored', async () => {
+    const unknown = uniq('Unknown Co');
+    const tag = uniq('PibRow').replace(/\W/g, '');
+    const missing = await commit('deals', { csv: `Deal,Company\n${tag} lost,${unknown}\n` });
+    expect(missing).toMatchObject({ created: 0, failed: 1, newCompanies: 0 });
+    expect(missing.failures[0].reason).toBe(`Company: no company named "${unknown}"; add its Company ID (PIB) to create it`);
+    expect(await companiesNamed(unknown)).toHaveLength(0);
+
+    const bad = await commit('deals', { csv: `Deal,Company,Company ID (PIB)\n${tag} bad,${unknown},123\n` });
+    expect(bad.failures[0].reason).toMatch(/^Company ID \(PIB\): /);
+
+    const pib = testPib();
+    const spaced = `${pib.slice(0, 3)} ${pib.slice(3, 6)} ${pib.slice(6)}`;
+    const made = await commit('deals', { csv: `Deal,Company,Company ID (PIB)\n${tag} new,${unknown},${spaced}\n` });
+    expect(made).toMatchObject({ created: 1, failed: 0, newCompanies: 1 });
+    const [co] = await companiesNamed(unknown);
+    expect(co.pib).toBe(pib);
+
+    // The PIB wins over the name: a row spelling the company differently still finds it.
+    const contact = await commit('contacts', { csv: `Full name,Company,Company ID (PIB)\nPia ${tag},Another spelling,${pib}\n` });
+    expect(contact).toMatchObject({ created: 1, failed: 0, newCompanies: 0 });
+    const [pia] = await contactsMatching(`Pia ${tag}`);
+    expect(pia.companyId).toBe(co.id);
   });
 });
 
@@ -358,8 +427,9 @@ describe('importing products (CD-81)', () => {
 describe('limits', () => {
   it('accepts a file above the default 100 kB JSON limit', async () => {
     const prefix = uniq('Big');
-    const rows = Array.from({ length: 1500 }, (_, i) => `${prefix} ${i},${'Industry text '.repeat(6)}`);
-    const csv = `Name,Industry\n${rows.join('\n')}\n`;
+    const pibs = testPibs(1500);
+    const rows = Array.from({ length: 1500 }, (_, i) => `${prefix} ${i},${'Industry text '.repeat(6)},${pibs[i]}`);
+    const csv = `Name,Industry,PIB\n${rows.join('\n')}\n`;
     expect(csv.length).toBeGreaterThan(100_000);
     expect((await preview('companies', { csv })).counts).toMatchObject({ rows: 1500, create: 1500 });
   });
@@ -378,7 +448,7 @@ describe('limits', () => {
     const huge = await call('POST', '/crm/import/companies/preview', { ...as(), body: { csv: 'x'.repeat(3_200_000) } });
     expect(huge.status).toBe(413);
     // Other routes keep the default limit.
-    expect((await call('POST', '/crm/companies', { ...as(), body: { name: 'x', notes: 'y'.repeat(200_000) } })).status).toBe(413);
+    expect((await call('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'x', notes: 'y'.repeat(200_000) } })).status).toBe(413);
   });
 
   it('refuses an empty file and a file with only a header', async () => {
@@ -393,10 +463,12 @@ describe('tenant isolation', () => {
   it("an import neither matches nor changes another workspace's rows", async () => {
     const name = uniq('Shared Name');
     const email = `${uniq('shared').replace(/\W/g, '')}@example.test`;
-    const theirs = await ok('POST', '/crm/companies', { token: outsider.token, tenant: otherTenant, body: { name, industry: 'Theirs' } });
+    // The same name and the same PIB in another workspace: neither matches here.
+    const sharedPib = testPib();
+    const theirs = await ok('POST', '/crm/companies', { token: outsider.token, tenant: otherTenant, body: { pib: sharedPib, name, industry: 'Theirs' } });
     await ok('POST', '/crm/contacts', { token: outsider.token, tenant: otherTenant, body: { fullName: 'Their Person', email } });
 
-    const companies = await commit('companies', { csv: `Name,Industry\n${name},Ours\n`, duplicates: 'update' });
+    const companies = await commit('companies', { csv: `Name,PIB,Industry\n${name},${sharedPib},Ours\n`, duplicates: 'update' });
     expect(companies).toMatchObject({ created: 1, updated: 0 });
     const contacts = await commit('contacts', { csv: `Name,Email\nOur Person,${email}\n`, duplicates: 'update' });
     expect(contacts).toMatchObject({ created: 1, updated: 0 });
@@ -419,7 +491,7 @@ describe('tenant isolation', () => {
     const res = await call('POST', '/crm/import/deals/preview', { ...as(), body: { csv: 'Deal,Company\nX,Y\n', funnelId: theirFunnels[0]!.id } });
     expect(res.status).toBe(400);
     expect(res.body.message).toBe('Unknown funnel');
-    const owners = await preview('companies', { csv: `Name,Owner email\n${uniq('Owner check')},${outsider.email}\n` });
+    const owners = await preview('companies', { csv: `Name,Owner email,PIB\n${uniq('Owner check')},${outsider.email},${testPib()}\n` });
     expect(owners.rows[0].messages).toEqual([`Owner email: no member of this workspace has the email ${outsider.email}`]);
   });
 });
@@ -429,7 +501,8 @@ describe('CSV quoting', () => {
     const a = uniq('Quote; "Co", Ltd');
     const b = uniq('Plain');
     const cell = (v: string) => `"${v.replace(/"/g, '""')}"`;
-    const csv = `\uFEFFName;Notes;Industry\r\n${cell(a)};"Line one\r\nline two, with a comma";Retail\r\n${b};;"=SUM(A1)"\r\n`;
+    const [pa, pb] = testPibs(2);
+    const csv = `\uFEFFName;Notes;Industry;PIB\r\n${cell(a)};"Line one\r\nline two, with a comma";Retail;${pa}\r\n${b};;"=SUM(A1)";${pb}\r\n`;
     const res = await commit('companies', { csv });
     expect(res).toMatchObject({ created: 2, failed: 0 });
     expect((await companiesNamed(a))[0]).toMatchObject({ name: a, notes: 'Line one\nline two, with a comma', industry: 'Retail' });
@@ -439,7 +512,7 @@ describe('CSV quoting', () => {
 
   it("drops the export's formula guard so an exported file imports back unchanged", async () => {
     const name = uniq('Guarded');
-    await commit('companies', { csv: `Name,Industry,Notes\n${name},'=HYPERLINK(1),'-5 and 'quoted'\n` });
+    await commit('companies', { csv: `Name,Industry,Notes,PIB\n${name},'=HYPERLINK(1),'-5 and 'quoted',${testPib()}\n` });
     expect((await companiesNamed(name))[0]).toMatchObject({ industry: '=HYPERLINK(1)', notes: "-5 and 'quoted'" });
   });
 

@@ -261,8 +261,9 @@ export async function createNew(page, kind) {
 /** "New deal" from the header's "+" menu with a new company and contact; returns the new deal id. */
 export async function createDealInUi(page, { company, contact }) {
   await createNew(page, 'deal');
-  await page.waitForSelector('input[placeholder="Company name"]');
-  await page.type('input[placeholder="Company name"]', company);
+  await page.waitForSelector('input[placeholder="Name as registered in APR"]');
+  await page.type('input[placeholder="Name as registered in APR"]', company);
+  await page.type('[data-testid=new-deal-company-pib]', testPib());
   await page.type('input[placeholder="Full name"]', contact);
   await clickButton(page, 'Create & start funnel');
   await page.waitForFunction(() => location.pathname.startsWith('/deals/'));
@@ -271,3 +272,14 @@ export async function createDealInUi(page, { company, contact }) {
 
 /** Sets the deal's closing date on the lead screen (a React-controlled date input). */
 export const setClosingDate = (page, isoDate) => setValue(page, 'input[type=date]', isoDate);
+
+/** A valid PIB (CD-357) for a test company: random first eight digits, the ISO 7064 MOD 11,10 check digit. */
+export function testPib() {
+  const first8 = String(10_000_000 + Math.floor(Math.random() * 89_999_999));
+  let r = 10;
+  for (const ch of first8) {
+    r = (r + Number(ch)) % 10 || 10;
+    r = (r * 2) % 11;
+  }
+  return first8 + ((11 - r) % 10);
+}

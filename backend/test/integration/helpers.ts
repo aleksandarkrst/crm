@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { expect, inject } from 'vitest';
+import { pibCheckDigit } from '../../src/shared/validation/serbian-ids';
 
 /** Unique per test run, so the suite can run against a shared dev database. */
 const RUN = `${Date.now().toString(36)}${randomBytes(3).toString('hex')}`;
@@ -150,4 +151,16 @@ export const productLine = (productId: string, over: Record<string, unknown> = {
 /** Saves a deal's products (CD-83) and returns `{ lines, totals }`. */
 export async function saveProducts(s: Session, tenant: string, dealId: string, lines: unknown[], extra: Record<string, unknown> = {}): Promise<Json> {
   return ok('PUT', `/crm/deals/${dealId}/products`, { token: s.token, tenant, body: { taxMode: 'exclusive', lines, ...extra } }, 200);
+}
+
+/** A valid PIB (CD-357) for a test company: random first eight digits, the check digit computed. */
+export function testPib(): string {
+  const first8 = String(10_000_000 + Math.floor(Math.random() * 89_999_999));
+  return first8 + pibCheckDigit(first8);
+}
+
+/** `n` distinct valid PIBs (consecutive first digits from a random start), for a big file. */
+export function testPibs(n: number): string[] {
+  const start = 10_000_000 + Math.floor(Math.random() * (89_999_999 - n));
+  return Array.from({ length: n }, (_, i) => String(start + i) + pibCheckDigit(String(start + i)));
 }

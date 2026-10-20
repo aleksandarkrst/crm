@@ -313,6 +313,9 @@ export function contactsForLead(s: State, leadId: string): Person[] {
   return allPeople(s).filter((p) => p.leadId === leadId || links.includes(p.id));
 }
 
+/** Ownership labels (CD-357), by the API's value. */
+export const OWNERSHIP_LABELS: Record<string, string> = { private: 'Private', state: 'State' };
+
 export interface CompanyRecord {
   /** Backend company id: companies are identified by id, never by name (names aren't unique). */
   id: string;
@@ -324,6 +327,9 @@ export interface CompanyRecord {
   /** Owner label, and user id for filtering (labels aren't unique). */
   owner: string;
   ownerId: string | null;
+  /** Company ID (CD-357), '' for an older company without one; ownership is 'Private', 'State' or ''. */
+  pib: string;
+  ownership: string;
   leads: Lead[];
   contactCount: number;
   oppCount: number;
@@ -338,14 +344,16 @@ export interface CompanyRecord {
  * company aren't grouped into a company record.
  */
 export function companyRecords(s: State): CompanyRecord[] {
-  const map = new Map<string, Omit<CompanyRecord, 'contactCount' | 'oppCount' | 'value' | 'valueLabel' | 'stageName' | 'lastTouch'>>();
+  const map = new Map<string, Omit<CompanyRecord, 'contactCount' | 'oppCount' | 'value' | 'valueLabel' | 'stageName' | 'lastTouch' | 'pib' | 'ownership'>>();
   for (const l of s.leads) {
     if (!l.companyId) continue;
     if (!map.has(l.companyId)) map.set(l.companyId, { id: l.companyId, name: l.company, industry: l.industry, hq: l.hq, size: l.size, source: l.source, owner: ownerOf(s, l), ownerId: l.ownerId ?? null, leads: [] });
     map.get(l.companyId)!.leads.push(l);
   }
   for (const c of s.extraCompanies) if (c.id && !map.has(c.id)) map.set(c.id, { ...c, id: c.id, owner: memberName(s, c.ownerId, c.owner), ownerId: c.ownerId ?? null, leads: [] });
+  const extras = new Map(s.extraCompanies.map((c) => [c.id, c]));
   return [...map.values()].map((r) => {
+    const extra = extras.get(r.id);
     const ids = new Set<string>();
     r.leads.forEach((l) => contactsForLead(s, l.id).forEach((p) => ids.add(p.id)));
     const value = r.leads.reduce((a, l) => a + valueNum(l.value), 0);
@@ -353,6 +361,8 @@ export function companyRecords(s: State): CompanyRecord[] {
     const last = r.leads[r.leads.length - 1];
     return {
       ...r,
+      pib: extra?.pib ?? '',
+      ownership: OWNERSHIP_LABELS[extra?.ownershipType ?? ''] ?? '',
       contactCount: ids.size,
       oppCount: r.leads.length,
       value,

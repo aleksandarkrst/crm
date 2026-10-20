@@ -4,7 +4,7 @@
  * with their team, work type and open tasks, for owners and admins only.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 import { accessOf } from './people-helpers';
 
 interface Technician {
@@ -47,7 +47,7 @@ describe('work type', () => {
 
 describe('Settings → Technicians', () => {
   it('lists people with their work type and open tasks, for owners and admins only', async () => {
-    const company = await ok('POST', '/crm/companies', { ...as(), body: { name: 'Northwind' } });
+    const company = await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Northwind' } });
     const [type] = await ok<{ id: string }[]>('GET', '/project-types', as());
     const project = await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name: 'Fit-out', projectTypeId: type!.id, companyId: company.id } });
     await ok('POST', '/tasks', { ...as(), body: { projectId: project.id, name: 'Survey', assigneeIds: [anaId] } });

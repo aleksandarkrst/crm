@@ -4,7 +4,7 @@
  */
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { call, createTenant, firstFunnel, type Funnel, ok, productLine, saveProducts, type Session, signIn } from './helpers';
+import { call, createTenant, firstFunnel, type Funnel, ok, productLine, saveProducts, type Session, signIn, testPib } from './helpers';
 
 let alice: Session;
 let bob: Session;
@@ -20,7 +20,7 @@ beforeAll(async () => {
   const funnelA = await firstFunnel(alice, tenantA);
   funnelB = await firstFunnel(bob, tenantB);
 
-  a.company = (await ok('POST', '/crm/companies', { ...as, body: { name: 'Alpha Secret Co' } })).id;
+  a.company = (await ok('POST', '/crm/companies', { ...as, body: { pib: testPib(), name: 'Alpha Secret Co' } })).id;
   a.contact = (await ok('POST', '/crm/contacts', { ...as, body: { fullName: 'Alpha Person', companyId: a.company } })).id;
   a.product = (await ok('POST', '/crm/products', { ...as, body: { name: 'Alpha Product', unitPrice: 100 } })).id;
   a.deal = (

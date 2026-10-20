@@ -14,6 +14,7 @@ import {
   steps,
   text,
   useBrowser,
+  testPib,
   waitForToastToClear,
 } from '../lib/harness.mjs';
 
@@ -60,7 +61,7 @@ describe('honest UI', () => {
 
     // The second deal through the API (the New deal dialog is covered elsewhere), in the same funnel.
     const { funnelId } = await api(page, '/crm/deals/' + datedId);
-    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Undated d.o.o.' }) });
+    const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Undated d.o.o.' }) });
     const deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Undated opportunity', funnelId, companyId: company.id }) });
     undatedId = deal.id;
     assert.equal(deal.closeDate, null);

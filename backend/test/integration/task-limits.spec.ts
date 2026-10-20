@@ -4,7 +4,7 @@
  * assignee and a manager see, the 50-person cap and the loggable list of a late joiner.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 import { accessOf, addEmployee, asTenantSql } from './people-helpers';
 
 interface HoursRow {
@@ -56,7 +56,7 @@ beforeAll(async () => {
   }
   // Marko reports to Petar.
   await ok('POST', '/people/reporting-lines', { ...as(), body: { employeeIds: [emp.marko], managerId: emp.petar } }, 200);
-  const company = await ok('POST', '/crm/companies', { ...as(), body: { name: 'Delta Engines' } });
+  const company = await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Delta Engines' } });
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as());
   projectId = (await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name: 'Engine overhaul', projectTypeId: type!.id, companyId: company.id, leadUserId: lead.userId } })).id;
 });
