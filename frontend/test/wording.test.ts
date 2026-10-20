@@ -1,7 +1,7 @@
 // Visible wording left over from the Deal → Opportunity rename (CD-356).
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { importIssueText, importTemplateLink, mergeFieldGroupHeading, opportunityCopy } from '../src/store/wording.ts';
+import { importTemplateLink, mergeFieldGroupHeading, mergeFieldReference, opportunityCopy } from '../src/store/wording.ts';
 
 describe('import dialog', () => {
   it('names the opportunities template the same way as the other record types', () => {
@@ -9,15 +9,6 @@ describe('import dialog', () => {
     assert.equal(importTemplateLink('contacts'), 'Download the contacts template');
     assert.equal(importTemplateLink('deals'), 'Download the opportunities template');
     assert.equal(importTemplateLink('products'), 'Download the products template');
-  });
-
-  it('shows the deals title column as Opportunity', () => {
-    assert.equal(opportunityCopy('Deal'), 'Opportunity');
-  });
-
-  it('renames only the Deal field prefix on a validation line', () => {
-    assert.equal(importIssueText('Deal: String must contain at least 1 character(s)'), 'Opportunity: String must contain at least 1 character(s)');
-    assert.equal(importIssueText('Funnel: there is no funnel named "Deal"'), 'Funnel: there is no funnel named "Deal"');
   });
 });
 
@@ -40,9 +31,16 @@ describe('document template merge fields', () => {
     assert.equal(opportunityCopy('Total with tax'), 'Total with tax');
   });
 
-  it('does not rewrite a merge token when one is shown beside the label', () => {
-    const tag = 'deal.title';
-    assert.equal(`{{${tag}}}`, '{{deal.title}}');
-    assert.equal(opportunityCopy('Deal title'), 'Opportunity title');
+  it('renders the opportunity description beside the unchanged merge token', () => {
+    assert.deepEqual(mergeFieldReference('deal.title', 'Deal title'), { token: '{{deal.title}}', description: 'Opportunity title' });
+    assert.deepEqual(mergeFieldReference('deal.headline', 'Proposal headline (the deal title when empty)'), {
+      token: '{{deal.headline}}',
+      description: 'Proposal headline (the opportunity title when empty)',
+    });
+    assert.deepEqual(mergeFieldReference('deal.amount', 'Deal value without tax, in the deal currency'), {
+      token: '{{deal.amount}}',
+      description: 'Opportunity value without tax, in the opportunity currency',
+    });
+    assert.deepEqual(mergeFieldReference('owner.name', 'Deal owner'), { token: '{{owner.name}}', description: 'Opportunity owner' });
   });
 });

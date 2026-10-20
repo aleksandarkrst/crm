@@ -60,7 +60,7 @@ describe('templates', () => {
     for (const [type, header] of [
       ['companies', 'Name,Company ID (PIB),MB,Industry,HQ'],
       ['contacts', 'Full name,Email'],
-      ['deals', 'Deal,Company,Company ID (PIB),Funnel,Stage,Value,Closing date'],
+      ['deals', 'Opportunity,Company,Company ID (PIB),Funnel,Stage,Value,Closing date'],
       ['products', 'Name,Description,Unit price,Unit,Quantity,Tax %,Billing frequency,Billing cycles'],
     ] as const) {
       const res = await fetch(`${inject('apiUrl')}/api/crm/import/${type}/template`, { headers: { authorization: `Bearer ${owner.token}`, 'x-tenant-id': tenant } });
@@ -118,9 +118,18 @@ describe('preview', () => {
     expect(messages[4]).toEqual(['Funnel: there is no funnel named "Nope"']);
   });
 
+  it('says Opportunity is required when a row has no title', async () => {
+    const pib = testPib();
+    // The old "Deal" header still maps; the message comes from the field label.
+    const res = await preview('deals', { csv: `Deal,Company,Company ID (PIB)\n,Acme,${pib}\n` });
+    expect(res.mapping.title).toBe(0);
+    expect(res.rows[0].status).toBe('invalid');
+    expect(res.rows[0].messages).toEqual(['Opportunity is required']);
+  });
+
   it('lists required fields without a column', async () => {
     const res = await preview('deals', { csv: 'Something\nx\n' });
-    expect(res.missingRequired).toEqual(['Deal', 'Company']);
+    expect(res.missingRequired).toEqual(['Opportunity', 'Company']);
     expect((await call('POST', '/crm/import/deals/commit', { ...as(), body: { csv: 'Something\nx\n' } })).status).toBe(400);
   });
 

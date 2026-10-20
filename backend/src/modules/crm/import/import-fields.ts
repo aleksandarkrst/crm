@@ -56,7 +56,7 @@ export const IMPORT_FIELDS: Record<ImportType, ImportField[]> = {
     owner,
   ],
   deals: [
-    { key: 'title', label: 'Deal', required: true, aliases: ['deal name', 'deal title', 'title', 'name', 'opportunity', 'opportunity name'], example: 'Website redesign' },
+    { key: 'title', label: 'Opportunity', required: true, aliases: ['deal', 'deal name', 'deal title', 'title', 'name', 'opportunity', 'opportunity name'], example: 'Website redesign' },
     { key: 'company', label: 'Company', required: true, aliases: ['company name', 'organisation', 'organization', 'account', 'account name', 'customer'], hint: 'Matched by PIB, then by name; a new one needs its PIB', example: 'Northwind Studio' },
     companyPib,
     { key: 'funnel', label: 'Funnel', required: false, aliases: ['pipeline', 'audience'], hint: 'Matched by name; empty means the funnel picked above', example: '' },

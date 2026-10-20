@@ -27,10 +27,7 @@ export function importTemplateLink(type: ImportRecord): string {
   return `Download the ${IMPORT_NOUN[type]} template`;
 }
 
-/**
- * A deals-import validation line still arrives as "Deal: …" (the API field name).
- * Only that prefix changes, so a value that happens to contain the word stays as typed.
- */
-export function importIssueText(text: string): string {
-  return text.replace(/^Deal:/, 'Opportunity:');
+/** Token and description as the merge-field reference renders them. The tag is not reworded. */
+export function mergeFieldReference(tag: string, label: string): { token: string; description: string } {
+  return { token: `{{${tag}}}`, description: opportunityCopy(label) };
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { canManageTemplates, type DocTemplate, docMoment, fileSize, type PlaceholderReference } from '../store/documents';
 import { useStore } from '../store/store';
-import { mergeFieldGroupHeading, opportunityCopy } from '../store/wording';
+import { mergeFieldGroupHeading, mergeFieldReference, opportunityCopy } from '../store/wording';
 
 /**
  * Settings → Document templates (CD-13): the uploaded .docx templates, the built-in proposal preview,
@@ -129,14 +129,17 @@ function PlaceholderReferenceCard() {
         {[...groups].map(([group, fields]) => (
           <div key={group} style={{ padding: '14px 18px', borderBottom: '1px solid var(--divider-2)', display: 'flex', flexDirection: 'column', gap: 7 }}>
             <span className="caps-muted">{mergeFieldGroupHeading(group)}</span>
-            {fields.map((f) => (
-              <div key={f.tag} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 10, fontSize: 12.5, alignItems: 'baseline' }}>
-                <code style={{ overflowWrap: 'anywhere' }}>{`{{${f.tag}}}`}</code>
-                <span style={{ color: 'var(--text-2)' }}>
-                  {opportunityCopy(f.label)} <span style={{ color: 'var(--muted)' }}>· {f.example}</span>
-                </span>
-              </div>
-            ))}
+            {fields.map((f) => {
+              const shown = mergeFieldReference(f.tag, f.label);
+              return (
+                <div key={f.tag} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 10, fontSize: 12.5, alignItems: 'baseline' }}>
+                  <code style={{ overflowWrap: 'anywhere' }}>{shown.token}</code>
+                  <span style={{ color: 'var(--text-2)' }}>
+                    {shown.description} <span style={{ color: 'var(--muted)' }}>· {f.example}</span>
+                  </span>
+                </div>
+              );
+            })}
           </div>
         ))}
       </div>

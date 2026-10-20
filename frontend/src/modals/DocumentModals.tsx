@@ -234,7 +234,7 @@ export function NewTemplateModal() {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
             {scan.placeholders.map((p) => (
               <span key={p.tag} style={{ fontSize: 12, background: 'var(--white)', border: `1px solid ${p.known ? 'var(--border)' : 'var(--danger)'}`, borderRadius: 6, padding: '5px 9px', color: 'var(--ink)' }}>
-                {p.tag === 'lines' ? '{{#lines}}' : `{{${p.tag}}}`} <span style={{ color: p.known ? 'var(--muted)' : 'var(--danger)' }}>→ {p.known ? (p.label ? opportunityCopy(p.label) : p.label) : 'not recognised'}</span>
+                {p.tag === 'lines' ? '{{#lines}}' : `{{${p.tag}}}`} <span style={{ color: p.known ? 'var(--muted)' : 'var(--danger)' }}>→ {p.known ? opportunityCopy(p.label ?? '') : 'not recognised'}</span>
               </span>
             ))}
           </div>

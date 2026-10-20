@@ -16,7 +16,7 @@ import {
   type RowStatus,
 } from '../store/importExport';
 import { useStore } from '../store/store';
-import { importIssueText, importTemplateLink, opportunityCopy } from '../store/wording';
+import { importTemplateLink } from '../store/wording';
 
 const TYPES: { key: ImportType; label: string; sub: string }[] = [
   { key: 'companies', label: 'Companies', sub: 'Duplicates are matched by name' },
@@ -131,7 +131,7 @@ export function ImportDialog({ initialType, onClose }: { initialType: ImportType
 
   const fields = preview?.fields ?? [];
   const isMapped = (key: string | undefined) => !!key && (mapping[key] ?? null) !== null;
-  const missing = fields.filter((f) => f.required && !isMapped(f.key) && !isMapped(f.alternative)).map((f) => opportunityCopy(f.label));
+  const missing = fields.filter((f) => f.required && !isMapped(f.key) && !isMapped(f.alternative)).map((f) => f.label);
   const shownFields = fields.filter((f) => isMapped(f.key)).slice(0, 4);
   const title = `Import ${TYPES.find((t) => t.key === type)!.label.toLowerCase()}`;
   const sub = 'Upload a CSV (UTF-8, comma or semicolon separated, with a header row). Nothing is saved until you import.';
@@ -192,7 +192,7 @@ export function ImportDialog({ initialType, onClose }: { initialType: ImportType
           <div className="import-fields">
             {fields.map((f) => (
               <label key={f.key} className="form-label" title={f.hint}>
-                {opportunityCopy(f.label)}
+                {f.label}
                 {f.required ? (f.alternative ? ` * (or ${fields.find((x) => x.key === f.alternative)?.label ?? f.alternative})` : ' *') : ''}
                 <select
                   className="form-input"
@@ -248,7 +248,7 @@ export function ImportDialog({ initialType, onClose }: { initialType: ImportType
           )}
           {preview.warnings.map((w) => (
             <div key={w} className="hint-box">
-              {importIssueText(w)}
+              {w}
             </div>
           ))}
           <div className="card" style={{ overflowX: 'auto' }}>
@@ -258,7 +258,7 @@ export function ImportDialog({ initialType, onClose }: { initialType: ImportType
                 <span className="th">Status</span>
                 {shownFields.map((f) => (
                   <span key={f.key} className="th">
-                    {opportunityCopy(f.label)}
+                    {f.label}
                   </span>
                 ))}
                 <span className="th">Notes</span>
@@ -274,7 +274,7 @@ export function ImportDialog({ initialType, onClose }: { initialType: ImportType
                       {r.values[f.key]}
                     </span>
                   ))}
-                  <span style={{ lineHeight: 1.4, color: r.status === 'invalid' ? 'var(--danger)' : 'var(--text-2)' }}>{[...r.messages, ...r.notes].map(importIssueText).join(' · ')}</span>
+                  <span style={{ lineHeight: 1.4, color: r.status === 'invalid' ? 'var(--danger)' : 'var(--text-2)' }}>{[...r.messages, ...r.notes].join(' · ')}</span>
                 </div>
               ))}
             </div>
@@ -286,7 +286,7 @@ export function ImportDialog({ initialType, onClose }: { initialType: ImportType
               {preview.problems
                 .filter((p) => !preview.rows.some((r) => r.line === p.line))
                 .slice(0, 10)
-                .map((p) => `line ${p.line}: ${p.messages.map(importIssueText).join('; ')}`)
+                .map((p) => `line ${p.line}: ${p.messages.join('; ')}`)
                 .join(' · ')}
               {preview.counts.invalid > 10 ? ' …' : ''}
             </div>
@@ -320,7 +320,7 @@ export function ImportDialog({ initialType, onClose }: { initialType: ImportType
           {result.failed > 0 && (
             <div className="hint-box" style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between', flexWrap: 'wrap' }}>
               <span>
-                {plural(result.failed, 'row')} failed, e.g. line {result.failures[0]!.line}: {importIssueText(result.failures[0]!.reason)}
+                {plural(result.failed, 'row')} failed, e.g. line {result.failures[0]!.line}: {result.failures[0]!.reason}
               </span>
               <button type="button" className="btn-plain" onClick={() => downloadText(`pultly-${type}-import-failed.csv`, failuresCsv(result))}>
                 Download failed rows
