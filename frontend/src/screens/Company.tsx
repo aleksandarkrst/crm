@@ -102,7 +102,7 @@ export function Company() {
               <IconRow icon="location" label="HQ">
                 <span className="contact-field">
                   <GhostInput aria-label="HQ" value={rec.hq} onChange={setField('hq')} />
-                  {map && (extra?.address || extra?.city || (rec.hq && rec.hq !== '—')) && (
+                  {(extra?.address || extra?.city || (rec.hq && rec.hq !== '—')) && (
                     <a className="contact-action" href={map} target="_blank" rel="noopener noreferrer" aria-label={`Show ${rec.name} on a map`}>
                       Map
                     </a>

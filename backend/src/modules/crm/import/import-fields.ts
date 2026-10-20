@@ -16,6 +16,16 @@ const owner: ImportField = {
   example: '',
 };
 
+/** A contact's or deal's company by its PIB (CD-357): required only when the company is new. */
+const companyPib: ImportField = {
+  key: 'companyPib',
+  label: 'Company ID (PIB)',
+  required: false,
+  aliases: ['pib', 'company id', 'company id (pib)', 'company pib', 'tax id', 'vat id', 'poreski broj'],
+  hint: 'Needed only for a company the workspace does not have yet',
+  example: '104052135',
+};
+
 export const IMPORT_FIELDS: Record<ImportType, ImportField[]> = {
   companies: [
     { key: 'name', label: 'Name', required: true, aliases: ['company', 'company name', 'organisation', 'organization', 'account', 'account name', 'naziv'], example: 'Northwind Studio' },
@@ -41,12 +51,14 @@ export const IMPORT_FIELDS: Record<ImportType, ImportField[]> = {
     { key: 'phone', label: 'Phone', required: false, aliases: ['telephone', 'mobile', 'phone number', 'tel'], example: '+381 60 000 0000' },
     { key: 'linkedin', label: 'LinkedIn', required: false, aliases: ['linkedin url', 'linkedin profile'], example: '' },
     { key: 'buyerRole', label: 'Buyer role', required: false, aliases: [], hint: 'Decision maker, Economic buyer, Champion, Influencer, Gatekeeper or End user', example: 'Decision maker' },
-    { key: 'company', label: 'Company', required: false, aliases: ['company name', 'organisation', 'organization', 'account', 'account name'], hint: 'Matched by name, created if new', example: 'Northwind Studio' },
+    { key: 'company', label: 'Company', required: false, aliases: ['company name', 'organisation', 'organization', 'account', 'account name'], hint: 'Matched by PIB, then by name; a new one needs its PIB', example: 'Northwind Studio' },
+    companyPib,
     owner,
   ],
   deals: [
     { key: 'title', label: 'Deal', required: true, aliases: ['deal name', 'deal title', 'title', 'name', 'opportunity', 'opportunity name'], example: 'Website redesign' },
-    { key: 'company', label: 'Company', required: true, aliases: ['company name', 'organisation', 'organization', 'account', 'account name', 'customer'], hint: 'Matched by name, created if new', example: 'Northwind Studio' },
+    { key: 'company', label: 'Company', required: true, aliases: ['company name', 'organisation', 'organization', 'account', 'account name', 'customer'], hint: 'Matched by PIB, then by name; a new one needs its PIB', example: 'Northwind Studio' },
+    companyPib,
     { key: 'funnel', label: 'Funnel', required: false, aliases: ['pipeline', 'audience'], hint: 'Matched by name; empty means the funnel picked above', example: '' },
     { key: 'stage', label: 'Stage', required: false, aliases: ['deal stage', 'pipeline stage', 'status'], hint: "Matched by name; empty means the funnel's first stage", example: '' },
     { key: 'amount', label: 'Value', required: false, aliases: ['amount', 'deal value', 'value', 'price', 'total'], example: '14000' },

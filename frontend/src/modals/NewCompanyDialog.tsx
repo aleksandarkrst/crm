@@ -56,13 +56,13 @@ export function NewCompanyDialog() {
       <ModalHeader title="New company" sub="Every company starts as a lead. The name and PIB are required; the rest can wait until it becomes an opportunity." />
       <label className="form-label">
         Company name
-        <input className="form-input" data-testid="new-company-name" autoFocus value={name} placeholder="Name as registered in APR" aria-invalid={!!nameError} onChange={(e) => setName(e.target.value)} />
+        <input className="form-input" data-testid="new-company-name" autoFocus value={name} placeholder="e.g. Vega Logistika d.o.o." aria-invalid={!!nameError} onChange={(e) => setName(e.target.value)} />
         {nameError && (
           <span className="subform-hint" role="alert" style={{ color: 'var(--danger)' }}>
             {nameError}
           </span>
         )}
-        <span className="subform-hint">Use the exact name from the APR register (Agencija za privredne registre).</span>
+        <span className="subform-hint">Name as registered in APR</span>
       </label>
       <div className="policy-field-row">
         <label className="form-label">

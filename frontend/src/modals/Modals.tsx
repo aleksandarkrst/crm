@@ -80,11 +80,13 @@ function NewDealModal() {
     // A new company needs its PIB (CD-357), checked here before anything is created.
     if (companyIsNew && pibProblem(companyPib)) return setPibTouched(true);
     const coName = companyIsNew ? companyName.trim() || 'New company' : (companyRec?.name ?? '');
+    const co = companyIsNew ? { name: coName, pib: companyPib.replace(/\s/g, '') } : companyId ? { id: companyId, name: coName } : null;
+    if (!co) return flash('Pick a company first');
     const ctName = contact === NEW_CT ? contactName.trim() : contact;
     const person = people.find((p) => p.name === ctName);
     setBusy(true);
     await createDeal({
-      company: companyIsNew ? { name: coName, pib: companyPib.replace(/\s/g, '') } : { id: companyId, name: coName },
+      company: co,
       contact: person ? { contactId: person.contactId, name: person.name } : ctName ? { name: ctName } : null,
       segment: type,
       ...(customFieldsOf(s, 'deal').length ? { customFields: fields.values } : {}),

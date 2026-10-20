@@ -1486,11 +1486,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
        * New deal; creates the company and the primary contact first when they are new. Opened from
        * the meeting form (CD-213), it stays there and the form picks the new deal.
        */
-      createDeal: async (input: { company: { id?: string; name: string; pib?: string }; contact: { contactId?: string; name: string } | null; segment: SegKey; customFields?: CustomFieldPatch }) => {
+      createDeal: async (input: { company: { id: string; name: string } | { name: string; pib: string }; contact: { contactId?: string; name: string } | null; segment: SegKey; customFields?: CustomFieldPatch }) => {
         const funnelId = cur().funnels[input.segment]?.id;
         if (!funnelId) return;
         try {
-          const companyId = input.company.id ?? (await crmApi.createCompany({ name: input.company.name, pib: input.company.pib ?? '' })).id;
+          const companyId = 'id' in input.company ? input.company.id : (await crmApi.createCompany({ name: input.company.name, pib: input.company.pib })).id;
           let primaryContactId = input.contact?.contactId;
           if (input.contact && !primaryContactId) primaryContactId = (await crmApi.createContact({ fullName: input.contact.name, companyId, buyerRole: 'Decision maker' })).id;
           const deal = await crmApi.createDeal({ title: input.company.name, funnelId, companyId, primaryContactId: primaryContactId ?? null, ...(input.customFields ? { customFields: input.customFields } : {}) });

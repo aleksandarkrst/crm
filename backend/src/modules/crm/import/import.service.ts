@@ -58,12 +58,12 @@ interface Lookups {
   currency: string;
 }
 
-/** Writes rows (commit) or pretends to (preview, which returns placeholder ids). */
-/** A company as the import writes it: an opportunity row may create one by name only, without a PIB. */
-type CompanyWrite = Omit<CreateCompany, 'pib'> & { pib?: string };
+/** A contact's or deal's company (CD-357): an existing one, or a new one with its name and PIB. */
+type CompanyRef = { id: string } | { name: string; pib: string };
 
+/** Writes rows (commit) or pretends to (preview, which returns placeholder ids). */
 interface Writer {
-  createCompany(input: CompanyWrite): Promise<string>;
+  createCompany(input: CreateCompany): Promise<string>;
   updateCompany(id: string, patch: Partial<CreateCompany>): Promise<void>;
   createContact(input: CreateContact): Promise<string>;
   updateContact(id: string, patch: Partial<CreateContact>): Promise<void>;
@@ -455,7 +455,7 @@ export class ImportService {
     const byPib = lk.companiesByPib.get(input.pib);
     const byNameId = lk.companiesByName.get(key(input.name));
     const byName = byNameId && !lk.pibOf.get(byNameId) ? byNameId : undefined;
-    if (byPib && byName && byPib !== byName) return invalid([`Company ID (PIB): ${input.pib} belongs to another company than the one named "${input.name}"`]);
+    if (byPib && byName) return invalid([`Company ID (PIB): ${input.pib} belongs to another company than the one named "${input.name}"`]);
     const existing = byPib ?? byName;
     if (existing) {
       // The existing company keeps its name spelling.
@@ -493,14 +493,13 @@ export class ImportService {
     const buyerRole = v.buyerRole ? (BUYER_ROLES.find((r) => key(r) === key(v.buyerRole!)) ?? v.buyerRole) : undefined;
     const parsed = CreateContact.safeParse({ fullName: v.fullName, email: v.email, jobTitle: v.jobTitle, phone: v.phone, linkedin: v.linkedin, buyerRole, ownerUserId });
     if (!parsed.success) errors.push(...zodErrors(parsed.error).filter((m) => !(v.fullName === '' && m.startsWith('Full name:'))));
-    const company = v.company ? CreateCompany.shape.name.safeParse(v.company) : null;
-    if (company && !company.success) errors.push(...zodErrors(company.error, 'Company'));
+    const company = v.company ? this.companyRef(v.company, v.companyPib, lk, errors, zodErrors) : undefined;
     if (errors.length || !parsed.success) return invalid(errors);
 
     const input = parsed.data;
     const existing = input.email ? lk.contactsByEmail.get(key(input.email)) : undefined;
     if (existing && duplicates === 'skip') return { ...result, status: 'skip', messages: [`A contact with the email ${input.email} already exists`] };
-    const companyId = company?.success ? await this.companyFor(company.data, lk, w, result) : undefined;
+    const companyId = company ? await this.companyFor(company, lk, w, result) : undefined;
     if (existing) {
       // The email is the match key; the existing contact keeps its spelling.
       const patch = present({ ...input, email: undefined, companyId });
@@ -544,8 +543,7 @@ export class ImportService {
     });
     const names = { title: 'Deal', amount: 'Value', closeDate: 'Closing date', source: 'Source', ownerUserId: 'Owner email' };
     if (!parsed.success) errors.push(...zodErrors(parsed.error, undefined, names).filter((m) => !(v.title === '' && m.startsWith('Deal:'))));
-    const company = v.company ? CreateCompany.shape.name.safeParse(v.company) : null;
-    if (company && !company.success) errors.push(...zodErrors(company.error, 'Company'));
+    const company = v.company ? this.companyRef(v.company, v.companyPib, lk, errors, zodErrors) : undefined;
 
     // The primary contact: an existing contact with the email, otherwise a new one when a name is given.
     let contactId = v.contactEmail ? lk.contactsByEmail.get(key(v.contactEmail)) : undefined;
@@ -557,9 +555,9 @@ export class ImportService {
     } else if (!contactId && v.contactEmail) {
       errors.push(`Contact email: no contact has the email ${v.contactEmail} (add a Contact name to create one)`);
     }
-    if (errors.length || !parsed.success || !stage || !company?.success) return invalid(errors);
+    if (errors.length || !parsed.success || !stage || !company) return invalid(errors);
 
-    const companyId = await this.companyFor(company.data, lk, w, result);
+    const companyId = await this.companyFor(company, lk, w, result);
     if (newContact) {
       const email = newContact.email;
       contactId = await w.createContact({ ...newContact, companyId });
@@ -572,14 +570,44 @@ export class ImportService {
     return result;
   }
 
-  /** A company by name: the existing one (oldest, if several share the name) or a new one. */
-  private async companyFor(name: string, lk: Lookups, w: Writer, result: RowResult): Promise<string> {
-    const existing = lk.companiesByName.get(key(name));
-    if (existing) return existing;
-    const id = await w.createCompany({ name });
-    result.effects.push(() => lk.companiesByName.set(key(name), id));
+  /**
+   * A contact's or deal's company (CD-357), as the company import matches it: the company with the
+   * row's PIB, else one with its name (oldest, if several share it) that has no other PIB. A new
+   * company needs its PIB, so a row naming an unknown company without one is a row error.
+   */
+  private companyRef(
+    rawName: string,
+    rawPib: string | undefined,
+    lk: Lookups,
+    errors: string[],
+    zodErrors: (err: z.ZodError, prefix?: string) => string[],
+  ): CompanyRef | undefined {
+    const name = CreateCompany.shape.name.safeParse(rawName);
+    if (!name.success) errors.push(...zodErrors(name.error, 'Company'));
+    const pib = rawPib ? CreateCompany.shape.pib.safeParse(rawPib) : undefined;
+    if (pib && !pib.success) errors.push(...zodErrors(pib.error, 'Company ID (PIB)'));
+    if (!name.success || (pib && !pib.success)) return undefined;
+
+    const byPib = pib ? lk.companiesByPib.get(pib.data) : undefined;
+    if (byPib) return { id: byPib };
+    const byNameId = lk.companiesByName.get(key(name.data));
+    if (byNameId && (!pib || !lk.pibOf.get(byNameId))) return { id: byNameId };
+    if (pib) return { name: name.data, pib: pib.data };
+    errors.push(`Company: no company named "${name.data}"; add its Company ID (PIB) to create it`);
+    return undefined;
+  }
+
+  /** The id of a company the row refers to, creating it when it is new. */
+  private async companyFor(ref: CompanyRef, lk: Lookups, w: Writer, result: RowResult): Promise<string> {
+    if ('id' in ref) return ref.id;
+    const id = await w.createCompany(ref);
+    result.effects.push(() => {
+      if (!lk.companiesByName.has(key(ref.name))) lk.companiesByName.set(key(ref.name), id);
+      lk.companiesByPib.set(ref.pib, id);
+      lk.pibOf.set(id, ref.pib);
+    });
     result.newCompanies++;
-    result.notes.push(`New company: ${name}`);
+    result.notes.push(`New company: ${ref.name}`);
     return id;
   }
 

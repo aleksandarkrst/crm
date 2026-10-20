@@ -5,7 +5,7 @@
  * the company's history and searchable by PIB.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { call, createTenant, type Json, ok, type Session, signIn, testPibs } from './helpers';
+import { call, createTenant, type Json, ok, type Session, signIn, testPib, testPibs } from './helpers';
 
 let owner: Session;
 let outsider: Session;
@@ -41,6 +41,12 @@ describe('creating a company', () => {
       body: { name: 'Vega Logistika d.o.o.', pib, mb: '20084693', activityCode: '4941', ownershipType: 'private', address: 'Bulevar 10', city: 'Novi Sad', postalCode: '21000' },
     });
     expect(co).toMatchObject({ pib, mb: '20084693', activityCode: '4941', ownershipType: 'private', address: 'Bulevar 10', city: 'Novi Sad', postalCode: '21000' });
+  });
+
+  it('drops the spaces in a PIB and an MB, as the dialogs do', async () => {
+    const pib = testPib();
+    const co = await ok('POST', '/crm/companies', { ...as(), body: { name: 'Spaced d.o.o.', pib: ` ${pib.slice(0, 3)} ${pib.slice(3, 6)} ${pib.slice(6)} `, mb: '2008 4693' } });
+    expect(co).toMatchObject({ pib, mb: '20084693' });
   });
 
   it('refuses a PIB the workspace already has (409 naming the company); another workspace may use it', async () => {

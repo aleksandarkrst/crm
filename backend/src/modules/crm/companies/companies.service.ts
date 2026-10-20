@@ -13,6 +13,8 @@ import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/cu
 import { RecordHistoryService } from '../history/record-history.service';
 import { assertOwnerIsMember, userNameOf } from '../owner';
 
+const noSpaces = (v: unknown) => (typeof v === 'string' ? v.replace(/\s/g, '') : v);
+
 export const CreateCompany = z.object({
   name: z.string().trim().min(1).max(200),
   industry: optionalText(100),
@@ -21,8 +23,9 @@ export const CreateCompany = z.object({
   source: optionalText(80),
   domain: optionalText(253),
   // Identity (CD-357). The PIB is required and, once set, can't be cleared (a PATCH may change it, not null it).
-  pib: z.string({ error: 'PIB is required' }).trim().refine(pibValid, PIB_MESSAGE),
-  mb: optionalText(8).refine((v) => v == null || mbValid(v), MB_MESSAGE),
+  // Spaces are dropped ("104 052 135" is 104052135), as the dialogs do, so a spreadsheet's formatting passes.
+  pib: z.preprocess(noSpaces, z.string({ error: 'PIB is required' }).refine(pibValid, PIB_MESSAGE)),
+  mb: z.preprocess(noSpaces, optionalText(8).refine((v) => v == null || mbValid(v), MB_MESSAGE)),
   address: optionalText(200),
   city: optionalText(100),
   postalCode: optionalText(12),
