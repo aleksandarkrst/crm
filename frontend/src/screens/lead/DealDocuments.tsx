@@ -3,6 +3,7 @@ import { canManageTemplates, type DealDoc, docBusy, docMoment, fileSize, suggest
 import { stageOf } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
+import { opportunityCopy } from '../../store/wording';
 import { docState, docStateClass } from './docs';
 
 /**
@@ -74,7 +75,7 @@ export function DealDocuments({ lead }: { lead: Lead }) {
               {d.sizeBytes ? ` · ${fileSize(d.sizeBytes)}` : ''}
             </span>
             {d.status === 'failed' && <span style={{ fontSize: 11.5, color: 'var(--danger)', lineHeight: 1.45 }}>{d.error}</span>}
-            {d.status === 'ready' && d.missingFields.length > 0 && <span style={{ fontSize: 11.5, color: 'var(--warn)', lineHeight: 1.45 }}>Left empty: {d.missingFields.join(', ')}</span>}
+            {d.status === 'ready' && d.missingFields.length > 0 && <span style={{ fontSize: 11.5, color: 'var(--warn)', lineHeight: 1.45 }}>Left empty: {d.missingFields.map(opportunityCopy).join(', ')}</span>}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {d.status === 'ready' && (
                 <button type="button" className="btn-outline" style={{ fontSize: 12, padding: '7px 11px', borderRadius: 6, fontWeight: 400 }} onClick={() => void downloadDoc(d)}>
