@@ -4,6 +4,7 @@ import { paths } from '../lib/paths';
 import { canManageTemplates, DOC_TYPES, type DocType, docBusy, fileSize, type ScanResult, suggestedTemplate, templateFileProblem } from '../store/documents';
 import { leadById, stageOf } from '../store/selectors';
 import { useStore } from '../store/store';
+import { opportunityCopy } from '../store/wording';
 
 /**
  * Generating a document on a deal (CD-13): pick a template, the worker fills it with the deal's
@@ -83,7 +84,7 @@ export function GenerationModal() {
           })}
           {doc.status === 'failed' && <div style={{ fontSize: 12.5, color: 'var(--danger)', lineHeight: 1.5 }}>{doc.error || 'The document could not be generated.'}</div>}
           {doc.status === 'ready' && doc.missingFields.length > 0 && (
-            <div style={{ fontSize: 12.5, color: 'var(--warn)', lineHeight: 1.5 }}>Left empty because the opportunity has no value yet: {doc.missingFields.join(', ')}.</div>
+            <div style={{ fontSize: 12.5, color: 'var(--warn)', lineHeight: 1.5 }}>Left empty because the opportunity has no value yet: {doc.missingFields.map(opportunityCopy).join(', ')}.</div>
           )}
         </div>
       )}
@@ -233,7 +234,7 @@ export function NewTemplateModal() {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
             {scan.placeholders.map((p) => (
               <span key={p.tag} style={{ fontSize: 12, background: 'var(--white)', border: `1px solid ${p.known ? 'var(--border)' : 'var(--danger)'}`, borderRadius: 6, padding: '5px 9px', color: 'var(--ink)' }}>
-                {p.tag === 'lines' ? '{{#lines}}' : `{{${p.tag}}}`} <span style={{ color: p.known ? 'var(--muted)' : 'var(--danger)' }}>→ {p.known ? p.label : 'not recognised'}</span>
+                {p.tag === 'lines' ? '{{#lines}}' : `{{${p.tag}}}`} <span style={{ color: p.known ? 'var(--muted)' : 'var(--danger)' }}>→ {p.known ? opportunityCopy(p.label ?? '') : 'not recognised'}</span>
               </span>
             ))}
           </div>

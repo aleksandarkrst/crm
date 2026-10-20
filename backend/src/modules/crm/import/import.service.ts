@@ -541,8 +541,8 @@ export class ImportService {
       closeDate: v.closeDate ? normalizeDate(v.closeDate) : undefined,
       ownerUserId,
     });
-    const names = { title: 'Deal', amount: 'Value', closeDate: 'Closing date', source: 'Source', ownerUserId: 'Owner email' };
-    if (!parsed.success) errors.push(...zodErrors(parsed.error, undefined, names).filter((m) => !(v.title === '' && m.startsWith('Deal:'))));
+    const names = { title: 'Opportunity', amount: 'Value', closeDate: 'Closing date', source: 'Source', ownerUserId: 'Owner email' };
+    if (!parsed.success) errors.push(...zodErrors(parsed.error, undefined, names).filter((m) => !(v.title === '' && m.startsWith('Opportunity:'))));
     const company = v.company ? this.companyRef(v.company, v.companyPib, lk, errors, zodErrors) : undefined;
 
     // The primary contact: an existing contact with the email, otherwise a new one when a name is given.

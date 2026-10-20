@@ -78,8 +78,10 @@ describe('guessMapping', () => {
   });
 
   it('uses each column once and prefers exact labels', () => {
-    const m = guessMapping('deals', ['Deal', 'Company', 'Email', 'Value', 'Stage']);
+    const m = guessMapping('deals', ['Opportunity', 'Company', 'Email', 'Value', 'Stage']);
     expect(m).toMatchObject({ title: 0, company: 1, contactEmail: 2, amount: 3, stage: 4, funnel: null });
+    // A file saved from the old template still maps: "Deal" is an alias, not the column key.
+    expect(guessMapping('deals', ['Deal', 'Company'])).toMatchObject({ title: 0, company: 1 });
     expect(guessMapping('contacts', ['Name', 'Role', 'Buyer role'])).toMatchObject({ fullName: 0, jobTitle: 1, buyerRole: 2 });
   });
 });

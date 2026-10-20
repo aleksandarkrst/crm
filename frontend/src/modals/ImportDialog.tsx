@@ -16,6 +16,7 @@ import {
   type RowStatus,
 } from '../store/importExport';
 import { useStore } from '../store/store';
+import { importTemplateLink } from '../store/wording';
 
 const TYPES: { key: ImportType; label: string; sub: string }[] = [
   { key: 'companies', label: 'Companies', sub: 'Duplicates are matched by name' },
@@ -177,7 +178,7 @@ export function ImportDialog({ initialType, onClose }: { initialType: ImportType
             {type === 'deals' ? 'Rows without a funnel or stage go to the funnel above, in its first stage; companies are matched by name and created if new. ' : ''}
             Not sure about the columns?{' '}
             <button type="button" className="btn-plain" style={{ padding: '3px 8px', fontSize: 12 }} onClick={() => void downloadTemplate()}>
-              Download the {type} template
+              {importTemplateLink(type)}
             </button>
           </div>
         </>
