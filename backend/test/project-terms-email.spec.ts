@@ -20,12 +20,28 @@ describe('emails use the workspace names for projects and tasks (CD-143)', () =>
     expect(m.html).toContain('Open the activity');
 
     const p = projectCreatedEmail({ ...base, project, terms: { project: 'Work order', task: 'Step' } });
-    expect(p.subject).toBe('Work order created from a won deal: Service 2026');
+    expect(p.subject).toBe('Work order created from a won opportunity: Service 2026');
     expect(p.text).toContain('created the work order Service 2026 for Acme.');
   });
 
   it('keeps acronyms as they are', () => {
     expect(inSentence('RFQ')).toBe('RFQ');
     expect(inSentence('Work order')).toBe('work order');
+  });
+});
+
+/** Subject, plain text and HTML with links removed: the words a person reads. Routes such as /projects/ stay out. */
+const visibleProse = (mail: { subject: string; text: string; html: string }) => `${mail.subject}\n${mail.text}\n${mail.html}`.replace(/https?:\/\/\S+/g, '');
+
+describe('project created email wording (CD-364)', () => {
+  it('does not say deal in the subject or body', () => {
+    const named = projectCreatedEmail({ ...base, project });
+    const unnamed = projectCreatedEmail({ ...base, project: { ...project, dealTitle: null } });
+    expect(named.subject).toBe('Project created from a won opportunity: Service 2026');
+    expect(named.text).toContain('Acme service was won');
+    expect(unnamed.text).toContain('Your opportunity was won');
+    expect(unnamed.text).toContain('"Create a project when an opportunity is won"');
+    expect(unnamed.html).toContain('Create a project when an opportunity is won');
+    for (const mail of [named, unnamed]) expect(visibleProse(mail)).not.toMatch(/deal/i);
   });
 });

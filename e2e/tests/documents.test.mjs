@@ -59,7 +59,7 @@ describe('document templates and generated documents', () => {
 
   step('downloads the starter template from the merge field reference', async () => {
     await page.goto(BASE_URL + '/settings/templates', { waitUntil: 'networkidle0' });
-    await page.waitForFunction(() => document.body.innerText.includes('{{deal.amount}}'));
+    await page.waitForFunction(() => document.body.innerText.includes('{{opportunity.amount}}'));
     await clickButton(page, 'Download starter template');
     starter = await downloaded(downloads, /starter template\.docx$/);
     assert.match(docxText(readFileSync(starter)), /\{\{deal\.headline\}\}/);

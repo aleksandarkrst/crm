@@ -66,9 +66,9 @@ describe('live updates, conflicts and change history', () => {
     await sleep(150);
     await setValue(ana, TITLE, 'Harbor refit (Ana)');
 
-    const toast = await ana.waitForSelector('.toast::-p-text(changed this deal while you were editing)', { timeout: 10_000 });
+    const toast = await ana.waitForSelector('.toast::-p-text(changed this opportunity while you were editing)', { timeout: 10_000 });
     const message = await toast.evaluate((el) => el.textContent);
-    assert.equal(message, "Olivia Owner changed this deal while you were editing. Your change to the title wasn't saved. It now says “Harbor refit (Olivia)”.");
+    assert.equal(message, "Olivia Owner changed this opportunity while you were editing. Your change to the title wasn't saved. It now says “Harbor refit (Olivia)”.");
     // Ana's screen shows the current value, and the database kept Olivia's.
     const shown = await eventually(async () => (await titleOf(ana)) === 'Harbor refit (Olivia)');
     assert.ok(shown, `Ana sees the saved title, not "${await titleOf(ana)}"`);
