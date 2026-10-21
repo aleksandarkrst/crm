@@ -194,7 +194,7 @@ export class FunnelsService implements TenantProvisioner, OnModuleInit {
         if (!all.some((f) => f.id === funnelId)) throw new NotFoundException('Funnel not found');
         if (all.length === 1) throw new ConflictException("A workspace needs at least one funnel, so the last one can't be deleted.");
         const [{ n }] = (await tx.select({ n: count() }).from(deals).where(eq(deals.funnelId, funnelId))) as [{ n: number }];
-        if (n > 0) throw new ConflictException(`This funnel has ${n} deal${n === 1 ? '' : 's'}. Move ${n === 1 ? 'it' : 'them'} to another funnel or delete ${n === 1 ? 'it' : 'them'} first.`);
+        if (n > 0) throw new ConflictException(`This funnel has ${n === 1 ? '1 opportunity' : `${n} opportunities`}. Move ${n === 1 ? 'it' : 'them'} to another funnel or delete ${n === 1 ? 'it' : 'them'} first.`);
         const stageIds = (await tx.select({ id: funnelStages.id }).from(funnelStages).where(eq(funnelStages.funnelId, funnelId))).map((s) => s.id);
         if (stageIds.length) {
           const [used] = await tx
@@ -202,7 +202,7 @@ export class FunnelsService implements TenantProvisioner, OnModuleInit {
             .from(dealStageHistory)
             .where(or(inArray(dealStageHistory.toStageId, stageIds), inArray(dealStageHistory.fromStageId, stageIds)))
             .limit(1);
-          if (used) throw new ConflictException('Deals have been in this funnel before (their stage history points at it), so it can\'t be deleted.');
+          if (used) throw new ConflictException('Opportunities have been in this funnel before (their stage history points at it), so it can\'t be deleted.');
         }
         await tx.delete(funnels).where(eq(funnels.id, funnelId)); // stages and their to-dos cascade
         await this.audit.record(tx, ctx, { action: 'funnel.deleted', entityType: 'funnel', entityId: funnelId });
@@ -274,15 +274,15 @@ export class FunnelsService implements TenantProvisioner, OnModuleInit {
         if (!stage) throw new NotFoundException('Stage not found');
         if (funnel.stages.length === 1) throw new ConflictException("A funnel needs at least one stage, so its last stage can't be deleted.");
         if (stage.isWon && funnel.stages.filter((s) => s.isWon).length === 1)
-          throw new ConflictException("This is the funnel's won stage: deals are won by reaching it, so it can't be deleted.");
+          throw new ConflictException("This is the funnel's won stage: opportunities are won by reaching it, so it can't be deleted.");
 
         const inStage = await tx.select().from(deals).where(eq(deals.stageId, stageId));
         let target = query.moveDealsTo ? funnel.stages.find((s) => s.id === query.moveDealsTo && s.id !== stageId) : undefined;
-        if (query.moveDealsTo && !target) throw new BadRequestException('Move the deals to another stage of the same funnel');
+        if (query.moveDealsTo && !target) throw new BadRequestException('Move the opportunities to another stage of the same funnel');
         if (inStage.length && !target)
-          throw new BadRequestException(`This stage has ${inStage.length} deal${inStage.length === 1 ? '' : 's'}. Pick the stage to move ${inStage.length === 1 ? 'it' : 'them'} to (moveDealsTo).`);
+          throw new BadRequestException(`This stage has ${inStage.length === 1 ? '1 opportunity' : `${inStage.length} opportunities`}. Pick the stage to move ${inStage.length === 1 ? 'it' : 'them'} to (moveDealsTo).`);
         if (target?.isWon && inStage.some((d) => d.lostAt))
-          throw new ConflictException("Lost deals can't go to the won stage. Pick another stage, or reopen them first.");
+          throw new ConflictException("Lost opportunities can't go to the won stage. Pick another stage, or reopen them first.");
 
         const now = new Date();
         if (target && inStage.length) {

@@ -43,8 +43,8 @@ describe('stage conversion on Overview', () => {
 
   step('moves opportunities through the SMB funnel (one won, one lost)', async () => {
     const smb = funnels.find((f) => f.key === 'smb');
-    const st = smb.stages; // New deal, First touch, Discovery call, Proposal, Negotiation, Won
-    // How far each deal moves, one stage at a time; "Idle" above stays in New deal.
+    const st = smb.stages; // New opportunity, First touch, Discovery call, Proposal, Negotiation, Won
+    // How far each deal moves, one stage at a time; "Idle" above stays in New opportunity.
     const plan = [
       { title: 'Winner', to: 5 },
       { title: 'Lost at proposal', to: 3, lost: 'Price' },
@@ -64,8 +64,8 @@ describe('stage conversion on Overview', () => {
   step('shows conversion, win rate and time to proposal', async () => {
     await page.goto(BASE_URL + '/overview', { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=stage-conversion] [data-stage]');
-    // 6 deals entered New deal and 5 moved on; 5 → 4 → 3 → 1 → 1 after that.
-    assert.deepEqual(await row(page, 'New deal'), ['83%', '5/6']);
+    // 6 deals entered New opportunity and 5 moved on; 5 → 4 → 3 → 1 → 1 after that.
+    assert.deepEqual(await row(page, 'New opportunity'), ['83%', '5/6']);
     assert.deepEqual(await row(page, 'First touch'), ['80%', '4/5']);
     assert.deepEqual(await row(page, 'Discovery call'), ['75%', '3/4']);
     assert.deepEqual(await row(page, 'Proposal'), ['33%', '1/3']);

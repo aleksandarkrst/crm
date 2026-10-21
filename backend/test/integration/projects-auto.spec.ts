@@ -56,8 +56,9 @@ describe('automatic project on a won deal', () => {
     }, 'the automatic project');
     expect(project).toMatchObject({ name: 'CAT 320 overhaul', status: 'open', leadUserId: seller.userId, dealId, stageName: 'Planning' });
     // The seller also got "assigned you" for the deal itself; find this one by its subject.
-    const mail = await eventually(async () => (await mailTo(owner, seller.email)).find((m) => m.subject === 'Project created from a won deal: CAT 320 overhaul'), 'the project email');
+    const mail = await eventually(async () => (await mailTo(owner, seller.email)).find((m) => m.subject === 'Project created from a won opportunity: CAT 320 overhaul'), 'the project email');
     expect(mail.text).toContain(`/projects/${project!.id}`);
+    expect(`${mail.subject}\n${mail.text}\n${mail.html}`.replace(/https?:\/\/\S+/g, '')).not.toMatch(/deal/i);
     await eventually(async () => (await timeline(dealId)).includes('Project created · CAT 320 overhaul'), 'the timeline entry');
   });
 

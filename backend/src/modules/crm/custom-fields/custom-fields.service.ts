@@ -58,7 +58,8 @@ export type CustomFieldsQuery = z.infer<typeof CustomFieldsQuery>;
 
 type Def = typeof customFieldDefs.$inferSelect;
 const TABLES = { deal: deals, company: companies, contact: contacts } as const;
-const ENTITY_LABEL = { deal: 'deal', company: 'company', contact: 'contact' } as const;
+const ENTITY_LABEL = { deal: 'opportunity', company: 'company', contact: 'contact' } as const;
+const ENTITY_ARTICLE = { deal: 'An', company: 'A', contact: 'A' } as const;
 
 /**
  * Custom fields (CD-15). Owners and admins define fields per record type; everyone fills values.
@@ -81,7 +82,7 @@ export class CustomFieldsService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const live = await this.defs(tx, input.entity);
-        if (live.length >= MAX_FIELDS) throw new ConflictException(`A ${ENTITY_LABEL[input.entity]} can have at most ${MAX_FIELDS} custom fields.`);
+        if (live.length >= MAX_FIELDS) throw new ConflictException(`${ENTITY_ARTICLE[input.entity]} ${ENTITY_LABEL[input.entity]} can have at most ${MAX_FIELDS} custom fields.`);
         const [last] = await tx.select({ n: max(customFieldDefs.position) }).from(customFieldDefs).where(eq(customFieldDefs.entity, input.entity));
         const [row] = await tx
           .insert(customFieldDefs)

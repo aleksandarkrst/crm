@@ -146,4 +146,12 @@ describe('invitationEmail', () => {
     expect(invitationEmail({ ...input, inviterName: null }).subject).toMatch(/^ana@example\.com invited you/);
     expect(invitationEmail({ ...input, inviterName: null, inviterEmail: null, role: 'member' }).text).toContain('A teammate invited you to join Acme <Studio> on Pultly as a member');
   });
+
+  it('does not say deal in the subject or body (CD-364)', () => {
+    const mail = invitationEmail(input);
+    expect(mail.text).toContain('keeps its opportunities, companies and contacts');
+    expect(mail.html).toContain('keeps its opportunities, companies and contacts');
+    const prose = `${mail.subject}\n${mail.text}\n${mail.html}`.replace(/https?:\/\/\S+/g, '');
+    expect(prose).not.toMatch(/deal/i);
+  });
 });

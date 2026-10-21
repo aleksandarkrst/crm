@@ -28,14 +28,14 @@ export interface ProjectCreatedEmailInput {
   project: { id: string; name: string; company: string; dealTitle: string | null };
 }
 
-/** "Project created from a won deal" (CD-233, spec 3.2), to the deal's owner. */
+/** "Project created from a won opportunity" (CD-233, spec 3.2), to the opportunity's owner. */
 export function projectCreatedEmail({ to, recipientName, workspaceName, appUrl, project, terms = DEFAULT_TERMS }: ProjectCreatedEmailInput): MailMessage {
   const link = `${appUrl.replace(/\/+$/, '')}/projects/${project.id}`;
   const word = inSentence(terms.project);
-  const subject = `${terms.project} created from a won deal: ${project.name}`;
+  const subject = `${terms.project} created from a won opportunity: ${project.name}`;
   const greeting = recipientName ? `Hi ${recipientName.split(' ')[0]},` : 'Hi,';
-  const intro = `${project.dealTitle ?? 'Your deal'} was won, so ${workspaceName} created the ${word} ${project.name} for ${project.company}. You lead it.`;
-  const footer = `You get this email because "Create a project when a deal is won" is on in Settings → Workspace for ${workspaceName}.`;
+  const intro = `${project.dealTitle ?? 'Your opportunity'} was won, so ${workspaceName} created the ${word} ${project.name} for ${project.company}. You lead it.`;
+  const footer = `You get this email because "Create a project when an opportunity is won" is on in Settings → Workspace for ${workspaceName}.`;
   const text = [greeting, '', intro, '', `Open the ${word}: ${link}`, '', footer].join('\n');
   const html = layoutHtml(
     [`<p style="margin:0 0 12px">${escapeHtml(greeting)}</p>`, `<p style="margin:0 0 12px">${escapeHtml(intro)}</p>`, buttonHtml(`Open the ${word}`, link)].join('\n'),

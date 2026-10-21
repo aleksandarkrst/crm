@@ -140,7 +140,7 @@ export class CompaniesService {
         if (!company) throw new NotFoundException('Company not found');
         const [open] = await tx.select({ n: count() }).from(deals).where(eq(deals.companyId, id));
         if (open && open.n > 0) {
-          const what = open.n === 1 ? '1 deal' : `${open.n} deals`;
+          const what = open.n === 1 ? '1 opportunity' : `${open.n} opportunities`;
           throw new ConflictException(`${company.name} has ${what}. Delete them or move them to another company first.`);
         }
         const [booked] = await tx.select({ n: count() }).from(meetings).where(eq(meetings.companyId, id));

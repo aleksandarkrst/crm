@@ -48,7 +48,7 @@ beforeAll(async () => {
   await addMember(owner, tenant, bo, 'member');
   companyId = (await ok('POST', '/crm/companies', { ...as(owner), body: { pib: testPib(), name: 'Participants Co' } })).id;
   const funnel = await firstFunnel(owner, tenant);
-  dealId = (await ok('POST', '/crm/deals', { ...as(owner), body: { title: 'Participants deal', funnelId: funnel.id, companyId } })).id;
+  dealId = (await ok('POST', '/crm/deals', { ...as(owner), body: { title: 'Participants renewal', funnelId: funnel.id, companyId } })).id;
 });
 
 describe('emails to internal participants', () => {
@@ -57,6 +57,8 @@ describe('emails to internal participants', () => {
     for (const who of [ana, bo]) {
       const mail = await waitForSubject(who, 'You were added to a meeting: Kickoff call');
       expect(mail.text).toContain(`${owner.name} added you to Kickoff call with Participants Co`);
+      expect(mail.text).toContain('Opportunity: Participants renewal');
+      expect(`${mail.subject}\n${mail.text}\n${mail.html}\n${String(mail.attachments?.[0]?.content ?? '')}`.replace(/https?:\/\/\S+/g, '')).not.toMatch(/deal/i);
       expect(mail.text).toContain(`http://app.example.test/meetings/${m.id}`);
       const file = mail.attachments[0];
       expect(file).toMatchObject({ filename: 'meeting.ics', contentType: 'text/calendar; charset=utf-8; method=REQUEST' });

@@ -77,7 +77,7 @@ export class ActivitiesService {
           .returning();
         if (CONTACT_CHANNELS.has(input.channel)) {
           const [deal] = await tx.update(deals).set({ lastContactAt: occurredAt }).where(eq(deals.id, dealId)).returning({ id: deals.id });
-          if (!deal) throw new NotFoundException('Deal not found');
+          if (!deal) throw new NotFoundException('Opportunity not found');
         }
         return row!;
       })

@@ -48,7 +48,7 @@ const meetingFields = {
   agenda: optionalText(5000),
   companyId: z.uuid(),
   /** Required (CD-213, spec 4.2): a deal of the meeting's company. A change can't clear it. */
-  dealId: z.uuid({ error: (issue) => (issue.input == null ? 'Pick a deal' : undefined) }),
+  dealId: z.uuid({ error: (issue) => (issue.input == null ? 'Pick an opportunity' : undefined) }),
   /** Defaults to the caller on create. Must be a member; always an internal participant. */
   organizerUserId: z.uuid().optional(),
   /** Members besides the organizer. On update the set is replaced (the organizer is always kept). */
@@ -189,7 +189,7 @@ interface People {
  * (meeting-rules.ts). Every meeting has a deal of its company (CD-213) and writes its timeline
  * entries there in the same transaction: scheduled, held (which counts as contact with the
  * customer) and cancelled. Meetings saved without a deal before that stay readable (the check
- * constraint is NOT VALID), but any change to one needs a deal first ("Pick a deal", 400).
+ * constraint is NOT VALID), but any change to one needs an opportunity first ("Pick an opportunity", 400).
  *
  * Internal participants are emailed (with an .ics) by the worker, through "crm.meeting-invite" jobs
  * queued in the same transaction (CD-131): when someone else adds them to a planned meeting, and
@@ -299,7 +299,7 @@ export class MeetingsService {
         const companyId = input.companyId ?? current.companyId;
         const dealId = input.dealId ?? current.dealId;
         // A meeting saved without a deal before CD-213 needs one with its next change.
-        if (!dealId) throw new BadRequestException('Pick a deal');
+        if (!dealId) throw new BadRequestException('Pick an opportunity');
         // Another company takes another deal: the current one belongs to the old company (400).
         if (input.companyId !== undefined || input.dealId !== undefined) await this.assertCompanyAndDeal(tx, companyId, dealId);
         // Picking another organizer (e.g. after "Organizer left") is for owners and admins (spec 5.3).
@@ -463,8 +463,8 @@ export class MeetingsService {
     const [company] = await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId));
     if (!company) throw new BadRequestException('Company not found');
     const [deal] = await tx.select({ companyId: deals.companyId }).from(deals).where(eq(deals.id, dealId));
-    if (!deal) throw new BadRequestException('Deal not found');
-    if (deal.companyId !== companyId) throw new BadRequestException("The deal belongs to another company. Pick one of the meeting company's deals.");
+    if (!deal) throw new BadRequestException('Opportunity not found');
+    if (deal.companyId !== companyId) throw new BadRequestException("The opportunity belongs to another company. Pick one of the meeting company's opportunities.");
   }
 
   /** Names of the given members (of this workspace only: users is global) and contacts. */

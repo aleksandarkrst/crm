@@ -11,7 +11,7 @@ export function opportunityCopy(text: string): string {
 
 /** Settings → Document templates. The lines group keeps the loop hint; other groups are the API name, reworded. */
 export function mergeFieldGroupHeading(group: string): string {
-  if (group === 'Deal lines') return 'Opportunity lines · inside {{#lines}}';
+  if (group === 'Deal lines' || group === 'Opportunity lines') return 'Opportunity lines · inside {{#lines}}';
   return opportunityCopy(group);
 }
 

@@ -101,7 +101,7 @@ export function mapDbError(err: unknown): never {
       if (pg.constraint && LOGGED_TIME[pg.constraint] && pg.message?.startsWith('update or delete')) throw new ConflictException(LOGGED_TIME[pg.constraint]);
       // A deal with meetings (CD-213): the service says so first; this covers a race with a new meeting.
       if (pg.constraint === 'meetings_deal_fk' && pg.message?.startsWith('update or delete')) {
-        throw new ConflictException('This deal has meetings. Delete them or move them to another deal first.');
+        throw new ConflictException('This opportunity has meetings. Delete them or move them to another opportunity first.');
       }
       // A company with projects (CD-233): kept, like a company with deals.
       if (pg.constraint === 'projects_company_fk' && pg.message?.startsWith('update or delete')) {
@@ -112,7 +112,7 @@ export function mapDbError(err: unknown): never {
       if (pg.constraint && RULES_WITH_MESSAGES.has(pg.constraint)) throw new ConflictException(pg.message);
       if (pg.constraint && pg.constraint in TIMESHEET_LOCKS) throw new HttpException(pg.message ?? 'Locked', TIMESHEET_LOCKS[pg.constraint]!);
       if (pg.constraint && TIMESHEET_RULES[pg.constraint]) throw new BadRequestException(TIMESHEET_RULES[pg.constraint]);
-      if (pg.constraint === 'meetings_deal_required') throw new BadRequestException('Pick a deal');
+      if (pg.constraint === 'meetings_deal_required') throw new BadRequestException('Pick an opportunity');
       if (pg.constraint && PROJECT_RULES[pg.constraint]) throw new BadRequestException(PROJECT_RULES[pg.constraint]);
       if (pg.constraint && PEOPLE_RULES[pg.constraint]) throw new BadRequestException(PEOPLE_RULES[pg.constraint]);
       throw err;

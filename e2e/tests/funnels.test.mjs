@@ -37,7 +37,7 @@ describe('funnels and stages', () => {
     assert.equal((await api(page, '/crm/funnels')).length, 3);
     assert.deepEqual(
       funnel.stages.map((s) => s.name),
-      ['New deal', 'Discovery', 'Proposal', 'Won'],
+      ['New opportunity', 'Discovery', 'Proposal', 'Won'],
     );
     // The builder opens the new funnel.
     await page.waitForFunction(() => [...document.querySelectorAll('input.form-input')].some((i) => i.value === 'Mid-market — CMO'));
@@ -89,7 +89,7 @@ describe('funnels and stages', () => {
     await page.waitForFunction(() => [...document.querySelectorAll('input.ghost')].some((i) => i.value === 'Discovery'));
 
     await clickButton(page, 'New stage');
-    const added = await eventually(async () => (await funnelNow()).stages.map((s) => s.name).join(',') === 'New deal,Discovery,Proposal,New stage,Won');
+    const added = await eventually(async () => (await funnelNow()).stages.map((s) => s.name).join(',') === 'New opportunity,Discovery,Proposal,New stage,Won');
     assert.ok(added, 'stage added before Won');
     await page.waitForFunction(() => [...document.querySelectorAll('input.ghost')].some((i) => i.value === 'New stage'));
     await waitForToastToClear(page);
@@ -114,7 +114,7 @@ describe('funnels and stages', () => {
     });
     assert.deepEqual(
       after.stages.map((s) => s.name),
-      ['New deal', 'Proposal', 'New stage', 'Won'],
+      ['New opportunity', 'Proposal', 'New stage', 'Won'],
     );
     const deal = await api(page, '/crm/deals/' + dealId);
     assert.equal(deal.stageId, funnel.stages[2].id, 'opportunity moved to Proposal');

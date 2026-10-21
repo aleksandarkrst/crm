@@ -158,13 +158,13 @@ describe('validation (AC 6)', () => {
   });
 
   it('needs a deal (CD-213): on create, and a change can never clear it', async () => {
-    expect(JSON.stringify(await refused({}, ['dealId']))).toMatch(/Pick a deal/);
-    expect(JSON.stringify(await refused({ dealId: null }))).toMatch(/Pick a deal/);
-    expect((await refused({ dealId: '00000000-0000-4000-8000-000000000000' })).message).toBe('Deal not found');
+    expect(JSON.stringify(await refused({}, ['dealId']))).toMatch(/Pick an opportunity/);
+    expect(JSON.stringify(await refused({ dealId: null }))).toMatch(/Pick an opportunity/);
+    expect((await refused({ dealId: '00000000-0000-4000-8000-000000000000' })).message).toBe('Opportunity not found');
     const m = await create(owner, acme.id, { dealId: acmeDeal.id });
     const cleared = await call('PATCH', `/crm/meetings/${m.id}`, { ...as(owner), body: { dealId: null } });
     expect(cleared.status).toBe(400);
-    expect(JSON.stringify(cleared.body)).toMatch(/Pick a deal/);
+    expect(JSON.stringify(cleared.body)).toMatch(/Pick an opportunity/);
     expect((await ok('GET', `/crm/meetings/${m.id}`, as(owner))).dealId).toBe(acmeDeal.id);
     // Another deal of the same company is fine.
     const second = await deal('Acme second deal', acme.id);
@@ -362,16 +362,16 @@ describe('related records', () => {
     const second = await create(owner, co.id, { dealId: d.id, title: 'Second' });
     const dealRefused = await call('DELETE', `/crm/deals/${d.id}`, as(owner));
     expect(dealRefused.status).toBe(409);
-    expect(dealRefused.body.message).toBe('Delete deal has 2 meetings. Delete them or move them to another deal first.');
+    expect(dealRefused.body.message).toBe('Delete deal has 2 meetings. Delete them or move them to another opportunity first.');
     const other = await deal('Delete other deal', co.id);
     await ok('PATCH', `/crm/meetings/${second.id}`, { ...as(owner), body: { dealId: other.id } });
-    expect((await call('DELETE', `/crm/deals/${d.id}`, as(owner))).body.message).toBe('Delete deal has 1 meeting. Delete them or move them to another deal first.');
+    expect((await call('DELETE', `/crm/deals/${d.id}`, as(owner))).body.message).toBe('Delete deal has 1 meeting. Delete them or move them to another opportunity first.');
     expect(await ok('GET', `/crm/meetings/${m.id}`, as(owner))).toMatchObject({ dealId: d.id, dealTitle: 'Delete deal' });
 
     // The company keeps its deals and meetings: deals first in the message.
     const refused = await call('DELETE', `/crm/companies/${co.id}`, as(owner));
     expect(refused.status).toBe(409);
-    expect(refused.body.message).toBe('Delete Co has 2 deals. Delete them or move them to another company first.');
+    expect(refused.body.message).toBe('Delete Co has 2 opportunities. Delete them or move them to another company first.');
     await ok('DELETE', `/crm/meetings/${m.id}`, as(owner));
     await ok('DELETE', `/crm/meetings/${second.id}`, as(owner));
     await ok('DELETE', `/crm/deals/${d.id}`, as(owner));

@@ -47,7 +47,7 @@ export function invitationEmail(input: InvitationEmailInput): MailMessage {
   const text = [
     hi,
     '',
-    `${inviterFull} invited you to join ${input.workspaceName} on Pultly as ${role}. Pultly is where the team keeps its deals, companies and contacts.`,
+    `${inviterFull} invited you to join ${input.workspaceName} on Pultly as ${role}. Pultly is where the team keeps its opportunities, companies and contacts.`,
     '',
     'Accept the invitation:',
     input.link,
@@ -59,7 +59,7 @@ export function invitationEmail(input: InvitationEmailInput): MailMessage {
   const html = layoutHtml(
     [
       `<p style="margin:0 0 12px">${escapeHtml(hi)}</p>`,
-      `<p style="margin:0 0 12px"><strong>${escapeHtml(inviterFull)}</strong> invited you to join <strong>${escapeHtml(input.workspaceName)}</strong> on Pultly as ${role}. Pultly is where the team keeps its deals, companies and contacts.</p>`,
+      `<p style="margin:0 0 12px"><strong>${escapeHtml(inviterFull)}</strong> invited you to join <strong>${escapeHtml(input.workspaceName)}</strong> on Pultly as ${role}. Pultly is where the team keeps its opportunities, companies and contacts.</p>`,
       buttonHtml('Accept the invitation', input.link),
       `<p style="margin:0 0 12px">The link works once, until ${escapeHtml(until)}. Sign in with this email address (${escapeHtml(input.to)}) to accept it.</p>`,
       `<p style="margin:0 0 12px;color:#475750;font-size:12.5px">If the button doesn't work, paste this link into your browser:<br><a href="${escapeHtml(input.link)}" style="color:#14503C;word-break:break-all">${escapeHtml(input.link)}</a></p>`,

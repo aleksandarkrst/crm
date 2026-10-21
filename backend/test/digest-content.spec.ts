@@ -203,7 +203,7 @@ describe('digestEmail', () => {
   const mail = digestEmail({ to: 'bo@example.com', memberName: 'Bo Jensen', workspaceName: 'Acme Studio', appUrl: 'https://app.example.com/', digest });
 
   it('summarises the counts in the subject', () => {
-    expect(mail.subject).toBe('Your day in Acme Studio: 1 overdue, 1 due today, 1 deal without a next step');
+    expect(mail.subject).toBe('Your day in Acme Studio: 1 overdue, 1 due today, 1 opportunity without a next step');
   });
 
   it('lists each section with links to the deals, in text and HTML', () => {
@@ -211,7 +211,7 @@ describe('digestEmail', () => {
     expect(mail.text).toContain('Thursday 24 September');
     expect(mail.text).toContain('Overdue tasks (1)\n- Call <Ana> (was due 22 Sept) · Deal a · Acme\n  https://app.example.com/deals/deal-a');
     expect(mail.text).toContain('Due today (1)\n- Task b · Deal b\n');
-    expect(mail.text).toContain('Deals with no next step (1)\n- Renewal · Globex · Proposal\n  https://app.example.com/deals/d1');
+    expect(mail.text).toContain('Opportunities with no next step (1)\n- Renewal · Globex · Proposal\n  https://app.example.com/deals/d1');
     expect(mail.text).toContain('https://app.example.com/settings/notifications');
     expect(mail.html).toContain('Call &lt;Ana&gt;');
     expect(mail.html).toContain('href="https://app.example.com/deals/d1"');
@@ -242,6 +242,32 @@ describe('dealAssignedEmail', () => {
     expect(mail.subject).toBe('Ana Petrović assigned you Website rebuild');
     expect(mail.text).toContain('Ana Petrović made you the owner of Website rebuild in Acme Studio.');
     expect(mail.text).toContain('Company: Globex\nStage: Discovery\nValue: €14,000\nExpected close: 15 Oct');
+    expect(mail.text).toContain('https://app.example.com/deals/d1');
+    expect(mail.text).toContain('Open the opportunity:');
+    expect(mail.text).toContain('"Opportunity assigned to you"');
+    expect(mail.html).toContain('Open the opportunity');
+    const prose = `${mail.subject}\n${mail.text}\n${mail.html}`.replace(/https?:\/\/\S+/g, '');
+    expect(prose).not.toMatch(/deal/i);
+  });
+});
+
+/** App routes stay `/deals/`. The words around those links must not say deal. */
+const proseWithoutRoutes = (mail: { subject: string; text: string; html: string }) => `${mail.subject}\n${mail.text}\n${mail.html}`.replace(/https?:\/\/\S+/g, '');
+
+describe('wording', () => {
+  it('the digest and the assignment email do not say deal in the subject or body', () => {
+    const digest = buildDigest(
+      '2026-09-24',
+      [task('a', '2026-09-22', { title: 'Call Ana', dealTitle: 'Renewal', company: 'Acme' }), task('b', '2026-09-24', { title: 'Send quote', dealTitle: 'Rollout', company: null })],
+      [
+        { id: 'd1', title: 'Website', company: 'Globex', stage: 'Proposal' },
+        { id: 'd2', title: 'Support', company: null, stage: 'New opportunity' },
+      ],
+    );
+    const mail = digestEmail({ to: 'bo@example.com', memberName: 'Bo', workspaceName: 'Acme Studio', appUrl: 'https://app.example.com/', digest });
+    expect(mail.subject).toBe('Your day in Acme Studio: 1 overdue, 1 due today, 2 opportunities without a next step');
+    expect(mail.text).toContain('Opportunities with no next step (2)');
+    expect(proseWithoutRoutes(mail)).not.toMatch(/deal/i);
     expect(mail.text).toContain('https://app.example.com/deals/d1');
   });
 });

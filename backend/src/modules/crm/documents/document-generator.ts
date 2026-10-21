@@ -50,7 +50,7 @@ export class DocumentGenerator {
         throw new TemplateFileError('The template file is missing from storage.');
       });
       const source = await this.database.withTenant(tenantId, (tx) => loadSource(tx, tenantId, doc.dealId));
-      if (!source) throw new TemplateFileError('The deal no longer exists.');
+      if (!source) throw new TemplateFileError('The opportunity no longer exists.');
       const data = buildTemplateData(source);
       const rendered = renderTemplate(template, data);
       const missing = missingFields(rendered.tags, data);

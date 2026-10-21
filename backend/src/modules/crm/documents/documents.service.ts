@@ -192,7 +192,7 @@ export class DocumentsService {
           .from(deals)
           .leftJoin(companies, and(eq(companies.tenantId, deals.tenantId), eq(companies.id, deals.companyId)))
           .where(eq(deals.id, dealId));
-        if (!deal) throw new NotFoundException('Deal not found');
+        if (!deal) throw new NotFoundException('Opportunity not found');
         const [template] = await tx.select().from(documentTemplates).where(eq(documentTemplates.id, input.templateId));
         if (!template) throw new BadRequestException('Unknown template');
         const [row] = await tx

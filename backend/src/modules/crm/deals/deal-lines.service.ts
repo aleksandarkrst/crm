@@ -95,13 +95,13 @@ export class DealLinesService {
 
   save(ctx: TenantContext, dealId: string, input: SaveDealProducts) {
     if (input.installments.length && input.lines.some((l) => isRecurring(l))) {
-      throw new BadRequestException('Installments are for deals with one-time products only. Remove the recurring products or the installments.');
+      throw new BadRequestException('Installments are for opportunities with one-time products only. Remove the recurring products or the installments.');
     }
     const lines = input.lines.map((l) => ({ ...l, billingCycles: l.billingFrequency === 'one_time' ? null : (l.billingCycles ?? null) }));
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const [deal] = await tx.select({ id: deals.id }).from(deals).where(eq(deals.id, dealId));
-        if (!deal) throw new NotFoundException('Deal not found');
+        if (!deal) throw new NotFoundException('Opportunity not found');
         const existing = await tx.select({ id: dealLines.id }).from(dealLines).where(eq(dealLines.dealId, dealId));
         const known = new Set(existing.map((l) => l.id));
         const kept = new Set<string>();
@@ -134,7 +134,7 @@ export class DealLinesService {
   /** Recalculates a deal's amount from its lines (e.g. after something else changed them). */
   async syncAmount(tx: Tx, dealId: string) {
     const [deal] = await tx.select({ taxMode: deals.taxMode, discounts: deals.discounts }).from(deals).where(eq(deals.id, dealId));
-    if (!deal) throw new NotFoundException('Deal not found');
+    if (!deal) throw new NotFoundException('Opportunity not found');
     const lines = await tx.select().from(dealLines).where(eq(dealLines.dealId, dealId));
     const totals = dealTotals(lines.map(toLineInput), deal.taxMode, deal.discounts);
     await tx.update(deals).set({ amount: totals.subtotal.toFixed(2) }).where(eq(deals.id, dealId));
