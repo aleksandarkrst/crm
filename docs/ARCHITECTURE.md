@@ -489,7 +489,12 @@ Signing in happens on Pultly's own pages; the backend talks to the provider (`id
 The access token lasts 2 hours, so:
 
 - **Renewal.** `getAccessToken()` renews one that is about to expire or has expired anyway (a
-  laptop that slept).
+  laptop that slept). A reload or a deep link does the same, once: the access token is only in
+  memory, and the cookie is what brings it back. When `/refresh` answers 401 the page remembers
+  that and does not ask again. While the app is open, the sign-in dialog below takes over;
+  otherwise sign-in is shown on the page that was opened, and that address stays, so a deep
+  link is still there after signing in. Sign-in pages stay where they are (a missing cookie
+  there is just being signed out). Signing in clears that memory.
 - **401 anywhere.** Every API call goes through `authorizedFetch()` (`lib/api.ts`): on 401 it
   renews once and sends the request again. If that fails too, the session has ended:
   `SessionEndedDialog` opens over the app and requests wait (`lib/session.ts`) instead of failing.
