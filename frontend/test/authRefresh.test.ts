@@ -216,6 +216,26 @@ describe('a refused refresh (CD-445)', () => {
 });
 
 describe('a valid session on load (CD-445)', () => {
+  it('a reload asks /refresh once and keeps the session', async () => {
+    let n = 0;
+    install((url) => (url === '/api/auth/refresh' ? json(200, { accessToken: `access-${++n}`, expiresIn: 3600 }) : json(200, { ok: true })));
+
+    assert.equal(await getAccessToken(), 'access-1');
+    assert.equal(refreshCalls().length, 1);
+    assert.equal(await getAccessToken(), 'access-1');
+    assert.equal(refreshCalls().length, 1);
+
+    // A reload drops the in-memory access token. The cookie is what the browser sends.
+    resetAuthForTests();
+    assert.equal(await getAccessToken(), 'access-2');
+    assert.equal(refreshCalls().length, 2);
+    pathname = '/companies';
+    await Promise.all([getAccessToken(), getAccessToken()]);
+    assert.equal(await getAccessToken(), 'access-2');
+    assert.equal(refreshCalls().length, 2);
+    assert.equal(pathname, '/companies');
+  });
+
   it('refreshes once for a deep link and reuses the access token while moving between screens', async () => {
     pathname = '/pipeline';
     install((url) => (url === '/api/auth/refresh' ? json(200, { accessToken: 'access-1', expiresIn: 3600 }) : json(200, { ok: true })));

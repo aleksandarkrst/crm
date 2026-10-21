@@ -1,12 +1,16 @@
+import type { AddressInfo } from 'node:net';
+import { HttpException } from '@nestjs/common';
+import express from 'express';
 import { SignJWT } from 'jose';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { Env } from '../src/infrastructure/config/config.module';
 import { Auth0Accounts } from '../src/modules/identity/accounts';
-import { readCookie, sessionProblem } from '../src/modules/identity/session.controller';
+import type { IdentityService } from '../src/modules/identity/identity.service';
+import { readCookie, SessionController, SessionCookies, sessionProblem } from '../src/modules/identity/session.controller';
 import { Auth0Sessions, createSessionProvider, DevSessions, NoSessions, pkce, type SessionError } from '../src/modules/identity/sessions';
 import { noPasswordEmail, passwordResetEmail, resetLink } from '../src/modules/identity/signup-email';
 import { providerUserId } from '../src/modules/identity/signup.service';
 import { claim } from '../src/modules/identity/token.service';
-import type { Env } from '../src/infrastructure/config/config.module';
 import type { Request } from 'express';
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -165,5 +169,241 @@ describe('forgot password (CD-114)', () => {
     const google = noPasswordEmail({ to: 'ana@example.test', link: 'https://app.example.test/login' });
     expect(google.text).toContain('Continue with Google');
     expect(google.text).not.toContain('reset-password');
+  });
+});
+
+/**
+ * Auth0 rotation: a used refresh token is dead, and the answer includes the next one only when the
+ * grant asks for the API audience and offline_access. Presenting the used token again inside the
+ * replay window must not call Auth0 (that revokes the chain).
+ */
+function rotatingAuth0() {
+  const live = new Set(['seed']);
+  let n = 0;
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (String(url).endsWith('/oauth/revoke')) return json(200, {});
+    const body = JSON.parse(String(init?.body)) as Record<string, string>;
+    const used = body.refresh_token ?? '';
+    if (!live.has(used)) return json(403, { error: 'invalid_grant' });
+    live.delete(used);
+    n += 1;
+    const asked = (body.scope ?? '').includes('offline_access') && body.audience === 'https://api.example.test';
+    const refresh = `${used}-n`;
+    if (asked) live.add(refresh);
+    return json(200, { access_token: `access-${n}`, expires_in: 3600, ...(asked ? { refresh_token: refresh } : {}) });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return { sessions: auth0(), fetchMock };
+}
+
+describe('refresh token rotation (CD-445)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('asks for the rotated refresh token, which the next refresh accepts', async () => {
+    const { sessions, fetchMock } = rotatingAuth0();
+    const first = await sessions.refresh('seed');
+    expect(first).toEqual({ accessToken: 'access-1', expiresIn: 3600, refreshToken: 'seed-n' });
+    const sent = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body));
+    expect(sent).toEqual({
+      grant_type: 'refresh_token',
+      refresh_token: 'seed',
+      audience: 'https://api.example.test',
+      scope: 'openid profile email offline_access',
+      client_id: 'web-app',
+      client_secret: 'web-secret',
+    });
+    expect(await sessions.refresh('seed-n')).toMatchObject({ accessToken: 'access-2', refreshToken: 'seed-n-n' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('answers a repeat of the token just used without asking Auth0 again', async () => {
+    const { sessions, fetchMock } = rotatingAuth0();
+    const first = await sessions.refresh('seed');
+    expect(await sessions.refresh('seed')).toEqual(first);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares one Auth0 call when the same token is refreshed twice at once', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetchMock = vi.fn(async () => {
+      await gate;
+      return json(200, { access_token: 'access-1', refresh_token: 'seed-n', expires_in: 3600 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const sessions = auth0();
+    const first = sessions.refresh('seed');
+    const second = sessions.refresh('seed');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    release();
+    expect(await first).toEqual(await second);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops replaying once the window has passed, and Auth0 then rejects the used token', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-21T06:00:00Z'));
+    const { sessions, fetchMock } = rotatingAuth0();
+    await sessions.refresh('seed');
+    vi.setSystemTime(new Date('2026-10-21T06:00:31Z'));
+    await expect(sessions.refresh('seed')).rejects.toMatchObject({ reason: 'expired' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not replay a refresh Auth0 answered without a new token', async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        calls += 1;
+        if (calls === 1) return json(200, { access_token: 'access-1', expires_in: 3600 });
+        return json(403, { error: 'invalid_grant' });
+      }),
+    );
+    const sessions = auth0();
+    expect((await sessions.refresh('seed')).refreshToken).toBeUndefined();
+    await expect(sessions.refresh('seed')).rejects.toMatchObject({ reason: 'expired' });
+    expect(calls).toBe(2);
+  });
+
+  it('forgets the replay when the session is revoked', async () => {
+    const { sessions, fetchMock } = rotatingAuth0();
+    const first = await sessions.refresh('seed');
+    expect(first.refreshToken).toBe('seed-n');
+    await sessions.revoke(first.refreshToken ?? '');
+    await expect(sessions.refresh('seed')).rejects.toMatchObject({ reason: 'expired' });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/oauth/revoke'))).toBe(true);
+  });
+
+  it('logout ends every earlier token in the rotation, not only the latest', async () => {
+    const { sessions, fetchMock } = rotatingAuth0();
+    const first = await sessions.refresh('seed');
+    const second = await sessions.refresh(first.refreshToken ?? '');
+    const calls = fetchMock.mock.calls.length;
+    await sessions.revoke(second.refreshToken ?? '');
+    await expect(sessions.refresh('seed')).rejects.toMatchObject({ reason: 'expired' });
+    await expect(sessions.refresh(first.refreshToken ?? '')).rejects.toMatchObject({ reason: 'expired' });
+    await expect(sessions.refresh(second.refreshToken ?? '')).rejects.toMatchObject({ reason: 'expired' });
+    expect(fetchMock.mock.calls.length).toBe(calls + 1);
+  });
+
+  it('revokes a refresh token that Auth0 issues after logout has started', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const revoked: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as Record<string, string>;
+        if (String(url).endsWith('/oauth/revoke')) {
+          revoked.push(body.token ?? '');
+          return json(200, {});
+        }
+        await gate;
+        return json(200, { access_token: 'access-1', refresh_token: 'seed-n', expires_in: 3600 });
+      }),
+    );
+    const sessions = auth0();
+    const pending = sessions.refresh('seed');
+    await sessions.revoke('seed');
+    release();
+    expect((await pending).refreshToken).toBe('seed-n');
+    await expect(sessions.refresh('seed')).rejects.toMatchObject({ reason: 'expired' });
+    await expect(sessions.refresh('seed-n')).rejects.toMatchObject({ reason: 'expired' });
+    expect(revoked).toEqual(['seed', 'seed-n']);
+  });
+});
+
+describe('POST /api/auth/refresh keeps the rotated cookie (CD-445)', () => {
+  let server: ReturnType<express.Express['listen']>;
+  let base: string;
+  const live = new Set(['seed']);
+  let n = 0;
+
+  beforeAll(async () => {
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (!String(url).endsWith('/oauth/token')) return realFetch(url, init);
+        const body = JSON.parse(String(init?.body)) as Record<string, string>;
+        const used = body.refresh_token ?? '';
+        if (!live.has(used)) return json(403, { error: 'invalid_grant' });
+        live.delete(used);
+        n += 1;
+        const refresh = `rt-${n}`;
+        live.add(refresh);
+        return json(200, { access_token: `access-${n}`, refresh_token: refresh, expires_in: 3600 });
+      }),
+    );
+    const env = { NODE_ENV: 'test', APP_URL: 'https://staging.pultly.com', AUTH_MODE: 'oidc' } as Env;
+    const sessions = auth0();
+    const cookies = new SessionCookies(sessions, { rememberProfile: async () => undefined } as unknown as IdentityService, env);
+    const controller = new SessionController(sessions, cookies, env);
+    const app = express();
+    app.use(express.json());
+    app.post('/api/auth/refresh', (req, res, next) => {
+      controller.refresh(req, res).then(
+        (body) => res.json(body),
+        (err: unknown) => (err instanceof HttpException ? res.status(err.getStatus()).json(err.getResponse()) : next(err)),
+      );
+    });
+    server = app.listen(0, '127.0.0.1');
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    vi.unstubAllGlobals();
+  });
+
+  const post = (cookie?: string) =>
+    fetch(`${base}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
+      body: '{}',
+    });
+
+  it('sets a cookie the next refresh accepts, and accepts the previous cookie again inside the window', async () => {
+    const first = await post('crm_session=seed');
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({ accessToken: 'access-1', expiresIn: 3600 });
+    expect(first.headers.get('cache-control')).toBe('no-store');
+    const set = first.headers.getSetCookie();
+    const line = set.find((value) => value.startsWith('crm_session=')) ?? '';
+    expect(line).toMatch(/^crm_session=rt-1;/);
+    expect(line).toContain('Path=/api/auth');
+    expect(line).toContain('HttpOnly');
+    expect(line).toContain('SameSite=Strict');
+    expect(line).toContain('Secure');
+    expect(line).toContain('Max-Age=2592000');
+
+    const second = await post('crm_session=rt-1');
+    expect(second.status).toBe(200);
+    expect(await second.json()).toEqual({ accessToken: 'access-2', expiresIn: 3600 });
+    expect(second.headers.getSetCookie().some((value) => value.startsWith('crm_session=rt-2;'))).toBe(true);
+
+    const replay = await post('crm_session=seed');
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toEqual({ accessToken: 'access-1', expiresIn: 3600 });
+    expect(replay.headers.getSetCookie().some((value) => value.startsWith('crm_session=rt-1;'))).toBe(true);
+
+    const rejected = await post('crm_session=never');
+    expect(rejected.status).toBe(401);
+    const cleared = rejected.headers.getSetCookie().find((value) => value.startsWith('crm_session=')) ?? '';
+    expect(cleared).toContain('Path=/api/auth');
+    expect(cleared).toMatch(/Max-Age=0|Expires=/);
+
+    const missing = await post();
+    expect(missing.status).toBe(401);
+    expect(missing.headers.getSetCookie()).toEqual([]);
   });
 });
