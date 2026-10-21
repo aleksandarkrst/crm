@@ -216,24 +216,52 @@ describe('a refused refresh (CD-445)', () => {
 });
 
 describe('a valid session on load (CD-445)', () => {
-  it('a reload asks /refresh once and keeps the session', async () => {
+  // The browser sends crm_session only with credentials, and stores a new one only from Set-Cookie.
+  // A refresh that omits that header leaves the used token in place, so the next load is refused.
+  it('stays signed in across a reload when the refresh response replaces the cookie', async () => {
+    let cookie = 'seed';
+    const live = new Set(['seed']);
     let n = 0;
-    install((url) => (url === '/api/auth/refresh' ? json(200, { accessToken: `access-${++n}`, expiresIn: 3600 }) : json(200, { ok: true })));
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      const headers = new Headers(init?.headers);
+      calls.push({ url, method: init?.method, credentials: init?.credentials, authorization: headers.get('authorization') });
+      if (url !== '/api/auth/refresh') return json(200, { ok: true });
+      const sent = init?.credentials === 'same-origin' || init?.credentials === 'include' ? cookie : '';
+      if (!live.has(sent)) return refused();
+      live.delete(sent);
+      n += 1;
+      const next = `rt-${n}`;
+      live.add(next);
+      const res = new Response(JSON.stringify({ accessToken: `access-${n}`, expiresIn: 3600 }), {
+        status: 200,
+        headers: {
+          'content-type': 'application/json',
+          'set-cookie': `crm_session=${next}; Path=/api/auth; HttpOnly; SameSite=Strict; Max-Age=2592000`,
+        },
+      });
+      const line = res.headers.getSetCookie().find((value) => value.startsWith('crm_session='));
+      if (line) cookie = decodeURIComponent(line.slice('crm_session='.length).split(';')[0]!.trim());
+      return res;
+    }) as typeof fetch;
 
     assert.equal(await getAccessToken(), 'access-1');
     assert.equal(refreshCalls().length, 1);
+    assert.equal(refreshCalls()[0]!.credentials, 'same-origin');
     assert.equal(await getAccessToken(), 'access-1');
     assert.equal(refreshCalls().length, 1);
 
-    // A reload drops the in-memory access token. The cookie is what the browser sends.
+    // A reload drops the in-memory access token. The cookie jar is what the browser still has.
     resetAuthForTests();
+    let shown = 0;
+    onSessionEnded(() => shown++);
     assert.equal(await getAccessToken(), 'access-2');
+    assert.equal(shown, 0);
     assert.equal(refreshCalls().length, 2);
-    pathname = '/companies';
     await Promise.all([getAccessToken(), getAccessToken()]);
     assert.equal(await getAccessToken(), 'access-2');
     assert.equal(refreshCalls().length, 2);
-    assert.equal(pathname, '/companies');
+    assert.deepEqual(assigns, []);
   });
 
   it('refreshes once for a deep link and reuses the access token while moving between screens', async () => {

@@ -483,12 +483,12 @@ Signing in happens on Pultly's own pages; the backend talks to the provider (`id
   cookie (SameSite=Strict, path `/api/auth`, 30 days). The browser keeps only the access token, in
   memory (`frontend/src/lib/auth.ts`), and gets a new one from `POST /api/auth/refresh` shortly
   before it expires; a reload does the same. The refresh grant asks for the same audience and
-  `offline_access` scope as sign-in, and the new refresh token in the answer replaces the cookie.
-  A token that was just rotated can be presented again for 30 seconds: Auth0 is not asked a
-  second time (that would revoke the chain) and the new cookie is set again. Tabs take turns
-  renewing (`navigator.locks`), because each use replaces the refresh token. `POST /api/auth/logout`
-  revokes it, drops that replay and every token rotated into it, and clears the cookie.
-  These endpoints only accept JSON, which a cross-site form can't send.
+  `offline_access` scope as sign-in, and a refresh token in the answer replaces the cookie.
+  Tabs take turns renewing (`navigator.locks`), because each use replaces the refresh token.
+  A second presentation of a token that was just used is allowed by Auth0's refresh-token reuse
+  interval, not by a cache in this API. `POST /api/auth/logout` revokes the refresh token and
+  clears the cookie. These endpoints only accept JSON, which a cross-site form can't send, and
+  their responses send `Cache-Control: no-store`.
 
 The access token lasts 2 hours, so:
 

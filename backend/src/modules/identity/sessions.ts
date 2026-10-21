@@ -60,12 +60,6 @@ export function pkce() {
 
 const TIMEOUT_MS = 15_000;
 const SCOPE = 'openid profile email offline_access';
-/**
- * Auth0 kills a refresh token as soon as it is used, and kills the whole chain if that token is
- * presented again (reuse detection). A reload that still has the previous cookie, or a second
- * request that raced the first, must get the rotated tokens again instead of asking Auth0.
- */
-const ROTATION_REPLAY_MS = 30_000;
 
 interface TokenReply {
   access_token?: string;
@@ -85,11 +79,6 @@ export class Auth0Sessions extends SessionProvider {
   readonly available = true;
   private readonly logger = new Logger('Auth0Sessions');
   private readonly base: string;
-  /** Refresh token just rotated → the tokens Auth0 gave for it, so a repeat does not revoke the chain. */
-  private readonly rotated = new Map<string, { at: number; tokens: SessionTokens }>();
-  private readonly inflight = new Map<string, Promise<SessionTokens>>();
-  /** Signed out, including every token rotated into this one. A replay must not mint the session again. */
-  private readonly revoked = new Map<string, number>();
 
   constructor(
     issuer: string,
@@ -124,109 +113,17 @@ export class Auth0Sessions extends SessionProvider {
     throw new SessionError('unavailable', UNAVAILABLE, { cause: new Error(why) });
   }
 
-  refresh(refreshToken: string): Promise<SessionTokens> {
-    this.prune();
-    if (this.revoked.has(refreshToken)) return Promise.reject(new SessionError('expired', 'Your session ended. Sign in again.'));
-    const again = this.replay(refreshToken);
-    if (again) return Promise.resolve(again);
-    const existing = this.inflight.get(refreshToken);
-    if (existing) return existing;
-    // One promise for every caller. The rejection handler is attached here so a refusal is not
-    // also an unhandled rejection on a second promise.
-    const pending = this.exchange(refreshToken).then(
-      (tokens) => {
-        if (this.inflight.get(refreshToken) === pending) this.inflight.delete(refreshToken);
-        return tokens;
-      },
-      (err: unknown) => {
-        if (this.inflight.get(refreshToken) === pending) this.inflight.delete(refreshToken);
-        throw err;
-      },
-    );
-    this.inflight.set(refreshToken, pending);
-    return pending;
-  }
-
-  /**
-   * The refresh grant has to ask for the same audience and offline_access as sign-in. Otherwise
-   * Auth0 can accept it, omit the rotated refresh token, and still invalidate the one we sent:
-   * the cookie keeps the dead token and the next reload is signed out.
-   */
-  private async exchange(refreshToken: string): Promise<SessionTokens> {
+  async refresh(refreshToken: string): Promise<SessionTokens> {
+    // Same audience and offline_access scope as password and Google sign-in.
     const reply = await this.token({ grant_type: 'refresh_token', refresh_token: refreshToken, audience: this.audience, scope: SCOPE });
-    if (reply.ok) {
-      this.remember(refreshToken, reply.tokens);
-      return reply.tokens;
-    }
+    if (reply.ok) return reply.tokens;
     if (reply.body.error === 'invalid_grant') throw new SessionError('expired', 'Your session ended. Sign in again.');
     const why = `Auth0 refused a refresh: ${reply.status} ${reply.body.error ?? ''}`;
     this.logger.error(why);
     throw new SessionError('unavailable', UNAVAILABLE, { cause: new Error(why) });
   }
 
-  private remember(used: string, tokens: SessionTokens) {
-    const next = tokens.refreshToken;
-    if (this.revoked.has(used)) {
-      if (next && next !== used) void this.revoke(next);
-      return;
-    }
-    if (!next || next === used) return;
-    this.rotated.set(used, { at: Date.now(), tokens });
-    this.prune();
-  }
-
-  private replay(token: string): SessionTokens | undefined {
-    const hit = this.rotated.get(token);
-    if (!hit) return undefined;
-    if (Date.now() - hit.at > ROTATION_REPLAY_MS) {
-      this.rotated.delete(token);
-      return undefined;
-    }
-    return hit.tokens;
-  }
-
-  /**
-   * Signing out drops the token and every one rotated into it or out of it. A reload that still
-   * holds an earlier cookie must not be handed the access token.
-   */
-  private forget(token: string) {
-    const dead = new Set<string>([token]);
-    let grew = true;
-    while (grew) {
-      grew = false;
-      for (const [key, hit] of this.rotated) {
-        const next = hit.tokens.refreshToken;
-        if (!dead.has(key) && !dead.has(next ?? '')) continue;
-        if (!dead.has(key)) {
-          dead.add(key);
-          grew = true;
-        }
-        if (next && !dead.has(next)) {
-          dead.add(next);
-          grew = true;
-        }
-      }
-    }
-    const now = Date.now();
-    for (const item of dead) {
-      this.revoked.set(item, now);
-      this.rotated.delete(item);
-      this.inflight.delete(item);
-    }
-    this.prune();
-  }
-
-  private prune(now = Date.now()) {
-    for (const [key, hit] of this.rotated) {
-      if (now - hit.at > ROTATION_REPLAY_MS) this.rotated.delete(key);
-    }
-    for (const [key, at] of this.revoked) {
-      if (now - at > ROTATION_REPLAY_MS) this.revoked.delete(key);
-    }
-  }
-
   async revoke(refreshToken: string): Promise<void> {
-    this.forget(refreshToken);
     await fetch(`${this.base}/oauth/revoke`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
