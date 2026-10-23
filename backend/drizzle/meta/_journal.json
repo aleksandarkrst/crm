@@ -827,6 +827,20 @@
       "when": 1792790931639,
       "tag": "0117_deal_sponsor_fk_set_null",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1792796499125,
+      "tag": "0118_contact_details_personal",
+      "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1792796523514,
+      "tag": "0119_contact_details_personal_history",
+      "breakpoints": true
     }
   ]
 }

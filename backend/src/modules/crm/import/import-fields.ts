@@ -54,6 +54,14 @@ export const IMPORT_FIELDS: Record<ImportType, ImportField[]> = {
     { key: 'company', label: 'Company', required: false, aliases: ['company name', 'organisation', 'organization', 'account', 'account name'], hint: 'Matched by PIB, then by name; a new one needs its PIB', example: 'Northwind Studio' },
     companyPib,
     owner,
+    // Details and personal details (CD-361).
+    { key: 'orgUnit', label: 'Org unit', required: false, aliases: ['department', 'division', 'team', 'org unit', 'organisational unit', 'organizational unit'], example: 'Procurement' },
+    { key: 'source', label: 'Source', required: false, aliases: ['lead source', 'channel'], example: 'Referral' },
+    { key: 'influence', label: 'Influence on the opportunity', required: false, aliases: ['influence', 'how they influence'], example: 'Signs off on budgets over 10k' },
+    { key: 'birthday', label: 'Birthday', required: false, aliases: ['date of birth', 'birth date', 'dob'], hint: 'A date, e.g. 1985-04-12 or 12.04.1985', example: '1985-04-12' },
+    { key: 'spouseName', label: 'Spouse', required: false, aliases: ['spouse name', 'partner', 'wife', 'husband'], example: '' },
+    { key: 'children', label: 'Children', required: false, aliases: ['kids'], example: '' },
+    { key: 'pets', label: 'Pets', required: false, aliases: ['pet'], example: '' },
   ],
   deals: [
     { key: 'title', label: 'Opportunity', required: true, aliases: ['deal', 'deal name', 'deal title', 'title', 'name', 'opportunity', 'opportunity name'], example: 'Website redesign' },

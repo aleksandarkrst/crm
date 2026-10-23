@@ -639,6 +639,9 @@ function personal(p: typeof employeePersonal.$inferSelect | undefined) {
     addressCountry: p?.addressCountry ?? 'Serbia',
     emergencyContactName: p?.emergencyContactName ?? null,
     emergencyContactPhone: p?.emergencyContactPhone ?? null,
+    spouse: p?.spouse ?? null,
+    children: p?.children ?? null,
+    pets: p?.pets ?? null,
   };
 }
 

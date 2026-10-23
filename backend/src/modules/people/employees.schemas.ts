@@ -94,6 +94,10 @@ const fields = {
   addressCountry: optionalText(100),
   emergencyContactName: optionalText(100),
   emergencyContactPhone: optionalText(40),
+  // Family and pets (CD-361)
+  spouse: optionalText(200),
+  children: optionalText(500),
+  pets: optionalText(500),
   // Bank account (spec 4.4)
   iban: bankAccount,
   bankName: optionalText(100),

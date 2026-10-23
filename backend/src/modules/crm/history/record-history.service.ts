@@ -69,6 +69,13 @@ const FIELD_NAMES: Record<string, string> = {
   phone: 'the phone',
   linkedin: 'the LinkedIn profile',
   buyerRole: 'the buyer role',
+  // contact details and personal details (CD-361)
+  orgUnit: 'the org unit',
+  influence: 'the influence on the opportunity',
+  birthday: 'the birthday',
+  spouseName: 'the spouse',
+  children: 'the children',
+  pets: 'the pets',
   // meetings (CD-130)
   type: 'the type',
   startsAt: 'the start',

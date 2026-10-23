@@ -19,6 +19,9 @@ export const PERSONAL_FIELDS = [
   'addressCountry',
   'emergencyContactName',
   'emergencyContactPhone',
+  'spouse',
+  'children',
+  'pets',
 ] as const;
 export const BANK_FIELDS = ['iban', 'bankName', 'fxSameAsIban', 'fxIban', 'swiftBic', 'fxBankName', 'fxBankAddress'] as const;
 /** Set only by deactivation and reactivation (spec 4.8), never by PATCH; shown like employment fields. */
@@ -86,6 +89,9 @@ export const FIELD_LABELS: Record<string, string> = {
   addressCountry: 'the country',
   emergencyContactName: 'the emergency contact',
   emergencyContactPhone: "the emergency contact's phone",
+  spouse: 'the spouse',
+  children: 'the children',
+  pets: 'the pets',
   iban: 'the IBAN',
   bankName: 'the bank',
   fxSameAsIban: 'the foreign currency account',

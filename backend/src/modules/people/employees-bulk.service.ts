@@ -132,6 +132,9 @@ export class EmployeesBulkService {
           addressCountry: p?.addressCountry ?? (p ? 'Serbia' : null),
           emergencyContactName: p?.emergencyContactName ?? null,
           emergencyContactPhone: p?.emergencyContactPhone ?? null,
+          spouse: p?.spouse ?? null,
+          children: p?.children ?? null,
+          pets: p?.pets ?? null,
         },
         bank: {
           iban: open(p?.ibanSealed),

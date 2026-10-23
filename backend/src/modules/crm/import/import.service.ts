@@ -491,7 +491,22 @@ export class ImportService {
     invalid: (m: string[]) => RowResult,
   ): Promise<RowResult> {
     const buyerRole = v.buyerRole ? (BUYER_ROLES.find((r) => key(r) === key(v.buyerRole!)) ?? v.buyerRole) : undefined;
-    const parsed = CreateContact.safeParse({ fullName: v.fullName, email: v.email, jobTitle: v.jobTitle, phone: v.phone, linkedin: v.linkedin, buyerRole, ownerUserId });
+    const parsed = CreateContact.safeParse({
+      fullName: v.fullName,
+      email: v.email,
+      jobTitle: v.jobTitle,
+      phone: v.phone,
+      linkedin: v.linkedin,
+      buyerRole,
+      ownerUserId,
+      orgUnit: v.orgUnit,
+      source: v.source,
+      influence: v.influence,
+      birthday: v.birthday ? normalizeDate(v.birthday) : undefined,
+      spouseName: v.spouseName,
+      children: v.children,
+      pets: v.pets,
+    });
     if (!parsed.success) errors.push(...zodErrors(parsed.error).filter((m) => !(v.fullName === '' && m.startsWith('Full name:'))));
     const company = v.company ? this.companyRef(v.company, v.companyPib, lk, errors, zodErrors) : undefined;
     if (errors.length || !parsed.success) return invalid(errors);
