@@ -112,12 +112,15 @@ export class ContactsService {
 
   /**
    * Deals where this contact is the primary contact are kept and lose their primary contact;
-   * links to other deals are removed (FK cascade).
+   * links to other deals are removed (FK cascade). A deal that named them as (power) sponsor
+   * (CD-362) loses that too.
    */
   remove(ctx: TenantContext, id: string) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const cleared = await tx.update(deals).set({ primaryContactId: null }).where(eq(deals.primaryContactId, id)).returning({ id: deals.id });
+        await tx.update(deals).set({ sponsorContactId: null }).where(eq(deals.sponsorContactId, id));
+        await tx.update(deals).set({ powerSponsorContactId: null }).where(eq(deals.powerSponsorContactId, id));
         // Off the meetings still to come (CD-131); held and past meetings keep them as "<name> (deleted)".
         const upcoming = tx
           .select({ id: meetings.id })

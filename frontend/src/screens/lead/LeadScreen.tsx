@@ -7,7 +7,7 @@ import { MeetingsCard } from '../../components/MeetingsCard';
 import { paths } from '../../lib/paths';
 import type { ApiProject } from '../../lib/projectsApi';
 import { useDealProjects } from '../../store/projects';
-import { champTotal, leadById, memberLabels, memberName, momentLabel, stageOf, stagesFor } from '../../store/selectors';
+import { leadById, memberLabels, memberName, momentLabel, stageOf, stagesFor } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
 import { CompanySection } from './CompanySection';
@@ -33,8 +33,9 @@ export function LeadScreen() {
   }, [id, ensureLog]);
   if (!lead) return <Navigate to={paths.pipeline} replace />;
 
-  const total = champTotal(s, lead);
-  const totalFg = total >= 80 ? '#14503C' : total >= 55 ? '#B4531B' : '#B42318';
+  // The fit score is switched off with CHAMP (CD-362).
+  // const total = lead.score;
+  // const totalFg = total >= 80 ? '#14503C' : total >= 55 ? '#B4531B' : '#B42318';
 
   return (
     <Screen title="Opportunity" parent={{ label: 'Pipeline', to: paths.pipeline }}>
@@ -48,6 +49,7 @@ export function LeadScreen() {
             <MeetingsCard record={{ dealId: lead.id }} seed={{ dealId: lead.id, companyId: lead.companyId, contactId: lead.contactId }} />
             <DealProducts lead={lead} />
             <Discovery lead={lead} />
+            {/* The fit score is switched off with CHAMP (CD-362).
             <div className="card" style={{ padding: 18 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
                 <div className="card-title">Fit score</div>
@@ -57,6 +59,7 @@ export function LeadScreen() {
                 Scored with CHAMP inside the qualification to-do. {total >= 80 ? 'Qualified.' : total >= 55 ? 'Nurture — gaps remain.' : 'Below the floor.'}
               </div>
             </div>
+            */}
           </div>
 
           <div className="lead-main" style={{ flex: '999 1 480px', display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>

@@ -17,7 +17,6 @@ export type WorkspaceData = Pick<
   | 'extraPeople'
   | 'links'
   | 'catalog'
-  | 'champ'
   | 'dealLines'
   | 'tasks'
   | 'extraTodos'
@@ -300,7 +299,6 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
   const now = Date.now();
 
   const leads: Lead[] = [];
-  const champ: State['champ'] = {};
   for (const { deal, ownerName } of dealRows) {
     const segment: SegKey = deal.funnelId;
     if (!funnels[segment]) continue; // a funnel created after the funnels were read; the next load has it
@@ -344,6 +342,14 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
       decisionMaker: deal.decisionMaker ?? '',
       discoveryDate: deal.discoveryDate ?? '',
       headline: deal.headline ?? '',
+      sponsorContactId: deal.sponsorContactId ?? '',
+      powerSponsorContactId: deal.powerSponsorContactId ?? '',
+      pain: deal.pain ?? '',
+      painSolution: deal.painSolution ?? '',
+      qualificationSteps: deal.qualificationSteps ?? [],
+      qualificationOther: deal.qualificationOther ?? '',
+      qualifiedAt: deal.qualifiedAt ?? undefined,
+      qualifiedBy: deal.qualifiedByUserId ?? undefined,
       lines: [],
       total: money(Number(deal.amount), { currency: deal.currency, locale }),
       closeDate: deal.closeDate ?? '',
@@ -352,7 +358,6 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
       lostNote: deal.lostNote ?? undefined,
       lostAt: deal.lostAt ?? undefined,
     });
-    if (deal.champ) champ[deal.id] = deal.champ as State['champ'][string];
   }
 
   const extraCompanies: CompanyExtra[] = companies.map((c) => ({
@@ -464,7 +469,6 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
     extraPeople,
     links,
     catalog,
-    champ,
     dealLines,
     tasks,
     extraTodos,

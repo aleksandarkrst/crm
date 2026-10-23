@@ -7,7 +7,7 @@ import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, dealDocuments, type DealOutcome, deals, funnels, funnelStages, LOST_REASONS, meetings, tenants } from '../../../shared/database/schema';
+import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, dealDocuments, type DealOutcome, deals, funnels, funnelStages, LOST_REASONS, meetings, QUALIFICATION_STEPS, tenants } from '../../../shared/database/schema';
 import { JobsService } from '../../../shared/events/jobs.service';
 import { ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { currencyCode } from '../currency';
@@ -17,7 +17,8 @@ import { RecordHistoryService } from '../history/record-history.service';
 import { StageHistoryService } from './stage-history.service';
 
 const money = z.union([z.number(), z.string()]).transform((v) => String(v)).pipe(z.string().regex(/^\d{1,12}(\.\d{1,2})?$/, 'Invalid amount'));
-const champLevel = z.union([z.literal(0), z.literal(8), z.literal(17), z.literal(25)]);
+// CHAMP and the fit score are switched off (CD-362); the columns stay until a later contract migration.
+// const champLevel = z.union([z.literal(0), z.literal(8), z.literal(17), z.literal(25)]);
 const currency = currencyCode;
 
 export const CreateDeal = z.object({
@@ -42,7 +43,16 @@ export const CreateDeal = z.object({
 });
 export const UpdateDeal = nonEmptyPatch(
   CreateDeal.partial().extend({
-    champ: z.object({ C: champLevel, H: champLevel, M: champLevel, P: champLevel }).optional(),
+    // champ: z.object({ C: champLevel, H: champLevel, M: champLevel, P: champLevel }).optional(),
+    // Qualification (CD-362). Empty text and null clear a field; the steps are replaced as a whole.
+    sponsorContactId: z.uuid().nullish(),
+    powerSponsorContactId: z.uuid().nullish(),
+    pain: optionalText(2000),
+    painSolution: optionalText(2000),
+    qualificationSteps: z.array(z.enum(QUALIFICATION_STEPS)).transform((steps) => [...new Set(steps)]).optional(),
+    qualificationOther: optionalText(1000),
+    /** The Qualified switch: the server records who turned it on and when. */
+    qualified: z.boolean().optional(),
   }),
 );
 export const MoveDeal = z.object({ stageId: z.uuid() });
@@ -180,10 +190,21 @@ export class DealsService {
         }
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const [before] = input.ownerUserId !== undefined ? await tx.select({ ownerUserId: deals.ownerUserId }).from(deals).where(eq(deals.id, id)) : [];
-        const { customFields: cfInput, ...fields } = input;
+        await this.assertContactsExist(tx, [input.sponsorContactId, input.powerSponsorContactId]);
+        const { customFields: cfInput, qualified, ...fields } = input;
         const patch: PgUpdateSetSource<typeof deals> = { ...fields };
         if (cfInput !== undefined) patch.customFields = this.customFields.merged(deals.customFields, await this.customFields.validate(tx, 'deal', cfInput));
-        if (input.champ) patch.fitScore = input.champ.C + input.champ.H + input.champ.M + input.champ.P;
+        // if (input.champ) patch.fitScore = input.champ.C + input.champ.H + input.champ.M + input.champ.P;
+        let qualifiedChange: boolean | null = null;
+        if (qualified !== undefined) {
+          const [current] = await tx.select({ qualifiedAt: deals.qualifiedAt }).from(deals).where(eq(deals.id, id));
+          if (!current) throw new NotFoundException('Opportunity not found');
+          // Turning it on again keeps the first author and date; only a real change is logged.
+          if (qualified !== !!current.qualifiedAt) {
+            Object.assign(patch, qualified ? { qualifiedAt: new Date(), qualifiedByUserId: ctx.userId } : { qualifiedAt: null, qualifiedByUserId: null });
+            qualifiedChange = qualified;
+          }
+        }
         let funnelChange: { from: string; to: typeof funnelStages.$inferSelect; funnel: string; at: Date } | null = null;
         if (input.funnelId) {
           const [current] = await tx.select({ funnelId: deals.funnelId, stageId: deals.stageId, lostAt: deals.lostAt }).from(deals).where(eq(deals.id, id));
@@ -208,6 +229,7 @@ export class DealsService {
           await this.history.record(tx, ctx, { dealId: id, kind: 'funnel_changed', fromStageId: from, toStageId: to.id, outcome: to.isWon ? 'won' : 'open' }, at);
           await this.log(tx, ctx, id, null, `Moved to funnel ${funnel}`, `Restarted at ${to.name} · next activity: ${to.activity}`);
         }
+        if (qualifiedChange !== null) await this.log(tx, ctx, id, null, qualifiedChange ? 'Marked Qualified' : 'No longer Qualified', null);
         if (before) await this.notifyAssigned(tx, ctx, id, before.ownerUserId, row.ownerUserId);
         await this.audit.record(tx, ctx, { action: 'deal.updated', entityType: 'deal', entityId: id, data: input });
         return this.present(tx, row);
@@ -365,6 +387,14 @@ export class DealsService {
     const [first] = await tx.select().from(funnelStages).where(and(eq(funnelStages.funnelId, funnelId), isNull(funnelStages.deletedAt))).orderBy(asc(funnelStages.position)).limit(1);
     if (!first) throw new BadRequestException('Funnel has no stages');
     return first;
+  }
+
+  /** Sponsors are this workspace's contacts (RLS hides the others, so they read as missing). */
+  private async assertContactsExist(tx: Tx, ids: (string | null | undefined)[]) {
+    const wanted = [...new Set(ids.filter((v): v is string => !!v))];
+    if (!wanted.length) return;
+    const found = await tx.select({ id: contacts.id }).from(contacts).where(inArray(contacts.id, wanted));
+    if (found.length !== wanted.length) throw new BadRequestException('Contact not found');
   }
 
   private async log(tx: Tx, ctx: TenantContext, dealId: string, channel: (typeof activities.$inferInsert)['channel'], title: string, detail: string | null) {

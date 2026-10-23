@@ -1,9 +1,9 @@
 /** Pure derivations over the store state (ported from the design prototype's logic). */
-import { CHAMP, CHAMP_LEVELS, SCRIPTS } from './seed';
+import { SCRIPTS } from './seed';
 import type { CustomFieldEntity, CustomValue } from '../lib/api';
 import { billingDates, type DealTotals, dealTotals } from './dealMath';
 import { dealsWithUpcomingMeeting } from './meetings';
-import type { CatalogItem, Champ, CustomFieldDef, DealLine, Lead, LeadTask, LogEntry, Person, SegKey, Stage, State, TaskState } from './types';
+import type { CatalogItem, CustomFieldDef, DealLine, Lead, LeadTask, LogEntry, Person, SegKey, Stage, State, TaskState } from './types';
 
 export const num = (v: unknown): number => Number(String(v ?? '').replace(/[^0-9.]/g, '')) || 0;
 
@@ -260,25 +260,6 @@ export function billedShare(s: State, lead: Lead): number {
   const now = new Date();
   return ps.filter((p) => p.when <= now).reduce((a, p) => a + p.amount, 0) / total;
 }
-
-// ---------------------------------------------------------------- CHAMP qualification
-
-export function champFor(s: State, lead: Lead): Champ {
-  const saved = s.champ[lead.id];
-  if (saved) return saved;
-  let left = lead.score;
-  const out = {} as Champ;
-  CHAMP.forEach((c, i) => {
-    const share = i === CHAMP.length - 1 ? left : Math.round(lead.score / 4);
-    out[c.key] = CHAMP_LEVELS.reduce((a, l) => (Math.abs(l.v - share) < Math.abs(a - share) ? l.v : a), 0);
-    left -= share;
-  });
-  return out;
-}
-export const champTotal = (s: State, lead: Lead): number => {
-  const v = champFor(s, lead);
-  return CHAMP.reduce((a, c) => a + (v[c.key] || 0), 0);
-};
 
 // ---------------------------------------------------------------- people & companies
 

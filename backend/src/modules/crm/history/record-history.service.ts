@@ -21,7 +21,7 @@ type ChangeRow = typeof recordChanges.$inferSelect;
 export { parseVersion };
 
 /** Fields whose values are ids; the history shows the name instead. */
-const ID_FIELDS = new Set(['stageId', 'funnelId', 'companyId', 'primaryContactId', 'ownerUserId', 'dealId', 'organizerUserId', 'salespersonUserId', 'projectTypeId', 'leadUserId']);
+const ID_FIELDS = new Set(['stageId', 'funnelId', 'companyId', 'primaryContactId', 'sponsorContactId', 'powerSponsorContactId', 'ownerUserId', 'dealId', 'organizerUserId', 'salespersonUserId', 'projectTypeId', 'leadUserId']);
 /** Id fields that name a member. */
 const USER_FIELDS = new Set(['ownerUserId', 'organizerUserId', 'salespersonUserId', 'leadUserId']);
 
@@ -42,6 +42,14 @@ const FIELD_NAMES: Record<string, string> = {
   constraint: 'the constraint',
   decisionMaker: 'the decision maker',
   discoveryDate: 'the discovery date',
+  // qualification (CD-362)
+  sponsorContactId: 'the sponsor',
+  powerSponsorContactId: 'the power sponsor',
+  pain: 'the pain',
+  painSolution: 'the solution',
+  qualificationSteps: 'the steps to be qualified',
+  qualificationOther: 'the other qualification steps',
+  qualifiedAt: 'Qualified',
   name: 'the name',
   industry: 'the industry',
   hq: 'the HQ',
@@ -83,8 +91,8 @@ const FIELD_NAMES: Record<string, string> = {
 };
 const ENTITY_NAMES: Record<HistoryEntityType, string> = { deal: 'opportunity', company: 'company', contact: 'contact', meeting: 'meeting', visit_plan: 'visit plan', project: 'project' };
 
-/** A patch field → the history field it changes (the fit score is stored from the CHAMP scores). */
-const historyField = (field: string) => (field === 'champ' ? 'fitScore' : field);
+/** A patch field → the history field it changes (the fit score is stored from the CHAMP scores, Qualified as a date). */
+const historyField = (field: string) => (field === 'champ' ? 'fitScore' : field === 'qualified' ? 'qualifiedAt' : field);
 
 export interface HistoryEntry {
   id: string;
@@ -209,6 +217,7 @@ export class RecordHistoryService {
         for (const v of [r.oldValue, r.newValue]) {
           if (typeof v !== 'string') continue;
           if (USER_FIELDS.has(r.field)) ids.user.add(v);
+          else if (r.field === 'sponsorContactId' || r.field === 'powerSponsorContactId') ids.primaryContactId.add(v);
           else ids[r.field as 'stageId' | 'funnelId' | 'companyId' | 'primaryContactId' | 'dealId' | 'projectTypeId'].add(v);
         }
       }
@@ -290,6 +299,7 @@ function withProductName(value: unknown, names: Map<string, string>): unknown {
 /** The update sends the value the record already has (someone made the same change): no conflict. */
 function sameValue(field: string, current: Record<string, unknown>, patch: Record<string, unknown>): boolean {
   if (field === 'fitScore') return JSON.stringify(current.champ ?? null) === JSON.stringify(patch.champ ?? null);
+  if (field === 'qualifiedAt') return !!current.qualifiedAt === patch.qualified;
   const a = current[field];
   const b = patch[field];
   if (field === 'amount') return Number(a) === Number(b);

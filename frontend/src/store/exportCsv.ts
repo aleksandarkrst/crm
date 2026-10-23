@@ -46,7 +46,7 @@ export function dealsCsv(s: State, leads: Lead[]): string {
     { header: 'Closing date', value: (l) => l.closeDate ?? '' },
     { header: 'Owner', value: (l) => clean(ownerOf(s, l)) },
     { header: 'Source', value: (l) => clean(l.source) },
-    { header: 'Fit score', value: (l) => l.score },
+    // { header: 'Fit score', value: (l) => l.score }, // switched off with CHAMP (CD-362)
     { header: 'Days since contact', value: (l) => l.stall },
     ...customColumns<Lead>(s, 'deal', (l) => l.id),
   ]);
