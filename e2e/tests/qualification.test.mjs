@@ -36,9 +36,9 @@ const valueOnCard = (page, label, tag) =>
 /** Ticks or unticks one step in the "To be qualified" dropdown. */
 async function toggleStep(page, step) {
   await click(page, '[data-testid=qualification] button[aria-label="To be qualified"]');
-  await page.waitForSelector('[data-testid=qualification] .org-multi-pop');
+  await page.waitForSelector('[data-testid=qualification-steps]');
   await page.evaluate((step) => {
-    const item = [...document.querySelectorAll('[data-testid=qualification] .org-multi-item')].find((el) => el.textContent.trim() === step);
+    const item = [...document.querySelectorAll('[data-testid=qualification-steps] .org-multi-item')].find((el) => el.textContent.trim() === step);
     item.querySelector('input').click();
   }, step);
   await click(page, '[data-testid=qualification] button[aria-label="To be qualified"]');

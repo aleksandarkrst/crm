@@ -1571,3 +1571,5 @@ a.task-card-project:hover { color: var(--brand); }
 
 /* The shared floating panel (CD-355): at the top of the page, above dialogs (z 45). */
 .popover { position: fixed; z-index: 60; }
+/* The Qualification card's "To be qualified" steps (CD-362). */
+.qual-steps-pop { width: 260px; max-width: calc(100vw - 24px); background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 6px; display: flex; flex-direction: column; gap: 2px; }

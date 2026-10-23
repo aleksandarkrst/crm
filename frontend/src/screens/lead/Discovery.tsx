@@ -1,6 +1,8 @@
-import { Chevron, FieldRow, GhostSelect, Switch, usePicker } from '../../components/ui';
+import { useRef, useState } from 'react';
+import { Popover } from '../../components/Popover';
+import { Chevron, FieldRow, GhostSelect, Switch } from '../../components/ui';
 import { QUALIFICATION_STEPS } from '../../store/seed';
-import { allPeople, memberName, momentLabel } from '../../store/selectors';
+import { allPeople, isoInZone, memberName } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
 
@@ -20,6 +22,8 @@ export function Discovery({ lead }: { lead: Lead }) {
     const id = p.contactId ?? p.id;
     if (p.name && !byContact.has(id) && (p.companyId === lead.companyId || !lead.companyId || id === lead.sponsorContactId || id === lead.powerSponsorContactId)) byContact.set(id, p.name);
   }
+  // A sponsor whose contact was deleted since (or isn't loaded) reads as such, not as its id.
+  for (const id of [lead.sponsorContactId, lead.powerSponsorContactId]) if (id && !byContact.has(id)) byContact.set(id, 'Former contact');
   const contactOptions = [{ value: '', label: 'Pick a contact' }, ...[...byContact].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))];
   const qualified = !!lead.qualifiedAt;
 
@@ -50,7 +54,7 @@ export function Discovery({ lead }: { lead: Lead }) {
             <Switch on={qualified} label="Qualified" onClick={() => store.setQualified(lead.id, !qualified)} />
             {qualified && (
               <span data-testid="qualified-by" style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
-                {momentLabel(lead.qualifiedAt!, s.workspace.timezone)} · {memberName(s, lead.qualifiedBy)}
+                {dayLabel(isoInZone(new Date(lead.qualifiedAt!), s.workspace.timezone))} · {memberName(s, lead.qualifiedBy)}
               </span>
             )}
           </span>
@@ -60,32 +64,37 @@ export function Discovery({ lead }: { lead: Lead }) {
   );
 }
 
+/** "2 Oct 2026" for an ISO date (the day the deal was marked Qualified, in the workspace time zone). */
+const dayLabel = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
 /** The steps still to be done, picked from a fixed list (any number, in the list's order). */
 function StepsSelect({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
-  const picker = usePicker();
+  const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
   const toggle = (step: string) => onChange(QUALIFICATION_STEPS.filter((x) => (x === step ? !value.includes(x) : value.includes(x))));
   return (
-    <div ref={picker.ref} style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+    <div style={{ flex: 1, minWidth: 0 }}>
       <button
+        ref={button}
         type="button"
         className="ghost"
         aria-label="To be qualified"
-        aria-expanded={picker.open}
-        onClick={() => picker.setOpen(!picker.open)}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
         style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', cursor: 'pointer', color: value.length ? 'var(--ink)' : 'var(--muted)' }}
       >
         <span style={{ flex: 1, minWidth: 0, lineHeight: 1.5 }}>{value.length ? value.join(', ') : 'Pick what must happen'}</span>
         <Chevron />
       </button>
-      {picker.open && (
-        <div className="org-multi-pop" role="listbox" aria-multiselectable>
+      {open && (
+        <Popover anchor={button} onClose={() => setOpen(false)} className="qual-steps-pop" label="To be qualified" testId="qualification-steps">
           {QUALIFICATION_STEPS.map((step) => (
             <label key={step} className="org-multi-item">
               <input type="checkbox" checked={value.includes(step)} onChange={() => toggle(step)} />
               <span>{step}</span>
             </label>
           ))}
-        </div>
+        </Popover>
       )}
     </div>
   );

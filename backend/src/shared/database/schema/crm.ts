@@ -271,7 +271,11 @@ export const deals = pgTable(
     constraint: text('discovery_constraint'),
     decisionMaker: text('decision_maker'),
     discoveryDate: date('discovery_date'),
-    /** Qualification (CD-362): who backs the deal at the customer, what hurts and how we fix it. */
+    /**
+     * Qualification (CD-362): who backs the deal at the customer, what hurts and how we fix it. The
+     * sponsor keys null only their column when the contact is deleted (ON DELETE SET NULL (column),
+     * in the custom migration 0117).
+     */
     sponsorContactId: uuid('sponsor_contact_id'),
     powerSponsorContactId: uuid('power_sponsor_contact_id'),
     pain: text('pain'),
