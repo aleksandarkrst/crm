@@ -1095,9 +1095,9 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .funnel-select > button { border: 0; border-left: 1px solid var(--border); background: var(--bg-soft); color: var(--text-2); padding: 0 12px; cursor: pointer; display: flex; align-items: center; }
 .funnel-select > button:hover { background: var(--divider); }
 .pipeline-table { border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; overflow-y: hidden; background: var(--white); }
-.pipeline-table-inner { min-width: 1120px; }
+.pipeline-table-inner { min-width: 1050px; }
 .pipeline-table-inner > .table-head,
-.pipeline-table .table-row { grid-template-columns: minmax(200px, 1.5fr) minmax(150px, 1.1fr) 140px 100px 70px 130px 130px minmax(170px, 1.2fr); }
+.pipeline-table .table-row { grid-template-columns: minmax(200px, 1.5fr) minmax(150px, 1.1fr) 140px 100px 130px 130px minmax(170px, 1.2fr); }
 .pipeline-table .table-row[data-lost] { background: var(--panel); }
 .pipeline-table-empty { padding: 28px 16px; text-align: center; font-size: 13px; color: var(--text-2); }
 .pt-cell { display: flex; flex-direction: column; min-width: 0; }
@@ -1571,3 +1571,5 @@ a.task-card-project:hover { color: var(--brand); }
 
 /* The shared floating panel (CD-355): at the top of the page, above dialogs (z 45). */
 .popover { position: fixed; z-index: 60; }
+/* The Qualification card's "To be qualified" steps (CD-362). */
+.qual-steps-pop { width: 260px; max-width: calc(100vw - 24px); background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 6px; display: flex; flex-direction: column; gap: 2px; }

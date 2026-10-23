@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { CHAMP, CHAMP_LEVELS, CHANNEL_LABELS, GATE_STAGE_ADVANCE, SCRIPTS } from '../../store/seed';
-import { champFor, champTotal, isoLabel, isOverdue, memberName, script, stageDone, stageOf, stagesFor, taskOf, todayIso, todoItemsFor } from '../../store/selectors';
+import { CHANNEL_LABELS, GATE_STAGE_ADVANCE, SCRIPTS } from '../../store/seed';
+import { isoLabel, isOverdue, memberName, script, stageDone, stageOf, stagesFor, taskOf, todayIso, todoItemsFor } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead, LeadTask } from '../../store/types';
 
@@ -73,7 +73,6 @@ export function Todos({ lead }: { lead: Lead }) {
             {g.items.map(({ item, i, t }) => {
               const key = g.st.id + ':' + i;
               const expanded = openTask === key;
-              const isChamp = /fit score|qualif/i.test(item.label);
               const toggleOpen = () => setOpenTask((cur) => (cur === key ? null : key));
               const complete = () => {
                 store.completeTask(lead, g.st.id, i, item.label);
@@ -136,8 +135,7 @@ export function Todos({ lead }: { lead: Lead }) {
 
                   {expanded && (
                     <div style={{ borderTop: '1px solid var(--divider)', padding: '15px 14px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                      {isChamp && <ChampPanel lead={lead} />}
-                      {!isChamp && !!SCRIPTS[g.st.activity] && (
+                      {!!SCRIPTS[g.st.activity] && (
                         <div style={{ background: 'var(--bg-soft)', borderRadius: 8, padding: '13px 14px', display: 'flex', flexDirection: 'column', gap: 7 }}>
                           <span className="caps">Script · {channelLabel}</span>
                           <span style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-line' }}>{script(g.st.activity, lead)}</span>
@@ -250,58 +248,6 @@ function LeadTaskRow({ task: t }: { task: LeadTask }) {
         <span className="badge badge-neutral" style={{ padding: '4px 9px', borderRadius: 6 }}>
           {CHANNEL_LABELS[t.channel] || t.channel}
         </span>
-      </div>
-    </div>
-  );
-}
-
-function ChampPanel({ lead }: { lead: Lead }) {
-  const store = useStore();
-  const vals = champFor(store.s, lead);
-  const total = champTotal(store.s, lead);
-  const fg = total >= 80 ? '#14503C' : total >= 55 ? '#B4531B' : '#B42318';
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>Qualify with CHAMP</div>
-          <div style={{ fontSize: 11.5, color: 'var(--text-2)', marginTop: 3 }}>25 points each. The total becomes the fit score.</div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          <span className="display" style={{ fontSize: 26, lineHeight: 1, color: fg }}>{total}</span>
-          <span className="tag" style={{ padding: 0, color: fg }}>
-            {total >= 80 ? 'pursue' : total >= 55 ? 'nurture' : 'disqualify'}
-          </span>
-        </div>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 14 }}>
-        {CHAMP.map((c) => (
-          <div key={c.key} style={{ display: 'flex', flexDirection: 'column', gap: 7, height: '100%' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600 }}>{c.name}</span>
-              <span style={{ fontSize: 11, color: 'var(--text-2)' }}>{vals[c.key] || 0}/25</span>
-            </div>
-            <div style={{ fontSize: 11.5, color: 'var(--text-2)', lineHeight: 1.4, flex: 1 }}>{c.prompt}</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 5 }}>
-              {CHAMP_LEVELS.map((l) => {
-                const on = (vals[c.key] || 0) === l.v;
-                return (
-                  <button
-                    key={l.label}
-                    type="button"
-                    onClick={() => store.setChamp(lead.id, c.key, l.v)}
-                    style={{ border: `1px solid ${on ? '#0F1B16' : '#E2E8E4'}`, background: on ? '#0F1B16' : '#FFFFFF', color: on ? '#F5F7F6' : '#475750', cursor: 'pointer', fontSize: 11, padding: '6px 4px', borderRadius: 6 }}
-                  >
-                    {l.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>
-        {total >= 80 ? 'Qualified. The funnel will keep pushing this one.' : total >= 55 ? 'Missing pieces. Fill the gaps before the proposal stage.' : 'Below the floor. Park it rather than spend a proposal on it.'}
       </div>
     </div>
   );

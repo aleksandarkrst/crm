@@ -211,6 +211,7 @@ export class OnboardingService {
           const drop = ids.contact.filter((id) => !keep.has(id));
           if (drop.length) {
             await tx.delete(dealContacts).where(inArray(dealContacts.contactId, drop));
+            // A real deal that names a sample contact as (power) sponsor loses that link (FK set null, CD-362).
             removed.contact = (await tx.delete(contacts).where(inArray(contacts.id, drop)).returning({ id: contacts.id })).length;
           }
           kept.contact = keep.size;

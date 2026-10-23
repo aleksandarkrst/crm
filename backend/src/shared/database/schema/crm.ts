@@ -243,6 +243,10 @@ export interface Installment {
 export const LOST_REASONS = ['Price', 'Timing', 'Chose a competitor', 'No budget', 'No decision', 'Other'] as const;
 export type LostReason = (typeof LOST_REASONS)[number];
 
+/** Steps a deal may still need before it is Qualified (CD-362), picked on the Qualification card. */
+export const QUALIFICATION_STEPS = ['Confirm pain', 'Identify decision maker', 'Confirm budget', 'Validate solution fit', 'Agree on timeline'] as const;
+export type QualificationStep = (typeof QUALIFICATION_STEPS)[number];
+
 export const deals = pgTable(
   'deals',
   {
@@ -267,6 +271,21 @@ export const deals = pgTable(
     constraint: text('discovery_constraint'),
     decisionMaker: text('decision_maker'),
     discoveryDate: date('discovery_date'),
+    /**
+     * Qualification (CD-362): who backs the deal at the customer, what hurts and how we fix it. The
+     * sponsor keys null only their column when the contact is deleted (ON DELETE SET NULL (column),
+     * in the custom migration 0117).
+     */
+    sponsorContactId: uuid('sponsor_contact_id'),
+    powerSponsorContactId: uuid('power_sponsor_contact_id'),
+    pain: text('pain'),
+    painSolution: text('pain_solution'),
+    /** What still has to happen before the deal is Qualified (QUALIFICATION_STEPS), plus free text. */
+    qualificationSteps: text('qualification_steps', { enum: QUALIFICATION_STEPS }).array().notNull().default([]),
+    qualificationOther: text('qualification_other'),
+    /** Set by the Qualified switch; cleared with its author when it is turned off. */
+    qualifiedAt: timestamp('qualified_at', { withTimezone: true }),
+    qualifiedByUserId: uuid('qualified_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     lastContactAt: timestamp('last_contact_at', { withTimezone: true }),
     stageEnteredAt: timestamp('stage_entered_at', { withTimezone: true }).notNull().defaultNow(),
     closedAt: timestamp('closed_at', { withTimezone: true }), // when the deal entered the won stage
@@ -296,8 +315,13 @@ export const deals = pgTable(
     index('deals_tenant_contact_idx').on(t.tenantId, t.primaryContactId),
     index('deals_tenant_stage_idx').on(t.tenantId, t.stageId),
     index('deals_tenant_owner_idx').on(t.tenantId, t.ownerUserId),
+    index('deals_tenant_sponsor_idx').on(t.tenantId, t.sponsorContactId),
+    index('deals_tenant_power_sponsor_idx').on(t.tenantId, t.powerSponsorContactId),
+    check('deals_qualification_steps_ck', sql`${t.qualificationSteps} <@ array['Confirm pain', 'Identify decision maker', 'Confirm budget', 'Validate solution fit', 'Agree on timeline']::text[]`),
     foreignKey({ columns: [t.tenantId, t.companyId], foreignColumns: [companies.tenantId, companies.id], name: 'deals_company_fk' }),
     foreignKey({ columns: [t.tenantId, t.primaryContactId], foreignColumns: [contacts.tenantId, contacts.id], name: 'deals_contact_fk' }),
+    foreignKey({ columns: [t.tenantId, t.sponsorContactId], foreignColumns: [contacts.tenantId, contacts.id], name: 'deals_sponsor_fk' }),
+    foreignKey({ columns: [t.tenantId, t.powerSponsorContactId], foreignColumns: [contacts.tenantId, contacts.id], name: 'deals_power_sponsor_fk' }),
     foreignKey({ columns: [t.tenantId, t.funnelId], foreignColumns: [funnels.tenantId, funnels.id], name: 'deals_funnel_fk' }),
     foreignKey({ columns: [t.tenantId, t.stageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deals_stage_fk' }),
     check('deals_fit_score_ck', sql`${t.fitScore} between 0 and 100`),

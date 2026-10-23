@@ -8,7 +8,7 @@ import * as amplitude from '../lib/analytics';
 import { paths } from '../lib/paths';
 import { dealsCsv } from '../store/exportCsv';
 import { DEFAULT_FILTERS, INDUSTRIES, LOST_VIEWS, VALUE_BANDS, valueBandLabel } from '../store/seed';
-import { bandOf, champTotal, curOf, currencySymbol, funnelOptions, needsNextStep, ownerOf, salesPeople, stageOf, valueNum, valueTotal } from '../store/selectors';
+import { bandOf, curOf, currencySymbol, funnelOptions, needsNextStep, ownerOf, salesPeople, stageOf, valueNum, valueTotal } from '../store/selectors';
 import type { Lead, Stage, State } from '../store/types';
 import { useStore } from '../store/store';
 
@@ -208,7 +208,7 @@ function PipelineBoard({ stages, leads }: { stages: Stage[]; leads: Lead[] }) {
                         {l.contact} · {l.role}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        <FitBadge score={champTotal(s, l)} />
+                        {/* The fit score is switched off with CHAMP (CD-362). <FitBadge score={l.score} /> */}
                         <StallLabel stall={l.stall} />
                       </div>
                       {lost ? (
@@ -238,13 +238,14 @@ function PipelineBoard({ stages, leads }: { stages: Stage[]; leads: Lead[] }) {
   );
 }
 
-type TableKey = 'company' | 'contact' | 'stage' | 'value' | 'fit' | 'stall' | 'owner' | 'next';
+// 'fit' is switched off with CHAMP (CD-362).
+type TableKey = 'company' | 'contact' | 'stage' | 'value' | 'stall' | 'owner' | 'next';
 const TABLE_HEADERS: { key: TableKey; label: string }[] = [
   { key: 'company', label: 'Opportunity' },
   { key: 'contact', label: 'Contact' },
   { key: 'stage', label: 'Stage' },
   { key: 'value', label: 'Value' },
-  { key: 'fit', label: 'Fit' },
+  // { key: 'fit', label: 'Fit' },
   { key: 'stall', label: 'Last contact' },
   { key: 'owner', label: 'Owner' },
   { key: 'next', label: 'Next step' },
@@ -267,8 +268,8 @@ function PipelineTable({ s, stages, leads, openLead }: { s: State; stages: Stage
         return order.get(l.stage) ?? stages.length;
       case 'value':
         return valueNum(l.value);
-      case 'fit':
-        return champTotal(s, l);
+      // case 'fit':
+      //   return l.score;
       case 'stall':
         return l.stall;
       case 'owner':
@@ -307,9 +308,9 @@ function PipelineTable({ s, stages, leads, openLead }: { s: State; stages: Stage
               </span>
               <span style={{ color: 'var(--text-2)' }}>{st.name}</span>
               <span>{l.value}</span>
-              <span>
-                <FitBadge score={champTotal(s, l)} />
-              </span>
+              {/* <span>
+                <FitBadge score={l.score} />
+              </span> */}
               <span>
                 <StallLabel stall={l.stall} />
               </span>
@@ -325,22 +326,23 @@ function PipelineTable({ s, stages, leads, openLead }: { s: State; stages: Stage
   );
 }
 
-function FitBadge({ score }: { score: number }) {
-  return (
-    <span
-      style={{
-        fontSize: 10,
-        padding: '3px 5px',
-        borderRadius: 4,
-        whiteSpace: 'nowrap',
-        background: score >= 80 ? '#E7F2EE' : score >= 65 ? '#FDF0E4' : '#F2F5F3',
-        color: score >= 80 ? '#14503C' : score >= 65 ? '#B4531B' : '#475750',
-      }}
-    >
-      fit {score}
-    </span>
-  );
-}
+// The fit score is switched off with CHAMP (CD-362).
+// function FitBadge({ score }: { score: number }) {
+//   return (
+//     <span
+//       style={{
+//         fontSize: 10,
+//         padding: '3px 5px',
+//         borderRadius: 4,
+//         whiteSpace: 'nowrap',
+//         background: score >= 80 ? '#E7F2EE' : score >= 65 ? '#FDF0E4' : '#F2F5F3',
+//         color: score >= 80 ? '#14503C' : score >= 65 ? '#B4531B' : '#475750',
+//       }}
+//     >
+//       fit {score}
+//     </span>
+//   );
+// }
 
 function StallLabel({ stall }: { stall: number }) {
   return <span style={{ fontSize: 11.5, color: stall >= 4 ? '#B42318' : '#475750' }}>{stall === 0 ? 'active today' : stall + 'd since contact'}</span>;

@@ -189,11 +189,9 @@ export function starterTemplate(): Buffer {
   return buildDocx([
     { text: '{{workspace.name}}', size: 11, bold: true, color: '475467' },
     { text: 'PROPOSAL', size: 9, bold: true, color: 'B4531B' },
-    { text: '{{deal.headline}}', size: 24, bold: true },
+    { text: '{{deal.title}}', size: 24, bold: true },
     { text: 'Prepared for {{contact.name}}, {{contact.job_title}} at {{company.name}} · {{today}}', color: '475467' },
-    { text: '01 — What you told us', size: 9, bold: true, color: '475467' },
-    { text: 'In our discovery call on {{discovery.date}} you described {{discovery.need}} The constraint is {{discovery.constraint}}, and the decision sits with {{discovery.decision_maker}}.' },
-    { text: '02 — Investment', size: 9, bold: true, color: '475467' },
+    { text: '01 — Investment', size: 9, bold: true, color: '475467' },
     {
       table: [
         ['Item', 'Quantity', 'Unit price', 'VAT', 'Total'],

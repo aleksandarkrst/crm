@@ -34,6 +34,8 @@ export const CURRENCIES = [
 ];
 /** The currency options, plus `current` when it isn't one of them (set through the API). */
 export const currencyOptions = (current?: string) => (current && !CURRENCIES.some((c) => c.value === current) ? [...CURRENCIES, { value: current, label: current }] : CURRENCIES);
+/** What may still have to happen before a deal is Qualified (CD-362); the API keeps the same list. */
+export const QUALIFICATION_STEPS = ['Confirm pain', 'Identify decision maker', 'Confirm budget', 'Validate solution fit', 'Agree on timeline'];
 export const SOURCES = ['Inbound web form', 'Referral', 'Outbound LinkedIn', 'Conference', 'Instagram DM', 'Trade fair'];
 export const INDUSTRIES = ['Architecture', 'Banking', 'Food & beverage', 'Freight & logistics', 'Furniture retail', 'Hospitality', 'Pharmaceuticals', 'Renewable energy', 'Wine', 'Other'];
 export const TEAM_SIZES = ['1–10 staff', '11–50 staff', '51–200 staff', '201–1,000 staff', '1,000+ staff'];
@@ -76,14 +78,6 @@ export const OBJECTIONS = [
   { q: '“We already have an agency.”', a: 'Position as the gap, not the replacement: one workstream your incumbent is not covering.' },
 ];
 
-export const CHAMP = [
-  { key: 'C', name: 'Challenges', prompt: 'Is there a named problem we are proven at solving?' },
-  { key: 'H', name: 'Authority', prompt: 'Are we talking to the person who signs, or a path to them?' },
-  { key: 'M', name: 'Money', prompt: 'Is there a budget range, and does it clear our floor?' },
-  { key: 'P', name: 'Prioritisation', prompt: 'Is there a date that forces a decision?' },
-] as const;
-export const CHAMP_LEVELS = [{ label: 'None', v: 0 }, { label: 'Weak', v: 8 }, { label: 'Partial', v: 17 }, { label: 'Strong', v: 25 }];
-
 /** Pipeline board views: lost deals are hidden by default. */
 export const LOST_VIEWS = ['Open & won', 'Include lost', 'Lost only'] as const;
 export const DEFAULT_FILTERS: Filters = { audience: 'Audience', owner: 'Salesperson', dates: 'Any closing date', source: 'Source', stage: 'Stage', industry: 'Industry', stalled: 'Status', band: 'Value', lost: LOST_VIEWS[0] };
@@ -100,7 +94,6 @@ export function initialState(): State {
     links: {},
     catalog: [],
     dealLines: {},
-    champ: {},
     tasks: {},
     extraTodos: {},
     extraTodoIds: {},

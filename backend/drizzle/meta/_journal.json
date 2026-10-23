@@ -806,6 +806,27 @@
       "when": 1792367500777,
       "tag": "0114_company_identity_history",
       "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "7",
+      "when": 1792787350287,
+      "tag": "0115_deal_qualification",
+      "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1792787369891,
+      "tag": "0116_deal_qualification_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "7",
+      "when": 1792790931639,
+      "tag": "0117_deal_sponsor_fk_set_null",
+      "breakpoints": true
     }
   ]
 }

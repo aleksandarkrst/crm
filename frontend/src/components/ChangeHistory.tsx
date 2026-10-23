@@ -24,6 +24,14 @@ const FIELD_LABELS: Record<string, string> = {
   constraint: 'Constraint',
   decisionMaker: 'Decision maker',
   discoveryDate: 'Discovery date',
+  // Qualification (CD-362)
+  sponsorContactId: 'Sponsor',
+  powerSponsorContactId: 'Power sponsor',
+  pain: 'Pain',
+  painSolution: 'Solution',
+  qualificationSteps: 'To be qualified',
+  qualificationOther: 'Other to be qualified',
+  qualifiedAt: 'Qualified',
   lostNote: 'Lost note',
   name: 'Name',
   industry: 'Industry',
@@ -119,7 +127,7 @@ const MEETING_TEXT: Record<string, string> = {
   customer: 'At the customer',
   workshop: 'In the workshop',
 };
-const MOMENT_FIELDS = new Set(['startsAt', 'endsAt', 'heldAt', 'cancelledAt', 'signedOffAt']);
+const MOMENT_FIELDS = new Set(['startsAt', 'endsAt', 'heldAt', 'cancelledAt', 'signedOffAt', 'qualifiedAt']);
 const LINE_LABELS: Record<string, string> = {
   productId: 'product',
   quantity: 'quantity',
@@ -203,6 +211,7 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
     if (field === 'periodType' && typeof v === 'string') return PERIOD_TEXT[v] ?? v;
     if (field === 'discountKind') return v === 'percent' ? 'percent' : 'amount';
     if (field === 'discounts' && Array.isArray(v)) return `${v.length} discount${v.length === 1 ? '' : 's'}`;
+    if (field === 'qualificationSteps' && Array.isArray(v)) return v.length ? clip(v.join(', ')) : empty;
     if (field === 'installments' && Array.isArray(v)) return `${v.length} installment${v.length === 1 ? '' : 's'}`;
     // The steps themselves (CD-222), so a change reads as what changed, not "1 step → 1 step".
     if (field === 'nextSteps' && Array.isArray(v))

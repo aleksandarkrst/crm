@@ -38,7 +38,7 @@ const tooLarge = (file: Buffer) => {
 
 describe('template size limits (CD-104)', () => {
   it('accepts the starter template', () => {
-    expect(inspectTemplate(starterTemplate())).toContain('deal.headline');
+    expect(inspectTemplate(starterTemplate())).toContain('deal.title');
   });
 
   it('refuses a document that unpacks to more than the limit', () => {

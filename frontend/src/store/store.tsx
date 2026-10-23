@@ -10,7 +10,6 @@ import { newPeopleRuntime, PEOPLE_HINTS, peopleActions } from './people';
 import { type Changed, loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type Part, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
 import {
-  champFor,
   companyRecords,
   curOf,
   customFieldsOf,
@@ -29,7 +28,7 @@ import {
 } from './selectors';
 import { dealTotals } from './dealMath';
 import { sortPlans, type VisitPlan } from './visitPlans';
-import type { BillingFrequency, BonusRule, Champ, ChannelCode, CustomFieldDef, DealDiscount, DealLine, Installment, Lead, LeadTask, LogEntry, NewContactDraft, Person, Profile, SegKey, Stage, State, TaskState, TaxMode, Workspace } from './types';
+import type { BillingFrequency, BonusRule, ChannelCode, CustomFieldDef, DealDiscount, DealLine, Installment, Lead, LeadTask, LogEntry, NewContactDraft, Person, Profile, SegKey, Stage, State, TaskState, TaxMode, Workspace } from './types';
 
 /** What the product dialog edits (CD-83); numbers as typed. */
 export interface ProductDraft {
@@ -193,6 +192,8 @@ function rowsOf(e: LiveEvent): Partial<Record<Part, readonly string[] | null>> {
 const ALL_PARTS: Part[] = ['funnels', 'companies', 'contacts', 'deals', 'products', 'lines', 'tasks', 'team', 'customFields', 'bonus', 'onboarding', 'visitPlans', 'visitScope'];
 const EMPTY_CONTACT: NewContactDraft = { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer', notes: '' };
 const DISCOVERY_FIELDS = ['headline', 'need', 'constraint', 'decisionMaker', 'discoveryDate'] as const satisfies readonly (keyof Lead & keyof DealInput)[];
+/** Qualification text (CD-362), saved as you type like the discovery notes. */
+const QUALIFICATION_TEXT = ['pain', 'painSolution', 'qualificationOther'] as const satisfies readonly (keyof Lead & keyof DealInput)[];
 /** Workspace settings as the API names them. */
 const WORKSPACE_FIELDS: Partial<Record<keyof Workspace, keyof WorkspaceInput>> = {
   name: 'name',
@@ -1207,6 +1208,17 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         const v = dealPatch[key];
         if (v !== undefined) saveLater(`${key}:${id}`, () => crmApi.updateDeal(id, { [key]: key === 'discoveryDate' ? v || null : v }, ver('deal', id)), 'the discovery notes');
       }
+      // Qualification (CD-362): text as you type; sponsors and the steps to be qualified at once.
+      for (const key of QUALIFICATION_TEXT) {
+        const v = dealPatch[key];
+        if (v !== undefined) saveLater(`${key}:${id}`, () => crmApi.updateDeal(id, { [key]: v }, ver('deal', id)), 'the qualification');
+      }
+      for (const key of ['sponsorContactId', 'powerSponsorContactId'] as const) {
+        const v = dealPatch[key];
+        if (v !== undefined && v !== lead[key]) void save(() => crmApi.updateDeal(id, { [key]: v || null }, ver('deal', id)), undefined, key === 'sponsorContactId' ? 'the sponsor' : 'the power sponsor');
+      }
+      const steps = dealPatch.qualificationSteps;
+      if (steps !== undefined) void save(() => crmApi.updateDeal(id, { qualificationSteps: steps }, ver('deal', id)), undefined, 'the steps to be qualified');
       if (dealPatch.companyId !== undefined && dealPatch.companyId !== companyId) {
         const target = dealPatch.companyId;
         const rec = target ? companyRecords(cur()).find((c) => c.id === target) : undefined;
@@ -1219,6 +1231,12 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         void save(() => crmApi.updateDeal(id, { ownerUserId: ownerId }, ver('deal', id)), undefined, 'the opportunity owner');
       }
       mapLead(id, (l) => ({ ...l, ...dealPatch }));
+    };
+
+    /** The Qualified switch (CD-362): the server records who and when, and logs it; reloading the deal and its timeline shows both. */
+    const setQualified = (id: string, on: boolean) => {
+      mapLead(id, (l) => ({ ...l, qualifiedAt: on ? new Date().toISOString() : undefined, qualifiedBy: on ? session.userId : undefined }));
+      void save(() => crmApi.updateDeal(id, { qualified: on }, ver('deal', id)), () => Promise.all([reload(), refreshLog(id)]), 'Qualified');
     };
 
     // ------------------------------------------------------------ deleting (owners and admins)
@@ -1320,6 +1338,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       startGeneration,
       pushLog,
       patchLead,
+      setQualified,
       patchLeadSegment: (id: string, seg: SegKey) => {
         const funnelId = cur().funnels[seg]?.id;
         if (!funnelId) return;
@@ -1391,20 +1410,6 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       },
       saveDealProducts,
       openDealProducts: (leadId: string) => set({ dealProductsId: leadId }),
-      setChamp: (leadId: string, key: keyof Champ, v: number) => {
-        set((y) => {
-          const lead = leadById(y, leadId);
-          if (!lead) return {};
-          const champ = { ...(y.champ[leadId] || champFor(y, lead)), [key]: v };
-          const total = champ.C + champ.H + champ.M + champ.P;
-          return { champ: { ...y.champ, [leadId]: champ }, leads: y.leads.map((l) => (l.id === leadId ? { ...l, score: total } : l)) };
-        });
-        // Quick clicks across the four criteria become one write of the final scores.
-        saveLater('champ:' + leadId, async () => {
-          const champ = cur().champ[leadId];
-          if (champ) await crmApi.updateDeal(leadId, { champ }, ver('deal', leadId));
-        }, 'the fit score');
-      },
       linkPerson,
       unlinkPerson,
       patchPerson,

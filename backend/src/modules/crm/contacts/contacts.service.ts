@@ -112,7 +112,8 @@ export class ContactsService {
 
   /**
    * Deals where this contact is the primary contact are kept and lose their primary contact;
-   * links to other deals are removed (FK cascade).
+   * links to other deals are removed (FK cascade). A deal that named them as (power) sponsor
+   * (CD-362) loses that too (FK set null).
    */
   remove(ctx: TenantContext, id: string) {
     return this.database

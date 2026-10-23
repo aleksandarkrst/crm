@@ -88,6 +88,16 @@ export interface Lead {
   decisionMaker: string;
   discoveryDate: string;
   headline: string;
+  /** Qualification (CD-362): sponsors are backend contact ids, '' when unset. */
+  sponsorContactId: string;
+  powerSponsorContactId: string;
+  pain: string;
+  painSolution: string;
+  qualificationSteps: string[];
+  qualificationOther: string;
+  /** ISO date-time the deal was marked Qualified, and by whom (user id). */
+  qualifiedAt?: string;
+  qualifiedBy?: string;
   lines: [string, string][];
   total: string;
   docs?: LeadDoc[];
@@ -201,7 +211,6 @@ export interface Installment {
   amount: number | string;
 }
 
-export type Champ = Record<'C' | 'H' | 'M' | 'P', number>;
 
 export interface TaskState {
   done?: boolean;
@@ -382,7 +391,6 @@ export interface State {
   links: Record<string, string[]>;
   catalog: CatalogItem[];
   dealLines: Record<string, DealLine[]>;
-  champ: Record<string, Champ>;
   tasks: Record<string, TaskState>;
   extraTodos: Record<string, string[]>;
   /** Backend ids of the off-playbook to-dos, parallel to extraTodos. */

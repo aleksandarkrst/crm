@@ -416,6 +416,16 @@ export interface ApiDeal {
   constraint: string | null;
   decisionMaker: string | null;
   discoveryDate: string | null;
+  /** Qualification (CD-362): sponsors are contact ids; the steps come from QUALIFICATION_STEPS. */
+  sponsorContactId: string | null;
+  powerSponsorContactId: string | null;
+  pain: string | null;
+  painSolution: string | null;
+  qualificationSteps: string[];
+  qualificationOther: string | null;
+  /** Set by the Qualified switch, with who turned it on. */
+  qualifiedAt: string | null;
+  qualifiedByUserId: string | null;
   lastContactAt: string | null;
   stageEnteredAt: string;
   outcome: DealOutcome;
@@ -760,8 +770,30 @@ export type CustomFieldPatch = Record<string, CustomValue | null>;
 export type CompanyInput = Partial<Omit<ApiCompany, 'id' | 'customFields' | 'updatedAt'>> & { name?: string; customFields?: CustomFieldPatch };
 export type ContactInput = Partial<Omit<ApiContact, 'id' | 'ownerName' | 'customFields' | 'updatedAt'>> & { customFields?: CustomFieldPatch };
 export type DealInput = Partial<
-  Pick<ApiDeal, 'title' | 'companyId' | 'primaryContactId' | 'funnelId' | 'ownerUserId' | 'source' | 'closeDate' | 'amount' | 'currency' | 'headline' | 'need' | 'constraint' | 'decisionMaker' | 'discoveryDate'>
-> & { champ?: ApiChamp; customFields?: CustomFieldPatch };
+  Pick<
+    ApiDeal,
+    | 'title'
+    | 'companyId'
+    | 'primaryContactId'
+    | 'funnelId'
+    | 'ownerUserId'
+    | 'source'
+    | 'closeDate'
+    | 'amount'
+    | 'currency'
+    | 'headline'
+    | 'need'
+    | 'constraint'
+    | 'decisionMaker'
+    | 'discoveryDate'
+    | 'sponsorContactId'
+    | 'powerSponsorContactId'
+    | 'pain'
+    | 'painSolution'
+    | 'qualificationSteps'
+    | 'qualificationOther'
+  >
+> & { customFields?: CustomFieldPatch; qualified?: boolean };
 export type ProductInput = Partial<{
   name: string;
   description: string | null;
