@@ -1,12 +1,16 @@
+import type { AddressInfo } from 'node:net';
+import { HttpException } from '@nestjs/common';
+import express from 'express';
 import { SignJWT } from 'jose';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { Env } from '../src/infrastructure/config/config.module';
 import { Auth0Accounts } from '../src/modules/identity/accounts';
-import { readCookie, sessionProblem } from '../src/modules/identity/session.controller';
+import type { IdentityService } from '../src/modules/identity/identity.service';
+import { readCookie, SessionController, SessionCookies, sessionProblem } from '../src/modules/identity/session.controller';
 import { Auth0Sessions, createSessionProvider, DevSessions, NoSessions, pkce, type SessionError } from '../src/modules/identity/sessions';
 import { noPasswordEmail, passwordResetEmail, resetLink } from '../src/modules/identity/signup-email';
 import { providerUserId } from '../src/modules/identity/signup.service';
 import { claim } from '../src/modules/identity/token.service';
-import type { Env } from '../src/infrastructure/config/config.module';
 import type { Request } from 'express';
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -165,5 +169,107 @@ describe('forgot password (CD-114)', () => {
     const google = noPasswordEmail({ to: 'ana@example.test', link: 'https://app.example.test/login' });
     expect(google.text).toContain('Continue with Google');
     expect(google.text).not.toContain('reset-password');
+  });
+});
+
+describe('refresh grant (CD-445)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('sends the audience and offline_access, and keeps a refresh token the answer included', async () => {
+    const fetchMock = vi.fn(async () => json(200, { access_token: 'at', refresh_token: 'rt-next', expires_in: 600 }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await auth0().refresh('seed')).toEqual({ accessToken: 'at', refreshToken: 'rt-next', expiresIn: 600 });
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://login.example.test/oauth/token');
+    expect(JSON.parse(init.body as string)).toEqual({
+      grant_type: 'refresh_token',
+      refresh_token: 'seed',
+      audience: 'https://api.example.test',
+      scope: 'openid profile email offline_access',
+      client_id: 'web-app',
+      client_secret: 'web-secret',
+    });
+  });
+});
+
+describe('POST /api/auth/refresh writes the returned refresh token (CD-445)', () => {
+  let server: ReturnType<express.Express['listen']>;
+  let base: string;
+  const sent: Record<string, string>[] = [];
+
+  beforeAll(async () => {
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (!String(url).endsWith('/oauth/token')) return realFetch(url, init);
+        const body = JSON.parse(String(init?.body)) as Record<string, string>;
+        sent.push(body);
+        if (body.refresh_token !== 'seed') return json(403, { error: 'invalid_grant' });
+        return json(200, { access_token: 'access-1', refresh_token: 'rt-next', expires_in: 3600 });
+      }),
+    );
+    const env = { NODE_ENV: 'test', APP_URL: 'https://staging.pultly.com', AUTH_MODE: 'oidc' } as Env;
+    const sessions = auth0();
+    const cookies = new SessionCookies(sessions, { rememberProfile: async () => undefined } as unknown as IdentityService, env);
+    const controller = new SessionController(sessions, cookies, env);
+    const app = express();
+    app.use(express.json());
+    app.post('/api/auth/refresh', (req, res, next) => {
+      controller.refresh(req, res).then(
+        (body) => res.json(body),
+        (err: unknown) => (err instanceof HttpException ? res.status(err.getStatus()).json(err.getResponse()) : next(err)),
+      );
+    });
+    server = app.listen(0, '127.0.0.1');
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    vi.unstubAllGlobals();
+  });
+
+  const post = (cookie?: string) =>
+    fetch(`${base}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
+      body: '{}',
+    });
+
+  it('sets crm_session to the refresh token that came back', async () => {
+    const first = await post('crm_session=seed');
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({ accessToken: 'access-1', expiresIn: 3600 });
+    expect(first.headers.get('cache-control')).toBe('no-store');
+    const line = first.headers.getSetCookie().find((value) => value.startsWith('crm_session=')) ?? '';
+    expect(line).toMatch(/^crm_session=rt-next;/);
+    expect(line).toContain('Path=/api/auth');
+    expect(line).toContain('HttpOnly');
+    expect(line).toContain('SameSite=Strict');
+    expect(line).toContain('Secure');
+    expect(line).toContain('Max-Age=2592000');
+    expect(sent).toEqual([
+      {
+        grant_type: 'refresh_token',
+        refresh_token: 'seed',
+        audience: 'https://api.example.test',
+        scope: 'openid profile email offline_access',
+        client_id: 'web-app',
+        client_secret: 'web-secret',
+      },
+    ]);
+
+    const rejected = await post('crm_session=dead');
+    expect(rejected.status).toBe(401);
+    const cleared = rejected.headers.getSetCookie().find((value) => value.startsWith('crm_session=')) ?? '';
+    expect(cleared).toContain('Path=/api/auth');
+    expect(cleared).toMatch(/Max-Age=0|Expires=/);
+
+    const missing = await post();
+    expect(missing.status).toBe(401);
+    expect(missing.headers.getSetCookie()).toEqual([]);
   });
 });

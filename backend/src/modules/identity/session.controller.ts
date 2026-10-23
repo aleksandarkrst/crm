@@ -79,6 +79,7 @@ export class SessionCookies {
 
   /** Sets the cookie, and saves the person's email and name from the ID token (CD-222). */
   async start(res: Response, tokens: SessionTokens): Promise<SignedIn> {
+    res.setHeader('Cache-Control', 'no-store');
     if (tokens.identity) await this.identity.rememberProfile(tokens.identity);
     if (tokens.refreshToken) {
       res.cookie(SESSION_COOKIE, tokens.refreshToken, { httpOnly: true, secure: this.secure, sameSite: 'strict', path: '/api/auth', maxAge: SESSION_DAYS * 86_400_000 });
@@ -87,6 +88,7 @@ export class SessionCookies {
   }
 
   end(res: Response) {
+    res.setHeader('Cache-Control', 'no-store');
     res.clearCookie(SESSION_COOKIE, { httpOnly: true, secure: this.secure, sameSite: 'strict', path: '/api/auth' });
   }
 
@@ -136,6 +138,7 @@ export class SessionController {
   @Post('refresh')
   @HttpCode(200)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<SignedIn> {
+    res.setHeader('Cache-Control', 'no-store');
     requireJson(req);
     const token = readCookie(req, SESSION_COOKIE);
     if (!token) throw sessionProblem(new SessionError('expired', 'Sign in to continue.'));

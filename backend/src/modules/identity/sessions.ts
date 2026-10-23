@@ -114,7 +114,8 @@ export class Auth0Sessions extends SessionProvider {
   }
 
   async refresh(refreshToken: string): Promise<SessionTokens> {
-    const reply = await this.token({ grant_type: 'refresh_token', refresh_token: refreshToken });
+    // Same audience and offline_access scope as password and Google sign-in.
+    const reply = await this.token({ grant_type: 'refresh_token', refresh_token: refreshToken, audience: this.audience, scope: SCOPE });
     if (reply.ok) return reply.tokens;
     if (reply.body.error === 'invalid_grant') throw new SessionError('expired', 'Your session ended. Sign in again.');
     const why = `Auth0 refused a refresh: ${reply.status} ${reply.body.error ?? ''}`;
