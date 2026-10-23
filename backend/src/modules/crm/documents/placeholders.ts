@@ -23,7 +23,6 @@ const P = (group: string, tag: string, label: string, example: string): Placehol
 /** `{{opportunity.*}}` is what the help lists. `{{deal.*}}` is the same field, kept for saved templates. */
 const OPPORTUNITY_FIELDS = [
   ['title', 'Opportunity title', 'ESG communications'],
-  ['headline', 'Proposal headline (the opportunity title when empty)', 'An ESG story investors can verify'],
   ['amount', 'Opportunity value without tax, in the opportunity currency', '€78,000'],
   ['vat', 'Tax on the opportunity', '€15,600'],
   ['total', 'Total with tax', '€93,600'],
@@ -47,10 +46,6 @@ export const PLACEHOLDERS: readonly PlaceholderDef[] = [
   P('Contact', 'contact.email', 'Contact email', 'i.radic@voltek.eu'),
   P('Contact', 'contact.phone', 'Contact phone', '+381 21 660 118'),
   ...OPPORTUNITY_FIELDS.map(([field, label, example]) => P('Opportunity', `opportunity.${field}`, label, example)),
-  P('Discovery', 'discovery.need', 'Need', 'an ESG communications programme…'),
-  P('Discovery', 'discovery.constraint', 'Constraint', 'investor day in March'),
-  P('Discovery', 'discovery.decision_maker', 'Decision maker', 'the CEO with board visibility'),
-  P('Discovery', 'discovery.date', 'Discovery call date', '5 September 2026'),
   P('Owner', 'owner.name', 'Opportunity owner', 'Mila Jovanović'),
   P('Owner', 'owner.email', 'Owner email', 'mila@studio.rs'),
   P('Owner', 'owner.job_title', 'Owner job title', 'Account Director'),
@@ -84,13 +79,28 @@ export const ALIASES: Readonly<Record<string, string>> = {
   contact_name: 'contact.name',
   price: 'opportunity.amount',
   total: 'opportunity.total',
-  need: 'discovery.need',
+};
+
+/**
+ * Discovery notes are no longer merged into documents (CD-362). Templates saved before still work:
+ * the headline becomes the opportunity title and the others render empty, never as raw `{{tags}}`.
+ * They are left out of the reference and of the missing-field lists.
+ */
+const RETIRED: Readonly<Record<string, { label: string; value: (src: DocumentSource) => string }>> = {
+  'deal.headline': { label: 'Opportunity title (was the proposal headline)', value: (src) => text(src.deal.title) },
+  'opportunity.headline': { label: 'Opportunity title (was the proposal headline)', value: (src) => text(src.deal.title) },
+  'discovery.need': { label: 'Discovery need (no longer filled)', value: () => '' },
+  'discovery.constraint': { label: 'Discovery constraint (no longer filled)', value: () => '' },
+  'discovery.decision_maker': { label: 'Discovery decision maker (no longer filled)', value: () => '' },
+  'discovery.date': { label: 'Discovery call date (no longer filled)', value: () => '' },
+  need: { label: 'Discovery need (no longer filled)', value: () => '' },
 };
 
 const LABELS = new Map<string, string>([...PLACEHOLDERS, ...LINE_PLACEHOLDERS].map((p) => [p.tag, p.label]));
 for (const [alias, tag] of Object.entries(ALIASES)) LABELS.set(alias, LABELS.get(tag)!);
 for (const [field] of OPPORTUNITY_FIELDS) LABELS.set(`deal.${field}`, LABELS.get(`opportunity.${field}`)!);
 LABELS.set(LINES_LOOP, 'Opportunity lines');
+for (const [tag, { label }] of Object.entries(RETIRED)) LABELS.set(tag, label);
 
 /** `deal.X` and a short alias of it count as the `opportunity.X` field in missing-field lists. */
 const CANONICAL = new Map<string, string>(OPPORTUNITY_FIELDS.map(([field]) => [`deal.${field}`, `opportunity.${field}`]));
@@ -117,17 +127,12 @@ export interface DocumentSource {
   workspace: { name: string; currency: string; timezone: string };
   deal: {
     title: string;
-    headline: string | null;
     amount: string | number;
     currency: string;
     closeDate: string | null;
     source: string | null;
     stage: string | null;
     funnel: string | null;
-    need: string | null;
-    constraint: string | null;
-    decisionMaker: string | null;
-    discoveryDate: string | null;
     taxMode: TaxMode;
     discounts: Pick<DealDiscount, 'kind' | 'value'>[];
   };
@@ -257,7 +262,6 @@ export function buildTemplateData(src: DocumentSource): TemplateData {
     'contact.email': text(src.contact?.email),
     'contact.phone': text(src.contact?.phone),
     'deal.title': text(src.deal.title),
-    'deal.headline': text(src.deal.headline) || text(src.deal.title),
     'deal.amount': money(amount),
     'deal.vat': money(vat),
     'deal.total': money(amount + vat),
@@ -267,10 +271,6 @@ export function buildTemplateData(src: DocumentSource): TemplateData {
     'deal.stage': text(src.deal.stage),
     'deal.funnel': text(src.deal.funnel),
     'deal.source': text(src.deal.source),
-    'discovery.need': text(src.deal.need),
-    'discovery.constraint': text(src.deal.constraint),
-    'discovery.decision_maker': text(src.deal.decisionMaker),
-    'discovery.date': formatDate(src.deal.discoveryDate),
     'owner.name': text(src.owner?.name),
     'owner.email': text(src.owner?.email),
     'owner.job_title': text(src.owner?.jobTitle),
@@ -280,6 +280,7 @@ export function buildTemplateData(src: DocumentSource): TemplateData {
   };
   for (const [field] of OPPORTUNITY_FIELDS) values[`opportunity.${field}`] = values[`deal.${field}`]!;
   for (const [alias, tag] of Object.entries(ALIASES)) values[alias] = values[tag]!;
+  for (const [tag, { value }] of Object.entries(RETIRED)) values[tag] = value(src);
   return { ...values, [LINES_LOOP]: lines };
 }
 

@@ -106,7 +106,7 @@ describe('templates: roles and limits', () => {
     const byOwner = await upload(owner, tenant, starterTemplate(), 'Owner template');
     expect(byOwner).toMatchObject({ name: 'Owner template', docType: 'Proposal', fileName: 'proposal.docx' });
     expect(byOwner.placeholders.every((p) => p.known)).toBe(true);
-    expect(byOwner.placeholders.map((p) => p.tag)).toEqual(expect.arrayContaining(['deal.headline', 'lines', 'line.total']));
+    expect(byOwner.placeholders.map((p) => p.tag)).toEqual(expect.arrayContaining(['deal.title', 'lines', 'line.total']));
     expectFile(tenant, `templates/${byOwner.id}.docx`, true);
     await upload(admin, tenant, starterTemplate(), 'Admin template');
 
@@ -174,10 +174,9 @@ describe('generating a document', () => {
       companyId: company.id,
       primaryContactId: contact.id,
       currency: 'USD',
+      // Discovery notes are no longer merged into documents (CD-362).
       headline: 'A brand that travels',
       need: 'a brand that works in three markets.',
-      decisionMaker: 'the board',
-      discoveryDate: '2026-09-05',
     });
     dealId = deal.id;
     const product = await ok<{ id: string }>('POST', '/crm/products', { token: owner.token, tenant, body: { name: 'Brand strategy', unitPrice: 1500.5 } });
@@ -190,16 +189,15 @@ describe('generating a document', () => {
     doc = await waitForDocument(member, tenant, queued.id);
     expect(doc.status, doc.error ?? '').toBe('ready');
     expect(doc.createdByName).toBe(member.name);
-    // The starter uses these, and the deal has no value for them.
-    expect(doc.missingFields).toEqual(['Constraint']);
+    expect(doc.missingFields).toEqual([]);
 
     const file = await raw('GET', `/crm/deal-documents/${doc.id}/file`, { token: member.token, tenant });
     expect(file.status).toBe(200);
     expect(file.headers.get('content-disposition')).toContain("filename*=UTF-8''Proposal%20%E2%80%94%20generation%20%E2%80%94%20Acme%20d.o.o..docx");
     const text = docxText(file.bytes);
-    expect(text).toContain('A brand that travels');
+    expect(text).not.toContain('A brand that travels');
+    expect(text).not.toContain('three markets');
     expect(text).toContain('Prepared for Ivana Radić, CMO at Acme d.o.o.');
-    expect(text).toContain('In our discovery call on 5 September 2026 you described a brand that works in three markets.');
     expect(text).toContain('US$1,500.50'); // unit price, USD deal in a EUR workspace
     expect(text).toContain('Total incl. VAT: US$3,601.20');
     expect(text).toContain(`Reply to ${owner.name}`);
@@ -213,7 +211,7 @@ describe('generating a document', () => {
     const activities = await ok<{ title: string; detail: string | null }[]>('GET', `/crm/deals/${dealId}/activities`, { token: owner.token, tenant });
     expect(activities[0]).toMatchObject({ title: 'Document generated · Proposal — generation — Acme d.o.o.' });
     expect(activities[0]!.detail).toContain(`by ${member.name}`);
-    expect(activities[0]!.detail).toContain('Left empty: Constraint.');
+    expect(activities[0]!.detail).not.toContain('Left empty');
   });
 
   it('keeps unknown fields as written', async () => {

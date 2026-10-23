@@ -62,7 +62,8 @@ describe('document templates and generated documents', () => {
     await page.waitForFunction(() => document.body.innerText.includes('{{opportunity.amount}}'));
     await clickButton(page, 'Download starter template');
     starter = await downloaded(downloads, /starter template\.docx$/);
-    assert.match(docxText(readFileSync(starter)), /\{\{deal\.headline\}\}/);
+    assert.match(docxText(readFileSync(starter)), /\{\{deal\.title\}\}/);
+    assert.doesNotMatch(docxText(readFileSync(starter)), /discovery\./);
   });
 
   step('uploads it as a template: the dialog lists its merge fields first', async () => {
@@ -71,7 +72,7 @@ describe('document templates and generated documents', () => {
     await input.uploadFile(starter);
     await page.waitForFunction(() => /parameters found/i.test(document.querySelector('.modal')?.innerText ?? ''));
     const modal = await page.$eval('.modal', (el) => el.innerText);
-    assert.match(modal, /\{\{deal\.headline\}\} → Proposal headline/);
+    assert.match(modal, /\{\{deal\.title\}\} → Opportunity title/);
     assert.ok(!modal.includes('not recognised'), 'every field of the starter is known');
     await setValue(page, '.modal input[placeholder^="e.g. Proposal"]', 'E2E proposal');
     await clickButton(page, 'Save template');

@@ -6,17 +6,12 @@ const source = (over: Partial<DocumentSource> = {}): DocumentSource => ({
   workspace: { name: 'Studio Kap', currency: 'EUR', timezone: 'Europe/Belgrade' },
   deal: {
     title: 'Brand refresh',
-    headline: null,
     amount: '3001.00',
     currency: 'EUR',
     closeDate: '2026-10-31',
     source: 'Referral',
     stage: 'Proposal',
     funnel: 'SMB',
-    need: 'a new brand.',
-    constraint: null,
-    decisionMaker: '  ',
-    discoveryDate: null,
     taxMode: 'exclusive',
     discounts: [],
   },
@@ -89,7 +84,7 @@ describe('buildTemplateData', () => {
     for (const p of PLACEHOLDERS) expect(typeof data[p.tag], p.tag).toBe('string');
     expect(data['company.name']).toBe('Acme d.o.o.');
     expect(data['contact.first_name']).toBe('Ivana');
-    expect(data['deal.headline']).toBe('Brand refresh'); // falls back to the title
+    expect(data['deal.headline']).toBe('Brand refresh'); // retired (CD-362): the title
     expect(data['deal.amount']).toBe('€3,001');
     expect(data['deal.vat']).toBe('€600.20');
     expect(data['deal.total']).toBe('€3,601.20');
@@ -126,12 +121,12 @@ describe('buildTemplateData', () => {
 describe('missingFields', () => {
   it('lists the used fields that were empty, in reference order, aliases included', () => {
     const data = buildTemplateData(source({ lines: [] }));
-    const used = ['discovery.decision_maker', 'company.name', 'discovery.constraint', 'lines', 'line.product', 'contact_name', 'company.industry', 'unknown.field'];
-    expect(missingFields(used, data)).toEqual(['Industry', 'Constraint', 'Decision maker', 'Opportunity lines']);
+    const used = ['contact.phone', 'company.name', 'lines', 'line.product', 'contact_name', 'company.industry', 'unknown.field'];
+    expect(missingFields(used, data)).toEqual(['Industry', 'Contact phone', 'Opportunity lines']);
   });
 
   it('lists an empty opportunity tag once, with the opportunity label, even when the legacy tag is used too', () => {
-    const data = buildTemplateData(source({ deal: { ...source().deal, title: '  ', headline: ' ', source: null } }));
+    const data = buildTemplateData(source({ deal: { ...source().deal, title: '  ', source: null } }));
     expect(data['opportunity.title']).toBe('');
     expect(data['deal.title']).toBe('');
     expect(missingFields(['opportunity.title', 'deal.title', 'opportunity.source', 'deal.source'], data)).toEqual(['Opportunity title', 'Source']);
@@ -139,7 +134,7 @@ describe('missingFields', () => {
 });
 
 describe('opportunity aliases', () => {
-  const fields = ['title', 'headline', 'amount', 'vat', 'total', 'discount', 'currency', 'closing_date', 'stage', 'funnel', 'source'] as const;
+  const fields = ['title', 'amount', 'vat', 'total', 'discount', 'currency', 'closing_date', 'stage', 'funnel', 'source'] as const;
 
   it('renders {{opportunity.X}} the same as {{deal.X}} for every tag, and a legacy-only template the same as before', () => {
     const data = buildTemplateData(source());
@@ -193,16 +188,26 @@ describe('docx templates', () => {
   it('finds the fields of the starter template, all of them known', () => {
     const found = describeTags(inspectTemplate(starterTemplate()));
     expect(found.filter((f) => !f.known)).toEqual([]);
-    expect(found.map((f) => f.tag)).toEqual(expect.arrayContaining(['deal.headline', 'lines', 'line.total', 'deal.total', 'today']));
+    expect(found.map((f) => f.tag)).toEqual(expect.arrayContaining(['deal.title', 'lines', 'line.total', 'deal.total', 'today']));
+    expect(found.map((f) => f.tag).filter((t) => t.startsWith('discovery.') || t === 'deal.headline')).toEqual([]);
   });
 
   it('fills fields and repeats the lines row; unknown fields stay as written', () => {
-    const tpl = buildDocx([{ text: 'For {{company.name}} ({{typo}})' }, { table: [['Item', 'Total'], ['{{#lines}}{{line.product}}', '{{line.total}}{{/lines}}']] }, { text: 'Need: {{need}}' }]);
+    const tpl = buildDocx([{ text: 'For {{company.name}} ({{typo}})' }, { table: [['Item', 'Total'], ['{{#lines}}{{line.product}}', '{{line.total}}{{/lines}}']] }]);
     const out = renderTemplate(tpl, buildTemplateData(source()));
     // The second line has no product, so its first cell is empty (docxText skips empty paragraphs).
-    expect(docxText(out.file)).toBe('For Acme d.o.o. ({{typo}})\nItem\nTotal\nStrategy\n€3,601.20\n€0\nNeed: a new brand.');
+    expect(docxText(out.file)).toBe('For Acme d.o.o. ({{typo}})\nItem\nTotal\nStrategy\n€3,601.20\n€0');
     expect(out.file.length).toBeGreaterThan(0);
-    expect(out.tags).toEqual(expect.arrayContaining(['company.name', 'typo', 'lines', 'line.product', 'need']));
+    expect(out.tags).toEqual(expect.arrayContaining(['company.name', 'typo', 'lines', 'line.product']));
+  });
+
+  it('a template saved before CD-362 still renders: the headline is the title, discovery notes are empty, nothing is flagged', () => {
+    const tpl = buildDocx([{ text: '{{deal.headline}} | {{opportunity.headline}} | [{{discovery.need}}{{discovery.constraint}}{{discovery.decision_maker}}{{discovery.date}}{{need}}]' }]);
+    const data = buildTemplateData(source());
+    const out = renderTemplate(tpl, data);
+    expect(docxText(out.file)).toBe('Brand refresh | Brand refresh | []');
+    expect(missingFields(out.tags, data)).toEqual([]);
+    expect(describeTags(out.tags).every((f) => f.known)).toBe(true);
   });
 
   it('rejects files that are not .docx, and broken merge fields', () => {

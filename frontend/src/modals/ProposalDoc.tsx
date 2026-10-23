@@ -51,13 +51,8 @@ export function ProposalDoc() {
 
   const eyebrow = { fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: '#475750' };
 
-  // Discovery notes saved on the deal. Anything not captured yet shows as a bracketed gap to fill in.
-  const gap = (what: string) => `[${what} — add it under Discovery on the opportunity]`;
-  const headline = lead.headline || lead.title || lead.company;
-  const callDate = lead.discoveryDate ? new Date(lead.discoveryDate + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : gap('call date');
-  const need = lead.need.trim() ? lead.need.trim().replace(/([^.!?])$/, '$1.') : gap('need') + '.';
-  const constraint = lead.constraint ? lead.constraint.replace(/[\s.]+$/, '') : gap('constraint');
-  const decisionMaker = lead.decisionMaker ? lead.decisionMaker.replace(/[\s.]+$/, '') : gap('decision maker');
+  // Discovery notes are no longer merged into the proposal (CD-362): the cover shows the opportunity title.
+  const headline = lead.title || lead.company;
 
   return (
     <div className="overlay" style={{ zIndex: 50, alignItems: 'flex-start', overflowY: 'auto', padding: 0 }}>
@@ -98,15 +93,8 @@ export function ProposalDoc() {
               </span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <span style={eyebrow}>01 — What you told us</span>
-              <p style={{ margin: 0, fontSize: 16, lineHeight: 1.7, maxWidth: 680 }}>
-                In our discovery call on <span style={merge}>{callDate}</span> you described <span style={merge}>{need}</span> The constraint is <span style={merge}>{constraint}</span> and the decision sits with <span style={merge}>{decisionMaker}</span>.
-              </p>
-            </div>
-
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <span style={eyebrow}>02 — Scope</span>
+              <span style={eyebrow}>01 — Scope</span>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 16 }}>
                 {lead.lines.map(([item]) => (
                   <div key={item} style={{ borderTop: '2px solid #0F1B16', paddingTop: 13, display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -118,7 +106,7 @@ export function ProposalDoc() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <span style={eyebrow}>03 — Timeline</span>
+              <span style={eyebrow}>02 — Timeline</span>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {[
                   { when: 'Week 1–2', what: 'Immersion: interviews, audit, and a written point of view on the gap.' },
@@ -135,7 +123,7 @@ export function ProposalDoc() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <span style={eyebrow}>04 — Investment</span>
+              <span style={eyebrow}>03 — Investment</span>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {docLines.map((l, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 18, padding: '13px 0', borderBottom: '1px solid #EBF0ED' }}>
@@ -156,7 +144,7 @@ export function ProposalDoc() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <span style={eyebrow}>05 — Billing schedule</span>
+              <span style={eyebrow}>04 — Billing schedule</span>
               {billing.length === 0 && <span style={{ fontSize: 14, color: '#475750' }}>Billing is set once products and services are added to the opportunity.</span>}
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {billing.map((b, i) => (

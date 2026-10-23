@@ -113,9 +113,9 @@ describe('settings and discovery fields', () => {
     await page.waitForFunction(() => location.pathname === '/today');
   });
 
-  // The discovery notes are hidden on the deal page since the Qualification card (CD-362); they are
-  // still saved on the deal and merged into the proposal.
-  step('merges the discovery notes of an opportunity into the proposal', async () => {
+  // Discovery notes are no longer shown on the deal page or merged into the proposal (CD-362),
+  // even when a deal still has them saved.
+  step('leaves the discovery notes out of the proposal', async () => {
     await api(page, '/crm/deals/' + dealId, {
       method: 'PATCH',
       body: JSON.stringify({
@@ -128,13 +128,11 @@ describe('settings and discovery fields', () => {
     });
     await page.goto(`${BASE_URL}/settings/templates`, { waitUntil: 'networkidle0' });
     await clickButton(page, 'Preview with an opportunity');
-    await page.waitForFunction(() => document.body.textContent.includes('What you told us'));
+    await page.waitForFunction(() => document.body.textContent.includes('01 — Scope'));
     const doc = await text(page);
-    assert.ok(doc.includes('One story across six markets'), 'headline in the proposal');
-    assert.ok(doc.includes('3 September 2026'), 'discovery date in the proposal');
-    assert.ok(doc.includes('a repositioning across six markets.'), 'need in the proposal');
-    assert.ok(doc.includes('procurement requires three approvals'), 'constraint in the proposal');
-    assert.ok(doc.includes('the CMO with CFO sign-off'), 'decision maker in the proposal');
+    for (const note of ['What you told us', 'One story across six markets', '3 September 2026', 'a repositioning across six markets', 'procurement requires three approvals', 'the CMO with CFO sign-off']) {
+      assert.ok(!doc.includes(note), `"${note}" is not in the proposal`);
+    }
   });
 
   step('shows members the workspace settings read-only', async () => {
