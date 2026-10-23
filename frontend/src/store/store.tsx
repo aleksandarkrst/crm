@@ -1233,10 +1233,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       mapLead(id, (l) => ({ ...l, ...dealPatch }));
     };
 
-    /** The Qualified switch (CD-362): the server records who and when, and logs it; the reload shows both. */
+    /** The Qualified switch (CD-362): the server records who and when, and logs it; reloading the deal and its timeline shows both. */
     const setQualified = (id: string, on: boolean) => {
       mapLead(id, (l) => ({ ...l, qualifiedAt: on ? new Date().toISOString() : undefined, qualifiedBy: on ? session.userId : undefined }));
-      void save(() => crmApi.updateDeal(id, { qualified: on }, ver('deal', id)), reload, 'Qualified');
+      void save(() => crmApi.updateDeal(id, { qualified: on }, ver('deal', id)), () => Promise.all([reload(), refreshLog(id)]), 'Qualified');
     };
 
     // ------------------------------------------------------------ deleting (owners and admins)
