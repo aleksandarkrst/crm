@@ -1,4 +1,4 @@
-// Workspace settings, profile settings and the deal's discovery fields are saved and survive a reload.
+// Workspace settings and profile settings are saved and survive a reload; a deal's discovery notes reach the proposal.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { api, BASE_URL, clickButton, createDealInUi, email, eventually, newUserWithWorkspace, RUN, setByLabel, signIn, steps, text, useBrowser, waitForToastToClear, finishOnboarding } from '../lib/harness.mjs';
@@ -113,37 +113,19 @@ describe('settings and discovery fields', () => {
     await page.waitForFunction(() => location.pathname === '/today');
   });
 
-  step('saves the discovery fields of an opportunity', async () => {
-    await page.goto(`${BASE_URL}/deals/${dealId}`, { waitUntil: 'networkidle0' });
-    await page.waitForFunction(() => document.body.innerText.includes('Discovery'));
-    assert.ok(await setByLabel(page, 'Discovery date', '2026-09-03'));
-    assert.ok(await setByLabel(page, 'Need', 'a repositioning across six markets', 'textarea'));
-    assert.ok(await setByLabel(page, 'Constraint', 'procurement requires three approvals'));
-    assert.ok(await setByLabel(page, 'Decision maker', 'the CMO with CFO sign-off'));
-    assert.ok(await setByLabel(page, 'Proposal headline', 'One story across six markets'));
-    const saved = await eventually(async () => {
-      const d = await api(page, '/crm/deals/' + dealId);
-      return (
-        d.discoveryDate === '2026-09-03' &&
-        d.need === 'a repositioning across six markets' &&
-        d.constraint === 'procurement requires three approvals' &&
-        d.decisionMaker === 'the CMO with CFO sign-off' &&
-        d.headline === 'One story across six markets' &&
-        d
-      );
+  // The discovery notes are hidden on the deal page since the Qualification card (CD-362); they are
+  // still saved on the deal and merged into the proposal.
+  step('merges the discovery notes of an opportunity into the proposal', async () => {
+    await api(page, '/crm/deals/' + dealId, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        discoveryDate: '2026-09-03',
+        need: 'a repositioning across six markets',
+        constraint: 'procurement requires three approvals',
+        decisionMaker: 'the CMO with CFO sign-off',
+        headline: 'One story across six markets',
+      }),
     });
-    assert.ok(saved, 'discovery fields saved');
-  });
-
-  step('shows the discovery fields after a reload, and in the proposal', async () => {
-    await page.reload({ waitUntil: 'networkidle0' });
-    await page.waitForFunction(() => document.body.innerText.includes('Discovery'));
-    assert.equal(await valueByLabel(page, 'Discovery date'), '2026-09-03');
-    assert.equal(await valueByLabel(page, 'Need', 'textarea'), 'a repositioning across six markets');
-    assert.equal(await valueByLabel(page, 'Constraint'), 'procurement requires three approvals');
-    assert.equal(await valueByLabel(page, 'Decision maker'), 'the CMO with CFO sign-off');
-    assert.equal(await valueByLabel(page, 'Proposal headline'), 'One story across six markets');
-
     await page.goto(`${BASE_URL}/settings/templates`, { waitUntil: 'networkidle0' });
     await clickButton(page, 'Preview with an opportunity');
     await page.waitForFunction(() => document.body.textContent.includes('What you told us'));
