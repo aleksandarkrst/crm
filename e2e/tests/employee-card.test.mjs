@@ -108,6 +108,23 @@ describe('employee card', () => {
     assert.equal(await valueOf(mia, '[data-testid=emp-personal] input[name=addressCity]'), 'Beograd');
   });
 
+  step('the Personal tab has the birthday (their date of birth), spouse, children and pets (CD-361)', async () => {
+    // The date of birth moved off the Overview tab: it shows once, as Birthday on Personal.
+    assert.equal(await mia.$('[data-testid=emp-personal] input[name=dateOfBirth]'), null, 'no date of birth on Overview');
+    await click(mia, '[data-testid=emp-tab-personal]');
+    await mia.waitForSelector('[data-testid=emp-family] input[name=dateOfBirth]');
+    assert.equal(await mia.$eval('[data-testid=emp-family] input[name=dateOfBirth]', (el) => el.getAttribute('aria-label')), 'Birthday');
+    await setValue(mia, '[data-testid=emp-family] input[name=dateOfBirth]', '1990-05-01');
+    await setValue(mia, '[data-testid=emp-family] input[name=spouse]', 'Jovana');
+    await setValue(mia, '[data-testid=emp-family] input[name=children]', 'Luka (6)');
+    await setValue(mia, '[data-testid=emp-family] input[name=pets]', 'Cat Mica');
+    await save(mia);
+    const card = await api(mia, `/people/employees/${miaEmployee}`);
+    assert.deepEqual([card.personal.dateOfBirth, card.personal.spouse, card.personal.children, card.personal.pets], ['1990-05-01', 'Jovana', 'Luka (6)', 'Cat Mica']);
+    await click(mia, '[data-testid=emp-tab-overview]');
+    await mia.waitForSelector('[data-testid=emp-work]');
+  });
+
   step('a domestic account number is saved as its IBAN, masked until "Show"', async () => {
     await mia.type('[data-testid=emp-bank] input[name=iban]', DOMESTIC);
     await mia.waitForSelector('[data-testid=emp-iban-preview]');
@@ -139,6 +156,7 @@ describe('employee card', () => {
     await mia.waitForSelector('[data-testid=emp-work]');
     assert.equal(await textOf(mia, '[data-testid=emp-name]'), 'Olga Owner');
     assert.equal(await mia.$('[data-testid=emp-personal]'), null, 'no personal details section');
+    assert.equal(await mia.$('[data-testid=emp-tabs]'), null, 'no Personal tab (CD-361)');
     assert.equal(await mia.$('[data-testid=emp-bank]'), null, 'no bank account section');
     assert.equal(await mia.$('[data-testid=emp-work] input'), null, "can't edit a colleague");
     assert.equal(await mia.$('[data-testid=emp-save]'), null, 'no Save');
