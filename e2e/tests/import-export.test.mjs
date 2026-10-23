@@ -128,7 +128,7 @@ describe('CSV import and export', () => {
     const bytes = readFileSync(join(downloads, name));
     assert.deepEqual([...bytes.subarray(0, 3)], [0xef, 0xbb, 0xbf], 'starts with a UTF-8 BOM');
     const lines = bytes.subarray(3).toString('utf8').split('\r\n');
-    assert.equal(lines[0], 'Contact ID,Full name,Job title,Company record ID,Company,Email,Phone,LinkedIn,Buyer role,Owner');
+    assert.equal(lines[0], 'Contact ID,Full name,Job title,Company record ID,Company,Email,Phone,LinkedIn,Buyer role,Owner,Org unit,Source,Influence on the opportunity,Birthday,Spouse,Children,Pets');
     assert.equal(lines.at(-1), '', 'ends with a line break');
     const rows = lines.slice(1, -1);
     assert.equal(rows.length, 2, 'the imported contact and the new one');
@@ -136,7 +136,8 @@ describe('CSV import and export', () => {
     // Guarded against formula injection, and quoted because of the quotes and the comma.
     assert.ok(formula.includes(`,"'=HYPERLINK(""x"")","Head, Growth",${globexId},${globex},`), formula);
     assert.ok(rows.some((r) => r.includes(`Gina Globex,,${globexId},${globex},gina-${RUN}@example.test`)));
-    assert.ok(formula.endsWith(',Influencer,Ivy Importer'), formula);
+    // No role in the decision yet (CD-361), then the empty details and personal details.
+    assert.ok(formula.endsWith(',,Ivy Importer,,,,,,,'), formula);
   });
 
   step('export follows the filters on screen', async () => {

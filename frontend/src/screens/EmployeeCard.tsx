@@ -11,7 +11,7 @@ import { useStore } from '../store/store';
 import { useEmployeeCard } from '../store/useEmployeeCard';
 import { DeactivateDialog, ReactivateDialog } from './employee/dialogs';
 import { CardEditContext, dateLabel } from './employee/parts';
-import { BankSection, cardInitial, cardPatch, PersonalSection, WorkSection } from './employee/sections';
+import { BankSection, cardInitial, cardPatch, FamilySection, PersonalSection, WorkSection } from './employee/sections';
 import { TimeOffSection } from './employee/TimeOffSection';
 import { EmployeeSickLeave } from './timeoff/SickLeave';
 import { TimesheetSection } from './employee/TimesheetSection';
@@ -71,6 +71,9 @@ export function EmployeeCard() {
 const DISCARD = 'Discard your changes?';
 
 /** The card's one draft and Save (CD-225), the header and the sections. */
+/** The underline tabs of Time off (CD-361 uses them for Overview | Personal). */
+const tabStyle = (on: boolean) => ({ borderBottom: `2px solid ${on ? 'var(--brand)' : 'transparent'}`, fontWeight: on ? 600 : 500, color: on ? 'var(--brand)' : 'var(--text-2)' });
+
 function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => void }) {
   const { employeeCard, flash } = useStore();
   const initial = useMemo(() => cardInitial(card), [card]);
@@ -78,6 +81,8 @@ function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => 
   const [edits, setEdits] = useState<Draft>({});
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<{ text: string; conflict: boolean } | null>(null);
+  // Overview | Personal (CD-361); one draft and one Save cover both tabs.
+  const [tab, setTab] = useState<'overview' | 'personal'>('overview');
   const changed = changedFields(initial, edits, editable);
   const dirty = Object.keys(changed).length > 0;
 
@@ -134,18 +139,37 @@ function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => 
             )}
           </div>
         )}
-        <div className="emp-grid">
-          <div className="emp-col">
-            <WorkSection card={card} />
-            <TimeOffSection id={card.id} />
-            <CardSickLeave employeeId={card.id} />
-            <TimesheetSection id={card.id} />
+        {/* Overview | Personal (CD-361): the tab is there for whoever sees the personal details. */}
+        {card.personal && (
+          <div className="report-tabs" role="tablist" data-testid="emp-tabs">
+            <button type="button" role="tab" aria-selected={tab === 'overview'} className="composer-tab" style={tabStyle(tab === 'overview')} onClick={() => setTab('overview')} data-testid="emp-tab-overview">
+              Overview
+            </button>
+            <button type="button" role="tab" aria-selected={tab === 'personal'} className="composer-tab" style={tabStyle(tab === 'personal')} onClick={() => setTab('personal')} data-testid="emp-tab-personal">
+              Personal
+            </button>
           </div>
-          <div className="emp-col">
-            {card.personal && <PersonalSection card={card} />}
-            {card.bank && <BankSection card={card} />}
+        )}
+        {tab === 'personal' && card.personal ? (
+          <div className="emp-grid">
+            <div className="emp-col">
+              <FamilySection card={card} />
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="emp-grid">
+            <div className="emp-col">
+              <WorkSection card={card} />
+              <TimeOffSection id={card.id} />
+              <CardSickLeave employeeId={card.id} />
+              <TimesheetSection id={card.id} />
+            </div>
+            <div className="emp-col">
+              {card.personal && <PersonalSection card={card} />}
+              {card.bank && <BankSection card={card} />}
+            </div>
+          </div>
+        )}
       </div>
     </CardEditContext.Provider>
   );

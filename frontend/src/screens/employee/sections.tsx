@@ -17,7 +17,11 @@ const WORK_TYPE_OPTIONS = (Object.keys(WORK_TYPE_LABEL) as WorkType[]).map((valu
 
 // ------------------------------------------------------------------ Work (spec 4.2)
 
-const PERSONAL = ['dateOfBirth', 'privateEmail', 'privatePhone', 'addressStreet', 'addressPostalCode', 'addressCity', 'addressCountry', 'emergencyContactName', 'emergencyContactPhone'] as const;
+const PERSONAL = ['dateOfBirth', 'privateEmail', 'privatePhone', 'addressStreet', 'addressPostalCode', 'addressCity', 'addressCountry', 'emergencyContactName', 'emergencyContactPhone', 'spouse', 'children', 'pets'] as const;
+/** The Personal tab's fields (CD-361): the birthday is the date of birth, so it shows only there. */
+const FAMILY = ['dateOfBirth', 'spouse', 'children', 'pets'] as const;
+/** Personal details on the Overview tab: everything else. */
+const CONTACT_DETAILS = PERSONAL.filter((f) => !(FAMILY as readonly string[]).includes(f));
 
 /**
  * The whole card's starting values (CD-225: one draft): strings for inputs, booleans for
@@ -327,12 +331,9 @@ export function PersonalSection({ card }: { card: ApiEmployeeCard }) {
     <EditableSection
       title="Personal details"
       testId="emp-personal"
-      fields={[...PERSONAL]}
+      fields={[...CONTACT_DETAILS]}
       view={
         <>
-          <Row label="Date of birth">
-            <Val v={dateLabel(p.dateOfBirth)} />
-          </Row>
           <Row label="Private email">
             <Val v={p.privateEmail} />
           </Row>
@@ -349,7 +350,6 @@ export function PersonalSection({ card }: { card: ApiEmployeeCard }) {
       }
       edit={(draft, setField, can) => (
         <>
-          <TextField field="dateOfBirth" type="date" draft={draft} setField={setField} can={can} />
           <TextField field="privateEmail" type="email" draft={draft} setField={setField} can={can} maxLength={254} />
           <TextField field="privatePhone" type="tel" draft={draft} setField={setField} can={can} maxLength={40} />
           <TextField field="addressStreet" draft={draft} setField={setField} can={can} maxLength={200} />
@@ -358,6 +358,45 @@ export function PersonalSection({ card }: { card: ApiEmployeeCard }) {
           <TextField field="addressCountry" draft={draft} setField={setField} can={can} maxLength={100} />
           <TextField field="emergencyContactName" draft={draft} setField={setField} can={can} maxLength={100} />
           <TextField field="emergencyContactPhone" type="tel" draft={draft} setField={setField} can={can} maxLength={40} />
+        </>
+      )}
+    />
+  );
+}
+
+/**
+ * The Personal tab (CD-361): birthday (the date of birth, shown only here), spouse, children and
+ * pets, for HR's gifts and cards. Seen and edited like the other personal details.
+ */
+export function FamilySection({ card }: { card: ApiEmployeeCard }) {
+  const p = card.personal!;
+  return (
+    <EditableSection
+      title="Personal"
+      testId="emp-family"
+      fields={[...FAMILY]}
+      view={
+        <>
+          <Row label="Birthday">
+            <Val v={dateLabel(p.dateOfBirth)} />
+          </Row>
+          <Row label="Spouse">
+            <Val v={p.spouse} />
+          </Row>
+          <Row label="Children">
+            <Val v={p.children} />
+          </Row>
+          <Row label="Pets">
+            <Val v={p.pets} />
+          </Row>
+        </>
+      }
+      edit={(draft, setField, can) => (
+        <>
+          <TextField field="dateOfBirth" type="date" label="Birthday" draft={draft} setField={setField} can={can} />
+          <TextField field="spouse" draft={draft} setField={setField} can={can} maxLength={200} />
+          <TextField field="children" draft={draft} setField={setField} can={can} maxLength={500} />
+          <TextField field="pets" draft={draft} setField={setField} can={can} maxLength={500} />
         </>
       )}
     />

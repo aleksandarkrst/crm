@@ -51,6 +51,8 @@ export function Company() {
     .filter((p) => p.companyId === rec.id)
     .forEach(add);
   rec.leads.forEach((l) => contactsForLead(s, l.id).forEach(add));
+  // By name (CD-361), the way people look for someone.
+  people.sort((a, b) => a.name.localeCompare(b.name));
   const q = picker.search.toLowerCase().trim();
   const directory = allPeople(s)
     .filter((p) => !seen.has(p.contactId || p.id))
@@ -167,7 +169,7 @@ export function Company() {
               action={<AddButton label="Add a contact" onClick={() => set({ contactOpen: true, contactDealId: '', contactCompanyId: rec.id })} />}
             >
               {people.map((p) => (
-                <button key={p.id} type="button" onClick={() => store.openContact(p.contactId || p.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', border: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left', font: 'inherit' }}>
+                <button key={p.id} type="button" onClick={() => store.openContact(p.contactId || p.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', flexWrap: 'wrap', padding: '7px 0', border: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left', font: 'inherit' }}>
                   <span className="avatar" style={{ width: 28, height: 28, fontSize: 10.5, fontWeight: 600 }}>
                     {p.initials || initialsOf(p.name)}
                   </span>
@@ -175,6 +177,12 @@ export function Company() {
                     <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--brand)' }}>{p.name}</span>
                     <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{[p.role, p.buyerRole].filter((x) => x && x !== '—').join(' · ')}</span>
                   </span>
+                  {/* A contact without a role in the decision blocks the opportunity (CD-361). */}
+                  {!p.buyerRole && (
+                    <span className="badge badge-warn" data-testid="no-role-badge" style={{ marginLeft: 'auto', flex: '0 0 auto' }}>
+                      No role in decision
+                    </span>
+                  )}
                 </button>
               ))}
               {people.length === 0 && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>No contacts yet.</span>}

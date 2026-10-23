@@ -53,6 +53,9 @@ export const FIELD_LABEL: Record<string, string> = {
   addressCountry: 'Country',
   emergencyContactName: 'Emergency contact',
   emergencyContactPhone: "Emergency contact's phone",
+  spouse: 'Spouse',
+  children: 'Children',
+  pets: 'Pets',
   iban: 'IBAN',
   bankName: 'Bank',
   fxSameAsIban: 'Foreign currency account same as IBAN',
@@ -131,6 +134,7 @@ export function TextField({
   type = 'text',
   placeholder,
   maxLength,
+  label,
 }: {
   field: EmployeeField;
   draft: Draft;
@@ -139,12 +143,14 @@ export function TextField({
   type?: 'text' | 'email' | 'tel' | 'date' | 'number';
   placeholder?: string;
   maxLength?: number;
+  /** Instead of the field's usual label ("Birthday" for the date of birth on the Personal tab, CD-361). */
+  label?: string;
 }) {
   const value = String(draft[field] ?? '');
   return (
-    <Row label={FIELD_LABEL[field] ?? field}>
+    <Row label={label ?? FIELD_LABEL[field] ?? field}>
       {can(field) ? (
-        <input className="form-input emp-input" aria-label={FIELD_LABEL[field]} name={field} type={type} value={value} placeholder={placeholder} maxLength={maxLength} onChange={(e) => setField(field, e.target.value)} />
+        <input className="form-input emp-input" aria-label={label ?? FIELD_LABEL[field]} name={field} type={type} value={value} placeholder={placeholder} maxLength={maxLength} onChange={(e) => setField(field, e.target.value)} />
       ) : (
         <Val v={value} />
       )}

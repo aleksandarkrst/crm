@@ -61,6 +61,9 @@ beforeAll(async () => {
         addressStreet: 'Knez Mihailova 1',
         addressCity: 'Beograd',
         emergencyContactName: 'Mila',
+        spouse: 'Jovana',
+        children: 'Luka (6), Sara (3)',
+        pets: 'Cat Mica',
         iban: DOMESTIC,
         bankName: 'AIK Banka',
       },
@@ -119,6 +122,8 @@ describe('the card per role (sections absent, never empty)', () => {
   it('the employee sees their own personal details and bank account, masked', async () => {
     const c = await card(emp, id.emp);
     expect(c.personal).toMatchObject({ dateOfBirth: '1990-05-01', privateEmail: PRIVATE_EMAIL, addressCity: 'Beograd', addressCountry: 'Serbia' });
+    // Family and pets (CD-361) come with the personal details, to the same people.
+    expect(c.personal).toMatchObject({ spouse: 'Jovana', children: 'Luka (6), Sara (3)', pets: 'Cat Mica' });
     expect(c.bank).toMatchObject({ iban: { masked: 'RS35 •••• •••• •••• ••13 79', last4: '1379', country: 'RS', foreign: false }, bankName: 'AIK Banka' });
     expect(c.employment).toMatchObject({ startDate: START, type: 'permanent', weeklyHours: 40 });
     expect(c.employment).not.toHaveProperty('leavingReason');
@@ -135,6 +140,7 @@ describe('the card per role (sections absent, never empty)', () => {
     expect(c).not.toHaveProperty('bank');
     expect(c).not.toHaveProperty('hr');
     expect(JSON.stringify(c)).not.toContain(PRIVATE_EMAIL);
+    expect(JSON.stringify(c)).not.toContain('Jovana');
     expect(JSON.stringify(c)).not.toContain('•');
     expect(c.permissions).toMatchObject({ editableFields: [], canRevealBank: false, canSeeHistory: false });
   });
@@ -243,6 +249,7 @@ describe('history', () => {
     const mine = await ok('GET', `/people/history?entityType=employee&entityId=${id.emp}`, as(emp));
     const fields = mine.entries.map((e: { field: string | null }) => e.field);
     expect(fields).toContain('privateEmail');
+    expect(fields).toEqual(expect.arrayContaining(['spouse', 'children', 'pets']));
     expect(fields).toContain('managerId');
     expect(fields).not.toContain('leavingReason');
     expect(mine.entries.find((e: { field: string }) => e.field === 'iban')).toMatchObject({ newValue: IBAN_MASK });

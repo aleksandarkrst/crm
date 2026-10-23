@@ -21,6 +21,9 @@ const HEADERS: { key: Key; label: string }[] = [
 ];
 export const isSenior = (role: string) => /decision maker|economic buyer/i.test(role);
 
+/** Shown (and filtered on) for a contact with no role in the decision yet (CD-361). */
+const NO_ROLE = 'No role yet';
+
 export function Contacts() {
   const { s, set, openContact } = useStore();
   const [company, setCompany] = useState('Company');
@@ -30,7 +33,7 @@ export function Contacts() {
 
   const rows = allPeople(s)
     // The contact's own owner (from the contacts API), not the owner of a deal they are on.
-    .map((p) => ({ id: p.id, contact: p.name, role: p.role, company: companyOfPerson(s, p), companyId: companyIdOfPerson(s, p), email: p.email, phone: p.phone, decisionMaker: p.buyerRole || 'Influencer', owner: memberName(s, p.ownerId, p.ownerName), ownerId: p.ownerId ?? null }))
+    .map((p) => ({ id: p.id, contact: p.name, role: p.role, company: companyOfPerson(s, p), companyId: companyIdOfPerson(s, p), email: p.email, phone: p.phone, decisionMaker: p.buyerRole || NO_ROLE, owner: memberName(s, p.ownerId, p.ownerName), ownerId: p.ownerId ?? null }))
     .filter((r) => company === 'Company' || r.companyId === company)
     .filter((r) => owner === 'Salesperson' || r.ownerId === owner)
     .filter((r) => buyerRole === 'Buyer role' || r.decisionMaker === buyerRole)
@@ -42,7 +45,7 @@ export function Contacts() {
         chips={[
           { value: company, options: ['Company', ...[...companyLabels(companyRecords(s))].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))], onChange: setCompany },
           { value: owner, options: ['Salesperson', ...salesPeople(s)], onChange: setOwner },
-          { value: buyerRole, options: ['Buyer role', ...BUYER_ROLES], onChange: setBuyerRole },
+          { value: buyerRole, options: ['Buyer role', ...BUYER_ROLES, NO_ROLE], onChange: setBuyerRole },
         ]}
         dirty={company !== 'Company' || owner !== 'Salesperson' || buyerRole !== 'Buyer role'}
         onClear={() => {
@@ -71,7 +74,7 @@ export function Contacts() {
                 <span>{r.company}</span>
                 <span style={{ color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.email}</span>
                 <span style={{ color: 'var(--text-2)' }}>{r.phone}</span>
-                <span className={isSenior(r.decisionMaker) ? 'badge badge-brand' : 'badge badge-neutral'} style={{ justifySelf: 'start' }}>
+                <span className={r.decisionMaker === NO_ROLE ? 'badge badge-warn' : isSenior(r.decisionMaker) ? 'badge badge-brand' : 'badge badge-neutral'} style={{ justifySelf: 'start' }}>
                   {r.decisionMaker}
                 </span>
                 <span style={{ color: 'var(--text-2)' }}>{r.owner}</span>

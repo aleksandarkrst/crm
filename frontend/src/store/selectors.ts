@@ -280,11 +280,13 @@ export function allPeople(s: State): Person[] {
       email: l.email,
       phone: l.phone,
       initials: l.initials,
-      buyerRole: l.buyerRole || (/founder|ceo|owner|managing/i.test(l.role) ? 'Decision maker' : 'Influencer'),
+      // No guessed role: an empty one is what the "No role in decision" badge is for (CD-361).
+      buyerRole: l.buyerRole ?? '',
       linkedin: l.contactLinkedin ?? '',
       notes: l.contactNotes ?? '',
       ownerId: l.contactOwnerId,
       ownerName: l.contactOwner,
+      ...l.contactExtra,
     }))
     .concat(s.extraPeople);
 }
