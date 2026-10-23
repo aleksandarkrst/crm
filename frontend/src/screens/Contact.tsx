@@ -45,7 +45,7 @@ export function Contact() {
   const companyRec = companyRecords(s).find((r) => r.id === (p.companyId ?? c?.companyId));
 
   // Tap to email or call (CD-70); "—" stands for a missing value.
-  const mailto = /^[^\s@]+@[^\s@]+$/.test(p.email.trim()) ? `mailto:${p.email.trim()}` : '';
+  const mailto = p.email.trim() && checkEmail(p.email).ok ? `mailto:${p.email.trim()}` : '';
   // Only a valid number becomes a Call link (CD-464): "abc123!!" never turns into tel:123.
   const tel = p.phone.trim() && checkPhone(p.phone).ok ? `tel:${p.phone.replace(/\s*(?:ext\.?|x)\s*\d+$/i, '').replace(/[^\d+]/g, '')}` : '';
   const linkedin = linkedinHref(p.linkedin ?? '');

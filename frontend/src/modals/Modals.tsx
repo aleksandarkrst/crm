@@ -359,13 +359,13 @@ function NewContactModal() {
   };
   const fieldError = (text: string | undefined) =>
     text ? (
-      <span role="alert" data-testid="field-error" style={{ fontSize: 12, fontWeight: 400, letterSpacing: 0, textTransform: 'none', color: 'var(--danger)' }}>
+      <span className="subform-hint" role="alert" data-testid="field-error" style={{ color: 'var(--danger)' }}>
         {text}
       </span>
     ) : null;
   return (
     <Modal maxWidth={580}>
-      <ModalHeader title="New contact" sub="Every contact belongs to a company, so multi-threading shows up on the opportunity record." />
+      <ModalHeader title="New contact" sub="Pick their company, so they show up on its record and can be added to its opportunities." />
       <div className="contact-form-grid">
         <label className="form-label">
           Full name

@@ -807,7 +807,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       if (!p || !target || !contactId || companyId === companyIdOfPerson(x, p)) return;
       const oldCompanyId = companyIdOfPerson(x, p);
       const affected = p.primary ? x.leads.filter((l) => l.contactId === contactId) : [];
-      const promoted = affected.length ? allPeople(x).find((y) => y.contactId && y.contactId !== contactId && companyIdOfPerson(x, y) === oldCompanyId) : undefined;
+      // Only a contact of the same company replaces them; a contact without a company has no colleagues.
+      const promoted = affected.length && oldCompanyId ? allPeople(x).find((y) => y.contactId && y.contactId !== contactId && companyIdOfPerson(x, y) === oldCompanyId) : undefined;
       void save(
         async () => {
           await crmApi.updateContact(contactId, { companyId }, ver('contact', contactId));

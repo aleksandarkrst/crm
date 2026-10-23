@@ -2,16 +2,23 @@
  * Contacts (CD-464): a phone is checked by the API (a letter-filled "abc123!!" is refused), and a
  * contact can belong to a company that has no deals, linked to none.
  */
-import { beforeAll, describe, expect, it } from 'vitest';
+import { Client } from 'pg';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let tenant: string;
+let db: Client;
 const as = () => ({ token: owner.token, tenant });
 
 beforeAll(async () => {
   owner = await signIn('contacts-owner');
   tenant = await createTenant(owner, 'Contacts');
+  db = new Client({ connectionString: inject('databaseUrl') });
+  await db.connect();
+});
+afterAll(async () => {
+  await db?.end();
 });
 
 describe('contact phone', () => {
@@ -25,6 +32,18 @@ describe('contact phone', () => {
     expect((await call('PATCH', `/crm/contacts/${contact.id}`, { ...as(), body: { phone: '123' } })).status).toBe(400);
     expect(await ok('PATCH', `/crm/contacts/${contact.id}`, { ...as(), body: { phone: '021/456-789 ext. 12' } }, 200)).toMatchObject({ phone: '021/456-789 ext. 12' });
     expect(await ok('PATCH', `/crm/contacts/${contact.id}`, { ...as(), body: { phone: '' } }, 200)).toMatchObject({ phone: null });
+  });
+
+  it('a contact saved before the check, with a phone it now refuses, still saves its other fields', async () => {
+    const contact = await ok<{ id: string }>('POST', '/crm/contacts', { ...as(), body: { fullName: 'Old Phone' } });
+    await db.query('begin');
+    await db.query(`select set_config('app.tenant_id', $1, true)`, [tenant]);
+    await db.query(`update contacts set phone = '060 111 222 / 011 333 444 (mobile)' where id = $1`, [contact.id]);
+    await db.query('commit');
+    expect(await ok('PATCH', `/crm/contacts/${contact.id}`, { ...as(), body: { jobTitle: 'Buyer' } }, 200)).toMatchObject({
+      jobTitle: 'Buyer',
+      phone: '060 111 222 / 011 333 444 (mobile)',
+    });
   });
 });
 
