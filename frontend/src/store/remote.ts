@@ -393,7 +393,8 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
       contactId: c.id,
       companyId: c.companyId,
       company: c.companyId ? companyById.get(c.companyId)?.name : undefined,
-      leadId: linkedLead.get(c.id) ?? leads.find((l) => c.companyId && l.companyId === c.companyId)?.id ?? '',
+      // Only a deal they are linked to: never another deal of their company (CD-464).
+      leadId: linkedLead.get(c.id) ?? '',
       primary: false,
       name: c.fullName,
       role: c.jobTitle ?? '',

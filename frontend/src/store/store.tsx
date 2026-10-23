@@ -10,6 +10,8 @@ import { newPeopleRuntime, PEOPLE_HINTS, peopleActions } from './people';
 import { type Changed, loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type Part, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
 import {
+  allPeople,
+  companyIdOfPerson,
   companyRecords,
   curOf,
   customFieldsOf,
@@ -80,7 +82,6 @@ function loadInitial(data: WorkspaceData): State {
   // The pipeline opens on your default funnel for this workspace, else the first one.
   s.segment = s.newLeadType = data.funnels[data.profile.defaultFunnelId] ? data.profile.defaultFunnelId : Object.keys(data.funnels)[0]!;
   s.taskLeadId = data.leads[0]?.id ?? '';
-  s.contactCompany = data.leads[0]?.id ?? '';
   try {
     // The Roadmap page was removed (CD-71); drop what it kept in this browser.
     localStorage.removeItem('cadence.roadmapItems');
@@ -794,28 +795,30 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     };
 
     /**
-     * Moves a contact to the company of another lead and links them to that lead. A moved primary
-     * contact is replaced on their old leads by another contact of that company, if there is one.
+     * Moves a contact to another company (CD-464), with no deal: any company, deals or not. A moved
+     * primary contact is replaced on their old company's deals by another contact of that company, if
+     * there is one.
      */
-    const movePerson = (id: string, newLeadId: string) => {
+    const setPersonCompany = (id: string, companyId: string) => {
       const x = cur();
       const p = personById(x, id);
-      const target = leadById(x, newLeadId);
+      const target = companyRecords(x).find((c) => c.id === companyId);
       const contactId = p?.contactId;
-      if (!p || !target || !contactId || newLeadId === p.leadId) return;
-      const promoted = p.primary ? x.extraPeople.find((y) => y.leadId === p.leadId && y.contactId) : undefined;
+      if (!p || !target || !contactId || companyId === companyIdOfPerson(x, p)) return;
+      const oldCompanyId = companyIdOfPerson(x, p);
       const affected = p.primary ? x.leads.filter((l) => l.contactId === contactId) : [];
+      const promoted = affected.length ? allPeople(x).find((y) => y.contactId && y.contactId !== contactId && companyIdOfPerson(x, y) === oldCompanyId) : undefined;
       void save(
         async () => {
-          await crmApi.updateContact(contactId, { companyId: target.companyId ?? null });
+          await crmApi.updateContact(contactId, { companyId }, ver('contact', contactId));
           for (const l of affected) await crmApi.updateDeal(l.id, { primaryContactId: promoted?.contactId ?? null });
-          await crmApi.linkContact(newLeadId, contactId);
         },
         async () => {
           await reload();
           navigate(paths.contact(contactId), { replace: true });
-          flash('Contact moved to ' + target.company);
+          flash('Contact moved to ' + target.name);
         },
+        'the company of ' + p.name,
       );
     };
 
@@ -1413,7 +1416,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       linkPerson,
       unlinkPerson,
       patchPerson,
-      movePerson,
+      setPersonCompany,
       patchTask,
       completeTask,
       addTodo,
@@ -1532,7 +1535,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           });
           if (lead) await crmApi.linkContact(lead.id, c.id);
           await reload();
-          set({ contactOpen: false, contactCompanyId: null, newContact: EMPTY_CONTACT });
+          set({ contactOpen: false, contactCompanyId: null, contactDealId: '', newContact: EMPTY_CONTACT });
           flash(draft.name + (lead ? ' added to ' + lead.company : ' added'));
           return c.id;
         } catch (err) {

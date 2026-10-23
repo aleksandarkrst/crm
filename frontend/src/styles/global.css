@@ -508,6 +508,9 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 /* The meeting dialog and form */
 .meeting-form { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .meeting-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+/* The New contact dialog (CD-464): columns that can shrink, so a long company name never scrolls it sideways. */
+.contact-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.contact-form-grid .form-label, .contact-form-grid .form-input { min-width: 0; }
 .meeting-when { display: flex; gap: 6px; min-width: 0; }
 .meeting-no-deals { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-height: 38px; }
 .meeting-no-deals .btn-plain { padding: 5px 10px; }
@@ -567,6 +570,7 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
   .cal-chip-time { font-size: 10px; }
   .cal-month-head span { padding: 6px 2px; text-align: center; letter-spacing: 0.02em; }
   .meeting-form-grid { grid-template-columns: 1fr; }
+  .contact-form-grid { grid-template-columns: minmax(0, 1fr); }
   .meeting-detail-label { flex-basis: 76px; }
 }
 

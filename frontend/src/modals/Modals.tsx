@@ -4,6 +4,7 @@ import { Modal, ModalHeader } from '../components/ui';
 import { type CustomFieldPatch, type CustomFieldType, LOST_REASONS, type LostReason } from '../lib/api';
 import { paths } from '../lib/paths';
 import { pibProblem } from '../lib/serbianIds';
+import { checkEmail, checkPhone } from '../lib/validate';
 import { BUYER_ROLES, CHANNEL_LABELS, FIELD_TYPES } from '../store/seed';
 import { allPeople, companyLabels, companyRecords, customFieldsOf, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
@@ -314,32 +315,62 @@ function NewTaskModal() {
 /** Every channel a task can have (CD-28), labelled as on the timeline. */
 const TASK_CHANNELS = Object.keys(CHANNEL_LABELS) as ChannelCode[];
 
+/**
+ * New contact (CD-464): at a company picked from every company (or the one it was opened from), and
+ * on a deal only when it was opened from that deal. Name, email and phone are checked in the dialog.
+ */
 function NewContactModal() {
-  const { s, set, flash, createContact } = useStore();
+  const { s, set, createContact } = useStore();
   const [busy, setBusy] = useState(false);
   const nc = s.newContact;
-  const fixedCompany = s.contactCompanyId ? companyRecords(s).find((c) => c.id === s.contactCompanyId) : undefined;
+  const deal = leadById(s, s.contactDealId);
+  const fixedCompanyId = s.contactCompanyId ?? deal?.companyId ?? null;
+  const companies = companyRecords(s);
+  const fixedCompany = fixedCompanyId ? companies.find((c) => c.id === fixedCompanyId) : undefined;
+  const [companyId, setCompanyId] = useState('');
   const [custom, setCustom] = useState<CustomFieldPatch>({});
+  const [errors, setErrors] = useState<{ name?: string; email?: string; phone?: string; form?: string }>({});
   const setNc = (k: keyof typeof nc) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const v = e.target.value;
     set((x) => ({ newContact: { ...x.newContact, [k]: v } }));
+    if (k === 'name' || k === 'email' || k === 'phone') setErrors((x) => ({ ...x, [k]: undefined, form: undefined }));
   };
+  const close = () => set({ contactOpen: false, contactCompanyId: null, contactDealId: '' });
   const create = async () => {
-    if (!nc.name.trim()) return flash('Give the contact a name first');
+    const email = checkEmail(nc.email);
+    const phone = checkPhone(nc.phone);
     const fields = customFieldsForCreate(customFieldsOf(s, 'contact'), custom);
-    if ('missing' in fields) return flash(`Fill in ${fields.missing} first`);
+    const next = {
+      name: nc.name.trim() ? undefined : "Enter the contact's full name.",
+      email: email.ok ? undefined : email.error,
+      phone: phone.ok ? undefined : phone.error,
+      form: 'missing' in fields ? `Fill in ${fields.missing}.` : undefined,
+    };
+    setErrors(next);
+    if (next.name || next.email || next.phone || next.form || !email.ok || !phone.ok || 'missing' in fields) return;
     setBusy(true);
-    const lead = leadById(s, s.contactCompany) || s.leads[0];
-    await createContact({ ...nc, name: nc.name.trim() }, lead?.id, customFieldsOf(s, 'contact').length ? fields.values : undefined, s.contactCompanyId ?? undefined);
+    await createContact(
+      { ...nc, name: nc.name.trim(), email: email.value, phone: phone.value },
+      deal?.id,
+      customFieldsOf(s, 'contact').length ? fields.values : undefined,
+      (fixedCompanyId ?? companyId) || undefined,
+    );
     setBusy(false);
   };
+  const fieldError = (text: string | undefined) =>
+    text ? (
+      <span role="alert" data-testid="field-error" style={{ fontSize: 12, fontWeight: 400, letterSpacing: 0, textTransform: 'none', color: 'var(--danger)' }}>
+        {text}
+      </span>
+    ) : null;
   return (
     <Modal maxWidth={580}>
       <ModalHeader title="New contact" sub="Every contact belongs to a company, so multi-threading shows up on the opportunity record." />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div className="contact-form-grid">
         <label className="form-label">
           Full name
-          <input className="form-input" placeholder="e.g. Ana Marković" value={nc.name} onChange={setNc('name')} />
+          <input className="form-input" placeholder="e.g. Ana Marković" value={nc.name} onChange={setNc('name')} aria-invalid={!!errors.name || undefined} />
+          {fieldError(errors.name)}
         </label>
         <label className="form-label">
           Role
@@ -347,32 +378,40 @@ function NewContactModal() {
         </label>
         <label className="form-label">
           Email
-          <input className="form-input" placeholder="name@company.com" value={nc.email} onChange={setNc('email')} />
+          <input className="form-input" type="email" placeholder="name@company.com" value={nc.email} onChange={setNc('email')} aria-invalid={!!errors.email || undefined} />
+          {fieldError(errors.email)}
         </label>
         <label className="form-label">
           Phone
-          <input className="form-input" placeholder="+381 …" value={nc.phone} onChange={setNc('phone')} />
+          <input className="form-input" type="tel" placeholder="+381 …" value={nc.phone} onChange={setNc('phone')} aria-invalid={!!errors.phone || undefined} />
+          {fieldError(errors.phone)}
         </label>
         <label className="form-label">
           LinkedIn
           <input className="form-input" placeholder="linkedin.com/in/…" value={nc.linkedin} onChange={setNc('linkedin')} />
         </label>
-        {fixedCompany ? (
+        {fixedCompanyId ? (
           <label className="form-label">
             Company
-            <input className="form-input" value={fixedCompany.name} readOnly />
+            <input className="form-input" value={fixedCompany?.name ?? deal?.company ?? ''} readOnly />
           </label>
         ) : (
           <label className="form-label">
-            Linked opportunity
-            <select className="form-input" value={s.contactCompany} onChange={(e) => set({ contactCompany: e.target.value })}>
-              {s.leads.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.company} · {l.title && l.title !== l.company ? l.title + ' · ' : ''}
-                  {stageOf(s, l).name}
+            Company
+            <select className="form-input" data-testid="new-contact-company" value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
+              <option value="">No company</option>
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
                 </option>
               ))}
             </select>
+          </label>
+        )}
+        {deal && (
+          <label className="form-label" style={{ gridColumn: '1 / -1' }}>
+            Opportunity
+            <input className="form-input" value={`${deal.company}${deal.title && deal.title !== deal.company ? ' · ' + deal.title : ''} · ${stageOf(s, deal).name}`} readOnly />
           </label>
         )}
       </div>
@@ -389,11 +428,16 @@ function NewContactModal() {
         Notes
         <textarea className="form-input" rows={3} placeholder="How they influence the opportunity" value={nc.notes} onChange={(e) => set((x) => ({ newContact: { ...x.newContact, notes: e.target.value } }))} />
       </label>
+      {errors.form && (
+        <div role="alert" style={{ fontSize: 12.5, color: 'var(--danger)' }}>
+          {errors.form}
+        </div>
+      )}
       <div className="modal-actions">
-        <button type="button" className="btn btn-secondary" onClick={() => set({ contactOpen: false, contactCompanyId: null })}>
+        <button type="button" className="btn btn-secondary" onClick={close}>
           Cancel
         </button>
-        <button type="button" className={nc.name && !busy ? 'btn btn-primary' : 'btn btn-disabled'} style={{ cursor: 'pointer' }} disabled={busy} onClick={() => void create()}>
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void create()}>
           {busy ? 'Adding…' : 'Add contact'}
         </button>
       </div>

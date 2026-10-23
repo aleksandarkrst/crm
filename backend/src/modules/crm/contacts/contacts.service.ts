@@ -8,6 +8,7 @@ import { DatabaseService } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
 import { BUYER_ROLES, contacts, deals, meetingParticipants, meetings } from '../../../shared/database/schema';
 import { ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
+import { PHONE_MESSAGE, phoneValid } from '../../../shared/validation/phone';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
 import { RecordHistoryService } from '../history/record-history.service';
 import { assertOwnerIsMember, userNameOf } from '../owner';
@@ -17,7 +18,7 @@ export const CreateContact = z.object({
   fullName: z.string().trim().min(1).max(200),
   jobTitle: optionalText(120),
   email: z.email().nullish().or(z.literal('').transform(() => null)),
-  phone: optionalText(50),
+  phone: optionalText(50).refine((v) => v == null || phoneValid(v), PHONE_MESSAGE),
   linkedin: optionalText(300),
   buyerRole: z.enum(BUYER_ROLES).optional(),
   ownerUserId: z.uuid().nullish(),

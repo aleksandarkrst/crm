@@ -164,7 +164,7 @@ export function Company() {
             <Section
               title={`Contacts (${people.length})`}
               testId="company-contacts"
-              action={<AddButton label="Add a contact" onClick={() => set(target ? { contactOpen: true, contactCompany: target.id, contactCompanyId: null } : { contactOpen: true, contactCompanyId: rec.id })} />}
+              action={<AddButton label="Add a contact" onClick={() => set({ contactOpen: true, contactDealId: '', contactCompanyId: rec.id })} />}
             >
               {people.map((p) => (
                 <button key={p.id} type="button" onClick={() => store.openContact(p.contactId || p.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', border: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left', font: 'inherit' }}>
