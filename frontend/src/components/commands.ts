@@ -65,7 +65,7 @@ export function useCommands(): Command[] {
 
   const create: Command[] = [
     { id: 'new-deal', group: 'Create', label: 'Opportunity', hint: 'Starts a funnel', key: 'D', icon: 'deal', keywords: 'new create add deal opportunity lead', run: () => set({ newLeadOpen: true }) },
-    { id: 'new-contact', group: 'Create', label: 'Contact', hint: 'A person at a company', key: 'P', icon: 'contact', keywords: 'new create add person people', run: () => set(onDeal ? { contactOpen: true, contactCompany: onDeal } : { contactOpen: true }) },
+    { id: 'new-contact', group: 'Create', label: 'Contact', hint: 'A person at a company', key: 'P', icon: 'contact', keywords: 'new create add person people', run: () => set(onDeal ? { contactOpen: true, contactDealId: onDeal, contactCompanyId: null } : { contactOpen: true, contactDealId: '', contactCompanyId: null }) },
     { id: 'new-company', group: 'Create', label: 'Company', hint: 'Opens the new record', key: 'O', icon: 'company', keywords: 'new create add organization organisation', run: addCompany },
     // "Deal task" since projects have tasks too (spec Q8, CD-144).
     { id: 'new-task', group: 'Create', label: 'Opportunity task', hint: 'Shows in Today', key: 'T', icon: 'task', keywords: 'new create add activity to-do todo call meeting', run: () => set(onDeal ? { taskOpen: true, taskLeadId: onDeal } : { taskOpen: true }) },

@@ -102,6 +102,14 @@ describe('preview', () => {
     expect(await companiesNamed(good)).toHaveLength(0);
   });
 
+  it('refuses a contact row whose phone is not a phone number, and says why (CD-464)', async () => {
+    const contacts = await preview('contacts', { csv: `Full name,Phone
+Pia,abc123!!
+Rea,+381 60 123 4567
+` });
+    expect(contacts.rows.map((r: Json) => r.messages)).toEqual([[expect.stringMatching(/^Phone: Enter a phone number/)], []]);
+  });
+
   it('reports contact and deal field errors with the field names', async () => {
     const contacts = await preview('contacts', { csv: `Full name,Email,Buyer role\nAna,not-an-email,Champion\nBo,bo@example.test,Boss\nCy,,decision MAKER\n` });
     expect(contacts.rows.map((r: Json) => r.messages)).toEqual([['Email: Invalid email address'], [expect.stringMatching(/^Buyer role: /)], []]);

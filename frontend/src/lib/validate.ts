@@ -42,3 +42,26 @@ export function checkLinkedin(input: string): Checked {
   }
   return { ok: false, error: 'Enter a LinkedIn address such as linkedin.com/in/name.' };
 }
+
+const PHONE = /^\+?[\d\s()./-]+(?:\s*(?:ext\.?|x)\s*\d{1,6})?$/i;
+
+/**
+ * A phone number (CD-464): an optional leading +, at least five digits, and spaces, dots, slashes,
+ * hyphens or brackets between them, optionally with an extension ("+381 60 123 4567",
+ * "021/456-789 ext. 12"). The API checks the same rule (backend shared/validation/phone.ts).
+ */
+export function checkPhone(input: string): Checked {
+  const raw = input.trim();
+  if (!raw) return { ok: true, value: '' };
+  const digits = raw.replace(/\s*(?:ext\.?|x)\s*\d{1,6}$/i, '').match(/\d/g)?.length ?? 0;
+  if (!PHONE.test(raw) || digits < 5) return { ok: false, error: 'Enter a phone number such as +381 60 123 4567: digits, spaces and + ( ) - . /' };
+  return { ok: true, value: raw };
+}
+
+/** An email address (CD-464): something@domain.tld, without spaces. */
+export function checkEmail(input: string): Checked {
+  const raw = input.trim();
+  if (!raw) return { ok: true, value: '' };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return { ok: false, error: 'Enter an email address such as ana@acme.com.' };
+  return { ok: true, value: raw };
+}

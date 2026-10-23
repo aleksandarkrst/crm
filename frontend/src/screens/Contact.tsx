@@ -6,10 +6,10 @@ import { MeetingsCard } from '../components/MeetingsCard';
 import { Screen } from '../components/Layout';
 import { DealsSection, FocusTasks, RecordHeader, RecordHistory, Section } from '../components/RecordParts';
 import { CheckedInput, GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
-import { checkLinkedin } from '../lib/validate';
+import { checkEmail, checkLinkedin, checkPhone } from '../lib/validate';
 import { paths } from '../lib/paths';
 import { BUYER_ROLES } from '../store/seed';
-import { allPeople, companyOfPerson, companyRecords, contactsForLead, curOf, initialsOf, leadById, personById, timelineFor } from '../store/selectors';
+import { allPeople, companyIdOfPerson, companyOfPerson, companyRecords, contactsForLead, curOf, initialsOf, leadById, personById, timelineFor } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Person } from '../store/types';
 import { docState, docStateClass } from './lead/docs';
@@ -45,12 +45,15 @@ export function Contact() {
   const companyRec = companyRecords(s).find((r) => r.id === (p.companyId ?? c?.companyId));
 
   // Tap to email or call (CD-70); "—" stands for a missing value.
-  const mailto = /^[^\s@]+@[^\s@]+$/.test(p.email.trim()) ? `mailto:${p.email.trim()}` : '';
-  const tel = /\d/.test(p.phone) ? `tel:${p.phone.replace(/[^\d+]/g, '')}` : '';
+  const mailto = p.email.trim() && checkEmail(p.email).ok ? `mailto:${p.email.trim()}` : '';
+  // Only a valid number becomes a Call link (CD-464): "abc123!!" never turns into tel:123.
+  const tel = p.phone.trim() && checkPhone(p.phone).ok ? `tel:${p.phone.replace(/\s*(?:ext\.?|x)\s*\d+$/i, '').replace(/[^\d+]/g, '')}` : '';
   const linkedin = linkedinHref(p.linkedin ?? '');
   const setField = (key: keyof Person) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => store.patchPerson(p.id, { [key]: e.target.value });
   const q = picker.search.toLowerCase().trim();
-  const companyOptions = s.leads.filter((l) => l.id !== p.leadId).filter((l) => !q || l.company.toLowerCase().includes(q));
+  // Every company, deals or not (CD-464).
+  const currentCompanyId = companyIdOfPerson(s, p);
+  const companyOptions = companyRecords(s).filter((r) => r.id !== currentCompanyId).filter((r) => !q || r.name.toLowerCase().includes(q));
   const docs = (leadId && s.dealDocs[leadId]) || [];
   const activities = deals.flatMap((l) => timelineFor(s, l.id)).slice(0, 30);
   const newDeal = () => set({ newLeadOpen: true, newLeadCompanyId: companyRec?.id ?? null, newLeadContactId: p.contactId ?? null });
@@ -84,7 +87,7 @@ export function Contact() {
             <Section title="Summary" testId="contact-summary">
               <IconRow icon="mail" label="Email">
                 <span className="contact-field">
-                  <GhostInput aria-label="Email" value={p.email} onChange={setField('email')} />
+                  <CheckedInput aria-label="Email" type="email" placeholder="name@company.com" value={p.email} check={checkEmail} onSave={(v) => store.patchPerson(p.id, { email: v })} />
                   {mailto && (
                     <a className="contact-action" href={mailto} aria-label={`Email ${p.name}`}>
                       Email
@@ -94,7 +97,7 @@ export function Contact() {
               </IconRow>
               <IconRow icon="phone" label="Phone">
                 <span className="contact-field">
-                  <GhostInput aria-label="Phone" value={p.phone} onChange={setField('phone')} />
+                  <CheckedInput aria-label="Phone" type="tel" placeholder="+381 60 123 4567" value={p.phone} check={checkPhone} onSave={(v) => store.patchPerson(p.id, { phone: v })} />
                   {tel && (
                     <a className="contact-action" href={tel} aria-label={`Call ${p.name}`}>
                       Call
@@ -115,15 +118,14 @@ export function Contact() {
               <IconRow icon="company" label="Company">
                 <Picker
                   picker={picker}
-                  items={companyOptions.map((l) => (
+                  items={companyOptions.map((r) => (
                     <PickerRow
-                      key={l.id}
+                      key={r.id}
                       square
-                      initials={initialsOf(l.company)}
-                      title={l.company}
-                      subtitle={l.title && l.title !== l.company ? l.title : undefined}
+                      initials={initialsOf(r.name)}
+                      title={r.name}
                       onPick={() => {
-                        store.movePerson(p.id, l.id);
+                        store.setPersonCompany(p.id, r.id);
                         picker.close();
                       }}
                     />

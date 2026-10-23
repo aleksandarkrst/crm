@@ -135,7 +135,7 @@ export function initialState(): State {
     taskLeadId: '',
     taskEditId: null,
     contactOpen: false,
-    contactCompany: '',
+    contactDealId: '',
     contactCompanyId: null,
     newContact: { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer', notes: '' },
     personaOpen: false,

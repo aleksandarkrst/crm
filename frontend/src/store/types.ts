@@ -474,8 +474,9 @@ export interface State {
   /** Task the dialog edits (CD-27); null when it adds a new one. */
   taskEditId: string | null;
   contactOpen: boolean;
-  contactCompany: string;
-  /** Company the New contact dialog adds to without linking a deal (a company page with no deals, CD-80). */
+  /** Deal the New contact dialog links the new contact to: only when it was opened from that deal (CD-464). */
+  contactDealId: string;
+  /** Company the New contact dialog adds to without linking a deal (a company page, CD-80). */
   contactCompanyId: string | null;
   newContact: NewContactDraft;
   personaOpen: boolean;
