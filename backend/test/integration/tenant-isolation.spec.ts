@@ -73,6 +73,8 @@ describe('through the API', () => {
       ['PUT', `/crm/deals/${a.deal}/products`, { taxMode: 'exclusive', lines: [] }],
       ['PATCH', `/crm/deal-tasks/${a.playbookTask}`, { done: false }],
       ['PATCH', `/crm/deal-tasks/${a.extraTask}`, { label: 'Hijacked' }],
+      ['PUT', `/crm/deals/${a.deal}/stages/${funnelB.stages[0]!.id}/docs-complete`, { complete: true }],
+      ['POST', `/crm/deals/${a.deal}/remind-stage-owner`, {}],
     ];
     for (const [method, path, body] of attempts) {
       const res = await call(method, path, { ...asB(), body });
@@ -172,7 +174,7 @@ describe('in SQL, as the runtime role', () => {
 
   it('sees no tenant rows at all without a tenant set', async () => {
     await asTenant(null, async () => {
-      for (const table of ['deals', 'companies', 'contacts', 'deal_lines', 'deal_tasks', 'products', 'activities', 'timeoff_policies', 'timeoff_policy_experience_rules', 'employee_timeoff_profiles', 'vacation_entitlements', 'vacation_balance_adjustments', 'vacation_balance_expiries', 'timeoff_notices', 'timeoff_reasons', 'timeoff_requests', 'timeoff_request_days', 'public_holiday_preloads', 'hr_documents', 'sick_leaves', 'sick_leave_types', 'timesheet_absences']) {
+      for (const table of ['deals', 'companies', 'contacts', 'deal_lines', 'deal_tasks', 'deal_stage_states', 'products', 'activities', 'timeoff_policies', 'timeoff_policy_experience_rules', 'employee_timeoff_profiles', 'vacation_entitlements', 'vacation_balance_adjustments', 'vacation_balance_expiries', 'timeoff_notices', 'timeoff_reasons', 'timeoff_requests', 'timeoff_request_days', 'public_holiday_preloads', 'hr_documents', 'sick_leaves', 'sick_leave_types', 'timesheet_absences']) {
         const { rows } = await db.query(`select count(*)::int as n from ${table}`);
         expect(rows[0].n, table).toBe(0);
       }
@@ -216,6 +218,11 @@ describe('in SQL, as the runtime role', () => {
       const code = await sqlError(db.query(`update companies set tenant_id = $1 where id = $2`, [tenantA, own.rows[0].id]));
       expect(code).toBe('42501');
     });
+    // A deal's stage state (CD-363) can't be planted in another tenant either.
+    await asTenant(tenantB, async () => {
+      const code = await sqlError(db.query(`insert into deal_stage_states (tenant_id, deal_id, stage_id, docs_complete) values ($1, $2, $3, true)`, [tenantA, a.deal, funnelB.stages[0]!.id]));
+      expect(code).toBe('42501');
+    });
   });
 
   it('keeps the audit log append-only: rows can be added and read, never changed or deleted (CD-101)', async () => {
@@ -236,6 +243,7 @@ describe('in SQL, as the runtime role', () => {
       ['deal → contact', `insert into deals (tenant_id, funnel_id, stage_id, title, primary_contact_id) values ($1, $2, $3, 'x', $4)`, [tenantB, funnelB.id, stageB, a.contact]],
       ['deal line → deal', `insert into deal_lines (tenant_id, deal_id) values ($1, $2)`, [tenantB, a.deal]],
       ['deal task → deal', `insert into deal_tasks (tenant_id, deal_id, stage_id, label) values ($1, $2, $3, 'x')`, [tenantB, a.deal, stageB]],
+      ['deal stage state → deal', `insert into deal_stage_states (tenant_id, deal_id, stage_id) values ($1, $2, $3)`, [tenantB, a.deal, stageB]],
       ['contact → company', `insert into contacts (tenant_id, full_name, company_id) values ($1, 'x', $2)`, [tenantB, a.company]],
     ];
     for (const [name, text, params] of cases) {

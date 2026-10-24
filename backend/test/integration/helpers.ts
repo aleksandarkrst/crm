@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { Client } from 'pg';
 import { expect, inject } from 'vitest';
 import { pibCheckDigit } from '../../src/shared/validation/serbian-ids';
 
@@ -67,9 +68,29 @@ export async function signIn(label: string): Promise<Session> {
 }
 
 /** Creates a tenant owned by `owner` (with the default funnels) and returns its id. */
-export async function createTenant(owner: Session, name: string): Promise<string> {
+/**
+ * A new workspace. Its default funnels start with "All to-dos must be done" on (CD-363); unless
+ * `gated`, that is switched off, like the funnels that existed before the gate, so specs that move
+ * opportunities around don't have to tick every to-do first.
+ */
+export async function createTenant(owner: Session, name: string, opts: { gated?: boolean } = {}): Promise<string> {
   const tenant = await ok<{ id: string }>('POST', '/tenants', { token: owner.token, body: { name: `${name} ${RUN}` } });
+  if (!opts.gated) await ungate(tenant.id);
   return tenant.id;
+}
+
+/** Switches the to-do gate off on every stage of a workspace, in SQL as the runtime role (RLS applies). */
+async function ungate(tenant: string) {
+  const db = new Client({ connectionString: inject('databaseUrl') });
+  await db.connect();
+  try {
+    await db.query('begin');
+    await db.query(`select set_config('app.tenant_id', $1, true)`, [tenant]);
+    await db.query('update funnel_stages set gate_todos = false');
+    await db.query('commit');
+  } finally {
+    await db.end();
+  }
 }
 
 /** Invites `invitee` into the tenant and has them accept, so they join with `role`. */
@@ -85,6 +106,9 @@ export interface Stage {
   position: number;
   isWon: boolean;
   checklistItems: { id: string; label: string }[];
+  /** Advance gates (CD-363). */
+  gateTodos: boolean;
+  gateDocsComplete: boolean;
 }
 
 export interface Funnel {
