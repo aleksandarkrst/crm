@@ -52,6 +52,9 @@ export function RecordHeader({
   onNewDeal,
   onDelete,
   deleteLabel,
+  status,
+  notice,
+  menuItems = [],
 }: {
   kind: 'company' | 'contact';
   initials: string;
@@ -63,6 +66,12 @@ export function RecordHeader({
   onNewDeal: () => void;
   onDelete?: () => void;
   deleteLabel: string;
+  /** Shown first among the actions: the company status (CD-358). */
+  status?: ReactNode;
+  /** Shown under the header row: what a lead still misses (CD-358). */
+  notice?: ReactNode;
+  /** More ⋯ menu entries, above Delete. */
+  menuItems?: { label: string; onClick: () => void; testId?: string }[];
 }) {
   const { s } = useStore();
   const [menu, setMenu] = useState(false);
@@ -86,6 +95,7 @@ export function RecordHeader({
           <input className="ghost deal-title" aria-label={kind === 'company' ? 'Company name' : 'Contact name'} data-testid="record-name" value={name} onChange={(e) => onName(e.target.value)} />
         </div>
         <div className="deal-actions">
+          {status}
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-2)' }} title="Owner">
             <Icon name="owner" title="Owner" />
             {onOwner ? (
@@ -104,29 +114,47 @@ export function RecordHeader({
           <button type="button" className="btn btn-primary" data-testid="record-new-deal" onClick={onNewDeal}>
             + Opportunity
           </button>
-          {onDelete && (
+          {(onDelete || menuItems.length > 0) && (
             <div ref={menuRef} style={{ position: 'relative' }}>
               <button type="button" className="btn btn-secondary" aria-label="More actions" aria-expanded={menu} onClick={() => setMenu((m) => !m)} style={{ padding: '10px 12px' }}>
                 ⋯
               </button>
               {menu && (
-                <div className="deal-menu" role="menu">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setMenu(false);
-                      onDelete();
-                    }}
-                  >
-                    {deleteLabel}
-                  </button>
+                <div className="deal-menu row-menu" role="menu">
+                  {menuItems.map((item) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      role="menuitem"
+                      data-testid={item.testId}
+                      onClick={() => {
+                        setMenu(false);
+                        item.onClick();
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                  {onDelete && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="danger"
+                      onClick={() => {
+                        setMenu(false);
+                        onDelete();
+                      }}
+                    >
+                      {deleteLabel}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
           )}
         </div>
       </div>
+      {notice}
     </div>
   );
 }
