@@ -31,7 +31,6 @@ function Icon({ d, size = 15 }: { d: string; size?: number }) {
  * then Clear filters when there is something to clear. A chip opens a popover for its field's type
  * (lists, people, dates, ranges, text, yes / no), so a new custom field needs no code. Changes apply
  * at once; the page keeps the value (see usePageFilters) and filters with store/filters.ts.
- * `after` puts a control right after a chip (the Pipeline's funnel pencil).
  */
 export function FilterRow<R>({
   fields,
@@ -39,7 +38,6 @@ export function FilterRow<R>({
   onChange,
   people = [],
   me,
-  after,
   onClearAll,
 }: {
   fields: FilterField<R>[];
@@ -47,7 +45,6 @@ export function FilterRow<R>({
   onChange: (v: FilterValue) => void;
   people?: FilterPerson[];
   me?: string;
-  after?: Record<string, ReactNode>;
   /** Also clears what the page keeps outside the row (the Calendar's report and deal chips). */
   onClearAll?: () => void;
 }) {
@@ -79,7 +76,6 @@ export function FilterRow<R>({
                 }}
               />
             </Chip>
-            {after?.[id]}
           </span>
         );
       })}
@@ -90,7 +86,7 @@ export function FilterRow<R>({
         <span>Filter</span>
       </button>
       {pop === ADD && (
-        <Popover anchor={addRef} onClose={close} label="Add a filter" className="fr-pop fr-pop-add" testId="filter-add-pop">
+        <Popover anchor={addRef} onClose={close} label="Add a filter" className="fr-pop fr-pop-add" testId="filter-add-pop" keepOnScroll>
           <AddPanel
             fields={all.filter((fd) => !order.includes(fd.id))}
             groups={[...new Set(all.map((f) => f.group))]}
@@ -133,7 +129,7 @@ function Chip({ fd, v, open, onToggle, onClose, text, children }: { fd: FilterFi
         </svg>
       </button>
       {open && (
-        <Popover anchor={ref} onClose={onClose} label={fd.label} className="fr-pop" testId={'filter-pop-' + fd.id}>
+        <Popover anchor={ref} onClose={onClose} label={fd.label} className="fr-pop" testId={'filter-pop-' + fd.id} keepOnScroll>
           {children}
         </Popover>
       )}

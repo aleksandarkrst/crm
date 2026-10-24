@@ -8,8 +8,8 @@ import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { dealsCsv } from '../store/exportCsv';
 import { filterPeople, LOST, openAndWon, opportunityFields, WON } from '../store/filterFields';
-import { applyFilters, clearAll, type FilterValue, isActive, matchField, setField } from '../store/filters';
-import { initialsOf, memberName, needsNextStep, ownerOf, stageOf, stageOwnerId, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
+import { applyFilters, clearAll, isActive, matchField, setField } from '../store/filters';
+import { funnelOptions, initialsOf, memberName, needsNextStep, ownerOf, stageOf, stageOwnerId, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
 import type { Lead, SegKey, Stage, State } from '../store/types';
 import { useStore } from '../store/store';
 import { usePageFilters } from '../store/usePageFilters';
@@ -51,20 +51,22 @@ export function Pipeline() {
   const seg = s.segment;
   const stages = s.funnels[seg].stages;
   const me = session.userId;
-  const fields = useMemo(() => opportunityFields(s, seg, ['funnel', 'owner', 'status']), [s, seg]);
-  const [saved, setSaved] = usePageFilters('pipeline', { order: ['funnel', 'owner', 'status'], f: { funnel: { vals: [seg] }, owner: { op: 'is', vals: [me] }, status: { op: 'is', vals: openAndWon(s, seg) } } });
-  // The Funnel chip is the funnel open on the Pipeline (s.segment), which the rest of the app uses too.
-  const filters = setField(saved, 'funnel', { vals: [seg] });
-  const setFilters = (v: FilterValue) => {
-    const next = v.f.funnel?.vals?.[0];
-    if (next && next !== seg && s.funnels[next]) {
-      v = setField(v, 'status', { vals: statusInFunnel(s, v.f.status?.vals, seg, next) });
-      set({ segment: next });
-    }
-    setSaved(v);
+  // The funnel stays the select next to the view toggle (owner's call, 24 Oct): not a chip, not under + Filter.
+  const fields = useMemo(() => opportunityFields(s, seg, ['owner', 'status']).filter((f) => f.id !== 'funnel'), [s, seg]);
+  const [filters, setFilters] = usePageFilters('pipeline', { order: ['owner', 'status'], f: { owner: { op: 'is', vals: [me] }, status: { op: 'is', vals: openAndWon(s, seg) } } });
+  /** Another funnel: Status carries over what it can (its stages differ). */
+  const pickFunnel = (next: SegKey) => {
+    if (next === seg || !s.funnels[next]) return;
+    setFilters(setField(filters, 'status', { vals: statusInFunnel(s, filters.f.status?.vals, seg, next) }));
+    set({ segment: next });
   };
-  // Every chip, the funnel and Status (Lost is one of its values, CD-60) included, with AND.
-  const segLeads = applyFilters(s.leads, fields, filters, { today: todayIso(s.workspace.timezone), fiscalMonth: s.workspace.fiscalMonth });
+  // The open funnel, then every chip (Status included: Lost is one of its values, CD-60), with AND.
+  const segLeads = applyFilters(
+    s.leads.filter((l) => l.segment === seg),
+    fields,
+    filters,
+    { today: todayIso(s.workspace.timezone), fiscalMonth: s.workspace.fiscalMonth },
+  );
   // The columns are the stages Status picks, and any other stage a deal in view sits in (a lost one).
   const statusField = fields.find((x) => x.id === 'status')!;
   const status = filters.f.status;
@@ -89,6 +91,20 @@ export function Pipeline() {
                 </button>
               ))}
             </div>
+            <div className="funnel-select">
+              <select aria-label="Funnel" data-testid="pipeline-funnel" value={seg} onChange={(e) => pickFunnel(e.target.value)}>
+                {funnelOptions(s).map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              <button type="button" title="Edit funnel in Workspace settings" aria-label="Edit funnel" data-testid="pipeline-edit-funnel" onClick={() => navigate(paths.settings('funnel'))}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />
+                </svg>
+              </button>
+            </div>
           </>
         }
         row={
@@ -98,15 +114,6 @@ export function Pipeline() {
             onChange={setFilters}
             people={filterPeople(s, me)}
             me={me}
-            after={{
-              funnel: (
-                <button type="button" className="funnel-edit" title="Edit funnel in Workspace settings" aria-label="Edit funnel" data-testid="pipeline-edit-funnel" onClick={() => navigate(paths.settings('funnel'))}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />
-                  </svg>
-                </button>
-              ),
-            }}
           />
         }
         meta={`${openLeads.length} open ${openLeads.length === 1 ? 'opportunity' : 'opportunities'} · ${pipelineValue}`}

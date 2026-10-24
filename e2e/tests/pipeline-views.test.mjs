@@ -33,8 +33,9 @@ describe('pipeline views', () => {
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=pipeline-view-board][aria-pressed=true]');
     assert.equal(await page.$('[data-testid=pipeline-table]'), null);
-    assert.deepEqual(await chips(page), ['funnel', 'owner', 'status']);
-    assert.equal(await chipText(page, 'funnel'), 'Funnel ' + funnel.label);
+    // The funnel is the select next to the view toggle, not a chip (CD-366).
+    assert.equal(await page.$eval('[data-testid=pipeline-funnel]', (el) => el.value), funnel.id);
+    assert.deepEqual(await chips(page), ['owner', 'status']);
     assert.equal(await chipText(page, 'owner'), 'Salesperson Me');
     assert.equal(await chipText(page, 'status'), 'Status Open, Won');
     assert.ok(await page.$$eval('.filter-actions .btn-primary', (bs) => bs.some((b) => b.textContent.trim() === 'New opportunity')));
@@ -93,7 +94,7 @@ describe('pipeline views', () => {
     assert.match((await tableRows(page))[0].text, /Beta Ltd/);
     await page.reload({ waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=pipeline-table-row]');
-    assert.deepEqual(await chips(page), ['funnel', 'owner', 'status', 'title']);
+    assert.deepEqual(await chips(page), ['owner', 'status', 'title']);
     assert.equal((await tableRows(page)).length, 1);
   });
 
@@ -104,8 +105,9 @@ describe('pipeline views', () => {
     await page.waitForSelector('[data-testid=filter-empty]');
     assert.match(await page.$eval('[data-testid=filter-empty]', (el) => el.innerText), /No opportunities match these filters[\s\S]*Change or clear a filter to see more/);
     await clearFilters(page);
-    assert.deepEqual(await chips(page), ['funnel', 'owner', 'status']);
-    assert.equal(await chipText(page, 'funnel'), 'Funnel ' + funnel.label);
+    // The funnel is the select next to the view toggle, not a chip (CD-366).
+    assert.equal(await page.$eval('[data-testid=pipeline-funnel]', (el) => el.value), funnel.id);
+    assert.deepEqual(await chips(page), ['owner', 'status']);
     assert.equal(await chipText(page, 'owner'), 'Salesperson Any');
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=pipeline-table-row]').length === 3);
   });

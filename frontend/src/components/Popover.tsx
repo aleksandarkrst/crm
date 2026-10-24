@@ -7,9 +7,26 @@ import { placePopover } from './popoverPlace';
  * so no dialog, scroll area or animated ancestor can clip or misplace it (the 18 Oct date picker
  * regression), placed by `placePopover` next to `anchor`. It closes on a click outside the panel
  * and the anchor, on Escape, on scrolling anything but the panel, and on a resize. Not a modal:
- * nothing is dimmed and it never stacks another overlay.
+ * nothing is dimmed and it never stacks another overlay. With `keepOnScroll` (the filter row, CD-366)
+ * scrolling doesn't close it: it moves with its anchor.
  */
-export function Popover({ anchor, onClose, children, className, label, testId }: { anchor: RefObject<HTMLElement | null>; onClose: () => void; children: ReactNode; className?: string; label: string; testId?: string }) {
+export function Popover({
+  anchor,
+  onClose,
+  children,
+  className,
+  label,
+  testId,
+  keepOnScroll,
+}: {
+  anchor: RefObject<HTMLElement | null>;
+  onClose: () => void;
+  children: ReactNode;
+  className?: string;
+  label: string;
+  testId?: string;
+  keepOnScroll?: boolean;
+}) {
   const panel = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState<{ top: number; left: number } | null>(null);
   const close = useRef(onClose);
@@ -17,14 +34,15 @@ export function Popover({ anchor, onClose, children, className, label, testId }:
 
   // Measured after the first render (hidden until placed), so the panel's real size decides above or below;
   // placed again whenever that size changes (a list loading, a month with one more week).
+  const place = useRef(() => {});
+  place.current = () => {
+    const a = anchor.current?.getBoundingClientRect();
+    const p = panel.current?.getBoundingClientRect();
+    if (a && p) setAt(placePopover(a, { width: p.width, height: p.height }, { width: window.innerWidth, height: window.innerHeight }));
+  };
   useLayoutEffect(() => {
-    const place = () => {
-      const a = anchor.current?.getBoundingClientRect();
-      const p = panel.current?.getBoundingClientRect();
-      if (a && p) setAt(placePopover(a, { width: p.width, height: p.height }, { width: window.innerWidth, height: window.innerHeight }));
-    };
-    place();
-    const observer = new ResizeObserver(place);
+    place.current();
+    const observer = new ResizeObserver(() => place.current());
     if (panel.current) observer.observe(panel.current);
     return () => observer.disconnect();
   }, [anchor]);
@@ -37,7 +55,11 @@ export function Popover({ anchor, onClose, children, className, label, testId }:
       anchor.current?.focus();
       close.current();
     };
-    const scroll = (e: Event) => !panel.current?.contains(e.target as Node) && close.current();
+    const scroll = (e: Event) => {
+      if (panel.current?.contains(e.target as Node)) return;
+      if (keepOnScroll) place.current();
+      else close.current();
+    };
     const resize = () => close.current();
     document.addEventListener('mousedown', down);
     document.addEventListener('keydown', key);
@@ -49,7 +71,7 @@ export function Popover({ anchor, onClose, children, className, label, testId }:
       window.removeEventListener('scroll', scroll, true);
       window.removeEventListener('resize', resize);
     };
-  }, [anchor]);
+  }, [anchor, keepOnScroll]);
 
   return createPortal(
     <div

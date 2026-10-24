@@ -1102,9 +1102,15 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .view-toggle { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 9px; background: var(--white); }
 .view-toggle > button { border: 0; border-radius: 7px; padding: 7px 9px; cursor: pointer; background: transparent; color: var(--text-2); display: flex; align-items: center; }
 .view-toggle > button[aria-pressed='true'] { background: var(--ink); color: var(--white); }
-/* The pencil next to the Funnel chip (CD-366): edit the funnel in Workspace settings. */
-.funnel-edit { width: 34px; height: 34px; flex-shrink: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-soft); color: var(--text-2); cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.funnel-edit:hover { background: var(--divider); }
+/* The Pipeline's funnel: a select with the pencil that opens it in Workspace settings (kept as it was by CD-366). */
+.funnel-select { display: flex; align-items: stretch; border: 1px solid var(--border); border-radius: 9px; background: var(--white); overflow: hidden; }
+.funnel-select > select { border: 0; background: transparent; padding: 9px 14px; font-size: 13.5px; color: var(--ink); cursor: pointer; min-width: 200px; outline: none; }
+.funnel-select > button { border: 0; border-left: 1px solid var(--border); background: var(--bg-soft); color: var(--text-2); padding: 0 12px; cursor: pointer; display: flex; align-items: center; }
+.funnel-select > button:hover { background: var(--divider); }
+@media (max-width: 700px) {
+  .funnel-select { flex: 1 1 calc(100% - 92px); min-width: 0; }
+  .funnel-select > select { min-width: 0; flex: 1; }
+}
 .pipeline-table { border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; overflow-y: hidden; background: var(--white); }
 .pipeline-table-inner { min-width: 1050px; }
 .pipeline-table-inner > .table-head,
