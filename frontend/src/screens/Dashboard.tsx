@@ -74,9 +74,10 @@ export function Dashboard() {
   const today = new Date();
   const payments: { leadId: string; currency?: string; when: Date; amount: number }[] = [];
   // Payments without a date (a product without a billing start date, an installment without a
-  // date) can't be placed, so they are left out and their deals counted below.
+  // date) can't be placed, so they are left out and their deals counted below. Only Won
+  // opportunities count: money that is contracted, not hoped for (CD-365).
   let undatedDeals = 0;
-  for (const l of liveLeads) {
+  for (const l of wonLeads) {
     const { payments: dated, undated } = dealPayments(s, l);
     if (undated) undatedDeals++;
     for (const p of dated) payments.push({ leadId: l.id, currency: l.currency, ...p });
@@ -188,7 +189,7 @@ export function Dashboard() {
             <div className="card-title" style={{ marginBottom: 4 }}>Funnel by payment due date</div>
             <div className="card-sub" style={{ marginBottom: 16 }}>
               {/* CD-365: the bands are separate periods, not running totals. */}
-              Each band is its own period; the bands don't add up. Product and service payments falling due in that period, incl. VAT
+              Won opportunities only. Each band is its own period; the bands don't add up. Product and service payments falling due in that period, incl. VAT
               {undatedDeals ? ` · ${plural(undatedDeals, 'opportunity', 'opportunities')} without billing dates left out` : ''}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
