@@ -25,6 +25,12 @@ export interface Stage {
   prob: number | '';
   /** The terminal "won" stage. */
   won?: boolean;
+  /** Stage owner (user id; null: the opportunity's owner) and target days (CD-363). */
+  ownerId: string | null;
+  targetDays: number | null;
+  /** Advance gates (CD-363): documentation marked complete; every to-do done. */
+  gateDocs: boolean;
+  gateTodos: boolean;
 }
 
 export interface Funnel {
@@ -32,6 +38,8 @@ export interface Funnel {
   id: string;
   label: string;
   note: string;
+  /** Default target days for its stages (CD-363). */
+  targetDays: number | null;
   stages: Stage[];
 }
 
@@ -77,6 +85,10 @@ export interface Lead {
   taxMode: TaxMode;
   discounts: DealDiscount[];
   installments: Installment[];
+  /** Days past the current stage's target (CD-363); 0 when on time. */
+  lateDays: number;
+  /** "Documentation complete" per stage id, with who (user id) and when (CD-363). */
+  docsComplete: Record<string, { at: string; by: string | null }>;
   /** ISO date-time the deal entered its current stage. */
   stageSince?: string;
   score: number;

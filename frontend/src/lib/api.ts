@@ -139,6 +139,11 @@ export interface ApiFunnelStage {
   /** Stage to-dos with stable ids (CD-32): renaming one keeps the deals' progress on it. */
   checklistItems: ApiChecklistItem[];
   isWon: boolean;
+  /** Stage owner (null: the opportunity's owner), target days and advance gates (CD-363). */
+  ownerUserId: string | null;
+  targetDays: number | null;
+  gateDocsComplete: boolean;
+  gateTodos: boolean;
 }
 export interface ApiChecklistItem {
   id: string;
@@ -149,6 +154,8 @@ export interface ApiFunnel {
   key: string;
   label: string;
   note: string | null;
+  /** Default target days for its stages (CD-363). */
+  targetDays: number | null;
   stages: ApiFunnelStage[];
 }
 export interface ApiTenant {
@@ -401,6 +408,13 @@ export const LOST_REASONS = ['Price', 'Timing', 'Chose a competitor', 'No budget
 export type LostReason = (typeof LOST_REASONS)[number];
 /** Lost is stored on the deal; won means the deal is in its funnel's won stage. */
 export type DealOutcome = 'open' | 'won' | 'lost';
+/** A deal's state in one stage (CD-363). */
+export interface ApiDealStageState {
+  stageId: string;
+  docsComplete: boolean;
+  docsCompleteAt: string | null;
+  docsCompleteByUserId: string | null;
+}
 export interface ApiDeal {
   id: string;
   companyId: string | null;
@@ -441,6 +455,10 @@ export interface ApiDeal {
   lostAt: string | null;
   lostReason: LostReason | null;
   lostNote: string | null;
+  /** Days past its stage's target (CD-363); 0 when on time, won or lost. */
+  stageLateDays?: number;
+  /** Per stage, "documentation complete" with who and when (CD-363; the single deal read only). */
+  stageStates?: ApiDealStageState[];
   /** Custom field values by field id (CD-15). */
   customFields: CustomFieldValues;
   createdAt: string;
@@ -842,7 +860,7 @@ export type TaskInput = Partial<{
   assigneeUserId: string | null;
   channel: Channel | null;
 }>;
-export type StageInput = Partial<Pick<ApiFunnelStage, 'name' | 'activity' | 'channel' | 'documentOnEntry' | 'winProbability' | 'checklistItems'>>;
+export type StageInput = Partial<Pick<ApiFunnelStage, 'name' | 'activity' | 'channel' | 'documentOnEntry' | 'winProbability' | 'checklistItems' | 'ownerUserId' | 'targetDays' | 'gateDocsComplete' | 'gateTodos'>>;
 
 // ---------------------------------------------------------------- meetings (CD-130)
 /** visit = Customer visit (the only type that counts toward visit plans); office = at our office. */
@@ -1067,9 +1085,13 @@ export const crmApi = {
 
   funnels: () => api<ApiFunnel[]>('/crm/funnels'),
   createFunnel: (input: { label: string; note?: string | null; copyFromFunnelId?: string }) => api<ApiFunnel>('/crm/funnels', { method: 'POST', json: input }),
-  updateFunnel: (id: string, input: { label?: string; note?: string | null }) => api<ApiFunnel>(`/crm/funnels/${id}`, { method: 'PATCH', json: input }),
+  updateFunnel: (id: string, input: { label?: string; note?: string | null; targetDays?: number | null }) => api<ApiFunnel>(`/crm/funnels/${id}`, { method: 'PATCH', json: input }),
   deleteFunnel: (id: string) => api(`/crm/funnels/${id}`, { method: 'DELETE' }),
   updateStage: (funnelId: string, stageId: string, input: StageInput) => api(`/crm/funnels/${funnelId}/stages/${stageId}`, { method: 'PATCH', json: input }),
+  /** "Documentation complete, ready to send" for one stage of a deal (CD-363). */
+  setDocsComplete: (dealId: string, stageId: string, complete: boolean) => api<ApiDealStageState>(`/crm/deals/${dealId}/stages/${stageId}/docs-complete`, { method: 'PUT', json: { complete } }),
+  /** "Remind the owner" (CD-363): emails whoever answers for the deal's stage. */
+  remindStageOwner: (dealId: string) => api<{ recipientUserId: string }>(`/crm/deals/${dealId}/remind-stage-owner`, { method: 'POST', json: {} }),
   createStage: (funnelId: string, input: StageInput & { name: string; position?: number }) => api<ApiFunnel>(`/crm/funnels/${funnelId}/stages`, { method: 'POST', json: input }),
   reorderStages: (funnelId: string, stageIds: string[]) => api<ApiFunnel>(`/crm/funnels/${funnelId}/stages/order`, { method: 'PUT', json: { stageIds } }),
   /** Deals in the stage move to `moveDealsTo` (required when it has any). */

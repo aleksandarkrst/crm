@@ -1,5 +1,6 @@
 export { CrmModule } from './crm.module';
 export { DealsService } from './deals/deals.service';
+export { stageLateDays } from './deals/stage-gate';
 export { DocumentGenerator } from './documents/document-generator';
 export { CrmWorkerModule } from './meetings/meeting-jobs';
 export { periodLabel as visitPlanPeriodLabel, periodOf as visitPeriodOf, periodStartOf as visitPeriodStartOf } from './visit-plans/periods';

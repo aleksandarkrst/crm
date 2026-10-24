@@ -15,7 +15,17 @@ const as = (s: Session = owner) => ({ token: s.token, tenant });
 
 const funnelsNow = () => ok<Funnel[]>('GET', '/crm/funnels', as());
 const funnelNow = async (id: string) => (await funnelsNow()).find((f) => f.id === id)!;
-const newFunnel = (body: object, s: Session = owner) => ok<Funnel>('POST', '/crm/funnels', { ...as(s), body });
+/**
+ * A new funnel. Its stages start with "All to-dos must be done" on (CD-363); these specs move deals
+ * around freely, so the gate is switched off (stage-gate.spec.ts covers the gate).
+ */
+const newFunnel = async (body: object, s: Session = owner) => {
+  const f = await ok<Funnel>('POST', '/crm/funnels', { ...as(s), body });
+  // A new funnel's stages start gated; a copy keeps the source's switches.
+  if (!('copyFromFunnelId' in body)) expect(f.stages.filter((st) => !st.isWon).every((st) => st.gateTodos)).toBe(true);
+  for (const st of f.stages) await ok('PATCH', `/crm/funnels/${f.id}/stages/${st.id}`, { ...as(owner), body: { gateTodos: false } });
+  return { ...f, stages: f.stages.map((st) => ({ ...st, gateTodos: false })) };
+};
 const newDeal = async (funnelId: string, title = 'Deal') => ok('POST', '/crm/deals', { ...as(), body: { title, funnelId } });
 const history = async (dealId: string) =>
   (await ok<{ kind: string; fromStageId: string | null; toStageId: string; outcome: string; changedByUserId: string | null }[]>('GET', `/crm/deal-stage-history?dealId=${dealId}`, as())).map((r) => [

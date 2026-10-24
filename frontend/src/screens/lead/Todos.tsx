@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { CHANNEL_LABELS, GATE_STAGE_ADVANCE, SCRIPTS } from '../../store/seed';
-import { isoLabel, isOverdue, memberName, script, stageDone, stageOf, stagesFor, taskOf, todayIso, todoItemsFor } from '../../store/selectors';
+import { CHANNEL_LABELS, SCRIPTS } from '../../store/seed';
+import { advanceBlockers, isoLabel, isOverdue, memberName, momentLabel, script, stageOf, stagesFor, taskOf, todayIso, todoItemsFor, wonBlocker } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead, LeadTask } from '../../store/types';
 
@@ -38,9 +38,22 @@ export function Todos({ lead }: { lead: Lead }) {
     return { st, gi, isCurrent, complete, items, extraTasks };
   });
 
-  const canAdvance = (!GATE_STAGE_ADVANCE || stageDone(s, lead, current.id)) && idx < stages.length - 1;
+  // The advance gate (CD-363): the current stage's switches, and Won only from the last stage in a gated funnel.
   const next = stages[Math.min(idx + 1, stages.length - 1)]!;
-  const advanceLabel = idx >= stages.length - 1 ? 'Final stage' : canAdvance ? 'Advance to ' + next.name : 'Locked — finish the to-do';
+  const blockers = advanceBlockers(s, lead);
+  const won = next.won ? wonBlocker(s, lead) : null;
+  if (won) blockers.unshift(won);
+  const atEnd = idx >= stages.length - 1;
+  const canAdvance = !atEnd && blockers.length === 0;
+  const advanceLabel = atEnd ? 'Final stage' : 'Advance to ' + next.name;
+  const docs = lead.docsComplete[current.id];
+  const gateNote = current.gateTodos
+    ? current.gateDocs
+      ? `All of ${current.name} must be closed and its documentation marked complete to advance.`
+      : `All of ${current.name} must be closed to advance.`
+    : current.gateDocs
+      ? `${current.name} needs its documentation marked complete to advance.`
+      : 'Advancing from this stage is not blocked.';
 
   return (
     <div className="card card-pad">
@@ -48,9 +61,7 @@ export function Todos({ lead }: { lead: Lead }) {
         <div>
           <div className="card-title">To-Do</div>
           <div className="card-sub" style={{ marginTop: 3 }}>
-            {GATE_STAGE_ADVANCE
-              ? `Everything done for this opportunity, stage by stage. All of ${current.name} must be closed to advance.`
-              : 'Everything done for this opportunity, stage by stage. Advancing is not blocked.'}
+            Everything done for this opportunity, stage by stage. {gateNote}
           </div>
         </div>
         <span className="tag" style={{ fontSize: 10.5, color: 'var(--text-2)', padding: 0 }}>
@@ -196,13 +207,33 @@ export function Todos({ lead }: { lead: Lead }) {
                 <button type="button" className="btn-dashed" style={{ alignSelf: 'flex-start' }} onClick={() => store.addTodo(lead.id, g.st.id)}>
                   + Add a to-do for this opportunity
                 </button>
+                {g.st.gateDocs && (
+                  // "Documentation complete, ready to send" (CD-363): who ticked it and when.
+                  <label className="todo-docs" data-testid="docs-complete" data-done={docs ? true : undefined}>
+                    <input type="checkbox" checked={!!docs} onChange={(e) => store.setDocsComplete(lead.id, g.st.id, e.target.checked)} />
+                    <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 600 }}>Documentation complete, ready to send</span>
+                      <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{docs ? `${docs.at ? momentLabel(docs.at, s.workspace.timezone) : 'Ticked'} · ${memberName(s, docs.by)}` : 'Not ticked yet'}</span>
+                    </span>
+                  </label>
+                )}
                 <button
                   type="button"
+                  data-testid="advance-stage"
+                  disabled={!canAdvance}
+                  aria-describedby={blockers.length ? 'advance-blockers' : undefined}
                   onClick={() => store.advanceStage(lead.id)}
-                  style={{ alignSelf: 'flex-start', marginTop: 4, border: 0, cursor: canAdvance ? 'pointer' : 'not-allowed', background: canAdvance ? '#14503C' : '#F2F5F3', color: canAdvance ? '#F5F7F6' : '#93A39B', fontSize: 13.5, fontWeight: 500, padding: '12px 18px', borderRadius: 8 }}
+                  style={{ alignSelf: 'flex-start', marginTop: 4, border: 0, cursor: canAdvance ? 'pointer' : 'not-allowed', background: canAdvance ? 'var(--brand)' : 'var(--chip)', color: canAdvance ? 'var(--bg-soft)' : 'var(--muted)', fontSize: 13.5, fontWeight: 500, padding: '12px 18px', borderRadius: 8 }}
                 >
                   {advanceLabel}
                 </button>
+                {!atEnd && blockers.length > 0 && (
+                  <ul id="advance-blockers" data-testid="advance-blockers" style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12.5, color: 'var(--text-2)' }}>
+                    {blockers.map((b) => (
+                      <li key={b}>{b}</li>
+                    ))}
+                  </ul>
+                )}
               </>
             )}
           </div>

@@ -7,7 +7,7 @@ import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { dealsCsv } from '../store/exportCsv';
 import { DEFAULT_FILTERS, INDUSTRIES, LOST_VIEWS, VALUE_BANDS, valueBandLabel } from '../store/seed';
-import { bandOf, curOf, currencySymbol, funnelOptions, needsNextStep, ownerOf, salesPeople, stageOf, valueNum, valueTotal } from '../store/selectors';
+import { bandOf, curOf, currencySymbol, funnelOptions, initialsOf, memberName, needsNextStep, ownerOf, salesPeople, stageOf, stageOwnerId, valueNum, valueTotal } from '../store/selectors';
 import type { Lead, Stage, State } from '../store/types';
 import { useStore } from '../store/store';
 
@@ -206,6 +206,17 @@ function PipelineBoard({ stages, leads }: { stages: Stage[]; leads: Lead[] }) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         {/* The fit score is switched off with CHAMP (CD-362). <FitBadge score={l.score} /> */}
                         <StallLabel stall={l.stall} />
+                        {l.lateDays > 0 && (
+                          <span className="badge badge-warn" data-testid="card-late">
+                            Late · {l.lateDays} {l.lateDays === 1 ? 'day' : 'days'}
+                          </span>
+                        )}
+                        {/* The stage owner (CD-363), shown when it isn't the opportunity's owner. */}
+                        {!lost && stageOwnerId(s, l) && stageOwnerId(s, l) !== l.ownerId && (
+                          <span className="avatar" title={'Stage owner: ' + memberName(s, stageOwnerId(s, l))} style={{ width: 20, height: 20, fontSize: 9, marginLeft: 'auto' }}>
+                            {initialsOf(memberName(s, stageOwnerId(s, l)))}
+                          </span>
+                        )}
                       </div>
                       {lost ? (
                         <div style={{ borderTop: '1px dashed var(--border)', paddingTop: 7 }}>

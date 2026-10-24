@@ -265,6 +265,8 @@ class Seed {
     const [funnel] = await as(owner, (x) => this.s.funnels.list(x));
     if (!funnel) throw new Error('no funnel');
     const open = funnel.stages.filter((st) => !st.isWon);
+    // The sample deals sit in later stages without their to-dos ticked: no to-do gate here (CD-363).
+    for (const st of open) await as(owner, (x) => this.s.funnels.updateStage(x, funnel.id, st.id, { gateTodos: false }));
     const dealIds: string[] = [];
     for (const d of ws.deals) {
       const deal = await as(owner, (x) => this.s.deals.create(x, { title: d.title, funnelId: funnel.id, companyId: companyIds[d.company]!, amount: d.amount, ownerUserId: admin.userId }));

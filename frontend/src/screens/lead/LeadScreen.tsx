@@ -7,7 +7,7 @@ import { MeetingsCard } from '../../components/MeetingsCard';
 import { paths } from '../../lib/paths';
 import type { ApiProject } from '../../lib/projectsApi';
 import { useDealProjects } from '../../store/projects';
-import { leadById, memberLabels, memberName, momentLabel, stageOf, stagesFor } from '../../store/selectors';
+import { initialsOf, leadById, memberLabels, memberName, momentLabel, stageOf, stageOwnerId, stagesFor, stageTargetDays, wonBlocker } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
 import { CompanySection } from './CompanySection';
@@ -78,8 +78,9 @@ export function LeadScreen() {
  * funnel's won stage; a stage of the bar moves it there.
  */
 function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | null }) {
-  const { s, set, patchLead, moveLead, reopenLead, canDelete, deleteDeal } = useStore();
+  const { s, set, session, patchLead, moveLead, reopenLead, canDelete, deleteDeal, remindStageOwner } = useStore();
   const [menu, setMenu] = useState(false);
+  const [reminding, setReminding] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menu) return;
@@ -94,6 +95,9 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
   const wonStage = stages.find((st) => st.won);
   const lost = lead.outcome === 'lost';
   const days = lead.stageSince ? Math.max(0, Math.floor((Date.now() - Date.parse(lead.stageSince)) / DAY)) : null;
+  const ownerId = stageOwnerId(s, lead);
+  const target = stageTargetDays(s, lead);
+  const wonBlock = wonBlocker(s, lead);
 
   const ownerOptions = [...memberLabels(s)].map(([value, label]) => ({ value, label }));
   if (lead.ownerId && !ownerOptions.some((o) => o.value === lead.ownerId)) ownerOptions.push({ value: lead.ownerId, label: memberName(s, lead.ownerId, lead.owner) });
@@ -150,7 +154,8 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
           ) : (
             <>
               {wonStage && (
-                <button type="button" className="btn btn-primary" data-testid="mark-won" onClick={() => moveLead(lead.id, wonStage.id)}>
+                // In a funnel with gates, Won only from the last stage before it (CD-363).
+                <button type="button" className="btn btn-primary" data-testid="mark-won" disabled={!!wonBlock} title={wonBlock ?? undefined} onClick={() => moveLead(lead.id, wonStage.id)}>
                   Won
                 </button>
               )}
@@ -194,6 +199,46 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
           );
         })}
       </div>
+      {!lost && lead.outcome !== 'won' && (
+        // Who answers for this stage, its target and whether it is late (CD-363).
+        <div className="stage-owner-row" data-testid="stage-owner-row">
+          <span style={{ color: 'var(--text-2)' }}>Stage owner:</span>
+          {ownerId ? (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span className="avatar" style={{ width: 20, height: 20, fontSize: 9 }}>
+                {initialsOf(memberName(s, ownerId))}
+              </span>
+              <span data-testid="stage-owner">{memberName(s, ownerId)}</span>
+            </span>
+          ) : (
+            <span data-testid="stage-owner">Nobody yet</span>
+          )}
+          {target && (
+            <span style={{ color: 'var(--text-2)' }}>
+              · Target {target} {target === 1 ? 'day' : 'days'}
+            </span>
+          )}
+          {lead.lateDays > 0 && (
+            <span className="badge badge-warn" data-testid="late-badge">
+              Late · {lead.lateDays} {lead.lateDays === 1 ? 'day' : 'days'}
+            </span>
+          )}
+          {ownerId && ownerId !== session.userId && (
+            <button
+              type="button"
+              className="btn-link"
+              data-testid="remind-owner"
+              disabled={reminding}
+              onClick={() => {
+                setReminding(true);
+                void remindStageOwner(lead.id).finally(() => setReminding(false));
+              }}
+            >
+              {reminding ? 'Sending' : 'Remind the owner'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

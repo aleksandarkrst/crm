@@ -181,9 +181,15 @@ export const funnels = pgTable(
     label: text('label').notNull(),
     note: text('note'),
     position: integer('position').notNull().default(0),
+    /** Days an opportunity may stay in a stage before it is late (CD-363); a stage's own target wins. */
+    targetDays: integer('target_days'),
     ...timestamps,
   },
-  (t) => [unique('funnels_tenant_id_uq').on(t.tenantId, t.id), unique('funnels_tenant_key_uq').on(t.tenantId, t.key)],
+  (t) => [
+    unique('funnels_tenant_id_uq').on(t.tenantId, t.id),
+    unique('funnels_tenant_key_uq').on(t.tenantId, t.key),
+    check('funnels_target_days_ck', sql`${t.targetDays} is null or ${t.targetDays} between 1 and 365`),
+  ],
 );
 
 export const funnelStages = pgTable(
@@ -202,6 +208,13 @@ export const funnelStages = pgTable(
     /** The stage to-dos (gates), with stable ids (CD-32). */
     checklistItems: jsonb('checklist_items').$type<ChecklistItem[]>().notNull().default([]),
     isWon: boolean('is_won').notNull().default(false), // the terminal "won" stage
+    /** Who answers for opportunities in this stage (CD-363); null: the opportunity's own owner. */
+    ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Days before an opportunity here is late; null: the funnel's default target. */
+    targetDays: integer('target_days'),
+    /** Advance gates (CD-363): documentation marked complete, and every to-do of the stage done. */
+    gateDocsComplete: boolean('gate_docs_complete').notNull().default(false),
+    gateTodos: boolean('gate_todos').notNull().default(true),
     /**
      * Deleted stages (CD-9) are kept, so the stage history of deals that passed through them stays
      * complete. They hold no deals (a trigger enforces it), are left out of the funnel, and their
@@ -215,6 +228,7 @@ export const funnelStages = pgTable(
     unique('funnel_stages_funnel_key_uq').on(t.funnelId, t.key),
     foreignKey({ columns: [t.tenantId, t.funnelId], foreignColumns: [funnels.tenantId, funnels.id], name: 'funnel_stages_funnel_fk' }).onDelete('cascade'),
     check('funnel_stages_probability_ck', sql`${t.winProbability} between 0 and 100`),
+    check('funnel_stages_target_days_ck', sql`${t.targetDays} is null or ${t.targetDays} between 1 and 365`),
   ],
 );
 
@@ -335,6 +349,30 @@ export const deals = pgTable(
     foreignKey({ columns: [t.tenantId, t.funnelId], foreignColumns: [funnels.tenantId, funnels.id], name: 'deals_funnel_fk' }),
     foreignKey({ columns: [t.tenantId, t.stageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deals_stage_fk' }),
     check('deals_fit_score_ck', sql`${t.fitScore} between 0 and 100`),
+  ],
+);
+
+/**
+ * A deal's state in one of its funnel's stages (CD-363): "documentation complete, ready to send",
+ * with who ticked it and when. One row per deal and stage, made the first time it is ticked; the
+ * advance gate (deals/stage-gate.ts) reads it. Offer approval (CD-120) adds its own columns here.
+ */
+export const dealStageStates = pgTable(
+  'deal_stage_states',
+  {
+    tenantId: tenantId(),
+    dealId: uuid('deal_id').notNull(),
+    stageId: uuid('stage_id').notNull(),
+    docsComplete: boolean('docs_complete').notNull().default(false),
+    docsCompleteAt: timestamp('docs_complete_at', { withTimezone: true }),
+    docsCompleteByUserId: uuid('docs_complete_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.dealId, t.stageId], name: 'deal_stage_states_pk' }),
+    index('deal_stage_states_stage_idx').on(t.tenantId, t.stageId),
+    foreignKey({ columns: [t.tenantId, t.dealId], foreignColumns: [deals.tenantId, deals.id], name: 'deal_stage_states_deal_fk' }).onDelete('cascade'),
+    foreignKey({ columns: [t.tenantId, t.stageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deal_stage_states_stage_fk' }).onDelete('cascade'),
   ],
 );
 

@@ -407,6 +407,45 @@ export function todoItemsFor(s: State, lead: Lead, stageId: string): TodoItem[] 
 export const stageDone = (s: State, lead: Lead, stageId: string): boolean =>
   todoItemsFor(s, lead, stageId).every((_it, idx) => taskOf(s, lead.id, stageId, idx).done);
 
+// ---------------------------------------------------------------- the advance gate (CD-363)
+// The same rules as the API's deals/stage-gate.ts, so the Advance and Won buttons show what the
+// server would answer; the server decides (a refused move comes back as a 409 with these reasons).
+
+/** Why the deal can't move forward out of its current stage: open to-dos, documentation. */
+export function advanceBlockers(s: State, lead: Lead): string[] {
+  const stage = stageOf(s, lead);
+  const out: string[] = [];
+  if (stage.gateTodos) {
+    const open = todoItemsFor(s, lead, stage.id).filter((_it, idx) => !taskOf(s, lead.id, stage.id, idx).done).length;
+    if (open) out.push(`${open} ${open === 1 ? 'to-do' : 'to-dos'} open in ${stage.name}`);
+  }
+  if (stage.gateDocs && !lead.docsComplete[stage.id]) out.push(`Documentation isn't marked complete in ${stage.name}`);
+  return out;
+}
+
+/** In a funnel with any gate on, Won only from the last stage before it; null when allowed. */
+export function wonBlocker(s: State, lead: Lead): string | null {
+  const stages = stagesFor(s, lead.segment);
+  if (!stages.some((st) => !st.won && (st.gateTodos || st.gateDocs))) return null;
+  const working = stages.filter((st) => !st.won);
+  const last = working[working.length - 1];
+  return last && lead.stage !== last.id ? `Win it from ${last.name}, the last stage before Won` : null;
+}
+
+/** A jump past a gated stage, as the API refuses it (skipBlocker in stage-gate.ts). */
+export function skipBlocker(s: State, lead: Lead, to: Stage): string | null {
+  const stages = stagesFor(s, lead.segment);
+  const between = stages.slice(stages.findIndex((st) => st.id === lead.stage) + 1, stages.indexOf(to)).filter((st) => !st.won);
+  const gated = between.find((st) => st.gateTodos || st.gateDocs);
+  return gated ? `Move it through ${gated.name} first` : null;
+}
+
+/** Who answers for the deal's current stage: the stage owner, else the deal's owner (user id). */
+export const stageOwnerId = (s: State, lead: Lead): string | null => stageOf(s, lead).ownerId ?? lead.ownerId ?? null;
+
+/** The current stage's target days: its own, else the funnel's. */
+export const stageTargetDays = (s: State, lead: Lead): number | null => stageOf(s, lead).targetDays ?? s.funnels[lead.segment]?.targetDays ?? null;
+
 // ---------------------------------------------------------------- tasks: overdue and next steps (CD-67)
 
 /** A task from "New task" that isn't done and was due before `today` (the workspace's ISO date). */

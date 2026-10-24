@@ -11,6 +11,7 @@ import { JobsService } from '../../../shared/events/jobs.service';
 import { type TenantProvisioner, TenantProvisioning } from '../../../shared/events/tenant-provisioning';
 import { nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { StageHistoryService } from '../deals/stage-history.service';
+import { assertOwnerIsMember } from '../owner';
 import { BLANK_FUNNEL_STAGES, DEFAULT_FUNNELS, type StageTemplate } from './default-funnels';
 
 const checklistLabel = z.string().trim().min(1).max(200);
@@ -35,6 +36,11 @@ const StageFields = z.object({
   documentOnEntry: z.string().trim().max(60).nullish(),
   winProbability: z.number().int().min(0).max(100),
   checklistItems: ChecklistItems,
+  // Stage owner, target and advance gates (CD-363). A null owner means the opportunity's own owner.
+  ownerUserId: z.uuid().nullish(),
+  targetDays: z.number().int().min(1).max(365).nullish(),
+  gateDocsComplete: z.boolean(),
+  gateTodos: z.boolean(),
 });
 
 export const UpdateStage = nonEmptyPatch(StageFields.partial());
@@ -69,7 +75,14 @@ export const CreateFunnel = z.object({
 });
 export type CreateFunnel = z.infer<typeof CreateFunnel>;
 
-export const UpdateFunnel = nonEmptyPatch(z.object({ label: z.string().trim().min(1).max(100).optional(), note: optionalText(1000) }));
+export const UpdateFunnel = nonEmptyPatch(
+  z.object({
+    label: z.string().trim().min(1).max(100).optional(),
+    note: optionalText(1000),
+    /** Default target days for its stages (CD-363); null removes it. */
+    targetDays: z.number().int().min(1).max(365).nullish(),
+  }),
+);
 export type UpdateFunnel = z.infer<typeof UpdateFunnel>;
 
 /** "Mid-market — CMO" → "mid-market-cmo"; keys are stable slugs, unique per funnel or tenant. */
@@ -217,6 +230,7 @@ export class FunnelsService implements TenantProvisioner, OnModuleInit {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const funnel = await this.one(tx, funnelId);
+        await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const keys = await tx.select({ key: funnelStages.key }).from(funnelStages).where(eq(funnelStages.funnelId, funnelId));
         const stages = funnel.stages;
         const wonAt = stages.findIndex((s) => s.isWon);
@@ -328,6 +342,7 @@ export class FunnelsService implements TenantProvisioner, OnModuleInit {
         const where = and(eq(funnelStages.id, stageId), eq(funnelStages.funnelId, funnelId), notDeleted);
         const [current] = await tx.select({ checklistItems: funnelStages.checklistItems }).from(funnelStages).where(where);
         if (!current) throw new NotFoundException('Stage not found');
+        await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const { checklistItems, ...rest } = input;
         const items = checklistItems?.map((i) => ({ id: i.id ?? randomUUID(), label: i.label }));
         const [row] = await tx
@@ -365,6 +380,11 @@ function stageRow(s: StageTemplate & { isWon?: boolean }, tenantId: string, funn
     winProbability: s.winProbability,
     checklistItems: newItems(s.checklist),
     isWon: s.isWon ?? s.key === 'won',
+    // A copied stage keeps its owner, target and gates (CD-363); a new one gets the column defaults.
+    ...(s.ownerUserId !== undefined ? { ownerUserId: s.ownerUserId } : {}),
+    ...(s.targetDays !== undefined ? { targetDays: s.targetDays } : {}),
+    ...(s.gateDocsComplete !== undefined ? { gateDocsComplete: s.gateDocsComplete } : {}),
+    ...(s.gateTodos !== undefined ? { gateTodos: s.gateTodos } : {}),
     tenantId,
     funnelId,
     position,

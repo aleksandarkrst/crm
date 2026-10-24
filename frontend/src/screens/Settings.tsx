@@ -7,7 +7,8 @@ import { MODULES, WORKSPACE_MODULES } from '../components/modules';
 import { paths } from '../lib/paths';
 import { canManageTemplates } from '../store/documents';
 import { ACTIVITIES, CHANNEL_LABELS, CHANNELS, CURRENCIES, DOCS, FIELD_TYPES, TEAM_ROLES } from '../store/seed';
-import { currencySymbol, curOf, customFieldsOf, initialsOf, salesPeople } from '../store/selectors';
+import { currencySymbol, curOf, customFieldsOf, initialsOf, memberLabels, salesPeople } from '../store/selectors';
+
 import type { CustomFieldDef, Stage, Workspace } from '../store/types';
 import type { CustomFieldEntity } from '../lib/api';
 import { useStore } from '../store/store';
@@ -21,6 +22,9 @@ import { TechniciansTab } from './settings/TechniciansTab';
 import { RolesTab } from './settings/RolesTab';
 import type { TeamMember } from '../store/types';
 import { useTerms } from '../store/terms';
+
+/** A target days input: empty means no target; 1..365 like the API. */
+const targetOf = (raw: string) => (raw === '' ? null : Math.max(1, Math.min(365, Math.round(Number(raw) || 1))));
 
 /**
  * The sections of Settings (CD-280), grouped by module in the left nav. Each has its own route
@@ -594,6 +598,13 @@ function FunnelBuilder() {
               How they buy
               <input className="form-input" value={funnel.note} disabled={!editable} placeholder="Who decides, how long it takes, what slows it down" onChange={(e) => store.patchFunnel(funnel.id, { note: e.target.value })} />
             </label>
+            <label className="form-label">
+              Default target days
+              <span style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--white)', padding: '0 10px 0 0' }}>
+                <input data-testid="funnel-target-days" type="number" disabled={!editable} min={1} max={365} value={funnel.targetDays ?? ''} placeholder="No target" onChange={(e) => store.patchFunnel(funnel.id, { targetDays: targetOf(e.target.value) })} style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', padding: '9px 4px 9px 10px', fontSize: 13, color: 'var(--ink)', textTransform: 'none', letterSpacing: 0 }} />
+                <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-2)', letterSpacing: 0 }}>days</span>
+              </span>
+            </label>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -676,6 +687,7 @@ function FunnelStageRow({
   onRemove: () => void;
 }) {
   const store = useStore();
+  const members = [...memberLabels(store.s)].sort((a, b) => a[1].localeCompare(b[1]));
   const arrow = (d: string) => (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d={d} />
@@ -749,7 +761,43 @@ function FunnelStageRow({
                 <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-2)', letterSpacing: 0 }}>%</span>
               </span>
             </label>
+            {!st.won && (
+              <>
+                <label className="form-label">
+                  Stage owner
+                  <select className="form-input" data-testid="stage-owner-select" disabled={!editable} style={{ padding: '9px 10px' }} value={st.ownerId ?? ''} onChange={(e) => store.setStageRule(idx, { ownerId: e.target.value || null })}>
+                    <option value="">The opportunity's owner</option>
+                    {members.map(([id, name]) => (
+                      <option key={id} value={id}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="form-label">
+                  Target days
+                  <span style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--white)', padding: '0 10px 0 0' }}>
+                    <input data-testid="stage-target-days" type="number" disabled={!editable} min={1} max={365} value={st.targetDays ?? ''} placeholder="Funnel default" onChange={(e) => store.setStageRule(idx, { targetDays: targetOf(e.target.value) })} style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', padding: '9px 4px 9px 10px', fontSize: 13, color: 'var(--ink)', textTransform: 'none', letterSpacing: 0 }} />
+                    <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-2)', letterSpacing: 0 }}>days</span>
+                  </span>
+                </label>
+              </>
+            )}
           </div>
+          {!st.won && (
+            // Advance gates (CD-363): what has to be done before an opportunity moves on from this stage.
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <span className="caps">Before moving on</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+                <Switch on={st.gateTodos} disabled={!editable} label="All to-dos must be done" onClick={() => store.setStageRule(idx, { gateTodos: !st.gateTodos })} />
+                All to-dos must be done
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+                <Switch on={st.gateDocs} disabled={!editable} label="Needs documentation complete" onClick={() => store.setStageRule(idx, { gateDocs: !st.gateDocs })} />
+                Needs documentation complete
+              </span>
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             <span className="caps">To-do</span>
             <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>

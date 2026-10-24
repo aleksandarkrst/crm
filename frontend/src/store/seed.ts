@@ -56,7 +56,6 @@ export const TEAM_ROLES = ['Owner', 'Admin', 'Member'] as const;
 
 /** Playbook rules (design props). */
 export const AUTO_GENERATE_DOCS = true;
-export const GATE_STAGE_ADVANCE = true;
 
 export const SCRIPTS: Record<string, string> = {
   'Personalized email': 'Subject: {{company}} — the 3 things we noticed\n\nHi {{first}}, I went through your last two campaigns before writing this. Two things stood out and one looks like a quick win. Worth 20 minutes next week?',

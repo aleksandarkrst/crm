@@ -3,11 +3,11 @@ import { and, asc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { ENV, type Env } from '../../infrastructure/config/config.module';
 import { Mailer } from '../../infrastructure/mail/mailer';
 import { DatabaseService } from '../../shared/database/database.service';
-import { companies, dailyDigests, deals, funnelStages, memberships, tenants, users, visitPlanLines, visitPlans } from '../../shared/database/schema';
+import { companies, dailyDigests, deals, funnels, funnelStages, memberships, tenants, users, visitPlanLines, visitPlans } from '../../shared/database/schema';
 import type { JobPayloads } from '../../shared/events/job-types';
 import { type JobAttempt, JobsService } from '../../shared/events/jobs.service';
 import { visitPlanPeriodLabel } from '../crm';
-import { dealAssignedEmail, digestEmail, digestItemCount, isDigestHour, isEmptyDigest, zonedNow } from './digest-content';
+import { dealAssignedEmail, digestEmail, stageReminderEmail, digestItemCount, isDigestHour, isEmptyDigest, zonedNow } from './digest-content';
 import { DigestService } from './digest.service';
 import { visitPlanEmail } from './visit-plan-email';
 
@@ -43,6 +43,7 @@ export class NotificationJobs implements OnApplicationBootstrap {
     await this.jobs.work('notifications.digest-tick', () => this.tick());
     await this.jobs.work('notifications.daily-digest', (data, attempt) => this.sendDigest(data, attempt));
     await this.jobs.work('crm.deal-assigned', (data) => this.sendDealAssigned(data));
+    await this.jobs.work('crm.stage-reminder', (data) => this.sendStageReminder(data));
     await this.jobs.work('crm.visit-plan-email', (data) => this.sendVisitPlan(data));
     await this.jobs.schedule('notifications.digest-tick', DIGEST_TICK_CRON);
   }
@@ -111,6 +112,56 @@ export class NotificationJobs implements OnApplicationBootstrap {
       throw err;
     }
     await record({ status: 'sent', itemCount: digestItemCount(digest), sentAt: new Date() });
+  }
+
+  /**
+   * "Remind the owner" (CD-363). Sent because someone asked for it, so it doesn't wait for a
+   * notification setting; it is dropped when the deal is gone, lost or won meanwhile.
+   */
+  async sendStageReminder({ tenantId, dealId, recipientUserId, actorUserId }: JobPayloads['crm.stage-reminder']): Promise<void> {
+    if (recipientUserId === actorUserId) return;
+    const [recipient] = await this.database.db
+      .select({ email: users.email, name: users.displayName, workspaceName: tenants.name })
+      .from(memberships)
+      .innerJoin(users, eq(users.id, memberships.userId))
+      .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
+      .where(and(eq(memberships.tenantId, tenantId), eq(memberships.userId, recipientUserId)));
+    if (!recipient?.email) return;
+    const [actor] = await this.database.db.select({ name: sql<string>`coalesce(${users.displayName}, ${users.email}, 'A teammate')` }).from(users).where(eq(users.id, actorUserId));
+    const [deal] = await this.database.withTenant(tenantId, (tx) =>
+      tx
+        .select({
+          id: deals.id,
+          title: deals.title,
+          company: companies.name,
+          stage: funnelStages.name,
+          isWon: funnelStages.isWon,
+          lostAt: deals.lostAt,
+          stageEnteredAt: deals.stageEnteredAt,
+          targetDays: sql<number | null>`coalesce(${funnelStages.targetDays}, ${funnels.targetDays})`,
+        })
+        .from(deals)
+        .innerJoin(funnelStages, eq(funnelStages.id, deals.stageId))
+        .innerJoin(funnels, eq(funnels.id, deals.funnelId))
+        .leftJoin(companies, eq(companies.id, deals.companyId))
+        .where(eq(deals.id, dealId)),
+    );
+    if (!deal || deal.isWon || deal.lostAt) return;
+    if (this.mailer.notDelivered) {
+      this.logger.warn(`Stage reminder for deal ${dealId} not sent: ${this.mailer.notDelivered}`);
+      return;
+    }
+    const daysInStage = Math.max(0, Math.floor((Date.now() - deal.stageEnteredAt.getTime()) / 86_400_000));
+    await this.mailer.send(
+      stageReminderEmail({
+        to: recipient.email,
+        recipientName: recipient.name,
+        actorName: actor?.name ?? 'A teammate',
+        workspaceName: recipient.workspaceName,
+        appUrl: this.env.APP_URL,
+        deal: { id: deal.id, title: deal.title, company: deal.company, stage: deal.stage, daysInStage, targetDays: deal.targetDays },
+      }),
+    );
   }
 
   async sendDealAssigned({ tenantId, dealId, assigneeUserId, actorUserId }: JobPayloads['crm.deal-assigned']): Promise<void> {

@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, not, or, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, not, or, type SQL, sql } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import { StorageService } from '../../../infrastructure/storage/storage.service';
@@ -7,7 +7,7 @@ import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, dealDocuments, type DealOutcome, deals, funnels, funnelStages, LOST_REASONS, meetings, QUALIFICATION_STEPS, tenants } from '../../../shared/database/schema';
+import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, dealDocuments, type DealOutcome, deals, dealStageStates, dealTasks, funnels, funnelStages, LOST_REASONS, meetings, QUALIFICATION_STEPS, tenants } from '../../../shared/database/schema';
 import { JobsService } from '../../../shared/events/jobs.service';
 import { ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { currencyCode } from '../currency';
@@ -15,6 +15,7 @@ import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/cu
 import { assertOwnerIsMember, userNameOf } from '../owner';
 import { RecordHistoryService } from '../history/record-history.service';
 import { StageHistoryService } from './stage-history.service';
+import { advanceBlockers, skipBlocker, stageLateDays, wonBlocker } from './stage-gate';
 
 const money = z.union([z.number(), z.string()]).transform((v) => String(v)).pipe(z.string().regex(/^\d{1,12}(\.\d{1,2})?$/, 'Invalid amount'));
 // CHAMP and the fit score are switched off (CD-362); the columns stay until a later contract migration.
@@ -77,6 +78,10 @@ export type MarkLost = z.infer<typeof MarkLost>;
  */
 export const dealOutcome = (deal: { lostAt: Date | null }, stageIsWon: boolean): DealOutcome => (deal.lostAt ? 'lost' : stageIsWon ? 'won' : 'open');
 
+/** Days past the stage's target (CD-363); won and lost deals are never late. */
+const lateDaysOf = (deal: { lostAt: Date | null; stageEnteredAt: Date }, isWon: boolean, targetDays: number | null, now: Date): number =>
+  isWon || deal.lostAt ? 0 : stageLateDays(deal.stageEnteredAt, targetDays, now);
+
 @Injectable()
 export class DealsService {
   constructor(
@@ -113,10 +118,13 @@ export class DealsService {
           stageName: funnelStages.name,
           stageActivity: funnelStages.activity,
           stageIsWon: funnelStages.isWon,
+          // The stage's own target, else the funnel's (CD-363): "late" on the Pipeline card.
+          stageTargetDays: sql<number | null>`coalesce(${funnelStages.targetDays}, ${funnels.targetDays})`,
           ownerName: userNameOf(deals.ownerUserId),
         })
         .from(deals)
         .innerJoin(funnelStages, eq(funnelStages.id, deals.stageId))
+        .innerJoin(funnels, eq(funnels.id, deals.funnelId))
         .leftJoin(companies, eq(companies.id, deals.companyId))
         .leftJoin(contacts, eq(contacts.id, deals.primaryContactId))
         .where(and(...filters))
@@ -129,9 +137,20 @@ export class DealsService {
         .select({ dealId: dealContacts.dealId, contactId: dealContacts.contactId })
         .from(dealContacts)
         .where(inArray(dealContacts.dealId, rows.map((r) => r.deal.id)));
-      return rows.map(({ stageIsWon, ...r }) => ({
+      // Each deal's "documentation complete" per stage (CD-363), for the gate on the deal screen.
+      const states = await tx
+        .select({ dealId: dealStageStates.dealId, stageId: dealStageStates.stageId, docsComplete: dealStageStates.docsComplete, docsCompleteAt: dealStageStates.docsCompleteAt, docsCompleteByUserId: dealStageStates.docsCompleteByUserId })
+        .from(dealStageStates)
+        .where(inArray(dealStageStates.dealId, rows.map((r) => r.deal.id)));
+      const now = new Date();
+      return rows.map(({ stageIsWon, stageTargetDays, ...r }) => ({
         ...r,
-        deal: { ...r.deal, outcome: dealOutcome(r.deal, stageIsWon) },
+        deal: {
+          ...r.deal,
+          outcome: dealOutcome(r.deal, stageIsWon),
+          stageLateDays: lateDaysOf(r.deal, stageIsWon, stageTargetDays, now),
+          stageStates: states.filter((st) => st.dealId === r.deal.id).map(({ dealId: _, ...st }) => st),
+        },
         contactIds: links.filter((l) => l.dealId === r.deal.id).map((l) => l.contactId),
       }));
     });
@@ -262,6 +281,7 @@ export class DealsService {
         if (!stage) throw new BadRequestException("Stage does not belong to this opportunity's funnel");
         if (deal.lostAt) throw new ConflictException('This opportunity is lost. Reopen it before moving it to another stage.');
         if (stage.id === deal.stageId) return { ...deal, outcome: dealOutcome(deal, stage.isWon) };
+        await this.assertCanAdvance(tx, deal, stage);
 
         const now = new Date();
         const [row] = await tx
@@ -376,10 +396,74 @@ export class DealsService {
     for (const key of files) await this.storage.delete(ctx.tenantId, key);
   }
 
-  /** A deal row with its outcome (see dealOutcome). */
+  /**
+   * A deal as the API answers it: its outcome, how many days it is past its stage's target
+   * (CD-363), and its state in each stage ("documentation complete", who and when).
+   */
   private async present(tx: Tx, deal: typeof deals.$inferSelect) {
-    const [stage] = await tx.select({ isWon: funnelStages.isWon }).from(funnelStages).where(eq(funnelStages.id, deal.stageId));
-    return { ...deal, outcome: dealOutcome(deal, !!stage?.isWon) };
+    const [stage] = await tx
+      .select({ isWon: funnelStages.isWon, targetDays: sql<number | null>`coalesce(${funnelStages.targetDays}, ${funnels.targetDays})` })
+      .from(funnelStages)
+      .innerJoin(funnels, eq(funnels.id, funnelStages.funnelId))
+      .where(eq(funnelStages.id, deal.stageId));
+    const stageStates = await tx
+      .select({ stageId: dealStageStates.stageId, docsComplete: dealStageStates.docsComplete, docsCompleteAt: dealStageStates.docsCompleteAt, docsCompleteByUserId: dealStageStates.docsCompleteByUserId })
+      .from(dealStageStates)
+      .where(eq(dealStageStates.dealId, deal.id));
+    return { ...deal, outcome: dealOutcome(deal, !!stage?.isWon), stageLateDays: lateDaysOf(deal, !!stage?.isWon, stage?.targetDays ?? null, new Date()), stageStates };
+  }
+
+  /**
+   * "Remind the owner" (CD-363): queues an email to whoever answers for the deal's stage (the stage
+   * owner, else the deal's owner) and notes it on the timeline. Not for won or lost deals, and once an
+   * hour per stage at most: the timeline entry is what it checks.
+   */
+  remindStageOwner(ctx: TenantContext, id: string) {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        const [row] = await tx
+          .select({ ownerUserId: deals.ownerUserId, lostAt: deals.lostAt, stageOwnerUserId: funnelStages.ownerUserId, stageName: funnelStages.name, isWon: funnelStages.isWon })
+          .from(deals)
+          .innerJoin(funnelStages, eq(funnelStages.id, deals.stageId))
+          .where(eq(deals.id, id));
+        if (!row) throw new NotFoundException('Opportunity not found');
+        if (row.isWon || row.lostAt) throw new ConflictException('This opportunity is closed; there is nothing to remind anyone about.');
+        const recipientUserId = row.stageOwnerUserId ?? row.ownerUserId;
+        if (!recipientUserId) throw new ConflictException('Nobody owns this stage or this opportunity yet. Pick an owner first.');
+        if (recipientUserId === ctx.userId) throw new BadRequestException('You are the owner here, so there is nobody to remind.');
+        const title = `Reminded the owner of ${row.stageName}`;
+        const [recent] = await tx
+          .select({ id: activities.id })
+          .from(activities)
+          .where(and(eq(activities.dealId, id), eq(activities.title, title), sql`${activities.createdAt} > now() - interval '1 hour'`))
+          .limit(1);
+        if (recent) throw new ConflictException('The owner was reminded less than an hour ago. Give them a little time.');
+        await this.jobs.send('crm.stage-reminder', { tenantId: ctx.tenantId, dealId: id, recipientUserId, actorUserId: ctx.userId }, tx);
+        await this.log(tx, ctx, id, null, title, null);
+        return { recipientUserId };
+      })
+      .catch(mapDbError);
+  }
+
+  /**
+   * The advance gate (CD-363): a forward move needs the current stage's gates to pass, and in a gated
+   * funnel Won is reached only from the last stage before it. Backward moves pass. 409 with the reasons.
+   */
+  private async assertCanAdvance(tx: Tx, deal: typeof deals.$inferSelect, target: typeof funnelStages.$inferSelect) {
+    const stages = await tx.select().from(funnelStages).where(and(eq(funnelStages.funnelId, deal.funnelId), isNull(funnelStages.deletedAt)));
+    const current = stages.find((s) => s.id === deal.stageId);
+    if (!current || target.position <= current.position) return;
+    const [tasks, [state]] = await Promise.all([
+      tx
+        .select({ checklistItemId: dealTasks.checklistItemId, offPlaybook: dealTasks.offPlaybook, blocksAdvance: dealTasks.blocksAdvance, done: dealTasks.done })
+        .from(dealTasks)
+        .where(and(eq(dealTasks.dealId, deal.id), eq(dealTasks.stageId, current.id))),
+      tx.select({ docsComplete: dealStageStates.docsComplete }).from(dealStageStates).where(and(eq(dealStageStates.dealId, deal.id), eq(dealStageStates.stageId, current.id))),
+    ]);
+    const blockers = advanceBlockers({ stage: current, tasks, stageState: state ?? null });
+    const route = target.isWon ? wonBlocker(current, stages) : skipBlocker(current, target, stages);
+    if (route) blockers.unshift(route);
+    if (blockers.length) throw new ConflictException({ message: `This opportunity can't move to ${target.name} yet: ${blockers.join('; ')}.`, blockers });
   }
 
   /** The first stage of a funnel: where new deals start, and where a funnel change restarts one. */

@@ -242,6 +242,31 @@ the Overview audience filter).
   stage that still holds deals, whatever code writes the rows. Code that reads `funnel_stages`
   directly must filter `deleted_at is null` (FunnelsService and DealsService do).
 
+### Stage owner, target days and the advance gate (CD-363)
+
+- Each stage has `owner_user_id` (null: the opportunity's owner answers for it), `target_days`
+  (null: the funnel's `funnels.target_days`), and two gates: `gate_todos` (every to-do of the stage
+  done: its checklist items, and off-playbook to-dos with `blocks_advance`) and
+  `gate_docs_complete`. New stages start with `gate_todos` on; migration 0121 switched it off on the
+  stages that existed before, so old funnels kept moving as they did.
+- `DealsService.moveToStage` checks the gates of the stage the deal leaves on **forward** moves
+  only (`stage-gate.ts`, pure): 409 `{ message, blockers: string[] }`. Backward moves, Lost and
+  reopening are never gated. In a funnel with any gate on, Won is only reached from the last stage
+  before it (and that stage's gates still apply); ungated funnels win from anywhere. A jump of two or
+  more stages is refused while a stage in between has a gate on ("Move it through X first"). The frontend
+  mirrors the same rules (`advanceBlockers`, `wonBlocker` in `selectors.ts`) to say why instead of
+  moving and snapping back.
+- **`deal_stage_states`** (tenant, deal, stage; RLS like every tenant table) holds per-deal, per-stage
+  state: "Documentation complete, ready to send" with who and when.
+  `PUT /api/crm/deals/:id/stages/:stageId/docs-complete` `{ complete }` sets or clears it and logs
+  it on the timeline. Deal reads return `stageStates` and `stageLateDays` (days in the stage past
+  its target; 0 for won and lost).
+- `POST /api/crm/deals/:id/remind-stage-owner` (202) mails the stage owner (else the deal owner)
+  via `crm.stage-reminder`; 400 when that is you, 409 when the deal is closed. The daily digest
+  lists "Late in their stage" to the stage owner (or the deal owner when the stage has none).
+- Test workspaces: integration `createTenant` and the e2e `createWorkspace` switch `gate_todos` off
+  unless asked for `gated`, so suites that move deals don't tick every to-do first.
+
 ## Deal outcome: open, won, lost
 
 - **Won is the won stage.** A deal is won while it is in its funnel's won stage
