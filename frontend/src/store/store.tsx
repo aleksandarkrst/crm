@@ -531,6 +531,20 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       people.refresh();
       queueRefresh(ALL_PARTS, logRequested.current);
     };
+    /** The status of these companies from the API, leaving their other fields as they are here (CD-358). */
+    const refreshCompanyStatus = async (ids: readonly string[]) => {
+      try {
+        const rows = new Map((await crmApi.companies(ids)).map((r) => [r.id, r]));
+        set((x) => ({
+          extraCompanies: x.extraCompanies.map((c) => {
+            const r = c.id ? rows.get(c.id) : undefined;
+            return r ? { ...c, status: r.status, statusManual: r.statusSetManually } : c;
+          }),
+        }));
+      } catch {
+        // the next refresh catches up
+      }
+    };
     const onLiveEvent = (e: LiveEvent) => {
       // Visit plan progress (CD-135) counts meetings: any meeting or plan change, also this tab's, recounts it.
       if (e.type === 'resync' || e.type === 'meeting' || e.type === 'visit_plan') set((x) => ({ visitRev: x.visitRev + 1 }));
@@ -564,6 +578,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         employeeCard.onLive(e, e.client === CLIENT_ID);
         if (!PARTS_OF[e.type]?.length) return;
       }
+      // A company's status (CD-358) moves on the server after this tab's own saves too (its fields, a
+      // contact, a deal): read just the status back, never the fields that may still be being edited.
+      if (e.client === CLIENT_ID && e.type === 'company' && e.ids?.length) void refreshCompanyStatus(e.ids);
       if (e.client === CLIENT_ID) return; // this tab's own change: the screen has it already
       if (e.type === 'meeting') return meetings.onLive(e);
       const parts = PARTS_OF[e.type] ?? ALL_PARTS;

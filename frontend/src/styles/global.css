@@ -186,9 +186,6 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .modal-actions { display: flex; gap: 9px; justify-content: flex-end; }
 .hint-box { font-size: 12.5px; color: var(--text-2); background: var(--bg-soft); border-radius: 8px; padding: 12px 13px; line-height: 1.5; }
 /* A warning in a dialog (CD-357): what went wrong and what to do instead. */
-/* The company status in its header (CD-358): badge, then automatic or set by hand. */
-.company-status { display: flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 12.5px; }
-.company-status .badge { font-size: 12px; }
 .notice-warn { font-size: 12.5px; color: var(--ink); background: var(--warn-soft); border-radius: 8px; padding: 12px 13px; line-height: 1.5; display: flex; flex-direction: column; gap: 4px; }
 /* A row of the company Identity card (CD-357): the field shrinks beside its badge; on a phone the label goes above it. */
 .identity-row .contact-field > * { min-width: 0; }

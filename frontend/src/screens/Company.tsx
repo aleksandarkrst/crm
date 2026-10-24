@@ -115,15 +115,6 @@ export function Company() {
           onNewDeal={newDeal}
           onDelete={store.canDelete ? onDelete : undefined}
           deleteLabel="Delete company"
-          status={
-            <span className="company-status" data-testid="company-status" title={manual ? 'Set back by hand: the automation leaves it until Back to automatic' : 'The status is automatic'}>
-              <span className={'badge ' + STATUS_BADGE[status]}>{COMPANY_STATUS_LABELS[status]}</span>
-              <span>
-                {manual ? 'set by hand' : 'automatic'}
-                {status === 'lead' && !manual ? ` · ${readiness.ready} of ${readiness.total} ready` : ''}
-              </span>
-            </span>
-          }
           notice={
             status === 'lead' && !manual && readiness.blockers.length > 0 ? (
               <div className="notice-warn" data-testid="company-blockers" style={{ marginTop: 12 }}>
@@ -151,6 +142,13 @@ export function Company() {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
           <div className="lead-side" style={{ flex: '1 1 400px', maxWidth: 540, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
             <Section title="Summary" testId="company-summary">
+              {/* Computed (CD-358); "set by hand" while someone set it back. */}
+              <IconRow icon="funnel" label="Status">
+                <span className="field-value" data-testid="company-status" title={manual ? 'Set back by hand: it stays there until Back to automatic' : undefined}>
+                  {COMPANY_STATUS_LABELS[status]}
+                  {manual ? ' · set by hand' : status === 'lead' ? ` · ${readiness.ready} of ${readiness.total} ready` : ''}
+                </span>
+              </IconRow>
               {/* Open: deals neither Won nor Lost; Lifetime: Won deals (CD-380). */}
               <IconRow icon="value" label="Open value">
                 <span className="field-value" data-testid="company-open-value">
@@ -293,8 +291,6 @@ function IdentityRow({ label, missing, badge, children }: { label: string; missi
     </div>
   );
 }
-
-const STATUS_BADGE: Record<CompanyStatus, string> = { lead: 'badge-neutral', opportunity: 'badge-brand', client: 'badge-brand', past_client: 'badge-neutral', not_interested: 'badge-warn' };
 
 /**
  * "Set status back" (CD-358): only to a status behind the current one. The automation then leaves

@@ -2424,11 +2424,12 @@ automation (owners, admins and the company's owner; a move forward is a 409 with
 `GET /api/crm/companies` takes `status=lead,opportunity` and `outcome=won|lost` (a won opportunity;
 opportunities, all lost).
 
-In the app the header shows the badge and "automatic · 3 of 7 ready" (or "set by hand"), a lead's
-missing items in the warning box under it (`companyReadiness` in `store/selectors.ts` mirrors the
-API's checks, so the list updates as fields are filled in), and the ⋯ menu has "Set status back"
-and "Back to automatic". The badge follows the API: a live update re-reads the company after the
-save that moved it.
+In the app the status is the first Summary row ("Lead · 3 of 7 ready", "Lead · set by hand",
+"Client"), a lead's missing items are in the warning box under the header (`companyReadiness` in
+`store/selectors.ts` mirrors the API's checks, so the list updates as fields are filled in), and the
+⋯ menu has "Set status back" and "Back to automatic". The status follows the API: live updates re-read
+it, also after this tab's own saves (`refreshCompanyStatus` in the store reads only the status
+fields back, so a field still being edited isn't overwritten).
 
 ## Module and workspace switcher (CD-214)
 

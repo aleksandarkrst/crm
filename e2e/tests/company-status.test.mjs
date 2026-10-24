@@ -27,7 +27,7 @@ describe('company status', () => {
 
   step('the company page says it is a lead and what is missing', async () => {
     await page.goto(`${BASE_URL}/companies/${companyId}`, { waitUntil: 'networkidle0' });
-    assert.match(await statusText(), /Lead\s+automatic · 6 of 7 ready/);
+    assert.match(await statusText(), /^Lead · 6 of 7 ready$/);
     assert.match(await page.$eval('[data-testid=company-blockers]', (el) => el.innerText), /Nikola Ilić has no role in the decision yet/);
   });
 
@@ -36,7 +36,7 @@ describe('company status', () => {
     await setValue(page, 'select[aria-label="Role in the decision"]', 'Decision maker');
     assert.ok(await eventually(async () => (await api(page, `/crm/companies/${companyId}`)).status === 'opportunity'), 'the API moved it');
     await page.goto(`${BASE_URL}/companies/${companyId}`, { waitUntil: 'networkidle0' });
-    assert.match(await statusText(), /Opportunity\s+automatic/);
+    assert.match(await statusText(), /^Opportunity$/);
     assert.equal(await page.$('[data-testid=company-blockers]'), null);
     await page.waitForFunction(() => document.body.innerText.includes('Status: Opportunity · automatic'));
   });
@@ -45,10 +45,10 @@ describe('company status', () => {
     await click(page, 'button[aria-label="More actions"]');
     await click(page, '[data-testid=status-set-back]');
     await click(page, '[data-testid=status-set-back-save]');
-    await page.waitForFunction(() => /Lead\s+set by hand/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
+    await page.waitForFunction(() => /^Lead · set by hand$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
     await click(page, 'button[aria-label="More actions"]');
     await click(page, '[data-testid=status-automatic]');
-    await page.waitForFunction(() => /Opportunity\s+automatic/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
+    await page.waitForFunction(() => /^Opportunity$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
   });
 
   it('throws no uncaught errors in the page', () => {

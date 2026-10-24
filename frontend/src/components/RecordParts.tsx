@@ -52,7 +52,6 @@ export function RecordHeader({
   onNewDeal,
   onDelete,
   deleteLabel,
-  status,
   notice,
   menuItems = [],
 }: {
@@ -66,8 +65,6 @@ export function RecordHeader({
   onNewDeal: () => void;
   onDelete?: () => void;
   deleteLabel: string;
-  /** Shown first among the actions: the company status (CD-358). */
-  status?: ReactNode;
   /** Shown under the header row: what a lead still misses (CD-358). */
   notice?: ReactNode;
   /** More ⋯ menu entries, above Delete. */
@@ -95,7 +92,6 @@ export function RecordHeader({
           <input className="ghost deal-title" aria-label={kind === 'company' ? 'Company name' : 'Contact name'} data-testid="record-name" value={name} onChange={(e) => onName(e.target.value)} />
         </div>
         <div className="deal-actions">
-          {status}
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-2)' }} title="Owner">
             <Icon name="owner" title="Owner" />
             {onOwner ? (
