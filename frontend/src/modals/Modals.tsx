@@ -320,20 +320,23 @@ const TASK_CHANNELS = Object.keys(CHANNEL_LABELS) as ChannelCode[];
  * on a deal only when it was opened from that deal. Name, email and phone are checked in the dialog.
  */
 function NewContactModal() {
-  const { s, set, createContact } = useStore();
+  const { s, set, session, createContact } = useStore();
   const [busy, setBusy] = useState(false);
   const nc = s.newContact;
+  // Owner (CD-361): whoever adds the contact, unless they pick another member.
+  const members = s.team.filter((m) => m.status === 'Active');
+  const ownerId = nc.ownerId || session.userId;
   const deal = leadById(s, s.contactDealId);
   const fixedCompanyId = s.contactCompanyId ?? deal?.companyId ?? null;
   const companies = companyRecords(s);
   const fixedCompany = fixedCompanyId ? companies.find((c) => c.id === fixedCompanyId) : undefined;
   const [companyId, setCompanyId] = useState('');
   const [custom, setCustom] = useState<CustomFieldPatch>({});
-  const [errors, setErrors] = useState<{ name?: string; email?: string; phone?: string; form?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; role?: string; buyerRole?: string; email?: string; phone?: string; form?: string }>({});
   const setNc = (k: keyof typeof nc) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const v = e.target.value;
     set((x) => ({ newContact: { ...x.newContact, [k]: v } }));
-    if (k === 'name' || k === 'email' || k === 'phone') setErrors((x) => ({ ...x, [k]: undefined, form: undefined }));
+    if (k === 'name' || k === 'role' || k === 'buyerRole' || k === 'email' || k === 'phone') setErrors((x) => ({ ...x, [k]: undefined, form: undefined }));
   };
   const close = () => set({ contactOpen: false, contactCompanyId: null, contactDealId: '' });
   const create = async () => {
@@ -342,15 +345,18 @@ function NewContactModal() {
     const fields = customFieldsForCreate(customFieldsOf(s, 'contact'), custom);
     const next = {
       name: nc.name.trim() ? undefined : "Enter the contact's full name.",
+      // A contact added here is complete (CD-361): job title and role in the decision.
+      role: nc.role.trim() ? undefined : 'Enter their job title.',
+      buyerRole: nc.buyerRole ? undefined : 'Pick their role in the decision.',
       email: email.ok ? undefined : email.error,
       phone: phone.ok ? undefined : phone.error,
       form: 'missing' in fields ? `Fill in ${fields.missing}.` : undefined,
     };
     setErrors(next);
-    if (next.name || next.email || next.phone || next.form || !email.ok || !phone.ok || 'missing' in fields) return;
+    if (next.name || next.role || next.buyerRole || next.email || next.phone || next.form || !email.ok || !phone.ok || 'missing' in fields) return;
     setBusy(true);
     await createContact(
-      { ...nc, name: nc.name.trim(), email: email.value, phone: phone.value },
+      { ...nc, name: nc.name.trim(), role: nc.role.trim(), email: email.value, phone: phone.value, ownerId },
       deal?.id,
       customFieldsOf(s, 'contact').length ? fields.values : undefined,
       (fixedCompanyId ?? companyId) || undefined,
@@ -373,8 +379,9 @@ function NewContactModal() {
           {fieldError(errors.name)}
         </label>
         <label className="form-label">
-          Role
-          <input className="form-input" placeholder="e.g. Marketing Director" value={nc.role} onChange={setNc('role')} />
+          Job title
+          <input className="form-input" placeholder="e.g. Marketing Director" value={nc.role} onChange={setNc('role')} aria-invalid={!!errors.role || undefined} />
+          {fieldError(errors.role)}
         </label>
         <label className="form-label">
           Email
@@ -415,18 +422,33 @@ function NewContactModal() {
           </label>
         )}
       </div>
-      <label className="form-label" style={{ maxWidth: 280 }}>
-        Role in the decision
-        <select className="form-input" value={nc.buyerRole} onChange={setNc('buyerRole')}>
-          {BUYER_ROLES.map((b) => (
-            <option key={b}>{b}</option>
-          ))}
-        </select>
-      </label>
+      <div className="contact-form-grid">
+        <label className="form-label">
+          Role in the decision
+          <select className="form-input" value={nc.buyerRole} onChange={setNc('buyerRole')} aria-invalid={!!errors.buyerRole || undefined}>
+            <option value="">Pick a role</option>
+            {BUYER_ROLES.map((b) => (
+              <option key={b}>{b}</option>
+            ))}
+          </select>
+          {fieldError(errors.buyerRole)}
+        </label>
+        <label className="form-label">
+          Owner
+          <select className="form-input" data-testid="new-contact-owner" value={ownerId} onChange={(e) => set((x) => ({ newContact: { ...x.newContact, ownerId: e.target.value } }))}>
+            {!members.some((m) => m.id === ownerId) && <option value={ownerId}>You</option>}
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.id === session.userId ? `${m.name} (you)` : m.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <CustomFieldInputs entity="contact" values={custom} onChange={setCustom} />
       <label className="form-label">
         Notes
-        <textarea className="form-input" rows={3} placeholder="How they influence the opportunity" value={nc.notes} onChange={(e) => set((x) => ({ newContact: { ...x.newContact, notes: e.target.value } }))} />
+        <textarea className="form-input" rows={3} placeholder="Anything worth knowing" value={nc.notes} onChange={(e) => set((x) => ({ newContact: { ...x.newContact, notes: e.target.value } }))} />
       </label>
       {errors.form && (
         <div role="alert" style={{ fontSize: 12.5, color: 'var(--danger)' }}>

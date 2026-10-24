@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { type ApiCompanyDetails, type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, type CompanyInput, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput, type WorkspaceTerms } from '../lib/api';
+import { type ApiCompanyDetails, type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, type CompanyInput, type ContactInput, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput, type WorkspaceTerms } from '../lib/api';
 import { paths } from '../lib/paths';
 import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference } from './documents';
 import { employeeCardActions } from './employeeCard';
@@ -30,7 +30,8 @@ import {
 } from './selectors';
 import { dealTotals } from './dealMath';
 import { sortPlans, type VisitPlan } from './visitPlans';
-import type { BillingFrequency, BonusRule, ChannelCode, CustomFieldDef, DealDiscount, DealLine, Installment, Lead, LeadTask, LogEntry, NewContactDraft, Person, Profile, SegKey, Stage, State, TaskState, TaxMode, Workspace } from './types';
+import { CONTACT_EXTRA_KEYS } from './types';
+import type { BillingFrequency, BonusRule, ChannelCode, ContactExtra, CustomFieldDef, DealDiscount, DealLine, Installment, Lead, LeadTask, LogEntry, NewContactDraft, Person, Profile, SegKey, Stage, State, TaskState, TaxMode, Workspace } from './types';
 
 /** What the product dialog edits (CD-83); numbers as typed. */
 export interface ProductDraft {
@@ -191,7 +192,9 @@ function rowsOf(e: LiveEvent): Partial<Record<Part, readonly string[] | null>> {
   }
 }
 const ALL_PARTS: Part[] = ['funnels', 'companies', 'contacts', 'deals', 'products', 'lines', 'tasks', 'team', 'customFields', 'bonus', 'onboarding', 'visitPlans', 'visitScope'];
-const EMPTY_CONTACT: NewContactDraft = { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer', notes: '' };
+/** A contact with none of the CD-361 details filled in. */
+const EMPTY_EXTRA: ContactExtra = { orgUnit: '', source: '', influence: '', birthday: '', spouseName: '', children: '', pets: '' };
+const EMPTY_CONTACT: NewContactDraft = { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: '', notes: '' };
 const DISCOVERY_FIELDS = ['headline', 'need', 'constraint', 'decisionMaker', 'discoveryDate'] as const satisfies readonly (keyof Lead & keyof DealInput)[];
 /** Qualification text (CD-362), saved as you type like the discovery notes. */
 const QUALIFICATION_TEXT = ['pain', 'painSolution', 'qualificationOther'] as const satisfies readonly (keyof Lead & keyof DealInput)[];
@@ -761,7 +764,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       void save(() => crmApi.unlinkContact(leadId, contactId), undefined, 'unlinking ' + p.name);
     };
 
-    const CONTACT_FIELDS: Partial<Record<keyof Person, 'fullName' | 'jobTitle' | 'email' | 'phone' | 'linkedin' | 'buyerRole' | 'notes'>> = {
+    const CONTACT_FIELDS: Partial<Record<keyof Person, keyof ContactInput>> = {
       name: 'fullName',
       role: 'jobTitle',
       email: 'email',
@@ -769,7 +772,16 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       linkedin: 'linkedin',
       buyerRole: 'buyerRole',
       notes: 'notes',
+      // Details and personal details (CD-361)
+      orgUnit: 'orgUnit',
+      source: 'source',
+      influence: 'influence',
+      birthday: 'birthday',
+      spouseName: 'spouseName',
+      children: 'children',
+      pets: 'pets',
     };
+    const FIELD_WORDS: Partial<Record<keyof Person, string>> = { role: 'job title', buyerRole: 'role in the decision', orgUnit: 'org unit', influence: 'influence on the opportunity', spouseName: 'spouse' };
     const patchPerson = (id: string, patch: Partial<Person>) => {
       const p = personById(cur(), id);
       const contactId = p?.contactId;
@@ -780,15 +792,21 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }
       for (const [k, v] of Object.entries(patch)) {
         const field = CONTACT_FIELDS[k as keyof Person];
-        const value = String(v ?? '');
-        if (field && !(field === 'fullName' && !value.trim())) saveLater(`contact:${contactId}:${field}`, () => crmApi.updateContact(contactId, { [field]: value }, ver('contact', contactId)), `${p.name}'s ${k === 'role' ? 'job title' : k === 'buyerRole' ? 'buyer role' : k}`);
+        const text = String(v ?? '');
+        // An empty role in the decision or birthday is "none" (null), not an empty string (CD-361).
+        const value = (field === 'buyerRole' || field === 'birthday') && !text ? null : text;
+        if (field && !(field === 'fullName' && !text.trim())) saveLater(`contact:${contactId}:${field}`, () => crmApi.updateContact(contactId, { [field]: value }, ver('contact', contactId)), `${p.name}'s ${FIELD_WORDS[k as keyof Person] ?? k}`);
       }
       const withInitials = patch.name !== undefined ? { ...patch, initials: initialsOf(patch.name) } : patch;
       if (p.primary) {
         const map: Record<string, string> = { name: 'contact', role: 'role', email: 'email', phone: 'phone', buyerRole: 'buyerRole', notes: 'contactNotes', linkedin: 'contactLinkedin', initials: 'initials', ownerId: 'contactOwnerId' };
         const lp: Record<string, unknown> = {};
-        Object.entries(withInitials).forEach(([k, v]) => (lp[map[k] || k] = v));
-        set((x) => ({ leads: x.leads.map((l) => (l.contactId === contactId ? { ...l, ...lp } : l)) }));
+        const extra: Partial<ContactExtra> = {};
+        Object.entries(withInitials).forEach(([k, v]) => {
+          if ((CONTACT_EXTRA_KEYS as readonly string[]).includes(k)) extra[k as keyof ContactExtra] = String(v ?? '');
+          else lp[map[k] || k] = v;
+        });
+        set((x) => ({ leads: x.leads.map((l) => (l.contactId === contactId ? { ...l, ...lp, contactExtra: { ...(l.contactExtra ?? EMPTY_EXTRA), ...extra } } : l)) }));
       } else {
         set((x) => ({ extraPeople: x.extraPeople.map((y) => (y.id === id ? { ...y, ...withInitials } : y)) }));
       }
@@ -1529,8 +1547,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             email: draft.email,
             phone: draft.phone,
             linkedin: draft.linkedin,
-            buyerRole: draft.buyerRole,
+            buyerRole: draft.buyerRole || null,
             notes: draft.notes,
+            // The dialog's owner; without one the API makes whoever creates it the owner.
+            ...(draft.ownerId ? { ownerUserId: draft.ownerId } : {}),
             companyId: companyId ?? lead?.companyId ?? null,
             ...(customFields ? { customFields } : {}),
           });

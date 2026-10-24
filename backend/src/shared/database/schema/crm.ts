@@ -133,11 +133,21 @@ export const contacts = pgTable(
     email: text('email'),
     phone: text('phone'),
     linkedin: text('linkedin'),
-    buyerRole: text('buyer_role', { enum: BUYER_ROLES }).notNull().default('Influencer'),
+    /** Role in the decision; null until someone picks one (CD-361: the "No role in decision" badge). */
+    buyerRole: text('buyer_role', { enum: BUYER_ROLES }),
     ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
     /** Custom field values (CD-15), keyed by custom_field_defs.id. */
     customFields: jsonb('custom_fields').$type<CustomFieldValues>().notNull().default({}),
     notes: text('notes'),
+    /** Details (CD-361): their part of the company, how we met them and how they sway the opportunity. */
+    orgUnit: text('org_unit'),
+    source: text('source'),
+    influence: text('influence'),
+    /** Personal (CD-361), for getting to know them; every CRM user sees these. */
+    birthday: date('birthday'),
+    spouseName: text('spouse_name'),
+    children: text('children'),
+    pets: text('pets'),
     ...timestamps,
   },
   (t) => [

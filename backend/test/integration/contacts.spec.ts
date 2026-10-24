@@ -4,16 +4,18 @@
  */
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { call, createTenant, ok, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
+let member: Session;
 let tenant: string;
 let db: Client;
 const as = () => ({ token: owner.token, tenant });
 
 beforeAll(async () => {
-  owner = await signIn('contacts-owner');
+  [owner, member] = await Promise.all([signIn('contacts-owner'), signIn('contacts-member')]);
   tenant = await createTenant(owner, 'Contacts');
+  await addMember(owner, tenant, member, 'member');
   db = new Client({ connectionString: inject('databaseUrl') });
   await db.connect();
 });
@@ -54,5 +56,34 @@ describe('a company without deals', () => {
     expect(contact.companyId).toBe(company.id);
     const deals = await ok<{ deal: { id: string; primaryContactId: string | null }; contactIds: string[] }[]>('GET', '/crm/deals', as());
     expect(deals.filter((r) => r.deal.primaryContactId === contact.id || r.contactIds.includes(contact.id))).toEqual([]);
+  });
+});
+
+describe('details and personal details (CD-361)', () => {
+  const asMember = () => ({ token: member.token, tenant });
+  const details = { orgUnit: 'Procurement', source: 'Referral', influence: 'Signs off on budgets over 10k', birthday: '1985-04-12', spouseName: 'Marko', children: 'Ana (7)', pets: 'Dog Rex' };
+
+  it("saves them, and a member who doesn't own the contact reads and edits them too", async () => {
+    const contact = await ok<{ id: string; ownerUserId: string }>('POST', '/crm/contacts', { ...as(), body: { fullName: 'Petra Personal', ...details } });
+    expect(contact).toMatchObject(details);
+    expect(contact.ownerUserId).toBe(owner.userId);
+
+    const seen = (await ok<Record<string, unknown>[]>('GET', '/crm/contacts', asMember())).find((c) => c.id === contact.id);
+    expect(seen).toMatchObject(details);
+    expect(await ok('PATCH', `/crm/contacts/${contact.id}`, { ...asMember(), body: { pets: 'Dog Rex, cat Maza', birthday: '' } }, 200)).toMatchObject({ pets: 'Dog Rex, cat Maza', birthday: null });
+  });
+
+  it('a new contact has no role in the decision until one is picked; null clears it again', async () => {
+    const contact = await ok<{ id: string; buyerRole: string | null }>('POST', '/crm/contacts', { ...as(), body: { fullName: 'Nora Norole' } });
+    expect(contact.buyerRole).toBeNull();
+    expect(await ok('PATCH', `/crm/contacts/${contact.id}`, { ...as(), body: { buyerRole: 'Champion' } }, 200)).toMatchObject({ buyerRole: 'Champion' });
+    expect(await ok('PATCH', `/crm/contacts/${contact.id}`, { ...as(), body: { buyerRole: null } }, 200)).toMatchObject({ buyerRole: null });
+  });
+
+  it('records them in the change history', async () => {
+    const contact = await ok<{ id: string }>('POST', '/crm/contacts', { ...as(), body: { fullName: 'Hugo History' } });
+    await ok('PATCH', `/crm/contacts/${contact.id}`, { ...as(), body: { orgUnit: 'Finance', spouseName: 'Iva' } }, 200);
+    const { entries } = await ok<{ entries: { field: string | null }[] }>('GET', `/crm/history?entityType=contact&entityId=${contact.id}`, as());
+    expect(entries.map((e) => e.field)).toEqual(expect.arrayContaining(['orgUnit', 'spouseName']));
   });
 });

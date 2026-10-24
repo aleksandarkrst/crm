@@ -61,6 +61,8 @@ export interface Lead {
   contactLinkedin?: string;
   /** Owner of the primary contact (user id, and last known name from the API). */
   contactOwnerId?: string | null;
+  /** The primary contact's details and personal details (CD-361). */
+  contactExtra?: ContactExtra;
   contactOwner?: string;
   /** Last known name of the deal owner, from the API. Show it with ownerOf(), match by ownerId. */
   owner?: string;
@@ -130,7 +132,19 @@ export interface Person {
   /** Owner of the contact (user id); ownerName is their last known name, from the API. */
   ownerId?: string | null;
   ownerName?: string;
+  /** Details and personal details (CD-361); '' when not filled in. */
+  orgUnit?: string;
+  source?: string;
+  influence?: string;
+  birthday?: string;
+  spouseName?: string;
+  children?: string;
+  pets?: string;
 }
+
+/** A contact's details and personal details (CD-361), as Person carries them; '' when empty. */
+export type ContactExtra = Required<Pick<Person, 'orgUnit' | 'source' | 'influence' | 'birthday' | 'spouseName' | 'children' | 'pets'>>;
+export const CONTACT_EXTRA_KEYS = ['orgUnit', 'source', 'influence', 'birthday', 'spouseName', 'children', 'pets'] as const satisfies readonly (keyof ContactExtra)[];
 
 export interface CompanyExtra {
   id?: string;
@@ -367,8 +381,11 @@ export interface NewContactDraft {
   email: string;
   phone: string;
   linkedin: string;
+  /** '' until one is picked (CD-361). */
   buyerRole: string;
   notes: string;
+  /** Owner of the new contact (user id); the dialog starts with whoever creates it. */
+  ownerId?: string;
 }
 
 export interface NewFieldDraft {

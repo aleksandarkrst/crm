@@ -371,11 +371,20 @@ export interface ApiContact {
   email: string | null;
   phone: string | null;
   linkedin: string | null;
-  buyerRole: string;
+  /** Null: no role in the decision yet (CD-361). */
+  buyerRole: string | null;
   ownerUserId: string | null;
   /** Custom field values by field id (CD-15). */
   customFields: CustomFieldValues;
   notes: string | null;
+  /** Details and personal details (CD-361). */
+  orgUnit: string | null;
+  source: string | null;
+  influence: string | null;
+  birthday: string | null;
+  spouseName: string | null;
+  children: string | null;
+  pets: string | null;
   /** Current name of the owner, also after they left the workspace (lists only). */
   ownerName?: string | null;
   /** The version: send it back as If-Match when changing the contact (CD-20). */
@@ -1285,6 +1294,10 @@ export interface ApiEmployeePersonalExport {
     addressCountry: string | null;
     emergencyContactName: string | null;
     emergencyContactPhone: string | null;
+    /** Family and pets (CD-361). */
+    spouse: string | null;
+    children: string | null;
+    pets: string | null;
   };
   bank: { iban: string | null; bankName: string | null; fxIban: string | null; fxSameAsIban: boolean; swiftBic: string | null; fxBankName: string | null; fxBankAddress: string | null };
 }
@@ -1347,6 +1360,9 @@ export type EmployeeField =
   | 'addressCountry'
   | 'emergencyContactName'
   | 'emergencyContactPhone'
+  | 'spouse'
+  | 'children'
+  | 'pets'
   | 'iban'
   | 'bankName'
   | 'fxSameAsIban'
@@ -1422,6 +1438,10 @@ export interface ApiEmployeeCard {
     addressCountry: string | null;
     emergencyContactName: string | null;
     emergencyContactPhone: string | null;
+    /** Family and pets (CD-361). */
+    spouse: string | null;
+    children: string | null;
+    pets: string | null;
   };
   bank?: {
     iban: ApiMaskedIban | null;

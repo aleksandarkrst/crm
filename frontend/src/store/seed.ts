@@ -137,7 +137,7 @@ export function initialState(): State {
     contactOpen: false,
     contactDealId: '',
     contactCompanyId: null,
-    newContact: { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: 'Influencer', notes: '' },
+    newContact: { name: '', role: '', email: '', phone: '', linkedin: '', buyerRole: '', notes: '' },
     personaOpen: false,
     personaBase: '',
     templateOpen: false,

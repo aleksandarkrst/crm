@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { askConfirm } from '../components/ConfirmDialog';
+import { tabStyle } from '../components/ui';
 import { Screen } from '../components/Layout';
 import type { ApiEmployeeCard, EmployeeField } from '../lib/api';
 import { paths } from '../lib/paths';
@@ -11,7 +12,7 @@ import { useStore } from '../store/store';
 import { useEmployeeCard } from '../store/useEmployeeCard';
 import { DeactivateDialog, ReactivateDialog } from './employee/dialogs';
 import { CardEditContext, dateLabel } from './employee/parts';
-import { BankSection, cardInitial, cardPatch, PersonalSection, WorkSection } from './employee/sections';
+import { BankSection, cardInitial, cardPatch, FamilySection, PersonalSection, WorkSection } from './employee/sections';
 import { TimeOffSection } from './employee/TimeOffSection';
 import { EmployeeSickLeave } from './timeoff/SickLeave';
 import { TimesheetSection } from './employee/TimesheetSection';
@@ -78,6 +79,8 @@ function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => 
   const [edits, setEdits] = useState<Draft>({});
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<{ text: string; conflict: boolean } | null>(null);
+  // Overview | Personal (CD-361); one draft and one Save cover both tabs.
+  const [tab, setTab] = useState<'overview' | 'personal'>('overview');
   const changed = changedFields(initial, edits, editable);
   const dirty = Object.keys(changed).length > 0;
 
@@ -134,18 +137,42 @@ function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => 
             )}
           </div>
         )}
-        <div className="emp-grid">
-          <div className="emp-col">
-            <WorkSection card={card} />
-            <TimeOffSection id={card.id} />
-            <CardSickLeave employeeId={card.id} />
-            <TimesheetSection id={card.id} />
+        {/* Overview | Personal (CD-361): the tab, with all personal details, is there for whoever may see them. */}
+        {card.personal && (
+          <div className="report-tabs" role="tablist" aria-label="Employee card" data-testid="emp-tabs">
+            <button type="button" role="tab" id="emp-tab-overview" aria-controls="emp-tabpanel" aria-selected={tab === 'overview'} className="composer-tab" style={tabStyle(tab === 'overview')} onClick={() => setTab('overview')} data-testid="emp-tab-overview">
+              Overview
+            </button>
+            <button type="button" role="tab" id="emp-tab-personal" aria-controls="emp-tabpanel" aria-selected={tab === 'personal'} className="composer-tab" style={tabStyle(tab === 'personal')} onClick={() => setTab('personal')} data-testid="emp-tab-personal">
+              Personal
+            </button>
           </div>
-          <div className="emp-col">
-            {card.personal && <PersonalSection card={card} />}
-            {card.bank && <BankSection card={card} />}
+        )}
+        {tab === 'personal' && card.personal ? (
+          <div className="emp-grid" role="tabpanel" id="emp-tabpanel" aria-labelledby="emp-tab-personal">
+            <div className="emp-col">
+              <PersonalSection card={card} />
+            </div>
+            <div className="emp-col">
+              <FamilySection card={card} />
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="emp-grid" {...(card.personal ? { role: 'tabpanel', id: 'emp-tabpanel', 'aria-labelledby': 'emp-tab-overview' } : {})}>
+            <div className="emp-col">
+              <WorkSection card={card} />
+              <TimeOffSection id={card.id} />
+              <CardSickLeave employeeId={card.id} />
+              <TimesheetSection id={card.id} />
+            </div>
+            {/* Personal details live on the Personal tab (CD-361). */}
+            {card.bank && (
+              <div className="emp-col">
+                <BankSection card={card} />
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </CardEditContext.Provider>
   );

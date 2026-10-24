@@ -17,7 +17,11 @@ const WORK_TYPE_OPTIONS = (Object.keys(WORK_TYPE_LABEL) as WorkType[]).map((valu
 
 // ------------------------------------------------------------------ Work (spec 4.2)
 
-const PERSONAL = ['dateOfBirth', 'privateEmail', 'privatePhone', 'addressStreet', 'addressPostalCode', 'addressCity', 'addressCountry', 'emergencyContactName', 'emergencyContactPhone'] as const;
+const PERSONAL = ['dateOfBirth', 'privateEmail', 'privatePhone', 'addressStreet', 'addressPostalCode', 'addressCity', 'addressCountry', 'emergencyContactName', 'emergencyContactPhone', 'spouse', 'children', 'pets'] as const;
+/** Family information on the Personal tab (CD-361). */
+const FAMILY = ['spouse', 'children', 'pets'] as const;
+/** Personal details, also on the Personal tab: everything else, the date of birth shown as Birthday. */
+const CONTACT_DETAILS = PERSONAL.filter((f) => !(FAMILY as readonly string[]).includes(f));
 
 /**
  * The whole card's starting values (CD-225: one draft): strings for inputs, booleans for
@@ -327,17 +331,17 @@ export function PersonalSection({ card }: { card: ApiEmployeeCard }) {
     <EditableSection
       title="Personal details"
       testId="emp-personal"
-      fields={[...PERSONAL]}
+      fields={[...CONTACT_DETAILS]}
       view={
         <>
-          <Row label="Date of birth">
-            <Val v={dateLabel(p.dateOfBirth)} />
-          </Row>
           <Row label="Private email">
             <Val v={p.privateEmail} />
           </Row>
           <Row label="Private phone">
             <Val v={p.privatePhone} />
+          </Row>
+          <Row label="Birthday">
+            <Val v={dateLabel(p.dateOfBirth)} />
           </Row>
           <Row label="Address" testId="emp-address">
             <Val v={p.addressStreet || p.addressCity ? address : ''} />
@@ -349,15 +353,50 @@ export function PersonalSection({ card }: { card: ApiEmployeeCard }) {
       }
       edit={(draft, setField, can) => (
         <>
-          <TextField field="dateOfBirth" type="date" draft={draft} setField={setField} can={can} />
           <TextField field="privateEmail" type="email" draft={draft} setField={setField} can={can} maxLength={254} />
           <TextField field="privatePhone" type="tel" draft={draft} setField={setField} can={can} maxLength={40} />
+          <TextField field="dateOfBirth" type="date" label="Birthday" draft={draft} setField={setField} can={can} />
           <TextField field="addressStreet" draft={draft} setField={setField} can={can} maxLength={200} />
           <TextField field="addressPostalCode" draft={draft} setField={setField} can={can} maxLength={10} />
           <TextField field="addressCity" draft={draft} setField={setField} can={can} maxLength={100} />
           <TextField field="addressCountry" draft={draft} setField={setField} can={can} maxLength={100} />
           <TextField field="emergencyContactName" draft={draft} setField={setField} can={can} maxLength={100} />
           <TextField field="emergencyContactPhone" type="tel" draft={draft} setField={setField} can={can} maxLength={40} />
+        </>
+      )}
+    />
+  );
+}
+
+/**
+ * Family information on the Personal tab (CD-361): spouse, children and pets, for HR's gifts and
+ * cards. Seen and edited like the other personal details.
+ */
+export function FamilySection({ card }: { card: ApiEmployeeCard }) {
+  const p = card.personal!;
+  return (
+    <EditableSection
+      title="Family information"
+      testId="emp-family"
+      fields={[...FAMILY]}
+      view={
+        <>
+          <Row label="Spouse">
+            <Val v={p.spouse} />
+          </Row>
+          <Row label="Children">
+            <Val v={p.children} />
+          </Row>
+          <Row label="Pets">
+            <Val v={p.pets} />
+          </Row>
+        </>
+      }
+      edit={(draft, setField, can) => (
+        <>
+          <TextField field="spouse" draft={draft} setField={setField} can={can} maxLength={200} />
+          <TextField field="children" draft={draft} setField={setField} can={can} maxLength={500} />
+          <TextField field="pets" draft={draft} setField={setField} can={can} maxLength={500} />
         </>
       )}
     />

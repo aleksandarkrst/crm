@@ -93,8 +93,16 @@ export function contactsCsv(s: State, rows: { id: string; company: string; compa
     { header: 'Email', value: ({ p }) => clean(p!.email) },
     { header: 'Phone', value: ({ p }) => clean(p!.phone) },
     { header: 'LinkedIn', value: ({ p }) => clean(p!.linkedin) },
-    { header: 'Buyer role', value: ({ p }) => p!.buyerRole || 'Influencer' },
+    { header: 'Buyer role', value: ({ p }) => p!.buyerRole ?? '' },
     { header: 'Owner', value: ({ p }) => clean(memberName(s, p!.ownerId, p!.ownerName)) },
+    // Details and personal details (CD-361), named as the contact import reads them.
+    { header: 'Org unit', value: ({ p }) => p!.orgUnit ?? '' },
+    { header: 'Source', value: ({ p }) => p!.source ?? '' },
+    { header: 'Influence on the opportunity', value: ({ p }) => p!.influence ?? '' },
+    { header: 'Birthday', value: ({ p }) => p!.birthday ?? '' },
+    { header: 'Spouse', value: ({ p }) => p!.spouseName ?? '' },
+    { header: 'Children', value: ({ p }) => p!.children ?? '' },
+    { header: 'Pets', value: ({ p }) => p!.pets ?? '' },
     ...customColumns<(typeof people)[number]>(s, 'contact', ({ p }) => p!.contactId),
   ]);
 }

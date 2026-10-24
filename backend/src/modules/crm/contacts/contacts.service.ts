@@ -20,11 +20,20 @@ export const CreateContact = z.object({
   email: z.email().nullish().or(z.literal('').transform(() => null)),
   phone: optionalText(50).refine((v) => v == null || phoneValid(v), PHONE_MESSAGE),
   linkedin: optionalText(300),
-  buyerRole: z.enum(BUYER_ROLES).optional(),
+  /** Null clears it: the contact then has no role in the decision (CD-361). */
+  buyerRole: z.enum(BUYER_ROLES).nullish(),
   ownerUserId: z.uuid().nullish(),
   /** Custom field values by field id (CD-15); null or '' clears one. */
   customFields: CustomFieldValuesInput,
   notes: optionalText(2000),
+  // Details and personal details (CD-361); empty text clears a field.
+  orgUnit: optionalText(120),
+  source: optionalText(80),
+  influence: optionalText(2000),
+  birthday: z.iso.date().nullish().or(z.literal('').transform(() => null)),
+  spouseName: optionalText(200),
+  children: optionalText(500),
+  pets: optionalText(500),
 });
 export const UpdateContact = nonEmptyPatch(CreateContact.partial());
 export const ContactsQuery = ListQuery.extend({

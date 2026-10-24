@@ -271,6 +271,10 @@ export const employeePersonal = pgTable(
     addressCountry: text('address_country'),
     emergencyContactName: text('emergency_contact_name'),
     emergencyContactPhone: text('emergency_contact_phone'),
+    /** Family and pets (CD-361), for HR's gifts and cards; seen like the rest of this table. */
+    spouse: text('spouse'),
+    children: text('children'),
+    pets: text('pets'),
     ibanSealed: text('iban_sealed'),
     ibanLast4: text('iban_last4'),
     ibanCountry: text('iban_country'),

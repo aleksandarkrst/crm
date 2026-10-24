@@ -5,10 +5,10 @@ import { IconRow } from '../components/icons';
 import { MeetingsCard } from '../components/MeetingsCard';
 import { Screen } from '../components/Layout';
 import { DealsSection, FocusTasks, RecordHeader, RecordHistory, Section } from '../components/RecordParts';
-import { CheckedInput, GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
+import { CheckedInput, GhostDate, GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
 import { checkEmail, checkLinkedin, checkPhone } from '../lib/validate';
 import { paths } from '../lib/paths';
-import { BUYER_ROLES } from '../store/seed';
+import { BUYER_ROLES, SOURCES } from '../store/seed';
 import { allPeople, companyIdOfPerson, companyOfPerson, companyRecords, contactsForLead, curOf, initialsOf, leadById, personById, timelineFor } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Person } from '../store/types';
@@ -20,6 +20,9 @@ function linkedinHref(value: string): string {
   if (/^https?:\/\/\S+$/i.test(v)) return v;
   return /^([a-z]{2,3}\.|www\.)?linkedin\.com\/\S+$/i.test(v) ? 'https://' + v : '';
 }
+
+/** The Source list companies and opportunities use (CD-361), plus a saved value that isn't on it. */
+const sourceOptions = (current?: string) => [{ value: '', label: 'No source' }, ...[...SOURCES, ...(current && !SOURCES.includes(current) ? [current] : [])].map((v) => ({ value: v, label: v }))];
 
 /** A contact (CD-80): header like a deal's, how to reach them, their company, deals, tasks and history. */
 export function Contact() {
@@ -141,15 +144,40 @@ export function Contact() {
                 <GhostInput aria-label="Role" placeholder="Job title" value={p.role} onChange={setField('role')} />
               </IconRow>
               <IconRow icon="team" label="Role in the decision">
-                <GhostSelect chevron aria-label="Role in the decision" value={p.buyerRole || 'Influencer'} onChange={setField('buyerRole')} options={BUYER_ROLES} />
+                <GhostSelect chevron aria-label="Role in the decision" value={p.buyerRole ?? ''} onChange={setField('buyerRole')} options={[{ value: '', label: 'No role yet' }, ...BUYER_ROLES.map((b) => ({ value: b, label: b }))]} />
+              </IconRow>
+              <IconRow icon="company" label="Org unit">
+                <GhostInput aria-label="Org unit" placeholder="e.g. Procurement" maxLength={120} value={p.orgUnit ?? ''} onChange={setField('orgUnit')} />
+              </IconRow>
+              <IconRow icon="source" label="Source">
+                <GhostSelect chevron aria-label="Source" value={p.source ?? ''} onChange={setField('source')} options={sourceOptions(p.source)} />
+              </IconRow>
+              <IconRow icon="note" label="Influence on the opportunity">
+                <textarea className="ghost" aria-label="Influence on the opportunity" rows={2} maxLength={2000} value={p.influence ?? ''} onChange={setField('influence')} placeholder="How they influence the opportunity" style={{ resize: 'vertical', lineHeight: 1.5, flex: 1 }} />
               </IconRow>
               <IconRow icon="note" label="Notes">
-                <textarea className="ghost" aria-label="Notes" rows={2} value={p.notes ?? ''} onChange={setField('notes')} placeholder="How they influence the opportunity" style={{ resize: 'vertical', lineHeight: 1.5, flex: 1 }} />
+                <textarea className="ghost" aria-label="Notes" rows={2} value={p.notes ?? ''} onChange={setField('notes')} placeholder="Anything worth knowing" style={{ resize: 'vertical', lineHeight: 1.5, flex: 1 }} />
               </IconRow>
               <IconRow icon="calendar" label="Last touch">
                 <span className="field-value">{!c ? '—' : c.stall === 0 ? 'Last touch today' : c.stall === 1 ? 'Last touch 1 day ago' : `Last touch ${c.stall} days ago`}</span>
               </IconRow>
               <CustomFieldRows entity="contact" recordId={p.contactId} />
+            </Section>
+
+            {/* Personal (CD-361): for getting to know them; every CRM user sees it. */}
+            <Section title="Personal" testId="contact-personal">
+              <IconRow icon="calendar" label="Birthday">
+                <GhostDate aria-label="Birthday" placeholder="Add birthday" value={p.birthday ?? ''} onChange={setField('birthday')} />
+              </IconRow>
+              <IconRow icon="team" label="Spouse">
+                <GhostInput aria-label="Spouse" placeholder="Add spouse" maxLength={200} value={p.spouseName ?? ''} onChange={setField('spouseName')} />
+              </IconRow>
+              <IconRow icon="team" label="Children">
+                <GhostInput aria-label="Children" placeholder="Add children" maxLength={500} value={p.children ?? ''} onChange={setField('children')} />
+              </IconRow>
+              <IconRow icon="note" label="Pets">
+                <GhostInput aria-label="Pets" placeholder="Add pets" maxLength={500} value={p.pets ?? ''} onChange={setField('pets')} />
+              </IconRow>
             </Section>
 
             {companyRec && (

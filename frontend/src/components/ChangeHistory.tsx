@@ -45,6 +45,13 @@ const FIELD_LABELS: Record<string, string> = {
   phone: 'Phone',
   linkedin: 'LinkedIn',
   buyerRole: 'Buyer role',
+  // Contact details and personal details (CD-361)
+  orgUnit: 'Org unit',
+  influence: 'Influence on the opportunity',
+  birthday: 'Birthday',
+  spouseName: 'Spouse',
+  children: 'Children',
+  pets: 'Pets',
   // Meetings (CD-130)
   type: 'Type',
   startsAt: 'Start',
@@ -142,7 +149,7 @@ const LINE_LABELS: Record<string, string> = {
 };
 const FREQUENCY_TEXT: Record<string, string> = { one_time: 'One time', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly', annually: 'Annually' };
 const TAX_TEXT: Record<string, string> = { exclusive: 'Tax exclusive', inclusive: 'Tax inclusive', none: 'No tax' };
-const DATE_FIELDS = new Set(['closeDate', 'discoveryDate', 'startDate', 'endDate', 'periodStart', 'dueDate', 'scheduledDate']);
+const DATE_FIELDS = new Set(['closeDate', 'discoveryDate', 'birthday', 'startDate', 'endDate', 'periodStart', 'dueDate', 'scheduledDate']);
 const PERIOD_TEXT: Record<string, string> = { month: 'Month', quarter: 'Quarter' };
 const NOUN: Record<HistoryEntity, string> = { deal: 'opportunity', company: 'company', contact: 'contact', meeting: 'meeting', visit_plan: 'visit plan', project: 'project', task: 'task', work_order: 'work order' };
 const PAGE = 30;

@@ -7,7 +7,7 @@ import { type ApiActivity, type ApiBonusRules, type ApiCompany, type ApiCustomFi
 import { initialsOf, localeFor, momentLabel, money, taskKey } from './selectors';
 import { sortPlans } from './visitPlans';
 import { SYSTEM_CHANNEL } from './seed';
-import type { BonusRule, CatalogItem, CompanyExtra, CustomFieldDef, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, Profile, SegKey, StageChange, State, TeamMember, Workspace } from './types';
+import type { BonusRule, CatalogItem, CompanyExtra, ContactExtra, CustomFieldDef, DealLine, Funnel, Lead, LeadTask, LogEntry, Person, Profile, SegKey, StageChange, State, TeamMember, Workspace } from './types';
 
 export type WorkspaceData = Pick<
   State,
@@ -37,6 +37,17 @@ export type WorkspaceData = Pick<
 
 export const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member' } as const;
 const DAY = 86_400_000;
+
+/** A contact's details and personal details (CD-361), '' for each one not filled in. */
+const contactExtraOf = (c: ApiContact): ContactExtra => ({
+  orgUnit: c.orgUnit ?? '',
+  source: c.source ?? '',
+  influence: c.influence ?? '',
+  birthday: c.birthday ?? '',
+  spouseName: c.spouseName ?? '',
+  children: c.children ?? '',
+  pets: c.pets ?? '',
+});
 
 function mapFunnel(f: ApiFunnel): Funnel {
   return {
@@ -316,10 +327,11 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
       initials: ct ? initialsOf(ct.fullName) : '—',
       email: ct?.email ?? '—',
       phone: ct?.phone ?? '—',
-      buyerRole: ct?.buyerRole,
+      buyerRole: ct?.buyerRole ?? '',
       contactNotes: ct?.notes ?? '',
       contactLinkedin: ct?.linkedin ?? '',
       contactOwnerId: ct?.ownerUserId,
+      contactExtra: ct ? contactExtraOf(ct) : undefined,
       contactOwner: ct?.ownerName ?? undefined,
       owner: ownerName ?? undefined,
       ownerId: deal.ownerUserId,
@@ -401,8 +413,9 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
       email: c.email ?? '',
       phone: c.phone ?? '',
       linkedin: c.linkedin ?? undefined,
-      buyerRole: c.buyerRole,
+      buyerRole: c.buyerRole ?? '',
       notes: c.notes ?? '',
+      ...contactExtraOf(c),
       initials: initialsOf(c.fullName),
       ownerId: c.ownerUserId,
       ownerName: c.ownerName ?? undefined,

@@ -81,7 +81,7 @@ export function GuestsField({
   const addContact = async () => {
     if (!newContact?.name.trim() || !companyId) return;
     setAdding(true);
-    const id = await createContact({ name: newContact.name.trim(), email: newContact.email.trim(), role: newContact.role.trim(), phone: '', linkedin: '', buyerRole: 'Influencer', notes: '' }, undefined, undefined, companyId);
+    const id = await createContact({ name: newContact.name.trim(), email: newContact.email.trim(), role: newContact.role.trim(), phone: '', linkedin: '', buyerRole: '', notes: '' }, undefined, undefined, companyId);
     setAdding(false);
     if (!id) return; // the store said why
     setNewContact(null);

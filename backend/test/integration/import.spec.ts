@@ -102,6 +102,17 @@ describe('preview', () => {
     expect(await companiesNamed(good)).toHaveLength(0);
   });
 
+  it("imports a contact's details and personal details, with a dd.mm.yyyy birthday and no role (CD-361)", async () => {
+    const email = `details-${Date.now()}@example.test`;
+    const csv = `Full name,Email,Org unit,Source,Influence,Birthday,Spouse,Children,Pets
+Dina Details,${email},Procurement,Referral,Signs off,12.04.1985,Marko,Ana (7),Dog Rex
+`;
+    const result = await commit('contacts', { csv });
+    expect(result.problems ?? []).toEqual([]);
+    const saved = (await ok<Json[]>('GET', '/crm/contacts', as())).find((c) => c.email === email);
+    expect(saved).toMatchObject({ orgUnit: 'Procurement', source: 'Referral', influence: 'Signs off', birthday: '1985-04-12', spouseName: 'Marko', children: 'Ana (7)', pets: 'Dog Rex', buyerRole: null });
+  });
+
   it('refuses a contact row whose phone is not a phone number, and says why (CD-464)', async () => {
     const contacts = await preview('contacts', { csv: `Full name,Phone
 Pia,abc123!!
