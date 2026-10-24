@@ -10,6 +10,7 @@ import { activities, CHANNELS, type ChecklistItem, deals, dealStageHistory, deal
 import { JobsService } from '../../../shared/events/jobs.service';
 import { type TenantProvisioner, TenantProvisioning } from '../../../shared/events/tenant-provisioning';
 import { nonEmptyPatch, optionalText } from '../../../shared/validation/common';
+import { CompanyStatusService } from '../companies/company-status.service';
 import { StageHistoryService } from '../deals/stage-history.service';
 import { assertOwnerIsMember } from '../owner';
 import { BLANK_FUNNEL_STAGES, DEFAULT_FUNNELS, type StageTemplate } from './default-funnels';
@@ -111,6 +112,7 @@ export class FunnelsService implements TenantProvisioner, OnModuleInit {
     private readonly provisioning: TenantProvisioning,
     private readonly history: StageHistoryService,
     private readonly jobs: JobsService,
+    private readonly status: CompanyStatusService,
   ) {}
 
   onModuleInit(): void {
@@ -311,6 +313,8 @@ export class FunnelsService implements TenantProvisioner, OnModuleInit {
             await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId: deal.id, actorUserId: ctx.userId, channel: null, title: `Moved to ${t.name}`, detail: `The stage ${stage.name} was deleted.` });
             if (outcome === 'won') await this.jobs.send('crm.deal-won', { tenantId: ctx.tenantId, dealId: deal.id, actorUserId: ctx.userId }, tx);
           }
+          // Into or out of the won stage moves their companies' status (CD-358).
+          await this.status.recompute(tx, ctx, inStage.map((d) => d.companyId));
         }
 
         const rest = funnel.stages.filter((s) => s.id !== stageId);

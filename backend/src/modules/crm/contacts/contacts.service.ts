@@ -11,6 +11,7 @@ import { ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validati
 import { PHONE_MESSAGE, phoneValid } from '../../../shared/validation/phone';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
 import { RecordHistoryService } from '../history/record-history.service';
+import { CompanyStatusService } from '../companies/company-status.service';
 import { assertOwnerIsMember, userNameOf } from '../owner';
 
 export const CreateContact = z.object({
@@ -51,6 +52,7 @@ export class ContactsService {
     private readonly audit: AuditService,
     private readonly customFields: CustomFieldsService,
     private readonly changes: RecordHistoryService,
+    private readonly status: CompanyStatusService,
   ) {}
 
   list(ctx: TenantContext, query: ContactsQuery) {
@@ -94,6 +96,8 @@ export class ContactsService {
           .values({ ownerUserId: ctx.userId, ...fields, customFields: cf.set, tenantId: ctx.tenantId })
           .returning();
         await this.audit.record(tx, ctx, { action: 'contact.created', entityType: 'contact', entityId: row!.id });
+        // A qualified contact counts towards the company's Opportunity status (CD-358).
+        await this.status.recompute(tx, ctx, [row!.companyId]);
         return row!;
       })
       .catch(mapDbError);
@@ -112,9 +116,12 @@ export class ContactsService {
         const { customFields: cfInput, ...fields } = input;
         const patch: PgUpdateSetSource<typeof contacts> = { ...fields };
         if (cfInput !== undefined) patch.customFields = this.customFields.merged(contacts.customFields, await this.customFields.validate(tx, 'contact', cfInput));
+        const [before] = await tx.select({ companyId: contacts.companyId }).from(contacts).where(eq(contacts.id, id));
         const [row] = await tx.update(contacts).set(patch).where(eq(contacts.id, id)).returning();
         if (!row) throw new NotFoundException('Contact not found');
         await this.audit.record(tx, ctx, { action: 'contact.updated', entityType: 'contact', entityId: id, data: input });
+        // Its company (and the one it left) may gain or lose a qualified contact (CD-358).
+        await this.status.recompute(tx, ctx, [before?.companyId, row.companyId]);
         return row;
       })
       .catch(mapDbError);
@@ -138,8 +145,9 @@ export class ContactsService {
           .delete(meetingParticipants)
           .where(and(eq(meetingParticipants.contactId, id), inArray(meetingParticipants.meetingId, upcoming)))
           .returning({ meetingId: meetingParticipants.meetingId });
-        const [row] = await tx.delete(contacts).where(eq(contacts.id, id)).returning({ id: contacts.id });
+        const [row] = await tx.delete(contacts).where(eq(contacts.id, id)).returning({ id: contacts.id, companyId: contacts.companyId });
         if (!row) throw new NotFoundException('Contact not found');
+        await this.status.recompute(tx, ctx, [row.companyId]);
         await this.audit.record(tx, ctx, {
           action: 'contact.deleted',
           entityType: 'contact',

@@ -855,6 +855,27 @@
       "when": 1792848544454,
       "tag": "0121_stage_owner_gates_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1792855746529,
+      "tag": "0122_company_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1792855789681,
+      "tag": "0123_company_status_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1792855912358,
+      "tag": "0124_company_status_history_idx",
+      "breakpoints": true
     }
   ]
 }

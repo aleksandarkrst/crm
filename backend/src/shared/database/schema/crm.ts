@@ -84,6 +84,10 @@ export const customFieldDefs = pgTable(
 
 /** Company ownership (CD-357): private or state-owned. */
 export const OWNERSHIP_TYPES = ['private', 'state'] as const;
+
+/** A company's status (CD-358), computed from its data and history; see crm/companies/company-status.ts. */
+export const COMPANY_STATUSES = ['lead', 'opportunity', 'client', 'past_client', 'not_interested'] as const;
+export type CompanyStatus = (typeof COMPANY_STATUSES)[number];
 export type OwnershipType = (typeof OWNERSHIP_TYPES)[number];
 
 export const companies = pgTable(
@@ -110,10 +114,19 @@ export const companies = pgTable(
     notes: text('notes'),
     /** Custom field values (CD-15), keyed by custom_field_defs.id; see CustomFieldsService. */
     customFields: jsonb('custom_fields').$type<CustomFieldValues>().notNull().default({}),
+    /**
+     * Status (CD-358): computed by CompanyStatusService after every change that affects it. A person
+     * can only set it back; `status_set_manually` then keeps the automation from raising it again.
+     */
+    status: text('status', { enum: COMPANY_STATUSES }).notNull().default('lead'),
+    statusChangedAt: timestamp('status_changed_at', { withTimezone: true }),
+    statusSetManually: boolean('status_set_manually').notNull().default(false),
     ...timestamps,
   },
   (t) => [
     unique('companies_tenant_id_uq').on(t.tenantId, t.id),
+    check('companies_status_ck', sql`${t.status} in ('lead', 'opportunity', 'client', 'past_client', 'not_interested')`),
+    index('companies_tenant_status_idx').on(t.tenantId, t.status),
     index('companies_tenant_name_idx').on(t.tenantId, t.name),
     uniqueIndex('companies_tenant_pib_uq').on(t.tenantId, t.pib).where(sql`${t.pib} is not null`),
   ],
