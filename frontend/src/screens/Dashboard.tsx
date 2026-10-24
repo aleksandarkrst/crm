@@ -7,20 +7,12 @@ import { VisitProgressCard } from '../components/VisitProgressCard';
 import { paths } from '../lib/paths';
 import { DATE_RANGES, dateRangeLabel, DEFAULT_FILTERS, SOURCES } from '../store/seed';
 import { billedShare, bonusOf, bonusRule, closeIsoOf, closeRangeOf, curOf, currencySymbol, funnelOptions, inCloseRange, dealPayments, moneyTotal, num, salesPeople, stageOf, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
-import { conversionMetrics, daysLabel, MIN_MOVED_DEALS } from '../store/metrics';
+import { conversionMetrics, daysLabel, MIN_MOVED_DEALS, TIME_BUCKETS } from '../store/metrics';
 import { useStore } from '../store/store';
 import type { Lead, SegKey } from '../store/types';
 
 const STAGE_SHADES = ['#E7F2EE', '#CBE3DA', '#A3D2BF', '#5FA587', '#2F7A5E', '#14503C', '#0D241C'];
 const TIME_SHADES = ['#F2F5F3', '#DFE6E2', '#C3CEC8', '#87968F', '#56665E', '#2E3D36'];
-const TIME_BUCKETS = [
-  { label: 'Up to 12 months', range: [9, 999] },
-  { label: 'Up to 9 months', range: [6, 9] },
-  { label: 'Up to 6 months', range: [3, 6] },
-  { label: 'Up to 3 months', range: [1, 3] },
-  { label: 'Up to 1 month', range: [0.5, 1] },
-  { label: 'Now', range: [-999, 0.5] },
-] as const;
 const BONUS_COLS = 'minmax(0,1.6fr) 90px 120px 120px 120px 120px';
 const CONV_COLS = 'minmax(0,1.3fr) minmax(0,1fr) 44px 104px 84px';
 const clip = 'polygon(0 0, 100% 0, calc(100% - 14px) 100%, 14px 100%)';
@@ -195,7 +187,8 @@ export function Dashboard() {
           <div className="card" style={{ padding: 18 }}>
             <div className="card-title" style={{ marginBottom: 4 }}>Funnel by payment due date</div>
             <div className="card-sub" style={{ marginBottom: 16 }}>
-              Product and service payments falling due inside each horizon, incl. VAT
+              {/* CD-365: the bands are separate periods, not running totals. */}
+              Each band is its own period; the bands don't add up. Product and service payments falling due in that period, incl. VAT
               {undatedDeals ? ` · ${plural(undatedDeals, 'opportunity', 'opportunities')} without billing dates left out` : ''}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
