@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { FilterBar, SortHeader, useSort } from '../components/ui';
 import { DataActions } from '../components/DataActions';
 import { EmptyState } from '../components/EmptyState';
@@ -25,7 +26,7 @@ export const isSenior = (role: string) => /decision maker|economic buyer/i.test(
 
 export function Contacts() {
   const { s, set, openContact, session } = useStore();
-  const fields = contactPageFields(s);
+  const fields = useMemo(() => contactPageFields(s), [s]);
   const [filters, setFilters] = usePageFilters('contacts', { order: ['owner'], f: { owner: { vals: [] } } });
   const { sort, toggle } = useSort<Key>('contact');
 

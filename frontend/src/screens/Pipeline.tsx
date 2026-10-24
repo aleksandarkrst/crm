@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FilterBar, SortHeader, useSort } from '../components/ui';
 import { DataActions } from '../components/DataActions';
@@ -51,7 +51,7 @@ export function Pipeline() {
   const seg = s.segment;
   const stages = s.funnels[seg].stages;
   const me = session.userId;
-  const fields = opportunityFields(s, seg, ['funnel', 'owner', 'status']);
+  const fields = useMemo(() => opportunityFields(s, seg, ['funnel', 'owner', 'status']), [s, seg]);
   const [saved, setSaved] = usePageFilters('pipeline', { order: ['funnel', 'owner', 'status'], f: { funnel: { vals: [seg] }, owner: { op: 'is', vals: [me] }, status: { op: 'is', vals: openAndWon(s, seg) } } });
   // The Funnel chip is the funnel open on the Pipeline (s.segment), which the rest of the app uses too.
   const filters = setField(saved, 'funnel', { vals: [seg] });

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { FilterBar, SortHeader, useSort } from '../components/ui';
 import { DataActions } from '../components/DataActions';
 import { EmptyState } from '../components/EmptyState';
@@ -32,7 +33,7 @@ const NUMERIC = new Set<Key>(['value', 'lifetimeValue', 'oppCount', 'contactCoun
 
 export function Companies() {
   const { s, addCompany, openCompany, session } = useStore();
-  const fields = companyPageFields(s);
+  const fields = useMemo(() => companyPageFields(s), [s]);
   const [filters, setFilters] = usePageFilters('companies', { order: ['owner'], f: { owner: { vals: [] } } });
   const { sort, toggle } = useSort<Key>('name');
 

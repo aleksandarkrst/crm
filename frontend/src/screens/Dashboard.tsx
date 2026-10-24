@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FilterBar } from '../components/ui';
 import { EmptyState } from '../components/EmptyState';
@@ -35,7 +35,7 @@ export function Dashboard() {
   const savedFunnel = saved.f.funnel?.vals?.[0] ?? '';
   const funnel = s.funnels[savedFunnel] ? savedFunnel : s.segment;
   const filters = setField(saved, 'funnel', { vals: [funnel] });
-  const fields = opportunityFields(s, funnel, ['funnel', 'owner', 'close']);
+  const fields = useMemo(() => opportunityFields(s, funnel, ['funnel', 'owner', 'close']), [s, funnel]);
   // "This quarter" is a fiscal one, and "today" is the workspace's (CD-73).
   const ctx = { today: todayIso(s.workspace.timezone), fiscalMonth: s.workspace.fiscalMonth };
   const closeField = fields.find((x) => x.id === 'close')!;
