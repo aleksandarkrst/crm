@@ -7,7 +7,7 @@ import { Screen } from '../components/Layout';
 import { VisitProgressCard } from '../components/VisitProgressCard';
 import { paths } from '../lib/paths';
 import { filterPeople, opportunityFields } from '../store/filterFields';
-import { applyFilters, isActive, valueText } from '../store/filters';
+import { applyFilters, isActive, pruneList, valueText } from '../store/filters';
 import { billedShare, bonusOf, bonusRule, closeIsoOf, curOf, currencySymbol, funnelOptions, dealPayments, moneyTotal, num, salesPeople, stageOf, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
 import { conversionMetrics, daysLabel, MIN_MOVED_DEALS, TIME_BUCKETS } from '../store/metrics';
 import { useStore } from '../store/store';
@@ -33,13 +33,15 @@ export function Dashboard() {
     void refreshHistory();
   }, [refreshHistory]);
   const me = session.userId;
-  const [filters, setFilters] = usePageFilters('overview', { order: ['owner', 'close'], f: { owner: { op: 'is', vals: [] }, close: {} } });
+  const [saved, setFilters] = usePageFilters('overview', { order: ['owner', 'close'], f: { owner: { op: 'is', vals: [] }, close: {} } });
   // The funnel stays the Audience select it was (owner's call, 24 Oct): all funnels, or one. It is kept with
   // the other filters (not a chip), so Clear filters resets it to all; a funnel deleted since counts as all.
-  const picked = filters.f.audience?.vals?.[0] ?? '';
+  const picked = saved.f.audience?.vals?.[0] ?? '';
   const audience = s.funnels[picked] ? picked : ALL_FUNNELS;
   // On "Audience" the Status choices are every funnel's stages, so none of them hides another funnel's deals.
-  const fields = useMemo(() => opportunityFields(s, audience === ALL_FUNNELS ? null : audience, ['owner', 'close']).filter((f) => f.id !== 'funnel'), [s, audience]);
+  const fields = useMemo(() => opportunityFields(s, audience === ALL_FUNNELS ? null : audience, ['owner', 'close']), [s, audience]);
+  // A Status chip keeps "Open" across funnels; single stages of another funnel are dropped.
+  const filters = pruneList(fields, saved, 'status');
   const inAudience = audience === ALL_FUNNELS ? s.leads : s.leads.filter((l) => l.segment === audience);
   // "This quarter" is a fiscal one, and "today" is the workspace's (CD-73).
   const ctx = { today: todayIso(s.workspace.timezone), fiscalMonth: s.workspace.fiscalMonth };

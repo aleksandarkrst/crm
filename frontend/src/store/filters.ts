@@ -32,8 +32,6 @@ export interface FilterField<R = never> {
   options?: FilterOption[];
   /** Always on the row (the page's defaults); the others are added with + Filter. */
   pinned?: boolean;
-  /** Always has a value (Funnel): no Clear selection, never cleared. */
-  required?: boolean;
   /** One value only (radio buttons), no is / is not. */
   single?: boolean;
   /** The row that ticks every `sub` option at once ("Open"). */
@@ -145,6 +143,38 @@ export function dateWindow(v: FieldFilter, ctx: FilterContext): { from: string; 
   return presetRange(v.preset, ctx.today, ctx.fiscalMonth);
 }
 
+// ---------------------------------------------------------------- the whole group ("Open")
+
+/**
+ * A grouped list chip ("Open" on Status) saves the whole group as this one value, not the ids it
+ * had then: a stage added later, or another funnel's stages, belong to it too.
+ */
+export const GROUP = '__group';
+const subIds = (fd: FilterField<never>) => (fd.options ?? []).filter((o) => o.sub).map((o) => o.id);
+/** What a list chip's values stand for now: GROUP is every `sub` option the field has today. */
+export function expandVals(fd: FilterField<never>, vals: string[]): string[] {
+  return vals.includes(GROUP) ? [...new Set([...subIds(fd), ...vals.filter((x) => x !== GROUP)])] : vals;
+}
+/** The other way, for saving: every `sub` option ticked is GROUP. */
+export function collapseVals(fd: FilterField<never>, vals: string[]): string[] {
+  const subs = subIds(fd);
+  if (!fd.groupLabel || !subs.length || !subs.every((id) => vals.includes(id))) return vals.filter((x) => x !== GROUP);
+  return [GROUP, ...vals.filter((x) => x !== GROUP && !subs.includes(x))];
+}
+/**
+ * A list chip without the values its field no longer offers (another funnel, a stage removed); GROUP
+ * stays. `fallback` is used when nothing is left.
+ */
+export function pruneList<R>(fields: FilterField<R>[], value: FilterValue, id: string, fallback?: string[]): FilterValue {
+  const fd = fields.find((f) => f.id === id);
+  const v = value.f[id];
+  if (!fd || fd.kind !== 'list' || !v?.vals?.length) return value;
+  const known = new Set((fd.options ?? []).map((o) => o.id));
+  const vals = v.vals.filter((x) => x === GROUP || known.has(x));
+  if (vals.length === v.vals.length) return value;
+  return setField(value, id, { vals: vals.length || !fallback ? vals : fallback });
+}
+
 // ---------------------------------------------------------------- matching
 
 const listOf = (raw: FilterRaw): string[] => (Array.isArray(raw) ? [...raw] : raw === null || raw === undefined || raw === '' ? [] : [String(raw)]);
@@ -155,7 +185,8 @@ export function matchField(fd: FilterField<never>, v: FieldFilter | undefined, r
   const vals = v.vals || [];
   switch (fd.kind) {
     case 'list': {
-      const hit = listOf(raw).some((x) => vals.includes(x));
+      const all = expandVals(fd, vals);
+      const hit = listOf(raw).some((x) => all.includes(x));
       return v.op === 'isnot' ? !hit : hit;
     }
     case 'person':
@@ -220,16 +251,17 @@ export function valueText(fd: FilterField<never>, v: FieldFilter | undefined, ct
   const vals = v.vals || [];
   switch (fd.kind) {
     case 'list': {
+      const all = expandVals(fd, vals);
       const os = fd.options || [];
       const subs = os.filter((o) => o.sub);
-      let rest = os.filter((o) => vals.includes(o.id));
+      let rest = os.filter((o) => all.includes(o.id));
       const parts: string[] = [];
-      if (fd.groupLabel && subs.length && subs.every((o) => vals.includes(o.id))) {
+      if (fd.groupLabel && subs.length && subs.every((o) => all.includes(o.id))) {
         parts.push(fd.groupLabel);
         rest = rest.filter((o) => !o.sub);
       }
       parts.push(...rest.map((o) => o.name));
-      return parts.length > 2 || !parts.length ? vals.length + ' selected' : parts.join(', ');
+      return parts.length > 2 || !parts.length ? all.length + ' selected' : parts.join(', ');
     }
     case 'person':
       if (vals.length > 2) return vals.length + ' people';
@@ -238,7 +270,10 @@ export function valueText(fd: FilterField<never>, v: FieldFilter | undefined, ct
       return vals[0] === 'yes' ? 'Yes' : 'No';
     case 'date':
       if (v.preset !== 'custom') return DATE_PRESETS.find((p) => p.id === v.preset)?.label ?? 'Any';
-      return (v.from ? dayLabel(v.from) : 'Any') + ' – ' + (v.to ? dayLabel(v.to) : 'Any');
+      // One-sided ranges read "From 1 Oct" / "Until 1 Oct" (Overview: "closing from 1 Oct").
+      if (!v.to) return 'From ' + dayLabel(v.from!);
+      if (!v.from) return 'Until ' + dayLabel(v.to);
+      return dayLabel(v.from) + ' – ' + dayLabel(v.to);
     case 'number': {
       const a = Number(v.min) || 0;
       const b = Number(v.max) || 0;
@@ -264,11 +299,11 @@ export function removeField(value: FilterValue, id: string): FilterValue {
   return { order: value.order.filter((x) => x !== id), f };
 }
 
-/** Clear filters: pinned chips back to "Any" (a required one keeps its value), added chips removed. */
-export function clearAll<R>(fields: FilterField<R>[], value: FilterValue): FilterValue {
+/** Clear filters: pinned chips back to "Any", added chips removed. */
+export function clearAll<R>(fields: FilterField<R>[]): FilterValue {
   const pinned = fields.filter((fd) => fd.pinned);
   const f: Record<string, FieldFilter> = {};
-  for (const fd of pinned) f[fd.id] = fd.required ? (value.f[fd.id] ?? {}) : emptyFilter(fd as FilterField<never>);
+  for (const fd of pinned) f[fd.id] = emptyFilter(fd as FilterField<never>);
   return { order: pinned.map((fd) => fd.id), f };
 }
 
@@ -276,7 +311,7 @@ export function clearAll<R>(fields: FilterField<R>[], value: FilterValue): Filte
 export function canClear<R>(fields: FilterField<R>[], value: FilterValue): boolean {
   return value.order.some((id) => {
     const fd = fields.find((x) => x.id === id);
-    return !!fd && (!fd.pinned || (!fd.required && isActive(fd as FilterField<never>, value.f[id])));
+    return !!fd && (!fd.pinned || isActive(fd as FilterField<never>, value.f[id]));
   });
 }
 

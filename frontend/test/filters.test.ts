@@ -1,7 +1,7 @@
 // Unit tests of the shared filter row's logic (CD-366): `npm test` in frontend.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { applyFilters, canClear, chipLabel, clearAll, type FilterField, type FilterValue, matchField, presetRange, restoreValue, valueText } from '../src/store/filters.ts';
+import { applyFilters, canClear, chipLabel, clearAll, collapseVals, type FilterField, type FilterValue, GROUP, matchField, presetRange, pruneList, restoreValue, valueText } from '../src/store/filters.ts';
 
 interface Rec {
   stage: string;
@@ -21,7 +21,7 @@ const STAGES = [
   { id: 'lost', name: 'Lost' },
 ];
 const fields: FilterField<Rec>[] = [
-  { id: 'funnel', label: 'Funnel', group: 'Opportunity', kind: 'list', single: true, required: true, pinned: true, options: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }], get: (r) => r.funnel },
+  { id: 'funnel', label: 'Funnel', group: 'Opportunity', kind: 'list', single: true, pinned: true, options: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }], get: (r) => r.funnel },
   { id: 'owner', label: 'Salesperson', group: 'Opportunity', kind: 'person', pinned: true, get: (r) => r.owner },
   { id: 'stage', label: 'Status', group: 'Opportunity', kind: 'list', groupLabel: 'Open', options: STAGES, get: (r) => r.stage },
   { id: 'people', label: 'People', group: 'Meeting', kind: 'person', get: (r) => r.people },
@@ -141,7 +141,30 @@ describe('date presets', () => {
     assert.equal(matchField(fd('close'), { preset: 'custom', from: '2026-10-01' }, '2026-12-01', ctx), true);
     assert.equal(matchField(fd('close'), { preset: 'custom', to: '2026-10-01' }, '2026-12-01', ctx), false);
     assert.equal(matchField(fd('close'), { preset: 'custom' }, '', ctx), true); // no dates yet: not active
-    assert.equal(valueText(fd('close'), { preset: 'custom', from: '2026-10-01' }), '1 Oct – Any');
+    assert.equal(valueText(fd('close'), { preset: 'custom', from: '2026-10-01' }), 'From 1 Oct');
+    assert.equal(valueText(fd('close'), { preset: 'custom', to: '2026-10-01' }), 'Until 1 Oct');
+    assert.equal(valueText(fd('close'), { preset: 'custom', from: '2026-10-01', to: '2026-12-31' }), '1 Oct – 31 Dec');
+  });
+});
+
+describe('the whole "Open" group', () => {
+  const later = [...STAGES.slice(0, 2), { id: 'negotiation', name: 'Negotiation', sub: true }, ...STAGES.slice(2)];
+  const status = (options: typeof STAGES) => ({ ...fd('stage'), options }) as FilterField<never>;
+
+  it('is saved as one value, so a stage added later is still part of Open', () => {
+    assert.deepEqual(collapseVals(fd('stage'), ['new', 'proposal', 'won']), [GROUP, 'won']);
+    const saved = { op: 'is' as const, vals: [GROUP, 'won'] };
+    assert.equal(matchField(status(later), saved, 'negotiation', ctx), true);
+    assert.equal(matchField(status(later), saved, 'lost', ctx), false);
+    assert.equal(valueText(status(later), saved), 'Open, Won');
+  });
+
+  it('a saved value drops stages its funnel no longer has, keeping Open; nothing left gives the fallback', () => {
+    const rows: FilterField<Rec>[] = [{ ...fields[2]!, options: later }];
+    const value: FilterValue = { order: ['stage'], f: { stage: { op: 'is', vals: [GROUP, 'gone', 'won'] } } };
+    assert.deepEqual(pruneList(rows, value, 'stage').f.stage?.vals, [GROUP, 'won']);
+    const stale: FilterValue = { order: ['stage'], f: { stage: { op: 'is', vals: ['gone'] } } };
+    assert.deepEqual(pruneList(rows, stale, 'stage', [GROUP, 'won']).f.stage?.vals, [GROUP, 'won']);
   });
 });
 
@@ -156,11 +179,10 @@ describe('the row', () => {
     assert.equal(applyFilters(rows, fields, value, ctx).length, 1);
   });
 
-  it('Clear filters keeps the required Funnel, empties the other pinned chips and removes added ones', () => {
+  it('Clear filters empties the pinned chips and removes added ones', () => {
     assert.equal(canClear(fields, value), true);
-    const cleared = clearAll(fields, value);
+    const cleared = clearAll(fields);
     assert.deepEqual(cleared.order, ['funnel', 'owner']);
-    assert.deepEqual(cleared.f.funnel, { vals: ['b'] });
     assert.deepEqual(cleared.f.owner, { op: 'is', vals: [] });
     assert.equal(canClear(fields, cleared), false);
   });

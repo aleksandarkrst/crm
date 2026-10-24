@@ -1,5 +1,5 @@
 // Pipeline views (CD-274): the Kanban / Table toggle, the table with the same filters as the
-// board (the filter row, CD-366), the remembered view, the Funnel chip's pencil and New opportunity.
+// board (the filter row, CD-366), the remembered view, the funnel select's pencil and New opportunity.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
 import { api, BASE_URL, newUserWithWorkspace, steps, text, useBrowser, testPib } from '../lib/harness.mjs';

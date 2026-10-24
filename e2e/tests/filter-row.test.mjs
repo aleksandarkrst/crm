@@ -3,8 +3,8 @@
 // custom field offered without code, the no-results card, and the row remembered per page.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, newUserWithWorkspace, steps, testPib, useBrowser } from '../lib/harness.mjs';
-import { addFilter, chips, chipText, clearFilters, closePopover, offeredFields, pickOption, setOp, setRange, typeText } from '../lib/filters.mjs';
+import { api, BASE_URL, click, clickButton, email, finishOnboarding, newUserWithWorkspace, signIn, steps, testPib, useBrowser } from '../lib/harness.mjs';
+import { addFilter, chips, chipText, clearFilters, closePopover, offeredFields, openChip, pickOption, setOp, setRange, typeText } from '../lib/filters.mjs';
 
 /** An ISO date `days` from today in Europe/Belgrade (new workspaces use it). */
 function isoDay(days) {
@@ -21,6 +21,8 @@ describe('filter row', () => {
   const step = steps(browser, 'filter-row');
   let page;
   let tier;
+  let acmeId;
+  let dealId;
 
   step('sets up companies, contacts, tasks, products and a company custom field', async () => {
     page = await browser.person('fiona');
@@ -33,6 +35,7 @@ describe('filter row', () => {
     await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ fullName: 'Bob Bolt', companyId: bolt.id, jobTitle: 'Owner' }) });
     const [funnel] = await api(page, '/crm/funnels');
     const deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Acme lanes', funnelId: funnel.id, companyId: acme.id }) });
+    [acmeId, dealId] = [acme.id, deal.id];
     const task = (label, channel, dueDate) => api(page, `/crm/deals/${deal.id}/tasks`, { method: 'POST', body: JSON.stringify({ stageId: funnel.stages[0].id, label, blocksAdvance: false, channel, dueDate }) });
     await task('Call Acme back', 'PH', isoDay(0));
     await task('Email the price list', 'EM', isoDay(5));
@@ -61,6 +64,38 @@ describe('filter row', () => {
     assert.deepEqual(await chips(page), ['owner']);
     assert.equal(await chipText(page, 'owner'), 'Salesperson Any');
     await page.waitForFunction(() => document.body.innerText.includes('Email the price list'));
+  });
+
+  step("Today: Meetings today follow every ticked salesperson, not only you", async () => {
+    const { token } = await api(page, '/team/invitations', { method: 'POST', body: JSON.stringify({ email: email('filter-row-ana'), role: 'member' }) });
+    const ana = await browser.person('filter-row-ana');
+    await ana.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
+    await signIn(ana, email('filter-row-ana'), 'Ana Agent');
+    await clickButton(ana, 'Accept and join');
+    await finishOnboarding(ana);
+    // One meeting each, today: Fiona organizes hers, Ana hers.
+    const at = (h) => `${isoDay(0)}T${String(h).padStart(2, '0')}:00:00Z`;
+    const meeting = (p, title, h) => api(p, '/crm/meetings', { method: 'POST', body: JSON.stringify({ title, type: 'visit', startsAt: at(h), endsAt: at(h + 1), companyId: acmeId, dealId }) });
+    await meeting(page, 'Fiona site visit', 8);
+    await meeting(ana, 'Ana site visit', 9);
+    const team = (await api(page, '/team')).members;
+    const id = (name) => team.find((m) => m.displayName === name).userId;
+
+    await page.goto(BASE_URL + '/today', { waitUntil: 'networkidle0' });
+    const meetings = () => page.$$eval('[data-testid=meetings-today] [data-meeting-id]', (els) => els.map((el) => el.innerText).join(' | '));
+    // Me and Ana ticked: both meetings (it used to show only yours).
+    await openChip(page, 'owner');
+    await click(page, `[data-testid="filter-pop-owner"] [data-testid="filter-option"][data-value="${id('Fiona Filter')}"]`);
+    await click(page, `[data-testid="filter-pop-owner"] [data-testid="filter-option"][data-value="${id('Ana Agent')}"]`);
+    await closePopover(page);
+    await page.waitForFunction(() => /Fiona site visit/.test(document.querySelector('[data-testid=meetings-today]')?.innerText ?? '') && /Ana site visit/.test(document.querySelector('[data-testid=meetings-today]')?.innerText ?? ''));
+    // Ana alone: only hers.
+    await openChip(page, 'owner');
+    await click(page, `[data-testid="filter-pop-owner"] [data-testid="filter-option"][data-value="${id('Fiona Filter')}"]`);
+    await closePopover(page);
+    await page.waitForFunction(() => !/Fiona site visit/.test(document.querySelector('[data-testid=meetings-today]')?.innerText ?? ''));
+    assert.match(await meetings(), /Ana site visit/);
+    await clearFilters(page);
   });
 
   step('Companies: + Filter lists every field, the new custom one tagged; Industry and Tier together', async () => {

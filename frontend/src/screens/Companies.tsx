@@ -58,7 +58,7 @@ export function Companies() {
       {companyRecords(s).length === 0 ? (
         <EmptyState title="No companies yet" text="Companies are the organisations you sell to. Add one, or import a list from a CSV file." action={{ label: 'Add company', onClick: addCompany }} />
       ) : rows.length === 0 ? (
-        <FilterEmpty noun="companies" onClear={() => setFilters(clearAll(fields, filters))} />
+        <FilterEmpty noun="companies" onClear={() => setFilters(clearAll(fields))} />
       ) : (
         <div className="card" style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 1580 }}>

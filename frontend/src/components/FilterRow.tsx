@@ -1,5 +1,5 @@
 import { type ReactNode, useRef, useState } from 'react';
-import { addField, canClear, CHECKBOX_OPTIONS, chipLabel, clearAll, DATE_PRESETS, emptyFilter, type FieldFilter, type FilterField, type FilterIcon, type FilterKind, type FilterOp, type FilterOption, type FilterPerson, type FilterValue, isActive, removeField, setField, valueText } from '../store/filters';
+import { addField, canClear, CHECKBOX_OPTIONS, chipLabel, clearAll, collapseVals, DATE_PRESETS, emptyFilter, expandVals, type FieldFilter, type FilterField, type FilterIcon, type FilterKind, type FilterOp, type FilterOption, type FilterPerson, type FilterValue, isActive, removeField, setField, valueText } from '../store/filters';
 import { initialsOf } from '../store/selectors';
 import { Popover } from './Popover';
 
@@ -106,7 +106,7 @@ export function FilterRow<R>({
           className="fr-clear"
           data-testid="filter-clear"
           onClick={() => {
-            onChange(clearAll(fields, value));
+            onChange(clearAll(fields));
             onClearAll?.();
             close();
           }}
@@ -201,13 +201,15 @@ interface Row {
 function FieldPanel({ fd, v, people, me, onPatch, onClear, onRemove }: { fd: FilterField<never>; v: FieldFilter | undefined; people: FilterPerson[]; me?: string; onPatch: (p: FieldFilter) => void; onClear: () => void; onRemove: () => void }) {
   const [q, setQ] = useState('');
   const query = q.trim().toLowerCase();
-  const vals = v?.vals ?? [];
+  // A grouped list saves "Open" as one value (GROUP): ticks show what it stands for now, saves collapse back.
+  const vals = fd.kind === 'list' ? expandVals(fd, v?.vals ?? []) : (v?.vals ?? []);
+  const patch = (p: FieldFilter) => onPatch(fd.kind === 'list' && p.vals ? { ...p, vals: collapseVals(fd, p.vals) } : p);
   const isList = fd.kind === 'list' || fd.kind === 'checkbox';
   const options = fd.kind === 'checkbox' ? CHECKBOX_OPTIONS : (fd.options ?? []);
   const single = fd.single || fd.kind === 'checkbox';
   const ops = fd.kind === 'list' && !fd.single ? OPS.list : fd.kind === 'text' ? OPS.text : null;
   const op = v?.op ?? ops?.[0]![0];
-  const toggle = (id: string) => () => onPatch({ vals: single ? [id] : vals.includes(id) ? vals.filter((x) => x !== id) : [...vals, id] });
+  const toggle = (id: string) => () => patch({ vals: single ? [id] : vals.includes(id) ? vals.filter((x) => x !== id) : [...vals, id] });
 
   let rows: Row[] = [];
   if (isList) {
@@ -219,7 +221,7 @@ function FieldPanel({ fd, v, people, me, onPatch, onClear, onRemove }: { fd: Fil
     if (grouped && subs.length) {
       const n = subs.filter((x) => vals.includes(x)).length;
       const allOn = n === subs.length;
-      rows.unshift({ key: '__group', label: fd.groupLabel!, on: allOn, partial: n > 0, bold: true, toggle: () => onPatch({ vals: allOn ? vals.filter((x) => !subs.includes(x)) : [...new Set([...vals, ...subs])] }) });
+      rows.unshift({ key: '__group', label: fd.groupLabel!, on: allOn, partial: n > 0, bold: true, toggle: () => patch({ vals: allOn ? vals.filter((x) => !subs.includes(x)) : [...new Set([...vals, ...subs])] }) });
     }
   } else if (fd.kind === 'person') {
     rows = [...people]
@@ -306,22 +308,16 @@ function FieldPanel({ fd, v, people, me, onPatch, onClear, onRemove }: { fd: Fil
         </div>
       )}
       {fd.kind === 'date' && v?.preset && v.preset !== 'custom' && <span className="fr-note">Updates with today's date.</span>}
-      {(!fd.required || !fd.pinned) && (
-        <div className="fr-foot">
-          {!fd.required ? (
-            <button type="button" className="fr-foot-btn" data-testid="filter-clear-selection" onClick={onClear}>
-              Clear selection
-            </button>
-          ) : (
-            <span />
-          )}
-          {!fd.pinned && (
-            <button type="button" className="fr-foot-btn danger" data-testid="filter-remove" onClick={onRemove}>
-              Remove filter
-            </button>
-          )}
-        </div>
-      )}
+      <div className="fr-foot">
+        <button type="button" className="fr-foot-btn" data-testid="filter-clear-selection" onClick={onClear}>
+          Clear selection
+        </button>
+        {!fd.pinned && (
+          <button type="button" className="fr-foot-btn danger" data-testid="filter-remove" onClick={onRemove}>
+            Remove filter
+          </button>
+        )}
+      </div>
     </>
   );
 }

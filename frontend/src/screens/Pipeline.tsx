@@ -7,9 +7,9 @@ import { FilterEmpty, FilterRow } from '../components/FilterRow';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { dealsCsv } from '../store/exportCsv';
-import { filterPeople, LOST, openAndWon, opportunityFields, WON } from '../store/filterFields';
-import { applyFilters, clearAll, isActive, matchField, setField } from '../store/filters';
-import { funnelOptions, initialsOf, memberName, needsNextStep, ownerOf, stageOf, stageOwnerId, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
+import { filterPeople, openAndWon, opportunityFields, WON } from '../store/filterFields';
+import { applyFilters, clearAll, isActive, matchField, pruneList } from '../store/filters';
+import { funnelOptions, initialsOf, memberName, needsNextStep, ownerOf, stageOf, stageOwnerId, todayIso, valueNum, valueTotal } from '../store/selectors';
 import type { Lead, SegKey, Stage, State } from '../store/types';
 import { useStore } from '../store/store';
 import { usePageFilters } from '../store/usePageFilters';
@@ -51,18 +51,14 @@ export function Pipeline() {
   const seg = s.segment;
   const stages = s.funnels[seg].stages;
   const me = session.userId;
-  // The funnel stays the select next to the view toggle (owner's call, 24 Oct): not a chip, not under + Filter.
-  const fields = useMemo(() => opportunityFields(s, seg, ['owner', 'status']).filter((f) => f.id !== 'funnel'), [s, seg]);
-  const [saved, setFilters] = usePageFilters('pipeline', { order: ['owner', 'status'], f: { owner: { op: 'is', vals: [me] }, status: { op: 'is', vals: openAndWon(s, seg) } } });
-  // The funnel can change elsewhere too (Settings, a new funnel): a Status naming another funnel's
-  // stages would hide every deal, so it starts over at "Open, Won" here.
-  const known = new Set(fields.find((f) => f.id === 'status')?.options?.map((o) => o.id));
-  const filters = (saved.f.status?.vals ?? []).some((id) => !known.has(id)) ? setField(saved, 'status', { op: 'is', vals: openAndWon(s, seg) }) : saved;
-  /** Another funnel: Status carries over what it can (its stages differ). */
+  // The funnel is the select next to the view toggle (owner's call, 24 Oct), not a chip.
+  const fields = useMemo(() => opportunityFields(s, seg, ['owner', 'status']), [s, seg]);
+  const [saved, setFilters] = usePageFilters('pipeline', { order: ['owner', 'status'], f: { owner: { op: 'is', vals: [me] }, status: { op: 'is', vals: openAndWon() } } });
+  // "Open" is saved as the whole group, so it follows the funnel's stages; single stages of another
+  // funnel (picked here, in Settings or a new funnel) are dropped, and "Open, Won" comes back if nothing is left.
+  const filters = pruneList(fields, saved, 'status', openAndWon());
   const pickFunnel = (next: SegKey) => {
-    if (next === seg || !s.funnels[next]) return;
-    setFilters(setField(filters, 'status', { vals: statusInFunnel(s, filters.f.status?.vals, seg, next) }));
-    set({ segment: next });
+    if (next !== seg && s.funnels[next]) set({ segment: next });
   };
   // The open funnel, then every chip (Status included: Lost is one of its values, CD-60), with AND.
   const segLeads = applyFilters(
@@ -131,7 +127,7 @@ export function Pipeline() {
         </div>
       )}
       {noMatch ? (
-        <FilterEmpty noun="opportunities" onClear={() => setFilters(clearAll(fields, filters))} />
+        <FilterEmpty noun="opportunities" onClear={() => setFilters(clearAll(fields))} />
       ) : view === 'table' ? (
         s.leads.length > 0 && <PipelineTable s={s} stages={visible} leads={segLeads} openLead={store.openLead} />
       ) : (
@@ -139,14 +135,6 @@ export function Pipeline() {
       )}
     </Screen>
   );
-}
-
-/** Status in another funnel: Won and Lost carry over, and so does a whole "Open" (the stages differ). */
-function statusInFunnel(s: State, vals: string[] | undefined, from: SegKey, to: SegKey): string[] {
-  if (!vals) return openAndWon(s, to);
-  const open = (seg: SegKey) => stagesFor(s, seg).filter((st) => !st.won).map((st) => st.id);
-  const whole = open(from).length > 0 && open(from).every((id) => vals.includes(id));
-  return [...(whole ? open(to) : []), ...vals.filter((v) => v === WON || v === LOST)];
 }
 
 /** The Kanban view: one column per stage; drag a card to move the deal there. */

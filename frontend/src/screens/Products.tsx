@@ -38,7 +38,7 @@ export function Products() {
           action={{ label: 'New product', onClick: () => openProduct(null) }}
         />
       ) : rows.length === 0 ? (
-        <FilterEmpty noun="products" onClear={() => setFilters(clearAll(fields, filters))} />
+        <FilterEmpty noun="products" onClear={() => setFilters(clearAll(fields))} />
       ) : (
         <div className="card" style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 900 }}>

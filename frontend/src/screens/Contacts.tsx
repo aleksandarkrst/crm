@@ -45,7 +45,7 @@ export function Contacts() {
       {allPeople(s).length === 0 ? (
         <EmptyState title="No contacts yet" text="Contacts are the people you talk to at your companies: who decides, who pays, who champions you." action={{ label: 'New contact', onClick: () => set({ contactOpen: true }) }} />
       ) : rows.length === 0 ? (
-        <FilterEmpty noun="contacts" onClear={() => setFilters(clearAll(fields, filters))} />
+        <FilterEmpty noun="contacts" onClear={() => setFilters(clearAll(fields))} />
       ) : (
         <div className="card" style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 1140 }}>

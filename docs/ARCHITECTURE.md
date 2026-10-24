@@ -298,9 +298,9 @@ the Overview audience filter).
 
 ### Pipeline views (CD-274)
 
-- The Pipeline bar starts with a **Kanban / Table** toggle, then the filter row (see below) whose
-  **Funnel** chip has a pencil next to it that opens Settings → Funnel builder (which edits the
-  selected funnel); then the meta line, "⋯" (import and export) and **New opportunity**.
+- The Pipeline bar starts with a **Kanban / Table** toggle, the **funnel select** with a pencil that
+  opens Settings → Funnel builder (which edits the selected funnel), then the filter row (see below),
+  the meta line, "⋯" (import and export) and **New opportunity**.
 - **Table** shows the same deals as the board, with the same filters: one band per stage that has
   deals (stage name, open value, count), with the columns Deal (company and title), Contact, Stage,
   Value, Fit, Last contact, Owner and Next step. A row opens the deal; no rows show "No deals
@@ -314,14 +314,18 @@ the Overview audience filter).
   `FilterRow` (`components/FilterRow.tsx`): the page's pinned chips, chips added with **+ Filter**,
   and **Clear filters**. The logic is pure and unit-tested (`store/filters.ts`,
   `test/filters.test.ts`): matching per field kind (list with is / is not, person, date presets,
-  number range, text contains / empty / not empty, checkbox), the chip's text, Clear filters (a
-  required chip such as Funnel keeps its value, added chips go). Chips combine with AND.
+  number range, text contains / empty / not empty, checkbox), the chip's text, Clear filters (pinned
+  chips back to Any, added chips go). Chips combine with AND. A grouped list ("Open" on Status) saves
+  the whole group as one value (`GROUP`), which stands for the funnel's open stages of the moment, so
+  a stage added later is in it; a saved chip drops values its field no longer offers (`pruneList`).
 - What each page offers is in `store/filterFields.ts`: every system field of the page's records and
   of the records they belong to (a deal's company and primary contact, a meeting's company), plus
   every custom field (CD-15) by its type, so a new custom field needs no code.
-- Pipeline: the Funnel chip is `s.segment` (the funnel the rest of the app opens); Status replaces
-  the old "lost" view (Won and Lost are values next to the open stages) and picks the columns.
-  Overview keeps its own Funnel chip.
+- The funnel is not a chip (owner's call, 24 Oct). Pipeline: the select next to the view toggle is
+  `s.segment` (the funnel the rest of the app opens); Status ("Open, Won" by default) replaces the
+  old "lost" view (Won and Lost are values next to the open stages) and picks the columns. Overview:
+  the **Audience** select (all funnels or one), kept with the page's filters, so Clear filters resets
+  it; on all funnels Status lists every funnel's stages.
 - The value is a per-browser convenience like the Pipeline view: `localStorage`
   `crm.filters.<userId>.<tenantId>.<page>` (`store/usePageFilters.ts`, in try/catch, the page's
   defaults without it). The Calendar still reads a link's `user`, `type`, `status` and `company`

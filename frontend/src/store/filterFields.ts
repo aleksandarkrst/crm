@@ -3,7 +3,7 @@
 // from their definitions, so a new one shows up without code.
 import { type ApiMeeting, type CustomFieldEntity, LOST_REASONS } from '../lib/api';
 import { FREQUENCIES } from './dealMath';
-import type { FilterField, FilterOption, FilterPerson } from './filters';
+import { type FilterField, type FilterOption, type FilterPerson, GROUP } from './filters';
 import { MEETING_STATUSES, MEETING_TYPES, STATUS_LABEL } from './meetings';
 import { BUYER_ROLES, INDUSTRIES, SOURCES, TEAM_SIZES } from './seed';
 import { allPeople, COMPANY_STATUS_LABELS, companyIdOfPerson, companyLabels, type CompanyRecord, companyRecords, curOf, currencySymbol, customFieldsOf, needsNextStep, salesPeople, stagesFor, valueNum } from './selectors';
@@ -135,8 +135,8 @@ export function statusOptions(s: State, funnel: SegKey | null): FilterOption[] {
     { id: LOST, name: 'Lost', dot: 'var(--danger)' },
   ];
 }
-/** Status "Open, Won": every open stage of the funnel and Won. */
-export const openAndWon = (s: State, funnel: SegKey): string[] => [...stagesFor(s, funnel).filter((st) => !st.won).map((st) => st.id), WON];
+/** Status "Open, Won": the whole "Open" group (whatever stages the funnel has) and Won. */
+export const openAndWon = (): string[] => [GROUP, WON];
 
 /**
  * Pipeline and Overview (CD-366): the opportunity's fields, then its company's and its primary
@@ -150,7 +150,6 @@ export function opportunityFields(s: State, funnel: SegKey | null, pinned: strin
   const g = 'Opportunity';
   const text = (id: string, label: string, get: (l: Lead) => string | undefined): FilterField<Lead> => ({ id, label, group: g, kind: 'text', get: (l) => get(l) ?? '' });
   const fields: FilterField<Lead>[] = [
-    { id: 'funnel', label: 'Funnel', group: g, kind: 'list', single: true, required: true, icon: 'funnel', options: Object.values(s.funnels).map((f) => ({ id: f.id, name: f.label })), get: (l) => l.segment },
     { id: 'owner', label: 'Salesperson', group: g, kind: 'person', get: (l) => l.ownerId },
     { id: 'status', label: 'Status', group: g, kind: 'list', icon: 'status', groupLabel: 'Open', options: statusOptions(s, funnel), get: statusOf },
     { id: 'close', label: 'Closing date', group: g, kind: 'date', get: (l) => l.closeDate || null },

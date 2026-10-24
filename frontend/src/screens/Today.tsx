@@ -38,10 +38,13 @@ export function Today() {
   const [filters, setFilters] = usePageFilters('today', { order: ['owner'], f: { owner: { op: 'is', vals: [me] } } });
   const owners = filters.f.owner?.vals ?? [];
   // Meetings today (CD-130): yours as organizer or internal participant, or the one chosen salesperson's.
+  // Several people ticked: the day's meetings, kept when any of them organizes or takes part.
   const tz = s.workspace.timezone;
   const day = todayIn(tz);
   const range = useMemo(() => dayRange(day, tz), [day, tz]);
-  const { meetings: todays } = useMeetingList({ from: new Date(range.from).toISOString(), to: new Date(range.to).toISOString(), userId: owners.length === 1 ? owners[0] : session.userId, status: ['planned', 'held'], sort: 'asc' });
+  const many = owners.length > 1;
+  const { meetings: dayMeetings } = useMeetingList({ from: new Date(range.from).toISOString(), to: new Date(range.to).toISOString(), userId: many ? undefined : owners.length === 1 ? owners[0] : session.userId, status: ['planned', 'held'], sort: 'asc' });
+  const todays = many ? dayMeetings.filter((m) => owners.includes(m.organizerUserId ?? '') || m.participants.some((p) => p.kind === 'internal' && !!p.userId && owners.includes(p.userId))) : dayMeetings;
 
   const today = todayIso(s.workspace.timezone);
   const doneToday = todayLabel(s.workspace.timezone);
@@ -141,7 +144,7 @@ export function Today() {
             </Link>
           ))}
         </div>
-        {noMatch && <FilterEmpty noun="tasks" onClear={() => setFilters(clearAll(fields, filters))} />}
+        {noMatch && <FilterEmpty noun="tasks" onClear={() => setFilters(clearAll(fields))} />}
         {!noMatch && groups.map((g) => (
           <div key={g.label} data-group={g.label} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
