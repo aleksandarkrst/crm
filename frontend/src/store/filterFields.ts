@@ -118,11 +118,19 @@ const STAGE_DOTS = ['var(--brand-soft-2)', 'var(--stage-done)', 'var(--green-500
 
 /** A deal's Status value: its stage while open, else Won or Lost. */
 export const statusOf = (l: Lead): string => (l.outcome === 'lost' ? LOST : l.outcome === 'won' ? WON : l.stage);
-/** The Status options of a funnel: its open stages under "Open", then Won and Lost. */
-export function statusOptions(s: State, funnel: SegKey): FilterOption[] {
-  const open = stagesFor(s, funnel).filter((st) => !st.won);
+/**
+ * The Status options of a funnel: its open stages under "Open", then Won and Lost. `null` is every
+ * funnel (Overview on "Audience"): each funnel's open stages, named with their funnel when there are several.
+ */
+export function statusOptions(s: State, funnel: SegKey | null): FilterOption[] {
+  const funnels = funnel === null ? Object.values(s.funnels) : [s.funnels[funnel]!];
+  const named = funnels.length > 1;
+  const dot = (i: number, n: number) => STAGE_DOTS[Math.min(STAGE_DOTS.length - 1, Math.round((i / Math.max(1, n - 1)) * (STAGE_DOTS.length - 1)))];
   return [
-    ...open.map((st, i) => ({ id: st.id, name: st.name, sub: true, dot: STAGE_DOTS[Math.min(STAGE_DOTS.length - 1, Math.round((i / Math.max(1, open.length - 1)) * (STAGE_DOTS.length - 1)))] })),
+    ...funnels.flatMap((f) => {
+      const open = stagesFor(s, f.id).filter((st) => !st.won);
+      return open.map((st, i) => ({ id: st.id, name: named ? `${st.name} · ${f.label}` : st.name, sub: true, dot: dot(i, open.length) }));
+    }),
     { id: WON, name: 'Won', dot: 'var(--lime)', ring: true },
     { id: LOST, name: 'Lost', dot: 'var(--danger)' },
   ];
@@ -134,7 +142,7 @@ export const openAndWon = (s: State, funnel: SegKey): string[] => [...stagesFor(
  * Pipeline and Overview (CD-366): the opportunity's fields, then its company's and its primary
  * contact's. `pinned` are the page's chips; the Status options are the funnel's.
  */
-export function opportunityFields(s: State, funnel: SegKey, pinned: string[]): FilterField<Lead>[] {
+export function opportunityFields(s: State, funnel: SegKey | null, pinned: string[]): FilterField<Lead>[] {
   const records = companyRecords(s);
   const byId = new Map(records.map((c) => [c.id, c]));
   const contacts = new Map(allPeople(s).map((p) => [p.contactId, p]));

@@ -53,7 +53,11 @@ export function Pipeline() {
   const me = session.userId;
   // The funnel stays the select next to the view toggle (owner's call, 24 Oct): not a chip, not under + Filter.
   const fields = useMemo(() => opportunityFields(s, seg, ['owner', 'status']).filter((f) => f.id !== 'funnel'), [s, seg]);
-  const [filters, setFilters] = usePageFilters('pipeline', { order: ['owner', 'status'], f: { owner: { op: 'is', vals: [me] }, status: { op: 'is', vals: openAndWon(s, seg) } } });
+  const [saved, setFilters] = usePageFilters('pipeline', { order: ['owner', 'status'], f: { owner: { op: 'is', vals: [me] }, status: { op: 'is', vals: openAndWon(s, seg) } } });
+  // The funnel can change elsewhere too (Settings, a new funnel): a Status naming another funnel's
+  // stages would hide every deal, so it starts over at "Open, Won" here.
+  const known = new Set(fields.find((f) => f.id === 'status')?.options?.map((o) => o.id));
+  const filters = (saved.f.status?.vals ?? []).some((id) => !known.has(id)) ? setField(saved, 'status', { op: 'is', vals: openAndWon(s, seg) }) : saved;
   /** Another funnel: Status carries over what it can (its stages differ). */
   const pickFunnel = (next: SegKey) => {
     if (next === seg || !s.funnels[next]) return;

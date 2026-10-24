@@ -39,6 +39,7 @@ export function FilterRow<R>({
   people = [],
   me,
   onClearAll,
+  forceClear,
 }: {
   fields: FilterField<R>[];
   value: FilterValue;
@@ -47,6 +48,8 @@ export function FilterRow<R>({
   me?: string;
   /** Also clears what the page keeps outside the row (the Calendar's report and deal chips). */
   onClearAll?: () => void;
+  /** Something outside the row is set (that onClearAll clears): Clear filters shows for it too. */
+  forceClear?: boolean;
 }) {
   const [pop, setPop] = useState<string | null>(null);
   const addRef = useRef<HTMLButtonElement>(null);
@@ -97,7 +100,7 @@ export function FilterRow<R>({
           />
         </Popover>
       )}
-      {canClear(fields, value) && (
+      {(forceClear || canClear(fields, value)) && (
         <button
           type="button"
           className="fr-clear"

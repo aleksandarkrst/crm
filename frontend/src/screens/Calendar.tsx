@@ -336,7 +336,7 @@ export function Calendar() {
             </span>
           ) : (
             <>
-          <FilterRow fields={fields} value={filters} onChange={setFilters} people={filterPeople(s, me)} me={me} onClearAll={() => update({ deal: null, contact: null, notClosed: null, missingMinutes: null, report: null })} />
+          <FilterRow fields={fields} value={filters} onChange={setFilters} people={filterPeople(s, me)} me={me} onClearAll={() => update({ deal: null, contact: null, notClosed: null, missingMinutes: null, report: null })} forceClear={reportCount > 0 || !!deal || !!contact || notClosed || missingMinutes} />
           {view === 'table' && (
             <>
               <label className="cal-check">

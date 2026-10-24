@@ -38,8 +38,8 @@ export function Dashboard() {
   // the other filters (not a chip), so Clear filters resets it to all; a funnel deleted since counts as all.
   const picked = filters.f.audience?.vals?.[0] ?? '';
   const audience = s.funnels[picked] ? picked : ALL_FUNNELS;
-  const funnel = audience === ALL_FUNNELS ? s.segment : audience;
-  const fields = useMemo(() => opportunityFields(s, funnel, ['owner', 'close']).filter((f) => f.id !== 'funnel'), [s, funnel]);
+  // On "Audience" the Status choices are every funnel's stages, so none of them hides another funnel's deals.
+  const fields = useMemo(() => opportunityFields(s, audience === ALL_FUNNELS ? null : audience, ['owner', 'close']).filter((f) => f.id !== 'funnel'), [s, audience]);
   const inAudience = audience === ALL_FUNNELS ? s.leads : s.leads.filter((l) => l.segment === audience);
   // "This quarter" is a fiscal one, and "today" is the workspace's (CD-73).
   const ctx = { today: todayIso(s.workspace.timezone), fiscalMonth: s.workspace.fiscalMonth };
@@ -162,7 +162,7 @@ export function Dashboard() {
             ))}
           </select>
         }
-        row={<FilterRow fields={fields} value={filters} onChange={setFilters} people={filterPeople(s, me)} me={me} />}
+        row={<FilterRow fields={fields} value={filters} onChange={setFilters} people={filterPeople(s, me)} me={me} forceClear={audience !== ALL_FUNNELS} />}
         meta={`${plural(dashLeads.length, 'opportunity', 'opportunities')} in view · ${closeOn ? 'closing ' + closeText.charAt(0).toLowerCase() + closeText.slice(1) : 'any closing date'}${undatedHidden ? ` · ${undatedHidden} without a closing date hidden` : ''}`}
       />
 
