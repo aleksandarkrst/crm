@@ -21,10 +21,10 @@ function linkedinHref(value: string): string {
   return /^([a-z]{2,3}\.|www\.)?linkedin\.com\/\S+$/i.test(v) ? 'https://' + v : '';
 }
 
-/** A contact (CD-80): header like a deal's, how to reach them, their company, deals, tasks and history. */
 /** The Source list companies and opportunities use (CD-361), plus a saved value that isn't on it. */
 const sourceOptions = (current?: string) => [{ value: '', label: 'No source' }, ...[...SOURCES, ...(current && !SOURCES.includes(current) ? [current] : [])].map((v) => ({ value: v, label: v }))];
 
+/** A contact (CD-80): header like a deal's, how to reach them, their company, deals, tasks and history. */
 export function Contact() {
   const store = useStore();
   const { s, set } = store;

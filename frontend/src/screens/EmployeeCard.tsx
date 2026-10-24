@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { askConfirm } from '../components/ConfirmDialog';
+import { tabStyle } from '../components/ui';
 import { Screen } from '../components/Layout';
 import type { ApiEmployeeCard, EmployeeField } from '../lib/api';
 import { paths } from '../lib/paths';
@@ -71,9 +72,6 @@ export function EmployeeCard() {
 const DISCARD = 'Discard your changes?';
 
 /** The card's one draft and Save (CD-225), the header and the sections. */
-/** The underline tabs of Time off (CD-361 uses them for Overview | Personal). */
-const tabStyle = (on: boolean) => ({ borderBottom: `2px solid ${on ? 'var(--brand)' : 'transparent'}`, fontWeight: on ? 600 : 500, color: on ? 'var(--brand)' : 'var(--text-2)' });
-
 function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => void }) {
   const { employeeCard, flash } = useStore();
   const initial = useMemo(() => cardInitial(card), [card]);
@@ -141,17 +139,17 @@ function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => 
         )}
         {/* Overview | Personal (CD-361): the tab, with all personal details, is there for whoever may see them. */}
         {card.personal && (
-          <div className="report-tabs" role="tablist" data-testid="emp-tabs">
-            <button type="button" role="tab" aria-selected={tab === 'overview'} className="composer-tab" style={tabStyle(tab === 'overview')} onClick={() => setTab('overview')} data-testid="emp-tab-overview">
+          <div className="report-tabs" role="tablist" aria-label="Employee card" data-testid="emp-tabs">
+            <button type="button" role="tab" id="emp-tab-overview" aria-controls="emp-tabpanel" aria-selected={tab === 'overview'} className="composer-tab" style={tabStyle(tab === 'overview')} onClick={() => setTab('overview')} data-testid="emp-tab-overview">
               Overview
             </button>
-            <button type="button" role="tab" aria-selected={tab === 'personal'} className="composer-tab" style={tabStyle(tab === 'personal')} onClick={() => setTab('personal')} data-testid="emp-tab-personal">
+            <button type="button" role="tab" id="emp-tab-personal" aria-controls="emp-tabpanel" aria-selected={tab === 'personal'} className="composer-tab" style={tabStyle(tab === 'personal')} onClick={() => setTab('personal')} data-testid="emp-tab-personal">
               Personal
             </button>
           </div>
         )}
         {tab === 'personal' && card.personal ? (
-          <div className="emp-grid">
+          <div className="emp-grid" role="tabpanel" id="emp-tabpanel" aria-labelledby="emp-tab-personal">
             <div className="emp-col">
               <PersonalSection card={card} />
             </div>
@@ -160,7 +158,7 @@ function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => 
             </div>
           </div>
         ) : (
-          <div className="emp-grid">
+          <div className="emp-grid" {...(card.personal ? { role: 'tabpanel', id: 'emp-tabpanel', 'aria-labelledby': 'emp-tab-overview' } : {})}>
             <div className="emp-col">
               <WorkSection card={card} />
               <TimeOffSection id={card.id} />

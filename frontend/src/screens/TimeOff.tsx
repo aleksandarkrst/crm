@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { askConfirm } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Layout';
-import { Modal, ModalHeader } from '../components/ui';
+import { Modal, ModalHeader, tabStyle } from '../components/ui';
 import { downloadBlob } from '../lib/csv';
 import { paths } from '../lib/paths';
 import { type ApiBalanceRow, type ApiBalancesTable, type ApiTimeOffPolicy, type BalancesFilters, timeOffApi } from '../lib/timeOffApi';
@@ -15,7 +15,6 @@ import { MyTimeOff } from './timeoff/MyTimeOff';
 import { RequestsTable } from './timeoff/RequestsTable';
 
 type Tab = 'my' | 'approvals' | 'timeline' | 'balances' | 'decisions';
-const tabStyle = (on: boolean) => ({ borderBottom: `2px solid ${on ? 'var(--brand)' : 'transparent'}`, fontWeight: on ? 600 : 500, color: on ? 'var(--brand)' : 'var(--text-2)' });
 
 /**
  * Time off (milestone 16, Workforce; simplified in CD-350): My time off (one tile per policy and sick

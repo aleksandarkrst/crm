@@ -193,6 +193,9 @@ export function GhostSelect({ options, className = '', chevron = false, ...props
   );
 }
 
+/** An underline tab (`.composer-tab` in a `.report-tabs` tablist): Time off and the employee card (CD-361). */
+export const tabStyle = (on: boolean) => ({ borderBottom: `2px solid ${on ? 'var(--brand)' : 'transparent'}`, fontWeight: on ? 600 : 500, color: on ? 'var(--brand)' : 'var(--text-2)' });
+
 export function Switch({ on, onClick, label, disabled }: { on: boolean; onClick: () => void; label?: string; disabled?: boolean }) {
   return (
     <button type="button" className={on ? 'switch on' : 'switch'} onClick={onClick} role="switch" aria-checked={on} aria-label={label} disabled={disabled} style={disabled ? { opacity: 0.5, cursor: 'default' } : undefined}>
