@@ -56,6 +56,13 @@ export interface FieldFilter {
   text?: string;
 }
 
+/** Someone the person filters offer: "Me" first, with "role · team" underneath. */
+export interface FilterPerson {
+  id: string;
+  name: string;
+  sub: string;
+}
+
 /** A page's filters: the chips in order, and each one's filter. */
 export interface FilterValue {
   order: string[];

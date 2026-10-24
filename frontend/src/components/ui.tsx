@@ -313,7 +313,8 @@ export interface BarChip {
 export function FilterBar({
   lead,
   search,
-  chips,
+  row,
+  chips = [],
   dirty,
   onClear,
   meta,
@@ -323,7 +324,9 @@ export function FilterBar({
   /** Controls before the filters (e.g. the Pipeline's view toggle and funnel select). */
   lead?: ReactNode;
   search?: { value: string; onChange: (v: string) => void; placeholder: string };
-  chips: BarChip[];
+  /** The shared filter row (CD-366), in place of the select chips; it takes the room left of the actions. */
+  row?: ReactNode;
+  chips?: BarChip[];
   dirty?: boolean;
   onClear?: () => void;
   meta?: string;
@@ -332,8 +335,9 @@ export function FilterBar({
   extra?: ReactNode;
 }) {
   return (
-    <div className="filter-bar" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+    <div className="filter-bar" style={{ display: 'flex', alignItems: row ? 'flex-start' : 'center', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
       {lead}
+      {row && <div className="fr-wrap">{row}</div>}
       {search && (
         <div className="filter-search" style={{ display: 'flex', alignItems: 'center', background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 11px', width: 230 }}>
           <input
@@ -363,7 +367,7 @@ export function FilterBar({
           Clear filters
         </button>
       )}
-      <div className="filter-actions" style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
+      <div className="filter-actions" style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto', minHeight: 34 }}>
         {meta && <span style={{ fontSize: 12.5, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{meta}</span>}
         {extra}
         {action && (
