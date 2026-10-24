@@ -8,11 +8,12 @@ import { INDUSTRIES } from '../store/seed';
 import { type CompanyRecord, companyRecords, salesPeople } from '../store/selectors';
 import { useStore } from '../store/store';
 
-const COLS = '1.5fr 1fr 0.8fr 1.1fr 1fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1.1fr 1.1fr 0.8fr 1fr';
-type Key = 'name' | 'pib' | 'ownership' | 'industry' | 'hq' | 'size' | 'contactCount' | 'oppCount' | 'value' | 'lifetimeValue' | 'stageName' | 'owner' | 'lastTouch' | 'source';
+const COLS = '1.5fr 1fr 0.9fr 0.8fr 1.1fr 1fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1.1fr 1.1fr 0.8fr 1fr';
+type Key = 'name' | 'pib' | 'status' | 'ownership' | 'industry' | 'hq' | 'size' | 'contactCount' | 'oppCount' | 'value' | 'lifetimeValue' | 'stageName' | 'owner' | 'lastTouch' | 'source';
 const HEADERS: { key: Key; label: string }[] = [
   { key: 'name', label: 'Company' },
   { key: 'pib', label: 'Company ID' },
+  { key: 'status', label: 'Status' },
   { key: 'ownership', label: 'Ownership' },
   { key: 'industry', label: 'Industry' },
   { key: 'hq', label: 'HQ' },
@@ -34,7 +35,8 @@ export function Companies() {
   const [owner, setOwner] = useState('Owner');
   const { sort, toggle } = useSort<Key>('name');
 
-  const sortVal = (c: CompanyRecord) => (NUMERIC.has(sort.key) ? (c[sort.key] as number) : String(c[sort.key] || '').toLowerCase());
+  // Status sorts in its order (Not interested, Lead, Opportunity, Past client, Client), not by name.
+  const sortVal = (c: CompanyRecord) => (sort.key === 'status' ? c.statusRank : NUMERIC.has(sort.key) ? (c[sort.key] as number) : String(c[sort.key] || '').toLowerCase());
   const rows = companyRecords(s)
     .filter((c) => industry === 'Industry' || c.industry === industry)
     .filter((c) => owner === 'Owner' || c.ownerId === owner)
@@ -64,7 +66,7 @@ export function Companies() {
         <EmptyState title="No companies yet" text="Companies are the organisations you sell to. Add one, or import a list from a CSV file." action={{ label: 'Add company', onClick: addCompany }} />
       ) : (
         <div className="card" style={{ overflowX: 'auto' }}>
-          <div style={{ minWidth: 1480 }}>
+          <div style={{ minWidth: 1580 }}>
             <div className="table-head" style={{ gridTemplateColumns: COLS }}>
               {HEADERS.map((h) => (
                 <SortHeader key={h.key} label={h.label} active={sort.key === h.key} dir={sort.dir} onClick={() => toggle(h.key)} />
@@ -75,6 +77,9 @@ export function Companies() {
               <div key={c.id} className="table-row clickable" style={{ gridTemplateColumns: COLS }} onClick={() => openCompany(c.id)}>
                 <span style={{ fontWeight: 600 }}>{c.name}</span>
                 <span style={{ color: 'var(--text-2)' }}>{c.pib || <span className="badge badge-warn">No PIB</span>}</span>
+                <span style={{ color: 'var(--text-2)' }} data-testid="company-row-status">
+                  {c.status}
+                </span>
                 <span style={{ color: 'var(--text-2)' }}>{c.ownership}</span>
                 <span style={{ color: 'var(--text-2)' }}>{c.industry}</span>
                 <span style={{ color: 'var(--text-2)' }}>{c.hq}</span>

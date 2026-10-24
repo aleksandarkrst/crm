@@ -12,6 +12,7 @@ import { JobsService } from '../../../shared/events/jobs.service';
 import { ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { currencyCode } from '../currency';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
+import { CompanyStatusService } from '../companies/company-status.service';
 import { assertOwnerIsMember, userNameOf } from '../owner';
 import { RecordHistoryService } from '../history/record-history.service';
 import { StageHistoryService } from './stage-history.service';
@@ -92,6 +93,7 @@ export class DealsService {
     private readonly customFields: CustomFieldsService,
     private readonly storage: StorageService,
     private readonly changes: RecordHistoryService,
+    private readonly status: CompanyStatusService,
   ) {}
 
   /** Board/list view: deals with company, primary contact and stage names joined in. */
@@ -189,6 +191,7 @@ export class DealsService {
         await this.log(tx, ctx, row!.id, null, 'Opportunity created', input.source ? `Source: ${input.source}` : null);
         await this.audit.record(tx, ctx, { action: 'deal.created', entityType: 'deal', entityId: row!.id });
         await this.notifyAssigned(tx, ctx, row!.id, null, row!.ownerUserId);
+        await this.status.recompute(tx, ctx, [row!.companyId]);
         return { ...row!, outcome: dealOutcome(row!, first.isWon) };
       })
       .catch(mapDbError);
@@ -208,7 +211,7 @@ export class DealsService {
           await this.changes.assertNoConflict(tx, ctx, 'deal', locked, input, version);
         }
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
-        const [before] = input.ownerUserId !== undefined ? await tx.select({ ownerUserId: deals.ownerUserId }).from(deals).where(eq(deals.id, id)) : [];
+        const [before] = await tx.select({ ownerUserId: deals.ownerUserId, companyId: deals.companyId }).from(deals).where(eq(deals.id, id));
         await this.assertContactsExist(tx, [input.sponsorContactId, input.powerSponsorContactId]);
         const { customFields: cfInput, qualified, ...fields } = input;
         const patch: PgUpdateSetSource<typeof deals> = { ...fields };
@@ -249,8 +252,10 @@ export class DealsService {
           await this.log(tx, ctx, id, null, `Moved to funnel ${funnel}`, `Restarted at ${to.name} · next activity: ${to.activity}`);
         }
         if (qualifiedChange !== null) await this.log(tx, ctx, id, null, qualifiedChange ? 'Marked Qualified' : 'No longer Qualified', null);
-        if (before) await this.notifyAssigned(tx, ctx, id, before.ownerUserId, row.ownerUserId);
+        if (before && input.ownerUserId !== undefined) await this.notifyAssigned(tx, ctx, id, before.ownerUserId, row.ownerUserId);
         await this.audit.record(tx, ctx, { action: 'deal.updated', entityType: 'deal', entityId: id, data: input });
+        // Another company, or a funnel change into a won stage, moves the company status (CD-358).
+        if (before?.companyId !== row.companyId || funnelChange) await this.status.recompute(tx, ctx, [before?.companyId, row.companyId]);
         return this.present(tx, row);
       })
       .catch(mapDbError);
@@ -293,6 +298,7 @@ export class DealsService {
         await this.log(tx, ctx, id, null, `Moved to ${stage.name}`, `Next activity: ${stage.activity}`);
         await this.audit.record(tx, ctx, { action: 'deal.stage_changed', entityType: 'deal', entityId: id, data: { from: deal.stageId, to: stage.id } });
         if (stage.isWon) await this.jobs.send('crm.deal-won', { tenantId: ctx.tenantId, dealId: id, actorUserId: ctx.userId }, tx);
+        await this.status.recompute(tx, ctx, [deal.companyId]);
         return { ...row!, outcome: dealOutcome(row!, stage.isWon) };
       })
       .catch(mapDbError);
@@ -324,6 +330,7 @@ export class DealsService {
         await this.history.record(tx, ctx, { dealId: id, kind: 'lost', fromStageId: deal.stageId, toStageId: deal.stageId, outcome: 'lost' }, now);
         await this.log(tx, ctx, id, 'NT', `Marked as lost: ${input.reason}`, input.note ?? null);
         await this.audit.record(tx, ctx, { action: 'deal.lost', entityType: 'deal', entityId: id, data: input });
+        await this.status.recompute(tx, ctx, [deal.companyId]);
         return { ...row!, outcome: dealOutcome(row!, false) };
       })
       .catch(mapDbError);
@@ -348,6 +355,7 @@ export class DealsService {
         await this.history.record(tx, ctx, { dealId: id, kind: 'reopened', fromStageId: deal.stageId, toStageId: deal.stageId, outcome }, now);
         await this.log(tx, ctx, id, 'NT', 'Reopened', `Back in ${stage.name} (was lost: ${deal.lostReason})`);
         await this.audit.record(tx, ctx, { action: 'deal.reopened', entityType: 'deal', entityId: id });
+        await this.status.recompute(tx, ctx, [deal.companyId]);
         return { ...row!, outcome };
       })
       .catch(mapDbError);
@@ -379,7 +387,7 @@ export class DealsService {
   async remove(ctx: TenantContext, id: string) {
     const files = await this.database
       .withTenant(ctx.tenantId, async (tx) => {
-        const [deal] = await tx.select({ title: deals.title }).from(deals).where(eq(deals.id, id));
+        const [deal] = await tx.select({ title: deals.title, companyId: deals.companyId }).from(deals).where(eq(deals.id, id));
         if (!deal) throw new NotFoundException('Opportunity not found');
         const [booked] = await tx.select({ n: count() }).from(meetings).where(eq(meetings.dealId, id));
         if (booked && booked.n > 0) {
@@ -390,6 +398,7 @@ export class DealsService {
         const [row] = await tx.delete(deals).where(eq(deals.id, id)).returning({ id: deals.id });
         if (!row) throw new NotFoundException('Opportunity not found');
         await this.audit.record(tx, ctx, { action: 'deal.deleted', entityType: 'deal', entityId: id });
+        await this.status.recompute(tx, ctx, [deal.companyId]);
         return docs.flatMap((d) => (d.key ? [d.key] : []));
       })
       .catch(mapDbError);

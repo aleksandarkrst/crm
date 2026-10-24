@@ -1,6 +1,7 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { and, asc, count, eq, inArray, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
 import { AuditService } from '../../../shared/audit/audit.service';
+import { CompanyStatusService } from '../companies/company-status.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
@@ -61,6 +62,7 @@ export class OnboardingService {
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
     private readonly history: StageHistoryService,
+    private readonly status: CompanyStatusService,
   ) {}
 
   async state(ctx: TenantContext) {
@@ -177,6 +179,8 @@ export class OnboardingService {
           marks.push({ kind: 'deal', recordId: dealId });
         }
         await tx.insert(sampleRecords).values(marks.map((m) => ({ ...m, tenantId: ctx.tenantId })));
+        // The sample companies get their status like any other (CD-358).
+        await this.status.recompute(tx, ctx, [...companyIds.values()]);
         await this.audit.record(tx, ctx, { action: 'sample_data.loaded', entityType: 'tenant', entityId: ctx.tenantId, data: { records: marks.length } });
       })
       .catch(mapDbError);
