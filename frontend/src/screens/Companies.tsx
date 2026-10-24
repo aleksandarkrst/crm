@@ -8,8 +8,8 @@ import { INDUSTRIES } from '../store/seed';
 import { type CompanyRecord, companyRecords, salesPeople } from '../store/selectors';
 import { useStore } from '../store/store';
 
-const COLS = '1.5fr 1fr 0.8fr 1.1fr 1fr 0.9fr 0.7fr 0.8fr 1fr 1.1fr 1.1fr 0.8fr 1fr';
-type Key = 'name' | 'pib' | 'ownership' | 'industry' | 'hq' | 'size' | 'contactCount' | 'oppCount' | 'value' | 'stageName' | 'owner' | 'lastTouch' | 'source';
+const COLS = '1.5fr 1fr 0.8fr 1.1fr 1fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1.1fr 1.1fr 0.8fr 1fr';
+type Key = 'name' | 'pib' | 'ownership' | 'industry' | 'hq' | 'size' | 'contactCount' | 'oppCount' | 'value' | 'lifetimeValue' | 'stageName' | 'owner' | 'lastTouch' | 'source';
 const HEADERS: { key: Key; label: string }[] = [
   { key: 'name', label: 'Company' },
   { key: 'pib', label: 'Company ID' },
@@ -20,12 +20,13 @@ const HEADERS: { key: Key; label: string }[] = [
   { key: 'contactCount', label: 'Contacts' },
   { key: 'oppCount', label: 'Opportunities' },
   { key: 'value', label: 'Open value' },
+  { key: 'lifetimeValue', label: 'Lifetime value' },
   { key: 'stageName', label: 'Latest stage' },
   { key: 'owner', label: 'Owner' },
   { key: 'lastTouch', label: 'Last touch' },
   { key: 'source', label: 'Source' },
 ];
-const NUMERIC = new Set<Key>(['value', 'oppCount', 'contactCount']);
+const NUMERIC = new Set<Key>(['value', 'lifetimeValue', 'oppCount', 'contactCount']);
 
 export function Companies() {
   const { s, addCompany, openCompany } = useStore();
@@ -63,7 +64,7 @@ export function Companies() {
         <EmptyState title="No companies yet" text="Companies are the organisations you sell to. Add one, or import a list from a CSV file." action={{ label: 'Add company', onClick: addCompany }} />
       ) : (
         <div className="card" style={{ overflowX: 'auto' }}>
-          <div style={{ minWidth: 1380 }}>
+          <div style={{ minWidth: 1480 }}>
             <div className="table-head" style={{ gridTemplateColumns: COLS }}>
               {HEADERS.map((h) => (
                 <SortHeader key={h.key} label={h.label} active={sort.key === h.key} dir={sort.dir} onClick={() => toggle(h.key)} />
@@ -81,6 +82,7 @@ export function Companies() {
                 <span style={{ color: 'var(--text-2)' }}>{c.contactCount}</span>
                 <span style={{ color: 'var(--text-2)' }}>{c.oppCount}</span>
                 <span style={{ color: 'var(--brand)' }}>{c.valueLabel}</span>
+                <span style={{ color: 'var(--text-2)' }}>{c.lifetimeLabel}</span>
                 <span style={{ fontSize: 12.5 }}>{c.stageName}</span>
                 <span style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{c.owner}</span>
                 <span style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{c.lastTouch}</span>

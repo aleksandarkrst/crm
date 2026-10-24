@@ -65,7 +65,9 @@ export function Pipeline() {
   const lostHidden = f.lost === LOST_VIEWS[0] ? inView.filter((l) => l.outcome === 'lost').length : 0;
   const visible = f.stage === 'Stage' || !stages.some((x) => x.name === f.stage) ? stages : stages.filter((x) => x.name === f.stage);
 
-  const pipelineValue = valueTotal(s, segLeads.filter((l) => l.outcome !== 'lost'));
+  // Open means neither Won nor Lost (CD-380): the summary counts and totals only those.
+  const openLeads = segLeads.filter((l) => l.outcome === 'open');
+  const pipelineValue = valueTotal(s, openLeads);
   const setFilter = (k: keyof typeof f) => (v: string) => set((x) => ({ filters: { ...x.filters, [k]: v } }));
   const dirty = (['owner', 'industry', 'band', 'lost'] as const).some((k) => f[k] !== DEFAULT_FILTERS[k]);
 
@@ -107,7 +109,7 @@ export function Pipeline() {
         ]}
         dirty={dirty}
         onClear={() => set((x) => ({ filters: { ...x.filters, ...DEFAULT_FILTERS } }))}
-        meta={`${segLeads.length} ${segLeads.length === 1 ? 'opportunity' : 'opportunities'} · ${pipelineValue} open${lostHidden ? ` · ${lostHidden} lost hidden` : ''}`}
+        meta={`${openLeads.length} open ${openLeads.length === 1 ? 'opportunity' : 'opportunities'} · ${pipelineValue}${lostHidden ? ` · ${lostHidden} lost hidden` : ''}`}
         extra={<DataActions type="deals" count={segLeads.length} exportCsv={() => dealsCsv(s, segLeads)} />}
         action={{ label: 'New opportunity', onClick: () => set({ newLeadOpen: true }) }}
       />
