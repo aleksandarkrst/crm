@@ -98,6 +98,17 @@ export function Company() {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
           <div className="lead-side" style={{ flex: '1 1 400px', maxWidth: 540, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
             <Section title="Summary" testId="company-summary">
+              {/* Open: deals neither Won nor Lost; Lifetime: Won deals (CD-380). */}
+              <IconRow icon="value" label="Open value">
+                <span className="field-value" data-testid="company-open-value">
+                  {rec.valueLabel}
+                </span>
+              </IconRow>
+              <IconRow icon="value" label="Lifetime value">
+                <span className="field-value" data-testid="company-lifetime-value">
+                  {rec.lifetimeLabel}
+                </span>
+              </IconRow>
               <IconRow icon="industry" label="Industry">
                 <GhostSelect chevron aria-label="Industry" value={rec.industry} onChange={setField('industry')} options={INDUSTRIES} />
               </IconRow>

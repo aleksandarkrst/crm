@@ -316,8 +316,12 @@ export interface CompanyRecord {
   leads: Lead[];
   contactCount: number;
   oppCount: number;
+  /** Open value (CD-380): its deals that are neither Won nor Lost. */
   value: number;
   valueLabel: string;
+  /** Lifetime value (CD-380): its Won deals. */
+  lifetimeValue: number;
+  lifetimeLabel: string;
   stageName: string;
   lastTouch: string;
 }
@@ -327,7 +331,7 @@ export interface CompanyRecord {
  * company aren't grouped into a company record.
  */
 export function companyRecords(s: State): CompanyRecord[] {
-  const map = new Map<string, Omit<CompanyRecord, 'contactCount' | 'oppCount' | 'value' | 'valueLabel' | 'stageName' | 'lastTouch' | 'pib' | 'ownership'>>();
+  const map = new Map<string, Omit<CompanyRecord, 'contactCount' | 'oppCount' | 'value' | 'valueLabel' | 'lifetimeValue' | 'lifetimeLabel' | 'stageName' | 'lastTouch' | 'pib' | 'ownership'>>();
   for (const l of s.leads) {
     if (!l.companyId) continue;
     if (!map.has(l.companyId)) map.set(l.companyId, { id: l.companyId, name: l.company, industry: l.industry, hq: l.hq, size: l.size, source: l.source, owner: ownerOf(s, l), ownerId: l.ownerId ?? null, leads: [] });
@@ -339,7 +343,9 @@ export function companyRecords(s: State): CompanyRecord[] {
     const extra = extras.get(r.id);
     const ids = new Set<string>();
     r.leads.forEach((l) => contactsForLead(s, l.id).forEach((p) => ids.add(p.id)));
-    const value = r.leads.reduce((a, l) => a + valueNum(l.value), 0);
+    const open = r.leads.filter((l) => l.outcome === 'open');
+    const won = r.leads.filter((l) => l.outcome === 'won');
+    const sum = (leads: Lead[]) => leads.reduce((a, l) => a + valueNum(l.value), 0);
     const stall = r.leads.length ? Math.min(...r.leads.map((l) => l.stall || 0)) : null;
     const last = r.leads[r.leads.length - 1];
     return {
@@ -348,8 +354,10 @@ export function companyRecords(s: State): CompanyRecord[] {
       ownership: OWNERSHIP_LABELS[extra?.ownershipType ?? ''] ?? '',
       contactCount: ids.size,
       oppCount: r.leads.length,
-      value,
-      valueLabel: valueTotal(s, r.leads),
+      value: sum(open),
+      valueLabel: valueTotal(s, open),
+      lifetimeValue: sum(won),
+      lifetimeLabel: valueTotal(s, won),
       stageName: last ? stageOf(s, last).name : '—',
       lastTouch: stall === null ? '—' : stall === 0 ? 'Today' : stall + 'd ago',
     };

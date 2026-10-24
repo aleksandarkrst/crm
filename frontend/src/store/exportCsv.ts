@@ -75,6 +75,7 @@ export function companiesCsv(s: State, records: CompanyRecord[]): string {
     { header: 'Contacts', value: (c) => c.contactCount },
     { header: 'Opportunities', value: (c) => c.oppCount },
     { header: 'Open value', value: (c) => c.value },
+    { header: 'Lifetime value', value: (c) => c.lifetimeValue },
     { header: 'Latest stage', value: (c) => clean(c.stageName) },
     { header: 'Last touch', value: (c) => clean(c.lastTouch) },
     ...customColumns<CompanyRecord>(s, 'company', (c) => c.id),
