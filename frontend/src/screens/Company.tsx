@@ -133,7 +133,7 @@ export function Company() {
               <CustomFieldRows entity="company" recordId={rec.id} />
             </Section>
 
-            <Section title="Identity" testId="company-identity" action={<span style={{ fontSize: 12, color: 'var(--text-2)' }}>As registered in APR</span>}>
+            <Section title="Company information" testId="company-identity" action={<span style={{ fontSize: 12, color: 'var(--text-2)' }}>As registered in APR</span>}>
               <IdentityRow label="Company ID (PIB)" missing={!pib} badge={pib ? undefined : 'No PIB'}>
                 <CheckedInput aria-label="Company ID (PIB)" inputMode="numeric" placeholder="9 digits" value={pib} check={checkPib} onSave={(v) => store.setCompanyField(rec.id, 'pib', v)} />
               </IdentityRow>
@@ -156,12 +156,6 @@ export function Company() {
                 <GhostInput aria-label="Postal code" inputMode="numeric" placeholder="21000" value={extra?.postalCode ?? ''} onChange={setField('postalCode')} />
               </IdentityRow>
             </Section>
-
-            <DealsSection leads={rec.leads} onAdd={newDeal} />
-
-            <CompanyProjects companyId={rec.id} />
-
-            <MeetingsCard record={{ companyId: rec.id }} seed={{ companyId: rec.id }} />
 
             <Section
               title={`Contacts (${people.length})`}
@@ -205,6 +199,12 @@ export function Company() {
                 />
               )}
             </Section>
+
+            <DealsSection leads={rec.leads} onAdd={newDeal} />
+
+            <CompanyProjects companyId={rec.id} />
+
+            <MeetingsCard record={{ companyId: rec.id }} seed={{ companyId: rec.id }} />
           </div>
 
           <div className="lead-main" style={{ flex: '999 1 480px', display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>

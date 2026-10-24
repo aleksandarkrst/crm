@@ -81,9 +81,10 @@ describe('employee card', () => {
     await mia.waitForSelector('[data-testid=emp-name]');
     assert.equal(await textOf(mia, '[data-testid=emp-name]'), 'Mia Member');
     assert.equal(await textOf(mia, '[data-testid=emp-account]'), 'Has account');
-    // Their own personal details and bank account are there.
-    await mia.waitForSelector('[data-testid=emp-personal]');
+    // Their own bank account is on Overview; their personal details on the Personal tab (CD-361).
     await mia.waitForSelector('[data-testid=emp-bank]');
+    assert.equal(await mia.$('[data-testid=emp-personal]'), null, 'personal details are not on Overview');
+    await mia.waitForSelector('[data-testid=emp-tab-personal]');
     // Nothing to save yet.
     await mia.waitForSelector('[data-testid=emp-save][disabled]');
   });
@@ -93,6 +94,9 @@ describe('employee card', () => {
     await mia.waitForSelector('[data-testid=emp-work] input[name=workPhone]');
     assert.equal(await mia.$('[data-testid=emp-work] input[name=jobTitle]'), null, 'job title is read-only');
     await setValue(mia, '[data-testid=emp-work] input[name=workPhone]', '+381 64 123 4567');
+    // The address is on the Personal tab; one draft and one Save cover both tabs (CD-361).
+    await click(mia, '[data-testid=emp-tab-personal]');
+    await mia.waitForSelector('[data-testid=emp-personal] input[name=addressStreet]');
     await setValue(mia, '[data-testid=emp-personal] input[name=addressStreet]', 'Knez Mihailova 1');
     await setValue(mia, '[data-testid=emp-personal] input[name=addressPostalCode]', '11000');
     await setValue(mia, '[data-testid=emp-personal] input[name=addressCity]', 'Beograd');
@@ -105,13 +109,17 @@ describe('employee card', () => {
     await mia.reload({ waitUntil: 'networkidle0' });
     await mia.waitForSelector('[data-testid=emp-work] input[name=workPhone]');
     assert.equal(await valueOf(mia, '[data-testid=emp-work] input[name=workPhone]'), '+381 64 123 4567');
+    await click(mia, '[data-testid=emp-tab-personal]');
+    await mia.waitForSelector('[data-testid=emp-personal] input[name=addressCity]');
     assert.equal(await valueOf(mia, '[data-testid=emp-personal] input[name=addressCity]'), 'Beograd');
+    await click(mia, '[data-testid=emp-tab-overview]');
   });
 
   step('the Personal tab has the birthday (their date of birth), spouse, children and pets (CD-361)', async () => {
-    // The date of birth moved off the Overview tab: it shows once, as Birthday on Personal.
-    assert.equal(await mia.$('[data-testid=emp-personal] input[name=dateOfBirth]'), null, 'no date of birth on Overview');
     await click(mia, '[data-testid=emp-tab-personal]');
+    // The date of birth shows once, as Birthday, not again in Personal details.
+    await mia.waitForSelector('[data-testid=emp-personal]');
+    assert.equal(await mia.$('[data-testid=emp-personal] input[name=dateOfBirth]'), null, 'no second date of birth');
     await mia.waitForSelector('[data-testid=emp-family] input[name=dateOfBirth]');
     assert.equal(await mia.$eval('[data-testid=emp-family] input[name=dateOfBirth]', (el) => el.getAttribute('aria-label')), 'Birthday');
     await setValue(mia, '[data-testid=emp-family] input[name=dateOfBirth]', '1990-05-01');
@@ -181,6 +189,8 @@ describe('employee card', () => {
     // The manager is chosen in Work (CD-228).
     await olga.waitForFunction((id) => !!document.querySelector(`[data-testid=emp-work] select[name=managerId] option[value="${id}"]`), {}, olgaEmployee);
     await setValue(olga, '[data-testid=emp-work] select[name=managerId]', olgaEmployee);
+    await click(olga, '[data-testid=emp-tab-personal]');
+    await olga.waitForSelector('[data-testid=emp-personal] input[name=addressCity]');
     await setValue(olga, '[data-testid=emp-personal] input[name=addressCity]', 'Novi Sad');
     await save(olga);
     await olga.reload({ waitUntil: 'networkidle0' });
@@ -188,6 +198,8 @@ describe('employee card', () => {
     assert.equal(await valueOf(olga, '[data-testid=emp-work] input[name=jobTitle]'), 'Office manager');
     assert.equal(await valueOf(olga, '[data-testid=emp-work] input[name=weeklyHours]'), '32');
     assert.equal(await valueOf(olga, '[data-testid=emp-work] select[name=managerId]'), olgaEmployee);
+    await click(olga, '[data-testid=emp-tab-personal]');
+    await olga.waitForSelector('[data-testid=emp-personal] input[name=addressCity]');
     assert.equal(await valueOf(olga, '[data-testid=emp-personal] input[name=addressCity]'), 'Novi Sad');
     const card = await api(olga, `/people/employees/${nova}`);
     assert.equal(card.jobTitle, 'Office manager');

@@ -139,7 +139,7 @@ function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => 
             )}
           </div>
         )}
-        {/* Overview | Personal (CD-361): the tab is there for whoever sees the personal details. */}
+        {/* Overview | Personal (CD-361): the tab, with all personal details, is there for whoever may see them. */}
         {card.personal && (
           <div className="report-tabs" role="tablist" data-testid="emp-tabs">
             <button type="button" role="tab" aria-selected={tab === 'overview'} className="composer-tab" style={tabStyle(tab === 'overview')} onClick={() => setTab('overview')} data-testid="emp-tab-overview">
@@ -155,6 +155,9 @@ function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => 
             <div className="emp-col">
               <FamilySection card={card} />
             </div>
+            <div className="emp-col">
+              <PersonalSection card={card} />
+            </div>
           </div>
         ) : (
           <div className="emp-grid">
@@ -164,10 +167,12 @@ function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => 
               <CardSickLeave employeeId={card.id} />
               <TimesheetSection id={card.id} />
             </div>
-            <div className="emp-col">
-              {card.personal && <PersonalSection card={card} />}
-              {card.bank && <BankSection card={card} />}
-            </div>
+            {/* Personal details live on the Personal tab (CD-361). */}
+            {card.bank && (
+              <div className="emp-col">
+                <BankSection card={card} />
+              </div>
+            )}
           </div>
         )}
       </div>
