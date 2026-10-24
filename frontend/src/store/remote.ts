@@ -54,6 +54,7 @@ function mapFunnel(f: ApiFunnel): Funnel {
     id: f.id,
     label: f.label,
     note: f.note ?? '',
+    targetDays: f.targetDays ?? null,
     stages: f.stages.map((st) => ({
       id: st.id,
       key: st.key,
@@ -65,6 +66,10 @@ function mapFunnel(f: ApiFunnel): Funnel {
       checklistIds: st.checklistItems.map((i) => i.id),
       prob: st.winProbability,
       won: st.isWon,
+      ownerId: st.ownerUserId ?? null,
+      targetDays: st.targetDays ?? null,
+      gateDocs: st.gateDocsComplete ?? false,
+      gateTodos: st.gateTodos ?? false,
     })),
   };
 }
@@ -343,6 +348,8 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
       discounts: deal.discounts ?? [],
       installments: (deal.installments ?? []).map((i) => ({ ...i, date: i.date ?? '' })),
       stageSince: deal.stageEnteredAt,
+      lateDays: deal.stageLateDays ?? 0,
+      docsComplete: Object.fromEntries((deal.stageStates ?? []).filter((st) => st.docsComplete).map((st) => [st.stageId, { at: st.docsCompleteAt ?? '', by: st.docsCompleteByUserId }])),
       score: deal.fitScore,
       stall: Math.max(0, Math.floor((now - lastTouch) / DAY)),
       industry: co?.industry ?? '—',

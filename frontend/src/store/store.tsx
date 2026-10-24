@@ -8,8 +8,9 @@ import { connectLive, type LiveEvent } from './live';
 import { meetingActions, meetingKey, newMeetingRuntime, upcomingQuery } from './meetings';
 import { newPeopleRuntime, PEOPLE_HINTS, peopleActions } from './people';
 import { type Changed, loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type Part, type WorkspaceData } from './remote';
-import { AUTO_GENERATE_DOCS, CHANNELS, GATE_STAGE_ADVANCE, initialState } from './seed';
+import { AUTO_GENERATE_DOCS, CHANNELS, initialState } from './seed';
 import {
+  advanceBlockers,
   allPeople,
   companyIdOfPerson,
   companyRecords,
@@ -17,16 +18,17 @@ import {
   customFieldsOf,
   initialsOf,
   leadById,
+  memberName,
   money,
   num,
   personById,
-  stageDone,
   stageOf,
   stagesFor,
   taskKey,
   taskOf,
   todayLabel,
   todoItemsFor,
+  wonBlocker,
 } from './selectors';
 import { dealTotals } from './dealMath';
 import { sortPlans, type VisitPlan } from './visitPlans';
@@ -678,8 +680,20 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         flash('This opportunity is lost. Reopen it before moving it to another stage.');
         return;
       }
-      const stage = stagesFor(cur(), lead.segment).find((st) => st.id === stageId);
-      mapLead(leadId, (l) => ({ ...l, stage: stageId, stall: 0, outcome: stage?.won ? 'won' : 'open', stageSince: new Date().toISOString() }));
+      const stages = stagesFor(cur(), lead.segment);
+      const stage = stages.find((st) => st.id === stageId);
+      // The advance gate (CD-363), as the API applies it: forward moves only, Won only from the last stage
+      // in a gated funnel. Said here instead of moving and snapping back; the API refuses it anyway (409).
+      if (stage && stages.indexOf(stage) > stages.findIndex((st) => st.id === lead.stage)) {
+        const blockers = advanceBlockers(cur(), lead);
+        const won = stage.won ? wonBlocker(cur(), lead) : null;
+        if (won) blockers.unshift(won);
+        if (blockers.length) {
+          flash(`Can't move to ${stage.name} yet: ${blockers.join('; ')}.`, 7000);
+          return;
+        }
+      }
+      mapLead(leadId, (l) => ({ ...l, stage: stageId, stall: 0, lateDays: 0, outcome: stage?.won ? 'won' : 'open', stageSince: new Date().toISOString() }));
       void save(() => crmApi.moveDeal(leadId, stageId), () => refreshLog(leadId), 'the stage move');
       if (stage && stage.doc === 'Proposal' && AUTO_GENERATE_DOCS) startGeneration(leadId);
       else if (stage) flash('Moved to ' + stage.name + ' · next activity: ' + stage.activity);
@@ -1014,15 +1028,40 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const stages = stagesFor(cur(), lead.segment);
       const stage = stageOf(cur(), lead);
       const i = stages.indexOf(stage);
-      if (GATE_STAGE_ADVANCE && !stageDone(cur(), lead, stage.id)) {
-        flash('Complete the to-do first — that is what keeps the funnel honest.');
-        return;
-      }
       if (i >= stages.length - 1) {
         flash('Already at the final stage.');
         return;
       }
       moveLead(lead.id, stages[i + 1]!.id);
+    };
+
+    /** "Documentation complete, ready to send" on a stage of a deal (CD-363): who and when come from the API. */
+    const setDocsComplete = (leadId: string, stageId: string, complete: boolean) => {
+      mapLead(leadId, (l) => {
+        const next = { ...l.docsComplete };
+        if (complete) next[stageId] = { at: new Date().toISOString(), by: session.userId };
+        else delete next[stageId];
+        return { ...l, docsComplete: next };
+      });
+      void save(
+        () => crmApi.setDocsComplete(leadId, stageId, complete),
+        async () => {
+          await reload();
+          await refreshLog(leadId);
+        },
+        'the documentation',
+      );
+    };
+
+    /** "Remind the owner" (CD-363): an email to whoever answers for the deal's stage. */
+    const remindStageOwner = async (leadId: string) => {
+      try {
+        const { recipientUserId } = await crmApi.remindStageOwner(leadId);
+        flash(`Reminder sent to ${memberName(cur(), recipientUserId)}`);
+        await refreshLog(leadId);
+      } catch (err) {
+        flash('Not sent: ' + errText(err));
+      }
     };
 
     // ------------------------------------------------------------ lost deals
@@ -1081,6 +1120,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           winProbability: st.prob === '' ? 0 : st.prob,
           // Items keep their id, so renaming one keeps the deals' ticks on it (CD-32).
           checklistItems: st.checklist.map((label, i) => ({ id: st.checklistIds[i]!, label: label.trim() })),
+          // Owner, target and advance gates (CD-363).
+          ownerUserId: st.ownerId,
+          targetDays: st.targetDays,
+          gateDocsComplete: st.gateDocs,
+          gateTodos: st.gateTodos,
         });
       // A to-do whose name is cleared while typing isn't saved (that would remove the item and
       // its ticks); the stage saves again once it has a name, or when it is removed.
@@ -1158,10 +1202,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }
     };
     /** Renames the open funnel or changes its note (one write per field after a pause). */
-    const patchFunnel = (id: string, patch: { label?: string; note?: string }) => {
+    const patchFunnel = (id: string, patch: { label?: string; note?: string; targetDays?: number | null }) => {
       const funnel = cur().funnels[id];
       if (!funnel) return;
       set((x) => ({ funnels: { ...x.funnels, [id]: { ...funnel, ...patch } } }));
+      if (patch.targetDays !== undefined) saveLater('funnel-target:' + id, () => crmApi.updateFunnel(id, { targetDays: patch.targetDays ?? null }), 'the default target days');
       if (patch.label !== undefined && patch.label.trim()) saveLater('funnel-label:' + id, () => crmApi.updateFunnel(id, { label: patch.label!.trim() }), 'the funnel name');
       if (patch.note !== undefined) saveLater('funnel-note:' + id, () => crmApi.updateFunnel(id, { note: patch.note!.trim() || null }), 'the funnel description');
     };
@@ -1442,6 +1487,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       renameExtra,
       removeExtra,
       advanceStage,
+      setDocsComplete,
+      remindStageOwner,
       markLost,
       reopenLead,
       addLeadTask,
@@ -1455,6 +1502,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       patchFunnel,
       deleteFunnel,
       editStage: (idx: number, key: 'name' | 'activity' | 'channel' | 'doc', val: string) => editStage(idx, (st) => void ((st as unknown as Record<string, string>)[key] = val)),
+      /** Stage owner, target days and advance gates (CD-363). */
+      setStageRule: (idx: number, patch: Partial<Pick<Stage, 'ownerId' | 'targetDays' | 'gateDocs' | 'gateTodos'>>) => editStage(idx, (st) => void Object.assign(st, patch)),
       editProb: (idx: number, raw: string) => editStage(idx, (st) => void (st.prob = raw === '' ? '' : Math.max(0, Math.min(100, Math.round(Number(raw) || 0))))),
       removeStage,
       addGate: (idx: number) =>

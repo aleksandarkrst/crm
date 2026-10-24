@@ -137,10 +137,20 @@ export class DealsService {
         .select({ dealId: dealContacts.dealId, contactId: dealContacts.contactId })
         .from(dealContacts)
         .where(inArray(dealContacts.dealId, rows.map((r) => r.deal.id)));
+      // Each deal's "documentation complete" per stage (CD-363), for the gate on the deal screen.
+      const states = await tx
+        .select({ dealId: dealStageStates.dealId, stageId: dealStageStates.stageId, docsComplete: dealStageStates.docsComplete, docsCompleteAt: dealStageStates.docsCompleteAt, docsCompleteByUserId: dealStageStates.docsCompleteByUserId })
+        .from(dealStageStates)
+        .where(inArray(dealStageStates.dealId, rows.map((r) => r.deal.id)));
       const now = new Date();
       return rows.map(({ stageIsWon, stageTargetDays, ...r }) => ({
         ...r,
-        deal: { ...r.deal, outcome: dealOutcome(r.deal, stageIsWon), stageLateDays: lateDaysOf(r.deal, stageIsWon, stageTargetDays, now) },
+        deal: {
+          ...r.deal,
+          outcome: dealOutcome(r.deal, stageIsWon),
+          stageLateDays: lateDaysOf(r.deal, stageIsWon, stageTargetDays, now),
+          stageStates: states.filter((st) => st.dealId === r.deal.id).map(({ dealId: _, ...st }) => st),
+        },
         contactIds: links.filter((l) => l.dealId === r.deal.id).map((l) => l.contactId),
       }));
     });
