@@ -1,17 +1,21 @@
 import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { RequireTenant, Tenant, type TenantContext } from '../../../shared/authorization';
-import { ListQuery, UuidParam } from '../../../shared/validation/common';
+import { UuidParam } from '../../../shared/validation/common';
 import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
 import { parseVersion } from '../history/record-history.service';
-import { CompaniesService, CreateCompany, UpdateCompany } from './companies.service';
+import { CompaniesQuery, CompaniesService, CreateCompany, SetCompanyStatus, UpdateCompany } from './companies.service';
+import { CompanyStatusService } from './company-status.service';
 
 @Controller('crm/companies')
 @RequireTenant('member')
 export class CompaniesController {
-  constructor(private readonly companies: CompaniesService) {}
+  constructor(
+    private readonly companies: CompaniesService,
+    private readonly status: CompanyStatusService,
+  ) {}
 
   @Get()
-  list(@Tenant() ctx: TenantContext, @Query(new ZodPipe(ListQuery)) page: ListQuery) {
+  list(@Tenant() ctx: TenantContext, @Query(new ZodPipe(CompaniesQuery)) page: CompaniesQuery) {
     return this.companies.list(ctx, page);
   }
 
@@ -34,6 +38,18 @@ export class CompaniesController {
     @Headers('if-match') ifMatch?: string,
   ) {
     return this.companies.update(ctx, id, body, parseVersion(ifMatch));
+  }
+
+  /** "Set status back…" or "Back to automatic" (CD-358): owners, admins and the company's owner. */
+  @Patch(':id/status')
+  setStatus(@Tenant() ctx: TenantContext, @Param('id', new ZodPipe(UuidParam)) id: string, @Body(new ZodPipe(SetCompanyStatus)) body: SetCompanyStatus) {
+    return this.status.setStatus(ctx, id, body.status);
+  }
+
+  /** The company's status changes, newest first, with who and why (CD-358). */
+  @Get(':id/status-history')
+  statusHistory(@Tenant() ctx: TenantContext, @Param('id', new ZodPipe(UuidParam)) id: string) {
+    return this.status.history(ctx, id);
   }
 
   @Delete(':id')

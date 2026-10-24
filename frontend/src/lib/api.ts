@@ -345,6 +345,17 @@ export interface ApiSampleRemoval {
 }
 export type ProfileInput = Partial<Omit<ApiProfile, 'userId' | 'email'>>;
 export type ApiOwnership = 'private' | 'state';
+/** A company's status (CD-358): computed by the API, only ever set back by hand. */
+export type ApiCompanyStatus = 'lead' | 'opportunity' | 'client' | 'past_client' | 'not_interested';
+/** One status change of a company, newest first (GET /crm/companies/:id/status-history). */
+export interface ApiCompanyStatusChange {
+  at: string;
+  from: ApiCompanyStatus;
+  to: ApiCompanyStatus;
+  reason: 'automatic' | 'manual';
+  actorUserId: string | null;
+  actorName: string | null;
+}
 export interface ApiCompany {
   id: string;
   name: string;
@@ -367,6 +378,10 @@ export interface ApiCompany {
   customFields: CustomFieldValues;
   /** Current name of the owner, also after they left the workspace (lists only). */
   ownerName?: string | null;
+  /** Status (CD-358); `statusSetManually` while someone set it back by hand. */
+  status: ApiCompanyStatus;
+  statusSetManually: boolean;
+  statusChangedAt: string | null;
   /** The version: send it back as If-Match when changing the company (CD-20). */
   updatedAt: string;
 }
@@ -1102,6 +1117,9 @@ export const crmApi = {
   createCompany: (input: CompanyInput & { name: string; pib: string }) => api<ApiCompany>('/crm/companies', { method: 'POST', json: input }),
   updateCompany: (id: string, input: CompanyInput, version?: string) => api<ApiCompany>(`/crm/companies/${id}`, { method: 'PATCH', json: input, headers: ifMatch(version) }),
   deleteCompany: (id: string) => api(`/crm/companies/${id}`, { method: 'DELETE' }),
+  /** "Set status back…" (a lower status) or "Back to automatic" (null), CD-358. */
+  setCompanyStatus: (id: string, status: ApiCompanyStatus | null) => api<ApiCompany>(`/crm/companies/${id}/status`, { method: 'PATCH', json: { status } }),
+  companyStatusHistory: (id: string) => api<ApiCompanyStatusChange[]>(`/crm/companies/${id}/status-history`),
 
   contacts: (ids?: readonly string[]) => all<ApiContact>(only('/crm/contacts', 'ids', ids)),
   createContact: (input: ContactInput & { fullName: string }) => api<ApiContact>('/crm/contacts', { method: 'POST', json: input }),

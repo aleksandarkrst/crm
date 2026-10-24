@@ -4,6 +4,7 @@ import { BonusRulesController } from './bonuses/bonus-rules.controller';
 import { BonusRulesService } from './bonuses/bonus-rules.service';
 import { CompaniesController } from './companies/companies.controller';
 import { CompaniesService } from './companies/companies.service';
+import { CompanyStatusService } from './companies/company-status.service';
 import { ContactsController } from './contacts/contacts.controller';
 import { ContactsService } from './contacts/contacts.service';
 import { CustomFieldsController } from './custom-fields/custom-fields.controller';
@@ -51,7 +52,7 @@ import { VisitProgressService } from './visit-plans/visit-progress.service';
 @Module({
   imports: [PeopleModule],
   controllers: [CompaniesController, ContactsController, FunnelsController, DealsController, DealWorkController, ProductsController, ImportController, CustomFieldsController, BonusRulesController, DocumentsController, HistoryController, OnboardingController, MeetingsController, MeetingMinutesController, ExternalMinutesController, VisitPlansController],
-  providers: [CompaniesService, ContactsService, FunnelsService, DealsService, ActivitiesService, DealLinesService, DealTasksService, DealStageStatesService, StageHistoryService, ProductsService, ImportService, CustomFieldsService, BonusRulesService, DocumentsService, DocumentGenerator, RecordHistoryService, OnboardingService, MeetingsService, MeetingMinutesService, ExternalMinutesService, VisitPlansService, VisitProgressService],
+  providers: [CompaniesService, CompanyStatusService, ContactsService, FunnelsService, DealsService, ActivitiesService, DealLinesService, DealTasksService, DealStageStatesService, StageHistoryService, ProductsService, ImportService, CustomFieldsService, BonusRulesService, DocumentsService, DocumentGenerator, RecordHistoryService, OnboardingService, MeetingsService, MeetingMinutesService, ExternalMinutesService, VisitPlansService, VisitProgressService],
   exports: [DealsService],
 })
 export class CrmModule {}

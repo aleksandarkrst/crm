@@ -1,0 +1,1 @@
+CREATE INDEX "audit_logs_company_status_idx" ON "audit_logs" USING btree ("tenant_id","entity_id","created_at") WHERE "audit_logs"."action" = 'company.status_changed';

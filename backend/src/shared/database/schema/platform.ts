@@ -225,7 +225,11 @@ export const auditLogs = pgTable(
     data: jsonb('data'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('audit_logs_tenant_created_idx').on(t.tenantId, t.createdAt)],
+  (t) => [
+    index('audit_logs_tenant_created_idx').on(t.tenantId, t.createdAt),
+    // A company's status history (CD-358) reads its status changes; the partial index stays small.
+    index('audit_logs_company_status_idx').on(t.tenantId, t.entityId, t.createdAt).where(sql`${t.action} = 'company.status_changed'`),
+  ],
 );
 
 export const INVITATION_ROLES = ['admin', 'member'] as const;

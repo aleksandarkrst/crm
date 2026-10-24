@@ -8,6 +8,8 @@ import type { JobPayloads } from '../../../shared/events/job-types';
 import { type JobAttempt, JobsService } from '../../../shared/events/jobs.service';
 import { userNameOf } from '../owner';
 import { ProjectLinkJobs } from '../deals/project-link-jobs';
+import { CompanyStatusJobs } from '../companies/company-status-jobs';
+import { CompanyStatusService } from '../companies/company-status.service';
 import { meetingInviteEmail } from './meeting-invite';
 import { minutesEmail, minutesMailMessage } from './minutes-email';
 
@@ -198,5 +200,5 @@ export class MeetingJobs implements OnApplicationBootstrap {
 }
 
 /** Registered in the worker (WorkerModule). */
-@Module({ providers: [MeetingJobs, ProjectLinkJobs] })
+@Module({ providers: [MeetingJobs, ProjectLinkJobs, CompanyStatusService, CompanyStatusJobs] })
 export class CrmWorkerModule {}

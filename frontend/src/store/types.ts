@@ -179,7 +179,13 @@ export interface CompanyExtra {
   /** Last known name of the owner, from the API (see memberName). */
   owner: string;
   ownerId?: string | null;
+  /** Status from the API (CD-358; 'lead' until it says otherwise); statusManual while set back by hand. */
+  status?: CompanyStatus;
+  statusManual?: boolean;
 }
+
+/** A company's status (CD-358). */
+export type CompanyStatus = 'lead' | 'opportunity' | 'client' | 'past_client' | 'not_interested';
 
 /** How often a product is billed (CD-83). */
 export type BillingFrequency = 'one_time' | 'weekly' | 'monthly' | 'quarterly' | 'annually';
@@ -278,6 +284,8 @@ export interface LogEntry {
   detail: string;
   /** Who did it (CD-318); null for the system (the deadline job, an import). */
   actor: string | null;
+  /** When, as an ISO time, for merging with other entries (CD-358); entries just made have none. */
+  at?: string;
 }
 
 export interface TeamMember {
