@@ -66,15 +66,15 @@ describe('stage conversion on Overview', () => {
     assert.match(text, /Opportunities that moved\s+5\s+of 6 opportunities in view/i);
   });
 
-  step('respects the Overview filters: Funnel, Salesperson and Closing date together; Clear filters keeps the funnel', async () => {
+  step('respects the Overview filters: Audience, Salesperson and Closing date together; Clear filters resets them', async () => {
     const ent = funnels.find((f) => f.key === 'ent');
     const smb = funnels.find((f) => f.key === 'smb');
     assert.equal(await chipText(page, 'owner'), 'Salesperson Any');
     assert.equal(await chipText(page, 'close'), 'Closing date Any');
-    await pickOption(page, 'funnel', ent.id);
+    // The funnel is the Audience select it was (CD-366), not a chip.
+    await page.select('[data-testid=overview-funnel]', ent.id);
     await page.waitForFunction(() => document.querySelector('[data-testid=stage-conversion]').innerText.includes('(0 so far)'));
-    await pickOption(page, 'funnel', smb.id);
-    await closePopover(page);
+    await page.select('[data-testid=overview-funnel]', smb.id);
     assert.ok(await eventually(async () => (await card(page)).includes('83%')), 'back on the SMB funnel');
     // Me (first in the list), then a closing date: these opportunities have none, so none match.
     await openChip(page, 'owner');
@@ -86,7 +86,7 @@ describe('stage conversion on Overview', () => {
     await page.waitForFunction(() => document.querySelector('[data-testid=stage-conversion]').innerText.includes('(0 so far)'));
     assert.match(await text(page), /6 without a closing date hidden/);
     await clearFilters(page);
-    assert.equal(await chipText(page, 'funnel'), 'Funnel ' + smb.label);
+    assert.equal(await page.$eval('[data-testid=overview-funnel]', (el) => el.value), 'Audience');
     assert.equal(await chipText(page, 'close'), 'Closing date Any');
     assert.ok(await eventually(async () => (await card(page)).includes('83%')), 'numbers are back once the filters are cleared');
   });

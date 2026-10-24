@@ -7,7 +7,7 @@ import { Screen } from '../components/Layout';
 import { VisitProgressCard } from '../components/VisitProgressCard';
 import { paths } from '../lib/paths';
 import { filterPeople, opportunityFields } from '../store/filterFields';
-import { applyFilters, isActive, setField, valueText } from '../store/filters';
+import { applyFilters, isActive, valueText } from '../store/filters';
 import { billedShare, bonusOf, bonusRule, closeIsoOf, curOf, currencySymbol, funnelOptions, dealPayments, moneyTotal, num, salesPeople, stageOf, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
 import { conversionMetrics, daysLabel, MIN_MOVED_DEALS, TIME_BUCKETS } from '../store/metrics';
 import { useStore } from '../store/store';
@@ -22,6 +22,9 @@ const clip = 'polygon(0 0, 100% 0, calc(100% - 14px) 100%, 14px 100%)';
 const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 const pct = (r: number | null) => (r === null ? '—' : Math.round(r * 100) + '%');
 
+/** The Audience select's "all funnels" (the old Overview filter's value). */
+const ALL_FUNNELS = 'Audience';
+
 export function Dashboard() {
   const { s, set, refreshHistory, canSeeBonuses, session } = useStore();
   const [dashSeg, setDashSeg] = useState<SegKey>(s.segment);
@@ -30,18 +33,20 @@ export function Dashboard() {
     void refreshHistory();
   }, [refreshHistory]);
   const me = session.userId;
-  const [saved, setFilters] = usePageFilters('overview', { order: ['funnel', 'owner', 'close'], f: { funnel: { vals: [s.segment] }, owner: { op: 'is', vals: [] }, close: {} } });
-  // The Funnel chip always has one; a funnel deleted since falls back to the one open on the Pipeline.
-  const savedFunnel = saved.f.funnel?.vals?.[0] ?? '';
-  const funnel = s.funnels[savedFunnel] ? savedFunnel : s.segment;
-  const filters = setField(saved, 'funnel', { vals: [funnel] });
-  const fields = useMemo(() => opportunityFields(s, funnel, ['funnel', 'owner', 'close']), [s, funnel]);
+  const [filters, setFilters] = usePageFilters('overview', { order: ['owner', 'close'], f: { owner: { op: 'is', vals: [] }, close: {} } });
+  // The funnel stays the Audience select it was (owner's call, 24 Oct): all funnels, or one. It is kept with
+  // the other filters (not a chip), so Clear filters resets it to all; a funnel deleted since counts as all.
+  const picked = filters.f.audience?.vals?.[0] ?? '';
+  const audience = s.funnels[picked] ? picked : ALL_FUNNELS;
+  const funnel = audience === ALL_FUNNELS ? s.segment : audience;
+  const fields = useMemo(() => opportunityFields(s, funnel, ['owner', 'close']).filter((f) => f.id !== 'funnel'), [s, funnel]);
+  const inAudience = audience === ALL_FUNNELS ? s.leads : s.leads.filter((l) => l.segment === audience);
   // "This quarter" is a fiscal one, and "today" is the workspace's (CD-73).
   const ctx = { today: todayIso(s.workspace.timezone), fiscalMonth: s.workspace.fiscalMonth };
   const closeField = fields.find((x) => x.id === 'close')!;
   const closeOn = isActive(closeField, filters.f.close);
   // Every panel below works on these deals, so the filter chips (including the closing date) apply everywhere.
-  const beforeDates = applyFilters(s.leads, fields, { ...filters, order: filters.order.filter((id) => id !== 'close') }, ctx);
+  const beforeDates = applyFilters(inAudience, fields, { ...filters, order: filters.order.filter((id) => id !== 'close') }, ctx);
   const dashLeads = applyFilters(beforeDates, fields, filters, ctx);
   const undatedHidden = closeOn ? beforeDates.filter((l) => !closeIsoOf(l)).length : 0;
   const closeText = valueText(closeField, filters.f.close);
@@ -142,6 +147,21 @@ export function Dashboard() {
   return (
     <Screen title="Overview">
       <FilterBar
+        lead={
+          <select
+            aria-label="Funnel"
+            data-testid="overview-funnel"
+            value={audience}
+            onChange={(e) => setFilters({ ...filters, f: { ...filters.f, audience: { vals: e.target.value === ALL_FUNNELS ? [] : [e.target.value] } } })}
+            style={{ border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '9px 11px', fontSize: 13, color: 'var(--ink)' }}
+          >
+            {[{ value: ALL_FUNNELS, label: 'Audience' }, ...funnelOptions(s)].map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        }
         row={<FilterRow fields={fields} value={filters} onChange={setFilters} people={filterPeople(s, me)} me={me} />}
         meta={`${plural(dashLeads.length, 'opportunity', 'opportunities')} in view · ${closeOn ? 'closing ' + closeText.charAt(0).toLowerCase() + closeText.slice(1) : 'any closing date'}${undatedHidden ? ` · ${undatedHidden} without a closing date hidden` : ''}`}
       />

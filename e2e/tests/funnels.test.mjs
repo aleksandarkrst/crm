@@ -2,7 +2,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { api, BASE_URL, clickButton, eventually, newUserWithWorkspace, setValue, steps, text, useBrowser, waitForToastToClear, createNew, testPib } from '../lib/harness.mjs';
-import { pickOption as pickFilterOption } from '../lib/filters.mjs';
 
 describe('funnels and stages', () => {
   const browser = useBrowser();
@@ -63,11 +62,11 @@ describe('funnels and stages', () => {
 
   step('the Pipeline and Overview show the third funnel and its opportunity', async () => {
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
-    // The Funnel chip of the filter row (CD-366) lists it, on the Pipeline and on Overview.
-    await pickFilterOption(page, 'funnel', funnel.id);
+    // The Pipeline's funnel select and Overview's Audience select list it.
+    await page.select('[data-testid=pipeline-funnel]', funnel.id);
     await page.waitForFunction(() => document.body.innerText.includes('Umbrella Corp'));
     await page.goto(BASE_URL + '/overview', { waitUntil: 'networkidle0' });
-    await pickFilterOption(page, 'funnel', funnel.id);
+    await page.select('[data-testid=overview-funnel]', funnel.id);
     await page.waitForFunction(() => /1 opportunity in view/.test(document.body.innerText));
   });
 
