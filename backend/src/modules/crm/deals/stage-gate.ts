@@ -56,6 +56,17 @@ export function wonBlocker(from: GateStage, stages: GateStage[]): string | null 
   return last && from.id !== last.id ? `Win it from ${last.name}, the last stage before Won` : null;
 }
 
+/**
+ * A jump of two or more stages forward: refused when a stage in between has a gate on, so its gates
+ * can't be skipped (found in review). Moves into Won use wonBlocker instead, which already asks for
+ * the last stage in a gated funnel. Null when nothing in between is gated.
+ */
+export function skipBlocker(from: GateStage, to: GateStage, stages: GateStage[]): string | null {
+  const between = stages.filter((s) => !s.isWon && s.position > from.position && s.position < to.position).sort((a, b) => a.position - b.position);
+  const gated = between.find((s) => s.gateTodos || s.gateDocsComplete);
+  return gated ? `Move it through ${gated.name} first` : null;
+}
+
 /** Days past the stage's target (else the funnel's), or 0 when on time or without a target. */
 export function stageLateDays(stageEnteredAt: Date, targetDays: number | null, now: Date): number {
   if (!targetDays) return 0;

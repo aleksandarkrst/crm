@@ -22,6 +22,7 @@ import {
   money,
   num,
   personById,
+  skipBlocker,
   stageOf,
   stagesFor,
   taskKey,
@@ -683,11 +684,12 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const stages = stagesFor(cur(), lead.segment);
       const stage = stages.find((st) => st.id === stageId);
       // The advance gate (CD-363), as the API applies it: forward moves only, Won only from the last stage
-      // in a gated funnel. Said here instead of moving and snapping back; the API refuses it anyway (409).
+      // in a gated funnel, no jumping over a gated stage. Said here instead of moving and snapping back;
+      // the API refuses it anyway (409).
       if (stage && stages.indexOf(stage) > stages.findIndex((st) => st.id === lead.stage)) {
         const blockers = advanceBlockers(cur(), lead);
-        const won = stage.won ? wonBlocker(cur(), lead) : null;
-        if (won) blockers.unshift(won);
+        const route = stage.won ? wonBlocker(cur(), lead) : skipBlocker(cur(), lead, stage);
+        if (route) blockers.unshift(route);
         if (blockers.length) {
           flash(`Can't move to ${stage.name} yet: ${blockers.join('; ')}.`, 7000);
           return;

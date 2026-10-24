@@ -71,6 +71,19 @@ describe('the to-do gate', () => {
     expect((await move(deal.id, stage(3).id)).status).toBe(200);
     await editStage(2, { gateTodos: true });
   });
+
+  it('refuses a jump over a gated stage, so its gates can\'t be skipped', async () => {
+    await editStage(0, { gateTodos: false });
+    const deal = await newDeal('Gate · jump');
+    const refused = await move(deal.id, stage(2).id);
+    expect(refused.status).toBe(409);
+    expect(refused.body.blockers).toEqual([`Move it through ${stage(1).name} first`]);
+
+    await editStage(1, { gateTodos: false });
+    expect((await move(deal.id, stage(2).id)).status).toBe(200);
+    await editStage(0, { gateTodos: true });
+    await editStage(1, { gateTodos: true });
+  });
 });
 
 describe('the documentation gate', () => {
@@ -152,6 +165,8 @@ describe('late, the stage owner, Remind the owner and the digest', () => {
   it('reminds the stage owner, and refuses to remind yourself', async () => {
     expect(await ok('POST', `/crm/deals/${dealId}/remind-stage-owner`, asOwner(), 202)).toEqual({ recipientUserId: seller.userId });
     expect((await call('POST', `/crm/deals/${dealId}/remind-stage-owner`, asSeller())).status).toBe(400);
+    // Once an hour per stage at most.
+    expect((await call('POST', `/crm/deals/${dealId}/remind-stage-owner`, asOwner())).status).toBe(409);
     const log = await ok<{ title: string }[]>('GET', `/crm/deals/${dealId}/activities`, asOwner());
     expect(log[0]!.title).toBe(`Reminded the owner of ${stage(0).name}`);
   });

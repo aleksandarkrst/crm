@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../shared/database/database.service';
 import { companies, deals, dealTasks, funnels, funnelStages, meetingMinutes, meetingParticipants, meetings, memberships, tenants, users } from '../../shared/database/schema';
-import { planGroupsOf, progressOfGroups, visitPeriodOf, visitPeriodStartOf } from '../crm';
+import { planGroupsOf, progressOfGroups, stageLateDays, visitPeriodOf, visitPeriodStartOf } from '../crm';
 import { buildDigest, type Digest, MINUTES_REMINDER_MS, NOT_CLOSED_AFTER_MS, zonedNow } from './digest-content';
 
 /**
@@ -101,10 +101,7 @@ export class DigestService {
             sql`${targetDays} is not null`,
           ),
         );
-      const lateInStage = late.map(({ stageEnteredAt, targetDays: target, ...d }) => ({
-        ...d,
-        lateDays: Math.max(0, Math.floor((now.getTime() - stageEnteredAt.getTime()) / 86_400_000) - (target ?? 0)),
-      }));
+      const lateInStage = late.map(({ stageEnteredAt, targetDays: target, ...d }) => ({ ...d, lateDays: stageLateDays(stageEnteredAt, target, now) }));
 
       const meetingRow = {
         id: meetings.id,

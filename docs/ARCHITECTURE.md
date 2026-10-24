@@ -252,7 +252,8 @@ the Overview audience filter).
 - `DealsService.moveToStage` checks the gates of the stage the deal leaves on **forward** moves
   only (`stage-gate.ts`, pure): 409 `{ message, blockers: string[] }`. Backward moves, Lost and
   reopening are never gated. In a funnel with any gate on, Won is only reached from the last stage
-  before it (and that stage's gates still apply); ungated funnels win from anywhere. The frontend
+  before it (and that stage's gates still apply); ungated funnels win from anywhere. A jump of two or
+  more stages is refused while a stage in between has a gate on ("Move it through X first"). The frontend
   mirrors the same rules (`advanceBlockers`, `wonBlocker` in `selectors.ts`) to say why instead of
   moving and snapping back.
 - **`deal_stage_states`** (tenant, deal, stage; RLS like every tenant table) holds per-deal, per-stage

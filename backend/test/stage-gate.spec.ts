@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advanceBlockers, funnelIsGated, type GateStage, type GateTask, stageLateDays, wonBlocker } from '../src/modules/crm/deals/stage-gate';
+import { advanceBlockers, funnelIsGated, type GateStage, type GateTask, skipBlocker, stageLateDays, wonBlocker } from '../src/modules/crm/deals/stage-gate';
 
 const stage = (over: Partial<GateStage> = {}): GateStage => ({
   id: 's1',
@@ -73,6 +73,25 @@ describe('winning in a gated funnel (CD-363)', () => {
     expect(wonBlocker(gated[0]!, gated)).toBe('Win it from Negotiation, the last stage before Won');
     expect(wonBlocker(gated[1]!, gated)).toBe('Win it from Negotiation, the last stage before Won');
     expect(wonBlocker(gated[2]!, gated)).toBeNull();
+  });
+});
+
+describe('skipping stages (CD-363)', () => {
+  const funnel = [
+    stage({ id: 'new', name: 'New', position: 0, gateTodos: false }),
+    stage({ id: 'prop', name: 'Proposal', position: 1, gateTodos: false, gateDocsComplete: true }),
+    stage({ id: 'neg', name: 'Negotiation', position: 2, gateTodos: false }),
+    stage({ id: 'sign', name: 'Signing', position: 3, gateTodos: false }),
+  ];
+
+  it('refuses a jump over a gated stage, naming the first one', () => {
+    expect(skipBlocker(funnel[0]!, funnel[2]!, funnel)).toBe('Move it through Proposal first');
+    expect(skipBlocker(funnel[0]!, funnel[3]!, funnel)).toBe('Move it through Proposal first');
+  });
+
+  it('allows the next stage, and jumps over ungated stages', () => {
+    expect(skipBlocker(funnel[0]!, funnel[1]!, funnel)).toBeNull();
+    expect(skipBlocker(funnel[1]!, funnel[3]!, funnel)).toBeNull();
   });
 });
 

@@ -432,6 +432,14 @@ export function wonBlocker(s: State, lead: Lead): string | null {
   return last && lead.stage !== last.id ? `Win it from ${last.name}, the last stage before Won` : null;
 }
 
+/** A jump past a gated stage, as the API refuses it (skipBlocker in stage-gate.ts). */
+export function skipBlocker(s: State, lead: Lead, to: Stage): string | null {
+  const stages = stagesFor(s, lead.segment);
+  const between = stages.slice(stages.findIndex((st) => st.id === lead.stage) + 1, stages.indexOf(to)).filter((st) => !st.won);
+  const gated = between.find((st) => st.gateTodos || st.gateDocs);
+  return gated ? `Move it through ${gated.name} first` : null;
+}
+
 /** Who answers for the deal's current stage: the stage owner, else the deal's owner (user id). */
 export const stageOwnerId = (s: State, lead: Lead): string | null => stageOf(s, lead).ownerId ?? lead.ownerId ?? null;
 

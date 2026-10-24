@@ -15,7 +15,7 @@ import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/cu
 import { assertOwnerIsMember, userNameOf } from '../owner';
 import { RecordHistoryService } from '../history/record-history.service';
 import { StageHistoryService } from './stage-history.service';
-import { advanceBlockers, stageLateDays, wonBlocker } from './stage-gate';
+import { advanceBlockers, skipBlocker, stageLateDays, wonBlocker } from './stage-gate';
 
 const money = z.union([z.number(), z.string()]).transform((v) => String(v)).pipe(z.string().regex(/^\d{1,12}(\.\d{1,2})?$/, 'Invalid amount'));
 // CHAMP and the fit score are switched off (CD-362); the columns stay until a later contract migration.
@@ -396,7 +396,6 @@ export class DealsService {
     for (const key of files) await this.storage.delete(ctx.tenantId, key);
   }
 
-  /** A deal row with its outcome (see dealOutcome). */
   /**
    * A deal as the API answers it: its outcome, how many days it is past its stage's target
    * (CD-363), and its state in each stage ("documentation complete", who and when).
@@ -416,7 +415,8 @@ export class DealsService {
 
   /**
    * "Remind the owner" (CD-363): queues an email to whoever answers for the deal's stage (the stage
-   * owner, else the deal's owner) and notes it on the timeline. Not for won or lost deals.
+   * owner, else the deal's owner) and notes it on the timeline. Not for won or lost deals, and once an
+   * hour per stage at most: the timeline entry is what it checks.
    */
   remindStageOwner(ctx: TenantContext, id: string) {
     return this.database
@@ -431,8 +431,15 @@ export class DealsService {
         const recipientUserId = row.stageOwnerUserId ?? row.ownerUserId;
         if (!recipientUserId) throw new ConflictException('Nobody owns this stage or this opportunity yet. Pick an owner first.');
         if (recipientUserId === ctx.userId) throw new BadRequestException('You are the owner here, so there is nobody to remind.');
+        const title = `Reminded the owner of ${row.stageName}`;
+        const [recent] = await tx
+          .select({ id: activities.id })
+          .from(activities)
+          .where(and(eq(activities.dealId, id), eq(activities.title, title), sql`${activities.createdAt} > now() - interval '1 hour'`))
+          .limit(1);
+        if (recent) throw new ConflictException('The owner was reminded less than an hour ago. Give them a little time.');
         await this.jobs.send('crm.stage-reminder', { tenantId: ctx.tenantId, dealId: id, recipientUserId, actorUserId: ctx.userId }, tx);
-        await this.log(tx, ctx, id, null, `Reminded the owner of ${row.stageName}`, null);
+        await this.log(tx, ctx, id, null, title, null);
         return { recipientUserId };
       })
       .catch(mapDbError);
@@ -454,8 +461,8 @@ export class DealsService {
       tx.select({ docsComplete: dealStageStates.docsComplete }).from(dealStageStates).where(and(eq(dealStageStates.dealId, deal.id), eq(dealStageStates.stageId, current.id))),
     ]);
     const blockers = advanceBlockers({ stage: current, tasks, stageState: state ?? null });
-    const won = target.isWon ? wonBlocker(current, stages) : null;
-    if (won) blockers.unshift(won);
+    const route = target.isWon ? wonBlocker(current, stages) : skipBlocker(current, target, stages);
+    if (route) blockers.unshift(route);
     if (blockers.length) throw new ConflictException({ message: `This opportunity can't move to ${target.name} yet: ${blockers.join('; ')}.`, blockers });
   }
 

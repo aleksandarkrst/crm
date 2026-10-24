@@ -48,7 +48,9 @@ export function Todos({ lead }: { lead: Lead }) {
   const advanceLabel = atEnd ? 'Final stage' : 'Advance to ' + next.name;
   const docs = lead.docsComplete[current.id];
   const gateNote = current.gateTodos
-    ? `All of ${current.name} must be closed to advance.`
+    ? current.gateDocs
+      ? `All of ${current.name} must be closed and its documentation marked complete to advance.`
+      : `All of ${current.name} must be closed to advance.`
     : current.gateDocs
       ? `${current.name} needs its documentation marked complete to advance.`
       : 'Advancing from this stage is not blocked.';

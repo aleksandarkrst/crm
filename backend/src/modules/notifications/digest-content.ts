@@ -250,7 +250,7 @@ function moneyLabel(amount: string, currency: string): string {
   }
 }
 
-/** "X made you the owner of a deal". */
+/** "X asked you to move a deal on" (CD-363). */
 export interface StageReminderEmailInput {
   to: string;
   recipientName: string | null;
@@ -286,6 +286,7 @@ export function stageReminderEmail({ to, recipientName, actorName, workspaceName
   return { to, subject, text, html };
 }
 
+/** "X made you the owner of a deal". */
 export function dealAssignedEmail({ to, assigneeName, actorName, workspaceName, appUrl, deal }: DealAssignedEmailInput): MailMessage {
   const link = `${appUrl.replace(/\/+$/, '')}/deals/${deal.id}`;
   const subject = `${actorName} assigned you ${deal.title}`;
