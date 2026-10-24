@@ -115,14 +115,16 @@ describe('employee card', () => {
     await click(mia, '[data-testid=emp-tab-overview]');
   });
 
-  step('the Personal tab has the birthday (their date of birth), spouse, children and pets (CD-361)', async () => {
+  step('the Personal tab has the birthday (their date of birth) in Personal details, and spouse, children and pets in Family information (CD-361)', async () => {
     await click(mia, '[data-testid=emp-tab-personal]');
-    // The date of birth shows once, as Birthday, not again in Personal details.
-    await mia.waitForSelector('[data-testid=emp-personal]');
-    assert.equal(await mia.$('[data-testid=emp-personal] input[name=dateOfBirth]'), null, 'no second date of birth');
-    await mia.waitForSelector('[data-testid=emp-family] input[name=dateOfBirth]');
-    assert.equal(await mia.$eval('[data-testid=emp-family] input[name=dateOfBirth]', (el) => el.getAttribute('aria-label')), 'Birthday');
-    await setValue(mia, '[data-testid=emp-family] input[name=dateOfBirth]', '1990-05-01');
+    // The date of birth is Birthday in Personal details, below the private phone; Family information has no second one.
+    await mia.waitForSelector('[data-testid=emp-personal] input[name=dateOfBirth]');
+    assert.equal(await mia.$eval('[data-testid=emp-personal] input[name=dateOfBirth]', (el) => el.getAttribute('aria-label')), 'Birthday');
+    const order = await mia.$$eval('[data-testid=emp-personal] input', (els) => els.map((el) => el.name));
+    assert.equal(order.indexOf('dateOfBirth'), order.indexOf('privatePhone') + 1, order.join(','));
+    assert.equal(await mia.$('[data-testid=emp-family] input[name=dateOfBirth]'), null, 'no second date of birth');
+    assert.match(await mia.$eval('[data-testid=emp-family]', (el) => el.innerText), /^Family information/);
+    await setValue(mia, '[data-testid=emp-personal] input[name=dateOfBirth]', '1990-05-01');
     await setValue(mia, '[data-testid=emp-family] input[name=spouse]', 'Jovana');
     await setValue(mia, '[data-testid=emp-family] input[name=children]', 'Luka (6)');
     await setValue(mia, '[data-testid=emp-family] input[name=pets]', 'Cat Mica');

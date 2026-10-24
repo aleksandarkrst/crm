@@ -153,10 +153,10 @@ function CardBody({ card, open }: { card: ApiEmployeeCard; open: (d: Dialog) => 
         {tab === 'personal' && card.personal ? (
           <div className="emp-grid">
             <div className="emp-col">
-              <FamilySection card={card} />
+              <PersonalSection card={card} />
             </div>
             <div className="emp-col">
-              <PersonalSection card={card} />
+              <FamilySection card={card} />
             </div>
           </div>
         ) : (
