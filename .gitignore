@@ -12,6 +12,7 @@ infra/backup/rclone.conf
 
 # runtime data
 backend/storage/
+backend/storage-*/
 e2e/artifacts/
 
 .DS_Store

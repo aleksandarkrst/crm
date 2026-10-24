@@ -230,6 +230,7 @@ export class FunnelsService implements TenantProvisioner, OnModuleInit {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const funnel = await this.one(tx, funnelId);
+        await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const keys = await tx.select({ key: funnelStages.key }).from(funnelStages).where(eq(funnelStages.funnelId, funnelId));
         const stages = funnel.stages;
         const wonAt = stages.findIndex((s) => s.isWon);

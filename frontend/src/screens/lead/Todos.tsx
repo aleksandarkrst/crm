@@ -221,7 +221,7 @@ export function Todos({ lead }: { lead: Lead }) {
                   disabled={!canAdvance}
                   aria-describedby={blockers.length ? 'advance-blockers' : undefined}
                   onClick={() => store.advanceStage(lead.id)}
-                  style={{ alignSelf: 'flex-start', marginTop: 4, border: 0, cursor: canAdvance ? 'pointer' : 'not-allowed', background: canAdvance ? '#14503C' : '#F2F5F3', color: canAdvance ? '#F5F7F6' : '#93A39B', fontSize: 13.5, fontWeight: 500, padding: '12px 18px', borderRadius: 8 }}
+                  style={{ alignSelf: 'flex-start', marginTop: 4, border: 0, cursor: canAdvance ? 'pointer' : 'not-allowed', background: canAdvance ? 'var(--brand)' : 'var(--chip)', color: canAdvance ? 'var(--bg-soft)' : 'var(--muted)', fontSize: 13.5, fontWeight: 500, padding: '12px 18px', borderRadius: 8 }}
                 >
                   {advanceLabel}
                 </button>

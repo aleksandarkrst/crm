@@ -80,6 +80,7 @@ export function LeadScreen() {
 function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | null }) {
   const { s, set, session, patchLead, moveLead, reopenLead, canDelete, deleteDeal, remindStageOwner } = useStore();
   const [menu, setMenu] = useState(false);
+  const [reminding, setReminding] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menu) return;
@@ -223,8 +224,17 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
             </span>
           )}
           {ownerId && ownerId !== session.userId && (
-            <button type="button" className="btn-link stage-remind" data-testid="remind-owner" onClick={() => void remindStageOwner(lead.id)}>
-              Remind the owner
+            <button
+              type="button"
+              className="btn-link"
+              data-testid="remind-owner"
+              disabled={reminding}
+              onClick={() => {
+                setReminding(true);
+                void remindStageOwner(lead.id).finally(() => setReminding(false));
+              }}
+            >
+              {reminding ? 'Sending' : 'Remind the owner'}
             </button>
           )}
         </div>

@@ -211,7 +211,6 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 
 /* Under the stage bar (CD-363): stage owner, target, late badge and Remind the owner. */
 .stage-owner-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; font-size: 12.5px; }
-.stage-remind { border: 0; background: transparent; padding: 0; cursor: pointer; color: var(--brand); font-size: 12.5px; }
 /* "Documentation complete, ready to send" in To-Do (CD-363): a highlighted row with who and when. */
 .todo-docs { display: flex; align-items: center; gap: 11px; padding: 11px 13px; border: 1px dashed var(--border); border-radius: 10px; background: var(--warn-soft); cursor: pointer; }
 .todo-docs[data-done] { border-style: solid; background: var(--brand-tint); }

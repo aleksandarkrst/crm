@@ -159,5 +159,9 @@ describe('late, the stage owner, Remind the owner and the digest', () => {
   it('refuses a stage owner who isn\'t a member', async () => {
     const outsider = await signIn('gate-outsider');
     expect((await call('PATCH', `/crm/funnels/${funnel.id}/stages/${stage(1).id}`, { ...asOwner(), body: { ownerUserId: outsider.userId } })).status).toBe(400);
+    // A new stage too; a member is fine.
+    expect((await call('POST', `/crm/funnels/${funnel.id}/stages`, { ...asOwner(), body: { name: 'Outsider stage', ownerUserId: outsider.userId } })).status).toBe(400);
+    const after = await ok<Funnel>('POST', `/crm/funnels/${funnel.id}/stages`, { ...asOwner(), body: { name: 'Seller stage', ownerUserId: seller.userId } });
+    expect(after.stages.find((s) => s.name === 'Seller stage')!.ownerUserId).toBe(seller.userId);
   });
 });

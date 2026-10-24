@@ -109,6 +109,7 @@ export interface Stage {
   /** Advance gates (CD-363). */
   gateTodos: boolean;
   gateDocsComplete: boolean;
+  ownerUserId: string | null;
 }
 
 export interface Funnel {
