@@ -598,7 +598,7 @@ function DrillModal() {
           <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
             {rows.length}
             {rows.length === 1 ? ' opportunity · ' : ' opportunities · '}
-            {total} open
+            {d.summary ?? `${total} open`}
           </span>
         </div>
         <button type="button" onClick={close} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--muted)', fontSize: 18, lineHeight: 1, padding: '2px 4px' }}>
@@ -623,7 +623,7 @@ function DrillModal() {
                 {l.contact} · {l.role}
               </span>
             </span>
-            <span style={{ fontSize: 12.5, color: 'var(--brand)', whiteSpace: 'nowrap' }}>{l.value}</span>
+            <span style={{ fontSize: 12.5, color: 'var(--brand)', whiteSpace: 'nowrap' }}>{d.amounts?.[l.id] ?? l.value}</span>
           </button>
         ))}
       </div>

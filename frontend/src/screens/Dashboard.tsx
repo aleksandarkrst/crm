@@ -9,7 +9,7 @@ import { DATE_RANGES, dateRangeLabel, DEFAULT_FILTERS, SOURCES } from '../store/
 import { billedShare, bonusOf, bonusRule, closeIsoOf, closeRangeOf, curOf, currencySymbol, funnelOptions, inCloseRange, dealPayments, moneyTotal, num, salesPeople, stageOf, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
 import { conversionMetrics, daysLabel, MIN_MOVED_DEALS, TIME_BUCKETS } from '../store/metrics';
 import { useStore } from '../store/store';
-import type { Lead, SegKey } from '../store/types';
+import type { Drill, Lead, SegKey } from '../store/types';
 
 const STAGE_SHADES = ['#E7F2EE', '#CBE3DA', '#A3D2BF', '#5FA587', '#2F7A5E', '#14503C', '#0D241C'];
 const TIME_SHADES = ['#F2F5F3', '#DFE6E2', '#C3CEC8', '#87968F', '#56665E', '#2E3D36'];
@@ -39,7 +39,7 @@ export function Dashboard() {
   const undatedHidden = range ? beforeDates.filter((l) => !closeIsoOf(l)).length : 0;
   const setFilter = (k: keyof typeof f) => (v: string) => set((x) => ({ filters: { ...x.filters, [k]: v } }));
   const dirty = (['audience', 'owner', 'dates', 'source'] as const).some((k) => f[k] !== DEFAULT_FILTERS[k]);
-  const drill = (kicker: string, title: string, leadIds: string[]) => set({ drill: { kicker, title, leadIds } });
+  const drill = (kicker: string, title: string, leadIds: string[], extra?: Pick<Drill, 'amounts' | 'summary'>) => set({ drill: { kicker, title, leadIds, ...extra } });
 
   // Lost deals (CD-60) count nowhere in the pipeline: not open, not weighted, not stalled.
   const liveLeads = dashLeads.filter((l) => l.outcome !== 'lost');
@@ -87,10 +87,13 @@ export function Dashboard() {
       const diff = (p.when.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30.4);
       return diff > b.range[0] && diff <= b.range[1];
     });
+    const ids = [...new Set(due.map((p) => p.leadId))];
     return {
       label: b.label,
-      ids: [...new Set(due.map((p) => p.leadId))],
+      ids,
       value: moneyTotal(s, due),
+      // Per deal, only what falls due in this band (CD-365), not the deal's whole value.
+      amounts: Object.fromEntries(ids.map((id) => [id, moneyTotal(s, due.filter((p) => p.leadId === id))])),
       width: 100 - i * 11 + '%',
       bg: TIME_SHADES[i],
       fg: i >= 4 ? '#F5F7F6' : '#0F1B16',
@@ -194,7 +197,7 @@ export function Dashboard() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
               {timeFunnel.map((b) => (
-                <div key={b.label} onClick={() => drill('Payments due', b.label, b.ids)} style={{ width: b.width, background: b.bg, clipPath: clip, padding: '11px 26px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
+                <div key={b.label} onClick={() => drill('Payments due', b.label, b.ids, { amounts: b.amounts, summary: `${b.value} due in this period` })} style={{ width: b.width, background: b.bg, clipPath: clip, padding: '11px 26px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: b.fg, textAlign: 'center' }}>{b.label}</span>
                   <span style={{ fontSize: 11.5, color: b.subFg, textAlign: 'center' }}>{b.value}</span>
                 </div>
