@@ -237,8 +237,8 @@ export function dealPayments(s: State, lead: Lead): { payments: { when: Date; am
   const totals = dealTotals(lines, lead.taxMode, lead.discounts);
   if (lead.installments.length) {
     // Installments are entered with tax (they add up to the one-time products with tax): take the
-    // deal's own share of tax out of each.
-    const netShare = totals.oneTimeTotal > 0 ? totals.oneTimeNet / totals.oneTimeTotal : 1;
+    // deal's own share of tax out of each; the whole deal's share when it has no one-time products.
+    const netShare = totals.oneTimeTotal > 0 ? totals.oneTimeNet / totals.oneTimeTotal : totals.total > 0 ? totals.subtotal / totals.total : 1;
     for (const i of lead.installments) push(i.date, num(i.amount) * netShare);
     return { payments, undated };
   }
