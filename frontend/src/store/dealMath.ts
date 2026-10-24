@@ -73,12 +73,14 @@ export interface DealTotals {
   discount: number;
   /** One-time products after discounts, with tax: what installments should add up to. */
   oneTimeTotal: number;
+  /** The same without tax (CD-365: installments are turned into amounts without tax with it). */
+  oneTimeNet: number;
   mrr: number;
   arr: number;
   /** First year's value: one-time products plus a year of recurring ones, without tax. */
   acv: number;
-  /** Per line: amount per cycle after deal discounts (as entered), cycles, contract value with tax. */
-  lines: { perCycle: number; cycles: number; tcv: number }[];
+  /** Per line: amount per cycle after deal discounts (as entered), cycles, contract value with and without tax. */
+  lines: { perCycle: number; cycles: number; tcv: number; net: number }[];
 }
 
 export function dealTotals(lines: DealLine[], mode: TaxMode, discounts: Pick<DealDiscount, 'kind' | 'value'>[]): DealTotals {
@@ -99,7 +101,7 @@ export function dealTotals(lines: DealLine[], mode: TaxMode, discounts: Pick<Dea
     const { net, tax: t } = splitTax(perCycle, num(l.vat), mode);
     subtotal += net * cycles;
     tax += t * cycles;
-    out.push({ perCycle, cycles, tcv: (net + t) * cycles });
+    out.push({ perCycle, cycles, tcv: (net + t) * cycles, net: net * cycles });
     if (l.frequency !== 'one_time') mrr += (net * CYCLES_PER_YEAR[l.frequency]) / 12;
     else {
       oneTimeTotal += net + t;
@@ -112,10 +114,11 @@ export function dealTotals(lines: DealLine[], mode: TaxMode, discounts: Pick<Dea
     total: round2(subtotal + tax),
     discount: round2(discount),
     oneTimeTotal: round2(oneTimeTotal),
+    oneTimeNet: round2(oneTimeNet),
     mrr: round2(mrr),
     arr: round2(mrr * 12),
     acv: round2(oneTimeNet + mrr * 12),
-    lines: out.map((x) => ({ perCycle: round2(x.perCycle), cycles: x.cycles, tcv: round2(x.tcv) })),
+    lines: out.map((x) => ({ perCycle: round2(x.perCycle), cycles: x.cycles, tcv: round2(x.tcv), net: round2(x.net) })),
   };
 }
 

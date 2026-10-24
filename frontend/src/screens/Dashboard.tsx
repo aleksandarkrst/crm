@@ -7,20 +7,12 @@ import { VisitProgressCard } from '../components/VisitProgressCard';
 import { paths } from '../lib/paths';
 import { DATE_RANGES, dateRangeLabel, DEFAULT_FILTERS, SOURCES } from '../store/seed';
 import { billedShare, bonusOf, bonusRule, closeIsoOf, closeRangeOf, curOf, currencySymbol, funnelOptions, inCloseRange, dealPayments, moneyTotal, num, salesPeople, stageOf, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
-import { conversionMetrics, daysLabel, MIN_MOVED_DEALS } from '../store/metrics';
+import { conversionMetrics, daysLabel, MIN_MOVED_DEALS, TIME_BUCKETS } from '../store/metrics';
 import { useStore } from '../store/store';
-import type { Lead, SegKey } from '../store/types';
+import type { Drill, Lead, SegKey } from '../store/types';
 
 const STAGE_SHADES = ['#E7F2EE', '#CBE3DA', '#A3D2BF', '#5FA587', '#2F7A5E', '#14503C', '#0D241C'];
 const TIME_SHADES = ['#F2F5F3', '#DFE6E2', '#C3CEC8', '#87968F', '#56665E', '#2E3D36'];
-const TIME_BUCKETS = [
-  { label: 'Up to 12 months', range: [9, 999] },
-  { label: 'Up to 9 months', range: [6, 9] },
-  { label: 'Up to 6 months', range: [3, 6] },
-  { label: 'Up to 3 months', range: [1, 3] },
-  { label: 'Up to 1 month', range: [0.5, 1] },
-  { label: 'Now', range: [-999, 0.5] },
-] as const;
 const BONUS_COLS = 'minmax(0,1.6fr) 90px 120px 120px 120px 120px';
 const CONV_COLS = 'minmax(0,1.3fr) minmax(0,1fr) 44px 104px 84px';
 const clip = 'polygon(0 0, 100% 0, calc(100% - 14px) 100%, 14px 100%)';
@@ -47,7 +39,7 @@ export function Dashboard() {
   const undatedHidden = range ? beforeDates.filter((l) => !closeIsoOf(l)).length : 0;
   const setFilter = (k: keyof typeof f) => (v: string) => set((x) => ({ filters: { ...x.filters, [k]: v } }));
   const dirty = (['audience', 'owner', 'dates', 'source'] as const).some((k) => f[k] !== DEFAULT_FILTERS[k]);
-  const drill = (kicker: string, title: string, leadIds: string[]) => set({ drill: { kicker, title, leadIds } });
+  const drill = (kicker: string, title: string, leadIds: string[], extra?: Pick<Drill, 'amounts' | 'summary'>) => set({ drill: { kicker, title, leadIds, ...extra } });
 
   // Lost deals (CD-60) count nowhere in the pipeline: not open, not weighted, not stalled.
   const liveLeads = dashLeads.filter((l) => l.outcome !== 'lost');
@@ -82,9 +74,10 @@ export function Dashboard() {
   const today = new Date();
   const payments: { leadId: string; currency?: string; when: Date; amount: number }[] = [];
   // Payments without a date (a product without a billing start date, an installment without a
-  // date) can't be placed, so they are left out and their deals counted below.
+  // date) can't be placed, so they are left out and their deals counted below. Only Won
+  // opportunities count: money that is contracted, not hoped for (CD-365).
   let undatedDeals = 0;
-  for (const l of liveLeads) {
+  for (const l of wonLeads) {
     const { payments: dated, undated } = dealPayments(s, l);
     if (undated) undatedDeals++;
     for (const p of dated) payments.push({ leadId: l.id, currency: l.currency, ...p });
@@ -94,10 +87,13 @@ export function Dashboard() {
       const diff = (p.when.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30.4);
       return diff > b.range[0] && diff <= b.range[1];
     });
+    const ids = [...new Set(due.map((p) => p.leadId))];
     return {
       label: b.label,
-      ids: [...new Set(due.map((p) => p.leadId))],
+      ids,
       value: moneyTotal(s, due),
+      // Per deal, only what falls due in this band (CD-365), not the deal's whole value.
+      amounts: Object.fromEntries(ids.map((id) => [id, moneyTotal(s, due.filter((p) => p.leadId === id))])),
       width: 100 - i * 11 + '%',
       bg: TIME_SHADES[i],
       fg: i >= 4 ? '#F5F7F6' : '#0F1B16',
@@ -195,12 +191,13 @@ export function Dashboard() {
           <div className="card" style={{ padding: 18 }}>
             <div className="card-title" style={{ marginBottom: 4 }}>Funnel by payment due date</div>
             <div className="card-sub" style={{ marginBottom: 16 }}>
-              Product and service payments falling due inside each horizon, incl. VAT
+              {/* CD-365: the bands are separate periods, not running totals. */}
+              Won opportunities only. Each band is its own period; the bands don't add up. Product and service payments falling due in that period, without VAT
               {undatedDeals ? ` · ${plural(undatedDeals, 'opportunity', 'opportunities')} without billing dates left out` : ''}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
               {timeFunnel.map((b) => (
-                <div key={b.label} onClick={() => drill('Payments due', b.label, b.ids)} style={{ width: b.width, background: b.bg, clipPath: clip, padding: '11px 26px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
+                <div key={b.label} onClick={() => drill('Payments due', b.label, b.ids, { amounts: b.amounts, summary: `${b.value} due in this period` })} style={{ width: b.width, background: b.bg, clipPath: clip, padding: '11px 26px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: b.fg, textAlign: 'center' }}>{b.label}</span>
                   <span style={{ fontSize: 11.5, color: b.subFg, textAlign: 'center' }}>{b.value}</span>
                 </div>

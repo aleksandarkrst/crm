@@ -373,6 +373,12 @@ export interface Drill {
   kicker: string;
   title: string;
   leadIds: string[];
+  /**
+   * What to show per deal instead of its value, and the summary after the count (CD-365: the
+   * payment-due funnel shows what falls due in its period, "€14,400 due in this period").
+   */
+  amounts?: Record<string, string>;
+  summary?: string;
 }
 
 export interface NewContactDraft {

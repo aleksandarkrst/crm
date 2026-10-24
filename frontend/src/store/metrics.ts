@@ -5,6 +5,20 @@
 import type { Lead, Stage, StageChange } from './types';
 
 const DAY = 86_400_000;
+
+/**
+ * The payment-due bands of Overview's "Funnel by payment due date", widest (furthest) first. Each is
+ * its own period in months from today (lower bound excluded, upper included), never a running total
+ * (CD-365): "Overdue and next 2 weeks" takes everything already due too, "Over 9 months" the rest.
+ */
+export const TIME_BUCKETS = [
+  { label: 'Over 9 months', range: [9, 999] },
+  { label: '6 to 9 months', range: [6, 9] },
+  { label: '3 to 6 months', range: [3, 6] },
+  { label: '1 to 3 months', range: [1, 3] },
+  { label: '2 weeks to 1 month', range: [0.5, 1] },
+  { label: 'Overdue and next 2 weeks', range: [-999, 0.5] },
+] as const;
 /** Below this many deals that moved between stages, rates would mostly be noise. */
 export const MIN_MOVED_DEALS = 5;
 
