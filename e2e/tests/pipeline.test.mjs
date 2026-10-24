@@ -14,6 +14,7 @@ import {
   signIn,
   steps,
   text,
+  ungateFunnels,
   useBrowser,
   waitForToastToClear,
 } from '../lib/harness.mjs';
@@ -36,6 +37,7 @@ describe('pipeline journey', () => {
     await page.type('input[placeholder="e.g. Pultly Studio"]', 'E2E Studio');
     await clickButton(page, 'Create workspace');
     await finishOnboarding(page);
+    await ungateFunnels(page); // the deals here move freely; the gate has its own test in deal-work
   });
 
   step('adds a product to the catalog', async () => {

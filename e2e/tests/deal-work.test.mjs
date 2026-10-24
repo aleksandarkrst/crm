@@ -1,4 +1,5 @@
-// Deal products and stage to-dos: edits in the UI reach the API and come back after a reload.
+// Deal products and stage to-dos: edits in the UI reach the API and come back after a reload; the
+// advance gate (CD-363) holds the opportunity in its stage until the to-dos are done.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
@@ -34,7 +35,7 @@ describe('opportunity products and stage to-dos', () => {
 
   step('sets up a workspace with a product and an opportunity', async () => {
     page = await browser.person('lina');
-    await newUserWithWorkspace(page, { label: 'lines', name: 'Lina Tester', workspace: 'Lines Co' });
+    await newUserWithWorkspace(page, { label: 'lines', name: 'Lina Tester', workspace: 'Lines Co', gated: true });
     await api(page, '/crm/products', { method: 'POST', body: JSON.stringify({ name: 'Website', unitPrice: 5000, vatRate: 20 }) });
     await page.reload({ waitUntil: 'networkidle0' });
     dealId = await createDealInUi(page, { company: 'Initech', contact: 'Bill Lumbergh' });
@@ -82,7 +83,7 @@ describe('opportunity products and stage to-dos', () => {
     await (await socials.$('button[title="Mark done"]')).click();
     await clickButton(page, 'Fit score entered');
     await page.type('textarea[placeholder="One line. This becomes the timeline entry."]', 'Budget confirmed');
-    await clickButton(page, '+ Add a to-do for this lead');
+    await clickButton(page, '+ Add a to-do for this opportunity');
     await page.waitForSelector('input[placeholder="Name this to-do"]');
     await page.type('input[placeholder="Name this to-do"]', 'Send NDA');
 
@@ -112,6 +113,25 @@ describe('opportunity products and stage to-dos', () => {
     await click(page, 'button[title="Delete this to-do"]');
     const gone = await eventually(async () => !(await api(page, '/crm/deal-tasks')).some((t) => t.label === 'Send NDA'));
     assert.ok(gone, 'to-do deleted');
+  });
+
+  step('holds the opportunity in its stage until its to-dos are done, then advances it', async () => {
+    const [funnel] = await api(page, '/crm/funnels');
+    const deal = await api(page, '/crm/deals/' + dealId);
+    const stages = funnel.stages.filter((st) => !st.isWon).sort((a, b) => a.position - b.position);
+    const current = stages.find((st) => st.id === deal.stageId);
+    const next = stages[stages.indexOf(current) + 1];
+    // Won waits for the last stage in a gated funnel; Advance waits for the open to-dos.
+    assert.equal(await page.$eval('[data-testid=mark-won]', (el) => el.disabled), true);
+    assert.equal(await page.$eval('[data-testid=advance-stage]', (el) => el.disabled), true);
+    assert.match(await page.$eval('[data-testid=advance-blockers]', (el) => el.textContent), new RegExp(`to-dos? open in ${current.name}`));
+
+    for (const item of current.checklistItems)
+      await api(page, `/crm/deals/${dealId}/tasks/playbook`, { method: 'PUT', body: JSON.stringify({ stageId: current.id, checklistItemId: item.id, done: true }) });
+    await page.reload({ waitUntil: 'networkidle0' });
+    await page.waitForFunction(() => document.querySelector('[data-testid=advance-stage]')?.disabled === false);
+    await click(page, '[data-testid=advance-stage]');
+    assert.ok(await eventually(async () => (await api(page, '/crm/deals/' + dealId)).stageId === next.id), `moved to ${next.name}`);
   });
 
   step("won't delete a product that is on an opportunity", async () => {

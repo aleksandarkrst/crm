@@ -206,13 +206,27 @@ export async function confirmInApp(page, { ok = true } = {}) {
   return title;
 }
 
-/** Creates the first workspace of a newly signed-in user, finishes onboarding and waits for the pipeline. */
-export async function createWorkspace(page, name, currency) {
+/**
+ * Creates the first workspace of a newly signed-in user, finishes onboarding and waits for the pipeline.
+ * A new workspace's stages need their to-dos done before a deal moves on (CD-363); unless `gated`, the
+ * gate is switched off so tests that move deals don't have to tick every to-do first.
+ */
+export async function createWorkspace(page, name, currency, { gated = false } = {}) {
   await page.waitForSelector('input[placeholder="e.g. Pultly Studio"]');
   await page.type('input[placeholder="e.g. Pultly Studio"]', name);
   if (currency) await setValue(page, 'select[aria-label="Main currency"]', currency);
   await click(page, 'button[type=submit]');
   await finishOnboarding(page);
+  if (!gated) await ungateFunnels(page);
+}
+
+/** Switches the to-do gate off on every stage of the workspace's funnels, and reloads the app. */
+export async function ungateFunnels(page) {
+  for (const funnel of await api(page, '/crm/funnels'))
+    for (const stage of funnel.stages.filter((st) => st.gateTodos))
+      await api(page, `/crm/funnels/${funnel.id}/stages/${stage.id}`, { method: 'PATCH', body: JSON.stringify({ gateTodos: false }) });
+  await page.reload({ waitUntil: 'networkidle0' });
+  await page.waitForSelector('[data-testid=new-menu]');
 }
 
 /**
@@ -245,11 +259,11 @@ export async function finishOnboarding(page, name = 'Test User') {
   await page.waitForSelector('[data-testid=new-menu]');
 }
 
-/** Opens the app, signs in as a new user and creates a workspace. */
-export async function newUserWithWorkspace(page, { label, name, workspace, currency }) {
+/** Opens the app, signs in as a new user and creates a workspace (ungated unless `gated`, see createWorkspace). */
+export async function newUserWithWorkspace(page, { label, name, workspace, currency, gated }) {
   await page.goto(BASE_URL, { waitUntil: 'networkidle0' });
   await signIn(page, email(label), name);
-  await createWorkspace(page, workspace, currency);
+  await createWorkspace(page, workspace, currency, { gated });
 }
 
 /** Opens a "Create" dialog from the header's "+" menu (CD-80): deal, contact, company, task or product. */
