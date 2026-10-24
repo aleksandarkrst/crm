@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { api, BASE_URL, email, eventually, newUserWithWorkspace, steps, text, useBrowser, testPib } from '../lib/harness.mjs';
+import { closePopover, openChip, pickOption, ticked } from '../lib/filters.mjs';
 
 /** Signs a user in through the dev login from Node (no browser needed for them). */
 async function devUser(label, name) {
@@ -13,18 +14,19 @@ async function devUser(label, name) {
   return { token: accessToken, email: email(label), id: me.user.id };
 }
 
-/** The Salesperson filter <select> on the current screen: its options as { value, label }. */
-const ownerOptions = (page) =>
-  page.evaluate(() => {
-    const select = [...document.querySelectorAll('select')].find((s) => s.options[0]?.textContent === 'Salesperson');
-    return select ? [...select.options].slice(1).map((o) => ({ value: o.value, label: o.textContent })) : null;
-  });
-const pickOwner = (page, value) =>
-  page.evaluate((value) => {
-    const select = [...document.querySelectorAll('select')].find((s) => s.options[0]?.textContent === 'Salesperson');
-    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, value);
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-  }, value);
+/** The Salesperson chip's people (CD-366) on the current screen, as { value, label }. */
+async function ownerOptions(page) {
+  await openChip(page, 'owner');
+  const list = await page.$$eval('[data-testid="filter-pop-owner"] [data-testid="filter-option"]', (els) => els.map((el) => ({ value: el.dataset.value, label: el.querySelector('.fr-opt-text > span').textContent })));
+  await closePopover(page);
+  return list;
+}
+/** Sets the Salesperson chip to exactly this person. */
+async function pickOwner(page, value) {
+  for (const id of await ticked(page, 'owner')) if (id !== value) await pickOption(page, 'owner', id);
+  if (!(await ticked(page, 'owner')).includes(value)) await pickOption(page, 'owner', value);
+  await closePopover(page);
+}
 
 describe('owners by id', () => {
   const browser = useBrowser();
@@ -56,7 +58,7 @@ describe('owners by id', () => {
 
   step('the pipeline filter lists both, told apart, and filters each separately', async () => {
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
-    await page.waitForFunction(() => document.body.innerText.includes('Alpha Owned'));
+    await page.waitForSelector('[data-testid="filter-chip-owner"]');
     const options = await ownerOptions(page);
     const a = options.find((o) => o.value === samA.id);
     const b = options.find((o) => o.value === samB.id);
@@ -65,11 +67,11 @@ describe('owners by id', () => {
     assert.ok(a.label.startsWith('Sam Seller') && a.label.includes(samA.email), a.label);
 
     await pickOwner(page, samA.id);
-    await page.waitForFunction(() => !document.body.innerText.includes('Bravo Owned'));
+    await page.waitForFunction(() => document.body.innerText.includes('Alpha Owned') && !document.body.innerText.includes('Bravo Owned'));
     assert.ok((await text(page)).includes('Alpha Owned'));
 
     await pickOwner(page, samB.id);
-    await page.waitForFunction(() => !document.body.innerText.includes('Alpha Owned'));
+    await page.waitForFunction(() => document.body.innerText.includes('Bravo Owned') && !document.body.innerText.includes('Alpha Owned'));
     assert.ok((await text(page)).includes('Bravo Owned'));
   });
 

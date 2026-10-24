@@ -152,7 +152,9 @@ night (`nightly.yml`):
   workspace, products, new deal, closing date, notes, drag between stages, reload, every screen
   renders; deal lines and stage to-dos persist; CHAMP fit score; team invitations with two
   browser contexts (invite, accept, roles, wrong account, withdraw, remove); marking a deal lost,
-  the Pipeline's lost view and reopening; stage conversion on Overview; a third funnel with a deal
+  Lost in the Pipeline's Status filter and reopening; the filter row on every list page (a
+  combined filter per screen, a new custom field offered, the no-results card, remembered per
+  page); stage conversion on Overview; a third funnel with a deal
   in it, adding and removing stages; renaming a checklist item without losing the tick; importing
   companies and deals through the import dialog, and the exported contacts CSV (downloaded to a
   temp folder); the command palette (Ctrl+K, records and actions, keyboard navigation), the "+" menu and its letters, the account menu, the company and contact pages, and the sidebar

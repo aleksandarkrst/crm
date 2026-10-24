@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { api, BASE_URL, clickButton, eventually, newUserWithWorkspace, setValue, steps, text, useBrowser, waitForToastToClear, createNew } from '../lib/harness.mjs';
+import { closePopover, pickOption as pickFilterOption } from '../lib/filters.mjs';
 
 /** An ISO date `days` from today in a time zone (new workspaces use Europe/Belgrade). */
 function isoDay(days, tz = 'Europe/Belgrade') {
@@ -10,16 +11,6 @@ function isoDay(days, tz = 'Europe/Belgrade') {
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d).map((x) => [x.type, x.value]));
   return `${p.year}-${p.month}-${p.day}`;
 }
-
-/** Sets the <select> that has an option with this value (the filter chips have no labels). */
-const pickOption = (page, value) =>
-  page.evaluate((value) => {
-    const el = [...document.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.value === value));
-    if (!el) return false;
-    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(el, value);
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-    return true;
-  }, value);
 
 describe('tasks: overdue, editing and channels', () => {
   const browser = useBrowser();
@@ -119,23 +110,23 @@ describe('workspace currency, fiscal year and counters', () => {
     await page.waitForFunction(() => document.body.innerText.includes('$12k'));
   });
 
-  step('the closing-date filter uses the fiscal year starting in April', async () => {
-    // This fiscal year runs from 1 April to 31 March.
-    const today = isoDay(0);
-    const [y, m] = today.split('-').map(Number);
-    const fyStart = m >= 4 ? y : y - 1;
-    const lastDay = `${fyStart + 1}-03-31`; // in this fiscal year (outside the calendar year when after March)
-    const dayBefore = `${fyStart}-03-31`; // the last day of the previous fiscal year
+  step("the Closing date chip's This quarter is a fiscal one", async () => {
+    // A fiscal year from February: its quarters (Feb–Apr, May–Jul, Aug–Oct, Nov–Jan) aren't calendar ones.
+    await api(page, '/workspace', { method: 'PATCH', body: JSON.stringify({ fiscalYearStartMonth: 2 }) });
+    const [y, m] = isoDay(0).split('-').map(Number);
+    const q = m - 1 - ((((m - 1 - 1) % 12) + 12) % 3); // first month (0-based) of this fiscal quarter
+    const iso = (t) => new Date(t).toISOString().slice(0, 10);
+    const lastDay = iso(Date.UTC(y, q + 3, 0)); // in this fiscal quarter
+    const dayBefore = iso(Date.UTC(y, q, 0)); // the last day of the previous one
     for (const [title, closeDate] of [
       ['Fiscal in', lastDay],
       ['Fiscal out', dayBefore],
     ])
       await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title, funnelId: smb.id, closeDate }) });
     await page.reload({ waitUntil: 'networkidle0' });
-    const labels = await page.evaluate(() => [...document.querySelectorAll('option')].map((o) => o.textContent));
-    assert.ok(labels.includes('Closing this fiscal year') && labels.includes('Closing this fiscal quarter'), 'fiscal labels shown');
-    assert.ok(await pickOption(page, 'Closing this year'), 'date filter found');
-    await page.waitForFunction(() => document.body.innerText.includes('1 opportunity in view · closing this fiscal year'));
+    await pickFilterOption(page, 'close', 'quarter');
+    await closePopover(page);
+    await page.waitForFunction(() => document.body.innerText.includes('1 opportunity in view · closing this quarter'));
   });
 
   it('throws no uncaught errors in the page', () => {

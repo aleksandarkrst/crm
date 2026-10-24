@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { api, BASE_URL, clickButton, eventually, newUserWithWorkspace, setValue, steps, text, useBrowser, waitForToastToClear, createNew, testPib } from '../lib/harness.mjs';
+import { pickOption as pickFilterOption } from '../lib/filters.mjs';
 
 describe('funnels and stages', () => {
   const browser = useBrowser();
@@ -10,16 +11,6 @@ describe('funnels and stages', () => {
   let funnel;
   let dealId;
 
-  /** Picks an option by its text in the first <select> that has it. */
-  const pickOption = (label) =>
-    page.evaluate((label) => {
-      const select = [...document.querySelectorAll('select')].find((el) => [...el.options].some((o) => o.textContent === label));
-      if (!select) return false;
-      const value = [...select.options].find((o) => o.textContent === label).value;
-      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, value);
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-      return true;
-    }, label);
   const funnelNow = async () => (await api(page, '/crm/funnels')).find((f) => f.id === funnel.id);
 
   step('creates a third funnel in the funnel builder', async () => {
@@ -72,10 +63,11 @@ describe('funnels and stages', () => {
 
   step('the Pipeline and Overview show the third funnel and its opportunity', async () => {
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
-    assert.ok(await pickOption('Mid-market'), 'funnel switcher lists it');
+    // The Funnel chip of the filter row (CD-366) lists it, on the Pipeline and on Overview.
+    await pickFilterOption(page, 'funnel', funnel.id);
     await page.waitForFunction(() => document.body.innerText.includes('Umbrella Corp'));
     await page.goto(BASE_URL + '/overview', { waitUntil: 'networkidle0' });
-    assert.ok(await pickOption('Mid-market'), 'audience filter lists it');
+    await pickFilterOption(page, 'funnel', funnel.id);
     await page.waitForFunction(() => /1 opportunity in view/.test(document.body.innerText));
   });
 

@@ -17,6 +17,7 @@ import {
   testPib,
   waitForToastToClear,
 } from '../lib/harness.mjs';
+import { closePopover, openChip, pickOption } from '../lib/filters.mjs';
 
 /** Local ISO date `days` from today. */
 function isoIn(days) {
@@ -25,15 +26,10 @@ function isoIn(days) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** Picks an option in the Overview filter chip that offers it. */
-function pickChip(page, option) {
-  return page.evaluate((option) => {
-    const select = [...document.querySelectorAll('select')].find((el) => [...el.options].some((o) => o.value === option));
-    if (!select) return false;
-    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, option);
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-    return true;
-  }, option);
+/** Picks a Closing date preset on Overview's filter row (CD-366). */
+async function pickClose(page, preset) {
+  await pickOption(page, 'close', preset);
+  await closePopover(page);
 }
 
 const metaText = (page) => page.evaluate(() => [...document.querySelectorAll('span')].map((el) => el.textContent).find((t) => / in view · /.test(t)) ?? '');
@@ -82,16 +78,18 @@ describe('honest UI', () => {
   });
 
   step('the closing-date filter changes what Overview counts', async () => {
-    assert.ok(await pickChip(page, 'Closing in 30 days'), 'date chip found');
+    await pickClose(page, 'next30');
     await page.waitForFunction(() => document.body.innerText.includes('1 opportunity in view'));
-    assert.match(await metaText(page), /^1 opportunity in view · closing in 30 days · 1 without a closing date hidden$/);
+    assert.match(await metaText(page), /^1 opportunity in view · closing next 30 days · 1 without a closing date hidden$/);
     assert.match(await text(page), /1 open opportunity in the current filter/);
 
-    assert.ok(await pickChip(page, 'Closing date passed'));
+    await pickClose(page, 'before');
     await page.waitForFunction(() => document.body.innerText.includes('0 opportunities in view'));
     assert.match(await text(page), /0 open opportunities in the current filter/);
 
-    assert.ok(await pickChip(page, 'Any closing date'));
+    await openChip(page, 'close');
+    await click(page, '[data-testid=filter-clear-selection]');
+    await closePopover(page);
     await page.waitForFunction(() => document.body.innerText.includes('2 opportunities in view'));
   });
 
