@@ -76,7 +76,9 @@ export function Companies() {
               <div key={c.id} className="table-row clickable" style={{ gridTemplateColumns: COLS }} onClick={() => openCompany(c.id)}>
                 <span style={{ fontWeight: 600 }}>{c.name}</span>
                 <span style={{ color: 'var(--text-2)' }}>{c.pib || <span className="badge badge-warn">No PIB</span>}</span>
-                <span data-testid="company-row-status">{c.status}</span>
+                <span style={{ color: 'var(--text-2)' }} data-testid="company-row-status">
+                  {c.status}
+                </span>
                 <span style={{ color: 'var(--text-2)' }}>{c.ownership}</span>
                 <span style={{ color: 'var(--text-2)' }}>{c.industry}</span>
                 <span style={{ color: 'var(--text-2)' }}>{c.hq}</span>

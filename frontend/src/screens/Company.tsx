@@ -127,7 +127,7 @@ export function Company() {
                   ))}
                 </ul>
                 <span style={{ color: 'var(--text-2)' }}>
-                  Fill them in below and the status becomes Opportunity by itself. Client and Past client follow won opportunities and finished projects; the ⋯ menu can set a status back by hand.
+                  Fill them in below and the status becomes Opportunity by itself. Client and Past client follow won opportunities and finished projects{canSetStatus ? '; the ⋯ menu can set a status back by hand.' : '.'}
                 </span>
               </div>
             ) : null
