@@ -1,17 +1,18 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, asc, count, eq, getTableColumns, ilike, inArray, ne, or } from 'drizzle-orm';
+import { and, asc, count, eq, getTableColumns, ilike, inArray, ne, or, sql } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { companies, contacts, deals, meetings, OWNERSHIP_TYPES, projects, visitPlanLines } from '../../../shared/database/schema';
-import { type ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
+import { companies, COMPANY_STATUSES, contacts, deals, funnelStages, meetings, OWNERSHIP_TYPES, projects, visitPlanLines } from '../../../shared/database/schema';
+import { ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { MB_MESSAGE, mbValid, PIB_MESSAGE, pibValid } from '../../../shared/validation/serbian-ids';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
 import { RecordHistoryService } from '../history/record-history.service';
 import { assertOwnerIsMember, userNameOf } from '../owner';
+import { CompanyStatusService } from './company-status.service';
 
 const noSpaces = (v: unknown) => (typeof v === 'string' ? v.replace(/\s/g, '') : v);
 
@@ -37,6 +38,24 @@ export const CreateCompany = z.object({
   notes: optionalText(5000),
 });
 export const UpdateCompany = nonEmptyPatch(CreateCompany.partial());
+
+/**
+ * `GET /crm/companies` filters (CD-358): `status=lead,opportunity` keeps those statuses; `outcome=won`
+ * keeps companies with a won opportunity, `outcome=lost` those whose opportunities were all lost.
+ */
+export const CompaniesQuery = ListQuery.extend({
+  status: z
+    .string()
+    .transform((s) => s.split(',').filter(Boolean))
+    .pipe(z.array(z.enum(COMPANY_STATUSES)).min(1))
+    .optional(),
+  outcome: z.enum(['won', 'lost']).optional(),
+});
+export type CompaniesQuery = z.infer<typeof CompaniesQuery>;
+
+/** "Set status back…" (a status) or "Back to automatic" (null). */
+export const SetCompanyStatus = z.object({ status: z.enum(COMPANY_STATUSES).nullable() });
+export type SetCompanyStatus = z.infer<typeof SetCompanyStatus>;
 export type CreateCompany = z.infer<typeof CreateCompany>;
 export type UpdateCompany = z.infer<typeof UpdateCompany>;
 
@@ -65,15 +84,31 @@ export class CompaniesService {
     private readonly audit: AuditService,
     private readonly customFields: CustomFieldsService,
     private readonly changes: RecordHistoryService,
+    private readonly status: CompanyStatusService,
   ) {}
 
-  list(ctx: TenantContext, page: ListQuery) {
+  list(ctx: TenantContext, page: CompaniesQuery) {
     const like = page.q ? `%${page.q}%` : undefined;
+    // won: an opportunity in a won stage that isn't lost; lost: opportunities, all lost.
+    const wonDeal = sql`exists (select 1 from ${deals} d join ${funnelStages} s on s.id = d.stage_id where d.company_id = ${companies.id} and d.lost_at is null and s.is_won)`;
+    const outcome =
+      page.outcome === 'won'
+        ? wonDeal
+        : page.outcome === 'lost'
+          ? sql`exists (select 1 from ${deals} d where d.company_id = ${companies.id}) and not exists (select 1 from ${deals} d where d.company_id = ${companies.id} and d.lost_at is null)`
+          : undefined;
     return this.database.withTenant(ctx.tenantId, (tx) =>
       tx
         .select({ ...getTableColumns(companies), ownerName: userNameOf(companies.ownerUserId) })
         .from(companies)
-        .where(and(like ? or(ilike(companies.name, like), ilike(companies.industry, like), ilike(companies.hq, like), ilike(companies.pib, like)) : undefined, page.ids ? inArray(companies.id, page.ids) : undefined))
+        .where(
+          and(
+            like ? or(ilike(companies.name, like), ilike(companies.industry, like), ilike(companies.hq, like), ilike(companies.pib, like)) : undefined,
+            page.ids ? inArray(companies.id, page.ids) : undefined,
+            page.status ? inArray(companies.status, page.status) : undefined,
+            outcome,
+          ),
+        )
         .orderBy(asc(companies.name))
         .limit(page.limit)
         .offset(page.offset),
@@ -81,11 +116,13 @@ export class CompaniesService {
   }
 
   get(ctx: TenantContext, id: string) {
-    return this.database.withTenant(ctx.tenantId, async (tx) => {
-      const [row] = await tx.select().from(companies).where(eq(companies.id, id));
-      if (!row) throw new NotFoundException('Company not found');
-      return row;
-    });
+    return this.database.withTenant(ctx.tenantId, (tx) => this.find(tx, id));
+  }
+
+  private async find(tx: Tx, id: string) {
+    const [row] = await tx.select().from(companies).where(eq(companies.id, id));
+    if (!row) throw new NotFoundException('Company not found');
+    return row;
   }
 
   create(ctx: TenantContext, input: CreateCompany) {
@@ -101,7 +138,8 @@ export class CompaniesService {
           .values({ ownerUserId: ctx.userId, ...fields, customFields: cf.set, tenantId: ctx.tenantId })
           .returning();
         await this.audit.record(tx, ctx, { action: 'company.created', entityType: 'company', entityId: row!.id });
-        return row!;
+        await this.status.recompute(tx, ctx, [row!.id]);
+        return this.find(tx, row!.id);
       })
       .catch(mapDbError);
   }
@@ -123,7 +161,9 @@ export class CompaniesService {
         const [row] = await tx.update(companies).set(patch).where(eq(companies.id, id)).returning();
         if (!row) throw new NotFoundException('Company not found');
         await this.audit.record(tx, ctx, { action: 'company.updated', entityType: 'company', entityId: id, data: input });
-        return row;
+        // Its identity and address count towards Opportunity (CD-358).
+        await this.status.recompute(tx, ctx, [id]);
+        return this.find(tx, id);
       })
       .catch(mapDbError);
   }

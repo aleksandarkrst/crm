@@ -172,7 +172,7 @@ export const mapTeam = (apiTeam: { members: ApiMember[]; invitations: ApiInvitat
   })),
 ];
 
-export const mapActivity = (a: ApiActivity, tz?: string): LogEntry => ({ date: dateLabel(a.occurredAt, tz), channel: a.channel ?? SYSTEM_CHANNEL, title: a.title, detail: a.detail ?? '', actor: a.actor?.name ?? null });
+export const mapActivity = (a: ApiActivity, tz?: string): LogEntry => ({ date: dateLabel(a.occurredAt, tz), channel: a.channel ?? SYSTEM_CHANNEL, title: a.title, detail: a.detail ?? '', actor: a.actor?.name ?? null, at: a.occurredAt });
 
 export const mapStageChange = (c: ApiStageChange): StageChange => ({
   dealId: c.dealId,
@@ -397,6 +397,8 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
     ownershipType: c.ownershipType ?? '',
     owner: c.ownerName ?? '',
     ownerId: c.ownerUserId,
+    status: c.status,
+    statusManual: c.statusSetManually,
   }));
 
   // Everyone who isn't already shown as a lead's primary contact.

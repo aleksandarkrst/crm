@@ -3,6 +3,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { asc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
+import { CompanyStatusService } from '../companies/company-status.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { activities, BILLING_FREQUENCIES, type BillingFrequency, BUYER_ROLES, companies, contacts, dealStageHistory, deals, funnels, funnelStages, memberships, type OwnershipType, products, tenants, users } from '../../../shared/database/schema';
@@ -123,6 +124,7 @@ export class ImportService {
     private readonly database: DatabaseService,
     private readonly audit: AuditService,
     private readonly history: StageHistoryService,
+    private readonly status: CompanyStatusService,
   ) {}
 
   async preview(ctx: TenantContext, type: ImportType, req: ImportRequest) {
@@ -249,6 +251,8 @@ export class ImportService {
         }
       }
     }
+    // Imported companies, contacts and opportunities move company statuses (CD-358): once, at the end.
+    if (summary.created + summary.updated > 0) await this.database.withTenant(ctx.tenantId, (tx) => this.status.recompute(tx, ctx, 'all'));
     return { type, ...summary, headers: prep.headers, failures, skippedRows: skipped };
   }
 

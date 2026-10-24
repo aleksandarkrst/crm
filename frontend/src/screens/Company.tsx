@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { CustomFieldRows } from '../components/CustomFields';
 import { IconRow } from '../components/icons';
@@ -6,15 +6,15 @@ import { MeetingsCard } from '../components/MeetingsCard';
 import { Screen } from '../components/Layout';
 import { CompanyProjects } from './CompanyProjects';
 import { AddButton, DealsSection, FocusTasks, RecordHeader, RecordHistory, Section } from '../components/RecordParts';
-import { CheckedInput, GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
+import { CheckedInput, GhostInput, GhostSelect, Modal, ModalHeader, Picker, PickerRow, usePicker } from '../components/ui';
 import { mapsSearchUrl } from '../lib/maps';
 import { checkActivityCode, checkMb, checkPib } from '../lib/serbianIds';
 import { checkDomain } from '../lib/validate';
 import { paths } from '../lib/paths';
 import { INDUSTRIES, SOURCES, TEAM_SIZES } from '../store/seed';
-import { allPeople, companyOfPerson, companyRecords, contactsForLead, curOf, initialsOf, timelineFor } from '../store/selectors';
+import { allPeople, COMPANY_STATUS_LABELS, COMPANY_STATUS_RANK, companyOfPerson, companyReadiness, companyRecords, contactsForLead, curOf, initialsOf, timelineFor } from '../store/selectors';
 import { type CompanyFieldKey, useStore } from '../store/store';
-import type { Person } from '../store/types';
+import type { CompanyStatus, LogEntry, Person } from '../store/types';
 
 /** The website of a domain such as "acme.com" (or a full http(s) address); '' when it isn't one. */
 function websiteHref(value: string): string {
@@ -31,12 +31,33 @@ export function Company() {
   const picker = usePicker();
   const rec = companyRecords(s).find((c) => c.id === id);
   const leadIds = (rec?.leads ?? []).map((l) => l.id).join(',');
-  const { ensureLog } = store;
+  const { ensureLog, companyStatusHistory } = store;
   useEffect(() => {
     if (leadIds) ensureLog(leadIds.split(','));
   }, [leadIds, ensureLog]);
+  // Its status changes (CD-358) join the Activity; read again whenever the status moves.
+  const [statusLog, setStatusLog] = useState<LogEntry[]>([]);
+  const [settingStatus, setSettingStatus] = useState(false);
+  const current = s.extraCompanies.find((c) => c.id === id);
+  const statusKey = `${current?.status}:${current?.statusManual}`;
+  useEffect(() => {
+    let live = true;
+    companyStatusHistory(id).then(
+      (rows) => live && setStatusLog(rows),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [id, statusKey, companyStatusHistory]);
   if (!rec) return <Navigate to={paths.companies} replace />;
   const extra = s.extraCompanies.find((c) => c.id === rec.id);
+  const status: CompanyStatus = extra?.status ?? 'lead';
+  const manual = !!extra?.statusManual;
+  const readiness = companyReadiness(s, rec.id);
+  // Owners, admins and the company's owner set it back (the API checks the same).
+  const canSetStatus = store.canDelete || extra?.ownerId === store.session.userId;
+  const lower = (Object.keys(COMPANY_STATUS_RANK) as CompanyStatus[]).filter((st) => COMPANY_STATUS_RANK[st] < COMPANY_STATUS_RANK[status]);
 
   // Its own contacts and everyone on its deals.
   const people: Person[] = [];
@@ -59,7 +80,8 @@ export function Company() {
     .filter((p) => !q || String(p.name || '').toLowerCase().includes(q));
   const target = rec.leads[0];
 
-  const activities = rec.leads.flatMap((l) => timelineFor(s, l.id)).slice(0, 30);
+  // Newest first; entries just made (no time yet) on top.
+  const activities = [...statusLog, ...rec.leads.flatMap((l) => timelineFor(s, l.id))].sort((a, b) => (b.at ?? '9').localeCompare(a.at ?? '9')).slice(0, 30);
   const setField = (key: CompanyFieldKey) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => store.setCompanyField(rec.id, key, e.target.value);
   const domain = extra?.domain ?? '';
   const website = websiteHref(domain);
@@ -93,11 +115,40 @@ export function Company() {
           onNewDeal={newDeal}
           onDelete={store.canDelete ? onDelete : undefined}
           deleteLabel="Delete company"
+          notice={
+            status === 'lead' && !manual && readiness.blockers.length > 0 ? (
+              <div className="notice-warn" data-testid="company-blockers" style={{ marginTop: 12 }}>
+                <span style={{ fontWeight: 600 }}>
+                  Still a lead: {readiness.blockers.length === 1 ? '1 thing is' : `${readiness.blockers.length} things are`} missing before this company can become an opportunity
+                </span>
+                <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--text-2)' }}>
+                  {readiness.blockers.map((b) => (
+                    <li key={b}>{b}</li>
+                  ))}
+                </ul>
+                <span style={{ color: 'var(--text-2)' }}>
+                  Fill them in below and the status becomes Opportunity by itself. Client and Past client follow won opportunities and finished projects{canSetStatus ? '; the ⋯ menu can set a status back by hand.' : '.'}
+                </span>
+              </div>
+            ) : null
+          }
+          menuItems={[
+            ...(canSetStatus && lower.length ? [{ label: 'Set status back', onClick: () => setSettingStatus(true), testId: 'status-set-back' }] : []),
+            ...(canSetStatus && manual ? [{ label: 'Back to automatic', onClick: () => void store.setCompanyStatus(rec.id, null), testId: 'status-automatic' }] : []),
+          ]}
         />
+        {settingStatus && <SetStatusDialog name={rec.name} current={status} choices={lower} onClose={() => setSettingStatus(false)} onPick={(st) => void store.setCompanyStatus(rec.id, st)} />}
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
           <div className="lead-side" style={{ flex: '1 1 400px', maxWidth: 540, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
             <Section title="Summary" testId="company-summary">
+              {/* Computed (CD-358); "set by hand" while someone set it back. */}
+              <IconRow icon="funnel" label="Status">
+                <span className="field-value" data-testid="company-status" title={manual ? 'Set back by hand: it stays there until Back to automatic' : undefined}>
+                  {COMPANY_STATUS_LABELS[status]}
+                  {manual ? ' · set by hand' : status === 'lead' ? ` · ${readiness.ready} of ${readiness.total} ready` : ''}
+                </span>
+              </IconRow>
               {/* Open: deals neither Won nor Lost; Lifetime: Won deals (CD-380). */}
               <IconRow icon="value" label="Open value">
                 <span className="field-value" data-testid="company-open-value">
@@ -238,5 +289,42 @@ function IdentityRow({ label, missing, badge, children }: { label: string; missi
         {missing && <span className="badge badge-warn">{badge ?? 'Missing'}</span>}
       </span>
     </div>
+  );
+}
+
+/**
+ * "Set status back" (CD-358): only to a status behind the current one. The automation then leaves
+ * it there until "Back to automatic", but still lowers it when the facts drop below it.
+ */
+function SetStatusDialog({ name, current, choices, onClose, onPick }: { name: string; current: CompanyStatus; choices: CompanyStatus[]; onClose: () => void; onPick: (status: CompanyStatus) => void }) {
+  const [pick, setPick] = useState<CompanyStatus>(choices[choices.length - 1]!);
+  return (
+    <Modal maxWidth={440} onBackdrop={onClose}>
+      <ModalHeader title={`Set ${name} back`} sub={`It is ${COMPANY_STATUS_LABELS[current]} now. The status moves forward by itself; by hand it can only go back, and it stays there until Back to automatic.`} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} role="radiogroup" aria-label="Status">
+        {[...choices].reverse().map((st) => (
+          <label key={st} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, cursor: 'pointer' }}>
+            <input type="radio" name="company-status" checked={pick === st} onChange={() => setPick(st)} />
+            {COMPANY_STATUS_LABELS[st]}
+          </label>
+        ))}
+      </div>
+      <div className="modal-actions">
+        <button type="button" className="btn btn-secondary" onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn btn-primary"
+          data-testid="status-set-back-save"
+          onClick={() => {
+            onPick(pick);
+            onClose();
+          }}
+        >
+          Set back
+        </button>
+      </div>
+    </Modal>
   );
 }

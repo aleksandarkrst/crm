@@ -88,6 +88,12 @@ export interface JobPayloads {
    * "Project created · <name>" on the deal's timeline (projects doesn't write CRM tables).
    */
   'projects.project-created-from-deal': { tenantId: string; dealId: string; projectId: string; projectName: string; actorUserId: string };
+  /**
+   * Sent by projects when a company's projects change: one created, completed, cancelled, reopened,
+   * moved to another company or deleted (CD-358). The CRM worker recomputes those companies' status
+   * (Client, Past client); projects doesn't write CRM tables.
+   */
+  'projects.company-projects-changed': { tenantId: string; companyIds: string[]; actorUserId: string };
   /** Sent by projects when a won deal created its project (CD-233): the projects worker emails the deal owner. */
   'projects.project-created-email': { tenantId: string; projectId: string; recipientUserId: string };
   /** Sent by projects when someone assigns another person to a task (CD-146): the projects worker emails them, if they want it. */
@@ -198,6 +204,7 @@ export const JOB_NAMES = [
   'people.deactivate-due',
   'people.employee-deactivated',
   'people.reporting-line-changed',
+  'projects.company-projects-changed',
   'projects.project-created-email',
   'projects.project-created-from-deal',
   'projects.task-assigned',

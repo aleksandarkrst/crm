@@ -229,6 +229,7 @@ export class ProjectsService {
         await this.audit.record(tx, ctx, { action: 'project.created', entityType: 'project', entityId: row!.id, data: { ...input, leadUserId } });
         if (deal && input.starterTasks) await addStarterTasks(tx, ctx, row!.id, stageId, deal.id);
         if (deal) await this.jobs.send('projects.project-created-from-deal', { tenantId: ctx.tenantId, dealId: deal.id, projectId: row!.id, projectName: input.name, actorUserId: ctx.userId }, tx);
+        await this.jobs.send('projects.company-projects-changed', { tenantId: ctx.tenantId, companyIds: [input.companyId], actorUserId: ctx.userId }, tx);
         return this.find(tx, row!.id);
       })
       .catch(mapDbError);
@@ -287,6 +288,9 @@ export class ProjectsService {
         // Another type: the tasks (CD-146) follow the project to its new stage, as their stages are the old type's.
         if (input.projectTypeId && input.projectTypeId !== current.projectTypeId) await tx.update(tasks).set({ stageId: patch.stageId }).where(eq(tasks.projectId, id));
         await this.audit.record(tx, ctx, { action: 'project.updated', entityType: 'project', entityId: id, data: input });
+        // The company status (CD-358) follows open and completed projects.
+        if (status !== current.status || companyId !== current.companyId)
+          await this.jobs.send('projects.company-projects-changed', { tenantId: ctx.tenantId, companyIds: [...new Set([current.companyId, companyId])], actorUserId: ctx.userId }, tx);
         return this.find(tx, id);
       })
       .catch(mapDbError);
@@ -305,9 +309,10 @@ export class ProjectsService {
           select 1 from time_entries e where e.task_id in (select id from tasks where project_id = ${id}) or e.project_id = ${id} limit 1`);
         if (logged.rows.length) throw new ConflictException('This project has logged hours. Complete or cancel it instead.');
         const files = await tx.select({ key: projectFiles.storageKey }).from(projectFiles).where(eq(projectFiles.projectId, id));
-        const [row] = await tx.delete(projects).where(eq(projects.id, id)).returning({ id: projects.id, name: projects.name });
+        const [row] = await tx.delete(projects).where(eq(projects.id, id)).returning({ id: projects.id, name: projects.name, companyId: projects.companyId });
         if (!row) throw new NotFoundException('Project not found');
         await this.audit.record(tx, ctx, { action: 'project.deleted', entityType: 'project', entityId: id, data: { name: row.name } });
+        await this.jobs.send('projects.company-projects-changed', { tenantId: ctx.tenantId, companyIds: [row.companyId], actorUserId: ctx.userId }, tx);
         return files.map((f) => f.key);
       })
       .catch(mapDbError);

@@ -6,7 +6,7 @@ import { FREQUENCIES } from './dealMath';
 import type { FilterField, FilterOption, FilterPerson } from './filters';
 import { MEETING_STATUSES, MEETING_TYPES, STATUS_LABEL } from './meetings';
 import { BUYER_ROLES, INDUSTRIES, SOURCES, TEAM_SIZES } from './seed';
-import { allPeople, companyIdOfPerson, companyLabels, type CompanyRecord, companyRecords, curOf, currencySymbol, customFieldsOf, needsNextStep, salesPeople, stagesFor, valueNum } from './selectors';
+import { allPeople, COMPANY_STATUS_LABELS, companyIdOfPerson, companyLabels, type CompanyRecord, companyRecords, curOf, currencySymbol, customFieldsOf, needsNextStep, salesPeople, stagesFor, valueNum } from './selectors';
 import { instantToZoned } from './time';
 import type { CatalogItem, Lead, Person, SegKey, State } from './types';
 
@@ -67,6 +67,8 @@ function companyFields<R>(s: State, toCompany: (r: R) => CompanyRecord | undefin
     { id: p + 'size', label: 'Team size', group, kind: 'list', options: optionsOf(TEAM_SIZES, records.map((c) => c.size)), get: (r) => toCompany(r)?.size },
     ...(opts.own ? [{ id: p + 'source', label: 'Source', group, kind: 'list', options: optionsOf(SOURCES, records.map((c) => c.source)), get: (r: R) => toCompany(r)?.source } as FilterField<R>] : []),
     text('pib', 'Company ID', (r) => toCompany(r)?.pib),
+    // The company status (CD-358), in its order.
+    { id: p + 'status', label: 'Status', group, kind: 'list', icon: 'status', options: (['lead', 'opportunity', 'client', 'past_client', 'not_interested'] as const).map((id) => ({ id, name: COMPANY_STATUS_LABELS[id] })), get: (r) => (toCompany(r) ? (extra(r)?.status ?? 'lead') : undefined) },
     text('mb', 'Matični broj', (r) => extra(r)?.mb),
     text('activityCode', 'Šifra delatnosti', (r) => extra(r)?.activityCode),
     { id: p + 'ownership', label: 'Ownership', group, kind: 'list', options: optionsOf(['Private', 'State'], []), get: (r) => toCompany(r)?.ownership },

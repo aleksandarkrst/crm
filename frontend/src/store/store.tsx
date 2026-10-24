@@ -8,10 +8,11 @@ import { connectLive, type LiveEvent } from './live';
 import { meetingActions, meetingKey, newMeetingRuntime, upcomingQuery } from './meetings';
 import { newPeopleRuntime, PEOPLE_HINTS, peopleActions } from './people';
 import { type Changed, loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type Part, type WorkspaceData } from './remote';
-import { AUTO_GENERATE_DOCS, CHANNELS, initialState } from './seed';
+import { AUTO_GENERATE_DOCS, CHANNELS, initialState, SYSTEM_CHANNEL } from './seed';
 import {
   advanceBlockers,
   allPeople,
+  COMPANY_STATUS_LABELS,
   companyIdOfPerson,
   companyRecords,
   curOf,
@@ -19,6 +20,7 @@ import {
   initialsOf,
   leadById,
   memberName,
+  momentLabel,
   money,
   num,
   personById,
@@ -34,7 +36,7 @@ import {
 import { dealTotals } from './dealMath';
 import { sortPlans, type VisitPlan } from './visitPlans';
 import { CONTACT_EXTRA_KEYS } from './types';
-import type { BillingFrequency, BonusRule, ChannelCode, ContactExtra, CustomFieldDef, DealDiscount, DealLine, Installment, Lead, LeadTask, LogEntry, NewContactDraft, Person, Profile, SegKey, Stage, State, TaskState, TaxMode, Workspace } from './types';
+import type { BillingFrequency, BonusRule, ChannelCode, CompanyStatus, ContactExtra, CustomFieldDef, DealDiscount, DealLine, Installment, Lead, LeadTask, LogEntry, NewContactDraft, Person, Profile, SegKey, Stage, State, TaskState, TaxMode, Workspace } from './types';
 
 /** What the product dialog edits (CD-83); numbers as typed. */
 export interface ProductDraft {
@@ -528,6 +530,20 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       people.refresh();
       queueRefresh(ALL_PARTS, logRequested.current);
     };
+    /** The status of these companies from the API, leaving their other fields as they are here (CD-358). */
+    const refreshCompanyStatus = async (ids: readonly string[]) => {
+      try {
+        const rows = new Map((await crmApi.companies(ids)).map((r) => [r.id, r]));
+        set((x) => ({
+          extraCompanies: x.extraCompanies.map((c) => {
+            const r = c.id ? rows.get(c.id) : undefined;
+            return r ? { ...c, status: r.status, statusManual: r.statusSetManually } : c;
+          }),
+        }));
+      } catch {
+        // the next refresh catches up
+      }
+    };
     const onLiveEvent = (e: LiveEvent) => {
       // Visit plan progress (CD-135) counts meetings: any meeting or plan change, also this tab's, recounts it.
       if (e.type === 'resync' || e.type === 'meeting' || e.type === 'visit_plan') set((x) => ({ visitRev: x.visitRev + 1 }));
@@ -561,6 +577,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         employeeCard.onLive(e, e.client === CLIENT_ID);
         if (!PARTS_OF[e.type]?.length) return;
       }
+      // A company's status (CD-358) moves on the server after this tab's own saves too (its fields, a
+      // contact, a deal): read just the status back, never the fields that may still be being edited.
+      if (e.client === CLIENT_ID && e.type === 'company' && e.ids?.length) void refreshCompanyStatus(e.ids);
       if (e.client === CLIENT_ID) return; // this tab's own change: the screen has it already
       if (e.type === 'meeting') return meetings.onLive(e);
       const parts = PARTS_OF[e.type] ?? ALL_PARTS;
@@ -1338,6 +1357,28 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       cancelSaves(id);
       await remove(() => crmApi.deleteCompany(id), paths.companies, rec.name + ' deleted');
     };
+    /** "Set status back…" or "Back to automatic" (CD-358); the API refuses a move forward and says why. */
+    const setCompanyStatus = async (companyId: string, status: CompanyStatus | null) => {
+      try {
+        const row = await crmApi.setCompanyStatus(companyId, status);
+        set((x) => ({ extraCompanies: x.extraCompanies.map((c) => (c.id === companyId ? { ...c, status: row.status, statusManual: row.statusSetManually } : c)) }));
+        flash(status ? `Status set back to ${COMPANY_STATUS_LABELS[row.status]}` : `The status is automatic again: ${COMPANY_STATUS_LABELS[row.status]}`);
+      } catch (err) {
+        flash('Status not changed: ' + errText(err), 7000);
+      }
+    };
+    /** A company's status changes as Activity entries, newest first (CD-358). */
+    const companyStatusHistory = async (companyId: string): Promise<LogEntry[]> => {
+      const tz = cur().workspace.timezone;
+      return (await crmApi.companyStatusHistory(companyId)).map((r) => ({
+        date: momentLabel(r.at, tz),
+        at: r.at,
+        channel: SYSTEM_CHANNEL,
+        title: `Status: ${COMPANY_STATUS_LABELS[r.to]} · ${r.reason === 'manual' ? 'set by hand' : 'automatic'}`,
+        detail: `Was ${COMPANY_STATUS_LABELS[r.from]}.`,
+        actor: r.actorName,
+      }));
+    };
     const deleteContact = async (personId: string) => {
       const p = personById(cur(), personId);
       const contactId = p?.contactId;
@@ -1556,6 +1597,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       deleteVisitPlan,
       deleteDeal,
       deleteCompany,
+      setCompanyStatus,
+      companyStatusHistory,
       deleteContact,
 
       // ---------------------------------------------------------- creating records

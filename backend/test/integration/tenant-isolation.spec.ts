@@ -61,6 +61,8 @@ describe('through the API', () => {
     expect((await call('GET', `/crm/companies/${a.company}`, asB())).status).toBe(404);
     expect((await call('GET', `/crm/contacts/${a.contact}`, asB())).status).toBe(404);
     expect(await ok('GET', `/crm/deals/${a.deal}/activities`, asB())).toEqual([]);
+    // A company's status history (CD-358) is its audit rows: none from another workspace.
+    expect(await ok('GET', `/crm/companies/${a.company}/status-history`, asB())).toEqual([]);
   });
 
   it("tenant B can't update tenant A's rows", async () => {
@@ -75,6 +77,7 @@ describe('through the API', () => {
       ['PATCH', `/crm/deal-tasks/${a.extraTask}`, { label: 'Hijacked' }],
       ['PUT', `/crm/deals/${a.deal}/stages/${funnelB.stages[0]!.id}/docs-complete`, { complete: true }],
       ['POST', `/crm/deals/${a.deal}/remind-stage-owner`, {}],
+      ['PATCH', `/crm/companies/${a.company}/status`, { status: 'not_interested' }],
     ];
     for (const [method, path, body] of attempts) {
       const res = await call(method, path, { ...asB(), body });

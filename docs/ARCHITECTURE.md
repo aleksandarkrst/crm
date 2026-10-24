@@ -47,6 +47,7 @@ grep the heading below, then read from that line to the next heading of the same
 - [Time off (milestone 16)](#time-off-milestone-16)
 - [Products, deal products and currency (CD-83)](#products-deal-products-and-currency-cd-83)
 - [Header, command palette and record pages (CD-80)](#header-command-palette-and-record-pages-cd-80)
+- [Company status (CD-358)](#company-status-cd-358)
 - [Module and workspace switcher (CD-214)](#module-and-workspace-switcher-cd-214)
   - [Modules as separate apps (CD-223)](#modules-as-separate-apps-cd-223)
 - [Meetings (CD-130)](#meetings-cd-130)
@@ -2407,6 +2408,48 @@ composer's WhatsApp and LinkedIn tabs are commented out until those integrations
   like the other fields (saved after a pause, with If-Match). A domain such as `acme.com`, or a
   LinkedIn value that is a web address (`linkedin.com/in/…` or http(s)), gets an **Open** link next
   to the field, like Email and Call; other text stays plain. Only http(s) links are made.
+
+## Company status (CD-358)
+
+A company's status is computed, never picked: `companies.status` (`lead`, `opportunity`, `client`,
+`past_client`, `not_interested`), with `status_changed_at` and `status_set_manually`. The rules are
+plain functions in `crm/companies/company-status.ts` (unit tests in `test/company-status.spec.ts`):
+
+- **Lead** until 7 checks pass: PIB, matični broj, street, city, postal code, šifra delatnosti, and a
+  contact with a job title, a role in the decision and an owner (`opportunityReadiness`, which also
+  words what is missing). Then **Opportunity**.
+- **Client** once an opportunity is won or the company has a project that wasn't cancelled; **Past
+  client** when nothing is open (no open opportunity or project) and a project was completed.
+- **Not interested** when it has opportunities and every one was lost.
+- By hand a status can only be set **back** (`STATUS_RANK`). It then stays there: the automation
+  never raises it again until "Back to automatic", but lowers it when the facts drop below it
+  (`effectiveStatus`).
+
+`CompanyStatusService.recompute(tx, actor, companyIds | 'all')` loads the facts of many companies in
+four queries and stores what changed. The CRM services call it in the same transaction as every
+change that can move it: company create and update, contact create, update (both companies when
+it moves) and delete, deal create, update (another company, a funnel change), move, lost, reopen
+and delete, a deleted stage moving its deals, the CSV import (once, at the end) and the sample
+data. Projects don't write CRM tables: `ProjectsService` sends `projects.company-projects-changed`
+on create, a status or company change and delete, and the CRM worker (`CompanyStatusJobs`)
+recomputes those companies. Migration 0123 gave existing companies their status with the same rules
+in SQL.
+
+Every change writes an audit row `company.status_changed` `{ from, to, reason: automatic | manual }`
+(actor: whoever made the change behind it). Those rows are the status history:
+`GET /api/crm/companies/:id/status-history` (partial index `audit_logs_company_status_idx`); the
+company page merges them into its Activity ("Status: Opportunity · automatic").
+`PATCH /api/crm/companies/:id/status` `{ status | null }` sets it back or hands it back to the
+automation (owners, admins and the company's owner; a move forward is a 409 with what is missing).
+`GET /api/crm/companies` takes `status=lead,opportunity` and `outcome=won|lost` (a won opportunity;
+opportunities, all lost).
+
+In the app the status is the first Summary row ("Lead · 3 of 7 ready", "Lead · set by hand",
+"Client"), a lead's missing items are in the warning box under the header (`companyReadiness` in
+`store/selectors.ts` mirrors the API's checks, so the list updates as fields are filled in), and the
+⋯ menu has "Set status back" and "Back to automatic". The status follows the API: live updates re-read
+it, also after this tab's own saves (`refreshCompanyStatus` in the store reads only the status
+fields back, so a field still being edited isn't overwritten).
 
 ## Module and workspace switcher (CD-214)
 
