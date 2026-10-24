@@ -9,6 +9,7 @@ import {
   type DigestTaskRow,
   isDigestHour,
   isEmptyDigest,
+  stageReminderEmail,
   zonedNow,
 } from '../src/modules/notifications/digest-content';
 import { countVisits } from '../src/modules/crm/visit-plans/visit-counting';
@@ -226,6 +227,48 @@ describe('digestEmail', () => {
     expect(m.text).not.toContain('no next step');
     expect(m.text).toContain('- and 3 more');
     expect(m.text.startsWith('Good morning.')).toBe(true);
+  });
+});
+
+describe('buildDigest: late in their stage (CD-363)', () => {
+  const late = [
+    { id: 'd1', title: 'Fleet licences', company: 'Kestrel', stage: 'Proposal', lateDays: 2 },
+    { id: 'd2', title: 'Studio rollout', company: 'Brightline', stage: 'Negotiation', lateDays: 6 },
+    { id: 'd3', title: 'On time', company: null, stage: 'Proposal', lateDays: 0 },
+  ];
+
+  it('lists the late ones, latest first, and counts them as a reason to send', () => {
+    const d = buildDigest('2026-10-24', [], [], { lateInStage: late });
+    expect(d.lateInStage.map((x) => x.id)).toEqual(['d2', 'd1']);
+    expect(digestItemCount(d)).toBe(2);
+    expect(isEmptyDigest(d)).toBe(false);
+  });
+
+  it('has its own section and subject count, without saying deal', () => {
+    const d = buildDigest('2026-10-24', [], [], { lateInStage: late });
+    const mail = digestEmail({ to: 'bo@example.com', memberName: 'Bo', workspaceName: 'Acme Studio', appUrl: 'https://app.example.com', digest: d });
+    expect(mail.subject).toBe('Your day in Acme Studio: 2 opportunities late in their stage');
+    expect(mail.text).toContain('Late in their stage (2)');
+    expect(mail.text).toContain('Studio rollout · Brightline · Negotiation, 6 days late');
+    expect(proseWithoutRoutes(mail)).not.toMatch(/deal/i);
+  });
+});
+
+describe('stageReminderEmail (CD-363)', () => {
+  it('says who asks, which opportunity, how long it has waited against the target', () => {
+    const mail = stageReminderEmail({
+      to: 'marko@example.com',
+      recipientName: 'Marko Kovač',
+      actorName: 'Ana Petrović',
+      workspaceName: 'Acme Studio',
+      appUrl: 'https://app.example.com/',
+      deal: { id: 'd1', title: 'Studio rollout', company: 'Brightline', stage: 'Proposal', daysInStage: 7, targetDays: 5 },
+    });
+    expect(mail.subject).toBe('Ana Petrović asked you to move Studio rollout on');
+    expect(mail.text).toContain('Hi Marko,');
+    expect(mail.text).toContain('Stage: Proposal, for 7 days (target 5 days)');
+    expect(mail.text).toContain('https://app.example.com/deals/d1');
+    expect(proseWithoutRoutes(mail)).not.toMatch(/deal/i);
   });
 });
 

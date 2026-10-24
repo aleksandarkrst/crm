@@ -51,6 +51,13 @@ export class DealsController {
     return this.deals.markLost(ctx, id, body);
   }
 
+  /** "Remind the owner" (CD-363): emails the stage owner, else the opportunity's owner. */
+  @Post(':id/remind-stage-owner')
+  @HttpCode(202)
+  remindStageOwner(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.deals.remindStageOwner(ctx, id);
+  }
+
   /** "Reopen" on a lost deal: back to open, in the stage it was lost in. */
   @Post(':id/reopen')
   @HttpCode(200)

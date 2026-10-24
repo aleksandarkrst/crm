@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../shared/database/database.service';
-import { companies, deals, dealTasks, funnelStages, meetingMinutes, meetingParticipants, meetings, memberships, tenants, users } from '../../shared/database/schema';
+import { companies, deals, dealTasks, funnels, funnelStages, meetingMinutes, meetingParticipants, meetings, memberships, tenants, users } from '../../shared/database/schema';
 import { planGroupsOf, progressOfGroups, visitPeriodOf, visitPeriodStartOf } from '../crm';
 import { buildDigest, type Digest, MINUTES_REMINDER_MS, NOT_CLOSED_AFTER_MS, zonedNow } from './digest-content';
 
@@ -85,6 +85,27 @@ export class DigestService {
           and(eq(deals.ownerUserId, userId), isNull(deals.lostAt), eq(funnelStages.isWon, false), notInArray(deals.id, withNextStep), notInArray(deals.id, withMeetingAhead)),
         );
 
+      // Late in a stage they answer for (CD-363): the stage owner, else the deal owner when the stage has none.
+      const targetDays = sql<number | null>`coalesce(${funnelStages.targetDays}, ${funnels.targetDays})`;
+      const late = await tx
+        .select({ id: deals.id, title: deals.title, company: companies.name, stage: funnelStages.name, stageEnteredAt: deals.stageEnteredAt, targetDays })
+        .from(deals)
+        .innerJoin(funnelStages, eq(funnelStages.id, deals.stageId))
+        .innerJoin(funnels, eq(funnels.id, deals.funnelId))
+        .leftJoin(companies, eq(companies.id, deals.companyId))
+        .where(
+          and(
+            isNull(deals.lostAt),
+            eq(funnelStages.isWon, false),
+            or(eq(funnelStages.ownerUserId, userId), and(isNull(funnelStages.ownerUserId), eq(deals.ownerUserId, userId))),
+            sql`${targetDays} is not null`,
+          ),
+        );
+      const lateInStage = late.map(({ stageEnteredAt, targetDays: target, ...d }) => ({
+        ...d,
+        lateDays: Math.max(0, Math.floor((now.getTime() - stageEnteredAt.getTime()) / 86_400_000) - (target ?? 0)),
+      }));
+
       const meetingRow = {
         id: meetings.id,
         title: meetings.title,
@@ -144,7 +165,7 @@ export class DigestService {
       });
 
       const iso = (rows: typeof meetingsToday) => rows.map((m) => ({ ...m, startsAt: m.startsAt.toISOString(), endsAt: m.endsAt.toISOString() }));
-      return buildDigest(today, tasks, stalled, { today: iso(meetingsToday), notClosed: iso(notClosed), minutesMissing: iso(minutesMissing), timeZone, now, visitPlans: planRows });
+      return buildDigest(today, tasks, stalled, { today: iso(meetingsToday), notClosed: iso(notClosed), minutesMissing: iso(minutesMissing), timeZone, now, visitPlans: planRows, lateInStage });
     });
   }
 }

@@ -8,6 +8,11 @@ export interface StageTemplate {
   documentOnEntry: string | null;
   winProbability: number;
   checklist: string[];
+  /** Kept when a funnel is copied (CD-363); new stages take the column defaults. */
+  ownerUserId?: string | null;
+  targetDays?: number | null;
+  gateDocsComplete?: boolean;
+  gateTodos?: boolean;
 }
 
 export interface FunnelTemplate {

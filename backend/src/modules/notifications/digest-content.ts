@@ -30,6 +30,11 @@ export interface DigestDealRow {
   stage: string;
 }
 
+/** An opportunity past its stage's target, for whoever answers for that stage (CD-363). */
+export interface DigestLateRow extends DigestDealRow {
+  lateDays: number;
+}
+
 /** A meeting (CD-130) the member organizes or takes part in. Times are ISO instants. */
 export interface DigestMeetingRow {
   id: string;
@@ -61,6 +66,8 @@ export interface Digest {
   /** Meetings they organize, held in the last 7 days, whose internal minutes have no summary yet (CD-132). */
   minutesMissing: DigestMeetingRow[];
   noNextStep: DigestDealRow[];
+  /** Opportunities past their stage's target in a stage they own (or own the opportunity, without a stage owner). */
+  lateInStage: DigestLateRow[];
   /** Their visit plans for the current month and quarter. Shown when the digest goes out; never a reason to send it. */
   visitPlans: DigestVisitPlanRow[];
 }
@@ -81,6 +88,8 @@ export interface DigestMeetings {
   now?: Date;
   /** The member's visit plans running today, already counted (countVisits). */
   visitPlans?: DigestVisitPlanRow[];
+  /** Their opportunities late in a stage (CD-363). */
+  lateInStage?: DigestLateRow[];
 }
 
 /**
@@ -108,13 +117,15 @@ export function buildDigest(today: string, tasks: DigestTaskRow[], dealsWithoutN
       })
       .sort(byStart),
     noNextStep: [...dealsWithoutNextStep].sort((a, b) => a.title.localeCompare(b.title)),
+    // Latest first, then by title.
+    lateInStage: [...(meetings.lateInStage ?? [])].filter((d) => d.lateDays > 0).sort((a, b) => b.lateDays - a.lateDays || a.title.localeCompare(b.title)),
     // The month's plan before the quarter's.
     visitPlans: [...(meetings.visitPlans ?? [])].sort((a, b) => (a.periodType === b.periodType ? 0 : a.periodType === 'month' ? -1 : 1)),
   };
 }
 
 export const digestItemCount = (d: Digest): number =>
-  d.meetingsToday.length + d.overdue.length + d.dueToday.length + d.notClosed.length + d.minutesMissing.length + d.noNextStep.length;
+  d.meetingsToday.length + d.overdue.length + d.dueToday.length + d.notClosed.length + d.minutesMissing.length + d.noNextStep.length + d.lateInStage.length;
 export const isEmptyDigest = (d: Digest): boolean => digestItemCount(d) === 0;
 
 /** The current date and time on the clock of an IANA time zone. */
@@ -158,6 +169,7 @@ export function digestEmail({ to, memberName, workspaceName, appUrl, digest }: D
     digest.notClosed.length ? plural(digest.notClosed.length, 'meeting') + ' not closed' : null,
     digest.minutesMissing.length ? plural(digest.minutesMissing.length, 'meeting') + ' without minutes' : null,
     digest.noNextStep.length ? plural(digest.noNextStep.length, 'opportunity', 'opportunities') + ' without a next step' : null,
+    digest.lateInStage.length ? plural(digest.lateInStage.length, 'opportunity', 'opportunities') + ' late in their stage' : null,
   ].filter(Boolean);
   const subject = `Your day in ${workspaceName}: ${counts.join(', ')}`;
 
@@ -186,6 +198,10 @@ export function digestEmail({ to, memberName, workspaceName, appUrl, digest }: D
       lines: digest.minutesMissing.map((m) => ({ text: `${m.title} · ${m.company} (held ${shortDay(clock(m.startsAt).date)})`, href: meetingUrl(m.id) })),
     },
     { title: 'Opportunities with no next step', lines: digest.noNextStep.map((d) => ({ text: `${onDeal(d.title, d.company)} · ${d.stage}`, href: dealUrl(d.id) })) },
+    {
+      title: 'Late in their stage',
+      lines: digest.lateInStage.map((d) => ({ text: `${onDeal(d.title, d.company)} · ${d.stage}, ${plural(d.lateDays, 'day')} late`, href: dealUrl(d.id) })),
+    },
     {
       title: 'Visit plan progress',
       lines: digest.visitPlans.map((p) => ({ text: `Visits planned this period (${p.periodLabel}): ${p.held} of ${p.planned} held`, href: `${base}/visit-plans/${p.planId}` })),
@@ -235,6 +251,41 @@ function moneyLabel(amount: string, currency: string): string {
 }
 
 /** "X made you the owner of a deal". */
+export interface StageReminderEmailInput {
+  to: string;
+  recipientName: string | null;
+  actorName: string;
+  workspaceName: string;
+  appUrl: string;
+  deal: { id: string; title: string; company: string | null; stage: string; daysInStage: number; targetDays: number | null };
+}
+
+/** "Remind the owner" (CD-363): someone asks the stage owner to move an opportunity on. */
+export function stageReminderEmail({ to, recipientName, actorName, workspaceName, appUrl, deal }: StageReminderEmailInput): MailMessage {
+  const link = `${appUrl.replace(/\/+$/, '')}/deals/${deal.id}`;
+  const subject = `${actorName} asked you to move ${deal.title} on`;
+  const days = (n: number) => `${n} ${n === 1 ? 'day' : 'days'}`;
+  const facts = [
+    deal.company ? `Company: ${deal.company}` : null,
+    `Stage: ${deal.stage}, for ${days(deal.daysInStage)}${deal.targetDays ? ` (target ${days(deal.targetDays)})` : ''}`,
+  ].filter((f): f is string => !!f);
+  const greeting = recipientName ? `Hi ${recipientName.split(' ')[0]},` : 'Hi,';
+  const intro = `${actorName} reminded you that ${deal.title} is waiting in ${deal.stage}, a stage you answer for in ${workspaceName}.`;
+  const footer = `You get this email because ${actorName} pressed "Remind the owner" on this opportunity.`;
+  const text = [greeting, '', intro, '', ...facts, '', `Open the opportunity: ${link}`, '', footer].join('\n');
+  const html = layoutHtml(
+    [
+      `<p style="margin:0 0 12px">${escapeHtml(greeting)}</p>`,
+      `<p style="margin:0 0 12px">${escapeHtml(intro)}</p>`,
+      `<p style="margin:0 0 12px;color:#475750">${facts.map(escapeHtml).join('<br>')}</p>`,
+      buttonHtml('Open the opportunity', link),
+    ].join('\n'),
+    footer,
+    appUrl,
+  );
+  return { to, subject, text, html };
+}
+
 export function dealAssignedEmail({ to, assigneeName, actorName, workspaceName, appUrl, deal }: DealAssignedEmailInput): MailMessage {
   const link = `${appUrl.replace(/\/+$/, '')}/deals/${deal.id}`;
   const subject = `${actorName} assigned you ${deal.title}`;

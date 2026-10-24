@@ -3,6 +3,7 @@ import { RequireTenant, Tenant, type TenantContext } from '../../../shared/autho
 import { DealRowsQuery, UuidParam } from '../../../shared/validation/common';
 import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
 import { DealLinesService, SaveDealProducts } from './deal-lines.service';
+import { DealStageStatesService, SetDocsComplete } from './deal-stage-states.service';
 import { CreateExtraTask, DealTasksService, UpdateTask, UpsertPlaybookTask } from './deal-tasks.service';
 import { StageHistoryQuery, StageHistoryService } from './stage-history.service';
 
@@ -17,7 +18,14 @@ export class DealWorkController {
     private readonly lines: DealLinesService,
     private readonly tasks: DealTasksService,
     private readonly history: StageHistoryService,
+    private readonly stageStates: DealStageStatesService,
   ) {}
+
+  /** "Documentation complete, ready to send" for one stage of a deal (CD-363): who ticked it and when. */
+  @Put('deals/:id/stages/:stageId/docs-complete')
+  setDocsComplete(@Tenant() ctx: TenantContext, @Param('id', Id) dealId: string, @Param('stageId', Id) stageId: string, @Body(new ZodPipe(SetDocsComplete)) body: SetDocsComplete) {
+    return this.stageStates.setDocsComplete(ctx, dealId, stageId, body);
+  }
 
   // ------------------------------------------------------------ deal lines
   @Get('deal-lines')
