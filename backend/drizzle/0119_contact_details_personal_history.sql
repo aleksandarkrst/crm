@@ -2,11 +2,15 @@
 -- 'Influencer' default (it can't be told apart from one picked on purpose; the owner decided to clear
 -- all of them) get no role, so the company page flags them. This is a conversion, not an edit: it
 -- skips the change history (no author) and keeps each contact's version, so open edits don't get a 409.
+-- Row-level security is lifted for the conversion (as in 0022), so it reaches every workspace whichever
+-- role runs the migrations.
+ALTER TABLE "contacts" NO FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "contacts" DISABLE TRIGGER "contacts_history";--> statement-breakpoint
 ALTER TABLE "contacts" DISABLE TRIGGER "contacts_version";--> statement-breakpoint
 UPDATE "contacts" SET "buyer_role" = NULL WHERE "buyer_role" = 'Influencer';--> statement-breakpoint
 ALTER TABLE "contacts" ENABLE TRIGGER "contacts_version";--> statement-breakpoint
 ALTER TABLE "contacts" ENABLE TRIGGER "contacts_history";--> statement-breakpoint
+ALTER TABLE "contacts" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 
 -- The contact's details and personal details are recorded like its other fields (every CRM user sees
 -- them on the contact, so their history may show them too). The function is unchanged.
