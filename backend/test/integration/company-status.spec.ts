@@ -58,6 +58,8 @@ describe('Lead → Opportunity, by itself', () => {
     // Clearing a field takes it back.
     await ok('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { postalCode: null } });
     expect((await company(c.id)).status).toBe('lead');
+    // The name isn't one of the checks: a company can't be saved without one.
+    expect((await call('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { name: '   ' } })).status).toBe(400);
   });
 
   it('follows a contact that moves to another company', async () => {

@@ -356,8 +356,9 @@ export interface CompanyRecord {
   /** Company ID (CD-357), '' for an older company without one; ownership is 'Private', 'State' or ''. */
   pib: string;
   ownership: string;
-  /** Status label (CD-358): Lead, Opportunity, Client, Past client or Not interested. */
+  /** Status label (CD-358): Lead, Opportunity, Client, Past client or Not interested; its rank sorts the column. */
   status: string;
+  statusRank: number;
   leads: Lead[];
   contactCount: number;
   oppCount: number;
@@ -376,7 +377,7 @@ export interface CompanyRecord {
  * company aren't grouped into a company record.
  */
 export function companyRecords(s: State): CompanyRecord[] {
-  const map = new Map<string, Omit<CompanyRecord, 'contactCount' | 'oppCount' | 'value' | 'valueLabel' | 'lifetimeValue' | 'lifetimeLabel' | 'stageName' | 'lastTouch' | 'pib' | 'ownership' | 'status'>>();
+  const map = new Map<string, Omit<CompanyRecord, 'contactCount' | 'oppCount' | 'value' | 'valueLabel' | 'lifetimeValue' | 'lifetimeLabel' | 'stageName' | 'lastTouch' | 'pib' | 'ownership' | 'status' | 'statusRank'>>();
   for (const l of s.leads) {
     if (!l.companyId) continue;
     if (!map.has(l.companyId)) map.set(l.companyId, { id: l.companyId, name: l.company, industry: l.industry, hq: l.hq, size: l.size, source: l.source, owner: ownerOf(s, l), ownerId: l.ownerId ?? null, leads: [] });
@@ -398,6 +399,7 @@ export function companyRecords(s: State): CompanyRecord[] {
       pib: extra?.pib ?? '',
       ownership: OWNERSHIP_LABELS[extra?.ownershipType ?? ''] ?? '',
       status: COMPANY_STATUS_LABELS[extra?.status ?? 'lead'],
+      statusRank: COMPANY_STATUS_RANK[extra?.status ?? 'lead'],
       contactCount: ids.size,
       oppCount: r.leads.length,
       value: sum(open),

@@ -35,7 +35,8 @@ export function Companies() {
   const [owner, setOwner] = useState('Owner');
   const { sort, toggle } = useSort<Key>('name');
 
-  const sortVal = (c: CompanyRecord) => (NUMERIC.has(sort.key) ? (c[sort.key] as number) : String(c[sort.key] || '').toLowerCase());
+  // Status sorts in its order (Not interested, Lead, Opportunity, Past client, Client), not by name.
+  const sortVal = (c: CompanyRecord) => (sort.key === 'status' ? c.statusRank : NUMERIC.has(sort.key) ? (c[sort.key] as number) : String(c[sort.key] || '').toLowerCase());
   const rows = companyRecords(s)
     .filter((c) => industry === 'Industry' || c.industry === industry)
     .filter((c) => owner === 'Owner' || c.ownerId === owner)

@@ -26,9 +26,10 @@ export class CompanyStatusService {
     const ids = companyIds === 'all' ? null : [...new Set(companyIds.filter((id): id is string => !!id))];
     if (ids && ids.length === 0) return;
     const of = (col: Column) => (ids ? inArray(col, ids) : undefined);
-    const [rows, people, opps, projs] = await Promise.all([
-      tx.select().from(companies).where(of(companies.id)),
-      tx.select({ companyId: contacts.companyId, fullName: contacts.fullName, jobTitle: contacts.jobTitle, buyerRole: contacts.buyerRole, ownerUserId: contacts.ownerUserId }).from(contacts).where(of(contacts.companyId)),
+    // Locked first (in id order, so two recomputes never deadlock): the facts below are then read
+    // after any other change to these companies has committed, and a stale status can't win.
+    const rows = await tx.select().from(companies).where(of(companies.id)).orderBy(companies.id).for('update');
+    const [people, opps, projs] = await Promise.all([      tx.select({ companyId: contacts.companyId, fullName: contacts.fullName, jobTitle: contacts.jobTitle, buyerRole: contacts.buyerRole, ownerUserId: contacts.ownerUserId }).from(contacts).where(of(contacts.companyId)),
       tx.select({ companyId: deals.companyId, lostAt: deals.lostAt, isWon: funnelStages.isWon }).from(deals).innerJoin(funnelStages, eq(funnelStages.id, deals.stageId)).where(of(deals.companyId)),
       tx.select({ companyId: projects.companyId, status: projects.status }).from(projects).where(of(projects.companyId)),
     ]);
@@ -99,6 +100,8 @@ export class CompanyStatusService {
 
   private async store(tx: Tx, actor: StatusActor, id: string, from: CompanyStatus, to: CompanyStatus, reason: 'automatic' | 'manual') {
     await tx.update(companies).set({ status: to, statusChangedAt: new Date() }).where(eq(companies.id, id));
+    // Written here rather than through AuditService.record, which wants a TenantContext with a role:
+    // the projects job recomputes as the person behind the change, with no role to hand. Same row shape.
     await tx.insert(auditLogs).values({ tenantId: actor.tenantId, actorUserId: actor.userId, action: 'company.status_changed', entityType: 'company', entityId: id, data: { from, to, reason } });
   }
 }
