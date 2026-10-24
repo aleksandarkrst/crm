@@ -347,7 +347,6 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           changedAt,
           segment: valid(x.segment),
           newLeadType: valid(x.newLeadType),
-          filters: x.filters.audience === 'Audience' || data.funnels[x.filters.audience] ? x.filters : { ...x.filters, audience: 'Audience' },
         };
       });
     /** Re-reads the workspace from the API once all pending edits are saved (see above). */
@@ -1195,7 +1194,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       try {
         const f = await crmApi.createFunnel({ label: input.label.trim(), note: input.note.trim() || null, ...(input.copyFrom !== 'blank' ? { copyFromFunnelId: input.copyFrom } : {}) });
         await reload();
-        set((x) => ({ segment: f.id, personaOpen: false, filters: { ...x.filters, audience: f.id } }));
+        set({ segment: f.id, personaOpen: false });
         flash(f.label + ' created · edit its stages below');
         return true;
       } catch (err) {

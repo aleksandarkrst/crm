@@ -3,13 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { FilterBar, SortHeader, useSort } from '../components/ui';
 import { DataActions } from '../components/DataActions';
 import { EmptyState } from '../components/EmptyState';
+import { FilterEmpty, FilterRow } from '../components/FilterRow';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { dealsCsv } from '../store/exportCsv';
-import { DEFAULT_FILTERS, INDUSTRIES, LOST_VIEWS, VALUE_BANDS, valueBandLabel } from '../store/seed';
-import { bandOf, curOf, currencySymbol, funnelOptions, initialsOf, memberName, needsNextStep, ownerOf, salesPeople, stageOf, stageOwnerId, valueNum, valueTotal } from '../store/selectors';
-import type { Lead, Stage, State } from '../store/types';
+import { filterPeople, LOST, openAndWon, opportunityFields, WON } from '../store/filterFields';
+import { applyFilters, clearAll, type FilterValue, isActive, matchField, setField } from '../store/filters';
+import { initialsOf, memberName, needsNextStep, ownerOf, stageOf, stageOwnerId, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
+import type { Lead, SegKey, Stage, State } from '../store/types';
 import { useStore } from '../store/store';
+import { usePageFilters } from '../store/usePageFilters';
 
 type PipelineView = 'board' | 'table';
 
@@ -47,23 +50,30 @@ export function Pipeline() {
   const [view, setView] = usePipelineView(session.userId, session.tenant.id);
   const seg = s.segment;
   const stages = s.funnels[seg].stages;
-  const f = s.filters;
-  // Lost deals are hidden from the board unless the "lost" chip says otherwise (CD-60).
-  const inView = s.leads
-    .filter((l) => l.segment === seg)
-    .filter((l) => f.owner === 'Salesperson' || l.ownerId === f.owner)
-    .filter((l) => f.stalled === 'Status' || (f.stalled === 'Stalled only' ? l.stall >= 3 : l.stall < 3))
-    .filter((l) => !f.industry || f.industry === 'Industry' || l.industry === f.industry)
-    .filter((l) => f.band === 'Value' || bandOf(l.value) === f.band);
-  const segLeads = inView.filter((l) => (f.lost === LOST_VIEWS[1] ? true : f.lost === LOST_VIEWS[2] ? l.outcome === 'lost' : l.outcome !== 'lost'));
-  const lostHidden = f.lost === LOST_VIEWS[0] ? inView.filter((l) => l.outcome === 'lost').length : 0;
-  const visible = f.stage === 'Stage' || !stages.some((x) => x.name === f.stage) ? stages : stages.filter((x) => x.name === f.stage);
+  const me = session.userId;
+  const fields = opportunityFields(s, seg, ['funnel', 'owner', 'status']);
+  const [saved, setSaved] = usePageFilters('pipeline', { order: ['funnel', 'owner', 'status'], f: { funnel: { vals: [seg] }, owner: { op: 'is', vals: [me] }, status: { op: 'is', vals: openAndWon(s, seg) } } });
+  // The Funnel chip is the funnel open on the Pipeline (s.segment), which the rest of the app uses too.
+  const filters = setField(saved, 'funnel', { vals: [seg] });
+  const setFilters = (v: FilterValue) => {
+    const next = v.f.funnel?.vals?.[0];
+    if (next && next !== seg && s.funnels[next]) {
+      v = setField(v, 'status', { vals: statusInFunnel(s, v.f.status?.vals, seg, next) });
+      set({ segment: next });
+    }
+    setSaved(v);
+  };
+  // Every chip, the funnel and Status (Lost is one of its values, CD-60) included, with AND.
+  const segLeads = applyFilters(s.leads, fields, filters, { today: todayIso(s.workspace.timezone), fiscalMonth: s.workspace.fiscalMonth });
+  // The columns are the stages Status picks, and any other stage a deal in view sits in (a lost one).
+  const statusField = fields.find((x) => x.id === 'status')!;
+  const status = filters.f.status;
+  const visible = isActive(statusField, status) ? stages.filter((st) => matchField(statusField, status, st.won ? WON : st.id, { today: '' }) || segLeads.some((l) => l.stage === st.id)) : stages;
 
   // Open means neither Won nor Lost (CD-380): the summary counts and totals only those.
   const openLeads = segLeads.filter((l) => l.outcome === 'open');
   const pipelineValue = valueTotal(s, openLeads);
-  const setFilter = (k: keyof typeof f) => (v: string) => set((x) => ({ filters: { ...x.filters, [k]: v } }));
-  const dirty = (['owner', 'industry', 'band', 'lost'] as const).some((k) => f[k] !== DEFAULT_FILTERS[k]);
+  const noMatch = segLeads.length === 0 && s.leads.some((l) => l.segment === seg);
 
   return (
     <Screen title="Pipeline">
@@ -79,31 +89,27 @@ export function Pipeline() {
                 </button>
               ))}
             </div>
-            <div className="funnel-select">
-              <select aria-label="Funnel" data-testid="pipeline-funnel" value={seg} onChange={(e) => set((x) => ({ segment: e.target.value, filters: { ...x.filters, audience: e.target.value } }))}>
-                {funnelOptions(s).map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              <button type="button" title="Edit funnel in Workspace settings" aria-label="Edit funnel" data-testid="pipeline-edit-funnel" onClick={() => navigate(paths.settings('funnel'))}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />
-                </svg>
-              </button>
-            </div>
           </>
         }
-        chips={[
-          { value: f.owner, options: ['Salesperson', ...salesPeople(s)], onChange: setFilter('owner') },
-          { value: f.industry, options: ['Industry', ...INDUSTRIES], onChange: setFilter('industry') },
-          { value: f.band, options: VALUE_BANDS.map((v) => ({ value: v, label: valueBandLabel(v, currencySymbol(curOf(s))) })), onChange: setFilter('band') },
-          { value: f.lost, options: [...LOST_VIEWS], onChange: setFilter('lost'), keepFirst: true },
-        ]}
-        dirty={dirty}
-        onClear={() => set((x) => ({ filters: { ...x.filters, ...DEFAULT_FILTERS } }))}
-        meta={`${openLeads.length} open ${openLeads.length === 1 ? 'opportunity' : 'opportunities'} · ${pipelineValue}${lostHidden ? ` · ${lostHidden} lost hidden` : ''}`}
+        row={
+          <FilterRow
+            fields={fields}
+            value={filters}
+            onChange={setFilters}
+            people={filterPeople(s, me)}
+            me={me}
+            after={{
+              funnel: (
+                <button type="button" className="funnel-edit" title="Edit funnel in Workspace settings" aria-label="Edit funnel" data-testid="pipeline-edit-funnel" onClick={() => navigate(paths.settings('funnel'))}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />
+                  </svg>
+                </button>
+              ),
+            }}
+          />
+        }
+        meta={`${openLeads.length} open ${openLeads.length === 1 ? 'opportunity' : 'opportunities'} · ${pipelineValue}`}
         extra={<DataActions type="deals" count={segLeads.length} exportCsv={() => dealsCsv(s, segLeads)} />}
         action={{ label: 'New opportunity', onClick: () => set({ newLeadOpen: true }) }}
       />
@@ -113,9 +119,23 @@ export function Pipeline() {
           <EmptyState title="No opportunities yet" text="Opportunities move through your funnel's stages, left to right. Add your first one, or import opportunities from a CSV file." action={{ label: 'New opportunity', onClick: () => set({ newLeadOpen: true }) }} />
         </div>
       )}
-      {view === 'table' ? s.leads.length > 0 && <PipelineTable s={s} stages={visible} leads={segLeads} openLead={store.openLead} /> : <PipelineBoard stages={visible} leads={segLeads} />}
+      {noMatch ? (
+        <FilterEmpty noun="opportunities" onClear={() => setFilters(clearAll(fields, filters))} />
+      ) : view === 'table' ? (
+        s.leads.length > 0 && <PipelineTable s={s} stages={visible} leads={segLeads} openLead={store.openLead} />
+      ) : (
+        <PipelineBoard stages={visible} leads={segLeads} />
+      )}
     </Screen>
   );
+}
+
+/** Status in another funnel: Won and Lost carry over, and so does a whole "Open" (the stages differ). */
+function statusInFunnel(s: State, vals: string[] | undefined, from: SegKey, to: SegKey): string[] {
+  if (!vals) return openAndWon(s, to);
+  const open = (seg: SegKey) => stagesFor(s, seg).filter((st) => !st.won).map((st) => st.id);
+  const whole = open(from).length > 0 && open(from).every((id) => vals.includes(id));
+  return [...(whole ? open(to) : []), ...vals.filter((v) => v === WON || v === LOST)];
 }
 
 /** The Kanban view: one column per stage; drag a card to move the deal there. */

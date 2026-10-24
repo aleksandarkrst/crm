@@ -1,12 +1,14 @@
-import { useState } from 'react';
 import { FilterBar, SortHeader, useSort } from '../components/ui';
 import { DataActions } from '../components/DataActions';
 import { EmptyState } from '../components/EmptyState';
+import { FilterEmpty, FilterRow } from '../components/FilterRow';
 import { Screen } from '../components/Layout';
 import { contactsCsv } from '../store/exportCsv';
-import { BUYER_ROLES } from '../store/seed';
-import { allPeople, companyIdOfPerson, companyLabels, companyOfPerson, companyRecords, memberName, salesPeople } from '../store/selectors';
+import { contactPageFields, filterPeople, NO_ROLE } from '../store/filterFields';
+import { applyFilters, clearAll } from '../store/filters';
+import { allPeople, companyIdOfPerson, companyOfPerson, memberName, todayIso } from '../store/selectors';
 import { useStore } from '../store/store';
+import { usePageFilters } from '../store/usePageFilters';
 
 const COLS = '1.2fr 1fr 1.2fr 1.4fr 1fr 1.1fr 1fr';
 type Key = 'contact' | 'role' | 'company' | 'email' | 'phone' | 'decisionMaker' | 'owner';
@@ -21,43 +23,28 @@ const HEADERS: { key: Key; label: string }[] = [
 ];
 export const isSenior = (role: string) => /decision maker|economic buyer/i.test(role);
 
-/** Shown (and filtered on) for a contact with no role in the decision yet (CD-361). */
-const NO_ROLE = 'No role yet';
-
 export function Contacts() {
-  const { s, set, openContact } = useStore();
-  const [company, setCompany] = useState('Company');
-  const [owner, setOwner] = useState('Salesperson');
-  const [buyerRole, setBuyerRole] = useState('Buyer role');
+  const { s, set, openContact, session } = useStore();
+  const fields = contactPageFields(s);
+  const [filters, setFilters] = usePageFilters('contacts', { order: ['owner'], f: { owner: { vals: [] } } });
   const { sort, toggle } = useSort<Key>('contact');
 
-  const rows = allPeople(s)
+  const rows = applyFilters(allPeople(s), fields, filters, { today: todayIso(s.workspace.timezone), fiscalMonth: s.workspace.fiscalMonth })
     // The contact's own owner (from the contacts API), not the owner of a deal they are on.
     .map((p) => ({ id: p.id, contact: p.name, role: p.role, company: companyOfPerson(s, p), companyId: companyIdOfPerson(s, p), email: p.email, phone: p.phone, decisionMaker: p.buyerRole || NO_ROLE, owner: memberName(s, p.ownerId, p.ownerName), ownerId: p.ownerId ?? null }))
-    .filter((r) => company === 'Company' || r.companyId === company)
-    .filter((r) => owner === 'Salesperson' || r.ownerId === owner)
-    .filter((r) => buyerRole === 'Buyer role' || r.decisionMaker === buyerRole)
     .sort((a, b) => String(a[sort.key]).localeCompare(String(b[sort.key])) * sort.dir);
 
   return (
     <Screen title="Contacts">
       <FilterBar
-        chips={[
-          { value: company, options: ['Company', ...[...companyLabels(companyRecords(s))].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))], onChange: setCompany },
-          { value: owner, options: ['Salesperson', ...salesPeople(s)], onChange: setOwner },
-          { value: buyerRole, options: ['Buyer role', ...BUYER_ROLES, NO_ROLE], onChange: setBuyerRole },
-        ]}
-        dirty={company !== 'Company' || owner !== 'Salesperson' || buyerRole !== 'Buyer role'}
-        onClear={() => {
-          setCompany('Company');
-          setOwner('Salesperson');
-          setBuyerRole('Buyer role');
-        }}
+        row={<FilterRow fields={fields} value={filters} onChange={setFilters} people={filterPeople(s, session.userId)} me={session.userId} />}
         extra={<DataActions type="contacts" count={rows.length} exportCsv={() => contactsCsv(s, rows)} />}
         action={{ label: 'New contact', onClick: () => set({ contactOpen: true }) }}
       />
       {allPeople(s).length === 0 ? (
         <EmptyState title="No contacts yet" text="Contacts are the people you talk to at your companies: who decides, who pays, who champions you." action={{ label: 'New contact', onClick: () => set({ contactOpen: true }) }} />
+      ) : rows.length === 0 ? (
+        <FilterEmpty noun="contacts" onClear={() => setFilters(clearAll(fields, filters))} />
       ) : (
         <div className="card" style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 1140 }}>
@@ -66,7 +53,6 @@ export function Contacts() {
                 <SortHeader key={h.key} label={h.label} active={sort.key === h.key} dir={sort.dir} onClick={() => toggle(h.key)} />
               ))}
             </div>
-            {rows.length === 0 && <div className="empty-state">No contacts match these filters.</div>}
             {rows.map((r) => (
               <div key={r.id} className="table-row clickable" style={{ gridTemplateColumns: COLS }} onClick={() => openContact(r.id)}>
                 <span style={{ fontWeight: 600 }}>{r.contact}</span>

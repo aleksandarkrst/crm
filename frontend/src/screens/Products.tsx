@@ -1,35 +1,33 @@
-import { useState } from 'react';
 import { DataActions } from '../components/DataActions';
 import { FilterBar } from '../components/ui';
 import { EmptyState } from '../components/EmptyState';
+import { FilterEmpty, FilterRow } from '../components/FilterRow';
 import { Screen } from '../components/Layout';
-import { billingText, FREQUENCIES } from '../store/dealMath';
+import { billingText } from '../store/dealMath';
 import { productsCsv } from '../store/exportCsv';
-import { linesOf, localeFor, plainAmount } from '../store/selectors';
+import { productFields } from '../store/filterFields';
+import { applyFilters, clearAll } from '../store/filters';
+import { linesOf, localeFor, plainAmount, todayIso } from '../store/selectors';
 import { useStore } from '../store/store';
+import { usePageFilters } from '../store/usePageFilters';
 
 const COLS = 'minmax(0,2fr) 0.9fr 0.7fr 0.9fr 0.6fr 1.1fr 0.7fr';
-const ANY = 'Billing frequency';
 
 /** The catalog (CD-83): a row opens the product in a dialog. */
 export function Products() {
   const { s, set, openProduct } = useStore();
-  const [frequency, setFrequency] = useState(ANY);
+  const [filters, setFilters] = usePageFilters('products', { order: [], f: {} });
 
   const usage: Record<string, string[]> = {};
   s.leads.forEach((l) => linesOf(s, l).forEach((ln) => (usage[ln.itemId] ||= []).push(l.id)));
-  const wanted = FREQUENCIES.find((f) => f.label === frequency)?.value;
-  const rows = s.catalog.filter((c) => !wanted || c.frequency === wanted);
+  const fields = productFields(s, (c) => usage[c.id]?.length ?? 0);
+  const rows = applyFilters(s.catalog, fields, filters, { today: todayIso(s.workspace.timezone), fiscalMonth: s.workspace.fiscalMonth });
   const locale = localeFor(s.workspace.currency);
 
   return (
     <Screen title="Products & services">
       <FilterBar
-        chips={[{ value: frequency, options: [ANY, ...FREQUENCIES.map((f) => f.label)], onChange: setFrequency }]}
-        dirty={frequency !== ANY}
-        onClear={() => {
-          setFrequency(ANY);
-        }}
+        row={<FilterRow fields={fields} value={filters} onChange={setFilters} />}
         extra={<DataActions type="products" count={rows.length} exportCsv={() => productsCsv(rows)} />}
         action={{ label: 'New product', onClick: () => openProduct(null) }}
       />
@@ -39,6 +37,8 @@ export function Products() {
           text="Your catalog is what you put on opportunities: products and services with their prices, tax and billing. An opportunity gives them its currency. Add them one by one, or import a CSV file from the ⋯ menu."
           action={{ label: 'New product', onClick: () => openProduct(null) }}
         />
+      ) : rows.length === 0 ? (
+        <FilterEmpty noun="products" onClear={() => setFilters(clearAll(fields, filters))} />
       ) : (
         <div className="card" style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 900 }}>
@@ -49,7 +49,6 @@ export function Products() {
                 </span>
               ))}
             </div>
-            {rows.length === 0 && <div className="empty-state">No products match these filters.</div>}
             {rows.map((c) => {
               const used = usage[c.id] || [];
               return (

@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FilterBar } from '../components/ui';
 import { EmptyState } from '../components/EmptyState';
+import { FilterRow } from '../components/FilterRow';
 import { Screen } from '../components/Layout';
 import { VisitProgressCard } from '../components/VisitProgressCard';
 import { paths } from '../lib/paths';
-import { DATE_RANGES, dateRangeLabel, DEFAULT_FILTERS, SOURCES } from '../store/seed';
-import { billedShare, bonusOf, bonusRule, closeIsoOf, closeRangeOf, curOf, currencySymbol, funnelOptions, inCloseRange, dealPayments, moneyTotal, num, salesPeople, stageOf, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
+import { filterPeople, opportunityFields } from '../store/filterFields';
+import { applyFilters, isActive, setField, valueText } from '../store/filters';
+import { billedShare, bonusOf, bonusRule, closeIsoOf, curOf, currencySymbol, funnelOptions, dealPayments, moneyTotal, num, salesPeople, stageOf, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
 import { conversionMetrics, daysLabel, MIN_MOVED_DEALS, TIME_BUCKETS } from '../store/metrics';
 import { useStore } from '../store/store';
+import { usePageFilters } from '../store/usePageFilters';
 import type { Drill, Lead, SegKey } from '../store/types';
 
 const STAGE_SHADES = ['#E7F2EE', '#CBE3DA', '#A3D2BF', '#5FA587', '#2F7A5E', '#14503C', '#0D241C'];
@@ -20,25 +23,29 @@ const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? o
 const pct = (r: number | null) => (r === null ? '—' : Math.round(r * 100) + '%');
 
 export function Dashboard() {
-  const { s, set, refreshHistory, canSeeBonuses } = useStore();
+  const { s, set, refreshHistory, canSeeBonuses, session } = useStore();
   const [dashSeg, setDashSeg] = useState<SegKey>(s.segment);
   // The stage history is loaded each time Overview opens, so it includes the latest moves.
   useEffect(() => {
     void refreshHistory();
   }, [refreshHistory]);
-  const f = s.filters;
-  // "This quarter" and "this year" are fiscal ones, and "today" is the workspace's (CD-73).
-  const range = closeRangeOf(f.dates, todayIso(s.workspace.timezone), s.workspace.fiscalMonth);
-  const rangeLabel = (v: string) => dateRangeLabel(v, s.workspace.fiscalMonth);
-  // Every panel below works on these deals, so the filter chips (including the closing-date range) apply everywhere.
-  const beforeDates = s.leads
-    .filter((l) => f.audience === 'Audience' || l.segment === f.audience)
-    .filter((l) => f.owner === 'Salesperson' || l.ownerId === f.owner)
-    .filter((l) => f.source === 'Source' || l.source === f.source);
-  const dashLeads = beforeDates.filter((l) => inCloseRange(l, range));
-  const undatedHidden = range ? beforeDates.filter((l) => !closeIsoOf(l)).length : 0;
-  const setFilter = (k: keyof typeof f) => (v: string) => set((x) => ({ filters: { ...x.filters, [k]: v } }));
-  const dirty = (['audience', 'owner', 'dates', 'source'] as const).some((k) => f[k] !== DEFAULT_FILTERS[k]);
+  const me = session.userId;
+  const [saved, setFilters] = usePageFilters('overview', { order: ['funnel', 'owner', 'close'], f: { funnel: { vals: [s.segment] }, owner: { op: 'is', vals: [] }, close: {} } });
+  // The Funnel chip always has one; a funnel deleted since falls back to the one open on the Pipeline.
+  const savedFunnel = saved.f.funnel?.vals?.[0] ?? '';
+  const funnel = s.funnels[savedFunnel] ? savedFunnel : s.segment;
+  const filters = setField(saved, 'funnel', { vals: [funnel] });
+  const fields = opportunityFields(s, funnel, ['funnel', 'owner', 'close']);
+  // "This quarter" is a fiscal one, and "today" is the workspace's (CD-73).
+  const ctx = { today: todayIso(s.workspace.timezone), fiscalMonth: s.workspace.fiscalMonth };
+  const closeField = fields.find((x) => x.id === 'close')!;
+  const closeOn = isActive(closeField, filters.f.close);
+  // Every panel below works on these deals, so the filter chips (including the closing date) apply everywhere.
+  const beforeDates = applyFilters(s.leads, fields, { ...filters, order: filters.order.filter((id) => id !== 'close') }, ctx);
+  const dashLeads = applyFilters(beforeDates, fields, filters, ctx);
+  const undatedHidden = closeOn ? beforeDates.filter((l) => !closeIsoOf(l)).length : 0;
+  const closeText = valueText(closeField, filters.f.close);
+  const owners = filters.f.owner?.vals ?? [];
   const drill = (kicker: string, title: string, leadIds: string[], extra?: Pick<Drill, 'amounts' | 'summary'>) => set({ drill: { kicker, title, leadIds, ...extra } });
 
   // Lost deals (CD-60) count nowhere in the pipeline: not open, not weighted, not stalled.
@@ -106,7 +113,7 @@ export function Dashboard() {
   const totalEarned: { currency?: string; amount: number }[] = [];
   const totalPending: { currency?: string; amount: number }[] = [];
   const bonusRows = (canSeeBonuses ? salesPeople(s) : [])
-    .filter(({ value: ownerId }) => f.owner === 'Salesperson' || ownerId === f.owner)
+    .filter(({ value: ownerId }) => !owners.length || owners.includes(ownerId))
     .map(({ value: ownerId, label: owner }) => {
     const rule = bonusRule(s, ownerId);
     const mine = liveLeads.filter((l) => l.ownerId === ownerId);
@@ -135,15 +142,8 @@ export function Dashboard() {
   return (
     <Screen title="Overview">
       <FilterBar
-        chips={[
-          { value: f.audience, options: [{ value: 'Audience', label: 'Audience' }, ...funnelOptions(s)], onChange: setFilter('audience') },
-          { value: f.owner, options: ['Salesperson', ...salesPeople(s)], onChange: setFilter('owner') },
-          { value: f.dates, options: DATE_RANGES.map((v) => ({ value: v, label: rangeLabel(v) })), onChange: setFilter('dates'), keepFirst: true },
-          { value: f.source, options: ['Source', ...SOURCES], onChange: setFilter('source') },
-        ]}
-        dirty={dirty}
-        onClear={() => set((x) => ({ filters: { ...x.filters, ...DEFAULT_FILTERS } }))}
-        meta={`${plural(dashLeads.length, 'opportunity', 'opportunities')} in view · ${range ? rangeLabel(f.dates).toLowerCase() : 'any closing date'}${undatedHidden ? ` · ${undatedHidden} without a closing date hidden` : ''}`}
+        row={<FilterRow fields={fields} value={filters} onChange={setFilters} people={filterPeople(s, me)} me={me} />}
+        meta={`${plural(dashLeads.length, 'opportunity', 'opportunities')} in view · ${closeOn ? 'closing ' + closeText.charAt(0).toLowerCase() + closeText.slice(1) : 'any closing date'}${undatedHidden ? ` · ${undatedHidden} without a closing date hidden` : ''}`}
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>

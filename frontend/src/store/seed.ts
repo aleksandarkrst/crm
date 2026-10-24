@@ -4,7 +4,7 @@
  */
 import { DEFAULT_TIMESHEET_SETTINGS, EMPTY_COMPANY } from '../lib/api';
 import { emptyPeople } from './people';
-import type { Filters, State } from './types';
+import type { State } from './types';
 
 export const ACTIVITIES = ['Qualify & research', 'Personalized email', 'LinkedIn touch', 'WhatsApp check-in', 'Discovery call', 'Discovery workshop', 'Multi-thread to stakeholders', 'Send proposal + walkthrough', 'Procurement follow-up', 'Negotiation call', 'Kickoff scheduling'];
 export const CHANNELS = ['RS', 'EM', 'LI', 'WA', 'MT'] as const;
@@ -39,19 +39,6 @@ export const QUALIFICATION_STEPS = ['Confirm pain', 'Identify decision maker', '
 export const SOURCES = ['Inbound web form', 'Referral', 'Outbound LinkedIn', 'Conference', 'Instagram DM', 'Trade fair'];
 export const INDUSTRIES = ['Architecture', 'Banking', 'Food & beverage', 'Freight & logistics', 'Furniture retail', 'Hospitality', 'Pharmaceuticals', 'Renewable energy', 'Wine', 'Other'];
 export const TEAM_SIZES = ['1–10 staff', '11–50 staff', '51–200 staff', '201–1,000 staff', '1,000+ staff'];
-/**
- * Overview date filter: ranges over each deal's closing date (calendar months; quarters and years
- * of the workspace's fiscal year, see closeRangeOf). The first entry means "no date filter" and is
- * the only one that includes deals without a closing date. These are the filter values; see
- * dateRangeLabel for how they read.
- */
-export const DATE_RANGES = ['Any closing date', 'Closing in 30 days', 'Closing this month', 'Closing this quarter', 'Closing next quarter', 'Closing this year', 'Closing date passed'];
-/** How a date filter reads: "Closing this fiscal quarter" when the fiscal year doesn't start in January. */
-export const dateRangeLabel = (value: string, fiscalMonth: number): string =>
-  fiscalMonth === 1 ? value : value.replace(/ (quarter|year)$/, ' fiscal $1');
-export const VALUE_BANDS = ['Value', 'Under €25k', '€25k–€100k', 'Over €100k'];
-/** How a value band reads in the workspace currency ("Under $25k"); the values above stay the filter keys. */
-export const valueBandLabel = (value: string, symbol: string): string => value.split('€').join(symbol);
 export const TEAM_ROLES = ['Owner', 'Admin', 'Member'] as const;
 
 /** Playbook rules (design props). */
@@ -76,10 +63,6 @@ export const OBJECTIONS = [
   { q: '“We need to think about it.”', a: 'Ask what specifically is unresolved, then name the next step and date on the call. Never leave without a date.' },
   { q: '“We already have an agency.”', a: 'Position as the gap, not the replacement: one workstream your incumbent is not covering.' },
 ];
-
-/** Pipeline board views: lost deals are hidden by default. */
-export const LOST_VIEWS = ['Open & won', 'Include lost', 'Lost only'] as const;
-export const DEFAULT_FILTERS: Filters = { audience: 'Audience', owner: 'Salesperson', dates: 'Any closing date', source: 'Source', stage: 'Stage', industry: 'Industry', stalled: 'Status', band: 'Value', lost: LOST_VIEWS[0] };
 
 export function initialState(): State {
   return {
@@ -112,7 +95,6 @@ export function initialState(): State {
     visitScope: { all: false, manageAll: false, seesTeam: false, visibleUserIds: [], manageableUserIds: [] },
     bonusRules: null,
     bonusTrigger: 'On contract signed',
-    filters: { ...DEFAULT_FILTERS },
     toast: '',
     templates: null,
     dealDocs: {},

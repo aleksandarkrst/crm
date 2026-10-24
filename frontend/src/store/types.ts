@@ -367,20 +367,6 @@ export interface BonusRule {
   fixed: number | string;
 }
 
-export interface Filters {
-  /** Overview audience: a funnel id, or 'Audience' for every funnel. */
-  audience: string;
-  owner: string;
-  dates: string;
-  source: string;
-  stage: string;
-  industry: string;
-  stalled: string;
-  band: string;
-  /** Pipeline board: lost deals are hidden unless this says otherwise (see LOST_VIEWS). */
-  lost: string;
-}
-
 export interface Drill {
   kicker: string;
   title: string;
@@ -463,7 +449,6 @@ export interface State {
   bonusRules: Record<string, BonusRule> | null;
   /** When a bonus counts as earned ("On contract signed" or "When fully billed"). */
   bonusTrigger: string;
-  filters: Filters;
   toast: string;
   /** Document templates (CD-13); null until loaded (see loadTemplates). */
   templates: DocTemplate[] | null;

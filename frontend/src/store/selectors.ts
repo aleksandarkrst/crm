@@ -127,51 +127,9 @@ export const stageOf = (s: State, lead: Lead): Stage => {
 export const leadById = (s: State, id: string | null | undefined): Lead | undefined => s.leads.find((l) => l.id === id);
 /** The deal owner's label (see memberName). */
 export const ownerOf = (s: State, l: Lead): string => memberName(s, l.ownerId, l.owner);
-export const bandOf = (v: string): string => {
-  const n = valueNum(v);
-  return n < 25000 ? 'Under €25k' : n <= 100000 ? '€25k–€100k' : 'Over €100k';
-};
 
 /** The deal's closing date (ISO), or '' when it has none: no date is never made up. */
 export const closeIsoOf = (lead: Lead): string => lead.closeDate || '';
-
-/**
- * The closing-date window for an Overview date filter (see DATE_RANGES), as inclusive ISO dates.
- * `null` means no filter. `today` is an ISO date (the workspace's today). Quarters and years are
- * fiscal ones: the year starts in `fiscalMonth` (1 = January, a calendar year).
- */
-export function closeRangeOf(label: string, today = todayIso(), fiscalMonth = 1): { from: string; to: string } | null {
-  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const [y = 0, month = 1, date = 1] = today.split('-').map(Number);
-  const m = month - 1;
-  // Months since the fiscal year started; the fiscal year and its quarters are counted from there.
-  const intoYear = (m - (fiscalMonth - 1) + 12) % 12;
-  const fy = m - intoYear; // first month of this fiscal year (may be in the previous calendar year)
-  const q = m - (intoYear % 3);
-  const day = (yy: number, mm: number, dd: number) => iso(new Date(yy, mm, dd));
-  switch (label) {
-    case 'Closing in 30 days':
-      return { from: today, to: day(y, m, date + 30) };
-    case 'Closing this month':
-      return { from: day(y, m, 1), to: day(y, m + 1, 0) };
-    case 'Closing this quarter':
-      return { from: day(y, q, 1), to: day(y, q + 3, 0) };
-    case 'Closing next quarter':
-      return { from: day(y, q + 3, 1), to: day(y, q + 6, 0) };
-    case 'Closing this year':
-      return { from: day(y, fy, 1), to: day(y, fy + 12, 0) };
-    case 'Closing date passed':
-      return { from: '0000-01-01', to: day(y, m, date - 1) };
-    default:
-      return null;
-  }
-}
-/** Whether a deal falls in an Overview date filter. Deals without a closing date only match "no filter". */
-export function inCloseRange(lead: Lead, range: { from: string; to: string } | null): boolean {
-  if (!range) return true;
-  const close = closeIsoOf(lead);
-  return !!close && close >= range.from && close <= range.to;
-}
 
 /** First payment date for a new line: the day after the closing date ('' without one). */
 export function defaultStart(lead: Lead | undefined): string {

@@ -561,7 +561,7 @@ function FunnelBuilder() {
   const dealsIn = (id: string) => s.leads.filter((l) => l.segment === id).length;
   const dealCount = dealsIn(funnel.id);
   const wonCount = stages.filter((st) => st.won).length;
-  const select = (id: string) => set((x) => ({ segment: id, filters: { ...x.filters, audience: id } }));
+  const select = (id: string) => set({ segment: id });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} data-testid="funnel-builder">
