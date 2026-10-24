@@ -220,7 +220,7 @@ export const companyOfPerson = (s: State, p: Person): string => p.company ?? lea
 export const companyIdOfPerson = (s: State, p: Person): string | null => (p.company !== undefined ? p.companyId : leadById(s, p.leadId)?.companyId) ?? null;
 
 /**
- * The dated payments of a deal, with tax (CD-83): its installments when it has them, otherwise
+ * The dated payments of a deal, without tax (CD-83, CD-365): its installments when it has them, otherwise
  * every billing of every product from its billing start date ("until canceled": the first year).
  * `undated` says a payment was left out for lack of a date.
  */
@@ -232,15 +232,19 @@ export function dealPayments(s: State, lead: Lead): { payments: { when: Date; am
     if (d && !isNaN(d.getTime())) payments.push({ when: d, amount });
     else undated = true;
   };
-  if (lead.installments.length) {
-    for (const i of lead.installments) push(i.date, num(i.amount));
-    return { payments, undated };
-  }
+  // Without tax, like the deal value (CD-365).
   const lines = linesOf(s, lead);
   const totals = dealTotals(lines, lead.taxMode, lead.discounts);
+  if (lead.installments.length) {
+    // Installments are entered with tax (they add up to the one-time products with tax): take the
+    // deal's own share of tax out of each.
+    const netShare = totals.oneTimeTotal > 0 ? totals.oneTimeNet / totals.oneTimeTotal : 1;
+    for (const i of lead.installments) push(i.date, num(i.amount) * netShare);
+    return { payments, undated };
+  }
   lines.forEach((ln, i) => {
     const t = totals.lines[i]!;
-    const each = t.tcv / t.cycles;
+    const each = t.net / t.cycles;
     const dates = billingDates(ln);
     if (!dates.length) undated = true;
     for (const d of dates) push(d, each);

@@ -189,7 +189,7 @@ export function Dashboard() {
             <div className="card-title" style={{ marginBottom: 4 }}>Funnel by payment due date</div>
             <div className="card-sub" style={{ marginBottom: 16 }}>
               {/* CD-365: the bands are separate periods, not running totals. */}
-              Won opportunities only. Each band is its own period; the bands don't add up. Product and service payments falling due in that period, incl. VAT
+              Won opportunities only. Each band is its own period; the bands don't add up. Product and service payments falling due in that period, without VAT
               {undatedDeals ? ` · ${plural(undatedDeals, 'opportunity', 'opportunities')} without billing dates left out` : ''}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
