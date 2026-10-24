@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/fonts.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/colors.css">
+  <script src="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/_ds_bundle.js"></script>
+  <style>
+    @keyframes dcFade { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+    .fr-in:focus { outline:none; border-color:#14503C !important; box-shadow:0 0 0 3px #E7F2EE; }
+  </style>
+</helmet>
+<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-family:'Onest',sans-serif; color:#0F1B16;">
+  <sc-for list="{{ chips }}" as="c" hint-placeholder-count="2">
+    <div style="position:relative;">
+      <button type="button" onClick="{{ c.open }}" style="display:flex; align-items:center; gap:6px; height:34px; box-sizing:border-box; padding:0 10px; border-radius:8px; border:1px solid {{ c.border }}; background:{{ c.bg }}; color:{{ c.fg }}; font-family:inherit; font-size:13px; cursor:pointer; white-space:nowrap;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{ c.icon }}"></path></svg>
+        <span style="font-weight:600;">{{ c.label }}</span>
+        <span style="color:{{ c.valFg }};">{{ c.value }}</span>
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"></path></svg>
+      </button>
+      <sc-if value="{{ c.isOpen }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ closePop }}" style="position:fixed; inset:0; z-index:40;"></div>
+        <div style="position:absolute; top:calc(100% + 6px); left:0; z-index:41; width:300px; background:#FFFFFF; border:1px solid #E2E8E4; border-radius:10px; box-shadow:0 16px 38px rgba(16,24,40,.16); padding:6px; display:flex; flex-direction:column; gap:2px; box-sizing:border-box; animation:dcFade .14s ease-out both;">
+          <sc-if value="{{ c.hasOp }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 8px 8px;">
+              <span style="font-size:12.5px; color:#475750; white-space:nowrap;">{{ c.fieldName }}</span>
+              <div style="display:flex; background:#F2F5F3; border-radius:7px; padding:2px;">
+                <sc-for list="{{ c.ops }}" as="o" hint-placeholder-count="2">
+                  <button type="button" onClick="{{ o.pick }}" style="border:0; border-radius:6px; padding:4px 10px; font-family:inherit; font-size:12.5px; white-space:nowrap; cursor:pointer; background:{{ o.bg }}; color:{{ o.fg }}; font-weight:{{ o.weight }}; box-shadow:{{ o.shadow }};">{{ o.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ c.hasSearch }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:2px 2px 6px;">
+              <input class="fr-in" value="{{ c.q }}" onChange="{{ c.setQ }}" placeholder="{{ c.searchPh }}" autoFocus="{{ true }}" style="width:100%; box-sizing:border-box; height:34px; border:1px solid #E2E8E4; border-radius:7px; padding:0 10px; font-family:inherit; font-size:13px; color:#0F1B16; background:#FFFFFF;">
+            </div>
+          </sc-if>
+          <div style="display:flex; flex-direction:column; max-height:320px; overflow-y:auto;">
+            <sc-for list="{{ c.rows }}" as="r" hint-placeholder-count="4">
+              <button type="button" onClick="{{ r.toggle }}" style="display:flex; align-items:center; gap:10px; width:100%; border:0; background:transparent; border-radius:7px; padding:7px 8px 7px {{ r.indent }}; font-family:inherit; font-size:13px; color:#0F1B16; cursor:pointer; text-align:left;" style-hover="background:#F1F3F6;">
+                <span style="width:16px; height:16px; flex:0 0 16px; border-radius:{{ r.boxRadius }}; border:1.5px solid {{ r.boxBorder }}; background:{{ r.boxBg }}; display:flex; align-items:center; justify-content:center; box-sizing:border-box; color:#FFFFFF;">
+                  <sc-if value="{{ r.on }}" hint-placeholder-val="{{ false }}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg></sc-if>
+                  <sc-if value="{{ r.partial }}" hint-placeholder-val="{{ false }}"><span style="width:8px; height:2px; background:#FFFFFF; border-radius:1px;"></span></sc-if>
+                </span>
+                <sc-if value="{{ r.hasDot }}" hint-placeholder-val="{{ false }}"><span style="width:8px; height:8px; border-radius:50%; background:{{ r.dot }}; box-shadow:{{ r.dotRing }}; flex-shrink:0;"></span></sc-if>
+                <sc-if value="{{ r.hasAvatar }}" hint-placeholder-val="{{ false }}"><span style="width:26px; height:26px; border-radius:50%; background:#E7F2EE; color:#14503C; display:flex; align-items:center; justify-content:center; font-size:10.5px; font-weight:600; flex-shrink:0;">{{ r.initials }}</span></sc-if>
+                <span style="flex:1; min-width:0; display:flex; flex-direction:column; gap:1px;">
+                  <span style="font-weight:{{ r.weight }};">{{ r.label }}</span>
+                  <sc-if value="{{ r.hasSub }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px; color:#475750;">{{ r.sub }}</span></sc-if>
+                </span>
+              </button>
+            </sc-for>
+            <sc-if value="{{ c.noRows }}" hint-placeholder-val="{{ false }}"><span style="padding:10px 8px; font-size:13px; color:#475750;">No matches.</span></sc-if>
+          </div>
+          <sc-if value="{{ c.isText }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:2px 2px 4px;">
+              <input class="fr-in" value="{{ c.text }}" onChange="{{ c.setText }}" placeholder="{{ c.textPh }}" autoFocus="{{ true }}" style="width:100%; box-sizing:border-box; height:34px; border:1px solid #E2E8E4; border-radius:7px; padding:0 10px; font-family:inherit; font-size:13px; color:#0F1B16;">
+            </div>
+          </sc-if>
+          <sc-if value="{{ c.isCustom }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:6px 8px 4px;">
+              <label style="display:flex; flex-direction:column; gap:4px; font-size:12px; color:#475750;">From<input class="fr-in" type="date" value="{{ c.from }}" onChange="{{ c.setFrom }}" style="height:34px; border:1px solid #E2E8E4; border-radius:7px; padding:0 8px; font-family:inherit; font-size:13px; color:#0F1B16;"></label>
+              <label style="display:flex; flex-direction:column; gap:4px; font-size:12px; color:#475750;">To<input class="fr-in" type="date" value="{{ c.to }}" onChange="{{ c.setTo }}" style="height:34px; border:1px solid #E2E8E4; border-radius:7px; padding:0 8px; font-family:inherit; font-size:13px; color:#0F1B16;"></label>
+            </div>
+          </sc-if>
+          <sc-if value="{{ c.isNumber }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:6px 8px 4px;">
+              <label style="display:flex; flex-direction:column; gap:4px; font-size:12px; color:#475750;">{{ c.minLabel }}<input class="fr-in" inputMode="numeric" value="{{ c.min }}" onChange="{{ c.setMin }}" placeholder="0" style="height:34px; border:1px solid #E2E8E4; border-radius:7px; padding:0 10px; font-family:inherit; font-size:13px; color:#0F1B16;"></label>
+              <label style="display:flex; flex-direction:column; gap:4px; font-size:12px; color:#475750;">{{ c.maxLabel }}<input class="fr-in" inputMode="numeric" value="{{ c.max }}" onChange="{{ c.setMax }}" placeholder="No limit" style="height:34px; border:1px solid #E2E8E4; border-radius:7px; padding:0 10px; font-family:inherit; font-size:13px; color:#0F1B16;"></label>
+            </div>
+          </sc-if>
+          <sc-if value="{{ c.hasNote }}" hint-placeholder-val="{{ false }}"><span style="padding:4px 8px 2px; font-size:12px; color:#475750;">Updates with today's date.</span></sc-if>
+          <sc-if value="{{ c.hasFooter }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 4px 2px; border-top:1px solid #EEF2EF; margin-top:4px;">
+              <sc-if value="{{ c.clearable }}" hint-placeholder-val="{{ true }}">
+                <button type="button" onClick="{{ c.clear }}" style="border:0; background:transparent; border-radius:7px; padding:6px 8px; font-family:inherit; font-size:12.5px; color:#475750; cursor:pointer;" style-hover="background:#F1F3F6;">Clear selection</button>
+              </sc-if>
+              <span></span>
+              <sc-if value="{{ c.removable }}" hint-placeholder-val="{{ false }}">
+                <button type="button" onClick="{{ c.remove }}" style="border:0; background:transparent; border-radius:7px; padding:6px 8px; font-family:inherit; font-size:12.5px; color:#B42318; cursor:pointer;" style-hover="background:#FDECEA;">Remove filter</button>
+              </sc-if>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+    </div>
+  </sc-for>
+
+  <div style="position:relative;">
+    <button type="button" onClick="{{ openAdd }}" style="display:flex; align-items:center; gap:6px; height:34px; box-sizing:border-box; padding:0 10px; border-radius:8px; border:1px dashed #D0D5DD; background:transparent; color:#475750; font-family:inherit; font-size:13px; cursor:pointer;" style-hover="background:#F1F3F6;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+      <span>Filter</span>
+    </button>
+    <sc-if value="{{ addOpen }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ closePop }}" style="position:fixed; inset:0; z-index:40;"></div>
+      <div style="position:absolute; top:calc(100% + 6px); left:0; z-index:41; width:260px; background:#FFFFFF; border:1px solid #E2E8E4; border-radius:10px; box-shadow:0 16px 38px rgba(16,24,40,.16); padding:6px; display:flex; flex-direction:column; gap:2px; box-sizing:border-box; animation:dcFade .14s ease-out both;">
+        <div style="padding:2px 2px 6px;">
+          <input class="fr-in" value="{{ addQ }}" onChange="{{ setAddQ }}" placeholder="Filter by…" autoFocus="{{ true }}" style="width:100%; box-sizing:border-box; height:34px; border:1px solid #E2E8E4; border-radius:7px; padding:0 10px; font-family:inherit; font-size:13px; color:#0F1B16;">
+        </div>
+        <div style="display:flex; flex-direction:column; max-height:360px; overflow-y:auto;">
+          <sc-for list="{{ fieldGroups }}" as="g" hint-placeholder-count="2">
+            <div style="display:flex; flex-direction:column;">
+              <span style="padding:8px 8px 4px; font-size:12px; color:#93A39B;">{{ g.label }}</span>
+              <sc-for list="{{ g.fields }}" as="f" hint-placeholder-count="3">
+                <button type="button" onClick="{{ f.add }}" style="display:flex; align-items:center; gap:10px; width:100%; border:0; background:transparent; border-radius:7px; padding:8px; font-family:inherit; font-size:13px; color:#0F1B16; cursor:pointer; text-align:left;" style-hover="background:#F1F3F6;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475750" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{ f.icon }}"></path></svg>
+                  <span style="flex:1;">{{ f.label }}</span>
+                  <sc-if value="{{ f.custom }}" hint-placeholder-val="{{ false }}"><span style="font-size:11.5px; color:#475750; background:#F2F5F3; border-radius:4px; padding:2px 6px;">Custom</span></sc-if>
+                </button>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+        <sc-if value="{{ noFields }}" hint-placeholder-val="{{ false }}"><span style="padding:10px 8px; font-size:13px; color:#475750;">No more fields to filter by.</span></sc-if>
+      </div>
+    </sc-if>
+  </div>
+
+  <sc-if value="{{ canClear }}" hint-placeholder-val="{{ false }}">
+    <button type="button" onClick="{{ clearAll }}" style="border:0; background:transparent; border-radius:8px; padding:7px 10px; font-family:inherit; font-size:13px; color:#14503C; cursor:pointer; white-space:nowrap;" style-hover="background:#F1F3F6;">Clear filters</button>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:900,&quot;height&quot;:420},&quot;fields&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;Array&lt;{id:string,label:string,group:string,kind:'list'|'person'|'date'|'number'|'text',options?:Array&lt;string|{id:string,name:string,dot?:string,sub?:boolean}&gt;,pinned?:boolean,required?:boolean,single?:boolean,groupLabel?:string,unit?:string,custom?:boolean,icon?:string}&gt;&quot;},&quot;value&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;{order:string[],f:Record&lt;string,any&gt;}&quot;},&quot;onChange&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(v:{order:string[],f:Record&lt;string,any&gt;})=&gt;void&quot;},&quot;people&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;Array&lt;{id:string,name:string,role:string,team:string}&gt;&quot;},&quot;me&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;scope&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const ICONS = {
+  list:"M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01",
+  date:"M5 6h14v14H5zM5 10h14M9 3v4M15 3v4",
+  number:"M5 9h14M5 15h14M10 4l-2 16M16 4l-2 16",
+  text:"M5 6h14M12 6v13",
+  person:"M16 19c0-2.2-1.8-4-4-4s-4 1.8-4 4M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+  status:"M12 3a9 9 0 1 0 9 9M12 7v5l3 2",
+  funnel:"M3 5h18l-7 8v6l-4 2v-8z",
+  company:"M4 20V6l8-3v17M12 9h8v11M7 9h2M7 13h2M15 13h2",
+  value:"M15 7.5a5 5 0 1 0 0 9M6 10.5h7M6 13.5h7"
+};
+const PRESETS = [
+  {id:"today",label:"Today"},{id:"week",label:"This week"},{id:"month",label:"This month"},{id:"quarter",label:"This quarter"},
+  {id:"last30",label:"Last 30 days"},{id:"next30",label:"Next 30 days"},{id:"before",label:"Before today"},{id:"custom",label:"Custom range"}
+];
+const fmtD = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y,m-1,d).toLocaleDateString("en-GB",{day:"numeric",month:"short"}); };
+const eur = v => v >= 1e6 ? "€" + (v/1e6).toFixed(1) + "m" : v >= 1000 ? "€" + Math.round(v/100)/10 + "k" : "€" + v;
+
+class Component extends DCLogic {
+  state = { pop:null, q:"", addQ:"" };
+  componentDidUpdate(pp) { if (pp.scope !== this.props.scope && (this.state.pop || this.state.q)) this.setState({ pop:null, q:"", addQ:"" }); }
+  get val() { return this.props.value || { order:[], f:{} }; }
+  get fields() { return this.props.fields || []; }
+  emit(next) { this.props.onChange && this.props.onChange(next); }
+  setF(id, patch) { const v = this.val; this.emit({ ...v, f:{ ...v.f, [id]:{ ...(v.f[id] || {}), ...patch } } }); }
+  opts(fd) { return (fd.options || []).map(o => typeof o === "string" ? { id:o, name:o } : o); }
+  defOp(fd) { return fd.kind === "text" ? "contains" : "is"; }
+  isActive(fd, v) {
+    if (!v) return false;
+    if (fd.kind === "date") return !!v.preset && (v.preset !== "custom" || !!(v.from || v.to));
+    if (fd.kind === "number") return !!(v.min || v.max);
+    if (fd.kind === "text") return v.op === "isempty" || v.op === "notempty" || !!(v.text || "").trim();
+    return (v.vals || []).length > 0;
+  }
+  personName(id) { const p = (this.props.people || []).find(x => x.id === id); return id === this.props.me ? "Me" : p ? p.name.split(" ")[0] : id; }
+  valueText(fd, v) {
+    if (!this.isActive(fd, v)) return "Any";
+    if (fd.kind === "list") {
+      const os = this.opts(fd), sel = v.vals, subs = os.filter(o => o.sub);
+      let parts = [], rest = os.filter(o => sel.includes(o.id));
+      if (fd.groupLabel && subs.length && subs.every(o => sel.includes(o.id))) { parts.push(fd.groupLabel); rest = rest.filter(o => !o.sub); }
+      parts = parts.concat(rest.map(o => o.name));
+      return parts.length > 2 ? sel.length + " selected" : parts.join(", ");
+    }
+    if (fd.kind === "person") return v.vals.length > 2 ? v.vals.length + " people" : v.vals.map(id => this.personName(id)).join(", ");
+    if (fd.kind === "date") return v.preset !== "custom" ? PRESETS.find(p => p.id === v.preset).label : (v.from ? fmtD(v.from) : "Any") + " – " + (v.to ? fmtD(v.to) : "Any");
+    if (fd.kind === "number") {
+      const a = Number(v.min) || 0, b = Number(v.max) || 0, n = x => fd.unit ? eur(x) : String(x);
+      if (a && b) return n(a) + "–" + n(b);
+      return a ? "at least " + n(a) : "at most " + n(b);
+    }
+    if (fd.kind === "text") return v.op === "isempty" ? "Empty" : v.op === "notempty" ? "Not empty" : "“" + v.text.trim() + "”";
+    return "";
+  }
+  check(on, partial, radio) {
+    return { on, partial: !on && !!partial, boxRadius: radio ? "50%" : "4px",
+      boxBorder: on || partial ? "#14503C" : "#C9D3CE", boxBg: on || partial ? "#14503C" : "#FFFFFF" };
+  }
+  rowsFor(fd, v) {
+    const vals = (v && v.vals) || [];
+    const base = { hasDot:false, hasAvatar:false, hasSub:false, sub:"", weight:400, indent:"8px", dot:"", dotRing:"none", initials:"" };
+    const q = this.state.q.trim().toLowerCase();
+    const tog = id => () => this.setF(fd.id, { vals: fd.single ? [id] : vals.includes(id) ? vals.filter(x => x !== id) : [...vals, id] });
+    if (fd.kind === "list") {
+      const os = this.opts(fd).filter(o => !q || o.name.toLowerCase().includes(q));
+      const row = o => ({ ...base, ...this.check(vals.includes(o.id), false, fd.single), label:o.name, hasDot:!!o.dot, dot:o.dot || "", dotRing:o.ring || "none",
+        indent: fd.groupLabel && o.sub && !q ? "30px" : "8px", weight: fd.groupLabel && !o.sub && !q ? 600 : 400, toggle: tog(o.id) });
+      const subs = this.opts(fd).filter(o => o.sub).map(o => o.id);
+      if (fd.groupLabel && !q && subs.length) {
+        const n = subs.filter(x => vals.includes(x)).length;
+        return [{ ...base, ...this.check(n === subs.length, n > 0), label:fd.groupLabel, weight:600,
+          toggle: () => this.setF(fd.id, { vals: n === subs.length ? vals.filter(x => !subs.includes(x)) : [...new Set([...vals, ...subs])] }) }, ...os.map(row)];
+      }
+      return os.map(row);
+    }
+    if (fd.kind === "person") {
+      const me = this.props.me;
+      const ppl = [...(this.props.people || [])].sort((a, b) => (b.id === me) - (a.id === me));
+      return ppl.filter(p => !q || p.name.toLowerCase().includes(q) || (p.id === me && "me".includes(q))).map(p => ({
+        ...base, ...this.check(vals.includes(p.id)), hasAvatar:true, initials: p.name.split(" ").map(w => w[0]).join(""), hasSub:true,
+        label: p.id === me ? "Me" : p.name, sub: p.id === me ? p.name + " · " + p.role : p.role + " · " + p.team, toggle: tog(p.id)
+      }));
+    }
+    if (fd.kind === "date") return PRESETS.map(p => ({ ...base, ...this.check(v && v.preset === p.id, false, true), label:p.label, toggle: () => this.setF(fd.id, { preset:p.id }) }));
+    return [];
+  }
+  renderVals() {
+    const s = this.state, val = this.val, fields = this.fields;
+    const closePop = () => this.setState({ pop:null, q:"", addQ:"" });
+    const order = val.order.filter(id => fields.some(f => f.id === id));
+    const chips = order.map(id => {
+      const fd = fields.find(x => x.id === id), v = val.f[id] || {};
+      const active = this.isActive(fd, v), isOpen = s.pop === id;
+      const hasOp = (fd.kind === "list" && !fd.single) || fd.kind === "text";
+      const opDefs = fd.kind === "text" ? [["contains","contains"],["isempty","is empty"],["notempty","is not empty"]] : [["is","is"],["isnot","is not"]];
+      const curOp = v.op || opDefs[0][0];
+      const rows = isOpen ? this.rowsFor(fd, v) : [];
+      return {
+        label: v.op === "isnot" ? fd.label + " is not" : fd.kind === "text" && active && curOp === "contains" ? fd.label + " contains" : fd.label,
+        fieldName: fd.label, value: this.valueText(fd, v), icon: ICONS[fd.icon] || ICONS[fd.kind],
+        bg: active ? "#E7F2EE" : "#FFFFFF", border: active ? "#CFE4DB" : "#E2E8E4", fg: active ? "#14503C" : "#0F1B16", valFg: active ? "#14503C" : "#93A39B",
+        isOpen, open: () => this.setState({ pop: isOpen ? null : id, q:"" }),
+        hasOp, ops: opDefs.map(([k, l]) => { const on = curOp === k;
+          return { label:l, pick: () => this.setF(id, { op:k }), bg: on ? "#FFFFFF" : "transparent", fg: on ? "#0F1B16" : "#475750", weight: on ? 600 : 400, shadow: on ? "0 1px 2px rgba(16,24,40,.1)" : "none" }; }),
+        hasSearch: fd.kind === "person" || (fd.kind === "list" && this.opts(fd).length > 5), q: s.q, setQ: e => this.setState({ q: e.target.value }),
+        searchPh: fd.kind === "person" ? "Search people" : "Search " + fd.label.toLowerCase(),
+        rows, noRows: isOpen && rows.length === 0 && (fd.kind === "list" || fd.kind === "person"),
+        isText: fd.kind === "text" && curOp === "contains", text: v.text || "", setText: e => this.setF(id, { text: e.target.value }), textPh: "Type to filter by " + fd.label.toLowerCase(),
+        isCustom: fd.kind === "date" && v.preset === "custom", from: v.from || "", to: v.to || "",
+        setFrom: e => this.setF(id, { from: e.target.value }), setTo: e => this.setF(id, { to: e.target.value }),
+        isNumber: fd.kind === "number", min: v.min || "", max: v.max || "",
+        minLabel: "At least" + (fd.unit ? " (€)" : ""), maxLabel: "At most" + (fd.unit ? " (€)" : ""),
+        setMin: e => this.setF(id, { min: e.target.value.replace(/\D/g, "") }), setMax: e => this.setF(id, { max: e.target.value.replace(/\D/g, "") }),
+        hasNote: fd.kind === "date" && !!v.preset && v.preset !== "custom",
+        hasFooter: !fd.required || !fd.pinned, clearable: !fd.required,
+        clear: () => { const nv = this.val; this.emit({ ...nv, f:{ ...nv.f, [id]:{ op: opDefs[0][0] } } }); },
+        removable: !fd.pinned,
+        remove: () => { const nv = this.val, f = { ...nv.f }; delete f[id]; this.emit({ order: nv.order.filter(x => x !== id), f }); this.setState({ pop:null }); }
+      };
+    });
+    const aq = s.addQ.trim().toLowerCase();
+    const avail = fields.filter(fd => !order.includes(fd.id) && (!aq || fd.label.toLowerCase().includes(aq)));
+    const groups = [...new Set(fields.map(f => f.group))];
+    const fieldGroups = groups.map(g => ({ label: g + " fields", fields: avail.filter(fd => fd.group === g).map(fd => ({
+      label: fd.label, icon: ICONS[fd.icon] || ICONS[fd.kind], custom: !!fd.custom,
+      add: () => { const nv = this.val; this.emit({ order:[...nv.order, fd.id], f:{ ...nv.f, [fd.id]: { op: this.defOp(fd), vals:[] } } }); this.setState({ pop: fd.id, addQ:"", q:"" }); }
+    })) })).filter(g => g.fields.length);
+    const pinned = fields.filter(f => f.pinned).map(f => f.id);
+    const canClear = order.some(id => !pinned.includes(id)) || order.some(id => { const fd = fields.find(x => x.id === id); return !fd.required && this.isActive(fd, val.f[id]); });
+    return {
+      chips, closePop,
+      openAdd: () => this.setState({ pop: s.pop === "__add" ? null : "__add", addQ:"" }),
+      addOpen: s.pop === "__add", addQ: s.addQ, setAddQ: e => this.setState({ addQ: e.target.value }),
+      fieldGroups, noFields: fieldGroups.length === 0, canClear,
+      clearAll: () => { const nv = this.val, f = {};
+        pinned.forEach(id => { const fd = fields.find(x => x.id === id); f[id] = fd.required ? nv.f[id] : { op: this.defOp(fd), vals:[] }; });
+        this.emit({ order: pinned, f }); this.setState({ pop:null }); }
+    };
+  }
+}
+</script>
+</body>
+</html>
