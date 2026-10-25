@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { askConfirm } from '../../components/ConfirmDialog';
 import { DocProgress } from '../../components/DocProgress';
 import { canManageTemplates, type DealDoc, docBusy, docMoment, fileExtension, fileSize, MAX_UPLOAD_FILES, suggestedTemplate, UPLOAD_TYPES, type UploadType, uploadFileProblem } from '../../store/documents';
-import { approvalStatusOf, stageOf } from '../../store/selectors';
+import { stageOf } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
 import { opportunityCopy } from '../../store/wording';
@@ -13,8 +13,8 @@ import { ProposalActions } from './ProposalActions';
  * The deal's Documents tab (CD-13): generate a document from a template, follow it while the worker
  * fills it in, and download or delete what was generated. Or import your own (CD-120): proposals
  * and documents made outside Pultly, each with its type; one Proposal per opportunity. Once a
- * proposal is imported or approved (owner's call, 25 Oct), the Generate / Import choice and the
- * built-in preview give way to "Add documents" for supporting files. The proposal's next step (request approval, approve, send) sits at the bottom.
+ * proposal is generated or imported (owner's call, 25 Oct), the Generate / Import choice gives way
+ * to "Add documents" for supporting files. The proposal's next step (request approval, approve, send) sits at the bottom.
  */
 export function DealDocuments({ lead }: { lead: Lead }) {
   const { s, session, ensureDocs, loadTemplates, generateDoc, downloadDoc, deleteDoc, startGeneration } = useStore();
@@ -32,8 +32,8 @@ export function DealDocuments({ lead }: { lead: Lead }) {
   const templateId = picked ?? (templates ? suggestedTemplate(templates, stageOf(s, lead).doc)?.id : undefined);
   const isAdmin = canManageTemplates(session.tenant.role);
   const hasProposal = docs.some((d) => d.docType === 'Proposal');
-  const imported = docs.some((d) => d.docType === 'Proposal' && d.source === 'uploaded');
-  const settled = imported || approvalStatusOf(s, lead) === 'approved';
+  // A proposal generated (or being generated) or imported; a failed generation doesn't count.
+  const settled = docs.some((d) => d.docType === 'Proposal' && d.status !== 'failed');
 
   const generate = async () => {
     if (!templateId) return;
