@@ -192,6 +192,24 @@ describe('request, approve, revoke and send', () => {
   });
 });
 
+describe('another workspace', () => {
+  it("can't request, decide, send or upload on this workspace's deal (404)", async () => {
+    const deal = await pendingDeal('Isolation');
+    const stranger = await signIn('appr-stranger');
+    const theirs = await createTenant(stranger, 'Elsewhere');
+    const them = { token: stranger.token, tenant: theirs };
+    for (const what of ['approval/request', 'approval/approve', 'approval/revoke', 'proposal/sent'])
+      expect((await call('POST', `/crm/deals/${deal.id}/${what}`, them)).status, what).toBe(404);
+    const form = new FormData();
+    form.append('files', new Blob([new Uint8Array(PDF)]), 'Sneaky.pdf');
+    form.append('types', JSON.stringify(['Price list']));
+    const res = await fetch(`${inject('apiUrl')}/api/crm/deals/${deal.id}/documents/upload`, { method: 'POST', headers: { authorization: `Bearer ${stranger.token}`, 'x-tenant-id': theirs }, body: form });
+    expect(res.status).toBe(404);
+    expect(await statusOf(deal.id)).toBe('pending');
+    expect((await ok<unknown[]>('GET', `/crm/deal-documents?dealId=${deal.id}`, as(owner))).length).toBe(1);
+  });
+});
+
 describe("the approver's task", () => {
   interface Task { id: string; dealId: string; label: string; assigneeUserId: string | null; dueDate: string | null; done: boolean; blocksAdvance: boolean }
   const tasksOf = async (dealId: string) => (await ok<Task[]>('GET', `/crm/deal-tasks?dealIds=${dealId}`, as(owner))).filter((t) => t.label === 'Approve the proposal');
@@ -223,6 +241,18 @@ describe("the approver's task", () => {
     await step(owner, revoked.id, 'approval/revoke');
     await step(seller, revoked.id, 'approval/request');
     expect((await tasksOf(revoked.id)).map((t) => t.done).sort()).toEqual([false, true]);
+  });
+
+  it('a new approver resets waiting requests, so the old approver keeps no task', async () => {
+    const deal = await pendingDeal('Task · approver changed');
+    await ok('PATCH', `/crm/funnels/${gated.id}`, { ...as(owner), body: { approverUserId: admin.userId } });
+    try {
+      expect(await statusOf(deal.id)).toBe('not_requested');
+      expect(await tasksOf(deal.id)).toHaveLength(0);
+      expect(await titles(deal.id)).toContain('Approval request reset');
+    } finally {
+      await ok('PATCH', `/crm/funnels/${gated.id}`, { ...as(owner), body: { approverUserId: approver.userId } });
+    }
   });
 });
 
