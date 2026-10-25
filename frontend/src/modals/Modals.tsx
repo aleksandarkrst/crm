@@ -155,7 +155,7 @@ function NewDealModal() {
           <span style={{ fontWeight: 600 }}>{companyRec.name} is still a lead</span>
           <span style={{ color: 'var(--text-2)' }}>
             Leads are listed but can't be picked.{' '}
-            {companyReadiness(s, companyRec.id).blockers.length ? `Missing for Opportunity: ${companyReadiness(s, companyRec.id).blockers.join('; ')}.` : 'It was set back to Lead by hand.'}
+            {companyReadiness(s, companyRec.id).blockers.length ? `Missing for Opportunity: ${companyReadiness(s, companyRec.id).blockers.join('; ').replace(/\.$/, '')}.` : 'It was set back to Lead by hand.'}
           </span>
           <span>
             <button type="button" className="btn-link" data-testid="new-deal-complete-company" onClick={() => { close(); openCompany(companyRec.id); }}>
