@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FilterBar } from '../components/ui';
 import { EmptyState } from '../components/EmptyState';
+import { FilterRow } from '../components/FilterRow';
 import { Screen } from '../components/Layout';
 import { VisitProgressCard } from '../components/VisitProgressCard';
 import { paths } from '../lib/paths';
-import { DATE_RANGES, dateRangeLabel, DEFAULT_FILTERS, SOURCES } from '../store/seed';
-import { billedShare, bonusOf, bonusRule, closeIsoOf, closeRangeOf, curOf, currencySymbol, funnelOptions, inCloseRange, dealPayments, moneyTotal, num, salesPeople, stageOf, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
+import { filterPeople, opportunityFields } from '../store/filterFields';
+import { allOpen, applyFilters, type FilterValue, isActive, markSeen, pruneList, valueText, withNewSubs } from '../store/filters';
+import { billedShare, bonusOf, bonusRule, closeIsoOf, curOf, currencySymbol, funnelOptions, dealPayments, moneyTotal, num, salesPeople, stageOf, stagesFor, todayIso, valueNum, valueTotal } from '../store/selectors';
 import { conversionMetrics, daysLabel, MIN_MOVED_DEALS, TIME_BUCKETS } from '../store/metrics';
 import { useStore } from '../store/store';
+import { usePageFilters } from '../store/usePageFilters';
 import type { Drill, Lead, SegKey } from '../store/types';
 
 const STAGE_SHADES = ['#E7F2EE', '#CBE3DA', '#A3D2BF', '#5FA587', '#2F7A5E', '#14503C', '#0D241C'];
@@ -19,26 +22,38 @@ const clip = 'polygon(0 0, 100% 0, calc(100% - 14px) 100%, 14px 100%)';
 const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 const pct = (r: number | null) => (r === null ? '—' : Math.round(r * 100) + '%');
 
+/** The Audience select's "all funnels" (the old Overview filter's value). */
+const ALL_FUNNELS = 'Audience';
+
 export function Dashboard() {
-  const { s, set, refreshHistory, canSeeBonuses } = useStore();
+  const { s, set, refreshHistory, canSeeBonuses, session } = useStore();
   const [dashSeg, setDashSeg] = useState<SegKey>(s.segment);
   // The stage history is loaded each time Overview opens, so it includes the latest moves.
   useEffect(() => {
     void refreshHistory();
   }, [refreshHistory]);
-  const f = s.filters;
-  // "This quarter" and "this year" are fiscal ones, and "today" is the workspace's (CD-73).
-  const range = closeRangeOf(f.dates, todayIso(s.workspace.timezone), s.workspace.fiscalMonth);
-  const rangeLabel = (v: string) => dateRangeLabel(v, s.workspace.fiscalMonth);
-  // Every panel below works on these deals, so the filter chips (including the closing-date range) apply everywhere.
-  const beforeDates = s.leads
-    .filter((l) => f.audience === 'Audience' || l.segment === f.audience)
-    .filter((l) => f.owner === 'Salesperson' || l.ownerId === f.owner)
-    .filter((l) => f.source === 'Source' || l.source === f.source);
-  const dashLeads = beforeDates.filter((l) => inCloseRange(l, range));
-  const undatedHidden = range ? beforeDates.filter((l) => !closeIsoOf(l)).length : 0;
-  const setFilter = (k: keyof typeof f) => (v: string) => set((x) => ({ filters: { ...x.filters, [k]: v } }));
-  const dirty = (['audience', 'owner', 'dates', 'source'] as const).some((k) => f[k] !== DEFAULT_FILTERS[k]);
+  const me = session.userId;
+  const [saved, setSaved] = usePageFilters('overview', { order: ['owner', 'close'], f: { owner: { op: 'is', vals: [] }, close: {} } });
+  // The funnel stays the Audience select it was (owner's call, 24 Oct): all funnels, or one. It is kept with
+  // the other filters (not a chip), so Clear filters resets it to all; a funnel deleted since counts as all.
+  const picked = saved.f.audience?.vals?.[0] ?? '';
+  const audience = s.funnels[picked] ? picked : ALL_FUNNELS;
+  // On "Audience" the Status choices are every funnel's stages, so none of them hides another funnel's deals.
+  const fields = useMemo(() => opportunityFields(s, audience === ALL_FUNNELS ? null : audience, ['owner', 'close']), [s, audience]);
+  // A Status chip keeps "Open" across funnels; single stages of another funnel are dropped.
+  const filters = withNewSubs(fields, pruneList(fields, saved, 'status'), 'status');
+  const setFilters = (v: FilterValue) => setSaved(markSeen(fields, v, 'status'));
+  const inAudience = audience === ALL_FUNNELS ? s.leads : s.leads.filter((l) => l.segment === audience);
+  // "This quarter" is a fiscal one, and "today" is the workspace's (CD-73).
+  const ctx = { today: todayIso(s.workspace.timezone), fiscalMonth: s.workspace.fiscalMonth };
+  const closeField = fields.find((x) => x.id === 'close')!;
+  const closeOn = isActive(closeField, filters.f.close);
+  // Every panel below works on these deals, so the filter chips (including the closing date) apply everywhere.
+  const beforeDates = applyFilters(inAudience, fields, { ...filters, order: filters.order.filter((id) => id !== 'close') }, ctx);
+  const dashLeads = applyFilters(beforeDates, fields, filters, ctx);
+  const undatedHidden = closeOn ? beforeDates.filter((l) => !closeIsoOf(l)).length : 0;
+  const closeText = valueText(closeField, filters.f.close);
+  const owners = filters.f.owner?.vals ?? [];
   const drill = (kicker: string, title: string, leadIds: string[], extra?: Pick<Drill, 'amounts' | 'summary'>) => set({ drill: { kicker, title, leadIds, ...extra } });
 
   // Lost deals (CD-60) count nowhere in the pipeline: not open, not weighted, not stalled.
@@ -106,7 +121,7 @@ export function Dashboard() {
   const totalEarned: { currency?: string; amount: number }[] = [];
   const totalPending: { currency?: string; amount: number }[] = [];
   const bonusRows = (canSeeBonuses ? salesPeople(s) : [])
-    .filter(({ value: ownerId }) => f.owner === 'Salesperson' || ownerId === f.owner)
+    .filter(({ value: ownerId }) => !owners.length || owners.includes(ownerId))
     .map(({ value: ownerId, label: owner }) => {
     const rule = bonusRule(s, ownerId);
     const mine = liveLeads.filter((l) => l.ownerId === ownerId);
@@ -135,15 +150,24 @@ export function Dashboard() {
   return (
     <Screen title="Overview">
       <FilterBar
-        chips={[
-          { value: f.audience, options: [{ value: 'Audience', label: 'Audience' }, ...funnelOptions(s)], onChange: setFilter('audience') },
-          { value: f.owner, options: ['Salesperson', ...salesPeople(s)], onChange: setFilter('owner') },
-          { value: f.dates, options: DATE_RANGES.map((v) => ({ value: v, label: rangeLabel(v) })), onChange: setFilter('dates'), keepFirst: true },
-          { value: f.source, options: ['Source', ...SOURCES], onChange: setFilter('source') },
-        ]}
-        dirty={dirty}
-        onClear={() => set((x) => ({ filters: { ...x.filters, ...DEFAULT_FILTERS } }))}
-        meta={`${plural(dashLeads.length, 'opportunity', 'opportunities')} in view · ${range ? rangeLabel(f.dates).toLowerCase() : 'any closing date'}${undatedHidden ? ` · ${undatedHidden} without a closing date hidden` : ''}`}
+        lead={
+          <select
+            aria-label="Funnel"
+            data-testid="overview-funnel"
+            value={audience}
+            // Another funnel: a Status chip takes all of its Open stages, keeping Won and Lost.
+            onChange={(e) => setFilters({ ...allOpen(filters, 'status'), f: { ...allOpen(filters, 'status').f, audience: { vals: e.target.value === ALL_FUNNELS ? [] : [e.target.value] } } })}
+            style={{ border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '9px 11px', fontSize: 13, color: 'var(--ink)' }}
+          >
+            {[{ value: ALL_FUNNELS, label: 'Audience' }, ...funnelOptions(s)].map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        }
+        row={<FilterRow fields={fields} value={filters} onChange={setFilters} people={filterPeople(s, me)} me={me} forceClear={audience !== ALL_FUNNELS} />}
+        meta={`${plural(dashLeads.length, 'opportunity', 'opportunities')} in view · ${closeOn ? 'closing ' + closeText.charAt(0).toLowerCase() + closeText.slice(1) : 'any closing date'}${undatedHidden ? ` · ${undatedHidden} without a closing date hidden` : ''}`}
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>

@@ -1,18 +1,9 @@
 // Lost deals (CD-60): mark a deal lost with a reason, it leaves the pipeline board (and shows
-// again with the "Include lost deals" view), the timeline says why, and it can be reopened.
+// again when the Status filter includes Lost, CD-366), the timeline says why, and it can be reopened.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { api, BASE_URL, click, clickButton, createDealInUi, eventually, newUserWithWorkspace, setValue, steps, text, useBrowser, testPib } from '../lib/harness.mjs';
-
-/** Picks an option in the Pipeline filter bar's select that offers `option`. */
-const pickView = (page, option) =>
-  page.evaluate((option) => {
-    const select = [...document.querySelectorAll('select')].find((el) => [...el.options].some((o) => o.value === option));
-    if (!select) return false;
-    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, option);
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-    return true;
-  }, option);
+import { chipText, clearFilters, closePopover, pickOption } from '../lib/filters.mjs';
 
 const boardCards = (page) => page.$$eval('[draggable]', (els) => els.map((el) => ({ text: el.innerText, lost: el.hasAttribute('data-lost') })));
 
@@ -71,18 +62,23 @@ describe('lost opportunities', () => {
     await page.waitForFunction(() => document.body.innerText.includes('Keeper Ltd'));
     const cards = await boardCards(page);
     assert.ok(!cards.some((c) => c.text.includes('Gone Away')), 'lost opportunity hidden');
-    assert.match(await text(page), /1 lost hidden/);
+    assert.equal(await chipText(page, 'status'), 'Status Open, Won');
+    assert.doesNotMatch(await text(page), /lost hidden/);
   });
 
-  step('shows it with the "Include lost" view, marked as lost', async () => {
-    assert.ok(await pickView(page, 'Include lost'), 'lost view chip found');
+  step('shows it when Status includes Lost, marked as lost', async () => {
+    await pickOption(page, 'status', '__lost');
     await page.waitForFunction(() => document.body.innerText.includes('Gone Away'));
     const lost = (await boardCards(page)).find((c) => c.text.includes('Gone Away'));
     assert.ok(lost.lost, 'the card is marked as lost');
     assert.match(lost.text, /Lost · Chose a competitor/);
     assert.ok((await boardCards(page)).some((c) => c.text.includes('Keeper Ltd')), 'open opportunities still shown');
 
-    assert.ok(await pickView(page, 'Lost only'));
+    // Lost only: the open stages (the "Open" row) and Won off.
+    await pickOption(page, 'status', '__group');
+    await pickOption(page, 'status', '__won');
+    await closePopover(page);
+    assert.equal(await chipText(page, 'status'), 'Status Lost');
     await page.waitForFunction(() => !document.body.innerText.includes('Keeper Ltd'));
     assert.ok((await boardCards(page)).some((c) => c.text.includes('Gone Away')));
   });
@@ -100,8 +96,9 @@ describe('lost opportunities', () => {
     await page.waitForFunction(() => document.body.innerText.includes('Reopened'));
 
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
-    assert.ok(await pickView(page, 'Open & won'));
-    await page.waitForFunction(() => [...document.querySelectorAll('[draggable]')].some((el) => el.innerText.includes('Gone Away')));
+    // The Status chip is remembered (Lost only); Clear filters lets every status through.
+    await clearFilters(page);
+    await page.waitForFunction(() => [...document.querySelectorAll('[draggable]')].some((el) => el.innerText.includes('Gone Away') && !el.hasAttribute('data-lost')));
     const history = await api(page, '/crm/deal-stage-history?dealId=' + dealId);
     assert.deepEqual(
       history.map((h) => h.kind),

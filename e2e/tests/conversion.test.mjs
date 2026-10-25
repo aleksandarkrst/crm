@@ -3,7 +3,8 @@
 // Overview filters.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, clickButton, eventually, newUserWithWorkspace, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, eventually, newUserWithWorkspace, steps, text, useBrowser } from '../lib/harness.mjs';
+import { chipText, clearFilters, closePopover, openChip, pickOption } from '../lib/filters.mjs';
 
 const card = (page) => page.$eval('[data-testid=stage-conversion]', (el) => el.innerText);
 /** The conversion row of a stage: [rate, "advanced/reached"]. */
@@ -12,17 +13,6 @@ const row = (page, stage) =>
     const cells = [...el.children].map((c) => c.innerText.trim());
     return [cells[2], cells[3]];
   });
-
-/** Sets the Overview filter chip that offers `option`. */
-const pickFilter = (page, option) =>
-  page.evaluate((option) => {
-    const select = [...document.querySelectorAll('select')].find((el) => [...el.options].some((o) => o.value === option || o.textContent === option));
-    if (!select) return false;
-    const value = [...select.options].find((o) => o.value === option || o.textContent === option).value;
-    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, value);
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-    return true;
-  }, option);
 
 describe('stage conversion on Overview', () => {
   const browser = useBrowser();
@@ -76,13 +66,29 @@ describe('stage conversion on Overview', () => {
     assert.match(text, /Opportunities that moved\s+5\s+of 6 opportunities in view/i);
   });
 
-  step('respects the Overview filters', async () => {
+  step('respects the Overview filters: Audience, Salesperson and Closing date together; Clear filters resets them', async () => {
     const ent = funnels.find((f) => f.key === 'ent');
-    assert.ok(await pickFilter(page, ent.label), 'audience chip found');
+    const smb = funnels.find((f) => f.key === 'smb');
+    assert.equal(await chipText(page, 'owner'), 'Salesperson Any');
+    assert.equal(await chipText(page, 'close'), 'Closing date Any');
+    // The funnel is the Audience select it was (CD-366), not a chip.
+    await page.select('[data-testid=overview-funnel]', ent.id);
     await page.waitForFunction(() => document.querySelector('[data-testid=stage-conversion]').innerText.includes('(0 so far)'));
-    await clickButton(page, 'Clear filters');
-    const back = await eventually(async () => (await card(page)).includes('83%'));
-    assert.ok(back, 'numbers are back once the filter is cleared');
+    await page.select('[data-testid=overview-funnel]', smb.id);
+    assert.ok(await eventually(async () => (await card(page)).includes('83%')), 'back on the SMB funnel');
+    // Me (first in the list), then a closing date: these opportunities have none, so none match.
+    await openChip(page, 'owner');
+    await click(page, '[data-testid="filter-pop-owner"] [data-testid="filter-option"]');
+    await closePopover(page);
+    assert.equal(await chipText(page, 'owner'), 'Salesperson Me');
+    await pickOption(page, 'close', 'today');
+    await closePopover(page);
+    await page.waitForFunction(() => document.querySelector('[data-testid=stage-conversion]').innerText.includes('(0 so far)'));
+    assert.match(await text(page), /6 without a closing date hidden/);
+    await clearFilters(page);
+    assert.equal(await page.$eval('[data-testid=overview-funnel]', (el) => el.value), 'Audience');
+    assert.equal(await chipText(page, 'close'), 'Closing date Any');
+    assert.ok(await eventually(async () => (await card(page)).includes('83%')), 'numbers are back once the filters are cleared');
   });
 
   it('throws no uncaught errors in the page', () => {

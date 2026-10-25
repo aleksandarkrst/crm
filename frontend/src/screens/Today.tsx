@@ -1,24 +1,25 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { FilterBar } from '../components/ui';
 import { EmptyState } from '../components/EmptyState';
+import { FilterEmpty, FilterRow } from '../components/FilterRow';
 import { Screen } from '../components/Layout';
+import { filterPeople, type FilterTask, taskFields } from '../store/filterFields';
+import { applyFilters, clearAll } from '../store/filters';
 import { CHANNEL_LABELS } from '../store/seed';
-import { isoLabel, isOverdue, leadById, memberName, salesPeople, stageOf, stagesFor, todayIso, todayLabel } from '../store/selectors';
+import { isoLabel, isOverdue, leadById, memberName, stageOf, stagesFor, todayIso, todayLabel } from '../store/selectors';
 import { useStore } from '../store/store';
+import { usePageFilters } from '../store/usePageFilters';
 import { paths } from '../lib/paths';
-import { dayRange, instantToZoned, todayIn } from '../store/time';
+import { addDays, dayRange, instantToZoned, todayIn } from '../store/time';
 import { useMeetingList } from '../store/useMeetings';
 import { TeamTodayCard } from './teamStatus/parts';
 import { blockClass, StatusMark, TypeTag } from './calendar/parts';
 
-interface TodayTask {
+interface TodayTask extends FilterTask {
   id: string;
   leadId: string;
-  title: string;
   company: string;
-  stageName: string;
-  channelLabel: string;
   due: string;
   bucket: number;
   /** Set for tasks added with "New task" (they can be ticked off and edited here). */
@@ -33,17 +34,21 @@ interface TodayTask {
  */
 export function Today() {
   const { s, set, openLead, toggleLeadTask, session } = useStore();
-  const [owner, setOwner] = useState('Salesperson');
-  // Meetings today (CD-130): yours as organizer or internal participant, or the chosen salesperson's.
+  const me = session.userId;
+  const [filters, setFilters] = usePageFilters('today', { order: ['owner'], f: { owner: { op: 'is', vals: [me] } } });
+  const owners = filters.f.owner?.vals ?? [];
+  // Meetings today (CD-130): yours as organizer or internal participant, or the one chosen salesperson's.
+  // Several people ticked: the day's meetings, kept when any of them organizes or takes part.
   const tz = s.workspace.timezone;
   const day = todayIn(tz);
   const range = useMemo(() => dayRange(day, tz), [day, tz]);
-  const { meetings: todays } = useMeetingList({ from: new Date(range.from).toISOString(), to: new Date(range.to).toISOString(), userId: owner === 'Salesperson' ? session.userId : owner, status: ['planned', 'held'], sort: 'asc' });
+  const many = owners.length > 1;
+  const { meetings: dayMeetings } = useMeetingList({ from: new Date(range.from).toISOString(), to: new Date(range.to).toISOString(), userId: many ? undefined : owners.length === 1 ? owners[0] : session.userId, status: ['planned', 'held'], sort: 'asc' });
+  const todays = many ? dayMeetings.filter((m) => owners.includes(m.organizerUserId ?? '') || m.participants.some((p) => p.kind === 'internal' && !!p.userId && owners.includes(p.userId))) : dayMeetings;
 
   const today = todayIso(s.workspace.timezone);
   const doneToday = todayLabel(s.workspace.timezone);
   const funnelTasks = s.leads
-    .filter((l) => owner === 'Salesperson' || l.ownerId === owner)
     .map<TodayTask>((l) => {
       const st = stageOf(s, l);
       return {
@@ -55,12 +60,16 @@ export function Today() {
         channelLabel: CHANNEL_LABELS[st.channel] || st.channel,
         due: l.stall >= 4 ? `today · ${l.stall} days since contact` : l.stall > 0 ? 'today' : 'tomorrow',
         bucket: l.stall > 0 ? 1 : 2,
+        ownerId: l.ownerId ?? null,
+        companyId: l.companyId ?? null,
+        dueIso: l.stall > 0 ? today : addDays(today, 1),
+        note: '',
+        done: false,
       };
     });
   // Hand-added tasks: open ones, plus those finished today (so ticking one doesn't make it vanish).
   const handTasks = s.leadTasks
     .filter((t) => !t.done || t.at === doneToday || (t.due && t.due >= today))
-    .filter((t) => owner === 'Salesperson' || t.ownerId === owner)
     .sort((a, b) => (a.due || today).localeCompare(b.due || today))
     .flatMap<TodayTask>((t) => {
       const lead = leadById(s, t.leadId);
@@ -77,11 +86,19 @@ export function Today() {
           due: dueIso === today ? 'today' : isoLabel(dueIso),
           // Ticked off today, an overdue task stays in Overdue (crossed out) until tomorrow.
           bucket: dueIso < today ? 0 : dueIso === today ? 1 : 2,
+          ownerId: t.ownerId || null,
+          companyId: lead.companyId ?? null,
+          dueIso,
+          note: t.note,
+          done: t.done,
           task: { done: t.done, owner: memberName(s, t.ownerId, t.ownerName), dueIso, overdue: isOverdue(t, today) },
         },
       ];
     });
-  const tasks = [...handTasks, ...funnelTasks];
+  const allTasks = [...handTasks, ...funnelTasks];
+  const fields = taskFields(s, allTasks);
+  const tasks = applyFilters(allTasks, fields, filters, { today, fiscalMonth: s.workspace.fiscalMonth });
+  const noMatch = allTasks.length > 0 && tasks.length === 0;
   const groups = [
     { label: 'Overdue', fg: '#B42318', tasks: tasks.filter((t) => t.bucket === 0) },
     { label: 'Today', fg: '#0F1B16', tasks: tasks.filter((t) => t.bucket === 1) },
@@ -91,11 +108,7 @@ export function Today() {
   return (
     <Screen title="Today">
       <FilterBar
-        chips={[{ value: owner, options: ['Salesperson', ...salesPeople(s)], onChange: setOwner }]}
-        dirty={owner !== 'Salesperson'}
-        onClear={() => {
-          setOwner('Salesperson');
-        }}
+        row={<FilterRow fields={fields} value={filters} onChange={setFilters} people={filterPeople(s, me)} me={me} />}
         action={{ label: 'New task', onClick: () => set({ taskOpen: true }) }}
       />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -131,7 +144,8 @@ export function Today() {
             </Link>
           ))}
         </div>
-        {groups.map((g) => (
+        {noMatch && <FilterEmpty noun="tasks" onClear={() => setFilters(clearAll(fields))} />}
+        {!noMatch && groups.map((g) => (
           <div key={g.label} data-group={g.label} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
               <span style={{ fontSize: 10.5, letterSpacing: '0.09em', textTransform: 'uppercase', color: g.fg }}>{g.label}</span>

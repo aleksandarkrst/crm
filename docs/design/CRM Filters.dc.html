@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/fonts.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/tokens/colors.css">
+  <link rel="stylesheet" href="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/css/base.css">
+  <script src="_ds/cadence-crm-design-system-587d043c-c501-4a8d-9824-ee3e580e8bbd/_ds_bundle.js"></script>
+  <style>
+    body { margin:0; background:#F5F7F6; font-family:'Onest',sans-serif; color:#0F1B16; -webkit-font-smoothing:antialiased; }
+    a { color:#14503C; } a:hover { color:#0C3226; }
+  </style>
+</helmet>
+<div style="display:flex; min-height:100vh; font-family:'Onest',sans-serif;">
+  <aside style="width:96px; flex-shrink:0; background:#0D241C; display:flex; flex-direction:column; align-items:center; gap:6px; padding:18px 0; position:sticky; top:0; height:100vh; box-sizing:border-box;">
+    <div style="margin-bottom:16px;">
+      <x-import component-from-global-scope="CadenceCRMDesignSystem_587d04.Logo" height="30" on-dark="{{ true }}" wordmark="{{ false }}" hint-size="30px,30px"></x-import>
+    </div>
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="7">
+      <button type="button" onClick="{{ n.go }}" style="display:flex; flex-direction:column; align-items:center; gap:5px; cursor:pointer; color:{{ n.fg }}; background:transparent; border:0; padding:0; font-family:inherit;">
+        <span style="width:46px; height:42px; border-radius:11px; display:flex; align-items:center; justify-content:center; background:{{ n.bg }};">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.icon }}"></path></svg>
+        </span>
+        <span style="font-size:11px; font-weight:{{ n.weight }};">{{ n.label }}</span>
+      </button>
+    </sc-for>
+  </aside>
+
+  <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+    <header style="position:sticky; top:0; z-index:30; background:#FFFFFF; border-bottom:1px solid #E2E8E4; height:60px; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:0 30px;">
+      <span style="font-size:20px; font-weight:600; white-space:nowrap;">{{ title }}</span>
+      <div style="display:flex; align-items:center; gap:8px; background:#F2F5F3; border-radius:999px; padding:8px 14px; width:300px; max-width:36vw; color:#93A39B; font-size:13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 20l-4.2-4.2M17.5 11a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0z"></path></svg>
+        <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Search opportunities, companies, contacts</span>
+      </div>
+      <div style="width:34px; height:34px; border-radius:50%; background:#E7F2EE; color:#14503C; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:600;">AK</div>
+    </header>
+
+    <main style="padding:18px 30px 44px; display:flex; flex-direction:column; gap:16px;">
+      <sc-if value="{{ isCalendar }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button type="button" style="height:34px; padding:0 12px; border:1px solid #E2E8E4; background:#FFFFFF; border-radius:8px; font-family:inherit; font-size:13px; cursor:pointer;">Today</button>
+            <button type="button" aria-label="Previous week" style="width:34px; height:34px; border:1px solid #E2E8E4; background:#FFFFFF; border-radius:8px; cursor:pointer; color:#475750;">‹</button>
+            <button type="button" aria-label="Next week" style="width:34px; height:34px; border:1px solid #E2E8E4; background:#FFFFFF; border-radius:8px; cursor:pointer; color:#475750;">›</button>
+            <span style="font-size:17px; font-weight:600; margin-left:6px; white-space:nowrap;">19 – 25 Oct 2026</span>
+          </div>
+          <div style="display:flex; background:#EAEFEC; border-radius:9px; padding:3px;">
+            <span style="padding:6px 12px; font-size:13px; color:#475750;">Day</span>
+            <span style="padding:6px 12px; font-size:13px; font-weight:600; background:#FFFFFF; border-radius:7px; box-shadow:0 1px 2px rgba(16,24,40,.1);">Week</span>
+            <span style="padding:6px 12px; font-size:13px; color:#475750;">Month</span>
+            <span style="padding:6px 12px; font-size:13px; color:#475750;">Table</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <div style="display:flex; align-items:flex-start; gap:10px; flex-wrap:wrap;">
+        <sc-if value="{{ isPipeline }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; border:1px solid #E2E8E4; border-radius:8px; padding:2px; background:#FFFFFF; gap:2px;">
+            <sc-for list="{{ viewBtns }}" as="b" hint-placeholder-count="2">
+              <button type="button" onClick="{{ b.pick }}" title="{{ b.title }}" style="width:30px; height:28px; border:0; border-radius:6px; background:{{ b.bg }}; color:{{ b.fg }}; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{ b.icon }}"></path></svg>
+              </button>
+            </sc-for>
+          </div>
+        </sc-if>
+        <div style="flex:1 1 520px; min-width:0;">
+          <dc-import name="Filter Row" fields="{{ fields }}" value="{{ filterVal }}" on-change="{{ setFilter }}" people="{{ people }}" me="{{ me }}" scope="{{ page }}" hint-size="100%,34px"></dc-import>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; height:34px; margin-left:auto;">
+          <span style="font-size:13px; color:#475750; white-space:nowrap;">{{ countLine }}</span>
+          <sc-if value="{{ hasPrimary }}" hint-placeholder-val="{{ true }}">
+            <button type="button" style="height:34px; padding:0 14px; border:0; border-radius:8px; background:#14503C; color:#FFFFFF; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;" style-hover="background:#0C3226;">{{ primary }}</button>
+          </sc-if>
+        </div>
+      </div>
+
+      <sc-if value="{{ showBoard }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; gap:12px; overflow-x:auto; padding-bottom:8px; align-items:flex-start;">
+          <sc-for list="{{ columns }}" as="col" hint-placeholder-count="5">
+            <div style="flex:0 0 250px; background:#EEF2EF; border-radius:10px; padding:10px; display:flex; flex-direction:column; gap:8px; min-height:420px; box-sizing:border-box;">
+              <div style="display:flex; flex-direction:column; gap:2px; padding:2px 4px 4px;">
+                <span style="font-size:13.5px; font-weight:600;">{{ col.name }}</span>
+                <span style="font-size:12px; color:#475750;">{{ col.meta }}</span>
+              </div>
+              <sc-for list="{{ col.cards }}" as="k" hint-placeholder-count="1">
+                <div style="background:#FFFFFF; border:1px solid #E2E8E4; border-radius:10px; padding:11px 12px; display:flex; flex-direction:column; gap:5px;">
+                  <div style="display:flex; justify-content:space-between; gap:8px;">
+                    <span style="font-size:13.5px; font-weight:600;">{{ k.company }}</span>
+                    <span style="font-size:12.5px; color:#475750;">{{ k.value }}</span>
+                  </div>
+                  <span style="font-size:12px; color:#475750;">{{ k.contact }}</span>
+                  <span style="font-size:12px; color:{{ k.touchFg }};">{{ k.touch }}</span>
+                  <sc-if value="{{ k.hasNext }}" hint-placeholder-val="{{ true }}"><span style="font-size:12px; color:#475750; border-top:1px solid #EEF2EF; padding-top:6px;">{{ k.next }}</span></sc-if>
+                </div>
+              </sc-for>
+              <sc-if value="{{ col.empty }}" hint-placeholder-val="{{ false }}">
+                <div style="border:1px dashed #D0D5DD; border-radius:10px; padding:16px; text-align:center; font-size:12.5px; color:#93A39B;">No opportunities</div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showOppList }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#FFFFFF; border:1px solid #E2E8E4; border-radius:12px; overflow:hidden;">
+          <div style="display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr) minmax(0,0.7fr) minmax(0,0.8fr); gap:12px; padding:10px 18px; background:#FAFBFC; border-bottom:1px solid #E2E8E4; font-size:12.5px; color:#475750;">
+            <span>Company</span><span>Stage</span><span>Salesperson</span><span style="text-align:right;">Value</span><span style="text-align:right;">Closing date</span>
+          </div>
+          <sc-for list="{{ oppRows }}" as="d" hint-placeholder-count="5">
+            <div style="display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr) minmax(0,0.7fr) minmax(0,0.8fr); gap:12px; padding:11px 18px; border-bottom:1px solid #EEF2EF; font-size:13.5px; align-items:center;">
+              <span style="font-weight:500;">{{ d.company }}</span>
+              <span style="display:flex; align-items:center; gap:7px; color:#475750;"><span style="width:8px; height:8px; border-radius:50%; background:{{ d.dot }}; box-shadow:{{ d.ring }};"></span>{{ d.stage }}</span>
+              <span style="color:#475750;">{{ d.owner }}</span>
+              <span style="text-align:right; font-weight:500;">{{ d.value }}</span>
+              <span style="text-align:right; color:#475750;">{{ d.close }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px;">
+            <sc-for list="{{ metrics }}" as="m" hint-placeholder-count="4">
+              <div style="background:#FFFFFF; border:1px solid #E2E8E4; border-radius:12px; padding:18px 20px; display:flex; flex-direction:column; gap:8px;">
+                <span style="font-size:13px; color:#475750;">{{ m.label }}</span>
+                <span style="font-family:'Unbounded',sans-serif; font-weight:500; font-size:28px; letter-spacing:-0.03em; line-height:1;">{{ m.value }}</span>
+                <span style="font-size:12.5px; color:#475750;">{{ m.note }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="background:#FFFFFF; border:1px solid #E2E8E4; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:12px;">
+            <div style="display:flex; flex-direction:column; gap:3px;">
+              <span style="font-size:14.5px; font-weight:600;">Opportunities by stage</span>
+              <span style="font-size:12.5px; color:#475750;">Value in each stage for the opportunities in view.</span>
+            </div>
+            <sc-for list="{{ stageBars }}" as="s" hint-placeholder-count="6">
+              <div style="display:grid; grid-template-columns:140px minmax(0,1fr) 130px; gap:12px; align-items:center; font-size:13px;">
+                <span>{{ s.name }}</span>
+                <div style="height:8px; background:#EEF2EF; border-radius:999px; overflow:hidden;"><div style="height:100%; width:{{ s.width }}; background:{{ s.dot }}; border-radius:999px;"></div></div>
+                <span style="text-align:right; color:#475750;">{{ s.meta }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isToday }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; gap:18px;">
+          <sc-for list="{{ taskSections }}" as="sec" hint-placeholder-count="2">
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                <span style="font-size:14px; font-weight:600; color:{{ sec.color }};">{{ sec.label }}</span>
+                <span style="font-size:12.5px; color:#475750;">{{ sec.count }}</span>
+              </div>
+              <sc-for list="{{ sec.tasks }}" as="t" hint-placeholder-count="3">
+                <div style="background:#FFFFFF; border:1px solid #E2E8E4; border-radius:12px; padding:13px 16px; display:flex; align-items:center; gap:14px;">
+                  <span style="width:18px; height:18px; border-radius:50%; border:1.5px solid #C9D3CE; flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:3px;">
+                    <span style="font-size:13.5px; font-weight:500;">{{ t.title }}</span>
+                    <span style="font-size:12.5px; color:{{ t.metaFg }};">{{ t.meta }}</span>
+                  </div>
+                  <span style="font-size:12px; background:#F2F5F3; color:#0F1B16; border-radius:5px; padding:3px 8px; white-space:nowrap;">{{ t.type }}</span>
+                  <button type="button" style="height:32px; padding:0 12px; border:1px solid #E2E8E4; background:#FFFFFF; border-radius:8px; font-family:inherit; font-size:12.5px; cursor:pointer; white-space:nowrap;" style-hover="background:#F5F6F8;">Open script</button>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isCalendar }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#FFFFFF; border:1px solid #E2E8E4; border-radius:12px; overflow:hidden;">
+          <sc-for list="{{ days }}" as="day" hint-placeholder-count="7">
+            <div style="display:grid; grid-template-columns:110px minmax(0,1fr); border-bottom:1px solid #EEF2EF;">
+              <div style="padding:12px 16px; font-size:13px; font-weight:{{ day.weight }}; color:{{ day.fg }};">{{ day.label }}</div>
+              <div style="display:flex; flex-direction:column; padding:6px 10px 6px 0;">
+                <sc-for list="{{ day.meetings }}" as="mt" hint-placeholder-count="1">
+                  <div style="display:grid; grid-template-columns:56px 10px minmax(0,1fr) auto; gap:10px; align-items:center; padding:6px 6px; font-size:13px; opacity:{{ mt.opacity }};">
+                    <span style="color:#475750;">{{ mt.time }}</span>
+                    <span style="width:8px; height:8px; border-radius:50%; background:{{ mt.dot }};"></span>
+                    <span><span style="font-weight:500; text-decoration:{{ mt.deco }};">{{ mt.title }}</span><span style="color:#475750;"> · {{ mt.meta }}</span></span>
+                    <span style="font-size:12px; color:{{ mt.statusFg }}; background:{{ mt.statusBg }}; border-radius:5px; padding:2px 8px;">{{ mt.status }}</span>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ day.none }}" hint-placeholder-val="{{ false }}"><span style="padding:6px; font-size:12.5px; color:#93A39B;">No meetings</span></sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ hasTable }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#FFFFFF; border:1px solid #E2E8E4; border-radius:12px; overflow:hidden;">
+          <div style="overflow-x:auto; overflow-y:hidden;">
+            <div style="min-width:{{ tableMin }};">
+              <div style="display:grid; grid-template-columns:{{ tableCols }}; gap:12px; padding:10px 18px; background:#FAFBFC; border-bottom:1px solid #E2E8E4; font-size:12.5px; color:#475750;">
+                <sc-for list="{{ tableHead }}" as="h" hint-placeholder-count="6"><span style="text-align:{{ h.align }};">{{ h.label }}</span></sc-for>
+              </div>
+              <sc-for list="{{ tableRows }}" as="row" hint-placeholder-count="5">
+                <div style="display:grid; grid-template-columns:{{ tableCols }}; gap:12px; padding:11px 18px; border-bottom:1px solid #EEF2EF; font-size:13.5px; align-items:center;" style-hover="background:#FAFBFC;">
+                  <sc-for list="{{ row.cells }}" as="cell" hint-placeholder-count="6">
+                    <span style="display:flex; flex-direction:column; gap:2px; align-items:{{ cell.items }}; min-width:0;">
+                      <span style="display:block; white-space:nowrap; font-weight:{{ cell.weight }}; color:{{ cell.fg }}; background:{{ cell.bg }}; padding:{{ cell.pad }}; border-radius:5px; font-size:{{ cell.size }}; overflow:hidden; text-overflow:ellipsis; max-width:100%; box-sizing:border-box;">{{ cell.text }}</span>
+                      <sc-if value="{{ cell.hasSub }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px; color:#475750; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;">{{ cell.sub }}</span></sc-if>
+                    </span>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ empty }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#FFFFFF; border:1px solid #E2E8E4; border-radius:12px; padding:44px 20px; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center;">
+          <span style="font-size:14.5px; font-weight:600;">{{ emptyTitle }}</span>
+          <span style="font-size:13px; color:#475750;">Change or clear a filter to see more.</span>
+          <button type="button" onClick="{{ clearAll }}" style="margin-top:4px; border:1px solid #E2E8E4; background:#FFFFFF; border-radius:8px; padding:7px 14px; font-family:inherit; font-size:13px; color:#0F1B16; cursor:pointer;" style-hover="background:#F5F6F8;">Clear filters</button>
+        </div>
+      </sc-if>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const ME = "aleks";
+const PEOPLE = [
+  {id:"aleks",name:"Aleksandar Krstić",role:"Sales lead",team:"Belgrade team"},
+  {id:"ana",name:"Ana Petrović",role:"Account executive",team:"Belgrade team"},
+  {id:"marko",name:"Marko Jovanović",role:"Account executive",team:"Novi Sad team"}
+];
+const STAGES = [
+  {id:"new",name:"New opportunity",dot:"#A3D2BF",sub:true,p:.1},{id:"touch",name:"First touch",dot:"#6FB197",sub:true,p:.2},
+  {id:"discovery",name:"Discovery call",dot:"#2F7A5E",sub:true,p:.4},{id:"proposal",name:"Proposal",dot:"#1E6248",sub:true,p:.6},
+  {id:"negotiation",name:"Negotiation",dot:"#14503C",sub:true,p:.8},{id:"won",name:"Won",dot:"#C6F16A",ring:"0 0 0 1px #14503C",p:1},
+  {id:"lost",name:"Lost",dot:"#B42318",p:0}
+];
+const OPEN = STAGES.filter(s => s.sub).map(s => s.id);
+const FUNNELS = ["SMB – CEO decides","Enterprise – buying committee"];
+const TODAY = new Date(2026,9,24);
+const parse = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y,m-1,d); };
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const fmtD = s => parse(s).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+const eur = v => v >= 1e6 ? "€" + (v/1e6).toFixed(1) + "m" : v >= 1000 ? "€" + Math.round(v/100)/10 + "k" : "€" + v;
+const eurFull = v => "€" + v.toLocaleString("en-US");
+const daysAgo = s => Math.round((TODAY - parse(s)) / 864e5);
+const RANGES = {
+  today:[TODAY,TODAY], week:[new Date(2026,9,19),new Date(2026,9,25)], month:[new Date(2026,9,1),new Date(2026,9,31)], quarter:[new Date(2026,9,1),new Date(2026,11,31)],
+  last30:[addDays(TODAY,-30),TODAY], next30:[TODAY,addDays(TODAY,30)], before:[new Date(2000,0,1),addDays(TODAY,-1)]
+};
+const pname = id => PEOPLE.find(p => p.id === id).name;
+const stage = id => STAGES.find(s => s.id === id);
+const uniq = a => [...new Set(a.filter(Boolean))].sort();
+
+const OPPS = [
+  ["Brightline Studio","Mila Petrović · Managing director","negotiation","aleks",3600,"2026-11-10","Referral",0,"Design agency","2026-10-15","Negotiation call"],
+  ["Tidewater Foods","Ana Kovač · Head of purchasing","negotiation","aleks",24000,"2026-10-31","Inbound web form",0,"Food production","2026-10-21","Negotiation call"],
+  ["Orchard Dental Group","Nikola Jovanović · Practice manager","won","aleks",5700,"2026-10-24","Referral",0,"Healthcare","2026-10-24","Kickoff scheduling"],
+  ["Kestrel Logistics","Stefan Ilić · Operations manager","won","aleks",16800,"2026-10-20","Conference",0,"Logistics","2026-10-20","Kickoff scheduling"],
+  ["Northwind Studio","Jelena Pavlović · Founder","discovery","ana",18000,"2026-11-20","Outbound LinkedIn",0,"Design agency","2026-10-22","Book discovery call"],
+  ["Ferma Organik","Luka Pešić · Owner","touch","ana",9500,"2026-12-01","Instagram DM",0,"Food production","2026-10-23","Personalized email"],
+  ["Palić Winery","Vuk Lazić · Director","proposal","aleks",14000,"2026-11-14","Referral",0,"Wine","2026-10-19","Follow up on proposal"],
+  ["Sava Retail","Tamara Ristić · COO","lost","ana",31000,"2026-10-05","Inbound web form",0,"Retail","2026-09-30",""],
+  ["Dunav Freight","Petar Ilić · Marketing director","proposal","marko",62000,"2026-11-05","Trade fair",1,"Logistics","2026-10-17","Follow up on proposal"],
+  ["Vojvodina Energy","Sara Milić · Procurement lead","new","marko",120000,"2027-01-15","Conference",1,"Renewable energy","2026-10-10","Qualify & research"]
+].map(r => ({company:r[0],contact:r[1],stage:r[2],owner:r[3],value:r[4],close:r[5],source:r[6],funnel:FUNNELS[r[7]],industry:r[8],lastTouch:r[9],nextStep:r[10]}));
+
+const TASKS = [
+  ["Send pricing for three depots","Kestrel Logistics","touch","Email","2026-10-22","aleks"],
+  ["Book a discovery call with Mila","Brightline Studio","new","Email","2026-10-24","aleks"],
+  ["Qualify & research","Brightline Studio","new","Research task","2026-10-24","aleks"],
+  ["Personalized email","Orchard Dental Group","touch","Email","2026-10-24","aleks"],
+  ["Negotiation call","Brightline Studio","negotiation","Meeting","2026-10-24","aleks"],
+  ["Negotiation call","Tidewater Foods","negotiation","Meeting","2026-10-24","aleks"],
+  ["Kickoff scheduling","Kestrel Logistics","won","Meeting","2026-10-24","aleks"],
+  ["Follow up on proposal","Dunav Freight","proposal","Call","2026-10-23","marko"],
+  ["Book discovery call","Northwind Studio","discovery","Call","2026-10-26","ana"]
+].map(r => ({title:r[0],company:r[1],stage:r[2],type:r[3],due:r[4],owner:r[5]}));
+
+const MTYPES = [{id:"Visit",name:"Visit",dot:"#2F7A5E"},{id:"Online",name:"Online",dot:"#3B6FD4"},{id:"Office",name:"Office",dot:"#7A5AF8"},{id:"Call",name:"Call",dot:"#B4531B"}];
+const MEETINGS = [
+  ["Discovery call","Northwind Studio","Online","Held","2026-10-19","10:00","ana"],
+  ["Site visit","Kestrel Logistics","Visit","Held","2026-10-20","14:00","aleks"],
+  ["Pricing review","Tidewater Foods","Office","Held","2026-10-21","09:30","aleks"],
+  ["Proposal walkthrough","Dunav Freight","Online","Cancelled","2026-10-22","11:00","marko"],
+  ["Showroom visit","Palić Winery","Visit","Planned","2026-10-22","16:00","aleks"],
+  ["Check-in call","Ferma Organik","Call","Held","2026-10-23","15:00","ana"],
+  ["Negotiation call","Brightline Studio","Call","Planned","2026-10-24","17:30","aleks"]
+].map(r => ({title:r[0],company:r[1],type:r[2],status:r[3],date:r[4],time:r[5],owner:r[6]}));
+
+const COMPANIES = [
+  ["Brightline Studio","990000019","Private","Design agency","Novi Sad","11–50 staff",1,2,3600,0,"negotiation","aleks","2026-10-22","Referral"],
+  ["Kestrel Logistics","990000027","Private","Logistics","Belgrade","51–200 staff",3,1,0,16800,"won","aleks","2026-10-20","Conference"],
+  ["Orchard Dental Group","990000035","Family-owned","Healthcare","Niš","11–50 staff",1,2,0,5700,"won","aleks","2026-10-24","Referral"],
+  ["Tidewater Foods","990000043","Private","Food production","Belgrade","201–500 staff",1,1,24000,0,"negotiation","aleks","2026-10-21","Inbound web form"],
+  ["Northwind Studio","990000051","Private","Design agency","Belgrade","1–10 staff",1,1,18000,0,"discovery","ana","2026-10-22","Outbound LinkedIn"],
+  ["Dunav Freight","990000069","Public","Logistics","Novi Sad","201–500 staff",2,1,62000,0,"proposal","marko","2026-10-17","Trade fair"]
+].map(r => ({company:r[0],companyId:r[1],ownership:r[2],industry:r[3],hq:r[4],size:r[5],contacts:r[6],opps:r[7],openValue:r[8],lifetimeValue:r[9],stage:r[10],owner:r[11],lastTouch:r[12],source:r[13]}));
+
+const CONTACTS = [
+  ["Ana Kovač","Head of purchasing","Tidewater Foods","ana@tidewater.example.com","+381 24 555 0129","No role yet","aleks"],
+  ["Ana Marković","","","","","No role yet","aleks"],
+  ["Jelena Marković","CFO","Kestrel Logistics","jelena@kestrel.example.com","+381 11 555 0110","Economic buyer","aleks"],
+  ["Mila Petrović","Managing director","Brightline Studio","mila@brightline.example.com","+381 21 555 0142","Decision maker","aleks"],
+  ["Nikola Jovanović","Practice manager","Orchard Dental Group","nikola@orchard.example.com","+381 18 555 0163","Decision maker","aleks"],
+  ["Stefan Ilić","Operations manager","Kestrel Logistics","stefan@kestrel.example.com","+381 11 555 0187","Champion","aleks"],
+  ["Petar Ilić","Marketing director","Dunav Freight","p.ilic@dunav.example.com","+381 11 402 771","Influencer","marko"]
+].map(r => ({name:r[0],role:r[1],company:r[2],email:r[3],phone:r[4],buyerRole:r[5],owner:r[6]}));
+
+const PRODUCTS = [
+  ["Annual licence","One seat for a year",4800,"seat","20%","Annually",4],
+  ["Onboarding workshop","A day on site to set up the team",1200,"day","20%","One time",2],
+  ["Support hours","Help after go-live",90,"hour","20%","One time",2],
+  ["Hosting","Managed hosting per month",150,"month","10%","Monthly",0]
+].map(r => ({name:r[0],desc:r[1],unitPrice:r[2],unit:r[3],tax:r[4],billing:r[5],inUse:r[6]}));
+
+const STAGE_OPTS = STAGES.map(s => ({id:s.id,name:s.name,dot:s.dot,ring:s.ring,sub:s.sub}));
+const STAGE_PLAIN = STAGES.map(s => ({id:s.id,name:s.name,dot:s.dot,ring:s.ring}));
+const P = (ids, list) => list.map(f => ids.includes(f.id) ? { ...f, pinned:true } : f);
+const OPP_FIELDS = [
+  {id:"funnel",label:"Funnel",group:"Opportunity",kind:"list",single:true,required:true,options:FUNNELS,icon:"funnel"},
+  {id:"owner",label:"Salesperson",group:"Opportunity",kind:"person"},
+  {id:"stage",label:"Status",group:"Opportunity",kind:"list",groupLabel:"Open",options:STAGE_OPTS,icon:"status"},
+  {id:"close",label:"Closing date",group:"Opportunity",kind:"date"},
+  {id:"value",label:"Value",group:"Opportunity",kind:"number",unit:"€",icon:"value"},
+  {id:"source",label:"Source",group:"Opportunity",kind:"list",options:uniq(OPPS.map(o => o.source))},
+  {id:"lastTouch",label:"Last touch",group:"Opportunity",kind:"date"},
+  {id:"nextStep",label:"Next step",group:"Opportunity",kind:"text"},
+  {id:"company",label:"Company",group:"Company",kind:"list",options:uniq(OPPS.map(o => o.company)),icon:"company"},
+  {id:"industry",label:"Industry",group:"Company",kind:"list",options:uniq(OPPS.map(o => o.industry))},
+  {id:"contact",label:"Contact",group:"Contact",kind:"text"}
+];
+const PAGES = {
+  pipeline: { title:"Pipeline", noun:"opportunities", primary:"New opportunity", fields: P(["funnel","owner","stage"], OPP_FIELDS),
+    def: { order:["funnel","owner","stage"], f:{ funnel:{vals:[FUNNELS[0]]}, owner:{vals:[ME]}, stage:{op:"is",vals:[...OPEN,"won"]} } } },
+  overview: { title:"Overview", noun:"opportunities", primary:"", fields: P(["funnel","owner","close"], OPP_FIELDS),
+    def: { order:["funnel","owner","close"], f:{ funnel:{vals:[FUNNELS[0]]}, owner:{vals:[]}, close:{} } } },
+  today: { title:"Today", noun:"tasks", primary:"New task", fields: [
+      {id:"owner",label:"Salesperson",group:"Task",kind:"person",pinned:true},
+      {id:"type",label:"Type",group:"Task",kind:"list",options:["Email","Meeting","Call","Research task"]},
+      {id:"due",label:"Due date",group:"Task",kind:"date"},
+      {id:"stage",label:"Stage",group:"Opportunity",kind:"list",options:STAGE_PLAIN,icon:"status"},
+      {id:"company",label:"Company",group:"Opportunity",kind:"list",options:uniq(TASKS.map(t => t.company)),icon:"company"}],
+    def: { order:["owner"], f:{ owner:{vals:[ME]} } } },
+  calendar: { title:"Calendar", noun:"meetings", primary:"New meeting", fields: [
+      {id:"owner",label:"Salesperson",group:"Meeting",kind:"person",pinned:true},
+      {id:"type",label:"Type",group:"Meeting",kind:"list",options:MTYPES,pinned:true},
+      {id:"status",label:"Status",group:"Meeting",kind:"list",options:["Planned","Held","Cancelled"],pinned:true,icon:"status"},
+      {id:"date",label:"Date",group:"Meeting",kind:"date"},
+      {id:"company",label:"Company",group:"Company",kind:"list",options:uniq(MEETINGS.map(m => m.company)),icon:"company"}],
+    def: { order:["owner","type","status"], f:{ owner:{vals:[]}, type:{op:"is",vals:[]}, status:{op:"is",vals:["Planned","Held"]} } } },
+  companies: { title:"Companies", noun:"companies", primary:"New company", fields: [
+      {id:"owner",label:"Salesperson",group:"Company",kind:"person",pinned:true},
+      {id:"industry",label:"Industry",group:"Company",kind:"list",options:uniq(COMPANIES.map(c => c.industry))},
+      {id:"hq",label:"HQ",group:"Company",kind:"list",options:uniq(COMPANIES.map(c => c.hq))},
+      {id:"size",label:"Team size",group:"Company",kind:"list",options:["1–10 staff","11–50 staff","51–200 staff","201–500 staff","500+ staff"]},
+      {id:"ownership",label:"Ownership",group:"Company",kind:"list",options:["Private","Public","Family-owned"]},
+      {id:"companyId",label:"Company ID",group:"Company",kind:"text"},
+      {id:"source",label:"Source",group:"Company",kind:"list",options:uniq(COMPANIES.map(c => c.source))},
+      {id:"lastTouch",label:"Last touch",group:"Company",kind:"date"},
+      {id:"stage",label:"Latest stage",group:"Opportunities",kind:"list",options:STAGE_PLAIN,icon:"status"},
+      {id:"opps",label:"Opportunities",group:"Opportunities",kind:"number"},
+      {id:"openValue",label:"Open value",group:"Opportunities",kind:"number",unit:"€",icon:"value"},
+      {id:"lifetimeValue",label:"Lifetime value",group:"Opportunities",kind:"number",unit:"€",icon:"value"},
+      {id:"contacts",label:"Contacts",group:"Opportunities",kind:"number"}],
+    def: { order:["owner"], f:{ owner:{vals:[]} } } },
+  contacts: { title:"Contacts", noun:"contacts", primary:"New contact", fields: [
+      {id:"owner",label:"Salesperson",group:"Contact",kind:"person",pinned:true},
+      {id:"buyerRole",label:"Buyer role",group:"Contact",kind:"list",options:["No role yet","Decision maker","Economic buyer","Champion","Influencer"]},
+      {id:"role",label:"Role",group:"Contact",kind:"text"},
+      {id:"email",label:"Email",group:"Contact",kind:"text"},
+      {id:"phone",label:"Phone",group:"Contact",kind:"text"},
+      {id:"company",label:"Company",group:"Company",kind:"list",options:uniq(CONTACTS.map(c => c.company)),icon:"company"}],
+    def: { order:["owner"], f:{ owner:{vals:[]} } } },
+  products: { title:"Products & services", noun:"products", primary:"New product", fields: [
+      {id:"billing",label:"Billing frequency",group:"Product",kind:"list",options:["One time","Monthly","Annually"]},
+      {id:"unit",label:"Unit",group:"Product",kind:"list",options:uniq(PRODUCTS.map(p => p.unit))},
+      {id:"unitPrice",label:"Unit price",group:"Product",kind:"number",unit:"€",icon:"value"},
+      {id:"tax",label:"Tax",group:"Product",kind:"list",options:["0%","10%","20%"]},
+      {id:"inUse",label:"In use",group:"Product",kind:"number"},
+      {id:"desc",label:"Description",group:"Product",kind:"text"}],
+    def: { order:[], f:{} } }
+};
+const NAV = [
+  ["overview","Overview","M4 19V5M4 19h16M8 16v-4M12 16V8M16 16v-6"],
+  ["pipeline","Pipeline","M4 5h5v14H4zM15 5h5v9h-5z"],
+  ["today","Today","M5 5h14v14H5zM9 12l2 2 4-4"],
+  ["calendar","Calendar","M5 6h14v14H5zM5 10h14M9 3v4M15 3v4"],
+  ["companies","Companies","M4 20V6l8-3v17M12 9h8v11M7 9h2M7 13h2M15 13h2"],
+  ["contacts","Contacts","M16 19c0-2.2-1.8-4-4-4s-4 1.8-4 4M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"],
+  ["products","Products","M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9"]
+];
+
+function isActive(fd, v) {
+  if (!v) return false;
+  if (fd.kind === "date") return !!v.preset && (v.preset !== "custom" || !!(v.from || v.to));
+  if (fd.kind === "number") return !!(v.min || v.max);
+  if (fd.kind === "text") return v.op === "isempty" || v.op === "notempty" || !!(v.text || "").trim();
+  return (v.vals || []).length > 0;
+}
+function matches(rec, fields, val) {
+  return val.order.every(id => {
+    const fd = fields.find(f => f.id === id), v = val.f[id];
+    if (!fd || !isActive(fd, v)) return true;
+    const x = rec[id];
+    if (fd.kind === "list") { const hit = v.vals.includes(x); return v.op === "isnot" ? !hit : hit; }
+    if (fd.kind === "person") return v.vals.includes(x);
+    if (fd.kind === "number") return (!v.min || x >= Number(v.min)) && (!v.max || x <= Number(v.max));
+    if (fd.kind === "text") { const t = (x || "").toLowerCase(); return v.op === "isempty" ? !t : v.op === "notempty" ? !!t : t.includes(v.text.trim().toLowerCase()); }
+    if (fd.kind === "date") {
+      if (!x) return false; const c = parse(x);
+      if (v.preset === "custom") return (!v.from || c >= parse(v.from)) && (!v.to || c <= parse(v.to));
+      const [a, b] = RANGES[v.preset]; return c >= a && c <= b;
+    }
+    return true;
+  });
+}
+const plural = (n, noun) => n + " " + (n === 1 ? noun.replace(/ies$/, "y").replace(/s$/, "") : noun);
+const cell = (text, o = {}) => ({ text: text === "" || text == null ? "—" : String(text), weight: o.weight || 400, fg: o.fg || (o.muted ? "#475750" : "#0F1B16"),
+  bg: o.bg || "transparent", pad: o.bg ? "2px 8px" : "0", size: o.bg ? "12px" : "13.5px", items: o.right ? "flex-end" : "flex-start", hasSub: !!o.sub, sub: o.sub || "" });
+
+class Component extends DCLogic {
+  state = { page:"pipeline", view:"board", filters: Object.fromEntries(Object.entries(PAGES).map(([k, p]) => [k, p.def])) };
+  renderVals() {
+    const s = this.state, pg = PAGES[s.page], val = s.filters[s.page];
+    const setFilter = v => this.setState(st => ({ filters:{ ...st.filters, [st.page]: v } }));
+    const pinned = pg.fields.filter(f => f.pinned).map(f => f.id);
+    const clearAll = () => { const f = {}; pinned.forEach(id => { const fd = pg.fields.find(x => x.id === id); f[id] = fd.required ? val.f[id] : { op: fd.kind === "text" ? "contains" : "is", vals:[] }; }); setFilter({ order: pinned, f }); };
+    const m = rec => matches(rec, pg.fields, val);
+    const out = { page:s.page, title:pg.title, fields:pg.fields, filterVal:val, setFilter, people:PEOPLE, me:ME, clearAll,
+      primary:pg.primary, hasPrimary:!!pg.primary,
+      isPipeline: s.page === "pipeline", isOverview: s.page === "overview", isToday: s.page === "today", isCalendar: s.page === "calendar",
+      showBoard:false, showOppList:false, hasTable:false, empty:false, emptyTitle:"No " + pg.noun + " match these filters",
+      nav: NAV.map(([id, label, icon]) => ({ label, icon, go: () => this.setState({ page:id }),
+        bg: s.page === id ? "#2F7A5E" : "transparent", fg: s.page === id ? "#FFFFFF" : "#93A39B", weight: s.page === id ? 600 : 500 })),
+      viewBtns: [["board","Board","M4 5h5v14H4zM15 5h5v9h-5z"],["list","List","M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"]].map(([k, t, icon]) => ({ title:t, icon,
+        pick: () => this.setState({ view:k }), bg: s.view === k ? "#0F1B16" : "transparent", fg: s.view === k ? "#FFFFFF" : "#475750" }))
+    };
+    if (s.page === "pipeline" || s.page === "overview") {
+      const list = OPPS.filter(m);
+      const open = list.filter(o => OPEN.includes(o.stage)), won = list.filter(o => o.stage === "won");
+      const sum = a => a.reduce((x, o) => x + o.value, 0);
+      if (s.page === "pipeline") {
+        out.countLine = plural(open.length, "open opportunities") + " · " + eurFull(sum(open));
+        const sv = val.f.stage, shown = isActive(pg.fields.find(f => f.id === "stage"), sv) ? STAGES.filter(st => sv.op === "isnot" ? !sv.vals.includes(st.id) : sv.vals.includes(st.id)) : STAGES;
+        out.columns = shown.map(st => { const cs = list.filter(o => o.stage === st.id);
+          return { name: st.name, meta: eur(sum(cs)) + " · " + cs.length, empty: cs.length === 0,
+            cards: cs.map(o => { const d = daysAgo(o.lastTouch);
+              return { company:o.company, value:eurFull(o.value), contact:o.contact, touch: d === 0 ? "Active today" : d + "d since contact", touchFg: d > 3 && OPEN.includes(o.stage) ? "#B42318" : "#475750", hasNext: !!o.nextStep, next: "Next: " + o.nextStep }; }) }; });
+        out.showBoard = s.view === "board" && list.length > 0;
+        out.showOppList = s.view === "list" && list.length > 0;
+        out.oppRows = list.map(o => { const st = stage(o.stage); return { company:o.company, stage:st.name, dot:st.dot, ring:st.ring || "none", owner:pname(o.owner), value:eur(o.value), close:fmtD(o.close) }; });
+        out.empty = list.length === 0;
+      } else {
+        out.countLine = plural(list.length, "opportunities") + " in view";
+        const weighted = open.reduce((x, o) => x + o.value * stage(o.stage).p, 0);
+        const stalled = open.filter(o => daysAgo(o.lastTouch) > 3);
+        out.metrics = [
+          { label:"Open pipeline", value:eur(sum(open)), note: plural(open.length, "open opportunities") },
+          { label:"Weighted pipeline", value:eur(Math.round(weighted)), note:"Open value × each stage's win probability" },
+          { label:"Won", value:eur(sum(won)), note: plural(won.length, "opportunities") + " won" },
+          { label:"Stalled", value:String(stalled.length), note:"Open, with no contact for 3+ days" }
+        ];
+        const max = Math.max(1, ...STAGES.map(st => sum(list.filter(o => o.stage === st.id))));
+        out.stageBars = STAGES.filter(st => st.id !== "lost").map(st => { const cs = list.filter(o => o.stage === st.id), v = sum(cs);
+          return { name:st.name, dot:st.dot, width: Math.round(v / max * 100) + "%", meta: plural(cs.length, "opportunities").replace("opportunities", "opps").replace("opportunity", "opp") + " · " + eur(v) }; });
+      }
+    }
+    if (s.page === "today") {
+      const list = TASKS.filter(m);
+      out.countLine = plural(list.length, "tasks");
+      const mk = t => ({ title:t.title, type:t.type, metaFg: t.due < "2026-10-24" ? "#B42318" : "#475750",
+        meta: [t.company, stage(t.stage).name, t.due < "2026-10-24" ? "was due " + fmtD(t.due) : t.due === "2026-10-24" ? "due today" : "due " + fmtD(t.due), pname(t.owner).split(" ")[0]].join(" · ") });
+      out.taskSections = [["Overdue","#B42318",t => t.due < "2026-10-24"],["Today","#0F1B16",t => t.due === "2026-10-24"],["Coming up","#0F1B16",t => t.due > "2026-10-24"]]
+        .map(([label, color, fn]) => { const ts = list.filter(fn); return { label, color, count: plural(ts.length, "tasks"), tasks: ts.map(mk) }; }).filter(x => x.tasks.length);
+      out.empty = list.length === 0;
+    }
+    if (s.page === "calendar") {
+      const list = MEETINGS.filter(m);
+      out.countLine = plural(list.length, "meetings");
+      out.days = Array.from({ length:7 }, (_, i) => { const d = addDays(new Date(2026,9,19), i), key = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+        const ms = list.filter(x => x.date === key).sort((a, b) => a.time.localeCompare(b.time)), isT = i === 5;
+        return { label: d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"}), weight: isT ? 600 : 400, fg: isT ? "#14503C" : "#0F1B16", none: ms.length === 0,
+          meetings: ms.map(x => ({ time:x.time, title:x.title, meta: x.company + " · " + x.type + " · " + pname(x.owner).split(" ")[0], dot: MTYPES.find(t => t.id === x.type).dot,
+            status:x.status, statusFg: x.status === "Cancelled" ? "#B42318" : x.status === "Held" ? "#14503C" : "#475750", statusBg: x.status === "Cancelled" ? "#FDECEA" : x.status === "Held" ? "#E7F2EE" : "#F2F5F3",
+            deco: x.status === "Cancelled" ? "line-through" : "none", opacity: x.status === "Cancelled" ? 0.7 : 1 })) }; });
+    }
+    const table = (rows, head, cols, min, toCells) => {
+      out.hasTable = rows.length > 0; out.empty = rows.length === 0; out.tableCols = cols; out.tableMin = min;
+      out.tableHead = head.map(h => ({ label: h.replace(/^>/, ""), align: h.startsWith(">") ? "right" : "left" }));
+      out.tableRows = rows.map(r => ({ cells: toCells(r) }));
+    };
+    if (s.page === "companies") {
+      const list = COMPANIES.filter(m); out.countLine = plural(list.length, "companies");
+      table(list, ["Company","Industry","HQ","Team size",">Open value",">Lifetime value","Latest stage","Salesperson","Last touch"],
+        "minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,0.8fr) minmax(0,0.9fr) minmax(0,0.8fr) minmax(0,0.9fr) minmax(0,0.9fr) minmax(0,1.1fr) minmax(0,0.8fr)", "1000px",
+        c => [cell(c.company,{weight:600,sub:"ID " + c.companyId}), cell(c.industry,{muted:1}), cell(c.hq,{muted:1}), cell(c.size,{muted:1}), cell(eurFull(c.openValue),{right:1}), cell(eurFull(c.lifetimeValue),{right:1,muted:1}),
+          cell(stage(c.stage).name,{muted:1}), cell(pname(c.owner),{muted:1}), cell(daysAgo(c.lastTouch) === 0 ? "Today" : daysAgo(c.lastTouch) + "d ago",{muted:1})]);
+    }
+    if (s.page === "contacts") {
+      const list = CONTACTS.filter(m); out.countLine = plural(list.length, "contacts");
+      table(list, ["Contact","Role","Company","Email","Phone","Buyer role","Salesperson"],
+        "minmax(0,1.2fr) minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)", "980px",
+        c => [cell(c.name,{weight:600}), cell(c.role,{muted:1}), cell(c.company,{muted:1}), cell(c.email,{muted:1}), cell(c.phone,{muted:1}),
+          cell(c.buyerRole, c.buyerRole === "No role yet" ? {bg:"#FDF0E4",fg:"#B4531B"} : {bg:"#E7F2EE",fg:"#14503C"}), cell(pname(c.owner),{muted:1})]);
+    }
+    if (s.page === "products") {
+      const list = PRODUCTS.filter(m); out.countLine = plural(list.length, "products");
+      table(list, ["Name",">Unit price","Unit","Tax","Billing frequency",">In use"],
+        "minmax(0,2fr) minmax(0,0.8fr) minmax(0,0.7fr) minmax(0,0.6fr) minmax(0,1fr) minmax(0,1fr)", "760px",
+        p => [cell(p.name,{weight:600,sub:p.desc}), cell(eurFull(p.unitPrice),{right:1}), cell(p.unit,{muted:1}), cell(p.tax,{muted:1}), cell(p.billing,{muted:1}), cell(plural(p.inUse,"opportunities"),{right:1,muted:1})]);
+    }
+    return out;
+  }
+}
+</script>
+</body>
+</html>

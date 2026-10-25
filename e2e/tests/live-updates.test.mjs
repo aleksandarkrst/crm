@@ -4,7 +4,8 @@
 // "Changes" view lists who changed what.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, clickButton, createWorkspace, email, eventually, setValue, signIn, sleep, steps, text, useBrowser, finishOnboarding, testPib } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, createWorkspace, email, eventually, setValue, signIn, sleep, steps, text, useBrowser, finishOnboarding, testPib } from '../lib/harness.mjs';
+import { closePopover, openChip } from '../lib/filters.mjs';
 
 describe('live updates, conflicts and change history', () => {
   const browser = useBrowser();
@@ -54,6 +55,10 @@ describe('live updates, conflicts and change history', () => {
       history.pushState({}, '', '/pipeline');
       dispatchEvent(new PopStateEvent('popstate'));
     });
+    // The Pipeline starts on Ana's own opportunities (CD-366): every salesperson's instead.
+    await openChip(ana, 'owner');
+    await click(ana, '[data-testid="filter-pop-owner"] [data-testid=filter-clear-selection]');
+    await closePopover(ana);
     await ana.waitForFunction(() => document.body.innerText.includes('Lighthouse Lamps Ltd'), { timeout: 10_000 });
     assert.equal(await ana.evaluate(() => window.__notReloaded), true, 'the page was not reloaded');
   });

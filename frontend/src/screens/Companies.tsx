@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
 import { FilterBar, SortHeader, useSort } from '../components/ui';
 import { DataActions } from '../components/DataActions';
 import { EmptyState } from '../components/EmptyState';
+import { FilterEmpty, FilterRow } from '../components/FilterRow';
 import { Screen } from '../components/Layout';
 import { companiesCsv } from '../store/exportCsv';
-import { INDUSTRIES } from '../store/seed';
-import { type CompanyRecord, companyRecords, salesPeople } from '../store/selectors';
+import { companyPageFields, filterPeople } from '../store/filterFields';
+import { applyFilters, clearAll } from '../store/filters';
+import { type CompanyRecord, companyRecords, todayIso } from '../store/selectors';
 import { useStore } from '../store/store';
+import { usePageFilters } from '../store/usePageFilters';
 
 const COLS = '1.5fr 1fr 0.9fr 0.8fr 1.1fr 1fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1.1fr 1.1fr 0.8fr 1fr';
 type Key = 'name' | 'pib' | 'status' | 'ownership' | 'industry' | 'hq' | 'size' | 'contactCount' | 'oppCount' | 'value' | 'lifetimeValue' | 'stageName' | 'owner' | 'lastTouch' | 'source';
@@ -30,16 +33,14 @@ const HEADERS: { key: Key; label: string }[] = [
 const NUMERIC = new Set<Key>(['value', 'lifetimeValue', 'oppCount', 'contactCount']);
 
 export function Companies() {
-  const { s, addCompany, openCompany } = useStore();
-  const [industry, setIndustry] = useState('Industry');
-  const [owner, setOwner] = useState('Owner');
+  const { s, addCompany, openCompany, session } = useStore();
+  const fields = useMemo(() => companyPageFields(s), [s]);
+  const [filters, setFilters] = usePageFilters('companies', { order: ['owner'], f: { owner: { vals: [] } } });
   const { sort, toggle } = useSort<Key>('name');
 
   // Status sorts in its order (Not interested, Lead, Opportunity, Past client, Client), not by name.
   const sortVal = (c: CompanyRecord) => (sort.key === 'status' ? c.statusRank : NUMERIC.has(sort.key) ? (c[sort.key] as number) : String(c[sort.key] || '').toLowerCase());
-  const rows = companyRecords(s)
-    .filter((c) => industry === 'Industry' || c.industry === industry)
-    .filter((c) => owner === 'Owner' || c.ownerId === owner)
+  const rows = applyFilters(companyRecords(s), fields, filters, { today: todayIso(s.workspace.timezone), fiscalMonth: s.workspace.fiscalMonth })
     .sort((a, b) => {
       const av = sortVal(a);
       const bv = sortVal(b);
@@ -49,21 +50,15 @@ export function Companies() {
   return (
     <Screen title="Companies">
       <FilterBar
-        chips={[
-          { value: industry, options: ['Industry', ...INDUSTRIES], onChange: setIndustry },
-          { value: owner, options: ['Owner', ...salesPeople(s)], onChange: setOwner },
-        ]}
-        dirty={industry !== 'Industry' || owner !== 'Owner'}
-        onClear={() => {
-          setIndustry('Industry');
-          setOwner('Owner');
-        }}
+        row={<FilterRow fields={fields} value={filters} onChange={setFilters} people={filterPeople(s, session.userId)} me={session.userId} />}
         meta={rows.length + (rows.length === 1 ? ' company' : ' companies')}
         extra={<DataActions type="companies" count={rows.length} exportCsv={() => companiesCsv(s, rows)} />}
         action={{ label: 'New company', onClick: addCompany }}
       />
       {companyRecords(s).length === 0 ? (
         <EmptyState title="No companies yet" text="Companies are the organisations you sell to. Add one, or import a list from a CSV file." action={{ label: 'Add company', onClick: addCompany }} />
+      ) : rows.length === 0 ? (
+        <FilterEmpty noun="companies" onClear={() => setFilters(clearAll(fields))} />
       ) : (
         <div className="card" style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 1580 }}>
@@ -72,7 +67,6 @@ export function Companies() {
                 <SortHeader key={h.key} label={h.label} active={sort.key === h.key} dir={sort.dir} onClick={() => toggle(h.key)} />
               ))}
             </div>
-            {rows.length === 0 && <div className="empty-state">No companies match these filters.</div>}
             {rows.map((c) => (
               <div key={c.id} className="table-row clickable" style={{ gridTemplateColumns: COLS }} onClick={() => openCompany(c.id)}>
                 <span style={{ fontWeight: 600 }}>{c.name}</span>

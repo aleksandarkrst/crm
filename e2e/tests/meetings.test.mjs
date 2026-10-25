@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { api, BASE_URL, click, eventually, newUserWithWorkspace, RUN, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
+import { addFilter, chips, chipText, closePopover, pickOption, setOp, typeText } from '../lib/filters.mjs';
 
 const TZ = 'Europe/Belgrade'; // new workspaces use it
 const PHONE = { width: 375, height: 812, isMobile: true, hasTouch: true };
@@ -198,26 +199,39 @@ describe('meeting calendar', () => {
     await timelineHas('Meeting cancelled · Showroom walkthrough');
   });
 
-  step('filter chips live in the URL and survive a reload', async () => {
+  step("a link's filters go into the filter row, which combines with AND and is remembered", async () => {
     const from = isoDay(-30);
     const to = isoDay(30);
     await page.goto(`${BASE_URL}/calendar?view=table&from=${from}&to=${to}&deal=${deal.id}&type=visit`, { waitUntil: 'networkidle0' });
     await page.waitForSelector(`.table-row[data-meeting-id="${meetingId}"]`);
     assert.match(await page.$eval('[data-testid=chip-deal]', (el) => el.innerText), /Acme showroom lights/);
-    assert.equal(await page.$eval('[data-testid=filter-type-visit]', (el) => el.getAttribute('aria-pressed')), 'true');
+    // The link's type is now the Type chip (CD-366), and leaves the URL; the deal stays a URL chip.
+    assert.equal(await chipText(page, 'type'), 'Type Visit');
+    await page.waitForFunction(() => !new URL(location.href).searchParams.has('type'));
+    assert.deepEqual(await chips(page), ['owner', 'type', 'status']);
+    assert.equal(await chipText(page, 'status'), 'Status Planned, Held');
 
-    // Only online meetings: ours (a visit) is gone; both types: it is back. The URL follows.
-    await click(page, '[data-testid=filter-type-visit]');
-    await click(page, '[data-testid=filter-type-online]');
-    await page.waitForFunction(() => new URL(location.href).searchParams.get('type') === 'online');
+    // Only online meetings: ours (a visit) is gone; both types: it is back.
+    await pickOption(page, 'type', 'visit');
+    await pickOption(page, 'type', 'online');
     await page.waitForFunction((id) => !document.querySelector(`.table-row[data-meeting-id="${id}"]`), {}, meetingId);
-    await click(page, '[data-testid=filter-type-visit]');
-    await page.waitForFunction(() => new URL(location.href).searchParams.get('type') === 'online,visit');
+    await pickOption(page, 'type', 'visit');
+    await closePopover(page);
+    assert.equal(await chipText(page, 'type'), 'Type Visit, Online');
+    await page.waitForSelector(`.table-row[data-meeting-id="${meetingId}"]`);
+
+    // An added Title chip on top: "contains" keeps it, "is empty" leaves it out; Remove filter.
+    await addFilter(page, 'title');
+    await typeText(page, 'title', 'showroom');
+    await page.waitForSelector(`.table-row[data-meeting-id="${meetingId}"]`);
+    await setOp(page, 'title', 'isempty');
+    await page.waitForFunction((id) => !document.querySelector(`.table-row[data-meeting-id="${id}"]`), {}, meetingId);
+    await click(page, '[data-testid="filter-pop-title"] [data-testid=filter-remove]');
     await page.waitForSelector(`.table-row[data-meeting-id="${meetingId}"]`);
 
     await page.reload({ waitUntil: 'networkidle0' });
     await page.waitForSelector(`.table-row[data-meeting-id="${meetingId}"]`);
-    assert.equal(await page.$eval('[data-testid=filter-type-online]', (el) => el.getAttribute('aria-pressed')), 'true');
+    assert.equal(await chipText(page, 'type'), 'Type Visit, Online', 'remembered');
     assert.equal(await page.$eval('[data-testid=view-table]', (el) => el.getAttribute('aria-selected')), 'true');
     assert.equal(await page.$eval('[data-testid=cal-from]', (el) => el.value), from);
 
@@ -226,8 +240,8 @@ describe('meeting calendar', () => {
     await page.waitForFunction(() => new URL(location.href).searchParams.get('view') === 'week');
     const params = new URL(page.url()).searchParams;
     assert.equal(params.get('deal'), deal.id);
-    assert.equal(params.get('type'), 'online,visit');
     assert.equal(params.get('date'), from);
+    assert.equal(await chipText(page, 'type'), 'Type Visit, Online');
 
     await click(page, '[data-testid=chip-deal] button');
     await page.waitForFunction(() => !new URL(location.href).searchParams.has('deal'));
@@ -240,11 +254,12 @@ describe('meeting calendar', () => {
     await page.waitForSelector('[data-testid=meetings-card]');
     await click(page, '[data-testid=meetings-show-all]');
     await page.waitForFunction(() => location.pathname === '/calendar');
-    const params = new URL(page.url()).searchParams;
-    assert.equal(params.get('view'), 'table');
-    assert.equal(params.get('company'), company.id);
+    assert.equal(new URL(page.url()).searchParams.get('view'), 'table');
     await page.waitForSelector(`[data-testid=meeting-table] .table-row[data-meeting-id="${meetingId}"]`);
-    assert.equal(await page.$eval('[data-testid=filter-company]', (el) => el.value), company.id);
+    // The link's company is a Company chip of the row; its other filters are the link's (every type).
+    assert.deepEqual(await chips(page), ['owner', 'type', 'status', 'company.company']);
+    assert.match(await chipText(page, 'company.company'), /^Company /);
+    assert.equal(await chipText(page, 'type'), 'Type Any');
   });
 
   step('without a planned meeting to come, the opportunity has no next step', async () => {

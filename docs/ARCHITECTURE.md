@@ -14,6 +14,7 @@ grep the heading below, then read from that line to the next heading of the same
 - [Funnels and stages](#funnels-and-stages)
 - [Deal outcome: open, won, lost](#deal-outcome-open-won-lost)
   - [Pipeline views (CD-274)](#pipeline-views-cd-274)
+  - [Filter row (CD-366)](#filter-row-cd-366)
 - [CSV import and export](#csv-import-and-export)
   - [Import (CD-64)](#import-cd-64)
   - [Export (CD-65)](#export-cd-65)
@@ -291,21 +292,46 @@ the Overview audience filter).
 - Every deal response carries `outcome` (`open` / `won` / `lost`), and `GET /api/crm/deals` takes
   `?outcome=`.
 - In the UI, the deal screen has **Mark as lost** (a dialog with the reason and a note) and shows
-  "Lost · <reason>" with **Reopen**. The Pipeline board hides lost deals unless its last filter chip
-  says "Include lost deals" or "Lost deals only". Overview leaves lost deals out of open and weighted
+  "Lost · <reason>" with **Reopen**. The Pipeline shows lost deals when its Status chip includes Lost
+  (by default it is "Open, Won", CD-366). Overview leaves lost deals out of open and weighted
   pipeline, stalled deals, the funnel, payments due and bonuses.
 
 ### Pipeline views (CD-274)
 
-- The Pipeline bar starts with a **Kanban / Table** toggle and the **funnel select** with a pencil
-  that opens Settings → Funnel builder (which edits the selected funnel); then the filters
-  (Salesperson, Industry, Value, lost view), the meta line, "⋯" (import and export) and **New deal**.
+- The Pipeline bar starts with a **Kanban / Table** toggle, the **funnel select** with a pencil that
+  opens Settings → Funnel builder (which edits the selected funnel), then the filter row (see below),
+  the meta line, "⋯" (import and export) and **New opportunity**.
 - **Table** shows the same deals as the board, with the same filters: one band per stage that has
   deals (stage name, open value, count), with the columns Deal (company and title), Contact, Stage,
   Value, Fit, Last contact, Owner and Next step. A row opens the deal; no rows show "No deals
   match these filters."
 - The chosen view is a per-browser convenience (`localStorage` `crm.pipelineView.<userId>.<tenantId>`,
   in try/catch; without storage it starts on Kanban).
+
+### Filter row (CD-366)
+
+- Overview, Pipeline, Today, Calendar, Companies, Contacts and Products filter with one component,
+  `FilterRow` (`components/FilterRow.tsx`): the page's pinned chips, chips added with **+ Filter**,
+  and **Clear filters**. The logic is pure and unit-tested (`store/filters.ts`,
+  `test/filters.test.ts`): matching per field kind (list with is / is not, person, date presets,
+  number range, text contains / empty / not empty, checkbox), the chip's text, Clear filters (pinned
+  chips back to Any, added chips go). Chips combine with AND. A grouped list ("Open" on Status) saves
+  the whole group as one value (`GROUP`), which stands for the funnel's open stages of the moment, so
+  a stage added later is in it; a saved chip drops values its field no longer offers (`pruneList`).
+- What each page offers is in `store/filterFields.ts`: every system field of the page's records and
+  of the records they belong to (a deal's company and primary contact, a meeting's company), plus
+  every custom field (CD-15) by its type, so a new custom field needs no code.
+- The funnel is not a chip (owner's call, 24 Oct). Pipeline: the select next to the view toggle is
+  `s.segment` (the funnel the rest of the app opens); Status ("Open, Won" by default) replaces the
+  old "lost" view (Won and Lost are values next to the open stages) and picks the columns. Overview:
+  the **Audience** select (all funnels or one), kept with the page's filters, so Clear filters resets
+  it; on all funnels Status lists every funnel's stages.
+- The value is a per-browser convenience like the Pipeline view: `localStorage`
+  `crm.filters.<userId>.<tenantId>.<page>` (`store/usePageFilters.ts`, in try/catch, the page's
+  defaults without it). The Calendar still reads a link's `user`, `type`, `status` and `company`
+  (reports, a record's "Show all") into the row for that visit and removes them from the URL; it
+  asks the API for what it can (one salesperson, the types and statuses, one company) and filters
+  the rest of the row in the browser.
 
 ## CSV import and export
 
@@ -392,8 +418,8 @@ description, unit price, unit, quantity, tax %, billing frequency ("One time", "
 product export has the same columns plus the id, so an exported file imports back.
 
 The file is built in the browser (`store/exportCsv.ts`, `lib/csv.ts`), not on the server, because
-"what the screen shows" is defined by filters that exist only in the UI (stalled days, value bands,
-company industry on deals, the lost view, owner labels for former members). A server export would
+"what the screen shows" is defined by filters that exist only in the UI (the filter row's fields of a
+deal's company and contact, its Status with Lost, owner labels for former members). A server export would
 have to repeat them in SQL and could drift. Members can already read these rows through the list
 endpoints, so a server export would not protect any data; the owner/admin rule is a product rule,
 applied in the UI. Revisit this if exports need an audit trail or outgrow the data the browser has.
@@ -1107,10 +1133,8 @@ the store is the one place that talks to the backend.
     filters) and the dates of timeline entries and completed to-dos use the workspace time zone,
     not the browser's (`todayIso(tz)`, `momentLabel`). Due dates and closing dates are calendar
     dates and aren't converted.
-  - **Fiscal year**: Overview's "this quarter", "next quarter" and "this year" closing-date filters
-    count from the fiscal-year start month (`closeRangeOf`). When it isn't January they read
-    "Closing this fiscal quarter" / "… fiscal year" (`dateRangeLabel`); the stored filter value
-    stays the same.
+  - **Fiscal year**: the filter row's "This quarter" date preset counts from the fiscal-year start
+    month (`presetRange` in `store/filters.ts`).
 - Profile (**Profile settings**, `GET/PATCH /api/profile`, always the caller's own): name, job title,
   phone, language, date format and start page live on `users` and apply in every workspace. The
   default funnel and the notification settings (daily digest, deal assigned) live on
