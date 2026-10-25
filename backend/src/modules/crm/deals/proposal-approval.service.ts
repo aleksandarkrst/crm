@@ -45,6 +45,8 @@ export class ProposalApprovalService {
       const task = await this.tasks.insertExtra(tx, ctx, dealId, {
         stageId: d.stageId,
         label: 'Approve the proposal',
+        // A note-type task: without a channel the app would label it "Research task".
+        channel: 'NT',
         blocksAdvance: false,
         assigneeUserId: d.approverUserId,
         dueDate: zonedParts(new Date(), workspace?.timezone ?? 'UTC').date,
@@ -64,7 +66,8 @@ export class ProposalApprovalService {
       if (status === 'approved') throw new ConflictException('The proposal is already approved.');
       if (status === 'not_requested') throw new ConflictException('Nobody has requested approval yet.');
       await closeApprovalTask(tx, ctx, dealId, d.approvalTaskId, true);
-      await tx.update(deals).set({ approvedAt: new Date(), approvedByUserId: ctx.userId, approvalTaskId: null }).where(eq(deals.id, dealId));
+      // The ticked task stays linked, so a revoke or a reset later removes it too (QA, 25 Oct).
+      await tx.update(deals).set({ approvedAt: new Date(), approvedByUserId: ctx.userId }).where(eq(deals.id, dealId));
       await this.log(tx, ctx, dealId, 'Proposal approved', null);
       await this.audit.record(tx, ctx, { action: 'deal.approved', entityType: 'deal', entityId: dealId });
     });
