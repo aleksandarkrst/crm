@@ -305,7 +305,7 @@ function CompleteCompany({ companyId }: { companyId: string }) {
       {label}
       {input}
       {errors[k] && (
-        <span role="alert" style={{ fontSize: 12, color: 'var(--danger)' }}>
+        <span role="alert" style={{ fontSize: 12, color: 'var(--danger)', textTransform: 'none', letterSpacing: 0 }}>
           {errors[k]}
         </span>
       )}
