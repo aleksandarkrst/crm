@@ -292,11 +292,14 @@ the Overview audience filter).
   the deal's current stage, assigned to them, due the workspace's today), so it shows on their
   Today and in the digest; `deals.approval_task_id` points at it. Approving ticks it; declining,
   revoking and a reset delete it (`closeApprovalTask`), all in the request's transaction.
-  Changing the funnel's approver, or switching approval off, resets requests still waiting (and
-  their task), so nobody keeps a task they can no longer act on.
+  Changing the funnel's approver resets requests still waiting (and their task), so nobody keeps a
+  task they can no longer act on; switching approval off resets approved ones too, so switching it
+  on again starts afresh.
 - What was approved must still stand: a new Proposal (generated or uploaded), deleting the
   Proposal, or moving the deal to another funnel clears the request and approval
-  (`resetApproval`, which also removes the approver's open task). Every step is an activity ("Approval requested", "Proposal approved",
+  (`resetApproval`, which also removes the approver's open task). A new or deleted Proposal also
+  clears `proposal_sent_at` (`proposalReplaced`), with or without approval, so the new one is sent
+  again. "Send proposal" needs an open deal and a ready Proposal. Every step is an activity ("Approval requested", "Proposal approved",
   "Proposal approval revoked", "Proposal sent", "… reset") and an audit row.
 - The daily digest lists "Proposals waiting for your approval" to the funnel's approver.
 - In the app there is no separate approval card: the proposal's next step sits at the bottom of
@@ -555,7 +558,9 @@ with one type per file: Proposal, Price list, Technical specification, Contract 
 list, Other). PDF, DOCX or XLSX by extension and first bytes, up to 25 MB each. They are
 `deal_documents` rows with `source = 'uploaded'`, `status = 'ready'` and their `mime_type` (the
 download keeps it and its extension). One Proposal per opportunity: two in one upload is a 400, a
-second one a 409 ("delete it first"). Once a Proposal is generated (or being generated) or
+second one a 409 ("delete it first"), uploaded or generated (`currentProposal`: a failed generation
+doesn't count). The Generate dialog leaves out Proposal templates then, and entering a Proposal
+stage doesn't open it. Once a Proposal is generated (or being generated) or
 imported, the tab drops the "Generate automatically / Import my own" choice; "Add documents" opens
 it again for supporting documents: templates other than proposals, and every upload type but Proposal. "Preview built-in proposal" is commented out on the Documents
 tab and in the Generate dialog (owner, 25 Oct); the built-in view still opens from Settings → Document

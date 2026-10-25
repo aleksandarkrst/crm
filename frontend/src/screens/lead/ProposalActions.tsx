@@ -51,14 +51,25 @@ export function ProposalActions({ lead, look = 'tab' }: { lead: Lead; look?: 'ta
             ? `Sent on ${momentLabel(a.sentAt, tz)}.`
             : undefined;
   // Why Request approval can't be pressed: shown as text, since a disabled button's title never shows on touch.
-  const blocked = lead.outcome === 'open' && status === 'not_requested' ? (!approverId ? 'This funnel has no approver yet. An admin picks one in Settings → Funnels.' : noProposal ? 'Generate the proposal or import your own first.' : null) : null;
+  const blocked =
+    lead.outcome !== 'open'
+      ? null
+      : status === 'not_requested'
+        ? !approverId
+          ? 'This funnel has no approver yet. An admin picks one in Settings → Funnels.'
+          : noProposal
+            ? 'Generate the proposal or import your own first.'
+            : null
+        : (status === 'not_required' || status === 'approved') && !a.sentAt && noProposal
+          ? 'Generate the proposal or import your own first.'
+          : null;
   const badge = status === 'approved' ? 'badge-brand' : status === 'pending' ? 'badge-warn' : 'badge-neutral';
   const send = a.sentAt ? (
     <button type="button" className={primary} data-testid="proposal-send" disabled title={`Sent on ${momentLabel(a.sentAt, tz)}`}>
       Proposal sent
     </button>
   ) : (
-    <button type="button" className={primary} data-testid="proposal-send" disabled={busy} title="Emailing proposals is coming soon; this marks the proposal as sent." onClick={() => run(() => markProposalSent(lead.id))}>
+    <button type="button" className={primary} data-testid="proposal-send" disabled={busy || noProposal} title="Emailing proposals is coming soon; this marks the proposal as sent." onClick={() => run(() => markProposalSent(lead.id))}>
       Send proposal
     </button>
   );

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, ModalHeader } from '../components/ui';
 import { paths } from '../lib/paths';
 import { DocProgress } from '../components/DocProgress';
-import { canManageTemplates, DOC_TYPES, type DocType, docBusy, fileSize, type ScanResult, suggestedTemplate, templateFileProblem } from '../store/documents';
+import { canManageTemplates, DOC_TYPES, type DocType, docBusy, fileSize, hasLiveProposal, type ScanResult, suggestedTemplate, templateFileProblem } from '../store/documents';
 import { leadById, stageOf } from '../store/selectors';
 import { useStore } from '../store/store';
 import { opportunityCopy } from '../store/wording';
@@ -13,10 +13,15 @@ import { opportunityCopy } from '../store/wording';
  * deal's Documents tab and when a deal enters a stage whose entry document is a Proposal.
  */
 export function GenerationModal() {
-  const { s, set, session, navigate, generateInDialog, downloadDoc } = useStore();
+  const { s, set, session, navigate, generateInDialog, downloadDoc, ensureDocs } = useStore();
   const lead = leadById(s, s.genLead);
   const stageDoc = lead ? stageOf(s, lead).doc : undefined;
-  const templates = s.templates;
+  useEffect(() => {
+    if (s.genLead) ensureDocs(s.genLead);
+  }, [s.genLead, ensureDocs]);
+  // One Proposal per opportunity (CD-120): once it has one, the Proposal templates aren't offered.
+  const hasProposal = !!lead && hasLiveProposal(s.dealDocs[lead.id]);
+  const templates = hasProposal ? s.templates?.filter((t) => t.docType !== 'Proposal') : s.templates;
   const [picked, setPicked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   if (!lead) return null;

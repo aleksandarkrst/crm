@@ -9,7 +9,7 @@ import { JobsService } from '../../../shared/events/jobs.service';
 import { zonedParts } from '../../../shared/time/zoned-time';
 import { userNameOf } from '../owner';
 import { DealTasksService } from './deal-tasks.service';
-import { approvalStatus, closeApprovalTask } from './proposal-approval';
+import { approvalStatus, closeApprovalTask, currentProposal } from './proposal-approval';
 
 /**
  * Proposal approval (CD-120): the funnel says whether proposals need approval and who approves.
@@ -86,6 +86,9 @@ export class ProposalApprovalService {
   /** "Send proposal" (marks it as sent; nothing is emailed yet): blocked until approved when the funnel asks for approval. */
   markSent(ctx: TenantContext, dealId: string) {
     return this.run(ctx, dealId, async (tx, d) => {
+      if (d.isWon || d.lostAt) throw new ConflictException('This opportunity is closed.');
+      const proposal = await currentProposal(tx, dealId);
+      if (!proposal || proposal.status !== 'ready') throw new ConflictException('Add the proposal first: generate it or import your own on the Documents tab.');
       const status = approvalStatus(d.proposalApproval, d);
       if (status !== 'not_required' && status !== 'approved') {
         throw new ConflictException(`The proposal needs approval by ${d.approverName ?? "the funnel's approver"} before it is sent.`);

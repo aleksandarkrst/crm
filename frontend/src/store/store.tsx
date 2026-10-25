@@ -2,7 +2,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { useNavigate } from 'react-router-dom';
 import { type ApiCompanyDetails, type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, type CompanyInput, type ContactInput, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput, type WorkspaceTerms } from '../lib/api';
 import { paths } from '../lib/paths';
-import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference, type UploadType } from './documents';
+import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, hasLiveProposal, type PlaceholderReference, type UploadType } from './documents';
 import { employeeCardActions } from './employeeCard';
 import { connectLive, type LiveEvent } from './live';
 import { meetingActions, meetingKey, newMeetingRuntime, upcomingQuery } from './meetings';
@@ -716,7 +716,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }
       mapLead(leadId, (l) => ({ ...l, stage: stageId, stall: 0, lateDays: 0, outcome: stage?.won ? 'won' : 'open', stageSince: new Date().toISOString() }));
       void save(() => crmApi.moveDeal(leadId, stageId), () => refreshLog(leadId), 'the stage move');
-      if (stage && stage.doc === 'Proposal' && AUTO_GENERATE_DOCS) startGeneration(leadId);
+      // Not when it has its proposal already (one per opportunity, CD-120).
+      if (stage && stage.doc === 'Proposal' && AUTO_GENERATE_DOCS && !hasLiveProposal(cur().dealDocs[leadId])) startGeneration(leadId);
       else if (stage) flash('Moved to ' + stage.name + ' · next activity: ' + stage.activity);
     };
 
@@ -1547,8 +1548,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           set((x) => ({ dealDocs: { ...x.dealDocs, [doc.dealId]: (x.dealDocs[doc.dealId] || []).filter((d) => d.id !== doc.id) } }));
           flash(doc.name + ' deleted');
           void refreshLog(doc.dealId).catch(() => undefined);
-          // Without its proposal, an approval no longer stands (CD-120): read it back.
-          if (doc.docType === 'Proposal') void reload();
+          // Without its proposal, its approval, task and sent date are cleared (CD-120): read that deal back.
+          if (doc.docType === 'Proposal') queueRefresh(['deals', 'tasks'], [], [doc.dealId], 0, { deals: [doc.dealId], tasks: [doc.dealId] });
         } catch (err) {
           flash('Could not delete the document: ' + errText(err), 7000);
         }

@@ -1,7 +1,7 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import type { TenantContext } from '../../../shared/authorization';
 import type { Tx } from '../../../shared/database/database.service';
-import { activities, dealTasks, deals, funnels } from '../../../shared/database/schema';
+import { activities, dealDocuments, dealTasks, deals, funnels } from '../../../shared/database/schema';
 
 /**
  * A proposal's approval (CD-120), one rule per funnel: Not required (the funnel doesn't ask for
@@ -28,6 +28,29 @@ export async function resetApproval(tx: Tx, ctx: TenantContext, dealId: string, 
   await closeApprovalTask(tx, ctx, dealId, row.taskId, false);
   await tx.update(deals).set({ approvalRequestedAt: null, approvalRequestedByUserId: null, approvedAt: null, approvedByUserId: null, approvalTaskId: null }).where(eq(deals.id, dealId));
   await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId, actorUserId: ctx.userId, channel: null, title: row.approved ? 'Proposal approval reset' : 'Approval request reset', detail: why });
+}
+
+/**
+ * The opportunity's proposal changed (CD-120): a new one generated or uploaded, or the one it had
+ * deleted. What was sent and what was approved was the old one, so both are cleared: the new one is
+ * approved (when the funnel asks for it) and sent again. Funnels without approval clear the sent date too.
+ */
+export async function proposalReplaced(tx: Tx, ctx: TenantContext, dealId: string, why: string): Promise<void> {
+  await tx
+    .update(deals)
+    .set({ proposalSentAt: null })
+    .where(and(eq(deals.id, dealId), sql`${deals.proposalSentAt} is not null`));
+  await resetApproval(tx, ctx, dealId, why);
+}
+
+/** The deal's proposal that counts (one per opportunity): any but a failed generation. */
+export async function currentProposal(tx: Tx, dealId: string) {
+  const [row] = await tx
+    .select({ id: dealDocuments.id, name: dealDocuments.name, status: dealDocuments.status })
+    .from(dealDocuments)
+    .where(and(eq(dealDocuments.dealId, dealId), eq(dealDocuments.docType, 'Proposal'), ne(dealDocuments.status, 'failed')))
+    .limit(1);
+  return row;
 }
 
 /**

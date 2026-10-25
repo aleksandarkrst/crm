@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { askConfirm } from '../../components/ConfirmDialog';
 import { DocProgress } from '../../components/DocProgress';
-import { canManageTemplates, type DealDoc, docBusy, docMoment, fileExtension, fileSize, MAX_UPLOAD_FILES, suggestedTemplate, UPLOAD_TYPES, type UploadType, uploadFileProblem } from '../../store/documents';
+import { canManageTemplates, type DealDoc, hasLiveProposal, docBusy, docMoment, fileExtension, fileSize, MAX_UPLOAD_FILES, suggestedTemplate, UPLOAD_TYPES, type UploadType, uploadFileProblem } from '../../store/documents';
 import { stageOf } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
@@ -29,7 +29,7 @@ export function DealDocuments({ lead }: { lead: Lead }) {
 
   const docs = s.dealDocs[lead.id] || [];
   // A proposal generated (or being generated) or imported; a failed generation doesn't count.
-  const settled = docs.some((d) => d.docType === 'Proposal' && d.status !== 'failed');
+  const settled = hasLiveProposal(docs);
   // One Proposal per opportunity: once it has one, "Add documents" offers the other templates only.
   const templates = settled ? s.templates?.filter((t) => t.docType !== 'Proposal') : s.templates;
   const templateId = picked && templates?.some((t) => t.id === picked) ? picked : templates ? suggestedTemplate(templates, stageOf(s, lead).doc)?.id : undefined;

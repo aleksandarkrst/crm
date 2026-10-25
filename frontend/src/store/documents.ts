@@ -149,6 +149,8 @@ export function templateFileProblem(file: File): string | null {
 
 export const canManageTemplates = (role: string) => role === 'owner' || role === 'admin';
 export const docBusy = (d: DealDoc) => d.status === 'queued' || d.status === 'running';
+/** Whether a deal has its proposal (CD-120: one per opportunity), generated or imported; a failed generation doesn't count. */
+export const hasLiveProposal = (docs: DealDoc[] | undefined) => !!docs?.some((d) => d.docType === 'Proposal' && d.status !== 'failed');
 
 /** The template to suggest on a deal: the first one of the stage's document type, else the newest. */
 export function suggestedTemplate(templates: DocTemplate[], docType?: string): DocTemplate | undefined {

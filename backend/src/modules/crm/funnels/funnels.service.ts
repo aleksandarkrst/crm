@@ -199,12 +199,17 @@ export class FunnelsService implements TenantProvisioner, OnModuleInit {
         if (!row) throw new NotFoundException('Funnel not found');
         // Approval needs someone to ask (CD-120).
         if (row.proposalApproval && !row.approverUserId) throw new BadRequestException('Pick the approver for proposals in this funnel');
-        // Requests waiting for someone who no longer decides go back to Not requested, with their task.
+        // Requests waiting for someone who no longer decides go back to Not requested, with their task;
+        // switching approval off clears approved ones too, so switching it on again starts afresh.
         if (before && before.proposalApproval && (!row.proposalApproval || row.approverUserId !== before.approverUserId)) {
           const waiting = await tx
             .select({ id: deals.id })
             .from(deals)
-            .where(and(eq(deals.funnelId, funnelId), sql`${deals.approvalRequestedAt} is not null`, isNull(deals.approvedAt)));
+            .where(
+              row.proposalApproval
+                ? and(eq(deals.funnelId, funnelId), sql`${deals.approvalRequestedAt} is not null`, isNull(deals.approvedAt))
+                : and(eq(deals.funnelId, funnelId), sql`(${deals.approvalRequestedAt} is not null or ${deals.approvedAt} is not null)`),
+            );
           const why = row.proposalApproval ? 'The approver of this funnel changed' : 'Proposal approval was switched off for this funnel';
           for (const d of waiting) await resetApproval(tx, ctx, d.id, why);
         }

@@ -5,6 +5,7 @@
  * uploading your own documents with their type (one Proposal per opportunity).
  */
 import { beforeAll, describe, expect, inject, it } from 'vitest';
+import { starterTemplate } from '../../src/modules/crm/documents/docx';
 import { addMember, call, createTenant, eventually, type Funnel, mailTo, ok, readyCompany, type Session, signIn, waitForMail } from './helpers';
 
 let owner: Session;
@@ -380,5 +381,74 @@ describe('uploading documents', () => {
     expect(await titles(deal.id)).toContain('Proposal approval reset');
     // A new one can be uploaded now.
     await uploadProposal(deal.id);
+  });
+});
+
+describe('one proposal at a time (review, 25 Oct)', () => {
+  /** A Proposal template (the starter one) and a generation from it on a deal. */
+  let templateId: string;
+  const generate = (dealId: string) => call<{ id: string; message: string }>('POST', `/crm/deals/${dealId}/documents`, { ...as(seller), body: { templateId } });
+  beforeAll(async () => {
+    const f = new FormData();
+    f.append('file', new Blob([new Uint8Array(starterTemplate())]), 'proposal.docx');
+    f.append('name', 'Review proposal');
+    f.append('docType', 'Proposal');
+    const res = await fetch(`${inject('apiUrl')}/api/crm/document-templates`, { method: 'POST', headers: { authorization: `Bearer ${owner.token}`, 'x-tenant-id': tenant }, body: f });
+    expect(res.status).toBe(201);
+    templateId = ((await res.json()) as { id: string }).id;
+  });
+
+  it('a replaced proposal is sent again: deleting it clears the sent date, with or without approval', async () => {
+    const deal = await pendingDeal('Review · resend');
+    await step(approver, deal.id, 'approval/approve');
+    expect((await step(seller, deal.id, 'proposal/sent')).body.proposalSentAt).not.toBeNull();
+    const [proposal] = await ok<{ id: string; docType: string }[]>('GET', `/crm/deal-documents?dealId=${deal.id}`, as(seller));
+    await ok('DELETE', `/crm/deal-documents/${proposal!.id}`, as(owner));
+    const after = await ok<Approval>('GET', `/crm/deals/${deal.id}`, as(seller));
+    expect(after).toMatchObject({ approvalStatus: 'not_requested', proposalSentAt: null });
+    await uploadProposal(deal.id);
+    expect((await step(seller, deal.id, 'proposal/sent')).status).toBe(409);
+    await step(seller, deal.id, 'approval/request');
+    await step(approver, deal.id, 'approval/approve');
+    expect((await step(seller, deal.id, 'proposal/sent')).body.proposalSentAt).not.toBeNull();
+
+    // No approval in the funnel: the sent date goes with the proposal too.
+    const free1 = await newDeal('Review · resend, no approval', free);
+    const p = await uploadProposal(free1.id);
+    await step(seller, free1.id, 'proposal/sent');
+    await ok('DELETE', `/crm/deal-documents/${p.id}`, as(owner));
+    expect((await ok<Approval>('GET', `/crm/deals/${free1.id}`, as(seller))).proposalSentAt).toBeNull();
+  });
+
+  it('generating a second Proposal is a 409, after an upload or a generation', async () => {
+    const uploaded = await newDeal('Review · generate after upload', free);
+    await uploadProposal(uploaded.id);
+    const refused = await generate(uploaded.id);
+    expect(refused.status).toBe(409);
+    expect(refused.body.message).toContain('already has a proposal');
+
+    const generated = await newDeal('Review · generate twice', free);
+    expect((await generate(generated.id)).status).toBe(202);
+    expect((await generate(generated.id)).status).toBe(409);
+  });
+
+  it("sending needs the opportunity's proposal", async () => {
+    const deal = await newDeal('Review · send without proposal', free);
+    const refused = await step(seller, deal.id, 'proposal/sent');
+    expect(refused.status).toBe(409);
+    expect((refused.body as unknown as { message: string }).message).toContain('Add the proposal first');
+  });
+
+  it('switching approval off resets approved proposals too; on again, they need approval again', async () => {
+    const deal = await pendingDeal('Review · switched off');
+    await step(approver, deal.id, 'approval/approve');
+    await ok('PATCH', `/crm/funnels/${gated.id}`, { ...as(owner), body: { proposalApproval: false } });
+    try {
+      expect(await statusOf(deal.id)).toBe('not_required');
+    } finally {
+      await ok('PATCH', `/crm/funnels/${gated.id}`, { ...as(owner), body: { proposalApproval: true, approverUserId: approver.userId } });
+    }
+    expect(await statusOf(deal.id)).toBe('not_requested');
+    expect(await titles(deal.id)).toContain('Proposal approval reset');
   });
 });

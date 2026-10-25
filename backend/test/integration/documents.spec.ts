@@ -62,8 +62,9 @@ function form(file: Buffer | null, fileName = 'proposal.docx', fields: Record<st
   return f;
 }
 
-async function upload(s: Session, t: string, file: Buffer = starterTemplate(), name = 'Proposal v1'): Promise<Template> {
-  const res = await raw('POST', '/crm/document-templates', { token: s.token, tenant: t, form: form(file, 'proposal.docx', { name, docType: 'Proposal' }) });
+/** A template; one Proposal per opportunity (CD-120), so tests that generate several on one deal use a Quote. */
+async function upload(s: Session, t: string, file: Buffer = starterTemplate(), name = 'Proposal v1', docType = 'Proposal'): Promise<Template> {
+  const res = await raw('POST', '/crm/document-templates', { token: s.token, tenant: t, form: form(file, 'proposal.docx', { name, docType }) });
   expect(res.status, JSON.stringify(res.json)).toBe(201);
   return res.json as unknown as Template;
 }
@@ -215,7 +216,7 @@ describe('generating a document', () => {
   });
 
   it('keeps unknown fields as written', async () => {
-    const typo = await upload(owner, tenant, buildDocx([{ text: 'Dear {{contact.frist_name}}, total {{total}}' }]), 'Typo');
+    const typo = await upload(owner, tenant, buildDocx([{ text: 'Dear {{contact.frist_name}}, total {{total}}' }]), 'Typo', 'Quote');
     const queued = await ok<Doc>('POST', `/crm/deals/${dealId}/documents`, { token: owner.token, tenant, body: { templateId: typo.id, name: 'Letter' } }, 202);
     const done = await waitForDocument(owner, tenant, queued.id);
     const file = await raw('GET', `/crm/deal-documents/${done.id}/file`, { token: owner.token, tenant });
@@ -259,7 +260,7 @@ describe('an interrupted generation (CD-100)', () => {
     boss = new PgBoss({ connectionString: inject('databaseUrl'), schema: 'pgboss', createSchema: false, supervise: false, schedule: false });
     boss.on('error', () => {});
     await boss.start();
-    template = await upload(owner, tenant, starterTemplate(), 'Proposal — interrupted');
+    template = await upload(owner, tenant, starterTemplate(), 'Quote — interrupted', 'Quote');
     dealId = (await newDeal(owner, tenant, funnelId)).id;
   });
   afterAll(async () => {
@@ -337,7 +338,7 @@ describe('deleting removes the files', () => {
   });
 
   it('a document is deleted by whoever generated it or an admin, with its file', async () => {
-    const template = await upload(owner, tenant);
+    const template = await upload(owner, tenant, starterTemplate(), 'Quote v1', 'Quote');
     const deal = await newDeal(owner, tenant, funnelId);
     const mine = await ok<Doc>('POST', `/crm/deals/${deal.id}/documents`, { token: member.token, tenant, body: { templateId: template.id } }, 202);
     const theirs = await ok<Doc>('POST', `/crm/deals/${deal.id}/documents`, { token: owner.token, tenant, body: { templateId: template.id } }, 202);

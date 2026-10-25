@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
-import { and, desc, eq, ne } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { StorageService } from '../../../infrastructure/storage/storage.service';
 import { AuditService } from '../../../shared/audit/audit.service';
@@ -11,7 +11,7 @@ import { mapDbError } from '../../../shared/database/errors';
 import { activities, companies, dealDocuments, deals, DOCUMENT_TYPES, documentTemplates, UPLOAD_DOCUMENT_TYPES } from '../../../shared/database/schema';
 import { JobsService } from '../../../shared/events/jobs.service';
 import { PaginationQuery } from '../../../shared/validation/common';
-import { resetApproval } from '../deals/proposal-approval';
+import { currentProposal, proposalReplaced } from '../deals/proposal-approval';
 import { userNameOf } from '../owner';
 import { inspectTemplate, MAX_TEMPLATE_BYTES, TemplateFileError } from './docx';
 import { describeTags } from './placeholders';
@@ -226,6 +226,8 @@ export class DocumentsService {
         if (!deal) throw new NotFoundException('Opportunity not found');
         const [template] = await tx.select().from(documentTemplates).where(eq(documentTemplates.id, input.templateId));
         if (!template) throw new BadRequestException('Unknown template');
+        // One Proposal per opportunity, generated or imported (a failed generation doesn't count).
+        if (template.docType === 'Proposal') await assertNoProposal(tx, dealId);
         const [row] = await tx
           .insert(dealDocuments)
           .values({
@@ -238,8 +240,8 @@ export class DocumentsService {
             createdByUserId: ctx.userId,
           })
           .returning({ id: dealDocuments.id });
-        // A new proposal isn't the one that was approved (CD-120).
-        if (template.docType === 'Proposal') await resetApproval(tx, ctx, dealId, 'A new proposal was generated');
+        // A new proposal isn't the one that was approved or sent (CD-120).
+        if (template.docType === 'Proposal') await proposalReplaced(tx, ctx, dealId, 'A new proposal was generated');
         await this.jobs.send('crm.generate-document', { tenantId: ctx.tenantId, documentId: row!.id, actorUserId: ctx.userId }, tx);
         return (await this.findDocument(tx, row!.id))!;
       })
@@ -274,12 +276,8 @@ export class DocumentsService {
         const [deal] = await tx.select({ id: deals.id }).from(deals).where(eq(deals.id, dealId)).for('update');
         if (!deal) throw new NotFoundException('Opportunity not found');
         if (input.types.includes('Proposal')) {
-          const [existing] = await tx
-            .select({ name: dealDocuments.name })
-            .from(dealDocuments)
-            .where(and(eq(dealDocuments.dealId, dealId), eq(dealDocuments.docType, 'Proposal'), ne(dealDocuments.status, 'failed')))
-            .limit(1);
-          if (existing) throw new ConflictException(`This opportunity already has a proposal (${existing.name}). Delete it first, or upload this file as another type.`);
+          await assertNoProposal(tx, dealId);
+          await proposalReplaced(tx, ctx, dealId, 'A new proposal was uploaded');
         }
         const now = new Date();
         await tx.insert(dealDocuments).values(
@@ -319,7 +317,7 @@ export class DocumentsService {
           throw new ForbiddenException('Only owners, admins and the person who generated it can delete a document');
         }
         await tx.delete(dealDocuments).where(eq(dealDocuments.id, id));
-        if (doc.docType === 'Proposal') await resetApproval(tx, ctx, doc.dealId, `The proposal ${doc.name} was deleted`);
+        if (doc.docType === 'Proposal') await proposalReplaced(tx, ctx, doc.dealId, `The proposal ${doc.name} was deleted`);
         await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId: doc.dealId, actorUserId: ctx.userId, channel: 'NT', title: `Document deleted · ${doc.name}`, detail: null });
         await this.audit.record(tx, ctx, { action: 'deal_document.deleted', entityType: 'deal_document', entityId: id, data: { dealId: doc.dealId, name: doc.name } });
         return doc.storageKey;
@@ -371,4 +369,10 @@ export function uploadKind(f: UploadedDocx): UploadKind {
   }
   if (f.size > MAX_UPLOAD_BYTES) throw new BadRequestException(`${f.originalname} is larger than 25 MB`);
   return ext;
+}
+
+/** One Proposal per opportunity (CD-120): a 409 naming the one it has, for a generation or an upload. */
+async function assertNoProposal(tx: Tx, dealId: string): Promise<void> {
+  const existing = await currentProposal(tx, dealId);
+  if (existing) throw new ConflictException(`This opportunity already has a proposal (${existing.name}). Delete it first, or use another document type.`);
 }
