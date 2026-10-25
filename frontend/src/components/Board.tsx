@@ -63,12 +63,12 @@ export function BoardColumn({
   children: ReactNode;
 }) {
   return (
-    <div data-testid={testId} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop} style={{ flex: '0 0 268px', width: 268, border: `1px solid ${active ? '#14503C' : 'transparent'}`, borderRadius: '6px 6px 0 0', display: 'flex', flexDirection: 'column' }}>
+    <div data-testid={testId} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop} style={{ flex: '0 0 268px', width: 268, border: `1px solid ${active ? 'var(--brand)' : 'transparent'}`, borderRadius: '6px 6px 0 0', display: 'flex', flexDirection: 'column' }}>
       <div
         style={{
           position: 'relative',
           width: last ? 268 : 282,
-          background: active ? '#D7E9E1' : '#F4F4F5',
+          background: active ? 'var(--brand-head)' : 'var(--board-column)',
           clipPath: first
             ? 'polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%)'
             : last
@@ -87,7 +87,7 @@ export function BoardColumn({
           <span style={{ fontSize: 11.5, color: 'var(--text-2)' }}>{sub}</span>
         </div>
       </div>
-      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, flex: 1, background: active ? '#E7F2EE' : '#F4F4F5' }}>{children}</div>
+      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, flex: 1, background: active ? 'var(--brand-soft)' : 'var(--board-column)' }}>{children}</div>
     </div>
   );
 }
