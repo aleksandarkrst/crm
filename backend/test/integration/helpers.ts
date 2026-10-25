@@ -184,6 +184,20 @@ export function testPib(): string {
   return first8 + pibCheckDigit(first8);
 }
 
+/** The identity a company needs to be an Opportunity (CD-358), besides its PIB. */
+export const READY_IDENTITY = { mb: '20084693', activityCode: '4941', address: 'Bulevar 10', city: 'Novi Sad', postalCode: '21000' };
+
+/**
+ * A company that can take opportunities (CD-360): complete, with a contact who has a job title, a
+ * role in the decision and an owner, so its status is Opportunity. `extra` adds or overrides fields.
+ */
+export async function readyCompany(s: Session, tenant: string, name = 'Ready Co', extra: Record<string, unknown> = {}): Promise<{ id: string; contactId: string }> {
+  const as = { token: s.token, tenant };
+  const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as, body: { name, pib: testPib(), ...READY_IDENTITY, ...extra } });
+  const contact = await ok<{ id: string }>('POST', '/crm/contacts', { ...as, body: { companyId: company.id, fullName: 'Petar Nikolić', jobTitle: 'CEO', buyerRole: 'Decision maker', ownerUserId: s.userId } });
+  return { id: company.id, contactId: contact.id };
+}
+
 /** `n` distinct valid PIBs (consecutive first digits from a random start), for a big file. */
 export function testPibs(n: number): string[] {
   const start = 10_000_000 + Math.floor(Math.random() * (89_999_999 - n));

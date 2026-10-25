@@ -46,6 +46,8 @@ interface Lookups {
   companiesByPib: Map<string, string>;
   /** Company id → its PIB, for the companies that have one. */
   pibOf: Map<string, string>;
+  /** Company id → its name and status (CD-358): a lead can't take an opportunity (CD-360). */
+  companyStatus: Map<string, { name: string; status: string }>;
   /** lower(email) → contact id. */
   contactsByEmail: Map<string, string>;
   /** lower(trim(name)) → id of the oldest product with that name (CD-81). */
@@ -271,7 +273,9 @@ export class ImportService {
     const companiesByName = new Map<string, string>();
     const companiesByPib = new Map<string, string>();
     const pibOf = new Map<string, string>();
-    for (const c of await tx.select({ id: companies.id, name: companies.name, pib: companies.pib }).from(companies).orderBy(asc(companies.createdAt), asc(companies.id))) {
+    const companyStatus = new Map<string, { name: string; status: string }>();
+    for (const c of await tx.select({ id: companies.id, name: companies.name, pib: companies.pib, status: companies.status }).from(companies).orderBy(asc(companies.createdAt), asc(companies.id))) {
+      companyStatus.set(c.id, { name: c.name, status: c.status });
       if (!companiesByName.has(key(c.name))) companiesByName.set(key(c.name), c.id);
       if (c.pib) {
         companiesByPib.set(c.pib, c.id);
@@ -310,7 +314,7 @@ export class ImportService {
     }
     // tenants has no RLS either.
     const [workspace] = await tx.select({ currency: tenants.currency }).from(tenants).where(eq(tenants.id, ctx.tenantId));
-    return { companiesByName, companiesByPib, pibOf, contactsByEmail, productsByName, productFrequency, members, funnels: fs, currency: workspace?.currency ?? 'EUR' };
+    return { companiesByName, companiesByPib, pibOf, companyStatus, contactsByEmail, productsByName, productFrequency, members, funnels: fs, currency: workspace?.currency ?? 'EUR' };
   }
 
   private defaultFunnel(type: ImportType, lookups: Lookups, funnelId: string | undefined): Funnel | null {
@@ -555,6 +559,7 @@ export class ImportService {
     const parsed = CreateDeal.safeParse({
       title: v.title,
       funnelId: funnel?.id ?? '00000000-0000-4000-8000-000000000000',
+      companyId: '00000000-0000-4000-8000-000000000000', // the row's company, checked below
       source: v.source,
       amount: v.amount ? normalizeAmount(v.amount) : undefined,
       closeDate: v.closeDate ? normalizeDate(v.closeDate) : undefined,
@@ -563,6 +568,14 @@ export class ImportService {
     const names = { title: 'Opportunity', amount: 'Value', closeDate: 'Closing date', source: 'Source', ownerUserId: 'Owner email' };
     if (!parsed.success) errors.push(...zodErrors(parsed.error, undefined, names).filter((m) => !(v.title === '' && m.startsWith('Opportunity:'))));
     const company = v.company ? this.companyRef(v.company, v.companyPib, lk, errors, zodErrors) : undefined;
+    // Only a company that is an opportunity or a client can take one (CD-360): not a lead, and not a
+    // company the import would create (that would be a lead too).
+    if (!v.company) errors.push('Company: an opportunity needs a company of this workspace');
+    else if (company && !('id' in company)) errors.push(`Company: "${company.name}" isn't in this workspace yet; add it and complete it first (only an opportunity or a client can enter the Pipeline)`);
+    else if (company) {
+      const known = lk.companyStatus.get(company.id);
+      if (known?.status === 'lead') errors.push(`Company: ${known.name} is still a lead; only an opportunity or a client can enter the Pipeline`);
+    }
 
     // The primary contact: an existing contact with the email, otherwise a new one when a name is given.
     let contactId = v.contactEmail ? lk.contactsByEmail.get(key(v.contactEmail)) : undefined;
