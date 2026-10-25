@@ -356,6 +356,7 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
       hq: co?.hq ?? '—',
       size: co?.teamSize ?? '—',
       source: deal.source ?? co?.source ?? '—',
+      saleType: deal.saleType ?? '',
       need: deal.need ?? '',
       constraint: deal.constraint ?? '',
       decisionMaker: deal.decisionMaker ?? '',

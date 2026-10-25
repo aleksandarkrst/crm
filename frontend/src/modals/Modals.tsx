@@ -3,12 +3,11 @@ import { CustomFieldInputs, customFieldsForCreate } from '../components/CustomFi
 import { Modal, ModalHeader } from '../components/ui';
 import { type CustomFieldPatch, type CustomFieldType, LOST_REASONS, type LostReason } from '../lib/api';
 import { paths } from '../lib/paths';
-import { pibProblem } from '../lib/serbianIds';
 import { checkEmail, checkPhone } from '../lib/validate';
-import { BUYER_ROLES, CHANNEL_LABELS, FIELD_TYPES } from '../store/seed';
-import { allPeople, companyLabels, companyRecords, customFieldsOf, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
+import { BUYER_ROLES, CHANNEL_LABELS, FIELD_TYPES, SALE_TYPES } from '../store/seed';
+import { allPeople, COMPANY_STATUS_LABELS, companyLabels, companyReadiness, companyRecords, customFieldsOf, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
-import type { ChannelCode, Lead } from '../store/types';
+import type { ChannelCode, CompanyStatus, Lead, SaleType } from '../store/types';
 import { GenerationModal, NewTemplateModal } from './DocumentModals';
 import { DealProductsDialog } from './DealProductsDialog';
 import { MeetingDialog } from './MeetingDialog';
@@ -45,51 +44,57 @@ export function Modals() {
   );
 }
 
-/** Sentinels for "make a new one" in the New deal dialog (never shown). */
-const NEW_CO = '\u0000new-company';
+/** Sentinel for "make a new contact" in the New opportunity dialog (never shown). */
 const NEW_CT = '\u0000new-contact';
 
+/**
+ * New opportunity (CD-360): only for a company that is an opportunity or a client. Leads are
+ * listed but can't be picked; one passed in (from its page) shows what it still misses, with a link
+ * to complete it. "+ New company" opens the New company dialog (a new company is a lead). The sale
+ * type is required; the funnel choice and custom fields are as before.
+ */
 function NewDealModal() {
-  const { s, set, flash, createDeal } = useStore();
+  const { s, set, flash, createDeal, openCompany } = useStore();
   const [busy, setBusy] = useState(false);
   const records = companyRecords(s);
   const labels = companyLabels(records);
-  const companies = records.map((c) => ({ value: c.id, label: labels.get(c.id) ?? c.name })).sort((a, b) => a.label.localeCompare(b.label));
-  // The selected company's id, or NEW_CO.
-  const [company, setCompany] = useState((s.newLeadCompanyId && companies.some((c) => c.value === s.newLeadCompanyId) ? s.newLeadCompanyId : companies[0]?.value) || NEW_CO);
-  const [companyName, setCompanyName] = useState('');
-  const [companyPib, setCompanyPib] = useState('');
-  const [pibTouched, setPibTouched] = useState(false);
+  const statusOf = (id: string): CompanyStatus => s.extraCompanies.find((c) => c.id === id)?.status ?? 'lead';
+  const companies = records
+    .map((c) => ({ value: c.id, label: labels.get(c.id) ?? c.name, status: statusOf(c.id) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const eligible = companies.filter((c) => c.status !== 'lead');
+  // The company passed in (even a lead: it says what is missing), else the first that can take one.
+  const [company, setCompany] = useState(() => (s.newLeadCompanyId && companies.some((c) => c.value === s.newLeadCompanyId) ? s.newLeadCompanyId : (eligible[0]?.value ?? '')));
   const [contactPick, setContactPick] = useState<string | null>(() => allPeople(s).find((p) => p.contactId && p.contactId === s.newLeadContactId)?.name ?? null);
   const [contactName, setContactName] = useState('');
+  const [saleType, setSaleType] = useState<SaleType | null>(null);
+  const [saleTypeMissing, setSaleTypeMissing] = useState(false);
   const type = s.funnels[s.newLeadType] ? s.newLeadType : Object.keys(s.funnels)[0]!;
 
-  const companyIsNew = company === NEW_CO;
   const companyRec = records.find((c) => c.id === company);
-  const companyId = companyRec?.id;
-  const people = companyIsNew ? [] : allPeople(s).filter((p) => p.contactId && p.companyId === companyId);
+  const isLead = !!companyRec && statusOf(companyRec.id) === 'lead';
+  const people = companyRec ? allPeople(s).filter((p) => p.contactId && p.companyId === companyRec.id) : [];
   const contactOptions = [...people.map((p) => p.name), NEW_CT];
   const contact = contactPick && contactOptions.includes(contactPick) ? contactPick : contactOptions[0]!;
   const funnel = s.funnels[type];
   const [custom, setCustom] = useState<CustomFieldPatch>({});
   // From the meeting form (CD-213): the meeting's company stays, and the dialog shows above the meeting's.
   const forMeeting = s.newLeadForMeeting && !!s.newLeadCompanyId && company === s.newLeadCompanyId;
+  const close = () => set({ newLeadOpen: false, newLeadCompanyId: null, newLeadContactId: null, newLeadForMeeting: false });
 
   const create = async () => {
+    if (!companyRec || isLead) return;
+    if (!saleType) return setSaleTypeMissing(true);
     const fields = customFieldsForCreate(customFieldsOf(s, 'deal'), custom);
     if ('missing' in fields) return flash(`Fill in ${fields.missing} first`);
-    // A new company needs its PIB (CD-357), checked here before anything is created.
-    if (companyIsNew && pibProblem(companyPib)) return setPibTouched(true);
-    const coName = companyIsNew ? companyName.trim() || 'New company' : (companyRec?.name ?? '');
-    const co = companyIsNew ? { name: coName, pib: companyPib.replace(/\s/g, '') } : companyId ? { id: companyId, name: coName } : null;
-    if (!co) return flash('Pick a company first');
     const ctName = contact === NEW_CT ? contactName.trim() : contact;
     const person = people.find((p) => p.name === ctName);
     setBusy(true);
     await createDeal({
-      company: co,
+      company: { id: companyRec.id, name: companyRec.name },
       contact: person ? { contactId: person.contactId, name: person.name } : ctName ? { name: ctName } : null,
       segment: type,
+      saleType,
       ...(customFieldsOf(s, 'deal').length ? { customFields: fields.values } : {}),
     });
     setBusy(false);
@@ -97,45 +102,23 @@ function NewDealModal() {
 
   return (
     <Modal maxWidth={560} gap={18} z={s.newLeadForMeeting ? 50 : undefined}>
-      <ModalHeader title="New opportunity" sub="Pick the customer type and the funnel, activities and documents come with it." />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {/* The company and contact (CD-318): pick one, or open a "New company" / "New contact" panel that is created with the deal. */}
+      <ModalHeader title="New opportunity" sub="Pick the company and the funnel; activities and documents come with it. Only a company in status Opportunity or Client can enter the Pipeline." />
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
         <div className="form-label">
           Company
-          {companyIsNew ? (
-            <div className="subform" data-testid="new-deal-new-company">
-              <div className="subform-head">
-                <span>New company</span>
-                {companies.length > 0 && !forMeeting && (
-                  <button type="button" className="btn-link" onClick={() => { setCompany(companies[0]!.value); setContactPick(null); }}>
-                    Pick an existing one
-                  </button>
-                )}
-              </div>
-              <input className="form-input" placeholder="Name as registered in APR" autoFocus value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
-              <input className="form-input" data-testid="new-deal-company-pib" inputMode="numeric" placeholder="Company ID (PIB), 9 digits" aria-label="Company ID (PIB)" value={companyPib} aria-invalid={pibTouched && !!pibProblem(companyPib)} onChange={(e) => setCompanyPib(e.target.value)} onBlur={() => setPibTouched(true)} />
-              {pibTouched && pibProblem(companyPib) && (
-                <span className="subform-hint" role="alert" style={{ color: 'var(--danger)' }}>
-                  {pibProblem(companyPib)}
-                </span>
-              )}
-              <span className="subform-hint">Created as a lead with the opportunity; its page fills in later.</span>
-            </div>
-          ) : (
-            <>
-              <select className="form-input" data-testid="new-deal-company" value={company} disabled={forMeeting} onChange={(e) => { setCompany(e.target.value); setContactPick(null); }}>
-                {companies.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              {!forMeeting && (
-                <button type="button" className="btn-link" data-testid="new-deal-add-company" onClick={() => { setCompany(NEW_CO); setContactPick(null); }}>
-                  + New company
-                </button>
-              )}
-            </>
+          <select className="form-input" data-testid="new-deal-company" value={company} disabled={forMeeting} onChange={(e) => { setCompany(e.target.value); setContactPick(null); }}>
+            {!companyRec && <option value="">No company can take one yet</option>}
+            {companies.map((o) => (
+              <option key={o.value} value={o.value} disabled={o.status === 'lead' && o.value !== company}>
+                {o.label} · {o.status === 'lead' ? 'Lead (not eligible)' : COMPANY_STATUS_LABELS[o.status]}
+              </option>
+            ))}
+          </select>
+          {!forMeeting && (
+            // A new company is a lead: it is made (and completed) first, then it can take an opportunity.
+            <button type="button" className="btn-link" data-testid="new-deal-add-company" onClick={() => set({ newLeadOpen: false, newLeadCompanyId: null, newLeadContactId: null, newCompanyOpen: true })}>
+              + New company
+            </button>
           )}
         </div>
         <div className="form-label">
@@ -151,7 +134,7 @@ function NewDealModal() {
                 )}
               </div>
               <input className="form-input" placeholder="Full name" value={contactName} onChange={(e) => setContactName(e.target.value)} />
-              <span className="subform-hint">{companyIsNew ? 'Added to the new company.' : `Added to ${companyRec?.name ?? 'the company'}.`}</span>
+              <span className="subform-hint">Added to {companyRec?.name ?? 'the company'}.</span>
             </div>
           ) : (
             <>
@@ -167,6 +150,37 @@ function NewDealModal() {
           )}
         </div>
       </div>
+      {isLead && companyRec && (
+        <div className="notice-warn" data-testid="new-deal-lead" role="alert">
+          <span style={{ fontWeight: 600 }}>{companyRec.name} is still a lead</span>
+          <span style={{ color: 'var(--text-2)' }}>
+            Leads are listed but can't be picked.{' '}
+            {companyReadiness(s, companyRec.id).blockers.length ? `Missing for Opportunity: ${companyReadiness(s, companyRec.id).blockers.join('; ')}.` : 'It was set back to Lead by hand.'}
+          </span>
+          <span>
+            <button type="button" className="btn-link" data-testid="new-deal-complete-company" onClick={() => { close(); openCompany(companyRec.id); }}>
+              Complete the company
+            </button>
+          </span>
+        </div>
+      )}
+      {!companyRec && <div className="hint-box">No company is an opportunity or a client yet. Complete a company first: its identity, address and a contact with a role, a role in the decision and an owner.</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+        <span className="caps">Sale type</span>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 9 }} role="radiogroup" aria-label="Sale type">
+          {SALE_TYPES.map((t) => (
+            <button key={t.id} type="button" role="radio" aria-checked={saleType === t.id} data-testid={'new-deal-sale-' + t.id} className={saleType === t.id ? 'choice on' : 'choice'} onClick={() => { setSaleType(t.id); setSaleTypeMissing(false); }}>
+              <span style={{ fontSize: 13.5, fontWeight: 600 }}>{t.name}</span>
+              <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45 }}>{t.note}</span>
+            </button>
+          ))}
+        </div>
+        {saleTypeMissing && (
+          <span role="alert" style={{ fontSize: 12.5, color: 'var(--danger)' }}>
+            Pick the sale type.
+          </span>
+        )}
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         <span className="caps">Target customer type</span>
         {Object.values(s.funnels).map((f) => (
@@ -181,10 +195,10 @@ function NewDealModal() {
         Assigns the {funnel.stages.length}-stage funnel. First task: {funnel.stages[0]?.activity}.
       </div>
       <div className="modal-actions">
-        <button type="button" className="btn btn-secondary" onClick={() => set({ newLeadOpen: false, newLeadCompanyId: null, newLeadContactId: null, newLeadForMeeting: false })}>
+        <button type="button" className="btn btn-secondary" onClick={close}>
           Cancel
         </button>
-        <button type="button" className="btn btn-primary" data-testid="new-deal-create" disabled={busy} onClick={() => void create()}>
+        <button type="button" className="btn btn-primary" data-testid="new-deal-create" disabled={busy || !companyRec || isLead} title={isLead ? 'A lead can\'t enter the Pipeline yet' : undefined} onClick={() => void create()}>
           {busy ? 'Creating…' : <>Create &amp; start funnel</>}
         </button>
       </div>

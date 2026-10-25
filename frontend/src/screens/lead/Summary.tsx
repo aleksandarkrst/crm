@@ -1,7 +1,7 @@
 import { CustomFieldRows } from '../../components/CustomFields';
 import { IconRow } from '../../components/icons';
 import { GhostDate, GhostSelect, PersonChip, Picker, PickerRow, usePicker } from '../../components/ui';
-import { SOURCES } from '../../store/seed';
+import { SALE_TYPES, SOURCES } from '../../store/seed';
 import { allPeople, closeIsoOf, companyOfPerson, contactsForLead, curOf, funnelOptions, initialsOf, linesOf, moneyExact, totalsOf, valueNum } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
@@ -86,6 +86,16 @@ export function Summary({ lead, projects }: { lead: Lead; projects?: React.React
         </IconRow>
         <IconRow icon="source" label="Source">
           <GhostSelect chevron aria-label="Source" value={lead.source} onChange={patch('source')} options={SOURCES} />
+        </IconRow>
+        {/* How it is sold (CD-360): here only, not as a badge in the header. */}
+        <IconRow icon="value" label="Sale type">
+          <GhostSelect
+            chevron
+            aria-label="Sale type"
+            value={lead.saleType}
+            onChange={patch('saleType')}
+            options={[...(lead.saleType ? [] : [{ value: '', label: 'Not set' }]), ...SALE_TYPES.map((t) => ({ value: t.id, label: t.name }))]}
+          />
         </IconRow>
         {projects}
         <CustomFieldRows entity="deal" recordId={lead.id} />

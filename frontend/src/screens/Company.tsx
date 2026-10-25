@@ -113,6 +113,7 @@ export function Company() {
           ownerName={extra?.owner}
           onOwner={(ownerId) => store.setCompanyOwner(rec.id, ownerId)}
           onNewDeal={newDeal}
+          newDealBlocked={status === 'lead' ? 'Only an opportunity or a client can be added to the Pipeline' : undefined}
           onDelete={store.canDelete ? onDelete : undefined}
           deleteLabel="Delete company"
           notice={

@@ -50,6 +50,7 @@ export function RecordHeader({
   ownerName,
   onOwner,
   onNewDeal,
+  newDealBlocked,
   onDelete,
   deleteLabel,
   notice,
@@ -63,6 +64,8 @@ export function RecordHeader({
   ownerName?: string | null;
   onOwner?: (id: string) => void;
   onNewDeal: () => void;
+  /** Why "+ Opportunity" can't be used here (a lead, CD-360); the button is disabled with it as its hint. */
+  newDealBlocked?: string;
   onDelete?: () => void;
   deleteLabel: string;
   /** Shown under the header row: what a lead still misses (CD-358). */
@@ -107,7 +110,7 @@ export function RecordHeader({
               <span style={{ fontSize: 13, color: 'var(--ink)' }}>{memberName(s, ownerId, ownerName)}</span>
             )}
           </label>
-          <button type="button" className="btn btn-primary" data-testid="record-new-deal" onClick={onNewDeal}>
+          <button type="button" className="btn btn-primary" data-testid="record-new-deal" disabled={!!newDealBlocked} title={newDealBlocked} onClick={onNewDeal}>
             + Opportunity
           </button>
           {(onDelete || menuItems.length > 0) && (
