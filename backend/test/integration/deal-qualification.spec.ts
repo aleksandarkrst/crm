@@ -3,7 +3,7 @@
  * qualified with "Other", and the Qualified switch with who and when, its timeline entries and history.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, type Funnel, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, type Funnel, ok, readyCompany, type Session, signIn } from './helpers';
 
 let owner: Session;
 let seller: Session;
@@ -11,10 +11,11 @@ let outsider: Session;
 let tenant: string;
 let otherTenant: string;
 let funnel: Funnel;
+let companyId: string;
 const asOwner = () => ({ token: owner.token, tenant });
 const asSeller = () => ({ token: seller.token, tenant });
 
-const newDeal = (title: string) => ok('POST', '/crm/deals', { ...asOwner(), body: { title, funnelId: funnel.id } });
+const newDeal = (title: string) => ok('POST', '/crm/deals', { ...asOwner(), body: { title, funnelId: funnel.id, companyId } });
 const newContact = (fullName: string, opts = asOwner()) => ok('POST', '/crm/contacts', { ...opts, body: { fullName } });
 const patch = (id: string, body: Record<string, unknown>, opts = asOwner()) => ok('PATCH', `/crm/deals/${id}`, { ...opts, body }, 200);
 const activities = (id: string) => ok<{ title: string; actor: { userId: string | null; name: string } | null }[]>('GET', `/crm/deals/${id}/activities`, asOwner());
@@ -24,6 +25,7 @@ beforeAll(async () => {
   [tenant, otherTenant] = await Promise.all([createTenant(owner, 'Qualification'), createTenant(outsider, 'Qualification other')]);
   await addMember(owner, tenant, seller, 'member');
   funnel = (await ok<Funnel[]>('GET', '/crm/funnels', asOwner()))[0]!;
+  companyId = (await readyCompany(owner, tenant)).id;
 });
 
 describe('qualification fields', () => {

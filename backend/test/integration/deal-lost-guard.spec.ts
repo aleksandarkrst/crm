@@ -5,11 +5,12 @@
  */
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { call, createTenant, type Funnel, ok, type Session, signIn } from './helpers';
+import { call, createTenant, type Funnel, ok, readyCompany, type Session, signIn } from './helpers';
 
 let owner: Session;
 let tenant: string;
 let smb: Funnel;
+let companyId: string;
 let db: Client;
 const as = () => ({ token: owner.token, tenant });
 const wonStage = () => smb.stages.find((s) => s.isWon)!;
@@ -18,6 +19,7 @@ beforeAll(async () => {
   owner = await signIn('guard-owner');
   tenant = await createTenant(owner, 'Lost guard');
   smb = (await ok('GET', '/crm/funnels', as())).find((f: Funnel) => f.key === 'smb');
+  companyId = (await readyCompany(owner, tenant)).id;
   db = new Client({ connectionString: inject('databaseUrl') });
   await db.connect();
 });
@@ -40,7 +42,7 @@ const sqlError = (p: Promise<unknown>) =>
     () => null,
     (err: { code?: string; constraint?: string }) => `${err.code} ${err.constraint}`,
   );
-const newDeal = async (title: string) => (await ok('POST', '/crm/deals', { ...as(), body: { title, funnelId: smb.id } })).id as string;
+const newDeal = async (title: string) => (await ok('POST', '/crm/deals', { ...as(), body: { title, funnelId: smb.id, companyId } })).id as string;
 
 describe('a lost deal in the won stage', () => {
   it('is refused when a deal in the won stage is marked lost in SQL', async () => {

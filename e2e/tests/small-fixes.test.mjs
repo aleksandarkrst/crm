@@ -2,7 +2,7 @@
 // members see the funnel builder's stage fields read-only.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, clickButton, email, eventually, newUserWithWorkspace, setValue, signIn, steps, useBrowser, createNew, finishOnboarding } from '../lib/harness.mjs';
+import { api, BASE_URL, clickButton, createReadyCompany, email, eventually, newUserWithWorkspace, setValue, signIn, steps, useBrowser, createNew, finishOnboarding } from '../lib/harness.mjs';
 
 describe('contact notes and read-only funnels', () => {
   const browser = useBrowser();
@@ -13,7 +13,7 @@ describe('contact notes and read-only funnels', () => {
     page = await browser.person('sam');
     await newUserWithWorkspace(page, { label: 'fixes', name: 'Sam Owner', workspace: 'Fixes Co' });
     const funnels = await api(page, '/crm/funnels');
-    await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Notes opportunity', funnelId: funnels[0].id }) });
+    await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Notes opportunity', funnelId: funnels[0].id, companyId: await createReadyCompany(page, 'Notes Customer') }) });
     await page.goto(BASE_URL + '/contacts', { waitUntil: 'networkidle0' });
     await createNew(page, 'contact');
     await page.waitForSelector('input[placeholder="e.g. Ana Marković"]');

@@ -37,23 +37,29 @@ beforeAll(async () => {
   const company = async (key: string, extra: Record<string, unknown> = {}, s = as) => (ids[key] = (await ok<{ id: string }>('POST', '/crm/companies', { ...s, body: { name: key, pib: testPib(), ...extra } })).id);
   const deal = (companyId: string, s = as, funnelId = funnel.id) => ok<{ id: string }>('POST', '/crm/deals', { ...s, body: { title: 'Deal', companyId, funnelId } });
   const project = (companyId: string) => ok<{ id: string }>('POST', '/projects', { ...as, body: { name: 'Project', projectTypeId: type!.id, companyId } });
-  const qualified = (companyId: string, buyerRole: string | null = 'Champion') =>
-    ok('POST', '/crm/contacts', { ...as, body: { companyId, fullName: 'Jelena Savić', jobTitle: 'Head of operations', buyerRole, ownerUserId: owner.userId } });
+  const qualified = (companyId: string, buyerRole: string | null = 'Champion', s = as, by = owner) =>
+    ok('POST', '/crm/contacts', { ...s, body: { companyId, fullName: 'Jelena Savić', jobTitle: 'Head of operations', buyerRole, ownerUserId: by.userId } });
+  // Only an opportunity or a client takes an opportunity (CD-360).
+  const ready = async (key: string, s = as, by = owner) => {
+    const id = await company(key, identity, s);
+    await qualified(id, 'Champion', s, by);
+    return id;
+  };
 
-  await ok('POST', `/crm/deals/${(await deal(await company('won deal'))).id}/move`, { ...as, body: { stageId: won.id } }, 200);
+  await ok('POST', `/crm/deals/${(await deal(await ready('won deal'))).id}/move`, { ...as, body: { stageId: won.id } }, 200);
   await project(await company('open project'));
   const past = await project(await company('only completed projects'));
   await ok('PATCH', `/projects/${past.id}`, { ...as, body: { status: 'completed' } });
-  const mixed = await company('completed project and an open deal');
+  const mixed = await ready('completed project and an open deal');
   await ok('PATCH', `/projects/${(await project(mixed)).id}`, { ...as, body: { status: 'completed' } });
   await deal(mixed);
-  await ok('POST', `/crm/deals/${(await deal(await company('all deals lost'))).id}/lost`, { ...as, body: { reason: 'Price' } }, 200);
+  await ok('POST', `/crm/deals/${(await deal(await ready('all deals lost'))).id}/lost`, { ...as, body: { reason: 'Price' } }, 200);
   await qualified(await company('ready', identity));
   await qualified(await company('whitespace PIB', identity));
   await qualified(await company('contact without a role in the decision', identity), null);
   await company('nothing yet');
   // Another workspace: its facts stay its own.
-  const theirs = await company('other workspace won deal', identity, { token: other.token, tenant: otherTenant });
+  const theirs = await ready('other workspace won deal', { token: other.token, tenant: otherTenant }, other);
   const otherFunnel = (await ok<Funnel[]>('GET', '/crm/funnels', { token: other.token, tenant: otherTenant }))[0]!;
   const otherDeal = await deal(theirs, { token: other.token, tenant: otherTenant }, otherFunnel.id);
   await ok('POST', `/crm/deals/${otherDeal.id}/move`, { token: other.token, tenant: otherTenant, body: { stageId: otherFunnel.stages.find((s) => s.isWon)!.id } }, 200);

@@ -430,9 +430,13 @@ export interface ApiDealStageState {
   docsCompleteAt: string | null;
   docsCompleteByUserId: string | null;
 }
+/** How an opportunity is sold (CD-360). */
+export type ApiSaleType = 'capital' | 'transactional';
 export interface ApiDeal {
   id: string;
   companyId: string | null;
+  /** Capital or transactional (CD-360); null on opportunities made before it. */
+  saleType: ApiSaleType | null;
   primaryContactId: string | null;
   funnelId: string;
   stageId: string;
@@ -820,6 +824,7 @@ export type DealInput = Partial<
     | 'funnelId'
     | 'ownerUserId'
     | 'source'
+    | 'saleType'
     | 'closeDate'
     | 'amount'
     | 'currency'

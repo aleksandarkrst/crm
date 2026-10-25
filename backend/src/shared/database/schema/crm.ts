@@ -280,6 +280,10 @@ export interface Installment {
 export const LOST_REASONS = ['Price', 'Timing', 'Chose a competitor', 'No budget', 'No decision', 'Other'] as const;
 export type LostReason = (typeof LOST_REASONS)[number];
 
+/** How the opportunity is sold (CD-360): equipment or a project in one contract, or parts, services and recurring orders. */
+export const SALE_TYPES = ['capital', 'transactional'] as const;
+export type SaleType = (typeof SALE_TYPES)[number];
+
 /** Steps a deal may still need before it is Qualified (CD-362), picked on the Qualification card. */
 export const QUALIFICATION_STEPS = ['Confirm pain', 'Identify decision maker', 'Confirm budget', 'Validate solution fit', 'Agree on timeline'] as const;
 export type QualificationStep = (typeof QUALIFICATION_STEPS)[number];
@@ -296,6 +300,8 @@ export const deals = pgTable(
     ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
     title: text('title').notNull(),
     source: text('source'),
+    /** Capital or transactional (CD-360); chosen in the New opportunity dialog, null on older ones. */
+    saleType: text('sale_type', { enum: SALE_TYPES }),
     // Net amount (sum of deal lines once those exist). Money is numeric, never float; Drizzle returns a string.
     amount: numeric('amount', { precision: 14, scale: 2 }).notNull().default('0'),
     currency: text('currency').notNull().default('EUR'),
@@ -362,6 +368,7 @@ export const deals = pgTable(
     foreignKey({ columns: [t.tenantId, t.funnelId], foreignColumns: [funnels.tenantId, funnels.id], name: 'deals_funnel_fk' }),
     foreignKey({ columns: [t.tenantId, t.stageId], foreignColumns: [funnelStages.tenantId, funnelStages.id], name: 'deals_stage_fk' }),
     check('deals_fit_score_ck', sql`${t.fitScore} between 0 and 100`),
+    check('deals_sale_type_ck', sql`${t.saleType} is null or ${t.saleType} in ('capital', 'transactional')`),
   ],
 );
 

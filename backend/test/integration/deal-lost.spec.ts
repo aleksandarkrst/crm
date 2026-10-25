@@ -3,7 +3,7 @@
  * stage history rows (CD-61) they write.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { call, createTenant, type Funnel, ok, type Session, signIn } from './helpers';
+import { call, createTenant, type Funnel, ok, readyCompany, type Session, signIn } from './helpers';
 
 let owner: Session;
 let other: Session;
@@ -11,9 +11,10 @@ let tenant: string;
 let otherTenant: string;
 let smb: Funnel;
 let ent: Funnel;
+let companyId: string;
 const as = () => ({ token: owner.token, tenant });
 
-const newDeal = async (title: string) => ok('POST', '/crm/deals', { ...as(), body: { title, funnelId: smb.id } });
+const newDeal = async (title: string) => ok('POST', '/crm/deals', { ...as(), body: { title, funnelId: smb.id, companyId } });
 const history = async (dealId: string) =>
   (await ok<{ kind: string; fromStageId: string | null; toStageId: string; outcome: string; changedByUserId: string }[]>('GET', `/crm/deal-stage-history?dealId=${dealId}`, as())).map(
     (r) => [r.kind, r.fromStageId, r.toStageId, r.outcome],
@@ -25,6 +26,7 @@ beforeAll(async () => {
   [tenant, otherTenant] = await Promise.all([createTenant(owner, 'Lost deals'), createTenant(other, 'Lost other')]);
   const funnels = await ok<Funnel[]>('GET', '/crm/funnels', as());
   smb = funnels.find((f) => f.key === 'smb')!;
+  companyId = (await readyCompany(owner, tenant)).id;
   ent = funnels.find((f) => f.key === 'ent')!;
 });
 

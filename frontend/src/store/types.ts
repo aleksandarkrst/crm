@@ -97,6 +97,8 @@ export interface Lead {
   hq: string;
   size: string;
   source: string;
+  /** Capital or transactional (CD-360); '' when not set (older opportunities). */
+  saleType: SaleType | '';
   need: string;
   constraint: string;
   decisionMaker: string;
@@ -185,6 +187,9 @@ export interface CompanyExtra {
   /** When the status last changed (ISO): a past client's "Last project done" month (CD-359). */
   statusChangedAt?: string | null;
 }
+
+/** How an opportunity is sold (CD-360). */
+export type SaleType = 'capital' | 'transactional';
 
 /** A company's status (CD-358). */
 export type CompanyStatus = 'lead' | 'opportunity' | 'client' | 'past_client' | 'not_interested';

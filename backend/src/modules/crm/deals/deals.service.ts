@@ -7,11 +7,12 @@ import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { activities, companies, contacts, DEAL_OUTCOMES, dealContacts, dealDocuments, type DealOutcome, deals, dealStageStates, dealTasks, funnels, funnelStages, LOST_REASONS, meetings, QUALIFICATION_STEPS, tenants } from '../../../shared/database/schema';
+import { activities, companies, contacts, DEAL_OUTCOMES, SALE_TYPES, dealContacts, dealDocuments, type DealOutcome, deals, dealStageStates, dealTasks, funnels, funnelStages, LOST_REASONS, meetings, QUALIFICATION_STEPS, tenants } from '../../../shared/database/schema';
 import { JobsService } from '../../../shared/events/jobs.service';
 import { ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { currencyCode } from '../currency';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
+import { opportunityReadiness } from '../companies/company-status';
 import { CompanyStatusService } from '../companies/company-status.service';
 import { assertOwnerIsMember, userNameOf } from '../owner';
 import { RecordHistoryService } from '../history/record-history.service';
@@ -26,7 +27,10 @@ const currency = currencyCode;
 export const CreateDeal = z.object({
   title: z.string().trim().min(1).max(200),
   funnelId: z.uuid(),
-  companyId: z.uuid().nullish(),
+  // Every opportunity has a company, and only one that is an opportunity or a client (CD-360).
+  companyId: z.uuid(),
+  /** Capital or transactional (CD-360); the New opportunity dialog asks for it. */
+  saleType: z.enum(SALE_TYPES).nullish(),
   primaryContactId: z.uuid().nullish(),
   ownerUserId: z.uuid().nullish(),
   source: optionalText(80),
@@ -65,6 +69,7 @@ export const DealsQuery = ListQuery.extend({
   companyId: z.uuid().optional(),
   ownerUserId: z.uuid().optional(),
   outcome: z.enum(DEAL_OUTCOMES).optional(),
+  saleType: z.enum(SALE_TYPES).optional(),
 });
 export type CreateDeal = z.infer<typeof CreateDeal>;
 export type UpdateDeal = z.infer<typeof UpdateDeal>;
@@ -82,6 +87,29 @@ export const dealOutcome = (deal: { lostAt: Date | null }, stageIsWon: boolean):
 /** Days past the stage's target (CD-363); won and lost deals are never late. */
 const lateDaysOf = (deal: { lostAt: Date | null; stageEnteredAt: Date }, isWon: boolean, targetDays: number | null, now: Date): number =>
   isWon || deal.lostAt ? 0 : stageLateDays(deal.stageEnteredAt, targetDays, now);
+
+/**
+ * Only a company that is an opportunity or a client can enter the Pipeline (CD-360): a lead is a
+ * 409 with what it still misses (the company page's list), and so is a Not interested company that
+ * isn't complete (set back from Lead by hand, it would slip past otherwise). Opportunities, clients
+ * and past clients pass; a company of another workspace is a 400.
+ */
+async function assertCanEnterPipeline(tx: Tx, companyId: string) {
+  // Locked while it decides: a concurrent change of its status (set back to Lead) waits for this deal.
+  // `for update`, not `for share`: the status recompute later in the transaction takes this lock anyway,
+  // and two shared holders upgrading at once deadlock.
+  const [company] = await tx.select().from(companies).where(eq(companies.id, companyId)).for('update');
+  if (!company) throw new BadRequestException('Pick a company of this workspace');
+  if (company.status !== 'lead' && company.status !== 'not_interested') return;
+  const people = await tx.select().from(contacts).where(eq(contacts.companyId, companyId));
+  const { blockers } = opportunityReadiness(company, people);
+  if (company.status === 'not_interested' && !blockers.length) return;
+  const missing = blockers.length ? `: ${blockers.length === 1 ? '1 thing is' : `${blockers.length} things are`} missing` : ' (it was set back to Lead by hand)';
+  throw new ConflictException({
+    message: `${company.name} ${company.status === 'lead' ? 'is still a lead' : "is Not interested and isn't complete"}. Only an opportunity or a client can enter the Pipeline${missing}.`,
+    blockers,
+  });
+}
 
 @Injectable()
 export class DealsService {
@@ -103,6 +131,7 @@ export class DealsService {
     if (query.stageId) filters.push(eq(deals.stageId, query.stageId));
     if (query.companyId) filters.push(eq(deals.companyId, query.companyId));
     if (query.ownerUserId) filters.push(eq(deals.ownerUserId, query.ownerUserId));
+    if (query.saleType) filters.push(eq(deals.saleType, query.saleType));
     if (query.ids) filters.push(inArray(deals.id, query.ids));
     if (query.outcome === 'lost') filters.push(isNotNull(deals.lostAt));
     else if (query.outcome) filters.push(isNull(deals.lostAt), query.outcome === 'won' ? eq(funnelStages.isWon, true) : not(funnelStages.isWon));
@@ -178,6 +207,7 @@ export class DealsService {
       .withTenant(ctx.tenantId, async (tx) => {
         const first = await this.firstStage(tx, input.funnelId);
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
+        await assertCanEnterPipeline(tx, input.companyId);
         // A create that sends custom field values (the New deal dialog) must fill the required ones.
         const { customFields: cfInput, ...fields } = input;
         const cf = await this.customFields.validate(tx, 'deal', cfInput, { requireAll: cfInput !== undefined });
@@ -212,6 +242,14 @@ export class DealsService {
         }
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const [before] = await tx.select({ ownerUserId: deals.ownerUserId, companyId: deals.companyId }).from(deals).where(eq(deals.id, id));
+        if (!before) throw new NotFoundException('Opportunity not found');
+        // Another company: it must be able to enter the Pipeline too (CD-360).
+        if (input.companyId && input.companyId !== before.companyId) {
+          // Both companies in id order, as the status recompute takes them, so opposite moves can't deadlock.
+          const both = [before.companyId, input.companyId].filter((c): c is string => !!c);
+          await tx.select({ id: companies.id }).from(companies).where(inArray(companies.id, both)).orderBy(companies.id).for('update');
+          await assertCanEnterPipeline(tx, input.companyId);
+        }
         await this.assertContactsExist(tx, [input.sponsorContactId, input.powerSponsorContactId]);
         const { customFields: cfInput, qualified, ...fields } = input;
         const patch: PgUpdateSetSource<typeof deals> = { ...fields };

@@ -1,4 +1,5 @@
-import type { BuyerRole, Channel, LostReason } from '../../../shared/database/schema';
+import type { BuyerRole, Channel, LostReason, SaleType } from '../../../shared/database/schema';
+import { pibCheckDigit } from '../../../shared/validation/serbian-ids';
 
 /**
  * The records "Load sample data" creates (CD-68): a small, realistic set to explore the app with.
@@ -16,10 +17,11 @@ export type SampleProductKey = (typeof SAMPLE_PRODUCTS)[number]['key'];
 
 /** Made-up PIBs with valid check digits (CD-357); one the workspace already uses is left out. */
 export const SAMPLE_COMPANIES = [
-  { key: 'brightline', pib: '990000019', name: 'Brightline Studio', industry: 'Design agency', hq: 'Novi Sad', teamSize: '11–50 staff', domain: 'brightline.example.com' },
-  { key: 'kestrel', pib: '990000027', name: 'Kestrel Logistics', industry: 'Logistics', hq: 'Belgrade', teamSize: '51–200 staff', domain: 'kestrel.example.com' },
-  { key: 'orchard', pib: '990000035', name: 'Orchard Dental Group', industry: 'Healthcare', hq: 'Niš', teamSize: '11–50 staff', domain: 'orchard.example.com' },
-  { key: 'tidewater', pib: '990000043', name: 'Tidewater Foods', industry: 'Food production', hq: 'Subotica', teamSize: '201–500 staff', domain: 'tidewater.example.com' },
+  // Complete (CD-360): with their qualified contacts they are opportunities or clients, as their deals need.
+  { key: 'brightline', pib: '990000019', name: 'Brightline Studio', industry: 'Design agency', hq: 'Novi Sad', teamSize: '11–50 staff', domain: 'brightline.example.com', mb: '20000007', address: 'Bulevar oslobođenja 12', city: 'Novi Sad', postalCode: '21000', activityCode: '7410' },
+  { key: 'kestrel', pib: '990000027', name: 'Kestrel Logistics', industry: 'Logistics', hq: 'Belgrade', teamSize: '51–200 staff', domain: 'kestrel.example.com', mb: '20010134', address: 'Bulevar Mihajla Pupina 6', city: 'Beograd', postalCode: '11070', activityCode: '4941' },
+  { key: 'orchard', pib: '990000035', name: 'Orchard Dental Group', industry: 'Healthcare', hq: 'Niš', teamSize: '11–50 staff', domain: 'orchard.example.com', mb: '20020261', address: 'Obrenovićeva 20', city: 'Niš', postalCode: '18000', activityCode: '8623' },
+  { key: 'tidewater', pib: '990000043', name: 'Tidewater Foods', industry: 'Food production', hq: 'Subotica', teamSize: '201–500 staff', domain: 'tidewater.example.com', mb: '20030399', address: 'Korzo 8', city: 'Subotica', postalCode: '24000', activityCode: '1089' },
 ] as const;
 export type SampleCompanyKey = (typeof SAMPLE_COMPANIES)[number]['key'];
 
@@ -41,6 +43,8 @@ export interface SampleDeal {
   /** Other people on the deal, besides the primary contact. */
   others?: string[];
   stage: SampleStage;
+  /** How it is sold (CD-360). */
+  saleType: SaleType;
   lost?: { reason: LostReason; note: string };
   lines: { product: SampleProductKey; quantity: number }[];
   /** Days since the deal was created, and since the last contact. */
@@ -61,6 +65,7 @@ export const SAMPLE_DEALS: SampleDeal[] = [
     company: 'brightline',
     contact: 'mila',
     stage: { open: 0 },
+    saleType: 'capital',
     lines: [{ product: 'workshop', quantity: 1 }],
     ageDays: 2,
     lastContactDays: 2,
@@ -74,6 +79,7 @@ export const SAMPLE_DEALS: SampleDeal[] = [
     contact: 'stefan',
     others: ['jelena'],
     stage: { open: 1 },
+    saleType: 'capital',
     lines: [
       { product: 'licence', quantity: 3 },
       { product: 'workshop', quantity: 2 },
@@ -91,6 +97,7 @@ export const SAMPLE_DEALS: SampleDeal[] = [
     company: 'orchard',
     contact: 'nikola',
     stage: { open: 2 },
+    saleType: 'transactional',
     lines: [
       { product: 'licence', quantity: 1 },
       { product: 'support', quantity: 10 },
@@ -106,6 +113,7 @@ export const SAMPLE_DEALS: SampleDeal[] = [
     company: 'tidewater',
     contact: 'ana',
     stage: { open: 99 },
+    saleType: 'transactional',
     lines: [{ product: 'licence', quantity: 5 }],
     ageDays: 34,
     lastContactDays: 3,
@@ -117,6 +125,7 @@ export const SAMPLE_DEALS: SampleDeal[] = [
     company: 'brightline',
     contact: 'mila',
     stage: 'won',
+    saleType: 'transactional',
     lines: [{ product: 'support', quantity: 40 }],
     ageDays: 40,
     lastContactDays: 9,
@@ -127,6 +136,7 @@ export const SAMPLE_DEALS: SampleDeal[] = [
     company: 'orchard',
     contact: 'nikola',
     stage: { open: 1 },
+    saleType: 'capital',
     lost: { reason: 'Timing', note: 'Revisit after the pilot at the first practice.' },
     lines: [{ product: 'licence', quantity: 1 }],
     ageDays: 25,
@@ -134,3 +144,15 @@ export const SAMPLE_DEALS: SampleDeal[] = [
     closeInDays: -5,
   },
 ];
+
+/**
+ * The sample company's PIB, or the next valid one nobody in the workspace has (CD-360): every
+ * sample company has a PIB, so none is a lead the New opportunity dialog can't complete.
+ */
+export function freePib(pib: string, taken: Set<string | null>): string {
+  let first8 = Number(pib.slice(0, 8));
+  let next = pib;
+  while (taken.has(next)) next = String(++first8).padStart(8, '0') + pibCheckDigit(String(first8).padStart(8, '0'));
+  taken.add(next);
+  return next;
+}

@@ -5,7 +5,7 @@
  */
 import { beforeAll, describe, expect, inject, it } from 'vitest';
 import { starterTemplate } from '../../src/modules/crm/documents/docx';
-import { addMember, call, createTenant, type Funnel, type Json, ok, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, type Funnel, type Json, ok, READY_IDENTITY, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let admin: Session;
@@ -66,11 +66,12 @@ describe('the checklist', () => {
     let st = await state();
     expect(done(st)).toEqual({ invite: true, records: false, template: false, funnel: true });
     expect(items(st)).toEqual({ contact: false, company: false, product: true, deal: false });
-    // A deal with a new company and contact adds all three.
-    await ok('POST', '/crm/deals', { ...as(), body: { title: 'Real deal', funnelId: funnel.id } });
-    const company = await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Real company' } });
-    expect(items(await state())).toEqual({ contact: false, company: true, product: true, deal: true });
-    await ok('POST', '/crm/contacts', { ...as(), body: { fullName: 'Real Person', companyId: company.id } });
+    // A company, its contact and a deal add all three; the deal needs the company ready for it (CD-360).
+    const company = await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Real company', ...READY_IDENTITY } });
+    expect(items(await state())).toEqual({ contact: false, company: true, product: true, deal: false });
+    await ok('POST', '/crm/contacts', { ...as(), body: { fullName: 'Real Person', companyId: company.id, jobTitle: 'CEO', buyerRole: 'Decision maker', ownerUserId: owner.userId } });
+    expect(items(await state())).toEqual({ contact: true, company: true, product: true, deal: false });
+    await ok('POST', '/crm/deals', { ...as(), body: { title: 'Real deal', funnelId: funnel.id, companyId: company.id } });
     st = await state();
     expect(done(st)).toEqual({ invite: true, records: true, template: false, funnel: true });
     expect(st.complete).toBe(false);
@@ -152,6 +153,8 @@ describe('sample data', () => {
     const sampleCompany = (await list('/crm/companies', owner, t)).find((c) => c.name === 'Tidewater Foods')!;
     const realCompany = await ok('POST', '/crm/companies', { ...asT(), body: { pib: testPib(), name: 'Real Co' } });
     const realContact = await ok('POST', '/crm/contacts', { ...asT(), body: { fullName: 'Real Person', companyId: realCompany.id } });
+    // The sample company has no matični broj, address or šifra delatnosti, so it is still a lead (CD-360).
+    await ok('PATCH', `/crm/companies/${sampleCompany.id}`, { ...asT(), body: READY_IDENTITY });
     const realDeal = await ok('POST', '/crm/deals', { ...asT(), body: { title: 'Real deal at a sample company', funnelId: funnel.id, companyId: sampleCompany.id } });
     const realProduct = await ok('POST', '/crm/products', { ...asT(), body: { name: 'Real product', unitPrice: 5 } });
 

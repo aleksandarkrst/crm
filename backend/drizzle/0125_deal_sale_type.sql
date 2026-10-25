@@ -1,0 +1,2 @@
+ALTER TABLE "deals" ADD COLUMN "sale_type" text;--> statement-breakpoint
+ALTER TABLE "deals" ADD CONSTRAINT "deals_sale_type_ck" CHECK ("deals"."sale_type" is null or "deals"."sale_type" in ('capital', 'transactional'));

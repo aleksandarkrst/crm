@@ -4,7 +4,7 @@
 // "Changes" view lists who changed what.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, clickButton, createWorkspace, email, eventually, setValue, signIn, sleep, steps, text, useBrowser, finishOnboarding, testPib } from '../lib/harness.mjs';
+import { api, createReadyCompany, BASE_URL, click, clickButton, createWorkspace, email, eventually, setValue, signIn, sleep, steps, text, useBrowser, finishOnboarding } from '../lib/harness.mjs';
 import { closePopover, openChip } from '../lib/filters.mjs';
 
 describe('live updates, conflicts and change history', () => {
@@ -29,7 +29,7 @@ describe('live updates, conflicts and change history', () => {
     await signIn(olivia, email('live-olivia'), 'Olivia Owner');
     await createWorkspace(olivia, 'Live Co');
     const funnels = await api(olivia, '/crm/funnels');
-    dealId = (await api(olivia, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Harbor refit', funnelId: funnels[0].id }) })).id;
+    dealId = (await api(olivia, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Harbor refit', funnelId: funnels[0].id, companyId: await createReadyCompany(olivia, 'Harbor Works') }) })).id;
     const { token } = await api(olivia, '/team/invitations', { method: 'POST', body: JSON.stringify({ email: email('live-ana'), role: 'member' }) });
 
     ana = await browser.person('ana');
@@ -48,7 +48,7 @@ describe('live updates, conflicts and change history', () => {
     await ana.waitForFunction((sel) => document.querySelector(sel)?.value === 'Harbor refit phase 2', { timeout: 10_000 }, TITLE);
     // A new deal shows up on the other person's pipeline too.
     const funnels = await api(olivia, '/crm/funnels');
-    const company = await api(olivia, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Lighthouse Lamps Ltd' }) });
+    const company = { id: await createReadyCompany(olivia, 'Lighthouse Lamps Ltd') };
     await api(olivia, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Lighthouse lamps', funnelId: funnels[0].id, companyId: company.id }) });
     // In-app navigation (no reload), as a click in the sidebar does.
     await ana.evaluate(() => {

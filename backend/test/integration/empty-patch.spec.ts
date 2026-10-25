@@ -1,6 +1,6 @@
 /** An update with no fields is a client error (400 with a clear message), never a 500. */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, firstFunnel, type Funnel, ok, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, firstFunnel, type Funnel, ok, readyCompany, type Session, signIn } from './helpers';
 
 let owner: Session;
 let member: Session;
@@ -15,8 +15,9 @@ beforeAll(async () => {
   tenant = await createTenant(owner, 'Empty patch');
   await addMember(owner, tenant, member, 'member');
   funnel = await firstFunnel(owner, tenant);
-  const company = await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Acme' } });
-  const contact = await ok('POST', '/crm/contacts', { ...as(), body: { fullName: 'Ann Buyer', companyId: company.id } });
+  const { id: companyId, contactId } = await readyCompany(owner, tenant, 'Acme');
+  const company = { id: companyId };
+  const contact = { id: contactId };
   const product = await ok('POST', '/crm/products', { ...as(), body: { name: 'Audit', unitPrice: 100 } });
   const deal = await ok('POST', '/crm/deals', { ...as(), body: { title: 'Deal', funnelId: funnel.id, companyId: company.id } });
   const task = await ok('POST', `/crm/deals/${deal.id}/tasks`, { ...as(), body: { stageId: funnel.stages[0]!.id, label: 'Call back' } });

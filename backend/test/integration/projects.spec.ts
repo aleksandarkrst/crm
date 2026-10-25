@@ -4,7 +4,7 @@
  * and not lost; the deal's timeline says so), who may change what, and workspace isolation.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, eventually, firstFunnel, ok, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, eventually, firstFunnel, ok, readyCompany, type Session, signIn, testPib } from './helpers';
 
 interface StageView {
   id: string;
@@ -80,7 +80,8 @@ describe('projects', () => {
   let clientType: TypeView;
 
   beforeAll(async () => {
-    [acme, beta] = await Promise.all([newCompany('Acme'), newCompany('Beta')]);
+    // Ready for opportunities (CD-360).
+    [acme, beta] = await Promise.all([readyCompany(owner, tenant, 'Acme'), readyCompany(owner, tenant, 'Beta')]);
     dealId = (await newDeal('CAT 320 overhaul', acme.id)).id;
     clientType = (await typesNow()).find((t) => t.name === 'Client project')!;
   });

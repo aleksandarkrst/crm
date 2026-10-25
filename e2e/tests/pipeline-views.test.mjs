@@ -2,7 +2,7 @@
 // board (the filter row, CD-366), the remembered view, the funnel select's pencil and New opportunity.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, newUserWithWorkspace, steps, text, useBrowser, testPib } from '../lib/harness.mjs';
+import { api, createReadyCompany, BASE_URL, newUserWithWorkspace, steps, text, useBrowser } from '../lib/harness.mjs';
 import { addFilter, chips, chipText, clearFilters, closePopover, pickOption, setOp, setRange, typeText } from '../lib/filters.mjs';
 
 const tableRows = (page) => page.$$eval('[data-testid=pipeline-table-row]', (els) => els.map((el) => ({ text: el.innerText, lost: el.hasAttribute('data-lost') })));
@@ -18,7 +18,7 @@ describe('pipeline views', () => {
     await newUserWithWorkspace(page, { label: 'views', name: 'Vic Viewer', workspace: 'Views Co' });
     [funnel] = await api(page, '/crm/funnels');
     const deal = async (name, stageIdx) => {
-      const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name }) });
+      const company = { id: await createReadyCompany(page, name) };
       const d = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: name + ' rollout', funnelId: funnel.id, companyId: company.id }) });
       if (stageIdx) await api(page, `/crm/deals/${d.id}/move`, { method: 'POST', body: JSON.stringify({ stageId: funnel.stages[stageIdx].id }) });
       return d;

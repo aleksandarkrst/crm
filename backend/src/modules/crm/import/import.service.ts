@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { asc, eq, isNotNull, isNull } from 'drizzle-orm';
+import { asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
+import { opportunityReadiness } from '../companies/company-status';
 import { CompanyStatusService } from '../companies/company-status.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
@@ -46,6 +47,8 @@ interface Lookups {
   companiesByPib: Map<string, string>;
   /** Company id → its PIB, for the companies that have one. */
   pibOf: Map<string, string>;
+  /** Company id → its name and whether it can't take an opportunity (CD-360): a lead, or an incomplete Not interested. */
+  companyStatus: Map<string, { name: string; status: string; blocked: boolean }>;
   /** lower(email) → contact id. */
   contactsByEmail: Map<string, string>;
   /** lower(trim(name)) → id of the oldest product with that name (CD-81). */
@@ -129,7 +132,7 @@ export class ImportService {
 
   async preview(ctx: TenantContext, type: ImportType, req: ImportRequest) {
     const prep = this.prepare(type, req);
-    const lookups = await this.database.withTenant(ctx.tenantId, (tx) => this.loadLookups(tx, ctx, type));
+    const lookups = await this.database.withTenant(ctx.tenantId, (tx) => this.loadLookups(tx, ctx, type, prep));
     const funnel = this.defaultFunnel(type, lookups, req.funnelId);
     let fake = 0;
     const dry: Writer = {
@@ -172,7 +175,7 @@ export class ImportService {
   async commit(ctx: TenantContext, type: ImportType, req: ImportRequest) {
     const prep = this.prepare(type, req);
     if (prep.missingRequired.length) throw new BadRequestException(`Choose a column for ${prep.missingRequired.join(', ')}`);
-    const lookups = await this.database.withTenant(ctx.tenantId, (tx) => this.loadLookups(tx, ctx, type));
+    const lookups = await this.database.withTenant(ctx.tenantId, (tx) => this.loadLookups(tx, ctx, type, prep));
     const funnel = this.defaultFunnel(type, lookups, req.funnelId);
 
     const summary = { created: 0, updated: 0, skipped: 0, failed: 0, newCompanies: 0, newContacts: 0 };
@@ -267,11 +270,13 @@ export class ImportService {
     return valuesOf(prep.mapping, row);
   }
 
-  private async loadLookups(tx: Tx, ctx: TenantContext, type: ImportType): Promise<Lookups> {
+  private async loadLookups(tx: Tx, ctx: TenantContext, type: ImportType, prep: Prepared): Promise<Lookups> {
     const companiesByName = new Map<string, string>();
     const companiesByPib = new Map<string, string>();
     const pibOf = new Map<string, string>();
-    for (const c of await tx.select({ id: companies.id, name: companies.name, pib: companies.pib }).from(companies).orderBy(asc(companies.createdAt), asc(companies.id))) {
+    const companyStatus = new Map<string, { name: string; status: string; blocked: boolean }>();
+    for (const c of await tx.select({ id: companies.id, name: companies.name, pib: companies.pib, status: companies.status }).from(companies).orderBy(asc(companies.createdAt), asc(companies.id))) {
+      companyStatus.set(c.id, { name: c.name, status: c.status, blocked: c.status === 'lead' });
       if (!companiesByName.has(key(c.name))) companiesByName.set(key(c.name), c.id);
       if (c.pib) {
         companiesByPib.set(c.pib, c.id);
@@ -310,7 +315,24 @@ export class ImportService {
     }
     // tenants has no RLS either.
     const [workspace] = await tx.select({ currency: tenants.currency }).from(tenants).where(eq(tenants.id, ctx.tenantId));
-    return { companiesByName, companiesByPib, pibOf, contactsByEmail, productsByName, productFrequency, members, funnels: fs, currency: workspace?.currency ?? 'EUR' };
+    // A Not interested company takes one only when it is complete (as DealsService checks it): only
+    // those the file names (by PIB or name, as companyRef finds them) are read.
+    const named = new Set<string>();
+    if (type === 'deals') {
+      for (const row of prep.rows) {
+        const v = this.valuesOf(prep, row);
+        const pib = v.companyPib ? CreateCompany.shape.pib.safeParse(v.companyPib) : undefined; // parsed as companyRef parses it
+        const id = (pib?.success && companiesByPib.get(pib.data)) || (v.company ? companiesByName.get(key(v.company)) : undefined);
+        if (id) named.add(id);
+      }
+    }
+    const notInterested = [...named].filter((id) => companyStatus.get(id)?.status === 'not_interested');
+    if (notInterested.length) {
+      const rows = await tx.select().from(companies).where(inArray(companies.id, notInterested));
+      const people = await tx.select().from(contacts).where(inArray(contacts.companyId, notInterested));
+      for (const c of rows) companyStatus.get(c.id)!.blocked = opportunityReadiness(c, people.filter((p) => p.companyId === c.id)).blockers.length > 0;
+    }
+    return { companiesByName, companiesByPib, pibOf, companyStatus, contactsByEmail, productsByName, productFrequency, members, funnels: fs, currency: workspace?.currency ?? 'EUR' };
   }
 
   private defaultFunnel(type: ImportType, lookups: Lookups, funnelId: string | undefined): Funnel | null {
@@ -555,6 +577,7 @@ export class ImportService {
     const parsed = CreateDeal.safeParse({
       title: v.title,
       funnelId: funnel?.id ?? '00000000-0000-4000-8000-000000000000',
+      companyId: '00000000-0000-4000-8000-000000000000', // the row's company, checked below
       source: v.source,
       amount: v.amount ? normalizeAmount(v.amount) : undefined,
       closeDate: v.closeDate ? normalizeDate(v.closeDate) : undefined,
@@ -563,6 +586,13 @@ export class ImportService {
     const names = { title: 'Opportunity', amount: 'Value', closeDate: 'Closing date', source: 'Source', ownerUserId: 'Owner email' };
     if (!parsed.success) errors.push(...zodErrors(parsed.error, undefined, names).filter((m) => !(v.title === '' && m.startsWith('Opportunity:'))));
     const company = v.company ? this.companyRef(v.company, v.companyPib, lk, errors, zodErrors) : undefined;
+    // Only a company that is an opportunity or a client can take one (CD-360): not a lead, and not a
+    // company the import would create (that would be a lead too). No company at all is "Company is required".
+    if (company && !('id' in company)) errors.push(`Company: "${company.name}" isn't in this workspace yet; add it and complete it first (only an opportunity or a client can enter the Pipeline)`);
+    else if (company) {
+      const known = lk.companyStatus.get(company.id);
+      if (known?.blocked) errors.push(`Company: ${known.name} ${known.status === 'lead' ? 'is still a lead' : "is Not interested and isn't complete"}; only an opportunity or a client can enter the Pipeline`);
+    }
 
     // The primary contact: an existing contact with the email, otherwise a new one when a name is given.
     let contactId = v.contactEmail ? lk.contactsByEmail.get(key(v.contactEmail)) : undefined;

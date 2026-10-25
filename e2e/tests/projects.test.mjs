@@ -4,7 +4,7 @@
 // and delete.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, clickButton, confirmInApp, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
+import { api, createReadyCompany, BASE_URL, click, clickButton, confirmInApp, eventually, newUserWithWorkspace, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
 
 describe('projects', () => {
   const browser = useBrowser();
@@ -19,7 +19,7 @@ describe('projects', () => {
     page = await browser.person('pia');
     await newUserWithWorkspace(page, { label: 'projects', name: 'Pia Projects', workspace: 'Projects Co' });
     const [funnel] = await api(page, '/crm/funnels');
-    acme = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Acme' }) });
+    acme = { id: await createReadyCompany(page, 'Acme') };
     beta = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Beta' }) });
     const deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Acme service opportunity', funnelId: funnel.id, companyId: acme.id }) });
     await api(page, `/crm/deals/${deal.id}/move`, { method: 'POST', body: JSON.stringify({ stageId: funnel.stages.find((s) => s.isWon).id }) });

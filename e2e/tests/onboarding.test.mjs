@@ -3,7 +3,7 @@
 // not shown to members.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, clickButton, email, eventually, newUserWithWorkspace, signIn, steps, text, useBrowser, waitForToastToClear, finishOnboarding } from '../lib/harness.mjs';
+import { api, BASE_URL, click, createReadyCompany, clickButton, email, eventually, newUserWithWorkspace, signIn, steps, text, useBrowser, waitForToastToClear, finishOnboarding } from '../lib/harness.mjs';
 
 describe('first-run onboarding', () => {
   const browser = useBrowser();
@@ -64,10 +64,12 @@ describe('first-run onboarding', () => {
   step('real work ticks the checklist, and removing sample data keeps it', async () => {
     await waitForToastToClear(page);
     const funnels = await api(page, '/crm/funnels');
-    await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'My own opportunity', funnelId: funnels[0].id }) });
+    // An opportunity needs a complete company with a qualified contact (CD-360): those tick too.
+    const companyId = await createReadyCompany(page, 'My Own Customer');
+    await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'My own opportunity', funnelId: funnels[0].id, companyId }) });
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=getting-started] [data-part=deal][data-done=true]');
-    assert.deepEqual(await partsDone(), { contact: false, company: false, product: false, deal: true });
+    assert.deepEqual(await partsDone(), { contact: true, company: true, product: false, deal: true });
     assert.equal((await stepsDone()).records, false);
 
     await click(page, '[data-testid=getting-started] [data-testid=remove-sample-data]');
@@ -78,8 +80,8 @@ describe('first-run onboarding', () => {
     });
     assert.ok(left, 'only the real opportunity is left');
     assert.equal(left[0].deal.title, 'My own opportunity');
-    assert.equal((await api(page, '/crm/companies')).length, 0);
-    assert.equal((await api(page, '/crm/contacts')).length, 0);
+    assert.deepEqual((await api(page, '/crm/companies')).map((c) => c.id), [companyId]);
+    assert.equal((await api(page, '/crm/contacts')).length, 1);
   });
 
   step('hiding the checklist is remembered, and it can be shown again from settings', async () => {
