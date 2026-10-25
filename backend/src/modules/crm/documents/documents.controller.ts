@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, Res, StreamableFile, UploadedFile, UseInterceptors } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, Res, StreamableFile, UploadedFile, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { memoryStorage } from 'multer';
 import { RequireTenant, Tenant, type TenantContext } from '../../../shared/authorization';
@@ -7,7 +7,7 @@ import { RateLimit } from '../../../shared/rate-limit';
 import { UuidParam } from '../../../shared/validation/common';
 import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
 import { DOCX_MIME, MAX_TEMPLATE_BYTES, starterTemplate } from './docx';
-import { CreateTemplate, DocumentsQuery, DocumentsService, downloadName, GenerateDocument, type UploadedDocx } from './documents.service';
+import { CreateTemplate, DocumentsQuery, DocumentsService, downloadName, extensionOf, GenerateDocument, MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES, type UploadedDocx, UploadDocuments } from './documents.service';
 import { ALIASES, LINE_PLACEHOLDERS, LINES_LOOP, PLACEHOLDERS } from './placeholders';
 
 const Id = new ZodPipe(UuidParam);
@@ -22,11 +22,11 @@ const Upload = () =>
     }),
   );
 
-/** Sends a .docx as a download; the name works in every browser (RFC 6266 / 5987). */
-function attachment(res: Response, name: string, stream: NodeJS.ReadableStream | Buffer): StreamableFile {
-  const file = downloadName(name);
+/** Sends a .docx (or an uploaded PDF or XLSX) as a download; the name works in every browser (RFC 6266 / 5987). */
+function attachment(res: Response, name: string, stream: NodeJS.ReadableStream | Buffer, mimeType: string | null = null): StreamableFile {
+  const file = downloadName(name, extensionOf(mimeType));
   const ascii = file.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, "'");
-  res.setHeader('Content-Type', DOCX_MIME);
+  res.setHeader('Content-Type', mimeType ?? DOCX_MIME);
   res.setHeader('Content-Disposition', `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(file)}`);
   res.setHeader('Cache-Control', 'private, no-store');
   return new StreamableFile(stream as never);
@@ -105,6 +105,20 @@ export class DocumentsController {
     return this.documents.generate(ctx, dealId, body);
   }
 
+  /** "Import my own" (CD-120), multipart/form-data: `files` and `types` (a JSON list, one type per file). */
+  @Post('deals/:id/documents/upload')
+  @RateLimit('heavy')
+  @UseInterceptors(
+    FilesInterceptor('files', MAX_UPLOAD_FILES, {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_UPLOAD_BYTES, files: MAX_UPLOAD_FILES, fields: 5, fieldSize: 10_000 },
+      defParamCharset: 'utf8',
+    }),
+  )
+  upload(@Tenant() ctx: TenantContext, @Param('id', Id) dealId: string, @UploadedFiles() files: UploadedDocx[] | undefined, @Body(new ZodPipe(UploadDocuments)) body: UploadDocuments) {
+    return this.documents.upload(ctx, dealId, files, body);
+  }
+
   @Get('deal-documents/:docId')
   getDocument(@Tenant() ctx: TenantContext, @Param('docId', Id) id: string) {
     return this.documents.getDocument(ctx, id);
@@ -112,8 +126,8 @@ export class DocumentsController {
 
   @Get('deal-documents/:docId/file')
   async documentFile(@Tenant() ctx: TenantContext, @Param('docId', Id) id: string, @Res({ passthrough: true }) res: Response) {
-    const { name, stream } = await this.documents.documentFile(ctx, id);
-    return attachment(res, name, stream);
+    const { name, mimeType, stream } = await this.documents.documentFile(ctx, id);
+    return attachment(res, name, stream, mimeType);
   }
 
   @Delete('deal-documents/:docId')

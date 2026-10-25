@@ -167,6 +167,7 @@ export const UpdateProfile = z
     notifyOrgChanges: z.boolean(),
     notifyTaskAssigned: z.boolean(),
     notifyHourLimits: z.boolean(),
+    notifyProposalApprovals: z.boolean(),
     notifyTimeoffBalance: z.boolean(),
     notifyTimeoffApprovals: z.boolean(),
     notifySickLeave: z.boolean(),

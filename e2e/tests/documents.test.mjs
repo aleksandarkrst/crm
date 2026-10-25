@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { after, describe } from 'node:test';
+import { after, describe, it } from 'node:test';
 import { inflateRawSync } from 'node:zlib';
 import { api, BASE_URL, click, clickButton, createDealInUi, eventually, newUserWithWorkspace, RUN, setValue, steps, text, useBrowser } from '../lib/harness.mjs';
 
@@ -105,7 +105,8 @@ describe('document templates and generated documents', () => {
     assert.match(await text(page), /Left empty:/);
   });
 
-  step("the built-in proposal preview's background reaches the end of the document (CD-226)", async () => {
+  // Skipped while "Preview built-in proposal" is switched off on the Documents tab (owner, 25 Oct).
+  it.skip("the built-in proposal preview's background reaches the end of the document (CD-226)", async () => {
     await page.setViewport({ width: 1280, height: 640 });
     // A DOM click: nothing on the deal page (a toast, the smaller window) may catch it.
     const preview = await page.waitForSelector('button::-p-text(Preview built-in proposal)');

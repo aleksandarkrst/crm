@@ -199,6 +199,8 @@ export const memberships = pgTable(
     notifyTaskAssigned: boolean('notify_task_assigned').notNull().default(true),
     // Email me "Hour limit almost reached" and "Hour limit reached" (CD-149).
     notifyHourLimits: boolean('notify_hour_limits').notNull().default(true),
+    // Email me when approval of a proposal is requested from me, as a funnel's approver (CD-120).
+    notifyProposalApprovals: boolean('notify_proposal_approvals').notNull().default(true),
     // Email me when someone adjusts my vacation balance, and when my carry-over is about to expire (CD-164).
     notifyTimeoffBalance: boolean('notify_timeoff_balance').notNull().default(true),
     // Email me the "Request waiting" summary and "Request withdrawn" as an approver (CD-166, spec 15.2 "Approval reminders").

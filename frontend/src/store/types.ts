@@ -40,6 +40,9 @@ export interface Funnel {
   note: string;
   /** Default target days for its stages (CD-363). */
   targetDays: number | null;
+  /** Proposals need approval before they are sent, by `approverId` (CD-120). */
+  proposalApproval: boolean;
+  approverId: string | null;
   stages: Stage[];
 }
 
@@ -89,6 +92,8 @@ export interface Lead {
   lateDays: number;
   /** "Documentation complete" per stage id, with who (user id) and when (CD-363). */
   docsComplete: Record<string, { at: string; by: string | null }>;
+  /** Its proposal's approval and sending (CD-120): ISO times and user ids; see approvalStatusOf. */
+  approval: { requestedAt: string | null; requestedBy: string | null; approvedAt: string | null; approvedBy: string | null; sentAt: string | null };
   /** ISO date-time the deal entered its current stage. */
   stageSince?: string;
   score: number;
@@ -374,6 +379,7 @@ export interface Profile {
   sickLeaveNotices: boolean;
   /** Hour limit warnings (CD-149): emails at 80 % and 100 % of an hour limit on a task. */
   hourLimits: boolean;
+  proposalApprovals: boolean;
 }
 
 export interface BonusRule {
@@ -478,7 +484,6 @@ export interface State {
   docOpen: boolean;
   docLeadId: string | null;
   showMerge: boolean;
-  sent: boolean;
   newLeadOpen: boolean;
   /** The New company dialog (CD-357). */
   newCompanyOpen: boolean;

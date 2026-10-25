@@ -123,13 +123,14 @@ describe('honest UI', () => {
     await waitForToastToClear(page);
   });
 
-  step('marking a proposal as sent does not claim an email or a task', async () => {
+  step('sending a proposal does not claim an email or a task', async () => {
     await page.goto(BASE_URL + '/settings/templates', { waitUntil: 'networkidle0' });
     await clickButton(page, 'Preview with an opportunity');
-    await click(page, 'button::-p-text(Mark as sent)');
+    // No approval in this funnel (CD-120): Send proposal only marks it as sent.
+    await click(page, '[data-testid=proposal-send]');
     await page.waitForSelector('.toast');
     const toast = await page.$eval('.toast', (el) => el.textContent);
-    assert.match(toast, /this session only/);
+    assert.match(toast, /nothing was emailed/);
     assert.ok(!/walkthrough task created/.test(toast), 'no fake task');
   });
 

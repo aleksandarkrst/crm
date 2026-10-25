@@ -883,6 +883,13 @@
       "when": 1792916068850,
       "tag": "0125_deal_sale_type",
       "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1792931192750,
+      "tag": "0126_proposal_approval",
+      "breakpoints": true
     }
   ]
 }

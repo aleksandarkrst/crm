@@ -562,6 +562,7 @@ function FunnelBuilder() {
   const dealCount = dealsIn(funnel.id);
   const wonCount = stages.filter((st) => st.won).length;
   const select = (id: string) => set({ segment: id });
+  const approvers = [...memberLabels(s)].sort((a, b) => a[1].localeCompare(b[1]));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} data-testid="funnel-builder">
@@ -629,6 +630,34 @@ function FunnelBuilder() {
                 New stage
               </button>
             )}
+          </div>
+
+          {/* One approval rule for the whole funnel, below its stages (CD-120). */}
+          <div className="card" data-testid="funnel-approval" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10, boxShadow: 'none' }}>
+            <span className="caps">Proposal approval</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+              <Switch on={funnel.proposalApproval} disabled={!editable} label="Proposals in this funnel need approval before they are sent" onClick={() => store.patchFunnel(funnel.id, { proposalApproval: !funnel.proposalApproval })} />
+              Proposals in this funnel need approval before they are sent
+            </span>
+            {funnel.proposalApproval && (
+              <label className="form-label" style={{ maxWidth: 360 }}>
+                Approver
+                <select className="form-input" data-testid="funnel-approver" disabled={!editable} style={{ padding: '9px 10px' }} value={funnel.approverId ?? ''} onChange={(e) => store.patchFunnel(funnel.id, { approverId: e.target.value || null })}>
+                  <option value="">Pick the approver</option>
+                  {approvers.map(([id, name]) => (
+                    <option key={id} value={id}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                {!funnel.approverId && (
+                  <span style={{ fontSize: 12, color: 'var(--warn)', textTransform: 'none', letterSpacing: 0 }}>
+                    Pick the approver to switch approval on.
+                  </span>
+                )}
+              </label>
+            )}
+            <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>One rule for the whole funnel, not per stage. The approver gets an email and a task when approval is requested; owners and admins can approve too.</span>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1078,6 +1107,13 @@ function NotificationsTab() {
       desc: 'An email when the hours on a task reach 80 % and 100 % of an hour limit.',
       on: p.hourLimits,
       toggle: () => patchProfile({ hourLimits: !p.hourLimits }),
+    },
+    {
+      id: 'proposal-approvals',
+      label: 'Proposal approvals',
+      desc: "As a funnel's approver: an email when someone requests your approval of a proposal. Pending ones are in your daily digest too.",
+      on: p.proposalApprovals,
+      toggle: () => patchProfile({ proposalApprovals: !p.proposalApprovals }),
     },
     {
       id: 'org-changes',

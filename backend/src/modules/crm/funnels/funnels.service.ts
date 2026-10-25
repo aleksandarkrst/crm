@@ -11,6 +11,7 @@ import { JobsService } from '../../../shared/events/jobs.service';
 import { type TenantProvisioner, TenantProvisioning } from '../../../shared/events/tenant-provisioning';
 import { nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { CompanyStatusService } from '../companies/company-status.service';
+import { resetApproval } from '../deals/proposal-approval';
 import { StageHistoryService } from '../deals/stage-history.service';
 import { assertOwnerIsMember } from '../owner';
 import { BLANK_FUNNEL_STAGES, DEFAULT_FUNNELS, type StageTemplate } from './default-funnels';
@@ -82,6 +83,9 @@ export const UpdateFunnel = nonEmptyPatch(
     note: optionalText(1000),
     /** Default target days for its stages (CD-363); null removes it. */
     targetDays: z.number().int().min(1).max(365).nullish(),
+    /** Proposals need approval before they are sent (CD-120), by `approverUserId` (owners and admins too). */
+    proposalApproval: z.boolean().optional(),
+    approverUserId: z.uuid().nullish(),
   }),
 );
 export type UpdateFunnel = z.infer<typeof UpdateFunnel>;
@@ -189,8 +193,26 @@ export class FunnelsService implements TenantProvisioner, OnModuleInit {
   updateFunnel(ctx: TenantContext, funnelId: string, input: UpdateFunnel) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
-        const [row] = await tx.update(funnels).set(input).where(eq(funnels.id, funnelId)).returning({ id: funnels.id });
+        if (input.approverUserId) await assertOwnerIsMember(tx, ctx, input.approverUserId, 'The approver');
+        const [before] = await tx.select({ proposalApproval: funnels.proposalApproval, approverUserId: funnels.approverUserId }).from(funnels).where(eq(funnels.id, funnelId));
+        const [row] = await tx.update(funnels).set(input).where(eq(funnels.id, funnelId)).returning({ id: funnels.id, proposalApproval: funnels.proposalApproval, approverUserId: funnels.approverUserId });
         if (!row) throw new NotFoundException('Funnel not found');
+        // Approval needs someone to ask (CD-120).
+        if (row.proposalApproval && !row.approverUserId) throw new BadRequestException('Pick the approver for proposals in this funnel');
+        // Requests waiting for someone who no longer decides go back to Not requested, with their task;
+        // switching approval off clears approved ones too, so switching it on again starts afresh.
+        if (before && before.proposalApproval && (!row.proposalApproval || row.approverUserId !== before.approverUserId)) {
+          const waiting = await tx
+            .select({ id: deals.id })
+            .from(deals)
+            .where(
+              row.proposalApproval
+                ? and(eq(deals.funnelId, funnelId), sql`${deals.approvalRequestedAt} is not null`, isNull(deals.approvedAt))
+                : and(eq(deals.funnelId, funnelId), sql`(${deals.approvalRequestedAt} is not null or ${deals.approvedAt} is not null)`),
+            );
+          const why = row.proposalApproval ? 'The approver of this funnel changed' : 'Proposal approval was switched off for this funnel';
+          for (const d of waiting) await resetApproval(tx, ctx, d.id, why);
+        }
         await this.audit.record(tx, ctx, { action: 'funnel.updated', entityType: 'funnel', entityId: funnelId, data: input });
         return this.one(tx, funnelId);
       })

@@ -12,6 +12,7 @@ import { CustomFieldsService } from './custom-fields/custom-fields.service';
 import { ActivitiesService } from './deals/activities.service';
 import { DealLinesService } from './deals/deal-lines.service';
 import { DealStageStatesService } from './deals/deal-stage-states.service';
+import { ProposalApprovalService } from './deals/proposal-approval.service';
 import { DealTasksService } from './deals/deal-tasks.service';
 import { DealWorkController } from './deals/deal-work.controller';
 import { DealsController } from './deals/deals.controller';
@@ -52,7 +53,7 @@ import { VisitProgressService } from './visit-plans/visit-progress.service';
 @Module({
   imports: [PeopleModule],
   controllers: [CompaniesController, ContactsController, FunnelsController, DealsController, DealWorkController, ProductsController, ImportController, CustomFieldsController, BonusRulesController, DocumentsController, HistoryController, OnboardingController, MeetingsController, MeetingMinutesController, ExternalMinutesController, VisitPlansController],
-  providers: [CompaniesService, CompanyStatusService, ContactsService, FunnelsService, DealsService, ActivitiesService, DealLinesService, DealTasksService, DealStageStatesService, StageHistoryService, ProductsService, ImportService, CustomFieldsService, BonusRulesService, DocumentsService, DocumentGenerator, RecordHistoryService, OnboardingService, MeetingsService, MeetingMinutesService, ExternalMinutesService, VisitPlansService, VisitProgressService],
+  providers: [CompaniesService, CompanyStatusService, ContactsService, FunnelsService, DealsService, ActivitiesService, DealLinesService, DealTasksService, DealStageStatesService, ProposalApprovalService, StageHistoryService, ProductsService, ImportService, CustomFieldsService, BonusRulesService, DocumentsService, DocumentGenerator, RecordHistoryService, OnboardingService, MeetingsService, MeetingMinutesService, ExternalMinutesService, VisitPlansService, VisitProgressService],
   exports: [DealsService],
 })
 export class CrmModule {}

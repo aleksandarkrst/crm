@@ -7,6 +7,12 @@ import { api, ApiError, authorizedFetch } from '../lib/api';
 
 export const DOC_TYPES = ['Proposal', 'Quote', 'Contract', 'NDA', 'Onboarding brief', 'Invoice'] as const;
 export type DocType = (typeof DOC_TYPES)[number];
+/** The type of a file uploaded to an opportunity (CD-120). One Proposal per opportunity. */
+export const UPLOAD_TYPES = ['Proposal', 'Price list', 'Technical specification', 'Contract draft', 'Reference list', 'Other'] as const;
+export type UploadType = (typeof UPLOAD_TYPES)[number];
+/** The same limits as the API, checked before uploading. */
+export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+export const MAX_UPLOAD_FILES = 10;
 /** The same limit as the API, checked before uploading. */
 export const MAX_TEMPLATE_BYTES = 5 * 1024 * 1024;
 
@@ -32,9 +38,12 @@ export interface DealDoc {
   dealId: string;
   templateId: string | null;
   templateName: string;
-  docType: DocType;
+  docType: DocType | UploadType;
   name: string;
   status: DocStatus;
+  /** Generated from a template, or uploaded (CD-120) as a PDF, DOCX or XLSX. */
+  source: 'generated' | 'uploaded';
+  mimeType: string | null;
   error: string | null;
   sizeBytes: number | null;
   missingFields: string[];
@@ -63,10 +72,10 @@ export interface ScanResult {
 
 
 /** Multipart upload (api() sends JSON only). */
-async function upload<T>(path: string, form: FormData): Promise<T> {
+async function upload<T>(path: string, form: FormData, tooLarge = 'The file is larger than 5 MB'): Promise<T> {
   const res = await authorizedFetch(path, { method: 'POST', body: form });
   const body: unknown = await res.json().catch(() => null);
-  if (!res.ok) throw new ApiError(res.status, res.status === 413 ? { message: 'The file is larger than 5 MB' } : body);
+  if (!res.ok) throw new ApiError(res.status, res.status === 413 ? { message: tooLarge } : body);
   return body as T;
 }
 
@@ -109,8 +118,26 @@ export const docsApi = {
   document: (id: string) => api<DealDoc>(`/crm/deal-documents/${id}`),
   generate: (dealId: string, templateId: string) => api<DealDoc>(`/crm/deals/${dealId}/documents`, { method: 'POST', json: { templateId } }),
   deleteDocument: (id: string) => api<null>(`/crm/deal-documents/${id}`, { method: 'DELETE' }),
-  downloadDocument: (d: DealDoc) => download(`/crm/deal-documents/${d.id}/file`, `${d.name}.docx`),
+  downloadDocument: (d: DealDoc) => download(`/crm/deal-documents/${d.id}/file`, `${d.name}.${fileExtension(d)}`),
+  /** "Import my own" (CD-120): the files and one type for each. */
+  uploadDocuments: (dealId: string, files: { file: File; type: UploadType }[]) => {
+    const form = new FormData();
+    for (const f of files) form.append('files', f.file, f.file.name);
+    form.append('types', JSON.stringify(files.map((f) => f.type)));
+    return upload<DealDoc[]>(`/crm/deals/${dealId}/documents/upload`, form, 'A file is larger than 25 MB');
+  },
 };
+
+/** A document's file extension: an uploaded PDF or XLSX, else the generated .docx. */
+export const fileExtension = (d: DealDoc) => (d.mimeType === 'application/pdf' ? 'pdf' : d.mimeType?.includes('spreadsheetml') ? 'xlsx' : 'docx');
+
+/** Checks a file picked for "Import my own" before it is sent; returns the problem, or null. */
+export function uploadFileProblem(file: File): string | null {
+  if (!/\.(pdf|docx|xlsx)$/i.test(file.name)) return 'Only PDF, DOCX or XLSX files can be uploaded.';
+  if (file.size > MAX_UPLOAD_BYTES) return 'The file is larger than 25 MB.';
+  if (file.size === 0) return 'The file is empty.';
+  return null;
+}
 
 /** Checks a picked file before it is sent; returns the problem, or null. */
 export function templateFileProblem(file: File): string | null {
@@ -122,6 +149,8 @@ export function templateFileProblem(file: File): string | null {
 
 export const canManageTemplates = (role: string) => role === 'owner' || role === 'admin';
 export const docBusy = (d: DealDoc) => d.status === 'queued' || d.status === 'running';
+/** Whether a deal has its proposal (CD-120: one per opportunity), generated or imported; a failed generation doesn't count. */
+export const hasLiveProposal = (docs: DealDoc[] | undefined) => !!docs?.some((d) => d.docType === 'Proposal' && d.status !== 'failed');
 
 /** The template to suggest on a deal: the first one of the stage's document type, else the newest. */
 export function suggestedTemplate(templates: DocTemplate[], docType?: string): DocTemplate | undefined {

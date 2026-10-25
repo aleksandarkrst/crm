@@ -196,6 +196,12 @@ export const funnels = pgTable(
     position: integer('position').notNull().default(0),
     /** Days an opportunity may stay in a stage before it is late (CD-363); a stage's own target wins. */
     targetDays: integer('target_days'),
+    /**
+     * Proposals in this funnel need approval before they are sent (CD-120): one rule for the whole
+     * funnel, with its approver (emailed when approval is requested). Owners and admins approve too.
+     */
+    proposalApproval: boolean('proposal_approval').notNull().default(false),
+    approverUserId: uuid('approver_user_id').references(() => users.id, { onDelete: 'set null' }),
     ...timestamps,
   },
   (t) => [
@@ -339,6 +345,18 @@ export const deals = pgTable(
     lostAt: timestamp('lost_at', { withTimezone: true }),
     lostReason: text('lost_reason', { enum: LOST_REASONS }),
     lostNote: text('lost_note'),
+    /**
+     * Its proposal's approval (CD-120), when the funnel asks for one: requested (pending), then
+     * approved. Revoking clears both, back to Not requested; the activity keeps every step.
+     */
+    approvalRequestedAt: timestamp('approval_requested_at', { withTimezone: true }),
+    approvalRequestedByUserId: uuid('approval_requested_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    approvedAt: timestamp('approved_at', { withTimezone: true }),
+    approvedByUserId: uuid('approved_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** The approver's "Approve the proposal" task made by the request; closed when it is decided or reset. */
+    approvalTaskId: uuid('approval_task_id'),
+    /** When its proposal was marked as sent (CD-120); the funnel's approval must come first. */
+    proposalSentAt: timestamp('proposal_sent_at', { withTimezone: true }),
     /** How the line prices are meant (CD-83): tax on top, tax included, or no tax. */
     taxMode: text('tax_mode', { enum: TAX_MODES }).notNull().default('exclusive'),
     /** Discounts on the whole deal; they apply to one-time products only (CD-83). */
@@ -632,6 +650,12 @@ export const salesBonusRules = pgTable(
 /** What a template is for (Settings → Document templates, "Document type"). */
 export const DOCUMENT_TYPES = ['Proposal', 'Quote', 'Contract', 'NDA', 'Onboarding brief', 'Invoice'] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+/** The type of a file uploaded to an opportunity instead of generated (CD-120). One Proposal per opportunity. */
+export const UPLOAD_DOCUMENT_TYPES = ['Proposal', 'Price list', 'Technical specification', 'Contract draft', 'Reference list', 'Other'] as const;
+export type UploadDocumentType = (typeof UPLOAD_DOCUMENT_TYPES)[number];
+export const DEAL_DOCUMENT_TYPES = [...new Set([...DOCUMENT_TYPES, ...UPLOAD_DOCUMENT_TYPES])] as [DocumentType | UploadDocumentType, ...(DocumentType | UploadDocumentType)[]];
+/** Generated from a template, or uploaded as made outside Pultly (CD-120). */
+export const DOCUMENT_SOURCES = ['generated', 'uploaded'] as const;
 
 /**
  * A .docx template uploaded by an owner or admin. The file lives in storage under
@@ -671,9 +695,12 @@ export const dealDocuments = pgTable(
     dealId: uuid('deal_id').notNull(),
     templateId: uuid('template_id'),
     templateName: text('template_name').notNull(),
-    docType: text('doc_type', { enum: DOCUMENT_TYPES }).notNull(),
+    docType: text('doc_type', { enum: DEAL_DOCUMENT_TYPES }).notNull(),
     name: text('name').notNull(),
     status: text('status', { enum: DOCUMENT_STATUSES }).notNull().default('queued'),
+    source: text('source', { enum: DOCUMENT_SOURCES }).notNull().default('generated'),
+    /** An uploaded file's type (PDF, DOCX or XLSX); null for a generated .docx. */
+    mimeType: text('mime_type'),
     error: text('error'),
     storageKey: text('storage_key'),
     sizeBytes: integer('size_bytes'),

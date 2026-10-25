@@ -212,6 +212,7 @@ export class SettingsService {
         notifyOrgChanges: memberships.notifyOrgChanges,
         notifyTaskAssigned: memberships.notifyTaskAssigned,
         notifyHourLimits: memberships.notifyHourLimits,
+        notifyProposalApprovals: memberships.notifyProposalApprovals,
         notifyTimeoffBalance: memberships.notifyTimeoffBalance,
         notifyTimeoffApprovals: memberships.notifyTimeoffApprovals,
         notifySickLeave: memberships.notifySickLeave,
@@ -225,11 +226,11 @@ export class SettingsService {
 
   /**
    * Updates the caller's own profile; `defaultFunnelId` and the notification settings
-   * (`dailyDigest`, `notifyDealAssigned`, CD-16; `notifyMeetingInvites`, `notifyVisitPlans`, CD-207; `notifyTaskAssigned`, CD-146; `notifyHourLimits`, CD-149) apply to this workspace only.
+   * (`dailyDigest`, `notifyDealAssigned`, CD-16; `notifyMeetingInvites`, `notifyVisitPlans`, CD-207; `notifyTaskAssigned`, CD-146; `notifyHourLimits`, CD-149; `notifyProposalApprovals`, CD-120) apply to this workspace only.
    */
   async updateProfile(ctx: TenantContext, user: AuthUser, input: UpdateProfile) {
-    const { defaultFunnelId, dailyDigest, notifyDealAssigned, notifyMeetingInvites, notifyVisitPlans, notifyOrgChanges, notifyTaskAssigned, notifyHourLimits, notifyTimeoffBalance, notifyTimeoffApprovals, notifySickLeave, ...own } = input;
-    const workspaceOnly = { defaultFunnelId, dailyDigest, notifyDealAssigned, notifyMeetingInvites, notifyVisitPlans, notifyOrgChanges, notifyTaskAssigned, notifyHourLimits, notifyTimeoffBalance, notifyTimeoffApprovals, notifySickLeave };
+    const { defaultFunnelId, dailyDigest, notifyDealAssigned, notifyMeetingInvites, notifyVisitPlans, notifyOrgChanges, notifyTaskAssigned, notifyHourLimits, notifyProposalApprovals, notifyTimeoffBalance, notifyTimeoffApprovals, notifySickLeave, ...own } = input;
+    const workspaceOnly = { defaultFunnelId, dailyDigest, notifyDealAssigned, notifyMeetingInvites, notifyVisitPlans, notifyOrgChanges, notifyTaskAssigned, notifyHourLimits, notifyProposalApprovals, notifyTimeoffBalance, notifyTimeoffApprovals, notifySickLeave };
     await this.database.withTenant(ctx.tenantId, async (tx) => {
       if (defaultFunnelId) {
         // RLS is on, so a funnel of another workspace is simply not found.

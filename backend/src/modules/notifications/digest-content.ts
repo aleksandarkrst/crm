@@ -68,6 +68,8 @@ export interface Digest {
   noNextStep: DigestDealRow[];
   /** Opportunities past their stage's target in a stage they own (or own the opportunity, without a stage owner). */
   lateInStage: DigestLateRow[];
+  /** Proposals waiting for their approval, as a funnel's approver (CD-120). */
+  approvalsPending: DigestDealRow[];
   /** Their visit plans for the current month and quarter. Shown when the digest goes out; never a reason to send it. */
   visitPlans: DigestVisitPlanRow[];
 }
@@ -90,6 +92,8 @@ export interface DigestMeetings {
   visitPlans?: DigestVisitPlanRow[];
   /** Their opportunities late in a stage (CD-363). */
   lateInStage?: DigestLateRow[];
+  /** Proposals pending their approval (CD-120). */
+  approvalsPending?: DigestDealRow[];
 }
 
 /**
@@ -119,13 +123,14 @@ export function buildDigest(today: string, tasks: DigestTaskRow[], dealsWithoutN
     noNextStep: [...dealsWithoutNextStep].sort((a, b) => a.title.localeCompare(b.title)),
     // Latest first, then by title.
     lateInStage: [...(meetings.lateInStage ?? [])].filter((d) => d.lateDays > 0).sort((a, b) => b.lateDays - a.lateDays || a.title.localeCompare(b.title)),
+    approvalsPending: [...(meetings.approvalsPending ?? [])].sort((a, b) => a.title.localeCompare(b.title)),
     // The month's plan before the quarter's.
     visitPlans: [...(meetings.visitPlans ?? [])].sort((a, b) => (a.periodType === b.periodType ? 0 : a.periodType === 'month' ? -1 : 1)),
   };
 }
 
 export const digestItemCount = (d: Digest): number =>
-  d.meetingsToday.length + d.overdue.length + d.dueToday.length + d.notClosed.length + d.minutesMissing.length + d.noNextStep.length + d.lateInStage.length;
+  d.meetingsToday.length + d.overdue.length + d.dueToday.length + d.notClosed.length + d.minutesMissing.length + d.noNextStep.length + d.lateInStage.length + d.approvalsPending.length;
 export const isEmptyDigest = (d: Digest): boolean => digestItemCount(d) === 0;
 
 /** The current date and time on the clock of an IANA time zone. */
@@ -170,6 +175,7 @@ export function digestEmail({ to, memberName, workspaceName, appUrl, digest }: D
     digest.minutesMissing.length ? plural(digest.minutesMissing.length, 'meeting') + ' without minutes' : null,
     digest.noNextStep.length ? plural(digest.noNextStep.length, 'opportunity', 'opportunities') + ' without a next step' : null,
     digest.lateInStage.length ? plural(digest.lateInStage.length, 'opportunity', 'opportunities') + ' late in their stage' : null,
+    digest.approvalsPending.length ? plural(digest.approvalsPending.length, 'proposal') + ' to approve' : null,
   ].filter(Boolean);
   const subject = `Your day in ${workspaceName}: ${counts.join(', ')}`;
 
@@ -201,6 +207,10 @@ export function digestEmail({ to, memberName, workspaceName, appUrl, digest }: D
     {
       title: 'Late in their stage',
       lines: digest.lateInStage.map((d) => ({ text: `${onDeal(d.title, d.company)} · ${d.stage}, ${plural(d.lateDays, 'day')} late`, href: dealUrl(d.id) })),
+    },
+    {
+      title: 'Proposals waiting for your approval',
+      lines: digest.approvalsPending.map((d) => ({ text: `${onDeal(d.title, d.company)} · ${d.stage}`, href: dealUrl(d.id) })),
     },
     {
       title: 'Visit plan progress',
@@ -258,6 +268,38 @@ export interface StageReminderEmailInput {
   workspaceName: string;
   appUrl: string;
   deal: { id: string; title: string; company: string | null; stage: string; daysInStage: number; targetDays: number | null };
+}
+
+export interface ApprovalRequestedEmailInput {
+  to: string;
+  recipientName: string | null;
+  actorName: string;
+  workspaceName: string;
+  funnelName: string;
+  appUrl: string;
+  deal: { id: string; title: string; company: string | null; stage: string };
+}
+
+/** "X asks you to approve the proposal" (CD-120), to the funnel's approver. */
+export function approvalRequestedEmail({ to, recipientName, actorName, workspaceName, funnelName, appUrl, deal }: ApprovalRequestedEmailInput): MailMessage {
+  const link = `${appUrl.replace(/\/+$/, '')}/deals/${deal.id}`;
+  const subject = `${actorName} asks you to approve the proposal for ${deal.title}`;
+  const facts = [deal.company ? `Company: ${deal.company}` : null, `Funnel: ${funnelName}`, `Stage: ${deal.stage}`].filter((f): f is string => !!f);
+  const greeting = recipientName ? `Hi ${recipientName.split(' ')[0]},` : 'Hi,';
+  const intro = `${actorName} requested your approval of the proposal for ${deal.title} in ${workspaceName}. It can't be sent until it is approved.`;
+  const footer = `You get this email because you approve proposals in the ${funnelName} funnel and "Proposal approvals" is on in Settings → Notifications for ${workspaceName}.`;
+  const text = [greeting, '', intro, '', ...facts, '', `Review and approve: ${link}`, '', footer].join('\n');
+  const html = layoutHtml(
+    [
+      `<p style="margin:0 0 12px">${escapeHtml(greeting)}</p>`,
+      `<p style="margin:0 0 12px">${escapeHtml(intro)}</p>`,
+      `<p style="margin:0 0 12px;color:#475750">${facts.map(escapeHtml).join('<br>')}</p>`,
+      buttonHtml('Review the proposal', link),
+    ].join('\n'),
+    footer,
+    appUrl,
+  );
+  return { to, subject, text, html };
 }
 
 /** "Remind the owner" (CD-363): someone asks the stage owner to move an opportunity on. */
