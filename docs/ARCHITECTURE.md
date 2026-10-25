@@ -269,6 +269,30 @@ the Overview audience filter).
 - Test workspaces: integration `createTenant` and the e2e `createWorkspace` switch `gate_todos` off
   unless asked for `gated`, so suites that move deals don't tick every to-do first.
 
+### Proposal approval (CD-120)
+
+- One rule per **funnel**, not per stage: `funnels.proposal_approval` and `approver_user_id`
+  (Settings → Funnels, below the stages; `PATCH /api/crm/funnels/:id`, admins; switching it on needs
+  a member as approver). No stage has an approval switch, and the CD-363 gates are unchanged.
+- On the deal: `approval_requested_at/_by_user_id`, `approved_at/_by_user_id` and
+  `proposal_sent_at`. The status is computed, never stored: `approvalStatus()` /
+  `approvalStatusSql` in `crm/deals/proposal-approval.ts` give `not_required` (the funnel doesn't
+  ask), `not_requested`, `pending`, `approved`. Deal reads carry `approvalStatus`, and
+  `GET /api/crm/deals?approvalStatus=` filters by it, whatever the stage (the "Approval status"
+  filter field).
+- `ProposalApprovalService` (`POST /api/crm/deals/:id/approval/request | approve | revoke`,
+  `POST …/proposal/sent`), each locking the deal row and answering with the approval as it now
+  stands. Requesting needs the funnel's rule, an open deal and a ready document typed Proposal; it
+  queues `crm.approval-requested`, which emails the approver if `memberships.notify_proposal_approvals`
+  is on (Settings → Notifications, "Proposal approvals"). The approver, owners and admins approve
+  (from Pending) or revoke (Pending or Approved, back to Not requested); anyone else gets 403.
+  "Mark as sent" is a 409 until approved when the funnel asks for it; it doesn't email anything yet.
+- What was approved must still stand: a new Proposal (generated or uploaded), deleting the
+  Proposal, or moving the deal to another funnel clears the request and approval
+  (`resetApproval`). Every step is an activity ("Approval requested", "Proposal approved",
+  "Proposal approval revoked", "Proposal sent", "… reset") and an audit row.
+- The daily digest lists "Proposals waiting for your approval" to the funnel's approver.
+
 ## Deal outcome: open, won, lost
 
 - **Won is the won stage.** A deal is won while it is in its funnel's won stage
@@ -511,6 +535,14 @@ fields; anyone in the workspace generates a document on a deal from one and down
 - **Not done yet**: PDF output (it needs LibreOffice or a conversion service in the worker; a
   follow-up), emailing a document, and "sent/signed" states (the built-in preview's "Mark as sent"
   is still session-only).
+
+**Uploaded documents (CD-120).** "Import my own" on the Documents tab:
+`POST /api/crm/deals/:id/documents/upload` (multipart `files`, up to 10, and `types`, a JSON list
+with one type per file: Proposal, Price list, Technical specification, Contract draft, Reference
+list, Other). PDF, DOCX or XLSX by extension and first bytes, up to 25 MB each. They are
+`deal_documents` rows with `source = 'uploaded'`, `status = 'ready'` and their `mime_type` (the
+download keeps it and its extension). One Proposal per opportunity: two in one upload is a 400, a
+second one a 409 ("delete it first").
 
 ## Auth
 
