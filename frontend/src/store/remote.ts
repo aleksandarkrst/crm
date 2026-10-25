@@ -400,6 +400,7 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
     ownerId: c.ownerUserId,
     status: c.status,
     statusManual: c.statusSetManually,
+    statusChangedAt: c.statusChangedAt,
   }));
 
   // Everyone who isn't already shown as a lead's primary contact.

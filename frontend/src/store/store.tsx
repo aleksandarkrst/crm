@@ -537,7 +537,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         set((x) => ({
           extraCompanies: x.extraCompanies.map((c) => {
             const r = c.id ? rows.get(c.id) : undefined;
-            return r ? { ...c, status: r.status, statusManual: r.statusSetManually } : c;
+            return r ? { ...c, status: r.status, statusManual: r.statusSetManually, statusChangedAt: r.statusChangedAt } : c;
           }),
         }));
       } catch {
@@ -1376,7 +1376,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     const setCompanyStatus = async (companyId: string, status: CompanyStatus | null) => {
       try {
         const row = await crmApi.setCompanyStatus(companyId, status);
-        set((x) => ({ extraCompanies: x.extraCompanies.map((c) => (c.id === companyId ? { ...c, status: row.status, statusManual: row.statusSetManually } : c)) }));
+        set((x) => ({ extraCompanies: x.extraCompanies.map((c) => (c.id === companyId ? { ...c, status: row.status, statusManual: row.statusSetManually, statusChangedAt: row.statusChangedAt } : c)) }));
         flash(status ? `Status set back to ${COMPANY_STATUS_LABELS[row.status]}` : `The status is automatic again: ${COMPANY_STATUS_LABELS[row.status]}`);
       } catch (err) {
         flash('Status not changed: ' + errText(err), 7000);

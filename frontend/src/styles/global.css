@@ -33,6 +33,8 @@
   --brand-soft-2: #CBE3DA;
   --brand-tint: #F3F8F6;
   --brand-head: #D7E9E1;
+  /* Kanban columns: the Pipeline, Companies and Tasks boards. */
+  --board-column: #F4F4F5;
   /* The border of a filter chip with a value (CD-366). */
   --brand-line: #CFE4DB;
 
@@ -1182,7 +1184,7 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 
 /* ---------------------------------------------------------------- tasks (CD-283) */
 .task-board { display: flex; gap: 14px; overflow-x: auto; align-items: stretch; min-height: 420px; padding-bottom: 6px; }
-.task-column { flex: 0 0 272px; width: 272px; display: flex; flex-direction: column; background: #F4F4F5; border: 1px solid transparent; border-radius: 10px; }
+.task-column { flex: 0 0 272px; width: 272px; display: flex; flex-direction: column; background: var(--board-column); border: 1px solid transparent; border-radius: 10px; }
 .task-column.over { border-color: var(--brand); background: #E7F2EE; }
 .task-column-head { display: flex; align-items: center; gap: 7px; padding: 12px 12px 8px; }
 .task-column-body { display: flex; flex-direction: column; gap: 10px; padding: 4px 12px 12px; flex: 1; }

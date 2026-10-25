@@ -2,6 +2,7 @@
 import { SCRIPTS } from './seed';
 import type { CustomFieldEntity, CustomValue } from '../lib/api';
 import { billingDates, type DealTotals, dealTotals } from './dealMath';
+import { readiness, STATUS_RANK } from './companyBoard';
 import { dealsWithUpcomingMeeting } from './meetings';
 import type { CatalogItem, CompanyStatus, CustomFieldDef, DealLine, Lead, LeadTask, LogEntry, Person, SegKey, Stage, State, TaskState } from './types';
 
@@ -181,7 +182,7 @@ export const companyIdOfPerson = (s: State, p: Person): string | null => (p.comp
 
 export const COMPANY_STATUS_LABELS: Record<CompanyStatus, string> = { lead: 'Lead', opportunity: 'Opportunity', client: 'Client', past_client: 'Past client', not_interested: 'Not interested' };
 /** Lower is further back; a status can only be set back by hand (company-status.ts in the API). */
-export const COMPANY_STATUS_RANK: Record<CompanyStatus, number> = { not_interested: 0, lead: 1, opportunity: 2, past_client: 3, client: 4 };
+export const COMPANY_STATUS_RANK = STATUS_RANK;
 
 /**
  * Whether a company can't take an opportunity (CD-360), as the API checks it: a lead, or a Not
@@ -200,31 +201,9 @@ export function companyContacts(s: State, companyId: string): Person[] {
   return allPeople(s).filter((p) => companyIdOfPerson(s, p) === companyId && !seen.has(p.contactId || p.id) && !!seen.add(p.contactId || p.id));
 }
 
-/**
- * What a lead still needs before it becomes an opportunity, as the API checks it
- * (opportunityReadiness in crm/companies/company-status.ts): 7 checks, the address as one line.
- */
-export function companyReadiness(s: State, companyId: string): { ready: number; total: number; blockers: string[] } {
-  const c = s.extraCompanies.find((x) => x.id === companyId);
-  const filled = (v: string | null | undefined) => !!v && v.trim() !== '';
-  const address = [!filled(c?.address) && 'street', !filled(c?.city) && 'city', !filled(c?.postalCode) && 'postal code'].filter((x): x is string => !!x);
-  const missing = (p: Person) => [!filled(p.role) && 'job title', !filled(p.buyerRole) && 'role in the decision', !p.ownerId && 'owner'].filter((x): x is string => !!x);
-  const people = companyContacts(s, companyId);
-  let contact: string | null = null;
-  if (!people.some((p) => missing(p).length === 0)) {
-    const want = 'A contact with a job title, a role in the decision and an owner';
-    const best = [...people].sort((a, b) => missing(a).length - missing(b).length)[0];
-    const gaps = best ? missing(best) : [];
-    contact = best ? `${want}: ${best.name} has no ${gaps.length > 1 ? `${gaps.slice(0, -1).join(', ')} or ${gaps[gaps.length - 1]}` : gaps[0]} yet.` : want;
-  }
-  const checks: [number, string][] = [
-    [filled(c?.pib) ? 0 : 1, 'Company ID (PIB)'],
-    [filled(c?.mb) ? 0 : 1, 'Matični broj'],
-    [address.length, `Address (${address.length > 1 ? `${address.slice(0, -1).join(', ')} and ${address[address.length - 1]}` : address[0]})`],
-    [filled(c?.activityCode) ? 0 : 1, 'Šifra delatnosti'],
-    [contact ? 1 : 0, contact ?? ''],
-  ];
-  return { ready: 7 - checks.reduce((n, [m]) => n + m, 0), total: 7, blockers: checks.filter(([m]) => m > 0).map(([, msg]) => msg) };
+/** What a lead still needs before it becomes an opportunity (companyBoard.ts: the API's 7 checks). */
+export function companyReadiness(s: State, companyId: string): { ready: number; total: number; blockers: string[]; missing: string[] } {
+  return readiness(s.extraCompanies.find((x) => x.id === companyId), companyContacts(s, companyId));
 }
 
 /**

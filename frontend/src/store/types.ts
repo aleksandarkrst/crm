@@ -184,6 +184,8 @@ export interface CompanyExtra {
   /** Status from the API (CD-358; 'lead' until it says otherwise); statusManual while set back by hand. */
   status?: CompanyStatus;
   statusManual?: boolean;
+  /** When the status last changed (ISO): a past client's "Last project done" month (CD-359). */
+  statusChangedAt?: string | null;
 }
 
 /** How an opportunity is sold (CD-360). */
