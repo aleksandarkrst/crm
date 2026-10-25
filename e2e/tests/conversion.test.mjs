@@ -3,7 +3,7 @@
 // Overview filters.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, steps, text, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, createReadyCompany, eventually, newUserWithWorkspace, steps, text, useBrowser } from '../lib/harness.mjs';
 import { chipText, clearFilters, closePopover, openChip, pickOption } from '../lib/filters.mjs';
 
 const card = (page) => page.$eval('[data-testid=stage-conversion]', (el) => el.innerText);
@@ -19,13 +19,15 @@ describe('stage conversion on Overview', () => {
   const step = steps(browser, 'conversion');
   let page;
   let funnels;
+  let companyId;
 
   step('shows the empty state while no opportunity has moved', async () => {
     page = await browser.person('cora');
     await newUserWithWorkspace(page, { label: 'conversion', name: 'Cora Tester', workspace: 'Conversion Co' });
     funnels = await api(page, '/crm/funnels');
     const smb = funnels.find((f) => f.key === 'smb');
-    await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Idle', funnelId: smb.id }) });
+    companyId = await createReadyCompany(page, 'Conversion Customer');
+    await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Idle', funnelId: smb.id, companyId }) });
     await page.goto(BASE_URL + '/overview', { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.querySelector('[data-testid=stage-conversion]')?.innerText.includes('so far'));
     assert.match(await card(page), /Conversion rates appear once at least 5 opportunities in view have moved between stages \(0 so far\)/);
@@ -43,7 +45,7 @@ describe('stage conversion on Overview', () => {
       { title: 'At proposal', to: 3 },
     ];
     for (const d of plan) {
-      const deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: d.title, funnelId: smb.id }) });
+      const deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: d.title, funnelId: smb.id, companyId }) });
       for (let k = 1; k <= d.to; k++) await api(page, `/crm/deals/${deal.id}/move`, { method: 'POST', body: JSON.stringify({ stageId: st[k].id }) });
       if (d.lost) await api(page, `/crm/deals/${deal.id}/lost`, { method: 'POST', body: JSON.stringify({ reason: d.lost }) });
     }

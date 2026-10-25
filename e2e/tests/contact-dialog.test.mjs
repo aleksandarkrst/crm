@@ -3,7 +3,7 @@
 // the contact page checks the phone and moves the contact to a company that has no deals.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, clickButton, createNew, eventually, newUserWithWorkspace, setValue, steps, testPib, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, createNew, createReadyCompany, eventually, newUserWithWorkspace, setValue, steps, testPib, useBrowser } from '../lib/harness.mjs';
 
 describe('contact dialog and contact page', () => {
   const browser = useBrowser();
@@ -18,9 +18,9 @@ describe('contact dialog and contact page', () => {
     await newUserWithWorkspace(page, { label: 'contacts', name: 'Cora Contacts', workspace: 'Contacts Co' });
     tide = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Tide d.o.o.' }) });
     kes = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'TEST-Kes d.o.o.' }) });
-    const other = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Busy Deals d.o.o.' }) });
+    const otherId = await createReadyCompany(page, 'Busy Deals d.o.o.');
     const funnels = await api(page, '/crm/funnels');
-    await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Busy deal', funnelId: funnels[0].id, companyId: other.id }) });
+    await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Busy deal', funnelId: funnels[0].id, companyId: otherId }) });
   });
 
   step('an empty form and a bad phone or email show inline errors, and nothing is saved', async () => {

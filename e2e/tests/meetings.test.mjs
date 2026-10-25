@@ -3,7 +3,7 @@
 // the URL, "Show all" from a company, scheduling from the deal's Composer, and phones.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, RUN, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
+import { api, BASE_URL, click, createReadyCompany, eventually, newUserWithWorkspace, READY_IDENTITY, RUN, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
 import { addFilter, chips, chipText, closePopover, pickOption, setOp, typeText } from '../lib/filters.mjs';
 
 const TZ = 'Europe/Belgrade'; // new workspaces use it
@@ -37,8 +37,8 @@ describe('meeting calendar', () => {
   step('sets up a company with a contact and an opportunity', async () => {
     page = await browser.person('mia');
     await newUserWithWorkspace(page, { label: 'meetings', name: 'Mia Meetings', workspace: 'Meetings Co' });
-    company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: COMPANY, hq: 'Belgrade, Knez Mihailova 1' }) });
-    contact = await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ fullName: 'Petra Customer', companyId: company.id, email: 'petra@acme.example.com' }) });
+    company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: COMPANY, hq: 'Belgrade, Knez Mihailova 1', ...READY_IDENTITY }) });
+    contact = await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ fullName: 'Petra Customer', companyId: company.id, email: 'petra@acme.example.com', jobTitle: 'Buyer', buyerRole: 'Decision maker' }) });
     const funnels = await api(page, '/crm/funnels');
     deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Acme showroom lights', funnelId: funnels[0].id, companyId: company.id, primaryContactId: contact.id }) });
   });
@@ -296,7 +296,8 @@ describe('meeting calendar', () => {
   });
 
   step('a meeting needs an opportunity: a company without one gets "+ New opportunity", which is picked after creating it', async () => {
-    const other = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: `Nodeal Works ${RUN}` }) });
+    // Only an opportunity or a client takes an opportunity (CD-360): a complete company without one yet.
+    const other = { id: await createReadyCompany(page, `Nodeal Works ${RUN}`) };
     const start = new Date(Math.ceil((Date.now() + 9 * 86_400_000) / 3_600_000) * 3_600_000).toISOString();
     const openNew = async () => {
       await page.goto(`${BASE_URL}/calendar?new=1&companyId=${other.id}&type=online&start=${encodeURIComponent(start)}`, { waitUntil: 'networkidle0' });
@@ -316,6 +317,7 @@ describe('meeting calendar', () => {
     await page.waitForSelector('[data-testid=new-deal-create]');
     assert.equal(await page.$eval('[data-testid=new-deal-company]', (el) => el.value), other.id);
     assert.equal(await page.$eval('[data-testid=new-deal-company]', (el) => el.disabled), true);
+    await click(page, '[data-testid=new-deal-sale-capital]');
     await click(page, '[data-testid=new-deal-create]');
     await page.waitForFunction(() => !document.querySelector('[data-testid=new-deal-create]'), { timeout: 10_000 });
     const made = await eventually(async () => (await api(page, '/crm/deals')).find((r) => r.deal.companyId === other.id)?.deal);

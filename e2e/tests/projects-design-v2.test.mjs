@@ -3,7 +3,7 @@
 // Ctrl/⌘K; "Add starter tasks from the products" when a project starts from a deal.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, newUserWithWorkspace, steps, useBrowser, testPib } from '../lib/harness.mjs';
+import { api, createReadyCompany, BASE_URL, click, newUserWithWorkspace, steps, useBrowser } from '../lib/harness.mjs';
 
 describe('projects design v2', () => {
   const browser = useBrowser();
@@ -18,7 +18,7 @@ describe('projects design v2', () => {
     page = await browser.person('vera');
     await newUserWithWorkspace(page, { label: 'design-v2', name: 'Vera Vee', workspace: 'Vee Co' });
     const [type] = await api(page, '/project-types');
-    company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Northwind' }) });
+    company = { id: await createReadyCompany(page, 'Northwind') };
     project = await api(page, '/projects', { method: 'POST', body: JSON.stringify({ name: 'Service 2026', projectTypeId: type.id, companyId: company.id }) });
     const task = (body) => api(page, '/tasks', { method: 'POST', body: JSON.stringify({ projectId: project.id, ...body }) });
     const done = await task({ name: 'Site survey' });

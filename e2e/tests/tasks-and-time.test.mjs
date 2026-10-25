@@ -2,7 +2,7 @@
 // dialog (CD-28), the workspace currency and fiscal year (CD-73), and "1 lead" (CD-74).
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, clickButton, eventually, newUserWithWorkspace, setValue, steps, text, useBrowser, waitForToastToClear, createNew } from '../lib/harness.mjs';
+import { api, BASE_URL, clickButton, createReadyCompany, eventually, newUserWithWorkspace, setValue, steps, text, useBrowser, waitForToastToClear, createNew } from '../lib/harness.mjs';
 import { closePopover, pickOption as pickFilterOption } from '../lib/filters.mjs';
 
 /** An ISO date `days` from today in a time zone (new workspaces use Europe/Belgrade). */
@@ -24,7 +24,7 @@ describe('tasks: overdue, editing and channels', () => {
     await newUserWithWorkspace(page, { label: 'tasks', name: 'Tara Tester', workspace: 'Tasks Co' });
     const funnels = await api(page, '/crm/funnels');
     const smb = funnels.find((f) => f.key === 'smb');
-    deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Overdue Ltd', funnelId: smb.id }) });
+    deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Overdue Ltd', funnelId: smb.id, companyId: await createReadyCompany(page, 'Overdue Ltd') }) });
     task = await api(page, `/crm/deals/${deal.id}/tasks`, {
       method: 'POST',
       body: JSON.stringify({ stageId: smb.stages[0].id, label: 'Chase the signed NDA', blocksAdvance: false, channel: 'EM', dueDate: isoDay(-3) }),
@@ -89,13 +89,15 @@ describe('workspace currency, fiscal year and counters', () => {
   const step = steps(browser, 'workspace-money');
   let page;
   let smb;
+  let companyId;
 
   step('a workspace in USD with one opportunity', async () => {
     page = await browser.person('uma');
     await newUserWithWorkspace(page, { label: 'usd', name: 'Uma Tester', workspace: 'Dollar Co' });
     await api(page, '/workspace', { method: 'PATCH', body: JSON.stringify({ currency: 'USD', fiscalYearStartMonth: 4 }) });
     smb = (await api(page, '/crm/funnels')).find((f) => f.key === 'smb');
-    const deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Yankee Doodle', funnelId: smb.id, amount: 12000 }) });
+    companyId = await createReadyCompany(page, 'Yankee Doodle Inc');
+    const deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Yankee Doodle', funnelId: smb.id, amount: 12000, companyId }) });
     assert.equal(deal.currency, 'USD');
   });
 
@@ -122,7 +124,7 @@ describe('workspace currency, fiscal year and counters', () => {
       ['Fiscal in', lastDay],
       ['Fiscal out', dayBefore],
     ])
-      await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title, funnelId: smb.id, closeDate }) });
+      await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title, funnelId: smb.id, closeDate, companyId }) });
     await page.reload({ waitUntil: 'networkidle0' });
     await pickFilterOption(page, 'close', 'quarter');
     await closePopover(page);
