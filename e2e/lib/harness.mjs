@@ -273,15 +273,31 @@ export async function createNew(page, kind) {
 }
 
 /** "New deal" from the header's "+" menu with a new company and contact; returns the new deal id. */
-export async function createDealInUi(page, { company, contact }) {
+export async function createDealInUi(page, { company, contact, saleType = 'capital' }) {
+  // Only an opportunity or a client takes an opportunity (CD-360): a complete company with a qualified contact.
+  const companyId = await createReadyCompany(page, company, contact);
+  await page.reload({ waitUntil: 'networkidle0' });
   await createNew(page, 'deal');
-  await page.waitForSelector('input[placeholder="Name as registered in APR"]');
-  await page.type('input[placeholder="Name as registered in APR"]', company);
-  await page.type('[data-testid=new-deal-company-pib]', testPib());
-  await page.type('input[placeholder="Full name"]', contact);
+  await page.waitForSelector('[data-testid=new-deal-company]');
+  await page.select('[data-testid=new-deal-company]', companyId);
+  await click(page, `[data-testid=new-deal-sale-${saleType}]`);
   await clickButton(page, 'Create & start funnel');
   await page.waitForFunction(() => location.pathname.startsWith('/deals/'));
   return page.url().split('/deals/')[1];
+}
+
+/** What a company needs, besides its PIB, to be an Opportunity (CD-358). */
+export const READY_IDENTITY = { mb: '20084693', activityCode: '4941', address: 'Bulevar 10', city: 'Novi Sad', postalCode: '21000' };
+
+/**
+ * A company that can take opportunities (CD-360), through the API: complete, with a contact who has a
+ * job title, a role in the decision and an owner (you). Returns its id.
+ */
+export async function createReadyCompany(page, name, contact = 'Petar Nikolić', extra = {}) {
+  const me = (await api(page, '/profile')).userId;
+  const company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name, pib: testPib(), ...READY_IDENTITY, ...extra }) });
+  await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ companyId: company.id, fullName: contact, jobTitle: 'CEO', buyerRole: 'Decision maker', ownerUserId: me }) });
+  return company.id;
 }
 
 /** Sets the deal's closing date on the lead screen (a React-controlled date input). */
