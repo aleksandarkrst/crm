@@ -212,7 +212,7 @@ describe('another workspace', () => {
 });
 
 describe("the approver's task", () => {
-  interface Task { id: string; dealId: string; label: string; assigneeUserId: string | null; dueDate: string | null; done: boolean; blocksAdvance: boolean }
+  interface Task { id: string; dealId: string; label: string; assigneeUserId: string | null; dueDate: string | null; done: boolean; blocksAdvance: boolean; channel: string | null }
   const tasksOf = async (dealId: string) => (await ok<Task[]>('GET', `/crm/deal-tasks?dealIds=${dealId}`, as(owner))).filter((t) => t.label === 'Approve the proposal');
 
   it('a request gives the approver a task due today; approving ticks it', async () => {
@@ -236,12 +236,26 @@ describe("the approver's task", () => {
     await ok('PATCH', `/crm/deals/${reset.id}`, { ...as(owner), body: { funnelId: free.id } });
     expect(await tasksOf(reset.id)).toHaveLength(0);
 
-    // Revoked after approval: the ticked task stays as history, the next request makes a new one.
+    // Revoked after approval: the ticked task goes too (QA, 25 Oct); the next request makes a new one.
     const revoked = await pendingDeal('Task · revoked');
     await step(approver, revoked.id, 'approval/approve');
+    expect((await tasksOf(revoked.id)).map((t) => t.done)).toEqual([true]);
     await step(owner, revoked.id, 'approval/revoke');
+    expect(await tasksOf(revoked.id)).toHaveLength(0);
     await step(seller, revoked.id, 'approval/request');
-    expect((await tasksOf(revoked.id)).map((t) => t.done).sort()).toEqual([false, true]);
+    expect((await tasksOf(revoked.id)).map((t) => t.done)).toEqual([false]);
+
+    // Approved, then its proposal deleted: the ticked task goes with the approval.
+    const replaced = await pendingDeal('Task · proposal deleted');
+    await step(approver, replaced.id, 'approval/approve');
+    const [proposal] = await ok<{ id: string }[]>('GET', `/crm/deal-documents?dealId=${replaced.id}`, as(seller));
+    await ok('DELETE', `/crm/deal-documents/${proposal!.id}`, as(owner));
+    expect(await tasksOf(replaced.id)).toHaveLength(0);
+  });
+
+  it('the task is a note, not a research task', async () => {
+    const deal = await pendingDeal('Task · channel');
+    expect((await tasksOf(deal.id)).map((t) => t.channel)).toEqual(['NT']);
   });
 
   it('a new approver resets waiting requests, so the old approver keeps no task', async () => {
