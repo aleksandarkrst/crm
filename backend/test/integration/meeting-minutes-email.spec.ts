@@ -6,7 +6,7 @@
  * and delete refused after a send, the internal minutes never in the email, and Serbian chrome.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, eventually, firstFunnel, type Funnel, type Json, mailTo, ok, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, eventually, firstFunnel, type Funnel, type Json, mailTo, ok, readyCompany, type Session, signIn } from './helpers';
 
 let owner: Session;
 let ana: Session;
@@ -65,7 +65,7 @@ beforeAll(async () => {
   await addMember(owner, tenant, ana, 'member');
   await addMember(owner, tenant, bo, 'member');
   funnel = await firstFunnel(owner, tenant);
-  companyId = (await ok('POST', '/crm/companies', { ...as(owner), body: { pib: testPib(), name: 'Customer Co' } })).id;
+  companyId = (await readyCompany(owner, tenant, 'Customer Co')).id;
   dealId = (await ok('POST', '/crm/deals', { ...as(owner), body: { title: 'Customer deal', funnelId: funnel.id, companyId } })).id;
   const contact = (fullName: string, email: string | null) => ok('POST', '/crm/contacts', { ...as(owner), body: { fullName, companyId, email } });
   jovan = await contact('Jovan Jovanović', `jovan-${RUN}@customer.example.test`);

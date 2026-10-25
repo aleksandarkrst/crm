@@ -5,7 +5,7 @@
  * with the owner gone the first admin leads it; with the setting off nothing is created.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, eventually, firstFunnel, type Funnel, mailTo, ok, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, eventually, firstFunnel, type Funnel, mailTo, ok, readyCompany, type Session, signIn } from './helpers';
 
 let owner: Session;
 let seller: Session;
@@ -14,9 +14,9 @@ let funnel: Funnel;
 const as = (s: Session = owner) => ({ token: s.token, tenant });
 
 const wonStage = () => funnel.stages.find((s) => s.isWon)!;
-async function newDeal(title: string, ownerUserId = owner.userId, withCompany = true) {
-  const company = withCompany ? await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: `${title} Ltd` } }) : null;
-  return ok('POST', '/crm/deals', { ...as(), body: { title, funnelId: funnel.id, companyId: company?.id ?? null, ownerUserId } });
+async function newDeal(title: string, ownerUserId = owner.userId) {
+  const company = await readyCompany(owner, tenant, `${title} Ltd`);
+  return ok('POST', '/crm/deals', { ...as(), body: { title, funnelId: funnel.id, companyId: company.id, ownerUserId } });
 }
 const win = (dealId: string) => ok('POST', `/crm/deals/${dealId}/move`, { ...as(), body: { stageId: wonStage().id } }, 200);
 const projectsOf = (dealId: string) => ok<{ id: string; name: string; leadUserId: string; dealId: string; stageName: string; status: string }[]>('GET', `/projects?dealId=${dealId}`, as());
@@ -82,11 +82,8 @@ describe('automatic project on a won deal', () => {
     expect(project!.leadUserId).toBe(owner.userId);
   });
 
-  it('a won deal without a company gets none (a project needs its company)', async () => {
-    const deal = await newDeal('No company deal', owner.userId, false);
-    await win(deal.id);
-    await settle();
-    expect(await projectsOf(deal.id)).toEqual([]);
+  it('there is no deal without a company to win (a project needs its company; CD-360)', async () => {
+    expect((await call('POST', '/crm/deals', { ...as(), body: { title: 'No company deal', funnelId: funnel.id } })).status).toBe(400);
   });
 
   it('a name the company already uses gets a number', async () => {

@@ -3,7 +3,7 @@
  * to what; readable names; members can read it; isolated per tenant.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, type Funnel, firstFunnel, ok, productLine, saveProducts, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, firstFunnel, type Funnel, ok, productLine, readyCompany, saveProducts, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let seller: Session;
@@ -11,6 +11,7 @@ let outsider: Session;
 let tenant: string;
 let otherTenant: string;
 let funnel: Funnel;
+let companyId: string;
 const asOwner = () => ({ token: owner.token, tenant });
 const asSeller = () => ({ token: seller.token, tenant });
 
@@ -36,12 +37,13 @@ beforeAll(async () => {
   otherTenant = await createTenant(outsider, 'History other');
   await addMember(owner, tenant, seller, 'member');
   funnel = await firstFunnel(owner, tenant);
+  companyId = (await readyCompany(owner, tenant)).id;
 });
 
 describe('deal history', () => {
   it('records creation, field changes, stage and owner changes, lost and reopen, and deal lines', async () => {
     const product = await ok('POST', '/crm/products', { ...asOwner(), body: { name: 'History Widget', unitPrice: 1200 } });
-    const deal = await ok('POST', '/crm/deals', { ...asOwner(), body: { title: 'History deal', funnelId: funnel.id } });
+    const deal = await ok('POST', '/crm/deals', { ...asOwner(), body: { title: 'History deal', funnelId: funnel.id, companyId } });
     await ok('PATCH', `/crm/deals/${deal.id}`, { ...asSeller(), body: { title: 'History deal v2', closeDate: '2026-11-30' } });
     await ok('PATCH', `/crm/deals/${deal.id}`, { ...asOwner(), body: { ownerUserId: seller.userId } });
     await ok('POST', `/crm/deals/${deal.id}/move`, { ...asSeller(), body: { stageId: funnel.stages[1]!.id } }, 200);
@@ -81,7 +83,7 @@ describe('deal history', () => {
   });
 
   it('pages the list and keeps entries by people who left, as "Former member"', async () => {
-    const deal = await ok('POST', '/crm/deals', { ...asSeller(), body: { title: 'Paged deal', funnelId: funnel.id } });
+    const deal = await ok('POST', '/crm/deals', { ...asSeller(), body: { title: 'Paged deal', funnelId: funnel.id, companyId } });
     for (let i = 1; i <= 4; i++) await ok('PATCH', `/crm/deals/${deal.id}`, { ...asSeller(), body: { source: `Source ${i}` } });
     const first = await history('deal', deal.id, asOwner(), '&limit=3');
     expect(first.entries).toHaveLength(3);
@@ -117,7 +119,7 @@ describe('company and contact history', () => {
 
 describe('tenant isolation', () => {
   it("never shows another workspace's history", async () => {
-    const deal = await ok('POST', '/crm/deals', { ...asOwner(), body: { title: 'Private deal', funnelId: funnel.id } });
+    const deal = await ok('POST', '/crm/deals', { ...asOwner(), body: { title: 'Private deal', funnelId: funnel.id, companyId } });
     expect((await history('deal', deal.id)).entries.length).toBeGreaterThan(0);
     // Asking in your own workspace for another workspace's record finds nothing.
     const other = await history('deal', deal.id, { token: outsider.token, tenant: otherTenant });

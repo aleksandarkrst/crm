@@ -3,7 +3,7 @@
 // members removed.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, clickButton, email, eventually, signIn, steps, text, useBrowser, createWorkspace, finishOnboarding } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, createReadyCompany, email, eventually, signIn, steps, text, useBrowser, createWorkspace, finishOnboarding } from '../lib/harness.mjs';
 
 describe('team and invitations', () => {
   const browser = useBrowser();
@@ -45,7 +45,7 @@ describe('team and invitations', () => {
     await signIn(owner, email('olivia'), 'Olivia Owner');
     await createWorkspace(owner, 'Shared Co');
     const funnels = await api(owner, '/crm/funnels');
-    await api(owner, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Acme rebrand', funnelId: funnels[0].id }) });
+    await api(owner, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Acme rebrand', funnelId: funnels[0].id, companyId: await createReadyCompany(owner, 'Acme') }) });
   });
 
   step('the team tab shows the owner as (you)', async () => {

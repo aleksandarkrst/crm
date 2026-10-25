@@ -6,7 +6,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe } from 'node:test';
-import { api, BASE_URL, click, clickButton, eventually, newUserWithWorkspace, RUN, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, eventually, newUserWithWorkspace, READY_IDENTITY, RUN, steps, testPib, useBrowser } from '../lib/harness.mjs';
 
 const dir = mkdtempSync(join(tmpdir(), 'pultly-e2e-csv-'));
 const downloads = join(dir, 'downloads');
@@ -77,7 +77,11 @@ describe('CSV import and export', () => {
     await page.waitForFunction((names) => names.every((n) => document.body.innerText.includes(n)), {}, [acme, globex]);
   });
 
-  step('imports opportunities from the Pipeline: company matched or created, stage by name', async () => {
+  step('imports opportunities from the Pipeline: company matched, stage by name; a company not in the workspace is an error', async () => {
+    // Only an opportunity or a client takes an opportunity (CD-360): Globex is completed first, with a qualified contact.
+    const globexId = (await api(page, '/crm/companies')).find((c) => c.name === globex).id;
+    await api(page, '/crm/companies/' + globexId, { method: 'PATCH', body: JSON.stringify({ pib: testPib(), ...READY_IDENTITY }) });
+    await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ fullName: 'Greg Globex', companyId: globexId, jobTitle: 'CEO', buyerRole: 'Decision maker' }) });
     await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     const funnels = await api(page, '/crm/funnels');
     const funnel = funnels[0];
@@ -90,16 +94,19 @@ describe('CSV import and export', () => {
     await clickButton(page, 'Preview');
     await page.waitForSelector('[data-testid=import-counts]');
     const counts = await page.$eval('[data-testid=import-counts]', (el) => el.innerText);
-    assert.match(counts, /2 new/);
-    assert.match(counts, /1 new company/);
+    assert.match(counts, /1 new/);
+    assert.match(counts, /1 row with errors/);
     assert.match(counts, /1 new contact/);
-    await clickButton(page, 'Import 2 rows');
+    assert.doesNotMatch(counts, /new company/, 'an import never makes a company for an opportunity: it would be a lead');
+    assert.match(await modalText(page), new RegExp(`"${initech}" isn't in this workspace yet`));
+    await clickButton(page, 'Import 1 row');
     await page.waitForSelector('[data-testid=import-summary]');
-    assert.match(await page.$eval('[data-testid=import-summary]', (el) => el.innerText.replace(/\s+/g, ' ')), /Created 2 Updated 0 Skipped 0 Failed 0/i);
+    assert.match(await page.$eval('[data-testid=import-summary]', (el) => el.innerText.replace(/\s+/g, ' ')), /Created 1 Updated 0 Skipped 0 Failed 1/i);
     await clickButton(page, 'Done');
 
-    // Both deals are on the board (a card shows the company name).
-    await page.waitForFunction((names) => names.every((n) => [...document.querySelectorAll('[draggable]')].some((el) => el.innerText.includes(n))), {}, [globex, initech]);
+    // The deal is on the board (a card shows the company name); Initech was not created.
+    await page.waitForFunction((name) => [...document.querySelectorAll('[draggable]')].some((el) => el.innerText.includes(name)), {}, globex);
+    assert.ok(!(await api(page, '/crm/companies')).some((c) => c.name === initech), 'no company made for the failed row');
     const deals = await api(page, '/crm/deals');
     const website = deals.find((r) => r.deal.title === `Website ${RUN}`);
     assert.equal(website.companyName, globex, 'matched the existing company, ignoring case');
@@ -107,8 +114,7 @@ describe('CSV import and export', () => {
     assert.equal(website.deal.amount, '14000.00');
     assert.equal(website.deal.closeDate, '2026-12-31');
     assert.equal(website.contactName, 'Gina Globex');
-    const retainer = deals.find((r) => r.deal.title === `Retainer ${RUN}`);
-    assert.equal(retainer.deal.stageId, funnel.stages[0].id, 'no stage: the first stage');
+    assert.ok(!deals.some((r) => r.deal.title === `Retainer ${RUN}`), 'the failed row made no opportunity');
   });
 
   step('exports the contacts list as an Excel-friendly CSV', async () => {
@@ -131,7 +137,7 @@ describe('CSV import and export', () => {
     assert.equal(lines[0], 'Contact ID,Full name,Job title,Company record ID,Company,Email,Phone,LinkedIn,Buyer role,Owner,Org unit,Source,Influence on the opportunity,Birthday,Spouse,Children,Pets');
     assert.equal(lines.at(-1), '', 'ends with a line break');
     const rows = lines.slice(1, -1);
-    assert.equal(rows.length, 2, 'the imported contact and the new one');
+    assert.equal(rows.length, 3, 'the qualified contact, the imported one and the new one');
     const formula = rows.find((r) => r.includes(`formula-${RUN}@example.test`));
     // Guarded against formula injection, and quoted because of the quotes and the comma.
     assert.ok(formula.includes(`,"'=HYPERLINK(""x"")","Head, Growth",${globexId},${globex},`), formula);
@@ -152,12 +158,12 @@ describe('CSV import and export', () => {
       },
       globexId,
     );
-    await page.waitForFunction(() => document.querySelectorAll('.table-row').length === 2);
+    await page.waitForFunction(() => document.querySelectorAll('.table-row').length === 3);
     await exportList(page);
     const name = await eventually(() => existsSync(downloads) && readdirSync(downloads).find((f) => f.endsWith('.csv')), { timeout: 10_000 });
     const lines = readFileSync(join(downloads, name), 'utf8').split('\r\n').filter(Boolean);
-    // The header and the two contacts at Globex; the others are filtered out.
-    assert.equal(lines.length, 3, lines.join('\n'));
+    // The header and the three contacts at Globex; the others are filtered out.
+    assert.equal(lines.length, 4, lines.join('\n'));
     assert.ok(lines.every((l, i) => i === 0 || l.includes(globex)), lines.join('\n'));
     assert.equal(browser.errors.length, 0, browser.errors.join('\n'));
   });

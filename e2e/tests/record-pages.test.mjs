@@ -4,7 +4,7 @@
 // domain (a link) and notes, and the contact's LinkedIn, edit in place and show in the history.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, clickButton, eventually, newUserWithWorkspace, setByLabel, steps, text, useBrowser, testPib } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, createReadyCompany, eventually, newUserWithWorkspace, READY_IDENTITY, setByLabel, steps, text, useBrowser, testPib } from '../lib/harness.mjs';
 
 describe('company and contact pages', () => {
   const browser = useBrowser();
@@ -19,11 +19,11 @@ describe('company and contact pages', () => {
     page = await browser.person('rhea');
     await newUserWithWorkspace(page, { label: 'records', name: 'Rhea Records', workspace: 'Records Co' });
     const funnels = await api(page, '/crm/funnels');
-    company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Umbrella d.o.o.', industry: 'Pharmaceuticals', hq: 'Niš' }) });
-    contact = await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ fullName: 'Alice Abernathy', companyId: company.id, email: 'alice@umbrella.test', jobTitle: 'COO' }) });
+    company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Umbrella d.o.o.', industry: 'Pharmaceuticals', hq: 'Niš', ...READY_IDENTITY }) });
+    contact = await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ fullName: 'Alice Abernathy', companyId: company.id, email: 'alice@umbrella.test', jobTitle: 'COO', buyerRole: 'Decision maker' }) });
     await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Umbrella rollout', funnelId: funnels[0].id, companyId: company.id, primaryContactId: contact.id }) });
     empty = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Empty Shell d.o.o.' }) });
-    unowned = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Nobody Owns d.o.o.', ownerUserId: null }) });
+    unowned = { id: await createReadyCompany(page, 'Nobody Owns d.o.o.', 'Petar Nikolić', { ownerUserId: null }) };
     await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Unowned company opportunity', funnelId: funnels[0].id, companyId: unowned.id }) });
     await page.reload({ waitUntil: 'networkidle0' });
   });

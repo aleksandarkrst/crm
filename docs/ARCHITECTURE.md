@@ -2502,6 +2502,33 @@ company page opens with a toast saying how it gets there (Past client → Client
 on, though its column is to the left). A lead without a PIB can't be dragged. A past client's
 "Last project done" month is its `status_changed_at`.
 
+### Pipeline entry and sale type (CD-360)
+
+- Only a company that is an **opportunity or a client** takes an opportunity: Opportunity, Client
+  and Past client pass, a Lead never does, and a Not interested company only when it is complete
+  (set back from Lead by hand, it would slip past otherwise). `CreateDeal` requires `companyId`;
+  `DealsService.create` and a company change in `update` lock the company row (`for update`, the
+  lock the status recompute takes anyway; a company change locks both companies in id order, so
+  nothing deadlocks) and refuse it with 409 `{ message, blockers }` (the company page's list from
+  `opportunityReadiness`; empty for a company set back to Lead by hand). A company of another workspace is a 400 without
+  blockers. The CSV import makes the same rule a row error: no company, a company the file would
+  create (a lead), a lead, or an incomplete Not interested company (only those the file names are
+  read).
+- The New opportunity dialog lists every company with its status (none when it isn't loaded);
+  blocked ones are disabled. One passed in (from its contact's page) shows what it misses, with a form for just those fields (the
+  identity fields and the closest contact's details, or a new contact): "Save and continue", and
+  once it is an opportunity the dialog goes on. "Open the company instead" leaves for its page (not
+  from a meeting form). "+ New company" closes it and opens the New company dialog. A company
+  page's "+ Opportunity" is disabled while it is blocked. Sample companies always get a PIB
+  (`freePib`: the next free valid one when theirs is taken), so none is a lead the form can't
+  complete; one still missing its PIB (from before CD-357) gets no form, only "Open the company
+  instead".
+- `deals.sale_type` (`capital` | `transactional`, null on older ones) is required in the dialog,
+  editable in the opportunity's Summary, offered under + Filter on Pipeline and Overview, and
+  `GET /api/crm/deals?saleType=` filters by it.
+- Tests create opportunities for a complete company: `readyCompany` in the integration helpers,
+  `createReadyCompany` in the e2e harness; the staging seed's companies are complete too.
+
 ## Module and workspace switcher (CD-214)
 
 The button under the Pultly mark in the sidebar (it shows the module you're in, CD-223) opens a

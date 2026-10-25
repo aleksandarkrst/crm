@@ -3,7 +3,7 @@
 // custom field offered without code, the no-results card, and the row remembered per page.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, clickButton, email, finishOnboarding, newUserWithWorkspace, signIn, steps, testPib, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, email, finishOnboarding, newUserWithWorkspace, READY_IDENTITY, signIn, steps, testPib, useBrowser } from '../lib/harness.mjs';
 import { addFilter, chips, chipText, clearFilters, closePopover, offeredFields, openChip, pickOption, setOp, setRange, typeText } from '../lib/filters.mjs';
 
 /** An ISO date `days` from today in Europe/Belgrade (new workspaces use it). */
@@ -29,7 +29,7 @@ describe('filter row', () => {
     await newUserWithWorkspace(page, { label: 'filter-row', name: 'Fiona Filter', workspace: 'Filters Co' });
     tier = await api(page, '/crm/custom-fields', { method: 'POST', body: JSON.stringify({ entity: 'company', label: 'Tier', type: 'select', options: [{ label: 'Gold' }, { label: 'Silver' }] }) });
     const gold = tier.options.find((o) => o.label === 'Gold').id;
-    const acme = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Acme Freight', industry: 'Freight & logistics', hq: 'Belgrade', customFields: { [tier.id]: gold } }) });
+    const acme = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Acme Freight', industry: 'Freight & logistics', hq: 'Belgrade', customFields: { [tier.id]: gold }, ...READY_IDENTITY }) });
     const bolt = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Bolt Wine', industry: 'Wine', hq: 'Novi Sad' }) });
     await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ fullName: 'Ana Acme', companyId: acme.id, jobTitle: 'CFO', email: 'ana@acme.example.com', buyerRole: 'Economic buyer' }) });
     await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ fullName: 'Bob Bolt', companyId: bolt.id, jobTitle: 'Owner' }) });

@@ -3,12 +3,13 @@
  * renaming an item in the funnel builder keeps every deal's progress on it.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, type Funnel, ok, type Session, signIn, type Stage } from './helpers';
+import { addMember, call, createTenant, type Funnel, ok, readyCompany, type Session, signIn, type Stage } from './helpers';
 
 let owner: Session;
 let member: Session;
 let tenant: string;
 let funnel: Funnel;
+let companyId: string;
 const as = () => ({ token: owner.token, tenant });
 
 interface Task {
@@ -30,13 +31,14 @@ const setItems = (stageId: string, checklistItems: { id?: string; label: string 
   ok<Stage>('PATCH', `/crm/funnels/${funnel.id}/stages/${stageId}`, { ...as(), body: { checklistItems } }, 200);
 const tick = (dealId: string, stageId: string, checklistItemId: string, extra: object = {}) =>
   ok<Task>('PUT', `/crm/deals/${dealId}/tasks/playbook`, { ...as(), body: { stageId, checklistItemId, done: true, ...extra } }, 200);
-const newDeal = async (title: string) => (await ok('POST', '/crm/deals', { ...as(), body: { title, funnelId: funnel.id } })).id as string;
+const newDeal = async (title: string) => (await ok('POST', '/crm/deals', { ...as(), body: { title, funnelId: funnel.id, companyId } })).id as string;
 
 beforeAll(async () => {
   [owner, member] = await Promise.all([signIn('checklist-owner'), signIn('checklist-member')]);
   tenant = await createTenant(owner, 'Checklist');
   await addMember(owner, tenant, member, 'member');
   funnel = (await ok<Funnel[]>('GET', '/crm/funnels', as())).find((f) => f.key === 'smb')!;
+  companyId = (await readyCompany(owner, tenant)).id;
 });
 
 describe('checklist items', () => {

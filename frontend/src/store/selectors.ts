@@ -195,6 +195,17 @@ export const COMPANY_STATUS_LABELS: Record<CompanyStatus, string> = { lead: 'Lea
 /** Lower is further back; a status can only be set back by hand (company-status.ts in the API). */
 export const COMPANY_STATUS_RANK = STATUS_RANK;
 
+/**
+ * Whether a company can't take an opportunity (CD-360), as the API checks it: a lead, or a Not
+ * interested company that isn't complete.
+ */
+export function pipelineBlocked(s: State, companyId: string): boolean {
+  // A company (or status) not loaded here isn't blocked: the API decides.
+  const status = s.extraCompanies.find((c) => c.id === companyId)?.status;
+  if (!status) return false;
+  return status === 'lead' || (status === 'not_interested' && companyReadiness(s, companyId).blockers.length > 0);
+}
+
 /** A company's own contacts, each once (primary contacts of its deals included). */
 export function companyContacts(s: State, companyId: string): Person[] {
   const seen = new Set<string>();

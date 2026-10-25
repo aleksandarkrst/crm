@@ -11,7 +11,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { allows, type PermissionRelation, PERMISSION_MODULES, permissionMatrix, permissionRow } from '../../src/modules/people/permissions';
 import type { FunctionalRole } from '../../src/modules/people/caller-access';
-import { call, createTenant, firstFunnel, ok, type Session, signIn, testPib } from './helpers';
+import { call, createTenant, firstFunnel, ok, readyCompany, type Session, signIn, testPib } from './helpers';
 import { asTenantSql, createDepartment, grantRole, IBAN, joinAsEmployee, levelAt, START } from './people-helpers';
 
 type Caller = 'employee' | 'manager' | 'admin';
@@ -73,7 +73,7 @@ beforeAll(async () => {
   departmentId = await createDepartment(tenant, 'Sales');
   topLevelId = await levelAt(tenant, 1);
   const funnel = await firstFunnel(who.admin, tenant);
-  companyId = (await ok('POST', '/crm/companies', { ...as('admin'), body: { pib: testPib(), name: 'Matrix Co' } })).id;
+  companyId = (await readyCompany(who.admin, tenant, 'Matrix Co')).id;
   dealId = (await ok('POST', '/crm/deals', { ...as('admin'), body: { title: 'Matrix deal', funnelId: funnel.id, companyId } })).id;
   for (const p of people) {
     const plan = await ok('POST', '/crm/visit-plans', { ...as('admin'), body: { salespersonUserId: who[p].userId, periodStart: PLAN_MONTH, lines: [{ companyId, plannedVisits: 2 }] } });

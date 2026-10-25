@@ -1,5 +1,5 @@
 {
-  "id": "472f2703-8a0e-45e2-b797-32d2319a9070",
+  "id": "73468ce1-8cac-40fa-923c-99c9c6a70b64",
   "prevId": "017dcfec-722e-4ca8-ad58-3e7a1e0d725e",
   "version": "7",
   "dialect": "postgresql",
@@ -432,13 +432,6 @@
         },
         "notify_hour_limits": {
           "name": "notify_hour_limits",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "notify_proposal_approvals": {
-          "name": "notify_proposal_approvals",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
@@ -2081,19 +2074,6 @@
           "notNull": true,
           "default": "'queued'"
         },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'generated'"
-        },
-        "mime_type": {
-          "name": "mime_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "error": {
           "name": "error",
           "type": "text",
@@ -3160,6 +3140,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "sale_type": {
+          "name": "sale_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "amount": {
           "name": "amount",
           "type": "numeric(14, 2)",
@@ -3306,36 +3292,6 @@
         "lost_note": {
           "name": "lost_note",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "approval_requested_at": {
-          "name": "approval_requested_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "approval_requested_by_user_id": {
-          "name": "approval_requested_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "approved_at": {
-          "name": "approved_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "approved_by_user_id": {
-          "name": "approved_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "proposal_sent_at": {
-          "name": "proposal_sent_at",
-          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
@@ -3577,32 +3533,6 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "deals_approval_requested_by_user_id_users_id_fk": {
-          "name": "deals_approval_requested_by_user_id_users_id_fk",
-          "tableFrom": "deals",
-          "tableTo": "users",
-          "columnsFrom": [
-            "approval_requested_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "deals_approved_by_user_id_users_id_fk": {
-          "name": "deals_approved_by_user_id_users_id_fk",
-          "tableFrom": "deals",
-          "tableTo": "users",
-          "columnsFrom": [
-            "approved_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
         "deals_company_fk": {
           "name": "deals_company_fk",
           "tableFrom": "deals",
@@ -3718,6 +3648,10 @@
         "deals_fit_score_ck": {
           "name": "deals_fit_score_ck",
           "value": "\"deals\".\"fit_score\" between 0 and 100"
+        },
+        "deals_sale_type_ck": {
+          "name": "deals_sale_type_ck",
+          "value": "\"deals\".\"sale_type\" is null or \"deals\".\"sale_type\" in ('capital', 'transactional')"
         }
       },
       "isRLSEnabled": false
@@ -4116,19 +4050,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "proposal_approval": {
-          "name": "proposal_approval",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "approver_user_id": {
-          "name": "approver_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -4157,19 +4078,6 @@
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "funnels_approver_user_id_users_id_fk": {
-          "name": "funnels_approver_user_id_users_id_fk",
-          "tableFrom": "funnels",
-          "tableTo": "users",
-          "columnsFrom": [
-            "approver_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

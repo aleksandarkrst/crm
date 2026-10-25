@@ -4,7 +4,7 @@
 // new one on the meeting page.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, email, eventually, newUserWithWorkspace, RUN, setValue, steps, text, useBrowser, testPib } from '../lib/harness.mjs';
+import { api, createReadyCompany, BASE_URL, click, email, eventually, newUserWithWorkspace, RUN, setValue, steps, text, useBrowser } from '../lib/harness.mjs';
 
 /** Signs a user in through the dev login from Node (no browser needed for them). */
 async function devUser(label, name) {
@@ -37,7 +37,7 @@ describe('meeting participants', () => {
     const { token } = await api(page, '/team/invitations', { method: 'POST', body: JSON.stringify({ email: nina.email, role: 'member' }) });
     const res = await fetch(`${BASE_URL}/api/invitations/${token}/accept`, { method: 'POST', headers: { authorization: 'Bearer ' + nina.token } });
     assert.equal(res.status, 200, 'accepted');
-    company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: COMPANY }) });
+    company = { id: await createReadyCompany(page, COMPANY) };
     const funnels = await api(page, '/crm/funnels');
     deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Kestrel pilot', funnelId: funnels[0].id, companyId: company.id }) });
   });

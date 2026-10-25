@@ -5,7 +5,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, firstFunnel, type Funnel, type Json, ok, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, firstFunnel, type Funnel, type Json, ok, readyCompany, type Session, signIn } from './helpers';
 
 let owner: Session;
 let admin: Session;
@@ -21,7 +21,8 @@ const DAY = 24 * HOUR;
 const iso = (ms: number) => new Date(ms).toISOString();
 const EPOCH = '"1970-01-01T00:00:00.000Z"';
 
-const company = (name: string) => ok('POST', '/crm/companies', { ...as(owner), body: { pib: testPib(), name } });
+// Only an opportunity or a client takes an opportunity (CD-360), and every meeting needs one.
+const company = (name: string) => readyCompany(owner, tenant, name);
 const deal = (title: string, companyId: string) => ok('POST', '/crm/deals', { ...as(owner), body: { title, funnelId: funnel.id, companyId } });
 /** One deal per company, for the meetings that don't name theirs (a meeting needs a deal, CD-213). */
 const companyDeals = new Map<string, Promise<Json>>();

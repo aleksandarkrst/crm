@@ -1,10 +1,11 @@
 /** Tasks from the "New task" dialog leave a trail on the deal's timeline: added, then removed. */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { createTenant, firstFunnel, type Funnel, ok, type Session, signIn } from './helpers';
+import { createTenant, firstFunnel, type Funnel, ok, readyCompany, type Session, signIn } from './helpers';
 
 let owner: Session;
 let tenant: string;
 let funnel: Funnel;
+let companyId: string;
 const as = () => ({ token: owner.token, tenant });
 const titles = async (dealId: string): Promise<string[]> => (await ok('GET', `/crm/deals/${dealId}/activities`, as())).map((a: { title: string }) => a.title);
 
@@ -12,11 +13,12 @@ beforeAll(async () => {
   owner = await signIn('tasks-owner');
   tenant = await createTenant(owner, 'Tasks');
   funnel = await firstFunnel(owner, tenant);
+  companyId = (await readyCompany(owner, tenant)).id;
 });
 
 describe('deleting a task', () => {
   it('logs "Task removed" and keeps the "Task added" entry', async () => {
-    const deal = await ok('POST', '/crm/deals', { ...as(), body: { title: 'Timeline', funnelId: funnel.id } });
+    const deal = await ok('POST', '/crm/deals', { ...as(), body: { title: 'Timeline', funnelId: funnel.id, companyId } });
     const task = await ok('POST', `/crm/deals/${deal.id}/tasks`, {
       ...as(),
       body: { stageId: funnel.stages[0]!.id, label: 'Send the offer', blocksAdvance: false, dueDate: '2030-01-15' },
@@ -35,7 +37,7 @@ describe('deleting a task', () => {
   });
 
   it('logs nothing for stage to-dos (they never logged "Task added")', async () => {
-    const deal = await ok('POST', '/crm/deals', { ...as(), body: { title: 'Quiet', funnelId: funnel.id } });
+    const deal = await ok('POST', '/crm/deals', { ...as(), body: { title: 'Quiet', funnelId: funnel.id, companyId } });
     const todo = await ok('POST', `/crm/deals/${deal.id}/tasks`, { ...as(), body: { stageId: funnel.stages[0]!.id, label: 'Check budget' } });
     const before = await titles(deal.id);
     await ok('DELETE', `/crm/deal-tasks/${todo.id}`, as());

@@ -37,6 +37,13 @@ export const currencyOptions = (current?: string) => (current && !CURRENCIES.som
 /** What may still have to happen before a deal is Qualified (CD-362); the API keeps the same list. */
 export const QUALIFICATION_STEPS = ['Confirm pain', 'Identify decision maker', 'Confirm budget', 'Validate solution fit', 'Agree on timeline'];
 export const SOURCES = ['Inbound web form', 'Referral', 'Outbound LinkedIn', 'Conference', 'Instagram DM', 'Trade fair'];
+
+/** The sale types (CD-360), with the line the New opportunity dialog shows under each. */
+export const SALE_TYPES = [
+  { id: 'capital', name: 'Capital', note: 'Equipment or a project, one contract.' },
+  { id: 'transactional', name: 'Transactional', note: 'Parts, services, recurring orders.' },
+] as const;
+export const SALE_TYPE_OPTIONS = SALE_TYPES.map(({ id, name }) => ({ id, name }));
 export const INDUSTRIES = ['Architecture', 'Banking', 'Food & beverage', 'Freight & logistics', 'Furniture retail', 'Hospitality', 'Pharmaceuticals', 'Renewable energy', 'Wine', 'Other'];
 export const TEAM_SIZES = ['1–10 staff', '11–50 staff', '51–200 staff', '201–1,000 staff', '1,000+ staff'];
 export const TEAM_ROLES = ['Owner', 'Admin', 'Member'] as const;

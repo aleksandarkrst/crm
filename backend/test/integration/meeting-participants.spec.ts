@@ -6,7 +6,7 @@
  * meetings, "Organizer left" until an admin picks one); the calendar and contact filters.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, eventually, firstFunnel, type Json, mailTo, ok, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, eventually, firstFunnel, type Json, mailTo, ok, readyCompany, type Session, signIn } from './helpers';
 
 let owner: Session;
 let admin: Session;
@@ -46,7 +46,7 @@ beforeAll(async () => {
   await addMember(owner, tenant, admin, 'admin');
   await addMember(owner, tenant, ana, 'member');
   await addMember(owner, tenant, bo, 'member');
-  companyId = (await ok('POST', '/crm/companies', { ...as(owner), body: { pib: testPib(), name: 'Participants Co' } })).id;
+  companyId = (await readyCompany(owner, tenant, 'Participants Co')).id;
   const funnel = await firstFunnel(owner, tenant);
   dealId = (await ok('POST', '/crm/deals', { ...as(owner), body: { title: 'Participants renewal', funnelId: funnel.id, companyId } })).id;
 });

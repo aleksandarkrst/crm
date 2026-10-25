@@ -5,7 +5,7 @@ import { type ApiMeeting, type CustomFieldEntity, LOST_REASONS } from '../lib/ap
 import { FREQUENCIES } from './dealMath';
 import { type FilterField, type FilterOption, type FilterPerson, GROUP } from './filters';
 import { MEETING_STATUSES, MEETING_TYPES, STATUS_LABEL } from './meetings';
-import { BUYER_ROLES, INDUSTRIES, SOURCES, TEAM_SIZES } from './seed';
+import { BUYER_ROLES, INDUSTRIES, SALE_TYPE_OPTIONS, SOURCES, TEAM_SIZES } from './seed';
 import { allPeople, APPROVAL_LABELS, type ApprovalStatus, approvalStatusOf, COMPANY_STATUS_LABELS, companyIdOfPerson, companyLabels, type CompanyRecord, companyRecords, curOf, currencySymbol, customFieldsOf, needsNextStep, salesPeople, stagesFor, valueNum } from './selectors';
 import { instantToZoned } from './time';
 import type { CatalogItem, Lead, Person, SegKey, State } from './types';
@@ -155,6 +155,8 @@ export function opportunityFields(s: State, funnel: SegKey | null, pinned: strin
     { id: 'close', label: 'Closing date', group: g, kind: 'date', get: (l) => l.closeDate || null },
     { id: 'value', label: 'Value', group: g, kind: 'number', icon: 'value', unit, get: (l) => valueNum(l.value) },
     { id: 'source', label: 'Source', group: g, kind: 'list', options: optionsOf(SOURCES, s.leads.map((l) => l.source)), get: (l) => l.source },
+    // How it is sold (CD-360).
+    { id: 'saleType', label: 'Sale type', group: g, kind: 'list', options: SALE_TYPE_OPTIONS, get: (l) => l.saleType || null },
     text('title', 'Opportunity name', (l) => l.title),
     { id: 'stall', label: 'Days since contact', group: g, kind: 'number', get: (l) => l.stall },
     { id: 'late', label: 'Days late', group: g, kind: 'number', get: (l) => l.lateDays },

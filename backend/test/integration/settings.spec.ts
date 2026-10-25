@@ -3,7 +3,7 @@
  * deal's discovery fields: role rules, validation, tenant isolation and "only your own profile".
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, firstFunnel, type Funnel, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, firstFunnel, type Funnel, ok, readyCompany, type Session, signIn } from './helpers';
 
 let owner: Session;
 let admin: Session;
@@ -13,6 +13,7 @@ let tenant: string;
 let otherTenant: string;
 let funnel: Funnel;
 let otherFunnel: Funnel;
+let companyId: string;
 
 beforeAll(async () => {
   [owner, admin, member, outsider] = await Promise.all([signIn('settings-owner'), signIn('settings-admin'), signIn('settings-member'), signIn('settings-outsider')]);
@@ -21,6 +22,7 @@ beforeAll(async () => {
   await addMember(owner, tenant, admin, 'admin');
   await addMember(owner, tenant, member, 'member');
   funnel = await firstFunnel(owner, tenant);
+  companyId = (await readyCompany(owner, tenant)).id;
   otherFunnel = await firstFunnel(outsider, otherTenant);
 });
 
@@ -182,7 +184,7 @@ describe('deal discovery fields', () => {
   it('are saved on create and update, and returned by get and list', async () => {
     const deal = await ok('POST', '/crm/deals', {
       ...as(member),
-      body: { title: 'Discovery deal', funnelId: funnel.id, headline: 'One story', need: 'a repositioning.', discoveryDate: '2026-09-03' },
+      body: { title: 'Discovery deal', funnelId: funnel.id, companyId, headline: 'One story', need: 'a repositioning.', discoveryDate: '2026-09-03' },
     });
     expect(deal).toMatchObject({ headline: 'One story', need: 'a repositioning.', constraint: null, decisionMaker: null, discoveryDate: '2026-09-03' });
 
@@ -201,12 +203,12 @@ describe('deal discovery fields', () => {
     ['a decision maker over 200 characters', { decisionMaker: 'x'.repeat(201) }],
     ['a date that is not a date', { discoveryDate: '3 Sep' }],
   ])('rejects %s with 400', async (_label, body) => {
-    const deal = await ok('POST', '/crm/deals', { ...as(member), body: { title: 'Validated deal', funnelId: funnel.id } });
+    const deal = await ok('POST', '/crm/deals', { ...as(member), body: { title: 'Validated deal', funnelId: funnel.id, companyId } });
     expect((await call('PATCH', `/crm/deals/${deal.id}`, { ...as(member), body })).status).toBe(400);
   });
 
   it("can't be changed from another tenant", async () => {
-    const deal = await ok('POST', '/crm/deals', { ...as(owner), body: { title: 'Private deal', funnelId: funnel.id, need: 'secret' } });
+    const deal = await ok('POST', '/crm/deals', { ...as(owner), body: { title: 'Private deal', funnelId: funnel.id, companyId, need: 'secret' } });
     expect((await call('PATCH', `/crm/deals/${deal.id}`, { ...as(outsider, otherTenant), body: { need: 'leaked' } })).status).toBe(404);
     expect((await ok('GET', `/crm/deals/${deal.id}`, as(owner))).need).toBe('secret');
   });

@@ -21,6 +21,13 @@ const seedPib = (n: number) => {
   return first8 + pibCheckDigit(first8);
 };
 
+/** A valid matični broj per seeded company: seven digits and their check digit (as mbValid computes it). */
+const seedMb = (n: number) => {
+  const first7 = String(2_000_000 + n * 1_013);
+  const r = [...first7].reduce((sum, ch, i) => sum + Number(ch) * [2, 7, 6, 5, 4, 3, 2][i]!, 0) % 11;
+  return first7 + String(11 - r > 9 ? 0 : 11 - r);
+};
+
 /**
  * The staging seed (CD-313): two workspaces, each with an owner, an admin and a member, and a few
  * records in every module (companies, contacts, products, deals, a meeting, employees with an org
@@ -257,7 +264,10 @@ class Seed {
     // CRM: companies with a contact each, products, deals in the first funnel, one meeting.
     const companyIds: string[] = [];
     for (const c of ws.companies) {
-      const company = await as(owner, (x) => this.s.companies.create(x, { name: c.name, pib: seedPib(companyIds.length), industry: c.industry, hq: c.hq }));
+      // Complete, with a qualified contact below: an Opportunity company, so it can take deals (CD-360).
+      const n = companyIds.length;
+      const identity = { mb: seedMb(n), activityCode: '4741', address: `Bulevar oslobođenja ${n + 1}`, city: c.hq, postalCode: '11000' };
+      const company = await as(owner, (x) => this.s.companies.create(x, { name: c.name, pib: seedPib(n), industry: c.industry, hq: c.hq, ...identity }));
       companyIds.push(company.id);
       await as(admin, (x) => this.s.contacts.create(x, { fullName: c.contact, companyId: company.id, jobTitle: c.contactTitle, buyerRole: 'Decision maker' }));
     }

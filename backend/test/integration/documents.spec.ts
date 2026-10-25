@@ -10,7 +10,7 @@ import { PgBoss } from 'pg-boss';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildDocx, docxText, MAX_TEMPLATE_BYTES, starterTemplate } from '../../src/modules/crm/documents/docx';
 import { DEFAULT_MIGRATION_DATABASE_URL } from './env';
-import { addMember, call, createTenant, firstFunnel, ok, productLine, saveProducts, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, firstFunnel, ok, productLine, READY_IDENTITY, readyCompany, saveProducts, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let admin: Session;
@@ -89,7 +89,7 @@ const expectFile = (t: string, key: string, present: boolean) => {
 };
 
 async function newDeal(s: Session, t: string, fId: string, extra: Record<string, unknown> = {}) {
-  return ok<{ id: string }>('POST', '/crm/deals', { token: s.token, tenant: t, body: { title: 'Brand refresh', funnelId: fId, ...extra } });
+  return ok<{ id: string }>('POST', '/crm/deals', { token: s.token, tenant: t, body: { title: 'Brand refresh', funnelId: fId, companyId: extra.companyId ?? (await readyCompany(s, t)).id, ...extra } });
 }
 
 beforeAll(async () => {
@@ -168,8 +168,8 @@ describe('generating a document', () => {
 
   beforeAll(async () => {
     template = await upload(owner, tenant, starterTemplate(), 'Proposal — generation');
-    const company = await ok<{ id: string }>('POST', '/crm/companies', { token: owner.token, tenant, body: { pib: testPib(), name: 'Acme d.o.o.' } });
-    const contact = await ok<{ id: string }>('POST', '/crm/contacts', { token: owner.token, tenant, body: { fullName: 'Ivana Radić', jobTitle: 'CMO', companyId: company.id } });
+    const company = await ok<{ id: string }>('POST', '/crm/companies', { token: owner.token, tenant, body: { pib: testPib(), name: 'Acme d.o.o.', ...READY_IDENTITY } });
+    const contact = await ok<{ id: string }>('POST', '/crm/contacts', { token: owner.token, tenant, body: { fullName: 'Ivana Radić', jobTitle: 'CMO', buyerRole: 'Decision maker', ownerUserId: owner.userId, companyId: company.id } });
     const deal = await newDeal(owner, tenant, funnelId, {
       companyId: company.id,
       primaryContactId: contact.id,

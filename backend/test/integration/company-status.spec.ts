@@ -29,6 +29,12 @@ const company = async (id: string) => ok<Company>('GET', `/crm/companies/${id}`,
 const newCompany = (name: string, extra: Record<string, unknown> = {}) => ok<Company>('POST', '/crm/companies', { ...as(), body: { name, pib: testPib(), ...extra } });
 const qualifiedContact = (companyId: string) =>
   ok<{ id: string }>('POST', '/crm/contacts', { ...as(), body: { companyId, fullName: 'Jelena Savić', jobTitle: 'Head of operations', buyerRole: 'Champion', ownerUserId: owner.userId } });
+// Only an opportunity or a client takes an opportunity (CD-360).
+const readyCompany = async (name: string) => {
+  const c = await newCompany(name, identity);
+  await qualifiedContact(c.id);
+  return c;
+};
 const newDeal = (companyId: string, title = 'Fleet licences') => ok<{ id: string }>('POST', '/crm/deals', { ...as(), body: { title, companyId, funnelId: funnel.id } });
 const wonStage = () => funnel.stages.find((s) => s.isWon)!;
 const history = (id: string) => ok<Change[]>('GET', `/crm/companies/${id}/status-history`, as());
@@ -76,9 +82,9 @@ describe('Lead → Opportunity, by itself', () => {
 
 describe('Client, Past client, Not interested', () => {
   it('a won opportunity makes a client; its completed project a past client', async () => {
-    const c = await newCompany('Kestrel Logistics');
+    const c = await readyCompany('Kestrel Logistics');
     const deal = await newDeal(c.id);
-    expect((await company(c.id)).status).toBe('lead');
+    expect((await company(c.id)).status).toBe('opportunity');
     await ok('POST', `/crm/deals/${deal.id}/move`, { ...as(), body: { stageId: wonStage().id } }, 200);
     expect((await company(c.id)).status).toBe('client');
 
@@ -94,12 +100,12 @@ describe('Client, Past client, Not interested', () => {
   });
 
   it('every opportunity lost is Not interested; reopening one takes it back', async () => {
-    const c = await newCompany('Sava Retail');
+    const c = await readyCompany('Sava Retail');
     const deal = await newDeal(c.id);
     await ok('POST', `/crm/deals/${deal.id}/lost`, { ...as(), body: { reason: 'Price' } }, 200);
     expect((await company(c.id)).status).toBe('not_interested');
     await ok('POST', `/crm/deals/${deal.id}/reopen`, as(), 200);
-    expect((await company(c.id)).status).toBe('lead');
+    expect((await company(c.id)).status).toBe('opportunity');
   });
 });
 
@@ -107,7 +113,7 @@ describe('setting the status by hand', () => {
   let id: string;
 
   beforeAll(async () => {
-    const c = await newCompany('Orchard Dental');
+    const c = await readyCompany('Orchard Dental');
     id = c.id;
     await ok('POST', `/crm/deals/${(await newDeal(id)).id}/move`, { ...as(), body: { stageId: wonStage().id } }, 200);
     expect((await company(id)).status).toBe('client');

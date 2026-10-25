@@ -5,7 +5,7 @@
  * uploading your own documents with their type (one Proposal per opportunity).
  */
 import { beforeAll, describe, expect, inject, it } from 'vitest';
-import { addMember, call, createTenant, eventually, type Funnel, mailTo, ok, type Session, signIn, waitForMail } from './helpers';
+import { addMember, call, createTenant, eventually, type Funnel, mailTo, ok, readyCompany, type Session, signIn, waitForMail } from './helpers';
 
 let owner: Session;
 let admin: Session;
@@ -16,6 +16,8 @@ let tenant: string;
 let gated: Funnel;
 /** No approval. */
 let free: Funnel;
+/** An opportunity company, so deals may enter the Pipeline (CD-360). */
+let companyId: string;
 const as = (s: Session) => ({ token: s.token, tenant });
 
 const PDF = Buffer.from('%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n');
@@ -29,7 +31,7 @@ interface Approval {
   proposalSentAt: string | null;
 }
 
-const newDeal = (title: string, funnel = gated) => ok<{ id: string }>('POST', '/crm/deals', { ...as(seller), body: { title, funnelId: funnel.id } });
+const newDeal = (title: string, funnel = gated) => ok<{ id: string }>('POST', '/crm/deals', { ...as(seller), body: { title, funnelId: funnel.id, companyId, saleType: 'transactional' } });
 const statusOf = async (dealId: string) => (await ok<{ approvalStatus: string }>('GET', `/crm/deals/${dealId}`, as(seller))).approvalStatus;
 const step = (s: Session, dealId: string, what: 'approval/request' | 'approval/approve' | 'approval/revoke' | 'proposal/sent') => call<Approval>('POST', `/crm/deals/${dealId}/${what}`, as(s));
 const titles = async (dealId: string) => (await ok<{ title: string; detail: string | null }[]>('GET', `/crm/deals/${dealId}/activities`, as(owner))).map((a) => a.title);
@@ -62,6 +64,7 @@ beforeAll(async () => {
   await addMember(owner, tenant, admin, 'admin');
   await addMember(owner, tenant, approver, 'member');
   await addMember(owner, tenant, seller, 'member');
+  companyId = (await readyCompany(owner, tenant, 'Approval Co')).id;
   [gated, free] = (await ok<Funnel[]>('GET', '/crm/funnels', as(owner))) as [Funnel, Funnel];
   await ok('PATCH', `/crm/funnels/${gated.id}`, { ...as(owner), body: { proposalApproval: true, approverUserId: approver.userId } });
 });

@@ -36,7 +36,7 @@ import {
 import { dealTotals } from './dealMath';
 import { sortPlans, type VisitPlan } from './visitPlans';
 import { CONTACT_EXTRA_KEYS } from './types';
-import type { BillingFrequency, BonusRule, ChannelCode, CompanyStatus, ContactExtra, CustomFieldDef, DealDiscount, DealLine, Installment, Lead, LeadTask, LogEntry, NewContactDraft, Person, Profile, SegKey, Stage, State, TaskState, TaxMode, Workspace } from './types';
+import type { BillingFrequency, BonusRule, ChannelCode, CompanyStatus, ContactExtra, SaleType, CustomFieldDef, DealDiscount, DealLine, Installment, Lead, LeadTask, LogEntry, NewContactDraft, Person, Profile, SegKey, Stage, State, TaskState, TaxMode, Workspace } from './types';
 
 /** What the product dialog edits (CD-83); numbers as typed. */
 export interface ProductDraft {
@@ -1339,6 +1339,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       if (title !== undefined && title.trim()) saveLater('title:' + id, () => crmApi.updateDeal(id, { title: title.trim() }, ver('deal', id)), 'the opportunity title');
       if (closeDate !== undefined) saveLater('close:' + id, () => crmApi.updateDeal(id, { closeDate: closeDate || null }, ver('deal', id)), 'the closing date');
       if (source !== undefined) saveLater('source:' + id, () => crmApi.updateDeal(id, { source }, ver('deal', id)), 'the opportunity source');
+      if (dealPatch.saleType !== undefined) void save(() => crmApi.updateDeal(id, { saleType: dealPatch.saleType || null }, ver('deal', id)), undefined, 'the sale type');
       // Discovery notes (merged into the proposal). Empty text clears the field.
       for (const key of DISCOVERY_FIELDS) {
         const v = dealPatch[key];
@@ -1405,6 +1406,20 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       if (!rec) return;
       cancelSaves(id);
       await remove(() => crmApi.deleteCompany(id), paths.companies, rec.name + ' deleted');
+    };
+    /**
+     * Fills in what a lead misses, from the New opportunity dialog (CD-360): its identity fields and
+     * one contact (an existing one, or a new one). The API recomputes the status; the reload brings it.
+     */
+    const completeCompany = async (companyId: string, company: CompanyInput, contact: { id: string; patch: ContactInput } | { create: ContactInput & { fullName: string } } | null) => {
+      try {
+        if (Object.keys(company).length) await crmApi.updateCompany(companyId, company);
+        if (contact && 'id' in contact && Object.keys(contact.patch).length) await crmApi.updateContact(contact.id, contact.patch);
+        if (contact && 'create' in contact) await crmApi.createContact({ ...contact.create, companyId });
+        await reload();
+      } catch (err) {
+        flash('Not saved: ' + errText(err), 7000);
+      }
     };
     /** "Set status back…" or "Back to automatic" (CD-358); the API refuses a move forward and says why. */
     const setCompanyStatus = async (companyId: string, status: CompanyStatus | null) => {
@@ -1647,6 +1662,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       deleteDeal,
       deleteCompany,
       setCompanyStatus,
+      completeCompany,
       companyStatusHistory,
       deleteContact,
 
@@ -1655,14 +1671,15 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
        * New deal; creates the company and the primary contact first when they are new. Opened from
        * the meeting form (CD-213), it stays there and the form picks the new deal.
        */
-      createDeal: async (input: { company: { id: string; name: string } | { name: string; pib: string }; contact: { contactId?: string; name: string } | null; segment: SegKey; customFields?: CustomFieldPatch }) => {
+      createDeal: async (input: { company: { id: string; name: string }; contact: { contactId?: string; name: string } | null; segment: SegKey; saleType: SaleType; customFields?: CustomFieldPatch }) => {
         const funnelId = cur().funnels[input.segment]?.id;
         if (!funnelId) return;
         try {
-          const companyId = 'id' in input.company ? input.company.id : (await crmApi.createCompany({ name: input.company.name, pib: input.company.pib })).id;
+          // Only an opportunity or a client (CD-360): the dialog offers no other, and the API checks it (409).
+          const companyId = input.company.id;
           let primaryContactId = input.contact?.contactId;
           if (input.contact && !primaryContactId) primaryContactId = (await crmApi.createContact({ fullName: input.contact.name, companyId, buyerRole: 'Decision maker' })).id;
-          const deal = await crmApi.createDeal({ title: input.company.name, funnelId, companyId, primaryContactId: primaryContactId ?? null, ...(input.customFields ? { customFields: input.customFields } : {}) });
+          const deal = await crmApi.createDeal({ title: input.company.name, funnelId, companyId, saleType: input.saleType, primaryContactId: primaryContactId ?? null, ...(input.customFields ? { customFields: input.customFields } : {}) });
           await reload();
           if (cur().newLeadForMeeting) {
             set({ newLeadOpen: false, newLeadCompanyId: null, newLeadContactId: null, newLeadForMeeting: false, newLeadMade: { companyId, dealId: deal.id }, segment: input.segment });

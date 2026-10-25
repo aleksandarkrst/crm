@@ -2,7 +2,7 @@
 // (neither Won nor Lost); a company's Open value is its open deals, its Lifetime value its Won deals.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, newUserWithWorkspace, steps, testPib, useBrowser } from '../lib/harness.mjs';
+import { api, createReadyCompany, BASE_URL, newUserWithWorkspace, steps, useBrowser } from '../lib/harness.mjs';
 
 describe('open and lifetime value', () => {
   const browser = useBrowser();
@@ -13,7 +13,7 @@ describe('open and lifetime value', () => {
   step('one company with an open, a Won and a Lost opportunity', async () => {
     page = await browser.person('values');
     await newUserWithWorkspace(page, { label: 'values', name: 'Val Values', workspace: 'Values Co' });
-    company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Simplicity Labs' }) });
+    company = { id: await createReadyCompany(page, 'Simplicity Labs') };
     const funnel = (await api(page, '/crm/funnels'))[0];
     const deal = (title, amount) => api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title, funnelId: funnel.id, companyId: company.id, amount }) });
     await deal('Open one', 2500);

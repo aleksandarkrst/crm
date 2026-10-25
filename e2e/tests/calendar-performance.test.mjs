@@ -7,7 +7,7 @@
 // The Table view of the same month pages through them: 500 at a time, then "Load more".
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, newUserWithWorkspace, RUN, steps, useBrowser, testPib } from '../lib/harness.mjs';
+import { api, BASE_URL, click, createReadyCompany, newUserWithWorkspace, RUN, steps, useBrowser } from '../lib/harness.mjs';
 
 const COUNT = 500;
 const BATCH = 25;
@@ -52,7 +52,7 @@ describe('calendar performance', () => {
   step(`seeds ${COUNT} meetings in one month through the API`, async () => {
     page = await browser.person('perf');
     await newUserWithWorkspace(page, { label: 'calendar-perf', name: 'Pia Performance', workspace: 'Busy Co' });
-    companyId = (await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: `Busy Customer ${RUN}` }) })).id;
+    companyId = await createReadyCompany(page, `Busy Customer ${RUN}`);
     const funnels = await api(page, '/crm/funnels');
     dealId = (await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Busy opportunity', funnelId: funnels[0].id, companyId }) })).id;
     await seed(0, COUNT, 'Load');

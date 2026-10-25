@@ -5,6 +5,7 @@ ALTER TABLE "deals" ADD COLUMN "approval_requested_at" timestamp with time zone;
 ALTER TABLE "deals" ADD COLUMN "approval_requested_by_user_id" uuid;--> statement-breakpoint
 ALTER TABLE "deals" ADD COLUMN "approved_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "deals" ADD COLUMN "approved_by_user_id" uuid;--> statement-breakpoint
+ALTER TABLE "deals" ADD COLUMN "approval_task_id" uuid;--> statement-breakpoint
 ALTER TABLE "deals" ADD COLUMN "proposal_sent_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "funnels" ADD COLUMN "proposal_approval" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE "funnels" ADD COLUMN "approver_user_id" uuid;--> statement-breakpoint
