@@ -1,6 +1,7 @@
 import { billingDates, billingText, dealTotals } from '../store/dealMath';
 import { approvalStatusOf, type Cur, curOf, isoLabel, itemById, leadById, linesOf, memberName, money, num } from '../store/selectors';
 import { useStore } from '../store/store';
+import { ProposalActions } from '../screens/lead/ProposalActions';
 import type { Lead, State } from '../store/types';
 
 /** Billing rows for the proposal (CD-83): the installments, or each product's billings, by date. */
@@ -26,9 +27,9 @@ function billingRows(s: State, lead: Lead, c: Cur) {
 
 /** The generated proposal, rendered from the deal record. Merge fields are highlighted. */
 export function ProposalDoc() {
-  const { s, set, markProposalSent } = useStore();
+  const { s, set } = useStore();
   const lead = leadById(s, s.docLeadId) || s.leads[0]!;
-  // Sent once approved, when the funnel asks for approval (CD-120); the API checks it too.
+  // Request approval, approve and send in the header (CD-120), as on the Documents tab; the API checks it too.
   const sent = !!lead.approval.sentAt;
   const approval = approvalStatusOf(s, lead);
   const needsApproval = approval === 'not_requested' || approval === 'pending';
@@ -71,16 +72,7 @@ export function ProposalDoc() {
             <button type="button" className="doc-btn" onClick={() => set((x) => ({ showMerge: !x.showMerge }))}>
               {s.showMerge ? 'Hide merge fields' : 'Show merge fields'}
             </button>
-            <button
-              type="button"
-              data-testid="proposal-mark-sent"
-              disabled={needsApproval}
-              onClick={() => void markProposalSent(lead.id)}
-              title={needsApproval ? `The proposal needs approval by ${approver} before it is sent.` : `Emailing proposals to ${first || 'the contact'} is coming soon; this only marks it as sent here.`}
-              style={{ border: 0, background: '#F5F7F6', color: '#0F1B16', cursor: needsApproval ? 'not-allowed' : 'pointer', opacity: needsApproval ? 0.55 : 1, fontSize: 12.5, fontWeight: 500, padding: '9px 14px', borderRadius: 7 }}
-            >
-              {sent ? 'Marked as sent ✓' : 'Mark as sent'}
-            </button>
+            <ProposalActions lead={lead} look="doc" />
             <button type="button" className="doc-btn" onClick={() => set({ docOpen: false })}>
               Close
             </button>

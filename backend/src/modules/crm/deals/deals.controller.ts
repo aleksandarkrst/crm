@@ -80,7 +80,7 @@ export class DealsController {
     return this.approval.revoke(ctx, id);
   }
 
-  /** "Mark as sent": a 409 while the funnel's approval is missing. */
+  /** "Send proposal" (marks it as sent; nothing is emailed yet): a 409 while the funnel's approval is missing. */
   @Post(':id/proposal/sent')
   @HttpCode(200)
   markProposalSent(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {

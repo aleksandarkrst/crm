@@ -83,7 +83,7 @@ export class ProposalApprovalService {
     });
   }
 
-  /** "Mark as sent": blocked until approved when the funnel asks for approval. */
+  /** "Send proposal" (marks it as sent; nothing is emailed yet): blocked until approved when the funnel asks for approval. */
   markSent(ctx: TenantContext, dealId: string) {
     return this.run(ctx, dealId, async (tx, d) => {
       const status = approvalStatus(d.proposalApproval, d);

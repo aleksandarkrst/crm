@@ -1,22 +1,27 @@
 import { useEffect, useState } from 'react';
 import { askConfirm } from '../../components/ConfirmDialog';
+import { DocProgress } from '../../components/DocProgress';
 import { canManageTemplates, type DealDoc, docBusy, docMoment, fileExtension, fileSize, MAX_UPLOAD_FILES, suggestedTemplate, UPLOAD_TYPES, type UploadType, uploadFileProblem } from '../../store/documents';
 import { stageOf } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
 import { opportunityCopy } from '../../store/wording';
 import { docState, docStateClass } from './docs';
+import { ProposalActions } from './ProposalActions';
 
 /**
  * The deal's Documents tab (CD-13): generate a document from a template, follow it while the worker
  * fills it in, and download or delete what was generated. Or import your own (CD-120): proposals
- * and documents made outside Pultly, each with its type; one Proposal per opportunity.
+ * and documents made outside Pultly, each with its type; one Proposal per opportunity. Once a
+ * proposal is imported, the choice and the built-in preview give way to "Add documents" for
+ * supporting files; the proposal's next step (request approval, approve, send) sits at the bottom.
  */
 export function DealDocuments({ lead }: { lead: Lead }) {
   const { s, session, ensureDocs, loadTemplates, generateDoc, downloadDoc, deleteDoc, openDoc, startGeneration } = useStore();
   const [picked, setPicked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<'generate' | 'import'>('generate');
+  const [adding, setAdding] = useState(false);
   useEffect(() => {
     ensureDocs(lead.id);
     void loadTemplates();
@@ -26,6 +31,8 @@ export function DealDocuments({ lead }: { lead: Lead }) {
   const docs = s.dealDocs[lead.id] || [];
   const templateId = picked ?? (templates ? suggestedTemplate(templates, stageOf(s, lead).doc)?.id : undefined);
   const isAdmin = canManageTemplates(session.tenant.role);
+  const hasProposal = docs.some((d) => d.docType === 'Proposal');
+  const imported = docs.some((d) => d.docType === 'Proposal' && d.source === 'uploaded');
 
   const generate = async () => {
     if (!templateId) return;
@@ -40,41 +47,47 @@ export function DealDocuments({ lead }: { lead: Lead }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <span className="caps">Proposal</span>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8 }}>
-        <button type="button" className={'choice' + (mode === 'generate' ? ' on' : '')} data-testid="docs-mode-generate" onClick={() => setMode('generate')}>
-          <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>Generate automatically</span>
-          <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Built from the deal, its products and the discovery notes.</span>
-        </button>
-        <button type="button" className={'choice' + (mode === 'import' ? ' on' : '')} data-testid="docs-mode-import" onClick={() => setMode('import')}>
-          <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>Import my own</span>
-          <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Upload a proposal and documents you made outside Pultly.</span>
-        </button>
-      </div>
-
-      {mode === 'import' ? (
-        <ImportDocuments lead={lead} hasProposal={docs.some((d) => d.docType === 'Proposal')} onDone={() => setMode('generate')} />
-      ) : templates && templates.length > 0 ? (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <select className="box-input" aria-label="Document template" style={{ flex: '1 1 200px', minWidth: 0 }} value={templateId} onChange={(e) => setPicked(e.target.value)}>
-            {templates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} · {t.docType}
-              </option>
-            ))}
-          </select>
-          <button type="button" className="btn btn-primary" disabled={busy || !templateId} onClick={() => void generate()}>
-            {busy ? 'Starting…' : 'Generate document'}
-          </button>
-        </div>
+      {imported ? (
+        adding && <ImportDocuments lead={lead} hasProposal onDone={() => setAdding(false)} />
       ) : (
-        templates && (
-          <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>
-            No document templates yet. {isAdmin ? 'Upload a Word template in Settings → Document templates.' : 'Ask an owner or admin to upload one in Settings → Document templates.'}{' '}
-            <button type="button" style={{ border: 0, background: 'none', padding: 0, color: 'var(--brand)', cursor: 'pointer', fontSize: 12.5 }} onClick={() => startGeneration(lead.id)}>
-              More options
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8 }}>
+            <button type="button" className={'choice' + (mode === 'generate' ? ' on' : '')} data-testid="docs-mode-generate" onClick={() => setMode('generate')}>
+              <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>Generate automatically</span>
+              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Built from the deal, its products and the discovery notes.</span>
+            </button>
+            <button type="button" className={'choice' + (mode === 'import' ? ' on' : '')} data-testid="docs-mode-import" onClick={() => setMode('import')}>
+              <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>Import my own</span>
+              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Upload a proposal and documents you made outside Pultly.</span>
             </button>
           </div>
-        )
+
+          {mode === 'import' ? (
+            <ImportDocuments lead={lead} hasProposal={hasProposal} onDone={() => setMode('generate')} />
+          ) : templates && templates.length > 0 ? (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <select className="box-input" aria-label="Document template" style={{ flex: '1 1 200px', minWidth: 0 }} value={templateId} onChange={(e) => setPicked(e.target.value)}>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} · {t.docType}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="btn btn-primary" disabled={busy || !templateId} onClick={() => void generate()}>
+                {busy ? 'Starting…' : 'Generate document'}
+              </button>
+            </div>
+          ) : (
+            templates && (
+              <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>
+                No document templates yet. {isAdmin ? 'Upload a Word template in Settings → Document templates.' : 'Ask an owner or admin to upload one in Settings → Document templates.'}{' '}
+                <button type="button" style={{ border: 0, background: 'none', padding: 0, color: 'var(--brand)', cursor: 'pointer', fontSize: 12.5 }} onClick={() => startGeneration(lead.id)}>
+                  More options
+                </button>
+              </div>
+            )
+          )}
+        </>
       )}
 
       {docs.map((d) => {
@@ -91,6 +104,7 @@ export function DealDocuments({ lead }: { lead: Lead }) {
               {d.source === 'uploaded' ? `${d.docType} · uploaded` : d.templateName} · {d.createdByName || 'someone who left'} · {docMoment(d.createdAt, s.workspace.timezone)}
               {d.sizeBytes ? ` · ${fileSize(d.sizeBytes)}` : ''}
             </span>
+            <DocProgress doc={d} />
             {d.status === 'failed' && <span style={{ fontSize: 11.5, color: 'var(--danger)', lineHeight: 1.45 }}>{d.error}</span>}
             {d.status === 'ready' && d.missingFields.length > 0 && <span style={{ fontSize: 11.5, color: 'var(--warn)', lineHeight: 1.45 }}>Left empty: {d.missingFields.map(opportunityCopy).join(', ')}</span>}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -109,9 +123,19 @@ export function DealDocuments({ lead }: { lead: Lead }) {
         );
       })}
       {docs.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>No documents yet. Generate one or import your own here; entering a stage whose entry document is a Proposal offers it too.</div>}
-      <button type="button" className="btn-outline" style={{ alignSelf: 'flex-start', fontSize: 12, padding: '7px 11px', borderRadius: 6, fontWeight: 400 }} onClick={() => openDoc(lead.id)}>
-        Preview built-in proposal
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {imported ? (
+          <button type="button" className="btn-outline" data-testid="docs-add" style={{ fontSize: 12, padding: '7px 11px', borderRadius: 6, fontWeight: 400 }} onClick={() => setAdding((x) => !x)}>
+            {adding ? 'Cancel' : 'Add documents'}
+          </button>
+        ) : (
+          <button type="button" className="btn-outline" style={{ fontSize: 12, padding: '7px 11px', borderRadius: 6, fontWeight: 400 }} onClick={() => openDoc(lead.id)}>
+            Preview built-in proposal
+          </button>
+        )}
+        <span style={{ marginLeft: 'auto' }} />
+        <ProposalActions lead={lead} />
+      </div>
     </div>
   );
 }
@@ -209,7 +233,7 @@ function ImportDocuments({ lead, hasProposal, onDone }: { lead: Lead; hasProposa
             style={{ flex: '0 1 210px' }}
           >
             <option value="">Choose a type</option>
-            {UPLOAD_TYPES.map((t) => (
+            {UPLOAD_TYPES.filter((t) => t !== 'Proposal' || !hasProposal).map((t) => (
               <option key={t} value={t}>
                 {t}
               </option>
@@ -221,7 +245,9 @@ function ImportDocuments({ lead, hasProposal, onDone }: { lead: Lead; hasProposa
         </div>
       ))}
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>
-        The file typed Proposal is the one sent for approval and to the client. Only one Proposal per opportunity; the rest are attached as supporting documents.
+        {hasProposal
+          ? 'This opportunity has its proposal already; these files are attached as supporting documents.'
+          : 'The file typed Proposal is the one sent for approval and to the client. Only one Proposal per opportunity; the rest are attached as supporting documents.'}
       </span>
       {files.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

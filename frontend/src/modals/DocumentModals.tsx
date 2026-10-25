@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Modal, ModalHeader } from '../components/ui';
 import { paths } from '../lib/paths';
+import { DocProgress } from '../components/DocProgress';
 import { canManageTemplates, DOC_TYPES, type DocType, docBusy, fileSize, type ScanResult, suggestedTemplate, templateFileProblem } from '../store/documents';
 import { leadById, stageOf } from '../store/selectors';
 import { useStore } from '../store/store';
@@ -82,6 +83,7 @@ export function GenerationModal() {
               </div>
             );
           })}
+          <DocProgress doc={doc} />
           {doc.status === 'failed' && <div style={{ fontSize: 12.5, color: 'var(--danger)', lineHeight: 1.5 }}>{doc.error || 'The document could not be generated.'}</div>}
           {doc.status === 'ready' && doc.missingFields.length > 0 && (
             <div style={{ fontSize: 12.5, color: 'var(--warn)', lineHeight: 1.5 }}>Left empty because the opportunity has no value yet: {doc.missingFields.map(opportunityCopy).join(', ')}.</div>

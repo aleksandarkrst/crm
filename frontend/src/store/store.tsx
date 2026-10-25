@@ -1093,19 +1093,22 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         mapLead(leadId, (l) => ({ ...l, approval: approvalOf(state) }));
         const lead = leadById(cur(), leadId);
         const approver = memberName(cur(), cur().funnels[lead?.segment ?? '']?.approverId ?? null);
-        flash(step === 'request' ? `Approval requested from ${approver}` : step === 'approve' ? 'Proposal approved · it can be sent now' : 'Approval revoked · the proposal needs approval again before it is sent');
+        flash(step === 'request' ? `Approval requested · ${approver} got an email and a task` : step === 'approve' ? 'Proposal approved · it can be sent now' : 'Approval revoked · the proposal needs approval again before it is sent');
+        // The approver's task is added, ticked or removed with it; the deal row is read again too, or the
+        // refresh would rebuild the deal from its previous load and drop the new approval.
+        queueRefresh(['deals', 'tasks'], [], [leadId], 0, { deals: [leadId], tasks: [leadId] });
         await refreshLog(leadId);
       } catch (err) {
         flash((step === 'request' ? 'Not requested: ' : step === 'approve' ? 'Not approved: ' : 'Not revoked: ') + errText(err), 7000);
       }
     };
-    /** "Mark as sent" (CD-120): the API refuses it until the funnel's approval is in. Resolves whether it was saved. */
+    /** "Send proposal" (CD-120): the API refuses it until the funnel's approval is in. Resolves whether it was saved. */
     const markProposalSent = async (leadId: string): Promise<boolean> => {
       try {
         const state = await crmApi.markProposalSent(leadId);
         mapLead(leadId, (l) => ({ ...l, approval: approvalOf(state) }));
         // Nothing is emailed and no follow-up task is created yet: say so instead of pretending.
-        flash('Marked as sent · nothing was emailed and no task was created');
+        flash('Proposal marked as sent · emailing it from Pultly is coming soon, nothing was emailed');
         await refreshLog(leadId);
         return true;
       } catch (err) {

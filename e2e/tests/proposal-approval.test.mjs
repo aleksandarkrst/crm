@@ -1,6 +1,6 @@
 // Proposal approval (CD-120): configured once per funnel in Settings → Funnels (one switch, one
-// approver), then on an opportunity: import its proposal, request approval, approve it, and only
-// then mark it as sent. The Approval status filter follows it.
+// approver), then on an opportunity's Documents tab: import its proposal, request approval (a task
+// for the approver), approve it, and only then send it. The Approval status filter follows it.
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -44,13 +44,13 @@ describe('proposal approval', () => {
 
   step('imports the proposal on the Documents tab, typed Proposal', async () => {
     dealId = await createDealInUi(page, { company: 'Vega Trans', contact: 'Marko Jović' });
+    await click(page, 'button.composer-tab::-p-text(Documents)');
+    // The next step sits where "Preview built-in proposal" is; nothing to request without a proposal.
     await page.waitForSelector('[data-testid=approval-status]');
     assert.equal(await page.$eval('[data-testid=approval-status]', (el) => el.textContent), 'Not requested');
-    // Nothing to request without a proposal.
     await page.waitForFunction(() => document.querySelector('[data-testid=approval-request]')?.disabled === true);
     const pdf = join(tmpdir(), `Ponuda-${Date.now()}.pdf`);
     await writeFile(pdf, '%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n');
-    await click(page, 'button.composer-tab::-p-text(Documents)');
     await click(page, '[data-testid=docs-mode-import]');
     const input = await page.waitForSelector('[data-testid=docs-import-input]');
     await input.uploadFile(pdf);
@@ -65,14 +65,21 @@ describe('proposal approval', () => {
     });
     assert.equal(docs.docType, 'Proposal');
     assert.equal(docs.source, 'uploaded');
+
+    // Imported: no second proposal, so the choice and the built-in preview give way to "Add documents".
+    await page.waitForSelector('[data-testid=docs-add]');
+    assert.equal(await page.$('[data-testid=docs-mode-import]'), null);
+    assert.equal(await page.$('::-p-text(Preview built-in proposal)'), null);
+    await click(page, '[data-testid=docs-add]');
+    await (await page.waitForSelector('[data-testid=docs-import-input]')).uploadFile(pdf);
+    const types = await page.$$eval('[data-testid=docs-import-file] select option', (els) => els.map((o) => o.value));
+    assert.ok(types.includes('Price list') && !types.includes('Proposal'), 'supporting documents only');
+    await click(page, '[data-testid=docs-add]');
   });
 
-  step("can't be sent before approval; requested, then approved", async () => {
+  step("can't be sent before approval; requested (a task for the approver), then approved", async () => {
     assert.equal((await api(page, `/crm/deals?approvalStatus=not_requested`)).some((r) => r.deal.id === dealId), true);
-    await click(page, 'button::-p-text(Preview built-in proposal)');
-    await page.waitForSelector('[data-testid=proposal-mark-sent]');
-    assert.equal(await page.$eval('[data-testid=proposal-mark-sent]', (el) => el.disabled), true, 'Mark as sent waits for approval');
-    await click(page, 'button::-p-text(Close)');
+    assert.equal(await page.$('[data-testid=proposal-send]'), null, 'no Send proposal before approval');
 
     await waitForToastToClear(page);
     await page.waitForFunction(() => document.querySelector('[data-testid=approval-request]')?.disabled === false);
@@ -80,19 +87,22 @@ describe('proposal approval', () => {
     await page.waitForFunction(() => document.querySelector('[data-testid=approval-status]')?.textContent === 'Pending approval');
     assert.equal((await api(page, `/crm/deals/${dealId}`)).approvalStatus, 'pending');
     assert.equal((await api(page, `/crm/deals?approvalStatus=pending`)).some((r) => r.deal.id === dealId), true);
+    const task = (await api(page, `/crm/deal-tasks?dealIds=${dealId}`)).find((t) => t.label === 'Approve the proposal');
+    assert.equal(task?.assigneeUserId, me, 'the approver has a task');
 
+    // Petra is the approver: Approve shows where Request approval was.
     await click(page, '[data-testid=approval-approve]');
     await page.waitForFunction(() => document.querySelector('[data-testid=approval-status]')?.textContent === 'Approved');
     assert.equal((await api(page, `/crm/deals?approvalStatus=approved`)).some((r) => r.deal.id === dealId), true);
+    assert.equal((await api(page, `/crm/deal-tasks?dealIds=${dealId}`)).find((t) => t.id === task.id)?.done, true, 'the task is ticked');
+    await page.waitForSelector('[data-testid=approval-revoke]');
   });
 
-  step('once approved, the proposal is marked as sent', async () => {
-    await click(page, 'button::-p-text(Preview built-in proposal)');
-    await page.waitForFunction(() => document.querySelector('[data-testid=proposal-mark-sent]')?.disabled === false);
-    await click(page, '[data-testid=proposal-mark-sent]');
-    await page.waitForFunction(() => document.querySelector('[data-testid=proposal-mark-sent]')?.textContent.includes('Marked as sent'));
+  step('once approved, Send proposal marks it as sent', async () => {
+    await page.waitForFunction(() => document.querySelector('[data-testid=proposal-send]')?.disabled === false);
+    await click(page, '[data-testid=proposal-send]');
+    await page.waitForFunction(() => document.querySelector('[data-testid=proposal-send]')?.textContent === 'Proposal sent');
     assert.ok((await api(page, `/crm/deals/${dealId}`)).proposalSentAt, 'sent');
-    await click(page, 'button::-p-text(Close)');
   });
 
   it('throws no uncaught errors in the page', () => {

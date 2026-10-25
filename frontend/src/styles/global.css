@@ -223,6 +223,8 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .drill-row:hover { background: var(--panel); }
 
 .doc-btn { border: 1px solid #2A4238; background: transparent; color: var(--bg-soft); cursor: pointer; font-size: 12.5px; padding: 9px 13px; border-radius: 7px; }
+.doc-btn-primary { border-color: var(--bg-soft); background: var(--bg-soft); color: var(--ink); font-weight: 500; }
+.doc-btn:disabled { cursor: not-allowed; opacity: 0.55; }
 
 .pay-input { border: 1px solid var(--border); border-radius: 7px; padding: 7px 9px; font-size: 13px; color: var(--ink); background: var(--white); }
 

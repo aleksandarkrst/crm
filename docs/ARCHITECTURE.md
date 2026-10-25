@@ -286,12 +286,22 @@ the Overview audience filter).
   queues `crm.approval-requested`, which emails the approver if `memberships.notify_proposal_approvals`
   is on (Settings → Notifications, "Proposal approvals"). The approver, owners and admins approve
   (from Pending) or revoke (Pending or Approved, back to Not requested); anyone else gets 403.
-  "Mark as sent" is a 409 until approved when the funnel asks for it; it doesn't email anything yet.
+  "Send proposal" (`…/proposal/sent`) is a 409 until approved when the funnel asks for it; it only
+  marks the proposal as sent and emails nothing yet.
+- A request also gives the approver a task, "Approve the proposal" (a non-blocking deal task on
+  the deal's current stage, assigned to them, due the workspace's today), so it shows on their
+  Today and in the digest; `deals.approval_task_id` points at it. Approving ticks it; declining,
+  revoking and a reset delete it (`closeApprovalTask`), all in the request's transaction.
 - What was approved must still stand: a new Proposal (generated or uploaded), deleting the
   Proposal, or moving the deal to another funnel clears the request and approval
-  (`resetApproval`). Every step is an activity ("Approval requested", "Proposal approved",
+  (`resetApproval`, which also removes the approver's open task). Every step is an activity ("Approval requested", "Proposal approved",
   "Proposal approval revoked", "Proposal sent", "… reset") and an audit row.
 - The daily digest lists "Proposals waiting for your approval" to the funnel's approver.
+- In the app there is no separate approval card: the proposal's next step sits at the bottom of
+  the Documents tab and in the built-in proposal's header (`screens/lead/ProposalActions.tsx`):
+  Request approval → Approval pending (disabled) for the requester and other members; Approve and
+  Decline for the approver, owners and admins; once approved Revoke approval and Send proposal;
+  Send proposal straight away in a funnel without approval. A badge keeps the status.
 
 ## Deal outcome: open, won, lost
 
@@ -542,7 +552,12 @@ with one type per file: Proposal, Price list, Technical specification, Contract 
 list, Other). PDF, DOCX or XLSX by extension and first bytes, up to 25 MB each. They are
 `deal_documents` rows with `source = 'uploaded'`, `status = 'ready'` and their `mime_type` (the
 download keeps it and its extension). One Proposal per opportunity: two in one upload is a 400, a
-second one a 409 ("delete it first").
+second one a 409 ("delete it first"). Once an uploaded Proposal exists the tab drops the
+"Generate automatically / Import my own" choice and the built-in preview; "Add documents" imports
+supporting files (no Proposal type). While a document is generated its row (and the Generate
+dialog) shows a progress bar with a percentage: the worker reports only queued → running → ready,
+so `store/docProgress.ts` estimates it from the time since it was queued and stays below 100 %
+until it is ready.
 
 ## Auth
 
