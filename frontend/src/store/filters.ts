@@ -52,6 +52,8 @@ export interface FieldFilter {
   min?: string;
   max?: string;
   text?: string;
+  /** A grouped list (Status): the `sub` options it had seen when saved, so newer ones get ticked. */
+  seen?: string[];
 }
 
 /** Someone the person filters offer: "Me" first, with "role · team" underneath. */
@@ -173,6 +175,30 @@ export function pruneList<R>(fields: FilterField<R>[], value: FilterValue, id: s
   const vals = v.vals.filter((x) => x === GROUP || known.has(x));
   if (vals.length === v.vals.length) return value;
   return setField(value, id, { vals: vals.length || !fallback ? vals : fallback });
+}
+
+/**
+ * A grouped list chip (Status) with every `sub` option it hasn't seen yet ticked: a stage added to
+ * the funnel shows at once (owner's call, 25 Oct). Not for "is not", where it would hide them.
+ */
+export function withNewSubs<R>(fields: FilterField<R>[], value: FilterValue, id: string): FilterValue {
+  const fd = fields.find((f) => f.id === id) as FilterField<never> | undefined;
+  const v = value.f[id];
+  if (!fd?.groupLabel || !v?.vals?.length || v.op === 'isnot') return value;
+  const seen = new Set(v.seen ?? []);
+  const fresh = subIds(fd).filter((x) => !seen.has(x) && !expandVals(fd, v.vals!).includes(x));
+  return fresh.length ? setField(value, id, { vals: collapseVals(fd, [...expandVals(fd, v.vals), ...fresh]) }) : value;
+}
+/** Stamps a grouped list chip with the `sub` options it saw, before saving (see withNewSubs). */
+export function markSeen<R>(fields: FilterField<R>[], value: FilterValue, id: string): FilterValue {
+  const fd = fields.find((f) => f.id === id) as FilterField<never> | undefined;
+  return fd?.groupLabel && value.f[id] ? setField(value, id, { seen: subIds(fd) }) : value;
+}
+/** Another funnel: every Open stage of it, keeping the Won and Lost ticks (owner's call, 25 Oct). */
+export function allOpen(value: FilterValue, id: string): FilterValue {
+  const v = value.f[id];
+  if (!v) return value;
+  return setField(value, id, { op: 'is', vals: [GROUP, ...(v.op === 'isnot' ? [] : (v.vals ?? []).filter((x) => x.startsWith('__') && x !== GROUP))], seen: undefined });
 }
 
 // ---------------------------------------------------------------- matching

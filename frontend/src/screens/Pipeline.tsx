@@ -8,7 +8,7 @@ import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { dealsCsv } from '../store/exportCsv';
 import { filterPeople, openAndWon, opportunityFields, WON } from '../store/filterFields';
-import { applyFilters, clearAll, isActive, matchField, pruneList } from '../store/filters';
+import { allOpen, applyFilters, clearAll, type FilterValue, isActive, markSeen, matchField, pruneList, withNewSubs } from '../store/filters';
 import { funnelOptions, initialsOf, memberName, needsNextStep, ownerOf, stageOf, stageOwnerId, todayIso, valueNum, valueTotal } from '../store/selectors';
 import type { Lead, SegKey, Stage, State } from '../store/types';
 import { useStore } from '../store/store';
@@ -53,12 +53,16 @@ export function Pipeline() {
   const me = session.userId;
   // The funnel is the select next to the view toggle (owner's call, 24 Oct), not a chip.
   const fields = useMemo(() => opportunityFields(s, seg, ['owner', 'status']), [s, seg]);
-  const [saved, setFilters] = usePageFilters('pipeline', { order: ['owner', 'status'], f: { owner: { op: 'is', vals: [me] }, status: { op: 'is', vals: openAndWon() } } });
+  const [saved, setSaved] = usePageFilters('pipeline', { order: ['owner', 'status'], f: { owner: { op: 'is', vals: [me] }, status: { op: 'is', vals: openAndWon() } } });
   // "Open" is saved as the whole group, so it follows the funnel's stages; single stages of another
-  // funnel (picked here, in Settings or a new funnel) are dropped, and "Open, Won" comes back if nothing is left.
-  const filters = pruneList(fields, saved, 'status', openAndWon());
+  // funnel are dropped ("Open, Won" if nothing is left), and stages added since are ticked.
+  const filters = withNewSubs(fields, pruneList(fields, saved, 'status', openAndWon()), 'status');
+  const setFilters = (v: FilterValue) => setSaved(markSeen(fields, v, 'status'));
+  // Another funnel: all of its Open stages, keeping Won and Lost (owner's call, 25 Oct).
   const pickFunnel = (next: SegKey) => {
-    if (next !== seg && s.funnels[next]) set({ segment: next });
+    if (next === seg || !s.funnels[next]) return;
+    setSaved(allOpen(filters, 'status'));
+    set({ segment: next });
   };
   // The open funnel, then every chip (Status included: Lost is one of its values, CD-60), with AND.
   const segLeads = applyFilters(

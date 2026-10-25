@@ -1,7 +1,7 @@
 // Unit tests of the shared filter row's logic (CD-366): `npm test` in frontend.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { applyFilters, canClear, chipLabel, clearAll, collapseVals, type FilterField, type FilterValue, GROUP, matchField, presetRange, pruneList, restoreValue, valueText } from '../src/store/filters.ts';
+import { allOpen, applyFilters, canClear, chipLabel, clearAll, collapseVals, type FilterField, type FilterValue, GROUP, markSeen, matchField, presetRange, pruneList, restoreValue, valueText, withNewSubs } from '../src/store/filters.ts';
 
 interface Rec {
   stage: string;
@@ -165,6 +165,28 @@ describe('the whole "Open" group', () => {
     assert.deepEqual(pruneList(rows, value, 'stage').f.stage?.vals, [GROUP, 'won']);
     const stale: FilterValue = { order: ['stage'], f: { stage: { op: 'is', vals: ['gone'] } } };
     assert.deepEqual(pruneList(rows, stale, 'stage', [GROUP, 'won']).f.stage?.vals, [GROUP, 'won']);
+  });
+});
+
+describe('new stages and another funnel (owner, 25 Oct)', () => {
+  const later = [...STAGES.slice(0, 2), { id: 'negotiation', name: 'Negotiation', sub: true }, ...STAGES.slice(2)];
+  const before: FilterField<Rec>[] = [fields[2]!];
+  const after: FilterField<Rec>[] = [{ ...fields[2]!, options: later }];
+
+  it('a stage added after saving is ticked, even when only some stages were', () => {
+    const saved = markSeen(before, { order: ['stage'], f: { stage: { op: 'is', vals: ['new', 'won'] } } }, 'stage');
+    assert.deepEqual(withNewSubs(after, saved, 'stage').f.stage?.vals, ['new', 'won', 'negotiation']);
+    // Saved before stages were remembered: every stage not ticked counts as new.
+    const old: FilterValue = { order: ['stage'], f: { stage: { op: 'is', vals: ['new', 'proposal', 'won'] } } };
+    assert.deepEqual(withNewSubs(after, old, 'stage').f.stage?.vals, [GROUP, 'won']);
+    // Not for "is not": that would hide the new stage.
+    const not: FilterValue = { order: ['stage'], f: { stage: { op: 'isnot', vals: ['new'] } } };
+    assert.equal(withNewSubs(after, not, 'stage'), not);
+  });
+
+  it('another funnel ticks all of its Open stages and keeps Won and Lost', () => {
+    const value: FilterValue = { order: ['stage'], f: { stage: { op: 'is', vals: ['new', '__won', '__lost'] } } };
+    assert.deepEqual(allOpen(value, 'stage').f.stage?.vals, [GROUP, '__won', '__lost']);
   });
 });
 
