@@ -56,6 +56,30 @@ describe('creating an opportunity', () => {
   });
 });
 
+describe('companies that are neither a lead nor complete, and other workspaces', () => {
+  it('refuses a Not interested company until it is complete (set back from Lead by hand)', async () => {
+    const lead = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { name: 'Quiet Co', pib: testPib() } });
+    await ok('PATCH', `/crm/companies/${lead.id}/status`, { ...as(), body: { status: 'not_interested' } });
+    const refused = await deal(lead.id);
+    expect(refused.status).toBe(409);
+    expect(refused.body.message).toContain("Quiet Co is Not interested and isn't complete");
+    // Complete, it may try again.
+    const ready = await readyCompany(owner, tenant, 'Second chance Co');
+    await ok('PATCH', `/crm/companies/${ready.id}/status`, { ...as(), body: { status: 'not_interested' } });
+    expect((await deal(ready.id)).status).toBe(201);
+  });
+
+  it("refuses another workspace's company on create and on a company change, and a missing opportunity", async () => {
+    const other = await signIn('entry-other');
+    const otherTenant = await createTenant(other, 'Pipeline entry other');
+    const theirs = await readyCompany(other, otherTenant, 'Their Co');
+    expect((await deal(theirs.id)).status).toBe(400);
+    const mine = (await deal((await readyCompany(owner, tenant, 'Mine Co')).id)).body;
+    expect((await call('PATCH', `/crm/deals/${mine.id}`, { ...as(), body: { companyId: theirs.id } })).status).toBe(400);
+    expect((await call('PATCH', `/crm/deals/00000000-0000-4000-8000-000000000000`, { ...as(), body: { companyId: theirs.id } })).status).toBe(404);
+  });
+});
+
 describe('changing the company of an opportunity', () => {
   it('refuses a lead, takes an opportunity', async () => {
     const [a, b] = [await readyCompany(owner, tenant, 'Alpha'), await readyCompany(owner, tenant, 'Bravo')];

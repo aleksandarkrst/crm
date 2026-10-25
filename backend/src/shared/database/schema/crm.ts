@@ -280,11 +280,11 @@ export interface Installment {
 export const LOST_REASONS = ['Price', 'Timing', 'Chose a competitor', 'No budget', 'No decision', 'Other'] as const;
 export type LostReason = (typeof LOST_REASONS)[number];
 
-/** Steps a deal may still need before it is Qualified (CD-362), picked on the Qualification card. */
 /** How the opportunity is sold (CD-360): equipment or a project in one contract, or parts, services and recurring orders. */
 export const SALE_TYPES = ['capital', 'transactional'] as const;
 export type SaleType = (typeof SALE_TYPES)[number];
 
+/** Steps a deal may still need before it is Qualified (CD-362), picked on the Qualification card. */
 export const QUALIFICATION_STEPS = ['Confirm pain', 'Identify decision maker', 'Confirm budget', 'Validate solution fit', 'Agree on timeline'] as const;
 export type QualificationStep = (typeof QUALIFICATION_STEPS)[number];
 

@@ -90,16 +90,20 @@ const lateDaysOf = (deal: { lostAt: Date | null; stageEnteredAt: Date }, isWon: 
 
 /**
  * Only a company that is an opportunity or a client can enter the Pipeline (CD-360): a lead is a
- * 409 with what it still misses (the company page's list); a company of another workspace is a 400.
+ * 409 with what it still misses (the company page's list), and so is a Not interested company that
+ * isn't complete (set back from Lead by hand, it would slip past otherwise). Opportunities, clients
+ * and past clients pass; a company of another workspace is a 400.
  */
 async function assertCanEnterPipeline(tx: Tx, companyId: string) {
   const [company] = await tx.select().from(companies).where(eq(companies.id, companyId));
   if (!company) throw new BadRequestException('Pick a company of this workspace');
-  if (company.status !== 'lead') return;
+  if (company.status !== 'lead' && company.status !== 'not_interested') return;
   const people = await tx.select().from(contacts).where(eq(contacts.companyId, companyId));
   const { blockers } = opportunityReadiness(company, people);
+  if (company.status === 'not_interested' && !blockers.length) return;
+  const missing = blockers.length ? `: ${blockers.length === 1 ? '1 thing is' : `${blockers.length} things are`} missing` : ' (it was set back to Lead by hand)';
   throw new ConflictException({
-    message: `${company.name} is still a lead. Only an opportunity or a client can enter the Pipeline${blockers.length ? `: ${blockers.length === 1 ? '1 thing is' : `${blockers.length} things are`} missing` : ' (it was set back to Lead by hand)'}.`,
+    message: `${company.name} ${company.status === 'lead' ? 'is still a lead' : "is Not interested and isn't complete"}. Only an opportunity or a client can enter the Pipeline${missing}.`,
     blockers,
   });
 }
@@ -235,8 +239,9 @@ export class DealsService {
         }
         await assertOwnerIsMember(tx, ctx, input.ownerUserId);
         const [before] = await tx.select({ ownerUserId: deals.ownerUserId, companyId: deals.companyId }).from(deals).where(eq(deals.id, id));
+        if (!before) throw new NotFoundException('Opportunity not found');
         // Another company: it must be able to enter the Pipeline too (CD-360).
-        if (input.companyId && input.companyId !== before?.companyId) await assertCanEnterPipeline(tx, input.companyId);
+        if (input.companyId && input.companyId !== before.companyId) await assertCanEnterPipeline(tx, input.companyId);
         await this.assertContactsExist(tx, [input.sponsorContactId, input.powerSponsorContactId]);
         const { customFields: cfInput, qualified, ...fields } = input;
         const patch: PgUpdateSetSource<typeof deals> = { ...fields };

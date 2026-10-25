@@ -12,7 +12,7 @@ import { checkActivityCode, checkMb, checkPib } from '../lib/serbianIds';
 import { checkDomain } from '../lib/validate';
 import { paths } from '../lib/paths';
 import { INDUSTRIES, SOURCES, TEAM_SIZES } from '../store/seed';
-import { allPeople, COMPANY_STATUS_LABELS, COMPANY_STATUS_RANK, companyOfPerson, companyReadiness, companyRecords, contactsForLead, curOf, initialsOf, timelineFor } from '../store/selectors';
+import { allPeople, COMPANY_STATUS_LABELS, COMPANY_STATUS_RANK, companyOfPerson, companyReadiness, companyRecords, pipelineBlocked, contactsForLead, curOf, initialsOf, timelineFor } from '../store/selectors';
 import { type CompanyFieldKey, useStore } from '../store/store';
 import type { CompanyStatus, LogEntry, Person } from '../store/types';
 
@@ -113,7 +113,7 @@ export function Company() {
           ownerName={extra?.owner}
           onOwner={(ownerId) => store.setCompanyOwner(rec.id, ownerId)}
           onNewDeal={newDeal}
-          newDealBlocked={status === 'lead' ? 'Only an opportunity or a client can be added to the Pipeline' : undefined}
+          newDealBlocked={pipelineBlocked(s, rec.id) ? 'Only an opportunity or a client can be added to the Pipeline' : undefined}
           onDelete={store.canDelete ? onDelete : undefined}
           deleteLabel="Delete company"
           notice={

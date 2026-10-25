@@ -88,7 +88,7 @@ export function Summary({ lead, projects }: { lead: Lead; projects?: React.React
           <GhostSelect chevron aria-label="Source" value={lead.source} onChange={patch('source')} options={SOURCES} />
         </IconRow>
         {/* How it is sold (CD-360): here only, not as a badge in the header. */}
-        <IconRow icon="value" label="Sale type">
+        <IconRow icon="agenda" label="Sale type">
           <GhostSelect
             chevron
             aria-label="Sale type"

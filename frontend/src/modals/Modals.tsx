@@ -5,7 +5,7 @@ import { type CustomFieldPatch, type CustomFieldType, LOST_REASONS, type LostRea
 import { paths } from '../lib/paths';
 import { checkEmail, checkPhone } from '../lib/validate';
 import { BUYER_ROLES, CHANNEL_LABELS, FIELD_TYPES, SALE_TYPES } from '../store/seed';
-import { allPeople, COMPANY_STATUS_LABELS, companyLabels, companyReadiness, companyRecords, customFieldsOf, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
+import { allPeople, COMPANY_STATUS_LABELS, companyLabels, companyReadiness, companyRecords, customFieldsOf, pipelineBlocked, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { ChannelCode, CompanyStatus, Lead, SaleType } from '../store/types';
 import { GenerationModal, NewTemplateModal } from './DocumentModals';
@@ -60,9 +60,9 @@ function NewDealModal() {
   const labels = companyLabels(records);
   const statusOf = (id: string): CompanyStatus => s.extraCompanies.find((c) => c.id === id)?.status ?? 'lead';
   const companies = records
-    .map((c) => ({ value: c.id, label: labels.get(c.id) ?? c.name, status: statusOf(c.id) }))
+    .map((c) => ({ value: c.id, label: labels.get(c.id) ?? c.name, status: statusOf(c.id), blocked: pipelineBlocked(s, c.id) }))
     .sort((a, b) => a.label.localeCompare(b.label));
-  const eligible = companies.filter((c) => c.status !== 'lead');
+  const eligible = companies.filter((c) => !c.blocked);
   // The company passed in (even a lead: it says what is missing), else the first that can take one.
   const [company, setCompany] = useState(() => (s.newLeadCompanyId && companies.some((c) => c.value === s.newLeadCompanyId) ? s.newLeadCompanyId : (eligible[0]?.value ?? '')));
   const [contactPick, setContactPick] = useState<string | null>(() => allPeople(s).find((p) => p.contactId && p.contactId === s.newLeadContactId)?.name ?? null);
@@ -72,7 +72,9 @@ function NewDealModal() {
   const type = s.funnels[s.newLeadType] ? s.newLeadType : Object.keys(s.funnels)[0]!;
 
   const companyRec = records.find((c) => c.id === company);
-  const isLead = !!companyRec && statusOf(companyRec.id) === 'lead';
+  // A lead, or a Not interested company that isn't complete: listed, not eligible.
+  const isLead = !!companyRec && pipelineBlocked(s, companyRec.id);
+  const missing = isLead ? companyReadiness(s, companyRec.id).blockers : [];
   const people = companyRec ? allPeople(s).filter((p) => p.contactId && p.companyId === companyRec.id) : [];
   const contactOptions = [...people.map((p) => p.name), NEW_CT];
   const contact = contactPick && contactOptions.includes(contactPick) ? contactPick : contactOptions[0]!;
@@ -109,8 +111,9 @@ function NewDealModal() {
           <select className="form-input" data-testid="new-deal-company" value={company} disabled={forMeeting} onChange={(e) => { setCompany(e.target.value); setContactPick(null); }}>
             {!companyRec && <option value="">No company can take one yet</option>}
             {companies.map((o) => (
-              <option key={o.value} value={o.value} disabled={o.status === 'lead' && o.value !== company}>
-                {o.label} · {o.status === 'lead' ? 'Lead (not eligible)' : COMPANY_STATUS_LABELS[o.status]}
+              <option key={o.value} value={o.value} disabled={o.blocked && o.value !== company}>
+                {o.label} · {COMPANY_STATUS_LABELS[o.status]}
+                {o.blocked ? ' (not eligible)' : ''}
               </option>
             ))}
           </select>
@@ -152,16 +155,23 @@ function NewDealModal() {
       </div>
       {isLead && companyRec && (
         <div className="notice-warn" data-testid="new-deal-lead" role="alert">
-          <span style={{ fontWeight: 600 }}>{companyRec.name} is still a lead</span>
+          <span style={{ fontWeight: 600 }}>
+            {companyRec.name} {statusOf(companyRec.id) === 'lead' ? 'is still a lead' : "is Not interested and isn't complete"}
+          </span>
           <span style={{ color: 'var(--text-2)' }}>
             Leads are listed but can't be picked.{' '}
-            {companyReadiness(s, companyRec.id).blockers.length ? `Missing for Opportunity: ${companyReadiness(s, companyRec.id).blockers.join('; ').replace(/\.$/, '')}.` : 'It was set back to Lead by hand.'}
+            {missing.length ? `Missing for Opportunity: ${missing.join('; ').replace(/\.$/, '')}.` : 'It was set back to Lead by hand.'}
           </span>
-          <span>
-            <button type="button" className="btn-link" data-testid="new-deal-complete-company" onClick={() => { close(); openCompany(companyRec.id); }}>
-              Complete the company
-            </button>
-          </span>
+          {/* From a meeting form, leaving would drop the meeting: complete the company afterwards. */}
+          {s.newLeadForMeeting ? (
+            <span style={{ color: 'var(--text-2)' }}>Complete it from its page after the meeting is saved.</span>
+          ) : (
+            <span>
+              <button type="button" className="btn-link" data-testid="new-deal-complete-company" onClick={() => { close(); openCompany(companyRec.id); }}>
+                Complete the company
+              </button>
+            </span>
+          )}
         </div>
       )}
       {!companyRec && <div className="hint-box">No company is an opportunity or a client yet. Complete a company first: its identity, address and a contact with a role, a role in the decision and an owner.</div>}

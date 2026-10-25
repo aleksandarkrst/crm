@@ -16,10 +16,11 @@ export type SampleProductKey = (typeof SAMPLE_PRODUCTS)[number]['key'];
 
 /** Made-up PIBs with valid check digits (CD-357); one the workspace already uses is left out. */
 export const SAMPLE_COMPANIES = [
-  { key: 'brightline', pib: '990000019', name: 'Brightline Studio', industry: 'Design agency', hq: 'Novi Sad', teamSize: '11–50 staff', domain: 'brightline.example.com' },
-  { key: 'kestrel', pib: '990000027', name: 'Kestrel Logistics', industry: 'Logistics', hq: 'Belgrade', teamSize: '51–200 staff', domain: 'kestrel.example.com' },
-  { key: 'orchard', pib: '990000035', name: 'Orchard Dental Group', industry: 'Healthcare', hq: 'Niš', teamSize: '11–50 staff', domain: 'orchard.example.com' },
-  { key: 'tidewater', pib: '990000043', name: 'Tidewater Foods', industry: 'Food production', hq: 'Subotica', teamSize: '201–500 staff', domain: 'tidewater.example.com' },
+  // Complete (CD-360): with their qualified contacts they are opportunities or clients, as their deals need.
+  { key: 'brightline', pib: '990000019', name: 'Brightline Studio', industry: 'Design agency', hq: 'Novi Sad', teamSize: '11–50 staff', domain: 'brightline.example.com', mb: '20000007', address: 'Bulevar oslobođenja 12', city: 'Novi Sad', postalCode: '21000', activityCode: '7410' },
+  { key: 'kestrel', pib: '990000027', name: 'Kestrel Logistics', industry: 'Logistics', hq: 'Belgrade', teamSize: '51–200 staff', domain: 'kestrel.example.com', mb: '20010134', address: 'Bulevar Mihajla Pupina 6', city: 'Beograd', postalCode: '11070', activityCode: '4941' },
+  { key: 'orchard', pib: '990000035', name: 'Orchard Dental Group', industry: 'Healthcare', hq: 'Niš', teamSize: '11–50 staff', domain: 'orchard.example.com', mb: '20020261', address: 'Obrenovićeva 20', city: 'Niš', postalCode: '18000', activityCode: '8623' },
+  { key: 'tidewater', pib: '990000043', name: 'Tidewater Foods', industry: 'Food production', hq: 'Subotica', teamSize: '201–500 staff', domain: 'tidewater.example.com', mb: '20030399', address: 'Korzo 8', city: 'Subotica', postalCode: '24000', activityCode: '1089' },
 ] as const;
 export type SampleCompanyKey = (typeof SAMPLE_COMPANIES)[number]['key'];
 

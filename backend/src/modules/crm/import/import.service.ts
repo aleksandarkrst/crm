@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { asc, eq, isNotNull, isNull } from 'drizzle-orm';
+import { asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { AuditService } from '../../../shared/audit/audit.service';
+import { opportunityReadiness } from '../companies/company-status';
 import { CompanyStatusService } from '../companies/company-status.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
@@ -46,8 +47,8 @@ interface Lookups {
   companiesByPib: Map<string, string>;
   /** Company id → its PIB, for the companies that have one. */
   pibOf: Map<string, string>;
-  /** Company id → its name and status (CD-358): a lead can't take an opportunity (CD-360). */
-  companyStatus: Map<string, { name: string; status: string }>;
+  /** Company id → its name and whether it can't take an opportunity (CD-360): a lead, or an incomplete Not interested. */
+  companyStatus: Map<string, { name: string; status: string; blocked: boolean }>;
   /** lower(email) → contact id. */
   contactsByEmail: Map<string, string>;
   /** lower(trim(name)) → id of the oldest product with that name (CD-81). */
@@ -273,9 +274,9 @@ export class ImportService {
     const companiesByName = new Map<string, string>();
     const companiesByPib = new Map<string, string>();
     const pibOf = new Map<string, string>();
-    const companyStatus = new Map<string, { name: string; status: string }>();
+    const companyStatus = new Map<string, { name: string; status: string; blocked: boolean }>();
     for (const c of await tx.select({ id: companies.id, name: companies.name, pib: companies.pib, status: companies.status }).from(companies).orderBy(asc(companies.createdAt), asc(companies.id))) {
-      companyStatus.set(c.id, { name: c.name, status: c.status });
+      companyStatus.set(c.id, { name: c.name, status: c.status, blocked: c.status === 'lead' });
       if (!companiesByName.has(key(c.name))) companiesByName.set(key(c.name), c.id);
       if (c.pib) {
         companiesByPib.set(c.pib, c.id);
@@ -314,6 +315,13 @@ export class ImportService {
     }
     // tenants has no RLS either.
     const [workspace] = await tx.select({ currency: tenants.currency }).from(tenants).where(eq(tenants.id, ctx.tenantId));
+    // A Not interested company takes one only when it is complete (as DealsService checks it).
+    const notInterested = [...companyStatus].filter(([, c]) => c.status === 'not_interested').map(([id]) => id);
+    if (type === 'deals' && notInterested.length) {
+      const rows = await tx.select().from(companies).where(inArray(companies.id, notInterested));
+      const people = await tx.select().from(contacts).where(inArray(contacts.companyId, notInterested));
+      for (const c of rows) companyStatus.get(c.id)!.blocked = opportunityReadiness(c, people.filter((p) => p.companyId === c.id)).blockers.length > 0;
+    }
     return { companiesByName, companiesByPib, pibOf, companyStatus, contactsByEmail, productsByName, productFrequency, members, funnels: fs, currency: workspace?.currency ?? 'EUR' };
   }
 
@@ -574,7 +582,7 @@ export class ImportService {
     else if (company && !('id' in company)) errors.push(`Company: "${company.name}" isn't in this workspace yet; add it and complete it first (only an opportunity or a client can enter the Pipeline)`);
     else if (company) {
       const known = lk.companyStatus.get(company.id);
-      if (known?.status === 'lead') errors.push(`Company: ${known.name} is still a lead; only an opportunity or a client can enter the Pipeline`);
+      if (known?.blocked) errors.push(`Company: ${known.name} ${known.status === 'lead' ? 'is still a lead' : "is Not interested and isn't complete"}; only an opportunity or a client can enter the Pipeline`);
     }
 
     // The primary contact: an existing contact with the email, otherwise a new one when a name is given.
