@@ -4,13 +4,14 @@
  * workspaces.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, firstFunnel, type Json, ok, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, firstFunnel, type Json, ok, readyCompany, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let admin: Session;
 let member: Session;
 let tenant: string;
 let funnelId: string;
+let companyId: string;
 const as = (s: Session = owner) => ({ token: s.token, tenant });
 const field = (body: Json, s: Session = owner) => ok('POST', '/crm/custom-fields', { ...as(s), body });
 
@@ -22,6 +23,7 @@ beforeAll(async () => {
   await addMember(owner, tenant, admin, 'admin');
   await addMember(owner, tenant, member, 'member');
   funnelId = (await firstFunnel(owner, tenant)).id;
+  companyId = (await readyCompany(owner, tenant)).id;
 });
 
 describe('field definitions', () => {
@@ -81,7 +83,7 @@ describe('values', () => {
     const high = pick.options[0].id;
     const deal = await ok('POST', '/crm/deals', {
       ...as(),
-      body: { title: 'Custom', funnelId, customFields: { [text.id]: ' PO-7 ', [num.id]: '12.5', [date.id]: '2026-12-31', [pick.id]: high, [check.id]: true, [url.id]: 'example.com/brief' } },
+      body: { title: 'Custom', funnelId, companyId, customFields: { [text.id]: ' PO-7 ', [num.id]: '12.5', [date.id]: '2026-12-31', [pick.id]: high, [check.id]: true, [url.id]: 'example.com/brief' } },
     });
     expect(deal.customFields).toEqual({ [text.id]: 'PO-7', [num.id]: 12.5, [date.id]: '2026-12-31', [pick.id]: high, [check.id]: true, [url.id]: 'https://example.com/brief' });
 
@@ -99,7 +101,7 @@ describe('values', () => {
   });
 
   it('rejects values that do not fit the field', async () => {
-    const deal = await ok('POST', '/crm/deals', { ...as(), body: { title: 'Strict', funnelId } });
+    const deal = await ok('POST', '/crm/deals', { ...as(), body: { title: 'Strict', funnelId, companyId } });
     const bad = async (id: string, value: unknown) => (await call('PATCH', `/crm/deals/${deal.id}`, { ...as(), body: { customFields: { [id]: value } } })).status;
     expect(await bad(num.id, 'twelve')).toBe(400);
     expect(await bad(date.id, '31.12.2026')).toBe(400);
@@ -165,7 +167,7 @@ describe('tenant isolation', () => {
     expect((await call('PATCH', `/crm/custom-fields/${mine.id}`, { token: other.token, tenant: otherTenant, body: { label: 'Mine now' } })).status).toBe(404);
     expect((await call('DELETE', `/crm/custom-fields/${mine.id}`, { token: other.token, tenant: otherTenant })).status).toBe(404);
     const theirFunnel = (await firstFunnel(other, otherTenant)).id;
-    const res = await call('POST', '/crm/deals', { token: other.token, tenant: otherTenant, body: { title: 'Sneaky', funnelId: theirFunnel, customFields: { [mine.id]: 'x' } } });
+    const res = await call('POST', '/crm/deals', { token: other.token, tenant: otherTenant, body: { title: 'Sneaky', funnelId: theirFunnel, companyId: (await readyCompany(other, otherTenant)).id, customFields: { [mine.id]: 'x' } } });
     expect(res.status).toBe(400);
     // Non-members get 403.
     expect((await call('GET', '/crm/custom-fields', { token: other.token, tenant })).status).toBe(403);

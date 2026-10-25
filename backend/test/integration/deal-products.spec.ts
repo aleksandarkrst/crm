@@ -4,14 +4,15 @@
  * its amount is the contract value without tax.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { call, createTenant, firstFunnel, type Json, ok, productLine, saveProducts, type Session, signIn } from './helpers';
+import { call, createTenant, firstFunnel, type Json, ok, productLine, readyCompany, saveProducts, type Session, signIn } from './helpers';
 
 let owner: Session;
 let member: Session;
 let tenant: string;
 let funnelId: string;
+let companyId: string;
 const as = (s: Session = owner) => ({ token: s.token, tenant });
-const newDeal = async (title: string, extra: Record<string, unknown> = {}) => (await ok('POST', '/crm/deals', { ...as(), body: { title, funnelId, ...extra } })).id as string;
+const newDeal = async (title: string, extra: Record<string, unknown> = {}) => (await ok('POST', '/crm/deals', { ...as(), body: { title, funnelId, companyId, ...extra } })).id as string;
 const dealOf = async (id: string) => ok('GET', `/crm/deals/${id}`, as());
 const linesOf = async (dealId: string) => (await ok<Json[]>('GET', '/crm/deal-lines?limit=200', as())).filter((l) => l.dealId === dealId);
 const product = async (body: Record<string, unknown>) => ok('POST', '/crm/products', { ...as(), body: { unitPrice: 100, ...body } });
@@ -20,6 +21,7 @@ beforeAll(async () => {
   owner = await signIn('products-owner');
   tenant = await createTenant(owner, 'Deal Products');
   funnelId = (await firstFunnel(owner, tenant)).id;
+  companyId = (await readyCompany(owner, tenant)).id;
 });
 
 describe('products', () => {

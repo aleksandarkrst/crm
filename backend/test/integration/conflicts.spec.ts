@@ -4,12 +4,13 @@
  * last-write-wins.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, firstFunnel, ok, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, firstFunnel, ok, readyCompany, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let ana: Session;
 let tenant: string;
 let funnelId: string;
+let companyId: string;
 const asOwner = (headers?: Record<string, string>) => ({ token: owner.token, tenant, headers });
 const asAna = (headers?: Record<string, string>) => ({ token: ana.token, tenant, headers });
 const ifMatch = (updatedAt: string) => ({ 'if-match': `"${updatedAt}"` });
@@ -20,9 +21,10 @@ beforeAll(async () => {
   tenant = await createTenant(owner, 'Conflicts');
   await addMember(owner, tenant, ana, 'member');
   funnelId = (await firstFunnel(owner, tenant)).id;
+  companyId = (await readyCompany(owner, tenant)).id;
 });
 
-const newDeal = (title: string) => ok('POST', '/crm/deals', { ...asOwner(), body: { title, funnelId, source: 'Referral' } });
+const newDeal = (title: string) => ok('POST', '/crm/deals', { ...asOwner(), body: { title, funnelId, companyId, source: 'Referral' } });
 
 describe('conflicting updates', () => {
   it('rejects a change to a field someone else changed since, names them and returns the current value', async () => {
