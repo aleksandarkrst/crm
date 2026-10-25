@@ -192,6 +192,40 @@ describe('request, approve, revoke and send', () => {
   });
 });
 
+describe("the approver's task", () => {
+  interface Task { id: string; dealId: string; label: string; assigneeUserId: string | null; dueDate: string | null; done: boolean; blocksAdvance: boolean }
+  const tasksOf = async (dealId: string) => (await ok<Task[]>('GET', `/crm/deal-tasks?dealIds=${dealId}`, as(owner))).filter((t) => t.label === 'Approve the proposal');
+
+  it('a request gives the approver a task due today; approving ticks it', async () => {
+    const deal = await pendingDeal('Task · approved');
+    const [task, ...more] = await tasksOf(deal.id);
+    expect(more).toHaveLength(0);
+    expect(task).toMatchObject({ assigneeUserId: approver.userId, done: false, blocksAdvance: false });
+    // Workspace "today" (the test tenant's time zone), never the UTC date (CD-338).
+    const { timezone } = await ok<{ timezone: string }>('GET', '/workspace', as(owner));
+    expect(task!.dueDate).toBe(new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date()));
+    await step(approver, deal.id, 'approval/approve');
+    expect(await tasksOf(deal.id)).toMatchObject([{ id: task!.id, done: true }]);
+  });
+
+  it('declining, revoking and a reset remove the open task', async () => {
+    const declined = await pendingDeal('Task · declined');
+    await step(approver, declined.id, 'approval/revoke');
+    expect(await tasksOf(declined.id)).toHaveLength(0);
+
+    const reset = await pendingDeal('Task · funnel change');
+    await ok('PATCH', `/crm/deals/${reset.id}`, { ...as(owner), body: { funnelId: free.id } });
+    expect(await tasksOf(reset.id)).toHaveLength(0);
+
+    // Revoked after approval: the ticked task stays as history, the next request makes a new one.
+    const revoked = await pendingDeal('Task · revoked');
+    await step(approver, revoked.id, 'approval/approve');
+    await step(owner, revoked.id, 'approval/revoke');
+    await step(seller, revoked.id, 'approval/request');
+    expect((await tasksOf(revoked.id)).map((t) => t.done).sort()).toEqual([false, true]);
+  });
+});
+
 describe('the approval-request email and the digest', () => {
   /** Approval by the admin, so the approver's own switch doesn't matter here. */
   let byAdmin: Funnel;
