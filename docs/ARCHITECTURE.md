@@ -556,8 +556,8 @@ list, Other). PDF, DOCX or XLSX by extension and first bytes, up to 25 MB each. 
 `deal_documents` rows with `source = 'uploaded'`, `status = 'ready'` and their `mime_type` (the
 download keeps it and its extension). One Proposal per opportunity: two in one upload is a 400, a
 second one a 409 ("delete it first"). Once a Proposal is generated (or being generated) or
-imported, the tab drops the "Generate automatically / Import my own" choice; "Add documents" imports
-supporting files (no Proposal type). "Preview built-in proposal" is commented out on the Documents
+imported, the tab drops the "Generate automatically / Import my own" choice; "Add documents" opens
+it again for supporting documents: templates other than proposals, and every upload type but Proposal. "Preview built-in proposal" is commented out on the Documents
 tab and in the Generate dialog (owner, 25 Oct); the built-in view still opens from Settings → Document
 templates. While a document is generated its row (and the Generate
 dialog) shows a progress bar with a percentage: the worker reports only queued → running → ready,
