@@ -2,12 +2,12 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { useNavigate } from 'react-router-dom';
 import { type ApiCompanyDetails, type ApiConflict, type ApiDeal, ApiError, type ApiRole, type ApiTenant, type Channel, clearTenantId, CLIENT_ID, type CompanyInput, type ContactInput, crmApi, type CustomFieldEntity, type CustomFieldPatch, type CustomFieldType, type CustomValue, type DealInput, type DealProductsInput, type HistoryEntity, type LostReason, type ProductInput, type ProfileInput, type TaskInput, type VisitPlanInput, type WorkspaceInput, type WorkspaceTerms } from '../lib/api';
 import { paths } from '../lib/paths';
-import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference } from './documents';
+import { type DealDoc, docBusy, docsApi, type DocTemplate, type DocType, type PlaceholderReference, type UploadType } from './documents';
 import { employeeCardActions } from './employeeCard';
 import { connectLive, type LiveEvent } from './live';
 import { meetingActions, meetingKey, newMeetingRuntime, upcomingQuery } from './meetings';
 import { newPeopleRuntime, PEOPLE_HINTS, peopleActions } from './people';
-import { type Changed, loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type Part, type WorkspaceData } from './remote';
+import { approvalOf, type Changed, loadWorkspace, mapActivity, mapBonusRules, mapCustomField, mapLeadTask, mapLine, mapProduct, mapStageChange, mapTeam, type Part, type WorkspaceData } from './remote';
 import { AUTO_GENERATE_DOCS, CHANNELS, initialState, SYSTEM_CHANNEL } from './seed';
 import {
   advanceBlockers,
@@ -239,6 +239,7 @@ const PROFILE_FIELDS: Partial<Record<keyof Profile, keyof ProfileInput>> = {
   timeOffApprovals: 'notifyTimeoffApprovals',
   sickLeaveNotices: 'notifySickLeave',
   hourLimits: 'notifyHourLimits',
+  proposalApprovals: 'notifyProposalApprovals',
 };
 
 function useStoreImpl(data: WorkspaceData, session: Session) {
@@ -1084,6 +1085,48 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }
     };
 
+    // ------------------------------------------------------------ proposal approval (CD-120)
+    /** Request, approve or revoke a proposal's approval; the API answers with where it now stands. */
+    const proposalApproval = async (leadId: string, step: 'request' | 'approve' | 'revoke') => {
+      try {
+        const state = await crmApi.approval(leadId, step);
+        mapLead(leadId, (l) => ({ ...l, approval: approvalOf(state) }));
+        const lead = leadById(cur(), leadId);
+        const approver = memberName(cur(), cur().funnels[lead?.segment ?? '']?.approverId ?? null);
+        flash(step === 'request' ? `Approval requested from ${approver}` : step === 'approve' ? 'Proposal approved · it can be sent now' : 'Approval revoked · the proposal needs approval again before it is sent');
+        await refreshLog(leadId);
+      } catch (err) {
+        flash((step === 'request' ? 'Not requested: ' : step === 'approve' ? 'Not approved: ' : 'Not revoked: ') + errText(err), 7000);
+      }
+    };
+    /** "Mark as sent" (CD-120): the API refuses it until the funnel's approval is in. Resolves whether it was saved. */
+    const markProposalSent = async (leadId: string): Promise<boolean> => {
+      try {
+        const state = await crmApi.markProposalSent(leadId);
+        mapLead(leadId, (l) => ({ ...l, approval: approvalOf(state) }));
+        // Nothing is emailed and no follow-up task is created yet: say so instead of pretending.
+        flash('Marked as sent · nothing was emailed and no task was created');
+        await refreshLog(leadId);
+        return true;
+      } catch (err) {
+        flash('Not marked as sent: ' + errText(err), 7000);
+        return false;
+      }
+    };
+    /** "Import my own" (CD-120): uploads the files with their types. Resolves whether they were saved. */
+    const uploadDocs = async (leadId: string, files: { file: File; type: UploadType }[]): Promise<boolean> => {
+      try {
+        const docs = await docsApi.uploadDocuments(leadId, files);
+        docs.forEach(putDoc);
+        flash(files.length === 1 ? `${files[0]!.file.name} saved` : `${files.length} documents saved`);
+        await refreshLog(leadId);
+        return true;
+      } catch (err) {
+        flash('Not saved: ' + errText(err), 7000);
+        return false;
+      }
+    };
+
     // ------------------------------------------------------------ lost deals
     /** The lost state of a deal as the API returned it. */
     const outcomeOf = (d: ApiDeal): Partial<Lead> => ({ outcome: d.outcome, lostReason: d.lostReason ?? undefined, lostNote: d.lostNote ?? undefined, lostAt: d.lostAt ?? undefined });
@@ -1222,13 +1265,19 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }
     };
     /** Renames the open funnel or changes its note (one write per field after a pause). */
-    const patchFunnel = (id: string, patch: { label?: string; note?: string; targetDays?: number | null }) => {
+    const patchFunnel = (id: string, patch: { label?: string; note?: string; targetDays?: number | null; proposalApproval?: boolean; approverId?: string | null }) => {
       const funnel = cur().funnels[id];
       if (!funnel) return;
       set((x) => ({ funnels: { ...x.funnels, [id]: { ...funnel, ...patch } } }));
       if (patch.targetDays !== undefined) saveLater('funnel-target:' + id, () => crmApi.updateFunnel(id, { targetDays: patch.targetDays ?? null }), 'the default target days');
       if (patch.label !== undefined && patch.label.trim()) saveLater('funnel-label:' + id, () => crmApi.updateFunnel(id, { label: patch.label!.trim() }), 'the funnel name');
       if (patch.note !== undefined) saveLater('funnel-note:' + id, () => crmApi.updateFunnel(id, { note: patch.note!.trim() || null }), 'the funnel description');
+      // Proposal approval (CD-120): the switch and the approver go together (the API needs an approver to switch it on).
+      if (patch.proposalApproval !== undefined || patch.approverId !== undefined) {
+        const next = { ...funnel, ...patch };
+        if (next.proposalApproval && !next.approverId) return;
+        void save(() => crmApi.updateFunnel(id, { proposalApproval: next.proposalApproval, approverUserId: next.approverId }), undefined, 'the proposal approval');
+      }
     };
     /** Deletes a funnel that never had deals (the API refuses others with a reason). */
     const deleteFunnel = async (id: string) => {
@@ -1480,6 +1529,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           set((x) => ({ dealDocs: { ...x.dealDocs, [doc.dealId]: (x.dealDocs[doc.dealId] || []).filter((d) => d.id !== doc.id) } }));
           flash(doc.name + ' deleted');
           void refreshLog(doc.dealId).catch(() => undefined);
+          // Without its proposal, an approval no longer stands (CD-120): read it back.
+          if (doc.docType === 'Proposal') void reload();
         } catch (err) {
           flash('Could not delete the document: ' + errText(err), 7000);
         }
@@ -1511,12 +1562,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           flash('Could not delete the template: ' + errText(err), 7000);
         }
       },
-      openDoc: (leadId: string) => set({ docOpen: true, docLeadId: leadId, sent: false }),
-      sendDoc: () => {
-        set({ sent: true });
-        // Nothing is emailed and no follow-up task is created yet: say so instead of pretending.
-        flash('Marked as sent for this session only · nothing was emailed and no task was created');
-      },
+      openDoc: (leadId: string) => set({ docOpen: true, docLeadId: leadId }),
+      markProposalSent,
+      proposalApproval,
+      uploadDocs,
       saveDealProducts,
       openDealProducts: (leadId: string) => set({ dealProductsId: leadId }),
       linkPerson,

@@ -1,5 +1,5 @@
 import { billingDates, billingText, dealTotals } from '../store/dealMath';
-import { type Cur, curOf, isoLabel, itemById, leadById, linesOf, money, num } from '../store/selectors';
+import { approvalStatusOf, type Cur, curOf, isoLabel, itemById, leadById, linesOf, memberName, money, num } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Lead, State } from '../store/types';
 
@@ -26,8 +26,13 @@ function billingRows(s: State, lead: Lead, c: Cur) {
 
 /** The generated proposal, rendered from the deal record. Merge fields are highlighted. */
 export function ProposalDoc() {
-  const { s, set, sendDoc } = useStore();
+  const { s, set, markProposalSent } = useStore();
   const lead = leadById(s, s.docLeadId) || s.leads[0]!;
+  // Sent once approved, when the funnel asks for approval (CD-120); the API checks it too.
+  const sent = !!lead.approval.sentAt;
+  const approval = approvalStatusOf(s, lead);
+  const needsApproval = approval === 'not_requested' || approval === 'pending';
+  const approver = memberName(s, s.funnels[lead.segment]?.approverId ?? null);
   const merge = { background: s.showMerge ? '#FDF0E4' : 'transparent', padding: '1px 3px' };
   const lines = linesOf(s, lead);
   const totals = dealTotals(lines, lead.taxMode, lead.discounts);
@@ -60,14 +65,21 @@ export function ProposalDoc() {
         <div style={{ position: 'sticky', top: 0, background: '#0F1B16', color: '#F5F7F6', padding: '14px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', zIndex: 2 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>Proposal — {lead.company}</span>
-            <span style={{ fontSize: 10.5, color: '#93A39B' }}>Proposal v4 · generated from CRM record · {s.sent ? 'marked sent (this session only)' : 'draft, not saved'}</span>
+            <span style={{ fontSize: 10.5, color: '#93A39B' }}>Proposal v4 · generated from CRM record · {sent ? 'marked as sent' : needsApproval ? `waiting for approval by ${approver}` : 'draft, not saved'}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
             <button type="button" className="doc-btn" onClick={() => set((x) => ({ showMerge: !x.showMerge }))}>
               {s.showMerge ? 'Hide merge fields' : 'Show merge fields'}
             </button>
-            <button type="button" onClick={sendDoc} title={`Emailing proposals to ${first || 'the contact'} is coming soon; this only marks it as sent here.`} style={{ border: 0, background: '#F5F7F6', color: '#0F1B16', cursor: 'pointer', fontSize: 12.5, fontWeight: 500, padding: '9px 14px', borderRadius: 7 }}>
-              {s.sent ? 'Marked as sent ✓' : 'Mark as sent'}
+            <button
+              type="button"
+              data-testid="proposal-mark-sent"
+              disabled={needsApproval}
+              onClick={() => void markProposalSent(lead.id)}
+              title={needsApproval ? `The proposal needs approval by ${approver} before it is sent.` : `Emailing proposals to ${first || 'the contact'} is coming soon; this only marks it as sent here.`}
+              style={{ border: 0, background: '#F5F7F6', color: '#0F1B16', cursor: needsApproval ? 'not-allowed' : 'pointer', opacity: needsApproval ? 0.55 : 1, fontSize: 12.5, fontWeight: 500, padding: '9px 14px', borderRadius: 7 }}
+            >
+              {sent ? 'Marked as sent ✓' : 'Mark as sent'}
             </button>
             <button type="button" className="doc-btn" onClick={() => set({ docOpen: false })}>
               Close

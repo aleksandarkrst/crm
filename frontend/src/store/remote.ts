@@ -3,7 +3,7 @@
  * a lead (deal) shows its company and primary contact inline, companies are derived from leads
  * plus companies without a deal, and people are primary contacts plus everyone else.
  */
-import { type ApiActivity, type ApiBonusRules, type ApiCompany, type ApiCustomField, type ApiDealLine, type ApiDealRow, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiInvitation, type ApiMember, type ApiProduct, type ApiProfile, type ApiStageChange, type ApiVisitPlan, type ApiWorkspace, ApiError, crmApi, DEFAULT_TIMESHEET_SETTINGS, EMPTY_COMPANY } from '../lib/api';
+import { type ApiActivity, type ApiApprovalState, type ApiBonusRules, type ApiCompany, type ApiCustomField, type ApiDealLine, type ApiDealRow, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiInvitation, type ApiMember, type ApiProduct, type ApiProfile, type ApiStageChange, type ApiVisitPlan, type ApiWorkspace, ApiError, crmApi, DEFAULT_TIMESHEET_SETTINGS, EMPTY_COMPANY } from '../lib/api';
 import { initialsOf, localeFor, momentLabel, money, taskKey } from './selectors';
 import { sortPlans } from './visitPlans';
 import { SYSTEM_CHANNEL } from './seed';
@@ -49,12 +49,23 @@ const contactExtraOf = (c: ApiContact): ContactExtra => ({
   pets: c.pets ?? '',
 });
 
+/** A deal's approval fields (CD-120), from a deal or what an approval action answered. */
+export const approvalOf = (d: Partial<ApiApprovalState>): Lead['approval'] => ({
+  requestedAt: d.approvalRequestedAt ?? null,
+  requestedBy: d.approvalRequestedByUserId ?? null,
+  approvedAt: d.approvedAt ?? null,
+  approvedBy: d.approvedByUserId ?? null,
+  sentAt: d.proposalSentAt ?? null,
+});
+
 function mapFunnel(f: ApiFunnel): Funnel {
   return {
     id: f.id,
     label: f.label,
     note: f.note ?? '',
     targetDays: f.targetDays ?? null,
+    proposalApproval: f.proposalApproval ?? false,
+    approverId: f.approverUserId ?? null,
     stages: f.stages.map((st) => ({
       id: st.id,
       key: st.key,
@@ -157,6 +168,7 @@ export const mapProfile = (p: ApiProfile): Profile => ({
   timeOffApprovals: p.notifyTimeoffApprovals,
   sickLeaveNotices: p.notifySickLeave ?? true,
   hourLimits: p.notifyHourLimits ?? true,
+  proposalApprovals: p.notifyProposalApprovals ?? true,
 });
 
 /** Members, then pending invitations with their email status. */
@@ -350,6 +362,7 @@ export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed =
       stageSince: deal.stageEnteredAt,
       lateDays: deal.stageLateDays ?? 0,
       docsComplete: Object.fromEntries((deal.stageStates ?? []).filter((st) => st.docsComplete).map((st) => [st.stageId, { at: st.docsCompleteAt ?? '', by: st.docsCompleteByUserId }])),
+      approval: approvalOf(deal),
       score: deal.fitScore,
       stall: Math.max(0, Math.floor((now - lastTouch) / DAY)),
       industry: co?.industry ?? '—',

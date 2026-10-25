@@ -16,6 +16,7 @@ import { DealProjectsRow, WonDealProjectAction } from './DealProjects';
 import { DealProducts } from './DealProducts';
 import { Discovery } from './Discovery';
 import { History } from './History';
+import { ProposalApproval } from './ProposalApproval';
 import { Summary } from './Summary';
 import { Todos } from './Todos';
 
@@ -65,6 +66,7 @@ export function LeadScreen() {
           <div className="lead-main" style={{ flex: '999 1 480px', display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
             <Composer lead={lead} />
             <Todos lead={lead} />
+            <ProposalApproval lead={lead} />
             <History lead={lead} />
           </div>
         </div>

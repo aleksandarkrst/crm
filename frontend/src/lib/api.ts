@@ -156,7 +156,21 @@ export interface ApiFunnel {
   note: string | null;
   /** Default target days for its stages (CD-363). */
   targetDays: number | null;
+  /** Proposals need approval before they are sent (CD-120), by this approver (owners and admins too). */
+  proposalApproval: boolean;
+  approverUserId: string | null;
   stages: ApiFunnelStage[];
+}
+/** A proposal's approval (CD-120): Not required, Not requested, Pending approval, Approved. */
+export type ApiApprovalStatus = 'not_required' | 'not_requested' | 'pending' | 'approved';
+/** What the approval actions answer: the opportunity's approval as it now stands. */
+export interface ApiApprovalState {
+  approvalStatus: ApiApprovalStatus;
+  approvalRequestedAt: string | null;
+  approvalRequestedByUserId: string | null;
+  approvedAt: string | null;
+  approvedByUserId: string | null;
+  proposalSentAt: string | null;
 }
 export interface ApiTenant {
   id: string;
@@ -324,6 +338,7 @@ export interface ApiProfile {
   notifySickLeave: boolean;
   /** "Hour limit almost reached" and "Hour limit reached" (CD-149). */
   notifyHourLimits?: boolean;
+  notifyProposalApprovals?: boolean;
 }
 /**
  * Getting started (CD-68): the workspace's activation steps (CD-115), derived from its records.
@@ -472,6 +487,13 @@ export interface ApiDeal {
   lostNote: string | null;
   /** Days past its stage's target (CD-363); 0 when on time, won or lost. */
   stageLateDays?: number;
+  /** Its proposal's approval, per its funnel's rule, and when the proposal was sent (CD-120). */
+  approvalStatus?: ApiApprovalStatus;
+  approvalRequestedAt?: string | null;
+  approvalRequestedByUserId?: string | null;
+  approvedAt?: string | null;
+  approvedByUserId?: string | null;
+  proposalSentAt?: string | null;
   /** Per stage, "documentation complete" with who and when (CD-363; the single deal read only). */
   stageStates?: ApiDealStageState[];
   /** Custom field values by field id (CD-15). */
@@ -1100,13 +1122,17 @@ export const crmApi = {
 
   funnels: () => api<ApiFunnel[]>('/crm/funnels'),
   createFunnel: (input: { label: string; note?: string | null; copyFromFunnelId?: string }) => api<ApiFunnel>('/crm/funnels', { method: 'POST', json: input }),
-  updateFunnel: (id: string, input: { label?: string; note?: string | null; targetDays?: number | null }) => api<ApiFunnel>(`/crm/funnels/${id}`, { method: 'PATCH', json: input }),
+  updateFunnel: (id: string, input: { label?: string; note?: string | null; targetDays?: number | null; proposalApproval?: boolean; approverUserId?: string | null }) =>
+    api<ApiFunnel>(`/crm/funnels/${id}`, { method: 'PATCH', json: input }),
   deleteFunnel: (id: string) => api(`/crm/funnels/${id}`, { method: 'DELETE' }),
   updateStage: (funnelId: string, stageId: string, input: StageInput) => api(`/crm/funnels/${funnelId}/stages/${stageId}`, { method: 'PATCH', json: input }),
   /** "Documentation complete, ready to send" for one stage of a deal (CD-363). */
   setDocsComplete: (dealId: string, stageId: string, complete: boolean) => api<ApiDealStageState>(`/crm/deals/${dealId}/stages/${stageId}/docs-complete`, { method: 'PUT', json: { complete } }),
   /** "Remind the owner" (CD-363): emails whoever answers for the deal's stage. */
   remindStageOwner: (dealId: string) => api<{ recipientUserId: string }>(`/crm/deals/${dealId}/remind-stage-owner`, { method: 'POST', json: {} }),
+  /** Proposal approval (CD-120): request, approve or revoke it, and mark the proposal as sent. */
+  approval: (dealId: string, step: 'request' | 'approve' | 'revoke') => api<ApiApprovalState>(`/crm/deals/${dealId}/approval/${step}`, { method: 'POST', json: {} }),
+  markProposalSent: (dealId: string) => api<ApiApprovalState>(`/crm/deals/${dealId}/proposal/sent`, { method: 'POST', json: {} }),
   createStage: (funnelId: string, input: StageInput & { name: string; position?: number }) => api<ApiFunnel>(`/crm/funnels/${funnelId}/stages`, { method: 'POST', json: input }),
   reorderStages: (funnelId: string, stageIds: string[]) => api<ApiFunnel>(`/crm/funnels/${funnelId}/stages/order`, { method: 'PUT', json: { stageIds } }),
   /** Deals in the stage move to `moveDealsTo` (required when it has any). */

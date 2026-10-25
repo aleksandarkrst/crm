@@ -178,6 +178,17 @@ export const companyOfPerson = (s: State, p: Person): string => p.company ?? lea
 /** Company id of a person, resolved the same way as companyOfPerson. */
 export const companyIdOfPerson = (s: State, p: Person): string | null => (p.company !== undefined ? p.companyId : leadById(s, p.leadId)?.companyId) ?? null;
 
+// ---------------------------------------------------------------- proposal approval (CD-120)
+
+export type ApprovalStatus = 'not_required' | 'not_requested' | 'pending' | 'approved';
+export const APPROVAL_LABELS: Record<ApprovalStatus, string> = { not_required: 'Not required', not_requested: 'Not requested', pending: 'Pending approval', approved: 'Approved' };
+
+/** Its proposal's approval, as the API works it out: the funnel's rule, then what was requested and approved. */
+export function approvalStatusOf(s: State, lead: Lead): ApprovalStatus {
+  if (!s.funnels[lead.segment]?.proposalApproval) return 'not_required';
+  return lead.approval.approvedAt ? 'approved' : lead.approval.requestedAt ? 'pending' : 'not_requested';
+}
+
 // ---------------------------------------------------------------- company status (CD-358)
 
 export const COMPANY_STATUS_LABELS: Record<CompanyStatus, string> = { lead: 'Lead', opportunity: 'Opportunity', client: 'Client', past_client: 'Past client', not_interested: 'Not interested' };

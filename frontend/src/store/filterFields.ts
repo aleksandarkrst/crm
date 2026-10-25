@@ -6,7 +6,7 @@ import { FREQUENCIES } from './dealMath';
 import { type FilterField, type FilterOption, type FilterPerson, GROUP } from './filters';
 import { MEETING_STATUSES, MEETING_TYPES, STATUS_LABEL } from './meetings';
 import { BUYER_ROLES, INDUSTRIES, SOURCES, TEAM_SIZES } from './seed';
-import { allPeople, COMPANY_STATUS_LABELS, companyIdOfPerson, companyLabels, type CompanyRecord, companyRecords, curOf, currencySymbol, customFieldsOf, needsNextStep, salesPeople, stagesFor, valueNum } from './selectors';
+import { allPeople, APPROVAL_LABELS, type ApprovalStatus, approvalStatusOf, COMPANY_STATUS_LABELS, companyIdOfPerson, companyLabels, type CompanyRecord, companyRecords, curOf, currencySymbol, customFieldsOf, needsNextStep, salesPeople, stagesFor, valueNum } from './selectors';
 import { instantToZoned } from './time';
 import type { CatalogItem, Lead, Person, SegKey, State } from './types';
 
@@ -160,6 +160,8 @@ export function opportunityFields(s: State, funnel: SegKey | null, pinned: strin
     { id: 'late', label: 'Days late', group: g, kind: 'number', get: (l) => l.lateDays },
     { id: 'noNextStep', label: 'No next step', group: g, kind: 'checkbox', get: (l) => needsNextStep(s, l) },
     { id: 'qualified', label: 'Qualified', group: g, kind: 'checkbox', get: (l) => !!l.qualifiedAt },
+    // Its proposal's approval (CD-120), whatever the stage.
+    { id: 'approval', label: 'Approval status', group: g, kind: 'list', options: (Object.keys(APPROVAL_LABELS) as ApprovalStatus[]).map((id) => ({ id, name: APPROVAL_LABELS[id] })), get: (l) => approvalStatusOf(s, l) },
     text('pain', 'Pain', (l) => l.pain),
     text('solution', 'Solution', (l) => l.painSolution),
     { id: 'lostReason', label: 'Lost reason', group: g, kind: 'list', options: optionsOf(LOST_REASONS, []), get: (l) => (l.outcome === 'lost' ? l.lostReason : null) },
