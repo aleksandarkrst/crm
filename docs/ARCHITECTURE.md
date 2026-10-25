@@ -555,8 +555,8 @@ with one type per file: Proposal, Price list, Technical specification, Contract 
 list, Other). PDF, DOCX or XLSX by extension and first bytes, up to 25 MB each. They are
 `deal_documents` rows with `source = 'uploaded'`, `status = 'ready'` and their `mime_type` (the
 download keeps it and its extension). One Proposal per opportunity: two in one upload is a 400, a
-second one a 409 ("delete it first"). Once an uploaded Proposal exists the tab drops the
-"Generate automatically / Import my own" choice and the built-in preview; "Add documents" imports
+second one a 409 ("delete it first"). Once an uploaded Proposal exists, or the proposal is
+approved, the tab drops the "Generate automatically / Import my own" choice and the built-in preview; "Add documents" imports
 supporting files (no Proposal type). While a document is generated its row (and the Generate
 dialog) shows a progress bar with a percentage: the worker reports only queued → running → ready,
 so `store/docProgress.ts` estimates it from the time since it was queued and stays below 100 %

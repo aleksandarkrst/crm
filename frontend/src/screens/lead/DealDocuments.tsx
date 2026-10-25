@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { askConfirm } from '../../components/ConfirmDialog';
 import { DocProgress } from '../../components/DocProgress';
 import { canManageTemplates, type DealDoc, docBusy, docMoment, fileExtension, fileSize, MAX_UPLOAD_FILES, suggestedTemplate, UPLOAD_TYPES, type UploadType, uploadFileProblem } from '../../store/documents';
-import { stageOf } from '../../store/selectors';
+import { approvalStatusOf, stageOf } from '../../store/selectors';
 import { useStore } from '../../store/store';
 import type { Lead } from '../../store/types';
 import { opportunityCopy } from '../../store/wording';
@@ -13,8 +13,8 @@ import { ProposalActions } from './ProposalActions';
  * The deal's Documents tab (CD-13): generate a document from a template, follow it while the worker
  * fills it in, and download or delete what was generated. Or import your own (CD-120): proposals
  * and documents made outside Pultly, each with its type; one Proposal per opportunity. Once a
- * proposal is imported, the choice and the built-in preview give way to "Add documents" for
- * supporting files; the proposal's next step (request approval, approve, send) sits at the bottom.
+ * proposal is imported or approved (owner's call, 25 Oct), the Generate / Import choice and the
+ * built-in preview give way to "Add documents" for supporting files. The proposal's next step (request approval, approve, send) sits at the bottom.
  */
 export function DealDocuments({ lead }: { lead: Lead }) {
   const { s, session, ensureDocs, loadTemplates, generateDoc, downloadDoc, deleteDoc, openDoc, startGeneration } = useStore();
@@ -33,6 +33,7 @@ export function DealDocuments({ lead }: { lead: Lead }) {
   const isAdmin = canManageTemplates(session.tenant.role);
   const hasProposal = docs.some((d) => d.docType === 'Proposal');
   const imported = docs.some((d) => d.docType === 'Proposal' && d.source === 'uploaded');
+  const settled = imported || approvalStatusOf(s, lead) === 'approved';
 
   const generate = async () => {
     if (!templateId) return;
@@ -47,8 +48,8 @@ export function DealDocuments({ lead }: { lead: Lead }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <span className="caps">Proposal</span>
-      {imported ? (
-        adding && <ImportDocuments lead={lead} hasProposal onDone={() => setAdding(false)} />
+      {settled ? (
+        adding && <ImportDocuments lead={lead} hasProposal={hasProposal} onDone={() => setAdding(false)} />
       ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8 }}>
@@ -124,12 +125,12 @@ export function DealDocuments({ lead }: { lead: Lead }) {
       })}
       {docs.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>No documents yet. Generate one or import your own here; entering a stage whose entry document is a Proposal offers it too.</div>}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-        {imported ? (
+        {settled ? (
           <button type="button" className="btn-outline" data-testid="docs-add" style={{ fontSize: 12, padding: '7px 11px', borderRadius: 6, fontWeight: 400 }} onClick={() => setAdding((x) => !x)}>
             {adding ? 'Cancel' : 'Add documents'}
           </button>
         ) : (
-          <button type="button" className="btn-outline" style={{ fontSize: 12, padding: '7px 11px', borderRadius: 6, fontWeight: 400 }} onClick={() => openDoc(lead.id)}>
+          <button type="button" className="btn-outline" data-testid="docs-preview" style={{ fontSize: 12, padding: '7px 11px', borderRadius: 6, fontWeight: 400 }} onClick={() => openDoc(lead.id)}>
             Preview built-in proposal
           </button>
         )}
