@@ -135,7 +135,7 @@ Rea,+381 60 123 4567
     expect(messages[0]).toEqual([`Stage: "${(funnels[0] as Json).label}" has no stage named "No such stage"`]);
     expect(messages[1]).toEqual(['Value: Invalid amount']);
     expect(messages[2]).toEqual([expect.stringMatching(/^Closing date: /)]);
-    expect(messages[3]).toEqual(['Company is required', 'Company: an opportunity needs a company of this workspace']);
+    expect(messages[3]).toEqual(['Company is required']);
     expect(messages[4]).toEqual(['Funnel: there is no funnel named "Nope"']);
   });
 

@@ -123,6 +123,6 @@ describe('importing opportunities', () => {
     expect((byLine[3]!.messages ?? []).join(' ')).toContain('Import Lead is still a lead');
     expect(byLine[4]!.status).toBe('invalid');
     expect(byLine[5]!.status).toBe('invalid');
-    expect((byLine[5]!.messages ?? []).join(' ')).toContain('an opportunity needs a company');
+    expect(byLine[5]!.messages).toContain('Company is required');
   });
 });

@@ -3,11 +3,12 @@ import { CustomFieldInputs, customFieldsForCreate } from '../components/CustomFi
 import { Modal, ModalHeader } from '../components/ui';
 import { type CustomFieldPatch, type CustomFieldType, LOST_REASONS, type LostReason } from '../lib/api';
 import { paths } from '../lib/paths';
+import { checkActivityCode, checkMb } from '../lib/serbianIds';
 import { checkEmail, checkPhone } from '../lib/validate';
 import { BUYER_ROLES, CHANNEL_LABELS, FIELD_TYPES, SALE_TYPES } from '../store/seed';
-import { allPeople, COMPANY_STATUS_LABELS, companyLabels, companyReadiness, companyRecords, customFieldsOf, pipelineBlocked, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
+import { allPeople, COMPANY_STATUS_LABELS, companyContacts, companyLabels, companyReadiness, companyRecords, customFieldsOf, memberLabels, pipelineBlocked, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
-import type { ChannelCode, CompanyStatus, Lead, SaleType } from '../store/types';
+import type { ChannelCode, CompanyStatus, Lead, Person, SaleType } from '../store/types';
 import { GenerationModal, NewTemplateModal } from './DocumentModals';
 import { DealProductsDialog } from './DealProductsDialog';
 import { MeetingDialog } from './MeetingDialog';
@@ -159,16 +160,15 @@ function NewDealModal() {
             {companyRec.name} {statusOf(companyRec.id) === 'lead' ? 'is still a lead' : "is Not interested and isn't complete"}
           </span>
           <span style={{ color: 'var(--text-2)' }}>
-            Leads are listed but can't be picked.{' '}
+            {missing.length ? 'Fill in what is missing here, and it can take the opportunity. ' : "Leads are listed but can't be picked. "}
             {missing.length ? `Missing for Opportunity: ${missing.join('; ').replace(/\.$/, '')}.` : 'It was set back to Lead by hand.'}
           </span>
-          {/* From a meeting form, leaving would drop the meeting: complete the company afterwards. */}
-          {s.newLeadForMeeting ? (
-            <span style={{ color: 'var(--text-2)' }}>Complete it from its page after the meeting is saved.</span>
-          ) : (
+          {missing.length > 0 && <CompleteCompany companyId={companyRec.id} />}
+          {/* From a meeting form, leaving would drop the meeting. */}
+          {!s.newLeadForMeeting && (
             <span>
               <button type="button" className="btn-link" data-testid="new-deal-complete-company" onClick={() => { close(); openCompany(companyRec.id); }}>
-                Complete the company
+                Open the company instead
               </button>
             </span>
           )}
@@ -213,6 +213,106 @@ function NewDealModal() {
         </button>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * What a lead misses, filled in right in the New opportunity dialog (CD-360): only the missing
+ * identity fields, and the missing details of the contact closest to qualifying (or a new contact
+ * when it has none). Saving makes it an opportunity, so the dialog can go on.
+ */
+function CompleteCompany({ companyId }: { companyId: string }) {
+  const { s, session, completeCompany } = useStore();
+  const extra = s.extraCompanies.find((c) => c.id === companyId);
+  const blank = (v: string | undefined) => !v || !v.trim();
+  const fields = ([['mb', 'Matični broj', '8 digits'], ['address', 'Street', 'Street and number'], ['city', 'City', 'City'], ['postalCode', 'Postal code', '21000'], ['activityCode', 'Šifra delatnosti', '4 digits, e.g. 6201']] as const).filter(([k]) => blank(extra?.[k]));
+  const people = companyContacts(s, companyId);
+  const gaps = (p: Person) => [blank(p.role) && 'role', blank(p.buyerRole) && 'buyerRole', !p.ownerId && 'ownerId'].filter((g): g is 'role' | 'buyerRole' | 'ownerId' => !!g);
+  const ready = people.some((p) => gaps(p).length === 0);
+  const person = ready ? undefined : [...people].sort((a, b) => gaps(a).length - gaps(b).length)[0];
+  const contactGaps = ready ? [] : person ? gaps(person) : (['role', 'buyerRole', 'ownerId'] as const).slice();
+  const [values, setValues] = useState<Record<string, string>>({ ownerId: session.userId });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setValues((v) => ({ ...v, [k]: e.target.value }));
+  const members = [...memberLabels(s)].map(([value, label]) => ({ value, label: value === session.userId ? `${label} (me)` : label }));
+
+  const save = async () => {
+    const errs: Record<string, string> = {};
+    const company: Record<string, string> = {};
+    for (const [k, label] of fields) {
+      const v = (values[k] ?? '').trim();
+      if (!v) errs[k] = `Fill in the ${label.toLowerCase()}`;
+      const checked = k === 'mb' ? checkMb(v) : k === 'activityCode' ? checkActivityCode(v) : null;
+      if (v && checked && !checked.ok) errs[k] = checked.error;
+      company[k] = checked?.ok ? checked.value : v;
+    }
+    if (!ready && !person && !(values.fullName ?? '').trim()) errs.fullName = 'Name the contact';
+    for (const g of contactGaps) if (!(values[g] ?? '').trim()) errs[g] = g === 'role' ? 'Fill in the job title' : g === 'buyerRole' ? 'Pick the role in the decision' : 'Pick the owner';
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+    const details = { ...(contactGaps.includes('role') ? { jobTitle: values.role!.trim() } : {}), ...(contactGaps.includes('buyerRole') ? { buyerRole: values.buyerRole! } : {}), ...(contactGaps.includes('ownerId') ? { ownerUserId: values.ownerId! } : {}) };
+    setBusy(true);
+    await completeCompany(companyId, company, ready ? null : person?.contactId ? { id: person.contactId, patch: details } : { create: { fullName: values.fullName!.trim(), ...details } });
+    setBusy(false);
+  };
+
+  const field = (k: string, label: string, input: React.ReactNode) => (
+    <label key={k} className="form-label">
+      {label}
+      {input}
+      {errors[k] && (
+        <span role="alert" style={{ fontSize: 12, color: 'var(--danger)', textTransform: 'none', letterSpacing: 0 }}>
+          {errors[k]}
+        </span>
+      )}
+    </label>
+  );
+  return (
+    <div data-testid="new-deal-complete-form" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+      {fields.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+          {fields.map(([k, label, ph]) => field(k, label, <input className="form-input" aria-label={label} placeholder={ph} value={values[k] ?? ''} onChange={set(k)} />))}
+        </div>
+      )}
+      {!ready && (
+        <>
+          <span style={{ fontSize: 12.5, fontWeight: 600 }}>{person ? person.name : 'A contact'}</span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+            {!person && field('fullName', 'Full name', <input className="form-input" aria-label="Contact name" value={values.fullName ?? ''} onChange={set('fullName')} />)}
+            {contactGaps.includes('role') && field('role', 'Job title', <input className="form-input" aria-label="Job title" placeholder="e.g. CEO" value={values.role ?? ''} onChange={set('role')} />)}
+            {contactGaps.includes('buyerRole') &&
+              field(
+                'buyerRole',
+                'Role in the decision',
+                <select className="form-input" aria-label="Role in the decision" value={values.buyerRole ?? ''} onChange={set('buyerRole')}>
+                  <option value="">Pick one</option>
+                  {BUYER_ROLES.map((r) => (
+                    <option key={r}>{r}</option>
+                  ))}
+                </select>,
+              )}
+            {contactGaps.includes('ownerId') &&
+              field(
+                'ownerId',
+                'Owner',
+                <select className="form-input" aria-label="Contact owner" value={values.ownerId ?? ''} onChange={set('ownerId')}>
+                  {members.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>,
+              )}
+          </div>
+        </>
+      )}
+      <span>
+        <button type="button" className="btn btn-secondary" data-testid="new-deal-complete-save" disabled={busy} onClick={() => void save()} style={{ padding: '8px 12px' }}>
+          {busy ? 'Saving…' : 'Save and continue'}
+        </button>
+      </span>
+    </div>
   );
 }
 

@@ -577,9 +577,8 @@ export class ImportService {
     if (!parsed.success) errors.push(...zodErrors(parsed.error, undefined, names).filter((m) => !(v.title === '' && m.startsWith('Opportunity:'))));
     const company = v.company ? this.companyRef(v.company, v.companyPib, lk, errors, zodErrors) : undefined;
     // Only a company that is an opportunity or a client can take one (CD-360): not a lead, and not a
-    // company the import would create (that would be a lead too).
-    if (!v.company) errors.push('Company: an opportunity needs a company of this workspace');
-    else if (company && !('id' in company)) errors.push(`Company: "${company.name}" isn't in this workspace yet; add it and complete it first (only an opportunity or a client can enter the Pipeline)`);
+    // company the import would create (that would be a lead too). No company at all is "Company is required".
+    if (company && !('id' in company)) errors.push(`Company: "${company.name}" isn't in this workspace yet; add it and complete it first (only an opportunity or a client can enter the Pipeline)`);
     else if (company) {
       const known = lk.companyStatus.get(company.id);
       if (known?.blocked) errors.push(`Company: ${known.name} ${known.status === 'lead' ? 'is still a lead' : "is Not interested and isn't complete"}; only an opportunity or a client can enter the Pipeline`);
