@@ -321,7 +321,8 @@ export class ImportService {
     if (type === 'deals') {
       for (const row of prep.rows) {
         const v = this.valuesOf(prep, row);
-        const id = (v.companyPib && companiesByPib.get(v.companyPib)) || (v.company ? companiesByName.get(key(v.company)) : undefined);
+        const pib = v.companyPib ? CreateCompany.shape.pib.safeParse(v.companyPib) : undefined; // parsed as companyRef parses it
+        const id = (pib?.success && companiesByPib.get(pib.data)) || (v.company ? companiesByName.get(key(v.company)) : undefined);
         if (id) named.add(id);
       }
     }

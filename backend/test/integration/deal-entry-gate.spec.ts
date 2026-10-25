@@ -54,6 +54,20 @@ describe('creating an opportunity', () => {
     expect(refused.body.blockers).toEqual([]);
     expect(refused.body.message).toContain('set back to Lead by hand');
   });
+
+  it('takes two opportunities for one company at once, and opposite moves between two companies', async () => {
+    // Both lock the company row; a shared lock that both then upgrade would deadlock one of them.
+    const c = await readyCompany(owner, tenant, 'Parallel Co');
+    const [a, b] = await Promise.all([deal(c.id), deal(c.id)]);
+    expect([a.status, b.status]).toEqual([201, 201]);
+    const d = await readyCompany(owner, tenant, 'Parallel Two');
+    const onD = await deal(d.id);
+    const moves = await Promise.all([
+      call('PATCH', `/crm/deals/${a.body.id}`, { ...as(), body: { companyId: d.id } }),
+      call('PATCH', `/crm/deals/${onD.body.id}`, { ...as(), body: { companyId: c.id } }),
+    ]);
+    expect(moves.map((m) => m.status)).toEqual([200, 200]);
+  });
 });
 
 describe('companies that are neither a lead nor complete, and other workspaces', () => {
@@ -121,9 +135,12 @@ describe('importing opportunities', () => {
   it('a row whose company is a lead, or unknown, is a row error in the preview', async () => {
     await readyCompany(owner, tenant, 'Import Ready');
     await ok('POST', '/crm/companies', { ...as(), body: { name: 'Import Lead', pib: testPib() } });
-    const quiet = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { name: 'Import Quiet', pib: testPib() } });
+    const quietPib = testPib();
+    const quiet = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { name: 'Import Quiet', pib: quietPib } });
     await ok('PATCH', `/crm/companies/${quiet.id}/status`, { ...as(), body: { status: 'not_interested' } });
-    const csv = ['Opportunity,Company', 'Ready one,Import Ready', 'Lead one,Import Lead', 'Unknown one,Nobody Ltd', 'No company,', 'Quiet one,Import Quiet'].join('\n');
+    // The last row names it by its PIB written with spaces, under another name.
+    const spaced = `${quietPib.slice(0, 3)} ${quietPib.slice(3, 6)} ${quietPib.slice(6)}`;
+    const csv = ['Opportunity,Company,PIB', 'Ready one,Import Ready,', 'Lead one,Import Lead,', 'Unknown one,Nobody Ltd,', 'No company,,', 'Quiet one,Import Quiet,', `Spaced one,Quiet Renamed,${spaced}`].join('\n');
     const preview = await ok<{ rows: { line: number; status: string; messages?: string[]; reason?: string }[] }>('POST', '/crm/import/deals/preview', {
       ...as(),
       body: { csv },
@@ -138,5 +155,7 @@ describe('importing opportunities', () => {
     // An incomplete Not interested company is refused like a lead.
     expect(byLine[6]!.status).toBe('invalid');
     expect((byLine[6]!.messages ?? []).join(' ')).toContain("Import Quiet is Not interested and isn't complete");
+    expect(byLine[7]!.status).toBe('invalid');
+    expect((byLine[7]!.messages ?? []).join(' ')).toContain("Import Quiet is Not interested and isn't complete");
   });
 });

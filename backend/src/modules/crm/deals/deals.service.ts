@@ -96,7 +96,9 @@ const lateDaysOf = (deal: { lostAt: Date | null; stageEnteredAt: Date }, isWon: 
  */
 async function assertCanEnterPipeline(tx: Tx, companyId: string) {
   // Locked while it decides: a concurrent change of its status (set back to Lead) waits for this deal.
-  const [company] = await tx.select().from(companies).where(eq(companies.id, companyId)).for('share');
+  // `for update`, not `for share`: the status recompute later in the transaction takes this lock anyway,
+  // and two shared holders upgrading at once deadlock.
+  const [company] = await tx.select().from(companies).where(eq(companies.id, companyId)).for('update');
   if (!company) throw new BadRequestException('Pick a company of this workspace');
   if (company.status !== 'lead' && company.status !== 'not_interested') return;
   const people = await tx.select().from(contacts).where(eq(contacts.companyId, companyId));
@@ -242,7 +244,12 @@ export class DealsService {
         const [before] = await tx.select({ ownerUserId: deals.ownerUserId, companyId: deals.companyId }).from(deals).where(eq(deals.id, id));
         if (!before) throw new NotFoundException('Opportunity not found');
         // Another company: it must be able to enter the Pipeline too (CD-360).
-        if (input.companyId && input.companyId !== before.companyId) await assertCanEnterPipeline(tx, input.companyId);
+        if (input.companyId && input.companyId !== before.companyId) {
+          // Both companies in id order, as the status recompute takes them, so opposite moves can't deadlock.
+          const both = [before.companyId, input.companyId].filter((c): c is string => !!c);
+          await tx.select({ id: companies.id }).from(companies).where(inArray(companies.id, both)).orderBy(companies.id).for('update');
+          await assertCanEnterPipeline(tx, input.companyId);
+        }
         await this.assertContactsExist(tx, [input.sponsorContactId, input.powerSponsorContactId]);
         const { customFields: cfInput, qualified, ...fields } = input;
         const patch: PgUpdateSetSource<typeof deals> = { ...fields };

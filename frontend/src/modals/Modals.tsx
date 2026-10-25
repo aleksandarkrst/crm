@@ -59,7 +59,8 @@ function NewDealModal() {
   const [busy, setBusy] = useState(false);
   const records = companyRecords(s);
   const labels = companyLabels(records);
-  const statusOf = (id: string): CompanyStatus => s.extraCompanies.find((c) => c.id === id)?.status ?? 'lead';
+  // Unknown (not loaded here) shows no status label, as pipelineBlocked leaves it to the API.
+  const statusOf = (id: string): CompanyStatus | undefined => s.extraCompanies.find((c) => c.id === id)?.status;
   const companies = records
     .map((c) => ({ value: c.id, label: labels.get(c.id) ?? c.name, status: statusOf(c.id), blocked: pipelineBlocked(s, c.id) }))
     .sort((a, b) => a.label.localeCompare(b.label));
@@ -76,6 +77,8 @@ function NewDealModal() {
   // A lead, or a Not interested company that isn't complete: listed, not eligible.
   const isLead = !!companyRec && pipelineBlocked(s, companyRec.id);
   const missing = isLead ? companyReadiness(s, companyRec.id).blockers : [];
+  // The form here has no PIB field (a PIB is checked for duplicates on the company page).
+  const fillHere = missing.length > 0 && !missing.includes('Company ID (PIB)');
   const people = companyRec ? allPeople(s).filter((p) => p.contactId && p.companyId === companyRec.id) : [];
   const contactOptions = [...people.map((p) => p.name), NEW_CT];
   const contact = contactPick && contactOptions.includes(contactPick) ? contactPick : contactOptions[0]!;
@@ -113,7 +116,8 @@ function NewDealModal() {
             {!companyRec && <option value="">No company can take one yet</option>}
             {companies.map((o) => (
               <option key={o.value} value={o.value} disabled={o.blocked && o.value !== company}>
-                {o.label} · {COMPANY_STATUS_LABELS[o.status]}
+                {o.label}
+                {o.status ? ` · ${COMPANY_STATUS_LABELS[o.status]}` : ''}
                 {o.blocked ? ' (not eligible)' : ''}
               </option>
             ))}
@@ -160,10 +164,10 @@ function NewDealModal() {
             {companyRec.name} {statusOf(companyRec.id) === 'lead' ? 'is still a lead' : "is Not interested and isn't complete"}
           </span>
           <span style={{ color: 'var(--text-2)' }}>
-            {missing.length ? 'Fill in what is missing here, and it can take the opportunity. ' : "Leads are listed but can't be picked. "}
+            {fillHere ? 'Fill in what is missing here, and it can take the opportunity. ' : missing.length ? 'Complete it on its page, and it can take the opportunity. ' : "Leads are listed but can't be picked. "}
             {missing.length ? `Missing for Opportunity: ${missing.join('; ').replace(/\.$/, '')}.` : 'It was set back to Lead by hand.'}
           </span>
-          {missing.length > 0 && <CompleteCompany companyId={companyRec.id} />}
+          {fillHere && <CompleteCompany companyId={companyRec.id} />}
           {/* From a meeting form, leaving would drop the meeting. */}
           {!s.newLeadForMeeting && (
             <span>
