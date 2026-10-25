@@ -95,7 +95,8 @@ const lateDaysOf = (deal: { lostAt: Date | null; stageEnteredAt: Date }, isWon: 
  * and past clients pass; a company of another workspace is a 400.
  */
 async function assertCanEnterPipeline(tx: Tx, companyId: string) {
-  const [company] = await tx.select().from(companies).where(eq(companies.id, companyId));
+  // Locked while it decides: a concurrent change of its status (set back to Lead) waits for this deal.
+  const [company] = await tx.select().from(companies).where(eq(companies.id, companyId)).for('share');
   if (!company) throw new BadRequestException('Pick a company of this workspace');
   if (company.status !== 'lead' && company.status !== 'not_interested') return;
   const people = await tx.select().from(contacts).where(eq(contacts.companyId, companyId));

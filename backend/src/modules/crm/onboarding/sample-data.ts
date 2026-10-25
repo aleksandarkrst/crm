@@ -1,4 +1,5 @@
-import type { BuyerRole, Channel, LostReason } from '../../../shared/database/schema';
+import type { BuyerRole, Channel, LostReason, SaleType } from '../../../shared/database/schema';
+import { pibCheckDigit } from '../../../shared/validation/serbian-ids';
 
 /**
  * The records "Load sample data" creates (CD-68): a small, realistic set to explore the app with.
@@ -42,6 +43,8 @@ export interface SampleDeal {
   /** Other people on the deal, besides the primary contact. */
   others?: string[];
   stage: SampleStage;
+  /** How it is sold (CD-360). */
+  saleType: SaleType;
   lost?: { reason: LostReason; note: string };
   lines: { product: SampleProductKey; quantity: number }[];
   /** Days since the deal was created, and since the last contact. */
@@ -62,6 +65,7 @@ export const SAMPLE_DEALS: SampleDeal[] = [
     company: 'brightline',
     contact: 'mila',
     stage: { open: 0 },
+    saleType: 'capital',
     lines: [{ product: 'workshop', quantity: 1 }],
     ageDays: 2,
     lastContactDays: 2,
@@ -75,6 +79,7 @@ export const SAMPLE_DEALS: SampleDeal[] = [
     contact: 'stefan',
     others: ['jelena'],
     stage: { open: 1 },
+    saleType: 'capital',
     lines: [
       { product: 'licence', quantity: 3 },
       { product: 'workshop', quantity: 2 },
@@ -92,6 +97,7 @@ export const SAMPLE_DEALS: SampleDeal[] = [
     company: 'orchard',
     contact: 'nikola',
     stage: { open: 2 },
+    saleType: 'transactional',
     lines: [
       { product: 'licence', quantity: 1 },
       { product: 'support', quantity: 10 },
@@ -107,6 +113,7 @@ export const SAMPLE_DEALS: SampleDeal[] = [
     company: 'tidewater',
     contact: 'ana',
     stage: { open: 99 },
+    saleType: 'transactional',
     lines: [{ product: 'licence', quantity: 5 }],
     ageDays: 34,
     lastContactDays: 3,
@@ -118,6 +125,7 @@ export const SAMPLE_DEALS: SampleDeal[] = [
     company: 'brightline',
     contact: 'mila',
     stage: 'won',
+    saleType: 'transactional',
     lines: [{ product: 'support', quantity: 40 }],
     ageDays: 40,
     lastContactDays: 9,
@@ -128,6 +136,7 @@ export const SAMPLE_DEALS: SampleDeal[] = [
     company: 'orchard',
     contact: 'nikola',
     stage: { open: 1 },
+    saleType: 'capital',
     lost: { reason: 'Timing', note: 'Revisit after the pilot at the first practice.' },
     lines: [{ product: 'licence', quantity: 1 }],
     ageDays: 25,
@@ -135,3 +144,15 @@ export const SAMPLE_DEALS: SampleDeal[] = [
     closeInDays: -5,
   },
 ];
+
+/**
+ * The sample company's PIB, or the next valid one nobody in the workspace has (CD-360): every
+ * sample company has a PIB, so none is a lead the New opportunity dialog can't complete.
+ */
+export function freePib(pib: string, taken: Set<string | null>): string {
+  let first8 = Number(pib.slice(0, 8));
+  let next = pib;
+  while (taken.has(next)) next = String(++first8).padStart(8, '0') + pibCheckDigit(String(first8).padStart(8, '0'));
+  taken.add(next);
+  return next;
+}

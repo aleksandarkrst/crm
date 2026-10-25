@@ -1358,23 +1358,21 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       cancelSaves(id);
       await remove(() => crmApi.deleteCompany(id), paths.companies, rec.name + ' deleted');
     };
-    /** "Set status back…" or "Back to automatic" (CD-358); the API refuses a move forward and says why. */
     /**
      * Fills in what a lead misses, from the New opportunity dialog (CD-360): its identity fields and
      * one contact (an existing one, or a new one). The API recomputes the status; the reload brings it.
      */
-    const completeCompany = async (companyId: string, company: CompanyInput, contact: { id: string; patch: ContactInput } | { create: ContactInput & { fullName: string } } | null): Promise<boolean> => {
+    const completeCompany = async (companyId: string, company: CompanyInput, contact: { id: string; patch: ContactInput } | { create: ContactInput & { fullName: string } } | null) => {
       try {
         if (Object.keys(company).length) await crmApi.updateCompany(companyId, company);
         if (contact && 'id' in contact && Object.keys(contact.patch).length) await crmApi.updateContact(contact.id, contact.patch);
         if (contact && 'create' in contact) await crmApi.createContact({ ...contact.create, companyId });
         await reload();
-        return true;
       } catch (err) {
         flash('Not saved: ' + errText(err), 7000);
-        return false;
       }
     };
+    /** "Set status back…" or "Back to automatic" (CD-358); the API refuses a move forward and says why. */
     const setCompanyStatus = async (companyId: string, status: CompanyStatus | null) => {
       try {
         const row = await crmApi.setCompanyStatus(companyId, status);

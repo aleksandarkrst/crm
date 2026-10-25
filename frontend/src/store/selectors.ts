@@ -188,7 +188,9 @@ export const COMPANY_STATUS_RANK: Record<CompanyStatus, number> = { not_interest
  * interested company that isn't complete.
  */
 export function pipelineBlocked(s: State, companyId: string): boolean {
-  const status = s.extraCompanies.find((c) => c.id === companyId)?.status ?? 'lead';
+  // A company (or status) not loaded here isn't blocked: the API decides.
+  const status = s.extraCompanies.find((c) => c.id === companyId)?.status;
+  if (!status) return false;
   return status === 'lead' || (status === 'not_interested' && companyReadiness(s, companyId).blockers.length > 0);
 }
 

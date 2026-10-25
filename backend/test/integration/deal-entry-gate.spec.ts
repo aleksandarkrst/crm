@@ -74,6 +74,12 @@ describe('companies that are neither a lead nor complete, and other workspaces',
     const otherTenant = await createTenant(other, 'Pipeline entry other');
     const theirs = await readyCompany(other, otherTenant, 'Their Co');
     expect((await deal(theirs.id)).status).toBe(400);
+    // Their lead too: a 400 that says nothing about it (no blockers), not a 409 with its gaps.
+    const theirLead = await ok<{ id: string }>('POST', '/crm/companies', { token: other.token, tenant: otherTenant, body: { name: 'Their Lead', pib: testPib() } });
+    const refused = await deal(theirLead.id);
+    expect(refused.status).toBe(400);
+    expect(refused.body.message).toBe('Pick a company of this workspace');
+    expect(refused.body.blockers).toBeUndefined();
     const mine = (await deal((await readyCompany(owner, tenant, 'Mine Co')).id)).body;
     expect((await call('PATCH', `/crm/deals/${mine.id}`, { ...as(), body: { companyId: theirs.id } })).status).toBe(400);
     expect((await call('PATCH', `/crm/deals/00000000-0000-4000-8000-000000000000`, { ...as(), body: { companyId: theirs.id } })).status).toBe(404);
@@ -100,6 +106,9 @@ describe('the sale type', () => {
     const transactional = (await deal(c.id, { saleType: 'transactional', title: 'Parts' })).body;
     await ok('PATCH', `/crm/deals/${transactional.id}`, { ...as(), body: { saleType: 'capital' } });
     await ok('PATCH', `/crm/deals/${transactional.id}`, { ...as(), body: { saleType: 'transactional' } });
+    // It can be cleared again.
+    const cleared = (await deal(c.id, { saleType: 'capital', title: 'Cleared' })).body;
+    expect((await ok<{ saleType: string | null }>('PATCH', `/crm/deals/${cleared.id}`, { ...as(), body: { saleType: null } })).saleType).toBeNull();
     const ids = async (q: string) => (await ok<{ deal: { id: string } }[]>('GET', `/crm/deals?${q}&limit=200`, as())).map((r) => r.deal.id);
     expect(await ids('saleType=capital')).toContain(capital.id);
     expect(await ids('saleType=capital')).not.toContain(transactional.id);
@@ -112,7 +121,9 @@ describe('importing opportunities', () => {
   it('a row whose company is a lead, or unknown, is a row error in the preview', async () => {
     await readyCompany(owner, tenant, 'Import Ready');
     await ok('POST', '/crm/companies', { ...as(), body: { name: 'Import Lead', pib: testPib() } });
-    const csv = ['Opportunity,Company', 'Ready one,Import Ready', 'Lead one,Import Lead', 'Unknown one,Nobody Ltd', 'No company,'].join('\n');
+    const quiet = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { name: 'Import Quiet', pib: testPib() } });
+    await ok('PATCH', `/crm/companies/${quiet.id}/status`, { ...as(), body: { status: 'not_interested' } });
+    const csv = ['Opportunity,Company', 'Ready one,Import Ready', 'Lead one,Import Lead', 'Unknown one,Nobody Ltd', 'No company,', 'Quiet one,Import Quiet'].join('\n');
     const preview = await ok<{ rows: { line: number; status: string; messages?: string[]; reason?: string }[] }>('POST', '/crm/import/deals/preview', {
       ...as(),
       body: { csv },
@@ -124,5 +135,8 @@ describe('importing opportunities', () => {
     expect(byLine[4]!.status).toBe('invalid');
     expect(byLine[5]!.status).toBe('invalid');
     expect(byLine[5]!.messages).toContain('Company is required');
+    // An incomplete Not interested company is refused like a lead.
+    expect(byLine[6]!.status).toBe('invalid');
+    expect((byLine[6]!.messages ?? []).join(' ')).toContain("Import Quiet is Not interested and isn't complete");
   });
 });

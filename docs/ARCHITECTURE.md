@@ -2457,15 +2457,23 @@ fields back, so a field still being edited isn't overwritten).
 
 ### Pipeline entry and sale type (CD-360)
 
-- Only a company that is an **opportunity or a client** (any status but `lead`) takes an
-  opportunity. `CreateDeal` requires `companyId`; `DealsService.create` and a company change in
-  `update` refuse a lead with 409 `{ message, blockers }` (the company page's list from
-  `opportunityReadiness`; empty for a company set back to Lead by hand). The CSV import makes the
-  same rule a row error: no company, a company the file would create (a lead), or a lead.
-- The New opportunity dialog lists every company with its status; leads are disabled, and one
-  passed in (from its contact's page) shows what it misses with "Complete the company". "+ New
-  company" closes it and opens the New company dialog. A company page's "+ Opportunity" is disabled
-  for a lead.
+- Only a company that is an **opportunity or a client** takes an opportunity: Opportunity, Client
+  and Past client pass, a Lead never does, and a Not interested company only when it is complete
+  (set back from Lead by hand, it would slip past otherwise). `CreateDeal` requires `companyId`;
+  `DealsService.create` and a company change in `update` lock the company row (`for share`) and
+  refuse it with 409 `{ message, blockers }` (the company page's list from `opportunityReadiness`;
+  empty for a company set back to Lead by hand). A company of another workspace is a 400 without
+  blockers. The CSV import makes the same rule a row error: no company, a company the file would
+  create (a lead), a lead, or an incomplete Not interested company (only those the file names are
+  read).
+- The New opportunity dialog lists every company with its status; blocked ones are disabled. One
+  passed in (from its contact's page) shows what it misses, with a form for just those fields (the
+  identity fields and the closest contact's details, or a new contact): "Save and continue", and
+  once it is an opportunity the dialog goes on. "Open the company instead" leaves for its page (not
+  from a meeting form). "+ New company" closes it and opens the New company dialog. A company
+  page's "+ Opportunity" is disabled while it is blocked. Sample companies always get a PIB
+  (`freePib`: the next free valid one when theirs is taken), so none is a lead the form can't
+  complete.
 - `deals.sale_type` (`capital` | `transactional`, null on older ones) is required in the dialog,
   editable in the opportunity's Summary, offered under + Filter on Pipeline and Overview, and
   `GET /api/crm/deals?saleType=` filters by it.

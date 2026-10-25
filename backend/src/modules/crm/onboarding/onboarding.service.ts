@@ -29,7 +29,7 @@ import {
   visitPlanLines,
 } from '../../../shared/database/schema';
 import { StageHistoryService } from '../deals/stage-history.service';
-import { SAMPLE_COMPANIES, SAMPLE_CONTACTS, SAMPLE_DEALS, SAMPLE_PRODUCTS, SAMPLE_SOURCE, type SampleDeal } from './sample-data';
+import { freePib, SAMPLE_COMPANIES, SAMPLE_CONTACTS, SAMPLE_DEALS, SAMPLE_PRODUCTS, SAMPLE_SOURCE, type SampleDeal } from './sample-data';
 
 /**
  * The workspace's activation steps (CD-115), in the order the checklist shows them: colleagues
@@ -159,7 +159,7 @@ export class OnboardingService {
         for (const { key, pib, ...c } of SAMPLE_COMPANIES) {
           const [row] = await tx
             .insert(companies)
-            .values({ ...c, pib: taken.has(pib) ? null : pib, source: SAMPLE_SOURCE, ownerUserId: ctx.userId, tenantId: ctx.tenantId })
+            .values({ ...c, pib: freePib(pib, taken), source: SAMPLE_SOURCE, ownerUserId: ctx.userId, tenantId: ctx.tenantId })
             .returning({ id: companies.id });
           companyIds.set(key, row!.id);
           marks.push({ kind: 'company', recordId: row!.id });
@@ -284,6 +284,7 @@ export class OnboardingService {
         primaryContactId: refs.contactIds.get(d.contact)!,
         ownerUserId: ctx.userId,
         source: SAMPLE_SOURCE,
+        saleType: d.saleType,
         amount: amount.toFixed(2),
         currency: refs.currency,
         closeDate: dateIn(refs.timezone, d.closeInDays),

@@ -132,7 +132,7 @@ export class ImportService {
 
   async preview(ctx: TenantContext, type: ImportType, req: ImportRequest) {
     const prep = this.prepare(type, req);
-    const lookups = await this.database.withTenant(ctx.tenantId, (tx) => this.loadLookups(tx, ctx, type));
+    const lookups = await this.database.withTenant(ctx.tenantId, (tx) => this.loadLookups(tx, ctx, type, prep));
     const funnel = this.defaultFunnel(type, lookups, req.funnelId);
     let fake = 0;
     const dry: Writer = {
@@ -175,7 +175,7 @@ export class ImportService {
   async commit(ctx: TenantContext, type: ImportType, req: ImportRequest) {
     const prep = this.prepare(type, req);
     if (prep.missingRequired.length) throw new BadRequestException(`Choose a column for ${prep.missingRequired.join(', ')}`);
-    const lookups = await this.database.withTenant(ctx.tenantId, (tx) => this.loadLookups(tx, ctx, type));
+    const lookups = await this.database.withTenant(ctx.tenantId, (tx) => this.loadLookups(tx, ctx, type, prep));
     const funnel = this.defaultFunnel(type, lookups, req.funnelId);
 
     const summary = { created: 0, updated: 0, skipped: 0, failed: 0, newCompanies: 0, newContacts: 0 };
@@ -270,7 +270,7 @@ export class ImportService {
     return valuesOf(prep.mapping, row);
   }
 
-  private async loadLookups(tx: Tx, ctx: TenantContext, type: ImportType): Promise<Lookups> {
+  private async loadLookups(tx: Tx, ctx: TenantContext, type: ImportType, prep: Prepared): Promise<Lookups> {
     const companiesByName = new Map<string, string>();
     const companiesByPib = new Map<string, string>();
     const pibOf = new Map<string, string>();
@@ -315,9 +315,18 @@ export class ImportService {
     }
     // tenants has no RLS either.
     const [workspace] = await tx.select({ currency: tenants.currency }).from(tenants).where(eq(tenants.id, ctx.tenantId));
-    // A Not interested company takes one only when it is complete (as DealsService checks it).
-    const notInterested = [...companyStatus].filter(([, c]) => c.status === 'not_interested').map(([id]) => id);
-    if (type === 'deals' && notInterested.length) {
+    // A Not interested company takes one only when it is complete (as DealsService checks it): only
+    // those the file names (by PIB or name, as companyRef finds them) are read.
+    const named = new Set<string>();
+    if (type === 'deals') {
+      for (const row of prep.rows) {
+        const v = this.valuesOf(prep, row);
+        const id = (v.companyPib && companiesByPib.get(v.companyPib)) || (v.company ? companiesByName.get(key(v.company)) : undefined);
+        if (id) named.add(id);
+      }
+    }
+    const notInterested = [...named].filter((id) => companyStatus.get(id)?.status === 'not_interested');
+    if (notInterested.length) {
       const rows = await tx.select().from(companies).where(inArray(companies.id, notInterested));
       const people = await tx.select().from(contacts).where(inArray(contacts.companyId, notInterested));
       for (const c of rows) companyStatus.get(c.id)!.blocked = opportunityReadiness(c, people.filter((p) => p.companyId === c.id)).blockers.length > 0;
