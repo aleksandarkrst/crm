@@ -292,6 +292,8 @@ the Overview audience filter).
   the deal's current stage, assigned to them, due the workspace's today), so it shows on their
   Today and in the digest; `deals.approval_task_id` points at it. Approving ticks it; declining,
   revoking and a reset delete it (`closeApprovalTask`), all in the request's transaction.
+  Changing the funnel's approver, or switching approval off, resets requests still waiting (and
+  their task), so nobody keeps a task they can no longer act on.
 - What was approved must still stand: a new Proposal (generated or uploaded), deleting the
   Proposal, or moving the deal to another funnel clears the request and approval
   (`resetApproval`, which also removes the approver's open task). Every step is an activity ("Approval requested", "Proposal approved",
@@ -301,7 +303,8 @@ the Overview audience filter).
   the Documents tab and in the built-in proposal's header (`screens/lead/ProposalActions.tsx`):
   Request approval → Approval pending (disabled) for the requester and other members; Approve and
   Decline for the approver, owners and admins; once approved Revoke approval and Send proposal;
-  Send proposal straight away in a funnel without approval. A badge keeps the status.
+  Send proposal straight away in a funnel without approval. A badge keeps the status, and a line
+  under the buttons says who requested or approved it, or why Request approval can't be pressed.
 
 ## Deal outcome: open, won, lost
 

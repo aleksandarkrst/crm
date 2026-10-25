@@ -32,7 +32,6 @@ export function ProposalDoc() {
   // Request approval, approve and send in the header (CD-120), as on the Documents tab; the API checks it too.
   const sent = !!lead.approval.sentAt;
   const approval = approvalStatusOf(s, lead);
-  const needsApproval = approval === 'not_requested' || approval === 'pending';
   const approver = memberName(s, s.funnels[lead.segment]?.approverId ?? null);
   const merge = { background: s.showMerge ? '#FDF0E4' : 'transparent', padding: '1px 3px' };
   const lines = linesOf(s, lead);
@@ -66,7 +65,7 @@ export function ProposalDoc() {
         <div style={{ position: 'sticky', top: 0, background: '#0F1B16', color: '#F5F7F6', padding: '14px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', zIndex: 2 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>Proposal — {lead.company}</span>
-            <span style={{ fontSize: 10.5, color: '#93A39B' }}>Proposal v4 · generated from CRM record · {sent ? 'marked as sent' : needsApproval ? `waiting for approval by ${approver}` : 'draft, not saved'}</span>
+            <span style={{ fontSize: 10.5, color: '#93A39B' }}>Proposal v4 · generated from CRM record · {sent ? 'marked as sent' : approval === 'pending' ? `waiting for approval by ${approver}` : approval === 'not_requested' ? `needs approval by ${approver}` : approval === 'approved' ? 'approved' : 'draft, not saved'}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
             <button type="button" className="doc-btn" onClick={() => set((x) => ({ showMerge: !x.showMerge }))}>

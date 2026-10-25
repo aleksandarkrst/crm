@@ -651,13 +651,13 @@ function FunnelBuilder() {
                   ))}
                 </select>
                 {!funnel.approverId && (
-                  <span role="alert" style={{ fontSize: 12, color: 'var(--warn)', textTransform: 'none', letterSpacing: 0 }}>
+                  <span style={{ fontSize: 12, color: 'var(--warn)', textTransform: 'none', letterSpacing: 0 }}>
                     Pick the approver to switch approval on.
                   </span>
                 )}
               </label>
             )}
-            <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>One rule for the whole funnel, not per stage. The approver gets an email when approval is requested; owners and admins can approve too.</span>
+            <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>One rule for the whole funnel, not per stage. The approver gets an email and a task when approval is requested; owners and admins can approve too.</span>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

@@ -1086,20 +1086,20 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
     };
 
     // ------------------------------------------------------------ proposal approval (CD-120)
-    /** Request, approve or revoke a proposal's approval; the API answers with where it now stands. */
-    const proposalApproval = async (leadId: string, step: 'request' | 'approve' | 'revoke') => {
+    /** Request, approve, decline or revoke a proposal's approval (decline is a revoke of a pending request); the API answers with where it now stands. */
+    const proposalApproval = async (leadId: string, step: 'request' | 'approve' | 'decline' | 'revoke') => {
       try {
-        const state = await crmApi.approval(leadId, step);
+        const state = await crmApi.approval(leadId, step === 'decline' ? 'revoke' : step);
         mapLead(leadId, (l) => ({ ...l, approval: approvalOf(state) }));
         const lead = leadById(cur(), leadId);
         const approver = memberName(cur(), cur().funnels[lead?.segment ?? '']?.approverId ?? null);
-        flash(step === 'request' ? `Approval requested · ${approver} got an email and a task` : step === 'approve' ? 'Proposal approved · it can be sent now' : 'Approval revoked · the proposal needs approval again before it is sent');
+        flash(step === 'request' ? `Approval requested · ${approver} got an email and a task` : step === 'approve' ? 'Proposal approved · it can be sent now' : step === 'decline' ? 'Approval request declined · the proposal needs a new request' : 'Approval revoked · the proposal needs approval again before it is sent');
         // The approver's task is added, ticked or removed with it; the deal row is read again too, or the
         // refresh would rebuild the deal from its previous load and drop the new approval.
         queueRefresh(['deals', 'tasks'], [], [leadId], 0, { deals: [leadId], tasks: [leadId] });
         await refreshLog(leadId);
       } catch (err) {
-        flash((step === 'request' ? 'Not requested: ' : step === 'approve' ? 'Not approved: ' : 'Not revoked: ') + errText(err), 7000);
+        flash((step === 'request' ? 'Not requested: ' : step === 'approve' ? 'Not approved: ' : step === 'decline' ? 'Not declined: ' : 'Not revoked: ') + errText(err), 7000);
       }
     };
     /** "Send proposal" (CD-120): the API refuses it until the funnel's approval is in. Resolves whether it was saved. */

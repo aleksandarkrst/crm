@@ -44,10 +44,14 @@ export function ProposalActions({ lead, look = 'tab' }: { lead: Lead; look?: 'ta
     status === 'pending'
       ? `Requested by ${memberName(s, a.requestedBy)}${a.requestedAt ? ' on ' + momentLabel(a.requestedAt, tz) : ''}. Waiting for ${approver}.`
       : status === 'approved'
-        ? `Approved by ${memberName(s, a.approvedBy)}${a.approvedAt ? ' on ' + momentLabel(a.approvedAt, tz) : ''}.`
+        ? `Approved by ${memberName(s, a.approvedBy)}${a.approvedAt ? ' on ' + momentLabel(a.approvedAt, tz) : ''}.${a.sentAt ? ` Sent on ${momentLabel(a.sentAt, tz)}.` : ''}`
         : status === 'not_requested'
           ? `Proposals in this funnel need approval by ${approver} before they are sent.`
-          : undefined;
+          : a.sentAt
+            ? `Sent on ${momentLabel(a.sentAt, tz)}.`
+            : undefined;
+  // Why Request approval can't be pressed: shown as text, since a disabled button's title never shows on touch.
+  const blocked = lead.outcome === 'open' && status === 'not_requested' ? (!approverId ? 'This funnel has no approver yet. An admin picks one in Settings → Funnels.' : noProposal ? 'Generate the proposal or import your own first.' : null) : null;
   const badge = status === 'approved' ? 'badge-brand' : status === 'pending' ? 'badge-warn' : 'badge-neutral';
   const send = a.sentAt ? (
     <button type="button" className={primary} data-testid="proposal-send" disabled title={`Sent on ${momentLabel(a.sentAt, tz)}`}>
@@ -59,48 +63,56 @@ export function ProposalActions({ lead, look = 'tab' }: { lead: Lead; look?: 'ta
     </button>
   );
 
+  const note = blocked ?? detail;
   return (
-    <div data-testid="proposal-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-      {lead.outcome === 'open' && (
-        <>
-          {status === 'not_requested' && (
-            <button
-              type="button"
-              className={primary}
-              data-testid="approval-request"
-              disabled={busy || noProposal || !approverId}
-              title={!approverId ? 'This funnel has no approver yet. An admin picks one in Settings → Funnels.' : noProposal ? 'Generate the proposal or import your own first.' : `Emails ${approver} and gives them a task to approve it.`}
-              onClick={() => run(() => proposalApproval(lead.id, 'request'))}
-            >
-              Request approval
-            </button>
-          )}
-          {status === 'pending' && !mayDecide && (
-            <button type="button" className={primary} data-testid="approval-pending" disabled>
-              Approval pending
-            </button>
-          )}
-          {status === 'pending' && mayDecide && (
-            <>
-              <button type="button" className={primary} data-testid="approval-approve" disabled={busy} onClick={() => run(() => proposalApproval(lead.id, 'approve'))}>
-                Approve
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: look === 'tab' ? 'flex-end' : 'stretch', gap: 6 }}>
+      <div data-testid="proposal-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {lead.outcome === 'open' && (
+          <>
+            {status === 'not_requested' && (
+              <button
+                type="button"
+                className={primary}
+                data-testid="approval-request"
+                disabled={busy || noProposal || !approverId}
+                title={blocked ?? `Emails ${approver} and gives them a task to approve it.`}
+                onClick={() => run(() => proposalApproval(lead.id, 'request'))}
+              >
+                Request approval
               </button>
-              <button type="button" className={secondary} data-testid="approval-decline" disabled={busy} onClick={() => run(() => proposalApproval(lead.id, 'revoke'))}>
-                Decline
+            )}
+            {status === 'pending' && !mayDecide && (
+              <button type="button" className={primary} data-testid="approval-pending" disabled>
+                Approval pending
               </button>
-            </>
-          )}
-          {status === 'approved' && mayDecide && !a.sentAt && (
-            <button type="button" className={secondary} data-testid="approval-revoke" disabled={busy} onClick={() => void revoke()}>
-              Revoke approval
-            </button>
-          )}
-          {(status === 'approved' || status === 'not_required') && send}
-        </>
-      )}
-      {status !== 'not_required' && (
-        <span className={'badge ' + badge} data-testid="approval-status" title={detail}>
-          {APPROVAL_LABELS[status]}
+            )}
+            {status === 'pending' && mayDecide && (
+              <>
+                <button type="button" className={primary} data-testid="approval-approve" disabled={busy} onClick={() => run(() => proposalApproval(lead.id, 'approve'))}>
+                  Approve
+                </button>
+                <button type="button" className={secondary} data-testid="approval-decline" disabled={busy} onClick={() => run(() => proposalApproval(lead.id, 'decline'))}>
+                  Decline
+                </button>
+              </>
+            )}
+            {status === 'approved' && mayDecide && !a.sentAt && (
+              <button type="button" className={secondary} data-testid="approval-revoke" disabled={busy} onClick={() => void revoke()}>
+                Revoke approval
+              </button>
+            )}
+            {(status === 'approved' || status === 'not_required') && send}
+          </>
+        )}
+        {status !== 'not_required' && (
+          <span className={'badge ' + badge} data-testid="approval-status" title={detail}>
+            {APPROVAL_LABELS[status]}
+          </span>
+        )}
+      </div>
+      {look === 'tab' && note && (
+        <span data-testid="approval-note" style={{ fontSize: 12, color: blocked ? 'var(--warn)' : 'var(--text-2)', lineHeight: 1.45 }}>
+          {note}
         </span>
       )}
     </div>

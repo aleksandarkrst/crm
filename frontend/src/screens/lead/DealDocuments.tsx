@@ -123,7 +123,7 @@ export function DealDocuments({ lead }: { lead: Lead }) {
         );
       })}
       {docs.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>No documents yet. Generate one or import your own here; entering a stage whose entry document is a Proposal offers it too.</div>}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
         {imported ? (
           <button type="button" className="btn-outline" data-testid="docs-add" style={{ fontSize: 12, padding: '7px 11px', borderRadius: 6, fontWeight: 400 }} onClick={() => setAdding((x) => !x)}>
             {adding ? 'Cancel' : 'Add documents'}
