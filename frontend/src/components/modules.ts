@@ -50,12 +50,13 @@ export interface ModuleDef {
 /** The CRM's pages, in sidebar order. */
 const CRM_NAV: NavDef[] = [
   { to: paths.overview, label: 'Overview', icon: 'M4 19V5M4 19h16M8 16v-4M12 16V8M16 16v-6' },
+  // Second, right under Overview (CD-359): the companies' statuses come before their opportunities.
+  { to: paths.companies, label: 'Companies', icon: 'M4 20V6.5L11 4v16M11 20h9V10h-9M14.5 13h2M14.5 16.5h2M7 8.5h1M7 12h1M7 15.5h1', phone: true },
   { to: paths.pipeline, label: 'Pipeline', icon: 'M4 5h5v14H4zM15 5h5v9h-5z', phone: true },
   { to: paths.today, label: 'Today', icon: 'M5 5h14v14H5zM9 12l2 2 4-4', phone: true },
   // Salespeople use it every day, so it's in the phone bar (CD-223).
   { to: paths.calendar(), label: 'Calendar', icon: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4', phone: true },
   { to: paths.visitPlans, label: 'Visit plans', icon: 'M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11ZM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z' },
-  { to: paths.companies, label: 'Companies', icon: 'M4 20V6.5L11 4v16M11 20h9V10h-9M14.5 13h2M14.5 16.5h2M7 8.5h1M7 12h1M7 15.5h1', phone: true },
   { to: paths.contacts, label: 'Contacts', icon: 'M12 11a3.3 3.3 0 1 0 0-6.6 3.3 3.3 0 0 0 0 6.6ZM5 20c1.2-3.1 4-4.7 7-4.7s5.8 1.6 7 4.7' },
   { to: paths.products, label: 'Products', icon: 'M20 8.5 12 4 4 8.5v7L12 20l8-4.5v-7ZM4 8.5 12 13m0 0 8-4.5M12 13v7' },
   { to: paths.reports(), label: 'Reports', icon: 'M5 20V10M10 20V4M15 20v-7M20 20v-4M3 20h18', managers: true },

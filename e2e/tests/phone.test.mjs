@@ -51,7 +51,7 @@ describe('phones and tablets', () => {
     assert.deepEqual(bar, { bottom: 844, width: 390 });
     // The CRM's everyday pages, Calendar included (CD-223), and "More".
     const inBar = await page.$$eval('.app-sidebar nav .nav-item', (els) => els.filter((el) => el.getClientRects().length > 0).map((el) => el.querySelector('.nav-label').textContent));
-    assert.deepEqual(inBar, ['Pipeline', 'Today', 'Calendar', 'Companies']);
+    assert.deepEqual(inBar, ['Companies', 'Pipeline', 'Today', 'Calendar']);
     await click(page, '.app-sidebar a[href="/calendar"]');
     await page.waitForFunction(() => location.pathname === '/calendar');
     await click(page, '.app-sidebar a[href="/today"]');

@@ -14,7 +14,7 @@ const LOGO = '[data-testid=module-switcher]';
 const MORE = '[data-testid=sidebar-more]';
 const MORE_POP = '[data-testid=sidebar-more-pop]';
 const PHONE = { width: 390, height: 844, isMobile: true, hasTouch: true };
-const CRM_PAGES = ['Overview', 'Pipeline', 'Today', 'Calendar', 'Visit plans', 'Companies', 'Contacts', 'Products', 'Reports'];
+const CRM_PAGES = ['Overview', 'Companies', 'Pipeline', 'Today', 'Calendar', 'Visit plans', 'Contacts', 'Products', 'Reports'];
 
 describe('module and workspace switcher', () => {
   const browser = useBrowser();
