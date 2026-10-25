@@ -4,19 +4,20 @@
  * gated funnel; "documentation complete" with who and when; late days; Remind the owner; the digest.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, type Funnel, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, type Funnel, ok, readyCompany, type Session, signIn } from './helpers';
 import { asTenantSql } from './people-helpers';
 
 let owner: Session;
 let seller: Session;
 let tenant: string;
 let funnel: Funnel;
+let companyId: string;
 const asOwner = () => ({ token: owner.token, tenant });
 const asSeller = () => ({ token: seller.token, tenant });
 const stage = (i: number) => funnel.stages.filter((s) => !s.isWon).sort((a, b) => a.position - b.position)[i]!;
 const won = () => funnel.stages.find((s) => s.isWon)!;
 
-const newDeal = (title: string) => ok<{ id: string }>('POST', '/crm/deals', { ...asOwner(), body: { title, funnelId: funnel.id, ownerUserId: owner.userId } });
+const newDeal = (title: string) => ok<{ id: string }>('POST', '/crm/deals', { ...asOwner(), body: { title, funnelId: funnel.id, companyId, ownerUserId: owner.userId } });
 const move = (dealId: string, stageId: string) => call<{ message: string; blockers?: string[] }>('POST', `/crm/deals/${dealId}/move`, { ...asSeller(), body: { stageId } });
 const tickAll = async (dealId: string, i: number) => {
   for (const item of stage(i).checklistItems) await ok('PUT', `/crm/deals/${dealId}/tasks/playbook`, { ...asSeller(), body: { stageId: stage(i).id, checklistItemId: item.id, done: true } });
@@ -28,6 +29,7 @@ beforeAll(async () => {
   tenant = await createTenant(owner, 'Stage gate', { gated: true });
   await addMember(owner, tenant, seller, 'member');
   funnel = (await ok<Funnel[]>('GET', '/crm/funnels', asOwner()))[0]!;
+  companyId = (await readyCompany(owner, tenant)).id;
 });
 
 describe('the to-do gate', () => {
@@ -129,7 +131,7 @@ describe('winning in a gated funnel', () => {
   it('is free in a funnel without gates', async () => {
     const free = await createTenant(owner, 'Stage gate free');
     const f = (await ok<Funnel[]>('GET', '/crm/funnels', { token: owner.token, tenant: free }))[0]!;
-    const deal = await ok<{ id: string }>('POST', '/crm/deals', { token: owner.token, tenant: free, body: { title: 'Win any time', funnelId: f.id } });
+    const deal = await ok<{ id: string }>('POST', '/crm/deals', { token: owner.token, tenant: free, body: { title: 'Win any time', funnelId: f.id, companyId: (await readyCompany(owner, free)).id } });
     expect((await call('POST', `/crm/deals/${deal.id}/move`, { token: owner.token, tenant: free, body: { stageId: f.stages.find((s) => s.isWon)!.id } })).status).toBe(200);
   });
 });

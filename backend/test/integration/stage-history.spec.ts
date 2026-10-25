@@ -4,7 +4,7 @@
  */
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { call, createTenant, type Funnel, ok, type Session, signIn } from './helpers';
+import { call, createTenant, type Funnel, ok, readyCompany, type Session, signIn } from './helpers';
 
 let alice: Session;
 let bob: Session;
@@ -12,6 +12,7 @@ let tenantA: string;
 let tenantB: string;
 let smb: Funnel;
 let ent: Funnel;
+let companyId: string;
 const asA = () => ({ token: alice.token, tenant: tenantA });
 const asB = () => ({ token: bob.token, tenant: tenantB });
 
@@ -33,11 +34,12 @@ beforeAll(async () => {
   const funnels = await ok<(Funnel & { stages: { id: string; isWon: boolean }[] })[]>('GET', '/crm/funnels', asA());
   smb = funnels.find((f) => f.key === 'smb')!;
   ent = funnels.find((f) => f.key === 'ent')!;
+  companyId = (await readyCompany(alice, tenantA)).id;
 });
 
 describe('stage history rows', () => {
   it('records the first stage when a deal is created', async () => {
-    const deal = await ok('POST', '/crm/deals', { ...asA(), body: { title: 'Created', funnelId: smb.id } });
+    const deal = await ok('POST', '/crm/deals', { ...asA(), body: { title: 'Created', funnelId: smb.id, companyId } });
     const rows = await historyOf(deal.id);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ dealId: deal.id, kind: 'created', fromStageId: null, toStageId: smb.stages[0]!.id, outcome: 'open', changedByUserId: alice.userId });
@@ -45,7 +47,7 @@ describe('stage history rows', () => {
   });
 
   it('records moves (drag and drop), including into the won stage, and ignores a move to the same stage', async () => {
-    const deal = await ok('POST', '/crm/deals', { ...asA(), body: { title: 'Moved', funnelId: smb.id } });
+    const deal = await ok('POST', '/crm/deals', { ...asA(), body: { title: 'Moved', funnelId: smb.id, companyId } });
     const [s0, s1, s2] = smb.stages;
     const won = smb.stages[smb.stages.length - 1]!;
     await ok('POST', `/crm/deals/${deal.id}/move`, { ...asA(), body: { stageId: s2!.id } }, 200);
@@ -64,7 +66,7 @@ describe('stage history rows', () => {
   });
 
   it("records a funnel change as a move to the new funnel's first stage", async () => {
-    const deal = await ok('POST', '/crm/deals', { ...asA(), body: { title: 'Switched', funnelId: smb.id } });
+    const deal = await ok('POST', '/crm/deals', { ...asA(), body: { title: 'Switched', funnelId: smb.id, companyId } });
     await ok('POST', `/crm/deals/${deal.id}/move`, { ...asA(), body: { stageId: smb.stages[2]!.id } }, 200);
     await ok('PATCH', `/crm/deals/${deal.id}`, { ...asA(), body: { funnelId: ent.id } });
     // Re-sending the same funnel changes nothing.
@@ -78,7 +80,7 @@ describe('stage history rows', () => {
   });
 
   it('writes nothing when the move fails', async () => {
-    const deal = await ok('POST', '/crm/deals', { ...asA(), body: { title: 'Wrong funnel', funnelId: smb.id } });
+    const deal = await ok('POST', '/crm/deals', { ...asA(), body: { title: 'Wrong funnel', funnelId: smb.id, companyId } });
     const res = await call('POST', `/crm/deals/${deal.id}/move`, { ...asA(), body: { stageId: ent.stages[1]!.id } });
     expect(res.status).toBe(400);
     expect(await historyOf(deal.id)).toHaveLength(1);
@@ -95,7 +97,7 @@ describe('stage history rows', () => {
   });
 
   it('deleting a deal deletes its history', async () => {
-    const deal = await ok('POST', '/crm/deals', { ...asA(), body: { title: 'Deleted', funnelId: smb.id } });
+    const deal = await ok('POST', '/crm/deals', { ...asA(), body: { title: 'Deleted', funnelId: smb.id, companyId } });
     await ok('DELETE', `/crm/deals/${deal.id}`, asA());
     expect(await historyOf(deal.id)).toEqual([]);
   });
@@ -106,7 +108,7 @@ describe('stage history isolation', () => {
   let db: Client;
 
   beforeAll(async () => {
-    dealA = (await ok('POST', '/crm/deals', { ...asA(), body: { title: 'Alpha history', funnelId: smb.id } })).id;
+    dealA = (await ok('POST', '/crm/deals', { ...asA(), body: { title: 'Alpha history', funnelId: smb.id, companyId } })).id;
     await ok('POST', `/crm/deals/${dealA}/move`, { ...asA(), body: { stageId: smb.stages[1]!.id } }, 200);
     db = new Client({ connectionString: inject('databaseUrl') });
     await db.connect();

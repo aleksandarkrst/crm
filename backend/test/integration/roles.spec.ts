@@ -3,7 +3,7 @@
  * endpoints and team management, what admins can't do to owners, and last-owner protection.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, firstFunnel, type Funnel, ok, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, firstFunnel, type Funnel, ok, readyCompany, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let admin: Session;
@@ -25,7 +25,7 @@ async function makeRows(by: Session) {
   const company = await ok('POST', '/crm/companies', { ...as(by), body: { pib: testPib(), name: 'Doomed Co' } });
   const contact = await ok('POST', '/crm/contacts', { ...as(by), body: { fullName: 'Doomed Person' } });
   const product = await ok('POST', '/crm/products', { ...as(by), body: { name: 'Doomed Product' } });
-  const deal = await ok('POST', '/crm/deals', { ...as(by), body: { title: 'Doomed Deal', funnelId: funnel.id } });
+  const deal = await ok('POST', '/crm/deals', { ...as(by), body: { title: 'Doomed Deal', funnelId: funnel.id, companyId: (await readyCompany(by, tenant, 'Deal Co')).id } });
   return {
     deal: `/crm/deals/${deal.id}`,
     company: `/crm/companies/${company.id}`,

@@ -6,7 +6,7 @@
  * meetings, "Organizer left" until an admin picks one); the calendar and contact filters.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, eventually, firstFunnel, type Json, mailTo, ok, readyCompany, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, eventually, firstFunnel, type Json, mailTo, ok, readyCompany, type Session, signIn } from './helpers';
 
 let owner: Session;
 let admin: Session;

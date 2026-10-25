@@ -1,6 +1,6 @@
 /** An update with no fields is a client error (400 with a clear message), never a 500. */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, firstFunnel, type Funnel, ok, readyCompany, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, firstFunnel, type Funnel, ok, readyCompany, type Session, signIn } from './helpers';
 
 let owner: Session;
 let member: Session;

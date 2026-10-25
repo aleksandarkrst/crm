@@ -6,7 +6,7 @@
  * and delete refused after a send, the internal minutes never in the email, and Serbian chrome.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, eventually, firstFunnel, type Funnel, type Json, mailTo, ok, readyCompany, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, eventually, firstFunnel, type Funnel, type Json, mailTo, ok, readyCompany, type Session, signIn } from './helpers';
 
 let owner: Session;
 let ana: Session;

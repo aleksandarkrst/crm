@@ -4,7 +4,7 @@
  */
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { call, createTenant, firstFunnel, type Funnel, ok, productLine, saveProducts, type Session, signIn, testPib } from './helpers';
+import { call, createTenant, firstFunnel, type Funnel, ok, productLine, READY_IDENTITY, readyCompany, saveProducts, type Session, signIn, testPib } from './helpers';
 
 let alice: Session;
 let bob: Session;
@@ -20,8 +20,8 @@ beforeAll(async () => {
   const funnelA = await firstFunnel(alice, tenantA);
   funnelB = await firstFunnel(bob, tenantB);
 
-  a.company = (await ok('POST', '/crm/companies', { ...as, body: { pib: testPib(), name: 'Alpha Secret Co' } })).id;
-  a.contact = (await ok('POST', '/crm/contacts', { ...as, body: { fullName: 'Alpha Person', companyId: a.company } })).id;
+  a.company = (await ok('POST', '/crm/companies', { ...as, body: { pib: testPib(), name: 'Alpha Secret Co', ...READY_IDENTITY } })).id;
+  a.contact = (await ok('POST', '/crm/contacts', { ...as, body: { fullName: 'Alpha Person', companyId: a.company, jobTitle: 'CEO', buyerRole: 'Decision maker', ownerUserId: alice.userId } })).id;
   a.product = (await ok('POST', '/crm/products', { ...as, body: { name: 'Alpha Product', unitPrice: 100 } })).id;
   a.deal = (
     await ok('POST', '/crm/deals', { ...as, body: { title: 'Alpha Deal', funnelId: funnelA.id, companyId: a.company, primaryContactId: a.contact, amount: 1000 } })
@@ -100,10 +100,11 @@ describe('through the API', () => {
   });
 
   it("tenant B can't attach its rows to tenant A's rows (composite foreign keys)", async () => {
-    const own = await ok('POST', '/crm/deals', { ...asB(), body: { title: 'Bravo Deal', funnelId: funnelB.id } });
+    const ownCo = await readyCompany(bob, tenantB, 'Bravo Co');
+    const own = await ok('POST', '/crm/deals', { ...asB(), body: { title: 'Bravo Deal', funnelId: funnelB.id, companyId: ownCo.id } });
     const attempts: [string, string, unknown][] = [
       ['POST', '/crm/deals', { title: 'Bravo → Alpha company', funnelId: funnelB.id, companyId: a.company }],
-      ['POST', '/crm/deals', { title: 'Bravo → Alpha contact', funnelId: funnelB.id, primaryContactId: a.contact }],
+      ['POST', '/crm/deals', { title: 'Bravo → Alpha contact', funnelId: funnelB.id, companyId: ownCo.id, primaryContactId: a.contact }],
       ['PATCH', `/crm/deals/${own.id}`, { companyId: a.company }],
       ['POST', '/crm/contacts', { fullName: 'Bravo Person', companyId: a.company }],
       ['PUT', `/crm/deals/${own.id}/contacts/${a.contact}`, undefined],
@@ -113,12 +114,13 @@ describe('through the API', () => {
     ];
     for (const [method, path, body] of attempts) {
       const res = await call(method, path, { ...asB(), body });
-      // 409 from a foreign key violation, or 404 where the service looks the row up first.
-      expect([404, 409], `${method} ${path} → ${res.status} ${JSON.stringify(res.body)}`).toContain(res.status);
+      // 409 from a foreign key violation, 404 where the service looks the row up first, or 400 where
+      // the pipeline entry check (CD-360) finds no such company in this workspace.
+      expect([400, 404, 409], `${method} ${path} → ${res.status} ${JSON.stringify(res.body)}`).toContain(res.status);
     }
     // Tenant B's own deal is untouched.
     const after = await ok('GET', `/crm/deals/${own.id}`, asB());
-    expect(after.companyId).toBeNull();
+    expect(after.companyId).toBe(ownCo.id);
     expect(after.contacts).toEqual([]);
   });
 

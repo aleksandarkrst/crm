@@ -5,7 +5,7 @@
  * meeting has a deal of its company (CD-213).
  */
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { addMember, call, createTenant, firstFunnel, type Funnel, type Json, ok, readyCompany, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, firstFunnel, type Funnel, type Json, ok, readyCompany, type Session, signIn } from './helpers';
 
 let owner: Session;
 let admin: Session;

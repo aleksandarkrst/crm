@@ -1,6 +1,6 @@
 /** Lists carry the owner's name, and keep it after the owner leaves the workspace. */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, createTenant, firstFunnel, ok, type Session, signIn, testPib } from './helpers';
+import { addMember, createTenant, firstFunnel, ok, READY_IDENTITY, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
 let seller: Session;
@@ -17,8 +17,8 @@ beforeAll(async () => {
 describe('owner names in lists', () => {
   it('deals, companies, contacts and tasks name their owner, also once they were removed from the team', async () => {
     const funnel = await firstFunnel(owner, tenant);
-    const company = await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Owned Co', ownerUserId: seller.userId } });
-    const contact = await ok('POST', '/crm/contacts', { ...as(), body: { fullName: 'Owned Person', companyId: company.id, ownerUserId: seller.userId } });
+    const company = await ok('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Owned Co', ownerUserId: seller.userId, ...READY_IDENTITY } });
+    const contact = await ok('POST', '/crm/contacts', { ...as(), body: { fullName: 'Owned Person', companyId: company.id, ownerUserId: seller.userId, jobTitle: 'CEO', buyerRole: 'Decision maker' } });
     // A contact owned by someone else than the deal owner shows their own owner, not the deal's.
     const ownContact = await ok('POST', '/crm/contacts', { ...as(), body: { fullName: 'Owner Person', companyId: company.id } });
     const deal = await ok('POST', '/crm/deals', { ...as(), body: { title: 'Owned deal', funnelId: funnel.id, companyId: company.id, ownerUserId: seller.userId } });

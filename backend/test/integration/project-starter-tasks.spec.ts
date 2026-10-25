@@ -4,7 +4,7 @@
  * hours sets the estimate. Without the switch, no tasks.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { createTenant, firstFunnel, ok, productLine, saveProducts, type Session, signIn, testPib } from './helpers';
+import { createTenant, firstFunnel, ok, productLine, readyCompany, saveProducts, type Session, signIn } from './helpers';
 
 let owner: Session;
 let tenant: string;
@@ -17,7 +17,7 @@ beforeAll(async () => {
   owner = await signIn('starter-owner');
   tenant = await createTenant(owner, 'Starter tasks');
   const funnel = await firstFunnel(owner, tenant);
-  companyId = (await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Northwind' } })).id;
+  companyId = (await readyCompany(owner, tenant, 'Northwind')).id;
   dealId = (await ok<{ id: string }>('POST', '/crm/deals', { ...as(), body: { title: 'AC rollout', funnelId: funnel.id, companyId } })).id;
   const install = await ok<{ id: string }>('POST', '/crm/products', { ...as(), body: { name: 'Installation work', unit: 'h', unitPrice: 50 } });
   const unit = await ok<{ id: string }>('POST', '/crm/products', { ...as(), body: { name: 'Split unit 3.5 kW', unit: 'pcs', unitPrice: 900 } });
