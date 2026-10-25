@@ -13,7 +13,7 @@ import { opportunityCopy } from '../store/wording';
  * deal's Documents tab and when a deal enters a stage whose entry document is a Proposal.
  */
 export function GenerationModal() {
-  const { s, set, session, navigate, generateInDialog, downloadDoc, openDoc } = useStore();
+  const { s, set, session, navigate, generateInDialog, downloadDoc } = useStore();
   const lead = leadById(s, s.genLead);
   const stageDoc = lead ? stageOf(s, lead).doc : undefined;
   const templates = s.templates;
@@ -97,6 +97,7 @@ export function GenerationModal() {
         </button>
         {!doc && templates && templates.length === 0 && (
           <>
+            {/* "Preview built-in proposal" is switched off (owner, 25 Oct).
             <button
               type="button"
               className="btn btn-secondary"
@@ -106,7 +107,7 @@ export function GenerationModal() {
               }}
             >
               Preview built-in proposal
-            </button>
+            </button> */}
             {canManageTemplates(session.tenant.role) && (
               <button
                 type="button"

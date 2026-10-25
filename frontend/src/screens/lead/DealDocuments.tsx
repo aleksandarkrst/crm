@@ -17,7 +17,7 @@ import { ProposalActions } from './ProposalActions';
  * built-in preview give way to "Add documents" for supporting files. The proposal's next step (request approval, approve, send) sits at the bottom.
  */
 export function DealDocuments({ lead }: { lead: Lead }) {
-  const { s, session, ensureDocs, loadTemplates, generateDoc, downloadDoc, deleteDoc, openDoc, startGeneration } = useStore();
+  const { s, session, ensureDocs, loadTemplates, generateDoc, downloadDoc, deleteDoc, startGeneration } = useStore();
   const [picked, setPicked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<'generate' | 'import'>('generate');
@@ -125,15 +125,17 @@ export function DealDocuments({ lead }: { lead: Lead }) {
       })}
       {docs.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>No documents yet. Generate one or import your own here; entering a stage whose entry document is a Proposal offers it too.</div>}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-        {settled ? (
+        {settled && (
           <button type="button" className="btn-outline" data-testid="docs-add" style={{ fontSize: 12, padding: '7px 11px', borderRadius: 6, fontWeight: 400 }} onClick={() => setAdding((x) => !x)}>
             {adding ? 'Cancel' : 'Add documents'}
           </button>
-        ) : (
+        )}
+        {/* "Preview built-in proposal" is switched off (owner, 25 Oct); it opened openDoc(lead.id).
+        {!settled && (
           <button type="button" className="btn-outline" data-testid="docs-preview" style={{ fontSize: 12, padding: '7px 11px', borderRadius: 6, fontWeight: 400 }} onClick={() => openDoc(lead.id)}>
             Preview built-in proposal
           </button>
-        )}
+        )} */}
         <span style={{ marginLeft: 'auto' }} />
         <ProposalActions lead={lead} />
       </div>
