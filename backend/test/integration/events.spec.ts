@@ -4,7 +4,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { inject } from 'vitest';
-import { addMember, call, createTenant, firstFunnel, ok, type Session, signIn, testPib } from './helpers';
+import { addMember, call, createTenant, firstFunnel, ok, readyCompany, type Session, signIn, testPib } from './helpers';
 
 interface ChangeEvent {
   type: string;
@@ -79,10 +79,11 @@ afterAll(() => streams.forEach((s) => s.close()));
 
 describe('event stream', () => {
   it("delivers the workspace's changes to its members, with the tab that made them", async () => {
+    const { id: companyId } = await readyCompany(owner, tenant);
     const mine = await openStream(member, tenant);
     streams.push(mine);
     const funnel = await firstFunnel(owner, tenant);
-    const deal = await ok('POST', '/crm/deals', { token: owner.token, tenant, body: { title: 'Live deal', funnelId: funnel.id } });
+    const deal = await ok('POST', '/crm/deals', { token: owner.token, tenant, body: { title: 'Live deal', funnelId: funnel.id, companyId } });
     await mine.waitFor((e) => e.type === 'deal' && e.op === 'insert' && !!e.ids?.includes(deal.id));
 
     await ok('PATCH', `/crm/deals/${deal.id}`, { token: owner.token, tenant, headers: { 'x-client-id': 'tab-events-owner' }, body: { title: 'Live deal 2' } });

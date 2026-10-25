@@ -3,7 +3,7 @@
  * deleting stages, with the deals of a deleted stage moved and their stage history written.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { addMember, call, createTenant, type Funnel, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, type Funnel, ok, readyCompany, type Session, signIn } from './helpers';
 
 let owner: Session;
 let admin: Session;
@@ -11,6 +11,7 @@ let member: Session;
 let stranger: Session;
 let tenant: string;
 let otherTenant: string;
+let companyId: string;
 const as = (s: Session = owner) => ({ token: s.token, tenant });
 
 const funnelsNow = () => ok<Funnel[]>('GET', '/crm/funnels', as());
@@ -26,7 +27,7 @@ const newFunnel = async (body: object, s: Session = owner) => {
   for (const st of f.stages) await ok('PATCH', `/crm/funnels/${f.id}/stages/${st.id}`, { ...as(owner), body: { gateTodos: false } });
   return { ...f, stages: f.stages.map((st) => ({ ...st, gateTodos: false })) };
 };
-const newDeal = async (funnelId: string, title = 'Deal') => ok('POST', '/crm/deals', { ...as(), body: { title, funnelId } });
+const newDeal = async (funnelId: string, title = 'Deal') => ok('POST', '/crm/deals', { ...as(), body: { title, funnelId, companyId } });
 const history = async (dealId: string) =>
   (await ok<{ kind: string; fromStageId: string | null; toStageId: string; outcome: string; changedByUserId: string | null }[]>('GET', `/crm/deal-stage-history?dealId=${dealId}`, as())).map((r) => [
     r.kind,
@@ -41,6 +42,7 @@ beforeAll(async () => {
   [tenant, otherTenant] = await Promise.all([createTenant(owner, 'Funnels'), createTenant(stranger, 'Funnels other')]);
   await addMember(owner, tenant, admin, 'admin');
   await addMember(owner, tenant, member, 'member');
+  companyId = (await readyCompany(owner, tenant)).id;
 });
 
 describe('creating and renaming funnels', () => {

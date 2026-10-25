@@ -6,7 +6,7 @@
  */
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { addMember, createTenant, eventually, firstFunnel, type Funnel, mailTo, ok, type Session, signIn, waitForMail } from './helpers';
+import { addMember, createTenant, eventually, firstFunnel, type Funnel, mailTo, ok, readyCompany, type Session, signIn, waitForMail } from './helpers';
 
 let owner: Session;
 let member: Session;
@@ -21,8 +21,14 @@ function localDate(timeZone: string, days = 0): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** One ready company per workspace: only an opportunity or a client takes an opportunity (CD-360). */
+const companies = new Map<string, Promise<string>>();
+const companyIn = (s: Session, t: string) => {
+  if (!companies.has(t)) companies.set(t, readyCompany(s, t).then((c) => c.id));
+  return companies.get(t)!;
+};
 async function deal(s: Session, t: string, funnel: Funnel, title: string, ownerUserId?: string) {
-  return ok<{ id: string; stageId: string }>('POST', '/crm/deals', { ...as(s, t), body: { title, funnelId: funnel.id, ...(ownerUserId ? { ownerUserId } : {}) } });
+  return ok<{ id: string; stageId: string }>('POST', '/crm/deals', { ...as(s, t), body: { title, funnelId: funnel.id, companyId: await companyIn(s, t), ...(ownerUserId ? { ownerUserId } : {}) } });
 }
 async function task(s: Session, t: string, d: { id: string; stageId: string }, label: string, dueDate: string, assigneeUserId: string, done = false) {
   return ok<{ id: string }>('POST', `/crm/deals/${d.id}/tasks`, { ...as(s, t), body: { stageId: d.stageId, label, dueDate, assigneeUserId, done, blocksAdvance: false } });
@@ -222,7 +228,7 @@ describe('deal assigned to you', () => {
 
   it('only goes to members of the workspace (the API refuses other owners)', async () => {
     const outsider = await signIn('notif-outsider');
-    await ok('POST', '/crm/deals', { ...as(owner), body: { title: 'Outsider', funnelId: funnel.id, ownerUserId: outsider.userId } }, 400);
+    await ok('POST', '/crm/deals', { ...as(owner), body: { title: 'Outsider', funnelId: funnel.id, companyId: await companyIn(owner, tenant), ownerUserId: outsider.userId } }, 400);
     await waitForMail(member, member.email); // the suite's mail endpoint still works for anyone signed in
     expect(await mailTo(outsider, outsider.email)).toEqual([]);
   });
