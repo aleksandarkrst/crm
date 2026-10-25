@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Board, BOARD_CARD, BoardColumn, ViewToggle } from '../components/Board';
+import { Board, BOARD_CARD, BoardColumn /* , ViewToggle */ } from '../components/Board';
 import { FilterBar, SortHeader, useSort } from '../components/ui';
 import { DataActions } from '../components/DataActions';
 import { EmptyState } from '../components/EmptyState';
@@ -12,7 +12,7 @@ import { applyFilters, clearAll } from '../store/filters';
 import { COMPANY_STATUS_LABELS, companyReadiness, type CompanyRecord, companyRecords, stagesFor, todayIso, valueTotal } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { CompanyStatus } from '../store/types';
-import { useBoardView } from '../store/useBoardView';
+// import { useBoardView } from '../store/useBoardView';
 import { usePageFilters } from '../store/usePageFilters';
 
 const COLS = '1.5fr 1fr 0.9fr 0.8fr 1.1fr 1fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1.1fr 1.1fr 0.8fr 1fr';
@@ -41,7 +41,9 @@ export function Companies() {
   const fields = useMemo(() => companyPageFields(s), [s]);
   const [filters, setFilters] = usePageFilters('companies', { order: ['owner'], f: { owner: { vals: [] } } });
   const { sort, toggle } = useSort<Key>('name');
-  const [view, setView] = useBoardView('crm.companiesView');
+  // The Kanban is switched off for now (owner, 25 Oct): a drag that can't move a card felt odd. The
+  // table is the page; the toggle and CompaniesBoard below come back with it.
+  // const [view, setView] = useBoardView('crm.companiesView');
 
   // Status sorts in its order (Not interested, Lead, Opportunity, Past client, Client), not by name.
   const sortVal = (c: CompanyRecord) => (sort.key === 'status' ? c.statusRank : NUMERIC.has(sort.key) ? (c[sort.key] as number) : String(c[sort.key] || '').toLowerCase());
@@ -55,7 +57,7 @@ export function Companies() {
   return (
     <Screen title="Companies">
       <FilterBar
-        lead={<ViewToggle value={view} onChange={setView} testId="companies-view" />}
+        // lead={<ViewToggle value={view} onChange={setView} testId="companies-view" />}
         row={<FilterRow fields={fields} value={filters} onChange={setFilters} people={filterPeople(s, session.userId)} me={session.userId} />}
         meta={rows.length + (rows.length === 1 ? ' company' : ' companies')}
         extra={<DataActions type="companies" count={rows.length} exportCsv={() => companiesCsv(s, rows)} />}
@@ -65,9 +67,7 @@ export function Companies() {
         <EmptyState title="No companies yet" text="Companies are the organisations you sell to. Add one, or import a list from a CSV file." action={{ label: 'Add company', onClick: addCompany }} />
       ) : rows.length === 0 ? (
         <FilterEmpty noun="companies" onClear={() => setFilters(clearAll(fields))} />
-      ) : view === 'board' ? (
-        <CompaniesBoard rows={rows} />
-      ) : (
+      ) : /* view === 'board' ? <CompaniesBoard rows={rows} /> : */ (
         <div className="card" style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 1580 }}>
             <div className="table-head" style={{ gridTemplateColumns: COLS }}>
@@ -108,7 +108,8 @@ export function Companies() {
  * status back by hand; further on, the company opens with a toast that says how it gets there.
  * A lead without a PIB can't be dragged.
  */
-function CompaniesBoard({ rows }: { rows: CompanyRecord[] }) {
+// Exported only while it is switched off (unused otherwise).
+export function CompaniesBoard({ rows }: { rows: CompanyRecord[] }) {
   const store = useStore();
   const { s, session } = store;
   const [dragId, setDragId] = useState<string | null>(null);

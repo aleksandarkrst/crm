@@ -2455,7 +2455,10 @@ In the app the status is the first Summary row ("Lead · 3 of 7 ready", "Lead ·
 it, also after this tab's own saves (`refreshCompanyStatus` in the store reads only the status
 fields back, so a field still being edited isn't overwritten).
 
-**Companies Kanban (CD-359).** Companies is second in the CRM sidebar and opens on a Kanban with a
+**Companies Kanban (CD-359), switched off for now** (owner, 25 Oct: a drag that can't move a card
+felt odd): the page is the table; the toggle and `CompaniesBoard` are commented out in
+`screens/Companies.tsx` and `companies-kanban.test.mjs` is skipped. Companies is second in the CRM
+sidebar. Built: a Kanban with a
 column per status (Lead, Opportunity, Client, Past client, Not interested), toggled to the table
 like the Pipeline (`useBoardView`, `crm.companiesView.<user>.<workspace>` in localStorage; the
 toggle, board and chevron column are the shared `components/Board.tsx`). A lead's card shows

@@ -27,7 +27,8 @@ function dragCard(page, companyId, status) {
 const cardText = (page, id) => page.$eval(`[data-testid=company-card][data-company="${id}"]`, (el) => el.innerText);
 const columnOf = (page, id) => page.$eval(`[data-testid=company-card][data-company="${id}"]`, (el) => el.closest('[data-testid^=companies-col-]').dataset.testid.replace('companies-col-', ''));
 
-describe('companies kanban', () => {
+// Skipped while the Kanban is switched off on the Companies page (owner, 25 Oct).
+describe.skip('companies kanban', () => {
   const browser = useBrowser();
   const step = steps(browser, 'companies-kanban');
   let page;
