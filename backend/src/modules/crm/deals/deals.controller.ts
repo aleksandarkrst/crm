@@ -5,6 +5,7 @@ import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
 import { parseVersion } from '../history/record-history.service';
 import { ActivitiesService, CreateActivity } from './activities.service';
 import { CreateDeal, DealsQuery, DealsService, MarkLost, MoveDeal, UpdateDeal } from './deals.service';
+import { ProposalApprovalService } from './proposal-approval.service';
 
 const Id = new ZodPipe(UuidParam);
 
@@ -14,6 +15,7 @@ export class DealsController {
   constructor(
     private readonly deals: DealsService,
     private readonly activities: ActivitiesService,
+    private readonly approval: ProposalApprovalService,
   ) {}
 
   @Get()
@@ -56,6 +58,33 @@ export class DealsController {
   @HttpCode(202)
   remindStageOwner(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
     return this.deals.remindStageOwner(ctx, id);
+  }
+
+  // Proposal approval (CD-120): each answers with the opportunity's approval as it now stands.
+  @Post(':id/approval/request')
+  @HttpCode(200)
+  requestApproval(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.approval.request(ctx, id);
+  }
+
+  /** The funnel's approver, owners and admins (403 for anyone else). */
+  @Post(':id/approval/approve')
+  @HttpCode(200)
+  approve(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.approval.approve(ctx, id);
+  }
+
+  @Post(':id/approval/revoke')
+  @HttpCode(200)
+  revokeApproval(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.approval.revoke(ctx, id);
+  }
+
+  /** "Mark as sent": a 409 while the funnel's approval is missing. */
+  @Post(':id/proposal/sent')
+  @HttpCode(200)
+  markProposalSent(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
+    return this.approval.markSent(ctx, id);
   }
 
   /** "Reopen" on a lost deal: back to open, in the stage it was lost in. */

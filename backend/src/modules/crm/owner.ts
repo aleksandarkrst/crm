@@ -8,13 +8,13 @@ import { memberships, users } from '../../shared/database/schema';
  * An owner must be a member of the tenant. `users` is global, so without this check any user id
  * would be accepted, and the owner's name would then show up in this workspace.
  */
-export async function assertOwnerIsMember(tx: Tx, ctx: TenantContext, ownerUserId: string | null | undefined): Promise<void> {
+export async function assertOwnerIsMember(tx: Tx, ctx: TenantContext, ownerUserId: string | null | undefined, who = 'The owner'): Promise<void> {
   if (!ownerUserId) return;
   const [row] = await tx
     .select({ userId: memberships.userId })
     .from(memberships)
     .where(and(eq(memberships.tenantId, ctx.tenantId), eq(memberships.userId, ownerUserId)));
-  if (!row) throw new BadRequestException('The owner must be a member of this workspace');
+  if (!row) throw new BadRequestException(`${who} must be a member of this workspace`);
 }
 
 /**

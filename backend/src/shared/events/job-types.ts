@@ -24,6 +24,11 @@ export interface JobPayloads {
    */
   'crm.stage-reminder': { tenantId: string; dealId: string; recipientUserId: string; actorUserId: string };
   /**
+   * Sent by CRM when someone requests approval of an opportunity's proposal (CD-120). The
+   * notifications module emails the funnel's approver, if they want that email.
+   */
+  'crm.approval-requested': { tenantId: string; dealId: string; approverUserId: string; actorUserId: string };
+  /**
    * Sent by CRM when a member is added to a meeting by someone else, or a planned meeting's time or
    * place changes, or it is cancelled (or restored). The CRM worker emails each of `userIds` (one
    * job per member, so a retry doesn't email the others again) with an .ics, if they still take
@@ -189,6 +194,7 @@ export const JOB_NAMES = [
   'crm.deal-won',
   'crm.deal-assigned',
   'crm.stage-reminder',
+  'crm.approval-requested',
   'crm.generate-document',
   'crm.meeting-invite',
   'crm.meeting-minutes-email',
@@ -220,4 +226,4 @@ export const JOB_NAMES = [
 ] as const satisfies readonly JobName[];
 
 /** Jobs that send email: retried MAIL_RETRY_LIMIT times with backoff from MAIL_RETRY_DELAY_SECONDS. */
-export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.stage-reminder', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed', 'projects.project-created-email', 'projects.task-assigned', 'projects.limit-alert', 'timesheet.notice-email', 'timeoff.notice-email', 'timeoff.sick-email', 'documents.email']);
+export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.stage-reminder', 'crm.approval-requested', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed', 'projects.project-created-email', 'projects.task-assigned', 'projects.limit-alert', 'timesheet.notice-email', 'timeoff.notice-email', 'timeoff.sick-email', 'documents.email']);

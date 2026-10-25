@@ -876,6 +876,13 @@
       "when": 1792855912358,
       "tag": "0124_company_status_history_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1792926684701,
+      "tag": "0125_proposal_approval",
+      "breakpoints": true
     }
   ]
 }

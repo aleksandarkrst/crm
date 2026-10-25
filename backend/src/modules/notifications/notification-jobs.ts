@@ -7,7 +7,7 @@ import { companies, dailyDigests, deals, funnels, funnelStages, memberships, ten
 import type { JobPayloads } from '../../shared/events/job-types';
 import { type JobAttempt, JobsService } from '../../shared/events/jobs.service';
 import { visitPlanPeriodLabel } from '../crm';
-import { dealAssignedEmail, digestEmail, stageReminderEmail, digestItemCount, isDigestHour, isEmptyDigest, zonedNow } from './digest-content';
+import { approvalRequestedEmail, dealAssignedEmail, digestEmail, stageReminderEmail, digestItemCount, isDigestHour, isEmptyDigest, zonedNow } from './digest-content';
 import { DigestService } from './digest.service';
 import { visitPlanEmail } from './visit-plan-email';
 
@@ -23,6 +23,8 @@ export const DIGEST_TICK_CRON = '*/15 * * * *';
  *   when it would be empty. `daily_digests` makes it once a day per member and workspace;
  * - "crm.deal-assigned": emails the new owner of a deal if someone else assigned it and they
  *   want that email;
+ * - "crm.approval-requested": emails a funnel's approver that a proposal waits for them (CD-120),
+ *   if they want that email and it is still pending;
  * - "crm.visit-plan-email": emails a salesperson the visit plan someone else made or changed for
  *   them (CD-134), if they want that email.
  * Failed sends throw, so pg-boss retries them (MAIL_RETRY_LIMIT).
@@ -44,6 +46,7 @@ export class NotificationJobs implements OnApplicationBootstrap {
     await this.jobs.work('notifications.daily-digest', (data, attempt) => this.sendDigest(data, attempt));
     await this.jobs.work('crm.deal-assigned', (data) => this.sendDealAssigned(data));
     await this.jobs.work('crm.stage-reminder', (data) => this.sendStageReminder(data));
+    await this.jobs.work('crm.approval-requested', (data) => this.sendApprovalRequested(data));
     await this.jobs.work('crm.visit-plan-email', (data) => this.sendVisitPlan(data));
     await this.jobs.schedule('notifications.digest-tick', DIGEST_TICK_CRON);
   }
@@ -160,6 +163,43 @@ export class NotificationJobs implements OnApplicationBootstrap {
         workspaceName: recipient.workspaceName,
         appUrl: this.env.APP_URL,
         deal: { id: deal.id, title: deal.title, company: deal.company, stage: deal.stage, daysInStage, targetDays: deal.targetDays },
+      }),
+    );
+  }
+
+  async sendApprovalRequested({ tenantId, dealId, approverUserId, actorUserId }: JobPayloads['crm.approval-requested']): Promise<void> {
+    const [approver] = await this.database.db
+      .select({ email: users.email, name: users.displayName, wants: memberships.notifyProposalApprovals, workspaceName: tenants.name })
+      .from(memberships)
+      .innerJoin(users, eq(users.id, memberships.userId))
+      .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
+      .where(and(eq(memberships.tenantId, tenantId), eq(memberships.userId, approverUserId)));
+    if (!approver?.email || !approver.wants) return;
+    const [actor] = await this.database.db.select({ name: sql<string>`coalesce(${users.displayName}, ${users.email}, 'A teammate')` }).from(users).where(eq(users.id, actorUserId));
+    const [deal] = await this.database.withTenant(tenantId, (tx) =>
+      tx
+        .select({ id: deals.id, title: deals.title, company: companies.name, stage: funnelStages.name, funnelName: funnels.label, requestedAt: deals.approvalRequestedAt, approvedAt: deals.approvedAt, approverUserId: funnels.approverUserId })
+        .from(deals)
+        .innerJoin(funnelStages, eq(funnelStages.id, deals.stageId))
+        .innerJoin(funnels, eq(funnels.id, deals.funnelId))
+        .leftJoin(companies, eq(companies.id, deals.companyId))
+        .where(eq(deals.id, dealId)),
+    );
+    // Deleted, decided, withdrawn or with another approver before this ran: nothing to ask.
+    if (!deal || !deal.requestedAt || deal.approvedAt || deal.approverUserId !== approverUserId) return;
+    if (this.mailer.notDelivered) {
+      this.logger.warn(`Approval request for deal ${dealId} not sent: ${this.mailer.notDelivered}`);
+      return;
+    }
+    await this.mailer.send(
+      approvalRequestedEmail({
+        to: approver.email,
+        recipientName: approver.name,
+        actorName: actor?.name ?? 'A teammate',
+        workspaceName: approver.workspaceName,
+        funnelName: deal.funnelName,
+        appUrl: this.env.APP_URL,
+        deal: { id: deal.id, title: deal.title, company: deal.company, stage: deal.stage },
       }),
     );
   }

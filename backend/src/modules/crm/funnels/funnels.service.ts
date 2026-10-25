@@ -82,6 +82,9 @@ export const UpdateFunnel = nonEmptyPatch(
     note: optionalText(1000),
     /** Default target days for its stages (CD-363); null removes it. */
     targetDays: z.number().int().min(1).max(365).nullish(),
+    /** Proposals need approval before they are sent (CD-120), by `approverUserId` (owners and admins too). */
+    proposalApproval: z.boolean().optional(),
+    approverUserId: z.uuid().nullish(),
   }),
 );
 export type UpdateFunnel = z.infer<typeof UpdateFunnel>;
@@ -189,8 +192,11 @@ export class FunnelsService implements TenantProvisioner, OnModuleInit {
   updateFunnel(ctx: TenantContext, funnelId: string, input: UpdateFunnel) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
-        const [row] = await tx.update(funnels).set(input).where(eq(funnels.id, funnelId)).returning({ id: funnels.id });
+        if (input.approverUserId) await assertOwnerIsMember(tx, ctx, input.approverUserId, 'The approver');
+        const [row] = await tx.update(funnels).set(input).where(eq(funnels.id, funnelId)).returning({ id: funnels.id, proposalApproval: funnels.proposalApproval, approverUserId: funnels.approverUserId });
         if (!row) throw new NotFoundException('Funnel not found');
+        // Approval needs someone to ask (CD-120).
+        if (row.proposalApproval && !row.approverUserId) throw new BadRequestException('Pick the approver for proposals in this funnel');
         await this.audit.record(tx, ctx, { action: 'funnel.updated', entityType: 'funnel', entityId: funnelId, data: input });
         return this.one(tx, funnelId);
       })

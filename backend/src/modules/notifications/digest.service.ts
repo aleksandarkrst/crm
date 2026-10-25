@@ -103,6 +103,15 @@ export class DigestService {
         );
       const lateInStage = late.map(({ stageEnteredAt, targetDays: target, ...d }) => ({ ...d, lateDays: stageLateDays(stageEnteredAt, target, now) }));
 
+      // Proposals waiting for them as a funnel's approver (CD-120): requested, not yet approved, still open.
+      const approvalsPending = await tx
+        .select({ id: deals.id, title: deals.title, company: companies.name, stage: funnelStages.name })
+        .from(deals)
+        .innerJoin(funnelStages, eq(funnelStages.id, deals.stageId))
+        .innerJoin(funnels, eq(funnels.id, deals.funnelId))
+        .leftJoin(companies, eq(companies.id, deals.companyId))
+        .where(and(eq(funnels.proposalApproval, true), eq(funnels.approverUserId, userId), isNotNull(deals.approvalRequestedAt), isNull(deals.approvedAt), isNull(deals.lostAt), eq(funnelStages.isWon, false)));
+
       const meetingRow = {
         id: meetings.id,
         title: meetings.title,
@@ -162,7 +171,7 @@ export class DigestService {
       });
 
       const iso = (rows: typeof meetingsToday) => rows.map((m) => ({ ...m, startsAt: m.startsAt.toISOString(), endsAt: m.endsAt.toISOString() }));
-      return buildDigest(today, tasks, stalled, { today: iso(meetingsToday), notClosed: iso(notClosed), minutesMissing: iso(minutesMissing), timeZone, now, visitPlans: planRows, lateInStage });
+      return buildDigest(today, tasks, stalled, { today: iso(meetingsToday), notClosed: iso(notClosed), minutesMissing: iso(minutesMissing), timeZone, now, visitPlans: planRows, lateInStage, approvalsPending });
     });
   }
 }

@@ -15,6 +15,7 @@ import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/cu
 import { CompanyStatusService } from '../companies/company-status.service';
 import { assertOwnerIsMember, userNameOf } from '../owner';
 import { RecordHistoryService } from '../history/record-history.service';
+import { APPROVAL_STATUSES, approvalStatus, approvalStatusSql, resetApproval } from './proposal-approval';
 import { StageHistoryService } from './stage-history.service';
 import { advanceBlockers, skipBlocker, stageLateDays, wonBlocker } from './stage-gate';
 
@@ -65,6 +66,8 @@ export const DealsQuery = ListQuery.extend({
   companyId: z.uuid().optional(),
   ownerUserId: z.uuid().optional(),
   outcome: z.enum(DEAL_OUTCOMES).optional(),
+  /** Its proposal's approval (CD-120), whatever the stage. */
+  approvalStatus: z.enum(APPROVAL_STATUSES).optional(),
 });
 export type CreateDeal = z.infer<typeof CreateDeal>;
 export type UpdateDeal = z.infer<typeof UpdateDeal>;
@@ -106,6 +109,7 @@ export class DealsService {
     if (query.ids) filters.push(inArray(deals.id, query.ids));
     if (query.outcome === 'lost') filters.push(isNotNull(deals.lostAt));
     else if (query.outcome) filters.push(isNull(deals.lostAt), query.outcome === 'won' ? eq(funnelStages.isWon, true) : not(funnelStages.isWon));
+    if (query.approvalStatus) filters.push(sql`${approvalStatusSql} = ${query.approvalStatus}`);
     if (query.q) {
       const like = `%${query.q}%`;
       filters.push(or(ilike(deals.title, like), ilike(companies.name, like), ilike(contacts.fullName, like)));
@@ -122,6 +126,7 @@ export class DealsService {
           stageIsWon: funnelStages.isWon,
           // The stage's own target, else the funnel's (CD-363): "late" on the Pipeline card.
           stageTargetDays: sql<number | null>`coalesce(${funnelStages.targetDays}, ${funnels.targetDays})`,
+          funnelApproval: funnels.proposalApproval,
           ownerName: userNameOf(deals.ownerUserId),
         })
         .from(deals)
@@ -145,11 +150,12 @@ export class DealsService {
         .from(dealStageStates)
         .where(inArray(dealStageStates.dealId, rows.map((r) => r.deal.id)));
       const now = new Date();
-      return rows.map(({ stageIsWon, stageTargetDays, ...r }) => ({
+      return rows.map(({ stageIsWon, stageTargetDays, funnelApproval, ...r }) => ({
         ...r,
         deal: {
           ...r.deal,
           outcome: dealOutcome(r.deal, stageIsWon),
+          approvalStatus: approvalStatus(funnelApproval, r.deal),
           stageLateDays: lateDaysOf(r.deal, stageIsWon, stageTargetDays, now),
           stageStates: states.filter((st) => st.dealId === r.deal.id).map(({ dealId: _, ...st }) => st),
         },
@@ -250,6 +256,8 @@ export class DealsService {
           const { from, to, funnel, at } = funnelChange;
           await this.history.record(tx, ctx, { dealId: id, kind: 'funnel_changed', fromStageId: from, toStageId: to.id, outcome: to.isWon ? 'won' : 'open' }, at);
           await this.log(tx, ctx, id, null, `Moved to funnel ${funnel}`, `Restarted at ${to.name} · next activity: ${to.activity}`);
+          // Approval is the funnel's (CD-120): the new one asks again, its own approver.
+          await resetApproval(tx, ctx, id, `Moved to funnel ${funnel}`);
         }
         if (qualifiedChange !== null) await this.log(tx, ctx, id, null, qualifiedChange ? 'Marked Qualified' : 'No longer Qualified', null);
         if (before && input.ownerUserId !== undefined) await this.notifyAssigned(tx, ctx, id, before.ownerUserId, row.ownerUserId);
@@ -411,7 +419,7 @@ export class DealsService {
    */
   private async present(tx: Tx, deal: typeof deals.$inferSelect) {
     const [stage] = await tx
-      .select({ isWon: funnelStages.isWon, targetDays: sql<number | null>`coalesce(${funnelStages.targetDays}, ${funnels.targetDays})` })
+      .select({ isWon: funnelStages.isWon, targetDays: sql<number | null>`coalesce(${funnelStages.targetDays}, ${funnels.targetDays})`, approval: funnels.proposalApproval })
       .from(funnelStages)
       .innerJoin(funnels, eq(funnels.id, funnelStages.funnelId))
       .where(eq(funnelStages.id, deal.stageId));
@@ -419,7 +427,7 @@ export class DealsService {
       .select({ stageId: dealStageStates.stageId, docsComplete: dealStageStates.docsComplete, docsCompleteAt: dealStageStates.docsCompleteAt, docsCompleteByUserId: dealStageStates.docsCompleteByUserId })
       .from(dealStageStates)
       .where(eq(dealStageStates.dealId, deal.id));
-    return { ...deal, outcome: dealOutcome(deal, !!stage?.isWon), stageLateDays: lateDaysOf(deal, !!stage?.isWon, stage?.targetDays ?? null, new Date()), stageStates };
+    return { ...deal, outcome: dealOutcome(deal, !!stage?.isWon), approvalStatus: approvalStatus(!!stage?.approval, deal), stageLateDays: lateDaysOf(deal, !!stage?.isWon, stage?.targetDays ?? null, new Date()), stageStates };
   }
 
   /**
