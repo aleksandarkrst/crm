@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Board, BOARD_CARD, BoardColumn, ViewToggle } from '../components/Board';
 import { FilterBar, SortHeader, useSort } from '../components/ui';
 import { DataActions } from '../components/DataActions';
 import { EmptyState } from '../components/EmptyState';
@@ -12,42 +13,14 @@ import { allOpen, applyFilters, clearAll, type FilterValue, isActive, markSeen, 
 import { funnelOptions, initialsOf, memberName, needsNextStep, ownerOf, stageOf, stageOwnerId, todayIso, valueNum, valueTotal } from '../store/selectors';
 import type { Lead, SegKey, Stage, State } from '../store/types';
 import { useStore } from '../store/store';
+import { useBoardView } from '../store/useBoardView';
 import { usePageFilters } from '../store/usePageFilters';
-
-type PipelineView = 'board' | 'table';
-
-const viewKey = (userId: string, tenantId: string) => `crm.pipelineView.${userId}.${tenantId}`;
-
-/** The Kanban / Table choice, remembered per person and workspace in this browser (CD-274). */
-function usePipelineView(userId: string, tenantId: string): [PipelineView, (v: PipelineView) => void] {
-  const [view, setView] = useState<PipelineView>(() => {
-    try {
-      return localStorage.getItem(viewKey(userId, tenantId)) === 'table' ? 'table' : 'board';
-    } catch {
-      return 'board';
-    }
-  });
-  const choose = (v: PipelineView) => {
-    setView(v);
-    try {
-      localStorage.setItem(viewKey(userId, tenantId), v);
-    } catch {
-      // No storage (private mode, blocked): the choice lasts until the page is left.
-    }
-  };
-  return [view, choose];
-}
-
-const VIEWS: { id: PipelineView; label: string; icon: string }[] = [
-  { id: 'board', label: 'Kanban', icon: 'M4 4h5v16H4zM10 4h5v10h-5zM16 4h4v7h-4z' },
-  { id: 'table', label: 'Table', icon: 'M4 6h16M4 12h16M4 18h16' },
-];
 
 export function Pipeline() {
   const store = useStore();
   const { s, set, session } = store;
   const navigate = useNavigate();
-  const [view, setView] = usePipelineView(session.userId, session.tenant.id);
+  const [view, setView] = useBoardView('crm.pipelineView');
   const seg = s.segment;
   const stages = s.funnels[seg].stages;
   const me = session.userId;
@@ -86,15 +59,7 @@ export function Pipeline() {
       <FilterBar
         lead={
           <>
-            <div className="view-toggle" role="group" aria-label="View">
-              {VIEWS.map((v) => (
-                <button key={v.id} type="button" title={v.label} aria-label={v.label} aria-pressed={view === v.id} data-testid={`pipeline-view-${v.id}`} onClick={() => setView(v.id)}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d={v.icon} />
-                  </svg>
-                </button>
-              ))}
-            </div>
+            <ViewToggle value={view} onChange={setView} testId="pipeline-view" />
             <div className="funnel-select">
               <select aria-label="Funnel" data-testid="pipeline-funnel" value={seg} onChange={(e) => pickFunnel(e.target.value)}>
                 {funnelOptions(s).map((o) => (
@@ -148,123 +113,94 @@ function PipelineBoard({ stages, leads }: { stages: Stage[]; leads: Lead[] }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   return (
-    <div className="pipeline-board" style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '0 -30px -44px', padding: '0 30px', minHeight: 'calc(100vh - 118px)' }}>
-      <div className="pipeline-columns" style={{ display: 'flex', gap: 14, overflowX: 'auto', alignItems: 'stretch', flex: 1, minHeight: s.leads.length ? 520 : 260 }}>
-        {stages.map((st, ci) => {
-          const cards = leads.filter((l) => l.stage === st.id);
-          const short = valueTotal(s, cards.filter((l) => l.outcome !== 'lost'), true);
-          const active = dragOver === st.id;
-          const first = ci === 0;
-          const last = ci === stages.length - 1;
-          return (
-            <div
-              key={st.id}
-              onDragOver={(e) => {
-                e.preventDefault();
-                if (dragOver !== st.id) setDragOver(st.id);
-              }}
-              onDragLeave={() => dragOver === st.id && setDragOver(null)}
-              onDrop={(e) => {
-                e.preventDefault();
-                const id = e.dataTransfer.getData('text/plain') || dragId;
-                setDragId(null);
-                setDragOver(null);
-                if (id) store.moveLead(id, st.id);
-              }}
-              style={{ flex: '0 0 268px', width: 268, border: `1px solid ${active ? '#14503C' : 'transparent'}`, borderRadius: '6px 6px 0 0', display: 'flex', flexDirection: 'column' }}
-            >
-              <div
-                style={{
-                  position: 'relative',
-                  width: last ? 268 : 282,
-                  background: active ? '#D7E9E1' : '#F4F4F5',
-                  clipPath: first
-                    ? 'polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%)'
-                    : last
-                      ? 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 16px 50%)'
-                      : 'polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%, 16px 50%)',
-                  padding: first ? '12px 30px 12px 12px' : last ? '12px 12px 12px 26px' : '12px 30px 12px 26px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 7,
-                  borderRadius: last ? '6px 6px 0 0' : '6px 0 0 0',
-                  height: 57,
-                }}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={{ fontSize: 14, fontWeight: 600 }}>{st.name}</span>
-                  <span style={{ fontSize: 11.5, color: 'var(--text-2)' }}>
-                    {short} · {cards.length}
-                  </span>
-                </div>
-              </div>
-
-              <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, flex: 1, background: active ? '#E7F2EE' : '#F4F4F5' }}>
-                {cards.map((l) => {
-                  const lost = l.outcome === 'lost';
-                  return (
-                    <div
-                      key={l.id}
-                      data-lost={lost || undefined}
-                      draggable={!lost}
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData('text/plain', l.id);
-                        e.dataTransfer.effectAllowed = 'move';
-                        setDragId(l.id);
-                      }}
-                      onDragEnd={() => {
-                        setDragId(null);
-                        setDragOver(null);
-                      }}
-                      onClick={() => store.openLead(l.id)}
-                      style={{ background: lost ? 'var(--panel)' : 'var(--white)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: 'var(--shadow-tile)', padding: '11px 12px', cursor: lost ? 'pointer' : 'grab', display: 'flex', flexDirection: 'column', gap: 8, opacity: dragId === l.id ? 0.45 : 1 }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                        <span style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.25 }}>{l.company}</span>
-                        <span style={{ fontSize: 11, color: 'var(--brand)', whiteSpace: 'nowrap' }}>{l.value}</span>
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                        {l.contact} · {l.role}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                        {/* The fit score is switched off with CHAMP (CD-362). <FitBadge score={l.score} /> */}
-                        <StallLabel stall={l.stall} />
-                        {l.lateDays > 0 && (
-                          <span className="badge badge-warn" data-testid="card-late">
-                            Late · {l.lateDays} {l.lateDays === 1 ? 'day' : 'days'}
-                          </span>
-                        )}
-                        {/* The stage owner (CD-363), shown when it isn't the opportunity's owner. */}
-                        {!lost && stageOwnerId(s, l) && stageOwnerId(s, l) !== l.ownerId && (
-                          <span className="avatar" title={'Stage owner: ' + memberName(s, stageOwnerId(s, l))} style={{ width: 20, height: 20, fontSize: 9, marginLeft: 'auto' }}>
-                            {initialsOf(memberName(s, stageOwnerId(s, l)))}
-                          </span>
-                        )}
-                      </div>
-                      {lost ? (
-                        <div style={{ borderTop: '1px dashed var(--border)', paddingTop: 7 }}>
-                          <span className="badge badge-danger">Lost · {l.lostReason}</span>
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: 11.5, color: 'var(--text-2)', borderTop: '1px dashed var(--border)', paddingTop: 7, lineHeight: 1.35 }}>
-                          Next: {stageOf(s, l).activity}
-                          {needsNextStep(s, l) && (
-                            <div style={{ marginTop: 6 }}>
-                              <NoNextStep />
-                            </div>
-                          )}
+    <Board tall={s.leads.length > 0}>
+      {stages.map((st, ci) => {
+        const cards = leads.filter((l) => l.stage === st.id);
+        const short = valueTotal(s, cards.filter((l) => l.outcome !== 'lost'), true);
+        return (
+          <BoardColumn
+            key={st.id}
+            name={st.name}
+            sub={`${short} · ${cards.length}`}
+            first={ci === 0}
+            last={ci === stages.length - 1}
+            active={dragOver === st.id}
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (dragOver !== st.id) setDragOver(st.id);
+            }}
+            onDragLeave={() => dragOver === st.id && setDragOver(null)}
+            onDrop={(e) => {
+              e.preventDefault();
+              const id = e.dataTransfer.getData('text/plain') || dragId;
+              setDragId(null);
+              setDragOver(null);
+              if (id) store.moveLead(id, st.id);
+            }}
+          >
+            {cards.map((l) => {
+              const lost = l.outcome === 'lost';
+              return (
+                <div
+                  key={l.id}
+                  data-lost={lost || undefined}
+                  draggable={!lost}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', l.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                    setDragId(l.id);
+                  }}
+                  onDragEnd={() => {
+                    setDragId(null);
+                    setDragOver(null);
+                  }}
+                  onClick={() => store.openLead(l.id)}
+                  style={{ ...BOARD_CARD, background: lost ? 'var(--panel)' : 'var(--white)', cursor: lost ? 'pointer' : 'grab', opacity: dragId === l.id ? 0.45 : 1 }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.25 }}>{l.company}</span>
+                    <span style={{ fontSize: 11, color: 'var(--brand)', whiteSpace: 'nowrap' }}>{l.value}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                    {l.contact} · {l.role}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {/* The fit score is switched off with CHAMP (CD-362). <FitBadge score={l.score} /> */}
+                    <StallLabel stall={l.stall} />
+                    {l.lateDays > 0 && (
+                      <span className="badge badge-warn" data-testid="card-late">
+                        Late · {l.lateDays} {l.lateDays === 1 ? 'day' : 'days'}
+                      </span>
+                    )}
+                    {/* The stage owner (CD-363), shown when it isn't the opportunity's owner. */}
+                    {!lost && stageOwnerId(s, l) && stageOwnerId(s, l) !== l.ownerId && (
+                      <span className="avatar" title={'Stage owner: ' + memberName(s, stageOwnerId(s, l))} style={{ width: 20, height: 20, fontSize: 9, marginLeft: 'auto' }}>
+                        {initialsOf(memberName(s, stageOwnerId(s, l)))}
+                      </span>
+                    )}
+                  </div>
+                  {lost ? (
+                    <div style={{ borderTop: '1px dashed var(--border)', paddingTop: 7 }}>
+                      <span className="badge badge-danger">Lost · {l.lostReason}</span>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 11.5, color: 'var(--text-2)', borderTop: '1px dashed var(--border)', paddingTop: 7, lineHeight: 1.35 }}>
+                      Next: {stageOf(s, l).activity}
+                      {needsNextStep(s, l) && (
+                        <div style={{ marginTop: 6 }}>
+                          <NoNextStep />
                         </div>
                       )}
                     </div>
-                  );
-                })}
-                {cards.length === 0 && <div className="empty-dashed">Drop an opportunity here</div>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+                  )}
+                </div>
+              );
+            })}
+            {cards.length === 0 && <div className="empty-dashed">Drop an opportunity here</div>}
+          </BoardColumn>
+        );
+      })}
+    </Board>
   );
 }
 
