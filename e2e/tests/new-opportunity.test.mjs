@@ -1,9 +1,9 @@
-// New opportunity (CD-360): only an opportunity or a client enters the Pipeline. Opened for a lead (from
-// its contact's page), the dialog says what is missing and can't be submitted; once the company is
-// complete it can, with the sale type, which then shows in the opportunity's Summary.
+// New opportunity (CD-360): only an opportunity or a client enters the Pipeline. A lead picked in the
+// dialog's searchable company list (or the dialog opened from its contact's page) says what is missing and
+// can't be submitted; once the company is complete it can, with the sale type, which then shows in the Summary.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, READY_IDENTITY, setValue, steps, testPib, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, createNew, eventually, newUserWithWorkspace, pickDealCompany, READY_IDENTITY, setValue, steps, testPib, useBrowser } from '../lib/harness.mjs';
 
 describe('new opportunity', () => {
   const browser = useBrowser();
@@ -20,6 +20,16 @@ describe('new opportunity', () => {
     companyId = (await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ name: 'Vega Logistika', pib: testPib(), ...rest }) })).id;
     contactId = (await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ companyId, fullName: 'Nikola Ilić', jobTitle: 'CEO', buyerRole: 'Decision maker', ownerUserId: me }) })).id;
     assert.equal((await api(page, `/crm/companies/${companyId}`)).status, 'lead');
+  });
+
+  step('picked from the searchable company list, a lead shows what it misses and cannot be submitted', async () => {
+    await page.goto(`${BASE_URL}/pipeline`, { waitUntil: 'networkidle0' });
+    await createNew(page, 'deal');
+    await pickDealCompany(page, companyId, 'vega');
+    const notice = await page.$eval('[data-testid=new-deal-lead]', (el) => el.innerText);
+    assert.match(notice, /Vega Logistika is still a lead/);
+    assert.equal(await page.$eval('[data-testid=new-deal-create]', (el) => el.disabled), true);
+    await click(page, 'button::-p-text(Cancel)');
   });
 
   step('opened for the lead, the dialog says what is missing and cannot be submitted', async () => {

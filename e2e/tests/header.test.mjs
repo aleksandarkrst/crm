@@ -3,7 +3,7 @@
 // sidebar's module and workspace switcher is in module-switcher.test.mjs (CD-214).
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, clickButton, createDealInUi, createReadyCompany, newUserWithWorkspace, READY_IDENTITY, RUN, setValue, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, createDealInUi, createReadyCompany, newUserWithWorkspace, READY_IDENTITY, RUN, setValue, steps, useBrowser, waitForToastToClear, testPib, pickDealCompany } from '../lib/harness.mjs';
 
 /** The search results as { group, title, selected } rows, in screen order. */
 const results = (page) =>
@@ -171,7 +171,7 @@ describe('command palette, + menu and account menu', () => {
     await click(page, '[data-testid=new-deal]');
     await page.waitForSelector('::-p-text(Create & start funnel)');
     assert.equal(new URL(page.url()).pathname, '/contacts', 'still on Contacts');
-    await page.select('[data-testid=new-deal-company]', menuMadeId);
+    await pickDealCompany(page, menuMadeId);
     await click(page, '[data-testid=new-deal-sale-capital]');
     await clickButton(page, 'Create & start funnel');
     await page.waitForFunction(() => location.pathname.startsWith('/deals/'));

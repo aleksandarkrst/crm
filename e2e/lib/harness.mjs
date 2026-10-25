@@ -278,12 +278,19 @@ export async function createDealInUi(page, { company, contact, saleType = 'capit
   const companyId = await createReadyCompany(page, company, contact);
   await page.reload({ waitUntil: 'networkidle0' });
   await createNew(page, 'deal');
-  await page.waitForSelector('[data-testid=new-deal-company]');
-  await page.select('[data-testid=new-deal-company]', companyId);
+  await pickDealCompany(page, companyId);
   await click(page, `[data-testid=new-deal-sale-${saleType}]`);
   await clickButton(page, 'Create & start funnel');
   await page.waitForFunction(() => location.pathname.startsWith('/deals/'));
   return page.url().split('/deals/')[1];
+}
+
+/** Picks a company in the New opportunity dialog's searchable company list (CD-360). */
+export async function pickDealCompany(page, companyId, search) {
+  await click(page, '[data-testid=new-deal-company]');
+  if (search) await setValue(page, '[data-testid=new-deal-company-search]', search);
+  await click(page, `[data-testid=new-deal-company-option][value="${companyId}"]`);
+  await page.waitForFunction((id) => document.querySelector('[data-testid=new-deal-company]')?.value === id, {}, companyId);
 }
 
 /** What a company needs, besides its PIB, to be an Opportunity (CD-358). */
