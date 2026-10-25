@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { CustomFieldInputs, customFieldsForCreate } from '../components/CustomFields';
-import { Modal, ModalHeader } from '../components/ui';
+import { Popover } from '../components/Popover';
+import { Chevron, Modal, ModalHeader } from '../components/ui';
 import { type CustomFieldPatch, type CustomFieldType, LOST_REASONS, type LostReason } from '../lib/api';
 import { paths } from '../lib/paths';
 import { checkActivityCode, checkMb } from '../lib/serbianIds';
 import { checkEmail, checkPhone } from '../lib/validate';
 import { BUYER_ROLES, CHANNEL_LABELS, FIELD_TYPES, SALE_TYPES } from '../store/seed';
 import { allPeople, COMPANY_STATUS_LABELS, companyContacts, companyLabels, companyReadiness, companyRecords, customFieldsOf, memberLabels, pipelineBlocked, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
+import { fold } from '../store/search';
 import { useStore } from '../store/store';
 import type { ChannelCode, CompanyStatus, Lead, Person, SaleType } from '../store/types';
 import { GenerationModal, NewTemplateModal } from './DocumentModals';
@@ -62,7 +64,7 @@ function NewDealModal() {
   // Unknown (not loaded here) shows no status label, as pipelineBlocked leaves it to the API.
   const statusOf = (id: string): CompanyStatus | undefined => s.extraCompanies.find((c) => c.id === id)?.status;
   const companies = records
-    .map((c) => ({ value: c.id, label: labels.get(c.id) ?? c.name, status: statusOf(c.id), blocked: pipelineBlocked(s, c.id) }))
+    .map((c) => ({ value: c.id, label: labels.get(c.id) ?? c.name, pib: c.pib, status: statusOf(c.id), blocked: pipelineBlocked(s, c.id) }))
     .sort((a, b) => a.label.localeCompare(b.label));
   const eligible = companies.filter((c) => !c.blocked);
   // The company passed in (even a lead: it says what is missing), else the first that can take one.
@@ -72,6 +74,16 @@ function NewDealModal() {
   const [saleType, setSaleType] = useState<SaleType | null>(null);
   const [saleTypeMissing, setSaleTypeMissing] = useState(false);
   const type = s.funnels[s.newLeadType] ? s.newLeadType : Object.keys(s.funnels)[0]!;
+  // The company list (CD-360 QA): searchable by name or PIB; a lead is listed and pickable, so the dialog can say what it misses.
+  const [pickOpen, setPickOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const pickRef = useRef<HTMLButtonElement>(null);
+  const query = fold(q.trim());
+  const shown = query ? companies.filter((c) => fold(c.label).includes(query) || c.pib.replace(/\s/g, '').includes(query.replace(/\s/g, ''))) : companies;
+  const closePick = () => {
+    setPickOpen(false);
+    setQ('');
+  };
 
   const companyRec = records.find((c) => c.id === company);
   // A lead, or a Not interested company that isn't complete: listed, not eligible.
@@ -112,16 +124,43 @@ function NewDealModal() {
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
         <div className="form-label">
           Company
-          <select className="form-input" data-testid="new-deal-company" value={company} disabled={forMeeting} onChange={(e) => { setCompany(e.target.value); setContactPick(null); }}>
-            {!companyRec && <option value="">No company can take one yet</option>}
-            {companies.map((o) => (
-              <option key={o.value} value={o.value} disabled={o.blocked && o.value !== company}>
-                {o.label}
-                {o.status ? ` · ${COMPANY_STATUS_LABELS[o.status]}` : ''}
-                {o.blocked ? ' (not eligible)' : ''}
-              </option>
-            ))}
-          </select>
+          <button ref={pickRef} type="button" className="form-input" data-testid="new-deal-company" value={company} disabled={forMeeting} aria-haspopup="dialog" aria-expanded={pickOpen} onClick={() => (pickOpen ? closePick() : setPickOpen(true))} style={{ display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', cursor: forMeeting ? 'default' : 'pointer' }}>
+            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {companyRec ? (labels.get(companyRec.id) ?? companyRec.name) : companies.length ? 'Pick a company' : 'No companies yet'}
+            </span>
+            {!forMeeting && <Chevron />}
+          </button>
+          {pickOpen && (
+            <Popover anchor={pickRef} onClose={closePick} className="fr-pop" label="Pick the company" testId="new-deal-company-pop">
+              <div className="fr-search">
+                <input className="fr-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or PIB" aria-label="Search companies" data-testid="new-deal-company-search" autoFocus />
+              </div>
+              <div className="fr-list">
+                {shown.map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    className="fr-opt"
+                    value={o.value}
+                    data-testid="new-deal-company-option"
+                    aria-current={o.value === company}
+                    onClick={() => {
+                      setCompany(o.value);
+                      setContactPick(null);
+                      closePick();
+                    }}
+                  >
+                    <span className="fr-opt-text">
+                      <span style={{ fontWeight: o.value === company ? 600 : 400 }}>{o.label}</span>
+                      <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{[o.status && COMPANY_STATUS_LABELS[o.status], o.pib && 'PIB ' + o.pib].filter(Boolean).join(' · ')}</span>
+                    </span>
+                    {o.blocked && <span className="fr-tag">Not eligible</span>}
+                  </button>
+                ))}
+              </div>
+              {!shown.length && <span className="fr-none">{query ? `No company matches “${q.trim()}”.` : 'No companies yet.'}</span>}
+            </Popover>
+          )}
           {!forMeeting && (
             // A new company is a lead: it is made (and completed) first, then it can take an opportunity.
             <button type="button" className="btn-link" data-testid="new-deal-add-company" onClick={() => set({ newLeadOpen: false, newLeadCompanyId: null, newLeadContactId: null, newCompanyOpen: true })}>
@@ -164,7 +203,7 @@ function NewDealModal() {
             {companyRec.name} {statusOf(companyRec.id) === 'lead' ? 'is still a lead' : "is Not interested and isn't complete"}
           </span>
           <span style={{ color: 'var(--text-2)' }}>
-            {fillHere ? 'Fill in what is missing here, and it can take the opportunity. ' : missing.length ? 'Complete it on its page, and it can take the opportunity. ' : "Leads are listed but can't be picked. "}
+            {fillHere ? 'Fill in what is missing here, and it can take the opportunity. ' : missing.length ? 'Complete it on its page, and it can take the opportunity. ' : "Pick another company, or change its status on its page. "}
             {missing.length ? `Missing for Opportunity: ${missing.join('; ').replace(/\.$/, '')}.` : 'It was set back to Lead by hand.'}
           </span>
           {fillHere && <CompleteCompany companyId={companyRec.id} />}
@@ -266,7 +305,7 @@ function CompleteCompany({ companyId }: { companyId: string }) {
       {label}
       {input}
       {errors[k] && (
-        <span role="alert" style={{ fontSize: 12, color: 'var(--danger)', textTransform: 'none', letterSpacing: 0 }}>
+        <span role="alert" style={{ fontSize: 12, color: 'var(--danger)' }}>
           {errors[k]}
         </span>
       )}
