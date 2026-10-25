@@ -53,8 +53,7 @@ export function GenerationModal() {
           <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>
             {canManageTemplates(session.tenant.role)
               ? 'Upload a Word template in Settings → Document templates. There is a starter template to download there.'
-              : 'Ask an owner or admin to upload one in Settings → Document templates.'}{' '}
-            Meanwhile you can preview the built-in proposal in the browser.
+              : 'Ask an owner or admin to upload one in Settings → Document templates.'}
           </span>
         </div>
       )}

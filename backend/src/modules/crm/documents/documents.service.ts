@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { StorageService } from '../../../infrastructure/storage/storage.service';
 import { AuditService } from '../../../shared/audit/audit.service';
@@ -277,7 +277,7 @@ export class DocumentsService {
           const [existing] = await tx
             .select({ name: dealDocuments.name })
             .from(dealDocuments)
-            .where(and(eq(dealDocuments.dealId, dealId), eq(dealDocuments.docType, 'Proposal')))
+            .where(and(eq(dealDocuments.dealId, dealId), eq(dealDocuments.docType, 'Proposal'), ne(dealDocuments.status, 'failed')))
             .limit(1);
           if (existing) throw new ConflictException(`This opportunity already has a proposal (${existing.name}). Delete it first, or upload this file as another type.`);
         }

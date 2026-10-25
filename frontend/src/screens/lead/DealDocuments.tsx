@@ -28,7 +28,6 @@ export function DealDocuments({ lead }: { lead: Lead }) {
   }, [lead.id, ensureDocs, loadTemplates]);
 
   const docs = s.dealDocs[lead.id] || [];
-  const hasProposal = docs.some((d) => d.docType === 'Proposal');
   // A proposal generated (or being generated) or imported; a failed generation doesn't count.
   const settled = docs.some((d) => d.docType === 'Proposal' && d.status !== 'failed');
   // One Proposal per opportunity: once it has one, "Add documents" offers the other templates only.
@@ -66,7 +65,7 @@ export function DealDocuments({ lead }: { lead: Lead }) {
           {mode === 'import' ? (
             <ImportDocuments
               lead={lead}
-              hasProposal={hasProposal}
+              hasProposal={settled}
               onDone={() => {
                 setMode('generate');
                 setAdding(false);
@@ -89,10 +88,16 @@ export function DealDocuments({ lead }: { lead: Lead }) {
             templates && (
               <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>
                 {settled ? 'No templates besides proposals yet. ' : 'No document templates yet. '}
-                {isAdmin ? 'Upload a Word template in Settings → Document templates.' : 'Ask an owner or admin to upload one in Settings → Document templates.'}{' '}
-                <button type="button" style={{ border: 0, background: 'none', padding: 0, color: 'var(--brand)', cursor: 'pointer', fontSize: 12.5 }} onClick={() => startGeneration(lead.id)}>
-                  More options
-                </button>
+                {isAdmin ? 'Upload a Word template in Settings → Document templates.' : 'Ask an owner or admin to upload one in Settings → Document templates.'}
+                {/* The Generate dialog lists every template, a Proposal too: not once the opportunity has one. */}
+                {!settled && (
+                  <>
+                    {' '}
+                    <button type="button" style={{ border: 0, background: 'none', padding: 0, color: 'var(--brand)', cursor: 'pointer', fontSize: 12.5 }} onClick={() => startGeneration(lead.id)}>
+                      More options
+                    </button>
+                  </>
+                )}
               </div>
             )
           )}
