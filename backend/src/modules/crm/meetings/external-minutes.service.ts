@@ -26,7 +26,7 @@ import { nonEmptyPatch } from '../../../shared/validation/common';
 import { ActivitiesService } from '../deals/activities.service';
 import { userNameOf } from '../owner';
 import { type ApiMeeting, MeetingsService } from './meetings.service';
-import { type MinutesEmail, minutesEmail, minutesTemplate, prefillCheck, updateFromMeeting } from './minutes-email';
+import { externalNextSteps, type MinutesEmail, minutesEmail, minutesTemplate, prefillCheck, updateFromMeeting } from './minutes-email';
 
 /** Limits of the external minutes (spec 7.1). */
 export const EXTERNAL_BODY_MAX = 10_000;
@@ -110,6 +110,11 @@ export interface ApiExternalMinutes {
    * (CD-222): 'time' when it moved, 'details' for its place, title or people. null otherwise.
    */
   meetingChanged: 'time' | 'details' | null;
+  /**
+   * Next steps marked internal only whose text is still in the external text (CD-374): marked after
+   * the template filled it in, or copied in by hand. The app warns before anyone sends it.
+   */
+  internalStepsInText: string[];
 }
 
 /** The aggregate status of one send's recipients. */
@@ -391,6 +396,11 @@ export class ExternalMinutesService {
       .from(tenants)
       .where(eq(tenants.id, ctx.tenantId));
     const [internal] = await tx.select({ agreements: meetingMinutes.agreements, nextSteps: meetingMinutes.nextSteps }).from(meetingMinutes).where(eq(meetingMinutes.meetingId, meetingId));
+    const steps = internal?.nextSteps ?? [];
+    // The owners' display names only: the customer never gets a member's email address (CD-374).
+    const ownerIds = [...new Set(steps.flatMap((s) => (s.ownerUserId && !s.internalOnly ? [s.ownerUserId] : [])))];
+    const owners = ownerIds.length ? await tx.select({ id: users.id, name: users.displayName }).from(users).where(inArray(users.id, ownerIds)) : [];
+    const ownerNames = new Map(owners.flatMap((o) => (o.name ? [[o.id, o.name] as const] : [])));
     const facts = {
       language: workspace?.language ?? 'en',
       timeZone: workspace?.timezone ?? 'UTC',
@@ -402,7 +412,7 @@ export class ExternalMinutesService {
     const filled = minutesTemplate({
       ...facts,
       agreements: internal?.agreements ?? '',
-      nextSteps: (internal?.nextSteps ?? []).map((s) => ({ text: s.text, dueDate: s.dueDate ?? null })),
+      nextSteps: externalNextSteps({ nextSteps: steps }, ownerNames),
     });
     const head = minutesTemplate({ ...facts, agreements: '', nextSteps: [] });
     return {
@@ -461,6 +471,7 @@ export class ExternalMinutesService {
         prefill: meetingMinutes.externalPrefill,
         updatedAt: meetingMinutes.externalUpdatedAt,
         updatedByName: userNameOf(meetingMinutes.externalUpdatedByUserId),
+        nextSteps: meetingMinutes.nextSteps,
       })
       .from(meetingMinutes)
       .where(eq(meetingMinutes.meetingId, meetingId));
@@ -468,6 +479,7 @@ export class ExternalMinutesService {
     const [lastSend] = await this.loadSends(tx, meetingId, undefined, 1);
     const subject = row?.subject ?? '';
     const body = row?.body ?? '';
+    const internalStepsInText = (row?.nextSteps ?? []).flatMap((s) => (s.internalOnly && s.text.trim() && body.includes(s.text.trim()) ? [s.text.trim()] : []));
     let meetingChanged: ApiExternalMinutes['meetingChanged'] = null;
     if (row?.prefill) {
       const now = await this.template(tx, ctx, meetingId);
@@ -484,6 +496,7 @@ export class ExternalMinutesService {
       lastSend: lastSend ?? null,
       changedSinceLastSend: !!lastSend && (lastSend.subject !== subjectLine(subject) || lastSend.body !== body),
       meetingChanged,
+      internalStepsInText,
     };
   }
 

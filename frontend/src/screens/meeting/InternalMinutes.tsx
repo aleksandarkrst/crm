@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { RichText } from '../../components/RichText';
-import { RemoveButton } from '../../components/ui';
+import { RemoveButton, Switch } from '../../components/ui';
 import type { ApiInternalMinutes, ApiMeeting, ApiMeetingNextStep, InternalMinutesInput } from '../../lib/api';
 import { paths } from '../../lib/paths';
 import { memberName } from '../../store/selectors';
@@ -108,7 +108,7 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
     const input: InternalMinutesInput = {};
     if (parts.includes('summary')) input.summary = d.summary;
     if (parts.includes('agreements')) input.agreements = d.agreements;
-    if (parts.includes('nextSteps')) input.nextSteps = d.nextSteps.map(({ id, text, ownerUserId, dueDate }) => ({ id, text, ownerUserId, dueDate }));
+    if (parts.includes('nextSteps')) input.nextSteps = d.nextSteps.map(({ id, text, ownerUserId, dueDate, internalOnly }) => ({ id, text, ownerUserId, dueDate, internalOnly }));
     inFlight.current++;
     setState('saving');
     chain.current = chain.current.then(async () => {
@@ -156,7 +156,7 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
   const setStep = (id: string, patch: Partial<ApiMeetingNextStep>) => change('nextSteps', { nextSteps: draftRef.current.nextSteps.map((st) => (st.id === id ? { ...st, ...patch } : st)) });
   const addStep = () => {
     const id = crypto.randomUUID();
-    change('nextSteps', { nextSteps: [...draftRef.current.nextSteps, { id, text: '', ownerUserId: null, dueDate: null, taskId: null }] });
+    change('nextSteps', { nextSteps: [...draftRef.current.nextSteps, { id, text: '', ownerUserId: null, dueDate: null, internalOnly: false, taskId: null }] });
     setFocusStep(id);
   };
   const createTask = async (stepId: string) => {
@@ -232,6 +232,11 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
                         ))}
                       </select>
                       <input className="form-input" type="date" data-testid="step-due" aria-label="Due date" value={st.dueDate ?? ''} onChange={(e) => setStep(st.id, { dueDate: e.target.value || null })} />
+                      {/* Kept out of the minutes sent to the customer (CD-374). */}
+                      <label className="minutes-step-internal" data-testid="step-internal" data-on={st.internalOnly ? 'true' : 'false'}>
+                        <Switch on={st.internalOnly} label="Internal only" onClick={() => setStep(st.id, { internalOnly: !st.internalOnly })} />
+                        <span className="caps-muted">Internal only</span>
+                      </label>
                       <StepTask m={m} st={st} task={task} editable busy={busyStep === st.id} onCreate={() => void createTask(st.id)} />
                       <RemoveButton title="Remove the next step" onClick={() => change('nextSteps', { nextSteps: draftRef.current.nextSteps.filter((x) => x.id !== st.id) })} />
                     </div>
@@ -240,7 +245,7 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
                   <>
                     <span className="minutes-step-read">{st.text || <span className="meeting-muted">(empty)</span>}</span>
                     <span className="minutes-step-meta meeting-muted">
-                      {[st.ownerUserId ? memberName(s, st.ownerUserId) : null, st.dueDate ? 'due ' + dateText(st.dueDate) : null].filter(Boolean).join(' · ')}
+                      {[st.ownerUserId ? memberName(s, st.ownerUserId) : null, st.dueDate ? 'due ' + dateText(st.dueDate) : null, st.internalOnly ? 'internal only' : null].filter(Boolean).join(' · ')}
                       <StepTask m={m} st={st} task={task} editable={false} busy={false} onCreate={() => undefined} />
                     </span>
                   </>

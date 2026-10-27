@@ -979,6 +979,8 @@ export interface ApiMeetingNextStep {
   ownerUserId: string | null;
   /** yyyy-mm-dd */
   dueDate: string | null;
+  /** Left out of the external minutes (CD-374). */
+  internalOnly: boolean;
   taskId: string | null;
 }
 /** The internal minutes of a meeting (CD-132): empty strings and no steps before anyone wrote them. */
@@ -1037,6 +1039,8 @@ export interface ApiExternalMinutes {
   changedSinceLastSend: boolean;
   /** The meeting changed since the template filled in the text, which someone changed since (CD-222). */
   meetingChanged: 'time' | 'details' | null;
+  /** Next steps marked internal only whose text is still in the external text (CD-374). */
+  internalStepsInText: string[];
 }
 /** Preview and send: contacts (external participants with an email) and members to copy. */
 export interface MinutesEmailInput {

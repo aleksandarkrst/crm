@@ -29,7 +29,7 @@ const subjectLine = (s: string) => s.replace(/[\r\n]+/g, ' ').trim();
 /**
  * The external minutes (CD-133): a text for the customer, separate from the internal minutes.
  * The first time someone who may edit it opens it once the meeting is held, it is filled in from a template (the meeting, both sides, the
- * agreements and next steps without owners); after that only "Copy from internal minutes" copies
+ * agreements, and the next steps with owner and due date except those marked internal only, CD-374); after that only "Copy from internal minutes" copies
  * anything. It saves itself like the internal minutes. Once the meeting is held, the people who
  * may change it send it by email: tick the customer's people (those with an email), add members
  * as CC, preview the exact email, send. Below: who it was last sent to, each recipient's delivery
@@ -210,6 +210,8 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
   const changed = !!last && (subjectLine(draft.subject) !== last.subject || draft.body !== last.body);
   const stateText = state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved' : state === 'error' ? 'Not saved' : '';
   const chosen = request().toContactIds.length;
+  // Marked internal after the template filled the text in, or copied in by hand (CD-374); the draft may have dropped them already.
+  const internalLeft = stored.internalStepsInText.filter((t) => draft.body.includes(t));
   const sendBlocked = !canSend ? (allowed ? 'Mark the meeting as held to send the minutes.' : null) : !chosen ? 'Pick at least one recipient.' : !draft.subject.trim() || !draft.body.trim() ? 'Write a subject and the minutes first.' : null;
 
   return (
@@ -246,6 +248,15 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
         )}
       </label>
       <RichField label="Minutes for the customer" testId="external-body" value={draft.body} max={BODY_MAX} editable={editable} placeholder="What you want the customer to read" onChange={(v) => change('body', v)} onBlur={() => void flush()} />
+      {editable && internalLeft.length > 0 && (
+        <div className="minutes-note" data-testid="external-internal-steps">
+          {internalLeft.length === 1 ? 'This text still has a next step marked internal only' : 'This text still has next steps marked internal only'}: {internalLeft.map((t) => `“${t}”`).join(', ')}. Remove{' '}
+          {internalLeft.length === 1 ? 'it' : 'them'} before sending.
+        </div>
+      )}
+      <div className="hint-box" data-testid="external-steps-hint">
+        Steps marked internal only stay in Pultly.
+      </div>
       {editable && (
         <button type="button" className="btn-plain minutes-add" data-testid="external-copy-internal" disabled={copying} onClick={() => void copy()}>
           {copying ? 'Copying' : 'Copy from internal minutes'}

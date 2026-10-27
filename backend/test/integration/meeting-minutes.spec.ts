@@ -257,7 +257,7 @@ describe('the missingMinutes filter and history', () => {
       [null, 'First', ana.name],
     ]);
     expect(of('agreements')[0]).toMatchObject({ oldValue: null, newValue: 'Deal' });
-    expect(of('nextSteps')[0].newValue).toEqual([{ ...s, taskId: null }]);
+    expect(of('nextSteps')[0].newValue).toEqual([{ ...s, internalOnly: false, taskId: null }]);
   });
 
   it('records only real changes of the next steps (CD-222)', async () => {

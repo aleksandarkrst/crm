@@ -1,6 +1,6 @@
 import { escapeHtml } from '../../../infrastructure/mail/html';
 import { fromHeader, type MailMessage } from '../../../infrastructure/mail/mailer';
-import type { CustomerEmailLanguage, ExternalPrefill } from '../../../shared/database/schema';
+import type { CustomerEmailLanguage, ExternalPrefill, MeetingNextStep } from '../../../shared/database/schema';
 import { formatTimeRange, zonedParts } from '../../../shared/time/zoned-time';
 
 /**
@@ -10,7 +10,8 @@ import { formatTimeRange, zonedParts } from '../../../shared/time/zoned-time';
  *   it (spec 6.2, AC 7.3.4). Its fixed text (the "chrome") is in the workspace's customer email
  *   language (CD-208); the minutes are whatever the user wrote.
  * - `minutesTemplate`: the text the external minutes start from (spec 7.1) and "Copy from internal
- *   minutes": the meeting's facts, the agreements and the next steps without their owners.
+ *   minutes": the meeting's facts, the agreements and the next steps from `externalNextSteps`.
+ * - `externalNextSteps`: the next steps the customer may see (CD-374), also for the PDF minutes.
  * - `renderMinutesHtml` / `renderMinutesText`: the formatting subset (milestone 12 decision 8):
  *   `**bold**`, lines starting with "- " or "* " as bullets, `[label](https://…)` and bare http(s)
  *   links. Every piece of text is escaped; only these become markup.
@@ -226,6 +227,25 @@ export function meetingWhen(start: Date, end: Date, timeZone: string, language: 
   return `${dayLabel(s.date, 'sr')} ${s.time} – ${dayLabel(e.date, 'sr')} ${e.time}`;
 }
 
+/** A next step as the customer sees it: the owner's display name only (never an email address). */
+export interface ExternalNextStep {
+  text: string;
+  owner: string | null;
+  /** yyyy-mm-dd */
+  dueDate: string | null;
+}
+
+/**
+ * The next steps of the internal minutes that go to the customer (CD-374): those not marked
+ * internal only and with text, in their order. `ownerNames` maps a user id to the display name;
+ * an owner without one (or not in it) is left out rather than shown by email.
+ */
+export function externalNextSteps(minutes: { nextSteps: readonly MeetingNextStep[] }, ownerNames: ReadonlyMap<string, string>): ExternalNextStep[] {
+  return minutes.nextSteps
+    .filter((s) => !s.internalOnly && s.text.trim())
+    .map((s) => ({ text: s.text.trim(), owner: (s.ownerUserId && ownerNames.get(s.ownerUserId)?.trim()) || null, dueDate: s.dueDate ?? null }));
+}
+
 export interface MinutesTemplateInput {
   language: CustomerEmailLanguage;
   timeZone: string;
@@ -235,8 +255,8 @@ export interface MinutesTemplateInput {
   internalNames: string[];
   externalNames: string[];
   agreements: string;
-  /** The next steps' text and due date: the owners are internal and never part of the template. */
-  nextSteps: { text: string; dueDate: string | null }[];
+  /** The next steps the customer may see (`externalNextSteps`). */
+  nextSteps: ExternalNextStep[];
 }
 
 /** The default subject and body of the external minutes. */
@@ -256,7 +276,10 @@ export function minutesTemplate(input: MinutesTemplateInput): { subject: string;
   const steps = input.nextSteps.filter((s) => s.text.trim());
   if (steps.length) {
     lines.push('', `**${w.nextSteps}**`);
-    for (const s of steps) lines.push(`- ${s.text.trim()}${s.dueDate ? ` (${w.due(dayLabel(s.dueDate, input.language))})` : ''}`);
+    for (const s of steps) {
+      const about = [s.owner, s.dueDate ? w.due(dayLabel(s.dueDate, input.language)) : null].filter(Boolean).join(', ');
+      lines.push(`- ${s.text.trim()}${about ? ` (${about})` : ''}`);
+    }
   }
   return { subject: w.subject(m.title, date), body: lines.join('\n') };
 }

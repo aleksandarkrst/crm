@@ -811,6 +811,8 @@ export interface MeetingNextStep {
   ownerUserId: string | null;
   /** yyyy-mm-dd */
   dueDate: string | null;
+  /** Left out of the external minutes (CD-374). Missing on steps written before it: false. */
+  internalOnly?: boolean;
   taskId: string | null;
 }
 
