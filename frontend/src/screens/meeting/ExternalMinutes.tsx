@@ -250,8 +250,8 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
       <RichField label="Minutes for the customer" testId="external-body" value={draft.body} max={BODY_MAX} editable={editable} placeholder="What you want the customer to read" onChange={(v) => change('body', v)} onBlur={() => void flush()} />
       {editable && internalLeft.length > 0 && (
         <div className="minutes-note" data-testid="external-internal-steps">
-          {internalLeft.length === 1 ? 'This text still has a next step marked internal only' : 'This text still has next steps marked internal only'}: {internalLeft.map((t) => `“${t}”`).join(', ')}. Remove{' '}
-          {internalLeft.length === 1 ? 'it' : 'them'} before sending.
+          {internalLeft.length === 1 ? 'This text still has a next step marked internal only' : 'This text still has next steps marked internal only'}: {internalLeft.map((t) => `“${t}”`).join(', ')}. The customer will read{' '}
+          {internalLeft.length === 1 ? 'it' : 'them'} unless you take {internalLeft.length === 1 ? 'it' : 'them'} out.
         </div>
       )}
       <div className="hint-box" data-testid="external-steps-hint">

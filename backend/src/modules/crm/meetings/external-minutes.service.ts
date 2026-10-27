@@ -398,8 +398,15 @@ export class ExternalMinutesService {
     const [internal] = await tx.select({ agreements: meetingMinutes.agreements, nextSteps: meetingMinutes.nextSteps }).from(meetingMinutes).where(eq(meetingMinutes.meetingId, meetingId));
     const steps = internal?.nextSteps ?? [];
     // The owners' display names only: the customer never gets a member's email address (CD-374).
+    // Members of this workspace only: an owner who left since is listed without a name.
     const ownerIds = [...new Set(steps.flatMap((s) => (s.ownerUserId && !s.internalOnly ? [s.ownerUserId] : [])))];
-    const owners = ownerIds.length ? await tx.select({ id: users.id, name: users.displayName }).from(users).where(inArray(users.id, ownerIds)) : [];
+    const owners = ownerIds.length
+      ? await tx
+          .select({ id: users.id, name: users.displayName })
+          .from(memberships)
+          .innerJoin(users, eq(users.id, memberships.userId))
+          .where(and(eq(memberships.tenantId, ctx.tenantId), inArray(memberships.userId, ownerIds)))
+      : [];
     const ownerNames = new Map(owners.flatMap((o) => (o.name ? [[o.id, o.name] as const] : [])));
     const facts = {
       language: workspace?.language ?? 'en',

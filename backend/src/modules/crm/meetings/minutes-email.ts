@@ -11,7 +11,7 @@ import { formatTimeRange, zonedParts } from '../../../shared/time/zoned-time';
  *   language (CD-208); the minutes are whatever the user wrote.
  * - `minutesTemplate`: the text the external minutes start from (spec 7.1) and "Copy from internal
  *   minutes": the meeting's facts, the agreements and the next steps from `externalNextSteps`.
- * - `externalNextSteps`: the next steps the customer may see (CD-374), also for the PDF minutes.
+ * - `externalNextSteps`: the next steps the customer may see (CD-374); the PDF minutes (CD-378) are to reuse it.
  * - `renderMinutesHtml` / `renderMinutesText`: the formatting subset (milestone 12 decision 8):
  *   `**bold**`, lines starting with "- " or "* " as bullets, `[label](https://…)` and bare http(s)
  *   links. Every piece of text is escaped; only these become markup.
@@ -238,12 +238,18 @@ export interface ExternalNextStep {
 /**
  * The next steps of the internal minutes that go to the customer (CD-374): those not marked
  * internal only and with text, in their order. `ownerNames` maps a user id to the display name;
- * an owner without one (or not in it) is left out rather than shown by email.
+ * an owner without a usable one (missing, or an email address) is left out rather than shown by email.
  */
 export function externalNextSteps(minutes: { nextSteps: readonly MeetingNextStep[] }, ownerNames: ReadonlyMap<string, string>): ExternalNextStep[] {
   return minutes.nextSteps
     .filter((s) => !s.internalOnly && s.text.trim())
-    .map((s) => ({ text: s.text.trim(), owner: (s.ownerUserId && ownerNames.get(s.ownerUserId)?.trim()) || null, dueDate: s.dueDate ?? null }));
+    .map((s) => ({ text: s.text.trim(), owner: ownerLabel(s.ownerUserId ? ownerNames.get(s.ownerUserId) : undefined), dueDate: s.dueDate ?? null }));
+}
+
+/** A display name fit for the customer: none when it is blank or an email address (sign-ups get their email as their name until they set one). */
+function ownerLabel(name: string | undefined): string | null {
+  const v = name?.trim();
+  return v && !v.includes('@') ? v : null;
 }
 
 export interface MinutesTemplateInput {

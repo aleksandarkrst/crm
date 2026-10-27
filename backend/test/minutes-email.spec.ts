@@ -170,6 +170,7 @@ describe('externalNextSteps (CD-374)', () => {
   const names = new Map([
     ['u-ana', 'Ana Petrović'],
     ['u-bo', '  '],
+    ['u-cy', 'cy@kestrel.example.com'],
   ]);
 
   it('leaves out the steps marked internal only and those without text, in their order', () => {
@@ -181,10 +182,12 @@ describe('externalNextSteps (CD-374)', () => {
   });
 
   it('shows an owner by display name only: no name (or an unknown user) leaves the owner out, never an email', () => {
-    const steps = [step('a', { ownerUserId: 'u-bo' }), step('b', { ownerUserId: 'u-unknown' })];
+    // Blank, not a member (not in the map), or a name that is the email address it was signed up with.
+    const steps = [step('a', { ownerUserId: 'u-bo' }), step('b', { ownerUserId: 'u-unknown' }), step('c', { ownerUserId: 'u-cy' })];
     expect(externalNextSteps({ nextSteps: steps }, names)).toEqual([
       { text: 'Step a', owner: null, dueDate: null },
       { text: 'Step b', owner: null, dueDate: null },
+      { text: 'Step c', owner: null, dueDate: null },
     ]);
   });
 
