@@ -377,6 +377,9 @@ export class ExternalMinutesService {
     const [workspace] = await tx.select({ name: tenants.name, language: tenants.customerEmailLanguage }).from(tenants).where(eq(tenants.id, ctx.tenantId));
     const language = workspace?.language ?? 'en';
     const body = withNextSteps(input.body, await this.externalSteps(tx, ctx, meetingId), language);
+    // The send keeps the whole body, next steps included, within the same limit as the text (CD-374).
+    if (body.length > EXTERNAL_BODY_MAX)
+      throw new BadRequestException(`The minutes and the next steps together are too long (${body.length.toLocaleString('en-US')} of ${EXTERNAL_BODY_MAX.toLocaleString('en-US')} characters). Shorten the text or the next steps.`);
 
     const email = minutesEmail({
       language,

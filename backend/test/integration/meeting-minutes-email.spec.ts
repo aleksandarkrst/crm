@@ -178,6 +178,15 @@ describe('the external text', () => {
     const later = await ok('POST', `/crm/meetings/${m.id}/minutes/preview`, { ...as(ana), body: request({ subject, body: 'We met.' }) }, 200);
     expect(later.text).toContain('Send the revised offer');
     expect(later.text).not.toContain('Book the follow-up');
+
+    // The text and the steps together must fit the send's limit: a clear 400, nothing sent.
+    const long = 'x'.repeat(9_990);
+    for (const path of ['preview', 'send']) {
+      const res = await call('POST', `/crm/meetings/${m.id}/minutes/${path}`, { ...as(ana), body: request({ subject, body: long }) });
+      expect(res.status, path).toBe(400);
+      expect(res.body.message).toMatch(/^The minutes and the next steps together are too long \(10,\d{3} of 10,000 characters\)/);
+    }
+    expect(await sends(m.id)).toEqual([]);
     await ok('PUT', `/crm/meetings/${m.id}/minutes/internal`, { ...as(ana), body: { nextSteps: [] } });
     const none = await ok('POST', `/crm/meetings/${m.id}/minutes/preview`, { ...as(ana), body: request({ subject, body: 'We met.' }) }, 200);
     expect(none.html).not.toContain('Next steps');

@@ -2955,7 +2955,9 @@ Service `meetings/external-minutes.service.ts`, email builder `meetings/minutes-
   Petrović, by 2 Nov 2026)"), under "Next steps" in the customer email language; no section when
   none is left. Owners are named only while they are members, and a display name that is an email
   address is left out, so no member's address reaches the customer. The send stores that full
-  body, so its copy and Retry stay exact. `GET external` returns them as `nextSteps` (`{ text,
+  body, so its copy and Retry stay exact; text and steps together must fit the send's 10,000
+  characters (`meeting_minutes_sends_length_ck`), else preview and send answer 400 ("The minutes
+  and the next steps together are too long"). `GET external` returns them as `nextSteps` (`{ text,
   owner, dueDate }`, from `externalNextSteps`, which the PDF minutes of CD-378 are to reuse) and
   `nextStepsText` (the section); "Changed since last send" compares the body with them.
 - **Rules**: writing, previewing, sending, retrying and "Update from meeting" take the people who may change the meeting

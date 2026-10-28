@@ -25,7 +25,6 @@ export const sentLabel = (at: string, tz: string) => {
   return `${dateLabel(z.date, { year: true })}, ${z.time}`;
 };
 const STATUS_TEXT = { queued: 'Queued', sent: 'Sent', failed: 'Failed' } as const;
-const subjectLine = (s: string) => s.replace(/[\r\n]+/g, ' ').trim();
 
 /**
  * The external minutes (CD-133): a text for the customer, separate from the internal minutes.
@@ -209,9 +208,8 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
   const reload = () => void actions.current.loadExternal(m.id).then(onStored, () => undefined);
 
   const last = stored.lastSend;
-  // What Send sends: the text, then the next steps as they are now (CD-374).
-  const sentBody = !stored.nextStepsText ? draft.body : draft.body.trim() ? `${draft.body.trimEnd()}\n\n${stored.nextStepsText}` : stored.nextStepsText;
-  const changed = !!last && (subjectLine(draft.subject) !== last.subject || sentBody !== last.body);
+  // The server compares the saved text with the last send, next steps included (CD-374); an edit not saved yet counts as a change.
+  const changed = !!last && (draft.subject === stored.subject && draft.body === stored.body ? stored.changedSinceLastSend : true);
   const stateText = state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved' : state === 'error' ? 'Not saved' : '';
   const chosen = request().toContactIds.length;
   const sendBlocked = !canSend ? (allowed ? 'Mark the meeting as held to send the minutes.' : null) : !chosen ? 'Pick at least one recipient.' : !draft.subject.trim() || !draft.body.trim() ? 'Write a subject and the minutes first.' : null;

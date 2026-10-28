@@ -174,8 +174,7 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
 
   const members = s.team.filter((t) => t.status === 'Active');
   // While editable, a last column for the save-as-task check (with an opportunity) and the remove button.
-  const tail = editable;
-  const cols = ['minmax(160px, 2.4fr)', 'minmax(120px, 1.1fr)', '150px', ...(tail ? ['auto'] : [])].join(' ');
+  const cols = ['minmax(160px, 2.4fr)', 'minmax(120px, 1.1fr)', '150px', ...(editable ? ['auto'] : [])].join(' ');
   const stateText = state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved' : state === 'error' ? 'Not saved' : '';
 
   return (
@@ -207,7 +206,7 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
         {draft.nextSteps.length > 0 && (
           <div className="card minutes-steps" data-testid="minutes-steps">
             <div className="table-head minutes-steps-head" style={{ gridTemplateColumns: cols }}>
-              {['Next step', 'Owner', 'Due date', ...(tail ? [''] : [])].map((h, i) => (
+              {['Next step', 'Owner', 'Due date', ...(editable ? [''] : [])].map((h, i) => (
                 <span key={i} className="th">
                   {h}
                 </span>
