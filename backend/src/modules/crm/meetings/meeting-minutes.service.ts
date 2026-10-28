@@ -126,7 +126,7 @@ export class MeetingMinutesService {
   }
 
   /**
-   * "Create task" on a next step: a task on the meeting's deal, in its current stage, as the "New
+   * The ✓ on a next step (CD-374; "Create task" before): a task on the meeting's deal, in its current stage, as the "New
    * task" dialog makes them (no stage gate, channel Meeting, "Task added" on the timeline), with
    * the step's text, owner (or the caller) and due date. The step then links to it. 409 for an old
    * meeting without a deal, or when the step already has a task that still exists.

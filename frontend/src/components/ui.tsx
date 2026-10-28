@@ -11,6 +11,14 @@ export function XIcon({ size = 15, stroke = 2 }: { size?: number; stroke?: numbe
   );
 }
 
+export function CheckIcon({ size = 15, stroke = 2 }: { size?: number; stroke?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4.5 12.5l4.5 4.5L19.5 6" />
+    </svg>
+  );
+}
+
 export function Chevron() {
   return (
     <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">

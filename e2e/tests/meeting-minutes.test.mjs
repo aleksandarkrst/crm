@@ -1,5 +1,5 @@
 // Internal minutes of a meeting (CD-132): writing the summary and agreements (saved on their own),
-// a next step with an owner and a due date, "Create task" (the task shows on Today), and a member
+// a next step with an owner and a due date, the ✓ that saves it as a task (it shows on Today), and a member
 // who doesn't take part seeing the minutes read-only.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
@@ -93,9 +93,9 @@ describe('internal minutes', () => {
     assert.equal(steps[0].taskId, null);
   });
 
-  step('"Create task" makes a task on the opportunity, linked from the step, and it shows on Today', async () => {
+  step('the ✓ makes a task on the opportunity without leaving the meeting, then goes away; the task shows on Today', async () => {
     await click(mia, '[data-testid=step-create-task]');
-    await mia.waitForSelector('[data-testid=step-task-link]', { timeout: 10_000 });
+    await mia.waitForFunction(() => !document.querySelector('[data-testid=step-create-task]'), { timeout: 10_000 });
     const { nextSteps } = await minutes();
     assert.ok(nextSteps[0].taskId, 'the step links to its task');
     const task = (await api(mia, `/crm/deal-tasks?dealIds=${deal.id}`)).find((t) => t.id === nextSteps[0].taskId);
@@ -104,10 +104,8 @@ describe('internal minutes', () => {
     assert.equal(task.label, STEP);
     assert.equal(task.assigneeUserId, miaId);
     assert.equal(task.dueDate, today());
-    assert.equal(await mia.$('[data-testid=step-create-task]'), null, 'once only');
 
-    await click(mia, '[data-testid=step-task-link]');
-    await mia.waitForFunction((id) => location.pathname === `/deals/${id}`, {}, deal.id);
+    assert.match(mia.url(), /\/meetings\//, 'still on the meeting');
     await mia.goto(`${BASE_URL}/today`, { waitUntil: 'networkidle0' });
     const group = await mia.waitForSelector('[data-group="Today"]');
     await mia.waitForFunction((step) => document.querySelector('[data-group="Today"]')?.innerText.includes(step), { timeout: 10_000 }, STEP);
@@ -124,7 +122,6 @@ describe('internal minutes', () => {
     const stepText = await bo.$eval('[data-testid=minutes-step]', (el) => el.innerText);
     assert.match(stepText, /Send the pilot contract/);
     assert.match(stepText, /Mia Minutes/);
-    assert.ok(await bo.$('[data-testid=step-task-link]'), 'the task link is shown');
     assert.match(await bo.$eval('[data-testid=internal-minutes]', (el) => el.innerText), /Only the organizer, the internal participants, owners and admins can write the minutes/);
   });
 });

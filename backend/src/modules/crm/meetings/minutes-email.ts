@@ -1,6 +1,6 @@
 import { escapeHtml } from '../../../infrastructure/mail/html';
 import { fromHeader, type MailMessage } from '../../../infrastructure/mail/mailer';
-import type { CustomerEmailLanguage, ExternalPrefill } from '../../../shared/database/schema';
+import type { CustomerEmailLanguage, ExternalPrefill, MeetingNextStep } from '../../../shared/database/schema';
 import { formatTimeRange, zonedParts } from '../../../shared/time/zoned-time';
 
 /**
@@ -10,7 +10,9 @@ import { formatTimeRange, zonedParts } from '../../../shared/time/zoned-time';
  *   it (spec 6.2, AC 7.3.4). Its fixed text (the "chrome") is in the workspace's customer email
  *   language (CD-208); the minutes are whatever the user wrote.
  * - `minutesTemplate`: the text the external minutes start from (spec 7.1) and "Copy from internal
- *   minutes": the meeting's facts, the agreements and the next steps without their owners.
+ *   minutes": the meeting's facts and the agreements.
+ * - `externalNextSteps` / `withNextSteps`: the next steps the customer may see (CD-374), added
+ *   after the written text when the email is made; the PDF minutes (CD-378) are to reuse them.
  * - `renderMinutesHtml` / `renderMinutesText`: the formatting subset (milestone 12 decision 8):
  *   `**bold**`, lines starting with "- " or "* " as bullets, `[label](https://…)` and bare http(s)
  *   links. Every piece of text is escaped; only these become markup.
@@ -226,6 +228,31 @@ export function meetingWhen(start: Date, end: Date, timeZone: string, language: 
   return `${dayLabel(s.date, 'sr')} ${s.time} – ${dayLabel(e.date, 'sr')} ${e.time}`;
 }
 
+/** A next step as the customer sees it: the owner's display name only (never an email address). */
+export interface ExternalNextStep {
+  text: string;
+  owner: string | null;
+  /** yyyy-mm-dd */
+  dueDate: string | null;
+}
+
+/**
+ * The next steps of the internal minutes as the customer sees them (CD-374): those with text,
+ * in their order. `ownerNames` maps a user id to the display name;
+ * an owner without a usable one (missing, or an email address) is left out rather than shown by email.
+ */
+export function externalNextSteps(minutes: { nextSteps: readonly MeetingNextStep[] }, ownerNames: ReadonlyMap<string, string>): ExternalNextStep[] {
+  return minutes.nextSteps
+    .filter((s) => s.text.trim())
+    .map((s) => ({ text: s.text.trim(), owner: ownerLabel(s.ownerUserId ? ownerNames.get(s.ownerUserId) : undefined), dueDate: s.dueDate ?? null }));
+}
+
+/** A display name fit for the customer: none when it is blank or an email address (sign-ups get their email as their name until they set one). */
+function ownerLabel(name: string | undefined): string | null {
+  const v = name?.trim();
+  return v && !v.includes('@') ? v : null;
+}
+
 export interface MinutesTemplateInput {
   language: CustomerEmailLanguage;
   timeZone: string;
@@ -235,8 +262,6 @@ export interface MinutesTemplateInput {
   internalNames: string[];
   externalNames: string[];
   agreements: string;
-  /** The next steps' text and due date: the owners are internal and never part of the template. */
-  nextSteps: { text: string; dueDate: string | null }[];
 }
 
 /** The default subject and body of the external minutes. */
@@ -253,12 +278,33 @@ export function minutesTemplate(input: MinutesTemplateInput): { subject: string;
   if (sides.length) lines.push(`${w.participants}:`, ...sides);
   const agreements = input.agreements.trim();
   if (agreements) lines.push('', `**${w.agreements}**`, agreements);
-  const steps = input.nextSteps.filter((s) => s.text.trim());
-  if (steps.length) {
-    lines.push('', `**${w.nextSteps}**`);
-    for (const s of steps) lines.push(`- ${s.text.trim()}${s.dueDate ? ` (${w.due(dayLabel(s.dueDate, input.language))})` : ''}`);
-  }
   return { subject: w.subject(m.title, date), body: lines.join('\n') };
+}
+
+/**
+ * The Next steps section of the external minutes (CD-374), in the body's Markdown subset: one line
+ * per step, with the owner and due date that exist. Empty when no step goes to the customer.
+ */
+export function nextStepsSection(steps: readonly ExternalNextStep[], language: CustomerEmailLanguage): string {
+  const w = WORDS[language] ?? WORDS.en;
+  const lines = steps
+    .filter((s) => s.text.trim())
+    .map((s) => {
+      const about = [s.owner, s.dueDate ? w.due(dayLabel(s.dueDate, language)) : null].filter(Boolean).join(', ');
+      return `- ${s.text.trim()}${about ? ` (${about})` : ''}`;
+    });
+  return lines.length ? [`**${w.nextSteps}**`, ...lines].join('\n') : '';
+}
+
+/**
+ * The body as it is sent: what was written, then the next steps as the internal minutes have them
+ * at that moment. They are not part of the editable text, so a step written, or marked internal
+ * only, after the text was filled in is still right in the email.
+ */
+export function withNextSteps(body: string, steps: readonly ExternalNextStep[], language: CustomerEmailLanguage): string {
+  const section = nextStepsSection(steps, language);
+  if (!section) return body;
+  return body.trim() ? `${body.trimEnd()}\n\n${section}` : section;
 }
 
 /**

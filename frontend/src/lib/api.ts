@@ -1037,6 +1037,10 @@ export interface ApiExternalMinutes {
   changedSinceLastSend: boolean;
   /** The meeting changed since the template filled in the text, which someone changed since (CD-222). */
   meetingChanged: 'time' | 'details' | null;
+  /** The next steps the email adds after the text (CD-374), as they are now. */
+  nextSteps: { text: string; owner: string | null; dueDate: string | null }[];
+  /** Those steps as the email's section, in the customer email language; empty when none. */
+  nextStepsText: string;
 }
 /** Preview and send: contacts (external participants with an email) and members to copy. */
 export interface MinutesEmailInput {

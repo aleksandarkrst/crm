@@ -93,9 +93,10 @@ describe('the external text', () => {
     for (const name of ['Jovan Jovanović', 'Mara Marić', 'No Mail', 'Bounce Person']) expect(customers).toContain(name);
     expect(side('- Minutes email ')).toContain(`${owner.name}, ${ana.name}`);
     expect(first.body).toContain('**Agreements**\nPilot in Belgrade');
-    // Next steps without their (internal) owners.
-    expect(first.body).toContain('**Next steps**\n- Send the offer');
-    expect(first.body).not.toContain(bo.name);
+    // The next steps are not part of the text: the email adds them as they are (CD-374), by the owner's name, never an email address.
+    expect(first.body).not.toContain('Next steps');
+    expect(first.nextSteps).toEqual([{ text: 'Send the offer', owner: bo.name, dueDate: null }]);
+    expect(JSON.stringify(first)).not.toContain(bo.email);
     expect(first).toMatchObject({ lastSend: null, changedSinceLastSend: false, language: 'en' });
 
     await ok('PUT', `/crm/meetings/${m.id}/minutes/internal`, { ...as(ana), body: { agreements: 'Pilot in Novi Sad' } });
@@ -146,6 +147,49 @@ describe('the external text', () => {
     expect(updated.body).not.toBe(edited.body);
     expect(updated.body.endsWith('\nThank you for your time!')).toBe(true);
     expect((await ok('GET', ext(m.id), as(owner))).body).toBe(updated.body);
+  });
+
+  it('adds the next steps to the email, as they are when it is made (CD-374)', async () => {
+    const m = await meeting('Next steps');
+    const step = (text: string, over: Record<string, unknown> = {}) => ({ id: crypto.randomUUID(), text, ownerUserId: null, dueDate: null, ...over });
+    const steps = [step('Send the offer', { ownerUserId: ana.userId, dueDate: '2026-11-02' }), step('Book the follow-up', { ownerUserId: owner.userId, dueDate: '2026-11-09' })];
+    // The text is filled in before the steps are written: they still reach the email.
+    const first = await ok('GET', ext(m.id), as(ana));
+    expect(first).toMatchObject({ nextSteps: [], nextStepsText: '' });
+    await ok('PUT', `/crm/meetings/${m.id}/minutes/internal`, { ...as(ana), body: { nextSteps: steps } });
+
+    const now = await ok('GET', ext(m.id), as(ana));
+    expect(now.body).toBe(first.body);
+    expect(now.nextSteps).toEqual([
+      { text: 'Send the offer', owner: ana.name, dueDate: '2026-11-02' },
+      { text: 'Book the follow-up', owner: owner.name, dueDate: '2026-11-09' },
+    ]);
+    expect(now.nextStepsText.split(String.fromCharCode(10))).toEqual(['**Next steps**', `- Send the offer (${ana.name}, by 2 Nov 2026)`, `- Book the follow-up (${owner.name}, by 9 Nov 2026)`]);
+    const subject = `Steps ${RUN}`;
+    const preview = await ok('POST', `/crm/meetings/${m.id}/minutes/preview`, { ...as(ana), body: request({ subject, body: 'We met.' }) }, 200);
+    expect(preview.text).toContain(['We met.', '', 'Next steps', `• Send the offer (${ana.name}, by 2 Nov 2026)`, `• Book the follow-up (${owner.name}, by 9 Nov 2026)`].join('\n'));
+    expect(preview.html).toContain('<strong>Next steps</strong>');
+    // Owners by name only (the sender's own address is in the footer, as the reply address).
+    const section = preview.text.slice(preview.text.indexOf('Next steps'), preview.text.indexOf('\n--'));
+    for (const s of [owner, ana, bo]) expect(section).not.toContain(s.email);
+
+    // A step changed later is in the next email as it is then; none left, no section.
+    await ok('PUT', `/crm/meetings/${m.id}/minutes/internal`, { ...as(ana), body: { nextSteps: [{ ...steps[0], text: 'Send the revised offer' }] } });
+    const later = await ok('POST', `/crm/meetings/${m.id}/minutes/preview`, { ...as(ana), body: request({ subject, body: 'We met.' }) }, 200);
+    expect(later.text).toContain('Send the revised offer');
+    expect(later.text).not.toContain('Book the follow-up');
+
+    // The text and the steps together must fit the send's limit: a clear 400, nothing sent.
+    const long = 'x'.repeat(9_990);
+    for (const path of ['preview', 'send']) {
+      const res = await call('POST', `/crm/meetings/${m.id}/minutes/${path}`, { ...as(ana), body: request({ subject, body: long }) });
+      expect(res.status, path).toBe(400);
+      expect(res.body.message).toMatch(/^The minutes and the next steps together are too long \(10,\d{3} of 10,000 characters\)/);
+    }
+    expect(await sends(m.id)).toEqual([]);
+    await ok('PUT', `/crm/meetings/${m.id}/minutes/internal`, { ...as(ana), body: { nextSteps: [] } });
+    const none = await ok('POST', `/crm/meetings/${m.id}/minutes/preview`, { ...as(ana), body: request({ subject, body: 'We met.' }) }, 200);
+    expect(none.html).not.toContain('Next steps');
   });
 
   it('is saved by the people who may change the meeting, with conflicts caught', async () => {
@@ -296,7 +340,8 @@ describe('the internal minutes never reach the customer (spec 6.2, AC 7.3.4)', (
     const text = await ok('GET', ext(m.id), as(owner));
     await ok('PUT', `/crm/meetings/${m.id}/minutes/internal`, {
       ...as(ana),
-      body: { summary: `Summary ${MARKER}`, agreements: `Agreements ${MARKER}`, nextSteps: [{ id: crypto.randomUUID(), text: `Step ${MARKER}`, ownerUserId: null, dueDate: null }] },
+      // The next steps do reach the customer (CD-374), so the marker is only in the summary and agreements.
+      body: { summary: `Summary ${MARKER}`, agreements: `Agreements ${MARKER}` },
     });
     const subject = `Marker check ${RUN}`;
     const preview = await ok('POST', `/crm/meetings/${m.id}/minutes/preview`, { ...as(owner), body: request({ subject, body: text.body, ccUserIds: [ana.userId] }) }, 200);

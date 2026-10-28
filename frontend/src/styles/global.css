@@ -591,7 +591,7 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .minutes-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .minutes-state { font-size: 12px; color: var(--text-2); min-height: 16px; }
 .minutes-state.is-error { color: var(--danger); font-weight: 600; }
-.minutes-note { font-size: 12.5px; color: var(--text-2); background: var(--bg-soft); border-radius: 8px; padding: 9px 12px; }
+.minutes-note { font-size: 12.5px; color: var(--text-2); background: var(--bg-soft); border-radius: 8px; padding: 9px 12px; overflow-wrap: anywhere; }
 .minutes-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .minutes-field-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 26px; }
 .minutes-toolbar { display: inline-flex; gap: 4px; }
@@ -601,14 +601,25 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .minutes-preview { font-size: 13.5px; line-height: 1.55; border: 1px solid transparent; border-radius: 7px; padding: 8px 10px; margin: 0 -10px; overflow-wrap: anywhere; }
 .minutes-preview.is-editable { cursor: text; }
 .minutes-preview.is-editable:hover { border-color: var(--border); background: var(--bg-soft); }
-.minutes-steps { display: flex; flex-direction: column; gap: 10px; }
-.minutes-step { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-top: 1px solid var(--divider); min-width: 0; }
-.minutes-step:first-child { border-top: 0; padding-top: 0; }
-.minutes-step-text { width: 100%; box-sizing: border-box; }
-.minutes-step-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.minutes-step-meta select.form-input, .minutes-step-meta input.form-input { padding: 7px 9px; flex: 1 1 140px; min-width: 0; max-width: 220px; }
+.minutes-steps > .table-row { padding: 9px 16px; }
+.minutes-steps > .table-row:last-child { border-bottom: 0; }
+.minutes-step > * { min-width: 0; }
+.minutes-step select.form-input, .minutes-step input.form-input { width: 100%; box-sizing: border-box; padding: 7px 9px; }
 .minutes-step-read { font-size: 13.5px; overflow-wrap: anywhere; }
-.minutes-task-link { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.minutes-step-cell { display: inline-flex; align-items: center; }
+.minutes-step-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.icon-btn.icon-btn-ok { color: var(--green-500); }
+.icon-btn.icon-btn-ok:hover { background: var(--brand-tint); color: var(--green-500); }
+.icon-btn.icon-btn-ok:disabled { background: transparent; color: var(--green-500); opacity: 0.35; cursor: not-allowed; }
+/* Stacked well before the columns would need to be squeezed (the meeting page sits next to the sidebar). */
+@media (max-width: 1000px) {
+  .minutes-steps > .table-head { display: none; }
+  .minutes-steps > .table-row.minutes-step { display: flex !important; flex-wrap: wrap; align-items: center; gap: 8px 14px; min-width: 0; }
+  .minutes-step > .minutes-step-text, .minutes-step > .minutes-step-read { flex: 1 1 100%; }
+  .minutes-step > select.form-input, .minutes-step > input[type=date] { flex: 1 1 140px; width: auto; }
+  .minutes-step-actions { margin-left: auto; }
+  .minutes-step-cell::before { content: attr(data-label); margin-right: 6px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-2); }
+}
 .minutes-add { align-self: flex-start; }
 
 /* ---- meeting participants (CD-131) ---- */

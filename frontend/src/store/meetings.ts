@@ -478,13 +478,13 @@ export function meetingActions(ctx: Ctx) {
       return { conflict: await loadMinutes(id).catch(() => null) };
     }
   };
-  /** "Create task" on a next step: a task on the meeting's deal. null (after saying why) when refused. */
+  /** "Save task" on a next step: a task on the meeting's deal. null (after saying why) when refused. */
   const createStepTask = async (id: string, stepId: string) => {
     try {
       const res = await crmApi.meetings.stepTask(id, stepId);
       minutesLoaded(id, res.minutes);
       ctx.tasksChanged(res.task.dealId);
-      flash('Task created on the opportunity');
+      flash('Task saved on the opportunity and on Today');
       return res;
     } catch (err) {
       flash('Task not created: ' + ctx.errText(err), 7000);

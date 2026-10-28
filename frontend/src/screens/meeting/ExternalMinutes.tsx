@@ -5,6 +5,7 @@ import { hasEmail } from '../../store/meetings';
 import { useStore } from '../../store/store';
 import { dateLabel, instantToZoned } from '../../store/time';
 import { RichField } from './InternalMinutes';
+import { RichText } from '../../components/RichText';
 
 /** Limits of the external minutes (spec 7.1; the API checks them too). */
 const BODY_MAX = 10_000;
@@ -24,13 +25,13 @@ export const sentLabel = (at: string, tz: string) => {
   return `${dateLabel(z.date, { year: true })}, ${z.time}`;
 };
 const STATUS_TEXT = { queued: 'Queued', sent: 'Sent', failed: 'Failed' } as const;
-const subjectLine = (s: string) => s.replace(/[\r\n]+/g, ' ').trim();
 
 /**
  * The external minutes (CD-133): a text for the customer, separate from the internal minutes.
  * The first time someone who may edit it opens it once the meeting is held, it is filled in from a template (the meeting, both sides, the
- * agreements and next steps without owners); after that only "Copy from internal minutes" copies
- * anything. It saves itself like the internal minutes. Once the meeting is held, the people who
+ * agreements); after that only "Copy from internal minutes" copies anything. The internal minutes'
+ * next steps, with owner and due date, are shown under the text and added after it when it is
+ * sent, as they are then (CD-374). It saves itself like the internal minutes. Once the meeting is held, the people who
  * may change it send it by email: tick the customer's people (those with an email), add members
  * as CC, preview the exact email, send. Below: who it was last sent to, each recipient's delivery
  * and Retry for the failed ones, and "Changed since last send".
@@ -207,7 +208,8 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
   const reload = () => void actions.current.loadExternal(m.id).then(onStored, () => undefined);
 
   const last = stored.lastSend;
-  const changed = !!last && (subjectLine(draft.subject) !== last.subject || draft.body !== last.body);
+  // The server compares the saved text with the last send, next steps included (CD-374); an edit not saved yet counts as a change.
+  const changed = !!last && (draft.subject === stored.subject && draft.body === stored.body ? stored.changedSinceLastSend : true);
   const stateText = state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved' : state === 'error' ? 'Not saved' : '';
   const chosen = request().toContactIds.length;
   const sendBlocked = !canSend ? (allowed ? 'Mark the meeting as held to send the minutes.' : null) : !chosen ? 'Pick at least one recipient.' : !draft.subject.trim() || !draft.body.trim() ? 'Write a subject and the minutes first.' : null;
@@ -215,7 +217,7 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
   return (
     <div className="minutes" data-testid="external-minutes" data-meeting={m.id} data-editable={editable ? 'true' : 'false'}>
       <div className="minutes-head">
-        <span className="meeting-muted">Written for the customer and sent by email. Nothing from the internal minutes is included unless you copy it in.</span>
+        <span className="meeting-muted">Written for the customer and sent by email. From the internal minutes only the next steps below are included, unless you copy more in.</span>
         <span className={'minutes-state' + (state === 'error' ? ' is-error' : '')} data-testid="external-save-state" aria-live="polite">
           {stateText}
         </span>
@@ -246,6 +248,20 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
         )}
       </label>
       <RichField label="Minutes for the customer" testId="external-body" value={draft.body} max={BODY_MAX} editable={editable} placeholder="What you want the customer to read" onChange={(v) => change('body', v)} onBlur={() => void flush()} />
+      <div className="minutes-field" data-testid="external-next-steps">
+        <span className="form-label">Next steps</span>
+        {stored.nextStepsText ? (
+          <div className="minutes-preview" data-testid="external-next-steps-view">
+            {/* The section without its heading (the label above says it). */}
+            <RichText text={stored.nextStepsText.slice(stored.nextStepsText.indexOf('\n') + 1)} />
+          </div>
+        ) : (
+          <div className="meeting-muted">No next steps for the customer.</div>
+        )}
+        <div className="hint-box" data-testid="external-steps-hint">
+          Added after the text when the minutes are sent, as they are in the internal minutes then.
+        </div>
+      </div>
       {editable && (
         <button type="button" className="btn-plain minutes-add" data-testid="external-copy-internal" disabled={copying} onClick={() => void copy()}>
           {copying ? 'Copying' : 'Copy from internal minutes'}

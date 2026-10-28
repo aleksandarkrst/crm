@@ -2885,25 +2885,28 @@ hints are in `drizzle/0034_meeting_minutes_rls.sql`.
   equal to what is stored (next steps as their canonical JSON) and a save that changes nothing
   keeps the version; the trigger compares next steps by id, trimmed text, owner and due date
   (`crm_minutes_steps`, `drizzle/0044_minutes_history_real_changes.sql`), so linking a task to a
-  step ("Create task") is no history row. The History tab shows the steps' text and due dates.
-- **Past due dates** (CD-222): "Create task" on a step whose due date is before today (workspace
-  zone) asks "This date is in the past. Create anyway?" first; the API accepts it either way.
+  step (its ✓) is no history row. The History tab shows the steps' text and due dates.
+- **Past due dates** (CD-222): the ✓ of a step whose due date is before today (workspace
+  zone) asks "This date is in the past" first (the app's own dialog); the API accepts it either way.
 - **Live updates**: minutes rows send `crm_changes` hints of type `meeting` with the meeting's id;
   the browser re-reads the meeting, and an open minutes tab reads the minutes again when the
   meeting's `minutesUpdatedAt` moved.
 - **Never in a customer email** (spec 6.2, AC 2): the internal minutes are read only by this
   service and the digest (which lists meetings, not their text). The external minutes email
   (CD-133) must be built from the external fields (`external_subject`, `external_body`) and the
-  meeting's facts only, never from `summary`, `agreements` or `next_steps`; "Copy from internal
-  minutes" copies text into the external body in the browser, explicitly. CD-133 adds the test on
-  its email builder that proves it.
+  meeting's facts only, never from `summary` or `agreements`; "Copy from internal minutes" copies
+  text into the external body in the browser, explicitly. The one exception is the next steps
+  (CD-374), which the email adds after the text (see "External minutes").
+  CD-133 adds the test on its email builder that proves it.
 - **Digest**: "Minutes missing" (see "Daily digest").
 - **Screen** (`screens/meeting/InternalMinutes.tsx`, store `meetings.loadMinutes / saveMinutes /
   createStepTask`, `s.meetingMinutes` by meeting id): Summary and Agreements are textareas with a
   small toolbar (Bold, Bullet list, Link) that inserts the Markdown subset; out of the editor (and
-  read-only) they show formatted through `RichText`. Next steps: text, owner, due date, remove,
-  and "Create task" (then a link to the task's deal; nothing on an old meeting without a deal,
-  CD-213). Changes save after a 0.7 s pause (and on blur or leaving), one save at a time,
+  read-only) they show formatted through `RichText`. Next steps are a table (Next step, Owner,
+  Due date; stacked rows on narrower screens). Next to the remove ✕, a green
+  ✓ saves the step as a task on the opportunity, and so on Today, without leaving the meeting
+  (`POST next-steps/:stepId/task`); once saved, the ✓ is gone. No ✓ on an old meeting without a
+  deal (CD-213). Changes save after a 0.7 s pause (and on blur or leaving), one save at a time,
   each based on the version the previous one returned; "Saving…" / "Saved" next to the heading.
   A conflict shows the API's message and replaces the editor with the minutes read again.
   Read-only for people who can't change the meeting and for cancelled meetings.
@@ -2921,11 +2924,12 @@ on every send and every status change) are in `drizzle/0036_meeting_minutes_send
 Service `meetings/external-minutes.service.ts`, email builder `meetings/minutes-email.ts`.
 
 - **API** (`/api/crm/meetings/:id/minutes`): `GET external` →
-  `{ subject, body, prefilled, updatedAt, updatedByName, language, lastSend, changedSinceLastSend }`.
+  `{ subject, body, prefilled, updatedAt, updatedByName, language, lastSend, changedSinceLastSend,
+  meetingChanged, nextSteps, nextStepsText }`.
   The first read by someone who may change the meeting once it is held (`external_prefilled_at`
   null; CD-211) fills in the template (spec 7.1: title, date
-  and time, location, both sides' participants, the agreements and the next steps with their due
-  dates but without owners; subject "Minutes: <title>, <date>"; in the customer email language)
+  and time, location, both sides' participants and the agreements; subject "Minutes: <title>,
+  <date>"; in the customer email language)
   and remembers it, with what it was made from (`external_prefill`: the meeting's start and end,
   the subject and body of the template from the meeting alone, and the text it filled in); after
   that nothing is copied automatically. **When the meeting changes** (CD-222; `prefillCheck` in
@@ -2946,6 +2950,16 @@ Service `meetings/external-minutes.service.ts`, email builder `meetings/minutes-
   `{ from, replyTo, to, cc, subject, text, html }`, send answers 202 with the send. `GET sends`
   (newest first, with recipients) and `POST sends/:sendId/retry` (202; only the failed recipients
   are queued again; 409 when none failed).
+- **Next steps** (CD-374): not part of the text. Preview and send add them after the body
+  (`withNextSteps`): the internal minutes' next steps with text, as they are at that moment, one line each with the owner's display name and the due date ("- Send the offer (Ana
+  Petrović, by 2 Nov 2026)"), under "Next steps" in the customer email language; no section when
+  none is left. Owners are named only while they are members, and a display name that is an email
+  address is left out, so no member's address reaches the customer. The send stores that full
+  body, so its copy and Retry stay exact; text and steps together must fit the send's 10,000
+  characters (`meeting_minutes_sends_length_ck`), else preview and send answer 400 ("The minutes
+  and the next steps together are too long"). `GET external` returns them as `nextSteps` (`{ text,
+  owner, dueDate }`, from `externalNextSteps`, which the PDF minutes of CD-378 are to reuse) and
+  `nextStepsText` (the section); "Changed since last send" compares the body with them.
 - **Rules**: writing, previewing, sending, retrying and "Update from meeting" take the people who may change the meeting
   (403); the text can be written while planned or held (a cancelled meeting is read-only, 409);
   sending only for a **held** meeting (409). `to` = external participants of this meeting whose
@@ -2976,8 +2990,8 @@ Service `meetings/external-minutes.service.ts`, email builder `meetings/minutes-
   no part of the preview, the email or the send log.
 - **Screen** (`screens/meeting/ExternalMinutes.tsx`, store `meetings.loadExternal / saveExternal /
   copyInternal / previewMinutes / sendMinutes / loadSends / retrySend`): subject and body (the
-  internal minutes' editor with its toolbar), autosave with "Saved", "Copy from internal minutes"
-  (asks before replacing text). Once held: To (the external participants with an email ticked;
+  internal minutes' editor with its toolbar), autosave with "Saved", then **Next steps** as the
+  email will add them (read-only, from `nextStepsText`) with a hint that they are added when sent, and "Copy from internal minutes" (asks before replacing text). Once held: To (the external participants with an email ticked;
   "No email" and deleted ones disabled) and Cc (the internal participants, "+ Copy another member").
   **Send…** opens the preview (from, reply-to, to, cc, subject, and the HTML in a sandboxed
   iframe); **Send** there sends. Under the editor: "Minutes sent to <names> on <date>", "Changed
