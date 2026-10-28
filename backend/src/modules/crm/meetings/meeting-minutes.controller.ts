@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, HttpCode, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Post, Put } from '@nestjs/common';
 import { RequireTenant, Tenant, type TenantContext } from '../../../shared/authorization';
 import { UuidParam } from '../../../shared/validation/common';
 import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
@@ -33,5 +33,11 @@ export class MeetingMinutesController {
   @HttpCode(201)
   createTask(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Param('stepId', Id) stepId: string) {
     return this.minutes.createTask(ctx, id, stepId);
+  }
+
+  /** Removes a next step's task from the deal (not one already done): `{ minutes }`. */
+  @Delete(':id/minutes/next-steps/:stepId/task')
+  removeTask(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Param('stepId', Id) stepId: string) {
+    return this.minutes.removeTask(ctx, id, stepId);
   }
 }

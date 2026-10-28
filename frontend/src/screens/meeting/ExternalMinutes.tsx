@@ -5,6 +5,7 @@ import { hasEmail } from '../../store/meetings';
 import { useStore } from '../../store/store';
 import { dateLabel, instantToZoned } from '../../store/time';
 import { RichField } from './InternalMinutes';
+import { RichText } from '../../components/RichText';
 
 /** Limits of the external minutes (spec 7.1; the API checks them too). */
 const BODY_MAX = 10_000;
@@ -207,17 +208,17 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
   const reload = () => void actions.current.loadExternal(m.id).then(onStored, () => undefined);
 
   const last = stored.lastSend;
-  const changed = !!last && (subjectLine(draft.subject) !== last.subject || draft.body !== last.body);
+  // What Send sends: the text, then the next steps as they are now (CD-374).
+  const sentBody = !stored.nextStepsText ? draft.body : draft.body.trim() ? `${draft.body.trimEnd()}\n\n${stored.nextStepsText}` : stored.nextStepsText;
+  const changed = !!last && (subjectLine(draft.subject) !== last.subject || sentBody !== last.body);
   const stateText = state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved' : state === 'error' ? 'Not saved' : '';
   const chosen = request().toContactIds.length;
-  // Marked internal after the template filled the text in, or copied in by hand (CD-374); the draft may have dropped them already.
-  const internalLeft = stored.internalStepsInText.filter((t) => draft.body.includes(t));
   const sendBlocked = !canSend ? (allowed ? 'Mark the meeting as held to send the minutes.' : null) : !chosen ? 'Pick at least one recipient.' : !draft.subject.trim() || !draft.body.trim() ? 'Write a subject and the minutes first.' : null;
 
   return (
     <div className="minutes" data-testid="external-minutes" data-meeting={m.id} data-editable={editable ? 'true' : 'false'}>
       <div className="minutes-head">
-        <span className="meeting-muted">Written for the customer and sent by email. Nothing from the internal minutes is included unless you copy it in.</span>
+        <span className="meeting-muted">Written for the customer and sent by email. From the internal minutes only the next steps below are included, unless you copy more in.</span>
         <span className={'minutes-state' + (state === 'error' ? ' is-error' : '')} data-testid="external-save-state" aria-live="polite">
           {stateText}
         </span>
@@ -248,14 +249,19 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
         )}
       </label>
       <RichField label="Minutes for the customer" testId="external-body" value={draft.body} max={BODY_MAX} editable={editable} placeholder="What you want the customer to read" onChange={(v) => change('body', v)} onBlur={() => void flush()} />
-      {editable && internalLeft.length > 0 && (
-        <div className="minutes-note" data-testid="external-internal-steps">
-          {internalLeft.length === 1 ? 'This text still has a next step marked internal only' : 'This text still has next steps marked internal only'}: {internalLeft.map((t) => `“${t}”`).join(', ')}. The customer will read{' '}
-          {internalLeft.length === 1 ? 'it' : 'them'} unless you take {internalLeft.length === 1 ? 'it' : 'them'} out.
+      <div className="minutes-field" data-testid="external-next-steps">
+        <span className="form-label">Next steps</span>
+        {stored.nextStepsText ? (
+          <div className="minutes-preview" data-testid="external-next-steps-view">
+            {/* The section without its heading (the label above says it). */}
+            <RichText text={stored.nextStepsText.slice(stored.nextStepsText.indexOf('\n') + 1)} />
+          </div>
+        ) : (
+          <div className="meeting-muted">No next steps for the customer.</div>
+        )}
+        <div className="hint-box" data-testid="external-steps-hint">
+          Added after the text when the minutes are sent, as they are in the internal minutes then. Steps marked internal only stay in Pultly.
         </div>
-      )}
-      <div className="hint-box" data-testid="external-steps-hint">
-        Steps marked internal only stay in Pultly.
       </div>
       {editable && (
         <button type="button" className="btn-plain minutes-add" data-testid="external-copy-internal" disabled={copying} onClick={() => void copy()}>

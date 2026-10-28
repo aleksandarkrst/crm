@@ -26,7 +26,7 @@ import { nonEmptyPatch } from '../../../shared/validation/common';
 import { ActivitiesService } from '../deals/activities.service';
 import { userNameOf } from '../owner';
 import { type ApiMeeting, MeetingsService } from './meetings.service';
-import { externalNextSteps, type MinutesEmail, minutesEmail, minutesTemplate, prefillCheck, updateFromMeeting } from './minutes-email';
+import { type ExternalNextStep, externalNextSteps, type MinutesEmail, minutesEmail, minutesTemplate, nextStepsSection, prefillCheck, updateFromMeeting, withNextSteps } from './minutes-email';
 
 /** Limits of the external minutes (spec 7.1). */
 export const EXTERNAL_BODY_MAX = 10_000;
@@ -111,10 +111,12 @@ export interface ApiExternalMinutes {
    */
   meetingChanged: 'time' | 'details' | null;
   /**
-   * Next steps marked internal only whose text is still in the external text (CD-374): marked after
-   * the template filled it in, or copied in by hand. The app warns before anyone sends it.
+   * The next steps the email adds after the text (CD-374): the internal minutes' steps not marked
+   * internal only, as they are now, with the owner's display name and the due date.
    */
-  internalStepsInText: string[];
+  nextSteps: ExternalNextStep[];
+  /** Those steps as the section the email adds (`nextStepsSection`, in the customer email language); empty when none. */
+  nextStepsText: string;
 }
 
 /** The aggregate status of one send's recipients. */
@@ -131,6 +133,8 @@ interface Prepared {
   cc: { userId: string; name: string; email: string }[];
   sender: { name: string; email: string };
   language: CustomerEmailLanguage;
+  /** The body as sent: the external text, then the next steps (CD-374). */
+  body: string;
 }
 
 /**
@@ -146,7 +150,8 @@ interface Prepared {
  *
  * The internal minutes never reach the email: `minutesEmail` only takes the external text and
  * facts about the sender and the workspace. They are read here only for the template and "Copy
- * from internal minutes", which return text for the user to edit.
+ * from internal minutes", which return text for the user to edit, and for the next steps not
+ * marked internal only (CD-374), which `withNextSteps` adds after the text when the email is made.
  */
 @Injectable()
 export class ExternalMinutesService {
@@ -273,7 +278,7 @@ export class ExternalMinutesService {
             senderName: p.sender.name,
             senderEmail: p.sender.email,
             subject: p.email.subject,
-            body: input.body,
+            body: p.body,
             language: p.language,
           })
           .returning({ id: meetingMinutesSends.id });
@@ -371,18 +376,19 @@ export class ExternalMinutesService {
     // tenants is a platform table without RLS, so filter by the caller's tenant explicitly.
     const [workspace] = await tx.select({ name: tenants.name, language: tenants.customerEmailLanguage }).from(tenants).where(eq(tenants.id, ctx.tenantId));
     const language = workspace?.language ?? 'en';
+    const body = withNextSteps(input.body, await this.externalSteps(tx, ctx, meetingId), language);
 
     const email = minutesEmail({
       language,
       subject: input.subject,
-      body: input.body,
+      body,
       workspaceName: workspace?.name ?? 'Pultly',
       sender,
       mailFrom: this.env.MAIL_FROM,
       to: to.map(({ name, email }) => ({ name, email })),
       cc: cc.map(({ name, email }) => ({ name, email })),
     });
-    return { meeting, email, to, cc, sender, language };
+    return { meeting, email, to, cc, sender, language, body };
   }
 
   /**
@@ -395,19 +401,7 @@ export class ExternalMinutesService {
       .select({ name: tenants.name, language: tenants.customerEmailLanguage, timezone: tenants.timezone })
       .from(tenants)
       .where(eq(tenants.id, ctx.tenantId));
-    const [internal] = await tx.select({ agreements: meetingMinutes.agreements, nextSteps: meetingMinutes.nextSteps }).from(meetingMinutes).where(eq(meetingMinutes.meetingId, meetingId));
-    const steps = internal?.nextSteps ?? [];
-    // The owners' display names only: the customer never gets a member's email address (CD-374).
-    // Members of this workspace only: an owner who left since is listed without a name.
-    const ownerIds = [...new Set(steps.flatMap((s) => (s.ownerUserId && !s.internalOnly ? [s.ownerUserId] : [])))];
-    const owners = ownerIds.length
-      ? await tx
-          .select({ id: users.id, name: users.displayName })
-          .from(memberships)
-          .innerJoin(users, eq(users.id, memberships.userId))
-          .where(and(eq(memberships.tenantId, ctx.tenantId), inArray(memberships.userId, ownerIds)))
-      : [];
-    const ownerNames = new Map(owners.flatMap((o) => (o.name ? [[o.id, o.name] as const] : [])));
+    const [internal] = await tx.select({ agreements: meetingMinutes.agreements }).from(meetingMinutes).where(eq(meetingMinutes.meetingId, meetingId));
     const facts = {
       language: workspace?.language ?? 'en',
       timeZone: workspace?.timezone ?? 'UTC',
@@ -416,12 +410,8 @@ export class ExternalMinutesService {
       internalNames: meeting.participants.filter((p) => p.kind === 'internal').map((p) => p.name),
       externalNames: meeting.participants.filter((p) => p.kind === 'external').map((p) => p.name),
     };
-    const filled = minutesTemplate({
-      ...facts,
-      agreements: internal?.agreements ?? '',
-      nextSteps: externalNextSteps({ nextSteps: steps }, ownerNames),
-    });
-    const head = minutesTemplate({ ...facts, agreements: '', nextSteps: [] });
+    const filled = minutesTemplate({ ...facts, agreements: internal?.agreements ?? '' });
+    const head = minutesTemplate({ ...facts, agreements: '' });
     return {
       startsAt: new Date(meeting.startsAt).toISOString(),
       endsAt: new Date(meeting.endsAt).toISOString(),
@@ -430,6 +420,25 @@ export class ExternalMinutesService {
       subject: filled.subject.slice(0, EXTERNAL_SUBJECT_MAX),
       body: filled.body.slice(0, EXTERNAL_BODY_MAX),
     };
+  }
+
+  /**
+   * The next steps of the internal minutes that go to the customer (CD-374), with their owners'
+   * display names only: the customer never gets a member's email address. Members of this
+   * workspace only: an owner who left since is listed without a name.
+   */
+  private async externalSteps(tx: Tx, ctx: TenantContext, meetingId: string): Promise<ExternalNextStep[]> {
+    const [internal] = await tx.select({ nextSteps: meetingMinutes.nextSteps }).from(meetingMinutes).where(eq(meetingMinutes.meetingId, meetingId));
+    const steps = internal?.nextSteps ?? [];
+    const ownerIds = [...new Set(steps.flatMap((s) => (s.ownerUserId && !s.internalOnly ? [s.ownerUserId] : [])))];
+    const owners = ownerIds.length
+      ? await tx
+          .select({ id: users.id, name: users.displayName })
+          .from(memberships)
+          .innerJoin(users, eq(users.id, memberships.userId))
+          .where(and(eq(memberships.tenantId, ctx.tenantId), inArray(memberships.userId, ownerIds)))
+      : [];
+    return externalNextSteps({ nextSteps: steps }, new Map(owners.flatMap((o) => (o.name ? [[o.id, o.name] as const] : []))));
   }
 
   /** A text nobody changed since the template filled it in follows the meeting when it moved (CD-222). */
@@ -478,7 +487,6 @@ export class ExternalMinutesService {
         prefill: meetingMinutes.externalPrefill,
         updatedAt: meetingMinutes.externalUpdatedAt,
         updatedByName: userNameOf(meetingMinutes.externalUpdatedByUserId),
-        nextSteps: meetingMinutes.nextSteps,
       })
       .from(meetingMinutes)
       .where(eq(meetingMinutes.meetingId, meetingId));
@@ -486,7 +494,8 @@ export class ExternalMinutesService {
     const [lastSend] = await this.loadSends(tx, meetingId, undefined, 1);
     const subject = row?.subject ?? '';
     const body = row?.body ?? '';
-    const internalStepsInText = (row?.nextSteps ?? []).flatMap((s) => (s.internalOnly && s.text.trim() && body.includes(s.text.trim()) ? [s.text.trim()] : []));
+    const nextSteps = await this.externalSteps(tx, ctx, meetingId);
+    const language = workspace?.language ?? 'en';
     let meetingChanged: ApiExternalMinutes['meetingChanged'] = null;
     if (row?.prefill) {
       const now = await this.template(tx, ctx, meetingId);
@@ -499,11 +508,12 @@ export class ExternalMinutesService {
       prefilled: !!row?.prefilledAt,
       updatedAt: row?.updatedAt ?? null,
       updatedByName: row?.updatedAt ? (row.updatedByName ?? null) : null,
-      language: workspace?.language ?? 'en',
+      language,
       lastSend: lastSend ?? null,
-      changedSinceLastSend: !!lastSend && (lastSend.subject !== subjectLine(subject) || lastSend.body !== body),
+      changedSinceLastSend: !!lastSend && (lastSend.subject !== subjectLine(subject) || lastSend.body !== withNextSteps(body, nextSteps, language)),
       meetingChanged,
-      internalStepsInText,
+      nextSteps,
+      nextStepsText: nextStepsSection(nextSteps, language),
     };
   }
 

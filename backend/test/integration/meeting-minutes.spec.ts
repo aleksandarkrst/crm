@@ -217,6 +217,35 @@ describe('next steps as deal tasks', () => {
     expect((await call('POST', `/crm/meetings/${m.id}/minutes/next-steps/${randomUUID()}/task`, as(ana))).status).toBe(404);
   });
 
+  it('removes a step’s task again when its box is unticked, unless the task is done (CD-374)', async () => {
+    const co = await company('Minutes Untick Co');
+    const d = await deal('Untick deal', co.id);
+    const m = await meeting(co.id, { dealId: d.id });
+    const a = step({ text: 'Send the brochure' });
+    const b = step({ text: 'Call the buyer' });
+    await save(ana, m.id, { nextSteps: [a, b] });
+    const url = (s: { id: string }) => `/crm/meetings/${m.id}/minutes/next-steps/${s.id}/task`;
+    const ta = (await ok('POST', url(a), as(ana))).task;
+    const tb = (await ok('POST', url(b), as(ana))).task;
+
+    // Same permission as writing; a step without a task is 409.
+    expect((await call('DELETE', url(a), as(bo))).status).toBe(403);
+    const theirs = await createTenant(outsider, 'Minutes untick other');
+    expect((await call('DELETE', url(a), { token: outsider.token, tenant: theirs })).status).toBe(404);
+    const removed = await ok('DELETE', url(a), as(ana), 200);
+    expect(removed.minutes.nextSteps.map((s: Json) => s.taskId)).toEqual([null, tb.id]);
+    const tasks = await ok('GET', `/crm/deal-tasks?dealIds=${d.id}`, as(owner));
+    expect(tasks.some((t: Json) => t.id === ta.id)).toBe(false);
+    const timeline = await ok('GET', `/crm/deals/${d.id}/activities`, as(owner));
+    expect(timeline.some((x: Json) => x.title === 'Task removed: Send the brochure')).toBe(true);
+    expect((await call('DELETE', url(a), as(ana))).status).toBe(409);
+
+    // A task already done stays on the opportunity.
+    await ok('PATCH', `/crm/deal-tasks/${tb.id}`, { ...as(owner), body: { done: true } });
+    expect((await call('DELETE', url(b), as(ana))).status).toBe(409);
+    expect((await ok('GET', minutesUrl(m.id), as(ana))).nextSteps[1].taskId).toBe(tb.id);
+  });
+
   it('refuses a task for an empty step', async () => {
     const co = await company('Minutes Empty Step Co');
     const m = await meeting(co.id);

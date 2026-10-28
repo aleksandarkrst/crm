@@ -128,7 +128,7 @@ export class MeetingMinutesService {
   }
 
   /**
-   * "Create task" on a next step: a task on the meeting's deal, in its current stage, as the "New
+   * "Save task" on a next step (ticking its box): a task on the meeting's deal, in its current stage, as the "New
    * task" dialog makes them (no stage gate, channel Meeting, "Task added" on the timeline), with
    * the step's text, owner (or the caller) and due date. The step then links to it. 409 for an old
    * meeting without a deal, or when the step already has a task that still exists.
@@ -163,6 +163,30 @@ export class MeetingMinutesService {
         await tx.update(meetingMinutes).set({ nextSteps, updatedByUserId: ctx.userId }).where(eq(meetingMinutes.id, current.id));
         await this.audit.record(tx, ctx, { action: 'meeting.next_step_task', entityType: 'meeting', entityId: meetingId, data: { stepId, taskId: task.id } });
         return { minutes: await this.load(tx, meetingId), task };
+      })
+      .catch(mapDbError);
+  }
+
+  /**
+   * Unticking a next step's task (CD-374): the task leaves the deal ("Task removed" on its
+   * timeline) and the step no longer links to it. A task already done stays (409): it is the
+   * deal's history. A link to a task deleted on the deal meanwhile is just cleared.
+   */
+  removeTask(ctx: TenantContext, meetingId: string, stepId: string) {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        await this.meetings.lockForChange(tx, ctx, meetingId, 'edit');
+        const current = await this.lockMinutes(tx, meetingId);
+        const step = current?.nextSteps.find((s) => s.id === stepId);
+        if (!current || !step) throw new NotFoundException('Next step not found');
+        if (!step.taskId) throw new ConflictException('This next step has no task.');
+        const [task] = await tx.select({ id: dealTasks.id, done: dealTasks.done }).from(dealTasks).where(eq(dealTasks.id, step.taskId)).for('update');
+        if (task?.done) throw new ConflictException('This task is done, so it stays on the opportunity.');
+        if (task) await this.tasks.deleteTask(tx, ctx, task.id);
+        const nextSteps = current.nextSteps.map((s) => canonicalStep(s.id === stepId ? { ...s, taskId: null } : s));
+        await tx.update(meetingMinutes).set({ nextSteps, updatedByUserId: ctx.userId }).where(eq(meetingMinutes.id, current.id));
+        await this.audit.record(tx, ctx, { action: 'meeting.next_step_task_removed', entityType: 'meeting', entityId: meetingId, data: { stepId, taskId: step.taskId } });
+        return { minutes: await this.load(tx, meetingId) };
       })
       .catch(mapDbError);
   }

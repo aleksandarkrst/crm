@@ -35,30 +35,29 @@ describe('next steps in the external minutes', () => {
     await api(page, `/crm/meetings/${meeting.id}/minutes/internal`, { method: 'PUT', body: JSON.stringify({ nextSteps }) });
   });
 
-  step('marks one step "Internal only"; the switch stays on after a reload', async () => {
+  step('marks one step "Internal only"; the box stays ticked after a reload', async () => {
     await page.goto(`${BASE_URL}/meetings/${meeting.id}`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=internal-minutes][data-editable=true]');
     const rows = await page.$$('[data-testid=minutes-step]');
     assert.equal(rows.length, 3);
-    await (await rows[1].$('[data-testid=step-internal] [role=switch]')).click();
+    await (await rows[1].$('[data-testid=step-internal]')).click();
     await page.waitForFunction(() => document.querySelector('[data-testid=minutes-save-state]')?.textContent === 'Saved', { timeout: 10_000 });
     assert.ok(await eventually(async () => (await minutes()).nextSteps.map((s) => s.internalOnly).join() === 'false,true,false'), 'saved with the step');
 
     await page.reload({ waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=internal-minutes][data-editable=true]');
-    const on = await page.$$eval('[data-testid=step-internal]', (els) => els.map((el) => el.querySelector('[role=switch]').getAttribute('aria-checked')));
-    assert.deepEqual(on, ['false', 'true', 'false']);
+    const on = await page.$$eval('[data-testid=step-internal]', (els) => els.map((el) => el.checked));
+    assert.deepEqual(on, [false, true, false]);
   });
 
   step('the external minutes list the other two steps with owner and due date, and say why', async () => {
     await click(page, '[data-testid=meeting-tab-external]');
-    const view = await page.waitForSelector('[data-testid=external-body-view]', { timeout: 10_000 });
+    const view = await page.waitForSelector('[data-testid=external-next-steps-view]', { timeout: 10_000 });
     const body = await view.evaluate((el) => el.innerText);
-    assert.match(body, /Next steps/);
     assert.match(body, /Send the offer \(Nina Steps, by 2 Nov 2026\)/);
     assert.match(body, /Book the follow-up \(Nina Steps, by 9 Nov 2026\)/);
     assert.ok(!body.includes(SECRET), 'the internal step is not in the external minutes');
     assert.ok(!body.includes(me.email), 'no email address of a member');
-    assert.equal(await page.$eval('[data-testid=external-steps-hint]', (el) => el.textContent.trim()), 'Steps marked internal only stay in Pultly.');
+    assert.match(await page.$eval('[data-testid=external-steps-hint]', (el) => el.textContent), /Steps marked internal only stay in Pultly\./);
   });
 });

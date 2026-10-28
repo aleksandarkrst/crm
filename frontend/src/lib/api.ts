@@ -1039,8 +1039,10 @@ export interface ApiExternalMinutes {
   changedSinceLastSend: boolean;
   /** The meeting changed since the template filled in the text, which someone changed since (CD-222). */
   meetingChanged: 'time' | 'details' | null;
-  /** Next steps marked internal only whose text is still in the external text (CD-374). */
-  internalStepsInText: string[];
+  /** The next steps the email adds after the text (CD-374): not marked internal only, as they are now. */
+  nextSteps: { text: string; owner: string | null; dueDate: string | null }[];
+  /** Those steps as the email's section, in the customer email language; empty when none. */
+  nextStepsText: string;
 }
 /** Preview and send: contacts (external participants with an email) and members to copy. */
 export interface MinutesEmailInput {
@@ -1240,6 +1242,7 @@ export const crmApi = {
     saveMinutes: (id: string, input: InternalMinutesInput, version: string | null) =>
       api<ApiInternalMinutes>(`/crm/meetings/${id}/minutes/internal`, { method: 'PUT', json: input, headers: ifMatch(version ?? '1970-01-01T00:00:00.000Z') }),
     stepTask: (id: string, stepId: string) => api<{ minutes: ApiInternalMinutes; task: ApiDealTask }>(`/crm/meetings/${id}/minutes/next-steps/${stepId}/task`, { method: 'POST' }),
+    removeStepTask: (id: string, stepId: string) => api<{ minutes: ApiInternalMinutes }>(`/crm/meetings/${id}/minutes/next-steps/${stepId}/task`, { method: 'DELETE' }),
     /** External minutes (CD-133): the first read fills in the template. */
     external: (id: string) => api<ApiExternalMinutes>(`/crm/meetings/${id}/minutes/external`),
     saveExternal: (id: string, input: { subject?: string; body?: string }, version: string | null) =>

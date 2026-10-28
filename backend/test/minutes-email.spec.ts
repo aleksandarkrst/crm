@@ -9,10 +9,12 @@ import {
   minutesEmail,
   minutesMailMessage,
   minutesTemplate,
+  nextStepsSection,
   prefillCheck,
   renderMinutesHtml,
   renderMinutesText,
   updateFromMeeting,
+  withNextSteps,
 } from '../src/modules/crm/meetings/minutes-email';
 import { fromHeader, mailAddressOf } from '../src/infrastructure/mail/mailer';
 
@@ -115,15 +117,9 @@ describe('minutesTemplate (spec 7.1)', () => {
     internalNames: ['Ana Petrović', 'Bo Tester'],
     externalNames: ['Jovan Jovanović'],
     agreements: 'Pilot in **Belgrade**',
-    nextSteps: [
-      { text: 'Send the offer', owner: 'Ana Petrović', dueDate: '2026-10-10' },
-      { text: '  ', owner: null, dueDate: null },
-      { text: 'Share the case study', owner: 'Bo Tester', dueDate: null },
-      { text: 'Book the follow-up', owner: null, dueDate: null },
-    ],
   };
 
-  it('has the meeting, both sides, the agreements and the next steps with owner and due date', () => {
+  it('has the meeting, both sides and the agreements (the next steps are added when the email is made)', () => {
     const t = minutesTemplate({ ...base, language: 'en' });
     expect(t.subject).toBe('Minutes: Quarterly review, 6 Oct 2026');
     expect(t.body).toBe(
@@ -137,25 +133,14 @@ describe('minutesTemplate (spec 7.1)', () => {
         '',
         '**Agreements**',
         'Pilot in **Belgrade**',
-        '',
-        '**Next steps**',
-        '- Send the offer (Ana Petrović, by 10 Oct 2026)',
-        '- Share the case study (Bo Tester)',
-        '- Book the follow-up',
       ].join('\n'),
     );
   });
 
   it('is in Serbian when the workspace writes to customers in Serbian, and leaves out what is empty', () => {
-    const t = minutesTemplate({ ...base, language: 'sr', meeting: { ...base.meeting, location: null }, agreements: '', nextSteps: [{ text: 'Poslati ponudu', owner: null, dueDate: '2026-10-10' }] });
+    const t = minutesTemplate({ ...base, language: 'sr', meeting: { ...base.meeting, location: null }, agreements: '' });
     expect(t.subject).toBe('Zapisnik: Quarterly review, 6. 10. 2026.');
-    expect(t.body).toBe(['**Quarterly review**', 'Datum: 6. 10. 2026. 10:00–11:00', 'Učesnici:', '- Kestrel: Ana Petrović, Bo Tester', '- Acme: Jovan Jovanović', '', '**Sledeći koraci**', '- Poslati ponudu (rok 10. 10. 2026.)'].join('\n'));
-  });
-
-  it('leaves out the next steps section when no step goes to the customer', () => {
-    const t = minutesTemplate({ ...base, language: 'en', nextSteps: [] });
-    expect(t.body).not.toContain('Next steps');
-    expect(minutesEmail({ ...input, body: t.body }).html).not.toContain('Next steps');
+    expect(t.body).toBe(['**Quarterly review**', 'Datum: 6. 10. 2026. 10:00–11:00', 'Učesnici:', '- Kestrel: Ana Petrović, Bo Tester', '- Acme: Jovan Jovanović'].join('\n'));
   });
 
   it('formats dates and times in the workspace zone', () => {
@@ -191,23 +176,25 @@ describe('externalNextSteps (CD-374)', () => {
     ]);
   });
 
-  it('renders as the template’s Next steps section, in the email as a list', () => {
-    const steps = [step('a', { ownerUserId: 'u-ana', dueDate: '2026-11-02' }), step('b', { internalOnly: true, text: 'Discount up to 15%' }), step('c')];
-    const t = minutesTemplate({
-      language: 'en',
-      timeZone: 'UTC',
-      workspaceName: 'Kestrel',
-      meeting: { title: 'Visit', startsAt: new Date('2026-10-06T08:00:00Z'), endsAt: new Date('2026-10-06T09:00:00Z'), location: null, companyName: 'Acme' },
-      internalNames: [],
-      externalNames: [],
-      agreements: '',
-      nextSteps: externalNextSteps({ nextSteps: steps }, names),
-    });
-    expect(t.body.split('\n').slice(-3)).toEqual(['**Next steps**', '- Step a (Ana Petrović, by 2 Nov 2026)', '- Step c']);
-    const html = minutesEmail({ ...input, body: t.body }).html;
+  it('is added after the written text with owner and due date, in the email as a list', () => {
+    const steps = [step('a', { ownerUserId: 'u-ana', dueDate: '2026-11-02' }), step('b', { internalOnly: true, text: 'Discount up to 15%' }), step('c'), step('d', { text: '  ' })];
+    const body = withNextSteps('We met.\n', externalNextSteps({ nextSteps: steps }, names), 'en');
+    expect(body).toBe(['We met.', '', '**Next steps**', '- Step a (Ana Petrović, by 2 Nov 2026)', '- Step c'].join('\n'));
+    const html = minutesEmail({ ...input, body }).html;
     expect(html).toContain('<strong>Next steps</strong>');
     expect(html).toContain('<li>Step a (Ana Petrović, by 2 Nov 2026)</li><li>Step c</li>');
     expect(html).not.toContain('Discount up to 15%');
+  });
+
+  it('is in the customer email language: the due date as "rok", and only the section when nothing was written', () => {
+    expect(withNextSteps('  ', [{ text: 'Poslati ponudu', owner: null, dueDate: '2026-10-10' }], 'sr')).toBe('**Sledeći koraci**\n- Poslati ponudu (rok 10. 10. 2026.)');
+    expect(nextStepsSection([{ text: 'Share the case study', owner: 'Bo Tester', dueDate: null }], 'en')).toBe('**Next steps**\n- Share the case study (Bo Tester)');
+  });
+
+  it('leaves the section out when no step goes to the customer', () => {
+    const body = withNextSteps('We met.', externalNextSteps({ nextSteps: [step('a', { internalOnly: true })] }, names), 'en');
+    expect(body).toBe('We met.');
+    expect(minutesEmail({ ...input, body }).html).not.toContain('Next steps');
   });
 });
 
