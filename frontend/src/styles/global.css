@@ -607,12 +607,13 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .minutes-step select.form-input, .minutes-step input.form-input { width: 100%; box-sizing: border-box; padding: 7px 9px; }
 .minutes-step-read { font-size: 13.5px; overflow-wrap: anywhere; }
 .minutes-step-cell { display: inline-flex; align-items: center; }
-.minutes-step-internal, .minutes-step-task { display: inline-flex; align-items: center; cursor: pointer; }
-/* The task box gets a finger-sized target: it creates or deletes a task, next to the remove button. */
-.minutes-step-task { padding: 6px; margin: -6px 0; }
-.minutes-step-internal input, .minutes-step-task input { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--brand); }
-.minutes-step-task input:disabled { cursor: default; }
-.minutes-step-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.minutes-step-internal { display: inline-flex; align-items: center; cursor: pointer; }
+.minutes-step-internal input { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--brand); }
+.minutes-step-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.icon-btn.icon-btn-ok { color: var(--green-500); }
+.icon-btn.icon-btn-ok:hover { background: var(--brand-tint); color: var(--green-500); }
+.icon-btn.icon-btn-ok:disabled { background: transparent; color: var(--green-500); opacity: 0.35; cursor: not-allowed; }
+.minutes-step-center { justify-content: center; text-align: center; }
 /* Stacked well before the columns would need to be squeezed (the meeting page sits next to the sidebar). */
 @media (max-width: 1000px) {
   .minutes-steps > .table-head { display: none; }
@@ -620,6 +621,7 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
   .minutes-step > .minutes-step-text, .minutes-step > .minutes-step-read { flex: 1 1 100%; }
   .minutes-step > select.form-input, .minutes-step > input[type=date] { flex: 1 1 140px; width: auto; }
   .minutes-step-actions { margin-left: auto; }
+  .minutes-step-center { justify-content: flex-start; }
   .minutes-step-cell::before { content: attr(data-label); margin-right: 6px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-2); }
 }
 .minutes-add { align-self: flex-start; }

@@ -1,5 +1,5 @@
 // Internal minutes of a meeting (CD-132): writing the summary and agreements (saved on their own),
-// a next step with an owner and a due date, the task box (the task shows on Today), and a member
+// a next step with an owner and a due date, the ✓ that saves it as a task (it shows on Today), and a member
 // who doesn't take part seeing the minutes read-only.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
@@ -93,9 +93,9 @@ describe('internal minutes', () => {
     assert.equal(steps[0].taskId, null);
   });
 
-  step('ticking the task box makes a task on the opportunity without leaving the meeting, and it shows on Today', async () => {
-    await click(mia, '[data-testid=step-task]');
-    await mia.waitForFunction(() => document.querySelector('[data-testid=step-task]')?.checked, { timeout: 10_000 });
+  step('the ✓ makes a task on the opportunity without leaving the meeting, then goes away; the task shows on Today', async () => {
+    await click(mia, '[data-testid=step-create-task]');
+    await mia.waitForFunction(() => !document.querySelector('[data-testid=step-create-task]'), { timeout: 10_000 });
     const { nextSteps } = await minutes();
     assert.ok(nextSteps[0].taskId, 'the step links to its task');
     const task = (await api(mia, `/crm/deal-tasks?dealIds=${deal.id}`)).find((t) => t.id === nextSteps[0].taskId);
@@ -117,12 +117,11 @@ describe('internal minutes', () => {
     await bo.waitForSelector('[data-testid=internal-minutes][data-editable=false]');
     assert.equal(await bo.$('[data-testid=minutes-summary]'), null, 'no editor');
     assert.equal(await bo.$('[data-testid=minutes-add-step]'), null);
-    assert.equal(await bo.$eval('[data-testid=step-task]', (el) => el.disabled), true, 'the task box is locked');
+    assert.equal(await bo.$('[data-testid=step-create-task]'), null);
     assert.equal(await bo.$eval('[data-testid=minutes-summary-view]', (el) => el.querySelector('strong')?.textContent), 'pilot');
     const stepText = await bo.$eval('[data-testid=minutes-step]', (el) => el.innerText);
     assert.match(stepText, /Send the pilot contract/);
     assert.match(stepText, /Mia Minutes/);
-    assert.equal(await bo.$eval('[data-testid=step-task]', (el) => el.checked), true, 'the task is shown as saved');
     assert.match(await bo.$eval('[data-testid=internal-minutes]', (el) => el.innerText), /Only the organizer, the internal participants, owners and admins can write the minutes/);
   });
 });

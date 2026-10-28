@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { askConfirm } from '../../components/ConfirmDialog';
 import { RichText } from '../../components/RichText';
-import { RemoveButton } from '../../components/ui';
+import { CheckIcon, RemoveButton } from '../../components/ui';
 import type { ApiInternalMinutes, ApiMeeting, ApiMeetingNextStep, InternalMinutesInput } from '../../lib/api';
 import { memberName } from '../../store/selectors';
 import { useStore } from '../../store/store';
@@ -171,20 +171,10 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
     }
     setBusyStep(null);
   };
-  const removeTask = async (stepId: string) => {
-    setBusyStep(stepId);
-    await flush();
-    const res = await actions.current.removeStepTask(m.id, stepId, m.dealId!);
-    if (res) {
-      base.current = res.minutes.updatedAt;
-      setDraft((x) => withTasks(x, res.minutes));
-    }
-    setBusyStep(null);
-  };
 
   const members = s.team.filter((t) => t.status === 'Active');
-  // The last column: the task box (with an opportunity) and, while editable, the remove button.
-  const tail = !!m.dealId || editable;
+  // While editable, a last column for the save-as-task check (with an opportunity) and the remove button.
+  const tail = editable;
   const cols = ['minmax(160px, 2.4fr)', 'minmax(120px, 1.1fr)', '150px', '90px', ...(tail ? ['auto'] : [])].join(' ');
   const stateText = state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved' : state === 'error' ? 'Not saved' : '';
 
@@ -217,14 +207,13 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
         {draft.nextSteps.length > 0 && (
           <div className="card minutes-steps" data-testid="minutes-steps">
             <div className="table-head minutes-steps-head" style={{ gridTemplateColumns: cols }}>
-              {['Next step', 'Owner', 'Due date', 'Internal only', ...(tail ? [m.dealId ? 'Task' : ''] : [])].map((h, i) => (
-                <span key={i} className="th">
+              {['Next step', 'Owner', 'Due date', 'Internal only', ...(tail ? [''] : [])].map((h, i) => (
+                <span key={i} className={'th' + (h === 'Internal only' ? ' minutes-step-center' : '')}>
                   {h}
                 </span>
               ))}
             </div>
             {draft.nextSteps.map((st) => {
-              const task = st.taskId ? s.leadTasks.find((t) => t.id === st.taskId) : undefined;
               const ownerKnown = !st.ownerUserId || members.some((x) => x.id === st.ownerUserId);
               return (
                 <div key={st.id} className="table-row minutes-step" data-testid="minutes-step" style={{ gridTemplateColumns: cols }}>
@@ -252,11 +241,11 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
                       </select>
                       <input className="form-input" type="date" data-testid="step-due" aria-label="Due date" value={st.dueDate ?? ''} onChange={(e) => setStep(st.id, { dueDate: e.target.value || null })} />
                       {/* Kept out of the minutes sent to the customer (CD-374). */}
-                      <label className="minutes-step-cell minutes-step-internal" data-label="Internal only">
+                      <label className="minutes-step-cell minutes-step-internal minutes-step-center" data-label="Internal only">
                         <input type="checkbox" data-testid="step-internal" aria-label="Internal only" checked={st.internalOnly} onChange={(e) => setStep(st.id, { internalOnly: e.target.checked })} />
                       </label>
                       <span className="minutes-step-actions">
-                        {m.dealId && <StepTask st={st} task={task} editable busy={busyStep === st.id} onToggle={(on) => void (on ? createTask(st.id) : removeTask(st.id))} />}
+                        {m.dealId && <StepTask st={st} busy={busyStep === st.id} onSave={() => void createTask(st.id)} />}
                         <RemoveButton title="Remove the next step" onClick={() => change('nextSteps', { nextSteps: draftRef.current.nextSteps.filter((x) => x.id !== st.id) })} />
                       </span>
                     </>
@@ -269,14 +258,9 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
                       <span className="minutes-step-cell" data-label="Due date">
                         {st.dueDate ? dateText(st.dueDate) : <span className="meeting-muted">No date</span>}
                       </span>
-                      <span className="minutes-step-cell" data-label="Internal only">
+                      <span className="minutes-step-cell minutes-step-center" data-label="Internal only">
                         {st.internalOnly ? 'Yes' : 'No'}
                       </span>
-                      {m.dealId && (
-                        <span className="minutes-step-actions">
-                          <StepTask st={st} task={task} editable={false} busy={false} onToggle={() => undefined} />
-                        </span>
-                      )}
                     </>
                   )}
                 </div>
@@ -297,34 +281,25 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
 }
 
 /**
- * The task box of a next step (the meeting has an opportunity): ticking it saves the step as a
- * task on the opportunity, and so on Today, without leaving the meeting; unticking removes that
- * task again. A task already done stays (the box is locked).
+ * Saving a next step as a task (the meeting has an opportunity): a check next to the remove
+ * button puts it on the opportunity, and so on Today, without leaving the meeting. Once saved,
+ * the check is gone.
  */
-function StepTask({ st, task, editable, busy, onToggle }: { st: ApiMeetingNextStep; task: { done: boolean } | undefined; editable: boolean; busy: boolean; onToggle: (on: boolean) => void }) {
-  const on = !!st.taskId;
-  const title = on
-    ? task?.done
-      ? 'Task done on the opportunity'
-      : editable
-        ? 'Saved as a task on the opportunity and on Today. Untick to remove it.'
-        : 'Saved as a task on the opportunity and on Today'
-    : !editable
-      ? 'Not saved as a task'
-      : st.text.trim()
-        ? 'Save as a task on the opportunity and on Today'
-        : 'Write the step first';
+function StepTask({ st, busy, onSave }: { st: ApiMeetingNextStep; busy: boolean; onSave: () => void }) {
+  if (st.taskId) return null;
+  const text = !!st.text.trim();
   return (
-    <label className="minutes-step-cell minutes-step-task" data-label="Task" title={title}>
-      <input
-        type="checkbox"
-        data-testid="step-task"
-        aria-label="Task on the opportunity"
-        checked={on}
-        disabled={!editable || busy || (!on && !st.text.trim()) || (on && !!task?.done)}
-        onChange={(e) => onToggle(e.target.checked)}
-      />
-    </label>
+    <button
+      type="button"
+      className="icon-btn icon-btn-ok"
+      data-testid="step-create-task"
+      aria-label="Save as a task"
+      title={text ? 'Save as a task on the opportunity and on Today' : 'Write the step first'}
+      disabled={busy || !text}
+      onClick={onSave}
+    >
+      <CheckIcon />
+    </button>
   );
 }
 

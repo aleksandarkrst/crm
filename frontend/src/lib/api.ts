@@ -1242,7 +1242,6 @@ export const crmApi = {
     saveMinutes: (id: string, input: InternalMinutesInput, version: string | null) =>
       api<ApiInternalMinutes>(`/crm/meetings/${id}/minutes/internal`, { method: 'PUT', json: input, headers: ifMatch(version ?? '1970-01-01T00:00:00.000Z') }),
     stepTask: (id: string, stepId: string) => api<{ minutes: ApiInternalMinutes; task: ApiDealTask }>(`/crm/meetings/${id}/minutes/next-steps/${stepId}/task`, { method: 'POST' }),
-    removeStepTask: (id: string, stepId: string) => api<{ minutes: ApiInternalMinutes }>(`/crm/meetings/${id}/minutes/next-steps/${stepId}/task`, { method: 'DELETE' }),
     /** External minutes (CD-133): the first read fills in the template. */
     external: (id: string) => api<ApiExternalMinutes>(`/crm/meetings/${id}/minutes/external`),
     saveExternal: (id: string, input: { subject?: string; body?: string }, version: string | null) =>

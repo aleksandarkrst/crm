@@ -2885,8 +2885,8 @@ hints are in `drizzle/0034_meeting_minutes_rls.sql`.
   equal to what is stored (next steps as their canonical JSON) and a save that changes nothing
   keeps the version; the trigger compares next steps by id, trimmed text, owner and due date
   (`crm_minutes_steps`, `drizzle/0044_minutes_history_real_changes.sql`), so linking a task to a
-  step (ticking its task box) is no history row. The History tab shows the steps' text and due dates.
-- **Past due dates** (CD-222): ticking the task box of a step whose due date is before today (workspace
+  step (its ✓) is no history row. The History tab shows the steps' text and due dates.
+- **Past due dates** (CD-222): the ✓ of a step whose due date is before today (workspace
   zone) asks "This date is in the past" first (the app's own dialog); the API accepts it either way.
 - **Live updates**: minutes rows send `crm_changes` hints of type `meeting` with the meeting's id;
   the browser re-reads the meeting, and an open minutes tab reads the minutes again when the
@@ -2903,11 +2903,10 @@ hints are in `drizzle/0034_meeting_minutes_rls.sql`.
   createStepTask`, `s.meetingMinutes` by meeting id): Summary and Agreements are textareas with a
   small toolbar (Bold, Bullet list, Link) that inserts the Markdown subset; out of the editor (and
   read-only) they show formatted through `RichText`. Next steps are a table (Next step, Owner,
-  Due date, Internal only as a checkbox; stacked rows on a phone). Next to the remove button, a
-  box saves the step as a task on the opportunity, and so on Today, without leaving the meeting
-  (`POST next-steps/:stepId/task`); unticking it removes that task (`DELETE` the same path:
-  "Task removed" on the deal's timeline, the link cleared; 409 for a task already done, whose box
-  is locked). No box on an old meeting without a deal (CD-213). Changes save after a 0.7 s pause (and on blur or leaving), one save at a time,
+  Due date, Internal only as a checkbox; stacked rows on a phone). Next to the remove ✕, a green
+  ✓ saves the step as a task on the opportunity, and so on Today, without leaving the meeting
+  (`POST next-steps/:stepId/task`); once saved, the ✓ is gone. No ✓ on an old meeting without a
+  deal (CD-213). Changes save after a 0.7 s pause (and on blur or leaving), one save at a time,
   each based on the version the previous one returned; "Saving…" / "Saved" next to the heading.
   A conflict shows the API's message and replaces the editor with the minutes read again.
   Read-only for people who can't change the meeting and for cancelled meetings.

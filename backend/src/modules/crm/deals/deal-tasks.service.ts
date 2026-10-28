@@ -148,18 +148,14 @@ export class DealTasksService {
    * and when it was dropped), and activities have no link to the task to match on safely.
    */
   remove(ctx: TenantContext, id: string) {
-    return this.database.withTenant(ctx.tenantId, (tx) => this.deleteTask(tx, ctx, id));
-  }
-
-  /** remove inside the caller's transaction (a meeting's next step drops its task, CD-374). */
-  async deleteTask(tx: Tx, ctx: TenantContext, id: string) {
-    const [row] = await tx
-      .delete(dealTasks)
-      .where(eq(dealTasks.id, id))
-      .returning({ dealId: dealTasks.dealId, label: dealTasks.label, offPlaybook: dealTasks.offPlaybook, blocksAdvance: dealTasks.blocksAdvance });
-    if (!row) throw new NotFoundException('To-do not found');
-    if (row.offPlaybook && !row.blocksAdvance)
-      await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId: row.dealId, actorUserId: ctx.userId, channel: null, title: 'Task removed: ' + row.label, detail: null });
-    return row;
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const [row] = await tx
+        .delete(dealTasks)
+        .where(eq(dealTasks.id, id))
+        .returning({ dealId: dealTasks.dealId, label: dealTasks.label, offPlaybook: dealTasks.offPlaybook, blocksAdvance: dealTasks.blocksAdvance });
+      if (!row) throw new NotFoundException('To-do not found');
+      if (row.offPlaybook && !row.blocksAdvance)
+        await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId: row.dealId, actorUserId: ctx.userId, channel: null, title: 'Task removed: ' + row.label, detail: null });
+    });
   }
 }

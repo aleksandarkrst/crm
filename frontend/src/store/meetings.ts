@@ -493,21 +493,6 @@ export function meetingActions(ctx: Ctx) {
     }
   };
 
-  /** Unticking a next step's task (CD-374): it leaves the deal. null (after saying why) when refused. */
-  const removeStepTask = async (id: string, stepId: string, dealId: string) => {
-    try {
-      const res = await crmApi.meetings.removeStepTask(id, stepId);
-      minutesLoaded(id, res.minutes);
-      ctx.tasksChanged(dealId);
-      flash('Task removed from the opportunity');
-      return res;
-    } catch (err) {
-      flash('Task not removed: ' + ctx.errText(err), 7000);
-      if (err instanceof ApiError && err.status === 409) void loadMinutes(id).catch(() => undefined);
-      return null;
-    }
-  };
-
   // ------------------------------------------------------------ external minutes (CD-133)
   /** The external text (the first read fills in the template); throws when it can't be read. */
   const loadExternal = (id: string) => crmApi.meetings.external(id);
@@ -616,7 +601,6 @@ export function meetingActions(ctx: Ctx) {
     loadMinutes,
     saveMinutes,
     createStepTask,
-    removeStepTask,
     loadExternal,
     saveExternal,
     copyInternal,
