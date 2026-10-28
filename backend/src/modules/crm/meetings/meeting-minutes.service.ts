@@ -32,8 +32,6 @@ const NextStep = z.object({
     .date()
     .nullish()
     .transform((v) => v ?? null),
-  /** Left out of the external minutes (CD-374). */
-  internalOnly: z.boolean().default(false),
 });
 
 /**

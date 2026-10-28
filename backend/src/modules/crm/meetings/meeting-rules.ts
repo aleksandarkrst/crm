@@ -54,14 +54,7 @@ export function meetingChangeError(change: MeetingChange, meeting: { status: Mee
 export type NextStepInput = Omit<MeetingNextStep, 'taskId'>;
 
 /** A next step with its keys in one order, so two lists compare by value (JSON) whatever order jsonb stored them in. */
-export const canonicalStep = (s: MeetingNextStep): MeetingNextStep => ({
-  id: s.id,
-  text: s.text,
-  ownerUserId: s.ownerUserId ?? null,
-  dueDate: s.dueDate ?? null,
-  internalOnly: s.internalOnly ?? false,
-  taskId: s.taskId ?? null,
-});
+export const canonicalStep = (s: MeetingNextStep): MeetingNextStep => ({ id: s.id, text: s.text, ownerUserId: s.ownerUserId ?? null, dueDate: s.dueDate ?? null, taskId: s.taskId ?? null });
 
 /**
  * The next steps after a save of the internal minutes (CD-132): the list sent replaces the list,

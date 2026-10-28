@@ -237,13 +237,13 @@ export interface ExternalNextStep {
 }
 
 /**
- * The next steps of the internal minutes that go to the customer (CD-374): those not marked
- * internal only and with text, in their order. `ownerNames` maps a user id to the display name;
+ * The next steps of the internal minutes as the customer sees them (CD-374): those with text,
+ * in their order. `ownerNames` maps a user id to the display name;
  * an owner without a usable one (missing, or an email address) is left out rather than shown by email.
  */
 export function externalNextSteps(minutes: { nextSteps: readonly MeetingNextStep[] }, ownerNames: ReadonlyMap<string, string>): ExternalNextStep[] {
   return minutes.nextSteps
-    .filter((s) => !s.internalOnly && s.text.trim())
+    .filter((s) => s.text.trim())
     .map((s) => ({ text: s.text.trim(), owner: ownerLabel(s.ownerUserId ? ownerNames.get(s.ownerUserId) : undefined), dueDate: s.dueDate ?? null }));
 }
 

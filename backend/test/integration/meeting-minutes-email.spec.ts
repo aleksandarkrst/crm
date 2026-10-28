@@ -149,21 +149,14 @@ describe('the external text', () => {
     expect((await ok('GET', ext(m.id), as(owner))).body).toBe(updated.body);
   });
 
-  it('adds the next steps not marked internal only to the email, as they are when it is made (CD-374)', async () => {
-    const m = await meeting('Internal steps');
+  it('adds the next steps to the email, as they are when it is made (CD-374)', async () => {
+    const m = await meeting('Next steps');
     const step = (text: string, over: Record<string, unknown> = {}) => ({ id: crypto.randomUUID(), text, ownerUserId: null, dueDate: null, ...over });
-    const steps = [
-      step('Send the offer', { ownerUserId: ana.userId, dueDate: '2026-11-02' }),
-      step('Discount up to 15%', { ownerUserId: bo.userId, dueDate: '2026-11-03', internalOnly: true }),
-      step('Book the follow-up', { ownerUserId: owner.userId, dueDate: '2026-11-09' }),
-    ];
+    const steps = [step('Send the offer', { ownerUserId: ana.userId, dueDate: '2026-11-02' }), step('Book the follow-up', { ownerUserId: owner.userId, dueDate: '2026-11-09' })];
     // The text is filled in before the steps are written: they still reach the email.
     const first = await ok('GET', ext(m.id), as(ana));
-    expect(first.nextSteps).toEqual([]);
-    const saved = await ok('PUT', `/crm/meetings/${m.id}/minutes/internal`, { ...as(ana), body: { nextSteps: steps } });
-    expect(saved.nextSteps.map((st: Json) => st.internalOnly)).toEqual([false, true, false]);
-    expect((await ok('GET', `/crm/meetings/${m.id}/minutes/internal`, as(bo))).nextSteps[1]).toMatchObject({ internalOnly: true });
-    expect((await call('PUT', `/crm/meetings/${m.id}/minutes/internal`, { ...as(ana), body: { nextSteps: [step('x', { internalOnly: 'yes' })] } })).status).toBe(400);
+    expect(first).toMatchObject({ nextSteps: [], nextStepsText: '' });
+    await ok('PUT', `/crm/meetings/${m.id}/minutes/internal`, { ...as(ana), body: { nextSteps: steps } });
 
     const now = await ok('GET', ext(m.id), as(ana));
     expect(now.body).toBe(first.body);
@@ -176,19 +169,16 @@ describe('the external text', () => {
     const preview = await ok('POST', `/crm/meetings/${m.id}/minutes/preview`, { ...as(ana), body: request({ subject, body: 'We met.' }) }, 200);
     expect(preview.text).toContain(['We met.', '', 'Next steps', `• Send the offer (${ana.name}, by 2 Nov 2026)`, `• Book the follow-up (${owner.name}, by 9 Nov 2026)`].join('\n'));
     expect(preview.html).toContain('<strong>Next steps</strong>');
-    expect(JSON.stringify(preview)).not.toContain('Discount');
     // Owners by name only (the sender's own address is in the footer, as the reply address).
     const section = preview.text.slice(preview.text.indexOf('Next steps'), preview.text.indexOf('\n--'));
     for (const s of [owner, ana, bo]) expect(section).not.toContain(s.email);
 
-    // Marked internal only later: out of the next email too.
-    await ok('PUT', `/crm/meetings/${m.id}/minutes/internal`, { ...as(ana), body: { nextSteps: steps.map((st, i) => (i === 2 ? { ...st, internalOnly: true } : st)) } });
-    expect((await ok('GET', ext(m.id), as(ana))).nextSteps.map((st: Json) => st.text)).toEqual(['Send the offer']);
+    // A step changed later is in the next email as it is then; none left, no section.
+    await ok('PUT', `/crm/meetings/${m.id}/minutes/internal`, { ...as(ana), body: { nextSteps: [{ ...steps[0], text: 'Send the revised offer' }] } });
     const later = await ok('POST', `/crm/meetings/${m.id}/minutes/preview`, { ...as(ana), body: request({ subject, body: 'We met.' }) }, 200);
+    expect(later.text).toContain('Send the revised offer');
     expect(later.text).not.toContain('Book the follow-up');
-
-    // None left for the customer: no section at all.
-    await ok('PUT', `/crm/meetings/${m.id}/minutes/internal`, { ...as(ana), body: { nextSteps: steps.map((st) => ({ ...st, internalOnly: true })) } });
+    await ok('PUT', `/crm/meetings/${m.id}/minutes/internal`, { ...as(ana), body: { nextSteps: [] } });
     const none = await ok('POST', `/crm/meetings/${m.id}/minutes/preview`, { ...as(ana), body: request({ subject, body: 'We met.' }) }, 200);
     expect(none.html).not.toContain('Next steps');
   });
@@ -341,8 +331,8 @@ describe('the internal minutes never reach the customer (spec 6.2, AC 7.3.4)', (
     const text = await ok('GET', ext(m.id), as(owner));
     await ok('PUT', `/crm/meetings/${m.id}/minutes/internal`, {
       ...as(ana),
-      // A next step reaches the customer unless it is marked internal only (CD-374).
-      body: { summary: `Summary ${MARKER}`, agreements: `Agreements ${MARKER}`, nextSteps: [{ id: crypto.randomUUID(), text: `Step ${MARKER}`, ownerUserId: null, dueDate: null, internalOnly: true }] },
+      // The next steps do reach the customer (CD-374), so the marker is only in the summary and agreements.
+      body: { summary: `Summary ${MARKER}`, agreements: `Agreements ${MARKER}` },
     });
     const subject = `Marker check ${RUN}`;
     const preview = await ok('POST', `/crm/meetings/${m.id}/minutes/preview`, { ...as(owner), body: request({ subject, body: text.body, ccUserIds: [ana.userId] }) }, 200);

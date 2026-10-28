@@ -107,7 +107,7 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
     const input: InternalMinutesInput = {};
     if (parts.includes('summary')) input.summary = d.summary;
     if (parts.includes('agreements')) input.agreements = d.agreements;
-    if (parts.includes('nextSteps')) input.nextSteps = d.nextSteps.map(({ id, text, ownerUserId, dueDate, internalOnly }) => ({ id, text, ownerUserId, dueDate, internalOnly }));
+    if (parts.includes('nextSteps')) input.nextSteps = d.nextSteps.map(({ id, text, ownerUserId, dueDate }) => ({ id, text, ownerUserId, dueDate }));
     inFlight.current++;
     setState('saving');
     chain.current = chain.current.then(async () => {
@@ -155,7 +155,7 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
   const setStep = (id: string, patch: Partial<ApiMeetingNextStep>) => change('nextSteps', { nextSteps: draftRef.current.nextSteps.map((st) => (st.id === id ? { ...st, ...patch } : st)) });
   const addStep = () => {
     const id = crypto.randomUUID();
-    change('nextSteps', { nextSteps: [...draftRef.current.nextSteps, { id, text: '', ownerUserId: null, dueDate: null, internalOnly: false, taskId: null }] });
+    change('nextSteps', { nextSteps: [...draftRef.current.nextSteps, { id, text: '', ownerUserId: null, dueDate: null, taskId: null }] });
     setFocusStep(id);
   };
   const createTask = async (stepId: string) => {
@@ -175,7 +175,7 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
   const members = s.team.filter((t) => t.status === 'Active');
   // While editable, a last column for the save-as-task check (with an opportunity) and the remove button.
   const tail = editable;
-  const cols = ['minmax(160px, 2.4fr)', 'minmax(120px, 1.1fr)', '150px', '90px', ...(tail ? ['auto'] : [])].join(' ');
+  const cols = ['minmax(160px, 2.4fr)', 'minmax(120px, 1.1fr)', '150px', ...(tail ? ['auto'] : [])].join(' ');
   const stateText = state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved' : state === 'error' ? 'Not saved' : '';
 
   return (
@@ -207,8 +207,8 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
         {draft.nextSteps.length > 0 && (
           <div className="card minutes-steps" data-testid="minutes-steps">
             <div className="table-head minutes-steps-head" style={{ gridTemplateColumns: cols }}>
-              {['Next step', 'Owner', 'Due date', 'Internal only', ...(tail ? [''] : [])].map((h, i) => (
-                <span key={i} className={'th' + (h === 'Internal only' ? ' minutes-step-center' : '')}>
+              {['Next step', 'Owner', 'Due date', ...(tail ? [''] : [])].map((h, i) => (
+                <span key={i} className="th">
                   {h}
                 </span>
               ))}
@@ -240,10 +240,6 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
                         ))}
                       </select>
                       <input className="form-input" type="date" data-testid="step-due" aria-label="Due date" value={st.dueDate ?? ''} onChange={(e) => setStep(st.id, { dueDate: e.target.value || null })} />
-                      {/* Kept out of the minutes sent to the customer (CD-374). */}
-                      <label className="minutes-step-cell minutes-step-internal minutes-step-center" data-label="Internal only">
-                        <input type="checkbox" data-testid="step-internal" aria-label="Internal only" checked={st.internalOnly} onChange={(e) => setStep(st.id, { internalOnly: e.target.checked })} />
-                      </label>
                       <span className="minutes-step-actions">
                         {m.dealId && <StepTask st={st} busy={busyStep === st.id} onSave={() => void createTask(st.id)} />}
                         <RemoveButton title="Remove the next step" onClick={() => change('nextSteps', { nextSteps: draftRef.current.nextSteps.filter((x) => x.id !== st.id) })} />
@@ -257,9 +253,6 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
                       </span>
                       <span className="minutes-step-cell" data-label="Due date">
                         {st.dueDate ? dateText(st.dueDate) : <span className="meeting-muted">No date</span>}
-                      </span>
-                      <span className="minutes-step-cell minutes-step-center" data-label="Internal only">
-                        {st.internalOnly ? 'Yes' : 'No'}
                       </span>
                     </>
                   )}

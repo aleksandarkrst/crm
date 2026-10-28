@@ -979,8 +979,6 @@ export interface ApiMeetingNextStep {
   ownerUserId: string | null;
   /** yyyy-mm-dd */
   dueDate: string | null;
-  /** Left out of the external minutes (CD-374). */
-  internalOnly: boolean;
   taskId: string | null;
 }
 /** The internal minutes of a meeting (CD-132): empty strings and no steps before anyone wrote them. */
@@ -1039,7 +1037,7 @@ export interface ApiExternalMinutes {
   changedSinceLastSend: boolean;
   /** The meeting changed since the template filled in the text, which someone changed since (CD-222). */
   meetingChanged: 'time' | 'details' | null;
-  /** The next steps the email adds after the text (CD-374): not marked internal only, as they are now. */
+  /** The next steps the email adds after the text (CD-374), as they are now. */
   nextSteps: { text: string; owner: string | null; dueDate: string | null }[];
   /** Those steps as the email's section, in the customer email language; empty when none. */
   nextStepsText: string;

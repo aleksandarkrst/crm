@@ -2895,15 +2895,15 @@ hints are in `drizzle/0034_meeting_minutes_rls.sql`.
   service and the digest (which lists meetings, not their text). The external minutes email
   (CD-133) must be built from the external fields (`external_subject`, `external_body`) and the
   meeting's facts only, never from `summary` or `agreements`; "Copy from internal minutes" copies
-  text into the external body in the browser, explicitly. The one exception is the next steps not
-  marked **internal only** (CD-374), which the email adds after the text (see "External minutes").
+  text into the external body in the browser, explicitly. The one exception is the next steps
+  (CD-374), which the email adds after the text (see "External minutes").
   CD-133 adds the test on its email builder that proves it.
 - **Digest**: "Minutes missing" (see "Daily digest").
 - **Screen** (`screens/meeting/InternalMinutes.tsx`, store `meetings.loadMinutes / saveMinutes /
   createStepTask`, `s.meetingMinutes` by meeting id): Summary and Agreements are textareas with a
   small toolbar (Bold, Bullet list, Link) that inserts the Markdown subset; out of the editor (and
   read-only) they show formatted through `RichText`. Next steps are a table (Next step, Owner,
-  Due date, Internal only as a checkbox; stacked rows on a phone). Next to the remove ✕, a green
+  Due date; stacked rows on narrower screens). Next to the remove ✕, a green
   ✓ saves the step as a task on the opportunity, and so on Today, without leaving the meeting
   (`POST next-steps/:stepId/task`); once saved, the ✓ is gone. No ✓ on an old meeting without a
   deal (CD-213). Changes save after a 0.7 s pause (and on blur or leaving), one save at a time,
@@ -2951,8 +2951,7 @@ Service `meetings/external-minutes.service.ts`, email builder `meetings/minutes-
   (newest first, with recipients) and `POST sends/:sendId/retry` (202; only the failed recipients
   are queued again; 409 when none failed).
 - **Next steps** (CD-374): not part of the text. Preview and send add them after the body
-  (`withNextSteps`): the internal minutes' steps not marked `internalOnly`, as they are at that
-  moment, one line each with the owner's display name and the due date ("- Send the offer (Ana
+  (`withNextSteps`): the internal minutes' next steps with text, as they are at that moment, one line each with the owner's display name and the due date ("- Send the offer (Ana
   Petrović, by 2 Nov 2026)"), under "Next steps" in the customer email language; no section when
   none is left. Owners are named only while they are members, and a display name that is an email
   address is left out, so no member's address reaches the customer. The send stores that full
@@ -2990,8 +2989,7 @@ Service `meetings/external-minutes.service.ts`, email builder `meetings/minutes-
 - **Screen** (`screens/meeting/ExternalMinutes.tsx`, store `meetings.loadExternal / saveExternal /
   copyInternal / previewMinutes / sendMinutes / loadSends / retrySend`): subject and body (the
   internal minutes' editor with its toolbar), autosave with "Saved", then **Next steps** as the
-  email will add them (read-only, from `nextStepsText`) with a hint that steps marked internal only
-  stay in Pultly, and "Copy from internal minutes" (asks before replacing text). Once held: To (the external participants with an email ticked;
+  email will add them (read-only, from `nextStepsText`) with a hint that they are added when sent, and "Copy from internal minutes" (asks before replacing text). Once held: To (the external participants with an email ticked;
   "No email" and deleted ones disabled) and Cc (the internal participants, "+ Copy another member").
   **Send…** opens the preview (from, reply-to, to, cc, subject, and the HTML in a sandboxed
   iframe); **Send** there sends. Under the editor: "Minutes sent to <names> on <date>", "Changed

@@ -30,8 +30,9 @@ const subjectLine = (s: string) => s.replace(/[\r\n]+/g, ' ').trim();
 /**
  * The external minutes (CD-133): a text for the customer, separate from the internal minutes.
  * The first time someone who may edit it opens it once the meeting is held, it is filled in from a template (the meeting, both sides, the
- * agreements, and the next steps with owner and due date except those marked internal only, CD-374); after that only "Copy from internal minutes" copies
- * anything. It saves itself like the internal minutes. Once the meeting is held, the people who
+ * agreements); after that only "Copy from internal minutes" copies anything. The internal minutes'
+ * next steps, with owner and due date, are shown under the text and added after it when it is
+ * sent, as they are then (CD-374). It saves itself like the internal minutes. Once the meeting is held, the people who
  * may change it send it by email: tick the customer's people (those with an email), add members
  * as CC, preview the exact email, send. Below: who it was last sent to, each recipient's delivery
  * and Retry for the failed ones, and "Changed since last send".
@@ -260,7 +261,7 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
           <div className="meeting-muted">No next steps for the customer.</div>
         )}
         <div className="hint-box" data-testid="external-steps-hint">
-          Added after the text when the minutes are sent, as they are in the internal minutes then. Steps marked internal only stay in Pultly.
+          Added after the text when the minutes are sent, as they are in the internal minutes then.
         </div>
       </div>
       {editable && (

@@ -222,7 +222,7 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
     if (field === 'installments' && Array.isArray(v)) return `${v.length} installment${v.length === 1 ? '' : 's'}`;
     // The steps themselves (CD-222), so a change reads as what changed, not "1 step → 1 step".
     if (field === 'nextSteps' && Array.isArray(v))
-      return v.length ? clip((v as { text?: string; dueDate?: string | null; internalOnly?: boolean }[]).map((st) => `“${st.text || '…'}”${st.dueDate ? ` by ${dateText(st.dueDate)}` : ''}${st.internalOnly ? ' (internal only)' : ''}`).join(', ')) : empty;
+      return v.length ? clip((v as { text?: string; dueDate?: string | null }[]).map((st) => `“${st.text || '…'}”${st.dueDate ? ` by ${dateText(st.dueDate)}` : ''}`).join(', ')) : empty;
     if (typeof v === 'string') return `“${clip(v)}”`;
     return String(v);
   };

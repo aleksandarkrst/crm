@@ -104,12 +104,11 @@ describe('next steps of the internal minutes (CD-132)', () => {
       { ...step('b'), taskId: null },
       { ...step('c'), taskId: 'task-c' },
     ];
-    const sent = [step('b', { text: 'Changed', internalOnly: true }), { ...step('a'), taskId: 'forged' } as never, step('new')];
-    // A step from before CD-374 has no internalOnly: it reads as false.
+    const sent = [step('b', { text: 'Changed' }), { ...step('a'), taskId: 'forged' } as never, step('new')];
     expect(mergeNextSteps(sent, existing)).toEqual([
-      { id: 'b', text: 'Changed', ownerUserId: null, dueDate: null, internalOnly: true, taskId: null },
-      { id: 'a', text: 'Step a', ownerUserId: null, dueDate: null, internalOnly: false, taskId: 'task-a' },
-      { id: 'new', text: 'Step new', ownerUserId: null, dueDate: null, internalOnly: false, taskId: null },
+      { id: 'b', text: 'Changed', ownerUserId: null, dueDate: null, taskId: null },
+      { id: 'a', text: 'Step a', ownerUserId: null, dueDate: null, taskId: 'task-a' },
+      { id: 'new', text: 'Step new', ownerUserId: null, dueDate: null, taskId: null },
     ]);
   });
 

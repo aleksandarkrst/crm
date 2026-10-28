@@ -111,8 +111,8 @@ export interface ApiExternalMinutes {
    */
   meetingChanged: 'time' | 'details' | null;
   /**
-   * The next steps the email adds after the text (CD-374): the internal minutes' steps not marked
-   * internal only, as they are now, with the owner's display name and the due date.
+   * The internal minutes' next steps the email adds after the text (CD-374), as they are now,
+   * with the owner's display name and the due date.
    */
   nextSteps: ExternalNextStep[];
   /** Those steps as the section the email adds (`nextStepsSection`, in the customer email language); empty when none. */
@@ -150,8 +150,8 @@ interface Prepared {
  *
  * The internal minutes never reach the email: `minutesEmail` only takes the external text and
  * facts about the sender and the workspace. They are read here only for the template and "Copy
- * from internal minutes", which return text for the user to edit, and for the next steps not
- * marked internal only (CD-374), which `withNextSteps` adds after the text when the email is made.
+ * from internal minutes", which return text for the user to edit, and for the next steps
+ * (CD-374), which `withNextSteps` adds after the text when the email is made.
  */
 @Injectable()
 export class ExternalMinutesService {
@@ -430,7 +430,7 @@ export class ExternalMinutesService {
   private async externalSteps(tx: Tx, ctx: TenantContext, meetingId: string): Promise<ExternalNextStep[]> {
     const [internal] = await tx.select({ nextSteps: meetingMinutes.nextSteps }).from(meetingMinutes).where(eq(meetingMinutes.meetingId, meetingId));
     const steps = internal?.nextSteps ?? [];
-    const ownerIds = [...new Set(steps.flatMap((s) => (s.ownerUserId && !s.internalOnly ? [s.ownerUserId] : [])))];
+    const ownerIds = [...new Set(steps.flatMap((s) => (s.ownerUserId ? [s.ownerUserId] : [])))];
     const owners = ownerIds.length
       ? await tx
           .select({ id: users.id, name: users.displayName })

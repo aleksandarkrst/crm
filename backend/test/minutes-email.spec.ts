@@ -158,8 +158,8 @@ describe('externalNextSteps (CD-374)', () => {
     ['u-cy', 'cy@kestrel.example.com'],
   ]);
 
-  it('leaves out the steps marked internal only and those without text, in their order', () => {
-    const steps = [step('a', { ownerUserId: 'u-ana', dueDate: '2026-11-02' }), step('b', { internalOnly: true, ownerUserId: 'u-ana' }), step('c', { text: '  ' }), step('d', { internalOnly: false })];
+  it('leaves out the steps without text, in their order', () => {
+    const steps = [step('a', { ownerUserId: 'u-ana', dueDate: '2026-11-02' }), step('c', { text: '  ' }), step('d')];
     expect(externalNextSteps({ nextSteps: steps }, names)).toEqual([
       { text: 'Step a', owner: 'Ana Petrović', dueDate: '2026-11-02' },
       { text: 'Step d', owner: null, dueDate: null },
@@ -177,13 +177,12 @@ describe('externalNextSteps (CD-374)', () => {
   });
 
   it('is added after the written text with owner and due date, in the email as a list', () => {
-    const steps = [step('a', { ownerUserId: 'u-ana', dueDate: '2026-11-02' }), step('b', { internalOnly: true, text: 'Discount up to 15%' }), step('c'), step('d', { text: '  ' })];
+    const steps = [step('a', { ownerUserId: 'u-ana', dueDate: '2026-11-02' }), step('c'), step('d', { text: '  ' })];
     const body = withNextSteps('We met.\n', externalNextSteps({ nextSteps: steps }, names), 'en');
     expect(body).toBe(['We met.', '', '**Next steps**', '- Step a (Ana Petrović, by 2 Nov 2026)', '- Step c'].join('\n'));
     const html = minutesEmail({ ...input, body }).html;
     expect(html).toContain('<strong>Next steps</strong>');
     expect(html).toContain('<li>Step a (Ana Petrović, by 2 Nov 2026)</li><li>Step c</li>');
-    expect(html).not.toContain('Discount up to 15%');
   });
 
   it('is in the customer email language: the due date as "rok", and only the section when nothing was written', () => {
@@ -191,8 +190,8 @@ describe('externalNextSteps (CD-374)', () => {
     expect(nextStepsSection([{ text: 'Share the case study', owner: 'Bo Tester', dueDate: null }], 'en')).toBe('**Next steps**\n- Share the case study (Bo Tester)');
   });
 
-  it('leaves the section out when no step goes to the customer', () => {
-    const body = withNextSteps('We met.', externalNextSteps({ nextSteps: [step('a', { internalOnly: true })] }, names), 'en');
+  it('leaves the section out when there are no next steps', () => {
+    const body = withNextSteps('We met.', externalNextSteps({ nextSteps: [step('a', { text: ' ' })] }, names), 'en');
     expect(body).toBe('We met.');
     expect(minutesEmail({ ...input, body }).html).not.toContain('Next steps');
   });
