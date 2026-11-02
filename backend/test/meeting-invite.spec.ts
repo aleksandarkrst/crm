@@ -175,6 +175,9 @@ describe('the meeting emails to internal participants', () => {
     expect(mail.text).not.toContain('Map:');
     expect(mail.html).not.toContain('google.com/maps');
     expect(unfold(mail.attachments![0]!.content)).toContain(`URL:${join}`);
+    const www = meetingInviteEmail({ ...input, meeting: { ...input.meeting, location: 'www.zoom.us/j/1' } });
+    expect(www.text).not.toContain('Map:');
+    expect(unfold(www.attachments![0]!.content)).toContain('URL:https://www.zoom.us/j/1');
   });
 
   it('says when the organizer left, and leaves out a missing deal and location', () => {

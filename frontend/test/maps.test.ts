@@ -7,6 +7,7 @@ describe('map links (CD-377)', () => {
   it('keeps a link as it is', () => {
     assert.equal(mapsUrl('https://teams.microsoft.com/l/meetup-join/19%3a'), 'https://teams.microsoft.com/l/meetup-join/19%3a');
     assert.equal(mapsUrl('  http://zoom.us/j/123  '), 'http://zoom.us/j/123');
+    assert.equal(mapsUrl('www.zoom.us/j/1'), 'https://www.zoom.us/j/1');
   });
 
   it('searches Google Maps for an address, diacritics and commas encoded', () => {

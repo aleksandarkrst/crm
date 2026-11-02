@@ -1,6 +1,6 @@
 import { buttonHtml, escapeHtml, layoutHtml } from '../../../infrastructure/mail/html';
 import type { MailAttachment, MailMessage } from '../../../infrastructure/mail/mailer';
-import { isWebUrl, mapsUrl } from '../../../shared/text/maps';
+import { MAPS_SEARCH, mapsUrl } from '../../../shared/text/maps';
 import { zonedParts } from '../../../shared/time/zoned-time';
 
 /**
@@ -176,7 +176,8 @@ export function meetingInviteEmail(input: InviteEmailInput): MailMessage {
         ? `${actorName} changed ${m.title} with ${m.companyName}. Here is the meeting as it is now.`
         : `${actorName} cancelled ${m.title} with ${m.companyName}.`;
   // An address gets a Google Maps link under it (CD-377); a Teams or Zoom link is already one.
-  const map = m.location && !isWebUrl(m.location) ? mapsUrl(m.location) : null;
+  const where = mapsUrl(m.location);
+  const map = where?.startsWith(MAPS_SEARCH) ? where : null;
   const mapLine = map ? `Map: ${map}` : null;
   const facts = [
     `Date: ${date}`,
@@ -203,7 +204,7 @@ export function meetingInviteEmail(input: InviteEmailInput): MailMessage {
     summary: m.title,
     location: m.location,
     description,
-    url: m.location && isWebUrl(m.location) ? m.location.trim() : link,
+    url: where && !map ? where : link,
     organizer: { name: m.organizerName ?? workspaceName, email: senderAddress(input.mailFrom) },
     attendee: { name: input.recipientName, email: input.to },
   });

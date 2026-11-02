@@ -156,10 +156,7 @@ export function canEditMeeting(m: ApiMeeting, me: string, role: ApiRole): boolea
 export const hasEmail = (email: string | null | undefined): boolean => !!email && /^[^\s@]+@[^\s@]+$/.test(email.trim());
 
 /** Where the location opens (CD-377): a link ("Join") as it is, an address ("Map") on Google Maps. */
-export const locationUrl = (location: string | null | undefined): string | null => {
-  const v = location?.trim() ?? '';
-  return mapsUrl(/^www\.\S+$/i.test(v) ? 'https://' + v : v);
-};
+export const locationUrl = mapsUrl;
 
 /** Open deals with a planned meeting still to come (they have a next step, CD-130). */
 const upcomingCache = new WeakMap<Record<string, ApiMeeting>, { at: number; deals: Set<string> }>();
