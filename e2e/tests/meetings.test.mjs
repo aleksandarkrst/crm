@@ -160,6 +160,22 @@ describe('meeting calendar', () => {
     assert.equal(await picked('[data-testid=meeting-field-organizer]'), 'Mia Meetings', 'the organizer is shown');
   });
 
+  step('an address location links to Google Maps, a meeting link to joining it (CD-377)', async () => {
+    const link = () => page.$eval('[data-testid=meeting-field-location-link]', (el) => ({ text: el.innerText.trim(), href: el.getAttribute('href'), target: el.target }));
+    await setValue(page, '[data-testid=meeting-field-location]', 'Bulevar Mihajla Pupina 10, Beograd');
+    await page.waitForSelector('[data-testid=meeting-field-location-link]');
+    assert.deepEqual(await link(), { text: 'Map', href: 'https://www.google.com/maps/search/?api=1&query=Bulevar%20Mihajla%20Pupina%2010%2C%20Beograd', target: '_blank' });
+    const join = 'https://teams.microsoft.com/l/meetup-join/abc';
+    await setValue(page, '[data-testid=meeting-field-location]', join);
+    await page.waitForFunction(() => document.querySelector('[data-testid=meeting-field-location-link]')?.innerText.trim() === 'Join');
+    assert.equal((await link()).href, join);
+    await setValue(page, '[data-testid=meeting-field-location]', '');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=meeting-field-location-link]'));
+    assert.ok(await eventually(async () => (await api(page, `/crm/meetings/${meetingId}`)).location === null), 'the cleared location is saved');
+    await setValue(page, '[data-testid=meeting-field-location]', 'Belgrade, Knez Mihailova 1');
+    await page.waitForSelector('[data-testid=meeting-field-location-link]');
+  });
+
   step('edits the title in place (CD-212)', async () => {
     await setValue(page, '[data-testid=meeting-title-input]', 'Showroom walkthrough');
     assert.ok(await eventually(async () => (await api(page, `/crm/meetings/${meetingId}`)).title === 'Showroom walkthrough'), 'saved after the typing pause');

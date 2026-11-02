@@ -1,5 +1,6 @@
 import { buttonHtml, escapeHtml, layoutHtml } from '../../../infrastructure/mail/html';
 import type { MailAttachment, MailMessage } from '../../../infrastructure/mail/mailer';
+import { isWebUrl, mapsUrl } from '../../../shared/text/maps';
 import { zonedParts } from '../../../shared/time/zoned-time';
 
 /**
@@ -28,6 +29,7 @@ export interface IcsEvent {
   summary: string;
   location: string | null;
   description: string;
+  /** The meeting in Pultly, or the join link when the location is one (CD-377). */
   url: string;
   /** The meeting's organizer by name, with the platform's sending address (replies aren't read). */
   organizer: { name: string; email: string };
@@ -173,10 +175,14 @@ export function meetingInviteEmail(input: InviteEmailInput): MailMessage {
       : kind === 'updated'
         ? `${actorName} changed ${m.title} with ${m.companyName}. Here is the meeting as it is now.`
         : `${actorName} cancelled ${m.title} with ${m.companyName}.`;
+  // An address gets a Google Maps link under it (CD-377); a Teams or Zoom link is already one.
+  const map = m.location && !isWebUrl(m.location) ? mapsUrl(m.location) : null;
+  const mapLine = map ? `Map: ${map}` : null;
   const facts = [
     `Date: ${date}`,
     `Time: ${time}`,
     m.location ? `Location: ${m.location}` : null,
+    mapLine,
     `Company: ${m.companyName}`,
     m.dealTitle ? `Opportunity: ${m.dealTitle}` : null,
     `Organizer: ${m.organizerName ?? 'left the workspace'}`,
@@ -197,7 +203,7 @@ export function meetingInviteEmail(input: InviteEmailInput): MailMessage {
     summary: m.title,
     location: m.location,
     description,
-    url: link,
+    url: m.location && isWebUrl(m.location) ? m.location.trim() : link,
     organizer: { name: m.organizerName ?? workspaceName, email: senderAddress(input.mailFrom) },
     attendee: { name: input.recipientName, email: input.to },
   });
@@ -208,7 +214,7 @@ export function meetingInviteEmail(input: InviteEmailInput): MailMessage {
     [
       `<p style="margin:0 0 12px">${escapeHtml(greeting)}</p>`,
       `<p style="margin:0 0 12px">${escapeHtml(intro)}</p>`,
-      `<p style="margin:0 0 12px;color:#475750">${facts.map(escapeHtml).join('<br>')}</p>`,
+      `<p style="margin:0 0 12px;color:#475750">${facts.map((f) => (f === mapLine ? `Map: <a href="${escapeHtml(map!)}" style="color:#14503C">Open in Google Maps</a>` : escapeHtml(f))).join('<br>')}</p>`,
       buttonHtml('Open the meeting', link),
       `<p style="margin:0;color:#475750">${escapeHtml(calendarNote)}</p>`,
     ].join('\n'),

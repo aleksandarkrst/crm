@@ -36,6 +36,7 @@ import {
   type MeetingStatus,
   type MeetingType,
 } from '../lib/api';
+import { mapsUrl } from '../lib/maps';
 import type { NewMeetingParams } from '../lib/paths';
 import type { LiveEvent } from './live';
 import type { State } from './types';
@@ -154,10 +155,10 @@ export function canEditMeeting(m: ApiMeeting, me: string, role: ApiRole): boolea
 /** "No email" for contacts without a usable address (the lists show "—" for none). */
 export const hasEmail = (email: string | null | undefined): boolean => !!email && /^[^\s@]+@[^\s@]+$/.test(email.trim());
 
-/** A URL location is shown as a link. */
+/** Where the location opens (CD-377): a link ("Join") as it is, an address ("Map") on Google Maps. */
 export const locationUrl = (location: string | null | undefined): string | null => {
   const v = location?.trim() ?? '';
-  return /^https?:\/\/\S+$/i.test(v) ? v : /^www\.\S+$/i.test(v) ? 'https://' + v : null;
+  return mapsUrl(/^www\.\S+$/i.test(v) ? 'https://' + v : v);
 };
 
 /** Open deals with a planned meeting still to come (they have a next step, CD-130). */

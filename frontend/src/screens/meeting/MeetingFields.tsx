@@ -4,6 +4,7 @@ import { IconRow } from '../../components/icons';
 import { RichText } from '../../components/RichText';
 import type { ApiMeeting, MeetingInput, MeetingType } from '../../lib/api';
 import { paths } from '../../lib/paths';
+import { MAPS_SEARCH } from '../../lib/maps';
 import { hasEmail, locationUrl, MEETING_TYPES } from '../../store/meetings';
 import { endSlots, keepLength, lengthLabel, momentOf } from '../../store/meetingTime';
 import { companyLabels, companyRecords, memberLabels, memberName } from '../../store/selectors';
@@ -323,7 +324,7 @@ export function MeetingDetails({ m, editable }: { m: ApiMeeting; editable: boole
         />
         {url && (
           <a href={url} target="_blank" rel="noopener noreferrer" className="meeting-field-link" data-testid="meeting-field-location-link">
-            Open
+            {url.startsWith(MAPS_SEARCH) ? 'Map' : 'Join'}
           </a>
         )}
       </IconRow>
