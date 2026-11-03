@@ -34,8 +34,8 @@ const contact = (fullName: string, companyId: string, email: string | null = nul
 const body = (companyId: string, over: Record<string, unknown> = {}) => ({
   title: 'Quarterly review',
   type: 'visit',
-  startsAt: '2026-11-10T09:00:00.000Z',
-  endsAt: '2026-11-10T10:00:00.000Z',
+  startsAt: '2036-11-10T09:00:00.000Z',
+  endsAt: '2036-11-10T10:00:00.000Z',
   companyId,
   ...over,
 });
@@ -79,8 +79,8 @@ describe('creating and reading meetings', () => {
     expect(m).toMatchObject({
       title: 'Quarterly review',
       type: 'visit',
-      startsAt: '2026-11-10T09:00:00.000Z',
-      endsAt: '2026-11-10T10:00:00.000Z',
+      startsAt: '2036-11-10T09:00:00.000Z',
+      endsAt: '2036-11-10T10:00:00.000Z',
       location: 'Acme HQ',
       agenda: 'Pricing\nRoadmap',
       companyId: acme.id,
@@ -110,7 +110,7 @@ describe('creating and reading meetings', () => {
     // "Meeting scheduled" on the deal, with the time in the workspace zone (Europe/Belgrade); no contact yet.
     const activities = await ok('GET', `/crm/deals/${d.id}/activities`, as(owner));
     expect(activities).toEqual(
-      expect.arrayContaining([expect.objectContaining({ channel: 'MT', title: 'Meeting scheduled · Quarterly review', detail: 'Tue 10 Nov 2026, 10:00–11:00 · Acme HQ' })]),
+      expect.arrayContaining([expect.objectContaining({ channel: 'MT', title: 'Meeting scheduled · Quarterly review', detail: 'Mon 10 Nov 2036, 10:00–11:00 · Acme HQ' })]),
     );
     expect((await ok('GET', `/crm/deals/${d.id}`, as(owner))).lastContactAt).toBeNull();
   });
@@ -173,11 +173,11 @@ describe('validation (AC 6)', () => {
   });
 
   it('refuses an end that is not after the start, also when only one of them changes', async () => {
-    await refused({ endsAt: '2026-11-10T09:00:00.000Z' });
-    await refused({ endsAt: '2026-11-10T08:00:00.000Z' });
+    await refused({ endsAt: '2036-11-10T09:00:00.000Z' });
+    await refused({ endsAt: '2036-11-10T08:00:00.000Z' });
     const m = await create(owner, acme.id);
-    expect((await call('PATCH', `/crm/meetings/${m.id}`, { ...as(owner), body: { endsAt: '2026-11-10T08:59:00.000Z' } })).status).toBe(400);
-    expect((await call('PATCH', `/crm/meetings/${m.id}`, { ...as(owner), body: { startsAt: '2026-11-10T10:00:00.000Z' } })).status).toBe(400);
+    expect((await call('PATCH', `/crm/meetings/${m.id}`, { ...as(owner), body: { endsAt: '2036-11-10T08:59:00.000Z' } })).status).toBe(400);
+    expect((await call('PATCH', `/crm/meetings/${m.id}`, { ...as(owner), body: { startsAt: '2036-11-10T10:00:00.000Z' } })).status).toBe(400);
   });
 
   it("refuses a deal of another company, an unknown company, people outside the workspace and unknown contacts", async () => {
@@ -210,32 +210,33 @@ describe('listing and filters', () => {
     co2 = await company('Filter Co 2');
     d = await deal('Filter deal', co.id);
     c = await contact('Filter Contact', co.id);
-    ids.morning = (await create(owner, co.id, { title: 'Morning', startsAt: '2026-11-10T09:00:00Z', endsAt: '2026-11-10T10:00:00Z', dealId: d.id })).id;
+    // Fixed dates far ahead, so they never meet the "Stale" and "Recent" meetings set relative to now.
+    ids.morning = (await create(owner, co.id, { title: 'Morning', startsAt: '2036-11-10T09:00:00Z', endsAt: '2036-11-10T10:00:00Z', dealId: d.id })).id;
     // 23:30 to 01:30 in Belgrade (CET): on both days.
-    ids.late = (await create(ana, co.id, { title: 'Late', type: 'online', startsAt: '2026-11-10T22:30:00Z', endsAt: '2026-11-11T00:30:00Z', externalContactIds: [c.id] })).id;
-    ids.next = (await create(owner, co.id, { title: 'Next day', type: 'phone', startsAt: '2026-11-11T12:00:00Z', endsAt: '2026-11-11T12:30:00Z', internalUserIds: [ana.userId] })).id;
-    ids.other = (await create(owner, co2.id, { title: 'Other company', startsAt: '2026-11-10T09:00:00Z', endsAt: '2026-11-10T10:00:00Z' })).id;
+    ids.late = (await create(ana, co.id, { title: 'Late', type: 'online', startsAt: '2036-11-10T22:30:00Z', endsAt: '2036-11-11T00:30:00Z', externalContactIds: [c.id] })).id;
+    ids.next = (await create(owner, co.id, { title: 'Next day', type: 'phone', startsAt: '2036-11-11T12:00:00Z', endsAt: '2036-11-11T12:30:00Z', internalUserIds: [ana.userId] })).id;
+    ids.other = (await create(owner, co2.id, { title: 'Other company', startsAt: '2036-11-10T09:00:00Z', endsAt: '2036-11-10T10:00:00Z' })).id;
     const old = Date.now() - 72 * HOUR;
     ids.stale = (await create(owner, co.id, { title: 'Stale', startsAt: iso(old), endsAt: iso(old + HOUR) })).id;
     const recent = Date.now() - 3 * HOUR;
     ids.recent = (await create(owner, co.id, { title: 'Recent', startsAt: iso(recent), endsAt: iso(recent + HOUR) })).id;
-    ids.cancelled = (await create(owner, co.id, { title: 'Cancelled', startsAt: '2026-11-10T13:00:00Z', endsAt: '2026-11-10T14:00:00Z' })).id;
+    ids.cancelled = (await create(owner, co.id, { title: 'Cancelled', startsAt: '2036-11-10T13:00:00Z', endsAt: '2036-11-10T14:00:00Z' })).id;
     await ok('POST', `/crm/meetings/${ids.cancelled}/cancel`, { ...as(owner), body: { reason: 'Customer ill' } }, 200);
   });
 
   it('returns the meetings overlapping a day in the workspace zone, including one crossing midnight', async () => {
-    // 10 November in Belgrade: 2026-11-09T23:00Z to 2026-11-10T23:00Z.
-    const tenth = await list(`from=2026-11-09T23:00:00Z&to=2026-11-10T23:00:00Z&companyId=${co.id}`);
+    // 10 November in Belgrade: 2036-11-09T23:00Z to 2036-11-10T23:00Z.
+    const tenth = await list(`from=2036-11-09T23:00:00Z&to=2036-11-10T23:00:00Z&companyId=${co.id}`);
     expect(titles(tenth)).toEqual(['Morning', 'Cancelled', 'Late']);
-    const eleventh = await list(`from=2026-11-10T23:00:00Z&to=2026-11-11T23:00:00Z&companyId=${co.id}`);
+    const eleventh = await list(`from=2036-11-10T23:00:00Z&to=2036-11-11T23:00:00Z&companyId=${co.id}`);
     expect(titles(eleventh)).toEqual(['Late', 'Next day']);
     // [from, to): a meeting ending exactly at `from` or starting exactly at `to` is outside.
-    expect(titles(await list(`from=2026-11-10T10:00:00Z&to=2026-11-10T13:00:00Z&companyId=${co.id}`))).toEqual([]);
-    expect(titles(await list(`from=2026-11-10T22:00:00Z&to=2026-11-11T12:00:00Z&companyId=${co.id}&sort=desc`))).toEqual(['Late']);
+    expect(titles(await list(`from=2036-11-10T10:00:00Z&to=2036-11-10T13:00:00Z&companyId=${co.id}`))).toEqual([]);
+    expect(titles(await list(`from=2036-11-10T22:00:00Z&to=2036-11-11T12:00:00Z&companyId=${co.id}&sort=desc`))).toEqual(['Late']);
   });
 
   it('filters by person, company, deal, contact, type and status', async () => {
-    const range = 'from=2026-11-01T00:00:00Z&to=2026-12-01T00:00:00Z';
+    const range = 'from=2036-11-01T00:00:00Z&to=2036-12-01T00:00:00Z';
     expect(titles(await list(`${range}&companyId=${co.id}&userId=${ana.userId}`))).toEqual(['Late', 'Next day']);
     expect(titles(await list(`${range}&companyId=${co.id}&userId=${owner.userId}`))).toEqual(['Morning', 'Cancelled', 'Next day']);
     expect(titles(await list(`${range}&companyId=${co2.id}`))).toEqual(['Other company']);
@@ -263,7 +264,7 @@ describe('listing and filters', () => {
     const rest = await list(`companyId=${co.id}&limit=50&offset=2`);
     expect(rest.more).toBe(false);
     expect((await call('GET', '/crm/meetings', as(owner))).status).toBe(400);
-    expect((await call('GET', '/crm/meetings?from=2026-11-11T00:00:00Z&to=2026-11-10T00:00:00Z', as(owner))).status).toBe(400);
+    expect((await call('GET', '/crm/meetings?from=2036-11-11T00:00:00Z&to=2036-11-10T00:00:00Z', as(owner))).status).toBe(400);
     expect((await call('GET', '/crm/meetings?companyId=x', as(owner))).status).toBe(400);
   });
 });
@@ -401,7 +402,7 @@ describe('change history and conflicts', () => {
     const first = await deal('History first deal', co.id);
     const d = await deal('History meet deal', co.id);
     const m = await create(owner, co.id, { title: 'History meeting', dealId: first.id });
-    await ok('PATCH', `/crm/meetings/${m.id}`, { ...as(owner), body: { title: 'History meeting v2', dealId: d.id, organizerUserId: ana.userId, startsAt: '2026-11-10T08:30:00Z' } });
+    await ok('PATCH', `/crm/meetings/${m.id}`, { ...as(owner), body: { title: 'History meeting v2', dealId: d.id, organizerUserId: ana.userId, startsAt: '2036-11-10T08:30:00Z' } });
     await ok('PATCH', `/crm/meetings/${m.id}`, { ...as(ana), body: { internalUserIds: [bo.userId] } });
     await ok('POST', `/crm/meetings/${m.id}/cancel`, as(ana), 200);
 
@@ -411,7 +412,7 @@ describe('change history and conflicts', () => {
     expect(find('updated', 'title')).toMatchObject({ oldValue: 'History meeting', newValue: 'History meeting v2' });
     expect(find('updated', 'dealId')).toMatchObject({ oldValue: first.id, oldLabel: 'History first deal', newValue: d.id, newLabel: 'History meet deal' });
     expect(find('updated', 'organizerUserId')).toMatchObject({ oldLabel: owner.name, newLabel: ana.name });
-    expect(new Date(find('updated', 'startsAt').newValue).toISOString()).toBe('2026-11-10T08:30:00.000Z');
+    expect(new Date(find('updated', 'startsAt').newValue).toISOString()).toBe('2036-11-10T08:30:00.000Z');
     expect(find('updated', 'status')).toMatchObject({ oldValue: 'planned', newValue: 'cancelled', actor: { userId: ana.userId, name: ana.name } });
     expect(entries.filter((e: Json) => e.action === 'participant_added').map((e: Json) => e.label).sort()).toEqual([ana.name, bo.name].sort());
     // The owner was dropped when ana replaced the members (ana stays as the organizer).
@@ -426,8 +427,8 @@ describe('change history and conflicts', () => {
     expect(res.status).toBe(409);
     expect(res.body.message).toBe(`${ana.name} changed this meeting while you were editing. Your change to the title wasn't saved.`);
     // Another field merges; the same start time sent again isn't a conflict.
-    await ok('PATCH', `/crm/meetings/${m.id}`, { ...as(ana), body: { startsAt: '2026-11-10T08:00:00Z' } });
-    const merged = await ok('PATCH', `/crm/meetings/${m.id}`, { ...as(owner, { 'if-match': `"${m.updatedAt}"` }), body: { location: 'Room 4', startsAt: '2026-11-10T08:00:00.000Z' } });
+    await ok('PATCH', `/crm/meetings/${m.id}`, { ...as(ana), body: { startsAt: '2036-11-10T08:00:00Z' } });
+    const merged = await ok('PATCH', `/crm/meetings/${m.id}`, { ...as(owner, { 'if-match': `"${m.updatedAt}"` }), body: { location: 'Room 4', startsAt: '2036-11-10T08:00:00.000Z' } });
     expect(merged).toMatchObject({ title: 'Ana’s title', location: 'Room 4' });
   });
 });

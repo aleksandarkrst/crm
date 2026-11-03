@@ -722,7 +722,7 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .cal-quick-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
 .meeting-field-when { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; flex: 1; }
 .meeting-field-when .ghost { width: auto; flex: 0 1 auto; padding: 6px 6px; }
-.meeting-field-link { font-size: 12px; white-space: nowrap; color: var(--brand); }
+.field-link { font-size: 12px; white-space: nowrap; color: var(--brand); }
 .meeting-title-input { min-width: 0; }
 .meeting-agenda-input { width: 100%; min-height: 84px; resize: vertical; line-height: 1.5; font-family: inherit; }
 .icon-row > select.ghost, .icon-row > input.ghost { flex: 1; min-width: 0; }

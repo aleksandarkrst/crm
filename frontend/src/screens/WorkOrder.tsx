@@ -4,6 +4,7 @@ import { ChangeHistory } from '../components/ChangeHistory';
 import { askConfirm } from '../components/ConfirmDialog';
 import { Screen } from '../components/Layout';
 import { Avatar, Modal, ModalHeader } from '../components/ui';
+import { mapsUrl } from '../lib/maps';
 import { paths } from '../lib/paths';
 import {
   type ApiWorkOrder,
@@ -84,6 +85,7 @@ export function WorkOrder() {
 
   // CD-148: a Completed order is locked until it is reopened; the status has its own rule.
   const canEdit = order.canChange && !order.locked;
+  const siteUrl = mapsUrl(order.location);
   const canSetStatus = order.canSetStatus;
   const ref = workOrderId(order);
   const save = async (patch: WorkOrderPatch, message?: (w: ApiWorkOrder) => string): Promise<boolean> => {
@@ -239,6 +241,11 @@ export function WorkOrder() {
                 </Row>
                 <Row label="Site">
                   <TextField className="ghost ghost-sm" label="Site" value={order.location ?? ''} disabled={!canEdit} placeholder="Address or site" maxLength={300} onSave={(v) => save({ location: v || null })} />
+                  {siteUrl && (
+                    <a href={siteUrl} target="_blank" rel="noopener noreferrer" className="field-link" data-testid="work-order-site-map">
+                      Map
+                    </a>
+                  )}
                 </Row>
                 <Row label="Type">
                   <select className="ghost ghost-sm" aria-label="Type" value={order.type} disabled={!canEdit} onChange={(e) => void save({ type: e.target.value as WorkOrderType })}>

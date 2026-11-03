@@ -1,5 +1,6 @@
 import { buttonHtml, escapeHtml, layoutHtml } from '../../../infrastructure/mail/html';
 import type { MailAttachment, MailMessage } from '../../../infrastructure/mail/mailer';
+import { mapLink } from '../../../shared/text/maps';
 import { zonedParts } from '../../../shared/time/zoned-time';
 
 /**
@@ -28,6 +29,7 @@ export interface IcsEvent {
   summary: string;
   location: string | null;
   description: string;
+  /** The meeting in Pultly, or the join link when the location is one (CD-377). */
   url: string;
   /** The meeting's organizer by name, with the platform's sending address (replies aren't read). */
   organizer: { name: string; email: string };
@@ -173,14 +175,18 @@ export function meetingInviteEmail(input: InviteEmailInput): MailMessage {
       : kind === 'updated'
         ? `${actorName} changed ${m.title} with ${m.companyName}. Here is the meeting as it is now.`
         : `${actorName} cancelled ${m.title} with ${m.companyName}.`;
+  // An address gets a Google Maps link under it (CD-377); a Teams or Zoom link is already one.
+  const where = mapLink(m.location);
+  const fact = (text: string) => ({ text, html: escapeHtml(text) });
   const facts = [
-    `Date: ${date}`,
-    `Time: ${time}`,
-    m.location ? `Location: ${m.location}` : null,
-    `Company: ${m.companyName}`,
-    m.dealTitle ? `Opportunity: ${m.dealTitle}` : null,
-    `Organizer: ${m.organizerName ?? 'left the workspace'}`,
-  ].filter((f): f is string => !!f);
+    fact(`Date: ${date}`),
+    fact(`Time: ${time}`),
+    m.location ? fact(`Location: ${m.location}`) : null,
+    where?.kind === 'map' ? { text: `Map: ${where.url}`, html: `Map: <a href="${escapeHtml(where.url)}" style="color:#14503C">Open in Google Maps</a>` } : null,
+    fact(`Company: ${m.companyName}`),
+    m.dealTitle ? fact(`Opportunity: ${m.dealTitle}`) : null,
+    fact(`Organizer: ${m.organizerName ?? 'left the workspace'}`),
+  ].filter((f) => !!f);
   const calendarNote = kind === 'cancelled' ? 'The attached meeting.ics removes it from your calendar.' : 'Open the attached meeting.ics to add it to your calendar, or update it there.';
   const greeting = input.recipientName ? `Hi ${input.recipientName.split(' ')[0]},` : 'Hi,';
   const footer = `You get this email because "Meeting invitations" is on in Settings → Notifications for ${workspaceName}.`;
@@ -197,18 +203,18 @@ export function meetingInviteEmail(input: InviteEmailInput): MailMessage {
     summary: m.title,
     location: m.location,
     description,
-    url: link,
+    url: where?.kind === 'join' ? where.url : link,
     organizer: { name: m.organizerName ?? workspaceName, email: senderAddress(input.mailFrom) },
     attendee: { name: input.recipientName, email: input.to },
   });
   const attachment: MailAttachment = { filename: 'meeting.ics', contentType: `text/calendar; charset=utf-8; method=${method}`, content: ics };
 
-  const text = [greeting, '', intro, '', ...facts, '', `Open the meeting: ${link}`, '', calendarNote, '', footer].join('\n');
+  const text = [greeting, '', intro, '', ...facts.map((f) => f.text), '', `Open the meeting: ${link}`, '', calendarNote, '', footer].join('\n');
   const html = layoutHtml(
     [
       `<p style="margin:0 0 12px">${escapeHtml(greeting)}</p>`,
       `<p style="margin:0 0 12px">${escapeHtml(intro)}</p>`,
-      `<p style="margin:0 0 12px;color:#475750">${facts.map(escapeHtml).join('<br>')}</p>`,
+      `<p style="margin:0 0 12px;color:#475750">${facts.map((f) => f.html).join('<br>')}</p>`,
       buttonHtml('Open the meeting', link),
       `<p style="margin:0;color:#475750">${escapeHtml(calendarNote)}</p>`,
     ].join('\n'),
