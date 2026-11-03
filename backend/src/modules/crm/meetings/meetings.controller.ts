@@ -1,9 +1,9 @@
-import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { RequireTenant, Tenant, type TenantContext } from '../../../shared/authorization';
 import { UuidParam } from '../../../shared/validation/common';
 import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
 import { parseVersion } from '../history/record-history.service';
-import { CancelMeeting, CreateMeeting, MeetingsQuery, MeetingsService, UpdateMeeting } from './meetings.service';
+import { CancelMeeting, CreateMeeting, MeetingsQuery, MeetingsService, SetReminders, UpdateMeeting } from './meetings.service';
 
 const Id = new ZodPipe(UuidParam);
 
@@ -60,6 +60,12 @@ export class MeetingsController {
   @HttpCode(200)
   restore(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
     return this.meetings.restore(ctx, id);
+  }
+
+  /** The caller's own reminders (CD-376): the whole list, at most 5. Only for the people on the meeting. */
+  @Put(':id/reminders')
+  setReminders(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(SetReminders)) body: SetReminders) {
+    return this.meetings.setReminders(ctx, id, body);
   }
 
   @Delete(':id')
