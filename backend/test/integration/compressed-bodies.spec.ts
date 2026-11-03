@@ -1,7 +1,7 @@
 /**
  * Compressed request bodies (CD-468, GHSA-27r3-jxmh-p828): body-parser 2.3.0 crashed the process on
  * a gzip body with trailing bytes, before routing or auth. The API refuses compressed bodies (415)
- * on every parser (Nest's JSON and urlencoded, and the import's 3 MB JSON) and stays up.
+ * on every parser (the app's JSON and urlencoded, and the import's 3 MB JSON) and stays up.
  * Skipped against an external API_URL: on an unfixed server this request would take it down.
  */
 import { gzipSync } from 'node:zlib';
