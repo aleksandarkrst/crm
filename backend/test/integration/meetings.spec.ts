@@ -210,32 +210,33 @@ describe('listing and filters', () => {
     co2 = await company('Filter Co 2');
     d = await deal('Filter deal', co.id);
     c = await contact('Filter Contact', co.id);
-    ids.morning = (await create(owner, co.id, { title: 'Morning', startsAt: '2026-11-10T09:00:00Z', endsAt: '2026-11-10T10:00:00Z', dealId: d.id })).id;
+    // Fixed dates far ahead, so they never meet the "Stale" and "Recent" meetings set relative to now.
+    ids.morning = (await create(owner, co.id, { title: 'Morning', startsAt: '2036-11-10T09:00:00Z', endsAt: '2036-11-10T10:00:00Z', dealId: d.id })).id;
     // 23:30 to 01:30 in Belgrade (CET): on both days.
-    ids.late = (await create(ana, co.id, { title: 'Late', type: 'online', startsAt: '2026-11-10T22:30:00Z', endsAt: '2026-11-11T00:30:00Z', externalContactIds: [c.id] })).id;
-    ids.next = (await create(owner, co.id, { title: 'Next day', type: 'phone', startsAt: '2026-11-11T12:00:00Z', endsAt: '2026-11-11T12:30:00Z', internalUserIds: [ana.userId] })).id;
-    ids.other = (await create(owner, co2.id, { title: 'Other company', startsAt: '2026-11-10T09:00:00Z', endsAt: '2026-11-10T10:00:00Z' })).id;
+    ids.late = (await create(ana, co.id, { title: 'Late', type: 'online', startsAt: '2036-11-10T22:30:00Z', endsAt: '2036-11-11T00:30:00Z', externalContactIds: [c.id] })).id;
+    ids.next = (await create(owner, co.id, { title: 'Next day', type: 'phone', startsAt: '2036-11-11T12:00:00Z', endsAt: '2036-11-11T12:30:00Z', internalUserIds: [ana.userId] })).id;
+    ids.other = (await create(owner, co2.id, { title: 'Other company', startsAt: '2036-11-10T09:00:00Z', endsAt: '2036-11-10T10:00:00Z' })).id;
     const old = Date.now() - 72 * HOUR;
     ids.stale = (await create(owner, co.id, { title: 'Stale', startsAt: iso(old), endsAt: iso(old + HOUR) })).id;
     const recent = Date.now() - 3 * HOUR;
     ids.recent = (await create(owner, co.id, { title: 'Recent', startsAt: iso(recent), endsAt: iso(recent + HOUR) })).id;
-    ids.cancelled = (await create(owner, co.id, { title: 'Cancelled', startsAt: '2026-11-10T13:00:00Z', endsAt: '2026-11-10T14:00:00Z' })).id;
+    ids.cancelled = (await create(owner, co.id, { title: 'Cancelled', startsAt: '2036-11-10T13:00:00Z', endsAt: '2036-11-10T14:00:00Z' })).id;
     await ok('POST', `/crm/meetings/${ids.cancelled}/cancel`, { ...as(owner), body: { reason: 'Customer ill' } }, 200);
   });
 
   it('returns the meetings overlapping a day in the workspace zone, including one crossing midnight', async () => {
-    // 10 November in Belgrade: 2026-11-09T23:00Z to 2026-11-10T23:00Z.
-    const tenth = await list(`from=2026-11-09T23:00:00Z&to=2026-11-10T23:00:00Z&companyId=${co.id}`);
+    // 10 November in Belgrade: 2036-11-09T23:00Z to 2036-11-10T23:00Z.
+    const tenth = await list(`from=2036-11-09T23:00:00Z&to=2036-11-10T23:00:00Z&companyId=${co.id}`);
     expect(titles(tenth)).toEqual(['Morning', 'Cancelled', 'Late']);
-    const eleventh = await list(`from=2026-11-10T23:00:00Z&to=2026-11-11T23:00:00Z&companyId=${co.id}`);
+    const eleventh = await list(`from=2036-11-10T23:00:00Z&to=2036-11-11T23:00:00Z&companyId=${co.id}`);
     expect(titles(eleventh)).toEqual(['Late', 'Next day']);
     // [from, to): a meeting ending exactly at `from` or starting exactly at `to` is outside.
-    expect(titles(await list(`from=2026-11-10T10:00:00Z&to=2026-11-10T13:00:00Z&companyId=${co.id}`))).toEqual([]);
-    expect(titles(await list(`from=2026-11-10T22:00:00Z&to=2026-11-11T12:00:00Z&companyId=${co.id}&sort=desc`))).toEqual(['Late']);
+    expect(titles(await list(`from=2036-11-10T10:00:00Z&to=2036-11-10T13:00:00Z&companyId=${co.id}`))).toEqual([]);
+    expect(titles(await list(`from=2036-11-10T22:00:00Z&to=2036-11-11T12:00:00Z&companyId=${co.id}&sort=desc`))).toEqual(['Late']);
   });
 
   it('filters by person, company, deal, contact, type and status', async () => {
-    const range = 'from=2026-11-01T00:00:00Z&to=2026-12-01T00:00:00Z';
+    const range = 'from=2036-11-01T00:00:00Z&to=2036-12-01T00:00:00Z';
     expect(titles(await list(`${range}&companyId=${co.id}&userId=${ana.userId}`))).toEqual(['Late', 'Next day']);
     expect(titles(await list(`${range}&companyId=${co.id}&userId=${owner.userId}`))).toEqual(['Morning', 'Cancelled', 'Next day']);
     expect(titles(await list(`${range}&companyId=${co2.id}`))).toEqual(['Other company']);
@@ -263,7 +264,7 @@ describe('listing and filters', () => {
     const rest = await list(`companyId=${co.id}&limit=50&offset=2`);
     expect(rest.more).toBe(false);
     expect((await call('GET', '/crm/meetings', as(owner))).status).toBe(400);
-    expect((await call('GET', '/crm/meetings?from=2026-11-11T00:00:00Z&to=2026-11-10T00:00:00Z', as(owner))).status).toBe(400);
+    expect((await call('GET', '/crm/meetings?from=2036-11-11T00:00:00Z&to=2036-11-10T00:00:00Z', as(owner))).status).toBe(400);
     expect((await call('GET', '/crm/meetings?companyId=x', as(owner))).status).toBe(400);
   });
 });
