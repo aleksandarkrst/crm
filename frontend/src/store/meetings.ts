@@ -26,6 +26,7 @@ import {
   type ApiMeeting,
   type ApiMinutesEmail,
   type ApiMinutesSend,
+  type ApiReminder,
   ApiError,
   type ApiRole,
   crmApi,
@@ -431,6 +432,17 @@ export function meetingActions(ctx: Ctx) {
       return false;
     }
   };
+  /** The caller's own reminders (CD-376); false (after saying why, and reading the meeting again) when refused. */
+  const setReminders = async (id: string, reminders: ApiReminder[]): Promise<boolean> => {
+    try {
+      after(await crmApi.meetings.setReminders(id, reminders));
+      return true;
+    } catch (err) {
+      flash(`Not saved: your reminders (${ctx.errText(err)}). They were reset to the saved ones.`, 7000);
+      void fetchOne(id).catch(() => undefined);
+      return false;
+    }
+  };
   const remove = async (id: string): Promise<boolean> => {
     const m = cur().meetings[id];
     try {
@@ -594,6 +606,7 @@ export function meetingActions(ctx: Ctx) {
     cancel: (id: string, reason: string) => status(id, () => crmApi.meetings.cancel(id, reason.trim() || null), 'Meeting cancelled'),
     undoHeld: (id: string) => status(id, () => crmApi.meetings.undoHeld(id), 'Back to planned'),
     restore: (id: string) => status(id, () => crmApi.meetings.restore(id), 'Meeting restored'),
+    setReminders,
     remove,
     findOverlaps,
     loadMinutes,
@@ -611,6 +624,8 @@ export function meetingActions(ctx: Ctx) {
     openDialog: (seed: MeetingDialogSeed = {}) => set({ meetingDialog: seed }),
     closeDialog: () => set({ meetingDialog: null }),
     canEdit: (m: ApiMeeting) => canEditMeeting(m, ctx.me, ctx.role),
+    /** The caller is on the meeting (organizer or internal participant): they have reminders of it (CD-376). */
+    takesPart: (m: ApiMeeting) => isInternal(m, ctx.me),
     /** Only owners and admins delete meetings. */
     canDelete: ctx.role === 'owner' || ctx.role === 'admin',
   };
