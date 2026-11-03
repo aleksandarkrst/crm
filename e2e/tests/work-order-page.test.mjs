@@ -64,6 +64,15 @@ describe('work order page', () => {
     }));
   });
 
+  step('Details: a site address links to Google Maps (CD-377)', async () => {
+    assert.equal(await page.$('[data-testid=work-order-site-map]'), null, 'no Map link without a site');
+    await api(page, '/work-orders/' + order.id, { method: 'PATCH', body: JSON.stringify({ location: 'Bulevar Mihajla Pupina 10, Beograd' }) });
+    await page.reload({ waitUntil: 'networkidle0' });
+    await page.waitForSelector('[data-testid=work-order-site-map]');
+    const map = await page.$eval('[data-testid=work-order-site-map]', (el) => ({ text: el.innerText.trim(), href: el.getAttribute('href'), target: el.target }));
+    assert.deepEqual(map, { text: 'Map', href: 'https://www.google.com/maps/search/?api=1&query=Bulevar%20Mihajla%20Pupina%2010%2C%20Beograd', target: '_blank' });
+  });
+
   step('Schedule: add a technician (Service people only) and make them the lead', async () => {
     await waitForToastToClear(page);
     await click(page, '[data-testid=add-technician]');

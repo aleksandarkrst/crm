@@ -242,7 +242,7 @@ export function WorkOrder() {
                 <Row label="Site">
                   <TextField className="ghost ghost-sm" label="Site" value={order.location ?? ''} disabled={!canEdit} placeholder="Address or site" maxLength={300} onSave={(v) => save({ location: v || null })} />
                   {siteUrl && (
-                    <a href={siteUrl} target="_blank" rel="noopener noreferrer" className="meeting-field-link" data-testid="work-order-site-map">
+                    <a href={siteUrl} target="_blank" rel="noopener noreferrer" className="field-link" data-testid="work-order-site-map">
                       Map
                     </a>
                   )}
