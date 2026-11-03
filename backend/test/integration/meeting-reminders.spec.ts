@@ -21,8 +21,13 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 const iso = (ms: number) => new Date(ms).toISOString();
-/** Three days ahead on a whole minute: the worker's own tick (real time) never finds these due. */
-const start = (days = 3) => Math.ceil((Date.now() + days * DAY) / MINUTE) * MINUTE;
+/**
+ * A start on a whole minute, three days ahead or more, so the worker's own tick (real time) never
+ * finds it due. Each meeting gets its own 30 days: the tick covers the whole workspace, and a
+ * reminder is at most 4 weeks before, so a tick for one meeting never finds another one's due.
+ */
+let slot = 0;
+const start = () => Math.ceil((Date.now() + (3 + 30 * slot++) * DAY) / MINUTE) * MINUTE;
 
 const create = (s: Session, title: string, startsAt: number, over: Record<string, unknown> = {}) =>
   ok('POST', '/crm/meetings', { ...as(s), body: { title, type: 'online', startsAt: iso(startsAt), endsAt: iso(startsAt + HOUR), companyId, dealId, ...over } });
