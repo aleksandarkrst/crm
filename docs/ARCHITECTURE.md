@@ -739,6 +739,8 @@ be retried. Modules register their own handlers through a worker module exported
 | `projects.project-created-from-deal` | projects, someone creates a project from a deal | CRM worker: "Project created · <name>" on the deal's timeline |
 | `crm.deal-assigned` | CRM, someone else becomes a deal's owner (create or change) | notifications: "deal assigned to you" email |
 | `crm.meeting-invite` | CRM, someone else adds a member to a planned meeting, or moves, cancels or restores one (one job per member) | CRM worker (`CrmWorkerModule`): the meeting email with an .ics |
+| `crm.meeting-reminders-tick` | cron, every minute (CD-376) | CRM worker (`MeetingReminderTick`): claims the due meeting reminders and queues their emails |
+| `crm.meeting-reminder` | the reminder tick, one per reminder and start | CRM worker: the reminder email to its owner |
 | `crm.meeting-minutes-email` | CRM, someone sends a meeting's external minutes, or retries the failed recipients | CRM worker: one email to the send's queued recipients, status per recipient |
 | `identity.member-removed` | identity, a member is removed or leaves | CRM worker: off future planned meetings, "Organizer left" where they organized |
 | `crm.visit-plan-email` | CRM, someone else creates or changes a salesperson's visit plan (CD-134) | notifications: "your visit plan" email |
@@ -2702,9 +2704,8 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`; the deal rules (CD
   the external minutes, CD-133, are the only email to them). `MeetingsService` queues
   `crm.meeting-invite` `{ tenantId, meetingId, userIds: [one member], actorUserId, kind }` in the
   same transaction, never for the person making the change:
-  - `added`: members someone else adds to a planned meeting (on create: everyone but the creator,
-    the organizer included when that is someone else; on PATCH: the newly added ones, e.g. a new
-    organizer). Subject "You were added to a meeting: <title>".
+  - `added`: members someone else adds to a planned meeting (on create: everyone but the creator;
+    on PATCH: the newly added ones). Subject "You were added to a meeting: <title>".
   - `updated`: a planned meeting's start, end or location changed (other fields send nothing), and
     Restore; to the internal participants not just added. "Meeting changed: <title>".
   - `cancelled`: Cancel, to all internal participants. "Meeting cancelled: <title>".
@@ -2712,14 +2713,17 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`; the deal rules (CD
 - **The worker** (`meetings/meeting-jobs.ts`, `CrmWorkerModule`) reads everything again when it
   sends: an `added`/`updated` email goes only while the meeting is planned, `cancelled` only while
   it is cancelled; the member must still be on the meeting, in the workspace, have an email and
-  "Meeting invitations" on (`memberships.notify_meeting_invites`). One job per member, so a retry
+  "Meeting invitations" on (`memberships.notify_meeting_invites`), and must not be the organizer:
+  as in Google Calendar, the meeting is the organizer's own and they get no invitation, update or
+  cancellation (CD-376; their reminders tell them about it). One job per member, so a retry
   never emails the others twice. Body: date and time in the workspace time zone, location,
   company, deal, organizer and a link to `APP_URL/meetings/<id>`.
 - **The .ics** (`meetings/meeting-invite.ts`, pure and unit-tested): `meeting.ics` with content type
   `text/calendar; charset=utf-8; method=REQUEST|CANCEL`; one VEVENT with `UID:meeting-<id>@pultly.com`,
   `SEQUENCE` = `ics_sequence`, DTSTART/DTEND/DTSTAMP in UTC, SUMMARY, LOCATION, DESCRIPTION
   (company, deal, link), URL, ORGANIZER (the organizer's name with the `MAIL_FROM` address) and the
-  recipient as ATTENDEE (`RSVP=FALSE`); a cancellation is `METHOD:CANCEL` + `STATUS:CANCELLED`.
+  recipient as ATTENDEE (`RSVP=FALSE`), and one VALARM with `TRIGGER:-PT1H` (CD-376; the
+  person's own email reminders are separate); a cancellation is `METHOD:CANCEL` + `STATUS:CANCELLED`, without the alarm.
   Text is escaped and lines folded at 75 octets (RFC 5545), so Google Calendar and Outlook take it.
 - **Deleting a contact** removes their rows from planned meetings that start in the future, in the
   contact's delete transaction; held, past and cancelled meetings keep them as "<name> (deleted)".
@@ -2728,7 +2732,43 @@ the live-update hints are in `drizzle/0029_meetings_rls.sql`; the deal rules (CD
   that start in the future and sets `organizer_user_id = null` where they organized one ("Organizer
   left"). Past meetings keep them (`deleted: true`, shown as "(former member)"). Nothing happens if
   they rejoined before the job ran. Owners and admins see **Pick new organizer** on the meeting page
-  (a PATCH of `organizerUserId`; the new organizer gets the `added` email).
+  (a PATCH of `organizerUserId`; the new organizer gets the default reminders, no email).
+
+### Meeting reminders (CD-376)
+
+As in Google Calendar, each person on a meeting (the organizer and each internal participant) has
+their own email reminders: a number of minutes, hours or days before the start, at most 5, at most
+4 weeks before, no two at the same time. Nobody sees anyone else's.
+
+- **`meeting_reminders`** (RLS in `drizzle/0128`): one row per reminder, `meeting_id` (composite
+  FK, cascade), `user_id`, `minutes_before` (unique per meeting and person) and `unit` (how it was
+  entered: 60 minutes or 1 hour), and `sent_for`: the start it was sent for. 0128 also gave the
+  people on planned meetings still to come their defaults, marked sent where the time had passed.
+- **Defaults**: someone added to a meeting (`syncParticipants`: on create, a new participant or a
+  new organizer) gets 1 hour before, and 1 day before too for a customer visit (`visit`). Someone
+  taken off it, or leaving the workspace (`identity.member-removed`), loses their reminders of it.
+- **API**: `ApiMeeting.myReminders` is the caller's own list; `PUT /crm/meetings/:id/reminders`
+  `{ reminders: [{ amount, unit }] }` replaces it (403 for anyone not on the meeting, owners and
+  admins too; 409 unless planned; 400 for more than 5, over 4 weeks or two at the same time). A
+  reminder that stays keeps its `sent_for`.
+- **Never late**: a reminder whose time has already passed when it is saved (added, defaulted, or
+  the meeting moved or was restored) gets `sent_for` = the start, so it never goes out
+  (`meetings/reminder-rows.ts`).
+- **Sending**: `crm.meeting-reminders-tick` every minute runs `MeetingReminderTick.queueDue` per
+  workspace: one UPDATE … FROM meetings sets `sent_for` = the start on the reminders of planned
+  meetings starting after now − 2 minutes whose time has come and whose `sent_for` is another
+  start, while their owner is still on the meeting and a member, and queues `crm.meeting-reminder`
+  `{ tenantId, reminderId, startsAt }` for each in the same transaction, so each goes out once per
+  start. A moved meeting has a new start, so its reminders go again. The job sends the email only
+  if the meeting is still planned at that start and the owner still on it and in the workspace.
+  The email (`meetings/meeting-reminders.ts`, unit-tested) has the start in the subject ("Reminder:
+  <title> @ Tue 10 Nov 2026, 10:00"), the time in the workspace time zone, the location (with a
+  map or join link), the agenda and a link to the meeting. There is no Settings switch for it.
+- **Dev trigger**: `POST /api/dev/meetings/reminders-tick` `{ now? }` runs the tick for the
+  caller's workspace (AUTH_MODE=dev; the integration tests use it).
+- **Screen**: **My reminders** under the guests on the meeting page, for the people on a planned
+  meeting: a number, a unit and "before" per row, remove, and **+ Add reminder** up to 5; each change
+  is saved (a typed number after a pause).
 
 ## Deal page (CD-83)
 
