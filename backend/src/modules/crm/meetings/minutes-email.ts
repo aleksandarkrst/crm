@@ -71,8 +71,9 @@ export const CHROME: Record<CustomerEmailLanguage, Chrome> = {
   },
 };
 
-const LINK = /\*\*(.+?)\*\*|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<]+[^\s<.,;:!?)\]])/g;
-const BULLET = /^\s*[-*]\s+(.*)$/;
+/** The formatting subset: bold, `[label](url)`, bare links (the PDF minutes parse the same, CD-378). */
+export const LINK = /\*\*(.+?)\*\*|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<]+[^\s<.,;:!?)\]])/g;
+export const BULLET = /^\s*[-*]\s+(.*)$/;
 
 /** Bold and links inside a line: each piece escaped, then wrapped. */
 function inlineHtml(line: string): string {
