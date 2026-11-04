@@ -302,11 +302,36 @@ interface Edit {
   end: number;
 }
 
-/** `**bold**` around the selection (or a placeholder to type over). */
-function bold(v: string, a: number, b: number): Edit {
-  const inner = v.slice(a, b) || 'bold text';
-  return { text: v.slice(0, a) + '**' + inner + '**' + v.slice(b), start: a + 2, end: a + 2 + inner.length };
+/** How many `*` stand right before `a` (2 or 3: bold; 1 or 3: italic). */
+const starsBefore = (v: string, a: number) => {
+  let n = 0;
+  while (n < a && v[a - 1 - n] === '*') n++;
+  return n;
+};
+
+/**
+ * `marker` around the selection (a placeholder to type over without one), or off again when the
+ * selection already has it: `**` bold, `*` italic, `__` underline. Spaces at the selection's ends
+ * stay outside, since the formatting needs text right inside its markers.
+ */
+function wrap(marker: string, placeholder: string) {
+  return (v: string, a: number, b: number): Edit => {
+    while (a < b && /\s/.test(v[a]!)) a++;
+    while (b > a && /\s/.test(v[b - 1]!)) b--;
+    const n = marker.length;
+    const stars = starsBefore(v, a);
+    const has =
+      v.slice(a - n, a) === marker &&
+      v.slice(b, b + n) === marker &&
+      (marker === '**' ? stars === 2 || stars === 3 : marker === '*' ? stars === 1 || stars === 3 : true);
+    if (has) return { text: v.slice(0, a - n) + v.slice(a, b) + v.slice(b + n), start: a - n, end: b - n };
+    const inner = v.slice(a, b) || placeholder;
+    return { text: v.slice(0, a) + marker + inner + marker + v.slice(b), start: a + n, end: a + n + inner.length };
+  };
 }
+const bold = wrap('**', 'bold text');
+const italic = wrap('*', 'italic text');
+const underline = wrap('__', 'underlined text');
 
 /** "- " in front of each selected line, or off again when they all have it. */
 function bullets(v: string, a: number, b: number): Edit {
@@ -327,9 +352,10 @@ function link(v: string, a: number, b: number, url: string): Edit {
 }
 
 /**
- * A text with the minutes' formatting (bold, bullet lists, links; see RichText): for someone who
- * may edit it, always the textarea with its small toolbar, also after clicking out of it (CD-378:
- * it no longer turns into the formatted view); for everyone else the formatted text.
+ * A text with the minutes' formatting (bold, italic, underline, bullet lists, links; see RichText).
+ * For someone who may edit it: the toolbar always, and in the same frame the textarea while it has
+ * the focus (Ctrl+B, Ctrl+I and Ctrl+U format the selection), else the formatted text, which a
+ * click turns back into the textarea (CD-378). Everyone else sees the formatted text.
  */
 export function RichField({
   label,
@@ -351,17 +377,36 @@ export function RichField({
   onBlur: () => void;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
-  const showEditor = editable;
+  const [focused, setFocused] = useState(false);
+  // The frame keeps its height between the text and the formatted view, so nothing jumps.
+  const [height, setHeight] = useState<number | undefined>(undefined);
+  const caret = useRef<number | null>(null);
+  const writing = editable && (focused || !value.trim());
 
+  useEffect(() => {
+    const el = ref.current;
+    if (!focused || !el || caret.current === null) return;
+    el.focus();
+    el.setSelectionRange(caret.current, caret.current);
+    caret.current = null;
+  }, [focused]);
+
+  /** From the formatted view to the textarea, the caret at the end. */
+  const open = (frame?: HTMLElement) => {
+    if (frame) setHeight(frame.offsetHeight);
+    caret.current = value.length;
+    setFocused(true);
+  };
   const apply = (make: (v: string, a: number, b: number) => Edit | null) => {
     const el = ref.current;
     if (!el) return;
     const r = make(el.value, el.selectionStart, el.selectionEnd);
     if (!r || r.text.length > max) return;
     onChange(r.text);
+    setFocused(true);
     requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(r.start, r.end);
+      ref.current?.focus();
+      ref.current?.setSelectionRange(r.start, r.end);
     });
   };
   const askLink = (v: string, a: number, b: number) => {
@@ -369,38 +414,59 @@ export function RichField({
     if (!raw || raw === 'https://') return null;
     return link(v, a, b, /^https?:\/\//i.test(raw) ? raw : 'https://' + raw);
   };
-  // Toolbar buttons keep the focus in the text (mouse down would move it).
-  const keep = (e: React.MouseEvent) => e.preventDefault();
+  const keys = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    const make = { b: bold, i: italic, u: underline }[e.key.toLowerCase()];
+    if (!make) return;
+    e.preventDefault();
+    apply(make);
+  };
+  // Toolbar buttons keep the focus in the text (mouse down would move it); on the formatted view
+  // they bring the textarea back first, so the format lands at the end of the text.
+  const keep = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!writing) open((e.currentTarget as HTMLElement).closest('.minutes-field')?.querySelector<HTMLElement>('.minutes-view') ?? undefined);
+  };
+  const tools: [string, React.ReactNode, string, (v: string, a: number, b: number) => Edit | null][] = [
+    ['Bold (Ctrl+B)', <b key="b">B</b>, 'bold', bold],
+    ['Italic (Ctrl+I)', <i key="i">I</i>, 'italic', italic],
+    ['Underline (Ctrl+U)', <u key="u">U</u>, 'underline', underline],
+    ['Bullet list', '• List', 'bullets', bullets],
+    ['Link', 'Link', 'link', askLink],
+  ];
 
   return (
     <div className="minutes-field">
       <div className="minutes-field-head">
         <span className="form-label">{label}</span>
-        {showEditor && (
+        {editable && (
           <span className="minutes-toolbar" role="toolbar" aria-label={`Format ${label.toLowerCase()}`}>
-            <button type="button" title="Bold" aria-label="Bold" data-testid={testId + '-bold'} onMouseDown={keep} onClick={() => apply(bold)}>
-              <b>B</b>
-            </button>
-            <button type="button" title="Bullet list" aria-label="Bullet list" data-testid={testId + '-bullets'} onMouseDown={keep} onClick={() => apply(bullets)}>
-              • List
-            </button>
-            <button type="button" title="Link" aria-label="Link" data-testid={testId + '-link'} onMouseDown={keep} onClick={() => apply(askLink)}>
-              Link
-            </button>
+            {tools.map(([title, face, id, make]) => (
+              <button key={id} type="button" title={title} aria-label={title.replace(/ \(.*\)$/, '')} data-testid={`${testId}-${id}`} onMouseDown={keep} onClick={() => apply(make)}>
+                {face}
+              </button>
+            ))}
           </span>
         )}
       </div>
-      {showEditor ? (
+      {writing ? (
         <>
           <textarea
             ref={ref}
             className="form-input minutes-text"
             data-testid={testId}
             rows={value.split('\n').length > 4 ? 8 : 4}
+            style={height ? { minHeight: height } : undefined}
             maxLength={max}
             placeholder={placeholder}
             value={value}
-            onBlur={onBlur}
+            onFocus={() => setFocused(true)}
+            onKeyDown={keys}
+            onBlur={(e) => {
+              setHeight(e.currentTarget.offsetHeight);
+              setFocused(false);
+              onBlur();
+            }}
             onChange={(e) => onChange(e.target.value)}
           />
           {value.length > max * 0.9 && (
@@ -409,6 +475,22 @@ export function RichField({
             </span>
           )}
         </>
+      ) : editable ? (
+        <div
+          className="form-input minutes-text minutes-view"
+          data-testid={testId + '-view'}
+          role="textbox"
+          aria-label={label}
+          tabIndex={0}
+          style={height ? { minHeight: height } : undefined}
+          // A link in it opens as a link; anywhere else the click (or Tab) starts editing.
+          onMouseDown={(e) => {
+            if ((e.target as HTMLElement).closest('a')) e.preventDefault();
+          }}
+          onFocus={(e) => open(e.currentTarget)}
+        >
+          <RichText text={value} />
+        </div>
       ) : value.trim() ? (
         <div className="minutes-preview" data-testid={testId + '-view'}>
           <RichText text={value} />

@@ -103,6 +103,11 @@ describe('minutesEmail (CD-133)', () => {
 });
 
 describe('renderMinutesHtml / renderMinutesText', () => {
+  it('reads italic and underline, nested in bold too (CD-378)', () => {
+    expect(renderMinutesHtml('*a* __b__ ***c*** **__d__** x * y * z')).toBe('<p style="margin:0 0 12px"><em>a</em> <u>b</u> <strong><em>c</em></strong> <strong><u>d</u></strong> x * y * z</p>');
+    expect(renderMinutesText('*a* __b__ ***c*** [l](https://x.test)')).toBe('a b c l (https://x.test)');
+  });
+
   it('keeps paragraphs with line breaks and turns "-" and "*" lines into lists', () => {
     expect(renderMinutesHtml('one\ntwo\n\n* a\n- b')).toBe('<p style="margin:0 0 12px">one<br>two</p>\n<ul style="margin:0 0 12px;padding-left:22px"><li>a</li><li>b</li></ul>');
     expect(renderMinutesText('**x** and [y](https://y.example)\n* z')).toBe('x and y (https://y.example)\n• z');

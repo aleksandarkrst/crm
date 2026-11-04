@@ -14,8 +14,9 @@ import { formatTimeRange, zonedParts } from '../../../shared/time/zoned-time';
  * - `externalNextSteps` / `withNextSteps`: the next steps the customer may see (CD-374), added
  *   after the written text when the email is made; the PDF minutes (CD-378) are to reuse them.
  * - `renderMinutesHtml` / `renderMinutesText`: the formatting subset (milestone 12 decision 8):
- *   `**bold**`, lines starting with "- " or "* " as bullets, `[label](https://…)` and bare http(s)
- *   links. Every piece of text is escaped; only these become markup.
+ *   `**bold**`, `*italic*`, `__underline__` (CD-378; they nest), lines starting with "- " or "* "
+ *   as bullets, `[label](https://…)` and bare http(s) links. Every piece of text is escaped; only
+ *   these become markup.
  */
 
 export interface MinutesPerson {
@@ -71,22 +72,51 @@ export const CHROME: Record<CustomerEmailLanguage, Chrome> = {
   },
 };
 
-/** The formatting subset: bold, `[label](url)`, bare links (the PDF minutes parse the same, CD-378). */
-export const LINK = /\*\*(.+?)\*\*|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<]+[^\s<.,;:!?)\]])/g;
+/**
+ * The inline formatting: bold, underline, italic (each may hold the others), `[label](url)` and
+ * bare links. The app's RichText and the PDF minutes (CD-378) read the same.
+ */
+const INLINE = /\*\*(?!\s)(.+?)(?<!\s)\*\*(?!\*)|__(?!\s)(.+?)(?<!\s)__|(?<![*\w])\*(?![\s*])(.+?)(?<![\s*])\*(?!\*)|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<]+[^\s<.,;:!?)\]])/g;
 export const BULLET = /^\s*[-*]\s+(.*)$/;
 
-/** Bold and links inside a line: each piece escaped, then wrapped. */
-function inlineHtml(line: string): string {
-  let out = '';
+/** A piece of a line with its formatting. */
+export interface InlineRun {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  url?: string;
+}
+
+/** A line (without its bullet) as runs of formatted text. */
+export function inlineRuns(line: string, style: Omit<InlineRun, 'text'> = {}): InlineRun[] {
+  const out: InlineRun[] = [];
   let last = 0;
-  for (const m of line.matchAll(LINK)) {
-    out += escapeHtml(line.slice(last, m.index));
-    if (m[1] !== undefined) out += `<strong>${escapeHtml(m[1])}</strong>`;
-    else if (m[2] !== undefined) out += `<a href="${escapeHtml(m[3]!)}" style="color:#14503C">${escapeHtml(m[2])}</a>`;
-    else out += `<a href="${escapeHtml(m[4]!)}" style="color:#14503C">${escapeHtml(m[4]!)}</a>`;
+  for (const m of line.matchAll(INLINE)) {
+    if (m.index > last) out.push({ ...style, text: line.slice(last, m.index) });
+    if (m[1] !== undefined) out.push(...inlineRuns(m[1], { ...style, bold: true }));
+    else if (m[2] !== undefined) out.push(...inlineRuns(m[2], { ...style, underline: true }));
+    else if (m[3] !== undefined) out.push(...inlineRuns(m[3], { ...style, italic: true }));
+    else if (m[4] !== undefined) out.push({ ...style, text: m[4], url: m[5]! });
+    else out.push({ ...style, text: m[6]!, url: m[6]! });
     last = m.index + m[0].length;
   }
-  return out + escapeHtml(line.slice(last));
+  if (last < line.length) out.push({ ...style, text: line.slice(last) });
+  return out.filter((r) => r.text);
+}
+
+/** The formatting inside a line: each piece escaped, then wrapped. */
+function inlineHtml(line: string): string {
+  return inlineRuns(line)
+    .map((r) => {
+      let h = escapeHtml(r.text);
+      if (r.url) h = `<a href="${escapeHtml(r.url)}" style="color:#14503C">${h}</a>`;
+      if (r.underline) h = `<u>${h}</u>`;
+      if (r.italic) h = `<em>${h}</em>`;
+      if (r.bold) h = `<strong>${h}</strong>`;
+      return h;
+    })
+    .join('');
 }
 
 /** Paragraphs (lines kept with <br>) and bullet lists, as the app's RichText shows them. */
@@ -120,13 +150,15 @@ export function renderMinutesHtml(text: string): string {
   return blocks.join('\n');
 }
 
-/** The plain-text version: bold markers dropped, links as "label (address)", bullets as "• ". */
+/** The plain-text version: formatting markers dropped, links as "label (address)", bullets as "• ". */
 export function renderMinutesText(text: string): string {
   return text
     .split(/\r?\n/)
     .map((line) => {
       const bullet = BULLET.exec(line);
-      const inner = (bullet ? bullet[1]! : line).replace(LINK, (whole, b?: string, label?: string, url?: string) => (b !== undefined ? b : label !== undefined ? `${label} (${url})` : whole));
+      const inner = inlineRuns(bullet ? bullet[1]! : line)
+        .map((r) => (r.url && r.url !== r.text ? `${r.text} (${r.url})` : r.text))
+        .join('');
       return bullet ? `• ${inner}` : inner;
     })
     .join('\n')

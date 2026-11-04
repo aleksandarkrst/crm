@@ -19,7 +19,7 @@ import { TimeOffTab } from './settings/TimeOffSettings';
 import { ApprovalsTab, HolidaysTab } from './settings/WorkforceSettings';
 import { ProjectHierarchyTab, ProjectTypesTab } from './settings/ProjectTypesTab';
 import { TechniciansTab } from './settings/TechniciansTab';
-import { WorkspaceLogo } from './settings/WorkspaceLogo';
+import { WorkspaceInfo } from './settings/WorkspaceInfo';
 import { RolesTab } from './settings/RolesTab';
 import type { TeamMember } from '../store/types';
 import { useTerms } from '../store/terms';
@@ -134,6 +134,7 @@ export function Settings() {
             )}
           </div>
 
+          {current === 'workspace' && <WorkspaceInfo />}
           {current === 'workspace' && <WorkspaceTab />}
           {current === 'workspace' && <CompanyCard />}
           {current === 'workspace' && <GettingStartedCard />}
@@ -192,10 +193,6 @@ function WorkspaceTab() {
       <div className="card-title" style={{ marginBottom: 8 }}>
         Workspace
       </div>
-      <WorkspaceLogo />
-      <FieldRow label="Name">
-        <GhostInput value={w.name} disabled={ro} onChange={(e) => setWorkspace({ name: e.target.value })} />
-      </FieldRow>
       <FieldRow label="Currency">
         <GhostSelect value={w.currency} disabled={ro} onChange={(e) => setWorkspace({ currency: e.target.value })} options={CURRENCIES} />
       </FieldRow>

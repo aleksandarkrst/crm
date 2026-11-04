@@ -64,7 +64,7 @@ describe('minutesPdfContent', () => {
 
   it('has Serbian labels and dates for Serbian minutes', () => {
     const c = minutesPdfContent({ ...base, language: 'sr' });
-    expect(c.labels.kicker).toBe('ZAPISNIK SA SASTANKA');
+    expect(c.labels.docTitle).toBe('Zapisnik sa sastanka');
     expect(c.details.map((d) => d.label)).toEqual(['Datum', 'Vreme', 'Vrsta sastanka', 'Mesto', 'Kompanija', 'Organizator']);
     expect(c.details[1]!.value).toBe('10:00 do 11:30');
     expect(c.nextSteps[0]!.due).toBe('20. 10. 2026.');

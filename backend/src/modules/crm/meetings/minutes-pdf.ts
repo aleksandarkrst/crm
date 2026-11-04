@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit';
 import type { CustomerEmailLanguage, MeetingType } from '../../../shared/database/schema';
 import { zonedParts } from '../../../shared/time/zoned-time';
-import { BULLET, dayLabel, type ExternalNextStep, LINK } from './minutes-email';
+import { BULLET, dayLabel, type ExternalNextStep, type InlineRun, inlineRuns } from './minutes-email';
 import { PULTLY_MARK_PNG } from './minutes-pdf-mark';
 
 /**
@@ -41,7 +41,8 @@ export interface MinutesPdfInput {
 }
 
 interface Labels {
-  kicker: string;
+  /** The PDF's title in its properties when the subject is empty. */
+  docTitle: string;
   details: string;
   summary: string;
   nextSteps: string;
@@ -64,7 +65,7 @@ interface Labels {
 
 const LABELS: Record<CustomerEmailLanguage, Labels> = {
   en: {
-    kicker: 'MEETING MINUTES',
+    docTitle: 'Meeting minutes',
     details: 'Meeting details',
     summary: 'Summary',
     nextSteps: 'Next steps',
@@ -85,7 +86,7 @@ const LABELS: Record<CustomerEmailLanguage, Labels> = {
     types: { visit: 'Customer visit', online: 'Online meeting', office: 'Meeting at our office', phone: 'Phone call' },
   },
   sr: {
-    kicker: 'ZAPISNIK SA SASTANKA',
+    docTitle: 'Zapisnik sa sastanka',
     details: 'Detalji sastanka',
     summary: 'Rezime',
     nextSteps: 'Sledeći koraci',
@@ -174,28 +175,10 @@ export function minutesPdfFileName(title: string, startsAt: Date, timeZone: stri
   return `${['Minutes', safe, zonedParts(startsAt, timeZone).date].filter(Boolean).join(' ')}.pdf`;
 }
 
-/** A piece of a summary line: plain, bold or a link. */
-interface Run {
-  text: string;
-  bold?: boolean;
-  url?: string;
-}
-
-/** A line of the summary as runs, with the email's formatting subset (`renderMinutesHtml`). */
-export function summaryRuns(line: string): { bullet: boolean; runs: Run[] } {
+/** A line of the summary as runs, with the email's formatting (`inlineRuns`). */
+export function summaryRuns(line: string): { bullet: boolean; runs: InlineRun[] } {
   const bullet = BULLET.exec(line);
-  const text = bullet ? bullet[1]! : line;
-  const runs: Run[] = [];
-  let last = 0;
-  for (const m of text.matchAll(LINK)) {
-    if (m.index > last) runs.push({ text: text.slice(last, m.index) });
-    if (m[1] !== undefined) runs.push({ text: m[1], bold: true });
-    else if (m[2] !== undefined) runs.push({ text: m[2], url: m[3]! });
-    else runs.push({ text: m[4]!, url: m[4]! });
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) runs.push({ text: text.slice(last) });
-  return { bullet: !!bullet, runs: runs.filter((r) => r.text) };
+  return { bullet: !!bullet, runs: inlineRuns(bullet ? bullet[1]! : line) };
 }
 
 // ---------------------------------------------------------------- layout
@@ -217,6 +200,8 @@ const C = {
 
 const BODY_FONT = require.resolve('dejavu-fonts-ttf/ttf/DejaVuSans.ttf');
 const BOLD_FONT = require.resolve('dejavu-fonts-ttf/ttf/DejaVuSans-Bold.ttf');
+const ITALIC_FONT = require.resolve('dejavu-fonts-ttf/ttf/DejaVuSans-Oblique.ttf');
+const BOLD_ITALIC_FONT = require.resolve('dejavu-fonts-ttf/ttf/DejaVuSans-BoldOblique.ttf');
 const PAGE = { left: 45, right: 45, top: 84, bottom: 62 };
 const PAD = 7;
 
@@ -238,7 +223,7 @@ export function renderMinutesPdf(input: MinutesPdfInput): Promise<Buffer> {
     size: 'A4',
     margins: PAGE,
     bufferPages: true,
-    info: { Title: content.subject || L.kicker, Author: content.workspaceName, Producer: 'Pultly', Creator: 'Pultly' },
+    info: { Title: content.subject || L.docTitle, Author: content.workspaceName, Producer: 'Pultly', Creator: 'Pultly' },
   });
   const chunks: Buffer[] = [];
   doc.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -248,6 +233,8 @@ export function renderMinutesPdf(input: MinutesPdfInput): Promise<Buffer> {
   });
   doc.registerFont('Body', BODY_FONT);
   doc.registerFont('Bold', BOLD_FONT);
+  doc.registerFont('Italic', ITALIC_FONT);
+  doc.registerFont('BoldItalic', BOLD_ITALIC_FONT);
   const x0 = PAGE.left;
   const width = doc.page.width - PAGE.left - PAGE.right;
   const limit = () => doc.page.height - PAGE.bottom;
@@ -256,12 +243,13 @@ export function renderMinutesPdf(input: MinutesPdfInput): Promise<Buffer> {
     if (doc.y + height > limit()) doc.addPage();
   };
 
-  // Title block (first page).
-  doc.font('Bold').fontSize(7).fillColor(C.brand).text(L.kicker, x0, PAGE.top, { ...PLAIN, width, characterSpacing: 1.6 });
-  doc.moveDown(0.3);
-  if (content.subject) doc.font('Bold').fontSize(16).fillColor(C.title).text(content.subject, x0, doc.y, { ...PLAIN, width });
-  doc.moveDown(0.35);
-  doc.font('Bold').fontSize(8.5).fillColor(C.muted).text(content.byline, x0, doc.y, { ...PLAIN, width });
+  // Title block (first page): the subject, then the meeting and its date in regular weight.
+  doc.y = PAGE.top;
+  if (content.subject) {
+    doc.font('Bold').fontSize(16).fillColor(C.title).text(content.subject, x0, doc.y, { ...PLAIN, width });
+    doc.moveDown(0.35);
+  }
+  doc.font('Body').fontSize(8.5).fillColor(C.muted).text(content.byline, x0, doc.y, { ...PLAIN, width });
   doc.rect(x0, doc.y + 6, 38, 3).fill(C.lime);
   doc.y += 30;
 
@@ -289,31 +277,34 @@ export function renderMinutesPdf(input: MinutesPdfInput): Promise<Buffer> {
       .text(text, x + PAD, y + PAD, { ...PLAIN, width: w - 2 * PAD, lineGap: 1.5, align: opts.align ?? 'left' });
   };
 
-  // 01 Meeting details: label and value, two pairs a row; participants on a row of their own.
+  // 01 Meeting details: label and value, two pairs a row; the organizer and the participants on a row of their own.
   if (content.details.length || content.participants) {
     heading(L.details, 30);
     const lw = 95;
     const vw = width / 2 - lw;
-    for (let i = 0; i < content.details.length; i += 2) {
-      const pair = content.details.slice(i, i + 2);
-      const h = Math.max(26, ...pair.map((d) => cellHeight(d.value, vw)));
+    const paired = content.details.filter((d) => d.label !== L.organizer);
+    const wide = content.details.filter((d) => d.label === L.organizer).map((d) => ({ label: d.label, value: d.value }));
+    if (content.participants) wide.push({ label: content.participants.label, value: content.participants.lines.join('\n') });
+    for (let i = 0; i < paired.length; i += 2) {
+      const pair = paired.slice(i, i + 2);
+      // A detail without a partner takes the whole row.
+      const valueWidth = pair.length === 1 ? width - lw : vw;
+      const h = Math.max(26, ...pair.map((d) => cellHeight(d.value, valueWidth)));
       room(h);
       const y = doc.y;
       pair.forEach((d, k) => {
         const x = x0 + k * (lw + vw);
         cell(d.label, x, y, lw, h, { fill: C.labelFill, color: C.label, font: 'Body', size: 8 });
-        cell(d.value, x + lw, y, vw, h);
+        cell(d.value, x + lw, y, valueWidth, h);
       });
-      if (pair.length === 1) cell('', x0 + lw + vw, y, lw + vw, h);
       doc.y = y + h;
     }
-    if (content.participants) {
-      const value = content.participants.lines.join('\n');
-      const h = Math.max(26, cellHeight(value, width - lw));
+    for (const row of wide) {
+      const h = Math.max(26, cellHeight(row.value, width - lw));
       room(h);
       const y = doc.y;
-      cell(content.participants.label, x0, y, lw, h, { fill: C.labelFill, color: C.label, font: 'Body', size: 8 });
-      cell(value, x0 + lw, y, width - lw, h);
+      cell(row.label, x0, y, lw, h, { fill: C.labelFill, color: C.label, font: 'Body', size: 8 });
+      cell(row.value, x0 + lw, y, width - lw, h);
       doc.y = y + h;
     }
     doc.y += 22;
@@ -344,10 +335,10 @@ export function renderMinutesPdf(input: MinutesPdfInput): Promise<Buffer> {
         doc.y = y + top;
         runs.forEach((r, k) => {
           doc
-            .font(r.bold ? 'Bold' : 'Body')
+            .font(r.bold ? (r.italic ? 'BoldItalic' : 'Bold') : r.italic ? 'Italic' : 'Body')
             .fontSize(9)
             .fillColor(r.url ? C.brand : C.text);
-          const opts = { ...PLAIN, width: inner - indent, lineGap: 2, continued: k < runs.length - 1, link: r.url ?? null, underline: !!r.url };
+          const opts = { ...PLAIN, width: inner - indent, lineGap: 2, continued: k < runs.length - 1, link: r.url ?? null, underline: !!(r.url || r.underline) };
           if (k === 0) doc.text(r.text, tx, y + top, opts);
           else doc.text(r.text, opts);
         });

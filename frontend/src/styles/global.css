@@ -598,6 +598,9 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .minutes-toolbar button { border: 1px solid var(--border); background: var(--white); color: var(--ink); border-radius: 6px; padding: 3px 9px; font-size: 12px; cursor: pointer; }
 .minutes-toolbar button:hover { background: var(--bg-soft); }
 .minutes-text { width: 100%; box-sizing: border-box; line-height: 1.5; min-height: 92px; }
+/* The formatted text in the editor's frame once it loses the focus (CD-378); a click edits again. */
+.minutes-view { cursor: text; }
+.minutes-view .rich-text { font-size: 13px; line-height: 1.5; }
 .minutes-preview { font-size: 13.5px; line-height: 1.55; border: 1px solid transparent; border-radius: 7px; padding: 8px 10px; margin: 0 -10px; overflow-wrap: anywhere; }
 .minutes-steps > .table-row { padding: 9px 16px; }
 .minutes-steps > .table-row:last-child { border-bottom: 0; }
@@ -686,17 +689,20 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .ext-status-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ext-pdf { padding: 6px 12px; }
 /* Settings → Workspace → Logo (CD-378). */
-.ws-logo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0; min-width: 0; }
-/* The tile: the logo or "No logo"; for owners and admins a pencil on hover, and a click picks an image. */
-.ws-logo-tile { position: relative; flex: 0 0 auto; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; padding: 6px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-soft); overflow: hidden; font: inherit; }
-button.ws-logo-tile { cursor: pointer; }
-.ws-logo-tile img { max-width: 100%; max-height: 100%; object-fit: contain; }
-.ws-logo-empty { font-size: 11px; line-height: 1.2; text-align: center; color: var(--muted); }
-.ws-logo-edit { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(13, 36, 28, 0.55); color: var(--white); opacity: 0; transition: opacity 0.12s; }
-button.ws-logo-tile:hover .ws-logo-edit, button.ws-logo-tile:focus-visible .ws-logo-edit, .ws-logo-tile.is-busy .ws-logo-edit { opacity: 1; }
-.ws-logo-remove { padding: 6px 12px; }
-.ws-logo-note { font-size: 12px; color: var(--text-2); }
-.ws-logo-error { font-size: 12px; color: var(--danger); margin: 2px 0 0; }
+/* Settings → Workspace info (CD-378): the logo in a circle, the name, Edit; the dialog's big circle shows a pencil on hover. */
+.ws-info { display: flex; flex-direction: column; gap: 12px; }
+.ws-info-row { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.ws-info-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.ws-info-label { font-size: 12px; color: var(--text-2); }
+.ws-info-name { font-size: 17px; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+.ws-avatar { position: relative; flex: 0 0 auto; width: 64px; height: 64px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: var(--bg-soft); border: 1px solid var(--border); color: var(--text-2); font-size: 20px; font-weight: 600; padding: 0; font-family: inherit; }
+.ws-avatar img { width: 100%; height: 100%; object-fit: contain; background: var(--white); }
+.ws-avatar-lg { width: 120px; height: 120px; font-size: 34px; cursor: pointer; }
+.ws-avatar-edit { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(13, 36, 28, 0.55); color: var(--white); opacity: 0; transition: opacity 0.12s; }
+.ws-avatar-lg:hover .ws-avatar-edit, .ws-avatar-lg:focus-visible .ws-avatar-edit { opacity: 1; }
+.ws-modal-logo { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ws-modal-formats { font-size: 12px; color: var(--text-2); }
+.ws-info-error { font-size: 12px; color: var(--danger); }
 .ext-people { display: flex; flex-direction: column; gap: 6px; }
 .ext-person { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; min-width: 0; overflow-wrap: anywhere; text-transform: none; letter-spacing: 0; font-weight: 400; }
 .ext-person.is-off { cursor: default; color: var(--muted); }
