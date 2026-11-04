@@ -381,6 +381,8 @@ export function RichField({
   // The frame keeps its height between the text and the formatted view, so nothing jumps.
   const [height, setHeight] = useState<number | undefined>(undefined);
   const caret = useRef<number | null>(null);
+  /** The selection a toolbar button or shortcut made, put back once its text has rendered. */
+  const selection = useRef<{ start: number; end: number } | null>(null);
   const writing = editable && (focused || !value.trim());
 
   useEffect(() => {
@@ -408,7 +410,6 @@ export function RichField({
   };
   // The new text replaces the textarea's value, which puts the caret at the end; the selection goes
   // back before the browser handles the next key, so Ctrl+B then Ctrl+I format the same text (CD-378 QA).
-  const selection = useRef<{ start: number; end: number } | null>(null);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || !selection.current) return;
