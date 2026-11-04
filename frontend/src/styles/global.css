@@ -1106,7 +1106,6 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .reminder-row .mf-input { padding: 6px 8px; font-size: 13px; }
 .reminder-amount { flex: 0 0 72px; width: 72px; }
 .reminder-unit { flex: 0 1 110px; width: auto; }
-.reminder-before { font-size: 13px; color: var(--text-2); flex: 1; }
 .reminder-empty { font-size: 12.5px; color: var(--muted); padding: 2px 0 4px; }
 .reminder-add { align-self: flex-start; padding: 5px 10px; }
 

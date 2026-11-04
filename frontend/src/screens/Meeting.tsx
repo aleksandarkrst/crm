@@ -160,12 +160,12 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
       </div>
 
       <div className="card mf-cols meeting-body">
-        <MeetingDetails m={m} editable={editable} />
         <div className="mf-side">
-          <MeetingGuests m={m} editable={editable} />
+          <MeetingDetails m={m} editable={editable} />
           {/* Each person's own email reminders (CD-376), while the meeting is planned. */}
           {m.status === 'planned' && meetings.takesPart(m) && <MeetingReminders m={m} />}
         </div>
+        <MeetingGuests m={m} editable={editable} />
       </div>
 
       <div className="lead-main card" style={{ minWidth: 0, overflow: 'hidden', marginTop: 16 }}>

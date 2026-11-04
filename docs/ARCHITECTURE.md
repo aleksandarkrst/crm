@@ -2766,9 +2766,10 @@ their own email reminders: a number of minutes, hours or days before the start, 
   map or join link), the agenda and a link to the meeting. There is no Settings switch for it.
 - **Dev trigger**: `POST /api/dev/meetings/reminders-tick` `{ now? }` runs the tick for the
   caller's workspace (AUTH_MODE=dev; the integration tests use it).
-- **Screen**: **My reminders** under the guests on the meeting page, for the people on a planned
-  meeting: a number, a unit and "before" per row, remove, and **+ Add reminder** up to 5; each change
-  is saved (a typed number after a pause).
+- **Screen**: **My reminders** under the agenda on the meeting page, for the people on a planned
+  meeting: a number and a unit per row, remove, and **+ Add reminder** up to 5; each change is saved
+  (a typed number after a pause). Rows stay where they are on screen when one changes; the API lists
+  them earliest first, which is the order after a reload.
 
 ## Deal page (CD-83)
 

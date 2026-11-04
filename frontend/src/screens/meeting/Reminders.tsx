@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { RemoveButton } from '../../components/ui';
 import type { ApiMeeting, ApiReminder, ReminderUnit } from '../../lib/api';
 import { useStore } from '../../store/store';
@@ -44,7 +45,14 @@ function rowsError(rows: Row[]): string | null {
  */
 export function MeetingReminders({ m }: { m: ApiMeeting }) {
   const { meetings, flash } = useStore();
-  const saved = JSON.stringify(m.myReminders.map((r) => ({ amount: String(r.amount), unit: r.unit })));
+  // The saved list comes back earliest first; it is shown in the order the rows are on screen, so
+  // a changed amount or unit doesn't move its row.
+  const order = useRef<number[]>([]);
+  const place = (r: ApiReminder) => {
+    const i = order.current.indexOf(r.amount * UNIT_MINUTES[r.unit]);
+    return i < 0 ? order.current.length : i;
+  };
+  const saved = JSON.stringify([...m.myReminders].sort((a, b) => place(a) - place(b)).map((r) => ({ amount: String(r.amount), unit: r.unit })));
   const field = useField(
     saved,
     async (v) => {
@@ -62,6 +70,7 @@ export function MeetingReminders({ m }: { m: ApiMeeting }) {
     TYPING_MS,
   );
   const rows = JSON.parse(field.draft) as Row[];
+  order.current = rows.map(minutesOf);
   const change = (next: Row[], now: boolean) => {
     field.change(JSON.stringify(next));
     if (now) void field.flush();
@@ -99,7 +108,6 @@ export function MeetingReminders({ m }: { m: ApiMeeting }) {
               </option>
             ))}
           </select>
-          <span className="reminder-before">before</span>
           <RemoveButton box={24} size={13} title="Remove this reminder" onClick={() => change(rows.filter((_, j) => j !== i), true)} />
         </div>
       ))}
