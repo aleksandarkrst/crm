@@ -255,7 +255,7 @@ function DealTitle({ saved, company, onSave }: { saved: string; company: string;
     if (!focused.current) setDraft(saved);
   }, [saved]);
   return (
-    <span style={{ display: 'flex', flexDirection: 'column', flex: '1 1 280px', minWidth: 0 }}>
+    <span className="deal-title-wrap">
       <input
         className="ghost deal-title"
         aria-label="Opportunity name"
@@ -277,10 +277,9 @@ function DealTitle({ saved, company, onSave }: { saved: string; company: string;
           setError(true);
         }}
         onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-        style={{ flex: 'none', width: '100%' }}
       />
       {error && (
-        <span role="alert" data-testid="deal-title-error" style={{ fontSize: 12, color: 'var(--danger)', padding: '2px 0 0' }}>
+        <span role="alert" data-testid="deal-title-error" style={{ fontSize: 12, color: 'var(--danger)' }}>
           An opportunity needs a name, so the last saved one is kept.
         </span>
       )}
