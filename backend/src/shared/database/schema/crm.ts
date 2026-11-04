@@ -804,6 +804,43 @@ export const meetingParticipants = pgTable(
   ],
 );
 
+export const REMINDER_UNITS = ['minutes', 'hours', 'days'] as const;
+export type ReminderUnit = (typeof REMINDER_UNITS)[number];
+
+/**
+ * One person's email reminder of a meeting (CD-376), as in Google Calendar: `minutes_before` the
+ * start, entered in `unit` (60 minutes or 1 hour), at most 5 per person and meeting. Only its
+ * owner sees it. `sent_for` is the start it was sent for (or skipped for, when its time had
+ * already passed on save): a meeting moved to another start makes it due again.
+ */
+export const meetingReminders = pgTable(
+  'meeting_reminders',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    meetingId: uuid('meeting_id').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    minutesBefore: integer('minutes_before').notNull(),
+    unit: text('unit', { enum: REMINDER_UNITS }).notNull(),
+    sentFor: timestamp('sent_for', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('meeting_reminders_tenant_meeting_idx').on(t.tenantId, t.meetingId),
+    index('meeting_reminders_tenant_user_idx').on(t.tenantId, t.userId),
+    uniqueIndex('meeting_reminders_uq').on(t.meetingId, t.userId, t.minutesBefore),
+    foreignKey({ columns: [t.tenantId, t.meetingId], foreignColumns: [meetings.tenantId, meetings.id], name: 'meeting_reminders_meeting_fk' }).onDelete('cascade'),
+    check('meeting_reminders_unit_ck', sql`${t.unit} in ('minutes', 'hours', 'days')`),
+    // Four weeks at most, as in Google Calendar; a whole number of the unit.
+    check(
+      'meeting_reminders_minutes_ck',
+      sql`${t.minutesBefore} between 0 and 40320 and ${t.minutesBefore} % (case ${t.unit} when 'days' then 1440 when 'hours' then 60 else 1 end) = 0`,
+    ),
+  ],
+);
+
 /** A next step of the internal minutes (CD-132). `taskId` is the deal task created from it, if any. */
 export interface MeetingNextStep {
   id: string;

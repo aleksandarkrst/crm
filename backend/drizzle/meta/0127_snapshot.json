@@ -1,5 +1,5 @@
 {
-  "id": "0e96f451-ae2f-4ecb-b1a2-b9ff32fb7f43",
+  "id": "66ca355b-ca58-426e-9410-9867d13b1734",
   "prevId": "365aadfd-da80-4e27-9b97-d95e3bd16471",
   "version": "7",
   "dialect": "postgresql",
@@ -742,24 +742,6 @@
         "country": {
           "name": "country",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "logo_storage_key": {
-          "name": "logo_storage_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "logo_content_type": {
-          "name": "logo_content_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "logo_updated_at": {
-          "name": "logo_updated_at",
-          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
@@ -4718,18 +4700,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "pdf_storage_key": {
-          "name": "pdf_storage_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pdf_file_name": {
-          "name": "pdf_file_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -5063,6 +5033,190 @@
         "meeting_participants_kind_ck": {
           "name": "meeting_participants_kind_ck",
           "value": "\"meeting_participants\".\"kind\" in ('internal', 'external') and (\"meeting_participants\".\"kind\" = 'internal' or \"meeting_participants\".\"user_id\" is null) and (\"meeting_participants\".\"kind\" = 'external' or \"meeting_participants\".\"contact_id\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.meeting_reminders": {
+      "name": "meeting_reminders",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "meeting_id": {
+          "name": "meeting_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "minutes_before": {
+          "name": "minutes_before",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sent_for": {
+          "name": "sent_for",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "meeting_reminders_tenant_meeting_idx": {
+          "name": "meeting_reminders_tenant_meeting_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "meeting_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "meeting_reminders_tenant_user_idx": {
+          "name": "meeting_reminders_tenant_user_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "meeting_reminders_uq": {
+          "name": "meeting_reminders_uq",
+          "columns": [
+            {
+              "expression": "meeting_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "minutes_before",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "meeting_reminders_tenant_id_tenants_id_fk": {
+          "name": "meeting_reminders_tenant_id_tenants_id_fk",
+          "tableFrom": "meeting_reminders",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "meeting_reminders_user_id_users_id_fk": {
+          "name": "meeting_reminders_user_id_users_id_fk",
+          "tableFrom": "meeting_reminders",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "meeting_reminders_meeting_fk": {
+          "name": "meeting_reminders_meeting_fk",
+          "tableFrom": "meeting_reminders",
+          "tableTo": "meetings",
+          "columnsFrom": [
+            "tenant_id",
+            "meeting_id"
+          ],
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "meeting_reminders_unit_ck": {
+          "name": "meeting_reminders_unit_ck",
+          "value": "\"meeting_reminders\".\"unit\" in ('minutes', 'hours', 'days')"
+        },
+        "meeting_reminders_minutes_ck": {
+          "name": "meeting_reminders_minutes_ck",
+          "value": "\"meeting_reminders\".\"minutes_before\" between 0 and 40320 and \"meeting_reminders\".\"minutes_before\" % (case \"meeting_reminders\".\"unit\" when 'days' then 1440 when 'hours' then 60 else 1 end) = 0"
         }
       },
       "isRLSEnabled": false

@@ -41,6 +41,17 @@ export interface JobPayloads {
    * queued (to: contacts, cc: members) and records each one's status.
    */
   'crm.meeting-minutes-email': { tenantId: string; sendId: string };
+  /**
+   * Cron (every minute, CD-376): in each workspace, claims the meeting reminders that are due
+   * (sent_for set to the start) and queues their emails in the same transaction.
+   */
+  'crm.meeting-reminders-tick': Record<string, never>;
+  /**
+   * One meeting reminder's email to its owner (CD-376), queued by the tick for the meeting's start
+   * then. The worker skips it when the meeting was moved, cancelled or deleted since, or the owner
+   * is no longer on it or in the workspace.
+   */
+  'crm.meeting-reminder': { tenantId: string; reminderId: string; startsAt: string };
   /** Sent by identity when someone removes a member or a member leaves; CRM takes them off future meetings (CD-131). */
   'identity.member-removed': { tenantId: string; userId: string };
   /**
@@ -198,6 +209,8 @@ export const JOB_NAMES = [
   'crm.generate-document',
   'crm.meeting-invite',
   'crm.meeting-minutes-email',
+  'crm.meeting-reminders-tick',
+  'crm.meeting-reminder',
   'crm.visit-plan-email',
   'documents.generate-pdf',
   'documents.email',
@@ -226,4 +239,4 @@ export const JOB_NAMES = [
 ] as const satisfies readonly JobName[];
 
 /** Jobs that send email: retried MAIL_RETRY_LIMIT times with backoff from MAIL_RETRY_DELAY_SECONDS. */
-export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.stage-reminder', 'crm.approval-requested', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed', 'projects.project-created-email', 'projects.task-assigned', 'projects.limit-alert', 'timesheet.notice-email', 'timeoff.notice-email', 'timeoff.sick-email', 'documents.email']);
+export const MAIL_JOBS: ReadonlySet<JobName> = new Set<JobName>(['crm.deal-assigned', 'crm.stage-reminder', 'crm.approval-requested', 'crm.meeting-invite', 'crm.meeting-minutes-email', 'crm.meeting-reminder', 'crm.visit-plan-email', 'identity.invitation-email', 'identity.signup-email', 'notifications.daily-digest', 'people.bank-account-changed-email', 'people.reporting-line-changed', 'projects.project-created-email', 'projects.task-assigned', 'projects.limit-alert', 'timesheet.notice-email', 'timeoff.notice-email', 'timeoff.sick-email', 'documents.email']);
