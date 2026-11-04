@@ -53,11 +53,17 @@ export function MeetingReminders({ m }: { m: ApiMeeting }) {
     return i < 0 ? order.current.length : i;
   };
   const saved = JSON.stringify([...m.myReminders].sort((a, b) => place(a) - place(b)).map((r) => ({ amount: String(r.amount), unit: r.unit })));
+  // A half-typed amount (cleared to retype, or briefly the same as another row) waits; it is
+  // refused only once the field is left or a unit or row changes.
+  const final = useRef(false);
   const field = useField(
     saved,
     async (v) => {
+      const done = final.current;
+      final.current = false;
       const rows = JSON.parse(v) as Row[];
       const error = rowsError(rows);
+      if (error && !done) return true;
       if (error) {
         flash(error);
         return false;
@@ -73,7 +79,11 @@ export function MeetingReminders({ m }: { m: ApiMeeting }) {
   order.current = rows.map(minutesOf);
   const change = (next: Row[], now: boolean) => {
     field.change(JSON.stringify(next));
-    if (now) void field.flush();
+    if (now) commit();
+  };
+  const commit = () => {
+    final.current = true;
+    void field.flush();
   };
   const update = (i: number, row: Partial<Row>, now: boolean) => change(rows.map((r, j) => (j === i ? { ...r, ...row } : r)), now);
   const add = () => {
@@ -87,7 +97,7 @@ export function MeetingReminders({ m }: { m: ApiMeeting }) {
       <div className="mf-col-title">
         My reminders <span className="meeting-muted">by email, only you see them</span>
       </div>
-      {rows.length === 0 && <div className="reminder-empty">No reminders. You won't get an email before this meeting.</div>}
+      {rows.length === 0 && <div className="cal-list-empty">No reminders. You won't get an email before this meeting.</div>}
       {rows.map((r, i) => (
         <div key={i} className="reminder-row" data-testid="meeting-reminder">
           <input
@@ -99,7 +109,7 @@ export function MeetingReminders({ m }: { m: ApiMeeting }) {
             data-testid="meeting-reminder-amount"
             value={r.amount}
             onChange={(e) => update(i, { amount: e.target.value }, false)}
-            onBlur={() => void field.flush()}
+            onBlur={commit}
           />
           <select className="mf-input reminder-unit" aria-label="Unit" data-testid="meeting-reminder-unit" value={r.unit} onChange={(e) => update(i, { unit: e.target.value as ReminderUnit }, true)}>
             {UNITS.map((u) => (

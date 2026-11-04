@@ -1101,12 +1101,10 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .meeting-body .icon-row { min-height: 36px; }
 .mf-side { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
 .mf-reminders { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.mf-reminders .mf-col-title .meeting-muted { font-weight: 400; font-size: 12px; }
 .reminder-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .reminder-row .mf-input { padding: 6px 8px; font-size: 13px; }
 .reminder-amount { flex: 0 0 72px; width: 72px; }
 .reminder-unit { flex: 0 1 110px; width: auto; }
-.reminder-empty { font-size: 12.5px; color: var(--muted); padding: 2px 0 4px; }
 .reminder-add { align-self: flex-start; padding: 5px 10px; }
 
 @media (max-width: 900px) {

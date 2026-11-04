@@ -100,6 +100,15 @@ describe('my reminders', () => {
     expect((await setReminders(ana, m.id, [hour])).status).toBe(409);
     expect((await call('PUT', `/crm/meetings/00000000-0000-4000-8000-000000000000/reminders`, { ...as(ana), body: { reminders: [] } })).status).toBe(404);
   });
+
+  it("can't be read or set from another workspace", async () => {
+    const m = await create(owner, 'Not theirs', start());
+    const outsider = await signIn('mr-stranger');
+    const theirs = { token: outsider.token, tenant: await createTenant(outsider, 'Reminders stranger') };
+    expect((await call('GET', `/crm/meetings/${m.id}`, theirs)).status).toBe(404);
+    expect((await call('PUT', `/crm/meetings/${m.id}/reminders`, { ...theirs, body: { reminders: [] } })).status).toBe(404);
+    expect((await get(owner, m.id)).myReminders).toEqual([hour]);
+  });
 });
 
 describe('the reminder emails', () => {
