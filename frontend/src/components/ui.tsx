@@ -404,13 +404,17 @@ export function Modal({ children, maxWidth, z = 45, gap = 16, onBackdrop }: { ch
     const root = document.documentElement;
     if (++openModals === 1) {
       // The lock hides the page's scrollbar: pad its width back so nothing behind moves (CD-493).
-      root.style.paddingRight = `${window.innerWidth - root.clientWidth}px`;
+      const width = `${window.innerWidth - root.clientWidth}px`;
+      root.style.paddingRight = width;
+      // Fixed things anchored to the right edge (the toast) add it too.
+      root.style.setProperty('--scrollbar-pad', width);
       root.classList.add('modal-open');
     }
     return () => {
       if (--openModals > 0) return;
       root.classList.remove('modal-open');
       root.style.paddingRight = '';
+      root.style.removeProperty('--scrollbar-pad');
     };
   }, []);
   return createPortal(
