@@ -401,9 +401,16 @@ let openModals = 0;
  */
 export function Modal({ children, maxWidth, z = 45, gap = 16, onBackdrop }: { children: ReactNode; maxWidth: number; z?: number; gap?: number; onBackdrop?: () => void }) {
   useEffect(() => {
-    if (++openModals === 1) document.documentElement.classList.add('modal-open');
+    const root = document.documentElement;
+    if (++openModals === 1) {
+      // The lock hides the page's scrollbar: pad its width back so nothing behind moves (CD-493).
+      root.style.paddingRight = `${window.innerWidth - root.clientWidth}px`;
+      root.classList.add('modal-open');
+    }
     return () => {
-      if (--openModals === 0) document.documentElement.classList.remove('modal-open');
+      if (--openModals > 0) return;
+      root.classList.remove('modal-open');
+      root.style.paddingRight = '';
     };
   }, []);
   return createPortal(
