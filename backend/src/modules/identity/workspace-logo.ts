@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import { pngPixelDataOk } from '../../shared/images/png';
 
 /** The workspace logo (CD-378): a PNG or JPEG of at most 1 MB, printed on the external minutes PDF. */
 export const MAX_LOGO_BYTES = 1024 * 1024;
@@ -29,8 +30,13 @@ export function logoContentType(buffer: Buffer): LogoContentType | null {
   return null;
 }
 
-/** pdfkit can place it (the minutes PDF would fail on an image it can't decode). */
+/**
+ * pdfkit can place it (the minutes PDF would fail on an image it can't decode). A PNG's pixel data
+ * is checked first: pdfkit decodes some PNGs asynchronously, where a broken one ends the process
+ * instead of throwing here.
+ */
 function printable(buffer: Buffer): boolean {
+  if (logoContentType(buffer) === 'image/png' && !pngPixelDataOk(buffer)) return false;
   try {
     new PDFDocument({ size: 'A4' }).image(buffer, 0, 0, { fit: [120, 40] });
     return true;

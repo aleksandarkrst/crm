@@ -36,7 +36,7 @@ export function RichText({ text, className }: { text: string; className?: string
 }
 
 /** Same as the email and the PDF (backend minutes-email `inlineRuns`): bold, underline and italic nest. */
-const TOKEN = /\*\*(?!\s)(.+?)(?<!\s)\*\*(?!\*)|__(?!\s)(.+?)(?<!\s)__|(?<![*\w])\*(?![\s*])(.+?)(?<![\s*])\*(?!\*)|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<]+[^\s<.,;:!?)\]])/g;
+const TOKEN = /\*\*(?!\s)(.+?)(?<!\s)\*\*(?!\*)|(?<!\w)__(?!\s)(.+?)(?<!\s)__(?!\w)|(?<![*\w])\*(?![\s*])(.+?)(?<![\s*])\*(?!\*)|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<]+[^\s<.,;:!?)\]])/g;
 
 /** Bold, italic, underline and links inside a line. */
 function inline(line: string): ReactNode[] {

@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import type { CustomerEmailLanguage, MeetingType } from '../../../shared/database/schema';
+import { pngPixelDataOk } from '../../../shared/images/png';
 import { zonedParts } from '../../../shared/time/zoned-time';
 import { BULLET, dayLabel, type ExternalNextStep, type InlineRun, inlineRuns } from './minutes-email';
 import { PULTLY_MARK_PNG } from './minutes-pdf-mark';
@@ -175,6 +176,41 @@ export function minutesPdfFileName(title: string, startsAt: Date, timeZone: stri
   return `${['Minutes', safe, zonedParts(startsAt, timeZone).date].filter(Boolean).join(' ')}.pdf`;
 }
 
+/**
+ * Runs cut at spaces into consecutive pieces, each as long as `fits` allows (a single word that
+ * doesn't fit still makes a piece of its own). One piece when the whole line fits.
+ */
+export function pieces(runs: InlineRun[], fits: (text: string) => boolean): InlineRun[][] {
+  if (fits(runs.map((r) => r.text).join(''))) return [runs];
+  const words = runs.flatMap((r) => r.text.split(/(?<=\s)/).map((text) => ({ ...r, text })));
+  const textOf = (from: number, to: number) => words.slice(from, to).map((w) => w.text).join('');
+  const out: InlineRun[][] = [];
+  for (let start = 0; start < words.length; ) {
+    // The most words from `start` that fit (fitting only gets harder with more words): a binary search.
+    let lo = start + 1;
+    let hi = words.length;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (fits(textOf(start, mid))) lo = mid;
+      else hi = mid - 1;
+    }
+    out.push(merged(words.slice(start, lo)));
+    start = lo;
+  }
+  return out;
+}
+
+/** Neighbouring runs with the same formatting as one. */
+function merged(runs: InlineRun[]): InlineRun[] {
+  const out: InlineRun[] = [];
+  for (const r of runs) {
+    const last = out[out.length - 1];
+    if (last && last.bold === r.bold && last.italic === r.italic && last.underline === r.underline && last.url === r.url) last.text += r.text;
+    else out.push({ ...r });
+  }
+  return out;
+}
+
 /** A line of the summary as runs, with the email's formatting (`inlineRuns`). */
 export function summaryRuns(line: string): { bullet: boolean; runs: InlineRun[] } {
   const bullet = BULLET.exec(line);
@@ -212,6 +248,20 @@ interface PdfImage {
 }
 const openImage = (doc: PDFKit.PDFDocument, src: Buffer): PdfImage => (doc as unknown as { openImage(src: Buffer): PdfImage }).openImage(src);
 const asSrc = (image: PdfImage) => image as unknown as Buffer;
+/**
+ * The logo opened, or null when it can't be printed: then the header has the name only. A PNG whose
+ * pixel data doesn't decode never reaches pdfkit, which would decode it later where the error can't
+ * be caught and ends the process (logos stored before the upload checked this too).
+ */
+function usableLogo(doc: PDFKit.PDFDocument, logo: Buffer): PdfImage | null {
+  const png = logo.length >= 8 && logo.readUInt32BE(0) === 0x89504e47;
+  if (png && !pngPixelDataOk(logo)) return null;
+  try {
+    return openImage(doc, logo);
+  } catch {
+    return null;
+  }
+}
 /** No ligatures: DejaVu's ff and fi would copy and search as "ofer" (fontkit takes a feature object; pdfkit's types say a list). */
 const PLAIN = { features: { liga: false, clig: false } as unknown as PDFKit.Mixins.OpenTypeFeatures[] };
 
@@ -314,15 +364,20 @@ export function renderMinutesPdf(input: MinutesPdfInput): Promise<Buffer> {
   if (content.summary) {
     heading(L.summary, 40);
     const inner = width - 2 * PAD - 8;
-    const lines = content.summary;
-    lines.forEach((line, i) => {
+    // Bold is wider: measure with it so the panel is never shorter than its text.
+    const measure = (text: string, w: number) => doc.font('Bold').fontSize(9).heightOfString(text, { ...PLAIN, width: w, lineGap: 2 });
+    // A paragraph taller than a page is cut into pieces that each fit one, so no panel runs over the footer.
+    const pageText = limit() - PAGE.top - 2 * (PAD + 2) - 2;
+    const lines = content.summary.flatMap((line) => {
       const { bullet, runs } = summaryRuns(line);
-      const indent = bullet ? 12 : 0;
+      const w = inner - (bullet ? 12 : 0);
+      return pieces(runs, (text) => measure(text, w) <= pageText).map((part, k) => ({ bullet: bullet && k === 0, indent: bullet ? 12 : 0, runs: part }));
+    });
+    lines.forEach(({ bullet, indent, runs }, i) => {
       const plain = runs.map((r) => r.text).join('');
       const top = i === 0 ? PAD + 2 : 0;
       const bottom = i === lines.length - 1 ? PAD + 2 : 0;
-      // Bold is wider: measure with it so the panel is never shorter than its text.
-      const textHeight = plain.trim() ? doc.font('Bold').fontSize(9).heightOfString(plain, { ...PLAIN, width: inner - indent, lineGap: 2 }) : 7;
+      const textHeight = plain.trim() ? measure(plain, inner - indent) : 7;
       const h = top + textHeight + bottom + 1;
       room(Math.min(h, limit() - PAGE.top));
       const y = doc.y;
@@ -384,7 +439,7 @@ export function renderMinutesPdf(input: MinutesPdfInput): Promise<Buffer> {
   doc.font('Body').fontSize(7.5).fillColor(C.muted).text(L.closing, x0, doc.y + 12, { ...PLAIN, width });
 
   // Header and footer on every page, once the page count is known.
-  const logo = input.logo ? openImage(doc, input.logo) : null;
+  const logo = input.logo ? usableLogo(doc, input.logo) : null;
   const mark = openImage(doc, PULTLY_MARK_PNG);
   const pages = doc.bufferedPageRange();
   for (let i = pages.start; i < pages.start + pages.count; i++) {

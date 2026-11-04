@@ -1,5 +1,7 @@
+import { crc32, deflateSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { type MinutesPdfInput, minutesPdfContent, minutesPdfFileName, renderMinutesPdf, summaryRuns } from '../src/modules/crm/meetings/minutes-pdf';
+import { type MinutesPdfInput, minutesPdfContent, minutesPdfFileName, pieces, renderMinutesPdf, summaryRuns } from '../src/modules/crm/meetings/minutes-pdf';
+import { pngPixelDataOk } from '../src/shared/images/png';
 import { logoContentType, logoProblem } from '../src/modules/identity/workspace-logo';
 import { PULTLY_MARK_PNG } from '../src/modules/crm/meetings/minutes-pdf-mark';
 
@@ -126,5 +128,78 @@ describe('workspace logo', () => {
     expect(logoProblem(file(Buffer.from('GIF89a......')))).toBe('The logo must be a PNG or JPG image.');
     expect(logoProblem({ ...file(PULTLY_MARK_PNG), size: 1024 * 1024 + 1 })).toBe('The logo can be at most 1 MB. Choose a smaller image.');
     expect(logoProblem(file(Buffer.concat([PULTLY_MARK_PNG.subarray(0, 40)])))).toMatch(/can't be read/);
+  });
+});
+
+/** A PNG built here: `pixels` is the raw scanline data (each row a filter byte, then the pixels). */
+function png(width: number, height: number, colourType: number, interlace: number, idat: Buffer): Buffer {
+  const chunk = (type: string, data: Buffer) => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(data.length, 0);
+    head.write(type, 4, 'latin1');
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])) >>> 0, 0);
+    return Buffer.concat([head, data, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = colourType;
+  ihdr[12] = interlace;
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', Buffer.alloc(0))]);
+}
+/** Rows of zero pixels with filter 0, for each pass. */
+const rows = (passes: [number, number][], bytesPerPixel: number) => Buffer.concat(passes.filter(([w, h]) => w && h).map(([w, h]) => Buffer.alloc(h * (1 + w * bytesPerPixel))));
+// A 4x4 image's Adam7 passes: widths and heights.
+const ADAM7_4x4: [number, number][] = [[1, 1], [0, 1], [1, 0], [1, 1], [2, 1], [2, 2], [4, 2]];
+
+describe('PNG pixel data (CD-378 review: a broken PNG must not reach pdfkit)', () => {
+  const rgba = png(4, 4, 6, 0, deflateSync(rows([[4, 4]], 4)));
+  const interlaced = png(4, 4, 6, 1, deflateSync(rows(ADAM7_4x4, 4)));
+  const garbage = png(4, 4, 6, 0, Buffer.from('this is not zlib data at all, just garbage bytes'));
+  const short = png(4, 4, 6, 0, deflateSync(rows([[4, 3]], 4)));
+  const badFilter = png(4, 4, 2, 0, deflateSync(Buffer.alloc(4 * (1 + 12), 9)));
+
+  it('accepts whole images, interlaced too', () => {
+    expect(pngPixelDataOk(rgba)).toBe(true);
+    expect(pngPixelDataOk(interlaced)).toBe(true);
+    expect(pngPixelDataOk(PULTLY_MARK_PNG)).toBe(true);
+  });
+
+  it('refuses corrupt, short or wrongly filtered pixel data, and what is not a PNG', () => {
+    expect(pngPixelDataOk(garbage)).toBe(false);
+    expect(pngPixelDataOk(short)).toBe(false);
+    expect(pngPixelDataOk(badFilter)).toBe(false);
+    expect(pngPixelDataOk(Buffer.from([0xff, 0xd8, 0xff, 0xe0]))).toBe(false);
+  });
+
+  it('refuses such a logo on upload, and a PDF with one stored earlier leaves it out; the process lives on', async () => {
+    const file = (buffer: Buffer) => ({ originalname: 'logo.png', mimetype: 'image/png', size: buffer.length, buffer });
+    expect(logoProblem(file(garbage))).toMatch(/can't be read/);
+    expect(logoProblem(file(rgba))).toBeNull();
+    const pdf = await renderMinutesPdf({ ...base, logo: garbage });
+    expect(pdf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    // pdfkit's asynchronous decode would have thrown by now and ended the run.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(pageCount(pdf)).toBe(1);
+  });
+});
+
+describe('long summary paragraphs (CD-378 review)', () => {
+  it('cuts a paragraph that does not fit into pieces at spaces, keeping the text and its formatting', () => {
+    const runs = [{ text: 'one two three ' }, { text: 'four five', bold: true }, { text: ' six seven eight nine ten' }];
+    const parts = pieces(runs, (t) => t.length <= 12);
+    const texts = parts.map((p) => p.map((r) => r.text).join(''));
+    expect(texts.join('')).toBe('one two three four five six seven eight nine ten');
+    expect(parts.length).toBeGreaterThan(1);
+    expect(texts.every((t) => t.length <= 12)).toBe(true);
+    expect(parts.flat().filter((r) => r.bold).map((r) => r.text).join('')).toBe('four five');
+    expect(pieces(runs, () => true)).toEqual([runs]);
+  });
+
+  it('puts a paragraph taller than a page on several pages', async () => {
+    const pdf = await renderMinutesPdf({ ...base, summary: Array.from({ length: 900 }, (_, i) => `word${i}`).join(' ') });
+    expect(pageCount(pdf)).toBeGreaterThan(1);
   });
 });

@@ -106,6 +106,8 @@ describe('renderMinutesHtml / renderMinutesText', () => {
   it('reads italic and underline, nested in bold too (CD-378)', () => {
     expect(renderMinutesHtml('*a* __b__ ***c*** **__d__** x * y * z')).toBe('<p style="margin:0 0 12px"><em>a</em> <u>b</u> <strong><em>c</em></strong> <strong><u>d</u></strong> x * y * z</p>');
     expect(renderMinutesText('*a* __b__ ***c*** [l](https://x.test)')).toBe('a b c l (https://x.test)');
+    // Underscores inside a word are part of it, not an underline.
+    expect(renderMinutesText('my__var__name and __u__')).toBe('my__var__name and u');
   });
 
   it('keeps paragraphs with line breaks and turns "-" and "*" lines into lists', () => {

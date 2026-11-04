@@ -76,7 +76,7 @@ export const CHROME: Record<CustomerEmailLanguage, Chrome> = {
  * The inline formatting: bold, underline, italic (each may hold the others), `[label](url)` and
  * bare links. The app's RichText and the PDF minutes (CD-378) read the same.
  */
-const INLINE = /\*\*(?!\s)(.+?)(?<!\s)\*\*(?!\*)|__(?!\s)(.+?)(?<!\s)__|(?<![*\w])\*(?![\s*])(.+?)(?<![\s*])\*(?!\*)|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<]+[^\s<.,;:!?)\]])/g;
+const INLINE = /\*\*(?!\s)(.+?)(?<!\s)\*\*(?!\*)|(?<!\w)__(?!\s)(.+?)(?<!\s)__(?!\w)|(?<![*\w])\*(?![\s*])(.+?)(?<![\s*])\*(?!\*)|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<]+[^\s<.,;:!?)\]])/g;
 export const BULLET = /^\s*[-*]\s+(.*)$/;
 
 /** A piece of a line with its formatting. */

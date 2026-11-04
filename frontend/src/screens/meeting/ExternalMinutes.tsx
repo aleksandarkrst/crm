@@ -210,9 +210,15 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
   const [pdfBusy, setPdfBusy] = useState(false);
   const downloadPdf = async () => {
     setPdfBusy(true);
-    await flush();
-    await actions.current.downloadPdf(m.id);
-    setPdfBusy(false);
+    try {
+      await flush();
+      // Edits that couldn't be saved ("Not saved" says so): a PDF of the older text would mislead.
+      if (!dirty.current.size) await actions.current.downloadPdf(m.id);
+    } catch {
+      // The save itself threw: same as above, the status shows it.
+    } finally {
+      setPdfBusy(false);
+    }
   };
 
   const last = stored.lastSend;
@@ -400,8 +406,11 @@ export function SendStatus({ m, send, onRetried, pdf = true }: { m: ApiMeeting; 
               title={`The exact file this send attached: ${send.pdfFileName}`}
               onClick={async () => {
                 setPdfBusy(true);
-                await meetings.downloadPdf(m.id, send);
-                setPdfBusy(false);
+                try {
+                  await meetings.downloadPdf(m.id, send);
+                } finally {
+                  setPdfBusy(false);
+                }
               }}
             >
               {pdfBusy ? 'Downloading' : 'Download PDF'}
