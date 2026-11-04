@@ -923,6 +923,12 @@ export const meetingMinutesSends = pgTable(
     subject: text('subject').notNull(),
     body: text('body').notNull(),
     language: text('language', { enum: CUSTOMER_EMAIL_LANGUAGES }).notNull(),
+    /**
+     * The PDF this send attached (CD-378), under STORAGE_DIR/<tenant id>/<key>: made once at send
+     * time, so a retry attaches the same file and "Download PDF" returns it. Null on sends before.
+     */
+    pdfStorageKey: text('pdf_storage_key'),
+    pdfFileName: text('pdf_file_name'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

@@ -146,6 +146,7 @@ export const mapWorkspace = (w: ApiWorkspace): Workspace => ({
   terms: w.terms ?? DEFAULT_TERMS,
   timesheet: w.timesheet ?? DEFAULT_TIMESHEET_SETTINGS,
   country: w.country ?? null,
+  logoUpdatedAt: w.logoUpdatedAt ?? null,
   company: w.company ?? EMPTY_COMPANY,
 });
 

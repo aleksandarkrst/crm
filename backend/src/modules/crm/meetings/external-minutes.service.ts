@@ -1,7 +1,9 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { ENV, type Env } from '../../../infrastructure/config/config.module';
+import { StorageService } from '../../../infrastructure/storage/storage.service';
 import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
@@ -27,6 +29,7 @@ import { ActivitiesService } from '../deals/activities.service';
 import { userNameOf } from '../owner';
 import { type ApiMeeting, MeetingsService } from './meetings.service';
 import { type ExternalNextStep, externalNextSteps, type MinutesEmail, minutesEmail, minutesTemplate, nextStepsSection, prefillCheck, updateFromMeeting, withNextSteps } from './minutes-email';
+import { minutesPdfFileName, renderMinutesPdf } from './minutes-pdf';
 
 /** Limits of the external minutes (spec 7.1). */
 export const EXTERNAL_BODY_MAX = 10_000;
@@ -86,6 +89,8 @@ export interface ApiMinutesSend {
   subject: string;
   body: string;
   language: CustomerEmailLanguage;
+  /** The PDF this send attached (CD-378), downloadable from the send log; null for sends before it. */
+  pdfFileName: string | null;
   /** failed when any recipient failed, queued while any is still queued, else sent. */
   status: MinutesDeliveryStatus;
   recipients: ApiMinutesRecipient[];
@@ -135,6 +140,14 @@ interface Prepared {
   language: CustomerEmailLanguage;
   /** The body as sent: the external text, then the next steps (CD-374). */
   body: string;
+  /** The next steps in that body: the PDF's table (CD-378). */
+  steps: ExternalNextStep[];
+}
+
+/** A PDF to download: its file name and bytes. */
+export interface MinutesPdfFile {
+  name: string;
+  content: Buffer;
 }
 
 /**
@@ -161,6 +174,7 @@ export class ExternalMinutesService {
     private readonly meetings: MeetingsService,
     private readonly activities: ActivitiesService,
     private readonly jobs: JobsService,
+    private readonly storage: StorageService,
     @Inject(ENV) private readonly env: Env,
   ) {}
 
@@ -264,14 +278,23 @@ export class ExternalMinutesService {
       .catch(mapDbError);
   }
 
-  /** Records the send and queues the email; the worker delivers it. */
+  /**
+   * Records the send and queues the email; the worker delivers it. The PDF (CD-378) is made here,
+   * once, and stored with the send: the email attaches it, a retry attaches the same file, and the
+   * send log downloads it. It is removed again when the send isn't recorded.
+   */
   send(ctx: TenantContext, meetingId: string, input: MinutesEmailRequest): Promise<ApiMinutesSend> {
+    const sendId = randomUUID();
+    const pdfKey = `meeting-minutes/${sendId}.pdf`;
+    let stored = false;
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const p = await this.prepare(tx, ctx, meetingId, input);
-        const [send] = await tx
-          .insert(meetingMinutesSends)
-          .values({
+        const pdf = await this.pdf(tx, ctx, meetingId, { subject: p.email.subject, summary: input.body, steps: p.steps });
+        await this.storage.putBuffer(ctx.tenantId, pdfKey, pdf.content);
+        stored = true;
+        await tx.insert(meetingMinutesSends).values({
+            id: sendId,
             tenantId: ctx.tenantId,
             meetingId,
             senderUserId: ctx.userId,
@@ -280,9 +303,9 @@ export class ExternalMinutesService {
             subject: p.email.subject,
             body: p.body,
             language: p.language,
-          })
-          .returning({ id: meetingMinutesSends.id });
-        const sendId = send!.id;
+            pdfStorageKey: pdfKey,
+            pdfFileName: pdf.name,
+          });
         await tx.insert(meetingMinutesRecipients).values([
           ...p.to.map((r) => ({ tenantId: ctx.tenantId, sendId, meetingId, kind: 'to' as const, contactId: r.contactId, userId: null, name: r.name, email: r.email })),
           ...p.cc.map((r) => ({ tenantId: ctx.tenantId, sendId, meetingId, kind: 'cc' as const, contactId: null, userId: r.userId, name: r.name, email: r.email })),
@@ -296,7 +319,34 @@ export class ExternalMinutesService {
         await this.audit.record(tx, ctx, { action: 'meeting.minutes_sent', entityType: 'meeting', entityId: meetingId, data: { sendId, to: p.to.length, cc: p.cc.length } });
         return (await this.loadSends(tx, meetingId, sendId))[0]!;
       })
-      .catch(mapDbError);
+      .catch(async (err: unknown) => {
+        if (stored) await this.storage.delete(ctx.tenantId, pdfKey).catch(() => undefined);
+        return mapDbError(err);
+      });
+  }
+
+  /**
+   * "Download PDF" on the External minutes tab (CD-378): the PDF of the saved text and the next
+   * steps as they are now, the same a send right now would attach. Every member who reads the meeting.
+   */
+  draftPdf(ctx: TenantContext, meetingId: string): Promise<MinutesPdfFile> {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const [row] = await tx.select({ subject: meetingMinutes.externalSubject, body: meetingMinutes.externalBody }).from(meetingMinutes).where(eq(meetingMinutes.meetingId, meetingId));
+      return this.pdf(tx, ctx, meetingId, { subject: subjectLine(row?.subject ?? ''), summary: row?.body ?? '', steps: await this.externalSteps(tx, ctx, meetingId) });
+    });
+  }
+
+  /** The PDF a send attached (CD-378), exactly as it went out. 404 for a send before PDFs. */
+  async sendPdf(ctx: TenantContext, meetingId: string, sendId: string): Promise<MinutesPdfFile> {
+    const [send] = await this.database.withTenant(ctx.tenantId, (tx) =>
+      tx
+        .select({ key: meetingMinutesSends.pdfStorageKey, name: meetingMinutesSends.pdfFileName })
+        .from(meetingMinutesSends)
+        .where(and(eq(meetingMinutesSends.id, sendId), eq(meetingMinutesSends.meetingId, meetingId))),
+    );
+    if (!send) throw new NotFoundException('Send not found');
+    if (!send.key) throw new NotFoundException('This send went out before minutes had a PDF');
+    return { name: send.name ?? 'Minutes.pdf', content: await this.storage.getBuffer(ctx.tenantId, send.key) };
   }
 
   /** Every send of the meeting, newest first. */
@@ -376,7 +426,8 @@ export class ExternalMinutesService {
     // tenants is a platform table without RLS, so filter by the caller's tenant explicitly.
     const [workspace] = await tx.select({ name: tenants.name, language: tenants.customerEmailLanguage }).from(tenants).where(eq(tenants.id, ctx.tenantId));
     const language = workspace?.language ?? 'en';
-    const body = withNextSteps(input.body, await this.externalSteps(tx, ctx, meetingId), language);
+    const steps = await this.externalSteps(tx, ctx, meetingId);
+    const body = withNextSteps(input.body, steps, language);
     // The send keeps the whole body, next steps included, within the same limit as the text (CD-374).
     if (body.length > EXTERNAL_BODY_MAX)
       throw new BadRequestException(`The minutes and the next steps together are too long (${body.length.toLocaleString('en-US')} of ${EXTERNAL_BODY_MAX.toLocaleString('en-US')} characters). Shorten the text or the next steps.`);
@@ -391,7 +442,44 @@ export class ExternalMinutesService {
       to: to.map(({ name, email }) => ({ name, email })),
       cc: cc.map(({ name, email }) => ({ name, email })),
     });
-    return { meeting, email, to, cc, sender, language, body };
+    return { meeting, email, to, cc, sender, language, body, steps };
+  }
+
+  /**
+   * The minutes PDF (CD-378) of this text and these next steps, with the meeting and the workspace
+   * (name, language, time zone, logo) as they are now. 404 when the meeting doesn't exist.
+   */
+  private async pdf(tx: Tx, ctx: TenantContext, meetingId: string, text: { subject: string; summary: string; steps: ExternalNextStep[] }): Promise<MinutesPdfFile> {
+    const meeting = await this.meetings.load(tx, ctx, meetingId);
+    // tenants is a platform table without RLS, so filter by the caller's tenant explicitly.
+    const [workspace] = await tx
+      .select({ name: tenants.name, language: tenants.customerEmailLanguage, timezone: tenants.timezone, logoKey: tenants.logoStorageKey })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId));
+    const timeZone = workspace?.timezone ?? 'UTC';
+    // A logo file that went missing leaves the name alone in the header rather than failing the minutes.
+    const logo = workspace?.logoKey ? await this.storage.getBuffer(ctx.tenantId, workspace.logoKey).catch(() => null) : null;
+    const content = await renderMinutesPdf({
+      language: workspace?.language ?? 'en',
+      timeZone,
+      workspaceName: workspace?.name ?? '',
+      logo,
+      subject: text.subject,
+      meeting: {
+        title: meeting.title,
+        type: meeting.type,
+        startsAt: new Date(meeting.startsAt),
+        endsAt: new Date(meeting.endsAt),
+        location: meeting.location,
+        companyName: meeting.companyName,
+        organizerName: meeting.organizerName,
+        internalNames: meeting.participants.filter((p) => p.kind === 'internal').map((p) => p.name),
+        externalNames: meeting.participants.filter((p) => p.kind === 'external').map((p) => p.name),
+      },
+      summary: text.summary,
+      nextSteps: text.steps,
+    });
+    return { name: minutesPdfFileName(meeting.title, new Date(meeting.startsAt), timeZone), content };
   }
 
   /**
@@ -549,6 +637,7 @@ export class ExternalMinutesService {
         subject: s.subject,
         body: s.body,
         language: s.language,
+        pdfFileName: s.pdfStorageKey ? s.pdfFileName : null,
         status: deliveryOf(mine.map((r) => r.status)),
         recipients: mine,
         createdAt: s.createdAt,

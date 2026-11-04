@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { and, eq, sql } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import { StorageService } from '../../infrastructure/storage/storage.service';
 import { AuditService } from '../../shared/audit/audit.service';
 import type { AuthUser, TenantContext } from '../../shared/authorization';
 import { DatabaseService } from '../../shared/database/database.service';
@@ -7,6 +9,7 @@ import { JobsService } from '../../shared/events/jobs.service';
 import { employees, funnels, memberships, tenants, users } from '../../shared/database/schema';
 import { applyCeoRule, syncMemberNames } from '../people';
 import { IdentityService } from './identity.service';
+import { logoContentType, logoProblem, type UploadedLogo } from './workspace-logo';
 import type { CompanyInput, TimesheetSettingsInput, UpdateProfile, UpdateWorkspace, WorkspaceTerms } from './settings.schemas';
 
 const workspaceColumns = {
@@ -29,6 +32,8 @@ const workspaceColumns = {
   taskTerm: tenants.taskTerm,
   taskTermPlural: tenants.taskTermPlural,
   country: tenants.country,
+  // The logo's version (CD-378); null without one. The image is GET /workspace/logo.
+  logoUpdatedAt: tenants.logoUpdatedAt,
   // Company details (CD-167), returned as `company`.
   coLegalName: tenants.companyLegalName,
   coAddress: tenants.companyAddress,
@@ -143,7 +148,55 @@ export class SettingsService {
     private readonly audit: AuditService,
     private readonly identity: IdentityService,
     private readonly jobs: JobsService,
+    private readonly storage: StorageService,
   ) {}
+
+  /**
+   * Sets or replaces the workspace logo (CD-378; owners and admins, by the route): a PNG or JPEG of
+   * at most 1 MB that pdfkit can print, else 400 with what to do. A replacement is stored under a
+   * new key and the old file removed after the row points at the new one.
+   */
+  async setLogo(ctx: TenantContext, file: UploadedLogo | undefined) {
+    const problem = logoProblem(file);
+    if (problem || !file) throw new BadRequestException(problem);
+    const contentType = logoContentType(file.buffer)!;
+    const key = `workspace/logo-${randomUUID()}.${contentType === 'image/png' ? 'png' : 'jpg'}`;
+    await this.storage.putBuffer(ctx.tenantId, key, file.buffer);
+    let previous: string | null = null;
+    try {
+      await this.database.withTenant(ctx.tenantId, async (tx) => {
+        const [before] = await tx.select({ key: tenants.logoStorageKey }).from(tenants).where(eq(tenants.id, ctx.tenantId)).for('update');
+        previous = before?.key ?? null;
+        await tx.update(tenants).set({ logoStorageKey: key, logoContentType: contentType, logoUpdatedAt: new Date() }).where(eq(tenants.id, ctx.tenantId));
+        await this.audit.record(tx, ctx, { action: 'workspace.logo_updated', entityType: 'tenant', entityId: ctx.tenantId, data: { contentType, sizeBytes: file.size } });
+      });
+    } catch (err) {
+      await this.storage.delete(ctx.tenantId, key);
+      throw err;
+    }
+    if (previous) await this.storage.delete(ctx.tenantId, previous);
+    return this.getWorkspace(ctx);
+  }
+
+  /** Removes the workspace logo (CD-378): the minutes PDF shows the workspace name only. */
+  async removeLogo(ctx: TenantContext) {
+    const previous = await this.database.withTenant(ctx.tenantId, async (tx) => {
+      const [before] = await tx.select({ key: tenants.logoStorageKey }).from(tenants).where(eq(tenants.id, ctx.tenantId)).for('update');
+      if (!before?.key) return null;
+      await tx.update(tenants).set({ logoStorageKey: null, logoContentType: null, logoUpdatedAt: null }).where(eq(tenants.id, ctx.tenantId));
+      await this.audit.record(tx, ctx, { action: 'workspace.logo_removed', entityType: 'tenant', entityId: ctx.tenantId, data: {} });
+      return before.key;
+    });
+    if (previous) await this.storage.delete(ctx.tenantId, previous);
+    return this.getWorkspace(ctx);
+  }
+
+  /** The logo image of the caller's workspace (any member, for Settings); 404 without one. */
+  async getLogo(ctx: TenantContext): Promise<{ contentType: string; content: Buffer }> {
+    const [row] = await this.database.db.select({ key: tenants.logoStorageKey, contentType: tenants.logoContentType }).from(tenants).where(eq(tenants.id, ctx.tenantId));
+    if (!row?.key) throw new NotFoundException('This workspace has no logo');
+    return { contentType: row.contentType ?? 'image/png', content: await this.storage.getBuffer(ctx.tenantId, row.key) };
+  }
 
   async getWorkspace(ctx: TenantContext) {
     const [row] = await this.database.db.select(workspaceColumns).from(tenants).where(eq(tenants.id, ctx.tenantId));

@@ -1,7 +1,8 @@
 import { Inject, Injectable, Logger, Module, type OnApplicationBootstrap } from '@nestjs/common';
 import { and, asc, eq, gt, inArray, isNotNull, sql } from 'drizzle-orm';
 import { ENV, type Env } from '../../../infrastructure/config/config.module';
-import { Mailer } from '../../../infrastructure/mail/mailer';
+import { type MailAttachment, Mailer } from '../../../infrastructure/mail/mailer';
+import { StorageService } from '../../../infrastructure/storage/storage.service';
 import { DatabaseService } from '../../../shared/database/database.service';
 import { companies, deals, meetingMinutesRecipients, meetingMinutesSends, meetingParticipants, meetingReminders, meetings, memberships, tenants, users } from '../../../shared/database/schema';
 import type { JobPayloads } from '../../../shared/events/job-types';
@@ -41,9 +42,20 @@ export class MeetingJobs implements OnApplicationBootstrap {
     private readonly jobs: JobsService,
     private readonly database: DatabaseService,
     private readonly mailer: Mailer,
+    private readonly storage: StorageService,
     private readonly reminders: MeetingReminderTick,
     @Inject(ENV) private readonly env: Env,
   ) {}
+
+  /** The send's stored PDF; a read failure gets a fixed message (the raw one names the storage path). */
+  private async pdfOf(tenantId: string, key: string): Promise<Buffer> {
+    try {
+      return await this.storage.getBuffer(tenantId, key);
+    } catch (err) {
+      this.logger.error(`Minutes PDF ${key} could not be read: ${err instanceof Error ? err.message : String(err)}`);
+      throw new Error('The minutes PDF could not be read.', { cause: err });
+    }
+  }
 
   async onApplicationBootstrap(): Promise<void> {
     await this.jobs.work('crm.meeting-invite', (data) => this.sendInvites(data));
@@ -112,7 +124,9 @@ export class MeetingJobs implements OnApplicationBootstrap {
    * "crm.meeting-minutes-email" (CD-133): one email with the send's exact text to its recipients
    * still queued (contacts in To, members in Cc; on a retry only the ones that failed), from the
    * sender's name at the platform's address, replies to the sender. Each recipient becomes sent,
-   * or failed with the reason: an address the server refused fails alone; a send that fails as a
+   * or failed with the reason: an address the server refused fails alone. The send's PDF (CD-378) goes with it,
+   * the same file on every attempt and retry; a PDF that can't be read fails the attempt rather than
+   * going out without it; a send that fails as a
    * whole keeps them queued while pg-boss retries it (MAIL_JOBS) and fails them on the last attempt.
    */
   async sendMinutes({ tenantId, sendId }: JobPayloads['crm.meeting-minutes-email'], attempt: Pick<JobAttempt, 'lastAttempt'> = { lastAttempt: true }): Promise<void> {
@@ -159,7 +173,10 @@ export class MeetingJobs implements OnApplicationBootstrap {
     });
     let rejected: Set<string>;
     try {
-      const result = await this.mailer.send(minutesMailMessage(email, sender));
+      const attachments: MailAttachment[] = send.pdfStorageKey
+        ? [{ filename: send.pdfFileName ?? 'Minutes.pdf', contentType: 'application/pdf', content: (await this.pdfOf(tenantId, send.pdfStorageKey)).toString('base64'), encoding: 'base64' }]
+        : [];
+      const result = await this.mailer.send({ ...minutesMailMessage(email, sender), ...(attachments.length ? { attachments } : {}) });
       rejected = new Set(result.rejected.map((a) => a.trim().toLowerCase()));
     } catch (err) {
       if (attempt.lastAttempt) await settle(all, { status: 'failed', error: (err instanceof Error ? err.message : String(err)).slice(0, 500) });
