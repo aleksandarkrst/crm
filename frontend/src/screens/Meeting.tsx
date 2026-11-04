@@ -12,6 +12,7 @@ import { ExternalMinutes } from './meeting/ExternalMinutes';
 import { InternalMinutes } from './meeting/InternalMinutes';
 import { MeetingDetails, MeetingGuests, MeetingTitle, MeetingWhen } from './meeting/MeetingFields';
 import { MeetingHistory } from './meeting/MeetingHistory';
+import { MeetingReminders } from './meeting/Reminders';
 
 type Tab = 'internal' | 'external' | 'history';
 const TABS: { value: Tab; label: string }[] = [
@@ -159,7 +160,11 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
       </div>
 
       <div className="card mf-cols meeting-body">
-        <MeetingDetails m={m} editable={editable} />
+        <div className="mf-side">
+          <MeetingDetails m={m} editable={editable} />
+          {/* Each person's own email reminders (CD-376), while the meeting is planned. */}
+          {m.status === 'planned' && meetings.takesPart(m) && <MeetingReminders m={m} />}
+        </div>
         <MeetingGuests m={m} editable={editable} />
       </div>
 

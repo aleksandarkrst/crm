@@ -60,6 +60,15 @@ describe('the .ics (RFC 5545)', () => {
     expect(lines).toContain('UID:meeting-3f2a@pultly.com');
   });
 
+  it('alerts an hour before with one VALARM on a request, and none on a cancellation (CD-376)', () => {
+    const lines = unfold(buildIcs(event));
+    expect(lines.filter((l) => l === 'BEGIN:VALARM')).toHaveLength(1);
+    const alarm = lines.slice(lines.indexOf('BEGIN:VALARM'), lines.indexOf('END:VALARM') + 1);
+    expect(alarm).toEqual(['BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Quarterly review', 'TRIGGER:-PT1H', 'END:VALARM']);
+    expect(lines.indexOf('END:VALARM')).toBeLessThan(lines.indexOf('END:VEVENT'));
+    expect(unfold(buildIcs({ ...event, method: 'CANCEL' }))).not.toContain('BEGIN:VALARM');
+  });
+
   it('leaves out an empty location', () => {
     expect(prop(buildIcs({ ...event, location: null }), 'LOCATION')).toBeUndefined();
   });

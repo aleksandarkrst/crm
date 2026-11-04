@@ -30,7 +30,9 @@ import { ActivitiesService } from '../deals/activities.service';
 import { RecordHistoryService } from '../history/record-history.service';
 import { userNameOf } from '../owner';
 import type { InviteKind } from './meeting-invite';
+import { type Reminder, remindersError, REMINDER_INPUT } from './meeting-reminders';
 import { canManageMeeting, isNotClosed, type MeetingChange, meetingChangeError, NOT_CLOSED_AFTER_MS } from './meeting-rules';
+import { addDefaultReminders, remindersOf, removeReminders, replaceReminders, skipPastReminders } from './reminder-rows';
 
 const instant = z.iso.datetime({ offset: true });
 /** Ids of people, without duplicates (the same person can't be added twice). */
@@ -114,10 +116,14 @@ export const MeetingsQuery = z
     message: 'Give a period (from, to) or one of companyId, dealId, contactId, ids',
   });
 
+/** The caller's own reminders of a meeting (CD-376): the whole list, at most 5. */
+export const SetReminders = z.object({ reminders: z.array(REMINDER_INPUT).max(20) });
+
 export type CreateMeeting = z.infer<typeof CreateMeeting>;
 export type UpdateMeeting = z.infer<typeof UpdateMeeting>;
 export type CancelMeeting = z.infer<typeof CancelMeeting>;
 export type MeetingsQuery = z.infer<typeof MeetingsQuery>;
+export type SetReminders = z.infer<typeof SetReminders>;
 
 export interface ApiMeetingParticipant {
   id: string;
@@ -159,6 +165,8 @@ export interface ApiMeeting {
   externalDelivery: 'not_sent' | 'queued' | 'sent' | 'failed';
   /** The last change of a send's delivery (null before the first send): an open send log reads again when it moves. */
   sendsUpdatedAt: Date | null;
+  /** The caller's own email reminders (CD-376), earliest first; nobody sees anyone else's. */
+  myReminders: Reminder[];
   createdByUserId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -273,7 +281,7 @@ export class MeetingsService {
           })
           .returning();
         const meeting = row!;
-        const { addedUserIds } = await this.syncParticipants(tx, ctx, meeting.id, organizerUserId, found, internal, input.externalContactIds ?? []);
+        const { addedUserIds } = await this.syncParticipants(tx, ctx, meeting, organizerUserId, found, internal, input.externalContactIds ?? []);
         await this.invite(tx, ctx, meeting.id, 'added', addedUserIds);
         await this.activities.record(tx, ctx, input.dealId, { channel: 'MT', title: `Meeting scheduled · ${meeting.title}`, detail: await this.when(tx, ctx, meeting) });
         await this.audit.record(tx, ctx, { action: 'meeting.created', entityType: 'meeting', entityId: meeting.id });
@@ -323,11 +331,14 @@ export class MeetingsService {
           planned &&
           (startsAt.getTime() !== current.startsAt.getTime() || endsAt.getTime() !== current.endsAt.getTime() || (input.location !== undefined && (input.location ?? null) !== current.location));
         if (moved) patch.icsSequence = sql`${meetings.icsSequence} + 1`;
+        const after = { id, type: input.type ?? current.type, startsAt };
         const sync = internalUserIds
-          ? await this.syncParticipants(tx, ctx, id, organizerUserId, found, internalUserIds, externalContactIds)
-          : await this.syncParticipants(tx, ctx, id, organizerUserId, found, [], externalContactIds, true);
+          ? await this.syncParticipants(tx, ctx, after, organizerUserId, found, internalUserIds, externalContactIds)
+          : await this.syncParticipants(tx, ctx, after, organizerUserId, found, [], externalContactIds, true);
         // A change of people alone still moves the version, so the next If-Match is current.
         if (Object.keys(patch).length || sync.changed) await tx.update(meetings).set(Object.keys(patch).length ? patch : { updatedAt: new Date() }).where(eq(meetings.id, id));
+        // A new start: the reminders count from it, sent ones too, but none whose time has passed (CD-376).
+        if (startsAt.getTime() !== current.startsAt.getTime()) await skipPastReminders(tx, after, new Date());
         if (planned) {
           await this.invite(tx, ctx, id, 'added', sync.addedUserIds);
           if (moved) await this.invite(tx, ctx, id, 'updated', (await this.internalUserIds(tx, id)).filter((u) => !sync.addedUserIds.includes(u)));
@@ -368,10 +379,32 @@ export class MeetingsService {
   /** Cancelled → planned ("Restore"). The participants' calendars get it back (an update); "Meeting restored" on the deal (CD-222). */
   restore(ctx: TenantContext, id: string): Promise<ApiMeeting> {
     return this.changeStatus(ctx, id, 'restore', { status: 'planned', cancelledAt: null, cancelReason: null, icsSequence: sql`${meetings.icsSequence} + 1` }, async (tx, m) => {
+      // The reminders whose time passed while it was cancelled don't go out late (CD-376).
+      await skipPastReminders(tx, m, new Date());
       await this.invite(tx, ctx, id, 'updated', await this.internalUserIds(tx, id));
       if (!m.dealId) return; // as above
       await this.activities.record(tx, ctx, m.dealId, { channel: 'MT', title: `Meeting restored · ${m.title}`, detail: await this.when(tx, ctx, m) });
     });
+  }
+
+  /**
+   * Replaces the caller's own reminders of a planned meeting (CD-376). Only the people on it
+   * (organizer included) have reminders (403 for anyone else, owners and admins too); at most 5,
+   * no two at the same time (400). One whose time has already passed is kept but never sent.
+   */
+  setReminders(ctx: TenantContext, id: string, input: SetReminders): Promise<ApiMeeting> {
+    return this.database
+      .withTenant(ctx.tenantId, async (tx) => {
+        const [meeting] = await tx.select().from(meetings).where(eq(meetings.id, id)).for('update');
+        if (!meeting) throw new NotFoundException('Meeting not found');
+        if (!(await this.internalUserIds(tx, id)).includes(ctx.userId)) throw new ForbiddenException('Only the people on this meeting have reminders of it');
+        if (meeting.status !== 'planned') throw new ConflictException('Reminders are only for planned meetings.');
+        const error = remindersError(input.reminders);
+        if (error) throw new BadRequestException(error);
+        await replaceReminders(tx, ctx.tenantId, meeting, ctx.userId, input.reminders, new Date());
+        return this.load(tx, ctx, id);
+      })
+      .catch(mapDbError);
   }
 
   /**
@@ -494,13 +527,14 @@ export class MeetingsService {
   private async syncParticipants(
     tx: Tx,
     ctx: TenantContext,
-    meetingId: string,
+    meeting: { id: string; type: MeetingType; startsAt: Date },
     organizerUserId: string | null,
     found: People,
     internal: string[],
     external: string[] | undefined,
     keepInternal = false,
   ): Promise<{ changed: boolean; addedUserIds: string[] }> {
+    const meetingId = meeting.id;
     const existing = await tx.select().from(meetingParticipants).where(eq(meetingParticipants.meetingId, meetingId));
     const wantedUsers = new Set(internal);
     if (organizerUserId) wantedUsers.add(organizerUserId);
@@ -511,14 +545,20 @@ export class MeetingsService {
     );
     const addUsers = [...wantedUsers].filter((id) => !haveUsers.has(id));
     const addContacts = (external ?? []).filter((id) => !haveContacts.has(id));
-    if (remove.length) await tx.delete(meetingParticipants).where(inArray(meetingParticipants.id, remove.map((p) => p.id)));
+    if (remove.length) {
+      await tx.delete(meetingParticipants).where(inArray(meetingParticipants.id, remove.map((p) => p.id)));
+      await removeReminders(tx, meetingId, remove.flatMap((p) => (p.userId ? [p.userId] : [])));
+    }
     // The organizer may have left the workspace's member list since: only add people we found.
     const rows = [
       ...addUsers.filter((id) => found.members.has(id)).map((userId) => ({ kind: 'internal' as const, userId, contactId: null, name: found.members.get(userId)!, email: null })),
       ...addContacts.map((contactId) => ({ kind: 'external' as const, userId: null, contactId, name: found.contacts.get(contactId)!.name, email: found.contacts.get(contactId)!.email })),
     ];
     if (rows.length) await tx.insert(meetingParticipants).values(rows.map((r) => ({ ...r, tenantId: ctx.tenantId, meetingId })));
-    return { changed: remove.length > 0 || rows.length > 0, addedUserIds: rows.flatMap((r) => (r.userId ? [r.userId] : [])) };
+    const addedUserIds = rows.flatMap((r) => (r.userId ? [r.userId] : []));
+    // Each person added starts with the default reminders (CD-376).
+    await addDefaultReminders(tx, ctx.tenantId, meeting, addedUserIds, new Date());
+    return { changed: remove.length > 0 || rows.length > 0, addedUserIds };
   }
 
   /** "Tue 6 Oct 2026, 10:00–11:00 · <location>", in the workspace time zone, for the deal's timeline. */
@@ -572,6 +612,7 @@ export class MeetingsService {
       .leftJoin(contacts, eq(contacts.id, meetingParticipants.contactId))
       .where(inArray(meetingParticipants.meetingId, rows.map((r) => r.meeting.id)))
       .orderBy(asc(meetingParticipants.createdAt), asc(meetingParticipants.name));
+    const reminders = await remindersOf(tx, ctx.userId, rows.map((r) => r.meeting.id));
     const byMeeting = new Map<string, ApiMeetingParticipant[]>();
     for (const { participant: p, contactName, contactEmail, memberName } of people) {
       const internal = p.kind === 'internal';
@@ -616,6 +657,7 @@ export class MeetingsService {
         minutesUpdatedAt,
         externalDelivery: delivery ?? 'not_sent',
         sendsUpdatedAt: sendsAt,
+        myReminders: reminders.get(m.id) ?? [],
         createdByUserId: m.createdByUserId,
         createdAt: m.createdAt,
         updatedAt: m.updatedAt,

@@ -3,7 +3,8 @@
  * someone else, time or place changed, cancelled), never to the person who made the change and
  * never when they turned "Meeting invitations" off; editing people on held meetings; deleting a
  * contact (off future planned meetings only); a member leaving the workspace (off future planned
- * meetings, "Organizer left" until an admin picks one); the calendar and contact filters.
+ * meetings, "Organizer left" until an admin picks one); the calendar and contact filters. The
+ * organizer never gets these emails (CD-376, as in Google Calendar): the meeting is theirs.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { addMember, call, createTenant, eventually, firstFunnel, type Json, mailTo, ok, readyCompany, type Session, signIn } from './helpers';
@@ -96,7 +97,6 @@ describe('emails to internal participants', () => {
     await patch(ana, m.id, { startsAt: future(72), endsAt: future(73) });
     const toBo = await waitForSubject(bo, 'Meeting changed: Moving review');
     expect(icsOf(toBo)).toEqual(expect.arrayContaining(['METHOD:REQUEST', 'SEQUENCE:1', `UID:meeting-${m.id}@pultly.com`]));
-    await waitForSubject(owner, 'Meeting changed: Moving review');
 
     await patch(owner, m.id, { location: 'Room 2' });
     // Ana moved it herself, so the owner's change of place is the only update she gets.
@@ -110,18 +110,20 @@ describe('emails to internal participants', () => {
     }, 'the second update to Bo');
     expect(icsOf(second)).toContain('SEQUENCE:2');
     expect(await mailsAbout(bo, 'Moving review')).toHaveLength(3);
+    // The owner organizes it: no email with an .ics (CD-376).
+    expect(await mailsAbout(owner, 'Moving review')).toEqual([]);
   });
 
   it('emails a cancellation that cancels the calendar event, to everyone but the person who cancelled', async () => {
     const m = await create(owner, 'Cancelled sync', { internalUserIds: [ana.userId, bo.userId] });
     await waitForSubject(bo, 'You were added to a meeting: Cancelled sync');
     await ok('POST', `/crm/meetings/${m.id}/cancel`, { ...as(ana), body: { reason: 'Customer asked' } }, 200);
-    for (const who of [owner, bo]) {
-      const mail = await waitForSubject(who, 'Meeting cancelled: Cancelled sync');
-      expect(mail.attachments[0].contentType).toBe('text/calendar; charset=utf-8; method=CANCEL');
-      expect(icsOf(mail)).toEqual(expect.arrayContaining(['METHOD:CANCEL', 'STATUS:CANCELLED', 'SEQUENCE:1', `UID:meeting-${m.id}@pultly.com`]));
-    }
+    const mail = await waitForSubject(bo, 'Meeting cancelled: Cancelled sync');
+    expect(mail.attachments[0].contentType).toBe('text/calendar; charset=utf-8; method=CANCEL');
+    expect(icsOf(mail)).toEqual(expect.arrayContaining(['METHOD:CANCEL', 'STATUS:CANCELLED', 'SEQUENCE:1', `UID:meeting-${m.id}@pultly.com`]));
     expect((await mailsAbout(ana, 'Cancelled sync')).map((x: Json) => x.subject)).toEqual(['You were added to a meeting: Cancelled sync']);
+    // Nothing to the organizer (CD-376).
+    expect(await mailsAbout(owner, 'Cancelled sync')).toEqual([]);
   });
 });
 
@@ -179,10 +181,15 @@ describe('participants', () => {
     expect(refused.status).toBe(403);
     expect(refused.body.message).toContain('Only admins and owners can change the organizer');
     expect(await patch(ana, organized.id, { location: 'Room 2' })).toMatchObject({ organizerUserId: null, location: 'Room 2' });
-    // An admin picks the new organizer, who is told they were added.
+    // An admin picks the new organizer. It is their meeting now: no invitation (CD-376), but the
+    // default reminder, as for anyone added.
     const fixed = await patch(admin, organized.id, { organizerUserId: bo.userId });
     expect(fixed).toMatchObject({ organizerUserId: bo.userId, organizerName: bo.name });
     expect(fixed.participants.map((p: Json) => p.userId).sort()).toEqual([ana.userId, bo.userId].sort());
-    await waitForSubject(bo, 'You were added to a meeting: Carl organizes');
+    expect((await get(bo, organized.id)).myReminders).toEqual([{ amount: 1, unit: 'hours' }]);
+    // A marker queued after it: once it arrived, the job for Bo has run.
+    await create(owner, 'Marker after the new organizer', { internalUserIds: [bo.userId] });
+    await waitForSubject(bo, 'You were added to a meeting: Marker after the new organizer');
+    expect(await mailsAbout(bo, 'Carl organizes')).toEqual([]);
   });
 });

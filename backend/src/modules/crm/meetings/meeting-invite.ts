@@ -110,6 +110,8 @@ export function buildIcs(e: IcsEvent): string {
     `ATTENDEE;CN=${paramValue(e.attendee.name || e.attendee.email)};CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=FALSE:mailto:${e.attendee.email}`,
     `STATUS:${cancel ? 'CANCELLED' : 'CONFIRMED'}`,
     'TRANSP:OPAQUE',
+    // One fixed calendar alert an hour before (CD-376); the emailed reminders are each person's own.
+    ...(cancel ? [] : ['BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${escapeIcsText(e.summary)}`, 'TRIGGER:-PT1H', 'END:VALARM']),
     'END:VEVENT',
     'END:VCALENDAR',
   ];

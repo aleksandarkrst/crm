@@ -919,6 +919,13 @@ export interface ApiMeetingParticipant {
   /** An external contact that was deleted, or a member no longer in the workspace. */
   deleted: boolean;
 }
+export type ReminderUnit = 'minutes' | 'hours' | 'days';
+/** "30 minutes before" is { amount: 30, unit: 'minutes' } (CD-376). */
+export interface ApiReminder {
+  amount: number;
+  unit: ReminderUnit;
+}
+
 export interface ApiMeeting {
   id: string;
   title: string;
@@ -952,6 +959,8 @@ export interface ApiMeeting {
   externalDelivery: 'not_sent' | 'queued' | 'sent' | 'failed';
   /** Moves whenever a send's delivery changes: an open send log reads again. */
   sendsUpdatedAt: string | null;
+  /** The caller's own email reminders (CD-376), earliest first. */
+  myReminders: ApiReminder[];
   createdByUserId: string | null;
   createdAt: string;
   /** The version: send it back as If-Match when changing the meeting. */
@@ -1233,6 +1242,8 @@ export const crmApi = {
     cancel: (id: string, reason: string | null) => api<ApiMeeting>(`/crm/meetings/${id}/cancel`, { method: 'POST', json: reason ? { reason } : {} }),
     undoHeld: (id: string) => api<ApiMeeting>(`/crm/meetings/${id}/undo-held`, { method: 'POST' }),
     restore: (id: string) => api<ApiMeeting>(`/crm/meetings/${id}/restore`, { method: 'POST' }),
+    /** The caller's own reminders, the whole list (CD-376). */
+    setReminders: (id: string, reminders: ApiReminder[]) => api<ApiMeeting>(`/crm/meetings/${id}/reminders`, { method: 'PUT', json: { reminders } }),
     delete: (id: string) => api(`/crm/meetings/${id}`, { method: 'DELETE' }),
     /** Internal minutes (CD-132). */
     minutes: (id: string) => api<ApiInternalMinutes>(`/crm/meetings/${id}/minutes/internal`),
