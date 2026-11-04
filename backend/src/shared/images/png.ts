@@ -22,7 +22,8 @@ const ADAM7 = [
  * transparency or interlacing later and asynchronously (png-js), and an error there isn't
  * catchable: it ends the process. So a PNG goes to pdfkit only after this check: the chunks are
  * whole, the IDAT data inflates to exactly the size the header promises, and every row starts
- * with a known filter type. Not a PNG at all: false.
+ * with a known filter type. For a PNG pdfkit decodes, png-js's own walk over the data must
+ * succeed as well (`pngJsDecodes`). Not a PNG at all: false.
  */
 export function pngPixelDataOk(buffer: Buffer): boolean {
   try {
@@ -31,6 +32,7 @@ export function pngPixelDataOk(buffer: Buffer): boolean {
     let header: { width: number; height: number; depth: number; type: number; interlace: number } | null = null;
     const idat: Buffer[] = [];
     let ended = false;
+    let transparency = false;
     while (pos + 8 <= buffer.length) {
       const length = buffer.readUInt32BE(pos);
       const type = buffer.toString('latin1', pos + 4, pos + 8);
@@ -46,6 +48,7 @@ export function pngPixelDataOk(buffer: Buffer): boolean {
           interlace: buffer[data + 12]!,
         };
       } else if (type === 'IDAT') idat.push(buffer.subarray(data, data + length));
+      else if (type === 'tRNS') transparency = true;
       else if (type === 'IEND') {
         ended = true;
         break;
@@ -71,8 +74,34 @@ export function pngPixelDataOk(buffer: Buffer): boolean {
       const rowBytes = 1 + Math.ceil((w * bitsPerPixel) / 8);
       for (let y = 0; y < h; y++, row += rowBytes) if (pixels[row]! > 4) return false;
     }
-    return true;
+    // pdfkit decodes (with png-js) an image with an alpha channel, an interlaced one, and a palette with transparency.
+    const decoded = header.type === 4 || header.type === 6 || header.interlace === 1 || (header.type === 3 && transparency);
+    return !decoded || pngJsDecodes(pixels, header.width, header.height, bitsPerPixel, header.interlace === 1);
   } catch {
     return false;
   }
+}
+
+/**
+ * png-js's `decodePixels` (0.20.x) replayed on the inflated data, without decoding: whether it gets
+ * through without throwing. It differs from the PNG specification in two ways that matter here:
+ * an interlaced pass with no columns still has its rows read (a filter byte each, so a narrow
+ * image's pixel bytes are taken as filter types), and it counts in bytes per pixel, so with fewer
+ * than 8 bits a pixel a buffer size that isn't whole throws. Both throws end the process.
+ */
+function pngJsDecodes(data: Buffer, width: number, height: number, bitsPerPixel: number, interlaced: boolean): boolean {
+  const pixelBytes = bitsPerPixel / 8;
+  if (!Number.isInteger(width * height * pixelBytes)) return false;
+  let pos = 0;
+  for (const [x0, y0, dx, dy] of interlaced ? ADAM7 : ([[0, 0, 1, 1]] as const)) {
+    const w = Math.ceil((width - x0) / dx);
+    const h = Math.ceil((height - y0) / dy);
+    const scanline = pixelBytes * w;
+    if (interlaced && !Number.isInteger(scanline * h)) return false;
+    for (let row = 0; row < h && pos < data.length; row++) {
+      if (data[pos++]! > 4) return false;
+      pos += Math.ceil(scanline);
+    }
+  }
+  return true;
 }

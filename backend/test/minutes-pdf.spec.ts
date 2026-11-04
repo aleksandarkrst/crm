@@ -132,7 +132,7 @@ describe('workspace logo', () => {
 });
 
 /** A PNG built here: `pixels` is the raw scanline data (each row a filter byte, then the pixels). */
-function png(width: number, height: number, colourType: number, interlace: number, idat: Buffer): Buffer {
+function png(width: number, height: number, colourType: number, interlace: number, idat: Buffer, depth = 8, extra: Buffer[] = []): Buffer {
   const chunk = (type: string, data: Buffer) => {
     const head = Buffer.alloc(8);
     head.writeUInt32BE(data.length, 0);
@@ -144,11 +144,15 @@ function png(width: number, height: number, colourType: number, interlace: numbe
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8;
+  ihdr[8] = depth;
   ihdr[9] = colourType;
   ihdr[12] = interlace;
-  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', Buffer.alloc(0))]);
+  const more = extra.map((c) => chunk(c.toString('latin1', 0, 4), c.subarray(4)));
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), ...more, chunk('IDAT', idat), chunk('IEND', Buffer.alloc(0))]);
 }
+/** An image's Adam7 passes (width, height) by the PNG specification. */
+const adam7 = (w: number, h: number): [number, number][] =>
+  [[0, 0, 8, 8], [4, 0, 8, 8], [0, 4, 4, 8], [2, 0, 4, 4], [0, 2, 2, 4], [1, 0, 2, 2], [0, 1, 1, 2]].map(([xs, ys, dx, dy]) => [Math.ceil(Math.max(0, w - xs!) / dx!), Math.ceil(Math.max(0, h - ys!) / dy!)]);
 /** Rows of zero pixels with filter 0, for each pass. */
 const rows = (passes: [number, number][], bytesPerPixel: number) => Buffer.concat(passes.filter(([w, h]) => w && h).map(([w, h]) => Buffer.alloc(h * (1 + w * bytesPerPixel))));
 // A 4x4 image's Adam7 passes: widths and heights.
@@ -183,6 +187,30 @@ describe('PNG pixel data (CD-378 review: a broken PNG must not reach pdfkit)', (
     // pdfkit's asynchronous decode would have thrown by now and ended the run.
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(pageCount(pdf)).toBe(1);
+  });
+});
+
+describe('PNGs pdfkit decodes its own way (CD-378 review, round 2)', () => {
+  // Valid by the specification, but png-js reads a filter byte for each row of the empty passes of a
+  // narrow interlaced image and so takes the pixel bytes (202) for filter types.
+  const narrow = png(1, 8, 0, 1, deflateSync(Buffer.concat(adam7(1, 8).filter(([w, h]) => w && h).flatMap(([, h]) => Array.from({ length: h }, () => Buffer.from([0, 202]))))));
+  // A 3x3 palette image at 1 bit a pixel with transparency: png-js sizes its buffer as 9 x 1/8 bytes and throws.
+  const palette = png(3, 3, 3, 0, deflateSync(Buffer.alloc(3 * 2)), 1, [Buffer.concat([Buffer.from('PLTE'), Buffer.alloc(6, 7)]), Buffer.concat([Buffer.from('tRNS'), Buffer.from([0])])]);
+  // The same palette image without transparency is embedded as it is, not decoded: fine.
+  const opaque = png(3, 3, 3, 0, deflateSync(Buffer.alloc(3 * 2)), 1, [Buffer.concat([Buffer.from('PLTE'), Buffer.alloc(6, 7)])]);
+
+  it('refuses them, and keeps what pdfkit embeds without decoding', () => {
+    expect(pngPixelDataOk(narrow)).toBe(false);
+    expect(pngPixelDataOk(palette)).toBe(false);
+    expect(pngPixelDataOk(opaque)).toBe(true);
+  });
+
+  it('renders a PDF with such a logo stored, without it, and the process lives on', async () => {
+    for (const logo of [narrow, palette]) {
+      const pdf = await renderMinutesPdf({ ...base, logo });
+      expect(pageCount(pdf)).toBe(1);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
   });
 });
 
