@@ -238,6 +238,8 @@ export interface ApiWorkspace {
   terms: WorkspaceTerms;
   /** ISO 3166-1 alpha-2 (CD-167), or null. Serbia ('RS') issues vacation decision documents. */
   country: string | null;
+  /** The logo's version (CD-378), null without one; the image is GET /workspace/logo. */
+  logoUpdatedAt?: string | null;
   /** Printed on generated documents (CD-167, spec 10.1). */
   company: ApiCompanyDetails;
   /** Timesheet settings (CD-153, Settings → Workforce → Employees and Approvals). */
@@ -1019,6 +1021,8 @@ export interface ApiMinutesSend {
   subject: string;
   body: string;
   language: 'en' | 'sr';
+  /** The PDF this send attached (CD-378); null for sends before minutes had one. */
+  pdfFileName: string | null;
   /** failed when any recipient failed, queued while any is queued, else sent. */
   status: MinutesDeliveryStatus;
   recipients: ApiMinutesRecipient[];
@@ -1112,6 +1116,20 @@ export const crmApi = {
 
   workspace: () => api<ApiWorkspace>('/workspace'),
   updateWorkspace: (input: WorkspaceInput) => api<ApiWorkspace>('/workspace', { method: 'PATCH', json: input }),
+  /** The workspace logo (CD-378) as an image; null without one. */
+  workspaceLogo: async (): Promise<Blob | null> => {
+    const res = await authorizedFetch('/workspace/logo');
+    if (res.status === 404) return null;
+    if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
+    return res.blob();
+  },
+  /** Sets or replaces the logo (owners and admins): a PNG or JPG of at most 1 MB. */
+  setWorkspaceLogo: (file: File) => {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return api<ApiWorkspace>('/workspace/logo', { method: 'PUT', body: form });
+  },
+  removeWorkspaceLogo: () => api<ApiWorkspace>('/workspace/logo', { method: 'DELETE' }),
   profile: () => api<ApiProfile>('/profile'),
   updateProfile: (input: ProfileInput) => api<ApiProfile>('/profile', { method: 'PATCH', json: input }),
   onboarding: () => api<ApiOnboarding>('/onboarding'),

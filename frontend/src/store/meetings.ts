@@ -37,6 +37,7 @@ import {
   type MeetingType,
 } from '../lib/api';
 import { mapLink } from '../lib/maps';
+import { download } from './documents';
 import type { NewMeetingParams } from '../lib/paths';
 import type { LiveEvent } from './live';
 import type { State } from './types';
@@ -550,6 +551,18 @@ export function meetingActions(ctx: Ctx) {
   };
   /** Every send, newest first; throws when they can't be read. */
   const loadSends = (id: string) => crmApi.meetings.sends(id);
+  /**
+   * Saves a minutes PDF (CD-378): the saved text with the next steps as they are now (no `send`),
+   * or the exact file a send attached. Says why when it can't.
+   */
+  const downloadPdf = async (id: string, send?: ApiMinutesSend): Promise<void> => {
+    try {
+      if (send) await download(`/crm/meetings/${id}/minutes/sends/${send.id}/pdf`, send.pdfFileName ?? 'Minutes.pdf');
+      else await download(`/crm/meetings/${id}/minutes/external/pdf`, 'Minutes.pdf');
+    } catch (err) {
+      flash('PDF not downloaded: ' + ctx.errText(err), 7000);
+    }
+  };
   /** Retry the failed recipients of a send; null (after saying why) when refused. */
   const retrySend = async (id: string, sendId: string): Promise<ApiMinutesSend | null> => {
     try {
@@ -607,6 +620,7 @@ export function meetingActions(ctx: Ctx) {
     sendMinutes,
     loadSends,
     retrySend,
+    downloadPdf,
     /** Opens the New meeting dialog (prefilled), or the dialog editing a meeting (`seed.id`). */
     openDialog: (seed: MeetingDialogSeed = {}) => set({ meetingDialog: seed }),
     closeDialog: () => set({ meetingDialog: null }),

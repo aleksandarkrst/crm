@@ -165,8 +165,10 @@ export function minutesPdfContent(input: MinutesPdfInput): MinutesPdfContent {
 /** The attachment's name: "Minutes <meeting title> <yyyy-mm-dd>.pdf", without characters a file name can't hold. */
 export function minutesPdfFileName(title: string, startsAt: Date, timeZone: string): string {
   const safe = title
-    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ')
+    .replace(/[\\/:*?"<>|]+/g, ' ')
+    // Control characters too (a title is one line, but never trust it in a file name).
     .replace(/\s+/g, ' ')
+    .replace(/\p{Cc}+/gu, '')
     .trim()
     .slice(0, 120);
   return `${['Minutes', safe, zonedParts(startsAt, timeZone).date].filter(Boolean).join(' ')}.pdf`;

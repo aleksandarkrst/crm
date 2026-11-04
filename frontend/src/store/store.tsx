@@ -1980,6 +1980,28 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           return Object.keys(out).length ? out : { project: errText(err) };
         }
       },
+      /** The workspace logo (CD-378) as an image, or null without one; throws when it can't be read. */
+      loadLogo: () => crmApi.workspaceLogo(),
+      /** Sets or replaces the logo (owners and admins); returns the API's reason when it refuses the file, else null. */
+      setLogo: async (file: File): Promise<string | null> => {
+        try {
+          const ws = await crmApi.setWorkspaceLogo(file);
+          set((x) => ({ workspace: { ...x.workspace, logoUpdatedAt: ws.logoUpdatedAt ?? null } }));
+          return null;
+        } catch (err) {
+          return errText(err);
+        }
+      },
+      /** Removes the logo; returns the API's reason when that fails, else null. */
+      removeLogo: async (): Promise<string | null> => {
+        try {
+          await crmApi.removeWorkspaceLogo();
+          set((x) => ({ workspace: { ...x.workspace, logoUpdatedAt: null } }));
+          return null;
+        } catch (err) {
+          return errText(err);
+        }
+      },
       /** Saves the company details (CD-167, owners and admins); returns the API's message when it refuses them, else null. */
       saveCompany: async (company: Partial<ApiCompanyDetails>): Promise<string | null> => {
         try {

@@ -19,6 +19,7 @@ import { TimeOffTab } from './settings/TimeOffSettings';
 import { ApprovalsTab, HolidaysTab } from './settings/WorkforceSettings';
 import { ProjectHierarchyTab, ProjectTypesTab } from './settings/ProjectTypesTab';
 import { TechniciansTab } from './settings/TechniciansTab';
+import { WorkspaceLogo } from './settings/WorkspaceLogo';
 import { RolesTab } from './settings/RolesTab';
 import type { TeamMember } from '../store/types';
 import { useTerms } from '../store/terms';
@@ -194,6 +195,7 @@ function WorkspaceTab() {
       <FieldRow label="Name">
         <GhostInput value={w.name} disabled={ro} onChange={(e) => setWorkspace({ name: e.target.value })} />
       </FieldRow>
+      <WorkspaceLogo />
       <FieldRow label="Currency">
         <GhostSelect value={w.currency} disabled={ro} onChange={(e) => setWorkspace({ currency: e.target.value })} options={CURRENCIES} />
       </FieldRow>
