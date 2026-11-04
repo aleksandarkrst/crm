@@ -157,7 +157,7 @@ function WorkspaceInfoModal({ current, onClose }: { current: string | null; onCl
           Cancel
         </button>
         <button type="button" className={name.trim() && !busy ? 'btn btn-primary' : 'btn btn-disabled'} disabled={!name.trim() || busy} data-testid="workspace-info-save" onClick={() => void save()}>
-          {busy ? 'Saving…' : 'Save'}
+          {busy ? 'Saving' : 'Save'}
         </button>
       </div>
     </Modal>

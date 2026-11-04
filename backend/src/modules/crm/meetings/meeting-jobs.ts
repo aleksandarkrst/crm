@@ -47,6 +47,16 @@ export class MeetingJobs implements OnApplicationBootstrap {
     @Inject(ENV) private readonly env: Env,
   ) {}
 
+  /** The send's stored PDF; a read failure gets a fixed message (the raw one names the storage path). */
+  private async pdfOf(tenantId: string, key: string): Promise<Buffer> {
+    try {
+      return await this.storage.getBuffer(tenantId, key);
+    } catch (err) {
+      this.logger.error(`Minutes PDF ${key} could not be read: ${err instanceof Error ? err.message : String(err)}`);
+      throw new Error('The minutes PDF could not be read.', { cause: err });
+    }
+  }
+
   async onApplicationBootstrap(): Promise<void> {
     await this.jobs.work('crm.meeting-invite', (data) => this.sendInvites(data));
     await this.jobs.work('identity.member-removed', (data) => this.memberRemoved(data));
@@ -164,7 +174,7 @@ export class MeetingJobs implements OnApplicationBootstrap {
     let rejected: Set<string>;
     try {
       const attachments: MailAttachment[] = send.pdfStorageKey
-        ? [{ filename: send.pdfFileName ?? 'Minutes.pdf', contentType: 'application/pdf', content: (await this.storage.getBuffer(tenantId, send.pdfStorageKey)).toString('base64'), encoding: 'base64' }]
+        ? [{ filename: send.pdfFileName ?? 'Minutes.pdf', contentType: 'application/pdf', content: (await this.pdfOf(tenantId, send.pdfStorageKey)).toString('base64'), encoding: 'base64' }]
         : [];
       const result = await this.mailer.send({ ...minutesMailMessage(email, sender), ...(attachments.length ? { attachments } : {}) });
       rejected = new Set(result.rejected.map((a) => a.trim().toLowerCase()));

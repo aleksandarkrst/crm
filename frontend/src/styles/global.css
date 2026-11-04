@@ -7,6 +7,8 @@
  */
 
 :root {
+  /* The dark veil behind dialogs and over a picture being changed. */
+  --scrim: rgba(13, 36, 28, 0.55);
   --ink: #0F1B16;
   --text-2: #475750;
   --muted: #93A39B;
@@ -182,7 +184,7 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 
 /* ---------------------------------------------------------------- modals & toast */
 
-.overlay { position: fixed; inset: 0; background: rgba(13, 36, 28, 0.55); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 45; overscroll-behavior: contain; }
+.overlay { position: fixed; inset: 0; background: var(--scrim); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 45; overscroll-behavior: contain; }
 html.modal-open, html.modal-open body { overflow: hidden; }
 .modal { background: var(--white); border-radius: 14px; width: 100%; padding: 26px; animation: dcFade .22s ease-out both; display: flex; flex-direction: column; gap: 16px; max-height: 88vh; overflow-y: auto; }
 .modal-title { font-family: var(--font-display); font-weight: 500; letter-spacing: -0.03em; font-size: 22px; line-height: 1.2; }
@@ -688,7 +690,6 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 /* Download PDF (CD-378) and Retry under a send's recipients. */
 .ext-status-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ext-pdf { padding: 6px 12px; }
-/* Settings → Workspace → Logo (CD-378). */
 /* Settings → Workspace info (CD-378): the logo in a circle, the name, Edit; the dialog's big circle shows a pencil on hover. */
 .ws-info { display: flex; flex-direction: column; gap: 12px; }
 .ws-info-row { display: flex; align-items: center; gap: 16px; min-width: 0; }
@@ -698,7 +699,7 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .ws-avatar { position: relative; flex: 0 0 auto; width: 64px; height: 64px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: var(--bg-soft); border: 1px solid var(--border); color: var(--text-2); font-size: 20px; font-weight: 600; padding: 0; font-family: inherit; }
 .ws-avatar img { width: 100%; height: 100%; object-fit: contain; background: var(--white); }
 .ws-avatar-lg { width: 120px; height: 120px; font-size: 34px; cursor: pointer; }
-.ws-avatar-edit { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(13, 36, 28, 0.55); color: var(--white); opacity: 0; transition: opacity 0.12s; }
+.ws-avatar-edit { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--scrim); color: var(--white); opacity: 0; transition: opacity 0.12s; }
 .ws-avatar-lg:hover .ws-avatar-edit, .ws-avatar-lg:focus-visible .ws-avatar-edit { opacity: 1; }
 .ws-modal-logo { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .ws-modal-formats { font-size: 12px; color: var(--text-2); }
