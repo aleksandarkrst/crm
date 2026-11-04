@@ -278,13 +278,13 @@ export function renderMinutesPdf(input: MinutesPdfInput): Promise<Buffer> {
   };
 
   /** One table cell's text; returns its height. */
-  const cellHeight = (text: string, w: number, font = 'Bold', size = 8.5) => doc.font(font).fontSize(size).heightOfString(text || ' ', { ...PLAIN, width: w - 2 * PAD, lineGap: 1.5 }) + 2 * PAD;
+  const cellHeight = (text: string, w: number, font = 'Body', size = 9) => doc.font(font).fontSize(size).heightOfString(text || ' ', { ...PLAIN, width: w - 2 * PAD, lineGap: 1.5 }) + 2 * PAD;
   const cell = (text: string, x: number, y: number, w: number, h: number, opts: { fill?: string; color?: string; font?: string; size?: number; align?: 'left' | 'center' } = {}) => {
     if (opts.fill) doc.rect(x, y, w, h).fill(opts.fill);
     doc.lineWidth(0.6).rect(x, y, w, h).stroke(C.rule);
     doc
-      .font(opts.font ?? 'Bold')
-      .fontSize(opts.size ?? 8.5)
+      .font(opts.font ?? 'Body')
+      .fontSize(opts.size ?? 9)
       .fillColor(opts.color ?? C.text)
       .text(text, x + PAD, y + PAD, { ...PLAIN, width: w - 2 * PAD, lineGap: 1.5, align: opts.align ?? 'left' });
   };
@@ -365,7 +365,7 @@ export function renderMinutesPdf(input: MinutesPdfInput): Promise<Buffer> {
     const head = () => {
       const y = doc.y;
       const titles = ['#', L.step, L.owner, L.due];
-      titles.forEach((t, i) => cell(t, xs[i]!, y, cols[i]!, 26, { fill: C.headFill, color: C.headText, size: 8, align: i === 0 || i === 3 ? 'center' : 'left' }));
+      titles.forEach((t, i) => cell(t, xs[i]!, y, cols[i]!, 26, { fill: C.headFill, color: C.headText, font: 'Bold', size: 8, align: i === 0 || i === 3 ? 'center' : 'left' }));
       doc.y = y + 26;
     };
     const rowHeight = (s: (typeof content.nextSteps)[number]) => Math.max(26, cellHeight(s.text, cols[1]!), cellHeight(s.owner, cols[2]!), cellHeight(s.due, cols[3]!));
@@ -390,7 +390,7 @@ export function renderMinutesPdf(input: MinutesPdfInput): Promise<Buffer> {
   // The closing line.
   room(40);
   doc.lineWidth(0.6).moveTo(x0, doc.y).lineTo(x0 + width, doc.y).stroke(C.rule);
-  doc.font('Bold').fontSize(7.5).fillColor(C.muted).text(L.closing, x0, doc.y + 12, { ...PLAIN, width });
+  doc.font('Body').fontSize(7.5).fillColor(C.muted).text(L.closing, x0, doc.y + 12, { ...PLAIN, width });
 
   // Header and footer on every page, once the page count is known.
   const logo = input.logo ? openImage(doc, input.logo) : null;
@@ -416,9 +416,11 @@ export function renderMinutesPdf(input: MinutesPdfInput): Promise<Buffer> {
     const fy = doc.page.height - 38;
     doc.lineWidth(0.6).moveTo(x0, fy - 10).lineTo(x0 + width, fy - 10).stroke(C.rule);
     doc.image(asSrc(mark), x0, fy - 1.5, { width: 9, height: 9 });
-    doc.font('Bold').fontSize(7.5).fillColor(C.faint).text(`${L.generatedWith} `, x0 + 13, fy, { ...PLAIN, continued: true, lineBreak: false });
-    doc.fillColor(C.title).text('pultly', { ...PLAIN, lineBreak: false });
+    // Regular text; the "pultly" wordmark stays bold, as in the template.
+    doc.font('Body').fontSize(7.5).fillColor(C.faint).text(`${L.generatedWith} `, x0 + 13, fy, { ...PLAIN, continued: true, lineBreak: false });
+    doc.font('Bold').fillColor(C.title).text('pultly', { ...PLAIN, lineBreak: false });
     doc
+      .font('Body')
       .fillColor(C.faint)
       .text(L.page(i - pages.start + 1, pages.count), x0, fy, { ...PLAIN, width, align: 'right', lineBreak: false });
     doc.page.margins.bottom = bottom;

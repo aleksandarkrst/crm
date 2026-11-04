@@ -56,6 +56,15 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
   const navigate = useNavigate();
   const tz = s.workspace.timezone;
   const [tab, setTab] = useState<Tab>('internal');
+  // Switching tabs never makes the panel shorter than it has been on this meeting, so the page
+  // doesn't shrink while the next tab loads and the browser doesn't jump up (CD-378).
+  const panel = useRef<HTMLDivElement>(null);
+  const [panelMin, setPanelMin] = useState(0);
+  useEffect(() => setPanelMin(0), [m.id]);
+  const openTab = (next: Tab) => {
+    setPanelMin((h) => Math.max(h, panel.current?.offsetHeight ?? 0));
+    setTab(next);
+  };
   const [cancelOpen, setCancelOpen] = useState(false);
   const [menu, setMenu] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -166,12 +175,12 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
       <div className="lead-main card" style={{ minWidth: 0, overflow: 'hidden', marginTop: 16 }}>
         <div className="meeting-tabs" role="tablist">
           {TABS.map((t) => (
-            <button key={t.value} type="button" role="tab" aria-selected={tab === t.value} data-testid={'meeting-tab-' + t.value} className="composer-tab" onClick={() => setTab(t.value)} style={{ borderBottom: `2px solid ${tab === t.value ? 'var(--brand)' : 'transparent'}`, fontWeight: tab === t.value ? 600 : 500, color: tab === t.value ? 'var(--brand)' : 'var(--text-2)' }}>
+            <button key={t.value} type="button" role="tab" aria-selected={tab === t.value} data-testid={'meeting-tab-' + t.value} className="composer-tab" onClick={() => openTab(t.value)} style={{ borderBottom: `2px solid ${tab === t.value ? 'var(--brand)' : 'transparent'}`, fontWeight: tab === t.value ? 600 : 500, color: tab === t.value ? 'var(--brand)' : 'var(--text-2)' }}>
               {t.label}
             </button>
           ))}
         </div>
-        <div style={{ padding: 18 }}>
+        <div ref={panel} style={{ padding: 18, minHeight: panelMin || undefined }}>
           {tab === 'internal' && <InternalMinutes meeting={m} />}
           {tab === 'external' && <ExternalMinutes meeting={m} />}
           {tab === 'history' && <MeetingHistory meeting={m} />}

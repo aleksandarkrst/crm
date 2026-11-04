@@ -286,7 +286,7 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
               </span>
             )}
           </div>
-          <SendStatus m={m} send={last} onRetried={reload} />
+          <SendStatus m={m} send={last} onRetried={reload} pdf={false} />
         </div>
       )}
 
@@ -368,8 +368,11 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
   );
 }
 
-/** Each recipient of a send with its delivery, the error of a failed one, and Retry. */
-export function SendStatus({ m, send, onRetried }: { m: ApiMeeting; send: ApiMinutesSend; onRetried?: () => void }) {
+/**
+ * Each recipient of a send with its delivery, the error of a failed one, and Retry; with `pdf`
+ * (the send log), "Download PDF" for the file the send attached (CD-378). The tab has its own.
+ */
+export function SendStatus({ m, send, onRetried, pdf = true }: { m: ApiMeeting; send: ApiMinutesSend; onRetried?: () => void; pdf?: boolean }) {
   const { meetings } = useStore();
   const [busy, setBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -386,9 +389,9 @@ export function SendStatus({ m, send, onRetried }: { m: ApiMeeting; send: ApiMin
           </span>
         </div>
       ))}
-      {(send.pdfFileName || (anyFailed && meetings.canEdit(m))) && (
+      {((pdf && send.pdfFileName) || (anyFailed && meetings.canEdit(m))) && (
         <div className="ext-status-actions">
-          {send.pdfFileName && (
+          {pdf && send.pdfFileName && (
             <button
               type="button"
               className="btn-plain ext-pdf"

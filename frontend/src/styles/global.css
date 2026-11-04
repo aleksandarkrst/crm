@@ -599,8 +599,6 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .minutes-toolbar button:hover { background: var(--bg-soft); }
 .minutes-text { width: 100%; box-sizing: border-box; line-height: 1.5; min-height: 92px; }
 .minutes-preview { font-size: 13.5px; line-height: 1.55; border: 1px solid transparent; border-radius: 7px; padding: 8px 10px; margin: 0 -10px; overflow-wrap: anywhere; }
-.minutes-preview.is-editable { cursor: text; }
-.minutes-preview.is-editable:hover { border-color: var(--border); background: var(--bg-soft); }
 .minutes-steps > .table-row { padding: 9px 16px; }
 .minutes-steps > .table-row:last-child { border-bottom: 0; }
 .minutes-step > * { min-width: 0; }
@@ -689,8 +687,15 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .ext-pdf { padding: 6px 12px; }
 /* Settings → Workspace → Logo (CD-378). */
 .ws-logo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0; min-width: 0; }
-.ws-logo-img { max-height: 40px; max-width: 140px; object-fit: contain; border: 1px solid var(--border); border-radius: 8px; padding: 4px; background: var(--white); }
-.ws-logo-empty { font-size: 13px; color: var(--muted); }
+/* The tile: the logo or "No logo"; for owners and admins a pencil on hover, and a click picks an image. */
+.ws-logo-tile { position: relative; flex: 0 0 auto; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; padding: 6px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-soft); overflow: hidden; font: inherit; }
+button.ws-logo-tile { cursor: pointer; }
+.ws-logo-tile img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.ws-logo-empty { font-size: 11px; line-height: 1.2; text-align: center; color: var(--muted); }
+.ws-logo-edit { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(13, 36, 28, 0.55); color: var(--white); opacity: 0; transition: opacity 0.12s; }
+button.ws-logo-tile:hover .ws-logo-edit, button.ws-logo-tile:focus-visible .ws-logo-edit, .ws-logo-tile.is-busy .ws-logo-edit { opacity: 1; }
+.ws-logo-remove { padding: 6px 12px; }
+.ws-logo-note { font-size: 12px; color: var(--text-2); }
 .ws-logo-error { font-size: 12px; color: var(--danger); margin: 2px 0 0; }
 .ext-people { display: flex; flex-direction: column; gap: 6px; }
 .ext-person { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; min-width: 0; overflow-wrap: anywhere; text-transform: none; letter-spacing: 0; font-weight: 400; }

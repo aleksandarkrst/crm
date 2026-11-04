@@ -295,18 +295,6 @@ function StepTask({ st, busy, onSave }: { st: ApiMeetingNextStep; busy: boolean;
   );
 }
 
-/**
- * Whether a mouse button or finger is down. A text leaving its editor on blur becomes its (shorter)
- * formatted view; doing that between pointer down and up would move what is being clicked away
- * from under the pointer, so it waits for the pointer to come up.
- */
-let pointerDown = false;
-if (typeof document !== 'undefined') {
-  document.addEventListener('pointerdown', () => (pointerDown = true), true);
-  document.addEventListener('pointerup', () => setTimeout(() => (pointerDown = false)), true);
-  document.addEventListener('pointercancel', () => (pointerDown = false), true);
-}
-
 /** Where the selection is, and the text with a change made around it. */
 interface Edit {
   text: string;
@@ -339,8 +327,9 @@ function link(v: string, a: number, b: number, url: string): Edit {
 }
 
 /**
- * A text with the minutes' formatting (bold, bullet lists, links; see RichText): a textarea with a
- * small toolbar while it is edited, else the formatted text (click to edit).
+ * A text with the minutes' formatting (bold, bullet lists, links; see RichText): for someone who
+ * may edit it, always the textarea with its small toolbar, also after clicking out of it (CD-378:
+ * it no longer turns into the formatted view); for everyone else the formatted text.
  */
 export function RichField({
   label,
@@ -362,15 +351,7 @@ export function RichField({
   onBlur: () => void;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
-  const [editing, setEditing] = useState(false);
-  const wantFocus = useRef(false);
-  const showEditor = editable && (editing || !value.trim());
-  useEffect(() => {
-    if (showEditor && wantFocus.current) {
-      wantFocus.current = false;
-      ref.current?.focus();
-    }
-  }, [showEditor]);
+  const showEditor = editable;
 
   const apply = (make: (v: string, a: number, b: number) => Edit | null) => {
     const el = ref.current;
@@ -419,13 +400,7 @@ export function RichField({
             maxLength={max}
             placeholder={placeholder}
             value={value}
-            onFocus={() => setEditing(true)}
-            onBlur={() => {
-              onBlur();
-              const leave = () => document.activeElement !== ref.current && setEditing(false);
-              if (pointerDown) window.addEventListener('pointerup', () => setTimeout(leave), { once: true, capture: true });
-              else leave();
-            }}
+            onBlur={onBlur}
             onChange={(e) => onChange(e.target.value)}
           />
           {value.length > max * 0.9 && (
@@ -435,25 +410,7 @@ export function RichField({
           )}
         </>
       ) : value.trim() ? (
-        <div
-          className={'minutes-preview' + (editable ? ' is-editable' : '')}
-          data-testid={testId + '-view'}
-          role={editable ? 'button' : undefined}
-          tabIndex={editable ? 0 : undefined}
-          title={editable ? 'Click to edit' : undefined}
-          onClick={(e) => {
-            if (!editable || (e.target as HTMLElement).closest('a')) return;
-            wantFocus.current = true;
-            setEditing(true);
-          }}
-          onKeyDown={(e) => {
-            if (editable && e.key === 'Enter') {
-              e.preventDefault();
-              wantFocus.current = true;
-              setEditing(true);
-            }
-          }}
-        >
+        <div className="minutes-preview" data-testid={testId + '-view'}>
           <RichText text={value} />
         </div>
       ) : (

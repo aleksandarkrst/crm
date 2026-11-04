@@ -192,10 +192,10 @@ function WorkspaceTab() {
       <div className="card-title" style={{ marginBottom: 8 }}>
         Workspace
       </div>
+      <WorkspaceLogo />
       <FieldRow label="Name">
         <GhostInput value={w.name} disabled={ro} onChange={(e) => setWorkspace({ name: e.target.value })} />
       </FieldRow>
-      <WorkspaceLogo />
       <FieldRow label="Currency">
         <GhostSelect value={w.currency} disabled={ro} onChange={(e) => setWorkspace({ currency: e.target.value })} options={CURRENCIES} />
       </FieldRow>
