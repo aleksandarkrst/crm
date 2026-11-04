@@ -298,6 +298,9 @@ export function contactsForLead(s: State, leadId: string): Person[] {
   return allPeople(s).filter((p) => p.leadId === leadId || links.includes(p.id));
 }
 
+/** What an opportunity is called on the Pipeline (CD-477): its own name, or its company's while it has none. */
+export const opportunityName = (l: Pick<Lead, 'title' | 'company'>): string => l.title?.trim() || l.company;
+
 /** Ownership labels (CD-357), by the API's value. */
 export const OWNERSHIP_LABELS: Record<string, string> = { private: 'Private', state: 'State' };
 

@@ -152,10 +152,13 @@ export class DealTasksService {
       const [row] = await tx
         .delete(dealTasks)
         .where(eq(dealTasks.id, id))
-        .returning({ dealId: dealTasks.dealId, label: dealTasks.label, offPlaybook: dealTasks.offPlaybook, blocksAdvance: dealTasks.blocksAdvance });
+        .returning({ dealId: dealTasks.dealId, label: dealTasks.label, offPlaybook: dealTasks.offPlaybook, blocksAdvance: dealTasks.blocksAdvance, done: dealTasks.done });
       if (!row) throw new NotFoundException('To-do not found');
       if (row.offPlaybook && !row.blocksAdvance)
         await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId: row.dealId, actorUserId: ctx.userId, channel: null, title: 'Task removed: ' + row.label, detail: null });
+      // A stage to-do marked done left "Completed against the … playbook" on the timeline; say it is gone (CD-477).
+      else if (row.offPlaybook && row.done && row.label.trim())
+        await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId: row.dealId, actorUserId: ctx.userId, channel: null, title: 'To-do removed: ' + row.label, detail: 'It had been marked done.' });
     });
   }
 }

@@ -11,6 +11,8 @@ export function Todos({ lead }: { lead: Lead }) {
   const store = useStore();
   const { s } = store;
   const [openTask, setOpenTask] = useState<string | null>(null);
+  /** The stage whose new to-do takes the focus when it appears (CD-477). */
+  const [naming, setNaming] = useState<string | null>(null);
 
   const stages = stagesFor(s, lead.segment);
   const current = stageOf(s, lead);
@@ -106,6 +108,14 @@ export function Todos({ lead }: { lead: Lead }) {
                         <input
                           value={item.label}
                           placeholder="Name this to-do"
+                          aria-label="To-do name"
+                          // A new to-do starts in its name; left without one, it goes (CD-477) instead of counting as open.
+                          autoFocus={naming === g.st.id && !item.label}
+                          onFocus={() => setNaming(null)}
+                          onBlur={(e) => {
+                            if (!e.currentTarget.value.trim()) store.removeExtra(lead.id, g.st.id, item.extraIdx!, i);
+                          }}
+                          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                           onChange={(e) => store.renameExtra(lead.id, g.st.id, item.extraIdx!, e.target.value)}
                           style={{ border: 0, outline: 0, background: 'transparent', padding: 0, fontSize: 13.5, color: t.done ? '#93A39B' : '#0F1B16', textDecoration: t.done ? 'line-through' : 'none', width: '100%' }}
                         />
@@ -204,7 +214,11 @@ export function Todos({ lead }: { lead: Lead }) {
 
             {g.isCurrent && (
               <>
-                <button type="button" className="btn-dashed" style={{ alignSelf: 'flex-start' }} onClick={() => store.addTodo(lead.id, g.st.id)}>
+                <button type="button" className="btn-dashed" style={{ alignSelf: 'flex-start' }} onClick={() => {
+                    setNaming(g.st.id);
+                    store.addTodo(lead.id, g.st.id);
+                  }}
+                >
                   + Add a to-do for this opportunity
                 </button>
                 {g.st.gateDocs && (

@@ -29,6 +29,7 @@ import {
   stagesFor,
   taskKey,
   taskOf,
+  todayIso,
   todayLabel,
   todoItemsFor,
   wonBlocker,
@@ -714,7 +715,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           return;
         }
       }
-      mapLead(leadId, (l) => ({ ...l, stage: stageId, stall: 0, lateDays: 0, outcome: stage?.won ? 'won' : 'open', stageSince: new Date().toISOString() }));
+      // Won today closes it today (CD-477), as the API records it.
+      const closeDate = stage?.won ? { closeDate: todayIso(cur().workspace.timezone) } : {};
+      mapLead(leadId, (l) => ({ ...l, ...closeDate, stage: stageId, stall: 0, lateDays: 0, outcome: stage?.won ? 'won' : 'open', stageSince: new Date().toISOString() }));
       void save(() => crmApi.moveDeal(leadId, stageId), () => refreshLog(leadId), 'the stage move');
       // Not when it has its proposal already (one per opportunity, CD-120).
       if (stage && stage.doc === 'Proposal' && AUTO_GENERATE_DOCS && !hasLiveProposal(cur().dealDocs[leadId])) startGeneration(leadId);
@@ -972,7 +975,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       });
       if (id) {
         dropSave('todo-label:' + id);
-        void save(() => crmApi.deleteTask(id), undefined, 'removing the to-do');
+        // Removing a done to-do adds "To-do removed" to the timeline (CD-477).
+        void save(() => crmApi.deleteTask(id), () => refreshLog(leadId), 'removing the to-do');
       }
     };
 
@@ -1369,7 +1373,16 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }
       if (ownerId !== undefined && ownerId !== lead.ownerId) {
         dealPatch.owner = cur().team.find((m) => m.status === 'Active' && m.id === ownerId)?.name;
-        void save(() => crmApi.updateDeal(id, { ownerUserId: ownerId }, ver('deal', id)), undefined, 'the opportunity owner');
+        const name = memberName(cur(), ownerId);
+        // Said once it is saved, and the Activity reread for the server's "Owner: …" entry (CD-477).
+        void save(
+          () => crmApi.updateDeal(id, { ownerUserId: ownerId }, ver('deal', id)),
+          () => {
+            flash(`Owner: ${name}`);
+            return refreshLog(id);
+          },
+          'the opportunity owner',
+        );
       }
       mapLead(id, (l) => ({ ...l, ...dealPatch }));
     };

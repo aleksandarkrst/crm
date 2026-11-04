@@ -117,7 +117,7 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
   return (
     <div className="card deal-header" style={{ padding: '16px 20px' }}>
       <div className="deal-header-top">
-        <input className="ghost deal-title" aria-label="Opportunity name" data-testid="deal-title" value={lead.title ?? ''} placeholder={lead.company} onChange={(e) => patchLead(lead.id, { title: e.target.value })} />
+        <DealTitle saved={lead.title ?? ''} company={lead.company} onSave={(title) => patchLead(lead.id, { title })} />
         <div className="deal-actions">
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-2)' }} title="Owner">
             <Icon name="owner" title="Owner" />
@@ -240,5 +240,50 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The opportunity's name (CD-477): saves as you type; a name can't be cleared, so leaving the field
+ * empty puts the saved name back and says why under the field, until the next edit.
+ */
+function DealTitle({ saved, company, onSave }: { saved: string; company: string; onSave: (title: string) => void }) {
+  const [draft, setDraft] = useState(saved);
+  const [error, setError] = useState(false);
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focused.current) setDraft(saved);
+  }, [saved]);
+  return (
+    <span style={{ display: 'flex', flexDirection: 'column', flex: '1 1 280px', minWidth: 0 }}>
+      <input
+        className="ghost deal-title"
+        aria-label="Opportunity name"
+        data-testid="deal-title"
+        value={draft}
+        placeholder={company}
+        aria-invalid={error || undefined}
+        onFocus={() => (focused.current = true)}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          setError(false);
+          if (e.target.value.trim()) onSave(e.target.value);
+        }}
+        onBlur={() => {
+          focused.current = false;
+          // Never named (the company's name shows instead): nothing was lost.
+          if (draft.trim() || !saved) return;
+          setDraft(saved);
+          setError(true);
+        }}
+        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        style={{ flex: 'none', width: '100%' }}
+      />
+      {error && (
+        <span role="alert" data-testid="deal-title-error" style={{ fontSize: 12, color: 'var(--danger)', padding: '2px 0 0' }}>
+          An opportunity needs a name, so the last saved one is kept.
+        </span>
+      )}
+    </span>
   );
 }

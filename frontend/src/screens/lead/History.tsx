@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { activityChannelLabel, SYSTEM_CHANNEL } from '../../store/seed';
 import { timelineFor } from '../../store/selectors';
 import { useStore } from '../../store/store';
-import type { Lead } from '../../store/types';
+import type { Lead, LogEntry } from '../../store/types';
 
 // WhatsApp, LinkedIn and Calls are hidden until their integrations ship (CD-318).
 const FILTERS = [
@@ -13,12 +13,16 @@ const FILTERS = [
   { k: 'RS', label: 'Tasks' },
 ];
 
+/** A task's own entry ("Task added: …"): it carries the task's channel, but belongs under Tasks (CD-477). */
+const TASK_ENTRY = /^(Task added|Task removed|To-do removed): /;
+const inTab = (e: LogEntry, k: string) => (k === 'RS' ? e.channel === 'RS' || TASK_ENTRY.test(e.title) : e.channel === k && !TASK_ENTRY.test(e.title));
+
 /** The deal's activity timeline (CD-318): every entry with who did it; the field-level Changes view went. */
 export function History({ lead }: { lead: Lead }) {
   const { s } = useStore();
   const [filter, setFilter] = useState('all');
   const all = timelineFor(s, lead.id);
-  const entries = filter === 'all' ? all : all.filter((e) => e.channel === filter);
+  const entries = filter === 'all' ? all : all.filter((e) => inTab(e, filter));
 
   return (
     <div className="card card-pad" data-testid="deal-activity">
@@ -27,7 +31,7 @@ export function History({ lead }: { lead: Lead }) {
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
         {FILTERS.map((d) => {
-          const n = d.k === 'all' ? all.length : all.filter((e) => e.channel === d.k).length;
+          const n = d.k === 'all' ? all.length : all.filter((e) => inTab(e, d.k)).length;
           const on = d.k === filter;
           return (
             <button key={d.k} type="button" onClick={() => setFilter(d.k)} style={{ border: 0, cursor: 'pointer', background: on ? '#E7F2EE' : 'transparent', color: on ? '#14503C' : '#475750', fontSize: 12, fontWeight: 500, padding: '6px 10px', borderRadius: 6 }}>
