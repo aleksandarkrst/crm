@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { askConfirm } from '../../components/ConfirmDialog';
 import { RichText } from '../../components/RichText';
 import { CheckIcon, RemoveButton } from '../../components/ui';
@@ -402,13 +402,20 @@ export function RichField({
     if (!el) return;
     const r = make(el.value, el.selectionStart, el.selectionEnd);
     if (!r || r.text.length > max) return;
+    selection.current = { start: r.start, end: r.end };
     onChange(r.text);
     setFocused(true);
-    requestAnimationFrame(() => {
-      ref.current?.focus();
-      ref.current?.setSelectionRange(r.start, r.end);
-    });
   };
+  // The new text replaces the textarea's value, which puts the caret at the end; the selection goes
+  // back before the browser handles the next key, so Ctrl+B then Ctrl+I format the same text (CD-378 QA).
+  const selection = useRef<{ start: number; end: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !selection.current) return;
+    el.focus();
+    el.setSelectionRange(selection.current.start, selection.current.end);
+    selection.current = null;
+  }, [value, focused]);
   const askLink = (v: string, a: number, b: number) => {
     const raw = window.prompt('Link address', 'https://')?.trim();
     if (!raw || raw === 'https://') return null;
