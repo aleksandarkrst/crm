@@ -189,7 +189,7 @@ function WorkspaceTab() {
   const w = s.workspace;
   const ro = !canEditWorkspace;
   return (
-    <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 18 }}>
       <div className="card-title" style={{ marginBottom: 8 }}>
         Workspace
       </div>
