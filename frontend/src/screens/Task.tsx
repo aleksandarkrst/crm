@@ -90,9 +90,10 @@ export function Task() {
   };
   // The API keeps a task with time logged on it (409, time_entries_task_fk): say so, and offer Mark done (CD-493).
   const keep = async (message: string) => {
-    const done = task.status === 'done';
-    const yes = await askConfirm({ title: `${taskId(task)} can't be deleted`, message: done ? message : `${message} Marking it done closes it and keeps the hours.`, confirmLabel: done ? 'OK' : 'Mark done', cancelLabel: done ? 'Close' : 'Cancel' });
-    if (yes && !done) setStatus(task, 'done');
+    // Already done: nothing to choose, so just say why.
+    if (task.status === 'done') return flash(`${taskId(task)} can't be deleted. ${message}`, 7000);
+    const yes = await askConfirm({ title: `${taskId(task)} can't be deleted`, message: `${message} Marking it done closes it and keeps the hours.`, confirmLabel: 'Mark done' });
+    if (yes) setStatus(task, 'done');
   };
   const remove = async () => {
     setMenu(false);
