@@ -251,6 +251,8 @@ function DealTitle({ saved, company, onSave }: { saved: string; company: string;
   const [draft, setDraft] = useState(saved);
   const [error, setError] = useState(false);
   const focused = useRef(false);
+  // The name before this edit: typing saves as it goes, so clearing it letter by letter saves the prefixes.
+  const before = useRef(saved);
   useEffect(() => {
     if (!focused.current) setDraft(saved);
   }, [saved]);
@@ -263,7 +265,10 @@ function DealTitle({ saved, company, onSave }: { saved: string; company: string;
         value={draft}
         placeholder={company}
         aria-invalid={error || undefined}
-        onFocus={() => (focused.current = true)}
+        onFocus={() => {
+          focused.current = true;
+          before.current = saved;
+        }}
         onChange={(e) => {
           setDraft(e.target.value);
           setError(false);
@@ -272,8 +277,9 @@ function DealTitle({ saved, company, onSave }: { saved: string; company: string;
         onBlur={() => {
           focused.current = false;
           // Never named (the company's name shows instead): nothing was lost.
-          if (draft.trim() || !saved) return;
-          setDraft(saved);
+          if (draft.trim() || !before.current) return;
+          setDraft(before.current);
+          if (before.current !== saved) onSave(before.current);
           setError(true);
         }}
         onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
