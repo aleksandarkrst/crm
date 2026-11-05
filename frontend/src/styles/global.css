@@ -595,12 +595,14 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .minutes-state.is-error { color: var(--danger); font-weight: 600; }
 .minutes-note { font-size: 12.5px; color: var(--text-2); background: var(--bg-soft); border-radius: 8px; padding: 9px 12px; overflow-wrap: anywhere; }
 .minutes-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-/* The label and toolbar stay at the top of the window while the field scrolls past (CD-378 QA: long minutes). */
-.minutes-field-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 26px; position: sticky; top: 0; z-index: 2; background: var(--white); padding: 6px 0 0; margin-top: -6px; }
+/* The label and toolbar stay in view, right under the sticky screen header, while the field scrolls past (CD-378 QA: long minutes). */
+.minutes-field-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 26px; position: sticky; top: var(--screen-header-h, 0px); z-index: 2; background: var(--white); padding: 6px 0 0; margin-top: -6px; }
 .minutes-toolbar { display: inline-flex; gap: 4px; }
 .minutes-toolbar button { border: 1px solid var(--border); background: var(--white); color: var(--ink); border-radius: 6px; padding: 3px 9px; font-size: 12px; cursor: pointer; }
 .minutes-toolbar button:hover { background: var(--bg-soft); }
 .minutes-text { width: 100%; box-sizing: border-box; line-height: 1.5; min-height: 92px; }
+/* The textarea grows with its text (RichField), so no scrollbar or resize handle of its own. */
+textarea.minutes-text { overflow-y: hidden; resize: none; }
 /* The formatted text in the editor's frame once it loses the focus (CD-378); a click edits again. */
 .minutes-view { cursor: text; }
 .minutes-view .rich-text { font-size: 13px; line-height: 1.5; }
