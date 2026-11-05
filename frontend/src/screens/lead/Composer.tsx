@@ -70,7 +70,8 @@ export function Composer({ lead }: { lead: Lead }) {
           </span>
           <span style={{ fontSize: 15, fontWeight: 600 }}>{stage.activity}</span>
           <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
-            Due {lead.stall >= 4 ? lead.stall + ' days ago' : 'today'} · {CHANNEL_LABELS[stage.channel] || stage.channel}
+            {/* Due today, as its to-dos and Today say; how long it has been quiet is a separate fact (CD-478). */}
+            Due today{lead.stall >= 4 ? ` · ${lead.stall} days since contact` : ''} · {CHANNEL_LABELS[stage.channel] || stage.channel}
           </span>
         </div>
         {tab !== def && (

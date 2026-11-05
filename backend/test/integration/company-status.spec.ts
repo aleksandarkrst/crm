@@ -6,6 +6,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { addMember, call, createTenant, eventually, type Funnel, ok, type Session, signIn, testPib } from './helpers';
+import { asTenantSql } from './people-helpers';
 
 let owner: Session;
 let seller: Session;
@@ -66,6 +67,9 @@ describe('Lead → Opportunity, by itself', () => {
     expect((await company(c.id)).status).toBe('lead');
     // The name isn't one of the checks: a company can't be saved without one.
     expect((await call('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { name: '   ' } })).status).toBe(400);
+    // A postal code is five digits (CD-478); spaces are dropped.
+    expect((await call('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { postalCode: 'abc' } })).status).toBe(400);
+    expect(await ok('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { postalCode: '11 000' } })).toMatchObject({ postalCode: '11000' });
   });
 
   it('follows a contact that moves to another company', async () => {
@@ -126,18 +130,44 @@ describe('setting the status by hand', () => {
     expect(refused.body.blockers).toContain('Matični broj');
   });
 
-  it('sets it back, and the automation leaves it there until Back to automatic', async () => {
+  it('sets it back; it holds while the facts stay, and the automation takes over when they change (CD-478)', async () => {
     const set = await ok<Company>('PATCH', `/crm/companies/${id}/status`, { ...as(), body: { status: 'opportunity' } });
     expect(set).toMatchObject({ status: 'opportunity', statusSetManually: true });
     expect((await history(id))[0]).toMatchObject({ from: 'client', to: 'opportunity', reason: 'manual' });
 
-    // Another won opportunity doesn't raise it.
-    await ok('POST', `/crm/deals/${(await newDeal(id, 'Another')).id}/move`, { ...as(), body: { stageId: wonStage().id } }, 200);
+    // An edit that changes nothing behind the status keeps it.
+    await ok('PATCH', `/crm/companies/${id}`, { ...as(), body: { notes: 'Called back in spring' } });
     expect((await company(id)).status).toBe('opportunity');
 
-    const back = await ok<Company>('PATCH', `/crm/companies/${id}/status`, { ...as(), body: { status: null } });
-    expect(back).toMatchObject({ status: 'client', statusSetManually: false });
+    // Another won opportunity is a new fact: the automation takes over again.
+    await ok('POST', `/crm/deals/${(await newDeal(id, 'Another')).id}/move`, { ...as(), body: { stageId: wonStage().id } }, 200);
+    expect(await company(id)).toMatchObject({ status: 'client', statusSetManually: false });
     expect((await history(id))[0]).toMatchObject({ from: 'opportunity', to: 'client', reason: 'automatic' });
+  });
+
+  it('a hand-set status is released by a readiness change, and one set before CD-478 holds against the facts of today', async () => {
+    const c = await readyCompany('Bistro Lane');
+    await ok('PATCH', `/crm/companies/${c.id}/status`, { ...as(), body: { status: 'lead' } });
+    await ok('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { mb: null } });
+    expect(await company(c.id)).toMatchObject({ status: 'lead', statusSetManually: false });
+
+    // Set by hand before the facts were recorded: an edit keeps it, and records the facts quietly.
+    const old = await readyCompany('Old Hand');
+    await asTenantSql(tenant, `update companies set status = 'lead', status_set_manually = true where id = $1`, [old.id]);
+    await ok('PATCH', `/crm/companies/${old.id}`, { ...as(), body: { notes: 'Edited after the release' } });
+    expect(await company(old.id)).toMatchObject({ status: 'lead', statusSetManually: true });
+    // The row that records the facts (lead → lead) isn't shown as a change.
+    expect((await history(old.id)).some((r) => r.from === r.to)).toBe(false);
+    // From now on the automation watches it: a readiness change releases it.
+    await ok('PATCH', `/crm/companies/${old.id}`, { ...as(), body: { mb: null } });
+    expect(await company(old.id)).toMatchObject({ status: 'lead', statusSetManually: false });
+  });
+
+  it('setting the status it already has by itself changes nothing (the app closes the opportunities first)', async () => {
+    const c = await readyCompany('Linden Foods');
+    await ok('POST', `/crm/deals/${(await newDeal(c.id)).id}/lost`, { ...as(), body: { reason: 'No decision', note: 'Closed when the company was set to Not interested' } }, 200);
+    expect(await ok<Company>('PATCH', `/crm/companies/${c.id}/status`, { ...as(), body: { status: 'not_interested' } })).toMatchObject({ status: 'not_interested', statusSetManually: false });
+    expect((await history(c.id))[0]).toMatchObject({ to: 'not_interested', reason: 'automatic' });
   });
 
   it('is for owners, admins and the company owner only', async () => {
@@ -151,9 +181,9 @@ describe('the companies list', () => {
   it('filters by status, and by won or lost opportunities', async () => {
     const names = async (query: string) => (await ok<{ name: string }[]>('GET', `/crm/companies?${query}&limit=200`, as())).map((c) => c.name).sort();
     expect(await names('status=client')).toEqual(['Kestrel Logistics', 'Orchard Dental']);
-    expect(await names('status=not_interested,past_client')).toEqual(['Seller Co']);
+    expect(await names('status=not_interested,past_client')).toEqual(['Linden Foods', 'Seller Co']);
     expect(await names('outcome=won')).toEqual(['Kestrel Logistics', 'Orchard Dental']);
-    expect(await names('outcome=lost')).toEqual([]);
+    expect(await names('outcome=lost')).toEqual(['Linden Foods']);
     expect((await call('GET', '/crm/companies?status=customer', as())).status).toBe(400);
   });
 });

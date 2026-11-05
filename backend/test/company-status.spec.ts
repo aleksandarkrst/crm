@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeStatus, effectiveStatus, opportunityReadiness, type StatusCompany, type StatusContact } from '../src/modules/crm/companies/company-status';
+import { computeStatus, factsFingerprint, opportunityReadiness, type StatusCompany, type StatusContact } from '../src/modules/crm/companies/company-status';
 
 const complete: StatusCompany = { name: 'Vega Logistika', pib: '104532877', mb: '21345678', address: 'Bulevar 12', city: 'Beograd', postalCode: '11000', activityCode: '4941' };
 const qualified: StatusContact = { fullName: 'Jelena Savić', jobTitle: 'Head of operations', buyerRole: 'Champion', ownerUserId: 'u1' };
@@ -56,15 +56,18 @@ describe('computeStatus (CD-358)', () => {
   });
 });
 
-describe('effectiveStatus: a status set by hand (CD-358)', () => {
-  it('follows the facts when automatic', () => {
-    expect(effectiveStatus('client', null)).toBe('client');
+describe('factsFingerprint: what a status set by hand is held against (CD-478)', () => {
+  const facts = (over: Partial<Parameters<typeof computeStatus>[0]> = {}) => factsFingerprint({ company: complete, contacts: [qualified], opportunities: [], projects: [], ...over });
+
+  it('stays the same while nothing that moves the status changes', () => {
+    expect(facts({ opportunities: ['won', 'open'] })).toBe(facts({ opportunities: ['open', 'won'], company: { ...complete, name: 'Renamed' } }));
   });
 
-  it('is never raised by the automation, but lowered when the facts drop below it', () => {
-    expect(effectiveStatus('client', 'opportunity')).toBe('opportunity');
-    expect(effectiveStatus('opportunity', 'lead')).toBe('lead');
-    expect(effectiveStatus('lead', 'opportunity')).toBe('lead');
-    expect(effectiveStatus('opportunity', 'not_interested')).toBe('not_interested');
+  it('changes with an opportunity won, lost or added, a project, or the readiness', () => {
+    const base = facts({ opportunities: ['open'] });
+    expect(facts({ opportunities: ['won'] })).not.toBe(base);
+    expect(facts({ opportunities: ['open', 'open'] })).not.toBe(base);
+    expect(facts({ opportunities: ['open'], projects: ['open'] })).not.toBe(base);
+    expect(facts({ opportunities: ['open'], company: { ...complete, mb: null } })).not.toBe(base);
   });
 });

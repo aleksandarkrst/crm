@@ -7,8 +7,9 @@ import { Screen } from '../components/Layout';
 import { CompanyProjects } from './CompanyProjects';
 import { AddButton, DealsSection, FocusTasks, RecordHeader, RecordHistory, Section } from '../components/RecordParts';
 import { CheckedInput, GhostInput, GhostSelect, Modal, ModalHeader, Picker, PickerRow, usePicker } from '../components/ui';
+import { LOST_REASONS, type LostReason } from '../lib/api';
 import { mapsSearchUrl } from '../lib/maps';
-import { checkActivityCode, checkMb, checkPib } from '../lib/serbianIds';
+import { checkActivityCode, checkMb, checkPib, checkPostalCode } from '../lib/serbianIds';
 import { checkDomain } from '../lib/validate';
 import { paths } from '../lib/paths';
 import { INDUSTRIES, SOURCES, TEAM_SIZES } from '../store/seed';
@@ -38,6 +39,8 @@ export function Company() {
   // Its status changes (CD-358) join the Activity; read again whenever the status moves.
   const [statusLog, setStatusLog] = useState<LogEntry[]>([]);
   const [settingStatus, setSettingStatus] = useState(false);
+  // While the Domain field holds an unsaved, invalid value, Open (to the saved one) is hidden (CD-478).
+  const [domainInvalid, setDomainInvalid] = useState(false);
   const current = s.extraCompanies.find((c) => c.id === id);
   const statusKey = `${current?.status}:${current?.statusManual}`;
   useEffect(() => {
@@ -86,6 +89,8 @@ export function Company() {
   const domain = extra?.domain ?? '';
   const website = websiteHref(domain);
   const pib = extra?.pib ?? '';
+  // The usual industries and any other a company of the workspace already has (CD-478).
+  const industries = [...new Set([...INDUSTRIES, ...companyRecords(s).map((c) => c.industry)])].filter((v) => v && v !== '—');
   const map = mapsSearchUrl(rec.name, extra?.address, extra?.city || rec.hq);
   const newDeal = () => set({ newLeadOpen: true, newLeadCompanyId: rec.id, newLeadContactId: null });
 
@@ -128,24 +133,32 @@ export function Company() {
                   ))}
                 </ul>
                 <span style={{ color: 'var(--text-2)' }}>
-                  Fill them in below and the status becomes Opportunity by itself. Client and Past client follow won opportunities and finished projects{canSetStatus ? '; the ⋯ menu can set a status back by hand.' : '.'}
+                  Fill them in below and the status becomes Opportunity by itself. Client and Past client follow won opportunities and finished projects.
                 </span>
               </div>
             ) : null
           }
           menuItems={[
             ...(canSetStatus && lower.length ? [{ label: 'Set status back', onClick: () => setSettingStatus(true), testId: 'status-set-back' }] : []),
-            ...(canSetStatus && manual ? [{ label: 'Back to automatic', onClick: () => void store.setCompanyStatus(rec.id, null), testId: 'status-automatic' }] : []),
           ]}
         />
-        {settingStatus && <SetStatusDialog name={rec.name} current={status} choices={lower} onClose={() => setSettingStatus(false)} onPick={(st) => void store.setCompanyStatus(rec.id, st)} />}
+        {settingStatus && (
+          <SetStatusDialog
+            name={rec.name}
+            current={status}
+            choices={lower}
+            openDeals={rec.leads.filter((l) => l.outcome === 'open').map((l) => l.id)}
+            onClose={() => setSettingStatus(false)}
+            onPick={(st, close) => void store.setCompanyStatus(rec.id, st, close)}
+          />
+        )}
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
           <div className="lead-side" style={{ flex: '1 1 400px', maxWidth: 540, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
             <Section title="Summary" testId="company-summary">
               {/* Computed (CD-358); "set by hand" while someone set it back. */}
               <IconRow icon="funnel" label="Status">
-                <span className="field-value" data-testid="company-status" title={manual ? 'Set back by hand: it stays there until Back to automatic' : undefined}>
+                <span className="field-value" data-testid="company-status" title={manual ? 'Set back by hand: it follows the company again as soon as its opportunities, projects or details change' : undefined}>
                   {COMPANY_STATUS_LABELS[status]}
                   {manual ? ' · set by hand' : status === 'lead' ? ` · ${readiness.ready} of ${readiness.total} ready` : ''}
                 </span>
@@ -162,7 +175,7 @@ export function Company() {
                 </span>
               </IconRow>
               <IconRow icon="industry" label="Industry">
-                <GhostSelect chevron aria-label="Industry" value={rec.industry} onChange={setField('industry')} options={INDUSTRIES} />
+                <GhostSelect chevron aria-label="Industry" value={rec.industry} onChange={setField('industry')} options={industries} />
               </IconRow>
               <IconRow icon="location" label="HQ">
                 <span className="contact-field">
@@ -182,8 +195,8 @@ export function Company() {
               </IconRow>
               <IconRow icon="globe" label="Domain">
                 <span className="contact-field">
-                  <CheckedInput aria-label="Domain" placeholder="acme.com" value={domain} check={checkDomain} onSave={(v) => store.setCompanyField(rec.id, 'domain', v)} />
-                  {website && (
+                  <CheckedInput aria-label="Domain" placeholder="acme.com" value={domain} check={checkDomain} onSave={(v) => store.setCompanyField(rec.id, 'domain', v)} onUnsaved={setDomainInvalid} />
+                  {website && !domainInvalid && (
                     <a className="contact-action" href={website} target="_blank" rel="noopener noreferrer" aria-label={`Open ${domain.trim()}`}>
                       Open
                     </a>
@@ -216,7 +229,7 @@ export function Company() {
                 <GhostInput aria-label="City" value={extra?.city ?? ''} onChange={setField('city')} />
               </IdentityRow>
               <IdentityRow label="Postal code" missing={!extra?.postalCode}>
-                <GhostInput aria-label="Postal code" inputMode="numeric" placeholder="21000" value={extra?.postalCode ?? ''} onChange={setField('postalCode')} />
+                <CheckedInput aria-label="Postal code" inputMode="numeric" placeholder="21000" value={extra?.postalCode ?? ''} check={checkPostalCode} onSave={(v) => store.setCompanyField(rec.id, 'postalCode', v)} />
               </IdentityRow>
             </Section>
 
@@ -294,35 +307,70 @@ function IdentityRow({ label, missing, badge, children }: { label: string; missi
 }
 
 /**
- * "Set status back" (CD-358): only to a status behind the current one. The automation then leaves
- * it there until "Back to automatic", but still lowers it when the facts drop below it.
+ * "Set status back" (CD-358): only to a status behind the current one. It stays there until the
+ * company's opportunities, projects or details change; then the automation takes over (CD-478).
+ * Not interested with open opportunities asks whether to close them as lost too (CD-478).
  */
-function SetStatusDialog({ name, current, choices, onClose, onPick }: { name: string; current: CompanyStatus; choices: CompanyStatus[]; onClose: () => void; onPick: (status: CompanyStatus) => void }) {
+function SetStatusDialog({ name, current, choices, openDeals, onClose, onPick }: { name: string; current: CompanyStatus; choices: CompanyStatus[]; openDeals: string[]; onClose: () => void; onPick: (status: CompanyStatus, close?: { leadIds: string[]; reason: LostReason }) => void }) {
   const [pick, setPick] = useState<CompanyStatus>(choices[choices.length - 1]!);
+  const [closeDeals, setCloseDeals] = useState<boolean | null>(null);
+  const [reason, setReason] = useState<LostReason | ''>('');
+  const [error, setError] = useState('');
+  const asks = pick === 'not_interested' && openDeals.length > 0;
+  const one = openDeals.length === 1;
+  const n = one ? '1 open opportunity' : `${openDeals.length} open opportunities`;
+  const save = () => {
+    if (asks && closeDeals === null) return setError(`Choose what happens to its ${n}.`);
+    if (asks && closeDeals && !reason) return setError('Pick the reason they were lost.');
+    onPick(pick, asks && closeDeals && reason ? { leadIds: openDeals, reason } : undefined);
+    onClose();
+  };
+  const row = { display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, cursor: 'pointer' } as const;
   return (
     <Modal maxWidth={440} onBackdrop={onClose}>
-      <ModalHeader title={`Set ${name} back`} sub={`It is ${COMPANY_STATUS_LABELS[current]} now. The status moves forward by itself; by hand it can only go back, and it stays there until Back to automatic.`} />
+      <ModalHeader title={`Set ${name} back`} sub={`It is ${COMPANY_STATUS_LABELS[current]} now. The status moves forward by itself; by hand it can only go back. It follows the company again as soon as its opportunities, projects or details change.`} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} role="radiogroup" aria-label="Status">
         {[...choices].reverse().map((st) => (
-          <label key={st} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, cursor: 'pointer' }}>
+          <label key={st} style={row}>
             <input type="radio" name="company-status" checked={pick === st} onChange={() => setPick(st)} />
             {COMPANY_STATUS_LABELS[st]}
           </label>
         ))}
       </div>
+      {asks && (
+        <div className="hint-box" data-testid="status-close-deals" style={{ display: 'flex', flexDirection: 'column', gap: 8 }} role="radiogroup" aria-label="Open opportunities">
+          <span style={{ fontWeight: 600, color: 'var(--ink)' }}>
+            It has {n}. Close {one ? 'it' : 'them'} as lost too?
+          </span>
+          <label style={row}>
+            <input type="radio" name="close-deals" checked={closeDeals === true} onChange={() => setCloseDeals(true)} />
+            Yes, close {one ? 'it' : 'them'} as lost
+          </label>
+          {closeDeals && (
+            <select className="form-input" aria-label="Reason" value={reason} onChange={(e) => setReason(e.target.value as LostReason)} style={{ marginLeft: 24, width: 'auto' }}>
+              <option value="" disabled>
+                Pick a reason
+              </option>
+              {LOST_REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          )}
+          <label style={row}>
+            <input type="radio" name="close-deals" checked={closeDeals === false} onChange={() => setCloseDeals(false)} />
+            No, keep {one ? 'it' : 'them'} open
+          </label>
+          <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>An open opportunity still counts in the Pipeline.</span>
+        </div>
+      )}
+      {error && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{error}</div>}
       <div className="modal-actions">
         <button type="button" className="btn btn-secondary" onClick={onClose}>
           Cancel
         </button>
-        <button
-          type="button"
-          className="btn btn-primary"
-          data-testid="status-set-back-save"
-          onClick={() => {
-            onPick(pick);
-            onClose();
-          }}
-        >
+        <button type="button" className="btn btn-primary" data-testid="status-set-back-save" onClick={save}>
           Set back
         </button>
       </div>

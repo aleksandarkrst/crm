@@ -121,11 +121,14 @@ export function CheckedInput({
   value,
   check,
   onSave,
+  onUnsaved,
   ...props
 }: Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'onBlur'> & {
   value: string;
   check: (v: string) => { ok: true; value: string; hint?: string } | { ok: false; error: string };
   onSave: (v: string) => void;
+  /** Told whether the field holds a value that wasn't saved (CD-478), e.g. to hide a link to the old one. */
+  onUnsaved?: (unsaved: boolean) => void;
 }) {
   const [draft, setDraft] = useState(value);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
@@ -133,6 +136,7 @@ export function CheckedInput({
   useEffect(() => {
     if (!focused && !message?.error) setDraft(value);
   }, [value, focused, message?.error]);
+  useEffect(() => onUnsaved?.(!!message?.error), [message?.error, onUnsaved]);
   const commit = () => {
     setFocused(false);
     const r = check(draft);
@@ -162,6 +166,7 @@ export function CheckedInput({
       {message && (
         <span role={message.error ? 'alert' : 'status'} data-testid={message.error ? 'field-error' : 'field-hint'} style={{ fontSize: 12, color: message.error ? 'var(--danger)' : 'var(--muted)', padding: '2px 0 0' }}>
           {message.text}
+          {message.error && ' Not saved: the last saved value is kept.'}
         </span>
       )}
     </span>

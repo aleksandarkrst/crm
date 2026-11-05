@@ -44,7 +44,7 @@ export const SALE_TYPES = [
   { id: 'transactional', name: 'Transactional', note: 'Parts, services, recurring orders.' },
 ] as const;
 export const SALE_TYPE_OPTIONS = SALE_TYPES.map(({ id, name }) => ({ id, name }));
-export const INDUSTRIES = ['Architecture', 'Banking', 'Food & beverage', 'Freight & logistics', 'Furniture retail', 'Hospitality', 'Pharmaceuticals', 'Renewable energy', 'Wine', 'Other'];
+export const INDUSTRIES = ['Architecture', 'Banking', 'Design agency', 'Food & beverage', 'Freight & logistics', 'Furniture retail', 'Healthcare', 'Hospitality', 'Pharmaceuticals', 'Renewable energy', 'Wine', 'Other'];
 export const TEAM_SIZES = ['1–10 staff', '11–50 staff', '51–200 staff', '201–1,000 staff', '1,000+ staff'];
 export const TEAM_ROLES = ['Owner', 'Admin', 'Member'] as const;
 
