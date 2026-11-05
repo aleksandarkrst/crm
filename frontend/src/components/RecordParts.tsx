@@ -45,6 +45,8 @@ function NameInput({ kind, name, onName }: { kind: 'company' | 'contact'; name: 
   const [draft, setDraft] = useState(name);
   const [error, setError] = useState(false);
   const focused = useRef(false);
+  // The name before this edit: typing saves as it goes, so clearing it letter by letter saves the prefixes.
+  const before = useRef(name);
   useEffect(() => {
     if (!focused.current) setDraft(name);
   }, [name]);
@@ -56,7 +58,10 @@ function NameInput({ kind, name, onName }: { kind: 'company' | 'contact'; name: 
         data-testid="record-name"
         value={draft}
         aria-invalid={error || undefined}
-        onFocus={() => (focused.current = true)}
+        onFocus={() => {
+          focused.current = true;
+          before.current = name;
+        }}
         onChange={(e) => {
           setDraft(e.target.value);
           setError(false);
@@ -65,7 +70,8 @@ function NameInput({ kind, name, onName }: { kind: 'company' | 'contact'; name: 
         onBlur={() => {
           focused.current = false;
           if (draft.trim()) return;
-          setDraft(name);
+          setDraft(before.current);
+          if (before.current !== name) onName(before.current);
           setError(true);
         }}
         onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}

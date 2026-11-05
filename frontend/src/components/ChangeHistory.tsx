@@ -339,7 +339,7 @@ export function ChangeHistory({ entity, id, cur, rev, activity }: { entity: Hist
     ...rows.map(({ e, text }) => ({
       at: e.changedAt,
       node: (
-        <div key={e.id} data-testid="change-row" style={{ display: 'grid', gridTemplateColumns: '96px 1fr auto', gap: 14, padding: '10px 0', borderTop: '1px solid var(--divider)', alignItems: 'start' }}>
+        <div key={e.id} data-testid="change-row" style={{ display: 'grid', gridTemplateColumns: '96px 1fr', gap: 14, padding: '10px 0', borderTop: '1px solid var(--divider)', alignItems: 'start' }}>
           <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>{when(e.changedAt)}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>{e.actor?.name ?? 'System'}</span>
@@ -348,18 +348,21 @@ export function ChangeHistory({ entity, id, cur, rev, activity }: { entity: Hist
         </div>
       ),
     })),
-    ...(activity ?? []).map((a, i) => ({
+    // While older changes aren't loaded yet, older activity waits too, so the list has no gaps.
+    ...(activity ?? []).filter((a) => !more || !entries?.length || (a.at ?? '9') >= entries[entries.length - 1]!.changedAt).map((a, i) => ({
       // Entries just made have no time yet: on top.
       at: a.at ?? '9',
       node: (
-        <div key={'a' + i} data-testid="activity-row" style={{ display: 'grid', gridTemplateColumns: '96px 1fr auto', gap: 14, padding: '10px 0', borderTop: '1px solid var(--divider)', alignItems: 'start' }}>
+        <div key={'a' + i} data-testid="activity-row" style={{ display: 'grid', gridTemplateColumns: '96px 1fr', gap: 14, padding: '10px 0', borderTop: '1px solid var(--divider)', alignItems: 'start' }}>
           <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>{a.date}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
             {a.actor && <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>{a.actor}</span>}
-            <span style={{ fontSize: 13, fontWeight: 500 }}>{a.title}</span>
+            <span style={{ fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {a.title}
+              <span className="badge badge-neutral">{activityChannelLabel(a.channel)}</span>
+            </span>
             <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45, whiteSpace: 'pre-line' }}>{a.detail}</div>
           </div>
-          <span className="badge badge-neutral">{activityChannelLabel(a.channel)}</span>
         </div>
       ),
     })),

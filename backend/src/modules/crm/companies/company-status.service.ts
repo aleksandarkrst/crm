@@ -35,6 +35,11 @@ export class CompanyStatusService {
       // A status set by hand (CD-478) holds while its facts stay as they were; any change to them
       // (an opportunity won, lost or added, a project, the data) hands it back to the automation.
       if (company.statusSetManually && held.get(company.id) === fingerprint) continue;
+      // Set by hand before CD-478, with no facts recorded: it holds against today's facts from now on.
+      if (company.statusSetManually && !held.get(company.id)) {
+        await this.store(tx, actor, company.id, company.status, company.status, 'manual', { facts: fingerprint });
+        continue;
+      }
       if (company.statusSetManually) await tx.update(companies).set({ statusSetManually: false }).where(eq(companies.id, company.id));
       if (computed !== company.status) await this.store(tx, actor, company.id, company.status, computed, 'automatic');
     }
@@ -127,7 +132,8 @@ export class CompanyStatusService {
         .where(and(eq(auditLogs.entityType, 'company'), eq(auditLogs.entityId, id), eq(auditLogs.action, 'company.status_changed')))
         .orderBy(desc(auditLogs.createdAt))
         .limit(50);
-      return rows.map(({ data, ...r }) => ({ ...r, ...(data as { from: CompanyStatus; to: CompanyStatus; reason: 'automatic' | 'manual' }) }));
+      // A row that only records the facts a status is held against (from = to) isn't a change.
+      return rows.map(({ data, ...r }) => ({ ...r, ...(data as { from: CompanyStatus; to: CompanyStatus; reason: 'automatic' | 'manual' }) })).filter((r) => r.from !== r.to);
     });
   }
 

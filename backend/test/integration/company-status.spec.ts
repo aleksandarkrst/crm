@@ -6,6 +6,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { addMember, call, createTenant, eventually, type Funnel, ok, type Session, signIn, testPib } from './helpers';
+import { asTenantSql } from './people-helpers';
 
 let owner: Session;
 let seller: Session;
@@ -144,7 +145,25 @@ describe('setting the status by hand', () => {
     expect((await history(id))[0]).toMatchObject({ from: 'opportunity', to: 'client', reason: 'automatic' });
   });
 
-  it('is for owners, admins and the company owner only', async () => {
+  it('a hand-set status is released by a readiness change, and one set before CD-478 holds against the facts of today', async () => {
+    const c = await readyCompany('Bistro Lane');
+    await ok('PATCH', `/crm/companies/${c.id}/status`, { ...as(), body: { status: 'lead' } });
+    await ok('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { mb: null } });
+    expect(await company(c.id)).toMatchObject({ status: 'lead', statusSetManually: false });
+
+    // Set by hand before the facts were recorded: an edit keeps it, and records the facts quietly.
+    const old = await readyCompany('Old Hand');
+    await asTenantSql(tenant, `update companies set status = 'lead', status_set_manually = true where id = $1`, [old.id]);
+    await ok('PATCH', `/crm/companies/${old.id}`, { ...as(), body: { notes: 'Edited after the release' } });
+    expect(await company(old.id)).toMatchObject({ status: 'lead', statusSetManually: true });
+    // The row that records the facts (lead → lead) isn't shown as a change.
+    expect((await history(old.id)).some((r) => r.from === r.to)).toBe(false);
+    // From now on the automation watches it: a readiness change releases it.
+    await ok('PATCH', `/crm/companies/${old.id}`, { ...as(), body: { mb: null } });
+    expect(await company(old.id)).toMatchObject({ status: 'lead', statusSetManually: false });
+  });
+
+    it('is for owners, admins and the company owner only', async () => {
     expect((await call('PATCH', `/crm/companies/${id}/status`, { ...as(seller), body: { status: 'lead' } })).status).toBe(403);
     const theirs = await ok<Company>('POST', '/crm/companies', { ...as(seller), body: { name: 'Seller Co', pib: testPib() } });
     expect((await call('PATCH', `/crm/companies/${theirs.id}/status`, { ...as(seller), body: { status: 'not_interested' } })).status).toBe(200);

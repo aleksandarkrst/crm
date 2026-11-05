@@ -216,7 +216,7 @@ describe('importing companies', () => {
       `${name},${good},20084693,6201,State,Bulevar 10,21000`,
       `${uniq('No PIB')},,,,,,`,
       `${uniq('Bad PIB')},104052136,,,,,`,
-      `${uniq('Bad rest')},${clash},20084694,62,Mixed,,`,
+      `${uniq('Bad rest')},${clash},20084694,62,Mixed,,Novi Sad`,
     ].join('\n');
     const res = await preview('companies', { csv });
     expect(res.rows.map((r: Json) => r.status)).toEqual(['create', 'invalid', 'invalid', 'invalid']);
@@ -225,6 +225,8 @@ describe('importing companies', () => {
     expect(res.rows[3].messages).toEqual([
       'Ownership: "Mixed" is not Private or State',
       'MB: MB is 8 digits with a valid check digit',
+      // Five digits (CD-478): a postal code with the city in it fails the row like any other field.
+      'Postal code: The postal code is 5 digits, e.g. 21000',
       'Activity code: The activity code is 4 digits',
     ]);
     await commit('companies', { csv });
