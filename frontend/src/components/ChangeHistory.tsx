@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ApiHistoryEntry, HistoryEntity } from '../lib/api';
+import { activityChannelLabel } from '../store/seed';
 import { type Cur, money } from '../store/selectors';
 import { useStore } from '../store/store';
+import type { LogEntry } from '../store/types';
 
 /** Field names as the screens call them. */
 const FIELD_LABELS: Record<string, string> = {
@@ -163,7 +165,7 @@ const clip = (t: string) => (t.length > 90 ? t.slice(0, 88) + '…' : t);
  * to what, newest first, a page at a time. It re-reads when the record changes, here or elsewhere
  * (a live update, CD-20).
  */
-export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity; id: string; cur: Cur; rev: string }) {
+export function ChangeHistory({ entity, id, cur, rev, activity }: { entity: HistoryEntity; id: string; cur: Cur; rev: string; activity?: LogEntry[] }) {
   const { s, loadChanges } = useStore();
   const [entries, setEntries] = useState<ApiHistoryEntry[] | null>(null);
   const [more, setMore] = useState(false);
@@ -327,29 +329,53 @@ export function ChangeHistory({ entity, id, cur, rev }: { entity: HistoryEntity;
     );
   };
 
-  if (failed && !entries) return <div style={{ fontSize: 12.5, color: 'var(--muted)', padding: '12px 0' }}>Couldn't load the changes. They'll load when the connection is back.</div>;
-  if (!entries) return <div style={{ fontSize: 12.5, color: 'var(--muted)', padding: '12px 0' }}>Loading changes…</div>;
+  // A company's or contact's History (CD-478) is one list: its activity and its field changes, newest first.
+  const merged = activity !== undefined;
+  if (!merged && failed && !entries) return <div style={{ fontSize: 12.5, color: 'var(--muted)', padding: '12px 0' }}>Couldn't load the changes. They'll load when the connection is back.</div>;
+  if (!merged && !entries) return <div style={{ fontSize: 12.5, color: 'var(--muted)', padding: '12px 0' }}>Loading changes…</div>;
 
-  const rows = entries.map((e) => ({ e, text: describe(e, entries) })).filter((r) => r.text !== null);
-  return (
-    <div data-testid="change-history" style={{ display: 'flex', flexDirection: 'column' }}>
-      {rows.map(({ e, text }) => (
-        <div key={e.id} data-testid="change-row" style={{ display: 'grid', gridTemplateColumns: '96px 1fr', gap: 14, padding: '10px 0', borderTop: '1px solid var(--divider)', alignItems: 'start' }}>
+  const rows = (entries ?? []).map((e) => ({ e, text: describe(e, entries ?? []) })).filter((r) => r.text !== null);
+  const items = [
+    ...rows.map(({ e, text }) => ({
+      at: e.changedAt,
+      node: (
+        <div key={e.id} data-testid="change-row" style={{ display: 'grid', gridTemplateColumns: '96px 1fr auto', gap: 14, padding: '10px 0', borderTop: '1px solid var(--divider)', alignItems: 'start' }}>
           <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>{when(e.changedAt)}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>{e.actor?.name ?? 'System'}</span>
             <span style={{ fontSize: 12.5, lineHeight: 1.45, overflowWrap: 'anywhere' }}>{text}</span>
           </div>
         </div>
-      ))}
-      {rows.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--muted)', padding: '12px 0' }}>No changes recorded yet. Changes are recorded from now on.</div>}
+      ),
+    })),
+    ...(activity ?? []).map((a, i) => ({
+      // Entries just made have no time yet: on top.
+      at: a.at ?? '9',
+      node: (
+        <div key={'a' + i} data-testid="activity-row" style={{ display: 'grid', gridTemplateColumns: '96px 1fr auto', gap: 14, padding: '10px 0', borderTop: '1px solid var(--divider)', alignItems: 'start' }}>
+          <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>{a.date}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+            {a.actor && <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>{a.actor}</span>}
+            <span style={{ fontSize: 13, fontWeight: 500 }}>{a.title}</span>
+            <div style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45, whiteSpace: 'pre-line' }}>{a.detail}</div>
+          </div>
+          <span className="badge badge-neutral">{activityChannelLabel(a.channel)}</span>
+        </div>
+      ),
+    })),
+  ].sort((a, b) => b.at.localeCompare(a.at));
+  return (
+    <div data-testid="change-history" style={{ display: 'flex', flexDirection: 'column' }}>
+      {items.map((it) => it.node)}
+      {merged && failed && !entries && <div style={{ fontSize: 12.5, color: 'var(--muted)', padding: '12px 0' }}>Couldn't load the field changes. They'll load when the connection is back.</div>}
+      {items.length === 0 && (entries || failed) && <div style={{ fontSize: 12.5, color: 'var(--muted)', padding: '12px 0' }}>{merged ? 'Nothing here yet.' : 'No changes recorded yet. Changes are recorded from now on.'}</div>}
       {more && (
         <button
           type="button"
           className="btn-plain"
           style={{ alignSelf: 'flex-start', marginTop: 8 }}
           onClick={() => {
-            shown.current = entries.length + PAGE;
+            shown.current = (entries?.length ?? 0) + PAGE;
             void load(shown.current);
           }}
         >

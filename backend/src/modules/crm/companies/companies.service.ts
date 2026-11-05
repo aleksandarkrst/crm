@@ -29,7 +29,8 @@ export const CreateCompany = z.object({
   mb: z.preprocess(noSpaces, optionalText(8).refine((v) => v == null || mbValid(v), MB_MESSAGE)),
   address: optionalText(200),
   city: optionalText(100),
-  postalCode: optionalText(12),
+  // A Serbian postal code (CD-478): five digits, spaces dropped ("11 000" is 11000).
+  postalCode: z.preprocess(noSpaces, optionalText(12).refine((v) => v == null || /^\d{5}$/.test(v), 'The postal code is 5 digits, e.g. 21000')),
   activityCode: optionalText(4).refine((v) => v == null || /^\d{4}$/.test(v), 'The activity code is 4 digits'),
   ownershipType: z.enum(OWNERSHIP_TYPES).nullish(),
   ownerUserId: z.uuid().nullish(),
@@ -53,7 +54,7 @@ export const CompaniesQuery = ListQuery.extend({
 });
 export type CompaniesQuery = z.infer<typeof CompaniesQuery>;
 
-/** "Set status back…" (a status) or "Back to automatic" (null). */
+/** "Set status back…" (a status); null hands it back to the automation at once (no longer offered in the app). */
 export const SetCompanyStatus = z.object({ status: z.enum(COMPANY_STATUSES).nullable() });
 export type SetCompanyStatus = z.infer<typeof SetCompanyStatus>;
 export type CreateCompany = z.infer<typeof CreateCompany>;

@@ -8,7 +8,7 @@ import { CompanyProjects } from './CompanyProjects';
 import { AddButton, DealsSection, FocusTasks, RecordHeader, RecordHistory, Section } from '../components/RecordParts';
 import { CheckedInput, GhostInput, GhostSelect, Modal, ModalHeader, Picker, PickerRow, usePicker } from '../components/ui';
 import { mapsSearchUrl } from '../lib/maps';
-import { checkActivityCode, checkMb, checkPib } from '../lib/serbianIds';
+import { checkActivityCode, checkMb, checkPib, checkPostalCode } from '../lib/serbianIds';
 import { checkDomain } from '../lib/validate';
 import { paths } from '../lib/paths';
 import { INDUSTRIES, SOURCES, TEAM_SIZES } from '../store/seed';
@@ -38,6 +38,8 @@ export function Company() {
   // Its status changes (CD-358) join the Activity; read again whenever the status moves.
   const [statusLog, setStatusLog] = useState<LogEntry[]>([]);
   const [settingStatus, setSettingStatus] = useState(false);
+  // While the Domain field holds an unsaved, invalid value, Open (to the saved one) is hidden (CD-478).
+  const [domainInvalid, setDomainInvalid] = useState(false);
   const current = s.extraCompanies.find((c) => c.id === id);
   const statusKey = `${current?.status}:${current?.statusManual}`;
   useEffect(() => {
@@ -86,6 +88,8 @@ export function Company() {
   const domain = extra?.domain ?? '';
   const website = websiteHref(domain);
   const pib = extra?.pib ?? '';
+  // The usual industries and any other a company of the workspace already has (CD-478).
+  const industries = [...new Set([...INDUSTRIES, ...companyRecords(s).map((c) => c.industry)])].filter((v) => v && v !== '—');
   const map = mapsSearchUrl(rec.name, extra?.address, extra?.city || rec.hq);
   const newDeal = () => set({ newLeadOpen: true, newLeadCompanyId: rec.id, newLeadContactId: null });
 
@@ -128,14 +132,13 @@ export function Company() {
                   ))}
                 </ul>
                 <span style={{ color: 'var(--text-2)' }}>
-                  Fill them in below and the status becomes Opportunity by itself. Client and Past client follow won opportunities and finished projects{canSetStatus ? '; the ⋯ menu can set a status back by hand.' : '.'}
+                  Fill them in below and the status becomes Opportunity by itself. Client and Past client follow won opportunities and finished projects.
                 </span>
               </div>
             ) : null
           }
           menuItems={[
             ...(canSetStatus && lower.length ? [{ label: 'Set status back', onClick: () => setSettingStatus(true), testId: 'status-set-back' }] : []),
-            ...(canSetStatus && manual ? [{ label: 'Back to automatic', onClick: () => void store.setCompanyStatus(rec.id, null), testId: 'status-automatic' }] : []),
           ]}
         />
         {settingStatus && <SetStatusDialog name={rec.name} current={status} choices={lower} onClose={() => setSettingStatus(false)} onPick={(st) => void store.setCompanyStatus(rec.id, st)} />}
@@ -145,7 +148,7 @@ export function Company() {
             <Section title="Summary" testId="company-summary">
               {/* Computed (CD-358); "set by hand" while someone set it back. */}
               <IconRow icon="funnel" label="Status">
-                <span className="field-value" data-testid="company-status" title={manual ? 'Set back by hand: it stays there until Back to automatic' : undefined}>
+                <span className="field-value" data-testid="company-status" title={manual ? 'Set back by hand: it follows the company again as soon as its opportunities, projects or details change' : undefined}>
                   {COMPANY_STATUS_LABELS[status]}
                   {manual ? ' · set by hand' : status === 'lead' ? ` · ${readiness.ready} of ${readiness.total} ready` : ''}
                 </span>
@@ -162,7 +165,7 @@ export function Company() {
                 </span>
               </IconRow>
               <IconRow icon="industry" label="Industry">
-                <GhostSelect chevron aria-label="Industry" value={rec.industry} onChange={setField('industry')} options={INDUSTRIES} />
+                <GhostSelect chevron aria-label="Industry" value={rec.industry} onChange={setField('industry')} options={industries} />
               </IconRow>
               <IconRow icon="location" label="HQ">
                 <span className="contact-field">
@@ -182,8 +185,8 @@ export function Company() {
               </IconRow>
               <IconRow icon="globe" label="Domain">
                 <span className="contact-field">
-                  <CheckedInput aria-label="Domain" placeholder="acme.com" value={domain} check={checkDomain} onSave={(v) => store.setCompanyField(rec.id, 'domain', v)} />
-                  {website && (
+                  <CheckedInput aria-label="Domain" placeholder="acme.com" value={domain} check={checkDomain} onSave={(v) => store.setCompanyField(rec.id, 'domain', v)} onUnsaved={setDomainInvalid} />
+                  {website && !domainInvalid && (
                     <a className="contact-action" href={website} target="_blank" rel="noopener noreferrer" aria-label={`Open ${domain.trim()}`}>
                       Open
                     </a>
@@ -216,7 +219,7 @@ export function Company() {
                 <GhostInput aria-label="City" value={extra?.city ?? ''} onChange={setField('city')} />
               </IdentityRow>
               <IdentityRow label="Postal code" missing={!extra?.postalCode}>
-                <GhostInput aria-label="Postal code" inputMode="numeric" placeholder="21000" value={extra?.postalCode ?? ''} onChange={setField('postalCode')} />
+                <CheckedInput aria-label="Postal code" inputMode="numeric" placeholder="21000" value={extra?.postalCode ?? ''} check={checkPostalCode} onSave={(v) => store.setCompanyField(rec.id, 'postalCode', v)} />
               </IdentityRow>
             </Section>
 
@@ -294,14 +297,14 @@ function IdentityRow({ label, missing, badge, children }: { label: string; missi
 }
 
 /**
- * "Set status back" (CD-358): only to a status behind the current one. The automation then leaves
- * it there until "Back to automatic", but still lowers it when the facts drop below it.
+ * "Set status back" (CD-358): only to a status behind the current one. It stays there until the
+ * company's opportunities, projects or details change; then the automation takes over (CD-478).
  */
 function SetStatusDialog({ name, current, choices, onClose, onPick }: { name: string; current: CompanyStatus; choices: CompanyStatus[]; onClose: () => void; onPick: (status: CompanyStatus) => void }) {
   const [pick, setPick] = useState<CompanyStatus>(choices[choices.length - 1]!);
   return (
     <Modal maxWidth={440} onBackdrop={onClose}>
-      <ModalHeader title={`Set ${name} back`} sub={`It is ${COMPANY_STATUS_LABELS[current]} now. The status moves forward by itself; by hand it can only go back, and it stays there until Back to automatic.`} />
+      <ModalHeader title={`Set ${name} back`} sub={`It is ${COMPANY_STATUS_LABELS[current]} now. The status moves forward by itself; by hand it can only go back. It follows the company again as soon as its opportunities, projects or details change.`} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} role="radiogroup" aria-label="Status">
         {[...choices].reverse().map((st) => (
           <label key={st} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, cursor: 'pointer' }}>

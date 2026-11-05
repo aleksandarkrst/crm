@@ -66,6 +66,9 @@ describe('Lead → Opportunity, by itself', () => {
     expect((await company(c.id)).status).toBe('lead');
     // The name isn't one of the checks: a company can't be saved without one.
     expect((await call('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { name: '   ' } })).status).toBe(400);
+    // A postal code is five digits (CD-478); spaces are dropped.
+    expect((await call('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { postalCode: 'abc' } })).status).toBe(400);
+    expect(await ok('PATCH', `/crm/companies/${c.id}`, { ...as(), body: { postalCode: '11 000' } })).toMatchObject({ postalCode: '11000' });
   });
 
   it('follows a contact that moves to another company', async () => {
@@ -126,17 +129,18 @@ describe('setting the status by hand', () => {
     expect(refused.body.blockers).toContain('Matični broj');
   });
 
-  it('sets it back, and the automation leaves it there until Back to automatic', async () => {
+  it('sets it back; it holds while the facts stay, and the automation takes over when they change (CD-478)', async () => {
     const set = await ok<Company>('PATCH', `/crm/companies/${id}/status`, { ...as(), body: { status: 'opportunity' } });
     expect(set).toMatchObject({ status: 'opportunity', statusSetManually: true });
     expect((await history(id))[0]).toMatchObject({ from: 'client', to: 'opportunity', reason: 'manual' });
 
-    // Another won opportunity doesn't raise it.
-    await ok('POST', `/crm/deals/${(await newDeal(id, 'Another')).id}/move`, { ...as(), body: { stageId: wonStage().id } }, 200);
+    // An edit that changes nothing behind the status keeps it.
+    await ok('PATCH', `/crm/companies/${id}`, { ...as(), body: { notes: 'Called back in spring' } });
     expect((await company(id)).status).toBe('opportunity');
 
-    const back = await ok<Company>('PATCH', `/crm/companies/${id}/status`, { ...as(), body: { status: null } });
-    expect(back).toMatchObject({ status: 'client', statusSetManually: false });
+    // Another won opportunity is a new fact: the automation takes over again.
+    await ok('POST', `/crm/deals/${(await newDeal(id, 'Another')).id}/move`, { ...as(), body: { stageId: wonStage().id } }, 200);
+    expect(await company(id)).toMatchObject({ status: 'client', statusSetManually: false });
     expect((await history(id))[0]).toMatchObject({ from: 'opportunity', to: 'client', reason: 'automatic' });
   });
 

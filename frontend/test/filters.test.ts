@@ -61,6 +61,13 @@ describe('person filters', () => {
     assert.equal(matchField(fd('people'), { vals: ['u3'] }, ['u1', 'u3'], ctx), true);
   });
 
+  it('matches a text without accents or case (CD-478)', () => {
+    assert.equal(matchField(fd('site'), { op: 'contains', text: 'sabac' }, 'Mlekara Šabac', ctx), true);
+    assert.equal(matchField(fd('site'), { op: 'contains', text: 'ŠABAC' }, 'mlekara sabac', ctx), true);
+    assert.equal(matchField(fd('site'), { op: 'contains', text: 'djordje' }, 'Đorđe d.o.o.', ctx), true);
+    assert.equal(matchField(fd('site'), { op: 'contains', text: 'novi sad' }, 'Mlekara Šabac', ctx), false);
+  });
+
   it('says Me for the current user, first names for others, then a count', () => {
     const personName = (id: string) => ({ u1: 'Aleksandar Krstić', u2: 'Ana Petrović', u3: 'Marko Jovanović' })[id] ?? id;
     assert.equal(valueText(fd('owner'), { vals: ['u1', 'u2'] }, { me: 'u1', personName }), 'Me, Ana');
