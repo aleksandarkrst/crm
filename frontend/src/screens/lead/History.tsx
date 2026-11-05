@@ -14,7 +14,7 @@ const FILTERS = [
 ];
 
 /** A task's own entry ("Task added: …"): it carries the task's channel, but belongs under Tasks (CD-477). */
-const TASK_ENTRY = /^(Task added|Task removed|To-do removed): /;
+const TASK_ENTRY = /^(Task added|Task removed|To-do added|To-do removed): /;
 const inTab = (e: LogEntry, k: string) => (k === 'RS' ? e.channel === 'RS' || TASK_ENTRY.test(e.title) : e.channel === k && !TASK_ENTRY.test(e.title));
 
 /** The deal's activity timeline (CD-318): every entry with who did it; the field-level Changes view went. */

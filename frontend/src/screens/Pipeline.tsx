@@ -188,9 +188,10 @@ function PipelineBoard({ stages, leads }: { stages: Stage[]; leads: Lead[] }) {
                       <span className="badge badge-danger">Lost · {l.lostReason}</span>
                     </div>
                   ) : (
-                    // The stage's playbook step, or the badge when nothing is planned: never both (CD-477), as in the table.
-                    <div style={{ fontSize: 11.5, color: 'var(--text-2)', borderTop: '1px dashed var(--border)', paddingTop: 7, lineHeight: 1.35 }}>
-                      {needsNextStep(s, l) ? <NoNextStep /> : <>Next: {stageOf(s, l).activity}</>}
+                    // The stage's suggested step, and "Not scheduled" while no task or meeting plans it (CD-477).
+                    <div style={{ fontSize: 11.5, color: 'var(--text-2)', borderTop: '1px dashed var(--border)', paddingTop: 7, lineHeight: 1.35, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span>Next: {stageOf(s, l).activity}</span>
+                      {needsNextStep(s, l) && <NoNextStep />}
                     </div>
                   )}
                 </div>
@@ -282,7 +283,14 @@ function PipelineTable({ s, stages, leads, openLead }: { s: State; stages: Stage
               </span>
               <span className="pt-main">{ownerOf(s, l)}</span>
               <span className="pt-main" style={{ color: 'var(--text-2)' }}>
-                {lost ? <span className="badge badge-danger">Lost · {l.lostReason}</span> : needsNextStep(s, l) ? <NoNextStep /> : stageOf(s, l).activity}
+                {lost ? (
+                  <span className="badge badge-danger">Lost · {l.lostReason}</span>
+                ) : (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {stageOf(s, l).activity}
+                    {needsNextStep(s, l) && <NoNextStep />}
+                  </span>
+                )}
               </span>
             </div>
           );
@@ -316,8 +324,8 @@ function StallLabel({ stall }: { stall: number }) {
 
 function NoNextStep() {
   return (
-    <span className="badge badge-warn" data-testid="no-next-step" title="No dated open task and no planned meeting on this opportunity. Stage to-dos are not scheduled next steps.">
-      No next step
+    <span className="badge badge-warn" data-testid="no-next-step" title="No next step: the suggested step has no open task or planned meeting yet. Stage to-dos don't count.">
+      Not scheduled
     </span>
   );
 }

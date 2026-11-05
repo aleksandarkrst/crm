@@ -65,13 +65,20 @@ describe('removing a stage to-do', () => {
     expect(await activities(deal.id)).toContainEqual(expect.objectContaining({ title: 'To-do removed: Call the CFO', detail: 'It had been marked done.' }));
   });
 
-  it('logs nothing for an open or nameless one', async () => {
+  it('logs a named to-do added and removed, also when named after it was added; nothing for a nameless one', async () => {
     const deal = await newDeal('Never done');
+    const titles = async () => (await activities(deal.id)).map((a: { title: string }) => a.title);
     const open = await ok('POST', `/crm/deals/${deal.id}/tasks`, { ...as(), body: { stageId: funnel.stages[0]!.id, label: 'Check budget' } });
-    const blank = await ok('POST', `/crm/deals/${deal.id}/tasks`, { ...as(), body: { stageId: funnel.stages[0]!.id, label: '' } });
-    await ok('PATCH', `/crm/deal-tasks/${blank.id}`, { ...as(), body: { done: true } }, 200);
-    const before = await activities(deal.id);
+    const later = await ok('POST', `/crm/deals/${deal.id}/tasks`, { ...as(), body: { stageId: funnel.stages[0]!.id, label: '' } });
+    await ok('PATCH', `/crm/deal-tasks/${later.id}`, { ...as(), body: { label: 'Send the deck' } }, 200);
+    await ok('PATCH', `/crm/deal-tasks/${later.id}`, { ...as(), body: { label: 'Send the deck v2' } }, 200);
+    expect((await titles()).filter((t) => t.startsWith('To-do added'))).toEqual(expect.arrayContaining(['To-do added: Check budget', 'To-do added: Send the deck']));
+    expect((await titles()).filter((t) => t.startsWith('To-do added'))).toHaveLength(2);
     await ok('DELETE', `/crm/deal-tasks/${open.id}`, as());
+    expect(await activities(deal.id)).toContainEqual(expect.objectContaining({ title: 'To-do removed: Check budget', detail: null }));
+
+    const blank = await ok('POST', `/crm/deals/${deal.id}/tasks`, { ...as(), body: { stageId: funnel.stages[0]!.id, label: '' } });
+    const before = await activities(deal.id);
     await ok('DELETE', `/crm/deal-tasks/${blank.id}`, as());
     expect(await activities(deal.id)).toEqual(before);
   });

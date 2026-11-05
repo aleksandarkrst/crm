@@ -403,11 +403,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }
     };
     /** Coalesces typing into one write per field (inputs call their action on every keystroke). */
-    const saveLater = (key: string, write: () => Promise<unknown>, what?: string) => {
+    const saveLater = (key: string, write: () => Promise<unknown>, what?: string, after?: () => unknown) => {
       clearTimeout(saveTimers.current.get(key)?.timer);
       const run = () => {
         saveTimers.current.delete(key);
-        void save(write, undefined, what);
+        void save(write, after, what);
       };
       saveTimers.current.set(key, { timer: setTimeout(run, 600), run });
     };
@@ -952,7 +952,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         list[extraIdx] = val;
         return { extraTodos: { ...x.extraTodos, [key]: list } };
       });
-      if (id) saveLater('todo-label:' + id, () => crmApi.updateTask(id, { label: val.trim() }), 'the to-do name');
+      // Its first name logs "To-do added" (CD-477): reread the timeline after the save.
+      if (id) saveLater('todo-label:' + id, () => crmApi.updateTask(id, { label: val.trim() }), 'the to-do name', () => refreshLog(leadId));
     };
     const removeExtra = (leadId: string, stageId: string, extraIdx: number, taskIdx: number) => {
       const key = leadId + '::' + stageId;
@@ -975,7 +976,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       });
       if (id) {
         dropSave('todo-label:' + id);
-        // Removing a done to-do adds "To-do removed" to the timeline (CD-477).
+        // Removing a named to-do adds "To-do removed" to the timeline (CD-477).
         void save(() => crmApi.deleteTask(id), () => refreshLog(leadId), 'removing the to-do');
       }
     };
