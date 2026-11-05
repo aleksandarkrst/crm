@@ -104,6 +104,8 @@ export class CompanyStatusService {
         if (status === null) {
           await tx.update(companies).set({ statusSetManually: false }).where(eq(companies.id, id));
           await this.recompute(tx, ctx, [id]);
+        } else if (status === company.status && !company.statusSetManually) {
+          // Already there by itself (e.g. its open opportunities were just closed as lost): nothing to hold.
         } else {
           if (STATUS_RANK[status] > STATUS_RANK[company.status]) {
             const people = await tx.select().from(contacts).where(eq(contacts.companyId, id));

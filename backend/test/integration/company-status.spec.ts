@@ -163,7 +163,14 @@ describe('setting the status by hand', () => {
     expect(await company(old.id)).toMatchObject({ status: 'lead', statusSetManually: false });
   });
 
-    it('is for owners, admins and the company owner only', async () => {
+  it('setting the status it already has by itself changes nothing (the app closes the opportunities first)', async () => {
+    const c = await readyCompany('Linden Foods');
+    await ok('POST', `/crm/deals/${(await newDeal(c.id)).id}/lost`, { ...as(), body: { reason: 'No decision', note: 'Closed when the company was set to Not interested' } }, 200);
+    expect(await ok<Company>('PATCH', `/crm/companies/${c.id}/status`, { ...as(), body: { status: 'not_interested' } })).toMatchObject({ status: 'not_interested', statusSetManually: false });
+    expect((await history(c.id))[0]).toMatchObject({ to: 'not_interested', reason: 'automatic' });
+  });
+
+  it('is for owners, admins and the company owner only', async () => {
     expect((await call('PATCH', `/crm/companies/${id}/status`, { ...as(seller), body: { status: 'lead' } })).status).toBe(403);
     const theirs = await ok<Company>('POST', '/crm/companies', { ...as(seller), body: { name: 'Seller Co', pib: testPib() } });
     expect((await call('PATCH', `/crm/companies/${theirs.id}/status`, { ...as(seller), body: { status: 'not_interested' } })).status).toBe(200);
@@ -174,9 +181,9 @@ describe('the companies list', () => {
   it('filters by status, and by won or lost opportunities', async () => {
     const names = async (query: string) => (await ok<{ name: string }[]>('GET', `/crm/companies?${query}&limit=200`, as())).map((c) => c.name).sort();
     expect(await names('status=client')).toEqual(['Kestrel Logistics', 'Orchard Dental']);
-    expect(await names('status=not_interested,past_client')).toEqual(['Seller Co']);
+    expect(await names('status=not_interested,past_client')).toEqual(['Linden Foods', 'Seller Co']);
     expect(await names('outcome=won')).toEqual(['Kestrel Logistics', 'Orchard Dental']);
-    expect(await names('outcome=lost')).toEqual([]);
+    expect(await names('outcome=lost')).toEqual(['Linden Foods']);
     expect((await call('GET', '/crm/companies?status=customer', as())).status).toBe(400);
   });
 });
