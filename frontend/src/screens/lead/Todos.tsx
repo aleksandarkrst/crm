@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { CHANNEL_LABELS, SCRIPTS } from '../../store/seed';
 import { advanceBlockers, isoLabel, isOverdue, memberName, momentLabel, script, stageOf, stagesFor, taskOf, todayIso, todoItemsFor, wonBlocker } from '../../store/selectors';
 import { useStore } from '../../store/store';
@@ -13,6 +13,8 @@ export function Todos({ lead }: { lead: Lead }) {
   const [openTask, setOpenTask] = useState<string | null>(null);
   /** The stage whose new to-do takes the focus when it appears (CD-477). */
   const [naming, setNaming] = useState<string | null>(null);
+  /** A to-do's name when its field got the focus: blank means a draft, which goes if left blank (CD-477). */
+  const named = useRef('');
 
   const stages = stagesFor(s, lead.segment);
   const current = stageOf(s, lead);
@@ -111,9 +113,15 @@ export function Todos({ lead }: { lead: Lead }) {
                           aria-label="To-do name"
                           // A new to-do starts in its name; left without one, it goes (CD-477) instead of counting as open.
                           autoFocus={naming === g.st.id && !item.label}
-                          onFocus={() => setNaming(null)}
+                          onFocus={(e) => {
+                            setNaming(null);
+                            named.current = e.currentTarget.value.trim();
+                          }}
                           onBlur={(e) => {
-                            if (!e.currentTarget.value.trim()) store.removeExtra(lead.id, g.st.id, item.extraIdx!, i);
+                            if (e.currentTarget.value.trim()) return;
+                            // A draft left blank goes; a named one that was cleared keeps its name (delete is ×).
+                            if (!named.current) store.removeExtra(lead.id, g.st.id, item.extraIdx!, i);
+                            else store.renameExtra(lead.id, g.st.id, item.extraIdx!, named.current);
                           }}
                           onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                           onChange={(e) => store.renameExtra(lead.id, g.st.id, item.extraIdx!, e.target.value)}

@@ -46,6 +46,9 @@ describe('winning', () => {
     const moved = await ok('POST', `/crm/deals/${deal.id}/move`, { ...as(), body: { stageId: won.id } }, 200);
     expect(moved.outcome).toBe('won');
     expect(moved.closeDate).toBe(workspaceToday());
+    // Moved out of Won again: it is open, with no closing date.
+    const back = await ok('POST', `/crm/deals/${deal.id}/move`, { ...as(), body: { stageId: funnel.stages.filter((st) => !st.isWon).at(-1)!.id } }, 200);
+    expect(back).toMatchObject({ outcome: 'open', closeDate: null });
   });
 
   it('leaves the closing date alone on an ordinary move', async () => {

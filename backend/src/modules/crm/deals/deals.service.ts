@@ -340,6 +340,7 @@ export class DealsService {
         if (deal.lostAt) throw new ConflictException('This opportunity is lost. Reopen it before moving it to another stage.');
         if (stage.id === deal.stageId) return { ...deal, outcome: dealOutcome(deal, stage.isWon) };
         await this.assertCanAdvance(tx, deal, stage);
+        const [from] = await tx.select({ isWon: funnelStages.isWon }).from(funnelStages).where(eq(funnelStages.id, deal.stageId));
 
         const now = new Date();
         const [row] = await tx
@@ -349,7 +350,8 @@ export class DealsService {
             stageEnteredAt: now,
             closedAt: stage.isWon ? now : null,
             // Won today: that is its closing date (CD-477), the workspace's today.
-            ...(stage.isWon ? { closeDate: sql<string>`(select (now() at time zone t.timezone)::date from ${tenants} t where t.id = ${ctx.tenantId})` } : {}),
+            // Out of Won again: it isn't closed, so the date the win set goes too.
+            ...(stage.isWon ? { closeDate: sql<string>`(select (now() at time zone t.timezone)::date from ${tenants} t where t.id = ${ctx.tenantId})` } : from?.isWon ? { closeDate: null } : {}),
           })
           .where(eq(deals.id, id))
           .returning();

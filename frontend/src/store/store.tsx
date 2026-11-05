@@ -715,8 +715,9 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           return;
         }
       }
-      // Won today closes it today (CD-477), as the API records it.
-      const closeDate = stage?.won ? { closeDate: todayIso(cur().workspace.timezone) } : {};
+      // Won today closes it today (CD-477), as the API records it; out of Won it has no closing date again.
+      const wasWon = stages.find((st) => st.id === lead.stage)?.won;
+      const closeDate = stage?.won ? { closeDate: todayIso(cur().workspace.timezone) } : wasWon ? { closeDate: '' } : {};
       mapLead(leadId, (l) => ({ ...l, ...closeDate, stage: stageId, stall: 0, lateDays: 0, outcome: stage?.won ? 'won' : 'open', stageSince: new Date().toISOString() }));
       void save(() => crmApi.moveDeal(leadId, stageId), () => refreshLog(leadId), 'the stage move');
       // Not when it has its proposal already (one per opportunity, CD-120).
@@ -952,8 +953,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         list[extraIdx] = val;
         return { extraTodos: { ...x.extraTodos, [key]: list } };
       });
+      if (!id) return;
+      // A blank name isn't saved (CD-477): a draft left blank is removed, a cleared name comes back on blur.
+      if (!val.trim()) return dropSave('todo-label:' + id);
       // Its first name logs "To-do added" (CD-477): reread the timeline after the save.
-      if (id) saveLater('todo-label:' + id, () => crmApi.updateTask(id, { label: val.trim() }), 'the to-do name', () => refreshLog(leadId));
+      saveLater('todo-label:' + id, () => crmApi.updateTask(id, { label: val.trim() }), 'the to-do name', () => refreshLog(leadId));
     };
     const removeExtra = (leadId: string, stageId: string, extraIdx: number, taskIdx: number) => {
       const key = leadId + '::' + stageId;
