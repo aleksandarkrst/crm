@@ -189,7 +189,8 @@ describe('the team calendar, the absent manager, the weekly check', () => {
   });
 
   it('on Mondays the Admins get the records to check, once', async () => {
-    let monday = plus(1);
+    // 8 days out: past every day the other tests run the daily job for (at most 4 days out), so the Monday check is still unclaimed (CD-498).
+    let monday = plus(8);
     while (new Date(`${monday}T00:00:00Z`).getUTCDay() !== 1) monday = addDays(monday, 1);
     const run = await ok('POST', '/dev/timeoff/daily', { ...as(owner), body: { now: `${monday}T06:00:00Z` } }, 200);
     expect(run.sickChecks).toBe(1);

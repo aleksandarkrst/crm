@@ -345,9 +345,25 @@ export function Layout() {
  * account menu on the right. Records show their own name in the page, not in the header.
  */
 export function Screen({ title, parent, children }: { title: string; parent?: { label: string; to: string }; children: ReactNode }) {
+  const header = useRef<HTMLElement>(null);
+  // The header sticks to the top of the window; what sticks below it (the minutes toolbar, CD-378)
+  // reads its height from --screen-header-h, which changes on phones and when the header wraps.
+  useLayoutEffect(() => {
+    const el = header.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const publish = () => root.style.setProperty('--screen-header-h', `${el.offsetHeight}px`);
+    publish();
+    const watch = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(publish);
+    watch?.observe(el);
+    return () => {
+      watch?.disconnect();
+      root.style.removeProperty('--screen-header-h');
+    };
+  }, []);
   return (
     <>
-      <header className="screen-header">
+      <header ref={header} className="screen-header">
         <div className="header-title">
           {parent && (
             <>

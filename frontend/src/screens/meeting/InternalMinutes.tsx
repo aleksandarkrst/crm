@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { askConfirm } from '../../components/ConfirmDialog';
 import { RichText } from '../../components/RichText';
 import { CheckIcon, RemoveButton } from '../../components/ui';
@@ -381,7 +381,21 @@ export function RichField({
   // The frame keeps its height between the text and the formatted view, so nothing jumps.
   const [height, setHeight] = useState<number | undefined>(undefined);
   const caret = useRef<number | null>(null);
+  /** The selection a toolbar button or shortcut made, put back once its text has rendered. */
+  const selection = useRef<{ start: number; end: number } | null>(null);
   const writing = editable && (focused || !value.trim());
+
+  // The textarea grows with its text, so the page is the only thing that scrolls and the toolbar
+  // (sticky under the screen header) stays usable on long minutes (CD-378 QA, round 2). Measuring
+  // needs height auto for a moment, which can make the page shorter: the scroll position stays.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!writing || !el) return;
+    const y = window.scrollY;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+    if (window.scrollY !== y) window.scrollTo(window.scrollX, y);
+  }, [value, writing]);
 
   useEffect(() => {
     const el = ref.current;
@@ -402,13 +416,19 @@ export function RichField({
     if (!el) return;
     const r = make(el.value, el.selectionStart, el.selectionEnd);
     if (!r || r.text.length > max) return;
+    selection.current = { start: r.start, end: r.end };
     onChange(r.text);
     setFocused(true);
-    requestAnimationFrame(() => {
-      ref.current?.focus();
-      ref.current?.setSelectionRange(r.start, r.end);
-    });
   };
+  // The new text replaces the textarea's value, which puts the caret at the end; the selection goes
+  // back before the browser handles the next key, so Ctrl+B then Ctrl+I format the same text (CD-378 QA).
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !selection.current) return;
+    el.focus();
+    el.setSelectionRange(selection.current.start, selection.current.end);
+    selection.current = null;
+  }, [value, focused]);
   const askLink = (v: string, a: number, b: number) => {
     const raw = window.prompt('Link address', 'https://')?.trim();
     if (!raw || raw === 'https://') return null;

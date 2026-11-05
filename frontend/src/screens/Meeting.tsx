@@ -177,7 +177,8 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
         <MeetingGuests m={m} editable={editable} />
       </div>
 
-      <div className="lead-main card" style={{ minWidth: 0, overflow: 'hidden', marginTop: 16 }}>
+      {/* clip, not hidden: hidden would make the card the scroll box, and the minutes toolbar couldn't stick to the window (CD-378 QA). */}
+      <div className="lead-main card" style={{ minWidth: 0, overflow: 'clip', marginTop: 16 }}>
         <div className="meeting-tabs" role="tablist">
           {TABS.map((t) => (
             <button key={t.value} type="button" role="tab" aria-selected={tab === t.value} data-testid={'meeting-tab-' + t.value} className="composer-tab" onClick={() => openTab(t.value)} style={{ borderBottom: `2px solid ${tab === t.value ? 'var(--brand)' : 'transparent'}`, fontWeight: tab === t.value ? 600 : 500, color: tab === t.value ? 'var(--brand)' : 'var(--text-2)' }}>
