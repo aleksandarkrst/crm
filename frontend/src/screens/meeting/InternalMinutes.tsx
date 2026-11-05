@@ -385,6 +385,18 @@ export function RichField({
   const selection = useRef<{ start: number; end: number } | null>(null);
   const writing = editable && (focused || !value.trim());
 
+  // The textarea grows with its text, so the page is the only thing that scrolls and the toolbar
+  // (sticky under the screen header) stays usable on long minutes (CD-378 QA, round 2). Measuring
+  // needs height auto for a moment, which can make the page shorter: the scroll position stays.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!writing || !el) return;
+    const y = window.scrollY;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+    if (window.scrollY !== y) window.scrollTo(window.scrollX, y);
+  }, [value, writing]);
+
   useEffect(() => {
     const el = ref.current;
     if (!focused || !el || caret.current === null) return;
