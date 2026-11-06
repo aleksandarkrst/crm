@@ -122,6 +122,8 @@ describe('through the API', () => {
     const after = await ok('GET', `/crm/deals/${own.id}`, asB());
     expect(after.companyId).toBe(ownCo.id);
     expect(after.contacts).toEqual([]);
+    // A foreign contact can't become the primary contact through the link route either (CD-477).
+    expect(after.primaryContactId).toBeNull();
   });
 
   it("tenant A's data is unchanged after all of that", async () => {

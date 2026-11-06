@@ -430,10 +430,12 @@ export class DealsService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         await tx.insert(dealContacts).values({ tenantId: ctx.tenantId, dealId, contactId }).onConflictDoNothing();
-        await tx
+        const [promoted] = await tx
           .update(deals)
           .set({ primaryContactId: contactId })
-          .where(and(eq(deals.id, dealId), isNull(deals.primaryContactId)));
+          .where(and(eq(deals.id, dealId), isNull(deals.primaryContactId)))
+          .returning({ id: deals.id });
+        if (promoted) await this.audit.record(tx, ctx, { action: 'deal.updated', entityType: 'deal', entityId: dealId, data: { primaryContactId: contactId } });
       })
       .then(() => undefined)
       .catch(mapDbError);

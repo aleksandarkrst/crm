@@ -792,15 +792,25 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       // same, CD-477): the Pipeline card shows it too. The reload turns the link into the primary contact.
       const becomesPrimary = !leadById(cur(), leadId)?.contactId;
       set((x) => ({ links: { ...x.links, [leadId]: [...(x.links[leadId] || []), personId] } }));
-      void save(() => crmApi.linkContact(leadId, contactId), becomesPrimary ? reload : undefined, 'linking ' + p.name);
-      flash(becomesPrimary ? p.name + ' is now the primary contact' : p.name + ' linked to this opportunity');
+      if (!becomesPrimary) flash(p.name + ' linked to this opportunity');
+      void save(
+        () => crmApi.linkContact(leadId, contactId),
+        becomesPrimary
+          ? async () => {
+              await reload();
+              // Said once the server has it: another tab may have set a primary contact meanwhile.
+              flash(leadById(cur(), leadId)?.contactId === contactId ? p.name + ' is now the primary contact' : p.name + ' linked to this opportunity');
+            }
+          : undefined,
+        'linking ' + p.name,
+      );
     };
     const unlinkPerson = (leadId: string, personId: string) => {
       const p = personById(cur(), personId);
       const contactId = p?.contactId;
       if (!p || !contactId) return;
       if (p.primary && p.leadId === leadId) {
-        flash(p.name + ' is the primary contact of this lead');
+        flash(p.name + ' is the primary contact of this opportunity');
         return;
       }
       set((x) => ({ links: { ...x.links, [leadId]: (x.links[leadId] || []).filter((i) => i !== personId) } }));
