@@ -55,3 +55,10 @@ export function checkActivityCode(input: string): Checked {
   if (!value) return { ok: true, value: '' };
   return /^\d{4}$/.test(value) ? { ok: true, value } : { ok: false, error: 'The activity code (šifra delatnosti) is 4 digits, e.g. 6201.' };
 }
+
+/** A Serbian postal code (CD-478): five digits, spaces dropped ("11 000" is 11000). */
+export function checkPostalCode(input: string): Checked {
+  const value = input.replace(/\s/g, '');
+  if (!value) return { ok: true, value: '' };
+  return /^\d{5}$/.test(value) ? { ok: true, value } : { ok: false, error: 'The postal code is 5 digits, e.g. 21000.' };
+}

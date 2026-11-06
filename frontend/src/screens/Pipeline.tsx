@@ -170,20 +170,21 @@ function PipelineBoard({ stages, leads }: { stages: Stage[]; leads: Lead[] }) {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     {/* The fit score is switched off with CHAMP (CD-362). <FitBadge score={l.score} /> */}
-                    <StallLabel stall={l.stall} />
+                    {/* Won and Lost opportunities have no work left: no staleness warning (CD-478). */}
+                    {l.outcome === 'open' && <StallLabel stall={l.stall} />}
                     {l.lateDays > 0 && (
                       <span className="badge badge-warn" data-testid="card-late">
                         Late · {l.lateDays} {l.lateDays === 1 ? 'day' : 'days'}
                       </span>
                     )}
                     {/* The stage owner (CD-363), shown when it isn't the opportunity's owner. */}
-                    {!lost && stageOwnerId(s, l) && stageOwnerId(s, l) !== l.ownerId && (
+                    {l.outcome === 'open' && stageOwnerId(s, l) && stageOwnerId(s, l) !== l.ownerId && (
                       <span className="avatar" title={'Stage owner: ' + memberName(s, stageOwnerId(s, l))} style={{ width: 20, height: 20, fontSize: 9, marginLeft: 'auto' }}>
                         {initialsOf(memberName(s, stageOwnerId(s, l)))}
                       </span>
                     )}
                   </div>
-                  {lost ? (
+                  {l.outcome === 'won' ? null : lost ? (
                     <div style={{ borderTop: '1px dashed var(--border)', paddingTop: 7 }}>
                       <span className="badge badge-danger">Lost · {l.lostReason}</span>
                     </div>
@@ -278,13 +279,13 @@ function PipelineTable({ s, stages, leads, openLead }: { s: State; stages: Stage
               {/* <span>
                 <FitBadge score={l.score} />
               </span> */}
-              <span>
-                <StallLabel stall={l.stall} />
-              </span>
+              <span>{l.outcome === 'open' && <StallLabel stall={l.stall} />}</span>
               <span className="pt-main">{ownerOf(s, l)}</span>
               <span className="pt-main" style={{ color: 'var(--text-2)' }}>
                 {lost ? (
                   <span className="badge badge-danger">Lost · {l.lostReason}</span>
+                ) : l.outcome === 'won' ? (
+                  <span className="badge badge-brand">Won</span>
                 ) : (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     {stageOf(s, l).activity}

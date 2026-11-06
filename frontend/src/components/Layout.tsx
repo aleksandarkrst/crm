@@ -96,7 +96,7 @@ function Sidebar() {
   const { pathname } = useLocation();
   // The profile name follows edits on the Profile screen; the session name is the signed-in user.
   const name = s.profile.name || session.userName;
-  const overdue = overdueTasks(s).length;
+  const overdue = overdueTasks(s, session.userId).length;
   const pendingApprovals = usePendingApprovals(session.tenant.role === 'owner' || session.tenant.role === 'admin' || s.visitScope.seesTeam);
   const module = currentModule(pathname, session.userId);
   const terms = useTerms();
@@ -158,7 +158,7 @@ function Sidebar() {
       {switcher && <ModuleSwitcher onClose={closeSwitcher} trigger={trigger} />}
       <nav ref={nav} aria-label={module.name} className="side-nav" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: NAV_GAP, width: '100%', flex: '1 1 0', minHeight: 0 }}>
         {items.map((n, i) => (
-          <NavItem key={n.to} {...n} badge={n.to === paths.today ? overdue : n.to === paths.timeOff() ? pendingApprovals : undefined} badgeTitle={n.to === paths.timeOff() ? 'waiting for approval' : undefined} className={(n.phone ? '' : 'nav-desktop ') + (i >= fit ? 'nav-overflow' : '')} />
+          <NavItem key={n.to} {...n} badge={n.to === paths.today ? overdue : n.to === paths.timeOff() ? pendingApprovals : undefined} badgeTitle={n.to === paths.timeOff() ? 'waiting for approval' : 'of your tasks overdue'} className={(n.phone ? '' : 'nav-desktop ') + (i >= fit ? 'nav-overflow' : '')} />
         ))}
         {fit < items.length && <SideMore items={items.slice(fit)} />}
         <MoreMenu name={name} items={items.filter((n) => !n.phone)} onModules={() => setSwitcher(true)} />

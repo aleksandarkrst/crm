@@ -457,9 +457,10 @@ export const stageTargetDays = (s: State, lead: Lead): number | null => stageOf(
 /** A task from "New task" that isn't done and was due before `today` (the workspace's ISO date). */
 export const isOverdue = (t: LeadTask, today: string): boolean => !t.done && !!t.due && t.due < today;
 /** Overdue tasks on deals in this workspace, by the workspace's today. */
-export const overdueTasks = (s: State): LeadTask[] => {
+/** Someone's overdue tasks: the Today badge counts what Today lists by default, your own (CD-478). */
+export const overdueTasks = (s: State, ownerId: string): LeadTask[] => {
   const today = todayIso(s.workspace.timezone);
-  return s.leadTasks.filter((t) => isOverdue(t, today) && s.leads.some((l) => l.id === t.leadId));
+  return s.leadTasks.filter((t) => t.ownerId === ownerId && isOverdue(t, today) && s.leads.some((l) => l.id === t.leadId));
 };
 /**
  * An open deal with no open task from "New task" and no planned meeting still to come (CD-130):

@@ -201,6 +201,16 @@ export function allOpen(value: FilterValue, id: string): FilterValue {
   return setField(value, id, { op: 'is', vals: [GROUP, ...(v.op === 'isnot' ? [] : (v.vals ?? []).filter((x) => x.startsWith('__') && x !== GROUP))], seen: undefined });
 }
 
+/** Lower case without accents, so "markovic" finds "Marković". */
+export const fold = (v: string | null | undefined): string =>
+  (v ?? '')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/đ/g, 'dj')
+    .replace(/Đ/g, 'Dj')
+    .toLowerCase()
+    .trim();
+
 // ---------------------------------------------------------------- matching
 
 const listOf = (raw: FilterRaw): string[] => (Array.isArray(raw) ? [...raw] : raw === null || raw === undefined || raw === '' ? [] : [String(raw)]);
@@ -226,10 +236,11 @@ export function matchField(fd: FilterField<never>, v: FieldFilter | undefined, r
       return (!v.min || x >= Number(v.min)) && (!v.max || x <= Number(v.max));
     }
     case 'text': {
-      const t = listOf(raw).join(' ').trim().toLowerCase();
+      // Without accents (CD-478), as Ctrl K searches: "sabac" finds "Šabac".
+      const t = fold(listOf(raw).join(' ').trim());
       if (v.op === 'isempty') return !t;
       if (v.op === 'notempty') return !!t;
-      return t.includes((v.text || '').trim().toLowerCase());
+      return t.includes(fold((v.text || '').trim()));
     }
     case 'date': {
       // Records with no date never match a date filter.

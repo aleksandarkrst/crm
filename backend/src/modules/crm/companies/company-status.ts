@@ -3,8 +3,8 @@
  * and what happened with it, never picked: Lead until its identity, address and a qualified contact
  * are complete, then Opportunity; Client once an opportunity is won (or it has a project); Past client
  * when its last project is completed and nothing is open; Not interested when every opportunity was
- * lost. A person can only set it back (a lower rank); the automation then never raises it again until
- * "Back to automatic", but still lowers it when the facts no longer support it.
+ * lost. A person can only set it back (a lower rank); it stays there until the facts change, and
+ * then the automation takes over again (CD-478).
  */
 import { COMPANY_STATUSES, type CompanyStatus } from '../../../shared/database/schema';
 
@@ -93,10 +93,10 @@ export function computeStatus(input: { company: StatusCompany; contacts: StatusC
 }
 
 /**
- * The status to keep. Automatic: what the facts support. Set by hand: the hand-set status, unless
- * the facts no longer support even that (then the lower, computed one).
+ * What a status set by hand is held against (CD-478): the status the facts support and the states of
+ * the company's opportunities and projects. While it stays the same the hand-set status holds; once
+ * it changes, the automation takes over again.
  */
-export function effectiveStatus(computed: CompanyStatus, manual: CompanyStatus | null): CompanyStatus {
-  if (!manual) return computed;
-  return STATUS_RANK[computed] < STATUS_RANK[manual] ? computed : manual;
+export function factsFingerprint(input: Parameters<typeof computeStatus>[0]): string {
+  return [computeStatus(input), [...input.opportunities].sort().join(','), [...input.projects].sort().join(',')].join('|');
 }

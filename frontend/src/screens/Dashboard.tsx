@@ -86,6 +86,11 @@ export function Dashboard() {
     };
   });
 
+  // The header counts every opportunity in view; the funnel only the open and won ones of its funnel (CD-478), so it says what it leaves out.
+  const lostInView = dashLeads.length - liveLeads.length;
+  const otherFunnels = liveLeads.filter((l) => l.segment !== dashSeg).length;
+  const funnelLeftOut = [lostInView && `${lostInView} lost`, otherFunnels && `${otherFunnels} in other funnels`].filter(Boolean).join(', ');
+
   const today = new Date();
   const payments: { leadId: string; currency?: string; when: Date; amount: number }[] = [];
   // Payments without a date (a product without a billing start date, an installment without a
@@ -192,7 +197,9 @@ export function Dashboard() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <span className="card-title">Pipeline funnel</span>
-                <span className="card-sub">Opportunities and value by stage</span>
+                <span className="card-sub" data-testid="funnel-sub">
+                  Opportunities and value by stage{funnelLeftOut ? ` · not counted: ${funnelLeftOut}` : ''}
+                </span>
               </div>
               <select value={dashSeg} onChange={(e) => setDashSeg(e.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--white)', borderRadius: 8, padding: '8px 11px', fontSize: 12.5, color: 'var(--ink)' }}>
                 {funnelOptions(s).map((o) => (

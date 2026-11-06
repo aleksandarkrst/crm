@@ -1443,12 +1443,22 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         flash('Not saved: ' + errText(err), 7000);
       }
     };
-    /** "Set status back…" or "Back to automatic" (CD-358); the API refuses a move forward and says why. */
-    const setCompanyStatus = async (companyId: string, status: CompanyStatus | null) => {
+    /**
+     * "Set status back…" (CD-358); the API refuses a move forward and says why. With `close`, those
+     * open opportunities are marked lost first (CD-478), so the status is held against them as lost.
+     */
+    const setCompanyStatus = async (companyId: string, status: CompanyStatus | null, close?: { leadIds: string[]; reason: LostReason }) => {
+      const closed = close ? ` · ${close.leadIds.length === 1 ? '1 opportunity' : close.leadIds.length + ' opportunities'} closed as lost` : '';
       try {
-        const row = await crmApi.setCompanyStatus(companyId, status);
+        // The API closes them in the same step, so the status is set by hand, not by the automation (CD-478).
+        const row = await crmApi.setCompanyStatus(companyId, status, close ? { reason: close.reason } : undefined);
         set((x) => ({ extraCompanies: x.extraCompanies.map((c) => (c.id === companyId ? { ...c, status: row.status, statusManual: row.statusSetManually, statusChangedAt: row.statusChangedAt } : c)) }));
-        flash(status ? `Status set back to ${COMPANY_STATUS_LABELS[row.status]}` : `The status is automatic again: ${COMPANY_STATUS_LABELS[row.status]}`);
+        const lostAt = new Date().toISOString();
+        for (const id of close?.leadIds ?? []) {
+          mapLead(id, (l) => ({ ...l, outcome: 'lost', lostReason: close!.reason, lostNote: 'Closed when the company was set to Not interested', lostAt }));
+          void refreshLog(id).catch(() => undefined);
+        }
+        flash((status ? `Status set back to ${COMPANY_STATUS_LABELS[row.status]}` : `The status is automatic again: ${COMPANY_STATUS_LABELS[row.status]}`) + closed);
       } catch (err) {
         flash('Status not changed: ' + errText(err), 7000);
       }
