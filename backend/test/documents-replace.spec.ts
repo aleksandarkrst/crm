@@ -83,8 +83,8 @@ describe('replaceTemplate storage rollback', () => {
     const next = buildDocx([{ text: 'Lost {{company.name}}' }]);
     const storage = {
       getBuffer: vi.fn().mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' })),
-      putBuffer: vi.fn(),
-      delete: vi.fn(),
+      putBuffer: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
     };
     let withTenant = 0;
     const database = {
