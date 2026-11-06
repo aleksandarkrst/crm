@@ -422,11 +422,21 @@ export class DealsService {
       .catch(mapDbError);
   }
 
+  /**
+   * Links a contact to the deal. An opportunity without a primary contact takes it as its primary one
+   * (CD-477): the Pipeline card and table show the primary contact, so they agree with the Summary.
+   */
   linkContact(ctx: TenantContext, dealId: string, contactId: string) {
     return this.database
-      .withTenant(ctx.tenantId, (tx) =>
-        tx.insert(dealContacts).values({ tenantId: ctx.tenantId, dealId, contactId }).onConflictDoNothing(),
-      )
+      .withTenant(ctx.tenantId, async (tx) => {
+        await tx.insert(dealContacts).values({ tenantId: ctx.tenantId, dealId, contactId }).onConflictDoNothing();
+        const [promoted] = await tx
+          .update(deals)
+          .set({ primaryContactId: contactId })
+          .where(and(eq(deals.id, dealId), isNull(deals.primaryContactId)))
+          .returning({ id: deals.id });
+        if (promoted) await this.audit.record(tx, ctx, { action: 'deal.updated', entityType: 'deal', entityId: dealId, data: { primaryContactId: contactId } });
+      })
       .then(() => undefined)
       .catch(mapDbError);
   }
