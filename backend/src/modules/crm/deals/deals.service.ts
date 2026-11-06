@@ -7,7 +7,7 @@ import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { activities, companies, contacts, DEAL_OUTCOMES, SALE_TYPES, dealContacts, dealDocuments, type DealOutcome, deals, dealStageStates, dealTasks, funnels, funnelStages, LOST_REASONS, meetings, QUALIFICATION_STEPS, tenants } from '../../../shared/database/schema';
+import { activities, companies, contacts, DEAL_OUTCOMES, SALE_TYPES, dealContacts, dealDocuments, type DealOutcome, deals, dealStageStates, dealTasks, funnels, funnelStages, LOST_REASONS, meetings, QUALIFICATION_STEPS, tenants, users } from '../../../shared/database/schema';
 import { JobsService } from '../../../shared/events/jobs.service';
 import { ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { currencyCode } from '../currency';
@@ -299,6 +299,13 @@ export class DealsService {
         }
         if (qualifiedChange !== null) await this.log(tx, ctx, id, null, qualifiedChange ? 'Marked Qualified' : 'No longer Qualified', null);
         if (before && input.ownerUserId !== undefined) await this.notifyAssigned(tx, ctx, id, before.ownerUserId, row.ownerUserId);
+        // A new owner is part of the opportunity's story (CD-477): who had it, who has it now.
+        if (before && input.ownerUserId !== undefined && before.ownerUserId !== row.ownerUserId) {
+          const ids = [before.ownerUserId, row.ownerUserId].filter((u): u is string => !!u);
+          const people = ids.length ? await tx.select({ id: users.id, name: sql<string>`coalesce(${users.displayName}, ${users.email})` }).from(users).where(inArray(users.id, ids)) : [];
+          const nameOf = (u: string | null) => people.find((p) => p.id === u)?.name ?? 'nobody';
+          await this.log(tx, ctx, id, null, `Owner: ${nameOf(row.ownerUserId)}`, `Was ${nameOf(before.ownerUserId)}.`);
+        }
         await this.audit.record(tx, ctx, { action: 'deal.updated', entityType: 'deal', entityId: id, data: input });
         // Another company, or a funnel change into a won stage, moves the company status (CD-358).
         if (before?.companyId !== row.companyId || funnelChange) await this.status.recompute(tx, ctx, [before?.companyId, row.companyId]);
@@ -333,11 +340,19 @@ export class DealsService {
         if (deal.lostAt) throw new ConflictException('This opportunity is lost. Reopen it before moving it to another stage.');
         if (stage.id === deal.stageId) return { ...deal, outcome: dealOutcome(deal, stage.isWon) };
         await this.assertCanAdvance(tx, deal, stage);
+        const [from] = await tx.select({ isWon: funnelStages.isWon }).from(funnelStages).where(eq(funnelStages.id, deal.stageId));
 
         const now = new Date();
         const [row] = await tx
           .update(deals)
-          .set({ stageId: stage.id, stageEnteredAt: now, closedAt: stage.isWon ? now : null })
+          .set({
+            stageId: stage.id,
+            stageEnteredAt: now,
+            closedAt: stage.isWon ? now : null,
+            // Won today: that is its closing date (CD-477), the workspace's today.
+            // Out of Won again: it isn't closed, so the date the win set goes too.
+            ...(stage.isWon ? { closeDate: sql<string>`(select (now() at time zone t.timezone)::date from ${tenants} t where t.id = ${ctx.tenantId})` } : from?.isWon ? { closeDate: null } : {}),
+          })
           .where(eq(deals.id, id))
           .returning();
         await this.history.record(tx, ctx, { dealId: id, kind: 'moved', fromStageId: deal.stageId, toStageId: stage.id, outcome: stage.isWon ? 'won' : 'open' }, now);

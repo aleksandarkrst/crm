@@ -10,7 +10,7 @@ import { paths } from '../lib/paths';
 import { dealsCsv } from '../store/exportCsv';
 import { filterPeople, openAndWon, opportunityFields, WON } from '../store/filterFields';
 import { allOpen, applyFilters, clearAll, type FilterValue, isActive, markSeen, matchField, pruneList, withNewSubs } from '../store/filters';
-import { funnelOptions, initialsOf, memberName, needsNextStep, ownerOf, stageOf, stageOwnerId, todayIso, valueNum, valueTotal } from '../store/selectors';
+import { funnelOptions, initialsOf, memberName, needsNextStep, opportunityName, ownerOf, stageOf, stageOwnerId, todayIso, valueNum, valueTotal } from '../store/selectors';
 import type { Lead, SegKey, Stage, State } from '../store/types';
 import { useStore } from '../store/store';
 import { useBoardView } from '../store/useBoardView';
@@ -158,11 +158,15 @@ function PipelineBoard({ stages, leads }: { stages: Stage[]; leads: Lead[] }) {
                   style={{ ...BOARD_CARD, background: lost ? 'var(--panel)' : 'var(--white)', cursor: lost ? 'pointer' : 'grab', opacity: dragId === l.id ? 0.45 : 1 }}
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.25 }}>{l.company}</span>
+                    {/* The opportunity's own name, its company under it (CD-477). */}
+                    <span style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.25 }} data-testid="card-title">
+                      {opportunityName(l)}
+                    </span>
                     <span style={{ fontSize: 11, color: 'var(--brand)', whiteSpace: 'nowrap' }}>{l.value}</span>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                    {l.contact} · {l.role}
+                    {[opportunityName(l) !== l.company ? l.company : '', l.contact].filter(Boolean).join(' · ')}
+                    {l.role ? ` · ${l.role}` : ''}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     {/* The fit score is switched off with CHAMP (CD-362). <FitBadge score={l.score} /> */}
@@ -185,13 +189,10 @@ function PipelineBoard({ stages, leads }: { stages: Stage[]; leads: Lead[] }) {
                       <span className="badge badge-danger">Lost · {l.lostReason}</span>
                     </div>
                   ) : (
-                    <div style={{ fontSize: 11.5, color: 'var(--text-2)', borderTop: '1px dashed var(--border)', paddingTop: 7, lineHeight: 1.35 }}>
-                      Next: {stageOf(s, l).activity}
-                      {needsNextStep(s, l) && (
-                        <div style={{ marginTop: 6 }}>
-                          <NoNextStep />
-                        </div>
-                      )}
+                    // The stage's suggested step, and "Not scheduled" while no task or meeting plans it (CD-477).
+                    <div style={{ fontSize: 11.5, color: 'var(--text-2)', borderTop: '1px dashed var(--border)', paddingTop: 7, lineHeight: 1.35, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span>Next: {stageOf(s, l).activity}</span>
+                      {needsNextStep(s, l) && <NoNextStep />}
                     </div>
                   )}
                 </div>
@@ -228,7 +229,7 @@ function PipelineTable({ s, stages, leads, openLead }: { s: State; stages: Stage
   const sortValue = (l: Lead): string | number => {
     switch (sort.key) {
       case 'company':
-        return `${l.company} ${l.title ?? ''}`.toLowerCase();
+        return `${opportunityName(l)} ${l.company}`.toLowerCase();
       case 'contact':
         return (l.contact ?? '').toLowerCase();
       case 'stage':
@@ -265,9 +266,9 @@ function PipelineTable({ s, stages, leads, openLead }: { s: State; stages: Stage
             <div key={l.id} className="table-row clickable" data-testid="pipeline-table-row" data-lost={lost || undefined} onClick={() => openLead(l.id)}>
               <span className="pt-cell">
                 <span className="pt-main" style={{ fontWeight: 600 }}>
-                  {l.company}
+                  {opportunityName(l)}
                 </span>
-                {l.title && <span className="pt-sub">{l.title}</span>}
+                {opportunityName(l) !== l.company && <span className="pt-sub">{l.company}</span>}
               </span>
               <span className="pt-cell">
                 <span className="pt-main">{l.contact}</span>
@@ -281,7 +282,16 @@ function PipelineTable({ s, stages, leads, openLead }: { s: State; stages: Stage
               <span>{l.outcome === 'open' && <StallLabel stall={l.stall} />}</span>
               <span className="pt-main">{ownerOf(s, l)}</span>
               <span className="pt-main" style={{ color: 'var(--text-2)' }}>
-                {lost ? <span className="badge badge-danger">Lost · {l.lostReason}</span> : l.outcome === 'won' ? <span className="badge badge-brand">Won</span> : needsNextStep(s, l) ? <NoNextStep /> : stageOf(s, l).activity}
+                {lost ? (
+                  <span className="badge badge-danger">Lost · {l.lostReason}</span>
+                ) : l.outcome === 'won' ? (
+                  <span className="badge badge-brand">Won</span>
+                ) : (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {stageOf(s, l).activity}
+                    {needsNextStep(s, l) && <NoNextStep />}
+                  </span>
+                )}
               </span>
             </div>
           );
@@ -315,8 +325,8 @@ function StallLabel({ stall }: { stall: number }) {
 
 function NoNextStep() {
   return (
-    <span className="badge badge-warn" data-testid="no-next-step" title="No dated open task and no planned meeting on this opportunity. Stage to-dos are not scheduled next steps.">
-      No next step
+    <span className="badge badge-warn" data-testid="no-next-step" title="No next step: the suggested step has no open task or planned meeting yet. Stage to-dos don't count.">
+      Not scheduled
     </span>
   );
 }
