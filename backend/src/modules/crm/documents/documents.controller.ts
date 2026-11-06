@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, Res, StreamableFile, UploadedFile, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query, Res, StreamableFile, UploadedFile, UploadedFiles, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { memoryStorage } from 'multer';
@@ -76,6 +76,15 @@ export class DocumentsController {
   @Upload()
   createTemplate(@Tenant() ctx: TenantContext, @UploadedFile() file: UploadedDocx | undefined, @Body(new ZodPipe(CreateTemplate)) body: CreateTemplate) {
     return this.documents.createTemplate(ctx, file, body);
+  }
+
+  /** Replaces an existing template's .docx and metadata (CD-487). multipart: `file`, `name`, `docType`. */
+  @Put('document-templates/:id')
+  @RateLimit('heavy')
+  @RequireTenant('admin')
+  @Upload()
+  replaceTemplate(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @UploadedFile() file: UploadedDocx | undefined, @Body(new ZodPipe(CreateTemplate)) body: CreateTemplate) {
+    return this.documents.replaceTemplate(ctx, id, file, body);
   }
 
   @Get('document-templates/:id/file')

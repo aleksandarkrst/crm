@@ -128,6 +128,7 @@ export function initialState(): State {
     personaOpen: false,
     personaBase: '',
     templateOpen: false,
+    templateEditing: null,
     templateType: 'Proposal',
 
     fieldOpen: false,
