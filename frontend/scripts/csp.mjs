@@ -21,8 +21,9 @@ function sentry() {
   }
 }
 
-// Amplitude's US-zone endpoints (CD-116): events, session replay, replay config, SDK diagnostics.
-const AMPLITUDE_HOSTS = ['https://api2.amplitude.com', 'https://api-sr.amplitude.com', 'https://sr-client-cfg.amplitude.com', 'https://diagnostics.prod.us-west-2.amplitude.com'];
+// Amplitude's US-zone endpoints (CD-116): events, session replay, replay config, SDK diagnostics, and
+// Guides & Surveys config (CD-490: initAll always adds that plugin; blocked, it flooded Sentry).
+const AMPLITUDE_HOSTS = ['https://api2.amplitude.com', 'https://api-sr.amplitude.com', 'https://sr-client-cfg.amplitude.com', 'https://diagnostics.prod.us-west-2.amplitude.com', 'https://gs.amplitude.com'];
 
 export function policy() {
   const s = sentry();

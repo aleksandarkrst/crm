@@ -9,16 +9,18 @@ import { Modal, ModalHeader } from './ui';
  * it is open (lib/session.ts), so nothing typed is lost: signing in again sends them. Signing in
  * happens right here (the password) or in a popup (Google), so this page and its unsaved edits stay.
  */
-export function SessionEndedDialog({ email, name, onSignOut }: { email: string; name: string; onSignOut: () => void }) {
+export function SessionEndedDialog(props: { email: string; name: string; onSignOut: () => void }) {
   const [ended, setEnded] = useState(false);
+  useEffect(() => watchSession(setEnded), []);
+  // Mounted only when shown, so a signed-in page doesn't ask for the sign-in options (CD-490).
+  return ended ? <SignInAgain {...props} /> : null;
+}
+
+function SignInAgain({ email, name, onSignOut }: { email: string; name: string; onSignOut: () => void }) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const options = useSignupOptions();
-
-  useEffect(() => watchSession(setEnded), []);
-
-  if (!ended) return null;
 
   const oidc = authMode === 'oidc';
   const again = async (google: boolean) => {
