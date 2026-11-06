@@ -4,7 +4,7 @@
 // Project and Task.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, newUserWithWorkspace, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, eventually, newUserWithWorkspace, steps, useBrowser } from '../lib/harness.mjs';
 
 const navLabels = (page) => page.$$eval('.nav-item', (els) => els.map((el) => el.textContent.trim()));
 
@@ -39,9 +39,13 @@ describe('workspace terms', () => {
       await page.type(`[data-testid=term-${key}]`, value);
     }
     await click(page, '[data-testid=save-terms]');
-    // Title stays "Project hierarchy" on this route; wait for the Names fields (and the API) instead.
-    await page.waitForFunction(() => document.querySelector('[data-testid=term-project]')?.value === 'Job' && document.querySelector('[data-testid=term-task]')?.value === 'Activity');
-    assert.deepEqual((await api(page, '/workspace')).terms, { project: 'Job', projects: 'Jobs', task: 'Activity', tasks: 'Activities' });
+    // Title stays "Project hierarchy" on this route; inputs already show Job/Activity from typing, so
+    // wait until the API has the saved terms (not the draft values).
+    const saved = await eventually(async () => {
+      const terms = (await api(page, '/workspace')).terms;
+      return terms.project === 'Job' && terms.task === 'Activity' && terms;
+    });
+    assert.deepEqual(saved, { project: 'Job', projects: 'Jobs', task: 'Activity', tasks: 'Activities' });
 
     // The other tab, without a reload (the live hint).
     await other.waitForFunction(() => {

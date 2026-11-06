@@ -44,6 +44,23 @@ describe('replaceTemplate storage rollback', () => {
     expect(storage.delete).not.toHaveBeenCalled();
   });
 
+  it('fails closed when getBuffer fails for a reason other than missing file', async () => {
+    const next = buildDocx([{ text: 'Should not write {{company.name}}' }]);
+    const storage = {
+      getBuffer: vi.fn().mockRejectedValue(Object.assign(new Error('EACCES'), { code: 'EACCES' })),
+      putBuffer: vi.fn(),
+      delete: vi.fn(),
+    };
+    const database = {
+      withTenant: vi.fn(async () => ({ id: 'tpl-1', key: 'templates/tpl-1.docx', name: 'Original' })),
+    };
+    const service = new DocumentsService(database as never, storage as never, {} as never, {} as never);
+
+    await expect(service.replaceTemplate(ctx, 'tpl-1', uploaded(next), { name: 'Next', docType: 'Quote' })).rejects.toMatchObject({ code: 'EACCES' });
+    expect(storage.putBuffer).not.toHaveBeenCalled();
+    expect(storage.delete).not.toHaveBeenCalled();
+  });
+
   it('still replaces when the previous .docx is missing (restored DB)', async () => {
     const next = buildDocx([{ text: 'Recovered {{company.name}}' }]);
     const puts: Buffer[] = [];

@@ -185,8 +185,12 @@ export class DocumentsService {
     });
     if (!existing) throw new NotFoundException('Template not found');
     // A row without a file (restored DB, or storage wiped) must still be replaceable — Edit is the
-    // recovery path. Only keep previous bytes when they exist, so a failed update can restore them.
-    const previous = await this.storage.getBuffer(ctx.tenantId, existing.key).catch(() => null);
+    // recovery path. Only ENOENT means "no previous"; any other read error fails closed so we don't
+    // overwrite then delete a file that is still on disk (EACCES, EMFILE, …).
+    const previous = await this.storage.getBuffer(ctx.tenantId, existing.key).catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === 'ENOENT') return null;
+      throw err;
+    });
     await this.storage.putBuffer(ctx.tenantId, existing.key, file!.buffer);
     try {
       return await this.database.withTenant(ctx.tenantId, async (tx) => {
