@@ -184,7 +184,9 @@ export class DocumentsService {
       return row;
     });
     if (!existing) throw new NotFoundException('Template not found');
-    const previous = await this.storage.getBuffer(ctx.tenantId, existing.key);
+    // A row without a file (restored DB, or storage wiped) must still be replaceable — Edit is the
+    // recovery path. Only keep previous bytes when they exist, so a failed update can restore them.
+    const previous = await this.storage.getBuffer(ctx.tenantId, existing.key).catch(() => null);
     await this.storage.putBuffer(ctx.tenantId, existing.key, file!.buffer);
     try {
       return await this.database.withTenant(ctx.tenantId, async (tx) => {
@@ -204,7 +206,8 @@ export class DocumentsService {
         return presentTemplate(row!);
       });
     } catch (err) {
-      await this.storage.putBuffer(ctx.tenantId, existing.key, previous).catch(() => undefined);
+      if (previous) await this.storage.putBuffer(ctx.tenantId, existing.key, previous).catch(() => undefined);
+      else await this.storage.delete(ctx.tenantId, existing.key).catch(() => undefined);
       return mapDbError(err);
     }
   }
