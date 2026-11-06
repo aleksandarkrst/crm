@@ -21,18 +21,18 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@nestjs/common": "^12.2.0",
-    "@nestjs/core": "^12.2.0",
-    "@nestjs/platform-express": "^12.2.0",
-    "@sentry/node": "^11.9.0",
+    "@nestjs/common": "^12.3.2",
+    "@nestjs/core": "^12.3.2",
+    "@nestjs/platform-express": "^12.3.2",
+    "@sentry/node": "^11.10.0",
     "dejavu-fonts-ttf": "^2.37.3",
     "docxtemplater": "^3.71.1",
     "drizzle-orm": "^0.45.4",
     "express": "^5.3.0",
     "helmet": "^8.3.0",
-    "jose": "^6.2.13",
+    "jose": "^6.2.14",
     "nestjs-pino": "^5.3.1",
-    "nodemailer": "^10.2.1",
+    "nodemailer": "^10.3.1",
     "pdfkit": "^0.20.2",
     "pg": "^8.23.1",
     "pg-boss": "^12.38.0",
@@ -45,7 +45,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@nestjs/testing": "^12.2.0",
+    "@nestjs/testing": "^12.3.2",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.3.0",
     "@types/node": "^24.19.2",
@@ -59,7 +59,7 @@
     "pdf-parse": "^2.4.5",
     "pino-pretty": "^13.2.0",
     "typescript": "~6.0.2",
-    "typescript-eslint": "^8.72.0",
+    "typescript-eslint": "^8.72.1",
     "vitest": "^5.0.5"
   },
   "allowScripts": {
