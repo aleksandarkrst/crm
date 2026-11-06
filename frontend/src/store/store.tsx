@@ -752,7 +752,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           unitPrice: num(l.price),
           discountKind: l.discountKind,
           discountValue: num(l.discount),
-          vatRate: Math.min(100, num(l.vat)),
+          vatRate: num(l.vat),
           billingFrequency: l.frequency,
           billingCycles: l.frequency === 'one_time' ? null : l.cycles,
         })),
@@ -1874,7 +1874,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           unit: draft.unit.trim() || null,
           unitPrice: num(draft.price),
           quantity: num(draft.qty) || 1,
-          vatRate: Math.min(100, num(draft.vat)),
+          vatRate: num(draft.vat),
           billingFrequency: draft.frequency,
           billingCycles: draft.frequency === 'one_time' ? null : draft.cycles,
         };

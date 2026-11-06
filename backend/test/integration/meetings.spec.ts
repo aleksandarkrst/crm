@@ -295,6 +295,18 @@ describe('who may change and delete meetings', () => {
     await ok('DELETE', `/crm/meetings/${m.id}`, as(owner));
     expect((await call('DELETE', `/crm/meetings/${m.id}`, as(owner))).status).toBe(404);
   });
+
+  it("takes a deleted meeting's entries off its deal timeline and says it was deleted (CD-479)", async () => {
+    const co = await company('Deleted meeting Co');
+    const d = await deal('Deleted meeting deal', co.id);
+    const keep = await create(owner, co.id, { title: 'Stays', dealId: d.id });
+    const m = await create(owner, co.id, { title: 'Gone soon', dealId: d.id });
+    await ok('POST', `/crm/meetings/${m.id}/cancel`, as(owner), 200);
+    await ok('DELETE', `/crm/meetings/${m.id}`, as(owner));
+    const entries = (await ok('GET', `/crm/deals/${d.id}/activities`, as(owner))).map((a: Json) => [a.channel, a.title]);
+    expect(entries).toContainEqual([null, 'Meeting deleted · Gone soon']);
+    expect(entries.filter(([channel]: Json[]) => channel === 'MT')).toEqual([['MT', `Meeting scheduled · ${keep.title}`]]);
+  });
 });
 
 describe('status changes', () => {

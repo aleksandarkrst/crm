@@ -8,6 +8,7 @@ import { DatabaseService, type Tx } from '../../../shared/database/database.serv
 import { mapDbError } from '../../../shared/database/errors';
 import { JobsService } from '../../../shared/events/jobs.service';
 import {
+  activities,
   companies,
   contacts,
   deals,
@@ -415,8 +416,15 @@ export class MeetingsService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         if (await this.minutesSent(tx, id)) throw new ConflictException(SENT_KEEPS);
-        const [row] = await tx.delete(meetings).where(eq(meetings.id, id)).returning({ id: meetings.id, title: meetings.title });
+        const [row] = await tx.delete(meetings).where(eq(meetings.id, id)).returning({ id: meetings.id, title: meetings.title, dealId: meetings.dealId });
         if (!row) throw new NotFoundException('Meeting not found');
+        if (row.dealId) {
+          // The deal's timeline drops the meeting's entries and says it was deleted (CD-479).
+          // shortcut: entries are matched by the meeting's current title, so ones written before a rename stay; link activities to meetings if that matters.
+          const titles = ['scheduled', 'held', 'cancelled', 'restored'].map((verb) => `Meeting ${verb} · ${row.title}`);
+          await tx.delete(activities).where(and(eq(activities.dealId, row.dealId), eq(activities.channel, 'MT'), inArray(activities.title, titles)));
+          await this.activities.record(tx, ctx, row.dealId, { channel: null, title: `Meeting deleted · ${row.title}`, detail: null });
+        }
         await this.audit.record(tx, ctx, { action: 'meeting.deleted', entityType: 'meeting', entityId: id, data: { title: row.title } });
       })
       .catch(mapDbError);

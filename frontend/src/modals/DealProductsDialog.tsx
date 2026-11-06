@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { BillingFields } from '../components/BillingFields';
 import { Modal, RemoveButton } from '../components/ui';
-import { billingText, dealTotals, isRecurring, TAX_MODES } from '../store/dealMath';
+import { amountProblem, billingText, dealTotals, isRecurring, MAX_PRICE, MAX_QTY, TAX_MODES } from '../store/dealMath';
 import { currencyOptions } from '../store/seed';
 import { closeIsoOf, curOf, currencySymbol, defaultStart, leadById, linesOf, moneyExact, num } from '../store/selectors';
 import { type DealProductsDraft, useStore } from '../store/store';
@@ -45,6 +45,9 @@ export function DealProductsDialog() {
   const installmentSum = draft.installments.reduce((a, i) => a + num(i.amount), 0);
   const mismatch = draft.installments.length > 0 && Math.abs(installmentSum - totals.oneTimeTotal) >= 0.01;
 
+  /** A line's out-of-range numbers (CD-479), shown under it and blocking Save. */
+  const problemsOf = (l: DealLine) => ({ price: amountProblem(l.price, 'Price', MAX_PRICE), qty: amountProblem(l.qty, 'Quantity', MAX_QTY), vat: draft.taxMode === 'none' ? '' : amountProblem(l.vat, 'Tax %', 100) });
+
   const patch = (fn: (d: DealProductsDraft) => DealProductsDraft) => {
     setError('');
     setDraft((d) => (d ? fn(d) : d));
@@ -71,6 +74,8 @@ export function DealProductsDialog() {
 
   const submit = async () => {
     if (draft.lines.some((l) => !l.itemId)) return setError('Pick a product on every line.');
+    const problem = draft.lines.flatMap((l) => Object.values(problemsOf(l))).find(Boolean);
+    if (problem) return setError(problem);
     if (draft.lines.some((l) => l.discountKind === 'percent' && num(l.discount) > 100) || draft.discounts.some((x) => x.kind === 'percent' && num(x.value) > 100)) return setError('A percentage discount is at most 100%.');
     if (draft.installments.length && recurring) return setError('Installments are for opportunities with one-time products only. Remove the recurring products or the installments.');
     const minIso = closeIsoOf(lead);
@@ -147,6 +152,8 @@ export function DealProductsDialog() {
               {draft.lines.map((l, i) => {
                 const it = s.catalog.find((c) => c.id === l.itemId);
                 const t = totals.lines[i]!;
+                const bad = problemsOf(l);
+                const lineError = bad.price || bad.qty || bad.vat;
                 return (
                   <div key={l.id} data-testid="deal-line" style={{ borderBottom: '1px solid var(--divider)', padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: LINE_COLS, gap: 12, alignItems: 'center' }}>
@@ -159,8 +166,8 @@ export function DealProductsDialog() {
                         ))}
                       </select>
                       <input className="form-input" type="date" aria-label="Billing start date" min={closeIsoOf(lead) || undefined} value={l.start} onChange={(e) => patchLine(l.id, { start: e.target.value })} />
-                      <input className="form-input" inputMode="decimal" aria-label="Price" value={l.price} onChange={(e) => patchLine(l.id, { price: e.target.value })} />
-                      <input className="form-input" inputMode="decimal" aria-label="Quantity" title={it?.unit || undefined} value={l.qty} onChange={(e) => patchLine(l.id, { qty: e.target.value })} />
+                      <input className="form-input" inputMode="decimal" aria-label="Price" aria-invalid={!!bad.price || undefined} value={l.price} onChange={(e) => patchLine(l.id, { price: e.target.value })} />
+                      <input className="form-input" inputMode="decimal" aria-label="Quantity" aria-invalid={!!bad.qty || undefined} title={it?.unit || undefined} value={l.qty} onChange={(e) => patchLine(l.id, { qty: e.target.value })} />
                       <span style={{ display: 'flex', gap: 4 }}>
                         <input className="form-input" inputMode="decimal" aria-label="Discount" value={l.discount} onChange={(e) => patchLine(l.id, { discount: e.target.value })} style={{ minWidth: 0, flex: 1 }} />
                         <select className="form-input" aria-label="Discount type" value={l.discountKind} onChange={(e) => patchLine(l.id, { discountKind: e.target.value as DiscountKind })} style={{ padding: '6px 4px' }}>
@@ -168,12 +175,17 @@ export function DealProductsDialog() {
                           <option value="amount">{sym}</option>
                         </select>
                       </span>
-                      <input className="form-input" inputMode="decimal" aria-label="Tax %" value={l.vat} disabled={draft.taxMode === 'none'} onChange={(e) => patchLine(l.id, { vat: e.target.value })} />
+                      <input className="form-input" inputMode="decimal" aria-label="Tax %" aria-invalid={!!bad.vat || undefined} value={l.vat} disabled={draft.taxMode === 'none'} onChange={(e) => patchLine(l.id, { vat: e.target.value })} />
                       <span data-testid="line-amount" style={{ fontSize: 13.5, fontWeight: 600, textAlign: 'right' }}>
                         {fmt(t.perCycle)}
                       </span>
                       <RemoveButton title="Remove product" box={28} size={14} stroke={1.9} style={{ borderRadius: 7 }} onClick={() => patch((d) => ({ ...d, lines: d.lines.filter((x) => x.id !== l.id) }))} />
                     </div>
+                    {lineError && (
+                      <div role="alert" data-testid="line-error" style={{ fontSize: 12.5, color: 'var(--danger)' }}>
+                        {lineError}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5, color: 'var(--text-2)' }}>
                       <button type="button" className="btn-plain" data-testid="line-billing" style={{ fontSize: 12.5, padding: '5px 10px', borderRadius: 7 }} onClick={() => setBillingOpen(billingOpen === l.id ? null : l.id)}>
                         {billingText(l.frequency, l.cycles)} ✎
