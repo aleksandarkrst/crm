@@ -788,9 +788,12 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const p = personById(cur(), personId);
       const contactId = p?.contactId;
       if (!p || !contactId) return;
+      // An opportunity without a primary contact takes the linked one as its primary (the API does the
+      // same, CD-477): the Pipeline card shows it too. The reload turns the link into the primary contact.
+      const becomesPrimary = !leadById(cur(), leadId)?.contactId;
       set((x) => ({ links: { ...x.links, [leadId]: [...(x.links[leadId] || []), personId] } }));
-      void save(() => crmApi.linkContact(leadId, contactId), undefined, 'linking ' + p.name);
-      flash(p.name + ' linked to this lead');
+      void save(() => crmApi.linkContact(leadId, contactId), becomesPrimary ? reload : undefined, 'linking ' + p.name);
+      flash(becomesPrimary ? p.name + ' is now the primary contact' : p.name + ' linked to this opportunity');
     };
     const unlinkPerson = (leadId: string, personId: string) => {
       const p = personById(cur(), personId);
