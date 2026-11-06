@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { askConfirm } from '../components/ConfirmDialog';
 import { FieldRow, GhostInput, GhostSelect, Modal, ModalHeader, RemoveButton, Switch } from '../components/ui';
 import { Icon } from '../components/icons';
 import { Screen } from '../components/Layout';
@@ -438,7 +439,12 @@ function TeamTab() {
                 onClick={() => {
                   if (invited) return revokeInvitation(m.id);
                   if (!self) return setRemoving(m);
-                  if (window.confirm(`Leave ${session.tenant.name}? You will need a new invitation to come back.`)) removeMember(m.id);
+                  void askConfirm({
+                    title: `Leave ${session.tenant.name}?`,
+                    message: 'You will need a new invitation to come back.',
+                    confirmLabel: 'Leave',
+                    danger: true,
+                  }).then((ok) => ok && removeMember(m.id));
                 }}
               />
             ) : (

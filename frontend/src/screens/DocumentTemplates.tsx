@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { askConfirm } from '../components/ConfirmDialog';
 import { canManageTemplates, type DocTemplate, docMoment, fileSize, type PlaceholderReference } from '../store/documents';
 import { useStore } from '../store/store';
 import { mergeFieldGroupHeading, mergeFieldReference, opportunityCopy } from '../store/wording';
@@ -16,8 +17,9 @@ export function TemplatesTab() {
     void loadTemplates();
   }, [loadTemplates]);
 
-  const onDelete = (t: DocTemplate) => {
-    if (window.confirm(`Delete the template "${t.name}"? Documents already generated from it are kept.`)) void deleteTemplate(t);
+  const onDelete = async (t: DocTemplate) => {
+    if (!(await askConfirm({ title: `Delete the template "${t.name}"?`, message: 'Documents already generated from it are kept.', confirmLabel: 'Delete', danger: true }))) return;
+    void deleteTemplate(t);
   };
   const onEdit = (t: DocTemplate) => set({ templateOpen: true, templateEditing: t });
 
@@ -61,7 +63,7 @@ export function TemplatesTab() {
                     <button type="button" className="btn-outline" data-testid="edit-template" onClick={() => onEdit(t)}>
                       Edit
                     </button>
-                    <button type="button" className="btn btn-secondary" style={{ fontSize: 12.5, padding: '8px 13px', borderRadius: 7 }} onClick={() => onDelete(t)}>
+                    <button type="button" className="btn btn-secondary" style={{ fontSize: 12.5, padding: '8px 13px', borderRadius: 7 }} onClick={() => void onDelete(t)}>
                       Delete
                     </button>
                   </>

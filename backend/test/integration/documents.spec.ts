@@ -343,6 +343,17 @@ describe('replacing a template (CD-487)', () => {
       form: form(next, 'updated.docx', { name: 'Gone', docType: 'Quote' }),
     });
     expect(missing.status).toBe(404);
+
+    // Another workspace cannot replace this template (RLS / tenant filter → 404); original stays.
+    const outsiderPut = await raw('PUT', `/crm/document-templates/${template.id}`, {
+      token: outsider.token,
+      tenant: otherTenant,
+      form: form(buildDocx([{ text: 'Intruder {{company.name}}' }]), 'intruder.docx', { name: 'Hijacked', docType: 'Quote' }),
+    });
+    expect(outsiderPut.status).toBe(404);
+    const still = (await ok<Template[]>('GET', '/crm/document-templates', { token: owner.token, tenant })).find((t) => t.id === template.id);
+    expect(still).toMatchObject({ name: 'Replaceable v2', fileName: 'updated.docx' });
+    expect(docxText((await raw('GET', `/crm/document-templates/${template.id}/file`, { token: owner.token, tenant })).bytes)).toContain('Updated {{company.name}} body');
   });
 });
 

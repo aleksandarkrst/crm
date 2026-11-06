@@ -191,4 +191,13 @@ describe('pending invitation role (CD-487)', () => {
     await ok('POST', `/invitations/${token}/accept`, { token: invitee.token }, 200);
     expect((await call('PATCH', `/team/invitations/${invitation.id}`, { ...as(), body: { role: 'admin' } })).status).toBe(404);
   });
+
+  it("another tenant can't change this tenant's pending invitation role", async () => {
+    const other = await signIn('inv-role-xtenant');
+    const otherTenant = await createTenant(other, 'Role Elsewhere');
+    const { invitation } = await invite(`role-x-${Date.now()}@example.test`, 'member');
+    expect((await call('PATCH', `/team/invitations/${invitation.id}`, { token: other.token, tenant: otherTenant, body: { role: 'admin' } })).status).toBe(404);
+    expect((await call('PATCH', `/team/invitations/${invitation.id}`, { token: other.token, tenant, body: { role: 'admin' } })).status).toBe(403);
+    expect((await ok('GET', '/team', as())).invitations.find((i: { id: string }) => i.id === invitation.id)?.role).toBe('member');
+  });
 });
