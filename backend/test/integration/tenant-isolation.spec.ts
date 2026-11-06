@@ -122,6 +122,8 @@ describe('through the API', () => {
     const after = await ok('GET', `/crm/deals/${own.id}`, asB());
     expect(after.companyId).toBe(ownCo.id);
     expect(after.contacts).toEqual([]);
+    // A foreign contact can't become the primary contact through the link route either (CD-477).
+    expect(after.primaryContactId).toBeNull();
   });
 
   it("tenant A's data is unchanged after all of that", async () => {
@@ -179,7 +181,7 @@ describe('in SQL, as the runtime role', () => {
 
   it('sees no tenant rows at all without a tenant set', async () => {
     await asTenant(null, async () => {
-      for (const table of ['deals', 'companies', 'contacts', 'deal_lines', 'deal_tasks', 'deal_stage_states', 'products', 'activities', 'timeoff_policies', 'timeoff_policy_experience_rules', 'employee_timeoff_profiles', 'vacation_entitlements', 'vacation_balance_adjustments', 'vacation_balance_expiries', 'timeoff_notices', 'timeoff_reasons', 'timeoff_requests', 'timeoff_request_days', 'public_holiday_preloads', 'hr_documents', 'sick_leaves', 'sick_leave_types', 'timesheet_absences']) {
+      for (const table of ['deals', 'companies', 'contacts', 'deal_lines', 'deal_tasks', 'deal_stage_states', 'products', 'activities', 'timeoff_policies', 'timeoff_policy_experience_rules', 'employee_timeoff_profiles', 'vacation_entitlements', 'vacation_balance_adjustments', 'vacation_balance_expiries', 'timeoff_notices', 'timeoff_reasons', 'timeoff_requests', 'timeoff_request_days', 'public_holiday_preloads', 'hr_documents', 'sick_leaves', 'sick_leave_types', 'timesheet_absences', 'meeting_reminders']) {
         const { rows } = await db.query(`select count(*)::int as n from ${table}`);
         expect(rows[0].n, table).toBe(0);
       }

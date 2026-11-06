@@ -50,7 +50,7 @@ export function CompanyCard() {
     setBusy(false);
   };
   return (
-    <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="company-details">
+    <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 18 }} data-testid="company-details">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <span style={{ fontSize: 15, fontWeight: 600 }}>Company details</span>
         <span className="emp-note">

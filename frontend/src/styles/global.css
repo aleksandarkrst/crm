@@ -7,6 +7,8 @@
  */
 
 :root {
+  /* The dark veil behind dialogs and over a picture being changed. */
+  --scrim: rgba(13, 36, 28, 0.55);
   --ink: #0F1B16;
   --text-2: #475750;
   --muted: #93A39B;
@@ -182,7 +184,7 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 
 /* ---------------------------------------------------------------- modals & toast */
 
-.overlay { position: fixed; inset: 0; background: rgba(13, 36, 28, 0.55); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 45; overscroll-behavior: contain; }
+.overlay { position: fixed; inset: 0; background: var(--scrim); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 45; overscroll-behavior: contain; }
 html.modal-open, html.modal-open body { overflow: hidden; }
 .modal { background: var(--white); border-radius: 14px; width: 100%; padding: 26px; animation: dcFade .22s ease-out both; display: flex; flex-direction: column; gap: 16px; max-height: 88vh; overflow-y: auto; }
 .modal-title { font-family: var(--font-display); font-weight: 500; letter-spacing: -0.03em; font-size: 22px; line-height: 1.2; }
@@ -209,7 +211,8 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .choice-pill { cursor: pointer; border: 1px solid var(--border); background: var(--white); color: var(--text-2); border-radius: 999px; padding: 8px 14px; font-size: 12.5px; font-weight: 500; }
 .choice-pill.on { border-color: var(--ink); background: var(--ink); color: var(--bg-soft); }
 
-.toast { position: fixed; bottom: 22px; right: 22px; max-width: 440px; background: var(--forest); color: var(--bg-soft); padding: 13px 18px; border-radius: 9px; font-size: 13px; z-index: 60; animation: dcFade .2s ease-out both; box-shadow: 0 8px 28px rgba(13, 36, 28, 0.28); }
+/* --scrollbar-pad: the scrollbar a modal's scroll lock hid (CD-493), so the toast stays put. */
+.toast { position: fixed; bottom: 22px; right: calc(22px + var(--scrollbar-pad, 0px)); max-width: 440px; background: var(--forest); color: var(--bg-soft); padding: 13px 18px; border-radius: 9px; font-size: 13px; z-index: 60; animation: dcFade .2s ease-out both; box-shadow: 0 8px 28px rgba(13, 36, 28, 0.28); }
 
 .hover-underline:hover { text-decoration: underline; }
 
@@ -368,6 +371,9 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .deal-header { display: flex; flex-direction: column; gap: 12px; }
 .deal-header-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .deal-title { font-family: var(--font-display); font-size: 22px; font-weight: 500; letter-spacing: -0.03em; line-height: 1.2; padding: 3px 8px; margin-left: -8px; border-radius: 8px; min-width: 0; flex: 1 1 280px; }
+/* The name and its error under it (CD-477): the wrapper takes the title's place in the row. */
+.deal-title-wrap { display: flex; flex-direction: column; gap: 4px; flex: 1 1 280px; min-width: 0; }
+.deal-title-wrap .deal-title { flex: none; width: 100%; }
 .deal-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .btn-lost { border: 0; background: var(--danger); color: #FFFFFF; font-weight: 600; }
 .btn-lost:hover { filter: brightness(1.08); }
@@ -593,14 +599,18 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .minutes-state.is-error { color: var(--danger); font-weight: 600; }
 .minutes-note { font-size: 12.5px; color: var(--text-2); background: var(--bg-soft); border-radius: 8px; padding: 9px 12px; overflow-wrap: anywhere; }
 .minutes-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.minutes-field-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 26px; }
+/* The label and toolbar stay in view, right under the sticky screen header, while the field scrolls past (CD-378 QA: long minutes). */
+.minutes-field-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 26px; position: sticky; top: var(--screen-header-h, 0px); z-index: 2; background: var(--white); padding: 6px 0 0; margin-top: -6px; }
 .minutes-toolbar { display: inline-flex; gap: 4px; }
 .minutes-toolbar button { border: 1px solid var(--border); background: var(--white); color: var(--ink); border-radius: 6px; padding: 3px 9px; font-size: 12px; cursor: pointer; }
 .minutes-toolbar button:hover { background: var(--bg-soft); }
 .minutes-text { width: 100%; box-sizing: border-box; line-height: 1.5; min-height: 92px; }
+/* The textarea grows with its text (RichField), so no scrollbar or resize handle of its own. */
+textarea.minutes-text { overflow-y: hidden; resize: none; }
+/* The formatted text in the editor's frame once it loses the focus (CD-378); a click edits again. */
+.minutes-view { cursor: text; }
+.minutes-view .rich-text { font-size: 13px; line-height: 1.5; }
 .minutes-preview { font-size: 13.5px; line-height: 1.55; border: 1px solid transparent; border-radius: 7px; padding: 8px 10px; margin: 0 -10px; overflow-wrap: anywhere; }
-.minutes-preview.is-editable { cursor: text; }
-.minutes-preview.is-editable:hover { border-color: var(--border); background: var(--bg-soft); }
 .minutes-steps > .table-row { padding: 9px 16px; }
 .minutes-steps > .table-row:last-child { border-bottom: 0; }
 .minutes-step > * { min-width: 0; }
@@ -684,6 +694,23 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .ext-status-row { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; min-width: 0; overflow-wrap: anywhere; }
 .ext-error { color: var(--danger); }
 .ext-retry { align-self: flex-start; padding: 6px 12px; }
+/* Download PDF (CD-378) and Retry under a send's recipients. */
+.ext-status-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ext-pdf { padding: 6px 12px; }
+/* Settings → Workspace info (CD-378): the logo in a circle, the name, Edit; the dialog's big circle shows a pencil on hover. */
+.ws-info { display: flex; flex-direction: column; gap: 12px; }
+.ws-info-row { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.ws-info-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.ws-info-label { font-size: 12px; color: var(--text-2); }
+.ws-info-name { font-size: 17px; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+.ws-avatar { position: relative; flex: 0 0 auto; width: 64px; height: 64px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: var(--bg-soft); border: 1px solid var(--border); color: var(--text-2); font-size: 20px; font-weight: 600; padding: 0; font-family: inherit; }
+.ws-avatar img { width: 100%; height: 100%; object-fit: contain; background: var(--white); }
+.ws-avatar-lg { width: 120px; height: 120px; font-size: 34px; cursor: pointer; }
+.ws-avatar-edit { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--scrim); color: var(--white); opacity: 0; transition: opacity 0.12s; }
+.ws-avatar-lg:hover .ws-avatar-edit, .ws-avatar-lg:focus-visible .ws-avatar-edit { opacity: 1; }
+.ws-modal-logo { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ws-modal-formats { font-size: 12px; color: var(--text-2); }
+.ws-info-error { font-size: 12px; color: var(--danger); }
 .ext-people { display: flex; flex-direction: column; gap: 6px; }
 .ext-person { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; min-width: 0; overflow-wrap: anywhere; text-transform: none; letter-spacing: 0; font-weight: 400; }
 .ext-person.is-off { cursor: default; color: var(--muted); }
@@ -722,7 +749,7 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .cal-quick-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
 .meeting-field-when { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; flex: 1; }
 .meeting-field-when .ghost { width: auto; flex: 0 1 auto; padding: 6px 6px; }
-.meeting-field-link { font-size: 12px; white-space: nowrap; color: var(--brand); }
+.field-link { font-size: 12px; white-space: nowrap; color: var(--brand); }
 .meeting-title-input { min-width: 0; }
 .meeting-agenda-input { width: 100%; min-height: 84px; resize: vertical; line-height: 1.5; font-family: inherit; }
 .icon-row > select.ghost, .icon-row > input.ghost { flex: 1; min-width: 0; }
@@ -1099,6 +1126,13 @@ a.meeting-person-row:hover { text-decoration: none; color: var(--brand); }
 .meeting-head .deal-title { flex: 1 1 auto; }
 .meeting-body { margin-top: 16px; padding: 16px 20px; }
 .meeting-body .icon-row { min-height: 36px; }
+.mf-side { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.mf-reminders { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.reminder-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.reminder-row .mf-input { padding: 6px 8px; font-size: 13px; }
+.reminder-amount { flex: 0 0 72px; width: 72px; }
+.reminder-unit { flex: 0 1 110px; width: auto; }
+.reminder-add { align-self: flex-start; padding: 5px 10px; }
 
 @media (max-width: 900px) {
   .mf-cols { grid-template-columns: minmax(0, 1fr); gap: 18px; }

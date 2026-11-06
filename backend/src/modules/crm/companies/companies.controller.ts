@@ -43,7 +43,7 @@ export class CompaniesController {
   /** "Set status back…" or "Back to automatic" (CD-358): owners, admins and the company's owner. */
   @Patch(':id/status')
   setStatus(@Tenant() ctx: TenantContext, @Param('id', new ZodPipe(UuidParam)) id: string, @Body(new ZodPipe(SetCompanyStatus)) body: SetCompanyStatus) {
-    return this.status.setStatus(ctx, id, body.status);
+    return this.status.setStatus(ctx, id, body.status, body.closeOpen);
   }
 
   /** The company's status changes, newest first, with who and why (CD-358). */

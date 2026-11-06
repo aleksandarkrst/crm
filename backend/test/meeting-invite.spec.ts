@@ -60,6 +60,15 @@ describe('the .ics (RFC 5545)', () => {
     expect(lines).toContain('UID:meeting-3f2a@pultly.com');
   });
 
+  it('alerts an hour before with one VALARM on a request, and none on a cancellation (CD-376)', () => {
+    const lines = unfold(buildIcs(event));
+    expect(lines.filter((l) => l === 'BEGIN:VALARM')).toHaveLength(1);
+    const alarm = lines.slice(lines.indexOf('BEGIN:VALARM'), lines.indexOf('END:VALARM') + 1);
+    expect(alarm).toEqual(['BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Quarterly review', 'TRIGGER:-PT1H', 'END:VALARM']);
+    expect(lines.indexOf('END:VALARM')).toBeLessThan(lines.indexOf('END:VEVENT'));
+    expect(unfold(buildIcs({ ...event, method: 'CANCEL' }))).not.toContain('BEGIN:VALARM');
+  });
+
   it('leaves out an empty location', () => {
     expect(prop(buildIcs({ ...event, location: null }), 'LOCATION')).toBeUndefined();
   });
@@ -131,6 +140,8 @@ describe('the meeting emails to internal participants', () => {
     expect(mail.text).toContain('Date: Tue 6 Oct 2026');
     expect(mail.text).toContain('Time: 10:00–11:00 (Europe/Belgrade)');
     expect(mail.text).toContain('Location: Acme HQ');
+    expect(mail.text).toContain('Map: https://www.google.com/maps/search/?api=1&query=Acme%20HQ');
+    expect(mail.html).toContain('href="https://www.google.com/maps/search/?api=1&amp;query=Acme%20HQ"');
     expect(mail.text).toContain('Company: Acme d.o.o.');
     expect(mail.text).toContain('Opportunity: Acme renewal');
     expect(mail.text).toContain('https://app.example.com/meetings/m-1');
@@ -147,6 +158,8 @@ describe('the meeting emails to internal participants', () => {
     expect(lines).toContain('DTSTART:20261006T080000Z');
     expect(lines).toContain('ORGANIZER;CN="Ana Petrović":mailto:no-reply@pultly.com');
     expect(prop(ics!.content, 'ATTENDEE')).toContain('mailto:bo@example.com');
+    expect(prop(ics!.content, 'LOCATION')).toBe('LOCATION:Acme HQ');
+    expect(lines).toContain('URL:https://app.example.com/meetings/m-1');
     expect(prop(ics!.content, 'DESCRIPTION')).toBe('DESCRIPTION:Company: Acme d.o.o.\\nOpportunity: Acme renewal\\nOpen in Pultly: https://app.example.com/meetings/m-1');
     expect(`${mail.subject}\n${mail.text}\n${mail.html}\n${ics!.content}`.replace(/https?:\/\/\S+/g, '')).not.toMatch(/deal/i);
   });
@@ -164,11 +177,24 @@ describe('the meeting emails to internal participants', () => {
     expect(lines).toEqual(expect.arrayContaining(['METHOD:CANCEL', 'STATUS:CANCELLED', 'SEQUENCE:3', 'UID:meeting-m-1@pultly.com']));
   });
 
+  it('a Teams or Zoom location is the link itself: no map, and the .ics URL joins it (CD-377)', () => {
+    const join = 'https://teams.microsoft.com/l/meetup-join/19%3ameeting';
+    const mail = meetingInviteEmail({ ...input, meeting: { ...input.meeting, location: join } });
+    expect(mail.text).toContain(`Location: ${join}`);
+    expect(mail.text).not.toContain('Map:');
+    expect(mail.html).not.toContain('google.com/maps');
+    expect(unfold(mail.attachments![0]!.content)).toContain(`URL:${join}`);
+    const www = meetingInviteEmail({ ...input, meeting: { ...input.meeting, location: 'www.zoom.us/j/1' } });
+    expect(www.text).not.toContain('Map:');
+    expect(unfold(www.attachments![0]!.content)).toContain('URL:https://www.zoom.us/j/1');
+  });
+
   it('says when the organizer left, and leaves out a missing deal and location', () => {
     const mail = meetingInviteEmail({ ...input, meeting: { ...input.meeting, organizerName: null, dealTitle: null, location: null } });
     expect(mail.text).toContain('Organizer: left the workspace');
     expect(mail.text).not.toContain('Opportunity:');
     expect(mail.text).not.toContain('Location:');
+    expect(mail.text).not.toContain('Map:');
     expect(prop(mail.attachments![0]!.content, 'ORGANIZER')).toBe('ORGANIZER;CN="Acme <Studio>":mailto:no-reply@pultly.com');
   });
 

@@ -5,7 +5,7 @@ import { LoggingModule } from './infrastructure/logging/logging.module';
 import { DevMailModule } from './infrastructure/mail/mail.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
 import { HealthController } from './modules/health/health.controller';
-import { CrmModule } from './modules/crm';
+import { CrmModule, MeetingsDevModule } from './modules/crm';
 import { IdentityModule } from './modules/identity';
 import { NotificationsDevModule, NotificationsModule } from './modules/notifications';
 import { PeopleDevModule, PeopleModule } from './modules/people';
@@ -43,8 +43,9 @@ import { RateLimitModule } from './shared/rate-limit';
     // Development only: the emails the log mail driver "sent" (GET /api/dev/mail), and sending
     // your daily digest now (POST /api/dev/digest), the daily deactivation job (POST /api/dev/people/deactivate-due),
     // stand-in hours on a task until time entries exist (POST /api/dev/tasks/:id/hours, CD-147),
-    // the timesheet deadline tick and the time off daily job (POST /api/dev/timeoff/daily, CD-163).
-    ...(loadEnv().AUTH_MODE === 'dev' ? [DevMailModule, NotificationsDevModule, PeopleDevModule, ProjectsDevModule, TimesheetDevModule, TimeoffDevModule] : []),
+    // the timesheet deadline tick, the time off daily job (POST /api/dev/timeoff/daily, CD-163) and
+    // the meeting reminder tick (POST /api/dev/meetings/reminders-tick, CD-376).
+    ...(loadEnv().AUTH_MODE === 'dev' ? [DevMailModule, MeetingsDevModule, NotificationsDevModule, PeopleDevModule, ProjectsDevModule, TimesheetDevModule, TimeoffDevModule] : []),
     RealtimeModule,
   ],
   controllers: [HealthController],

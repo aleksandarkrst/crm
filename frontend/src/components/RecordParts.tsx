@@ -38,6 +38,54 @@ export function AddButton({ label, onClick, testId }: { label: string; onClick: 
 }
 
 /**
+ * The record's name (CD-478): saves as you type; a name can't be cleared, so leaving it empty puts
+ * the saved name back and says why under the field, until the next edit.
+ */
+function NameInput({ kind, name, onName }: { kind: 'company' | 'contact'; name: string; onName: (v: string) => void }) {
+  const [draft, setDraft] = useState(name);
+  const [error, setError] = useState(false);
+  const focused = useRef(false);
+  // The name before this edit: typing saves as it goes, so clearing it letter by letter saves the prefixes.
+  const before = useRef(name);
+  useEffect(() => {
+    if (!focused.current) setDraft(name);
+  }, [name]);
+  return (
+    <span className="deal-title-wrap">
+      <input
+        className="ghost deal-title"
+        aria-label={kind === 'company' ? 'Company name' : 'Contact name'}
+        data-testid="record-name"
+        value={draft}
+        aria-invalid={error || undefined}
+        onFocus={() => {
+          focused.current = true;
+          before.current = name;
+        }}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          setError(false);
+          if (e.target.value.trim()) onName(e.target.value);
+        }}
+        onBlur={() => {
+          focused.current = false;
+          if (draft.trim()) return;
+          setDraft(before.current);
+          if (before.current !== name) onName(before.current);
+          setError(true);
+        }}
+        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+      />
+      {error && (
+        <span role="alert" data-testid="record-name-error" style={{ fontSize: 12, color: 'var(--danger)' }}>
+          {kind === 'company' ? 'A company' : 'A contact'} needs a name, so the last saved one is kept.
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
  * The top of a company or contact page: its picture, editable name, owner, "+ Deal" and a menu
  * with Delete (owners and admins).
  */
@@ -92,7 +140,7 @@ export function RecordHeader({
           <span className="avatar" style={{ width: 44, height: 44, flex: '0 0 44px', fontSize: 15, fontWeight: 600, borderRadius: kind === 'company' ? 10 : '50%' }}>
             {kind === 'company' ? <Icon name="company" size={22} /> : initials}
           </span>
-          <input className="ghost deal-title" aria-label={kind === 'company' ? 'Company name' : 'Contact name'} data-testid="record-name" value={name} onChange={(e) => onName(e.target.value)} />
+          <NameInput kind={kind} name={name} onName={onName} />
         </div>
         <div className="deal-actions">
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-2)' }} title="Owner">
@@ -243,23 +291,14 @@ export function FocusTasks({ leadIds }: { leadIds: string[] }) {
 
 /** Activity on the record's deals, and who changed which field of the record (CD-69). */
 export function RecordHistory({ entries, entity, id, cur, rev }: { entries: LogEntry[]; entity: HistoryEntity; id: string | undefined; cur: Cur; rev: string }) {
-  const [view, setView] = useState<'activity' | 'changes'>('activity');
-  const tab = (k: typeof view, label: string) => (
-    <button type="button" data-testid={'history-' + k} aria-pressed={view === k} onClick={() => setView(k)} style={{ border: 0, cursor: 'pointer', background: view === k ? '#E7F2EE' : 'transparent', color: view === k ? '#14503C' : '#475750', fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 6 }}>
-      {label}
-    </button>
-  );
   return (
     <div className="card card-pad">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
-        <div className="card-title">History</div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {tab('activity', 'Activity')}
-          {id && tab('changes', 'Changes')}
-        </div>
+      <div className="card-title" style={{ marginBottom: 8 }}>
+        History
       </div>
-      {view === 'changes' && id ? (
-        <ChangeHistory entity={entity} id={id} cur={cur} rev={rev} />
+      {id ? (
+        // One list (CD-478): the activity and the field changes together, newest first.
+        <ChangeHistory entity={entity} id={id} cur={cur} rev={rev} activity={entries} />
       ) : (
         <>
           {entries.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--muted)', padding: '12px 0' }}>Nothing here yet.</div>}

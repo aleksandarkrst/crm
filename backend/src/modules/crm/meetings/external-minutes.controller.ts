@@ -1,15 +1,26 @@
-import { Body, Controller, Get, Headers, HttpCode, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Param, Post, Put, Res, StreamableFile } from '@nestjs/common';
+import type { Response } from 'express';
 import { RequireTenant, Tenant, type TenantContext } from '../../../shared/authorization';
 import { UuidParam } from '../../../shared/validation/common';
 import { ZodPipe } from '../../../shared/validation/zod-validation.pipe';
 import { parseVersion } from '../history/record-history.service';
-import { ExternalMinutesService, MinutesEmailRequest, SaveExternalMinutes } from './external-minutes.service';
+import { ExternalMinutesService, MinutesEmailRequest, type MinutesPdfFile, SaveExternalMinutes } from './external-minutes.service';
 
 const Id = new ZodPipe(UuidParam);
 
+/** A minutes PDF as a download (`attachment`, never cached). */
+function pdfDownload(res: Response, file: MinutesPdfFile): StreamableFile {
+  const ascii = file.name.replace(/[^ -~]/g, '_').replace(/"/g, "'");
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(file.name)}`);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'private, no-store');
+  return new StreamableFile(file.content);
+}
+
 /**
  * The external minutes of a meeting and their emails to the customer (CD-133). Every member reads
- * the text and the send log; writing, previewing, sending and retrying take the meeting's
+ * the text, the send log and the PDFs (CD-378); writing, previewing, sending and retrying take the meeting's
  * organizer, an internal participant, an admin or the owner (403). Sending needs a held meeting (409).
  */
 @Controller('crm/meetings')
@@ -43,6 +54,12 @@ export class ExternalMinutesController {
     return this.minutes.updateFromMeeting(ctx, id);
   }
 
+  /** "Download PDF" (CD-378): the PDF of the saved text and the current next steps, as a send now would attach it. */
+  @Get(':id/minutes/external/pdf')
+  async draftPdf(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Res({ passthrough: true }) res: Response) {
+    return pdfDownload(res, await this.minutes.draftPdf(ctx, id));
+  }
+
   /** The exact email Send would send: `{ from, replyTo, to, cc, subject, text, html }`. */
   @Post(':id/minutes/preview')
   @HttpCode(200)
@@ -61,6 +78,12 @@ export class ExternalMinutesController {
   @Get(':id/minutes/sends')
   listSends(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
     return this.minutes.listSends(ctx, id);
+  }
+
+  /** The PDF a send attached (CD-378), the same file every time. */
+  @Get(':id/minutes/sends/:sendId/pdf')
+  async sendPdf(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Param('sendId', Id) sendId: string, @Res({ passthrough: true }) res: Response) {
+    return pdfDownload(res, await this.minutes.sendPdf(ctx, id, sendId));
   }
 
   /** Queues the failed recipients of a send again (202). */

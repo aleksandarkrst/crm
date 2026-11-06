@@ -7,6 +7,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { addMember, createTenant, eventually, mailTo, type Mail, ok, type Session, signIn, testPib } from './helpers';
+import { serbianHolidayDates } from '../../src/modules/timesheet/serbian-holidays';
 import { accessOf, asTenantSql } from './people-helpers';
 
 let owner: Session;
@@ -45,7 +46,11 @@ beforeAll(async () => {
   const [type] = await ok<{ id: string }[]>('GET', '/project-types', as());
   const project = await ok<{ id: string }>('POST', '/projects', { ...as(), body: { name: 'Service contract 2026', projectTypeId: type!.id, companyId: company.id } });
   taskId = (await ok<{ id: string }>('POST', '/tasks', { ...as(), body: { projectId: project.id, name: 'Hydraulic leak', assigneeIds: [ids.ana, ids.marko, ids.petar] } })).id;
+  // Next week, or the first one after it whose three weeks have no public holiday: a holiday lowers
+  // the hours a week needs (11 November made it "32 of 32 h").
+  const holidays = new Set([0, 1].flatMap((n) => serbianHolidayDates(new Date().getUTCFullYear() + n)));
   week1 = addDays((await ok<{ thisWeek: string }>('GET', '/timesheet/week', as(ana))).thisWeek, 7);
+  while (Array.from({ length: 21 }, (_, n) => addDays(week1, n)).some((d) => holidays.has(d))) week1 = addDays(week1, 7);
   // Ana works Monday to Thursday; Petar's whole week is in already; Marko has nothing.
   await hours('ana', [0, 1, 2, 3].map((n) => addDays(week1, n)));
   await hours('petar', [0, 1, 2, 3, 4].map((n) => addDays(week1, n)));

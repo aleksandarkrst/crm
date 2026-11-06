@@ -346,6 +346,8 @@ export interface Workspace {
   timesheet: ApiTimesheetSettings;
   /** The company's country (CD-167): 'RS' turns vacation decisions on. */
   country: string | null;
+  /** The logo's version (CD-378), null without one: printed on the minutes PDF. */
+  logoUpdatedAt: string | null;
   /** Company details printed on generated documents (CD-167). */
   company: ApiCompanyDetails;
 }
