@@ -1180,7 +1180,7 @@ export const crmApi = {
   updateCompany: (id: string, input: CompanyInput, version?: string) => api<ApiCompany>(`/crm/companies/${id}`, { method: 'PATCH', json: input, headers: ifMatch(version) }),
   deleteCompany: (id: string) => api(`/crm/companies/${id}`, { method: 'DELETE' }),
   /** "Set status back…" (a lower status) or "Back to automatic" (null), CD-358. */
-  setCompanyStatus: (id: string, status: ApiCompanyStatus | null) => api<ApiCompany>(`/crm/companies/${id}/status`, { method: 'PATCH', json: { status } }),
+  setCompanyStatus: (id: string, status: ApiCompanyStatus | null, closeOpen?: { reason: LostReason }) => api<ApiCompany>(`/crm/companies/${id}/status`, { method: 'PATCH', json: { status, closeOpen } }),
   companyStatusHistory: (id: string) => api<ApiCompanyStatusChange[]>(`/crm/companies/${id}/status-history`),
 
   contacts: (ids?: readonly string[]) => all<ApiContact>(only('/crm/contacts', 'ids', ids)),

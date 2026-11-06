@@ -170,6 +170,29 @@ describe('setting the status by hand', () => {
     expect((await history(c.id))[0]).toMatchObject({ to: 'not_interested', reason: 'automatic' });
   });
 
+  it('Not interested closes its open opportunities in the same step, and is set by hand (CD-478 QA TC8)', async () => {
+    const c = await readyCompany('Aspen Clinic');
+    const open = await newDeal(c.id);
+    const set = await ok<Company>('PATCH', `/crm/companies/${c.id}/status`, { ...as(), body: { status: 'not_interested', closeOpen: { reason: 'Timing' } } });
+    expect(set).toMatchObject({ status: 'not_interested', statusSetManually: true });
+    const changes = await history(c.id);
+    expect(changes[0]).toMatchObject({ from: 'opportunity', to: 'not_interested', reason: 'manual', actorUserId: owner.userId });
+    expect(changes.some((r) => r.to === 'not_interested' && r.reason === 'automatic')).toBe(false);
+    expect(await ok('GET', `/crm/deals/${open.id}`, as())).toMatchObject({ outcome: 'lost', lostReason: 'Timing', lostNote: 'Closed when the company was set to Not interested' });
+    const timeline = await ok<{ title: string }[]>('GET', `/crm/deals/${open.id}/activities`, as());
+    expect(timeline.map((a) => a.title)).toContain('Marked as lost: Timing');
+
+    // A client keeps its won opportunity; only the open ones close.
+    const won = await readyCompany('Birch Studio');
+    await ok('POST', `/crm/deals/${(await newDeal(won.id)).id}/move`, { ...as(), body: { stageId: wonStage().id } }, 200);
+    const second = await newDeal(won.id, 'Second site');
+    expect(await ok<Company>('PATCH', `/crm/companies/${won.id}/status`, { ...as(), body: { status: 'not_interested', closeOpen: { reason: 'Price' } } })).toMatchObject({ status: 'not_interested', statusSetManually: true });
+    expect(await ok('GET', `/crm/deals/${second.id}`, as())).toMatchObject({ outcome: 'lost' });
+
+    // Only Not interested closes them.
+    expect((await call('PATCH', `/crm/companies/${won.id}/status`, { ...as(), body: { status: 'lead', closeOpen: { reason: 'Price' } } })).status).toBe(400);
+  });
+
   it('is for owners, admins and the company owner only', async () => {
     expect((await call('PATCH', `/crm/companies/${id}/status`, { ...as(seller), body: { status: 'lead' } })).status).toBe(403);
     const theirs = await ok<Company>('POST', '/crm/companies', { ...as(seller), body: { name: 'Seller Co', pib: testPib() } });
@@ -181,9 +204,9 @@ describe('the companies list', () => {
   it('filters by status, and by won or lost opportunities', async () => {
     const names = async (query: string) => (await ok<{ name: string }[]>('GET', `/crm/companies?${query}&limit=200`, as())).map((c) => c.name).sort();
     expect(await names('status=client')).toEqual(['Kestrel Logistics', 'Orchard Dental']);
-    expect(await names('status=not_interested,past_client')).toEqual(['Linden Foods', 'Seller Co']);
-    expect(await names('outcome=won')).toEqual(['Kestrel Logistics', 'Orchard Dental']);
-    expect(await names('outcome=lost')).toEqual(['Linden Foods']);
+    expect(await names('status=not_interested,past_client')).toEqual(['Aspen Clinic', 'Birch Studio', 'Linden Foods', 'Seller Co']);
+    expect(await names('outcome=won')).toEqual(['Birch Studio', 'Kestrel Logistics', 'Orchard Dental']);
+    expect(await names('outcome=lost')).toEqual(['Aspen Clinic', 'Linden Foods']);
     expect((await call('GET', '/crm/companies?status=customer', as())).status).toBe(400);
   });
 });
