@@ -4,6 +4,7 @@ import { ChangeHistory } from '../components/ChangeHistory';
 import { askConfirm } from '../components/ConfirmDialog';
 import { Screen } from '../components/Layout';
 import { Avatar, Modal, ModalHeader } from '../components/ui';
+import { ApiError } from '../lib/api';
 import { paths } from '../lib/paths';
 import { type ApiTask, type ApiTaskBrief, quarterHourError, statusLabel, TASK_STATUSES, taskId, type TaskPatch, tasksApi } from '../lib/tasksApi';
 import { projectError, useProject, useProjects, useProjectTypes } from '../store/projects';
@@ -87,8 +88,16 @@ export function Task() {
       flash(projectError(err));
     }
   };
+  // The API keeps a task with time logged on it (409, time_entries_task_fk): say so, and offer Mark done (CD-493).
+  const keep = async (message: string) => {
+    // Already done: nothing to choose, so just say why.
+    if (task.status === 'done') return flash(`${taskId(task)} can't be deleted. ${message}`, 7000);
+    const yes = await askConfirm({ title: `${taskId(task)} can't be deleted`, message: `${message} Marking it done closes it and keeps the hours.`, confirmLabel: 'Mark done' });
+    if (yes) setStatus(task, 'done');
+  };
   const remove = async () => {
     setMenu(false);
+    if ((time.data?.loggedMinutes ?? 0) > 0) return keep(`Hours are logged on ${task.name}, so it stays for the timesheets and reports.`);
     const yes = await askConfirm({ title: `Delete ${taskId(task)}?`, message: `${task.name} and its history are deleted. The ${terms.project} is kept.`, confirmLabel: `Delete ${terms.task}`, danger: true });
     if (!yes) return;
     try {
@@ -96,6 +105,8 @@ export function Task() {
       flash(`${taskId(task)} deleted`);
       navigate(paths.project(task.projectId));
     } catch (err) {
+      // Time logged since the page loaded: the same answer as above, in the API's words.
+      if (err instanceof ApiError && err.status === 409) return keep(projectError(err));
       flash(projectError(err));
     }
   };
