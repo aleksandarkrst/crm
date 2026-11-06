@@ -2180,7 +2180,8 @@ Admins, and the requester alone when they are the only Admin.
 - **The Approvals tab** (`GET /api/timeoff/approvals`, spec 9.2): the pending requests whose
   resolved approvers include the caller (managers among their reports, Admins everywhere), each
   with the vacation balance after approval, `alsoAway` (the requester's unit and the approver's
-  direct reports with pending or approved leave on any of the days), `startDatePassed`,
+  direct reports with pending or approved leave on any of the days, only people the caller may
+  see: managers their reports, Admins everyone; CD-494), `startDatePassed`,
   `twoWeekPartMissing` (a vacation under ten days from October on while the two-week part isn't
   taken) and the paid leave warnings. `GET approvals/count` feeds the sidebar badge on Time off
   (`usePendingApprovals` in the sidebar, managers and Admins).
