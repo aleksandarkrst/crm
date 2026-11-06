@@ -4,7 +4,7 @@ import { IconRow } from '../../components/icons';
 import { RichText } from '../../components/RichText';
 import type { ApiMeeting, MeetingInput, MeetingType } from '../../lib/api';
 import { paths } from '../../lib/paths';
-import { hasEmail, locationUrl, MEETING_TYPES } from '../../store/meetings';
+import { hasEmail, locationLink, MEETING_TYPES } from '../../store/meetings';
 import { endSlots, keepLength, lengthLabel, momentOf } from '../../store/meetingTime';
 import { companyLabels, companyRecords, memberLabels, memberName } from '../../store/selectors';
 import { useStore } from '../../store/store';
@@ -191,7 +191,7 @@ export function MeetingDetails({ m, editable }: { m: ApiMeeting; editable: boole
     },
     TYPING_MS,
   );
-  const url = locationUrl(location.draft);
+  const where = locationLink(location.draft);
 
   // Company and deal: another company needs one of its deals (CD-213) before it is saved.
   const records = useMemo(() => companyRecords(s), [s]);
@@ -271,7 +271,7 @@ export function MeetingDetails({ m, editable }: { m: ApiMeeting; editable: boole
             </option>
           ))}
         </select>
-        <Link to={paths.company(m.companyId)} className="meeting-field-link">
+        <Link to={paths.company(m.companyId)} className="field-link">
           Open
         </Link>
       </IconRow>
@@ -299,12 +299,12 @@ export function MeetingDetails({ m, editable }: { m: ApiMeeting; editable: boole
           </select>
         )}
         {m.dealId && !movingTo && (
-          <Link to={paths.lead(m.dealId)} className="meeting-field-link" title={deal?.title || deal?.company || m.dealTitle || 'Opportunity'}>
+          <Link to={paths.lead(m.dealId)} className="field-link" title={deal?.title || deal?.company || m.dealTitle || 'Opportunity'}>
             Open
           </Link>
         )}
         {movingTo && (
-          <button type="button" className="btn-plain meeting-field-link" onClick={() => setMovingTo(null)}>
+          <button type="button" className="btn-plain field-link" onClick={() => setMovingTo(null)}>
             Keep {m.companyName}
           </button>
         )}
@@ -321,9 +321,9 @@ export function MeetingDetails({ m, editable }: { m: ApiMeeting; editable: boole
           onChange={(e) => location.change(e.target.value)}
           onBlur={() => void location.flush()}
         />
-        {url && (
-          <a href={url} target="_blank" rel="noopener noreferrer" className="meeting-field-link" data-testid="meeting-field-location-link">
-            Open
+        {where && (
+          <a href={where.url} target="_blank" rel="noopener noreferrer" className="field-link" data-testid="meeting-field-location-link">
+            {where.kind === 'map' ? 'Map' : 'Join'}
           </a>
         )}
       </IconRow>

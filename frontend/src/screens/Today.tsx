@@ -48,7 +48,9 @@ export function Today() {
 
   const today = todayIso(s.workspace.timezone);
   const doneToday = todayLabel(s.workspace.timezone);
+  // Only open opportunities have a next stage activity; Won and Lost ones have no work left (CD-478).
   const funnelTasks = s.leads
+    .filter((l) => l.outcome === 'open')
     .map<TodayTask>((l) => {
       const st = stageOf(s, l);
       return {

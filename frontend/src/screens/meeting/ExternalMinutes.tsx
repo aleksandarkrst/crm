@@ -206,6 +206,20 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
     setPreviewing(false);
   };
   const reload = () => void actions.current.loadExternal(m.id).then(onStored, () => undefined);
+  // The PDF of the saved text (CD-378): the edits waiting to be saved go first.
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const downloadPdf = async () => {
+    setPdfBusy(true);
+    try {
+      await flush();
+      // Edits that couldn't be saved ("Not saved" says so): a PDF of the older text would mislead.
+      if (!dirty.current.size) await actions.current.downloadPdf(m.id);
+    } catch {
+      // The save itself threw: same as above, the status shows it.
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
   const last = stored.lastSend;
   // The server compares the saved text with the last send, next steps included (CD-374); an edit not saved yet counts as a change.
@@ -278,7 +292,7 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
               </span>
             )}
           </div>
-          <SendStatus m={m} send={last} onRetried={reload} />
+          <SendStatus m={m} send={last} onRetried={reload} pdf={false} />
         </div>
       )}
 
@@ -324,8 +338,8 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
           </div>
         </div>
       )}
-      {allowed && m.status !== 'cancelled' && (
-        <div className="ext-send-row">
+      <div className="ext-send-row">
+        {allowed && m.status !== 'cancelled' && (
           <button
             type="button"
             className="btn btn-primary"
@@ -336,9 +350,12 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
           >
             {previewing ? 'Preparing' : last ? 'Send again' : 'Send'}
           </button>
-          {sendBlocked && <span className="meeting-muted">{sendBlocked}</span>}
-        </div>
-      )}
+        )}
+        <button type="button" className="btn btn-secondary" data-testid="external-pdf" disabled={pdfBusy} title="The PDF the email attaches, from the saved text and the next steps as they are now" onClick={() => void downloadPdf()}>
+          {pdfBusy ? 'Preparing' : 'Download PDF'}
+        </button>
+        {allowed && m.status !== 'cancelled' && sendBlocked && <span className="meeting-muted">{sendBlocked}</span>}
+      </div>
       {sendError && <div className="meeting-error-box">{sendError}</div>}
 
       {preview && (
@@ -357,10 +374,14 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
   );
 }
 
-/** Each recipient of a send with its delivery, the error of a failed one, and Retry. */
-export function SendStatus({ m, send, onRetried }: { m: ApiMeeting; send: ApiMinutesSend; onRetried?: () => void }) {
+/**
+ * Each recipient of a send with its delivery, the error of a failed one, and Retry; with `pdf`
+ * (the send log), "Download PDF" for the file the send attached (CD-378). The tab has its own.
+ */
+export function SendStatus({ m, send, onRetried, pdf = true }: { m: ApiMeeting; send: ApiMinutesSend; onRetried?: () => void; pdf?: boolean }) {
   const { meetings } = useStore();
   const [busy, setBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const anyFailed = send.recipients.some((r) => r.status === 'failed');
   return (
     <div className="ext-status" data-testid="send-status" data-status={send.status}>
@@ -374,21 +395,44 @@ export function SendStatus({ m, send, onRetried }: { m: ApiMeeting; send: ApiMin
           </span>
         </div>
       ))}
-      {anyFailed && meetings.canEdit(m) && (
-        <button
-          type="button"
-          className="btn btn-secondary ext-retry"
-          data-testid="send-retry"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            await meetings.retrySend(m.id, send.id);
-            setBusy(false);
-            onRetried?.();
-          }}
-        >
-          {busy ? 'Retrying' : 'Retry failed'}
-        </button>
+      {((pdf && send.pdfFileName) || (anyFailed && meetings.canEdit(m))) && (
+        <div className="ext-status-actions">
+          {pdf && send.pdfFileName && (
+            <button
+              type="button"
+              className="btn-plain ext-pdf"
+              data-testid="send-pdf"
+              disabled={pdfBusy}
+              title={`The exact file this send attached: ${send.pdfFileName}`}
+              onClick={async () => {
+                setPdfBusy(true);
+                try {
+                  await meetings.downloadPdf(m.id, send);
+                } finally {
+                  setPdfBusy(false);
+                }
+              }}
+            >
+              {pdfBusy ? 'Downloading' : 'Download PDF'}
+            </button>
+          )}
+          {anyFailed && meetings.canEdit(m) && (
+            <button
+              type="button"
+              className="btn btn-secondary ext-retry"
+              data-testid="send-retry"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                await meetings.retrySend(m.id, send.id);
+                setBusy(false);
+                onRetried?.();
+              }}
+            >
+              {busy ? 'Retrying' : 'Retry failed'}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

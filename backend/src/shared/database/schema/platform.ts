@@ -65,6 +65,14 @@ export const tenants = pgTable(
      * set. Serbia ('RS') turns the vacation decision document on: Serbian employers must issue one.
      */
     country: text('country'),
+    /**
+     * The workspace logo (CD-378, Settings → Workspace): a PNG or JPEG of at most 1 MB under
+     * STORAGE_DIR/<tenant id>/<key>, printed in the header of the external minutes PDF. A
+     * replacement gets a new key; `logo_updated_at` is its version.
+     */
+    logoStorageKey: text('logo_storage_key'),
+    logoContentType: text('logo_content_type'),
+    logoUpdatedAt: timestamp('logo_updated_at', { withTimezone: true }),
     // Company details printed on generated documents (spec 10.1, Settings → Workspace → Company).
     companyLegalName: text('company_legal_name'),
     /** Street and number, postal code and city, on one line. */

@@ -1,3 +1,4 @@
+import { fold } from './filters';
 import { allPeople, companyOfPerson, companyRecords, initialsOf, stageOf } from './selectors';
 import type { State } from './types';
 
@@ -30,15 +31,8 @@ const GROUPS: { kind: SearchKind; label: string }[] = [
   { kind: 'contact', label: 'Contacts' },
 ];
 
-/** Lower case without accents, so "markovic" finds "Marković". */
-export const fold = (v: string | null | undefined): string =>
-  (v ?? '')
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .replace(/đ/g, 'dj')
-    .replace(/Đ/g, 'Dj')
-    .toLowerCase()
-    .trim();
+/** Lower case without accents, so "markovic" finds "Marković" (kept with the filters, CD-478). */
+export { fold };
 
 const digits = (v: string | null | undefined): string => (v ?? '').replace(/\D/g, '');
 

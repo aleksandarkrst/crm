@@ -121,11 +121,14 @@ export function CheckedInput({
   value,
   check,
   onSave,
+  onUnsaved,
   ...props
 }: Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'onBlur'> & {
   value: string;
   check: (v: string) => { ok: true; value: string; hint?: string } | { ok: false; error: string };
   onSave: (v: string) => void;
+  /** Told whether the field holds a value that wasn't saved (CD-478), e.g. to hide a link to the old one. */
+  onUnsaved?: (unsaved: boolean) => void;
 }) {
   const [draft, setDraft] = useState(value);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
@@ -133,6 +136,7 @@ export function CheckedInput({
   useEffect(() => {
     if (!focused && !message?.error) setDraft(value);
   }, [value, focused, message?.error]);
+  useEffect(() => onUnsaved?.(!!message?.error), [message?.error, onUnsaved]);
   const commit = () => {
     setFocused(false);
     const r = check(draft);
@@ -162,6 +166,7 @@ export function CheckedInput({
       {message && (
         <span role={message.error ? 'alert' : 'status'} data-testid={message.error ? 'field-error' : 'field-hint'} style={{ fontSize: 12, color: message.error ? 'var(--danger)' : 'var(--muted)', padding: '2px 0 0' }}>
           {message.text}
+          {message.error && ' Not saved: the last saved value is kept.'}
         </span>
       )}
     </span>
@@ -401,9 +406,20 @@ let openModals = 0;
  */
 export function Modal({ children, maxWidth, z = 45, gap = 16, onBackdrop }: { children: ReactNode; maxWidth: number; z?: number; gap?: number; onBackdrop?: () => void }) {
   useEffect(() => {
-    if (++openModals === 1) document.documentElement.classList.add('modal-open');
+    const root = document.documentElement;
+    if (++openModals === 1) {
+      // The lock hides the page's scrollbar: pad its width back so nothing behind moves (CD-493).
+      const width = `${window.innerWidth - root.clientWidth}px`;
+      root.style.paddingRight = width;
+      // Fixed things anchored to the right edge (the toast) add it too.
+      root.style.setProperty('--scrollbar-pad', width);
+      root.classList.add('modal-open');
+    }
     return () => {
-      if (--openModals === 0) document.documentElement.classList.remove('modal-open');
+      if (--openModals > 0) return;
+      root.classList.remove('modal-open');
+      root.style.paddingRight = '';
+      root.style.removeProperty('--scrollbar-pad');
     };
   }, []);
   return createPortal(

@@ -238,6 +238,8 @@ export interface ApiWorkspace {
   terms: WorkspaceTerms;
   /** ISO 3166-1 alpha-2 (CD-167), or null. Serbia ('RS') issues vacation decision documents. */
   country: string | null;
+  /** The logo's version (CD-378), null without one; the image is GET /workspace/logo. */
+  logoUpdatedAt?: string | null;
   /** Printed on generated documents (CD-167, spec 10.1). */
   company: ApiCompanyDetails;
   /** Timesheet settings (CD-153, Settings → Workforce → Employees and Approvals). */
@@ -919,6 +921,13 @@ export interface ApiMeetingParticipant {
   /** An external contact that was deleted, or a member no longer in the workspace. */
   deleted: boolean;
 }
+export type ReminderUnit = 'minutes' | 'hours' | 'days';
+/** "30 minutes before" is { amount: 30, unit: 'minutes' } (CD-376). */
+export interface ApiReminder {
+  amount: number;
+  unit: ReminderUnit;
+}
+
 export interface ApiMeeting {
   id: string;
   title: string;
@@ -952,6 +961,8 @@ export interface ApiMeeting {
   externalDelivery: 'not_sent' | 'queued' | 'sent' | 'failed';
   /** Moves whenever a send's delivery changes: an open send log reads again. */
   sendsUpdatedAt: string | null;
+  /** The caller's own email reminders (CD-376), earliest first. */
+  myReminders: ApiReminder[];
   createdByUserId: string | null;
   createdAt: string;
   /** The version: send it back as If-Match when changing the meeting. */
@@ -1019,6 +1030,8 @@ export interface ApiMinutesSend {
   subject: string;
   body: string;
   language: 'en' | 'sr';
+  /** The PDF this send attached (CD-378); null for sends before minutes had one. */
+  pdfFileName: string | null;
   /** failed when any recipient failed, queued while any is queued, else sent. */
   status: MinutesDeliveryStatus;
   recipients: ApiMinutesRecipient[];
@@ -1112,6 +1125,20 @@ export const crmApi = {
 
   workspace: () => api<ApiWorkspace>('/workspace'),
   updateWorkspace: (input: WorkspaceInput) => api<ApiWorkspace>('/workspace', { method: 'PATCH', json: input }),
+  /** The workspace logo (CD-378) as an image; null without one. */
+  workspaceLogo: async (): Promise<Blob | null> => {
+    const res = await authorizedFetch('/workspace/logo');
+    if (res.status === 404) return null;
+    if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
+    return res.blob();
+  },
+  /** Sets or replaces the logo (owners and admins): a PNG or JPG of at most 1 MB. */
+  setWorkspaceLogo: (file: File) => {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return api<ApiWorkspace>('/workspace/logo', { method: 'PUT', body: form });
+  },
+  removeWorkspaceLogo: () => api<ApiWorkspace>('/workspace/logo', { method: 'DELETE' }),
   profile: () => api<ApiProfile>('/profile'),
   updateProfile: (input: ProfileInput) => api<ApiProfile>('/profile', { method: 'PATCH', json: input }),
   onboarding: () => api<ApiOnboarding>('/onboarding'),
@@ -1153,7 +1180,7 @@ export const crmApi = {
   updateCompany: (id: string, input: CompanyInput, version?: string) => api<ApiCompany>(`/crm/companies/${id}`, { method: 'PATCH', json: input, headers: ifMatch(version) }),
   deleteCompany: (id: string) => api(`/crm/companies/${id}`, { method: 'DELETE' }),
   /** "Set status back…" (a lower status) or "Back to automatic" (null), CD-358. */
-  setCompanyStatus: (id: string, status: ApiCompanyStatus | null) => api<ApiCompany>(`/crm/companies/${id}/status`, { method: 'PATCH', json: { status } }),
+  setCompanyStatus: (id: string, status: ApiCompanyStatus | null, closeOpen?: { reason: LostReason }) => api<ApiCompany>(`/crm/companies/${id}/status`, { method: 'PATCH', json: { status, closeOpen } }),
   companyStatusHistory: (id: string) => api<ApiCompanyStatusChange[]>(`/crm/companies/${id}/status-history`),
 
   contacts: (ids?: readonly string[]) => all<ApiContact>(only('/crm/contacts', 'ids', ids)),
@@ -1233,6 +1260,8 @@ export const crmApi = {
     cancel: (id: string, reason: string | null) => api<ApiMeeting>(`/crm/meetings/${id}/cancel`, { method: 'POST', json: reason ? { reason } : {} }),
     undoHeld: (id: string) => api<ApiMeeting>(`/crm/meetings/${id}/undo-held`, { method: 'POST' }),
     restore: (id: string) => api<ApiMeeting>(`/crm/meetings/${id}/restore`, { method: 'POST' }),
+    /** The caller's own reminders, the whole list (CD-376). */
+    setReminders: (id: string, reminders: ApiReminder[]) => api<ApiMeeting>(`/crm/meetings/${id}/reminders`, { method: 'PUT', json: { reminders } }),
     delete: (id: string) => api(`/crm/meetings/${id}`, { method: 'DELETE' }),
     /** Internal minutes (CD-132). */
     minutes: (id: string) => api<ApiInternalMinutes>(`/crm/meetings/${id}/minutes/internal`),

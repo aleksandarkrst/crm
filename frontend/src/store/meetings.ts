@@ -26,6 +26,7 @@ import {
   type ApiMeeting,
   type ApiMinutesEmail,
   type ApiMinutesSend,
+  type ApiReminder,
   ApiError,
   type ApiRole,
   crmApi,
@@ -36,6 +37,8 @@ import {
   type MeetingStatus,
   type MeetingType,
 } from '../lib/api';
+import { mapLink } from '../lib/maps';
+import { download } from './documents';
 import type { NewMeetingParams } from '../lib/paths';
 import type { LiveEvent } from './live';
 import type { State } from './types';
@@ -154,11 +157,8 @@ export function canEditMeeting(m: ApiMeeting, me: string, role: ApiRole): boolea
 /** "No email" for contacts without a usable address (the lists show "—" for none). */
 export const hasEmail = (email: string | null | undefined): boolean => !!email && /^[^\s@]+@[^\s@]+$/.test(email.trim());
 
-/** A URL location is shown as a link. */
-export const locationUrl = (location: string | null | undefined): string | null => {
-  const v = location?.trim() ?? '';
-  return /^https?:\/\/\S+$/i.test(v) ? v : /^www\.\S+$/i.test(v) ? 'https://' + v : null;
-};
+/** Where the location opens (CD-377): a link ("Join") as it is, an address ("Map") on Google Maps. */
+export const locationLink = mapLink;
 
 /** Open deals with a planned meeting still to come (they have a next step, CD-130). */
 const upcomingCache = new WeakMap<Record<string, ApiMeeting>, { at: number; deals: Set<string> }>();
@@ -433,6 +433,17 @@ export function meetingActions(ctx: Ctx) {
       return false;
     }
   };
+  /** The caller's own reminders (CD-376); false (after saying why, and reading the meeting again) when refused. */
+  const setReminders = async (id: string, reminders: ApiReminder[]): Promise<boolean> => {
+    try {
+      after(await crmApi.meetings.setReminders(id, reminders));
+      return true;
+    } catch (err) {
+      flash(`Not saved: your reminders (${ctx.errText(err)}). They were reset to the saved ones.`, 7000);
+      void fetchOne(id).catch(() => undefined);
+      return false;
+    }
+  };
   const remove = async (id: string): Promise<boolean> => {
     const m = cur().meetings[id];
     try {
@@ -552,6 +563,18 @@ export function meetingActions(ctx: Ctx) {
   };
   /** Every send, newest first; throws when they can't be read. */
   const loadSends = (id: string) => crmApi.meetings.sends(id);
+  /**
+   * Saves a minutes PDF (CD-378): the saved text with the next steps as they are now (no `send`),
+   * or the exact file a send attached. Says why when it can't.
+   */
+  const downloadPdf = async (id: string, send?: ApiMinutesSend): Promise<void> => {
+    try {
+      if (send) await download(`/crm/meetings/${id}/minutes/sends/${send.id}/pdf`, send.pdfFileName ?? 'Minutes.pdf');
+      else await download(`/crm/meetings/${id}/minutes/external/pdf`, 'Minutes.pdf');
+    } catch (err) {
+      flash('PDF not downloaded: ' + ctx.errText(err), 7000);
+    }
+  };
   /** Retry the failed recipients of a send; null (after saying why) when refused. */
   const retrySend = async (id: string, sendId: string): Promise<ApiMinutesSend | null> => {
     try {
@@ -596,6 +619,7 @@ export function meetingActions(ctx: Ctx) {
     cancel: (id: string, reason: string) => status(id, () => crmApi.meetings.cancel(id, reason.trim() || null), 'Meeting cancelled'),
     undoHeld: (id: string) => status(id, () => crmApi.meetings.undoHeld(id), 'Back to planned'),
     restore: (id: string) => status(id, () => crmApi.meetings.restore(id), 'Meeting restored'),
+    setReminders,
     remove,
     findOverlaps,
     loadMinutes,
@@ -609,10 +633,13 @@ export function meetingActions(ctx: Ctx) {
     sendMinutes,
     loadSends,
     retrySend,
+    downloadPdf,
     /** Opens the New meeting dialog (prefilled), or the dialog editing a meeting (`seed.id`). */
     openDialog: (seed: MeetingDialogSeed = {}) => set({ meetingDialog: seed }),
     closeDialog: () => set({ meetingDialog: null }),
     canEdit: (m: ApiMeeting) => canEditMeeting(m, ctx.me, ctx.role),
+    /** The caller is on the meeting (organizer or internal participant): they have reminders of it (CD-376). */
+    takesPart: (m: ApiMeeting) => isInternal(m, ctx.me),
     /** Only owners and admins delete meetings. */
     canDelete: ctx.role === 'owner' || ctx.role === 'admin',
   };

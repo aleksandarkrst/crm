@@ -29,6 +29,7 @@ import {
   stagesFor,
   taskKey,
   taskOf,
+  todayIso,
   todayLabel,
   todoItemsFor,
   wonBlocker,
@@ -402,11 +403,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }
     };
     /** Coalesces typing into one write per field (inputs call their action on every keystroke). */
-    const saveLater = (key: string, write: () => Promise<unknown>, what?: string) => {
+    const saveLater = (key: string, write: () => Promise<unknown>, what?: string, after?: () => unknown) => {
       clearTimeout(saveTimers.current.get(key)?.timer);
       const run = () => {
         saveTimers.current.delete(key);
-        void save(write, undefined, what);
+        void save(write, after, what);
       };
       saveTimers.current.set(key, { timer: setTimeout(run, 600), run });
     };
@@ -714,7 +715,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           return;
         }
       }
-      mapLead(leadId, (l) => ({ ...l, stage: stageId, stall: 0, lateDays: 0, outcome: stage?.won ? 'won' : 'open', stageSince: new Date().toISOString() }));
+      // Won today closes it today (CD-477), as the API records it; out of Won it has no closing date again.
+      const wasWon = stages.find((st) => st.id === lead.stage)?.won;
+      const closeDate = stage?.won ? { closeDate: todayIso(cur().workspace.timezone) } : wasWon ? { closeDate: '' } : {};
+      mapLead(leadId, (l) => ({ ...l, ...closeDate, stage: stageId, stall: 0, lateDays: 0, outcome: stage?.won ? 'won' : 'open', stageSince: new Date().toISOString() }));
       void save(() => crmApi.moveDeal(leadId, stageId), () => refreshLog(leadId), 'the stage move');
       // Not when it has its proposal already (one per opportunity, CD-120).
       if (stage && stage.doc === 'Proposal' && AUTO_GENERATE_DOCS && !hasLiveProposal(cur().dealDocs[leadId])) startGeneration(leadId);
@@ -784,16 +788,29 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       const p = personById(cur(), personId);
       const contactId = p?.contactId;
       if (!p || !contactId) return;
+      // An opportunity without a primary contact takes the linked one as its primary (the API does the
+      // same, CD-477): the Pipeline card shows it too. The reload turns the link into the primary contact.
+      const becomesPrimary = !leadById(cur(), leadId)?.contactId;
       set((x) => ({ links: { ...x.links, [leadId]: [...(x.links[leadId] || []), personId] } }));
-      void save(() => crmApi.linkContact(leadId, contactId), undefined, 'linking ' + p.name);
-      flash(p.name + ' linked to this lead');
+      if (!becomesPrimary) flash(p.name + ' linked to this opportunity');
+      void save(
+        () => crmApi.linkContact(leadId, contactId),
+        becomesPrimary
+          ? async () => {
+              await reload();
+              // Said once the server has it: another tab may have set a primary contact meanwhile.
+              flash(leadById(cur(), leadId)?.contactId === contactId ? p.name + ' is now the primary contact' : p.name + ' linked to this opportunity');
+            }
+          : undefined,
+        'linking ' + p.name,
+      );
     };
     const unlinkPerson = (leadId: string, personId: string) => {
       const p = personById(cur(), personId);
       const contactId = p?.contactId;
       if (!p || !contactId) return;
       if (p.primary && p.leadId === leadId) {
-        flash(p.name + ' is the primary contact of this lead');
+        flash(p.name + ' is the primary contact of this opportunity');
         return;
       }
       set((x) => ({ links: { ...x.links, [leadId]: (x.links[leadId] || []).filter((i) => i !== personId) } }));
@@ -949,7 +966,11 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         list[extraIdx] = val;
         return { extraTodos: { ...x.extraTodos, [key]: list } };
       });
-      if (id) saveLater('todo-label:' + id, () => crmApi.updateTask(id, { label: val.trim() }), 'the to-do name');
+      if (!id) return;
+      // A blank name isn't saved (CD-477): a draft left blank is removed, a cleared name comes back on blur.
+      if (!val.trim()) return dropSave('todo-label:' + id);
+      // Its first name logs "To-do added" (CD-477): reread the timeline after the save.
+      saveLater('todo-label:' + id, () => crmApi.updateTask(id, { label: val.trim() }), 'the to-do name', () => refreshLog(leadId));
     };
     const removeExtra = (leadId: string, stageId: string, extraIdx: number, taskIdx: number) => {
       const key = leadId + '::' + stageId;
@@ -972,7 +993,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       });
       if (id) {
         dropSave('todo-label:' + id);
-        void save(() => crmApi.deleteTask(id), undefined, 'removing the to-do');
+        // Removing a named to-do adds "To-do removed" to the timeline (CD-477).
+        void save(() => crmApi.deleteTask(id), () => refreshLog(leadId), 'removing the to-do');
       }
     };
 
@@ -1369,7 +1391,16 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       }
       if (ownerId !== undefined && ownerId !== lead.ownerId) {
         dealPatch.owner = cur().team.find((m) => m.status === 'Active' && m.id === ownerId)?.name;
-        void save(() => crmApi.updateDeal(id, { ownerUserId: ownerId }, ver('deal', id)), undefined, 'the opportunity owner');
+        const name = memberName(cur(), ownerId);
+        // Said once it is saved, and the Activity reread for the server's "Owner: …" entry (CD-477).
+        void save(
+          () => crmApi.updateDeal(id, { ownerUserId: ownerId }, ver('deal', id)),
+          () => {
+            flash(`Owner: ${name}`);
+            return refreshLog(id);
+          },
+          'the opportunity owner',
+        );
       }
       mapLead(id, (l) => ({ ...l, ...dealPatch }));
     };
@@ -1425,12 +1456,22 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         flash('Not saved: ' + errText(err), 7000);
       }
     };
-    /** "Set status back…" or "Back to automatic" (CD-358); the API refuses a move forward and says why. */
-    const setCompanyStatus = async (companyId: string, status: CompanyStatus | null) => {
+    /**
+     * "Set status back…" (CD-358); the API refuses a move forward and says why. With `close`, those
+     * open opportunities are marked lost first (CD-478), so the status is held against them as lost.
+     */
+    const setCompanyStatus = async (companyId: string, status: CompanyStatus | null, close?: { leadIds: string[]; reason: LostReason }) => {
+      const closed = close ? ` · ${close.leadIds.length === 1 ? '1 opportunity' : close.leadIds.length + ' opportunities'} closed as lost` : '';
       try {
-        const row = await crmApi.setCompanyStatus(companyId, status);
+        // The API closes them in the same step, so the status is set by hand, not by the automation (CD-478).
+        const row = await crmApi.setCompanyStatus(companyId, status, close ? { reason: close.reason } : undefined);
         set((x) => ({ extraCompanies: x.extraCompanies.map((c) => (c.id === companyId ? { ...c, status: row.status, statusManual: row.statusSetManually, statusChangedAt: row.statusChangedAt } : c)) }));
-        flash(status ? `Status set back to ${COMPANY_STATUS_LABELS[row.status]}` : `The status is automatic again: ${COMPANY_STATUS_LABELS[row.status]}`);
+        const lostAt = new Date().toISOString();
+        for (const id of close?.leadIds ?? []) {
+          mapLead(id, (l) => ({ ...l, outcome: 'lost', lostReason: close!.reason, lostNote: 'Closed when the company was set to Not interested', lostAt }));
+          void refreshLog(id).catch(() => undefined);
+        }
+        flash((status ? `Status set back to ${COMPANY_STATUS_LABELS[row.status]}` : `The status is automatic again: ${COMPANY_STATUS_LABELS[row.status]}`) + closed);
       } catch (err) {
         flash('Status not changed: ' + errText(err), 7000);
       }
@@ -1978,6 +2019,28 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             if (key in terms) out[key] = i.message;
           }
           return Object.keys(out).length ? out : { project: errText(err) };
+        }
+      },
+      /** The workspace logo (CD-378) as an image, or null without one; throws when it can't be read. */
+      loadLogo: () => crmApi.workspaceLogo(),
+      /** Sets or replaces the logo (owners and admins); returns the API's reason when it refuses the file, else null. */
+      setLogo: async (file: File): Promise<string | null> => {
+        try {
+          const ws = await crmApi.setWorkspaceLogo(file);
+          set((x) => ({ workspace: { ...x.workspace, logoUpdatedAt: ws.logoUpdatedAt ?? null } }));
+          return null;
+        } catch (err) {
+          return errText(err);
+        }
+      },
+      /** Removes the logo; returns the API's reason when that fails, else null. */
+      removeLogo: async (): Promise<string | null> => {
+        try {
+          await crmApi.removeWorkspaceLogo();
+          set((x) => ({ workspace: { ...x.workspace, logoUpdatedAt: null } }));
+          return null;
+        } catch (err) {
+          return errText(err);
         }
       },
       /** Saves the company details (CD-167, owners and admins); returns the API's message when it refuses them, else null. */

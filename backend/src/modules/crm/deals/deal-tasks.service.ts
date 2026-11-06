@@ -122,8 +122,13 @@ export class DealTasksService {
     if (rest.blocksAdvance === false) {
       const detail = [rest.dueDate && 'Due ' + rest.dueDate, owner && 'Owner ' + owner, rest.note].filter(Boolean).join(' · ');
       await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId, actorUserId: ctx.userId, channel: rest.channel ?? null, title: 'Task added: ' + rest.label, detail: detail || null });
-    }
+    } else if (rest.label?.trim()) await this.logTodo(tx, ctx, dealId, 'To-do added: ' + rest.label.trim());
     return row!;
+  }
+
+  /** A stage to-do added or removed goes on the timeline, under Activity's Tasks (CD-477). */
+  private logTodo(tx: Tx, ctx: TenantContext, dealId: string, title: string, detail: string | null = null) {
+    return tx.insert(activities).values({ tenantId: ctx.tenantId, dealId, actorUserId: ctx.userId, channel: null, title, detail });
   }
 
   update(ctx: TenantContext, id: string, input: UpdateTask) {
@@ -131,12 +136,15 @@ export class DealTasksService {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         if (rest.assigneeUserId) await assertMember(tx, ctx, rest.assigneeUserId);
+        // A new to-do starts without a name; it counts as added once it gets one (CD-477).
+        const [before] = rest.label?.trim() ? await tx.select({ label: dealTasks.label }).from(dealTasks).where(eq(dealTasks.id, id)) : [];
         const [row] = await tx
           .update(dealTasks)
           .set({ ...rest, ...doneFields(ctx, done) })
           .where(eq(dealTasks.id, id))
           .returning();
         if (!row) throw new NotFoundException('To-do not found');
+        if (before && !before.label.trim() && row.offPlaybook && row.blocksAdvance) await this.logTodo(tx, ctx, row.dealId, 'To-do added: ' + row.label.trim());
         return row;
       })
       .catch(mapDbError);
@@ -152,10 +160,12 @@ export class DealTasksService {
       const [row] = await tx
         .delete(dealTasks)
         .where(eq(dealTasks.id, id))
-        .returning({ dealId: dealTasks.dealId, label: dealTasks.label, offPlaybook: dealTasks.offPlaybook, blocksAdvance: dealTasks.blocksAdvance });
+        .returning({ dealId: dealTasks.dealId, label: dealTasks.label, offPlaybook: dealTasks.offPlaybook, blocksAdvance: dealTasks.blocksAdvance, done: dealTasks.done });
       if (!row) throw new NotFoundException('To-do not found');
       if (row.offPlaybook && !row.blocksAdvance)
         await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId: row.dealId, actorUserId: ctx.userId, channel: null, title: 'Task removed: ' + row.label, detail: null });
+      // A named stage to-do going is on the timeline too, and says if it had been done (CD-477).
+      else if (row.offPlaybook && row.label.trim()) await this.logTodo(tx, ctx, row.dealId, 'To-do removed: ' + row.label.trim(), row.done ? 'It had been marked done.' : null);
     });
   }
 }

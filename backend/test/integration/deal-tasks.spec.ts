@@ -36,11 +36,12 @@ describe('deleting a task', () => {
     expect((await ok('GET', '/crm/deal-tasks', as())).some((t: { id: string }) => t.id === task.id)).toBe(false);
   });
 
-  it('logs nothing for stage to-dos (they never logged "Task added")', async () => {
+  it('logs a stage to-do as "To-do added" and "To-do removed", not as a task (CD-477)', async () => {
     const deal = await ok('POST', '/crm/deals', { ...as(), body: { title: 'Quiet', funnelId: funnel.id, companyId } });
     const todo = await ok('POST', `/crm/deals/${deal.id}/tasks`, { ...as(), body: { stageId: funnel.stages[0]!.id, label: 'Check budget' } });
-    const before = await titles(deal.id);
     await ok('DELETE', `/crm/deal-tasks/${todo.id}`, as());
-    expect(await titles(deal.id)).toEqual(before);
+    const logged = await titles(deal.id);
+    expect(logged).toEqual(expect.arrayContaining(['To-do added: Check budget', 'To-do removed: Check budget']));
+    expect(logged.some((t: string) => t.startsWith('Task '))).toBe(false);
   });
 });
