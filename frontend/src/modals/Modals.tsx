@@ -119,7 +119,7 @@ function NewDealModal() {
   };
 
   return (
-    <Modal maxWidth={560} gap={18} z={s.newLeadForMeeting ? 50 : undefined}>
+    <Modal maxWidth={560} gap={18} z={s.newLeadForMeeting ? 50 : undefined} onClose={close}>
       <ModalHeader title="New opportunity" sub="Pick the company and the funnel; activities and documents come with it. Only a company in status Opportunity or Client can enter the Pipeline." />
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
         <div className="form-label">
@@ -407,7 +407,7 @@ function NewTaskModal() {
   };
 
   return (
-    <Modal maxWidth={580}>
+    <Modal maxWidth={580} onClose={close}>
       <ModalHeader title={editing ? 'Edit task' : 'New task'} sub="Tasks outside the playbook still belong to a company and a stage, so the timeline stays complete." />
       <label className="form-label">
         Task title
@@ -537,7 +537,7 @@ function NewContactModal() {
       </span>
     ) : null;
   return (
-    <Modal maxWidth={580}>
+    <Modal maxWidth={580} onClose={close}>
       <ModalHeader title="New contact" sub="Pick their company, so they show up on its record and can be added to its opportunities." />
       <div className="contact-form-grid">
         <label className="form-label">
@@ -651,7 +651,7 @@ function NewPersonaModal() {
     setBusy(false);
   };
   return (
-    <Modal maxWidth={560}>
+    <Modal maxWidth={560} onClose={() => set({ personaOpen: false })}>
       <ModalHeader title="New funnel" sub="A funnel is the playbook for one target persona. Name who buys, then edit the stages, activities and documents." />
       <label className="form-label">
         Funnel name
@@ -702,7 +702,7 @@ function NewFieldModal() {
     set({ fieldOpen: false, newField: reset });
   };
   return (
-    <Modal maxWidth={520}>
+    <Modal maxWidth={520} onClose={() => set({ fieldOpen: false, newField: reset })}>
       <ModalHeader title="New field" sub="Custom fields show on the record and in its create form, and are included in CSV exports." />
       <label className="form-label">
         Field name

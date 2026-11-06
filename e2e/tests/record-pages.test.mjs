@@ -4,7 +4,7 @@
 // domain (a link) and notes, and the contact's LinkedIn, edit in place and show in the history.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, clickButton, createReadyCompany, eventually, newUserWithWorkspace, READY_IDENTITY, setByLabel, steps, text, useBrowser, testPib } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, confirmInApp, createReadyCompany, eventually, newUserWithWorkspace, READY_IDENTITY, setByLabel, steps, text, useBrowser, testPib } from '../lib/harness.mjs';
 
 describe('company and contact pages', () => {
   const browser = useBrowser();
@@ -154,6 +154,7 @@ describe('company and contact pages', () => {
     await page.goto(`${BASE_URL}/companies/${empty.id}`, { waitUntil: 'networkidle0' });
     await click(page, 'button[aria-label="More actions"]');
     await clickButton(page, 'Delete company');
+    assert.equal(await confirmInApp(page), `Delete ${empty.name}?`);
     await page.waitForFunction(() => location.pathname === '/companies');
     assert.ok(await eventually(async () => !(await api(page, '/crm/companies')).some((c) => c.id === empty.id)), 'company deleted');
   });

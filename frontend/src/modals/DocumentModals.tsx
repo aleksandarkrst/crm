@@ -39,7 +39,7 @@ export function GenerationModal() {
     : [];
 
   return (
-    <Modal maxWidth={520} z={40}>
+    <Modal maxWidth={520} z={40} onClose={close}>
       <div>
         <div className="caps">{stageDoc && stageDoc !== 'None' ? `Stage document · ${stageDoc}` : 'Generate a document'}</div>
         <div style={{ fontWeight: 600, letterSpacing: '-0.02em', fontSize: 24, lineHeight: 1.15, margin: '7px 0 6px' }}>
@@ -198,7 +198,7 @@ export function NewTemplateModal() {
   const known = scan?.placeholders.filter((p) => p.known) ?? [];
 
   return (
-    <Modal maxWidth={600}>
+    <Modal maxWidth={600} onClose={close}>
       <ModalHeader title="New template" sub="Upload the Word document you already use. Every {{parameter}} it contains becomes a merge field the CRM fills from the opportunity." />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         <span className="caps">Document type</span>

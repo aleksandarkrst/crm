@@ -60,7 +60,7 @@ export function DeactivateDialog({ card, onClose }: { card: ApiEmployeeCard; onC
     else onClose();
   };
   return (
-    <Modal maxWidth={560}>
+    <Modal maxWidth={560} onClose={busy ? undefined : onClose}>
       <ModalHeader title={`Deactivate ${card.fullName}`} sub="For someone leaving the company. Their access ends and their reports move to a new manager." />
       <div className="emp-dialog-grid">
         <label className="form-label">
@@ -131,7 +131,7 @@ export function ReactivateDialog({ card, onClose }: { card: ApiEmployeeCard; onC
     else onClose();
   };
   return (
-    <Modal maxWidth={480}>
+    <Modal maxWidth={480} onClose={busy ? undefined : onClose}>
       <ModalHeader
         title={inactive ? `Reactivate ${card.fullName}` : `Cancel ${card.fullName}'s leaving`}
         sub={inactive ? 'For a rehire. The previous period stays in the history. They have no account until you invite them again.' : 'They stay active; nothing changes on their last working day.'}

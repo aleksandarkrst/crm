@@ -13,6 +13,7 @@ import { InternalMinutes } from './meeting/InternalMinutes';
 import { MeetingDetails, MeetingGuests, MeetingTitle, MeetingWhen } from './meeting/MeetingFields';
 import { MeetingHistory } from './meeting/MeetingHistory';
 import { MeetingReminders } from './meeting/Reminders';
+import { askConfirm } from '../components/ConfirmDialog';
 
 type Tab = 'internal' | 'external' | 'history';
 const TABS: { value: Tab; label: string }[] = [
@@ -100,7 +101,7 @@ function MeetingPage({ m }: { m: ApiMeeting }) {
   };
   const onDelete = async () => {
     setMenu(false);
-    if (!window.confirm(`Delete the meeting "${m.title}"? This can't be undone. To keep a record of it, cancel it instead.`)) return;
+    if (!(await askConfirm({ title: `Delete the meeting "${m.title}"?`, message: "This can't be undone. To keep a record of it, cancel it instead.", confirmLabel: 'Delete', danger: true }))) return;
     if (await meetings.remove(m.id)) navigate(paths.calendar(), { replace: true });
   };
 

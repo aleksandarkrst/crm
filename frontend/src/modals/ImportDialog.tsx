@@ -17,6 +17,7 @@ import {
 } from '../store/importExport';
 import { useStore } from '../store/store';
 import { importTemplateLink } from '../store/wording';
+import { askConfirm } from '../components/ConfirmDialog';
 
 const TYPES: { key: ImportType; label: string; sub: string }[] = [
   { key: 'companies', label: 'Companies', sub: 'Duplicates are matched by name' },
@@ -129,6 +130,12 @@ export function ImportDialog({ initialType, onClose }: { initialType: ImportType
     setError('');
   };
 
+  // After the file was read, its columns are mapped: ask before throwing that away (CD-224).
+  const cancel = async () => {
+    if (step !== 'File' && !(await askConfirm({ title: 'Discard this import?', message: 'The file and the column mapping are not kept.', confirmLabel: 'Discard', danger: true }))) return;
+    onClose();
+  };
+
   const fields = preview?.fields ?? [];
   const isMapped = (key: string | undefined) => !!key && (mapping[key] ?? null) !== null;
   const missing = fields.filter((f) => f.required && !isMapped(f.key) && !isMapped(f.alternative)).map((f) => f.label);
@@ -137,7 +144,7 @@ export function ImportDialog({ initialType, onClose }: { initialType: ImportType
   const sub = 'Upload a CSV (UTF-8, comma or semicolon separated, with a header row). Nothing is saved until you import.';
 
   return (
-    <Modal maxWidth={760} gap={18}>
+    <Modal maxWidth={760} gap={18} onClose={() => void cancel()}>
       <ModalHeader title={title} sub={sub} />
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }} aria-label="Import steps">
         {STEPS.map((x, i) => (
@@ -352,11 +359,7 @@ export function ImportDialog({ initialType, onClose }: { initialType: ImportType
               type="button"
               className="btn btn-secondary"
               data-testid="import-cancel"
-              onClick={() => {
-                // After the file was read, its columns are mapped: ask before throwing that away (CD-224).
-                if (step !== 'File' && !window.confirm('Discard this import? The file and the column mapping are not kept.')) return;
-                onClose();
-              }}
+              onClick={() => void cancel()}
             >
               Cancel
             </button>

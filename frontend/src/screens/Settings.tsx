@@ -23,6 +23,7 @@ import { WorkspaceInfo } from './settings/WorkspaceInfo';
 import { RolesTab } from './settings/RolesTab';
 import type { TeamMember } from '../store/types';
 import { useTerms } from '../store/terms';
+import { askConfirm } from '../components/ConfirmDialog';
 
 /** A target days input: empty means no target; 1..365 like the API. */
 const targetOf = (raw: string) => (raw === '' ? null : Math.max(1, Math.min(365, Math.round(Number(raw) || 1))));
@@ -412,7 +413,7 @@ function TeamTab() {
                 onClick={() => {
                   if (invited) return revokeInvitation(m.id);
                   if (!self) return setRemoving(m);
-                  if (window.confirm(`Leave ${session.tenant.name}? You will need a new invitation to come back.`)) removeMember(m.id);
+                  void askConfirm({ title: `Leave ${session.tenant.name}?`, message: 'You will need a new invitation to come back.', confirmLabel: 'Leave', danger: true }).then((ok) => ok && removeMember(m.id));
                 }}
               />
             ) : (
@@ -441,7 +442,7 @@ function RemoveMemberDialog({ member, onClose }: { member: TeamMember; onClose: 
     else removeMember(member.id);
   };
   return (
-    <Modal maxWidth={480}>
+    <Modal maxWidth={480} onClose={onClose}>
       <ModalHeader title={`Remove ${member.name}?`} sub={`They lose access to ${session.tenant.name}. Their employee record stays, with no account.`} />
       {member.employeeId && (
         <label className="emp-check" style={{ fontSize: 13 }}>
@@ -484,7 +485,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
       .then(() => setCopied(true))
       .catch(() => setCopied(false));
   return (
-    <Modal maxWidth={520}>
+    <Modal maxWidth={520} onClose={onClose}>
       <ModalHeader title="Invite a teammate" sub={`They join ${session.tenant.name} and see the same pipeline. The email greets them by first name; the link works once, for this email address, for 7 days.`} />
       {!link ? (
         <>
@@ -956,8 +957,8 @@ function FieldDefRow({ field: fl, first, last }: { field: CustomFieldDef; first:
   const pill = (on: boolean) => ({ cursor: canEditFields ? 'pointer' : 'default', border: `1px solid ${on ? '#14503C' : '#E2E8E4'}`, background: on ? '#E7F2EE' : '#FFFFFF', color: on ? '#14503C' : '#475750', fontSize: 12, padding: '6px 11px', borderRadius: 6 });
   const entityLabel = { deal: 'opportunity', company: 'company', contact: 'contact' }[fl.entity];
   const onDelete = () => {
-    const question = `Delete the field "${fl.label}"? It disappears from every ${entityLabel}, from the ${entityLabel} forms and from CSV exports. Values already entered are kept in the records but no longer shown, and the field can't be brought back from here.`;
-    if (window.confirm(question)) deleteCustomField(fl.id);
+    const message = `It disappears from every ${entityLabel}, from the ${entityLabel} forms and from CSV exports. Values already entered are kept in the records but no longer shown, and the field can't be brought back from here.`;
+    void askConfirm({ title: `Delete the field "${fl.label}"?`, message, confirmLabel: 'Delete', danger: true }).then((ok) => ok && deleteCustomField(fl.id));
   };
   const saveOptions = () => {
     const options = (editing ?? []).map((o) => ({ ...o, label: o.label.trim() })).filter((o) => o.label);

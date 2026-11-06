@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { canManageTemplates, type DocTemplate, docMoment, fileSize, type PlaceholderReference } from '../store/documents';
 import { useStore } from '../store/store';
 import { mergeFieldGroupHeading, mergeFieldReference, opportunityCopy } from '../store/wording';
+import { askConfirm } from '../components/ConfirmDialog';
 
 /**
  * Settings → Document templates (CD-13): the uploaded .docx templates, the built-in proposal preview,
@@ -17,7 +18,7 @@ export function TemplatesTab() {
   }, [loadTemplates]);
 
   const onDelete = (t: DocTemplate) => {
-    if (window.confirm(`Delete the template "${t.name}"? Documents already generated from it are kept.`)) void deleteTemplate(t);
+    void askConfirm({ title: `Delete the template "${t.name}"?`, message: 'Documents already generated from it are kept.', confirmLabel: 'Delete', danger: true }).then((ok) => ok && void deleteTemplate(t));
   };
 
   return (

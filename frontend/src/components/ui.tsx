@@ -1,4 +1,4 @@
-import { type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, useEffect, useRef, useState } from 'react';
+import { createContext, type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, useContext, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 // ---------------------------------------------------------------- icons
@@ -397,6 +397,8 @@ export function FilterBar({
 
 /** Open modals; while any is open the page behind them does not scroll. */
 let openModals = 0;
+/** Escape handlers of the open modals, topmost last. */
+const escapeStack: { current?: () => void }[] = [];
 
 /**
  * A dialog over the whole screen. It renders into `document.body`, never where it is used: a modal
@@ -404,7 +406,41 @@ let openModals = 0;
  * would otherwise be positioned and clipped by that element, and scrolling it showed the page with
  * no backdrop (CD-228).
  */
-export function Modal({ children, maxWidth, z = 45, gap = 16, onBackdrop }: { children: ReactNode; maxWidth: number; z?: number; gap?: number; onBackdrop?: () => void }) {
+export function Modal({
+  children,
+  maxWidth,
+  z = 45,
+  gap = 16,
+  onBackdrop,
+  onClose = onBackdrop,
+  role = 'dialog',
+}: {
+  children: ReactNode;
+  maxWidth: number;
+  z?: number;
+  gap?: number;
+  onBackdrop?: () => void;
+  /** What Escape does (CD-490); the backdrop click's action by default. Without either, Escape does nothing. */
+  onClose?: () => void;
+  role?: 'dialog' | 'alertdialog';
+}) {
+  const titleId = useId();
+  const escape = useRef(onClose);
+  escape.current = onClose;
+  useEffect(() => {
+    // Only the topmost modal answers Escape; a popover or field that handled it first (preventDefault / stopPropagation) wins.
+    escapeStack.push(escape);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || escapeStack[escapeStack.length - 1] !== escape || !escape.current) return;
+      e.preventDefault();
+      escape.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      escapeStack.splice(escapeStack.indexOf(escape), 1);
+    };
+  }, []);
   useEffect(() => {
     const root = document.documentElement;
     if (++openModals === 1) {
@@ -424,18 +460,30 @@ export function Modal({ children, maxWidth, z = 45, gap = 16, onBackdrop }: { ch
   }, []);
   return createPortal(
     <div className="overlay" style={{ zIndex: z }} onClick={onBackdrop}>
-      <div className="modal" style={{ maxWidth, gap }} onClick={(e) => e.stopPropagation()}>
-        {children}
+      <div className="modal" role={role} aria-modal="true" aria-labelledby={titleId} style={{ maxWidth, gap }} onClick={(e) => e.stopPropagation()}>
+        <ModalTitleId.Provider value={titleId}>{children}</ModalTitleId.Provider>
       </div>
     </div>,
     document.body,
   );
 }
 
+/** The id of the open modal's heading, for `aria-labelledby` (CD-490). */
+const ModalTitleId = createContext<string | undefined>(undefined);
+
+/** The modal's heading, named by the dialog (CD-490). */
+export function ModalTitle({ children, style }: { children: ReactNode; style?: CSSProperties }) {
+  return (
+    <h2 className="modal-title" id={useContext(ModalTitleId)} style={style}>
+      {children}
+    </h2>
+  );
+}
+
 export function ModalHeader({ title, sub }: { title: string; sub: string }) {
   return (
     <div>
-      <div className="modal-title">{title}</div>
+      <ModalTitle>{title}</ModalTitle>
       <div className="modal-sub">{sub}</div>
     </div>
   );
