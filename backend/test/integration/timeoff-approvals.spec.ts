@@ -8,7 +8,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, createTenant, eventually, mailTo, ok, type Session, signIn } from './helpers';
-import { joinAsEmployee, START } from './people-helpers';
+import { asTenantSql, createDepartment, joinAsEmployee, START } from './people-helpers';
 
 let owner: Session;
 let mgr: Session;
@@ -74,6 +74,18 @@ describe('who decides (spec 9.1, AC 9.6.1)', () => {
     const mail = await eventually(async () => (await mailsAbout(peer.email, 'Time off rejected'))[0] ?? null, 'the rejected email');
     expect(mail.text).toContain('- Comment: Too many away that week');
     expect((await call('POST', `/timeoff/requests/${p.id}/reject`, { ...as(mgr), body: { comment: 'again' } })).status).toBe(409);
+  });
+
+  it('leaves out unit colleagues who are not the manager\'s reports (CD-494)', async () => {
+    const unit = await createDepartment(tenant, 'Also away unit');
+    await asTenantSql(tenant, `update employees set unit_id = $1 where id = any($2)`, [unit, [id.emp, id.peer, id.other]]);
+    const r = await submit(emp, { type: 'unpaid_leave', startDate: d('03-01'), endDate: d('03-02') });
+    const p = await submit(peer, { type: 'unpaid_leave', startDate: d('03-01'), endDate: d('03-01') });
+    const o = await submit(other, { type: 'unpaid_leave', startDate: d('03-02'), endDate: d('03-02') });
+    const row = (await ok('GET', '/timeoff/approvals', as(mgr))).find((x: { id: string }) => x.id === r.id);
+    expect(row.alsoAway.map((a: { employeeId: string }) => a.employeeId)).toEqual([id.peer]);
+    for (const [s, req] of [[emp, r], [peer, p], [other, o]] as const) await ok('POST', `/timeoff/requests/${req.id}/withdraw`, as(s), 200);
+    await asTenantSql(tenant, `update employees set unit_id = null where id = any($1)`, [[id.emp, id.peer, id.other]]);
   });
 });
 
