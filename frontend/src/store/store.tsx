@@ -1838,6 +1838,16 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           flash('Not resent: ' + errText(err), 7000);
         }
       },
+      /** Fetches a pending invitation's link without copying (CD-487: Show link). */
+      fetchInvitationLink: async (id: string): Promise<string | null> => {
+        try {
+          const { token } = await crmApi.invitationLink(id);
+          return `${window.location.origin}/invite/${token}`;
+        } catch (err) {
+          flash('No link: ' + errText(err), 7000);
+          return null;
+        }
+      },
       /** Copies a pending invitation's link to the clipboard, for when the email doesn't arrive. */
       copyInvitationLink: async (id: string): Promise<string | null> => {
         try {

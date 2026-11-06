@@ -39,7 +39,8 @@ describe('workspace terms', () => {
       await page.type(`[data-testid=term-${key}]`, value);
     }
     await click(page, '[data-testid=save-terms]');
-    await page.waitForFunction(() => document.querySelector('.settings-title')?.textContent === 'Job types');
+    // Title stays "Project hierarchy" on this route; wait for the Names fields (and the API) instead.
+    await page.waitForFunction(() => document.querySelector('[data-testid=term-project]')?.value === 'Job' && document.querySelector('[data-testid=term-task]')?.value === 'Activity');
     assert.deepEqual((await api(page, '/workspace')).terms, { project: 'Job', projects: 'Jobs', task: 'Activity', tasks: 'Activities' });
 
     // The other tab, without a reload (the live hint).
@@ -60,7 +61,7 @@ describe('workspace terms', () => {
     await page.goto(BASE_URL + '/settings/project-hierarchy', { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=project-terms]');
     await click(page, '[data-testid=reset-terms]');
-    await page.waitForFunction(() => document.querySelector('.settings-title')?.textContent === 'Project types');
+    await page.waitForFunction(() => document.querySelector('[data-testid=term-project]')?.value === 'Project' && document.querySelector('[data-testid=term-task]')?.value === 'Task');
     assert.deepEqual((await api(page, '/workspace')).terms, { project: 'Project', projects: 'Projects', task: 'Task', tasks: 'Tasks' });
     await other.waitForFunction(() => [...document.querySelectorAll('.nav-item')].some((el) => el.textContent.trim() === 'Tasks'));
   });

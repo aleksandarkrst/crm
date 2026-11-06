@@ -60,7 +60,7 @@ export function TemplatesTab() {
                 </button>
                 {canManage && (
                   <>
-                    <button type="button" className="btn-outline" data-testid="edit-template" onClick={() => onEdit(t)}>
+                    <button type="button" className="btn btn-secondary" style={{ fontSize: 12.5, padding: '8px 13px', borderRadius: 7 }} data-testid="edit-template" onClick={() => onEdit(t)}>
                       Edit
                     </button>
                     <button type="button" className="btn btn-secondary" style={{ fontSize: 12.5, padding: '8px 13px', borderRadius: 7 }} onClick={() => void onDelete(t)}>

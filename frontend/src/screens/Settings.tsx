@@ -129,15 +129,15 @@ export function Settings() {
                 {action.meta && <span style={{ fontSize: 12.5, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{action.meta}</span>}
                 {'soon' in action && action.soon ? (
                   <ComingSoonButton label={action.label} />
+                ) : 'disabled' in action && action.disabled ? (
+                  // Disabled buttons often skip `title` in browsers; wrap so the reason still shows (CD-487).
+                  <span title={'title' in action ? action.title : undefined} style={{ flex: '0 0 auto' }}>
+                    <button type="button" className="btn btn-disabled" disabled onClick={action.onClick}>
+                      {action.label}
+                    </button>
+                  </span>
                 ) : (
-                  <button
-                    type="button"
-                    className={'disabled' in action && action.disabled ? 'btn btn-disabled' : 'btn btn-primary'}
-                    style={{ flex: '0 0 auto' }}
-                    disabled={'disabled' in action && action.disabled}
-                    title={'title' in action ? action.title : undefined}
-                    onClick={action.onClick}
-                  >
+                  <button type="button" className="btn btn-primary" style={{ flex: '0 0 auto' }} onClick={action.onClick}>
                     {action.label}
                   </button>
                 )}
@@ -331,7 +331,7 @@ function GettingStartedCard() {
 }
 
 function TeamTab() {
-  const { s, session, setMemberRole, setInvitationRole, removeMember, revokeInvitation, resendInvitation, copyInvitationLink, refreshTeam } = useStore();
+  const { s, session, setMemberRole, setInvitationRole, removeMember, revokeInvitation, resendInvitation, fetchInvitationLink, copyInvitationLink, refreshTeam } = useStore();
   const cols = '1.4fr 1.4fr 0.9fr 0.7fr 0.7fr 40px';
   // Removing someone else asks whether they also left the company (spec 4.8).
   const [removing, setRemoving] = useState<TeamMember | null>(null);
@@ -351,7 +351,7 @@ function TeamTab() {
     return () => clearInterval(timer);
   }, [sending, refreshTeam]);
   const showInviteLink = async (id: string) => {
-    const link = await copyInvitationLink(id);
+    const link = await fetchInvitationLink(id);
     if (link) setShownLinks((prev) => ({ ...prev, [id]: link }));
   };
   return (
@@ -394,9 +394,15 @@ function TeamTab() {
                       <button type="button" style={linkButton} disabled={m.invite.emailStatus === 'queued' && !m.invite.emailError} onClick={() => void resendInvitation(m.id)}>
                         Resend
                       </button>
-                      <button type="button" style={linkButton} onClick={() => void showInviteLink(m.id)}>
-                        {shownLinks[m.id] ? 'Copy link' : 'Show link'}
-                      </button>
+                      {shownLinks[m.id] ? (
+                        <button type="button" style={linkButton} onClick={() => void copyInvitationLink(m.id)}>
+                          Copy link
+                        </button>
+                      ) : (
+                        <button type="button" style={linkButton} onClick={() => void showInviteLink(m.id)}>
+                          Show link
+                        </button>
+                      )}
                     </span>
                     {shownLinks[m.id] && (
                       <input className="form-input" readOnly value={shownLinks[m.id]} data-testid="pending-invite-link" onFocus={(e) => e.target.select()} style={{ fontSize: 12, padding: '6px 8px' }} />

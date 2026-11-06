@@ -175,6 +175,7 @@ export class DocumentsService {
   /**
    * Replaces a template's file and metadata in place (CD-487). Same storage key, so documents
    * already generated from it keep their template_id; later generations use the new .docx.
+   * Previous bytes are restored if the database update fails after the file was overwritten.
    */
   async replaceTemplate(ctx: TenantContext, id: string, file: UploadedDocx | undefined, input: CreateTemplate) {
     const tags = this.checkUpload(file);
@@ -183,6 +184,7 @@ export class DocumentsService {
       return row;
     });
     if (!existing) throw new NotFoundException('Template not found');
+    const previous = await this.storage.getBuffer(ctx.tenantId, existing.key);
     await this.storage.putBuffer(ctx.tenantId, existing.key, file!.buffer);
     try {
       return await this.database.withTenant(ctx.tenantId, async (tx) => {
@@ -202,6 +204,7 @@ export class DocumentsService {
         return presentTemplate(row!);
       });
     } catch (err) {
+      await this.storage.putBuffer(ctx.tenantId, existing.key, previous).catch(() => undefined);
       return mapDbError(err);
     }
   }
