@@ -1,9 +1,9 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { and, type Column, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, type Column, desc, eq, inArray, isNull, not, sql } from 'drizzle-orm';
 import { hasRole, type TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { auditLogs, companies, contacts, deals, funnelStages, projects } from '../../../shared/database/schema';
+import { activities, auditLogs, companies, contacts, deals, dealStageHistory, funnelStages, type LostReason, projects } from '../../../shared/database/schema';
 import { userNameOf } from '../owner';
 import { type CompanyStatus, computeStatus, factsFingerprint, type OpportunityState, opportunityReadiness, type ProjectState, STATUS_LABELS, STATUS_RANK } from './company-status';
 
@@ -95,7 +95,7 @@ export class CompanyStatusService {
    * A status can only be set back (a lower rank than now); forward is the automation's job (409 with
    * what is missing). `null` hands the status back to the automation, which recomputes it at once.
    */
-  setStatus(ctx: TenantContext, id: string, status: CompanyStatus | null) {
+  setStatus(ctx: TenantContext, id: string, status: CompanyStatus | null, closeOpen?: { reason: LostReason }) {
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const [company] = await tx.select().from(companies).where(eq(companies.id, id)).for('update');
@@ -104,8 +104,8 @@ export class CompanyStatusService {
         if (status === null) {
           await tx.update(companies).set({ statusSetManually: false }).where(eq(companies.id, id));
           await this.recompute(tx, ctx, [id]);
-        } else if (status === company.status && !company.statusSetManually) {
-          // Already there by itself (e.g. its open opportunities were just closed as lost): nothing to hold.
+        } else if (status === company.status && !company.statusSetManually && !closeOpen) {
+          // Already there by itself: nothing to hold.
         } else {
           if (STATUS_RANK[status] > STATUS_RANK[company.status]) {
             const people = await tx.select().from(contacts).where(eq(contacts.companyId, id));
@@ -115,6 +115,9 @@ export class CompanyStatusService {
               blockers: status === 'opportunity' ? blockers : [],
             });
           }
+          // Not interested may close its open opportunities as lost (CD-478), in this transaction and
+          // before the facts are read: the status is then set by hand against them, not by the automation.
+          if (closeOpen && status === 'not_interested') await this.closeOpen(tx, ctx, id, closeOpen.reason);
           const { facts } = await this.read(tx, [id]);
           await tx.update(companies).set({ statusSetManually: true }).where(eq(companies.id, id));
           await this.store(tx, ctx, id, company.status, status, 'manual', { facts: facts.get(id)!.fingerprint });
@@ -123,6 +126,27 @@ export class CompanyStatusService {
         return row!;
       })
       .catch(mapDbError);
+  }
+
+  /**
+   * Marks the company's open opportunities lost, as "Mark as lost" does (stage history, timeline,
+   * audit), without a recompute of their own: the caller sets the status right after.
+   */
+  private async closeOpen(tx: Tx, ctx: TenantContext, companyId: string, reason: LostReason) {
+    const note = 'Closed when the company was set to Not interested';
+    const open = await tx
+      .select({ id: deals.id, stageId: deals.stageId })
+      .from(deals)
+      .innerJoin(funnelStages, eq(funnelStages.id, deals.stageId))
+      .where(and(eq(deals.companyId, companyId), isNull(deals.lostAt), not(funnelStages.isWon)))
+      .for('update', { of: deals });
+    const now = new Date();
+    for (const deal of open) {
+      await tx.update(deals).set({ lostAt: now, lostReason: reason, lostNote: note }).where(eq(deals.id, deal.id));
+      await tx.insert(dealStageHistory).values({ tenantId: ctx.tenantId, dealId: deal.id, kind: 'lost', fromStageId: deal.stageId, toStageId: deal.stageId, outcome: 'lost', changedAt: now, changedByUserId: ctx.userId });
+      await tx.insert(activities).values({ tenantId: ctx.tenantId, dealId: deal.id, actorUserId: ctx.userId, channel: 'NT', title: `Marked as lost: ${reason}`, detail: note });
+      await tx.insert(auditLogs).values({ tenantId: ctx.tenantId, actorUserId: ctx.userId, action: 'deal.lost', entityType: 'deal', entityId: deal.id, data: { reason, note } });
+    }
   }
 
   /** The company's status changes, newest first: the audit rows `company.status_changed`. */

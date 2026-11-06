@@ -6,7 +6,7 @@ import { AuditService } from '../../../shared/audit/audit.service';
 import type { TenantContext } from '../../../shared/authorization';
 import { DatabaseService, type Tx } from '../../../shared/database/database.service';
 import { mapDbError } from '../../../shared/database/errors';
-import { companies, COMPANY_STATUSES, contacts, deals, funnelStages, meetings, OWNERSHIP_TYPES, projects, visitPlanLines } from '../../../shared/database/schema';
+import { companies, COMPANY_STATUSES, contacts, deals, funnelStages, LOST_REASONS, meetings, OWNERSHIP_TYPES, projects, visitPlanLines } from '../../../shared/database/schema';
 import { ListQuery, nonEmptyPatch, optionalText } from '../../../shared/validation/common';
 import { MB_MESSAGE, mbValid, PIB_MESSAGE, pibValid } from '../../../shared/validation/serbian-ids';
 import { CustomFieldsService, CustomFieldValuesInput } from '../custom-fields/custom-fields.service';
@@ -55,7 +55,13 @@ export const CompaniesQuery = ListQuery.extend({
 export type CompaniesQuery = z.infer<typeof CompaniesQuery>;
 
 /** "Set status back…" (a status); null hands it back to the automation at once (no longer offered in the app). */
-export const SetCompanyStatus = z.object({ status: z.enum(COMPANY_STATUSES).nullable() });
+export const SetCompanyStatus = z
+  .object({
+    status: z.enum(COMPANY_STATUSES).nullable(),
+    /** With Not interested: close its open opportunities as lost with this reason, in the same step (CD-478). */
+    closeOpen: z.object({ reason: z.enum(LOST_REASONS) }).optional(),
+  })
+  .refine((b) => !b.closeOpen || b.status === 'not_interested', { message: 'Only Not interested closes the open opportunities', path: ['closeOpen'] });
 export type SetCompanyStatus = z.infer<typeof SetCompanyStatus>;
 export type CreateCompany = z.infer<typeof CreateCompany>;
 export type UpdateCompany = z.infer<typeof UpdateCompany>;
