@@ -172,6 +172,40 @@ export class DocumentsService {
     }
   }
 
+  /**
+   * Replaces a template's file and metadata in place (CD-487). Same storage key, so documents
+   * already generated from it keep their template_id; later generations use the new .docx.
+   */
+  async replaceTemplate(ctx: TenantContext, id: string, file: UploadedDocx | undefined, input: CreateTemplate) {
+    const tags = this.checkUpload(file);
+    const existing = await this.database.withTenant(ctx.tenantId, async (tx) => {
+      const [row] = await tx.select({ id: documentTemplates.id, key: documentTemplates.storageKey, name: documentTemplates.name }).from(documentTemplates).where(eq(documentTemplates.id, id));
+      return row;
+    });
+    if (!existing) throw new NotFoundException('Template not found');
+    await this.storage.putBuffer(ctx.tenantId, existing.key, file!.buffer);
+    try {
+      return await this.database.withTenant(ctx.tenantId, async (tx) => {
+        await tx
+          .update(documentTemplates)
+          .set({
+            name: input.name,
+            docType: input.docType,
+            fileName: file!.originalname.slice(0, 200),
+            sizeBytes: file!.size,
+            placeholders: tags,
+            uploadedByUserId: ctx.userId,
+          })
+          .where(eq(documentTemplates.id, id));
+        await this.audit.record(tx, ctx, { action: 'document_template.replaced', entityType: 'document_template', entityId: id, data: { name: input.name, previousName: existing.name } });
+        const [row] = await tx.select(templateColumns).from(documentTemplates).where(eq(documentTemplates.id, id));
+        return presentTemplate(row!);
+      });
+    } catch (err) {
+      return mapDbError(err);
+    }
+  }
+
   async templateFile(ctx: TenantContext, id: string): Promise<{ name: string; stream: Readable }> {
     const row = await this.database.withTenant(ctx.tenantId, async (tx) => {
       const [t] = await tx.select({ name: documentTemplates.name, key: documentTemplates.storageKey }).from(documentTemplates).where(eq(documentTemplates.id, id));

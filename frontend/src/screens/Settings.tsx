@@ -84,7 +84,7 @@ export function Settings() {
 
   const action =
     current === 'templates'
-      ? { label: 'New template', onClick: () => (canManageTemplates(session.tenant.role) ? set({ templateOpen: true }) : flash('Only owners and admins can add templates')), meta: '' }
+      ? { label: 'New template', onClick: () => (canManageTemplates(session.tenant.role) ? set({ templateOpen: true, templateEditing: null }) : flash('Only owners and admins can add templates')), meta: '' }
       : current === 'fields'
         ? canEditFields
           ? { label: 'New field', onClick: () => set({ fieldOpen: true }), meta: '' }
@@ -92,8 +92,11 @@ export function Settings() {
         : current === 'team'
           ? {
               label: 'Invite member',
-              onClick: () => (session.tenant.role === 'member' ? flash('Only owners and admins can invite people') : setInviteOpen(true)),
+              onClick: () => setInviteOpen(true),
               meta: `${s.team.filter((m) => m.status === 'Active').length} active · ${s.team.filter((m) => m.status === 'Invited').length} invited`,
+              // Members cannot invite (CD-487): disable with a reason instead of a no-op primary button.
+              disabled: session.tenant.role === 'member',
+              title: session.tenant.role === 'member' ? 'Only owners and admins can invite people' : undefined,
             }
           : null;
 
@@ -126,7 +129,14 @@ export function Settings() {
                 {'soon' in action && action.soon ? (
                   <ComingSoonButton label={action.label} />
                 ) : (
-                  <button type="button" className="btn btn-primary" style={{ flex: '0 0 auto' }} onClick={action.onClick}>
+                  <button
+                    type="button"
+                    className={'disabled' in action && action.disabled ? 'btn btn-disabled' : 'btn btn-primary'}
+                    style={{ flex: '0 0 auto' }}
+                    disabled={'disabled' in action && action.disabled}
+                    title={'title' in action ? action.title : undefined}
+                    onClick={action.onClick}
+                  >
                     {action.label}
                   </button>
                 )}
@@ -320,10 +330,12 @@ function GettingStartedCard() {
 }
 
 function TeamTab() {
-  const { s, session, setMemberRole, removeMember, revokeInvitation, resendInvitation, copyInvitationLink, refreshTeam } = useStore();
+  const { s, session, setMemberRole, setInvitationRole, removeMember, revokeInvitation, resendInvitation, copyInvitationLink, refreshTeam } = useStore();
   const cols = '1.4fr 1.4fr 0.9fr 0.7fr 0.7fr 40px';
   // Removing someone else asks whether they also left the company (spec 4.8).
   const [removing, setRemoving] = useState<TeamMember | null>(null);
+  /** Invitation id → link shown under the pending row (CD-487). */
+  const [shownLinks, setShownLinks] = useState<Record<string, string>>({});
   const canManage = session.tenant.role !== 'member';
   const isOwner = session.tenant.role === 'owner';
   // While an invitation email is on its way, check back every few seconds (for up to 2 minutes).
@@ -337,6 +349,10 @@ function TeamTab() {
     }, 3000);
     return () => clearInterval(timer);
   }, [sending, refreshTeam]);
+  const showInviteLink = async (id: string) => {
+    const link = await copyInvitationLink(id);
+    if (link) setShownLinks((prev) => ({ ...prev, [id]: link }));
+  };
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
       <div className="table-head th" style={{ gridTemplateColumns: cols }}>
@@ -351,7 +367,8 @@ function TeamTab() {
         const self = m.id === session.userId;
         const invited = m.status === 'Invited';
         // Owners manage everyone; admins can't touch owners or hand out the owner role.
-        const editable = !invited && canManage && (isOwner || m.role !== 'Owner');
+        // Pending invitations: admins can change Admin/Member before the invitee joins (CD-487).
+        const editable = canManage && (invited ? true : isOwner || m.role !== 'Owner');
         const removable = invited ? canManage : self || (canManage && (isOwner || m.role !== 'Owner'));
         return (
           <div key={m.id} className="table-row" style={{ gridTemplateColumns: cols, padding: '11px 16px' }}>
@@ -371,14 +388,19 @@ function TeamTab() {
                   {inviteEmailLine(m.invite).text}
                 </span>
                 {canManage && m.invite.hasLink && (
-                  <span style={{ display: 'flex', gap: 12 }}>
-                    <button type="button" style={linkButton} disabled={m.invite.emailStatus === 'queued' && !m.invite.emailError} onClick={() => void resendInvitation(m.id)}>
-                      Resend
-                    </button>
-                    <button type="button" style={linkButton} onClick={() => void copyInvitationLink(m.id)}>
-                      Copy link
-                    </button>
-                  </span>
+                  <>
+                    <span style={{ display: 'flex', gap: 12 }}>
+                      <button type="button" style={linkButton} disabled={m.invite.emailStatus === 'queued' && !m.invite.emailError} onClick={() => void resendInvitation(m.id)}>
+                        Resend
+                      </button>
+                      <button type="button" style={linkButton} onClick={() => void showInviteLink(m.id)}>
+                        {shownLinks[m.id] ? 'Copy link' : 'Show link'}
+                      </button>
+                    </span>
+                    {shownLinks[m.id] && (
+                      <input className="form-input" readOnly value={shownLinks[m.id]} data-testid="pending-invite-link" onFocus={(e) => e.target.select()} style={{ fontSize: 12, padding: '6px 8px' }} />
+                    )}
+                  </>
                 )}
               </div>
             ) : (
@@ -388,8 +410,12 @@ function TeamTab() {
               <GhostSelect
                 className="ghost-sm"
                 value={m.role}
-                onChange={(e) => setMemberRole(m.id, e.target.value.toLowerCase() as 'owner' | 'admin' | 'member')}
-                options={isOwner ? [...TEAM_ROLES] : ['Admin', 'Member']}
+                onChange={(e) => {
+                  const role = e.target.value.toLowerCase() as 'owner' | 'admin' | 'member';
+                  if (invited) setInvitationRole(m.id, role === 'owner' ? 'admin' : role);
+                  else setMemberRole(m.id, role);
+                }}
+                options={invited ? ['Admin', 'Member'] : isOwner ? [...TEAM_ROLES] : ['Admin', 'Member']}
                 style={{ padding: '5px 8px' }}
               />
             ) : (
@@ -525,7 +551,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
           <div className="hint-box">We are emailing an invitation to {email.trim()}. The Team list shows when it has been sent, and you can resend it or copy the link from there.</div>
           <label className="form-label">
             Or send them the link yourself
-            <input className="form-input" readOnly value={link} onFocus={(e) => e.target.select()} />
+            <input className="form-input" readOnly value={link} data-testid="invite-link" onFocus={(e) => e.target.select()} />
           </label>
           <div className="modal-actions">
             <button type="button" className="btn btn-secondary" onClick={() => void copy()}>

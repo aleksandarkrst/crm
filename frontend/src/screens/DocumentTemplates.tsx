@@ -9,7 +9,7 @@ import { mergeFieldGroupHeading, mergeFieldReference, opportunityCopy } from '..
  * delete; everyone can download.
  */
 export function TemplatesTab() {
-  const { s, session, openDoc, loadTemplates, downloadTemplate, deleteTemplate } = useStore();
+  const { s, session, set, openDoc, loadTemplates, downloadTemplate, deleteTemplate } = useStore();
   const lead = s.leads[0];
   const canManage = canManageTemplates(session.tenant.role);
   useEffect(() => {
@@ -19,6 +19,7 @@ export function TemplatesTab() {
   const onDelete = (t: DocTemplate) => {
     if (window.confirm(`Delete the template "${t.name}"? Documents already generated from it are kept.`)) void deleteTemplate(t);
   };
+  const onEdit = (t: DocTemplate) => set({ templateOpen: true, templateEditing: t });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -56,9 +57,14 @@ export function TemplatesTab() {
                   Download
                 </button>
                 {canManage && (
-                  <button type="button" className="btn btn-secondary" style={{ fontSize: 12.5, padding: '8px 13px', borderRadius: 7 }} onClick={() => onDelete(t)}>
-                    Delete
-                  </button>
+                  <>
+                    <button type="button" className="btn-outline" data-testid="edit-template" onClick={() => onEdit(t)}>
+                      Edit
+                    </button>
+                    <button type="button" className="btn btn-secondary" style={{ fontSize: 12.5, padding: '8px 13px', borderRadius: 7 }} onClick={() => onDelete(t)}>
+                      Delete
+                    </button>
+                  </>
                 )}
               </div>
             </div>

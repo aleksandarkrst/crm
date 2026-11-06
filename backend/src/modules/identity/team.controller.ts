@@ -4,7 +4,7 @@ import { type AuthUser, CurrentUser, RequireTenant, Tenant, type TenantContext }
 import { RateLimit } from '../../shared/rate-limit';
 import { UuidParam } from '../../shared/validation/common';
 import { ZodPipe } from '../../shared/validation/zod-validation.pipe';
-import { CreateInvitation, TeamService, UpdateMember } from './team.service';
+import { CreateInvitation, TeamService, UpdateInvitation, UpdateMember } from './team.service';
 import { UserOnboardingService } from './user-onboarding.service';
 
 const Id = new ZodPipe(UuidParam);
@@ -45,6 +45,13 @@ export class TeamController {
   @RequireTenant('admin')
   link(@Tenant() ctx: TenantContext, @Param('id', Id) id: string) {
     return this.team.link(ctx, id);
+  }
+
+  /** Changes Admin/Member on a pending invitation (CD-487). */
+  @Patch('team/invitations/:id')
+  @RequireTenant('admin')
+  updateInvitation(@Tenant() ctx: TenantContext, @Param('id', Id) id: string, @Body(new ZodPipe(UpdateInvitation)) body: UpdateInvitation) {
+    return this.team.updateInvitation(ctx, id, body);
   }
 
   @Delete('team/invitations/:id')

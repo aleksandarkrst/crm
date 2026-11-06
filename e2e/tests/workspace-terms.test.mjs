@@ -1,4 +1,4 @@
-// What a workspace calls projects and tasks (CD-143): Settings → Project types → Names. An admin
+// What a workspace calls projects and tasks (CD-143): Settings → Project hierarchy → Names. An admin
 // renames Project and Task; the sidebar, pages, buttons and dialogs use the new names, another tab
 // gets them without a reload; invalid names show a field error; "Reset to defaults" brings back
 // Project and Task.
@@ -24,7 +24,7 @@ describe('workspace terms', () => {
   });
 
   step('a task name that repeats a project name shows a field error and saves nothing', async () => {
-    await page.goto(BASE_URL + '/settings/project-types', { waitUntil: 'networkidle0' });
+    await page.goto(BASE_URL + '/settings/project-hierarchy', { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=project-terms]');
     await page.$eval('[data-testid=term-task]', (el) => el.select());
     await page.type('[data-testid=term-task]', 'project');
@@ -57,7 +57,8 @@ describe('workspace terms', () => {
   });
 
   step('Reset to defaults brings back Project and Task', async () => {
-    await page.goto(BASE_URL + '/settings/project-types', { waitUntil: 'networkidle0' });
+    await page.goto(BASE_URL + '/settings/project-hierarchy', { waitUntil: 'networkidle0' });
+    await page.waitForSelector('[data-testid=project-terms]');
     await click(page, '[data-testid=reset-terms]');
     await page.waitForFunction(() => document.querySelector('.settings-title')?.textContent === 'Project types');
     assert.deepEqual((await api(page, '/workspace')).terms, { project: 'Project', projects: 'Projects', task: 'Task', tasks: 'Tasks' });
