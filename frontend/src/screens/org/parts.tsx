@@ -237,7 +237,10 @@ export function EmployeePicker({
           setOpen(true);
         }}
         onKeyDown={(ev) => {
-          if (ev.key === 'Escape') setOpen(false);
+          if (ev.key === 'Escape' && open) {
+            ev.preventDefault(); // closes the list, not the dialog around it (CD-490)
+            setOpen(false);
+          }
           if (ev.key === 'Enter' && matches[0]) {
             ev.preventDefault();
             onChange(matches[0].id);

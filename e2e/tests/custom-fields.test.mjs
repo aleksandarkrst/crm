@@ -2,7 +2,7 @@
 // and the value survives a reload; members can fill values but not change the definitions.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, clickButton, createDealInUi, email, eventually, newUserWithWorkspace, signIn, steps, text, useBrowser, waitForToastToClear, finishOnboarding } from '../lib/harness.mjs';
+import { api, BASE_URL, clickButton, confirmInApp, createDealInUi, email, eventually, newUserWithWorkspace, signIn, steps, text, useBrowser, waitForToastToClear, finishOnboarding } from '../lib/harness.mjs';
 
 /** Types into the custom field input with this label (data-custom-field) on the screen. */
 async function fillCustom(page, label, value) {
@@ -75,10 +75,10 @@ describe('custom fields', () => {
 
   step('deleting the field asks first and hides it from the opportunity', async () => {
     await page.goto(BASE_URL + '/settings/fields', { waitUntil: 'networkidle0' });
-    // The harness accepts every dialog; just read the question.
-    let question = '';
-    page.once('dialog', (d) => void (question = d.message()));
     await page.click('[data-testid=fields-deal] [data-testid=custom-field] button::-p-text(Delete)');
+    await page.waitForSelector('[data-testid=confirm-dialog]');
+    const question = await page.$eval('[data-testid=confirm-dialog]', (e) => e.textContent);
+    await confirmInApp(page);
     await eventually(async () => !(await api(page, '/crm/custom-fields')).some((f) => f.id === field.id));
     assert.match(question, /Values already entered are kept/);
     await page.goto(`${BASE_URL}/deals/${dealId}`, { waitUntil: 'networkidle0' });

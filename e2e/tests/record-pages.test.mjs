@@ -4,7 +4,7 @@
 // domain (a link) and notes, and the contact's LinkedIn, edit in place and show in the history.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, clickButton, createReadyCompany, eventually, newUserWithWorkspace, READY_IDENTITY, setByLabel, steps, text, useBrowser, testPib } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, confirmInApp, createNew, createReadyCompany, eventually, newUserWithWorkspace, READY_IDENTITY, setByLabel, steps, text, useBrowser, testPib } from '../lib/harness.mjs';
 
 describe('company and contact pages', () => {
   const browser = useBrowser();
@@ -14,6 +14,7 @@ describe('company and contact pages', () => {
   let contact;
   let empty;
   let unowned;
+  let deal;
 
   step('sets up a company with a contact and an opportunity, and an empty company', async () => {
     page = await browser.person('rhea');
@@ -21,7 +22,7 @@ describe('company and contact pages', () => {
     const funnels = await api(page, '/crm/funnels');
     company = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Umbrella d.o.o.', industry: 'Pharmaceuticals', hq: 'Niš', ...READY_IDENTITY }) });
     contact = await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ fullName: 'Alice Abernathy', companyId: company.id, email: 'alice@umbrella.test', jobTitle: 'COO', buyerRole: 'Decision maker' }) });
-    await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Umbrella rollout', funnelId: funnels[0].id, companyId: company.id, primaryContactId: contact.id }) });
+    deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Umbrella rollout', funnelId: funnels[0].id, companyId: company.id, primaryContactId: contact.id }) });
     empty = await api(page, '/crm/companies', { method: 'POST', body: JSON.stringify({ pib: testPib(), name: 'Empty Shell d.o.o.' }) });
     unowned = { id: await createReadyCompany(page, 'Nobody Owns d.o.o.', 'Petar Nikolić', { ownerUserId: null }) };
     await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Unowned company opportunity', funnelId: funnels[0].id, companyId: unowned.id }) });
@@ -48,9 +49,8 @@ describe('company and contact pages', () => {
     await page.keyboard.press('Tab');
   };
 
-  /** Opens the Changes view of the record's history and waits until it mentions `label`. */
+  /** Waits until the record's history (one list now: the Changes tab is gone) mentions `label`. */
   const changesInclude = async (label) => {
-    await click(page, '[data-testid="history-changes"]');
     await page.waitForFunction((label) => document.querySelector('[data-testid="change-history"]')?.innerText.includes(label), { timeout: 10_000 }, label);
     return page.$eval('[data-testid="change-history"]', (el) => el.innerText);
   };
@@ -80,10 +80,27 @@ describe('company and contact pages', () => {
   step('"+ Opportunity" starts the New opportunity dialog with this company', async () => {
     await click(page, '[data-testid=record-new-deal]');
     await page.waitForSelector('::-p-text(Create & start funnel)');
-    const picked = await page.$eval('.modal select', (el) => el.value);
+    const picked = await page.$eval('[data-testid=new-deal-company]', (el) => el.value);
     assert.equal(picked, company.id);
     await clickButton(page, 'Cancel');
     await page.waitForFunction(() => !document.querySelector('.modal'));
+  });
+
+  step('Escape closes New opportunity from the + menu, a labelled dialog (CD-490)', async () => {
+    await createNew(page, 'deal');
+    await page.waitForSelector('.modal[role=dialog][aria-modal=true]');
+    assert.equal(await page.$eval('.modal[role=dialog]', (el) => document.getElementById(el.getAttribute('aria-labelledby'))?.textContent), 'New opportunity');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.modal'));
+  });
+
+  step("Escape closes the opportunity's ⋯ menu and gives the focus back to ⋯ (CD-490)", async () => {
+    await page.goto(`${BASE_URL}/deals/${deal.id}`, { waitUntil: 'networkidle0' });
+    await click(page, '.deal-header button[aria-label="More actions"]');
+    await page.waitForSelector('[data-testid=delete-deal]');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=delete-deal]'));
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'More actions');
   });
 
   step('the contact page: header, summary, company and opportunities', async () => {
@@ -143,6 +160,13 @@ describe('company and contact pages', () => {
     await page.waitForSelector('.modal input[placeholder="e.g. Ana Marković"]');
     assert.equal(await page.$eval('.modal input[readonly]', (el) => el.value), 'Empty Shell d.o.o.');
     await page.type('.modal input[placeholder="e.g. Ana Marković"]', 'Nora Newhire');
+    // A contact added here is complete (CD-361): job title and role in the decision.
+    await page.type('.modal input[placeholder="e.g. Marketing Director"]', 'Office manager');
+    await page.evaluate(() => {
+      const select = [...document.querySelectorAll('.modal select')].find((el) => [...el.options].some((o) => o.value === 'Champion'));
+      select.value = 'Champion';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     await clickButton(page, 'Add contact');
     await page.waitForFunction(() => !document.querySelector('.modal'));
     const added = await eventually(async () => (await api(page, '/crm/contacts')).find((c) => c.fullName === 'Nora Newhire'));
@@ -154,6 +178,7 @@ describe('company and contact pages', () => {
     await page.goto(`${BASE_URL}/companies/${empty.id}`, { waitUntil: 'networkidle0' });
     await click(page, 'button[aria-label="More actions"]');
     await clickButton(page, 'Delete company');
+    assert.equal(await confirmInApp(page), `Delete ${empty.name}?`);
     await page.waitForFunction(() => location.pathname === '/companies');
     assert.ok(await eventually(async () => !(await api(page, '/crm/companies')).some((c) => c.id === empty.id)), 'company deleted');
   });

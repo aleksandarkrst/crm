@@ -16,6 +16,7 @@ import { INDUSTRIES, SOURCES, TEAM_SIZES } from '../store/seed';
 import { allPeople, COMPANY_STATUS_LABELS, COMPANY_STATUS_RANK, companyOfPerson, companyReadiness, companyRecords, pipelineBlocked, contactsForLead, curOf, initialsOf, timelineFor } from '../store/selectors';
 import { type CompanyFieldKey, useStore } from '../store/store';
 import type { CompanyStatus, LogEntry, Person } from '../store/types';
+import { askConfirm } from '../components/ConfirmDialog';
 
 /** The website of a domain such as "acme.com" (or a full http(s) address); '' when it isn't one. */
 function websiteHref(value: string): string {
@@ -98,12 +99,12 @@ export function Company() {
   const onDelete = () => {
     if (rec.leads.length) {
       const what = rec.leads.length === 1 ? 'an opportunity' : rec.leads.length + ' opportunities';
-      window.alert(`${rec.name} has ${what}. Delete them or move them to another company first.`);
+      store.flash(`${rec.name} has ${what}. Delete them or move them to another company first.`);
       return;
     }
     const own = allPeople(s).filter((p) => p.companyId === rec.id).length;
     const kept = own ? ` Its ${own === 1 ? 'contact is' : own + ' contacts are'} kept without a company.` : '';
-    if (window.confirm(`Delete ${rec.name}?${kept} This can't be undone.`)) void store.deleteCompany(rec.id);
+    void askConfirm({ title: `Delete ${rec.name}?`, message: `${kept.trim()} This can't be undone.`.trim(), confirmLabel: 'Delete', danger: true }).then((ok) => ok && void store.deleteCompany(rec.id));
   };
 
   return (

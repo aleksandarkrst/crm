@@ -54,8 +54,8 @@ export function ConfirmHost() {
     setQueue((q) => q.slice(1));
   }
   return (
-    <Modal maxWidth={440} z={70} onBackdrop={() => answer(false)}>
-      <div role="alertdialog" aria-modal="true" aria-label={current.title} data-testid="confirm-dialog" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <Modal maxWidth={440} z={70} role="alertdialog" onBackdrop={() => answer(false)}>
+      <div data-testid="confirm-dialog" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <ModalHeader title={current.title} sub={current.message ?? ''} />
         <div className="modal-actions">
           <button type="button" className="btn btn-secondary" data-testid="confirm-cancel" onClick={() => answer(false)}>

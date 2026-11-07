@@ -65,3 +65,14 @@ export function checkEmail(input: string): Checked {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return { ok: false, error: 'Enter an email address such as ana@acme.com.' };
   return { ok: true, value: raw };
 }
+
+/**
+ * Target days (CD-487): empty clears it (null), a whole number 1–365 sets it; anything else is
+ * refused (undefined), never clamped. `badInput` is the number input's validity.badInput.
+ */
+export const targetOf = (raw: string, badInput = false): number | null | undefined => {
+  if (badInput) return undefined;
+  if (raw.trim() === '') return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 && n <= 365 ? n : undefined;
+};

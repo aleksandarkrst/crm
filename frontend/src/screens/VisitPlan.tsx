@@ -13,6 +13,7 @@ import { startInPeriod } from '../store/meetingTime';
 import { dateLabel, instantToZoned, zonedToInstant } from '../store/time';
 import { useVisitProgress } from '../store/useVisitProgress';
 import { completionLabel, paceOf, shiftPeriod, type VisitCount, visitsInCalendar } from '../store/visitPlans';
+import { askConfirm } from '../components/ConfirmDialog';
 
 const COLS = 'minmax(0,2fr) 0.8fr 0.7fr 0.8fr 0.8fr minmax(150px,auto)';
 const COUNT_LABEL: Record<VisitCount, string> = { held: 'Held visits', upcoming: 'Upcoming visits', notClosed: 'Not closed visits', unplanned: 'Unplanned visits' };
@@ -184,16 +185,16 @@ export function VisitPlan() {
       plan.id,
       lines.map((l) => (l.companyId === companyId ? { ...l, plannedVisits: n } : l)),
     );
-  const removeLine = (companyId: string, name: string) => {
+  const removeLine = async (companyId: string, name: string) => {
     if (lines.length === 1) return store.flash('A plan needs at least one customer. Delete the plan instead.');
-    if (!window.confirm(`Remove ${name} from this plan? Meetings with ${name} are kept.`)) return;
+    if (!(await askConfirm({ title: `Remove ${name} from this plan?`, message: `Meetings with ${name} are kept.`, confirmLabel: 'Remove', danger: true }))) return;
     store.setPlanLines(
       plan.id,
       lines.filter((l) => l.companyId !== companyId),
     );
   };
   const onDelete = () => {
-    if (window.confirm(`Delete the visit plan of ${salesperson} for ${plan.periodLabel}? Meetings are kept.`)) void store.deleteVisitPlan(plan.id);
+    void askConfirm({ title: `Delete the visit plan of ${salesperson} for ${plan.periodLabel}?`, message: 'Meetings are kept.', confirmLabel: 'Delete', danger: true }).then((ok) => ok && void store.deleteVisitPlan(plan.id));
   };
   const copyToNext = () =>
     setCopying({
@@ -324,7 +325,7 @@ export function VisitPlan() {
                         >
                           Schedule visit
                         </button>
-                        {editable && <RemoveButton title={`Remove ${l.companyName}`} onClick={() => removeLine(l.companyId, l.companyName)} />}
+                        {editable && <RemoveButton title={`Remove ${l.companyName}`} onClick={() => void removeLine(l.companyId, l.companyName)} />}
                       </span>
                     </div>
                     {drillFor(l.companyId)}

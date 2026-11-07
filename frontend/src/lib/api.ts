@@ -1151,6 +1151,8 @@ export const crmApi = {
   revokeInvitation: (id: string) => api(`/team/invitations/${id}`, { method: 'DELETE' }),
   resendInvitation: (id: string) => api<ApiInvitation>(`/team/invitations/${id}/resend`, { method: 'POST' }),
   invitationLink: (id: string) => api<{ token: string }>(`/team/invitations/${id}/link`),
+  /** Changes Admin/Member on a pending invitation (CD-487). */
+  updateInvitation: (id: string, role: 'admin' | 'member') => api<ApiInvitation>(`/team/invitations/${id}`, { method: 'PATCH', json: { role } }),
   updateMember: (userId: string, role: ApiRole) => api(`/team/members/${userId}`, { method: 'PATCH', json: { role } }),
   removeMember: (userId: string) => api(`/team/members/${userId}`, { method: 'DELETE' }),
   previewInvitation: (token: string) => api<ApiInvitePreview>(`/invitations/${token}`),

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { askConfirm } from '../components/ConfirmDialog';
 import { FieldRow, GhostInput, GhostSelect, Modal, ModalHeader, RemoveButton, Switch } from '../components/ui';
 import { Icon } from '../components/icons';
 import { Screen } from '../components/Layout';
@@ -23,9 +24,58 @@ import { WorkspaceInfo } from './settings/WorkspaceInfo';
 import { RolesTab } from './settings/RolesTab';
 import type { TeamMember } from '../store/types';
 import { useTerms } from '../store/terms';
+import { targetOf } from '../lib/validate';
 
-/** A target days input: empty means no target; 1..365 like the API. */
-const targetOf = (raw: string) => (raw === '' ? null : Math.max(1, Math.min(365, Math.round(Number(raw) || 1))));
+const TARGET_DAYS_PROBLEM = 'Use whole days from 1 to 365, or leave it empty.';
+
+/**
+ * A target-days field that saves when it is left (or on Enter), not per keystroke: typing 99999999
+ * must not save its valid prefix 99 on the way. A value out of range or not a whole number stays
+ * in the field with a message under it and is not saved (CD-487 QA: -5 used to become 1 silently).
+ */
+function TargetDaysInput({ value, onSave, disabled, placeholder, testId }: { value: number | null; onSave: (v: number | null) => void; disabled: boolean; placeholder: string; testId: string }) {
+  const [text, setText] = useState(value === null ? '' : String(value));
+  const [bad, setBad] = useState(false);
+  useEffect(() => {
+    setText(value === null ? '' : String(value));
+    setBad(false);
+  }, [value]);
+  return (
+    <>
+      <span style={{ display: 'flex', alignItems: 'center', border: `1px solid ${bad ? 'var(--danger)' : 'var(--border)'}`, borderRadius: 7, background: 'var(--white)', padding: '0 10px 0 0' }}>
+        <input
+          data-testid={testId}
+          type="number"
+          disabled={disabled}
+          min={1}
+          max={365}
+          step={1}
+          value={text}
+          placeholder={placeholder}
+          aria-invalid={bad}
+          onChange={(e) => {
+            setText(e.target.value);
+            setBad(targetOf(e.target.value, e.target.validity.badInput) === undefined);
+          }}
+          onBlur={(e) => {
+            const next = targetOf(e.target.value, e.target.validity.badInput);
+            if (next !== undefined && next !== value) onSave(next);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+          }}
+          style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', padding: '9px 4px 9px 10px', fontSize: 13, color: 'var(--ink)', textTransform: 'none', letterSpacing: 0 }}
+        />
+        <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-2)', letterSpacing: 0 }}>days</span>
+      </span>
+      {bad && (
+        <span className="emp-error" role="alert" data-testid={`${testId}-error`} style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>
+          {TARGET_DAYS_PROBLEM}
+        </span>
+      )}
+    </>
+  );
+}
 
 /**
  * The sections of Settings (CD-280), grouped by module in the left nav. Each has its own route
@@ -84,7 +134,7 @@ export function Settings() {
 
   const action =
     current === 'templates'
-      ? { label: 'New template', onClick: () => (canManageTemplates(session.tenant.role) ? set({ templateOpen: true }) : flash('Only owners and admins can add templates')), meta: '' }
+      ? { label: 'New template', onClick: () => (canManageTemplates(session.tenant.role) ? set({ templateOpen: true, templateEditing: null }) : flash('Only owners and admins can add templates')), meta: '' }
       : current === 'fields'
         ? canEditFields
           ? { label: 'New field', onClick: () => set({ fieldOpen: true }), meta: '' }
@@ -92,8 +142,11 @@ export function Settings() {
         : current === 'team'
           ? {
               label: 'Invite member',
-              onClick: () => (session.tenant.role === 'member' ? flash('Only owners and admins can invite people') : setInviteOpen(true)),
+              onClick: () => setInviteOpen(true),
               meta: `${s.team.filter((m) => m.status === 'Active').length} active · ${s.team.filter((m) => m.status === 'Invited').length} invited`,
+              // Members cannot invite (CD-487): disable with a reason instead of a no-op primary button.
+              disabled: session.tenant.role === 'member',
+              title: session.tenant.role === 'member' ? 'Only owners and admins can invite people' : undefined,
             }
           : null;
 
@@ -125,6 +178,13 @@ export function Settings() {
                 {action.meta && <span style={{ fontSize: 12.5, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{action.meta}</span>}
                 {'soon' in action && action.soon ? (
                   <ComingSoonButton label={action.label} />
+                ) : 'disabled' in action && action.disabled ? (
+                  // Disabled buttons often skip `title` in browsers; wrap so the reason still shows (CD-487).
+                  <span title={'title' in action ? action.title : undefined} style={{ flex: '0 0 auto' }}>
+                    <button type="button" className="btn btn-disabled" disabled onClick={action.onClick}>
+                      {action.label}
+                    </button>
+                  </span>
                 ) : (
                   <button type="button" className="btn btn-primary" style={{ flex: '0 0 auto' }} onClick={action.onClick}>
                     {action.label}
@@ -320,10 +380,12 @@ function GettingStartedCard() {
 }
 
 function TeamTab() {
-  const { s, session, setMemberRole, removeMember, revokeInvitation, resendInvitation, copyInvitationLink, refreshTeam } = useStore();
+  const { s, session, setMemberRole, setInvitationRole, removeMember, revokeInvitation, resendInvitation, fetchInvitationLink, copyInvitationLink, refreshTeam } = useStore();
   const cols = '1.4fr 1.4fr 0.9fr 0.7fr 0.7fr 40px';
   // Removing someone else asks whether they also left the company (spec 4.8).
   const [removing, setRemoving] = useState<TeamMember | null>(null);
+  /** Invitation id → link shown under the pending row (CD-487). */
+  const [shownLinks, setShownLinks] = useState<Record<string, string>>({});
   const canManage = session.tenant.role !== 'member';
   const isOwner = session.tenant.role === 'owner';
   // While an invitation email is on its way, check back every few seconds (for up to 2 minutes).
@@ -337,6 +399,10 @@ function TeamTab() {
     }, 3000);
     return () => clearInterval(timer);
   }, [sending, refreshTeam]);
+  const showInviteLink = async (id: string) => {
+    const link = await fetchInvitationLink(id);
+    if (link) setShownLinks((prev) => ({ ...prev, [id]: link }));
+  };
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
       <div className="table-head th" style={{ gridTemplateColumns: cols }}>
@@ -351,7 +417,8 @@ function TeamTab() {
         const self = m.id === session.userId;
         const invited = m.status === 'Invited';
         // Owners manage everyone; admins can't touch owners or hand out the owner role.
-        const editable = !invited && canManage && (isOwner || m.role !== 'Owner');
+        // Pending invitations: admins can change Admin/Member before the invitee joins (CD-487).
+        const editable = canManage && (invited ? true : isOwner || m.role !== 'Owner');
         const removable = invited ? canManage : self || (canManage && (isOwner || m.role !== 'Owner'));
         return (
           <div key={m.id} className="table-row" style={{ gridTemplateColumns: cols, padding: '11px 16px' }}>
@@ -371,14 +438,25 @@ function TeamTab() {
                   {inviteEmailLine(m.invite).text}
                 </span>
                 {canManage && m.invite.hasLink && (
-                  <span style={{ display: 'flex', gap: 12 }}>
-                    <button type="button" style={linkButton} disabled={m.invite.emailStatus === 'queued' && !m.invite.emailError} onClick={() => void resendInvitation(m.id)}>
-                      Resend
-                    </button>
-                    <button type="button" style={linkButton} onClick={() => void copyInvitationLink(m.id)}>
-                      Copy link
-                    </button>
-                  </span>
+                  <>
+                    <span style={{ display: 'flex', gap: 12 }}>
+                      <button type="button" style={linkButton} disabled={m.invite.emailStatus === 'queued' && !m.invite.emailError} onClick={() => void resendInvitation(m.id)}>
+                        Resend
+                      </button>
+                      {shownLinks[m.id] ? (
+                        <button type="button" style={linkButton} onClick={() => void copyInvitationLink(m.id)}>
+                          Copy link
+                        </button>
+                      ) : (
+                        <button type="button" style={linkButton} onClick={() => void showInviteLink(m.id)}>
+                          Show link
+                        </button>
+                      )}
+                    </span>
+                    {shownLinks[m.id] && (
+                      <input className="form-input" readOnly value={shownLinks[m.id]} data-testid="pending-invite-link" onFocus={(e) => e.target.select()} style={{ fontSize: 12, padding: '6px 8px' }} />
+                    )}
+                  </>
                 )}
               </div>
             ) : (
@@ -388,8 +466,12 @@ function TeamTab() {
               <GhostSelect
                 className="ghost-sm"
                 value={m.role}
-                onChange={(e) => setMemberRole(m.id, e.target.value.toLowerCase() as 'owner' | 'admin' | 'member')}
-                options={isOwner ? [...TEAM_ROLES] : ['Admin', 'Member']}
+                onChange={(e) => {
+                  const role = e.target.value.toLowerCase() as 'owner' | 'admin' | 'member';
+                  if (invited) setInvitationRole(m.id, role === 'owner' ? 'admin' : role);
+                  else setMemberRole(m.id, role);
+                }}
+                options={invited ? ['Admin', 'Member'] : isOwner ? [...TEAM_ROLES] : ['Admin', 'Member']}
                 style={{ padding: '5px 8px' }}
               />
             ) : (
@@ -412,7 +494,12 @@ function TeamTab() {
                 onClick={() => {
                   if (invited) return revokeInvitation(m.id);
                   if (!self) return setRemoving(m);
-                  if (window.confirm(`Leave ${session.tenant.name}? You will need a new invitation to come back.`)) removeMember(m.id);
+                  void askConfirm({
+                    title: `Leave ${session.tenant.name}?`,
+                    message: 'You will need a new invitation to come back.',
+                    confirmLabel: 'Leave',
+                    danger: true,
+                  }).then((ok) => ok && removeMember(m.id));
                 }}
               />
             ) : (
@@ -441,7 +528,7 @@ function RemoveMemberDialog({ member, onClose }: { member: TeamMember; onClose: 
     else removeMember(member.id);
   };
   return (
-    <Modal maxWidth={480}>
+    <Modal maxWidth={480} onClose={onClose}>
       <ModalHeader title={`Remove ${member.name}?`} sub={`They lose access to ${session.tenant.name}. Their employee record stays, with no account.`} />
       {member.employeeId && (
         <label className="emp-check" style={{ fontSize: 13 }}>
@@ -484,7 +571,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
       .then(() => setCopied(true))
       .catch(() => setCopied(false));
   return (
-    <Modal maxWidth={520}>
+    <Modal maxWidth={520} onClose={onClose}>
       <ModalHeader title="Invite a teammate" sub={`They join ${session.tenant.name} and see the same pipeline. The email greets them by first name; the link works once, for this email address, for 7 days.`} />
       {!link ? (
         <>
@@ -525,7 +612,7 @@ function InviteModal({ onClose }: { onClose: () => void }) {
           <div className="hint-box">We are emailing an invitation to {email.trim()}. The Team list shows when it has been sent, and you can resend it or copy the link from there.</div>
           <label className="form-label">
             Or send them the link yourself
-            <input className="form-input" readOnly value={link} onFocus={(e) => e.target.select()} />
+            <input className="form-input" readOnly value={link} data-testid="invite-link" onFocus={(e) => e.target.select()} />
           </label>
           <div className="modal-actions">
             <button type="button" className="btn btn-secondary" onClick={() => void copy()}>
@@ -600,10 +687,7 @@ function FunnelBuilder() {
             </label>
             <label className="form-label">
               Default target days
-              <span style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--white)', padding: '0 10px 0 0' }}>
-                <input data-testid="funnel-target-days" type="number" disabled={!editable} min={1} max={365} value={funnel.targetDays ?? ''} placeholder="No target" onChange={(e) => store.patchFunnel(funnel.id, { targetDays: targetOf(e.target.value) })} style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', padding: '9px 4px 9px 10px', fontSize: 13, color: 'var(--ink)', textTransform: 'none', letterSpacing: 0 }} />
-                <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-2)', letterSpacing: 0 }}>days</span>
-              </span>
+              <TargetDaysInput testId="funnel-target-days" disabled={!editable} value={funnel.targetDays ?? null} placeholder="No target" onSave={(v) => store.patchFunnel(funnel.id, { targetDays: v })} />
             </label>
           </div>
 
@@ -804,10 +888,7 @@ function FunnelStageRow({
                 </label>
                 <label className="form-label">
                   Target days
-                  <span style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--white)', padding: '0 10px 0 0' }}>
-                    <input data-testid="stage-target-days" type="number" disabled={!editable} min={1} max={365} value={st.targetDays ?? ''} placeholder="Funnel default" onChange={(e) => store.setStageRule(idx, { targetDays: targetOf(e.target.value) })} style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', padding: '9px 4px 9px 10px', fontSize: 13, color: 'var(--ink)', textTransform: 'none', letterSpacing: 0 }} />
-                    <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-2)', letterSpacing: 0 }}>days</span>
-                  </span>
+                  <TargetDaysInput testId="stage-target-days" disabled={!editable} value={st.targetDays ?? null} placeholder="Funnel default" onSave={(v) => store.setStageRule(idx, { targetDays: v })} />
                 </label>
               </>
             )}
@@ -956,8 +1037,8 @@ function FieldDefRow({ field: fl, first, last }: { field: CustomFieldDef; first:
   const pill = (on: boolean) => ({ cursor: canEditFields ? 'pointer' : 'default', border: `1px solid ${on ? '#14503C' : '#E2E8E4'}`, background: on ? '#E7F2EE' : '#FFFFFF', color: on ? '#14503C' : '#475750', fontSize: 12, padding: '6px 11px', borderRadius: 6 });
   const entityLabel = { deal: 'opportunity', company: 'company', contact: 'contact' }[fl.entity];
   const onDelete = () => {
-    const question = `Delete the field "${fl.label}"? It disappears from every ${entityLabel}, from the ${entityLabel} forms and from CSV exports. Values already entered are kept in the records but no longer shown, and the field can't be brought back from here.`;
-    if (window.confirm(question)) deleteCustomField(fl.id);
+    const message = `It disappears from every ${entityLabel}, from the ${entityLabel} forms and from CSV exports. Values already entered are kept in the records but no longer shown, and the field can't be brought back from here.`;
+    void askConfirm({ title: `Delete the field "${fl.label}"?`, message, confirmLabel: 'Delete', danger: true }).then((ok) => ok && deleteCustomField(fl.id));
   };
   const saveOptions = () => {
     const options = (editing ?? []).map((o) => ({ ...o, label: o.label.trim() })).filter((o) => o.label);

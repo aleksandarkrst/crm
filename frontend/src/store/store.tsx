@@ -361,7 +361,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           for (let attempt = 0; attempt < 5; attempt++) {
             await whenIdle();
             const seq = writeSeq.current;
-            const data = await loadWorkspace();
+            const data = await loadWorkspace(session.tenant.role);
             if (seq === writeSeq.current && isIdle()) {
               applyData(data);
               return;
@@ -467,7 +467,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             const seq = writeSeq.current;
             const changed: Changed = {};
             for (const [part, ids] of rows) if (ids) changed[part] = ids;
-            const data = await loadWorkspace(parts, changed);
+            const data = await loadWorkspace(session.tenant.role, parts, changed);
             if (seq === writeSeq.current && isIdle()) {
               applyData(data, touched);
               applied = true;
@@ -1612,6 +1612,14 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         refreshChecklist();
         return t;
       },
+      /** Replaces an existing template's .docx and metadata (CD-487). */
+      replaceTemplate: async (id: string, file: File, name: string, docType: DocType) => {
+        const t = await docsApi.replaceTemplate(id, file, name, docType);
+        set((x) => ({ templates: (x.templates || []).map((y) => (y.id === id ? t : y)) }));
+        flash(`${t.name} updated`);
+        refreshChecklist();
+        return t;
+      },
       deleteTemplate: async (t: DocTemplate) => {
         try {
           await docsApi.deleteTemplate(t.id);
@@ -1830,6 +1838,16 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           flash('Not resent: ' + errText(err), 7000);
         }
       },
+      /** Fetches a pending invitation's link without copying (CD-487: Show link). */
+      fetchInvitationLink: async (id: string): Promise<string | null> => {
+        try {
+          const { token } = await crmApi.invitationLink(id);
+          return `${window.location.origin}/invite/${token}`;
+        } catch (err) {
+          flash('No link: ' + errText(err), 7000);
+          return null;
+        }
+      },
       /** Copies a pending invitation's link to the clipboard, for when the email doesn't arrive. */
       copyInvitationLink: async (id: string): Promise<string | null> => {
         try {
@@ -1851,6 +1869,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       },
       setMemberRole: (userId: string, role: ApiRole) => {
         void save(() => crmApi.updateMember(userId, role), reload, 'the role');
+      },
+      /** Changes Admin/Member on a pending invitation before they join (CD-487). */
+      setInvitationRole: (id: string, role: 'admin' | 'member') => {
+        void save(() => crmApi.updateInvitation(id, role), reload, 'the invitation role');
       },
       /** Removes a member; removing yourself leaves the workspace. */
       removeMember: (userId: string) => {
@@ -2043,14 +2065,23 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           return errText(err);
         }
       },
-      /** Saves the company details (CD-167, owners and admins); returns the API's message when it refuses them, else null. */
-      saveCompany: async (company: Partial<ApiCompanyDetails>): Promise<string | null> => {
+      /**
+       * Saves the company details (CD-167, owners and admins); null when saved. When the API refuses
+       * them, its per-field messages keyed by field (CD-487: "pib", not "company.pib"), or a message.
+       */
+      saveCompany: async (company: Partial<ApiCompanyDetails>): Promise<{ fields: Partial<Record<keyof ApiCompanyDetails, string>>; message: string | null } | null> => {
         try {
           const ws = await crmApi.updateWorkspace({ company });
           set((x) => ({ workspace: { ...x.workspace, company: ws.company } }));
           return null;
         } catch (err) {
-          return errText(err);
+          const issues = err instanceof ApiError ? ((err.body as { issues?: { path?: string; message?: string }[] } | null)?.issues ?? []) : [];
+          const fields: Partial<Record<keyof ApiCompanyDetails, string>> = {};
+          for (const i of issues) {
+            const key = i.path?.replace(/^company\./, '') as keyof ApiCompanyDetails | undefined;
+            if (key && key in company && i.message && !fields[key]) fields[key] = i.message.endsWith('.') ? i.message : i.message + '.';
+          }
+          return { fields, message: Object.keys(fields).length ? null : errText(err) };
         }
       },
       /** Edits your own profile and saves it (one write per field after a pause). */

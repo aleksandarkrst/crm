@@ -18,6 +18,7 @@ export function Popover({
   label,
   testId,
   keepOnScroll,
+  role = 'dialog',
 }: {
   anchor: RefObject<HTMLElement | null>;
   onClose: () => void;
@@ -26,6 +27,8 @@ export function Popover({
   label: string;
   testId?: string;
   keepOnScroll?: boolean;
+  /** `menu` for a list of actions (the ⋯ and + menus, CD-490). */
+  role?: 'dialog' | 'menu';
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState<{ top: number; left: number } | null>(null);
@@ -52,6 +55,7 @@ export function Popover({
     const down = (e: MouseEvent) => !inside(e.target) && close.current();
     const key = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      e.preventDefault(); // the modal under it stays open (CD-490)
       anchor.current?.focus();
       close.current();
     };
@@ -77,7 +81,7 @@ export function Popover({
     <div
       ref={panel}
       className={'popover' + (className ? ` ${className}` : '')}
-      role="dialog"
+      role={role}
       aria-label={label}
       data-testid={testId}
       // Hidden by opacity, not visibility, so a field inside can take focus as it mounts (autoFocus).

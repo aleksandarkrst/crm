@@ -525,6 +525,8 @@ export interface State {
   /** Funnel id the "New funnel" dialog copies, or 'blank'. */
   personaBase: string;
   templateOpen: boolean;
+  /** Template being edited in the New/Edit template dialog (null = new upload). CD-487. */
+  templateEditing: DocTemplate | null;
   templateType: string;
   fieldOpen: boolean;
   newField: NewFieldDraft;

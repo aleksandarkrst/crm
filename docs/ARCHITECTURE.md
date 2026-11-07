@@ -539,9 +539,11 @@ fields; anyone in the workspace generates a document on a deal from one and down
   the backup container archives it next to each database dump (see
   [DEPLOYMENT.md](DEPLOYMENT.md#5-backups)).
 - **UI**: Settings → Document templates lists the uploaded templates (fields, uploader, Download,
-  Delete for owners/admins), keeps the built-in "Proposal v4" browser preview, and has the merge
-  field reference with **Download starter template**. **New template** (owners/admins) takes the
-  type, name and file, scans it and shows the fields before **Save template**. On a deal, the
+  Edit, Delete for owners/admins), keeps the built-in "Proposal v4" browser preview, and has the
+  merge field reference with **Download starter template**. **New template** (owners/admins) takes the
+  type, name and file, scans it and shows the fields before **Save template**. **Edit** (CD-487)
+  opens the same dialog prefilled and replaces the .docx in place (`PUT /api/crm/document-templates/:id`).
+  On a deal, the
   composer's **Documents** tab picks a template (the stage's document type first), generates, and
   lists the documents with their state, template, who, when and what was left empty, with Download
   and Delete. Entering a stage whose entry document is a Proposal opens the generation dialog, which
@@ -674,6 +676,9 @@ and admins can resend or copy it later.
   admins) returns the token, for when the email doesn't arrive. Both answer 404 for an invitation
   that was accepted, withdrawn or expired (or belongs to another workspace), and 409 for one from
   before CD-7 (no stored link: withdraw it and invite again) or when `APP_SECRET` changed since.
+- **Pending role** (`PATCH /api/team/invitations/:id`, admins, CD-487): change Admin/Member on a
+  pending invitation before it is accepted. The Team tab shows the same role dropdown as for active
+  members (Admin/Member only). Members see **Invite member** disabled with a reason.
 - The email names the workspace, who invited them and the role, and links to
   `APP_URL/invite/<token>`. `APP_URL` is configured, never taken from the request, so a spoofed
   Host header can't redirect invite links.
@@ -1211,9 +1216,9 @@ the store is the one place that talks to the backend.
 
 **The Settings page** (CD-280, `screens/Settings.tsx`): a 200 px left nav grouped by module, the
 section on the right (title, one-line description, the section's action button). Each section has
-its own route (`/settings/<section>`, kept on reload). Groups: **Workspace** (General, Members, Roles &
+its own route (`/settings/<section>`, kept on reload). Groups: **Workspace** (General, Modules, Members, Roles &
 permissions, Notifications), **CRM** (Funnels, Document templates, Customize fields, Sales bonuses),
-**Projects** (Project types, Technicians) and **Workforce** (Employees, Approvals, Holidays; CD-153). The design also names Workforce → Cost
+**Projects** (Project hierarchy, Project types, Technicians) and **Workforce** (Employees, Approvals, Holidays, Time off; CD-153 / CD-163 / CD-318). The design also names Workforce → Cost
 rates; it comes when there are rates to set. Sales bonuses and Employees stay hidden from those who
 can't use them. Settings belongs to no module, so the sidebar and the switcher keep the module it
 was opened from. Under 800 px the nav wraps above the content.
@@ -2180,7 +2185,8 @@ Admins, and the requester alone when they are the only Admin.
 - **The Approvals tab** (`GET /api/timeoff/approvals`, spec 9.2): the pending requests whose
   resolved approvers include the caller (managers among their reports, Admins everywhere), each
   with the vacation balance after approval, `alsoAway` (the requester's unit and the approver's
-  direct reports with pending or approved leave on any of the days), `startDatePassed`,
+  direct reports with pending or approved leave on any of the days, only people the caller may
+  see: managers their reports, Admins everyone; CD-494), `startDatePassed`,
   `twoWeekPartMissing` (a vacation under ten days from October on while the two-week part isn't
   taken) and the paid leave warnings. `GET approvals/count` feeds the sidebar badge on Time off
   (`usePendingApprovals` in the sidebar, managers and Admins).

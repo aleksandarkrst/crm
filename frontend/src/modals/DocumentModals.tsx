@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal, ModalHeader } from '../components/ui';
+import { Modal, ModalHeader, ModalTitle } from '../components/ui';
 import { paths } from '../lib/paths';
 import { DocProgress } from '../components/DocProgress';
 import { canManageTemplates, DOC_TYPES, type DocType, docBusy, fileSize, hasLiveProposal, type ScanResult, suggestedTemplate, templateFileProblem } from '../store/documents';
@@ -39,12 +39,12 @@ export function GenerationModal() {
     : [];
 
   return (
-    <Modal maxWidth={520} z={40}>
+    <Modal maxWidth={520} z={40} onClose={close}>
       <div>
         <div className="caps">{stageDoc && stageDoc !== 'None' ? `Stage document · ${stageDoc}` : 'Generate a document'}</div>
-        <div style={{ fontWeight: 600, letterSpacing: '-0.02em', fontSize: 24, lineHeight: 1.15, margin: '7px 0 6px' }}>
+        <ModalTitle className="" style={{ fontWeight: 600, letterSpacing: '-0.02em', fontSize: 24, lineHeight: 1.15, margin: '7px 0 6px' }}>
           {doc ? `Building ${doc.name}` : `Generate a document for ${lead.company || lead.title}`}
-        </div>
+        </ModalTitle>
         <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5 }}>
           {doc ? `Template: ${doc.templateName}` : 'The template is filled in with this opportunity: company, contact, discovery notes, products and amounts in the opportunity currency.'}
         </div>
@@ -151,18 +151,20 @@ export function GenerationModal() {
 }
 
 /**
- * Uploading a template (owners and admins): the file is checked and its merge fields listed before
- * it is saved, so a typo like {{deal.amoutn}} shows up as "not recognised" right away.
+ * Uploading or replacing a template (owners and admins): the file is checked and its merge fields
+ * listed before it is saved, so a typo like {{deal.amoutn}} shows up as "not recognised" right away.
+ * Edit (CD-487) prefills name and type and replaces the .docx in place.
  */
 export function NewTemplateModal() {
-  const { set, uploadTemplate, scanTemplate } = useStore();
-  const [docType, setDocType] = useState<DocType>('Proposal');
-  const [name, setName] = useState('');
+  const { s, set, uploadTemplate, replaceTemplate, scanTemplate } = useStore();
+  const editing = s.templateEditing;
+  const [docType, setDocType] = useState<DocType>(editing?.docType ?? 'Proposal');
+  const [name, setName] = useState(editing?.name ?? '');
   const [file, setFile] = useState<File | null>(null);
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [problem, setProblem] = useState('');
   const [busy, setBusy] = useState<'' | 'scan' | 'save'>('');
-  const close = () => set({ templateOpen: false });
+  const close = () => set({ templateOpen: false, templateEditing: null });
 
   const pick = async (f: File | undefined) => {
     setScan(null);
@@ -186,7 +188,8 @@ export function NewTemplateModal() {
     if (!file || !scan) return;
     setBusy('save');
     try {
-      await uploadTemplate(file, name.trim(), docType);
+      if (editing) await replaceTemplate(editing.id, file, name.trim(), docType);
+      else await uploadTemplate(file, name.trim(), docType);
       close();
     } catch (err) {
       setProblem((err as Error).message);
@@ -198,8 +201,15 @@ export function NewTemplateModal() {
   const known = scan?.placeholders.filter((p) => p.known) ?? [];
 
   return (
-    <Modal maxWidth={600}>
-      <ModalHeader title="New template" sub="Upload the Word document you already use. Every {{parameter}} it contains becomes a merge field the CRM fills from the opportunity." />
+    <Modal maxWidth={600} onClose={close}>
+      <ModalHeader
+        title={editing ? 'Edit template' : 'New template'}
+        sub={
+          editing
+            ? 'Upload a new Word document to replace this template. Documents already generated from it are kept; new generations use the updated file.'
+            : 'Upload the Word document you already use. Every {{parameter}} it contains becomes a merge field the CRM fills from the opportunity.'
+        }
+      />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         <span className="caps">Document type</span>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -224,13 +234,15 @@ export function NewTemplateModal() {
           style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
           onChange={(e) => void pick(e.target.files?.[0])}
         />
-        <span style={{ fontSize: 13.5, fontWeight: 600 }}>{file ? file.name : 'Upload a .docx'}</span>
+        <span style={{ fontSize: 13.5, fontWeight: 600 }}>{file ? file.name : editing ? 'Upload a new .docx to replace the file' : 'Upload a .docx'}</span>
         <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45 }}>
           {busy === 'scan'
             ? 'Checking the document…'
             : scan
               ? `Scanned · ${fileSize(scan.sizeBytes)} · ${known.length} merge field${known.length === 1 ? '' : 's'} recognised${unknown.length ? `, ${unknown.length} not` : ''}`
-              : 'Word (.docx), up to 5 MB. Write merge fields in double braces, e.g. {{company.name}}; the reference below the templates lists them all.'}
+              : editing
+                ? `Current file: ${editing.fileName}. Word (.docx), up to 5 MB.`
+                : 'Word (.docx), up to 5 MB. Write merge fields in double braces, e.g. {{company.name}}; the reference below the templates lists them all.'}
         </span>
       </label>
       {problem && <div style={{ fontSize: 12.5, color: 'var(--danger)', lineHeight: 1.5 }}>{problem}</div>}
@@ -255,7 +267,7 @@ export function NewTemplateModal() {
           Cancel
         </button>
         <button type="button" className={scan && name.trim() && !busy ? 'btn btn-primary' : 'btn btn-disabled'} disabled={!scan || !name.trim() || !!busy} onClick={() => void save()}>
-          {busy === 'save' ? 'Saving…' : 'Save template'}
+          {busy === 'save' ? 'Saving…' : editing ? 'Save changes' : 'Save template'}
         </button>
       </div>
     </Modal>

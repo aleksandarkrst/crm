@@ -13,6 +13,7 @@ import { allPeople, companyIdOfPerson, companyOfPerson, companyRecords, contacts
 import { useStore } from '../store/store';
 import type { Person } from '../store/types';
 import { docState, docStateClass } from './lead/docs';
+import { askConfirm } from '../components/ConfirmDialog';
 
 /** A LinkedIn value that is a web address (with or without https://); '' otherwise. */
 function linkedinHref(value: string): string {
@@ -66,7 +67,7 @@ export function Contact() {
     const note = primaryOf.length
       ? ` ${primaryOf.length === 1 ? 'The opportunity' : primaryOf.length + ' opportunities'} where they are the primary contact (${primaryOf.map((l) => l.title || l.company).join(', ')}) will be kept without a primary contact.`
       : '';
-    if (window.confirm(`Delete ${p.name}? They are removed from every opportunity.${note} This can't be undone.`)) void store.deleteContact(p.id);
+    void askConfirm({ title: `Delete ${p.name}?`, message: `They are removed from every opportunity.${note} This can't be undone.`, confirmLabel: 'Delete', danger: true }).then((ok) => ok && void store.deleteContact(p.id));
   };
 
   return (

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { BillingFields } from '../components/BillingFields';
-import { Modal, RemoveButton } from '../components/ui';
+import { Modal, ModalTitle, RemoveButton } from '../components/ui';
 import { amountProblem, billingText, dealTotals, isRecurring, MAX_PRICE, MAX_QTY, TAX_MODES } from '../store/dealMath';
 import { currencyOptions } from '../store/seed';
 import { closeIsoOf, curOf, currencySymbol, defaultStart, leadById, linesOf, moneyExact, num } from '../store/selectors';
@@ -110,11 +110,9 @@ export function DealProductsDialog() {
   );
 
   return (
-    <Modal maxWidth={1060} z={46} gap={16}>
+    <Modal maxWidth={1060} z={46} gap={16} onClose={close}>
       <div>
-        <div className="modal-title" style={{ fontSize: 20 }}>
-          Add products to opportunity · {lead.title || lead.company}
-        </div>
+        <ModalTitle style={{ fontSize: 20 }}>Add products to opportunity · {lead.title || lead.company}</ModalTitle>
       </div>
       <div role="tablist" style={{ display: 'flex', gap: 22, borderBottom: '1px solid var(--divider)' }}>
         {tabBtn('products', `Products (${draft.lines.length})`)}

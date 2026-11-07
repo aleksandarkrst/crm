@@ -4,6 +4,7 @@ import { Icon } from '../../components/icons';
 import { askConfirm } from '../../components/ConfirmDialog';
 import { Screen } from '../../components/Layout';
 import { MeetingsCard } from '../../components/MeetingsCard';
+import { Popover } from '../../components/Popover';
 import { paths } from '../../lib/paths';
 import type { ApiProject } from '../../lib/projectsApi';
 import { useDealProjects } from '../../store/projects';
@@ -81,13 +82,7 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
   const { s, set, session, patchLead, moveLead, reopenLead, canDelete, deleteDeal, remindStageOwner } = useStore();
   const [menu, setMenu] = useState(false);
   const [reminding, setReminding] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!menu) return;
-    const off = (e: MouseEvent) => !menuRef.current?.contains(e.target as Node) && setMenu(false);
-    document.addEventListener('mousedown', off);
-    return () => document.removeEventListener('mousedown', off);
-  }, [menu]);
+  const menuRef = useRef<HTMLButtonElement>(null);
 
   const stages = stagesFor(s, lead.segment);
   const stage = stageOf(s, lead);
@@ -165,18 +160,19 @@ function DealHeader({ lead, projects }: { lead: Lead; projects: ApiProject[] | n
             </>
           )}
           {canDelete && (
-            <div ref={menuRef} style={{ position: 'relative' }}>
-              <button type="button" className="btn btn-secondary" aria-label="More actions" aria-expanded={menu} onClick={() => setMenu((m) => !m)} style={{ padding: '10px 12px' }}>
+            <>
+              <button ref={menuRef} type="button" className="btn btn-secondary" aria-label="More actions" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((m) => !m)} style={{ padding: '10px 12px' }}>
                 ⋯
               </button>
               {menu && (
-                <div className="deal-menu" role="menu">
+                // The shared Popover: Escape closes it and returns focus to ⋯ (CD-490).
+                <Popover anchor={menuRef} onClose={() => setMenu(false)} className="deal-menu" role="menu" label="More actions">
                   <button type="button" role="menuitem" data-testid="delete-deal" onClick={() => void onDelete()}>
                     Delete opportunity
                   </button>
-                </div>
+                </Popover>
               )}
-            </div>
+            </>
           )}
         </div>
       </div>

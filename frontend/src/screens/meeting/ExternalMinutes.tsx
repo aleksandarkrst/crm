@@ -6,6 +6,7 @@ import { useStore } from '../../store/store';
 import { dateLabel, instantToZoned } from '../../store/time';
 import { RichField } from './InternalMinutes';
 import { RichText } from '../../components/RichText';
+import { askConfirm } from '../../components/ConfirmDialog';
 
 /** Limits of the external minutes (spec 7.1; the API checks them too). */
 const BODY_MAX = 10_000;
@@ -169,7 +170,7 @@ function ExternalEditor({ m, stored, onStored }: { m: ApiMeeting; stored: ApiExt
     const text = await actions.current.copyInternal(m.id);
     setCopying(false);
     if (text === null) return;
-    if (draftRef.current.body.trim() && !window.confirm('Replace the text for the customer with the internal minutes? Your current text will be lost.')) return;
+    if (draftRef.current.body.trim() && !(await askConfirm({ title: 'Replace the text for the customer with the internal minutes?', message: 'Your current text will be lost.', confirmLabel: 'Replace', danger: true }))) return;
     change('body', text.slice(0, BODY_MAX));
   };
 

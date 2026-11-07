@@ -22,8 +22,11 @@ export const CreateInvitation = z.object({
   lastName: personName.optional(),
 });
 export const UpdateMember = z.object({ role: z.enum(MEMBERSHIP_ROLES) });
+/** Pending invitation role (Admin or Member only — invitations never carry Owner). */
+export const UpdateInvitation = z.object({ role: z.enum(INVITATION_ROLES) });
 export type CreateInvitation = z.infer<typeof CreateInvitation>;
 export type UpdateMember = z.infer<typeof UpdateMember>;
+export type UpdateInvitation = z.infer<typeof UpdateInvitation>;
 
 const NO_STORED_LINK = 'This invitation was created before invite links were kept, so it can only be withdrawn. Withdraw it and invite them again.';
 
@@ -127,6 +130,29 @@ export class TeamService {
       await this.audit.record(tx, ctx, { action: 'invitation.revoked', entityType: 'invitation', entityId: id });
       // The employee record the invitation made goes with it (CD-226).
       await dropUnusedInvitedEmployees(tx, ctx.tenantId);
+    });
+  }
+
+  /** Changes the role on a pending invitation before the invitee joins (CD-487). */
+  updateInvitation(ctx: TenantContext, id: string, input: UpdateInvitation) {
+    return this.database.withTenant(ctx.tenantId, async (tx) => {
+      const [found] = await tx
+        .select({ id: invitations.id, role: invitations.role })
+        .from(invitations)
+        .where(and(eq(invitations.id, id), eq(invitations.tenantId, ctx.tenantId), pending()));
+      if (!found) throw new NotFoundException('Invitation not found. It may have been accepted, withdrawn or expired.');
+      if (found.role === input.role) {
+        const [row] = await tx.select(invitationColumns).from(invitations).where(eq(invitations.id, id));
+        return row!;
+      }
+      const [row] = await tx
+        .update(invitations)
+        .set({ role: input.role })
+        .where(and(eq(invitations.id, id), eq(invitations.tenantId, ctx.tenantId), pending()))
+        .returning(invitationColumns);
+      if (!row) throw new NotFoundException('Invitation not found. It may have been accepted, withdrawn or expired.');
+      await this.audit.record(tx, ctx, { action: 'invitation.role_changed', entityType: 'invitation', entityId: id, data: { from: found.role, to: input.role } });
+      return row;
     });
   }
 
