@@ -472,9 +472,9 @@ export function Modal({
 const ModalTitleId = createContext<string | undefined>(undefined);
 
 /** The modal's heading, named by the dialog (CD-490). */
-export function ModalTitle({ children, style }: { children: ReactNode; style?: CSSProperties }) {
+export function ModalTitle({ children, style, className = 'modal-title' }: { children: ReactNode; style?: CSSProperties; className?: string }) {
   return (
-    <h2 className="modal-title" id={useContext(ModalTitleId)} style={style}>
+    <h2 className={className} id={useContext(ModalTitleId)} style={style}>
       {children}
     </h2>
   );

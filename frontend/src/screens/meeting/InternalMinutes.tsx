@@ -437,6 +437,15 @@ export function RichField({
     setLinkAt({ a, b });
     return null;
   };
+  // Cancelled with Escape (the Popover has put the focus on Link): back to the text with the selection as it was.
+  // A click elsewhere leaves the focus where it went.
+  const cancelLink = () => {
+    const at = linkAt;
+    setLinkAt(null);
+    if (!at || document.activeElement !== linkBtn.current) return;
+    selection.current = { start: at.a, end: at.b };
+    setFocused(true);
+  };
   const insertLink = (input: string) => {
     const at = linkAt;
     setLinkAt(null);
@@ -483,7 +492,7 @@ export function RichField({
           </span>
         )}
         {linkAt && (
-          <Popover anchor={linkBtn} onClose={() => setLinkAt(null)} className="fr-pop" label="Link address" testId={`${testId}-link-pop`}>
+          <Popover anchor={linkBtn} onClose={cancelLink} className="fr-pop" label="Link address" testId={`${testId}-link-pop`}>
             <form
               style={{ display: 'flex', gap: 8, padding: 4 }}
               onSubmit={(e) => {

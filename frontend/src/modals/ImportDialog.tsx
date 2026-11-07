@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Modal, ModalHeader } from '../components/ui';
 import { ApiError } from '../lib/api';
 import { downloadText } from '../lib/csv';
@@ -131,8 +131,16 @@ export function ImportDialog({ initialType, onClose }: { initialType: ImportType
   };
 
   // After the file was read, its columns are mapped: ask before throwing that away (CD-224).
+  // Once imported (Done) there is nothing to discard; a held Escape asks only once.
+  const asking = useRef(false);
   const cancel = async () => {
-    if (step !== 'File' && !(await askConfirm({ title: 'Discard this import?', message: 'The file and the column mapping are not kept.', confirmLabel: 'Discard', danger: true }))) return;
+    if (step !== 'File' && step !== 'Done') {
+      if (asking.current) return;
+      asking.current = true;
+      const ok = await askConfirm({ title: 'Discard this import?', message: 'The file and the column mapping are not kept.', confirmLabel: 'Discard', danger: true });
+      asking.current = false;
+      if (!ok) return;
+    }
     onClose();
   };
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal, ModalHeader } from '../components/ui';
+import { Modal, ModalHeader, ModalTitle } from '../components/ui';
 import { paths } from '../lib/paths';
 import { DocProgress } from '../components/DocProgress';
 import { canManageTemplates, DOC_TYPES, type DocType, docBusy, fileSize, hasLiveProposal, type ScanResult, suggestedTemplate, templateFileProblem } from '../store/documents';
@@ -42,9 +42,9 @@ export function GenerationModal() {
     <Modal maxWidth={520} z={40} onClose={close}>
       <div>
         <div className="caps">{stageDoc && stageDoc !== 'None' ? `Stage document · ${stageDoc}` : 'Generate a document'}</div>
-        <div style={{ fontWeight: 600, letterSpacing: '-0.02em', fontSize: 24, lineHeight: 1.15, margin: '7px 0 6px' }}>
+        <ModalTitle className="" style={{ fontWeight: 600, letterSpacing: '-0.02em', fontSize: 24, lineHeight: 1.15, margin: '7px 0 6px' }}>
           {doc ? `Building ${doc.name}` : `Generate a document for ${lead.company || lead.title}`}
-        </div>
+        </ModalTitle>
         <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5 }}>
           {doc ? `Template: ${doc.templateName}` : 'The template is filled in with this opportunity: company, contact, discovery notes, products and amounts in the opportunity currency.'}
         </div>
