@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ApiCompanyDetails } from '../../lib/api';
+import { checkMb, checkPib } from '../../lib/serbianIds';
 import { useStore } from '../../store/store';
 
 /** Countries offered in Settings → Workspace (CD-167): Serbia first, it turns vacation decisions on. */
@@ -25,12 +26,28 @@ const FIELDS: { key: Exclude<keyof ApiCompanyDetails, 'legalBasis'>; label: stri
 ];
 
 type Draft = Record<keyof ApiCompanyDetails, string>;
+type FieldErrors = Partial<Record<keyof ApiCompanyDetails, string>>;
 const draftOf = (c: ApiCompanyDetails): Draft => ({ legalName: c.legalName ?? '', address: c.address ?? '', pib: c.pib ?? '', mb: c.mb ?? '', place: c.place ?? '', signatoryName: c.signatoryName ?? '', signatoryTitle: c.signatoryTitle ?? '', legalBasis: c.legalBasis });
+
+/** What is wrong with the draft, per field, in words (CD-487). PIB and MB may stay empty here. */
+function problemsOf(d: Draft): FieldErrors {
+  const out: FieldErrors = {};
+  if (d.pib.trim()) {
+    const p = checkPib(d.pib);
+    if (!p.ok) out.pib = p.error;
+  }
+  const mb = checkMb(d.mb);
+  if (!mb.ok) out.mb = mb.error;
+  const basis = d.legalBasis.trim();
+  if (basis && basis.length < 10) out.legalBasis = 'The legal basis is needed on every decision; write at least 10 characters.';
+  return out;
+}
 
 /**
  * Settings → Workspace → Company details (CD-167, spec 10.1): printed on generated documents such
  * as vacation decisions. Owners and admins edit and save; members read them. PIB and MB are
- * checked by the server (check digits).
+ * checked here as you type (the same rules as the server) and under each field; Save waits until
+ * they are right (CD-487).
  */
 export function CompanyCard() {
   const { s, saveCompany, canEditWorkspace, flash } = useStore();
@@ -38,17 +55,35 @@ export function CompanyCard() {
   const [draft, setDraft] = useState<Draft>(() => draftOf(company));
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [serverErrors, setServerErrors] = useState<FieldErrors>({});
   useEffect(() => setDraft(draftOf(company)), [company]);
   const ro = !canEditWorkspace;
   const changed = JSON.stringify(draft) !== JSON.stringify(draftOf(company));
+  const errors: FieldErrors = { ...serverErrors, ...problemsOf(draft) };
+  const hasErrors = Object.values(errors).some(Boolean);
+  const edit = (key: keyof ApiCompanyDetails, value: string) => {
+    setDraft({ ...draft, [key]: value });
+    if (serverErrors[key]) setServerErrors({ ...serverErrors, [key]: undefined });
+    setProblem(null);
+  };
   const save = async () => {
+    if (hasErrors) return;
     setBusy(true);
     setProblem(null);
-    const error = await saveCompany({ ...draft, legalBasis: draft.legalBasis.trim() || undefined });
-    if (error) setProblem(error);
-    else flash('Company details saved');
+    const refused = await saveCompany({ ...draft, legalBasis: draft.legalBasis.trim() || undefined });
+    if (refused) {
+      setServerErrors(refused.fields);
+      setProblem(refused.message);
+    } else flash('Company details saved');
     setBusy(false);
   };
+  const fieldError = (key: keyof ApiCompanyDetails) =>
+    errors[key] ? (
+      <span className="emp-error" data-testid={`company-${key}-error`}>
+        {errors[key]}
+      </span>
+    ) : null;
+  const invalidStyle = (key: keyof ApiCompanyDetails) => (errors[key] ? { borderColor: 'var(--danger)' } : undefined);
   return (
     <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 18 }} data-testid="company-details">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -61,13 +96,15 @@ export function CompanyCard() {
         {FIELDS.map((f) => (
           <label key={f.key} className="policy-field">
             <span className="th">{f.label}</span>
-            <input className="form-input" value={draft[f.key]} placeholder={f.placeholder} inputMode={f.inputMode} disabled={ro} onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })} data-testid={`company-${f.key}`} />
+            <input className="form-input" value={draft[f.key]} placeholder={f.placeholder} inputMode={f.inputMode} disabled={ro} aria-invalid={!!errors[f.key]} style={invalidStyle(f.key)} onChange={(e) => edit(f.key, e.target.value)} data-testid={`company-${f.key}`} />
+            {fieldError(f.key)}
           </label>
         ))}
       </div>
       <label className="policy-field">
         <span className="th">Legal basis on decisions</span>
-        <textarea className="form-input" rows={3} value={draft.legalBasis} disabled={ro} onChange={(e) => setDraft({ ...draft, legalBasis: e.target.value })} data-testid="company-legalBasis" />
+        <textarea className="form-input" rows={3} value={draft.legalBasis} disabled={ro} aria-invalid={!!errors.legalBasis} style={invalidStyle('legalBasis')} onChange={(e) => edit('legalBasis', e.target.value)} data-testid="company-legalBasis" />
+        {fieldError('legalBasis')}
         <span className="emp-note">Follows "Na osnovu". Update it when the Labor Law's gazette numbers change.</span>
       </label>
       {problem && (
@@ -82,7 +119,7 @@ export function CompanyCard() {
           <button type="button" className="btn btn-secondary" disabled={busy || !changed} onClick={() => setDraft(draftOf(company))}>
             Discard
           </button>
-          <button type="button" className="btn btn-primary" disabled={busy || !changed} onClick={() => void save()} data-testid="company-save">
+          <button type="button" className="btn btn-primary" disabled={busy || !changed || hasErrors} onClick={() => void save()} data-testid="company-save">
             Save
           </button>
         </div>

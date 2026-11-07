@@ -2065,14 +2065,23 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           return errText(err);
         }
       },
-      /** Saves the company details (CD-167, owners and admins); returns the API's message when it refuses them, else null. */
-      saveCompany: async (company: Partial<ApiCompanyDetails>): Promise<string | null> => {
+      /**
+       * Saves the company details (CD-167, owners and admins); null when saved. When the API refuses
+       * them, its per-field messages keyed by field (CD-487: "pib", not "company.pib"), or a message.
+       */
+      saveCompany: async (company: Partial<ApiCompanyDetails>): Promise<{ fields: Partial<Record<keyof ApiCompanyDetails, string>>; message: string | null } | null> => {
         try {
           const ws = await crmApi.updateWorkspace({ company });
           set((x) => ({ workspace: { ...x.workspace, company: ws.company } }));
           return null;
         } catch (err) {
-          return errText(err);
+          const issues = err instanceof ApiError ? ((err.body as { issues?: { path?: string; message?: string }[] } | null)?.issues ?? []) : [];
+          const fields: Partial<Record<keyof ApiCompanyDetails, string>> = {};
+          for (const i of issues) {
+            const key = i.path?.replace(/^company\./, '') as keyof ApiCompanyDetails | undefined;
+            if (key && key in company && i.message && !fields[key]) fields[key] = i.message.endsWith('.') ? i.message : i.message + '.';
+          }
+          return { fields, message: Object.keys(fields).length ? null : errText(err) };
         }
       },
       /** Edits your own profile and saves it (one write per field after a pause). */
