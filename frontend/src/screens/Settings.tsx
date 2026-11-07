@@ -24,9 +24,58 @@ import { WorkspaceInfo } from './settings/WorkspaceInfo';
 import { RolesTab } from './settings/RolesTab';
 import type { TeamMember } from '../store/types';
 import { useTerms } from '../store/terms';
+import { targetOf } from '../lib/validate';
 
-/** A target days input: empty means no target; 1..365 like the API. */
-const targetOf = (raw: string) => (raw === '' ? null : Math.max(1, Math.min(365, Math.round(Number(raw) || 1))));
+const TARGET_DAYS_PROBLEM = 'Use whole days from 1 to 365, or leave it empty.';
+
+/**
+ * A target-days field that saves when it is left (or on Enter), not per keystroke: typing 99999999
+ * must not save its valid prefix 99 on the way. A value out of range or not a whole number stays
+ * in the field with a message under it and is not saved (CD-487 QA: -5 used to become 1 silently).
+ */
+function TargetDaysInput({ value, onSave, disabled, placeholder, testId }: { value: number | null; onSave: (v: number | null) => void; disabled: boolean; placeholder: string; testId: string }) {
+  const [text, setText] = useState(value === null ? '' : String(value));
+  const [bad, setBad] = useState(false);
+  useEffect(() => {
+    setText(value === null ? '' : String(value));
+    setBad(false);
+  }, [value]);
+  return (
+    <>
+      <span style={{ display: 'flex', alignItems: 'center', border: `1px solid ${bad ? 'var(--danger)' : 'var(--border)'}`, borderRadius: 7, background: 'var(--white)', padding: '0 10px 0 0' }}>
+        <input
+          data-testid={testId}
+          type="number"
+          disabled={disabled}
+          min={1}
+          max={365}
+          step={1}
+          value={text}
+          placeholder={placeholder}
+          aria-invalid={bad}
+          onChange={(e) => {
+            setText(e.target.value);
+            setBad(targetOf(e.target.value, e.target.validity.badInput) === undefined);
+          }}
+          onBlur={(e) => {
+            const next = targetOf(e.target.value, e.target.validity.badInput);
+            if (next !== undefined && next !== value) onSave(next);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+          }}
+          style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', padding: '9px 4px 9px 10px', fontSize: 13, color: 'var(--ink)', textTransform: 'none', letterSpacing: 0 }}
+        />
+        <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-2)', letterSpacing: 0 }}>days</span>
+      </span>
+      {bad && (
+        <span className="emp-error" role="alert" data-testid={`${testId}-error`} style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>
+          {TARGET_DAYS_PROBLEM}
+        </span>
+      )}
+    </>
+  );
+}
 
 /**
  * The sections of Settings (CD-280), grouped by module in the left nav. Each has its own route
@@ -638,10 +687,7 @@ function FunnelBuilder() {
             </label>
             <label className="form-label">
               Default target days
-              <span style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--white)', padding: '0 10px 0 0' }}>
-                <input data-testid="funnel-target-days" type="number" disabled={!editable} min={1} max={365} value={funnel.targetDays ?? ''} placeholder="No target" onChange={(e) => store.patchFunnel(funnel.id, { targetDays: targetOf(e.target.value) })} style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', padding: '9px 4px 9px 10px', fontSize: 13, color: 'var(--ink)', textTransform: 'none', letterSpacing: 0 }} />
-                <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-2)', letterSpacing: 0 }}>days</span>
-              </span>
+              <TargetDaysInput testId="funnel-target-days" disabled={!editable} value={funnel.targetDays ?? null} placeholder="No target" onSave={(v) => store.patchFunnel(funnel.id, { targetDays: v })} />
             </label>
           </div>
 
@@ -842,10 +888,7 @@ function FunnelStageRow({
                 </label>
                 <label className="form-label">
                   Target days
-                  <span style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--white)', padding: '0 10px 0 0' }}>
-                    <input data-testid="stage-target-days" type="number" disabled={!editable} min={1} max={365} value={st.targetDays ?? ''} placeholder="Funnel default" onChange={(e) => store.setStageRule(idx, { targetDays: targetOf(e.target.value) })} style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', padding: '9px 4px 9px 10px', fontSize: 13, color: 'var(--ink)', textTransform: 'none', letterSpacing: 0 }} />
-                    <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-2)', letterSpacing: 0 }}>days</span>
-                  </span>
+                  <TargetDaysInput testId="stage-target-days" disabled={!editable} value={st.targetDays ?? null} placeholder="Funnel default" onSave={(v) => store.setStageRule(idx, { targetDays: v })} />
                 </label>
               </>
             )}
