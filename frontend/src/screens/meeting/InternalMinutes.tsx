@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { askConfirm } from '../../components/ConfirmDialog';
+import { Popover } from '../../components/Popover';
 import { RichText } from '../../components/RichText';
 import { CheckIcon, RemoveButton } from '../../components/ui';
 import type { ApiInternalMinutes, ApiMeeting, ApiMeetingNextStep, InternalMinutesInput } from '../../lib/api';
@@ -429,10 +430,32 @@ export function RichField({
     el.setSelectionRange(selection.current.start, selection.current.end);
     selection.current = null;
   }, [value, focused]);
-  const askLink = (v: string, a: number, b: number) => {
-    const raw = window.prompt('Link address', 'https://')?.trim();
-    if (!raw || raw === 'https://') return null;
-    return link(v, a, b, /^https?:\/\//i.test(raw) ? raw : 'https://' + raw);
+  // The address is asked in a popover by the Link button, not the browser's prompt (CD-490); the selection waits for it.
+  const linkBtn = useRef<HTMLButtonElement>(null);
+  const [linkAt, setLinkAt] = useState<{ a: number; b: number } | null>(null);
+  const askLink = (_v: string, a: number, b: number) => {
+    setLinkAt({ a, b });
+    return null;
+  };
+  // Cancelled with Escape (the Popover has put the focus on Link): back to the text with the selection as it was.
+  // A click elsewhere leaves the focus where it went.
+  const cancelLink = () => {
+    const at = linkAt;
+    setLinkAt(null);
+    if (!at || document.activeElement !== linkBtn.current) return;
+    selection.current = { start: at.a, end: at.b };
+    setFocused(true);
+  };
+  const insertLink = (input: string) => {
+    const at = linkAt;
+    setLinkAt(null);
+    const raw = input.trim();
+    if (!at || !raw || raw === 'https://') return;
+    const r = link(value, at.a, at.b, /^https?:\/\//i.test(raw) ? raw : 'https://' + raw);
+    if (r.text.length > max) return;
+    selection.current = { start: r.start, end: r.end };
+    onChange(r.text);
+    setFocused(true);
   };
   const keys = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
@@ -462,11 +485,27 @@ export function RichField({
         {editable && (
           <span className="minutes-toolbar" role="toolbar" aria-label={`Format ${label.toLowerCase()}`}>
             {tools.map(([title, face, id, make]) => (
-              <button key={id} type="button" title={title} aria-label={title.replace(/ \(.*\)$/, '')} data-testid={`${testId}-${id}`} onMouseDown={keep} onClick={() => apply(make)}>
+              <button key={id} ref={id === 'link' ? linkBtn : undefined} type="button" title={title} aria-label={title.replace(/ \(.*\)$/, '')} data-testid={`${testId}-${id}`} onMouseDown={keep} onClick={() => apply(make)}>
                 {face}
               </button>
             ))}
           </span>
+        )}
+        {linkAt && (
+          <Popover anchor={linkBtn} onClose={cancelLink} className="fr-pop" label="Link address" testId={`${testId}-link-pop`}>
+            <form
+              style={{ display: 'flex', gap: 8, padding: 4 }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                insertLink(String(new FormData(e.currentTarget).get('url') ?? ''));
+              }}
+            >
+              <input name="url" className="form-input" aria-label="Link address" defaultValue="https://" autoFocus style={{ flex: 1, minWidth: 0 }} />
+              <button type="submit" className="btn btn-primary">
+                Insert
+              </button>
+            </form>
+          </Popover>
         )}
       </div>
       {writing ? (

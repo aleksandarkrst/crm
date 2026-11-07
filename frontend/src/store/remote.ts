@@ -3,7 +3,7 @@
  * a lead (deal) shows its company and primary contact inline, companies are derived from leads
  * plus companies without a deal, and people are primary contacts plus everyone else.
  */
-import { type ApiActivity, type ApiApprovalState, type ApiBonusRules, type ApiCompany, type ApiCustomField, type ApiDealLine, type ApiDealRow, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiInvitation, type ApiMember, type ApiProduct, type ApiProfile, type ApiStageChange, type ApiVisitPlan, type ApiWorkspace, ApiError, crmApi, DEFAULT_TIMESHEET_SETTINGS, EMPTY_COMPANY } from '../lib/api';
+import { type ApiActivity, type ApiApprovalState, type ApiBonusRules, type ApiCompany, type ApiCustomField, type ApiDealLine, type ApiDealRow, type ApiDealTask, type ApiContact, type ApiFunnel, type ApiInvitation, type ApiMember, type ApiProduct, type ApiProfile, type ApiRole, type ApiStageChange, type ApiVisitPlan, type ApiWorkspace, ApiError, crmApi, DEFAULT_TIMESHEET_SETTINGS, EMPTY_COMPANY } from '../lib/api';
 import { initialsOf, localeFor, momentLabel, money, taskKey } from './selectors';
 import { sortPlans } from './visitPlans';
 import { SYSTEM_CHANNEL } from './seed';
@@ -224,8 +224,9 @@ const PARTS = {
   workspace: () => crmApi.workspace(),
   profile: () => crmApi.profile(),
   customFields: () => crmApi.customFields(),
-  bonus: () => loadBonusRules(),
-  onboarding: () => loadOnboarding(),
+  // Owners and admins only: members aren't asked, so they see no 403s (CD-490).
+  bonus: (admin: boolean) => (admin ? loadBonusRules() : null),
+  onboarding: (admin: boolean) => (admin ? loadOnboarding() : null),
   /** Customer visit plans (CD-134); members get only their own. */
   visitPlans: () => crmApi.visitPlans(),
   /** Whose plans this user sees and manages (CD-142). */
@@ -297,11 +298,12 @@ function merge(prev: unknown[], fresh: unknown[], ids: ReadonlySet<string>, key:
  * from the previous load (live updates); lists with ids in `changed` are re-read only for those
  * rows. Without `only`, everything is read.
  */
-export async function loadWorkspace(only?: ReadonlySet<Part>, changed: Changed = {}): Promise<WorkspaceData> {
+export async function loadWorkspace(role: ApiRole, only?: ReadonlySet<Part>, changed: Changed = {}): Promise<WorkspaceData> {
+  const admin = role !== 'member';
   const prev = only ? lastRaw : null;
   const keys = (Object.keys(PARTS) as Part[]).filter((k) => !prev || only!.has(k));
   const partial = (k: Part) => (prev && BY_ID[k] && changed[k] && changed[k].size <= MAX_IDS ? [...changed[k]] : null);
-  const fetched = await Promise.all(keys.map((k) => (partial(k) ? BY_ID[k]!.fetch(partial(k)!) : PARTS[k]())));
+  const fetched = await Promise.all(keys.map((k) => (partial(k) ? BY_ID[k]!.fetch(partial(k)!) : PARTS[k](admin))));
   const raw = { ...prev } as Record<Part, unknown>;
   keys.forEach((k, i) => {
     const ids = partial(k);

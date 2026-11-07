@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { datedName, downloadText } from '../lib/csv';
 import { ImportDialog } from '../modals/ImportDialog';
+import { Popover } from './Popover';
 import { canImportExport, type ImportType } from '../store/importExport';
 import { useStore } from '../store/store';
 
@@ -14,18 +15,7 @@ export function DataActions({ type, exportCsv, count }: { type: ImportType | 'pr
   const { session, flash } = useStore();
   const [open, setOpen] = useState(false);
   const [importing, setImporting] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
-    document.addEventListener('mousedown', onDown, true);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown, true);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  const ref = useRef<HTMLButtonElement>(null);
   if (!canImportExport(session.tenant.role)) return null;
 
   const doExport = () => {
@@ -38,12 +28,12 @@ export function DataActions({ type, exportCsv, count }: { type: ImportType | 'pr
     flash(`Exported ${count.toLocaleString('en-US')} ${count === 1 ? 'row' : 'rows'} to CSV`);
   };
   return (
-    <div ref={ref} className="new-menu">
-      <button type="button" className="btn btn-secondary" data-testid="data-menu" aria-label="More actions" title="Import and export" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} style={{ padding: '9px 13px' }}>
+    <div className="new-menu">
+      <button ref={ref} type="button" className="btn btn-secondary" data-testid="data-menu" aria-label="More actions" title="Import and export" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} style={{ padding: '9px 13px' }}>
         ⋯
       </button>
       {open && (
-        <div className="menu-pop" role="menu" style={{ right: 0, width: 240 }}>
+        <Popover anchor={ref} onClose={() => setOpen(false)} className="menu-pop data-menu-pop" role="menu" label="Import and export">
           <button type="button" role="menuitem" className="menu-item" onClick={doExport} title="Download the rows shown, as CSV">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--text-2)' }}>
               <path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 15v4h14v-4" />
@@ -70,7 +60,7 @@ export function DataActions({ type, exportCsv, count }: { type: ImportType | 'pr
               </button>
             </>
           )}
-        </div>
+        </Popover>
       )}
       {importing && type !== 'projects' && <ImportDialog initialType={type} onClose={() => setImporting(false)} />}
     </div>

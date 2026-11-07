@@ -60,7 +60,11 @@ export function useBrowser() {
       page.on('console', (m) => {
         if (/Content Security Policy/i.test(m.text())) state.errors.push(`${name}: ${m.text()}`);
       });
-      page.on('dialog', (d) => void d.accept());
+      // The app has its own dialogs (CD-490): a browser dialog is a bug.
+      page.on('dialog', (d) => {
+        state.errors.push(`${name}: browser ${d.type()} "${d.message()}"`);
+        void d.dismiss();
+      });
       state.pages.push({ name, page });
       return page;
     },
