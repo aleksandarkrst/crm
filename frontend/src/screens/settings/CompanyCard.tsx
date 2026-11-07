@@ -70,7 +70,8 @@ export function CompanyCard() {
     if (hasErrors) return;
     setBusy(true);
     setProblem(null);
-    const refused = await saveCompany({ ...draft, legalBasis: draft.legalBasis.trim() || undefined });
+    // The checks above drop spaces ("104 052 135"); the API only trims, so send what was checked.
+    const refused = await saveCompany({ ...draft, pib: draft.pib.replace(/\s/g, ''), mb: draft.mb.replace(/\s/g, ''), legalBasis: draft.legalBasis.trim() || undefined });
     if (refused) {
       setServerErrors(refused.fields);
       setProblem(refused.message);

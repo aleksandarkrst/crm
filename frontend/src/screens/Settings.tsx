@@ -24,20 +24,14 @@ import { WorkspaceInfo } from './settings/WorkspaceInfo';
 import { RolesTab } from './settings/RolesTab';
 import type { TeamMember } from '../store/types';
 import { useTerms } from '../store/terms';
+import { targetOf } from '../lib/validate';
 
-/** A target days input: empty means no target; 1..365 like the API. */
-/** Target days (CD-487): empty clears it, a whole number 1–365 sets it; anything else is refused, never clamped. */
-const targetOf = (raw: string, badInput: boolean): number | null | undefined => {
-  if (badInput) return undefined;
-  if (raw.trim() === '') return null;
-  const n = Number(raw);
-  return Number.isInteger(n) && n >= 1 && n <= 365 ? n : undefined;
-};
 const TARGET_DAYS_PROBLEM = 'Use whole days from 1 to 365, or leave it empty.';
 
 /**
- * A target-days field that saves as you type. A value out of range or not a whole number stays in
- * the field with a message under it and is not saved (CD-487 QA: -5 used to become 1 silently).
+ * A target-days field that saves when it is left (or on Enter), not per keystroke: typing 99999999
+ * must not save its valid prefix 99 on the way. A value out of range or not a whole number stays
+ * in the field with a message under it and is not saved (CD-487 QA: -5 used to become 1 silently).
  */
 function TargetDaysInput({ value, onSave, disabled, placeholder, testId }: { value: number | null; onSave: (v: number | null) => void; disabled: boolean; placeholder: string; testId: string }) {
   const [text, setText] = useState(value === null ? '' : String(value));
@@ -60,10 +54,15 @@ function TargetDaysInput({ value, onSave, disabled, placeholder, testId }: { val
           placeholder={placeholder}
           aria-invalid={bad}
           onChange={(e) => {
-            const next = targetOf(e.target.value, e.target.validity.badInput);
             setText(e.target.value);
-            setBad(next === undefined);
+            setBad(targetOf(e.target.value, e.target.validity.badInput) === undefined);
+          }}
+          onBlur={(e) => {
+            const next = targetOf(e.target.value, e.target.validity.badInput);
             if (next !== undefined && next !== value) onSave(next);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
           }}
           style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', padding: '9px 4px 9px 10px', fontSize: 13, color: 'var(--ink)', textTransform: 'none', letterSpacing: 0 }}
         />
