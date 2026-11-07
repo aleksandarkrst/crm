@@ -3,6 +3,7 @@ import { BillingFields } from '../components/BillingFields';
 import { Modal, ModalHeader } from '../components/ui';
 import { linesOf, localeFor, num, plainAmount } from '../store/selectors';
 import { type ProductDraft, useStore } from '../store/store';
+import { askConfirm } from '../components/ConfirmDialog';
 
 const UNITS = ['hour', 'day', 'seat', 'license', 'month', 'piece', 'project'];
 
@@ -34,10 +35,10 @@ export function ProductModal() {
     close();
     flash(editing ? name + ' saved' : name + ' added to the catalog');
   };
-  const onDelete = () => {
+  const onDelete = async () => {
     if (!editing) return;
     if (usedOn) return flash(`${editing.name} is on ${usedOn === 1 ? '1 opportunity' : usedOn + ' opportunities'}. Remove it there first.`);
-    if (!window.confirm(`Delete ${editing.name} from the catalog?`)) return;
+    if (!(await askConfirm({ title: `Delete ${editing.name} from the catalog?`, confirmLabel: 'Delete', danger: true }))) return;
     removeProduct(editing.id);
     close();
     flash(editing.name + ' removed from the catalog');
@@ -87,7 +88,7 @@ export function ProductModal() {
       <div className="modal-actions" style={{ gap: 10, justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <span>
           {editing && canDelete && (
-            <button type="button" className="btn btn-secondary" style={{ color: 'var(--danger)' }} onClick={onDelete}>
+            <button type="button" className="btn btn-secondary" style={{ color: 'var(--danger)' }} onClick={() => void onDelete()}>
               Delete
             </button>
           )}

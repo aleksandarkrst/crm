@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useStore } from '../store/store';
 import { ICONS, useCommands } from './commands';
 import { currentModule } from './modules';
+import { Popover } from './Popover';
 
 /**
  * The header's "+" menu (CD-66, CD-80): creates a deal, contact, company, task or product from any
@@ -17,16 +18,7 @@ export function NewMenu() {
   const items = useCommands().filter((c) => c.group === 'Create' && (!inProjects || c.module === 'projects'));
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown, true);
-    return () => document.removeEventListener('mousedown', onDown, true);
-  }, [open]);
+  const ref = useRef<HTMLButtonElement>(null);
 
   const pick = (i: number) => {
     setOpen(false);
@@ -58,8 +50,9 @@ export function NewMenu() {
   };
 
   return (
-    <div ref={ref} className="new-menu" onKeyDown={onKeyDown}>
+    <div className="new-menu" onKeyDown={onKeyDown}>
       <button
+        ref={ref}
         type="button"
         className="round-btn new-menu-btn"
         data-testid="new-menu"
@@ -83,7 +76,8 @@ export function NewMenu() {
         )}
       </button>
       {open && (
-        <div className="menu-pop new-menu-pop" role="menu">
+        // Placed by the Popover so it stays on screen at phone width (CD-490).
+        <Popover anchor={ref} onClose={() => setOpen(false)} className="menu-pop new-menu-pop" role="menu" label="Create new">
           {inProjects && <span className="caps-muted" style={{ display: 'block', padding: '6px 10px 4px' }}>Create in Projects</span>}
           {items.map((it, i) => (
             <button
@@ -104,7 +98,7 @@ export function NewMenu() {
               </kbd>
             </button>
           ))}
-        </div>
+        </Popover>
       )}
     </div>
   );

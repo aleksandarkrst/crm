@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { CustomFieldInputs, customFieldsForCreate } from '../components/CustomFields';
 import { Popover } from '../components/Popover';
-import { Chevron, Modal, ModalHeader } from '../components/ui';
+import { Chevron, Modal, ModalHeader, ModalTitle } from '../components/ui';
 import { type CustomFieldPatch, type CustomFieldType, LOST_REASONS, type LostReason } from '../lib/api';
 import { paths } from '../lib/paths';
 import { checkActivityCode, checkMb } from '../lib/serbianIds';
@@ -119,7 +119,7 @@ function NewDealModal() {
   };
 
   return (
-    <Modal maxWidth={560} gap={18} z={s.newLeadForMeeting ? 50 : undefined}>
+    <Modal maxWidth={560} gap={18} z={s.newLeadForMeeting ? 50 : undefined} onClose={close}>
       <ModalHeader title="New opportunity" sub="Pick the company and the funnel; activities and documents come with it. Only a company in status Opportunity or Client can enter the Pipeline." />
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
         <div className="form-label">
@@ -407,7 +407,7 @@ function NewTaskModal() {
   };
 
   return (
-    <Modal maxWidth={580}>
+    <Modal maxWidth={580} onClose={close}>
       <ModalHeader title={editing ? 'Edit task' : 'New task'} sub="Tasks outside the playbook still belong to a company and a stage, so the timeline stays complete." />
       <label className="form-label">
         Task title
@@ -537,7 +537,7 @@ function NewContactModal() {
       </span>
     ) : null;
   return (
-    <Modal maxWidth={580}>
+    <Modal maxWidth={580} onClose={close}>
       <ModalHeader title="New contact" sub="Pick their company, so they show up on its record and can be added to its opportunities." />
       <div className="contact-form-grid">
         <label className="form-label">
@@ -651,7 +651,7 @@ function NewPersonaModal() {
     setBusy(false);
   };
   return (
-    <Modal maxWidth={560}>
+    <Modal maxWidth={560} onClose={() => set({ personaOpen: false })}>
       <ModalHeader title="New funnel" sub="A funnel is the playbook for one target persona. Name who buys, then edit the stages, activities and documents." />
       <label className="form-label">
         Funnel name
@@ -702,7 +702,7 @@ function NewFieldModal() {
     set({ fieldOpen: false, newField: reset });
   };
   return (
-    <Modal maxWidth={520}>
+    <Modal maxWidth={520} onClose={() => set({ fieldOpen: false, newField: reset })}>
       <ModalHeader title="New field" sub="Custom fields show on the record and in its create form, and are included in CSV exports." />
       <label className="form-label">
         Field name
@@ -761,14 +761,16 @@ function DrillModal() {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span className="caps-muted">{d.kicker}</span>
-          <span style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em' }}>{d.title}</span>
+          <ModalTitle className="" style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em', margin: 0 }}>
+            {d.title}
+          </ModalTitle>
           <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
             {rows.length}
             {rows.length === 1 ? ' opportunity · ' : ' opportunities · '}
             {d.summary ?? `${total} open`}
           </span>
         </div>
-        <button type="button" onClick={close} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--muted)', fontSize: 18, lineHeight: 1, padding: '2px 4px' }}>
+        <button type="button" aria-label="Close" onClick={close} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--muted)', fontSize: 18, lineHeight: 1, padding: '2px 4px' }}>
           ×
         </button>
       </div>

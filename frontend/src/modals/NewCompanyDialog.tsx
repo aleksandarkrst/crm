@@ -52,7 +52,7 @@ export function NewCompanyDialog() {
   };
 
   return (
-    <Modal maxWidth={560} gap={18}>
+    <Modal maxWidth={560} gap={18} onClose={close}>
       <ModalHeader title="New company" sub="Every company starts as a lead. The name and PIB are required; the rest can wait until it becomes an opportunity." />
       <label className="form-label">
         Company name

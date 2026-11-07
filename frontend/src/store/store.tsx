@@ -361,7 +361,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           for (let attempt = 0; attempt < 5; attempt++) {
             await whenIdle();
             const seq = writeSeq.current;
-            const data = await loadWorkspace();
+            const data = await loadWorkspace(session.tenant.role);
             if (seq === writeSeq.current && isIdle()) {
               applyData(data);
               return;
@@ -467,7 +467,7 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
             const seq = writeSeq.current;
             const changed: Changed = {};
             for (const [part, ids] of rows) if (ids) changed[part] = ids;
-            const data = await loadWorkspace(parts, changed);
+            const data = await loadWorkspace(session.tenant.role, parts, changed);
             if (seq === writeSeq.current && isIdle()) {
               applyData(data, touched);
               applied = true;

@@ -145,7 +145,8 @@
 .dot-badge { position: absolute; top: -2px; right: -3px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: #B42318; color: #FFFFFF; font-size: 10.5px; font-weight: 600; line-height: 17px; text-align: center; }
 .avatar-btn { width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--brand-soft); color: var(--brand); font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .avatar-btn[aria-expanded="true"] { box-shadow: 0 0 0 2px var(--brand); }
-.new-menu-pop { left: 50%; transform: translateX(-50%); width: 230px; }
+.new-menu-pop { width: 230px; }
+.data-menu-pop { width: 240px; }
 .new-menu-pop .menu-item { padding: 9px 10px; }
 
 /* ---------------------------------------------------------------- command palette (CD-80) */

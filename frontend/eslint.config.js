@@ -15,6 +15,14 @@ export default tseslint.config(
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      // The app's own dialogs (CD-228, CD-490): askConfirm(), flash, or a Popover.
+      'no-restricted-globals': ['error', ...['confirm', 'alert', 'prompt'].map((name) => ({ name, message: 'Use askConfirm(), flash or a Popover instead of a browser dialog.' }))],
+      'no-restricted-properties': ['error', ...['confirm', 'alert', 'prompt'].map((property) => ({ object: 'window', property, message: 'Use askConfirm(), flash or a Popover instead of a browser dialog.' }))],
     },
+  },
+  {
+    // askConfirm's fallback when no ConfirmHost is mounted.
+    files: ['src/components/ConfirmDialog.tsx'],
+    rules: { 'no-restricted-properties': 'off' },
   },
 );
