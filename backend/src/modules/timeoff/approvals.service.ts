@@ -22,7 +22,7 @@ import type { CalendarQuery } from './timeoff.schemas';
 export interface ApprovalRow extends RequestView {
   /** Vacation: days left after approval. */
   balanceAfter: number | null;
-  /** Colleagues away on any of the days: the requester's unit, and the approver's direct reports. */
+  /** Colleagues away on any of the days: the requester's unit, and the approver's direct reports; only people the caller may see. */
   alsoAway: { employeeId: string; fullName: string; what: string; startDate: string; endDate: string; status: 'approved' | 'pending' }[];
   startDatePassed: boolean;
   /** A short vacation late in the year while the two-week part was not taken (A5). */
@@ -376,12 +376,16 @@ export class ApprovalsService {
     return out;
   }
 
-  /** Who else is away on the request's days: the requester's unit and the approver's direct reports (spec 9.2). */
+  /**
+   * Who else is away on the request's days: the requester's unit and the approver's direct reports (spec 9.2),
+   * limited to people the caller may see (CD-494, as CD-349): managers only their reports, Admins everyone.
+   */
   private async alsoAway(tx: Tx, access: CallerAccess, row: TimeoffRequestRow): Promise<ApprovalRow['alsoAway']> {
     const [who] = await tx.select({ unitId: employees.unitId }).from(employees).where(eq(employees.id, row.employeeId));
     const ids = new Set<string>(access.directReportIds);
     if (who?.unitId) for (const e of await tx.select({ id: employees.id }).from(employees).where(and(eq(employees.unitId, who.unitId), shownAndActive))) ids.add(e.id);
     ids.delete(row.employeeId);
+    for (const id of ids) if (!access.canSeeEmployment(id)) ids.delete(id);
     if (!ids.size) return [];
     const overlaps = await tx
       .select({ employeeId: timeoffRequests.employeeId, fullName: employees.fullName, type: timeoffRequests.type, reasonId: timeoffRequests.reasonId, startDate: timeoffRequests.startDate, endDate: timeoffRequests.endDate, status: timeoffRequests.status })

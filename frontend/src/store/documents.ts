@@ -72,8 +72,8 @@ export interface ScanResult {
 
 
 /** Multipart upload (api() sends JSON only). */
-async function upload<T>(path: string, form: FormData, tooLarge = 'The file is larger than 5 MB'): Promise<T> {
-  const res = await authorizedFetch(path, { method: 'POST', body: form });
+async function upload<T>(path: string, form: FormData, tooLarge = 'The file is larger than 5 MB', method: 'POST' | 'PUT' = 'POST'): Promise<T> {
+  const res = await authorizedFetch(path, { method, body: form });
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(res.status, res.status === 413 ? { message: tooLarge } : body);
   return body as T;
@@ -110,6 +110,9 @@ export const docsApi = {
   placeholders: () => api<PlaceholderReference>('/crm/document-templates/placeholders'),
   scan: (file: File) => upload<ScanResult>('/crm/document-templates/scan', templateForm(file)),
   createTemplate: (file: File, name: string, docType: DocType) => upload<DocTemplate>('/crm/document-templates', templateForm(file, { name, docType })),
+  /** Replaces an existing template's file and metadata (CD-487). */
+  replaceTemplate: (id: string, file: File, name: string, docType: DocType) =>
+    upload<DocTemplate>(`/crm/document-templates/${id}`, templateForm(file, { name, docType }), 'The file is larger than 5 MB', 'PUT'),
   deleteTemplate: (id: string) => api<null>(`/crm/document-templates/${id}`, { method: 'DELETE' }),
   downloadTemplate: (t: DocTemplate) => download(`/crm/document-templates/${t.id}/file`, t.fileName),
   downloadStarter: () => download('/crm/document-templates/starter', 'Pultly proposal starter template.docx'),

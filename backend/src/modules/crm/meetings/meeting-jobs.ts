@@ -182,12 +182,25 @@ export class MeetingJobs implements OnApplicationBootstrap {
       if (attempt.lastAttempt) await settle(all, { status: 'failed', error: (err instanceof Error ? err.message : String(err)).slice(0, 500) });
       throw err;
     }
+    // Sent and failed in one transaction (CD-499): otherwise a reader can see a failed send
+    // while delivered recipients are still queued between the two writes.
     const refused = queued.filter((r) => rejected.has(r.email.trim().toLowerCase())).map((r) => r.id);
-    await settle(refused, { status: 'failed', error: 'The mail server refused this address.' });
-    await settle(
-      all.filter((id) => !refused.includes(id)),
-      { status: 'sent', error: null, sentAt: new Date() },
-    );
+    const delivered = all.filter((id) => !refused.includes(id));
+    await this.database.withTenant(tenantId, async (tx) => {
+      const now = new Date();
+      if (refused.length) {
+        await tx
+          .update(meetingMinutesRecipients)
+          .set({ status: 'failed', error: 'The mail server refused this address.', updatedAt: now })
+          .where(and(inArray(meetingMinutesRecipients.id, refused), eq(meetingMinutesRecipients.status, 'queued')));
+      }
+      if (delivered.length) {
+        await tx
+          .update(meetingMinutesRecipients)
+          .set({ status: 'sent', error: null, sentAt: now, updatedAt: now })
+          .where(and(inArray(meetingMinutesRecipients.id, delivered), eq(meetingMinutesRecipients.status, 'queued')));
+      }
+    });
   }
 
   async sendInvites({ tenantId, meetingId, userIds, actorUserId, kind }: JobPayloads['crm.meeting-invite']): Promise<void> {

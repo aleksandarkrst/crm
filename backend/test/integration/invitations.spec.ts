@@ -3,7 +3,7 @@
  * invitations stop working, and one tenant can't touch another tenant's invitations.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
-import { call, createTenant, ok, type Session, signIn } from './helpers';
+import { addMember, call, createTenant, ok, type Session, signIn } from './helpers';
 import { asTenantSql } from './people-helpers';
 import { emailNames } from '../../src/modules/people/linking';
 
@@ -166,5 +166,38 @@ describe('withdrawing and replacing', () => {
     expect((await call('DELETE', `/team/invitations/${invitation.id}`, { token: other.token, tenant: otherTenant })).status).toBe(404);
     expect((await call('DELETE', `/team/invitations/${invitation.id}`, { token: other.token, tenant })).status).toBe(403);
     expect(await pendingIds()).toContain(invitation.id);
+  });
+});
+
+describe('pending invitation role (CD-487)', () => {
+  it('admins can change Admin/Member on a pending invitation before it is accepted', async () => {
+    const invitee = await signIn('inv-role-change');
+    const { token, invitation } = await invite(invitee.email, 'member');
+    expect(invitation.role).toBe('member');
+    const updated = await ok<{ id: string; role: string }>('PATCH', `/team/invitations/${invitation.id}`, { ...as(), body: { role: 'admin' } });
+    expect(updated).toMatchObject({ id: invitation.id, role: 'admin' });
+    expect((await ok('GET', '/team', as())).invitations.find((i: { id: string }) => i.id === invitation.id)?.role).toBe('admin');
+    // Accepting uses the updated role.
+    expect(await ok('POST', `/invitations/${token}/accept`, { token: invitee.token }, 200)).toMatchObject({ role: 'admin' });
+  });
+
+  it('refuses owner, members, and invitations that are gone', async () => {
+    const invitee = await signIn('inv-role-gone');
+    const { token, invitation } = await invite(invitee.email);
+    expect((await call('PATCH', `/team/invitations/${invitation.id}`, { ...as(), body: { role: 'owner' } })).status).toBe(400);
+    const member = await signIn('inv-role-member');
+    await addMember(owner, tenant, member, 'member');
+    expect((await call('PATCH', `/team/invitations/${invitation.id}`, { token: member.token, tenant, body: { role: 'admin' } })).status).toBe(403);
+    await ok('POST', `/invitations/${token}/accept`, { token: invitee.token }, 200);
+    expect((await call('PATCH', `/team/invitations/${invitation.id}`, { ...as(), body: { role: 'admin' } })).status).toBe(404);
+  });
+
+  it("another tenant can't change this tenant's pending invitation role", async () => {
+    const other = await signIn('inv-role-xtenant');
+    const otherTenant = await createTenant(other, 'Role Elsewhere');
+    const { invitation } = await invite(`role-x-${Date.now()}@example.test`, 'member');
+    expect((await call('PATCH', `/team/invitations/${invitation.id}`, { token: other.token, tenant: otherTenant, body: { role: 'admin' } })).status).toBe(404);
+    expect((await call('PATCH', `/team/invitations/${invitation.id}`, { token: other.token, tenant, body: { role: 'admin' } })).status).toBe(403);
+    expect((await ok('GET', '/team', as())).invitations.find((i: { id: string }) => i.id === invitation.id)?.role).toBe('member');
   });
 });

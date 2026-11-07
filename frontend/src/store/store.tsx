@@ -1612,6 +1612,14 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         refreshChecklist();
         return t;
       },
+      /** Replaces an existing template's .docx and metadata (CD-487). */
+      replaceTemplate: async (id: string, file: File, name: string, docType: DocType) => {
+        const t = await docsApi.replaceTemplate(id, file, name, docType);
+        set((x) => ({ templates: (x.templates || []).map((y) => (y.id === id ? t : y)) }));
+        flash(`${t.name} updated`);
+        refreshChecklist();
+        return t;
+      },
       deleteTemplate: async (t: DocTemplate) => {
         try {
           await docsApi.deleteTemplate(t.id);
@@ -1830,6 +1838,16 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           flash('Not resent: ' + errText(err), 7000);
         }
       },
+      /** Fetches a pending invitation's link without copying (CD-487: Show link). */
+      fetchInvitationLink: async (id: string): Promise<string | null> => {
+        try {
+          const { token } = await crmApi.invitationLink(id);
+          return `${window.location.origin}/invite/${token}`;
+        } catch (err) {
+          flash('No link: ' + errText(err), 7000);
+          return null;
+        }
+      },
       /** Copies a pending invitation's link to the clipboard, for when the email doesn't arrive. */
       copyInvitationLink: async (id: string): Promise<string | null> => {
         try {
@@ -1851,6 +1869,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       },
       setMemberRole: (userId: string, role: ApiRole) => {
         void save(() => crmApi.updateMember(userId, role), reload, 'the role');
+      },
+      /** Changes Admin/Member on a pending invitation before they join (CD-487). */
+      setInvitationRole: (id: string, role: 'admin' | 'member') => {
+        void save(() => crmApi.updateInvitation(id, role), reload, 'the invitation role');
       },
       /** Removes a member; removing yourself leaves the workspace. */
       removeMember: (userId: string) => {

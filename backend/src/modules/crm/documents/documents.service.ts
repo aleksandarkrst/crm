@@ -172,6 +172,50 @@ export class DocumentsService {
     }
   }
 
+  /**
+   * Replaces a template's file and metadata in place (CD-487). Same storage key, so documents
+   * already generated from it keep their template_id; later generations use the new .docx.
+   * Previous bytes are restored if the database update fails after the file was overwritten.
+   */
+  async replaceTemplate(ctx: TenantContext, id: string, file: UploadedDocx | undefined, input: CreateTemplate) {
+    const tags = this.checkUpload(file);
+    const existing = await this.database.withTenant(ctx.tenantId, async (tx) => {
+      const [row] = await tx.select({ id: documentTemplates.id, key: documentTemplates.storageKey, name: documentTemplates.name }).from(documentTemplates).where(eq(documentTemplates.id, id));
+      return row;
+    });
+    if (!existing) throw new NotFoundException('Template not found');
+    // A row without a file (restored DB, or storage wiped) must still be replaceable — Edit is the
+    // recovery path. Only ENOENT means "no previous"; any other read error fails closed so we don't
+    // overwrite then delete a file that is still on disk (EACCES, EMFILE, …).
+    const previous = await this.storage.getBuffer(ctx.tenantId, existing.key).catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === 'ENOENT') return null;
+      throw err;
+    });
+    await this.storage.putBuffer(ctx.tenantId, existing.key, file!.buffer);
+    try {
+      return await this.database.withTenant(ctx.tenantId, async (tx) => {
+        await tx
+          .update(documentTemplates)
+          .set({
+            name: input.name,
+            docType: input.docType,
+            fileName: file!.originalname.slice(0, 200),
+            sizeBytes: file!.size,
+            placeholders: tags,
+            uploadedByUserId: ctx.userId,
+          })
+          .where(eq(documentTemplates.id, id));
+        await this.audit.record(tx, ctx, { action: 'document_template.replaced', entityType: 'document_template', entityId: id, data: { name: input.name, previousName: existing.name } });
+        const [row] = await tx.select(templateColumns).from(documentTemplates).where(eq(documentTemplates.id, id));
+        return presentTemplate(row!);
+      });
+    } catch (err) {
+      if (previous) await this.storage.putBuffer(ctx.tenantId, existing.key, previous).catch(() => undefined);
+      else await this.storage.delete(ctx.tenantId, existing.key).catch(() => undefined);
+      return mapDbError(err);
+    }
+  }
+
   async templateFile(ctx: TenantContext, id: string): Promise<{ name: string; stream: Readable }> {
     const row = await this.database.withTenant(ctx.tenantId, async (tx) => {
       const [t] = await tx.select({ name: documentTemplates.name, key: documentTemplates.storageKey }).from(documentTemplates).where(eq(documentTemplates.id, id));

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
+import { askConfirm } from '../components/ConfirmDialog';
 import { canManageTemplates, type DocTemplate, docMoment, fileSize, type PlaceholderReference } from '../store/documents';
 import { useStore } from '../store/store';
 import { mergeFieldGroupHeading, mergeFieldReference, opportunityCopy } from '../store/wording';
-import { askConfirm } from '../components/ConfirmDialog';
 
 /**
  * Settings → Document templates (CD-13): the uploaded .docx templates, the built-in proposal preview,
@@ -10,16 +10,18 @@ import { askConfirm } from '../components/ConfirmDialog';
  * delete; everyone can download.
  */
 export function TemplatesTab() {
-  const { s, session, openDoc, loadTemplates, downloadTemplate, deleteTemplate } = useStore();
+  const { s, session, set, openDoc, loadTemplates, downloadTemplate, deleteTemplate } = useStore();
   const lead = s.leads[0];
   const canManage = canManageTemplates(session.tenant.role);
   useEffect(() => {
     void loadTemplates();
   }, [loadTemplates]);
 
-  const onDelete = (t: DocTemplate) => {
-    void askConfirm({ title: `Delete the template "${t.name}"?`, message: 'Documents already generated from it are kept.', confirmLabel: 'Delete', danger: true }).then((ok) => ok && void deleteTemplate(t));
+  const onDelete = async (t: DocTemplate) => {
+    if (!(await askConfirm({ title: `Delete the template "${t.name}"?`, message: 'Documents already generated from it are kept.', confirmLabel: 'Delete', danger: true }))) return;
+    void deleteTemplate(t);
   };
+  const onEdit = (t: DocTemplate) => set({ templateOpen: true, templateEditing: t });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -57,9 +59,14 @@ export function TemplatesTab() {
                   Download
                 </button>
                 {canManage && (
-                  <button type="button" className="btn btn-secondary" style={{ fontSize: 12.5, padding: '8px 13px', borderRadius: 7 }} onClick={() => onDelete(t)}>
-                    Delete
-                  </button>
+                  <>
+                    <button type="button" className="btn btn-secondary" style={{ fontSize: 12.5, padding: '8px 13px', borderRadius: 7 }} data-testid="edit-template" onClick={() => onEdit(t)}>
+                      Edit
+                    </button>
+                    <button type="button" className="btn btn-secondary" style={{ fontSize: 12.5, padding: '8px 13px', borderRadius: 7 }} onClick={() => void onDelete(t)}>
+                      Delete
+                    </button>
+                  </>
                 )}
               </div>
             </div>

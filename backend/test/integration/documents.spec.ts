@@ -318,6 +318,45 @@ describe('an interrupted generation (CD-100)', () => {
   });
 });
 
+describe('replacing a template (CD-487)', () => {
+  it('owners and admins replace the .docx in place; members get 403', async () => {
+    const template = await upload(owner, tenant, starterTemplate(), 'Replaceable', 'Quote');
+    const next = buildDocx([{ text: 'Updated {{company.name}} body' }]);
+    const put = (s: Session, f: FormData) => raw('PUT', `/crm/document-templates/${template.id}`, { token: s.token, tenant, form: f });
+    expect((await put(member, form(next, 'updated.docx', { name: 'Replaceable v2', docType: 'Quote' }))).status).toBe(403);
+
+    const res = await put(admin, form(next, 'updated.docx', { name: 'Replaceable v2', docType: 'Quote' }));
+    expect(res.status, JSON.stringify(res.json)).toBe(200);
+    const updated = res.json as unknown as Template;
+    expect(updated).toMatchObject({ id: template.id, name: 'Replaceable v2', docType: 'Quote', fileName: 'updated.docx' });
+    expect(updated.placeholders.map((p) => p.tag)).toContain('company.name');
+    expectFile(tenant, `templates/${template.id}.docx`, true);
+
+    const file = await raw('GET', `/crm/document-templates/${template.id}/file`, { token: member.token, tenant });
+    expect(file.status).toBe(200);
+    expect(docxText(file.bytes)).toContain('Updated {{company.name}} body');
+
+    expect((await put(owner, form(null, 'missing.docx', { name: 'X', docType: 'Quote' }))).status).toBe(400);
+    const missing = await raw('PUT', `/crm/document-templates/${crypto.randomUUID()}`, {
+      token: owner.token,
+      tenant,
+      form: form(next, 'updated.docx', { name: 'Gone', docType: 'Quote' }),
+    });
+    expect(missing.status).toBe(404);
+
+    // Another workspace cannot replace this template (RLS / tenant filter → 404); original stays.
+    const outsiderPut = await raw('PUT', `/crm/document-templates/${template.id}`, {
+      token: outsider.token,
+      tenant: otherTenant,
+      form: form(buildDocx([{ text: 'Intruder {{company.name}}' }]), 'intruder.docx', { name: 'Hijacked', docType: 'Quote' }),
+    });
+    expect(outsiderPut.status).toBe(404);
+    const still = (await ok<Template[]>('GET', '/crm/document-templates', { token: owner.token, tenant })).find((t) => t.id === template.id);
+    expect(still).toMatchObject({ name: 'Replaceable v2', fileName: 'updated.docx' });
+    expect(docxText((await raw('GET', `/crm/document-templates/${template.id}/file`, { token: owner.token, tenant })).bytes)).toContain('Updated {{company.name}} body');
+  });
+});
+
 describe('deleting removes the files', () => {
   it('deleting a template removes its file and keeps the documents made from it', async () => {
     const template = await upload(admin, tenant, starterTemplate(), 'Short-lived');
