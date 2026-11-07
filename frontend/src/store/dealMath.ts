@@ -21,8 +21,10 @@ export const MAX_QTY = 9_999_999;
 
 /** Why a typed amount can't be saved, or '' (CD-479): a negative or too-large value is refused, never flipped or clamped. */
 export function amountProblem(raw: unknown, label: string, max: number): string {
-  const n = Number(String(raw ?? '').replace(/[^0-9.-]/g, '') || 0);
-  if (!Number.isFinite(n)) return `${label} must be a number`;
+  const text = String(raw ?? '').trim();
+  // Digits with an optional sign and decimal point only: letters and symbols are refused, not stripped.
+  if (text && !/^-?(\d+\.?\d*|\.\d+)$/.test(text)) return `${label} must be a number`;
+  const n = Number(text || 0);
   if (n < 0) return `${label} can't be negative`;
   if (n > max) return `${label} can be at most ${max.toLocaleString('en-US')}`;
   return '';
