@@ -1,5 +1,6 @@
 import { createContext, type CSSProperties, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, useContext, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { askConfirm } from './ConfirmDialog';
 
 // ---------------------------------------------------------------- icons
 
@@ -414,6 +415,7 @@ export function Modal({
   onBackdrop,
   onClose = onBackdrop,
   role = 'dialog',
+  askDiscard = true,
 }: {
   children: ReactNode;
   maxWidth: number;
@@ -423,10 +425,31 @@ export function Modal({
   /** What Escape does (CD-490); the backdrop click's action by default. Without either, Escape does nothing. */
   onClose?: () => void;
   role?: 'dialog' | 'alertdialog';
+  /** Once something was typed or picked in it, Escape and the backdrop ask before closing (CD-490). Off for a modal that asks itself. */
+  askDiscard?: boolean;
 }) {
   const titleId = useId();
+  const box = useRef<HTMLDivElement>(null);
+  const dirty = useRef(false);
+  const asking = useRef(false);
+  const markDirty = () => {
+    dirty.current = true;
+  };
+  /** Runs a close action, first asking to discard what was entered. */
+  const guarded = (action: (() => void) | undefined) => {
+    if (!action) return undefined;
+    return () => {
+      if (!askDiscard || !dirty.current) return action();
+      if (asking.current) return;
+      asking.current = true;
+      void askConfirm({ title: 'Discard your changes?', message: 'What you entered here is not saved.', confirmLabel: 'Discard', danger: true }).then((ok) => {
+        asking.current = false;
+        if (ok) action();
+      });
+    };
+  };
   const escape = useRef(onClose);
-  escape.current = onClose;
+  escape.current = guarded(onClose);
   useEffect(() => {
     // Only the topmost modal answers Escape; a popover or field that handled it first (preventDefault / stopPropagation) wins.
     escapeStack.push(escape);
@@ -440,6 +463,19 @@ export function Modal({
       window.removeEventListener('keydown', onKey);
       escapeStack.splice(escapeStack.indexOf(escape), 1);
     };
+  }, []);
+  // Read on the first render, before a field inside takes focus with autoFocus.
+  const [opener] = useState(() => (document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null));
+  useEffect(() => {
+    // Focus moves into the dialog (unless a field took it with autoFocus) and back to what opened it on close (CD-490).
+    const dialog = box.current;
+    if (dialog && !dialog.contains(document.activeElement)) dialog.focus({ preventScroll: true });
+    return () => {
+      const now = document.activeElement;
+      const lost = !now || now === document.body || !now.isConnected || !!dialog?.contains(now);
+      if (opener?.isConnected && lost) opener.focus({ preventScroll: true });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening
   }, []);
   useEffect(() => {
     const root = document.documentElement;
@@ -459,8 +495,19 @@ export function Modal({
     };
   }, []);
   return createPortal(
-    <div className="overlay" style={{ zIndex: z }} onClick={onBackdrop}>
-      <div className="modal" role={role} aria-modal="true" aria-labelledby={titleId} style={{ maxWidth, gap }} onClick={(e) => e.stopPropagation()}>
+    <div className="overlay" style={{ zIndex: z }} onClick={guarded(onBackdrop)}>
+      <div
+        ref={box}
+        className="modal"
+        role={role}
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        style={{ maxWidth, gap, outline: 'none' }}
+        onClick={(e) => e.stopPropagation()}
+        onInput={markDirty}
+        onChange={markDirty}
+      >
         <ModalTitleId.Provider value={titleId}>{children}</ModalTitleId.Provider>
       </div>
     </div>,

@@ -152,7 +152,7 @@ export function ImportDialog({ initialType, onClose }: { initialType: ImportType
   const sub = 'Upload a CSV (UTF-8, comma or semicolon separated, with a header row). Nothing is saved until you import.';
 
   return (
-    <Modal maxWidth={760} gap={18} onClose={() => void cancel()}>
+    <Modal maxWidth={760} gap={18} askDiscard={false} onClose={() => void cancel()}>
       <ModalHeader title={title} sub={sub} />
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }} aria-label="Import steps">
         {STEPS.map((x, i) => (

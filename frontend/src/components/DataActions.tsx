@@ -49,6 +49,8 @@ export function DataActions({ type, exportCsv, count }: { type: ImportType | 'pr
                 role="menuitem"
                 className="menu-item"
                 onClick={() => {
+                  // The trigger gets focus back first: the import dialog returns it there on close (CD-490).
+                  ref.current?.focus();
                   setOpen(false);
                   setImporting(true);
                 }}
