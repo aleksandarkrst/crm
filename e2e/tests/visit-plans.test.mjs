@@ -4,7 +4,7 @@
 // also on a phone; plans are monthly and a quarter in Reports adds up its months (CD-212).
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, createReadyCompany, click, clickButton, createWorkspace, email, eventually, finishOnboarding, setValue, signIn, steps, text, useBrowser, testPib } from '../lib/harness.mjs';
+import { api, BASE_URL, createReadyCompany, click, clickButton, confirmInApp, createWorkspace, email, eventually, finishOnboarding, setValue, signIn, steps, text, useBrowser, testPib } from '../lib/harness.mjs';
 // The app's own rule for where a visit from a plan starts (B9, unit-tested in frontend/test).
 import { startInPeriod } from '../../frontend/src/store/meetingTime.ts';
 
@@ -232,5 +232,20 @@ describe('visit plans', () => {
     // The completion's tooltip says the expected pace in visits.
     const title = await olga.$eval(`[data-testid=report-row][data-user-id="${miaId}"] [data-testid=report-completion]`, (el) => el.title);
     assert.match(title, /of \d+ visits? expected by today|Every planned visit is held/);
+  });
+  step("removing a customer asks first; the last one can't be removed (CD-490 QA)", async () => {
+    await olga.goto(`${BASE_URL}/visit-plans/${nextPlan.id}`, { waitUntil: "networkidle0" });
+    await olga.waitForSelector("button[title=\"Remove Bravo Visits\"]");
+    await click(olga, "button[title=\"Remove Bravo Visits\"]");
+    assert.equal(await confirmInApp(olga, { ok: false }), "Remove Bravo Visits from this plan?");
+    assert.ok(await olga.$("button[title=\"Remove Bravo Visits\"]"), "Cancel keeps the customer");
+    await click(olga, "button[title=\"Remove Bravo Visits\"]");
+    assert.equal(await confirmInApp(olga), "Remove Bravo Visits from this plan?");
+    await olga.waitForFunction(() => !document.querySelector("button[title=\"Remove Bravo Visits\"]"));
+    assert.ok(await eventually(async () => (await api(olga, `/crm/visit-plans/${nextPlan.id}`)).lines.length === 1), "removed");
+    // The last customer stays; the plan says why.
+    await click(olga, "button[title^=\"Remove Alpha Visits\"]");
+    await olga.waitForFunction(() => document.querySelector(".toast")?.textContent.includes("at least one customer"));
+    assert.ok(await olga.$("button[title^=\"Remove Alpha Visits\"]"), "the last customer stays");
   });
 });

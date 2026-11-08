@@ -186,7 +186,8 @@ export function VisitPlan() {
       lines.map((l) => (l.companyId === companyId ? { ...l, plannedVisits: n } : l)),
     );
   const removeLine = async (companyId: string, name: string) => {
-    if (lines.length === 1) return store.flash('A plan needs at least one customer. Delete the plan instead.');
+    // Long enough to read: the × looks like it should remove, so the reason has to be seen (CD-490 QA).
+    if (lines.length === 1) return store.flash('A plan needs at least one customer. Delete the plan instead.', 6000);
     if (!(await askConfirm({ title: `Remove ${name} from this plan?`, message: `Meetings with ${name} are kept.`, confirmLabel: 'Remove', danger: true }))) return;
     store.setPlanLines(
       plan.id,
@@ -325,7 +326,7 @@ export function VisitPlan() {
                         >
                           Schedule visit
                         </button>
-                        {editable && <RemoveButton title={`Remove ${l.companyName}`} onClick={() => void removeLine(l.companyId, l.companyName)} />}
+                        {editable && <RemoveButton title={lines.length === 1 ? `Remove ${l.companyName}: a plan needs at least one customer` : `Remove ${l.companyName}`} onClick={() => void removeLine(l.companyId, l.companyName)} />}
                       </span>
                     </div>
                     {drillFor(l.companyId)}
