@@ -21,6 +21,8 @@ export function NewMenu() {
   const ref = useRef<HTMLButtonElement>(null);
 
   const pick = (i: number) => {
+    // The + button gets focus back first: the modal the item opens returns it there on close (CD-490).
+    ref.current?.focus();
     setOpen(false);
     items[i]!.run();
   };

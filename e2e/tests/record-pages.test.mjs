@@ -90,8 +90,25 @@ describe('company and contact pages', () => {
     await createNew(page, 'deal');
     await page.waitForSelector('.modal[role=dialog][aria-modal=true]');
     assert.equal(await page.$eval('.modal[role=dialog]', (el) => document.getElementById(el.getAttribute('aria-labelledby'))?.textContent), 'New opportunity');
+    assert.ok(await page.$eval('.modal[role=dialog]', (el) => el.contains(document.activeElement)), 'focus moved into the dialog');
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.modal'));
+    // Focus goes back to what opened it, the + button (CD-490 QA).
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'new-menu');
+  });
+
+  step('Escape on a modal with typed input asks to discard it first (CD-490 QA)', async () => {
+    await createNew(page, 'company');
+    await page.waitForSelector('[data-testid=new-company-name]');
+    await page.type('[data-testid=new-company-name]', 'TEST-CD490-esc');
+    await page.keyboard.press('Escape');
+    // Cancel keeps the dialog and what was typed.
+    assert.equal(await confirmInApp(page, { ok: false }), 'Discard your changes?');
+    assert.equal(await page.$eval('[data-testid=new-company-name]', (el) => el.value), 'TEST-CD490-esc');
+    await page.keyboard.press('Escape');
+    assert.equal(await confirmInApp(page), 'Discard your changes?');
+    await page.waitForFunction(() => !document.querySelector('.modal'));
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'new-menu');
   });
 
   step("Escape closes the opportunity's ⋯ menu and gives the focus back to ⋯ (CD-490)", async () => {
