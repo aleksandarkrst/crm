@@ -86,7 +86,8 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
 
   // Someone else's change was read: show it, unless this tab has edits not saved yet.
   useEffect(() => {
-    if (dirty.current.size || timer.current || inFlight.current) return;
+    // Our own save (already in the draft) is skipped, so a blank step being typed isn't wiped.
+    if (dirty.current.size || timer.current || inFlight.current || stored.updatedAt === base.current) return;
     setDraft(toDraft(stored));
     base.current = stored.updatedAt;
   }, [stored]);
@@ -108,7 +109,8 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
     const input: InternalMinutesInput = {};
     if (parts.includes('summary')) input.summary = d.summary;
     if (parts.includes('agreements')) input.agreements = d.agreements;
-    if (parts.includes('nextSteps')) input.nextSteps = d.nextSteps.map(({ id, text, ownerUserId, dueDate }) => ({ id, text, ownerUserId, dueDate }));
+    // A blank step stays on screen while it's typed but isn't saved (CD-479); one with a task keeps its link.
+    if (parts.includes('nextSteps')) input.nextSteps = d.nextSteps.filter((st) => st.text.trim() || st.taskId).map(({ id, text, ownerUserId, dueDate }) => ({ id, text, ownerUserId, dueDate }));
     inFlight.current++;
     setState('saving');
     chain.current = chain.current.then(async () => {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BillingFields } from '../components/BillingFields';
 import { Modal, ModalHeader } from '../components/ui';
+import { amountProblem, MAX_PRICE, MAX_QTY } from '../store/dealMath';
 import { linesOf, localeFor, num, plainAmount } from '../store/selectors';
 import { type ProductDraft, useStore } from '../store/store';
 import { askConfirm } from '../components/ConfirmDialog';
@@ -23,11 +24,20 @@ export function ProductModal() {
   const close = () => set({ productOpen: false, productEditId: null });
   const field = (k: keyof ProductDraft) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setP((x) => ({ ...x, [k]: e.target.value }));
   const locale = localeFor(s.workspace.currency);
+  const problems = { price: amountProblem(p.price, 'Unit price', MAX_PRICE), qty: amountProblem(p.qty, 'Quantity', MAX_QTY), vat: amountProblem(p.vat, 'Tax %', 100) };
+  const fieldError = (k: keyof typeof problems) =>
+    problems[k] && (
+      <span className="subform-hint" role="alert" data-testid="field-error" style={{ color: 'var(--danger)' }}>
+        {problems[k]}
+      </span>
+    );
   const usedOn = editing ? s.leads.filter((l) => linesOf(s, l).some((ln) => ln.itemId === editing.id)).length : 0;
 
   const submit = async () => {
     const name = p.name.trim();
     if (!name) return flash('Give the product a name first');
+    const problem = Object.values(problems).find(Boolean);
+    if (problem) return flash(problem);
     setBusy(true);
     const ok = await saveProduct(editing?.id ?? null, { ...p, name });
     setBusy(false);
@@ -58,7 +68,8 @@ export function ProductModal() {
       <div className="product-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
         <label className="form-label">
           Unit price
-          <input className="form-input" inputMode="decimal" placeholder="6500" value={p.price} onChange={field('price')} />
+          <input className="form-input" inputMode="decimal" placeholder="6500" aria-invalid={!!problems.price || undefined} value={p.price} onChange={field('price')} />
+          {fieldError('price')}
         </label>
         <label className="form-label">
           Unit
@@ -71,7 +82,8 @@ export function ProductModal() {
         </label>
         <label className="form-label">
           Quantity
-          <input className="form-input" inputMode="decimal" value={p.qty} onChange={field('qty')} />
+          <input className="form-input" inputMode="decimal" aria-invalid={!!problems.qty || undefined} value={p.qty} onChange={field('qty')} />
+          {fieldError('qty')}
         </label>
         <div className="form-label">
           Price
@@ -81,7 +93,8 @@ export function ProductModal() {
         </div>
         <label className="form-label">
           Tax %
-          <input className="form-input" inputMode="decimal" placeholder="20" value={p.vat} onChange={field('vat')} />
+          <input className="form-input" inputMode="decimal" placeholder="20" aria-invalid={!!problems.vat || undefined} value={p.vat} onChange={field('vat')} />
+          {fieldError('vat')}
         </label>
       </div>
       <BillingFields idPrefix="product" frequency={p.frequency} cycles={p.cycles} onChange={(frequency, cycles) => setP((x) => ({ ...x, frequency, cycles }))} />

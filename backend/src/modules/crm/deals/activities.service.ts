@@ -93,7 +93,7 @@ export class ActivitiesService {
     tx: Tx,
     ctx: TenantContext,
     dealId: string,
-    entry: { channel: (typeof CHANNELS)[number]; title: string; detail: string | null; occurredAt?: Date },
+    entry: { channel: (typeof CHANNELS)[number] | null; title: string; detail: string | null; occurredAt?: Date },
     { countsAsContact = false } = {},
   ): Promise<void> {
     const occurredAt = entry.occurredAt ?? new Date();

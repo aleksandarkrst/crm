@@ -15,7 +15,8 @@ import type { CompanyStatus } from '../store/types';
 // import { useBoardView } from '../store/useBoardView';
 import { usePageFilters } from '../store/usePageFilters';
 
-const COLS = '1.5fr 1fr 0.9fr 0.8fr 1.1fr 1fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1.1fr 1.1fr 0.8fr 1fr';
+// minmax(0, …): every row gets the same column widths whatever its content (CD-479); long text ends in "…".
+const COLS = [1.5, 1, 0.9, 0.8, 1.1, 1, 0.9, 0.7, 0.8, 1, 1, 1.1, 1.1, 0.8, 1].map((f) => `minmax(0, ${f}fr)`).join(' ');
 type Key = 'name' | 'pib' | 'status' | 'ownership' | 'industry' | 'hq' | 'size' | 'contactCount' | 'oppCount' | 'value' | 'lifetimeValue' | 'stageName' | 'owner' | 'lastTouch' | 'source';
 const HEADERS: { key: Key; label: string }[] = [
   { key: 'name', label: 'Company' },
@@ -76,24 +77,24 @@ export function Companies() {
               ))}
             </div>
             {rows.map((c) => (
-              <div key={c.id} className="table-row clickable" style={{ gridTemplateColumns: COLS }} onClick={() => openCompany(c.id)}>
-                <span style={{ fontWeight: 600 }}>{c.name}</span>
+              <div key={c.id} className="table-row clickable cells-clip" style={{ gridTemplateColumns: COLS }} onClick={() => openCompany(c.id)}>
+                <span style={{ fontWeight: 600 }} title={c.name}>{c.name}</span>
                 <span style={{ color: 'var(--text-2)' }}>{c.pib || <span className="badge badge-warn">No PIB</span>}</span>
                 <span style={{ color: 'var(--text-2)' }} data-testid="company-row-status">
                   {c.status}
                 </span>
-                <span style={{ color: 'var(--text-2)' }}>{c.ownership}</span>
-                <span style={{ color: 'var(--text-2)' }}>{c.industry}</span>
-                <span style={{ color: 'var(--text-2)' }}>{c.hq}</span>
+                <span style={{ color: 'var(--text-2)' }} title={c.ownership}>{c.ownership}</span>
+                <span style={{ color: 'var(--text-2)' }} title={c.industry}>{c.industry}</span>
+                <span style={{ color: 'var(--text-2)' }} title={c.hq}>{c.hq}</span>
                 <span style={{ color: 'var(--text-2)' }}>{c.size}</span>
                 <span style={{ color: 'var(--text-2)' }}>{c.contactCount}</span>
                 <span style={{ color: 'var(--text-2)' }}>{c.oppCount}</span>
                 <span style={{ color: 'var(--brand)' }}>{c.valueLabel}</span>
                 <span style={{ color: 'var(--text-2)' }}>{c.lifetimeLabel}</span>
-                <span style={{ fontSize: 12.5 }}>{c.stageName}</span>
-                <span style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{c.owner}</span>
+                <span style={{ fontSize: 12.5 }} title={c.stageName}>{c.stageName}</span>
+                <span style={{ color: 'var(--text-2)', fontSize: 12.5 }} title={c.owner}>{c.owner}</span>
                 <span style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{c.lastTouch}</span>
-                <span style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{c.source}</span>
+                <span style={{ color: 'var(--text-2)', fontSize: 12.5 }} title={c.source}>{c.source}</span>
               </div>
             ))}
           </div>

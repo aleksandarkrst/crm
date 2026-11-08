@@ -141,6 +141,7 @@ a.btn-plain:hover { color: var(--ink); text-decoration: none; }
 .form-label { display: flex; flex-direction: column; gap: 6px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-2); }
 .form-input { border: 1px solid var(--border); border-radius: 7px; padding: 10px; font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--ink); background: var(--white); font-weight: 400; }
 .form-input:focus { border-color: var(--brand); box-shadow: var(--ring); outline: none; }
+.form-input[aria-invalid='true'] { border-color: var(--danger); }
 textarea.form-input { resize: vertical; }
 .box-input { border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; font-size: 13px; color: var(--ink); background: var(--white); width: 100%; }
 .box-input:focus { border-color: var(--brand); box-shadow: var(--ring); outline: none; }
@@ -170,6 +171,7 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 .table-head { display: grid; gap: 12px; padding: 11px 16px; background: var(--panel); border-bottom: 1px solid var(--border); }
 .table-row { display: grid; gap: 12px; padding: 13px 16px; border-bottom: 1px solid var(--divider); font-size: 13px; align-items: center; }
 .table-row.clickable { cursor: pointer; }
+.table-row.cells-clip > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .table-row.clickable:hover { background: var(--panel); }
 .sort-btn { display: flex; align-items: center; gap: 4px; border: 0; background: transparent; cursor: pointer; padding: 0; text-align: left; font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; }
 
