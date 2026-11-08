@@ -10,7 +10,7 @@
  *   canceled" counts one year of cycles, so the contract value stays finite.
  * - The deal value is the contract value without tax.
  */
-import type { BillingFrequency, DealDiscount, DealLine, TaxMode } from './types';
+import type { BillingFrequency, BonusRule, DealDiscount, DealLine, TaxMode } from './types';
 
 /**
  * A typed or stored amount as a number: currency symbols, spaces and thousands commas are dropped,
@@ -34,6 +34,18 @@ export function amountProblem(raw: unknown, label: string, max: number): string 
   if (n > max) return `${label} can be at most ${max.toLocaleString('en-US')}`;
   return '';
 }
+
+/** The API's bound for a bonus minimum and flat amount (bonus-rules.service.ts). */
+export const MAX_BONUS_AMOUNT = 999_999_999_999;
+/**
+ * Why a salesperson's bonus rule can't be saved, per field, or '' (CD-479 QA): a negative or
+ * too-large number, or letters, are refused with a message under the field, never flipped or clamped.
+ */
+export const bonusRuleProblems = (r: BonusRule) => ({
+  rate: amountProblem(r.rate, 'Rate', 100),
+  floor: amountProblem(r.floor, 'Minimum', MAX_BONUS_AMOUNT),
+  fixed: amountProblem(r.fixed, 'Flat amount', MAX_BONUS_AMOUNT),
+});
 
 export const FREQUENCIES: { value: BillingFrequency; label: string }[] = [
   { value: 'one_time', label: 'One time' },

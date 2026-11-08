@@ -124,6 +124,7 @@ a.btn-plain:hover { color: var(--ink); text-decoration: none; }
 .ghost { border: 1px solid transparent; border-radius: 7px; padding: 6px 9px; font-size: 13.5px; color: var(--ink); background: transparent; width: 100%; letter-spacing: 0; text-transform: none; }
 .ghost:hover { background: var(--bg-soft); }
 .ghost:focus { background: var(--white); border-color: var(--brand); box-shadow: var(--ring); outline: none; }
+.ghost[aria-invalid='true'] { border-color: var(--danger); }
 .ghost-sm { padding: 6px 8px; font-size: 13px; }
 .ghost-date-empty { text-align: left; cursor: pointer; color: var(--text-2); }
 .ghost-date-empty:hover { color: var(--ink); }
@@ -618,6 +619,10 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
 .minutes-preview { font-size: 13.5px; line-height: 1.55; border: 1px solid transparent; border-radius: 7px; padding: 8px 10px; margin: 0 -10px; overflow-wrap: anywhere; }
 .minutes-steps > .table-row { padding: 9px 16px; }
 .minutes-steps > .table-row:last-child { border-bottom: 0; }
+/* A step's message sits under its row, in the row's padding; the divider moves below the message. */
+.minutes-steps > .minutes-step-error { padding: 0 16px 8px; color: var(--danger); }
+.minutes-steps > .minutes-step-error:not(:last-child) { border-bottom: 1px solid var(--divider); }
+.minutes-steps > .table-row:has(+ .minutes-step-error) { border-bottom: 0; }
 .minutes-step > * { min-width: 0; }
 .minutes-step select.form-input, .minutes-step input.form-input { width: 100%; box-sizing: border-box; padding: 7px 9px; }
 .minutes-step-read { font-size: 13.5px; overflow-wrap: anywhere; }

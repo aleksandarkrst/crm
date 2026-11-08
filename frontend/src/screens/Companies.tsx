@@ -16,7 +16,8 @@ import type { CompanyStatus } from '../store/types';
 import { usePageFilters } from '../store/usePageFilters';
 
 // minmax(0, …): every row gets the same column widths whatever its content (CD-479); long text ends in "…".
-const COLS = [1.5, 1, 0.9, 0.8, 1.1, 1, 0.9, 0.7, 0.8, 1, 1, 1.1, 1.1, 0.8, 1].map((f) => `minmax(0, ${f}fr)`).join(' ');
+/** Column shares: each header (with its sort arrow) fits its column at the table's 1580px (CD-479 QA). */
+const COLS = [1.5, 1.05, 0.8, 1, 0.95, 0.75, 0.9, 0.9, 1.3, 1.05, 1.3, 1.15, 0.95, 1.05, 0.75].map((f) => `minmax(0, ${f}fr)`).join(' ');
 type Key = 'name' | 'pib' | 'status' | 'ownership' | 'industry' | 'hq' | 'size' | 'contactCount' | 'oppCount' | 'value' | 'lifetimeValue' | 'stageName' | 'owner' | 'lastTouch' | 'source';
 const HEADERS: { key: Key; label: string }[] = [
   { key: 'name', label: 'Company' },

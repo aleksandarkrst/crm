@@ -8,9 +8,10 @@ import { MODULES, WORKSPACE_MODULES } from '../components/modules';
 import { paths } from '../lib/paths';
 import { canManageTemplates } from '../store/documents';
 import { ACTIVITIES, CHANNEL_LABELS, CHANNELS, CURRENCIES, DOCS, FIELD_TYPES, TEAM_ROLES } from '../store/seed';
+import { bonusRuleProblems } from '../store/dealMath';
 import { currencySymbol, curOf, customFieldsOf, initialsOf, memberLabels, salesPeople } from '../store/selectors';
 
-import type { CustomFieldDef, Stage, Workspace } from '../store/types';
+import type { BonusRule, CustomFieldDef, Stage, Workspace } from '../store/types';
 import type { CustomFieldEntity } from '../lib/api';
 import { useStore } from '../store/store';
 import { TemplatesTab } from './DocumentTemplates';
@@ -1140,13 +1141,25 @@ function BonusesTab() {
           {salesPeople(s)
             .filter((p) => s.team.some((m) => m.status === 'Active' && m.id === p.value))
             .map((p) => {
-              const r = rules[p.value];
+              const r = rules[p.value] ?? { rate: '', floor: '', fixed: '' };
+              // A refused number stays in its field with a red message under it and is not saved (CD-479 QA).
+              const bad = bonusRuleProblems(r);
+              const field = (key: keyof BonusRule, label: string) => (
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                  <GhostInput className="ghost-sm" aria-label={`${label} for ${p.label}`} inputMode="decimal" placeholder="0" aria-invalid={!!bad[key] || undefined} value={r[key]} onChange={(e) => setBonusRule(p.value, key, e.target.value)} />
+                  {bad[key] && (
+                    <span className="subform-hint" role="alert" data-testid="bonus-error" style={{ color: 'var(--danger)', padding: '0 8px' }}>
+                      {bad[key]}
+                    </span>
+                  )}
+                </span>
+              );
               return (
                 <div key={p.value} data-testid="bonus-rule" className="table-row" style={{ gridTemplateColumns: BONUS_COLS, padding: '8px 16px' }}>
                   <span style={{ fontWeight: 600 }}>{p.label}</span>
-                  <GhostInput className="ghost-sm" aria-label={'Rate for ' + p.label} inputMode="decimal" placeholder="0" value={r?.rate ?? ''} onChange={(e) => setBonusRule(p.value, 'rate', e.target.value)} />
-                  <GhostInput className="ghost-sm" aria-label={'Minimum for ' + p.label} inputMode="decimal" placeholder="0" value={r?.floor ?? ''} onChange={(e) => setBonusRule(p.value, 'floor', e.target.value)} />
-                  <GhostInput className="ghost-sm" aria-label={'Flat amount for ' + p.label} inputMode="decimal" placeholder="0" value={r?.fixed ?? ''} onChange={(e) => setBonusRule(p.value, 'fixed', e.target.value)} />
+                  {field('rate', 'Rate')}
+                  {field('floor', 'Minimum')}
+                  {field('fixed', 'Flat amount')}
                 </div>
               );
             })}

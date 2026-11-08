@@ -272,7 +272,7 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
                   )}
                 </div>
                 {needsText && (
-                  <div className="subform-hint minutes-step-error" role="alert" data-testid="step-error" style={{ color: 'var(--danger)', padding: '0 14px 8px' }}>
+                  <div className="subform-hint minutes-step-error" role="alert" data-testid="step-error">
                     A next step needs text. Its task keeps the saved text until you type one.
                   </div>
                 )}
