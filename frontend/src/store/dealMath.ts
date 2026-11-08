@@ -12,7 +12,11 @@
  */
 import type { BillingFrequency, DealDiscount, DealLine, TaxMode } from './types';
 
-const num = (v: unknown): number => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
+/**
+ * A typed or stored amount as a number: currency symbols, spaces and thousands commas are dropped,
+ * the minus sign is kept (CD-479: "-500" is -500, never 500, so validation can refuse it). Not a number: 0.
+ */
+export const num = (v: unknown): number => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /** The API's bounds for a unit price and a quantity (deal-lines.service.ts, products.service.ts). */

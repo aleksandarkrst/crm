@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { BillingFields } from '../components/BillingFields';
 import { Modal, ModalTitle, RemoveButton } from '../components/ui';
 import { amountProblem, billingText, dealTotals, isRecurring, MAX_PRICE, MAX_QTY, TAX_MODES } from '../store/dealMath';
@@ -48,15 +48,20 @@ export function DealProductsDialog() {
     discount: discountProblem(l.discount, l.discountKind),
     vat: draft.taxMode === 'none' ? '' : amountProblem(l.vat, 'Tax %', 100),
   });
-  // A refused value never feeds the amounts or totals (CD-479 QA): a line with one counts as 0,
-  // a refused deal discount takes nothing off, until the value is fixed.
+  // Checked once per render: the messages, Save and the totals all read these (CD-479 QA).
+  const lineProblems = draft.lines.map(problemsOf);
+  const lineErrors = lineProblems.map((bad) => bad.price || bad.qty || bad.discount || bad.vat);
+  const discountErrors = draft.discounts.map((d) => discountProblem(d.value, d.kind));
+  const installmentErrors = draft.installments.map((i) => amountProblem(i.amount, 'Amount', MAX_PRICE));
+  // A refused value never feeds the amounts or totals: a line with one counts as 0, a refused deal
+  // discount takes nothing off and a refused installment adds nothing, until the value is fixed.
   const totals = dealTotals(
-    draft.lines.map((l) => (Object.values(problemsOf(l)).some(Boolean) ? { ...l, qty: 0 } : l)),
+    draft.lines.map((l, i) => (lineErrors[i] ? { ...l, qty: 0 } : l)),
     draft.taxMode,
-    draft.discounts.map((d) => (discountProblem(d.value, d.kind) ? { ...d, value: 0 } : d)),
+    draft.discounts.map((d, i) => (discountErrors[i] ? { ...d, value: 0 } : d)),
   );
   const recurring = draft.lines.some(isRecurring);
-  const installmentSum = draft.installments.reduce((a, i) => a + num(i.amount), 0);
+  const installmentSum = draft.installments.reduce((a, x, i) => a + (installmentErrors[i] ? 0 : num(x.amount)), 0);
   const mismatch = draft.installments.length > 0 && Math.abs(installmentSum - totals.oneTimeTotal) >= 0.01;
 
   const patch = (fn: (d: DealProductsDraft) => DealProductsDraft) => {
@@ -85,10 +90,8 @@ export function DealProductsDialog() {
 
   const submit = async () => {
     if (draft.lines.some((l) => !l.itemId)) return setError('Pick a product on every line.');
-    const problem = draft.lines.flatMap((l) => Object.values(problemsOf(l))).find(Boolean);
+    const problem = [...lineErrors, ...discountErrors, ...installmentErrors].find(Boolean);
     if (problem) return setError(problem);
-    const discountError = draft.discounts.map((x) => discountProblem(x.value, x.kind)).find(Boolean);
-    if (discountError) return setError(discountError);
     if (draft.installments.length && recurring) return setError('Installments are for opportunities with one-time products only. Remove the recurring products or the installments.');
     const minIso = closeIsoOf(lead);
     if (minIso && (draft.lines.some((l) => l.start && l.start < minIso) || draft.installments.some((i) => i.date && i.date < minIso))) return setError('Billing dates must fall after the closing date.');
@@ -162,8 +165,8 @@ export function DealProductsDialog() {
               {draft.lines.map((l, i) => {
                 const it = s.catalog.find((c) => c.id === l.itemId);
                 const t = totals.lines[i]!;
-                const bad = problemsOf(l);
-                const lineError = bad.price || bad.qty || bad.discount || bad.vat;
+                const bad = lineProblems[i]!;
+                const lineError = lineErrors[i];
                 return (
                   <div key={l.id} data-testid="deal-line" style={{ borderBottom: '1px solid var(--divider)', padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: LINE_COLS, gap: 12, alignItems: 'center' }}>
@@ -226,8 +229,8 @@ export function DealProductsDialog() {
             <div style={{ flex: '1 1 360px', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div className="card-title">Additional discounts</div>
               <div style={{ fontSize: 12, color: 'var(--text-2)' }}>Apply to one-time products only.</div>
-              {draft.discounts.map((x) => {
-                const discountError = discountProblem(x.value, x.kind);
+              {draft.discounts.map((x, i) => {
+                const discountError = discountErrors[i];
                 return (
                   <div key={x.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <div data-testid="deal-discount" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -276,12 +279,19 @@ export function DealProductsDialog() {
                   ))}
                 </div>
                 {draft.installments.map((x, i) => (
-                  <div key={x.id} data-testid="installment" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) 160px 150px 30px', gap: 12, alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid var(--divider)' }}>
+                  <Fragment key={x.id}>
+                  <div data-testid="installment" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) 160px 150px 30px', gap: 12, alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid var(--divider)' }}>
                     <input className="form-input" aria-label="Installment description" placeholder={`Installment ${i + 1}`} value={x.description} maxLength={200} onChange={(e) => patchInstallment(x.id, { description: e.target.value })} />
                     <input className="form-input" type="date" aria-label="Billing date" min={closeIsoOf(lead) || undefined} value={x.date} onChange={(e) => patchInstallment(x.id, { date: e.target.value })} />
-                    <input className="form-input" inputMode="decimal" aria-label="Installment amount" value={x.amount} onChange={(e) => patchInstallment(x.id, { amount: e.target.value })} />
+                    <input className="form-input" inputMode="decimal" aria-label="Installment amount" aria-invalid={!!installmentErrors[i] || undefined} value={x.amount} onChange={(e) => patchInstallment(x.id, { amount: e.target.value })} />
                     <RemoveButton title="Remove installment" box={28} size={14} stroke={1.9} style={{ borderRadius: 7 }} onClick={() => patch((d) => ({ ...d, installments: d.installments.filter((y) => y.id !== x.id) }))} />
                   </div>
+                  {installmentErrors[i] && (
+                    <div role="alert" data-testid="installment-error" style={{ fontSize: 12.5, color: 'var(--danger)', padding: '0 16px 8px' }}>
+                      {installmentErrors[i]}
+                    </div>
+                  )}
+                  </Fragment>
                 ))}
               </div>
             </div>
