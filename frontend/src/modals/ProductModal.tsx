@@ -88,7 +88,8 @@ export function ProductModal() {
         <div className="form-label">
           Price
           <span data-testid="product-price" className="form-input" style={{ background: 'var(--bg-soft)', color: 'var(--text-2)' }}>
-            {plainAmount(num(p.price) * (num(p.qty) || 1), locale)}
+            {/* A refused price or quantity never feeds the preview (CD-479 QA): -500 must not read 500.00. */}
+            {plainAmount(problems.price || problems.qty ? 0 : num(p.price) * (num(p.qty) || 1), locale)}
           </span>
         </div>
         <label className="form-label">

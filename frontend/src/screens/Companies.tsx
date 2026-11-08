@@ -71,7 +71,7 @@ export function Companies() {
       ) : /* view === 'board' ? <CompaniesBoard rows={rows} /> : */ (
         <div className="card" style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 1580 }}>
-            <div className="table-head" style={{ gridTemplateColumns: COLS }}>
+            <div className="table-head cells-clip" style={{ gridTemplateColumns: COLS }}>
               {HEADERS.map((h) => (
                 <SortHeader key={h.key} label={h.label} active={sort.key === h.key} dir={sort.dir} onClick={() => toggle(h.key)} />
               ))}

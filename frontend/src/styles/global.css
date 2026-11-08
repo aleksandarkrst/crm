@@ -172,6 +172,8 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 .table-row { display: grid; gap: 12px; padding: 13px 16px; border-bottom: 1px solid var(--divider); font-size: 13px; align-items: center; }
 .table-row.clickable { cursor: pointer; }
 .table-row.cells-clip > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.table-head.cells-clip > * { min-width: 0; max-width: 100%; }
+.table-head.cells-clip .sort-btn > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .table-row.clickable:hover { background: var(--panel); }
 .sort-btn { display: flex; align-items: center; gap: 4px; border: 0; background: transparent; cursor: pointer; padding: 0; text-align: left; font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; }
 

@@ -40,11 +40,6 @@ export function DealProductsDialog() {
   const cur = { ...curOf(s, lead), currency: draft.currency };
   const sym = currencySymbol(cur);
   const fmt = (n: number) => moneyExact(n, cur);
-  const totals = dealTotals(draft.lines, draft.taxMode, draft.discounts);
-  const recurring = draft.lines.some(isRecurring);
-  const installmentSum = draft.installments.reduce((a, i) => a + num(i.amount), 0);
-  const mismatch = draft.installments.length > 0 && Math.abs(installmentSum - totals.oneTimeTotal) >= 0.01;
-
   /** A line's out-of-range numbers (CD-479), shown under it and blocking Save. */
   const discountProblem = (value: unknown, kind: DiscountKind) => (kind === 'percent' ? amountProblem(value, 'Discount %', 100) : amountProblem(value, 'Discount', MAX_PRICE));
   const problemsOf = (l: DealLine) => ({
@@ -53,6 +48,16 @@ export function DealProductsDialog() {
     discount: discountProblem(l.discount, l.discountKind),
     vat: draft.taxMode === 'none' ? '' : amountProblem(l.vat, 'Tax %', 100),
   });
+  // A refused value never feeds the amounts or totals (CD-479 QA): a line with one counts as 0,
+  // a refused deal discount takes nothing off, until the value is fixed.
+  const totals = dealTotals(
+    draft.lines.map((l) => (Object.values(problemsOf(l)).some(Boolean) ? { ...l, qty: 0 } : l)),
+    draft.taxMode,
+    draft.discounts.map((d) => (discountProblem(d.value, d.kind) ? { ...d, value: 0 } : d)),
+  );
+  const recurring = draft.lines.some(isRecurring);
+  const installmentSum = draft.installments.reduce((a, i) => a + num(i.amount), 0);
+  const mismatch = draft.installments.length > 0 && Math.abs(installmentSum - totals.oneTimeTotal) >= 0.01;
 
   const patch = (fn: (d: DealProductsDraft) => DealProductsDraft) => {
     setError('');
