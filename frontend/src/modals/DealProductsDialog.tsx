@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import { BillingFields } from '../components/BillingFields';
 import { Modal, ModalTitle, RemoveButton } from '../components/ui';
 import { amountProblem, billingText, dealTotals, isRecurring, MAX_PRICE, MAX_QTY, TAX_MODES } from '../store/dealMath';
@@ -279,8 +279,8 @@ export function DealProductsDialog() {
                   ))}
                 </div>
                 {draft.installments.map((x, i) => (
-                  <Fragment key={x.id}>
-                  <div data-testid="installment" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) 160px 150px 30px', gap: 12, alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid var(--divider)' }}>
+                  <div key={x.id} style={{ borderBottom: '1px solid var(--divider)' }}>
+                  <div data-testid="installment" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) 160px 150px 30px', gap: 12, alignItems: 'center', padding: '8px 16px' }}>
                     <input className="form-input" aria-label="Installment description" placeholder={`Installment ${i + 1}`} value={x.description} maxLength={200} onChange={(e) => patchInstallment(x.id, { description: e.target.value })} />
                     <input className="form-input" type="date" aria-label="Billing date" min={closeIsoOf(lead) || undefined} value={x.date} onChange={(e) => patchInstallment(x.id, { date: e.target.value })} />
                     <input className="form-input" inputMode="decimal" aria-label="Installment amount" aria-invalid={!!installmentErrors[i] || undefined} value={x.amount} onChange={(e) => patchInstallment(x.id, { amount: e.target.value })} />
@@ -291,7 +291,7 @@ export function DealProductsDialog() {
                       {installmentErrors[i]}
                     </div>
                   )}
-                  </Fragment>
+                  </div>
                 ))}
               </div>
             </div>

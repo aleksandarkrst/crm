@@ -34,7 +34,7 @@ import {
   todoItemsFor,
   wonBlocker,
 } from './selectors';
-import { dealTotals } from './dealMath';
+import { bonusRuleProblems, dealTotals } from './dealMath';
 import { sortPlans, type VisitPlan } from './visitPlans';
 import { CONTACT_EXTRA_KEYS } from './types';
 import type { BillingFrequency, BonusRule, ChannelCode, CompanyStatus, ContactExtra, SaleType, CustomFieldDef, DealDiscount, DealLine, Installment, Lead, LeadTask, LogEntry, NewContactDraft, Person, Profile, SegKey, Stage, State, TaskState, TaxMode, Workspace } from './types';
@@ -1987,18 +1987,22 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
         set({ bonusTrigger: trigger });
         void save(() => crmApi.updateBonusSettings(trigger), undefined, 'when bonuses are earned');
       },
-      /** Edits one number of a salesperson's rule; the whole rule is saved after a pause. */
+      /**
+       * Edits one number of a salesperson's rule; the whole rule is saved after a pause. A refused
+       * number (negative, too large, letters) is shown under its field and not sent (CD-479 QA): the
+       * save waits until the rule is valid again.
+       */
       setBonusRule: (userId: string, key: keyof BonusRule, v: string) => {
-        set((x) => {
-          const saved = x.bonusRules?.[userId] ?? { rate: '', floor: '', fixed: '' };
-          return { bonusRules: { ...(x.bonusRules ?? {}), [userId]: { ...saved, [key]: v } } };
-        });
+        const empty: BonusRule = { rate: '', floor: '', fixed: '' };
+        set((x) => ({ bonusRules: { ...(x.bonusRules ?? {}), [userId]: { ...(x.bonusRules?.[userId] ?? empty), [key]: v } } }));
+        const valid = (r: BonusRule | undefined): r is BonusRule => !!r && !Object.values(bonusRuleProblems(r)).some(Boolean);
+        if (!valid({ ...(cur().bonusRules?.[userId] ?? empty), [key]: v })) return cancelSaves('bonus:' + userId);
         saveLater(
           'bonus:' + userId,
           async () => {
             const r = cur().bonusRules?.[userId];
-            if (!r) return;
-            const saved = await crmApi.putBonusRule(userId, { rate: Math.min(100, num(r.rate)), floor: num(r.floor), fixed: num(r.fixed) });
+            if (!valid(r)) return;
+            const saved = await crmApi.putBonusRule(userId, { rate: num(r.rate), floor: num(r.floor), fixed: num(r.fixed) });
             // Keep what is still being typed for this person; take the stored rules for everyone else.
             const stored = mapBonusRules(saved);
             set((x) => ({ bonusRules: { ...stored, [userId]: x.bonusRules?.[userId] ?? stored[userId]! } }));
