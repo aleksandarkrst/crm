@@ -1,12 +1,13 @@
 /** Pure derivations over the store state (ported from the design prototype's logic). */
 import { SCRIPTS } from './seed';
 import type { CustomFieldEntity, CustomValue } from '../lib/api';
-import { billingDates, type DealTotals, dealTotals } from './dealMath';
+import { billingDates, type DealTotals, dealTotals, num } from './dealMath';
 import { readiness, STATUS_RANK } from './companyBoard';
 import { dealsWithUpcomingMeeting } from './meetings';
 import type { CatalogItem, CompanyStatus, CustomFieldDef, DealLine, Lead, LeadTask, LogEntry, Person, SegKey, Stage, State, TaskState } from './types';
 
-export const num = (v: unknown): number => Number(String(v ?? '').replace(/[^0-9.]/g, '')) || 0;
+/** The one amount parser, kept with the deal math (it keeps the minus sign). */
+export { num };
 
 // ---------------------------------------------------------------- money (CD-73)
 // Amounts are written with Intl.NumberFormat in the workspace currency. A deal keeps its own

@@ -12,7 +12,11 @@
  */
 import type { BillingFrequency, DealDiscount, DealLine, TaxMode } from './types';
 
-const num = (v: unknown): number => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
+/**
+ * A typed or stored amount as a number: currency symbols, spaces and thousands commas are dropped,
+ * the minus sign is kept (CD-479: "-500" is -500, never 500, so validation can refuse it). Not a number: 0.
+ */
+export const num = (v: unknown): number => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /** The API's bounds for a unit price and a quantity (deal-lines.service.ts, products.service.ts). */
@@ -22,9 +26,10 @@ export const MAX_QTY = 9_999_999;
 /** Why a typed amount can't be saved, or '' (CD-479): a negative or too-large value is refused, never flipped or clamped. */
 export function amountProblem(raw: unknown, label: string, max: number): string {
   const text = String(raw ?? '').trim();
-  // Digits with an optional sign and decimal point only: letters and symbols are refused, not stripped.
-  if (text && !/^-?(\d+\.?\d*|\.\d+)$/.test(text)) return `${label} must be a number`;
-  const n = Number(text || 0);
+  // Digits with an optional sign, decimal point and comma thousands separators ("1,234.50"):
+  // letters and other symbols are refused, not stripped; "1,2,3" is not a grouped number.
+  if (text && !/^-?(\d{1,3}(,\d{3})+(\.\d*)?|\d+\.?\d*|\.\d+)$/.test(text)) return `${label} must be a number`;
+  const n = Number(text.replace(/,/g, '') || 0);
   if (n < 0) return `${label} can't be negative`;
   if (n > max) return `${label} can be at most ${max.toLocaleString('en-US')}`;
   return '';

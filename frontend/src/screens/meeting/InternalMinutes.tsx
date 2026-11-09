@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { askConfirm } from '../../components/ConfirmDialog';
 import { Popover } from '../../components/Popover';
 import { RichText } from '../../components/RichText';
@@ -79,6 +79,8 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
   actions.current = meetings;
   /** The version the draft is based on (If-Match). */
   const base = useRef(stored.updatedAt);
+  /** The server's last version: a step with a task keeps its saved text while its text is blank (CD-479 QA). */
+  const server = useRef(stored);
   const dirty = useRef(new Set<Part>());
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const chain = useRef<Promise<void>>(Promise.resolve());
@@ -90,6 +92,7 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
     if (dirty.current.size || timer.current || inFlight.current || stored.updatedAt === base.current) return;
     setDraft(toDraft(stored));
     base.current = stored.updatedAt;
+    server.current = stored;
   }, [stored]);
 
   /** Taking the server's steps' task links into the draft (the browser never sets them). */
@@ -109,8 +112,12 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
     const input: InternalMinutesInput = {};
     if (parts.includes('summary')) input.summary = d.summary;
     if (parts.includes('agreements')) input.agreements = d.agreements;
-    // A blank step stays on screen while it's typed but isn't saved (CD-479); one with a task keeps its link.
-    if (parts.includes('nextSteps')) input.nextSteps = d.nextSteps.filter((st) => st.text.trim() || st.taskId).map(({ id, text, ownerUserId, dueDate }) => ({ id, text, ownerUserId, dueDate }));
+    // A blank step stays on screen while it's typed but isn't saved (CD-479). One with a task keeps
+    // its link and its saved text: the blank text is refused with a message under the step.
+    if (parts.includes('nextSteps'))
+      input.nextSteps = d.nextSteps
+        .filter((st) => st.text.trim() || st.taskId)
+        .map(({ id, text, ownerUserId, dueDate }) => ({ id, text: text.trim() ? text : (server.current.nextSteps.find((x) => x.id === id)?.text ?? text), ownerUserId, dueDate }));
     inFlight.current++;
     setState('saving');
     chain.current = chain.current.then(async () => {
@@ -119,6 +126,7 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
       const more = dirty.current.size > 0 || !!timer.current || inFlight.current > 0;
       if (res && 'saved' in res) {
         base.current = res.saved.updatedAt;
+        server.current = res.saved;
         setDraft((x) => withTasks(x, res.saved));
         if (!more) setState('saved');
       } else if (res && 'conflict' in res) {
@@ -129,6 +137,7 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
         if (res.conflict) {
           setDraft(toDraft(res.conflict));
           base.current = res.conflict.updatedAt;
+          server.current = res.conflict;
         }
         setState('idle');
       } else {
@@ -217,8 +226,10 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
             </div>
             {draft.nextSteps.map((st) => {
               const ownerKnown = !st.ownerUserId || members.some((x) => x.id === st.ownerUserId);
+              const needsText = editable && !!st.taskId && !st.text.trim();
               return (
-                <div key={st.id} className="table-row minutes-step" data-testid="minutes-step" style={{ gridTemplateColumns: cols }}>
+                <Fragment key={st.id}>
+                <div className="table-row minutes-step" data-testid="minutes-step" style={{ gridTemplateColumns: cols }}>
                   {editable ? (
                     <>
                       <input
@@ -228,6 +239,7 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
                         maxLength={STEP_MAX}
                         placeholder="What happens next"
                         aria-label="Next step"
+                        aria-invalid={needsText || undefined}
                         autoFocus={focusStep === st.id}
                         onChange={(e) => setStep(st.id, { text: e.target.value })}
                         onBlur={() => void flush()}
@@ -259,6 +271,12 @@ function MinutesEditor({ m, stored }: { m: ApiMeeting; stored: ApiInternalMinute
                     </>
                   )}
                 </div>
+                {needsText && (
+                  <div className="subform-hint minutes-step-error" role="alert" data-testid="step-error" style={{ color: 'var(--danger)', padding: '0 14px 8px' }}>
+                    A next step needs text. Its task keeps the saved text until you type one.
+                  </div>
+                )}
+                </Fragment>
               );
             })}
           </div>

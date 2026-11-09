@@ -539,7 +539,7 @@ export function ModalHeader({ title, sub }: { title: string; sub: string }) {
 /** Sortable table header cell. */
 export function SortHeader({ label, active, dir, onClick }: { label: string; active: boolean; dir: 1 | -1; onClick: () => void }) {
   return (
-    <button type="button" className="sort-btn" onClick={onClick} style={{ color: active ? 'var(--ink)' : 'var(--text-2)' }}>
+    <button type="button" className="sort-btn" title={label} onClick={onClick} style={{ color: active ? 'var(--ink)' : 'var(--text-2)' }}>
       <span>{label}</span>
       <span style={{ fontSize: 10 }}>{active ? (dir === 1 ? '↑' : '↓') : ''}</span>
     </button>
