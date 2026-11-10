@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createTenant, ok, type Session, signIn } from './helpers';
-import { asTenantSql, joinAsEmployee } from './people-helpers';
+import { asTenantSql, joinAsEmployee, withoutPreloadedHolidays } from './people-helpers';
 
 interface Summary {
   applicable: boolean;
@@ -23,6 +23,7 @@ beforeAll(async () => {
     signIn('employee-late-senior'), signIn('employee-late-peer'),
   ]);
   tenant = await createTenant(owner, 'Employee late summary');
+  await withoutPreloadedHolidays(owner, tenant);
   employeeId = await joinAsEmployee(owner, tenant, employee);
   managerId = await joinAsEmployee(owner, tenant, manager);
   seniorId = await joinAsEmployee(owner, tenant, senior);

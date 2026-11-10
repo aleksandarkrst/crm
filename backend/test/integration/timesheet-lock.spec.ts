@@ -7,7 +7,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, createTenant, eventually, type Mail, mailTo, ok, type Session, signIn, testPib } from './helpers';
-import { asTenantSql, joinAsEmployee } from './people-helpers';
+import { asTenantSql, joinAsEmployee, withoutPreloadedHolidays } from './people-helpers';
 
 interface Day {
   date: string;
@@ -40,6 +40,7 @@ const history = (s: Session, id = draganId) => ok<History>('GET', `/timesheet/ap
 beforeAll(async () => {
   [owner, marko, dragan, peer] = (await Promise.all(['owner', 'marko', 'dragan', 'peer'].map((n) => signIn(`tsl-${n}`)))) as [Session, Session, Session, Session];
   tenant = await createTenant(owner, 'Lock');
+  await withoutPreloadedHolidays(owner, tenant);
   const markoId = await joinAsEmployee(owner, tenant, marko);
   draganId = await joinAsEmployee(owner, tenant, dragan);
   await joinAsEmployee(owner, tenant, peer);

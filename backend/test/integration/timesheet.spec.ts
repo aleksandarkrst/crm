@@ -6,7 +6,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
-import { accessOf, asTenantSql } from './people-helpers';
+import { accessOf, asTenantSql, withoutPreloadedHolidays } from './people-helpers';
 
 interface Cell {
   minutes: number;
@@ -73,6 +73,7 @@ beforeAll(async () => {
   [owner, ana, marko] = await Promise.all([signIn('ts-owner'), signIn('ts-ana'), signIn('ts-marko')]);
   tenant = await createTenant(owner, 'Timesheet');
   other = await createTenant(owner, 'Timesheet other');
+  await withoutPreloadedHolidays(owner, tenant);
   await addMember(owner, tenant, ana, 'member');
   await addMember(owner, tenant, marko, 'member');
   anaId = (await accessOf(ana, tenant)).employeeId;

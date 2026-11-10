@@ -5,7 +5,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { addMember, call, createTenant, ok, type Session, signIn, testPib } from './helpers';
-import { accessOf, asTenantSql } from './people-helpers';
+import { accessOf, asTenantSql, withoutPreloadedHolidays } from './people-helpers';
 
 interface Week {
   thisWeek: string;
@@ -33,6 +33,7 @@ const submit = (body: Record<string, unknown>) => call<Week>('POST', '/timesheet
 beforeAll(async () => {
   [owner, ana] = await Promise.all([signIn('tam-owner'), signIn('tam-ana')]);
   tenant = await createTenant(owner, 'Approval mode');
+  await withoutPreloadedHolidays(owner, tenant);
   await addMember(owner, tenant, ana, 'member');
   const anaId = (await accessOf(ana, tenant)).employeeId;
   const company = await ok<{ id: string }>('POST', '/crm/companies', { ...as(), body: { pib: testPib(), name: 'Hidrogradnja' } });
