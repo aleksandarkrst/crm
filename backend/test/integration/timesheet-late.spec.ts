@@ -6,7 +6,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { addMember, createTenant, ok, type Session, signIn, testPib } from './helpers';
-import { accessOf, asTenantSql } from './people-helpers';
+import { accessOf, asTenantSql, withoutPreloadedHolidays } from './people-helpers';
 
 interface Week {
   thisWeek: string;
@@ -33,6 +33,8 @@ const log = (s: Session, date: string, minutes = 480) => ok('PUT', '/timesheet/c
 beforeAll(async () => {
   [owner, ana, marko] = await Promise.all([signIn('late-owner'), signIn('late-ana'), signIn('late-marko')]);
   tenant = await createTenant(owner, 'Late');
+  // Dates come from today: no preloaded holiday may take a working day out of them.
+  await withoutPreloadedHolidays(owner, tenant);
   await addMember(owner, tenant, ana, 'member');
   await addMember(owner, tenant, marko, 'member');
   const ids = [(await accessOf(ana, tenant)).employeeId, (await accessOf(marko, tenant)).employeeId];

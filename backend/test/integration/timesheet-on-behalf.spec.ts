@@ -8,7 +8,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, createTenant, ok, type Session, signIn, testPib } from './helpers';
-import { addEmployee, asTenantSql, joinAsEmployee } from './people-helpers';
+import { addEmployee, asTenantSql, joinAsEmployee, withoutPreloadedHolidays } from './people-helpers';
 
 interface Week {
   thisWeek: string;
@@ -44,6 +44,8 @@ const events = (employeeId: string, kind: string) => asTenantSql<{ work_date: st
 beforeAll(async () => {
   [owner, marko, dragan, peer] = (await Promise.all(['owner', 'marko', 'dragan', 'peer'].map((n) => signIn(`tsb-${n}`)))) as [Session, Session, Session, Session];
   tenant = await createTenant(owner, 'On behalf');
+  // Dates come from today: no preloaded holiday may take a working day out of them.
+  await withoutPreloadedHolidays(owner, tenant);
   markoId = await joinAsEmployee(owner, tenant, marko);
   draganId = await joinAsEmployee(owner, tenant, dragan);
   await joinAsEmployee(owner, tenant, peer);
