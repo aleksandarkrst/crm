@@ -7,7 +7,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, createTenant, ok, type Session, signIn, testPib } from './helpers';
-import { addEmployee, asTenantSql, createDepartment, createTeam, joinAsEmployee, showInApp, START } from './people-helpers';
+import { addEmployee, asTenantSql, createDepartment, createTeam, joinAsEmployee, showInApp, START, withoutPreloadedHolidays } from './people-helpers';
 
 interface Row {
   id: string;
@@ -48,8 +48,7 @@ beforeAll(async () => {
   const field = await createTeam(tenant, sales, 'Field sales');
   for (const id of [mgrId, empId, peerId]) await ok('PATCH', `/people/employees/${id}`, { ...as(owner), body: { employmentStartDate: START, ...(id === empId ? { managerId: mgrId, unitId: field } : {}) } }, 200);
   // No preloaded holidays: the tests add their own.
-  await ok('POST', '/timesheet/holidays/preload', { ...as(owner), body: { country: 'none' } }, 200);
-  await asTenantSql(tenant, `delete from public_holidays where source = 'preload'`, []);
+  await withoutPreloadedHolidays(owner, tenant);
   today = (await status(owner)).today;
   futureId = await addEmployee(owner, tenant, { firstName: 'Nova', lastName: 'Future', employmentStartDate: addDays(today, 200) });
   monday = mondayOf(today);

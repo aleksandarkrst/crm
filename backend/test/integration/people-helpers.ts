@@ -28,6 +28,17 @@ export async function asTenantSql<T = Record<string, unknown>>(tenant: string, t
 }
 
 /**
+ * Clears the Serbian holidays a new workspace preloads (spec 4.3) and turns the preload off, so a
+ * test that uses the real current week, or days near today, gets five working days whatever the
+ * date (CD-513: on the week of 11 November, Armistice Day, "8 h every weekday" failed). Tests
+ * about holidays add their own. Call it right after createTenant, before hours or time off exist.
+ */
+export async function withoutPreloadedHolidays(owner: Session, tenant: string): Promise<void> {
+  await ok('POST', '/timesheet/holidays/preload', { token: owner.token, tenant, body: { country: 'none' } }, 200);
+  await asTenantSql(tenant, `delete from public_holidays where source = 'preload'`, []);
+}
+
+/**
  * The workspace's level at `position` (1 = top), making the default levels Department and Team
  * first when it has none (as GET /people/org-levels does).
  */

@@ -7,7 +7,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, createTenant, eventually, mailTo, ok, type Session, signIn } from './helpers';
-import { joinAsEmployee, START } from './people-helpers';
+import { joinAsEmployee, START, withoutPreloadedHolidays } from './people-helpers';
 
 let owner: Session;
 let mgr: Session;
@@ -66,6 +66,8 @@ beforeAll(async () => {
   [owner, mgr, emp, peer, other, boss] = (await Promise.all(['sick-owner', 'sick-mgr', 'sick-emp', 'sick-peer', 'sick-other', 'sick-boss'].map((l) => signIn(l)))) as [Session, Session, Session, Session, Session, Session];
   tenant = await createTenant(owner, 'Sick leave');
   otherTenant = await createTenant(other, 'Sick leave elsewhere');
+  // Dates are picked from today: no preloaded holiday may land on them.
+  await withoutPreloadedHolidays(owner, tenant);
   id.owner = (await ok('GET', '/people/access', as(owner))).employeeId;
   for (const [key, s] of [['mgr', mgr], ['emp', emp], ['peer', peer], ['boss', boss]] as const) id[key] = await joinAsEmployee(owner, tenant, s);
   // boss manages mgr: an indirect manager of emp and peer.
