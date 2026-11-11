@@ -104,7 +104,7 @@ export class DealLinesService {
         .select()
         .from(dealLines)
         .where(page.dealIds ? inArray(dealLines.dealId, page.dealIds) : undefined)
-        .orderBy(asc(dealLines.dealId), asc(dealLines.position), asc(dealLines.createdAt)).limit(page.limit).offset(page.offset),
+        .orderBy(asc(dealLines.dealId), asc(dealLines.position), asc(dealLines.createdAt), asc(dealLines.id)).limit(page.limit).offset(page.offset),
     );
   }
 

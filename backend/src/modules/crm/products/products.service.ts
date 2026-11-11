@@ -56,7 +56,7 @@ export class ProductsService {
     if (query.q) filters.push(ilike(products.name, `%${query.q}%`));
     if (query.ids) filters.push(inArray(products.id, query.ids));
     return this.database.withTenant(ctx.tenantId, (tx) =>
-      tx.select().from(products).where(and(...filters)).orderBy(asc(products.name)).limit(query.limit).offset(query.offset),
+      tx.select().from(products).where(and(...filters)).orderBy(asc(products.name), asc(products.id)).limit(query.limit).offset(query.offset),
     );
   }
 

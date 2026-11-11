@@ -70,7 +70,7 @@ export class DealTasksService {
         .from(dealTasks)
         .leftJoin(users, eq(users.id, dealTasks.doneByUserId))
         .where(page.dealIds ? inArray(dealTasks.dealId, page.dealIds) : undefined)
-        .orderBy(asc(dealTasks.dealId), asc(dealTasks.position), asc(dealTasks.createdAt))
+        .orderBy(asc(dealTasks.dealId), asc(dealTasks.position), asc(dealTasks.createdAt), asc(dealTasks.id))
         .limit(page.limit)
         .offset(page.offset),
     );

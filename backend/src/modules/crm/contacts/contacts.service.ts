@@ -70,7 +70,8 @@ export class ContactsService {
         .select({ ...getTableColumns(contacts), ownerName: userNameOf(contacts.ownerUserId) })
         .from(contacts)
         .where(and(...filters))
-        .orderBy(asc(contacts.fullName))
+        // id last (CD-502): equal names otherwise come back in a different order per page, so paging repeats and skips rows.
+        .orderBy(asc(contacts.fullName), asc(contacts.id))
         .limit(query.limit)
         .offset(query.offset),
     );
