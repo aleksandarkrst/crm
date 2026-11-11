@@ -164,7 +164,8 @@ export class DealsService {
         .leftJoin(companies, eq(companies.id, deals.companyId))
         .leftJoin(contacts, eq(contacts.id, deals.primaryContactId))
         .where(and(...filters))
-        .orderBy(asc(funnelStages.position), desc(deals.updatedAt))
+        // id last (CD-502), so deals changed in the same instant keep one order across pages.
+        .orderBy(asc(funnelStages.position), desc(deals.updatedAt), asc(deals.id))
         .limit(query.limit)
         .offset(query.offset);
       if (rows.length === 0) return [];

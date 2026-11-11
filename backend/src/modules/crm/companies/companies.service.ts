@@ -116,7 +116,8 @@ export class CompaniesService {
             outcome,
           ),
         )
-        .orderBy(asc(companies.name))
+        // id last (CD-502): equal names otherwise come back in a different order per page, so paging repeats and skips rows.
+        .orderBy(asc(companies.name), asc(companies.id))
         .limit(page.limit)
         .offset(page.offset),
     );
