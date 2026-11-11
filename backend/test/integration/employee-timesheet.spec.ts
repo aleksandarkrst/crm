@@ -23,7 +23,6 @@ beforeAll(async () => {
     signIn('employee-late-senior'), signIn('employee-late-peer'),
   ]);
   tenant = await createTenant(owner, 'Employee late summary');
-  // Dates come from today: no preloaded holiday may take a working day out of them.
   await withoutPreloadedHolidays(owner, tenant);
   employeeId = await joinAsEmployee(owner, tenant, employee);
   managerId = await joinAsEmployee(owner, tenant, manager);

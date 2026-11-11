@@ -33,7 +33,6 @@ const submit = (body: Record<string, unknown>) => call<Week>('POST', '/timesheet
 beforeAll(async () => {
   [owner, ana] = await Promise.all([signIn('tam-owner'), signIn('tam-ana')]);
   tenant = await createTenant(owner, 'Approval mode');
-  // The week is the real current one: no preloaded holiday may take a weekday out of it.
   await withoutPreloadedHolidays(owner, tenant);
   await addMember(owner, tenant, ana, 'member');
   const anaId = (await accessOf(ana, tenant)).employeeId;

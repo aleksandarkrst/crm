@@ -40,7 +40,6 @@ const history = (s: Session, id = draganId) => ok<History>('GET', `/timesheet/ap
 beforeAll(async () => {
   [owner, marko, dragan, peer] = (await Promise.all(['owner', 'marko', 'dragan', 'peer'].map((n) => signIn(`tsl-${n}`)))) as [Session, Session, Session, Session];
   tenant = await createTenant(owner, 'Lock');
-  // Dates come from today: no preloaded holiday may take a working day out of them.
   await withoutPreloadedHolidays(owner, tenant);
   const markoId = await joinAsEmployee(owner, tenant, marko);
   draganId = await joinAsEmployee(owner, tenant, dragan);

@@ -39,7 +39,6 @@ const mailsAbout = async (to: string, subjectStart: string) => (await mailTo(own
 beforeAll(async () => {
   [owner, mgr, emp, peer, other] = (await Promise.all(['ap-owner', 'ap-mgr', 'ap-emp', 'ap-peer', 'ap-other'].map((l) => signIn(l)))) as [Session, Session, Session, Session, Session];
   tenant = await createTenant(owner, 'Time off approvals');
-  // Dates come from today: no preloaded holiday may take a working day out of them.
   await withoutPreloadedHolidays(owner, tenant);
   otherTenant = await createTenant(other, 'Approvals elsewhere');
   id.owner = (await ok('GET', '/people/access', as(owner))).employeeId;

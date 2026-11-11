@@ -44,7 +44,6 @@ const events = (employeeId: string, kind: string) => asTenantSql<{ work_date: st
 beforeAll(async () => {
   [owner, marko, dragan, peer] = (await Promise.all(['owner', 'marko', 'dragan', 'peer'].map((n) => signIn(`tsb-${n}`)))) as [Session, Session, Session, Session];
   tenant = await createTenant(owner, 'On behalf');
-  // Dates come from today: no preloaded holiday may take a working day out of them.
   await withoutPreloadedHolidays(owner, tenant);
   markoId = await joinAsEmployee(owner, tenant, marko);
   draganId = await joinAsEmployee(owner, tenant, dragan);

@@ -73,7 +73,6 @@ beforeAll(async () => {
   [owner, ana, marko] = await Promise.all([signIn('ts-owner'), signIn('ts-ana'), signIn('ts-marko')]);
   tenant = await createTenant(owner, 'Timesheet');
   other = await createTenant(owner, 'Timesheet other');
-  // The week is the real current one: no preloaded holiday may take a weekday out of it.
   await withoutPreloadedHolidays(owner, tenant);
   await addMember(owner, tenant, ana, 'member');
   await addMember(owner, tenant, marko, 'member');
