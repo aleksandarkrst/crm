@@ -61,7 +61,10 @@ export function DealProductsDialog() {
     draft.discounts.map((d, i) => (discountErrors[i] ? { ...d, value: 0 } : d)),
   );
   // Each value has its own maximum, but together they can pass what an opportunity holds.
-  const valueError = totals.subtotal > MAX_DEAL_VALUE ? 'The opportunity value can be at most 999,999,999,999.99. Lower a price, a quantity or the number of billing cycles.' : '';
+  const valueError =
+    totals.subtotal > MAX_DEAL_VALUE
+      ? `The opportunity value can be at most ${MAX_DEAL_VALUE.toLocaleString('en-US', { minimumFractionDigits: 2 })}. Lower a price, a quantity or the number of billing cycles.`
+      : '';
   const recurring = draft.lines.some(isRecurring);
   const installmentSum = draft.installments.reduce((a, x, i) => a + (installmentErrors[i] ? 0 : num(x.amount)), 0);
   const mismatch = draft.installments.length > 0 && Math.abs(installmentSum - totals.oneTimeTotal) >= 0.01;

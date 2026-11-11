@@ -27,6 +27,14 @@ const Cycles = z.number().int().min(1).max(1000).nullable();
  */
 export const MAX_DEAL_AMOUNT = 999_999_999_999.99;
 
+/** Refuses an opportunity value the amount column can't hold, before anything is written. */
+function checkDealAmount(subtotal: number): void {
+  if (subtotal > MAX_DEAL_AMOUNT) {
+    const max = MAX_DEAL_AMOUNT.toLocaleString('en-US', { minimumFractionDigits: 2 });
+    throw new BadRequestException(`The opportunity value can be at most ${max}. Lower a price, a quantity or the number of billing cycles.`);
+  }
+}
+
 const DealLineInput = z
   .object({
     /** Keep the id of a line that stays; leave it out for a new line. */
@@ -105,9 +113,7 @@ export class DealLinesService {
       throw new BadRequestException('Installments are for opportunities with one-time products only. Remove the recurring products or the installments.');
     }
     const lines = input.lines.map((l) => ({ ...l, billingCycles: l.billingFrequency === 'one_time' ? null : (l.billingCycles ?? null) }));
-    if (dealTotals(lines.map(toLineInput), input.taxMode, input.discounts).subtotal > MAX_DEAL_AMOUNT) {
-      throw new BadRequestException('The opportunity value can be at most 999,999,999,999.99. Lower a price, a quantity or the number of billing cycles.');
-    }
+    checkDealAmount(dealTotals(lines.map(toLineInput), input.taxMode, input.discounts).subtotal);
     return this.database
       .withTenant(ctx.tenantId, async (tx) => {
         const [deal] = await tx.select({ id: deals.id }).from(deals).where(eq(deals.id, dealId));
@@ -147,6 +153,7 @@ export class DealLinesService {
     if (!deal) throw new NotFoundException('Opportunity not found');
     const lines = await tx.select().from(dealLines).where(eq(dealLines.dealId, dealId));
     const totals = dealTotals(lines.map(toLineInput), deal.taxMode, deal.discounts);
+    checkDealAmount(totals.subtotal);
     await tx.update(deals).set({ amount: totals.subtotal.toFixed(2) }).where(eq(deals.id, dealId));
   }
 }
