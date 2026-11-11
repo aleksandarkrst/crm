@@ -1,7 +1,7 @@
 // Unit tests of the shared filter row's logic (CD-366): `npm test` in frontend.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { allOpen, applyFilters, canClear, chipLabel, clearAll, collapseVals, type FilterField, fold, type FilterValue, GROUP, markSeen, matchField, presetRange, pruneList, restoreValue, valueText, withNewSubs } from '../src/store/filters.ts';
+import { allOpen, applyFilters, canClear, chipLabel, clearAll, collapseVals, type FilterField, fold, type FilterValue, GROUP, markSeen, matchField, notApplied, presetRange, rangeInput, rangeProblem, pruneList, restoreValue, valueText, withNewSubs } from '../src/store/filters.ts';
 
 interface Rec {
   stage: string;
@@ -66,15 +66,6 @@ describe('person filters', () => {
     assert.equal(matchField(fd('site'), { op: 'contains', text: 'ŠABAC' }, 'mlekara sabac', ctx), true);
     assert.equal(matchField(fd('site'), { op: 'contains', text: 'djordje' }, 'Đorđe d.o.o.', ctx), true);
     assert.equal(matchField(fd('site'), { op: 'contains', text: 'novi sad' }, 'Mlekara Šabac', ctx), false);
-  });
-
-  it('folds đ the same whether typed as d, dj or đ (CD-504)', () => {
-    for (const typed of ['Dordevic', 'Djordjevic', 'Đorđević', 'DJORDJEVIC', 'Ana Dor']) {
-      assert.ok(fold('Ana Đorđević').includes(fold(typed)), typed);
-    }
-    assert.ok(fold('Ana Djordjević').includes(fold('Đorđe')));
-    assert.equal(fold('Petrović'), fold('Petrovic'));
-    assert.equal(matchField(fd('site'), { op: 'contains', text: 'dorde' }, 'Đorđe d.o.o.', ctx), true);
   });
 
   it('folds đ the way people type it, as d or dj (CD-504)', () => {
@@ -240,5 +231,62 @@ describe('the row', () => {
     assert.deepEqual(restored.order, ['funnel', 'owner', 'site']);
     assert.deepEqual(restored.f.owner, { vals: [] });
     assert.deepEqual(restored.f.funnel, { vals: ['a'] });
+  });
+});
+
+describe('invalid ranges (CD-507)', () => {
+  const recs = [rec({ value: 50, close: '2026-06-01' }), rec({ value: 500, close: '2026-12-31' })];
+  const row = (id: string, v: Record<string, string>): FilterValue => ({ order: [id], f: { [id]: v } });
+  const closeRange = (from: string, to: string) => ({ preset: 'custom' as const, from, to });
+
+  it('does not apply a custom range whose From is after its To, and says so', () => {
+    const v = closeRange('2026-12-31', '2026-01-01');
+    assert.match(rangeProblem(fd('close'), v) ?? '', /From is after To/);
+    assert.equal(notApplied(fd('close'), v), true);
+    assert.equal(valueText(fd('close'), v), 'Not applied');
+    assert.equal(applyFilters(recs, fields, row('close', v), ctx).length, 2);
+  });
+
+  it('does not apply a date with a five-digit year', () => {
+    const v = closeRange('2026-01-01', '99999-12-31');
+    assert.match(rangeProblem(fd('close'), v) ?? '', /four-digit year/);
+    assert.equal(valueText(fd('close'), v), 'Not applied');
+  });
+
+  it('does not apply At least above At most', () => {
+    const v = { min: '1000', max: '100' };
+    assert.match(rangeProblem(fd('value'), v) ?? '', /more than/);
+    assert.equal(valueText(fd('value'), v), 'Not applied');
+    assert.equal(applyFilters(recs, fields, row('value', v), ctx).length, 2);
+  });
+
+  it('refuses an amount above the largest value', () => {
+    assert.match(rangeProblem(fd('value'), { min: '100000000000000000000' }) ?? '', /at most 999,999,999,999.99/);
+    assert.equal(rangeProblem(fd('value'), { max: '999999999999' }), null);
+    assert.equal(valueText(fd('value'), { max: '999999999999' }), 'at most €1000bn');
+  });
+
+  it('keeps the minus of -5 and refuses it for Value', () => {
+    assert.equal(rangeInput('-5'), '-5');
+    assert.equal(rangeInput('€ 1 500,5x'), '1500,5');
+    assert.match(rangeProblem(fd('value'), { min: '-5' }) ?? '', /can't be negative/);
+    assert.match(rangeProblem(fd('value'), { min: '5-' }) ?? '', /numbers only/);
+  });
+
+  it('still applies a valid range, with a decimal comma', () => {
+    assert.equal(rangeProblem(fd('value'), { min: '12,5', max: '600' }), null);
+    assert.equal(applyFilters(recs, fields, row('value', { min: '12,5', max: '100' }), ctx).length, 1);
+  });
+
+  it('keeps Clear filters for a pinned range that is not applied', () => {
+    const pinned = fields.map((f) => (f.id === 'value' ? { ...f, pinned: true } : f));
+    assert.equal(canClear(pinned, row('value', { min: '1000', max: '100' })), true);
+    assert.equal(canClear(pinned, row('value', {})), false);
+  });
+
+  it('names the year when a range is not all in this one', () => {
+    assert.equal(valueText(fd('close'), closeRange('2026-10-01', '2026-12-31'), { today: '2026-11-11' }), '1 Oct – 31 Dec');
+    assert.equal(valueText(fd('close'), closeRange('2026-12-01', '2027-01-15'), { today: '2026-11-11' }), '1 Dec 2026 – 15 Jan 2027');
+    assert.equal(valueText(fd('close'), { preset: 'custom', from: '2027-03-01' }, { today: '2026-11-11' }), 'From 1 Mar 2027');
   });
 });

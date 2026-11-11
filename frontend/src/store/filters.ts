@@ -96,7 +96,7 @@ export const defaultOp = (fd: FilterField<never>): FilterOp => (fd.kind === 'tex
 export const emptyFilter = (fd: FilterField<never>): FieldFilter => ({ op: defaultOp(fd), vals: [] });
 
 /** Whether something was chosen or typed, valid or not. */
-export function hasInput(fd: FilterField<never>, v: FieldFilter | undefined): boolean {
+function hasInput(fd: FilterField<never>, v: FieldFilter | undefined): boolean {
   if (!v) return false;
   if (fd.kind === 'date') return !!v.preset && (v.preset !== 'custom' || !!(v.from || v.to));
   if (fd.kind === 'number') return !!(v.min || v.max);
@@ -108,6 +108,12 @@ export function hasInput(fd: FilterField<never>, v: FieldFilter | undefined): bo
 export function isActive(fd: FilterField<never>, v: FieldFilter | undefined): boolean {
   return hasInput(fd, v) && !rangeProblem(fd, v);
 }
+
+/** A range was typed but has a problem: the chip says "Not applied" and the popover says why (CD-507). */
+export const notApplied = (fd: FilterField<never>, v: FieldFilter | undefined): boolean => hasInput(fd, v) && !!rangeProblem(fd, v);
+
+/** What a range input keeps of what was typed: digits, one sign and a decimal mark, so "-5" stays "-5" and gets a warning. */
+export const rangeInput = (typed: string): string => typed.replace(/[^\d.,-]/g, '');
 
 // ---------------------------------------------------------------- invalid ranges (CD-507)
 
@@ -281,7 +287,7 @@ export function matchField(fd: FilterField<never>, v: FieldFilter | undefined, r
       if (raw === null || raw === undefined || raw === '' || Array.isArray(raw)) return false;
       const x = Number(raw);
       if (!Number.isFinite(x)) return false;
-      return (!v.min || x >= Number(v.min)) && (!v.max || x <= Number(v.max));
+      return (!v.min || x >= boundNum(v.min)) && (!v.max || x <= boundNum(v.max));
     }
     case 'text': {
       // Without accents (CD-478), as Ctrl K searches: "sabac" finds "Šabac".
@@ -319,10 +325,16 @@ export function chipLabel(fd: FilterField<never>, v: FieldFilter | undefined): s
   return fd.label;
 }
 
-const dayLabel = (s: string) => new Date(s + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-/** "€24k", "€1.2m", "€900": short amounts for the chip. */
+/** "1 Oct", or "1 Oct 2027" with `year` (CD-507: a range across years, or not in this one, says which). */
+const dayLabel = (s: string, year = false) => new Date(s + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(year ? { year: 'numeric' } : {}), timeZone: 'UTC' });
+/** Whether a custom range's chip names the year: its ends fall in different years, or not in this one. */
+function rangeNeedsYear(from: string | undefined, to: string | undefined, thisYear: string): boolean {
+  const years = [from, to].filter((x): x is string => !!x).map((x) => x.slice(0, 4));
+  return years.some((y) => y !== thisYear) || new Set(years).size > 1;
+}
+/** "€24k", "€1.2m", "€3.5bn", "€900": short amounts for the chip. */
 export const shortAmount = (n: number, unit = '') => {
-  const body = n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'm' : n >= 1000 ? Math.round(n / 100) / 10 + 'k' : String(n);
+  const body = n >= 1e9 ? (n / 1e9).toFixed(1).replace(/\.0$/, '') + 'bn' : n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'm' : n >= 1000 ? Math.round(n / 100) / 10 + 'k' : String(n);
   return unit ? (unit.length > 1 ? unit + ' ' : unit) + body : body;
 };
 
@@ -331,7 +343,8 @@ export const shortAmount = (n: number, unit = '') => {
  * ("N people"). Status with every open stage ticked says "Open"; the current user is "Me", other
  * people their first name.
  */
-export function valueText(fd: FilterField<never>, v: FieldFilter | undefined, ctx: { me?: string; personName?: (id: string) => string } = {}): string {
+export function valueText(fd: FilterField<never>, v: FieldFilter | undefined, ctx: { me?: string; personName?: (id: string) => string; today?: string } = {}): string {
+  if (notApplied(fd, v)) return 'Not applied';
   if (!v || !isActive(fd, v)) return 'Any';
   const vals = v.vals || [];
   switch (fd.kind) {
@@ -355,13 +368,16 @@ export function valueText(fd: FilterField<never>, v: FieldFilter | undefined, ct
       return vals[0] === 'yes' ? 'Yes' : 'No';
     case 'date':
       if (v.preset !== 'custom') return DATE_PRESETS.find((p) => p.id === v.preset)?.label ?? 'Any';
+    {
       // One-sided ranges read "From 1 Oct" / "Until 1 Oct" (Overview: "closing from 1 Oct").
-      if (!v.to) return 'From ' + dayLabel(v.from!);
-      if (!v.from) return 'Until ' + dayLabel(v.to);
-      return dayLabel(v.from) + ' – ' + dayLabel(v.to);
+      const year = rangeNeedsYear(v.from, v.to, (ctx.today ?? new Date().toISOString()).slice(0, 4));
+      if (!v.to) return 'From ' + dayLabel(v.from!, year);
+      if (!v.from) return 'Until ' + dayLabel(v.to, year);
+      return dayLabel(v.from, year) + ' – ' + dayLabel(v.to, year);
+    }
     case 'number': {
-      const a = Number(v.min) || 0;
-      const b = Number(v.max) || 0;
+      const a = boundNum(v.min ?? '') || 0;
+      const b = boundNum(v.max ?? '') || 0;
       const n = (x: number) => shortAmount(x, fd.unit);
       if (v.min && v.max) return n(a) + '–' + n(b);
       return v.min ? 'at least ' + n(a) : 'at most ' + n(b);
@@ -396,7 +412,8 @@ export function clearAll<R>(fields: FilterField<R>[]): FilterValue {
 export function canClear<R>(fields: FilterField<R>[], value: FilterValue): boolean {
   return value.order.some((id) => {
     const fd = fields.find((x) => x.id === id);
-    return !!fd && (!fd.pinned || isActive(fd as FilterField<never>, value.f[id]));
+    // A typed range that isn't applied (CD-507) still has something to clear.
+    return !!fd && (!fd.pinned || hasInput(fd as FilterField<never>, value.f[id]));
   });
 }
 
