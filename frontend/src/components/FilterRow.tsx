@@ -1,5 +1,5 @@
 import { type ReactNode, useRef, useState } from 'react';
-import { addField, canClear, CHECKBOX_OPTIONS, chipLabel, clearAll, collapseVals, DATE_PRESETS, emptyFilter, expandVals, type FieldFilter, type FilterField, type FilterIcon, type FilterKind, type FilterOp, type FilterOption, type FilterPerson, type FilterValue, isActive, removeField, setField, valueText } from '../store/filters';
+import { addField, canClear, CHECKBOX_OPTIONS, chipLabel, clearAll, collapseVals, DATE_PRESETS, emptyFilter, expandVals, type FieldFilter, type FilterField, type FilterIcon, type FilterKind, type FilterOp, type FilterOption, type FilterPerson, type FilterValue, isActive, notApplied, rangeInput, rangeProblem, removeField, setField, valueText } from '../store/filters';
 import { initialsOf } from '../store/selectors';
 import { Popover } from './Popover';
 
@@ -121,9 +121,10 @@ export function FilterRow<R>({
 function Chip({ fd, v, open, onToggle, onClose, text, children }: { fd: FilterField<never>; v: FieldFilter | undefined; open: boolean; onToggle: () => void; onClose: () => void; text: string; children: ReactNode }) {
   const ref = useRef<HTMLButtonElement>(null);
   const on = isActive(fd, v);
+  const warn = notApplied(fd, v);
   return (
     <>
-      <button ref={ref} type="button" className={'fr-chip' + (on ? ' on' : '')} data-testid={'filter-chip-' + fd.id} aria-expanded={open} onClick={onToggle}>
+      <button ref={ref} type="button" className={'fr-chip' + (on ? ' on' : warn ? ' warn' : '')} data-testid={'filter-chip-' + fd.id} aria-expanded={open} onClick={onToggle}>
         <Icon d={iconOf(fd)} />
         <span className="fr-chip-label">{chipLabel(fd, v)}</span>
         <span className="fr-chip-val">{text}</span>
@@ -207,6 +208,8 @@ function FieldPanel({ fd, v, people, me, onPatch, onClear, onRemove }: { fd: Fil
   const isList = fd.kind === 'list' || fd.kind === 'checkbox';
   const options = fd.kind === 'checkbox' ? CHECKBOX_OPTIONS : (fd.options ?? []);
   const single = fd.single || fd.kind === 'checkbox';
+  // A custom date range or number range that can't apply says why (CD-507).
+  const problem = rangeProblem(fd, v);
   const ops = fd.kind === 'list' && !fd.single ? OPS.list : fd.kind === 'text' ? OPS.text : null;
   const op = v?.op ?? ops?.[0]![0];
   const toggle = (id: string) => () => patch({ vals: single ? [id] : vals.includes(id) ? vals.filter((x) => x !== id) : [...vals, id] });
@@ -287,11 +290,11 @@ function FieldPanel({ fd, v, people, me, onPatch, onClear, onRemove }: { fd: Fil
         <div className="fr-pair">
           <label>
             From
-            <input className="fr-input" type="date" value={v.from ?? ''} onChange={(e) => onPatch({ from: e.target.value })} />
+            <input className="fr-input" type="date" max="9999-12-31" value={v.from ?? ''} aria-invalid={!!problem} onChange={(e) => onPatch({ from: e.target.value })} data-testid="filter-from" />
           </label>
           <label>
             To
-            <input className="fr-input" type="date" value={v.to ?? ''} onChange={(e) => onPatch({ to: e.target.value })} />
+            <input className="fr-input" type="date" max="9999-12-31" value={v.to ?? ''} aria-invalid={!!problem} onChange={(e) => onPatch({ to: e.target.value })} data-testid="filter-to" />
           </label>
         </div>
       )}
@@ -299,13 +302,18 @@ function FieldPanel({ fd, v, people, me, onPatch, onClear, onRemove }: { fd: Fil
         <div className="fr-pair">
           <label>
             At least{money}
-            <input className="fr-input" inputMode="numeric" value={v?.min ?? ''} placeholder="0" onChange={(e) => onPatch({ min: e.target.value.replace(/\D/g, '') })} />
+            <input className="fr-input" inputMode="decimal" value={v?.min ?? ''} placeholder="0" aria-invalid={!!problem} onChange={(e) => onPatch({ min: rangeInput(e.target.value) })} data-testid="filter-min" />
           </label>
           <label>
             At most{money}
-            <input className="fr-input" inputMode="numeric" value={v?.max ?? ''} placeholder="No limit" onChange={(e) => onPatch({ max: e.target.value.replace(/\D/g, '') })} />
+            <input className="fr-input" inputMode="decimal" value={v?.max ?? ''} placeholder="No limit" aria-invalid={!!problem} onChange={(e) => onPatch({ max: rangeInput(e.target.value) })} data-testid="filter-max" />
           </label>
         </div>
+      )}
+      {problem && (
+        <span className="fr-note fr-warn" role="alert" data-testid="filter-problem">
+          {problem} Not applied until it's fixed.
+        </span>
       )}
       {fd.kind === 'date' && v?.preset && v.preset !== 'custom' && <span className="fr-note">Updates with today's date.</span>}
       <div className="fr-foot">

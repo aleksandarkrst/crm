@@ -1655,6 +1655,9 @@ a.task-card-project:hover { color: var(--brand); }
 .fr-chip-val { color: var(--muted); }
 .fr-chip.on { background: var(--brand-soft); border-color: var(--brand-line); color: var(--brand); }
 .fr-chip.on .fr-chip-val { color: var(--brand); }
+.fr-chip.warn { background: var(--warn-soft); color: var(--warn); }
+.fr-chip.warn .fr-chip-val { color: var(--warn); }
+.fr-note.fr-warn { color: var(--warn); }
 .fr-add { border: 1px dashed var(--dashed); background: transparent; color: var(--text-2); }
 .fr-add:hover, .fr-clear:hover { background: var(--divider-2); }
 .fr-clear { border: 0; background: transparent; border-radius: 8px; padding: 7px 10px; font-size: 13px; color: var(--brand); cursor: pointer; white-space: nowrap; flex-shrink: 0; }
