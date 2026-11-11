@@ -1,7 +1,7 @@
 // Unit tests of the shared filter row's logic (CD-366): `npm test` in frontend.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { allOpen, applyFilters, canClear, chipLabel, clearAll, collapseVals, type FilterField, type FilterValue, GROUP, markSeen, matchField, presetRange, pruneList, restoreValue, valueText, withNewSubs } from '../src/store/filters.ts';
+import { allOpen, applyFilters, canClear, chipLabel, clearAll, collapseVals, type FilterField, fold, type FilterValue, GROUP, markSeen, matchField, presetRange, pruneList, restoreValue, valueText, withNewSubs } from '../src/store/filters.ts';
 
 interface Rec {
   stage: string;
@@ -66,6 +66,22 @@ describe('person filters', () => {
     assert.equal(matchField(fd('site'), { op: 'contains', text: 'ŠABAC' }, 'mlekara sabac', ctx), true);
     assert.equal(matchField(fd('site'), { op: 'contains', text: 'djordje' }, 'Đorđe d.o.o.', ctx), true);
     assert.equal(matchField(fd('site'), { op: 'contains', text: 'novi sad' }, 'Mlekara Šabac', ctx), false);
+  });
+
+  it('folds đ the same whether typed as d, dj or đ (CD-504)', () => {
+    for (const typed of ['Dordevic', 'Djordjevic', 'Đorđević', 'DJORDJEVIC', 'Ana Dor']) {
+      assert.ok(fold('Ana Đorđević').includes(fold(typed)), typed);
+    }
+    assert.ok(fold('Ana Djordjević').includes(fold('Đorđe')));
+    assert.equal(fold('Petrović'), fold('Petrovic'));
+    assert.equal(matchField(fd('site'), { op: 'contains', text: 'dorde' }, 'Đorđe d.o.o.', ctx), true);
+  });
+
+  it('folds đ the way people type it, as d or dj (CD-504)', () => {
+    for (const typed of ['Dordevic', 'djordjevic', 'Đorđević', 'DJORĐEVIĆ']) assert.equal(fold(typed), 'dordevic', typed);
+    assert.ok(fold('Ana Đorđević').includes(fold('Ana Dor')));
+    assert.ok(fold('Ana Petrović').includes(fold('Petrovic')));
+    assert.equal(matchField(fd('site'), { op: 'contains', text: 'dorde' }, 'Đorđe d.o.o.', ctx), true);
   });
 
   it('says Me for the current user, first names for others, then a count', () => {
