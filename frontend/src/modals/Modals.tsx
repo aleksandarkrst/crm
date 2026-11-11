@@ -5,7 +5,7 @@ import { Chevron, Modal, ModalHeader, ModalTitle } from '../components/ui';
 import { type CustomFieldPatch, type CustomFieldType, LOST_REASONS, type LostReason } from '../lib/api';
 import { paths } from '../lib/paths';
 import { checkActivityCode, checkMb } from '../lib/serbianIds';
-import { checkEmail, checkPhone } from '../lib/validate';
+import { checkEmail, checkLinkedin, checkPhone } from '../lib/validate';
 import { BUYER_ROLES, CHANNEL_LABELS, FIELD_TYPES, SALE_TYPES } from '../store/seed';
 import { allPeople, COMPANY_STATUS_LABELS, companyContacts, companyLabels, companyReadiness, companyRecords, customFieldsOf, memberLabels, pipelineBlocked, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
 import { fold, foldIncludes } from '../store/search';
@@ -499,16 +499,18 @@ function NewContactModal() {
   const fixedCompany = fixedCompanyId ? companies.find((c) => c.id === fixedCompanyId) : undefined;
   const [companyId, setCompanyId] = useState('');
   const [custom, setCustom] = useState<CustomFieldPatch>({});
-  const [errors, setErrors] = useState<{ name?: string; role?: string; buyerRole?: string; email?: string; phone?: string; form?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; role?: string; buyerRole?: string; email?: string; phone?: string; linkedin?: string; form?: string }>({});
   const setNc = (k: keyof typeof nc) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const v = e.target.value;
     set((x) => ({ newContact: { ...x.newContact, [k]: v } }));
-    if (k === 'name' || k === 'role' || k === 'buyerRole' || k === 'email' || k === 'phone') setErrors((x) => ({ ...x, [k]: undefined, form: undefined }));
+    if (k === 'name' || k === 'role' || k === 'buyerRole' || k === 'email' || k === 'phone' || k === 'linkedin') setErrors((x) => ({ ...x, [k]: undefined, form: undefined }));
   };
   const close = () => set({ contactOpen: false, contactCompanyId: null, contactDealId: '' });
   const create = async () => {
     const email = checkEmail(nc.email);
     const phone = checkPhone(nc.phone);
+    // The same check as on the contact page (CD-502): "notalink" is refused, "in/ana" is saved as linkedin.com/in/ana.
+    const linkedin = checkLinkedin(nc.linkedin);
     const fields = customFieldsForCreate(customFieldsOf(s, 'contact'), custom);
     const next = {
       name: nc.name.trim() ? undefined : "Enter the contact's full name.",
@@ -517,13 +519,14 @@ function NewContactModal() {
       buyerRole: nc.buyerRole ? undefined : 'Pick their role in the decision.',
       email: email.ok ? undefined : email.error,
       phone: phone.ok ? undefined : phone.error,
+      linkedin: linkedin.ok ? undefined : linkedin.error,
       form: 'missing' in fields ? `Fill in ${fields.missing}.` : undefined,
     };
     setErrors(next);
-    if (next.name || next.role || next.buyerRole || next.email || next.phone || next.form || !email.ok || !phone.ok || 'missing' in fields) return;
+    if (next.name || next.role || next.buyerRole || next.email || next.phone || next.linkedin || next.form || !email.ok || !phone.ok || !linkedin.ok || 'missing' in fields) return;
     setBusy(true);
     await createContact(
-      { ...nc, name: nc.name.trim(), role: nc.role.trim(), email: email.value, phone: phone.value, ownerId },
+      { ...nc, name: nc.name.trim(), role: nc.role.trim(), email: email.value, phone: phone.value, linkedin: linkedin.value, ownerId },
       deal?.id,
       customFieldsOf(s, 'contact').length ? fields.values : undefined,
       (fixedCompanyId ?? companyId) || undefined,
@@ -562,7 +565,8 @@ function NewContactModal() {
         </label>
         <label className="form-label">
           LinkedIn
-          <input className="form-input" placeholder="linkedin.com/in/…" value={nc.linkedin} onChange={setNc('linkedin')} />
+          <input className="form-input" placeholder="linkedin.com/in/…" value={nc.linkedin} onChange={setNc('linkedin')} aria-invalid={!!errors.linkedin || undefined} />
+          {fieldError(errors.linkedin)}
         </label>
         {fixedCompanyId ? (
           <label className="form-label">

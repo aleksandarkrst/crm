@@ -1,7 +1,7 @@
 // Typed amounts in the product and deal forms (CD-479): refused, never stripped or clamped. `npm test` in frontend.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { amountProblem, lineAmount, MAX_PRICE, num } from '../src/store/dealMath.ts';
+import { amountProblem, lineAmount, MAX_PRICE, num, quantityProblem } from '../src/store/dealMath.ts';
 
 describe('amountProblem', () => {
   const check = (raw: unknown, max = MAX_PRICE) => amountProblem(raw, 'Price', max);
@@ -23,6 +23,22 @@ describe('amountProblem', () => {
     assert.equal(check('150', 100), 'Price can be at most 100');
     assert.equal(check('100', 100), '');
     assert.equal(check('1,000,000,000'), 'Price can be at most 999,999,999');
+  });
+});
+
+describe('quantityProblem', () => {
+  it('refuses 0 and an empty quantity instead of saving 1 or a zero line (CD-502)', () => {
+    for (const zero of ['0', '0.00', '', ' ', 0, null]) assert.equal(quantityProblem(zero), 'Quantity must be more than 0', String(zero));
+  });
+
+  it('accepts any positive quantity up to the maximum', () => {
+    for (const ok of ['1', '0.5', '.25', '1,000', 3]) assert.equal(quantityProblem(ok), '', String(ok));
+    assert.equal(quantityProblem('10,000,000'), 'Quantity can be at most 9,999,999');
+  });
+
+  it('keeps the number and sign messages', () => {
+    assert.equal(quantityProblem('abc'), 'Quantity must be a number');
+    assert.equal(quantityProblem('-1'), "Quantity can't be negative");
   });
 });
 

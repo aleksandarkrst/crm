@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { BillingFields } from '../components/BillingFields';
 import { Modal, ModalHeader } from '../components/ui';
-import { amountProblem, MAX_PRICE, MAX_QTY } from '../store/dealMath';
+import { amountProblem, MAX_PRICE, quantityProblem } from '../store/dealMath';
 import { linesOf, localeFor, num, plainAmount } from '../store/selectors';
 import { type ProductDraft, useStore } from '../store/store';
 import { askConfirm } from '../components/ConfirmDialog';
@@ -24,7 +24,7 @@ export function ProductModal() {
   const close = () => set({ productOpen: false, productEditId: null });
   const field = (k: keyof ProductDraft) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setP((x) => ({ ...x, [k]: e.target.value }));
   const locale = localeFor(s.workspace.currency);
-  const problems = { price: amountProblem(p.price, 'Unit price', MAX_PRICE), qty: amountProblem(p.qty, 'Quantity', MAX_QTY), vat: amountProblem(p.vat, 'Tax %', 100) };
+  const problems = { price: amountProblem(p.price, 'Unit price', MAX_PRICE), qty: quantityProblem(p.qty), vat: amountProblem(p.vat, 'Tax %', 100) };
   const fieldError = (k: keyof typeof problems) =>
     problems[k] && (
       <span className="subform-hint" role="alert" data-testid="field-error" style={{ color: 'var(--danger)' }}>
