@@ -191,7 +191,9 @@ textarea.box-input { line-height: 1.55; resize: vertical; }
 /* ---------------------------------------------------------------- modals & toast */
 
 .overlay { position: fixed; inset: 0; background: var(--scrim); display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 45; overscroll-behavior: contain; }
-html.modal-open, html.modal-open body { overflow: hidden; }
+/* The lock is on html only (CD-502): hidden overflow on body too made body a scroll container, so the
+   sticky sidebar jumped with the page while a dialog was open on a scrolled screen. */
+html.modal-open { overflow: hidden; }
 .modal { background: var(--white); border-radius: 14px; width: 100%; padding: 26px; animation: dcFade .22s ease-out both; display: flex; flex-direction: column; gap: 16px; max-height: 88vh; overflow-y: auto; }
 .modal-title { margin: 0; font-family: var(--font-display); font-weight: 500; letter-spacing: -0.03em; font-size: 22px; line-height: 1.2; }
 .modal-sub { font-size: 13px; color: var(--text-2); margin-top: 5px; line-height: 1.5; }
