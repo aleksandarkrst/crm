@@ -1,4 +1,4 @@
-import { fold } from './filters';
+import { fold, foldDj, foldIncludes } from './filters';
 import { allPeople, companyOfPerson, companyRecords, initialsOf, stageOf } from './selectors';
 import type { State } from './types';
 
@@ -32,7 +32,7 @@ const GROUPS: { kind: SearchKind; label: string }[] = [
 ];
 
 /** Lower case without accents, so "markovic" finds "Marković" (kept with the filters, CD-478). */
-export { fold };
+export { fold, foldIncludes };
 
 const digits = (v: string | null | undefined): string => (v ?? '').replace(/\D/g, '');
 
@@ -48,7 +48,11 @@ function fieldScore(value: string | null | undefined, q: string, qDigits: string
     const d = digits(value);
     return qDigits.length >= 3 && d.includes(qDigits) ? (d.startsWith(qDigits) ? 3 : 1) : 0;
   }
-  const v = fold(value);
+  // "đ" typed as "d" or as "dj" (CD-504): score the record both ways.
+  return Math.max(textScore(fold(value), q), textScore(foldDj(value), q));
+}
+
+function textScore(v: string, q: string): number {
   if (!v) return 0;
   if (v.startsWith(q)) return 3;
   const at = v.indexOf(q);

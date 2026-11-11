@@ -4,7 +4,7 @@ import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { addDays, type ApiDayStatus, type ApiStatusRow } from '../lib/timesheetApi';
-import { fold } from '../store/search';
+import { fold, foldIncludes } from '../store/search';
 import { useStore } from '../store/store';
 import { useTeamStatus } from '../store/timesheet';
 import { STATUS_COUNTERS, StatusBadge, statusCounts, TimesheetCell } from './teamStatus/parts';
@@ -82,7 +82,7 @@ export function TeamStatus() {
         (!f.department || r.department?.id === f.department) &&
         (!f.team || r.team?.id === f.team) &&
         (!inManager || inManager.has(r.id)) &&
-        (!q || fold(`${r.name} ${r.jobTitle ?? ''}`).includes(q)),
+        (!q || foldIncludes(`${r.name} ${r.jobTitle ?? ''}`, q)),
     );
   }, [rows, f.all, f.department, f.team, f.manager, f.q]);
   const shown = f.status ? scoped.filter((r) => r.status === f.status) : scoped;

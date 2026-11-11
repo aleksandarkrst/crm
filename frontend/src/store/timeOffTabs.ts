@@ -31,6 +31,16 @@ export function timeOffTab(wanted: string | null, viewer: TimeOffViewer): TimeOf
 }
 
 /**
+ * Whether the page should wait before showing a tab: the link asks for a managers' tab, the caller
+ * isn't an Admin and their access hasn't been read yet (`myEmployeeId` is undefined until it was,
+ * null when it failed). Without the wait, a manager's `?tab=approvals` flashes My time off first.
+ */
+export function timeOffWaits(wanted: string | null, viewer: TimeOffViewer, myEmployeeId: string | null | undefined): boolean {
+  const managersTab = wanted === 'approvals' || wanted === 'requests' || wanted === 'sick' || wanted === 'balances';
+  return managersTab && !viewer.admin && !viewer.access && myEmployeeId === undefined;
+}
+
+/**
  * The directory state with the caller's own access in it (CD-503). Time off reads the caller's roles
  * before the directory has been, so this leaves `loaded` and the rows alone: People still reads them.
  */

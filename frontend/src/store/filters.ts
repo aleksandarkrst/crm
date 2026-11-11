@@ -99,7 +99,7 @@ export const emptyFilter = (fd: FilterField<never>): FieldFilter => ({ op: defau
 function hasInput(fd: FilterField<never>, v: FieldFilter | undefined): boolean {
   if (!v) return false;
   if (fd.kind === 'date') return !!v.preset && (v.preset !== 'custom' || !!(v.from || v.to));
-  if (fd.kind === 'number') return !!(v.min || v.max);
+  if (fd.kind === 'number') return !blankBound(v.min) || !blankBound(v.max);
   if (fd.kind === 'text') return v.op === 'isempty' || v.op === 'notempty' || !!(v.text || '').trim();
   return (v.vals || []).length > 0;
 }
@@ -120,10 +120,24 @@ export const rangeInput = (typed: string): string => typed.replace(/[^\d.,-]/g, 
 /** The largest number a range takes: an opportunity's value can be at most 999,999,999,999.99. */
 export const MAX_FILTER_NUMBER = 999_999_999_999.99;
 
-/** A typed bound as a number ("1500", "-5", "12,5"); NaN when it isn't one. */
+/** A bound with nothing in it yet: empty, or only the minus typed so far. */
+export const blankBound = (s: string | null | undefined): boolean => !s || s.trim() === '' || s.trim() === '-';
+
+/**
+ * A typed bound as a number; NaN when it isn't one. Thousands separators are read as such in
+ * both conventions ("10.000", "10,000", "1.500.000", "1.500,50", "1,500.50"); otherwise one "."
+ * or "," is the decimal mark ("12,5"), and a trailing one is still being typed ("12," is 12).
+ */
 export function boundNum(s: string): number {
-  const t = s.trim().replace(',', '.');
-  return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : NaN;
+  const t = s.trim();
+  const sign = t.startsWith('-') ? -1 : 1;
+  const body = t.replace(/^-/, '');
+  let n: string | null = null;
+  if (/^\d{1,3}(\.\d{3})+$/.test(body) || /^\d{1,3}(,\d{3})+$/.test(body)) n = body.replace(/[.,]/g, '');
+  else if (/^\d{1,3}(\.\d{3})+,\d*$/.test(body)) n = body.replace(/\./g, '').replace(',', '.');
+  else if (/^\d{1,3}(,\d{3})+\.\d*$/.test(body)) n = body.replace(/,/g, '');
+  else if (/^\d+([.,]\d*)?$/.test(body)) n = body.replace(',', '.');
+  return n === null ? NaN : sign * Number(n.replace(/\.$/, ''));
 }
 
 /** A real calendar date with a four-digit year ("99999-12-31" from the date picker isn't). */
@@ -145,12 +159,12 @@ export function rangeProblem(fd: FilterField<never>, v: FieldFilter | undefined)
   }
   if (fd.kind === 'number') {
     const max = MAX_FILTER_NUMBER.toLocaleString('en-US', fd.unit ? { minimumFractionDigits: 2 } : undefined);
-    const bounds = [v.min, v.max].filter((x): x is string => !!x).map(boundNum);
+    const bounds = [v.min, v.max].filter((x): x is string => !blankBound(x)).map(boundNum);
     if (bounds.some((x) => Number.isNaN(x))) return 'Enter numbers only, such as 1500 or 12.5.';
     // Custom number fields can hold anything; the system ones (value, days) are never below zero.
     if (!fd.custom && bounds.some((x) => x < 0)) return fd.label + " can't be negative. Enter 0 or more.";
     if (bounds.some((x) => Math.abs(x) > MAX_FILTER_NUMBER)) return 'Enter at most ' + max + '.';
-    if (v.min && v.max && boundNum(v.min) > boundNum(v.max)) return '“At least” is more than “At most”. Lower the first or raise the second.';
+    if (!blankBound(v.min) && !blankBound(v.max) && boundNum(v.min!) > boundNum(v.max!)) return '“At least” is more than “At most”. Lower the first or raise the second.';
   }
   return null;
 }
@@ -253,17 +267,26 @@ export function allOpen(value: FilterValue, id: string): FilterValue {
 }
 
 /**
- * Lower case without accents, so "markovic" finds "Marković". "đ" has no accent to strip and is
- * typed as "d" or "dj", so both fold to "d": "Dordevic", "Djordjevic" and "Đorđević" all become
- * "dordevic" (CD-504). Fold both sides before comparing.
+ * Lower case without accents, so "markovic" finds "Marković"; "đ" becomes "d" ("Đorđe" → "dorde"),
+ * as the API and People fold names. People type "đ" as "d" or "dj": match a folded query with
+ * foldIncludes, which also tries the record with "đ" as "dj" (CD-504).
  */
 export const fold = (v: string | null | undefined): string =>
   (v ?? '')
+    .replace(/[đĐ]/g, (c) => (c === 'đ' ? 'd' : 'D'))
     .normalize('NFD')
     .replace(/\p{M}/gu, '')
     .toLowerCase()
-    .replace(/đ|dj/g, 'd')
     .trim();
+
+/** A record's text folded with "đ" as "dj" ("Đorđević" → "djordjevic"), the other way it is typed. */
+export const foldDj = (v: string | null | undefined): string => fold((v ?? '').replace(/đ/g, 'dj').replace(/Đ/g, 'Dj'));
+
+/**
+ * Whether a record's text contains an already folded query (`fold(query)`): "Dordevic",
+ * "Djordjevic" and "Đorđević" all find "Đorđević", while "Djo" doesn't find "Dobro".
+ */
+export const foldIncludes = (value: string | null | undefined, query: string): boolean => !query || fold(value).includes(query) || foldDj(value).includes(query);
 
 // ---------------------------------------------------------------- matching
 
@@ -287,14 +310,14 @@ export function matchField(fd: FilterField<never>, v: FieldFilter | undefined, r
       if (raw === null || raw === undefined || raw === '' || Array.isArray(raw)) return false;
       const x = Number(raw);
       if (!Number.isFinite(x)) return false;
-      return (!v.min || x >= boundNum(v.min)) && (!v.max || x <= boundNum(v.max));
+      return (blankBound(v.min) || x >= boundNum(v.min!)) && (blankBound(v.max) || x <= boundNum(v.max!));
     }
     case 'text': {
       // Without accents (CD-478), as Ctrl K searches: "sabac" finds "Šabac".
-      const t = fold(listOf(raw).join(' ').trim());
-      if (v.op === 'isempty') return !t;
-      if (v.op === 'notempty') return !!t;
-      return t.includes(fold((v.text || '').trim()));
+      const text = listOf(raw).join(' ').trim();
+      if (v.op === 'isempty') return !fold(text);
+      if (v.op === 'notempty') return !!fold(text);
+      return foldIncludes(text, fold((v.text || '').trim()));
     }
     case 'date': {
       // Records with no date never match a date filter.
@@ -379,8 +402,8 @@ export function valueText(fd: FilterField<never>, v: FieldFilter | undefined, ct
       const a = boundNum(v.min ?? '') || 0;
       const b = boundNum(v.max ?? '') || 0;
       const n = (x: number) => shortAmount(x, fd.unit);
-      if (v.min && v.max) return n(a) + '–' + n(b);
-      return v.min ? 'at least ' + n(a) : 'at most ' + n(b);
+      if (!blankBound(v.min) && !blankBound(v.max)) return n(a) + '–' + n(b);
+      return !blankBound(v.min) ? 'at least ' + n(a) : 'at most ' + n(b);
     }
     case 'text':
       return v.op === 'isempty' ? 'Empty' : v.op === 'notempty' ? 'Not empty' : '“' + (v.text || '').trim() + '”';

@@ -9,7 +9,7 @@ import { paths } from '../lib/paths';
 import { type ApiBalanceRow, type ApiBalancesTable, type ApiTimeOffPolicy, type BalancesFilters, timeOffApi } from '../lib/timeOffApi';
 import { projectError, useProjectsRead } from '../store/projects';
 import { useStore } from '../store/store';
-import { timeOffAccess, timeOffTab } from '../store/timeOffTabs';
+import { timeOffAccess, timeOffTab, timeOffWaits } from '../store/timeOffTabs';
 import { CalendarTab } from './timeoff/Approvals';
 import { DecisionsTab } from './timeoff/Decisions';
 import { MyTimeOff } from './timeoff/MyTimeOff';
@@ -28,6 +28,8 @@ export function TimeOff() {
   const viewer = { admin, access: s.people.access, country: s.workspace?.country };
   const { approvals: canSeeBalances, decisions: seesDecisions } = timeOffAccess(viewer);
   const tab = timeOffTab(params.get('tab'), viewer);
+  // A link to a manager's tab waits for the caller's access before showing anything, so it doesn't flash My time off first (CD-503).
+  const waiting = timeOffWaits(params.get('tab'), viewer, s.myEmployeeId);
   const month = params.get('month') && /^\d{4}-\d{2}$/.test(params.get('month')!) ? params.get('month')! : new Date().toISOString().slice(0, 7);
   useEffect(() => {
     void employeeCard.loadMyEmployeeId();
@@ -62,7 +64,7 @@ export function TimeOff() {
           </button>
         )}
       </div>
-      {tab === 'my' && <MyTimeOff employeeId={s.myEmployeeId} year={params.get('year')} onYear={(y) => go({ year: y })} />}
+      {tab === 'my' && !waiting && <MyTimeOff employeeId={s.myEmployeeId} year={params.get('year')} onYear={(y) => go({ year: y })} />}
       {tab === 'approvals' && <RequestsTable admin={admin} myEmployeeId={s.myEmployeeId ?? null} />}
       {tab === 'timeline' && <CalendarTab month={month} onMonth={(m) => go({ month: m })} />}
       {tab === 'balances' && <Balances params={params} go={go} />}

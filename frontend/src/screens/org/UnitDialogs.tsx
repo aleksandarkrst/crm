@@ -14,7 +14,7 @@ import { withHeadConfirm } from '../../lib/headMoves';
 import { type ApiDirectoryRow, type ApiOrgLevel, type ApiOrgUnit, type LeadPreview, orgApi } from '../../lib/orgApi';
 import { type OrgStructure, orgError, useOrgStructure } from '../../store/org';
 import { managerForUnit, unitPathLabel, unitsBelow, unitTree } from '../../store/orgChart';
-import { fold } from '../../store/search';
+import { fold, foldIncludes } from '../../store/search';
 import { useStore } from '../../store/store';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -331,7 +331,7 @@ function AddPeople({ unit, data, onClose }: { unit: ApiOrgUnit; data: OrgStructu
   const { busy, problem, run } = useRun(onClose);
   const candidates = useMemo(() => {
     const q = fold(search);
-    return data.employees.filter((e) => e.unitId !== unit.id && (!q || fold(`${e.fullName} ${e.jobTitle ?? ''} ${e.unitName ?? ''}`).includes(q)));
+    return data.employees.filter((e) => e.unitId !== unit.id && (!q || foldIncludes(`${e.fullName} ${e.jobTitle ?? ''} ${e.unitName ?? ''}`, q)));
   }, [data.employees, search, unit.id]);
   const togglePick = (id: string) => setPicked((x) => (x.includes(id) ? x.filter((p) => p !== id) : [...x, id]));
   const managerId = managerForUnit(data.units, unit.id, '', s.workspace.ceoEmployeeId);

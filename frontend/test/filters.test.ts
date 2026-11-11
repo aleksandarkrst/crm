@@ -1,7 +1,7 @@
 // Unit tests of the shared filter row's logic (CD-366): `npm test` in frontend.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { allOpen, applyFilters, canClear, chipLabel, clearAll, collapseVals, type FilterField, fold, type FilterValue, GROUP, markSeen, matchField, notApplied, presetRange, rangeInput, rangeProblem, pruneList, restoreValue, valueText, withNewSubs } from '../src/store/filters.ts';
+import { allOpen, applyFilters, canClear, chipLabel, clearAll, collapseVals, boundNum, type FilterField, fold, foldIncludes, type FilterValue, GROUP, markSeen, matchField, notApplied, presetRange, rangeInput, rangeProblem, pruneList, restoreValue, valueText, withNewSubs } from '../src/store/filters.ts';
 
 interface Rec {
   stage: string;
@@ -68,11 +68,15 @@ describe('person filters', () => {
     assert.equal(matchField(fd('site'), { op: 'contains', text: 'novi sad' }, 'Mlekara Šabac', ctx), false);
   });
 
-  it('folds đ the way people type it, as d or dj (CD-504)', () => {
-    for (const typed of ['Dordevic', 'djordjevic', 'Đorđević', 'DJORĐEVIĆ']) assert.equal(fold(typed), 'dordevic', typed);
-    assert.ok(fold('Ana Đorđević').includes(fold('Ana Dor')));
-    assert.ok(fold('Ana Petrović').includes(fold('Petrovic')));
+  it('finds đ the way people type it, as d or dj, without dj matching every d (CD-504)', () => {
+    assert.equal(fold('Đorđević'), 'dordevic');
+    for (const typed of ['Dordevic', 'djordjevic', 'Đorđević', 'DJORDJEVIC', 'ĐORĐEVIĆ', 'Ana Dor', 'Djo']) assert.ok(foldIncludes('Ana Đorđević', fold(typed)), typed);
+    assert.ok(foldIncludes('Ana Petrović', fold('Petrovic')));
+    // "dj" is how đ is typed, not another spelling of d.
+    assert.equal(foldIncludes('Dobro Dora', fold('Djo')), false);
+    assert.equal(foldIncludes('Adjustment', fold('adj')), true);
     assert.equal(matchField(fd('site'), { op: 'contains', text: 'dorde' }, 'Đorđe d.o.o.', ctx), true);
+    assert.equal(matchField(fd('site'), { op: 'contains', text: 'djordje' }, 'Đorđe d.o.o.', ctx), true);
   });
 
   it('says Me for the current user, first names for others, then a count', () => {
@@ -271,6 +275,24 @@ describe('invalid ranges (CD-507)', () => {
     assert.equal(rangeInput('€ 1 500,5x'), '1500,5');
     assert.match(rangeProblem(fd('value'), { min: '-5' }) ?? '', /can't be negative/);
     assert.match(rangeProblem(fd('value'), { min: '5-' }) ?? '', /numbers only/);
+  });
+
+  it('reads thousands separators in both conventions, and one separator as the decimal mark', () => {
+    for (const [typed, n] of [['10.000', 10000], ['10,000', 10000], ['1.500.000', 1500000], ['1,500,000', 1500000], ['1.500,50', 1500.5], ['1,500.50', 1500.5], ['12,5', 12.5], ['12.5', 12.5], ['1500', 1500], ['-5', -5]] as const) {
+      assert.equal(boundNum(rangeInput(typed)), n, typed);
+    }
+    assert.equal(valueText(fd('value'), { min: '10.000' }), 'at least €10k');
+    assert.ok(Number.isNaN(boundNum('1.2.3')));
+  });
+
+  it('treats a half-typed bound as still being typed, not as a problem', () => {
+    assert.equal(boundNum('12,'), 12);
+    assert.equal(rangeProblem(fd('value'), { min: '12,' }), null);
+    assert.equal(rangeProblem(fd('value'), { min: '-' }), null);
+    assert.equal(notApplied(fd('value'), { min: '-' }), false);
+    assert.equal(valueText(fd('value'), { min: '-' }), 'Any');
+    assert.equal(valueText(fd('value'), { min: '-', max: '100' }), 'at most €100');
+    assert.equal(applyFilters(recs, fields, row('value', { min: '-', max: '100' }), ctx).length, 1);
   });
 
   it('still applies a valid range, with a decimal comma', () => {

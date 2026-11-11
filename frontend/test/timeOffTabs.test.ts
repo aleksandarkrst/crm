@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { ApiPeopleAccess } from '../src/lib/api.ts';
 import type { PeopleState } from '../src/store/people.ts';
-import { timeOffAccess, timeOffTab, withCallerAccess } from '../src/store/timeOffTabs.ts';
+import { timeOffAccess, timeOffTab, timeOffWaits, withCallerAccess } from '../src/store/timeOffTabs.ts';
 
 const emptyPeople = (): PeopleState => ({ employees: [], levels: [], units: [], access: null, loaded: false, loading: false, error: null });
 const managerAccess: ApiPeopleAccess = { employeeId: 'e-1', roles: ['employee', 'manager'], directReportIds: ['e-2'], reportIds: ['e-2'] };
@@ -32,6 +32,17 @@ describe('Time off tabs', () => {
     assert.equal(timeOffTab('approvals', { admin: false, access: null, country: null }), 'my');
     assert.equal(timeOffTab('approvals', { admin: false, access: employeeAccess, country: null }), 'my');
     assert.equal(timeOffTab('timeline', { admin: false, access: employeeAccess, country: null }), 'timeline');
+  });
+
+  it('waits for the caller access before showing a managers tab from a link, not longer', () => {
+    const unread = { admin: false, access: null, country: null };
+    assert.equal(timeOffWaits('approvals', unread, undefined), true);
+    assert.equal(timeOffWaits('balances', unread, undefined), true);
+    assert.equal(timeOffWaits(null, unread, undefined), false);
+    assert.equal(timeOffWaits('approvals', { ...unread, admin: true }, undefined), false);
+    assert.equal(timeOffWaits('approvals', { ...unread, access: managerAccess }, 'e-1'), false);
+    // The read failed: show My time off rather than nothing.
+    assert.equal(timeOffWaits('approvals', unread, null), false);
   });
 
   it('shows Approvals to Admins and Decisions only in Serbia', () => {
