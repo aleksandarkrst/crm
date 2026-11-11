@@ -1895,7 +1895,8 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           description: draft.description.trim() || null,
           unit: draft.unit.trim() || null,
           unitPrice: num(draft.price),
-          quantity: num(draft.qty) || 1,
+          // The dialog refuses 0 with a message (CD-502); never silently saved as 1.
+          quantity: num(draft.qty),
           vatRate: num(draft.vat),
           billingFrequency: draft.frequency,
           billingCycles: draft.frequency === 'one_time' ? null : draft.cycles,

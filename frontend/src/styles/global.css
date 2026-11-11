@@ -222,6 +222,11 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 
 .hover-underline:hover { text-decoration: underline; }
 
+/* Overview funnel bands (CD-502): buttons, so Tab reaches them and Enter opens the drill. The band's
+   clip-path would cut an outside outline, so focus is drawn inside it. */
+.funnel-band { border: 0; font: inherit; cursor: pointer; }
+.funnel-band:focus-visible { outline: 2px solid var(--white); outline-offset: -5px; box-shadow: inset 0 0 0 5px var(--brand); }
+
 /* Under the stage bar (CD-363): stage owner, target, late badge and Remind the owner. */
 .stage-owner-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; font-size: 12.5px; }
 /* "Documentation complete, ready to send" in To-Do (CD-363): a highlighted row with who and when. */

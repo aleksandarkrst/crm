@@ -211,10 +211,11 @@ export function Dashboard() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
               {stageFunnel.map((b) => (
-                <div key={b.name} onClick={() => drill('Stage', b.name, b.ids)} style={{ width: b.width, background: b.bg, clipPath: clip, padding: '11px 26px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
+                // A button (CD-502): Tab reaches it, Enter opens the drill, and closing the drill puts focus back here.
+                <button type="button" key={b.name} className="funnel-band" data-testid="funnel-stage-band" onClick={() => drill('Stage', b.name, b.ids)} style={{ width: b.width, background: b.bg, clipPath: clip, padding: '11px 26px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: b.fg, textAlign: 'center' }}>{b.name}</span>
                   <span style={{ fontSize: 11.5, color: b.subFg, textAlign: 'center' }}>{b.meta}</span>
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -228,10 +229,10 @@ export function Dashboard() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
               {timeFunnel.map((b) => (
-                <div key={b.label} onClick={() => drill('Payments due', b.label, b.ids, { amounts: b.amounts, summary: `${b.value} due in this period` })} style={{ width: b.width, background: b.bg, clipPath: clip, padding: '11px 26px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
+                <button type="button" key={b.label} className="funnel-band" data-testid="funnel-due-band" onClick={() => drill('Payments due', b.label, b.ids, { amounts: b.amounts, summary: `${b.value} due in this period` })} style={{ width: b.width, background: b.bg, clipPath: clip, padding: '11px 26px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: b.fg, textAlign: 'center' }}>{b.label}</span>
                   <span style={{ fontSize: 11.5, color: b.subFg, textAlign: 'center' }}>{b.value}</span>
-                </div>
+                </button>
               ))}
             </div>
           </div>

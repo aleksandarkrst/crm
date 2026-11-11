@@ -37,6 +37,16 @@ export function amountProblem(raw: unknown, label: string, max: number): string 
   return '';
 }
 
+/**
+ * Why a quantity can't be saved, or '' (CD-502): as `amountProblem`, and it must be more than 0.
+ * A 0 (or an empty field) is refused with a message, never saved as 1 or as a zero line.
+ */
+export function quantityProblem(raw: unknown, max = MAX_QTY): string {
+  const problem = amountProblem(raw, 'Quantity', max);
+  if (problem) return problem;
+  return Number(String(raw ?? '').trim().replace(/,/g, '') || 0) > 0 ? '' : 'Quantity must be more than 0';
+}
+
 /** The API's bound for a bonus minimum and flat amount (bonus-rules.service.ts). */
 export const MAX_BONUS_AMOUNT = 999_999_999_999;
 /**

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { BillingFields } from '../components/BillingFields';
 import { Modal, ModalTitle, RemoveButton } from '../components/ui';
-import { amountProblem, billingText, dealTotals, isRecurring, MAX_DEAL_VALUE, MAX_PRICE, MAX_QTY, TAX_MODES } from '../store/dealMath';
+import { amountProblem, billingText, dealTotals, isRecurring, MAX_DEAL_VALUE, MAX_PRICE, quantityProblem, TAX_MODES } from '../store/dealMath';
 import { currencyOptions } from '../store/seed';
 import { closeIsoOf, curOf, currencySymbol, defaultStart, leadById, linesOf, moneyExact, num } from '../store/selectors';
 import { type DealProductsDraft, useStore } from '../store/store';
@@ -44,7 +44,7 @@ export function DealProductsDialog() {
   const discountProblem = (value: unknown, kind: DiscountKind) => (kind === 'percent' ? amountProblem(value, 'Discount %', 100) : amountProblem(value, 'Discount', MAX_PRICE));
   const problemsOf = (l: DealLine) => ({
     price: amountProblem(l.price, 'Price', MAX_PRICE),
-    qty: amountProblem(l.qty, 'Quantity', MAX_QTY),
+    qty: quantityProblem(l.qty),
     discount: discountProblem(l.discount, l.discountKind),
     vat: draft.taxMode === 'none' ? '' : amountProblem(l.vat, 'Tax %', 100),
   });

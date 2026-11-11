@@ -6,6 +6,7 @@ import { useStore } from '../store/store';
 import type { Lead, LogEntry } from '../store/types';
 import { ChangeHistory } from './ChangeHistory';
 import { Icon } from './icons';
+import { Popover } from './Popover';
 
 /**
  * The parts company and contact pages share with the deal page (CD-80): a header card with the
@@ -123,13 +124,7 @@ export function RecordHeader({
 }) {
   const { s } = useStore();
   const [menu, setMenu] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!menu) return;
-    const off = (e: MouseEvent) => !menuRef.current?.contains(e.target as Node) && setMenu(false);
-    document.addEventListener('mousedown', off);
-    return () => document.removeEventListener('mousedown', off);
-  }, [menu]);
+  const menuRef = useRef<HTMLButtonElement>(null);
   const ownerOptions = [...memberLabels(s)].map(([value, label]) => ({ value, label }));
   if (ownerId && !ownerOptions.some((o) => o.value === ownerId)) ownerOptions.push({ value: ownerId, label: memberName(s, ownerId, ownerName) });
 
@@ -162,12 +157,13 @@ export function RecordHeader({
             + Opportunity
           </button>
           {(onDelete || menuItems.length > 0) && (
-            <div ref={menuRef} style={{ position: 'relative' }}>
-              <button type="button" className="btn btn-secondary" aria-label="More actions" aria-expanded={menu} onClick={() => setMenu((m) => !m)} style={{ padding: '10px 12px' }}>
+            <>
+              <button ref={menuRef} type="button" className="btn btn-secondary" aria-label="More actions" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((m) => !m)} style={{ padding: '10px 12px' }}>
                 ⋯
               </button>
               {menu && (
-                <div className="deal-menu row-menu" role="menu">
+                // The shared Popover, as on the opportunity (CD-490): Escape closes it and returns focus to ⋯ (CD-502).
+                <Popover anchor={menuRef} onClose={() => setMenu(false)} className="deal-menu row-menu" role="menu" label="More actions">
                   {menuItems.map((item) => (
                     <button
                       key={item.label}
@@ -195,9 +191,9 @@ export function RecordHeader({
                       {deleteLabel}
                     </button>
                   )}
-                </div>
+                </Popover>
               )}
-            </div>
+            </>
           )}
         </div>
       </div>
