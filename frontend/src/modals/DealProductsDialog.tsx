@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { BillingFields } from '../components/BillingFields';
 import { Modal, ModalTitle, RemoveButton } from '../components/ui';
-import { amountProblem, billingText, dealTotals, isRecurring, MAX_PRICE, MAX_QTY, TAX_MODES } from '../store/dealMath';
+import { amountProblem, billingText, dealTotals, isRecurring, MAX_DEAL_VALUE, MAX_PRICE, MAX_QTY, TAX_MODES } from '../store/dealMath';
 import { currencyOptions } from '../store/seed';
 import { closeIsoOf, curOf, currencySymbol, defaultStart, leadById, linesOf, moneyExact, num } from '../store/selectors';
 import { type DealProductsDraft, useStore } from '../store/store';
@@ -56,10 +56,12 @@ export function DealProductsDialog() {
   // A refused value never feeds the amounts or totals: a line with one counts as 0, a refused deal
   // discount takes nothing off and a refused installment adds nothing, until the value is fixed.
   const totals = dealTotals(
-    draft.lines.map((l, i) => (lineErrors[i] ? { ...l, qty: 0 } : l)),
+    draft.lines.map((l, i) => (lineErrors[i] ? { ...l, qty: 0, discount: 0 } : l)),
     draft.taxMode,
     draft.discounts.map((d, i) => (discountErrors[i] ? { ...d, value: 0 } : d)),
   );
+  // Each value has its own maximum, but together they can pass what an opportunity holds.
+  const valueError = totals.subtotal > MAX_DEAL_VALUE ? 'The opportunity value can be at most 999,999,999,999.99. Lower a price, a quantity or the number of billing cycles.' : '';
   const recurring = draft.lines.some(isRecurring);
   const installmentSum = draft.installments.reduce((a, x, i) => a + (installmentErrors[i] ? 0 : num(x.amount)), 0);
   const mismatch = draft.installments.length > 0 && Math.abs(installmentSum - totals.oneTimeTotal) >= 0.01;
@@ -90,7 +92,7 @@ export function DealProductsDialog() {
 
   const submit = async () => {
     if (draft.lines.some((l) => !l.itemId)) return setError('Pick a product on every line.');
-    const problem = [...lineErrors, ...discountErrors, ...installmentErrors].find(Boolean);
+    const problem = [...lineErrors, ...discountErrors, ...installmentErrors, valueError].find(Boolean);
     if (problem) return setError(problem);
     if (draft.installments.length && recurring) return setError('Installments are for opportunities with one-time products only. Remove the recurring products or the installments.');
     const minIso = closeIsoOf(lead);
@@ -256,7 +258,7 @@ export function DealProductsDialog() {
                 </button>
               </div>
             </div>
-            <DealSummary totals={totals} fmt={fmt} taxMode={draft.taxMode} />
+            <DealSummary totals={totals} fmt={fmt} taxMode={draft.taxMode} error={valueError} />
           </div>
         </>
       ) : (
@@ -339,7 +341,7 @@ export function DealProductsDialog() {
   );
 }
 
-function DealSummary({ totals, fmt, taxMode }: { totals: ReturnType<typeof dealTotals>; fmt: (n: number) => string; taxMode: TaxMode }) {
+function DealSummary({ totals, fmt, taxMode, error }: { totals: ReturnType<typeof dealTotals>; fmt: (n: number) => string; taxMode: TaxMode; error: string }) {
   const row = (label: string, value: string, strong = false, testId?: string) => (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: strong ? 14 : 13, fontWeight: strong ? 600 : 400 }}>
       <span style={{ color: strong ? 'var(--ink)' : 'var(--text-2)' }}>{label}</span>
@@ -355,6 +357,11 @@ function DealSummary({ totals, fmt, taxMode }: { totals: ReturnType<typeof dealT
       {row('Subtotal excluding tax', fmt(totals.subtotal), false, 'summary-subtotal')}
       {taxMode !== 'none' && row('Tax', fmt(totals.tax))}
       {row('Total with tax', fmt(totals.total), true, 'summary-total')}
+      {error && (
+        <div role="alert" data-testid="summary-error" style={{ fontSize: 12.5, color: 'var(--danger)' }}>
+          {error}
+        </div>
+      )}
       {totals.mrr > 0 && <div style={{ fontSize: 12, color: 'var(--text-2)' }}>MRR {fmt(totals.mrr)} · ARR {fmt(totals.arr)} · ACV {fmt(totals.acv)}</div>}
     </div>
   );

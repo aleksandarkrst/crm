@@ -22,6 +22,8 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 /** The API's bounds for a unit price and a quantity (deal-lines.service.ts, products.service.ts). */
 export const MAX_PRICE = 999_999_999;
 export const MAX_QTY = 9_999_999;
+/** The largest opportunity value the API stores (deal-lines.service.ts MAX_DEAL_AMOUNT): price × quantity × cycles can pass it. */
+export const MAX_DEAL_VALUE = 999_999_999_999.99;
 
 /** Why a typed amount can't be saved, or '' (CD-479): a negative or too-large value is refused, never flipped or clamped. */
 export function amountProblem(raw: unknown, label: string, max: number): string {
@@ -81,7 +83,9 @@ export function lineCycles(l: { frequency: BillingFrequency; cycles: number | nu
 /** A line's amount per cycle as entered (after its own discount), in the deal's tax mode. */
 export function lineAmount(l: Pick<DealLine, 'qty' | 'price' | 'discountKind' | 'discount'>): number {
   const base = num(l.qty) * num(l.price);
-  const off = l.discountKind === 'percent' ? (base * Math.min(100, num(l.discount))) / 100 : Math.min(base, num(l.discount));
+  // A negative discount never adds to the amount (CD-479 QA: a refused € -10 showed as +€10).
+  const discount = Math.max(0, num(l.discount));
+  const off = l.discountKind === 'percent' ? (base * Math.min(100, discount)) / 100 : Math.min(base, discount);
   return Math.max(0, base - off);
 }
 

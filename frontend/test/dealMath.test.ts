@@ -1,7 +1,7 @@
 // Typed amounts in the product and deal forms (CD-479): refused, never stripped or clamped. `npm test` in frontend.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { amountProblem, MAX_PRICE, num } from '../src/store/dealMath.ts';
+import { amountProblem, lineAmount, MAX_PRICE, num } from '../src/store/dealMath.ts';
 
 describe('amountProblem', () => {
   const check = (raw: unknown, max = MAX_PRICE) => amountProblem(raw, 'Price', max);
@@ -39,5 +39,20 @@ describe('num', () => {
 
   it('reads anything else as 0', () => {
     for (const x of [null, undefined, '', 'abc', '5-']) assert.equal(num(x), 0, String(x));
+  });
+});
+
+describe('lineAmount', () => {
+  it('never adds a negative discount to the amount (CD-479 QA round 3)', () => {
+    // A refused line is counted with quantity 0: its € -10 discount used to show as +€10.
+    assert.equal(lineAmount({ qty: 0, price: 100, discountKind: 'amount', discount: -10 }), 0);
+    assert.equal(lineAmount({ qty: 1, price: 100, discountKind: 'amount', discount: -10 }), 100);
+    assert.equal(lineAmount({ qty: 1, price: 100, discountKind: 'percent', discount: -5 }), 100);
+  });
+
+  it('takes a valid discount off, never below zero', () => {
+    assert.equal(lineAmount({ qty: 2, price: 100, discountKind: 'amount', discount: 10 }), 190);
+    assert.equal(lineAmount({ qty: 2, price: 100, discountKind: 'percent', discount: 10 }), 180);
+    assert.equal(lineAmount({ qty: 1, price: 100, discountKind: 'amount', discount: 500 }), 0);
   });
 });

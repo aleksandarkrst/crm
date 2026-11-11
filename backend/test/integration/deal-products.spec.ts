@@ -148,6 +148,26 @@ describe('saving a deal’s products', () => {
     expect((await call('PUT', `/crm/deals/00000000-0000-4000-8000-000000000000/products`, { ...as(), body: { taxMode: 'exclusive', lines: [] } })).status).toBe(404);
   });
 
+  it('refuses a value past what an opportunity holds with a readable 400, not a 500 (CD-479 QA)', async () => {
+    const p = await product({ name: 'Turbine' });
+    const deal = await newDeal('Too big together');
+    await saveProducts(owner, tenant, deal, [productLine(p.id, { quantity: 2, unitPrice: 10 })]);
+    // Each value is within its own maximum; together they pass 999,999,999,999.99.
+    for (const lines of [
+      [productLine(p.id, { quantity: 9_999_999, unitPrice: 999_999_999 })],
+      [productLine(p.id, { quantity: 1_001, unitPrice: 999_999_999 })],
+      [productLine(p.id, { unitPrice: 999_999_999, billingFrequency: 'monthly', billingCycles: 1_000 }), productLine(p.id, { unitPrice: 999_999_999 })],
+    ]) {
+      const res = await call<{ message: string }>('PUT', `/crm/deals/${deal}/products`, { ...as(), body: { taxMode: 'exclusive', lines } });
+      expect(res.status, JSON.stringify(res.body)).toBe(400);
+      expect(res.body.message).toMatch(/at most 999,999,999,999\.99/);
+    }
+    expect(Number((await dealOf(deal)).amount)).toBe(20);
+    // The largest value that fits still saves.
+    const max = await saveProducts(owner, tenant, deal, [productLine(p.id, { quantity: 1_000, unitPrice: 999_999_999 })]);
+    expect((max as { totals: { subtotal: number } }).totals.subtotal).toBe(999_999_999_000);
+  });
+
   it('members can price deals too', async () => {
     member = await signIn('products-member');
     const { token } = await ok('POST', '/team/invitations', { ...as(), body: { email: member.email, role: 'member' } });
