@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { type ApiLoggable, type ApiTimesheetWeek, timesheetApi } from '../../lib/timesheetApi';
 import { Popover } from '../../components/Popover';
 import { projectError } from '../../store/projects';
-import { fold } from '../../store/search';
+import { fold, foldIncludes } from '../../store/search';
 
 interface ProjectGroup {
   key: string;
@@ -64,7 +64,7 @@ export function TaskPicker({ week, employeeId, onAdd }: { week: ApiTimesheetWeek
   const inWeek = useMemo(() => new Set(week.rows.map((r) => r.id)), [week.rows]);
   const query = fold(q.trim());
   const groups = useMemo(() => {
-    const avail = (items ?? []).filter((i) => !inWeek.has(i.id) && (!query || fold(`${i.code} ${i.name} ${i.path}`).includes(query)));
+    const avail = (items ?? []).filter((i) => !inWeek.has(i.id) && (!query || foldIncludes(`${i.code} ${i.name} ${i.path}`, query)));
     return groupsOf(avail);
   }, [items, inWeek, query]);
 

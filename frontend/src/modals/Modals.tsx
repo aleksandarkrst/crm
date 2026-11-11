@@ -8,7 +8,7 @@ import { checkActivityCode, checkMb } from '../lib/serbianIds';
 import { checkEmail, checkLinkedin, checkPhone } from '../lib/validate';
 import { BUYER_ROLES, CHANNEL_LABELS, FIELD_TYPES, SALE_TYPES } from '../store/seed';
 import { allPeople, COMPANY_STATUS_LABELS, companyContacts, companyLabels, companyReadiness, companyRecords, customFieldsOf, memberLabels, pipelineBlocked, leadById, stageOf, stagesFor, todayIso, valueTotal } from '../store/selectors';
-import { fold } from '../store/search';
+import { fold, foldIncludes } from '../store/search';
 import { useStore } from '../store/store';
 import type { ChannelCode, CompanyStatus, Lead, Person, SaleType } from '../store/types';
 import { GenerationModal, NewTemplateModal } from './DocumentModals';
@@ -79,7 +79,7 @@ function NewDealModal() {
   const [q, setQ] = useState('');
   const pickRef = useRef<HTMLButtonElement>(null);
   const query = fold(q.trim());
-  const shown = query ? companies.filter((c) => fold(c.label).includes(query) || c.pib.replace(/\s/g, '').includes(query.replace(/\s/g, ''))) : companies;
+  const shown = query ? companies.filter((c) => foldIncludes(c.label, query) || c.pib.replace(/\s/g, '').includes(query.replace(/\s/g, ''))) : companies;
   const closePick = () => {
     setPickOpen(false);
     setQ('');

@@ -37,6 +37,7 @@ import {
 } from '../lib/api';
 import { headMoveMessage } from '../lib/headMoves';
 import type { LiveEvent } from './live';
+import { withCallerAccess } from './timeOffTabs';
 import type { State } from './types';
 
 export interface PeoplePickers {
@@ -261,11 +262,15 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
       }
     },
 
-    /** Your own employee record, for Profile → "My employee card". */
+    /**
+     * Your own employee record, for Profile → "My employee card", and your access (roles, reports)
+     * in `s.people.access`: Time off shows Approvals to managers from it without the directory having
+     * been read (CD-503). The directory's own read stores the same `/people/access` answer.
+     */
     loadMyEmployeeId: async () => {
       try {
         const access = await peopleCardApi.access();
-        set({ myEmployeeId: access.employeeId });
+        set((x) => ({ myEmployeeId: access.employeeId, people: withCallerAccess(x.people, access) }));
       } catch {
         set({ myEmployeeId: null });
       }

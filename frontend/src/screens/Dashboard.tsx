@@ -52,7 +52,7 @@ export function Dashboard() {
   const beforeDates = applyFilters(inAudience, fields, { ...filters, order: filters.order.filter((id) => id !== 'close') }, ctx);
   const dashLeads = applyFilters(beforeDates, fields, filters, ctx);
   const undatedHidden = closeOn ? beforeDates.filter((l) => !closeIsoOf(l)).length : 0;
-  const closeText = valueText(closeField, filters.f.close);
+  const closeText = valueText(closeField, filters.f.close, { today: ctx.today });
   const owners = filters.f.owner?.vals ?? [];
   const drill = (kicker: string, title: string, leadIds: string[], extra?: Pick<Drill, 'amounts' | 'summary'>) => set({ drill: { kicker, title, leadIds, ...extra } });
 

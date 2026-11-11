@@ -5,7 +5,7 @@ import { searchEmployees } from '../store/people';
 import { useProjects } from '../store/projects';
 import { taskId } from '../lib/tasksApi';
 import { useTasks } from '../store/tasks';
-import { fold, searchWorkspace } from '../store/search';
+import { fold, foldIncludes, searchWorkspace } from '../store/search';
 import { useStore } from '../store/store';
 import { type Command, ICONS, useCommands } from './commands';
 import { currentModule } from './modules';
@@ -87,23 +87,23 @@ export function CommandPalette() {
       .map(({ c }) => ({ kind: 'command' as const, command: c }));
     const projectHits = (projects ?? [])
       .filter((p) => {
-        const hay = fold(`${p.code ?? ''} ${p.name} ${p.companyName}`);
-        return words.every((w) => hay.includes(w));
+        const hay = `${p.code ?? ''} ${p.name} ${p.companyName}`;
+        return words.every((w) => foldIncludes(hay, w));
       })
       .slice(0, 6)
       .map((p) => ({ kind: 'record' as const, record: 'project' as const, id: p.id, title: p.code ? `${p.code} · ${p.name}` : p.name, subtitle: `${p.companyName} · ${p.stageName}`, initials: p.name.slice(0, 2).toUpperCase() }));
     const employees = searchEmployees(s.people.employees, q).map((h) => ({ kind: 'record' as const, record: 'employee' as const, id: h.id, title: h.title, subtitle: h.subtitle, initials: h.initials }));
     const taskHits = (tasks ?? [])
       .filter((t) => {
-        const hay = fold(`${taskId(t)} ${t.name} ${t.projectName}`);
-        return words.every((w) => hay.includes(w));
+        const hay = `${taskId(t)} ${t.name} ${t.projectName}`;
+        return words.every((w) => foldIncludes(hay, w));
       })
       .slice(0, 4)
       .map((t) => ({ kind: 'record' as const, record: 'task' as const, id: t.id, title: `${taskId(t)} · ${t.name}`, subtitle: `${terms.Task} · ${t.projectName}`, initials: 'T' }));
     const orderHits = (workOrders ?? [])
       .filter((w) => {
-        const hay = fold(`${workOrderId(w)} ${w.title} ${w.companyName}`);
-        return words.every((x) => hay.includes(x));
+        const hay = `${workOrderId(w)} ${w.title} ${w.companyName}`;
+        return words.every((x) => foldIncludes(hay, x));
       })
       .slice(0, 4)
       .map((w) => ({ kind: 'record' as const, record: 'work_order' as const, id: w.id, title: `${workOrderId(w)} · ${w.title}`, subtitle: `${w.companyName} · ${workOrderStatusLabel(w.status)}`, initials: 'WO' }));

@@ -95,13 +95,78 @@ export const defaultOp = (fd: FilterField<never>): FilterOp => (fd.kind === 'tex
 /** A field's filter with nothing chosen ("Any"). */
 export const emptyFilter = (fd: FilterField<never>): FieldFilter => ({ op: defaultOp(fd), vals: [] });
 
-/** Whether the filter narrows anything (otherwise the chip says "Any"). */
-export function isActive(fd: FilterField<never>, v: FieldFilter | undefined): boolean {
+/** Whether something was chosen or typed, valid or not. */
+function hasInput(fd: FilterField<never>, v: FieldFilter | undefined): boolean {
   if (!v) return false;
   if (fd.kind === 'date') return !!v.preset && (v.preset !== 'custom' || !!(v.from || v.to));
-  if (fd.kind === 'number') return !!(v.min || v.max);
+  if (fd.kind === 'number') return !blankBound(v.min) || !blankBound(v.max);
   if (fd.kind === 'text') return v.op === 'isempty' || v.op === 'notempty' || !!(v.text || '').trim();
   return (v.vals || []).length > 0;
+}
+
+/** Whether the filter narrows anything (otherwise the chip says "Any"); a range with a problem doesn't. */
+export function isActive(fd: FilterField<never>, v: FieldFilter | undefined): boolean {
+  return hasInput(fd, v) && !rangeProblem(fd, v);
+}
+
+/** A range was typed but has a problem: the chip says "Not applied" and the popover says why (CD-507). */
+export const notApplied = (fd: FilterField<never>, v: FieldFilter | undefined): boolean => hasInput(fd, v) && !!rangeProblem(fd, v);
+
+/** What a range input keeps of what was typed: digits, one sign and a decimal mark, so "-5" stays "-5" and gets a warning. */
+export const rangeInput = (typed: string): string => typed.replace(/[^\d.,-]/g, '');
+
+// ---------------------------------------------------------------- invalid ranges (CD-507)
+
+/** The largest number a range takes: an opportunity's value can be at most 999,999,999,999.99. */
+export const MAX_FILTER_NUMBER = 999_999_999_999.99;
+
+/** A bound with nothing in it yet: empty, or only the minus typed so far. */
+export const blankBound = (s: string | null | undefined): boolean => !s || s.trim() === '' || s.trim() === '-';
+
+/**
+ * A typed bound as a number; NaN when it isn't one. Thousands separators are read as such in
+ * both conventions ("10.000", "10,000", "1.500.000", "1.500,50", "1,500.50"); otherwise one "."
+ * or "," is the decimal mark ("12,5"), and a trailing one is still being typed ("12," is 12).
+ */
+export function boundNum(s: string): number {
+  const t = s.trim();
+  const sign = t.startsWith('-') ? -1 : 1;
+  const body = t.replace(/^-/, '');
+  let n: string | null = null;
+  if (/^\d{1,3}(\.\d{3})+$/.test(body) || /^\d{1,3}(,\d{3})+$/.test(body)) n = body.replace(/[.,]/g, '');
+  else if (/^\d{1,3}(\.\d{3})+,\d*$/.test(body)) n = body.replace(/\./g, '').replace(',', '.');
+  else if (/^\d{1,3}(,\d{3})+\.\d*$/.test(body)) n = body.replace(/,/g, '');
+  else if (/^\d+([.,]\d*)?$/.test(body)) n = body.replace(',', '.');
+  return n === null ? NaN : sign * Number(n.replace(/\.$/, ''));
+}
+
+/** A real calendar date with a four-digit year ("99999-12-31" from the date picker isn't). */
+export function isRealDate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const t = Date.parse(s + 'T00:00:00Z');
+  return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === s;
+}
+
+/**
+ * What is wrong with a custom date range or a number range, as the popover says it; null when
+ * nothing is. A range with a problem isn't applied (the chip says "Not applied").
+ */
+export function rangeProblem(fd: FilterField<never>, v: FieldFilter | undefined): string | null {
+  if (!v) return null;
+  if (fd.kind === 'date' && v.preset === 'custom') {
+    if ((v.from && !isRealDate(v.from)) || (v.to && !isRealDate(v.to))) return 'Enter a real date with a four-digit year.';
+    if (v.from && v.to && v.from > v.to) return 'From is after To. Pick a From date on or before the To date.';
+  }
+  if (fd.kind === 'number') {
+    const max = MAX_FILTER_NUMBER.toLocaleString('en-US', fd.unit ? { minimumFractionDigits: 2 } : undefined);
+    const bounds = [v.min, v.max].filter((x): x is string => !blankBound(x)).map(boundNum);
+    if (bounds.some((x) => Number.isNaN(x))) return 'Enter numbers only, such as 1500 or 12.5.';
+    // Custom number fields can hold anything; the system ones (value, days) are never below zero.
+    if (!fd.custom && bounds.some((x) => x < 0)) return fd.label + " can't be negative. Enter 0 or more.";
+    if (bounds.some((x) => Math.abs(x) > MAX_FILTER_NUMBER)) return 'Enter at most ' + max + '.';
+    if (!blankBound(v.min) && !blankBound(v.max) && boundNum(v.min!) > boundNum(v.max!)) return '“At least” is more than “At most”. Lower the first or raise the second.';
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------- dates
@@ -201,15 +266,27 @@ export function allOpen(value: FilterValue, id: string): FilterValue {
   return setField(value, id, { op: 'is', vals: [GROUP, ...(v.op === 'isnot' ? [] : (v.vals ?? []).filter((x) => x.startsWith('__') && x !== GROUP))], seen: undefined });
 }
 
-/** Lower case without accents, so "markovic" finds "Marković". */
+/**
+ * Lower case without accents, so "markovic" finds "Marković"; "đ" becomes "d" ("Đorđe" → "dorde"),
+ * as the API and People fold names. People type "đ" as "d" or "dj": match a folded query with
+ * foldIncludes, which also tries the record with "đ" as "dj" (CD-504).
+ */
 export const fold = (v: string | null | undefined): string =>
   (v ?? '')
+    .replace(/[đĐ]/g, (c) => (c === 'đ' ? 'd' : 'D'))
     .normalize('NFD')
     .replace(/\p{M}/gu, '')
-    .replace(/đ/g, 'dj')
-    .replace(/Đ/g, 'Dj')
     .toLowerCase()
     .trim();
+
+/** A record's text folded with "đ" as "dj" ("Đorđević" → "djordjevic"), the other way it is typed. */
+export const foldDj = (v: string | null | undefined): string => fold((v ?? '').replace(/đ/g, 'dj').replace(/Đ/g, 'Dj'));
+
+/**
+ * Whether a record's text contains an already folded query (`fold(query)`): "Dordevic",
+ * "Djordjevic" and "Đorđević" all find "Đorđević", while "Djo" doesn't find "Dobro".
+ */
+export const foldIncludes = (value: string | null | undefined, query: string): boolean => !query || fold(value).includes(query) || foldDj(value).includes(query);
 
 // ---------------------------------------------------------------- matching
 
@@ -233,14 +310,14 @@ export function matchField(fd: FilterField<never>, v: FieldFilter | undefined, r
       if (raw === null || raw === undefined || raw === '' || Array.isArray(raw)) return false;
       const x = Number(raw);
       if (!Number.isFinite(x)) return false;
-      return (!v.min || x >= Number(v.min)) && (!v.max || x <= Number(v.max));
+      return (blankBound(v.min) || x >= boundNum(v.min!)) && (blankBound(v.max) || x <= boundNum(v.max!));
     }
     case 'text': {
       // Without accents (CD-478), as Ctrl K searches: "sabac" finds "Šabac".
-      const t = fold(listOf(raw).join(' ').trim());
-      if (v.op === 'isempty') return !t;
-      if (v.op === 'notempty') return !!t;
-      return t.includes(fold((v.text || '').trim()));
+      const text = listOf(raw).join(' ').trim();
+      if (v.op === 'isempty') return !fold(text);
+      if (v.op === 'notempty') return !!fold(text);
+      return foldIncludes(text, fold((v.text || '').trim()));
     }
     case 'date': {
       // Records with no date never match a date filter.
@@ -271,10 +348,16 @@ export function chipLabel(fd: FilterField<never>, v: FieldFilter | undefined): s
   return fd.label;
 }
 
-const dayLabel = (s: string) => new Date(s + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-/** "€24k", "€1.2m", "€900": short amounts for the chip. */
+/** "1 Oct", or "1 Oct 2027" with `year` (CD-507: a range across years, or not in this one, says which). */
+const dayLabel = (s: string, year = false) => new Date(s + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(year ? { year: 'numeric' } : {}), timeZone: 'UTC' });
+/** Whether a custom range's chip names the year: its ends fall in different years, or not in this one. */
+function rangeNeedsYear(from: string | undefined, to: string | undefined, thisYear: string): boolean {
+  const years = [from, to].filter((x): x is string => !!x).map((x) => x.slice(0, 4));
+  return years.some((y) => y !== thisYear) || new Set(years).size > 1;
+}
+/** "€24k", "€1.2m", "€3.5bn", "€900": short amounts for the chip. */
 export const shortAmount = (n: number, unit = '') => {
-  const body = n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'm' : n >= 1000 ? Math.round(n / 100) / 10 + 'k' : String(n);
+  const body = n >= 1e9 ? (n / 1e9).toFixed(1).replace(/\.0$/, '') + 'bn' : n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'm' : n >= 1000 ? Math.round(n / 100) / 10 + 'k' : String(n);
   return unit ? (unit.length > 1 ? unit + ' ' : unit) + body : body;
 };
 
@@ -283,7 +366,8 @@ export const shortAmount = (n: number, unit = '') => {
  * ("N people"). Status with every open stage ticked says "Open"; the current user is "Me", other
  * people their first name.
  */
-export function valueText(fd: FilterField<never>, v: FieldFilter | undefined, ctx: { me?: string; personName?: (id: string) => string } = {}): string {
+export function valueText(fd: FilterField<never>, v: FieldFilter | undefined, ctx: { me?: string; personName?: (id: string) => string; today?: string } = {}): string {
+  if (notApplied(fd, v)) return 'Not applied';
   if (!v || !isActive(fd, v)) return 'Any';
   const vals = v.vals || [];
   switch (fd.kind) {
@@ -307,16 +391,19 @@ export function valueText(fd: FilterField<never>, v: FieldFilter | undefined, ct
       return vals[0] === 'yes' ? 'Yes' : 'No';
     case 'date':
       if (v.preset !== 'custom') return DATE_PRESETS.find((p) => p.id === v.preset)?.label ?? 'Any';
+    {
       // One-sided ranges read "From 1 Oct" / "Until 1 Oct" (Overview: "closing from 1 Oct").
-      if (!v.to) return 'From ' + dayLabel(v.from!);
-      if (!v.from) return 'Until ' + dayLabel(v.to);
-      return dayLabel(v.from) + ' – ' + dayLabel(v.to);
+      const year = rangeNeedsYear(v.from, v.to, (ctx.today ?? new Date().toISOString()).slice(0, 4));
+      if (!v.to) return 'From ' + dayLabel(v.from!, year);
+      if (!v.from) return 'Until ' + dayLabel(v.to, year);
+      return dayLabel(v.from, year) + ' – ' + dayLabel(v.to, year);
+    }
     case 'number': {
-      const a = Number(v.min) || 0;
-      const b = Number(v.max) || 0;
+      const a = boundNum(v.min ?? '') || 0;
+      const b = boundNum(v.max ?? '') || 0;
       const n = (x: number) => shortAmount(x, fd.unit);
-      if (v.min && v.max) return n(a) + '–' + n(b);
-      return v.min ? 'at least ' + n(a) : 'at most ' + n(b);
+      if (!blankBound(v.min) && !blankBound(v.max)) return n(a) + '–' + n(b);
+      return !blankBound(v.min) ? 'at least ' + n(a) : 'at most ' + n(b);
     }
     case 'text':
       return v.op === 'isempty' ? 'Empty' : v.op === 'notempty' ? 'Not empty' : '“' + (v.text || '').trim() + '”';
@@ -348,7 +435,8 @@ export function clearAll<R>(fields: FilterField<R>[]): FilterValue {
 export function canClear<R>(fields: FilterField<R>[], value: FilterValue): boolean {
   return value.order.some((id) => {
     const fd = fields.find((x) => x.id === id);
-    return !!fd && (!fd.pinned || isActive(fd as FilterField<never>, value.f[id]));
+    // A typed range that isn't applied (CD-507) still has something to clear.
+    return !!fd && (!fd.pinned || hasInput(fd as FilterField<never>, value.f[id]));
   });
 }
 
