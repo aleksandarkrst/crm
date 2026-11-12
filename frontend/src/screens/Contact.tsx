@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { CustomFieldRows } from '../components/CustomFields';
 import { IconRow } from '../components/icons';
@@ -31,6 +31,9 @@ export function Contact() {
   const { s, set } = store;
   const { id = '' } = useParams();
   const picker = usePicker();
+  // While a refused email or phone is in its field, no Email or Call link to the old one (CD-478).
+  const [emailUnsaved, setEmailUnsaved] = useState(false);
+  const [phoneUnsaved, setPhoneUnsaved] = useState(false);
   // A contact is addressed by its person id or its backend contact id; unknown ids go back to the list.
   const p = personById(s, id) || allPeople(s).find((x) => x.contactId === id);
   const c = p ? leadById(s, p.leadId) : undefined;
@@ -91,8 +94,8 @@ export function Contact() {
             <Section title="Summary" testId="contact-summary">
               <IconRow icon="mail" label="Email">
                 <span className="contact-field">
-                  <CheckedInput aria-label="Email" type="email" placeholder="name@company.com" value={p.email} check={checkEmail} onSave={(v) => store.patchPerson(p.id, { email: v })} />
-                  {mailto && (
+                  <CheckedInput aria-label="Email" type="email" placeholder="name@company.com" value={p.email} check={checkEmail} onSave={(v) => store.patchPerson(p.id, { email: v })} onUnsaved={setEmailUnsaved} />
+                  {mailto && !emailUnsaved && (
                     <a className="contact-action" href={mailto} aria-label={`Email ${p.name}`}>
                       Email
                     </a>
@@ -101,8 +104,8 @@ export function Contact() {
               </IconRow>
               <IconRow icon="phone" label="Phone">
                 <span className="contact-field">
-                  <CheckedInput aria-label="Phone" type="tel" placeholder="+381 60 123 4567" value={p.phone} check={checkPhone} onSave={(v) => store.patchPerson(p.id, { phone: v })} />
-                  {tel && (
+                  <CheckedInput aria-label="Phone" type="tel" placeholder="+381 60 123 4567" value={p.phone} check={checkPhone} onSave={(v) => store.patchPerson(p.id, { phone: v })} onUnsaved={setPhoneUnsaved} />
+                  {tel && !phoneUnsaved && (
                     <a className="contact-action" href={tel} aria-label={`Call ${p.name}`}>
                       Call
                     </a>
