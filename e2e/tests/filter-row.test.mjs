@@ -36,7 +36,9 @@ describe('filter row', () => {
     const [funnel] = await api(page, '/crm/funnels');
     const deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Acme lanes', funnelId: funnel.id, companyId: acme.id }) });
     [acmeId, dealId] = [acme.id, deal.id];
-    const task = (label, channel, dueDate) => api(page, `/crm/deals/${deal.id}/tasks`, { method: 'POST', body: JSON.stringify({ stageId: funnel.stages[0].id, label, blocksAdvance: false, channel, dueDate }) });
+    // Assigned to Fiona, as the New task dialog does by default: Today's "Salesperson Me" shows a task by its assignee.
+    const me = (await api(page, '/profile')).userId;
+    const task = (label, channel, dueDate) => api(page, `/crm/deals/${deal.id}/tasks`, { method: 'POST', body: JSON.stringify({ stageId: funnel.stages[0].id, label, blocksAdvance: false, channel, dueDate, assigneeUserId: me }) });
     await task('Call Acme back', 'PH', isoDay(0));
     await task('Email the price list', 'EM', isoDay(5));
     await api(page, '/crm/products', { method: 'POST', body: JSON.stringify({ name: 'Annual licence', unitPrice: 4800, billingFrequency: 'annually' }) });

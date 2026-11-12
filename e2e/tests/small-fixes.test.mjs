@@ -18,13 +18,17 @@ describe('contact notes and read-only funnels', () => {
     await createNew(page, 'contact');
     await page.waitForSelector('input[placeholder="e.g. Ana Marković"]');
     await page.type('input[placeholder="e.g. Ana Marković"]', 'Nina Notes');
-    await setValue(page, 'textarea[placeholder="How they influence the opportunity"]', 'Signs off on budgets over 10k');
+    // The dialog asks for the job title and the role in the decision too; its Notes field is
+    // "Anything worth knowing" (CD-361: influence is a separate field on the contact page).
+    await page.type('.modal input[placeholder="e.g. Marketing Director"]', 'Finance director');
+    await page.select('::-p-xpath(//*[contains(@class,"modal")]//label[contains(., "Role in the decision")]//select)', 'Decision maker');
+    await setValue(page, '.modal textarea[placeholder="Anything worth knowing"]', 'Signs off on budgets over 10k');
     await clickButton(page, 'Add contact');
     const saved = await eventually(async () => (await api(page, '/crm/contacts')).find((c) => c.fullName === 'Nina Notes'));
     assert.ok(saved, 'contact saved');
     assert.equal(saved.notes, 'Signs off on budgets over 10k');
     await page.goto(`${BASE_URL}/contacts/${saved.id}`, { waitUntil: 'networkidle0' });
-    const shown = await page.waitForFunction(() => document.querySelector('textarea.ghost')?.value);
+    const shown = await page.waitForFunction(() => document.querySelector('textarea[aria-label="Notes"]')?.value);
     assert.equal(await shown.jsonValue(), 'Signs off on budgets over 10k');
   });
 

@@ -34,7 +34,8 @@ describe('company identity', () => {
   step('the list shows the Company ID and the ownership', async () => {
     await page.goto(BASE_URL + '/companies', { waitUntil: 'networkidle0' });
     const row = await page.$eval('.table-row', (el) => el.innerText);
-    assert.match(row, new RegExp(`Vega Logistika d.o.o.\\s+${pib}\\s+Private`));
+    // The Status column sits between the Company ID and the ownership (CD-358).
+    assert.match(row, new RegExp(`Vega Logistika d.o.o.\\s+${pib}\\s+Lead\\s+Private`));
   });
 
   step('the same PIB again offers the existing company instead', async () => {
