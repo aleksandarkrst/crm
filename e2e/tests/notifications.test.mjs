@@ -69,6 +69,10 @@ describe('emails: invitations and notification settings', () => {
 
   step('Copy link gives the same link as the email', async () => {
     await waitForToastToClear(page).catch(() => {});
+    // Show link first puts the link in a field under the invitation; Copy link then takes its place (CD-487).
+    assert.ok(await clickInInvite(page, invitee, 'Show link'), 'Show link button');
+    const shown = await page.waitForSelector(`[data-invite-email="${invitee}"] [data-testid="pending-invite-link"]`);
+    assert.equal(await shown.evaluate((el) => el.value), link, 'the shown link is the emailed one');
     assert.ok(await clickInInvite(page, invitee, 'Copy link'), 'Copy link button');
     // Headless Chrome may refuse the clipboard; the toast then shows the link instead.
     await page.waitForFunction(() => /Invite link (copied|: )/.test(document.querySelector('.toast')?.textContent ?? ''));

@@ -1,7 +1,7 @@
 // Workspace settings and profile settings are saved and survive a reload; a deal's discovery notes reach the proposal.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, clickButton, createDealInUi, email, eventually, newUserWithWorkspace, RUN, setByLabel, signIn, steps, text, useBrowser, waitForToastToClear, finishOnboarding } from '../lib/harness.mjs';
+import { api, BASE_URL, click, clickButton, createDealInUi, email, eventually, newUserWithWorkspace, RUN, setByLabel, setValue, signIn, steps, text, useBrowser, waitForToastToClear, finishOnboarding } from '../lib/harness.mjs';
 
 /** The value of the input/select/textarea next to a label (like setByLabel, for reading). */
 const valueByLabel = (page, label, tag = 'input') =>
@@ -32,7 +32,11 @@ describe('settings and discovery fields', () => {
   step('saves the workspace settings', async () => {
     await page.goto(`${BASE_URL}/settings/workspace`, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.body.innerText.includes('Fiscal year starts'));
-    assert.ok(await setByLabel(page, 'Name', workspaceName));
+    // The name is edited in the Workspace info dialog (CD-378).
+    await click(page, '[data-testid="workspace-info-edit"]');
+    await setValue(page, '[data-testid="workspace-info-name"]', workspaceName);
+    await click(page, '[data-testid="workspace-info-save"]');
+    await page.waitForFunction((name) => document.querySelector('.ws-info-name')?.textContent.trim() === name, {}, workspaceName);
     assert.ok(await setByLabel(page, 'Currency', 'RSD', 'select'));
     assert.ok(await setByLabel(page, 'Time zone', 'Europe/London', 'select'));
     assert.ok(await setByLabel(page, 'Fiscal year starts', '4', 'select'));
@@ -58,7 +62,7 @@ describe('settings and discovery fields', () => {
   step('shows the saved workspace settings after a reload, and the new name in the session', async () => {
     await page.reload({ waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.body.innerText.includes('Fiscal year starts'));
-    assert.equal(await valueByLabel(page, 'Name'), workspaceName);
+    assert.equal(await page.$eval('.ws-info-name', (el) => el.textContent.trim()), workspaceName);
     assert.equal(await valueByLabel(page, 'Currency', 'select'), 'RSD');
     assert.equal(await valueByLabel(page, 'Time zone', 'select'), 'Europe/London');
     assert.equal(await valueByLabel(page, 'Fiscal year starts', 'select'), '4');
@@ -144,15 +148,16 @@ describe('settings and discovery fields', () => {
     await finishOnboarding(member);
     await member.goto(`${BASE_URL}/settings/workspace`, { waitUntil: 'networkidle0' });
     await member.waitForFunction(() => document.body.innerText.includes('Only owners and admins can change the workspace settings.'));
-    assert.equal(await valueByLabel(member, 'Name'), workspaceName);
+    assert.equal(await member.$eval('.ws-info-name', (el) => el.textContent.trim()), workspaceName);
+    assert.equal(await member.$('[data-testid="workspace-info-edit"]'), null, 'no Edit for the name and logo');
     assert.equal(await valueByLabel(member, 'Currency', 'select'), 'RSD');
     const disabled = await member.evaluate(() =>
-      ['Name', 'Currency', 'Time zone', 'Fiscal year starts'].map((label) => {
+      ['Currency', 'Time zone', 'Fiscal year starts'].map((label) => {
         const span = [...document.querySelectorAll('span')].find((el) => el.textContent.trim() === label);
         return span?.parentElement?.querySelector('input, select')?.disabled;
       }),
     );
-    assert.deepEqual(disabled, [true, true, true, true]);
+    assert.deepEqual(disabled, [true, true, true]);
     // A member's own profile starts with the defaults, independent of the owner's.
     const p = await api(member, '/profile');
     assert.equal(p.startPage, 'pipeline');

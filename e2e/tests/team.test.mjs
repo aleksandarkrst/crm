@@ -13,11 +13,12 @@ describe('team and invitations', () => {
   const bobEmail = email('bob');
   const carolEmail = email('carol');
 
-  async function createInvite(page, address) {
+  /** Invites `address` by name (CD-318: the invitation greets them, and the member starts with that name). */
+  async function createInvite(page, address, [first, last]) {
     await page.goto(BASE_URL + '/settings/team', { waitUntil: 'networkidle0' });
     await clickButton(page, 'Invite member');
-    await page.type('[data-testid=invite-first-name]', 'Invited');
-    await page.type('[data-testid=invite-last-name]', 'Person');
+    await page.type('[data-testid=invite-first-name]', first);
+    await page.type('[data-testid=invite-last-name]', last);
     await page.type('input[placeholder="name@company.com"]', address);
     await clickButton(page, 'Send invitation');
     const input = await page.waitForSelector('input[readonly]');
@@ -58,10 +59,11 @@ describe('team and invitations', () => {
 
   let bobLink;
   step('the owner creates an invite link and sees it pending', async () => {
-    bobLink = await createInvite(owner, bobEmail);
+    bobLink = await createInvite(owner, bobEmail, ['Bob', 'Builder']);
     assert.ok(bobLink.startsWith(BASE_URL + '/invite/'), bobLink);
-    const body = await text(owner);
-    assert.ok(body.includes('Invitation sent') && body.includes(bobEmail), 'pending invitation listed');
+    // The invitation carries the invitee's name since CD-318; its row says Invited until they join.
+    const row = await owner.evaluate((address) => [...document.querySelectorAll('.table-row')].find((r) => r.querySelector(`[data-invite-email="${address}"]`))?.innerText ?? '', bobEmail);
+    assert.ok(row.includes('Bob Builder') && /^\s*Invited\s*$/m.test(row), 'pending invitation listed');
   });
 
   step('the invitee is asked to sign in, then sees who invited them and joins', async () => {
@@ -71,7 +73,8 @@ describe('team and invitations', () => {
     await signIn(bob, bobEmail, 'Bob Builder');
     await bob.waitForSelector('button::-p-text(Accept and join)');
     const body = await text(bob);
-    assert.ok(body.includes('Join Shared Co') && body.includes('Olivia Owner invited'), 'names workspace and inviter');
+    // Greets them by the first name on the invitation (CD-318).
+    assert.ok(body.includes('Hi Bob, join Shared Co') && body.includes('Olivia Owner invited'), 'names workspace and inviter');
     await clickButton(bob, 'Accept and join');
     await finishOnboarding(bob);
   });
@@ -83,7 +86,11 @@ describe('team and invitations', () => {
     });
     assert.ok(deals, 'sees the one shared opportunity');
     assert.equal(deals[0].deal.title, 'Acme rebrand');
-    await bob.waitForFunction(() => document.body.innerText.includes('No company'));
+    // The pipeline shows your own opportunities by default (CD-366), and every opportunity has a
+    // company (CD-360): with the filters cleared, Olivia's Acme rebrand is on the board.
+    await bob.waitForSelector('button::-p-text(Clear filters)');
+    await clickButton(bob, 'Clear filters');
+    await bob.waitForFunction(() => document.body.innerText.includes('Acme rebrand'));
     assert.equal((await api(bob, '/me')).tenants.length, 1);
   });
 
@@ -105,11 +112,11 @@ describe('team and invitations', () => {
 
   let carolLink;
   step("someone else can't accept an invitation that isn't theirs", async () => {
-    carolLink = await createInvite(owner, carolEmail);
+    carolLink = await createInvite(owner, carolEmail, ['Carol', 'Clark']);
     const eve = await browser.person('eve');
     await eve.goto(carolLink, { waitUntil: 'networkidle0' });
     await signIn(eve, email('eve'), 'Eve Other');
-    await eve.waitForSelector('::-p-text(Join Shared Co)');
+    await eve.waitForSelector('::-p-text(Hi Carol, join Shared Co)');
     assert.ok((await text(eve)).includes(`Sign out and sign in as ${carolEmail}`), 'told to switch accounts');
     const disabled = await eve.$eval('button::-p-text(Accept and join)', (b) => b.disabled);
     assert.equal(disabled, true);
