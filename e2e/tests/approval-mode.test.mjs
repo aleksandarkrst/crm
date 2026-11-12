@@ -3,7 +3,7 @@
 // and switching back keeps that day Submitted.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, eventually, newUserWithWorkspace, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
+import { api, BASE_URL, click, confirmInApp, eventually, newUserWithWorkspace, steps, useBrowser, waitForToastToClear, testPib } from '../lib/harness.mjs';
 
 describe('approval mode', () => {
   const browser = useBrowser();
@@ -43,6 +43,8 @@ describe('approval mode', () => {
     await page.waitForSelector('[data-testid=ts-grid]');
     assert.equal(await page.$('[data-testid=ts-submit-day]'), null);
     await click(page, '[data-testid=ts-submit]');
+    // Only Monday has hours: the rest of the week's working days are empty, so it asks first (CD-152).
+    assert.match(await confirmInApp(page), /no hours\. Submit anyway\?$/);
     await page.waitForFunction((d) => document.querySelector(`[data-testid=ts-day][data-date="${d}"]`)?.dataset.status === 'submitted', {}, monday);
     await waitForToastToClear(page);
   });

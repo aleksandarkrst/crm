@@ -3,7 +3,7 @@
 // required comment; the employee then sees the comment on the rejected day.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, clickButton, email, eventually, finishOnboarding, newUserWithWorkspace, signIn, steps, useBrowser, testPib } from '../lib/harness.mjs';
+import { api, BASE_URL, clearPreloadedHolidays, click, clickButton, email, eventually, finishOnboarding, newUserWithWorkspace, signIn, steps, useBrowser, testPib } from '../lib/harness.mjs';
 
 const addDays = (date, n) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
@@ -38,6 +38,8 @@ describe('approvals', () => {
   step('a manager with two reports who submitted this week', async () => {
     manager = await browser.person('ap-manager');
     await newUserWithWorkspace(manager, { label: 'ap-manager', name: 'Marko Ilić', workspace: 'Approvals Co' });
+    // Expected hours ("at approval 8 of 8 h") on the real current week, whatever holidays it has (CD-513).
+    await clearPreloadedHolidays(manager);
     await report('ap-dragan', 'Dragan Milić');
     await report('ap-bojan', 'Bojan Đurić');
   });
@@ -46,9 +48,16 @@ describe('approvals', () => {
     await manager.goto(`${BASE_URL}/approvals?week=${monday}`, { waitUntil: 'networkidle0' });
     await manager.waitForSelector('[data-testid=ap-row]');
     const rows = await manager.$$eval('[data-testid=ap-row]', (els) => els.map((el) => ({ status: el.dataset.status, text: el.textContent })));
-    assert.equal(rows.length, 2);
-    assert.ok(rows.every((r) => r.status === 'submitted'), JSON.stringify(rows));
-    assert.ok(await manager.$('[data-testid=ap-all-good]'), 'everyone submitted on time');
+    // The manager is an Admin, who sees every employee with a timesheet, their own row too, read only (CD-157).
+    const own = rows.filter((r) => r.text.includes('Marko Ilić'));
+    const reports = rows.filter((r) => !r.text.includes('Marko Ilić'));
+    assert.equal(own.length, 1, JSON.stringify(rows));
+    assert.match(own[0].text, /Read only/);
+    assert.equal(reports.length, 2);
+    assert.ok(reports.every((r) => r.status === 'submitted'), JSON.stringify(rows));
+    // Both reports submitted on time: only the manager's own (empty) week is not yet submitted.
+    assert.match(await manager.$eval('[data-testid=ap-not-submitted]', (el) => el.textContent), /^Not (yet )?submitted1Marko Ilić · /);
+    assert.match(await manager.$eval('[data-testid=ap-late]', (el) => el.textContent), /^Late0Nobody$/);
     const dragan = `[data-testid=ap-row][data-employee="${people['ap-dragan'].id}"]`;
     assert.equal(await manager.$eval(`${dragan} [data-testid=ap-squares]`, (el) => el.querySelectorAll('[data-status=submitted]').length), 5);
     await click(manager, `${dragan} [data-testid=ap-approve]`);
@@ -154,7 +163,8 @@ describe('approvals', () => {
     await manager.goto(`${BASE_URL}/approvals/${dragan.id}?week=${monday}`, { waitUntil: 'networkidle0' });
     await manager.waitForSelector('[data-testid=ap-on-behalf]');
     assert.match(await manager.$eval('[data-testid=ap-entered-by-me]', (el) => el.textContent), /You entered a day of this week on behalf of Dragan; another approver must approve it\./);
-    assert.equal(await manager.$('[data-testid=ap-approve-week]'), null);
+    // Approve week stays on screen, disabled, and says why (CD-317).
+    assert.deepEqual(await manager.$eval('[data-testid=ap-approve-week]', (el) => ({ disabled: el.disabled, title: el.title })), { disabled: true, title: 'Another approver must approve the days you entered' });
     await click(manager, '[data-testid=ap-history]');
     await manager.waitForSelector('[data-testid=week-history]');
     assert.match(await manager.$eval('[data-testid=week-history]', (el) => el.textContent), /Resubmitted: “Corrected by the office\.”Marko Ilić on behalf of Dragan Milić/);

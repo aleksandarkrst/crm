@@ -15,6 +15,8 @@ const MORE = '[data-testid=sidebar-more]';
 const MORE_POP = '[data-testid=sidebar-more-pop]';
 const PHONE = { width: 390, height: 844, isMobile: true, hasTouch: true };
 const CRM_PAGES = ['Overview', 'Companies', 'Pipeline', 'Today', 'Calendar', 'Visit plans', 'Contacts', 'Products', 'Reports'];
+// The owner also sees Workforce's manager pages: Approvals (CD-157), Today's status (CD-162), Time off (CD-164).
+const WORKFORCE_PAGES = ['Timesheet', 'Approvals', "Today's status", 'Time off', 'Org structure'];
 
 describe('module and workspace switcher', () => {
   const browser = useBrowser();
@@ -86,7 +88,7 @@ describe('module and workspace switcher', () => {
     await page.waitForFunction(() => location.pathname === '/org');
     await closed();
     await inModule('workforce');
-    assert.deepEqual(await sidebar(), { module: 'workforce', pages: ['Timesheet', 'Org structure'] });
+    assert.deepEqual(await sidebar(), { module: 'workforce', pages: WORKFORCE_PAGES });
     assert.equal((await page.$eval(LOGO, (el) => el.textContent)).trim(), 'Workforce');
     await click(page, LOGO);
     assert.equal((await modules()).find((m) => m.current)?.id, 'workforce');
@@ -105,7 +107,7 @@ describe('module and workspace switcher', () => {
     await inModule('workforce');
     await click(page, '.app-sidebar a[href="/settings"]');
     await page.waitForFunction(() => location.pathname.startsWith('/settings/'));
-    assert.deepEqual(await sidebar(), { module: 'workforce', pages: ['Timesheet', 'Org structure'] });
+    assert.deepEqual(await sidebar(), { module: 'workforce', pages: WORKFORCE_PAGES });
     // Remembered in this browser: still Workforce after a reload.
     await page.reload({ waitUntil: 'networkidle0' });
     await inModule('workforce');
@@ -325,9 +327,9 @@ describe('module and workspace switcher', () => {
     await click(page, `${POP} [data-module=workforce]`);
     await page.waitForFunction(() => location.pathname === '/org');
     await closed();
-    // Workforce's bottom bar: Timesheet, Org structure and "More".
+    // Workforce's bottom bar: Timesheet, Time off (CD-164), Org structure and "More".
     await inModule('workforce');
-    assert.deepEqual((await sidebar()).pages, ['Timesheet', 'Org structure']);
+    assert.deepEqual((await sidebar()).pages, ['Timesheet', 'Time off', 'Org structure']);
     assert.ok(await page.$eval('[data-testid=nav-more]', (el) => el.getClientRects().length > 0), '"More" in the bar');
     // The backdrop closes it, too.
     await click(page, '[data-testid=nav-more]');
