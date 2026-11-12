@@ -95,7 +95,11 @@ describe('filter row', () => {
     await openChip(page, 'owner');
     await click(page, `[data-testid="filter-pop-owner"] [data-testid="filter-option"][data-value="${id('Fiona Filter')}"]`);
     await closePopover(page);
-    await page.waitForFunction(() => !/Fiona site visit/.test(document.querySelector('[data-testid=meetings-today]')?.innerText ?? ''));
+    // Both at once: while the list reloads it is briefly empty, which has no Fiona either.
+    await page.waitForFunction(() => {
+      const t = document.querySelector('[data-testid=meetings-today]')?.innerText ?? '';
+      return !/Fiona site visit/.test(t) && /Ana site visit/.test(t);
+    });
     assert.match(await meetings(), /Ana site visit/);
     await clearFilters(page);
   });

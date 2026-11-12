@@ -46,6 +46,9 @@ describe('new opportunity', () => {
     await click(page, '[data-testid=new-deal-complete-company]');
     await page.waitForFunction((id) => location.pathname === `/companies/${id}`, {}, companyId);
     // The company page is a lazily loaded screen (CD-24): it renders a moment after the URL changes.
+    // Until it does, the contact page's own (enabled) + Opportunity is still there: wait for a
+    // field only the company page has.
+    await page.waitForSelector('input[aria-label="Matični broj"]');
     const plus = await page.waitForSelector('[data-testid=record-new-deal]');
     assert.equal(await plus.evaluate((el) => el.disabled), true, '+ Opportunity is off for a lead');
     // A checked field saves when it loses the focus, so it takes the focus first.
