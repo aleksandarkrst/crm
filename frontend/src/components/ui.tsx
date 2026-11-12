@@ -87,6 +87,44 @@ export function GhostInput({ className = '', ...props }: InputHTMLAttributes<HTM
 }
 
 /**
+ * A field whose value is also a link (CD-516): an email, a website, LinkedIn, a place on the map.
+ * The value shows as a link over the field: clicking the link opens it (a new tab, or the mail app
+ * for an email), clicking anywhere else in the field edits it, and while the field has the focus the
+ * link steps aside. The face reuses the field's classes, so the link sits exactly on the field's text.
+ * Without an href (empty, refused or not saved yet) it is just the field.
+ */
+export function LinkedField({
+  href,
+  text,
+  label,
+  fieldClass = 'ghost',
+  testId,
+  children,
+}: {
+  href: string | null | undefined;
+  text: string;
+  label: string;
+  fieldClass?: string;
+  testId?: string;
+  children: ReactNode;
+}) {
+  const on = !!href && !!text.trim();
+  const newTab = on && !href.startsWith('mailto:');
+  return (
+    <span className={`linked-field${on ? ' has-link' : ''}`}>
+      {children}
+      {on && (
+        <span className={`${fieldClass} linked-field-face`}>
+          <a href={href} aria-label={label} data-testid={testId} {...(newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
+            {text.trim()}
+          </a>
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
  * A ghost date field (CD-318): empty, it reads as a prompt ("Add closed date") instead of the
  * browser's dd/mm/yyyy mask; a click opens the picker. With a value it is the date input itself.
  */

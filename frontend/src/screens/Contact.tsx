@@ -5,7 +5,7 @@ import { IconRow } from '../components/icons';
 import { MeetingsCard } from '../components/MeetingsCard';
 import { Screen } from '../components/Layout';
 import { DealsSection, FocusTasks, RecordHeader, RecordHistory, Section } from '../components/RecordParts';
-import { CheckedInput, GhostDate, GhostInput, GhostSelect, Picker, PickerRow, usePicker } from '../components/ui';
+import { CheckedInput, GhostDate, GhostInput, GhostSelect, LinkedField, Picker, PickerRow, usePicker } from '../components/ui';
 import { checkEmail, checkLinkedin, checkPhone } from '../lib/validate';
 import { paths } from '../lib/paths';
 import { BUYER_ROLES, SOURCES } from '../store/seed';
@@ -31,8 +31,9 @@ export function Contact() {
   const { s, set } = store;
   const { id = '' } = useParams();
   const picker = usePicker();
-  // While a refused email is in its field, no Email link to the old one (CD-478).
+  // While a refused email or LinkedIn is in its field, no link to the old one (CD-478).
   const [emailUnsaved, setEmailUnsaved] = useState(false);
+  const [linkedinUnsaved, setLinkedinUnsaved] = useState(false);
   // A contact is addressed by its person id or its backend contact id; unknown ids go back to the list.
   const p = personById(s, id) || allPeople(s).find((x) => x.contactId === id);
   const c = p ? leadById(s, p.leadId) : undefined;
@@ -90,14 +91,9 @@ export function Contact() {
           <div className="lead-side" style={{ flex: '1 1 400px', maxWidth: 540, display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
             <Section title="Summary" testId="contact-summary">
               <IconRow icon="mail" label="Email">
-                <span className="contact-field">
+                <LinkedField href={emailUnsaved ? '' : mailto} text={p.email} label={`Email ${p.name}`}>
                   <CheckedInput aria-label="Email" type="email" placeholder="name@company.com" value={p.email} check={checkEmail} onSave={(v) => store.patchPerson(p.id, { email: v })} onUnsaved={setEmailUnsaved} />
-                  {mailto && !emailUnsaved && (
-                    <a className="contact-action" href={mailto} aria-label={`Email ${p.name}`}>
-                      Email
-                    </a>
-                  )}
-                </span>
+                </LinkedField>
               </IconRow>
               <IconRow icon="phone" label="Phone">
                 <span className="contact-field">
@@ -105,14 +101,9 @@ export function Contact() {
                 </span>
               </IconRow>
               <IconRow icon="linkedin" label="LinkedIn">
-                <span className="contact-field">
-                  <CheckedInput aria-label="LinkedIn" placeholder="linkedin.com/in/name" value={p.linkedin ?? ''} check={checkLinkedin} onSave={(v) => store.patchPerson(p.id, { linkedin: v })} />
-                  {linkedin && (
-                    <a className="contact-action" href={linkedin} target="_blank" rel="noopener noreferrer" aria-label={`Open ${p.name} on LinkedIn`}>
-                      Open
-                    </a>
-                  )}
-                </span>
+                <LinkedField href={linkedinUnsaved ? '' : linkedin} text={p.linkedin ?? ''} label={`Open ${p.name} on LinkedIn`}>
+                  <CheckedInput aria-label="LinkedIn" placeholder="linkedin.com/in/name" value={p.linkedin ?? ''} check={checkLinkedin} onSave={(v) => store.patchPerson(p.id, { linkedin: v })} onUnsaved={setLinkedinUnsaved} />
+                </LinkedField>
               </IconRow>
               <IconRow icon="company" label="Company">
                 <Picker
