@@ -34,6 +34,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NEW_PARAMS = ['new', 'companyId', 'dealId', 'contactId', 'type', 'organizer', 'start'];
 /** The filter row's chips a link can set (a report, a record's "Show all"): read into the row, then removed. */
 const LINK_FILTERS = ['user', 'type', 'status', 'company'];
+/** A link with filters; a New meeting link (?new=1) uses `type` for the meeting, not as a filter. */
+const isLinkFilter = (p: URLSearchParams) => p.get('new') !== '1' && LINK_FILTERS.some((k) => p.has(k));
 const COMPANY = 'company.company';
 const DEFAULTS: FilterValue = { order: ['owner', 'type', 'status'], f: { owner: { op: 'is', vals: [] }, type: { op: 'is', vals: [] }, status: { op: 'is', vals: [...DEFAULT_STATUSES] } } };
 
@@ -108,7 +110,7 @@ export function Calendar() {
   const toParam = params.get('to');
   const tableFrom = isIsoDate(fromParam) ? fromParam : monthRange(date, tz).first;
   const tableTo = isIsoDate(toParam) && toParam >= tableFrom ? toParam : isIsoDate(fromParam) ? addDays(tableFrom, 30) : monthRange(date, tz).last;
-  const fromLink = LINK_FILTERS.some((k) => params.has(k));
+  const fromLink = isLinkFilter(params);
   const [filters, setFilters] = usePageFilters('calendar', DEFAULTS, fromLink ? linkFilters(params, me) : undefined);
   const fields = useMemo(() => meetingFields(s), [s]);
   // What the API filters on: one salesperson, the types and statuses let through, one company.
@@ -161,7 +163,9 @@ export function Calendar() {
 
   // A link's filters: into the row for this visit (not remembered), and out of the URL.
   useEffect(() => {
-    if (!LINK_FILTERS.some((k) => params.has(k))) return;
+    // Not together with ?new=1: both effects rewrite the URL from the same params, so the second
+    // would put new=1 back, and going back from the New meeting page would open it again.
+    if (!isLinkFilter(params)) return;
     setFilters(linkFilters(params, me), false);
     update(Object.fromEntries(LINK_FILTERS.map((k) => [k, null])));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the URL asks for it
