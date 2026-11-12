@@ -311,8 +311,16 @@ export async function createReadyCompany(page, name, contact = 'Petar Nikolić',
   return company.id;
 }
 
-/** Sets the deal's closing date on the lead screen (a React-controlled date input). */
-export const setClosingDate = (page, isoDate) => setValue(page, 'input[type=date]', isoDate);
+/**
+ * Sets the deal's closing date on the lead screen. Empty, the field is a ghost button ("Add closed
+ * date", CD-318) that turns into the date input when clicked; with a value it is the input itself.
+ */
+export async function setClosingDate(page, isoDate) {
+  const input = 'input[type=date][aria-label="Closing date"]';
+  if (!(await page.$(input))) await click(page, 'button.ghost-date-empty[aria-label="Closing date"]');
+  await page.waitForSelector(input);
+  await setValue(page, input, isoDate);
+}
 
 /** A valid PIB (CD-357) for a test company: random first eight digits, the ISO 7064 MOD 11,10 check digit. */
 export function testPib() {
