@@ -375,11 +375,16 @@ html.modal-open { overflow: hidden; }
 /* A field whose value is a link (CD-516): the face, with the field's own classes, lies on the field;
    only its link takes clicks, the rest of the field still focuses the input for editing. */
 .linked-field { position: relative; display: flex; flex: 1; min-width: 0; }
-.linked-field.has-link:not(:focus-within) input { color: transparent; }
-.linked-field-face { position: absolute; top: 0; left: 0; right: 0; display: block; background: transparent; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: normal; }
+/* Only the input's focus (editing) moves the link aside, never the link's own: pressing or tabbing
+   to the link must not hide it. */
+.linked-field.has-link:not(:has(input:focus)) input { color: transparent; }
+.linked-field-face { position: absolute; top: 0; left: 0; right: 0; display: block; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: normal; }
+.linked-field .linked-field-face, .linked-field .linked-field-face:hover { background: transparent; }
 .linked-field-face a { pointer-events: auto; color: var(--brand); text-decoration: underline; text-decoration-color: var(--brand-soft-2); text-underline-offset: 3px; }
 .linked-field-face a:hover { text-decoration-color: currentColor; }
-.linked-field:focus-within .linked-field-face { display: none; }
+/* Invisible, not removed: Tab from the input still reaches the link (which then shows again). */
+.linked-field:has(input:focus) .linked-field-face { opacity: 0; }
+.linked-field:has(input:focus) .linked-field-face a { pointer-events: none; }
 .empty-block { background: var(--white); border: 1px dashed var(--dashed); border-radius: 12px; padding: 34px 20px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; }
 .empty-block-title { font-size: 15px; font-weight: 600; }
 .empty-block-text { font-size: 13px; color: var(--text-2); max-width: 460px; line-height: 1.5; }

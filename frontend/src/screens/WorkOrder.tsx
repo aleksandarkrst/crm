@@ -67,6 +67,8 @@ export function WorkOrder() {
   const terms = useTerms();
   const [adding, setAdding] = useState(false);
   const [menu, setMenu] = useState(false);
+  // While a new site is saving, no link to the old one over it (CD-516).
+  const [siteSaving, setSiteSaving] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menu) return;
@@ -240,8 +242,23 @@ export function WorkOrder() {
                   </select>
                 </Row>
                 <Row label="Site">
-                  <LinkedField href={siteUrl} text={order.location ?? ''} label="Show the site on a map" fieldClass="ghost ghost-sm" testId="work-order-site-map">
-                    <TextField className="ghost ghost-sm" label="Site" value={order.location ?? ''} disabled={!canEdit} placeholder="Address or site" maxLength={300} onSave={(v) => save({ location: v || null })} />
+                  <LinkedField href={siteSaving ? null : siteUrl} text={order.location ?? ''} label="Show the site on a map" fieldClass="ghost ghost-sm" testId="work-order-site-map">
+                    <TextField
+                      className="ghost ghost-sm"
+                      label="Site"
+                      value={order.location ?? ''}
+                      disabled={!canEdit}
+                      placeholder="Address or site"
+                      maxLength={300}
+                      onSave={async (v) => {
+                        setSiteSaving(true);
+                        try {
+                          return await save({ location: v || null });
+                        } finally {
+                          setSiteSaving(false);
+                        }
+                      }}
+                    />
                   </LinkedField>
                 </Row>
                 <Row label="Type">
