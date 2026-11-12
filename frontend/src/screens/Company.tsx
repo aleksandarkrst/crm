@@ -214,10 +214,15 @@ export function Company() {
                 <GhostSelect chevron aria-label="Ownership" value={extra?.ownershipType ?? ''} onChange={setField('ownershipType')} options={[{ value: 'private', label: 'Private' }, { value: 'state', label: 'State' }]} />
               </IdentityRow>
               <IdentityRow label="Street" missing={!extra?.address}>
-                <GhostInput aria-label="Street" placeholder="Street and number" value={extra?.address ?? ''} onChange={setField('address')} />
+                {/* The address opens the map too (CD-516): imports fill Street and City, not HQ. */}
+                <LinkedField href={map} text={extra?.address ?? ''} label={`Show ${rec.name}'s street on a map`}>
+                  <GhostInput aria-label="Street" placeholder="Street and number" value={extra?.address ?? ''} onChange={setField('address')} />
+                </LinkedField>
               </IdentityRow>
               <IdentityRow label="City" missing={!extra?.city}>
-                <GhostInput aria-label="City" value={extra?.city ?? ''} onChange={setField('city')} />
+                <LinkedField href={map} text={extra?.city ?? ''} label={`Show ${rec.name}'s city on a map`}>
+                  <GhostInput aria-label="City" value={extra?.city ?? ''} onChange={setField('city')} />
+                </LinkedField>
               </IdentityRow>
               <IdentityRow label="Postal code" missing={!extra?.postalCode}>
                 <CheckedInput aria-label="Postal code" inputMode="numeric" placeholder="21000" value={extra?.postalCode ?? ''} check={checkPostalCode} onSave={(v) => store.setCompanyField(rec.id, 'postalCode', v)} />

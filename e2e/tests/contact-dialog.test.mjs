@@ -76,6 +76,19 @@ describe('contact dialog and contact page', () => {
     assert.ok(!/Last touch \d+ day/.test(body), 'no last touch');
   });
 
+  step('a refused email leaves no Email link to the old address (CD-516)', async () => {
+    await api(page, `/crm/contacts/${contactId}`, { method: 'PATCH', body: JSON.stringify({ email: 'nina@tide.test' }) });
+    await page.reload({ waitUntil: 'networkidle0' });
+    await page.waitForSelector('[data-testid=contact-summary] a[href="mailto:nina@tide.test"]');
+    await page.focus('input[aria-label="Email"]');
+    await setValue(page, 'input[aria-label="Email"]', 'not an email');
+    await page.$eval('input[aria-label="Email"]', (el) => el.blur());
+    await page.waitForSelector('[data-testid=contact-summary] [data-testid=field-error]');
+    assert.equal(await page.$('[data-testid=contact-summary] a[href^="mailto:"]'), null, 'no mailto link while the refused email is in the field');
+    assert.equal((await api(page, '/crm/contacts')).find((c) => c.id === contactId).email, 'nina@tide.test', 'the saved email is kept');
+    await page.reload({ waitUntil: 'networkidle0' });
+  });
+
   step('the contact page refuses a bad phone and keeps the saved one', async () => {
     // Focused first: the field checks and saves when it loses focus (CD-478).
     await page.focus('input[aria-label="Phone"]');

@@ -193,6 +193,18 @@ describe('company and contact pages', () => {
     await page.waitForFunction(() => document.querySelector('[data-testid=company-contacts]')?.innerText.includes('Nora Newhire'));
   });
 
+  step('a company with only a City (as imports fill it) still links to the map (CD-516)', async () => {
+    await api(page, `/crm/companies/${empty.id}`, { method: 'PATCH', body: JSON.stringify({ city: 'Novi Sad' }) });
+    await page.reload({ waitUntil: 'networkidle0' });
+    assert.equal(await page.$eval('input[aria-label="HQ"]', (el) => el.value.replace('—', '')), '', 'no HQ');
+    const link = await page.waitForSelector('a[aria-label="Show Empty Shell d.o.o.\'s city on a map"]');
+    assert.deepEqual(await link.evaluate((a) => ({ text: a.innerText.trim(), href: a.getAttribute('href'), target: a.target })), {
+      text: 'Novi Sad',
+      href: 'https://www.google.com/maps/search/?api=1&query=Empty%20Shell%20d.o.o.%2C%20Novi%20Sad',
+      target: '_blank',
+    });
+  });
+
   step('the owner deletes an empty company from the menu', async () => {
     await page.goto(`${BASE_URL}/companies/${empty.id}`, { waitUntil: 'networkidle0' });
     await click(page, 'button[aria-label="More actions"]');

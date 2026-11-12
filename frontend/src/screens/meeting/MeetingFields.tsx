@@ -192,7 +192,9 @@ export function MeetingDetails({ m, editable }: { m: ApiMeeting; editable: boole
     },
     TYPING_MS,
   );
-  const where = locationLink(location.draft);
+  // A link only to the saved location (CD-516): not to a draft that is refused or not saved yet.
+  const savedLocation = m.location ?? '';
+  const where = location.draft === savedLocation ? locationLink(savedLocation) : null;
 
   // Company and deal: another company needs one of its deals (CD-213) before it is saved.
   const records = useMemo(() => companyRecords(s), [s]);

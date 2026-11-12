@@ -71,7 +71,7 @@ describe('work order page', () => {
     await page.waitForSelector('[data-testid=work-order-site-map]');
     const map = await page.$eval('[data-testid=work-order-site-map]', (el) => ({ text: el.innerText.trim(), href: el.getAttribute('href'), target: el.target }));
     // The site itself is the link (CD-516).
-    assert.deepEqual(map, { text: 'Bulevar Mihajla Pupina 10, Beograd', href:'https://www.google.com/maps/search/?api=1&query=Bulevar%20Mihajla%20Pupina%2010%2C%20Beograd', target: '_blank' });
+    assert.deepEqual(map, { text: 'Bulevar Mihajla Pupina 10, Beograd', href: 'https://www.google.com/maps/search/?api=1&query=Bulevar%20Mihajla%20Pupina%2010%2C%20Beograd', target: '_blank' });
   });
 
   step('Schedule: add a technician (Service people only) and make them the lead', async () => {
