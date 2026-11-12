@@ -37,6 +37,7 @@ import {
 } from '../lib/api';
 import { headMoveMessage } from '../lib/headMoves';
 import type { LiveEvent } from './live';
+import { withCallerAccess } from './timeOffTabs';
 import type { State } from './types';
 
 export interface PeoplePickers {
@@ -269,7 +270,7 @@ export function employeeCardActions({ cur, set, flash, errText, conflictText, re
     loadMyEmployeeId: async () => {
       try {
         const access = await peopleCardApi.access();
-        set((x) => ({ myEmployeeId: access.employeeId, people: { ...x.people, access } }));
+        set((x) => ({ myEmployeeId: access.employeeId, people: withCallerAccess(x.people, access) }));
       } catch {
         set({ myEmployeeId: null });
       }

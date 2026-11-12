@@ -9,12 +9,11 @@ import { paths } from '../lib/paths';
 import { type ApiBalanceRow, type ApiBalancesTable, type ApiTimeOffPolicy, type BalancesFilters, timeOffApi } from '../lib/timeOffApi';
 import { projectError, useProjectsRead } from '../store/projects';
 import { useStore } from '../store/store';
+import { timeOffAccess, timeOffTab } from '../store/timeOffTabs';
 import { CalendarTab } from './timeoff/Approvals';
 import { DecisionsTab } from './timeoff/Decisions';
 import { MyTimeOff } from './timeoff/MyTimeOff';
 import { RequestsTable } from './timeoff/RequestsTable';
-
-type Tab = 'my' | 'approvals' | 'timeline' | 'balances' | 'decisions';
 
 /**
  * Time off (milestone 16, Workforce; simplified in CD-350): My time off (one tile per policy and sick
@@ -26,22 +25,9 @@ export function TimeOff() {
   const { s, session, employeeCard } = useStore();
   const [params, setParams] = useSearchParams();
   const admin = session.tenant.role === 'owner' || session.tenant.role === 'admin';
-  const manager = !!s.people.access?.roles.includes('manager');
-  const canSeeBalances = admin || manager;
-  // Vacation decisions (rešenje) exist only in Serbian workspaces (CD-167); the tab shows only there.
-  const seesDecisions = admin && s.workspace?.country === 'RS';
-  const wanted = params.get('tab');
-  // CD-350: Requests and Sick leave live in Approvals, the Team calendar is the Timeline; old links still land.
-  const tab: Tab =
-    wanted === 'timeline' || wanted === 'calendar'
-      ? 'timeline'
-      : canSeeBalances && (wanted === 'approvals' || wanted === 'requests' || wanted === 'sick')
-        ? 'approvals'
-        : canSeeBalances && wanted === 'balances'
-          ? 'balances'
-          : seesDecisions && wanted === 'decisions'
-            ? 'decisions'
-            : 'my';
+  const viewer = { admin, access: s.people.access, country: s.workspace?.country };
+  const { approvals: canSeeBalances, decisions: seesDecisions } = timeOffAccess(viewer);
+  const tab = timeOffTab(params.get('tab'), viewer);
   const month = params.get('month') && /^\d{4}-\d{2}$/.test(params.get('month')!) ? params.get('month')! : new Date().toISOString().slice(0, 7);
   useEffect(() => {
     void employeeCard.loadMyEmployeeId();
