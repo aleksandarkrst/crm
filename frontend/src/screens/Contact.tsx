@@ -31,9 +31,8 @@ export function Contact() {
   const { s, set } = store;
   const { id = '' } = useParams();
   const picker = usePicker();
-  // While a refused email or phone is in its field, no Email or Call link to the old one (CD-478).
+  // While a refused email is in its field, no Email link to the old one (CD-478).
   const [emailUnsaved, setEmailUnsaved] = useState(false);
-  const [phoneUnsaved, setPhoneUnsaved] = useState(false);
   // A contact is addressed by its person id or its backend contact id; unknown ids go back to the list.
   const p = personById(s, id) || allPeople(s).find((x) => x.contactId === id);
   const c = p ? leadById(s, p.leadId) : undefined;
@@ -51,10 +50,8 @@ export function Contact() {
   const company = companyOfPerson(s, p);
   const companyRec = companyRecords(s).find((r) => r.id === (p.companyId ?? c?.companyId));
 
-  // Tap to email or call (CD-70); "—" stands for a missing value.
+  // Tap to email (CD-70). There is no calling from Pultly, so the phone is only a field (CD-516).
   const mailto = p.email.trim() && checkEmail(p.email).ok ? `mailto:${p.email.trim()}` : '';
-  // Only a valid number becomes a Call link (CD-464): "abc123!!" never turns into tel:123.
-  const tel = p.phone.trim() && checkPhone(p.phone).ok ? `tel:${p.phone.replace(/\s*(?:ext\.?|x)\s*\d+$/i, '').replace(/[^\d+]/g, '')}` : '';
   const linkedin = linkedinHref(p.linkedin ?? '');
   const setField = (key: keyof Person) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => store.patchPerson(p.id, { [key]: e.target.value });
   const q = picker.search.toLowerCase().trim();
@@ -104,12 +101,7 @@ export function Contact() {
               </IconRow>
               <IconRow icon="phone" label="Phone">
                 <span className="contact-field">
-                  <CheckedInput aria-label="Phone" type="tel" placeholder="+381 60 123 4567" value={p.phone} check={checkPhone} onSave={(v) => store.patchPerson(p.id, { phone: v })} onUnsaved={setPhoneUnsaved} />
-                  {tel && !phoneUnsaved && (
-                    <a className="contact-action" href={tel} aria-label={`Call ${p.name}`}>
-                      Call
-                    </a>
-                  )}
+                  <CheckedInput aria-label="Phone" type="tel" placeholder="+381 60 123 4567" value={p.phone} check={checkPhone} onSave={(v) => store.patchPerson(p.id, { phone: v })} />
                 </span>
               </IconRow>
               <IconRow icon="linkedin" label="LinkedIn">

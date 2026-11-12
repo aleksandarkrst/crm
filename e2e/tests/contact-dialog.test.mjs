@@ -82,7 +82,7 @@ describe('contact dialog and contact page', () => {
     await setValue(page, 'input[aria-label="Phone"]', 'abc123!!');
     await page.$eval('input[aria-label="Phone"]', (el) => el.blur());
     await page.waitForSelector('[data-testid=contact-summary] [data-testid=field-error]');
-    assert.equal(await page.$('a[aria-label="Call Nina Tide"]'), null, 'no Call link for the draft');
+    assert.equal(await page.$('a[href^="tel:"]'), null, 'no Call link: there is no calling from Pultly');
     assert.equal((await api(page, '/crm/contacts')).find((c) => c.id === contactId).phone, '+381 60 123 4567');
   });
 
