@@ -32,6 +32,9 @@ describe('contact dialog and contact page', () => {
     assert.match(await page.$eval('.modal', (el) => el.innerText), /Enter the contact's full name/);
 
     await page.type('.modal input[placeholder="e.g. Ana Marković"]', 'Nina Tide');
+    // A contact added here is complete (CD-361): the job title and the role in the decision are required too.
+    await page.type('.modal input[placeholder="e.g. Marketing Director"]', 'Logistics manager');
+    await page.select('::-p-xpath(//*[contains(@class,"modal")]//label[contains(., "Role in the decision")]//select)', 'Decision maker');
     await page.type('.modal input[type=tel]', 'abc123!!');
     await page.type('.modal input[type=email]', 'nina@tide');
     await clickButton(page, 'Add contact');
@@ -73,11 +76,26 @@ describe('contact dialog and contact page', () => {
     assert.ok(!/Last touch \d+ day/.test(body), 'no last touch');
   });
 
+  step('a refused email leaves no Email link to the old address (CD-516)', async () => {
+    await api(page, `/crm/contacts/${contactId}`, { method: 'PATCH', body: JSON.stringify({ email: 'nina@tide.test' }) });
+    await page.reload({ waitUntil: 'networkidle0' });
+    await page.waitForSelector('[data-testid=contact-summary] a[href="mailto:nina@tide.test"]');
+    await page.focus('input[aria-label="Email"]');
+    await setValue(page, 'input[aria-label="Email"]', 'not an email');
+    await page.$eval('input[aria-label="Email"]', (el) => el.blur());
+    await page.waitForSelector('[data-testid=contact-summary] [data-testid=field-error]');
+    assert.equal(await page.$('[data-testid=contact-summary] a[href^="mailto:"]'), null, 'no mailto link while the refused email is in the field');
+    assert.equal((await api(page, '/crm/contacts')).find((c) => c.id === contactId).email, 'nina@tide.test', 'the saved email is kept');
+    await page.reload({ waitUntil: 'networkidle0' });
+  });
+
   step('the contact page refuses a bad phone and keeps the saved one', async () => {
+    // Focused first: the field checks and saves when it loses focus (CD-478).
+    await page.focus('input[aria-label="Phone"]');
     await setValue(page, 'input[aria-label="Phone"]', 'abc123!!');
     await page.$eval('input[aria-label="Phone"]', (el) => el.blur());
     await page.waitForSelector('[data-testid=contact-summary] [data-testid=field-error]');
-    assert.equal(await page.$('a[aria-label="Call Nina Tide"]'), null, 'no Call link for the draft');
+    assert.equal(await page.$('a[href^="tel:"]'), null, 'no Call link: there is no calling from Pultly');
     assert.equal((await api(page, '/crm/contacts')).find((c) => c.id === contactId).phone, '+381 60 123 4567');
   });
 

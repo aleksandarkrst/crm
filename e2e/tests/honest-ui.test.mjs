@@ -51,7 +51,7 @@ describe('honest UI', () => {
 
   step('creates one opportunity closing soon and one without a closing date', async () => {
     datedId = await createDealInUi(page, { company: 'Dated d.o.o.', contact: 'Dana Dated' });
-    await page.waitForSelector('input[type=date]');
+    await page.waitForSelector('[aria-label="Closing date"]');
     await setClosingDate(page, isoIn(5));
     assert.ok(await eventually(async () => (await api(page, '/crm/deals/' + datedId)).closeDate === isoIn(5)), 'closing date saved');
 
@@ -124,9 +124,22 @@ describe('honest UI', () => {
   });
 
   step('sending a proposal does not claim an email or a task', async () => {
+    // Send proposal waits for a proposal (CD-120): each opportunity gets an imported one ("Import my
+    // own"), since the preview shows the workspace's first opportunity.
+    for (const id of [datedId, undatedId]) {
+      await page.evaluate(async (id) => {
+        const form = new FormData();
+        form.append('files', new Blob(['%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n'], { type: 'application/pdf' }), 'Proposal.pdf');
+        form.append('types', JSON.stringify(['Proposal']));
+        const headers = { Authorization: 'Bearer ' + localStorage.getItem('crm.devToken'), 'X-Tenant-Id': localStorage.getItem('crm.tenantId') ?? '' };
+        const res = await fetch(`/api/crm/deals/${id}/documents/upload`, { method: 'POST', headers, body: form });
+        if (!res.ok) throw new Error(`upload → ${res.status} ${await res.text()}`);
+      }, id);
+    }
     await page.goto(BASE_URL + '/settings/templates', { waitUntil: 'networkidle0' });
     await clickButton(page, 'Preview with an opportunity');
     // No approval in this funnel (CD-120): Send proposal only marks it as sent.
+    await page.waitForFunction(() => document.querySelector('[data-testid=proposal-send]')?.disabled === false);
     await click(page, '[data-testid=proposal-send]');
     await page.waitForSelector('.toast');
     const toast = await page.$eval('.toast', (el) => el.textContent);

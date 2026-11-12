@@ -6,7 +6,7 @@
 // from the company node; a level with units can't be removed; the panel fits a phone.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
-import { api, BASE_URL, click, confirmInApp, email, setValue, signIn, createWorkspace, steps, useBrowser } from '../lib/harness.mjs';
+import { api, BASE_URL, click, confirmInApp, email, setValue, signIn, createWorkspace, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
 
 describe('org levels and units', () => {
   const browser = useBrowser();
@@ -96,9 +96,12 @@ describe('org levels and units', () => {
     await page.type(name, 'Squad');
     await page.keyboard.press('Enter');
     await page.waitForSelector('[data-testid=org-level-row][data-name=Squad]');
+    // The levels sit at the bottom of the tab (below the working day, CD-153): "Level renamed" covers Remove.
+    await waitForToastToClear(page);
     await click(page, '[data-testid=org-level-row][data-name=Squad] [data-testid=org-level-remove]');
     assert.equal(await confirmInApp(page), 'Remove the level Squad?');
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=org-level-row]').length === 2);
+    await waitForToastToClear(page);
     await page.type('[data-testid=org-level-new]', 'Team');
     await click(page, '[data-testid=org-level-add]');
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=org-level-row]').length === 3);

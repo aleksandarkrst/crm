@@ -41,13 +41,25 @@ describe('company status', () => {
     await page.waitForFunction(() => document.body.innerText.includes('Status: Opportunity · automatic'));
   });
 
-  step('sets it back by hand, then hands it back to the automation', async () => {
+  // There is no "Back to automatic" any more (CD-478): a status set by hand holds until the company's
+  // opportunities, projects or details change, then the automation takes over again. (A lead set back
+  // by hand can't get a new opportunity, so the change here is the contact's role.)
+  step('sets it back by hand; a change to its details hands it back to the automation', async () => {
     await click(page, 'button[aria-label="More actions"]');
     await click(page, '[data-testid=status-set-back]');
     await click(page, '[data-testid=status-set-back-save]');
     await page.waitForFunction(() => /^Lead · set by hand$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
-    await click(page, 'button[aria-label="More actions"]');
-    await click(page, '[data-testid=status-automatic]');
+    await page.reload({ waitUntil: 'networkidle0' });
+    assert.match(await statusText(), /^Lead · set by hand$/, 'it holds while nothing changes');
+    const companyNow = async () => api(page, `/crm/companies/${companyId}`);
+    // The contact loses its role: the facts change, so the automation takes over (still a lead).
+    await page.goto(`${BASE_URL}/contacts/${contactId}`, { waitUntil: 'networkidle0' });
+    await setValue(page, 'select[aria-label="Role in the decision"]', '');
+    assert.ok(await eventually(async () => (await companyNow()).statusSetManually === false), 'no longer held by hand');
+    // ...and the role back makes it an opportunity by itself again.
+    await setValue(page, 'select[aria-label="Role in the decision"]', 'Decision maker');
+    assert.ok(await eventually(async () => (await companyNow()).status === 'opportunity'), 'the API moved it');
+    await page.goto(`${BASE_URL}/companies/${companyId}`, { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => /^Opportunity$/.test(document.querySelector('[data-testid=company-status]')?.innerText ?? ''));
   });
 

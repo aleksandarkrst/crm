@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe } from 'node:test';
 import { api, BASE_URL, click, clickButton, eventually, newUserWithWorkspace, READY_IDENTITY, RUN, steps, testPib, useBrowser } from '../lib/harness.mjs';
+import { addFilter, closePopover, pickOption } from '../lib/filters.mjs';
 
 const dir = mkdtempSync(join(tmpdir(), 'pultly-e2e-csv-'));
 const downloads = join(dir, 'downloads');
@@ -51,13 +52,15 @@ describe('CSV import and export', () => {
   step('imports companies: maps the columns, previews errors, reports the failed row', async () => {
     await page.goto(BASE_URL + '/companies', { waitUntil: 'networkidle0' });
     // Semicolon separated, a quoted name with the delimiter and doubled quotes, a row without a name.
-    const file = csvFile('companies.csv', `\uFEFFCompany name;Sector;City\r\n"${acme.replace(/"/g, '""')}";Retail;Belgrade\r\n${globex};Energy;Novi Sad\r\n;Nameless;Nowhere\r\n`);
+    // The PIB is a required column and City is a field of its own, apart from HQ (CD-357).
+    const file = csvFile('companies.csv', `\uFEFFCompany name;PIB;Sector;City\r\n"${acme.replace(/"/g, '""')}";${testPib()};Retail;Belgrade\r\n${globex};${testPib()};Energy;Novi Sad\r\n;${testPib()};Nameless;Nowhere\r\n`);
     await upload(page, file);
     // The header names were matched to fields.
     const mapped = await page.$$eval('.modal select[data-field]', (els) => Object.fromEntries(els.map((el) => [el.dataset.field, el.options[el.selectedIndex].text])));
     assert.equal(mapped.name, 'Company name');
+    assert.equal(mapped.pib, 'PIB');
     assert.equal(mapped.industry, 'Sector');
-    assert.equal(mapped.hq, 'City');
+    assert.equal(mapped.city, 'City');
 
     await clickButton(page, 'Preview');
     await page.waitForSelector('[data-testid=import-counts]');
@@ -87,7 +90,8 @@ describe('CSV import and export', () => {
     const funnel = funnels[0];
     const second = funnel.stages[1];
     const initech = `Initech ${RUN}`;
-    const file = csvFile('deals.csv', `Opportunity,Company,Stage,Value,Closing date,Contact,Contact email\nWebsite ${RUN},${globex.toUpperCase()},${second.name},"14,000",31.12.2026,Gina Globex,gina-${RUN}@example.test\nRetainer ${RUN},${initech},,2500,,,\n`);
+    // Initech comes with a PIB, so the import could create it (CD-357), but an opportunity never makes a company (CD-360).
+    const file = csvFile('deals.csv', `Opportunity,Company,PIB,Stage,Value,Closing date,Contact,Contact email\nWebsite ${RUN},${globex.toUpperCase()},,${second.name},"14,000",31.12.2026,Gina Globex,gina-${RUN}@example.test\nRetainer ${RUN},${initech},${testPib()},,2500,,,\n`);
     await upload(page, file);
     // Opened from the Pipeline, the dialog imports deals into the funnel on screen.
     assert.match(await modalText(page), /Import opportunities/);
@@ -149,15 +153,10 @@ describe('CSV import and export', () => {
   step('export follows the filters on screen', async () => {
     rmSync(downloads, { recursive: true, force: true });
     const globexId = (await api(page, '/crm/companies')).find((c) => c.name === globex).id;
-    await page.$$eval(
-      'select',
-      (els, id) => {
-        const el = els.find((x) => [...x.options].some((o) => o.value === id));
-        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(el, id);
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-      },
-      globexId,
-    );
+    // The Company filter is a chip of the filter row now (CD-366), not a select.
+    await addFilter(page, 'company');
+    await pickOption(page, 'company', globexId);
+    await closePopover(page);
     await page.waitForFunction(() => document.querySelectorAll('.table-row').length === 3);
     await exportList(page);
     const name = await eventually(() => existsSync(downloads) && readdirSync(downloads).find((f) => f.endsWith('.csv')), { timeout: 10_000 });

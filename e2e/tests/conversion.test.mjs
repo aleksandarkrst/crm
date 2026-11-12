@@ -78,15 +78,16 @@ describe('stage conversion on Overview', () => {
     await page.waitForFunction(() => document.querySelector('[data-testid=stage-conversion]').innerText.includes('(0 so far)'));
     await page.select('[data-testid=overview-funnel]', smb.id);
     assert.ok(await eventually(async () => (await card(page)).includes('83%')), 'back on the SMB funnel');
-    // Me (first in the list), then a closing date: these opportunities have none, so none match.
+    // Me (first in the list), then a closing date before today: the Won one closed today (winning sets
+    // the closing date, CD-477) and the others have none, so none match.
     await openChip(page, 'owner');
     await click(page, '[data-testid="filter-pop-owner"] [data-testid="filter-option"]');
     await closePopover(page);
     assert.equal(await chipText(page, 'owner'), 'Salesperson Me');
-    await pickOption(page, 'close', 'today');
+    await pickOption(page, 'close', 'before');
     await closePopover(page);
     await page.waitForFunction(() => document.querySelector('[data-testid=stage-conversion]').innerText.includes('(0 so far)'));
-    assert.match(await text(page), /6 without a closing date hidden/);
+    assert.match(await text(page), /5 without a closing date hidden/);
     await clearFilters(page);
     assert.equal(await page.$eval('[data-testid=overview-funnel]', (el) => el.value), 'Audience');
     assert.equal(await chipText(page, 'close'), 'Closing date Any');

@@ -18,10 +18,13 @@ describe('next steps in the external minutes', () => {
     me = (await api(page, '/me')).user;
     const company = { id: await createReadyCompany(page, `Umbrella ${RUN}`) };
     const jovan = await api(page, '/crm/contacts', { method: 'POST', body: JSON.stringify({ fullName: 'Jovan Customer', companyId: company.id, email: `jovan-${RUN}@customer.example.com` }) });
+    // A meeting needs an opportunity (CD-213).
+    const funnels = await api(page, '/crm/funnels');
+    const deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Umbrella rollout', funnelId: funnels[0].id, companyId: company.id }) });
     const start = Date.now() - 2 * 3_600_000;
     meeting = await api(page, '/crm/meetings', {
       method: 'POST',
-      body: JSON.stringify({ title: 'Scope review', type: 'visit', startsAt: new Date(start).toISOString(), endsAt: new Date(start + 3_600_000).toISOString(), companyId: company.id, externalContactIds: [jovan.id] }),
+      body: JSON.stringify({ title: 'Scope review', type: 'visit', startsAt: new Date(start).toISOString(), endsAt: new Date(start + 3_600_000).toISOString(), companyId: company.id, dealId: deal.id, externalContactIds: [jovan.id] }),
     });
     await api(page, `/crm/meetings/${meeting.id}/held`, { method: 'POST' });
     const nextSteps = [

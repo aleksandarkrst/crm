@@ -72,7 +72,11 @@ describe('funnels and stages', () => {
   });
 
   step('adds a stage, then removes a stage with the opportunity in it (the opportunity moves)', async () => {
-    // Move the deal to Discovery through the API, then remove Discovery in the builder.
+    // Move the deal to Discovery through the API, then remove Discovery in the builder. The advance
+    // gate (CD-363) holds it in New opportunity until that stage's to-dos are done.
+    const first = (await funnelNow()).stages[0];
+    for (const item of first.checklistItems)
+      await api(page, `/crm/deals/${dealId}/tasks/playbook`, { method: 'PUT', body: JSON.stringify({ stageId: first.id, checklistItemId: item.id, done: true }) });
     await api(page, `/crm/deals/${dealId}/move`, { method: 'POST', body: JSON.stringify({ stageId: funnel.stages[1].id }) });
     await page.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });
     // The builder lists the funnels on the left (CD-318): picking one shows it.

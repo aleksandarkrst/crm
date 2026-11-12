@@ -94,9 +94,10 @@ describe('phones and tablets', () => {
     assert.ok(done, 'a to-do was saved as done');
   });
 
-  step('a contact can be called or emailed with one tap', async () => {
+  step('a contact can be emailed with one tap on the address (there is no calling, CD-516)', async () => {
     await page.goto(`${BASE_URL}/contacts/${deal.primaryContactId}`, { waitUntil: 'networkidle0' });
-    const links = await page.$$eval('a.contact-action', (as) => as.map((a) => a.getAttribute('href')));
-    assert.deepEqual(links, ['mailto:stefan@kestrel.example.com', 'tel:+381115550187']);
+    await page.waitForSelector('[data-testid=contact-summary] .linked-field-face a');
+    const links = await page.$$eval('[data-testid=contact-summary] a[href^="mailto:"], [data-testid=contact-summary] a[href^="tel:"]', (as) => as.map((a) => a.getAttribute('href')));
+    assert.deepEqual(links, ['mailto:stefan@kestrel.example.com']);
   });
 });

@@ -17,7 +17,8 @@ describe('first-run onboarding', () => {
 
   step('a new workspace shows the checklist with nothing done', async () => {
     page = await browser.person('nora');
-    await newUserWithWorkspace(page, { label: 'onboard', name: 'Nora Owner', workspace: 'Fresh Co' });
+    // Gated: switching the to-do gate off (CD-363) changes the stages, which would tick "Set up your funnel".
+    await newUserWithWorkspace(page, { label: 'onboard', name: 'Nora Owner', workspace: 'Fresh Co', gated: true });
     await page.waitForSelector('[data-testid=getting-started]');
     assert.deepEqual(await stepsDone(), nothingDone);
     assert.deepEqual(await partsDone(), { contact: false, company: false, product: false, deal: false });
@@ -105,7 +106,8 @@ describe('first-run onboarding', () => {
     await signIn(member, email('onboard-member'), 'Mo Member');
     await clickButton(member, 'Accept and join');
     await finishOnboarding(member);
-    await member.goto(BASE_URL + '/companies', { waitUntil: 'networkidle0' });
+    // Products is still empty (the owner's opportunity brought a company since CD-360), so its empty state shows.
+    await member.goto(BASE_URL + '/products', { waitUntil: 'networkidle0' });
     await member.waitForSelector('[data-testid=empty-state]');
     assert.equal(await member.$('[data-testid=getting-started]'), null);
     assert.equal(await member.$('button::-p-text(load sample data)'), null);

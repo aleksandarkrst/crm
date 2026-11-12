@@ -70,7 +70,9 @@ describe('proposal approval', () => {
     await page.waitForSelector('[data-testid=docs-add]');
     assert.equal(await page.$('[data-testid=docs-mode-import]'), null);
     assert.equal(await page.$('::-p-text(Preview built-in proposal)'), null);
+    // Add documents opens the same choice (CD-120): Import my own, for supporting documents.
     await click(page, '[data-testid=docs-add]');
+    await click(page, '[data-testid=docs-mode-import]');
     await (await page.waitForSelector('[data-testid=docs-import-input]')).uploadFile(pdf);
     const types = await page.$$eval('[data-testid=docs-import-file] select option', (els) => els.map((o) => o.value));
     assert.ok(types.includes('Price list') && !types.includes('Proposal'), 'supporting documents only');

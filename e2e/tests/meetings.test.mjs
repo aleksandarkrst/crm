@@ -161,13 +161,14 @@ describe('meeting calendar', () => {
   });
 
   step('an address location links to Google Maps, a meeting link to joining it (CD-377)', async () => {
-    const link = () => page.$eval('[data-testid=meeting-field-location-link]', (el) => ({ text: el.innerText.trim(), href: el.getAttribute('href'), target: el.target }));
+    // The location itself is the link (CD-516), named for what it does.
+    const link = () => page.$eval('[data-testid=meeting-field-location-link]', (el) => ({ text: el.innerText.trim(), label: el.getAttribute('aria-label'), href: el.getAttribute('href'), target: el.target }));
     await setValue(page, '[data-testid=meeting-field-location]', 'Bulevar Mihajla Pupina 10, Beograd');
     await page.waitForSelector('[data-testid=meeting-field-location-link]');
-    assert.deepEqual(await link(), { text: 'Map', href: 'https://www.google.com/maps/search/?api=1&query=Bulevar%20Mihajla%20Pupina%2010%2C%20Beograd', target: '_blank' });
+    assert.deepEqual(await link(), { text: 'Bulevar Mihajla Pupina 10, Beograd', label: 'Show the location on a map', href: 'https://www.google.com/maps/search/?api=1&query=Bulevar%20Mihajla%20Pupina%2010%2C%20Beograd', target: '_blank' });
     const join = 'https://teams.microsoft.com/l/meetup-join/abc';
     await setValue(page, '[data-testid=meeting-field-location]', join);
-    await page.waitForFunction(() => document.querySelector('[data-testid=meeting-field-location-link]')?.innerText.trim() === 'Join');
+    await page.waitForFunction(() => document.querySelector('[data-testid=meeting-field-location-link]')?.getAttribute('aria-label') === 'Join the meeting');
     assert.equal((await link()).href, join);
     await setValue(page, '[data-testid=meeting-field-location]', '');
     await page.waitForFunction(() => !document.querySelector('[data-testid=meeting-field-location-link]'));

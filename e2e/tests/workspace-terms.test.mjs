@@ -21,6 +21,8 @@ describe('workspace terms', () => {
     await other.setViewport({ width: 1400, height: 1100 });
     await other.goto(BASE_URL + '/tasks', { waitUntil: 'networkidle0' });
     await other.waitForFunction(() => [...document.querySelectorAll('.nav-item')].some((el) => el.textContent.trim() === 'Tasks'));
+    // Back to the first tab: a background tab doesn't paint, so waits that poll on animation frames there never end.
+    await page.bringToFront();
   });
 
   step('a task name that repeats a project name shows a field error and saves nothing', async () => {
@@ -47,12 +49,12 @@ describe('workspace terms', () => {
     });
     assert.deepEqual(saved, { project: 'Job', projects: 'Jobs', task: 'Activity', tasks: 'Activities' });
 
-    // The other tab, without a reload (the live hint).
+    // The other tab, without a reload (the live hint). It is in the background: poll on a timer, not on frames.
     await other.waitForFunction(() => {
       const labels = [...document.querySelectorAll('.nav-item')].map((el) => el.textContent.trim());
       return labels.includes('Jobs') && labels.includes('Activities');
-    });
-    await other.waitForFunction(() => document.body.innerText.includes('New activity'));
+    }, { polling: 250 });
+    await other.waitForFunction(() => document.body.innerText.includes('New activity'), { polling: 250 });
 
     await page.goto(BASE_URL + '/projects', { waitUntil: 'networkidle0' });
     assert.ok((await navLabels(page)).includes('Jobs'));
@@ -67,6 +69,6 @@ describe('workspace terms', () => {
     await click(page, '[data-testid=reset-terms]');
     await page.waitForFunction(() => document.querySelector('[data-testid=term-project]')?.value === 'Project' && document.querySelector('[data-testid=term-task]')?.value === 'Task');
     assert.deepEqual((await api(page, '/workspace')).terms, { project: 'Project', projects: 'Projects', task: 'Task', tasks: 'Tasks' });
-    await other.waitForFunction(() => [...document.querySelectorAll('.nav-item')].some((el) => el.textContent.trim() === 'Tasks'));
+    await other.waitForFunction(() => [...document.querySelectorAll('.nav-item')].some((el) => el.textContent.trim() === 'Tasks'), { polling: 250 });
   });
 });

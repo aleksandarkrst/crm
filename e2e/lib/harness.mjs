@@ -311,8 +311,16 @@ export async function createReadyCompany(page, name, contact = 'Petar Nikolić',
   return company.id;
 }
 
-/** Sets the deal's closing date on the lead screen (a React-controlled date input). */
-export const setClosingDate = (page, isoDate) => setValue(page, 'input[type=date]', isoDate);
+/**
+ * Sets the deal's closing date on the lead screen. Empty, the field is a ghost button ("Add closed
+ * date", CD-318) that turns into the date input when clicked; with a value it is the input itself.
+ */
+export async function setClosingDate(page, isoDate) {
+  const input = 'input[type=date][aria-label="Closing date"]';
+  if (!(await page.$(input))) await click(page, 'button.ghost-date-empty[aria-label="Closing date"]');
+  await page.waitForSelector(input);
+  await setValue(page, input, isoDate);
+}
 
 /** A valid PIB (CD-357) for a test company: random first eight digits, the ISO 7064 MOD 11,10 check digit. */
 export function testPib() {
@@ -323,4 +331,16 @@ export function testPib() {
     r = (r * 2) % 11;
   }
   return first8 + ((11 - r) % 10);
+}
+
+/**
+ * Clears the Serbian public holidays a new workspace preloads (spec 4.3) and turns the preload off,
+ * as the backend's integration specs do (CD-513), so a test on the real current week gets every
+ * working day whatever the date (on the week of 11 November, Armistice Day, Wednesday has no hours
+ * expected). Tests about holidays add their own. Call it right after the workspace is made, as an Admin.
+ */
+export async function clearPreloadedHolidays(page) {
+  await api(page, '/timesheet/holidays/preload', { method: 'POST', body: JSON.stringify({ country: 'none' }) });
+  const year = new Date().getUTCFullYear();
+  for (const y of [year - 1, year, year + 1]) for (const h of await api(page, `/timesheet/holidays?year=${y}`)) await api(page, `/timesheet/holidays/${h.id}`, { method: 'DELETE' });
 }

@@ -372,7 +372,22 @@ html.modal-open { overflow: hidden; }
 .empty-state { padding: 34px 18px; text-align: center; color: var(--text-2); font-size: 13px; }
 .empty-state button { border: 0; background: transparent; color: var(--brand); font-weight: 600; cursor: pointer; }
 .contact-field { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
-.contact-action { padding: 7px 9px; border-radius: 7px; background: var(--brand-soft); font-size: 12px; font-weight: 600; white-space: nowrap; }
+/* A field whose value is a link (CD-516): the face, with the field's own classes, lies on the field;
+   only its link takes clicks, the rest of the field still focuses the input for editing. */
+.linked-field { position: relative; display: flex; flex: 1; min-width: 0; }
+/* Only the input's focus (editing) moves the link aside, never the link's own: pressing or tabbing
+   to the link must not hide it. */
+.linked-field.has-link:not(:has(input:focus)) input { color: transparent; }
+.linked-field-face { position: absolute; top: 0; left: 0; right: 0; display: block; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: normal; }
+.linked-field .linked-field-face, .linked-field .linked-field-face:hover { background: transparent; }
+/* A long value stops short of the end: the last 40px always edit the field. The link itself is cut
+   to the face's content box, so its click area ends there too, not only its text. */
+.linked-field .linked-field-face { padding-right: 40px; }
+.linked-field-face a { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: top; pointer-events: auto; color: var(--brand); text-decoration: underline; text-decoration-color: var(--brand-soft-2); text-underline-offset: 3px; }
+.linked-field-face a:hover { text-decoration-color: currentColor; }
+/* Invisible, not removed: Tab from the input still reaches the link (which then shows again). */
+.linked-field:has(input:focus) .linked-field-face { opacity: 0; }
+.linked-field:has(input:focus) .linked-field-face a { pointer-events: none; }
 .empty-block { background: var(--white); border: 1px dashed var(--dashed); border-radius: 12px; padding: 34px 20px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; }
 .empty-block-title { font-size: 15px; font-weight: 600; }
 .empty-block-text { font-size: 13px; color: var(--text-2); max-width: 460px; line-height: 1.5; }

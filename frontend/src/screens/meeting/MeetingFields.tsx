@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { IconRow } from '../../components/icons';
+import { LinkedField } from '../../components/ui';
 import { RichText } from '../../components/RichText';
 import type { ApiMeeting, MeetingInput, MeetingType } from '../../lib/api';
 import { paths } from '../../lib/paths';
@@ -191,7 +192,9 @@ export function MeetingDetails({ m, editable }: { m: ApiMeeting; editable: boole
     },
     TYPING_MS,
   );
-  const where = locationLink(location.draft);
+  // A link only to the saved location (CD-516): not to a draft that is refused or not saved yet.
+  const savedLocation = m.location ?? '';
+  const where = location.draft === savedLocation ? locationLink(savedLocation) : null;
 
   // Company and deal: another company needs one of its deals (CD-213) before it is saved.
   const records = useMemo(() => companyRecords(s), [s]);
@@ -310,22 +313,19 @@ export function MeetingDetails({ m, editable }: { m: ApiMeeting; editable: boole
         )}
       </IconRow>
       <IconRow icon="location" label="Location">
-        <input
-          className="ghost"
-          aria-label="Location"
-          data-testid="meeting-field-location"
-          maxLength={320}
-          placeholder={editable ? (type.draft === 'online' ? 'Add a meeting link' : 'Add location') : 'No location'}
-          value={location.draft}
-          disabled={!editable}
-          onChange={(e) => location.change(e.target.value)}
-          onBlur={() => void location.flush()}
-        />
-        {where && (
-          <a href={where.url} target="_blank" rel="noopener noreferrer" className="field-link" data-testid="meeting-field-location-link">
-            {where.kind === 'map' ? 'Map' : 'Join'}
-          </a>
-        )}
+        <LinkedField href={where?.url} text={location.draft} label={where?.kind === 'map' ? 'Show the location on a map' : 'Join the meeting'} testId="meeting-field-location-link">
+          <input
+            className="ghost"
+            aria-label="Location"
+            data-testid="meeting-field-location"
+            maxLength={320}
+            placeholder={editable ? (type.draft === 'online' ? 'Add a meeting link' : 'Add location') : 'No location'}
+            value={location.draft}
+            disabled={!editable}
+            onChange={(e) => location.change(e.target.value)}
+            onBlur={() => void location.flush()}
+          />
+        </LinkedField>
       </IconRow>
       <IconRow icon="owner" label="Organizer">
         {editable && admin ? (

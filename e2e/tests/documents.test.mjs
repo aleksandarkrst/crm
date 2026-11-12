@@ -99,7 +99,8 @@ describe('document templates and generated documents', () => {
     await click(page, `[data-doc="E2E proposal — ${company}"] button::-p-text(Download .docx)`);
     const file = await downloaded(downloads, /^E2E proposal — .*\.docx$/);
     const body = docxText(readFileSync(file));
-    assert.match(body, new RegExp(`Prepared for Petra Proposal, +at ${company.replace(/[.]/g, '\\.')}`));
+    // The contact of a company that takes opportunities has a job title (CD-360).
+    assert.match(body, new RegExp(`Prepared for Petra Proposal, CEO at ${company.replace(/[.]/g, '\\.')}`));
     assert.ok(body.includes('Dora Documents'), 'the owner');
     assert.ok(!body.includes('{{'), 'no merge field left');
     assert.match(await text(page), /Left empty:/);

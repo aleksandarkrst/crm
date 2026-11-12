@@ -6,7 +6,7 @@ import { MeetingsCard } from '../components/MeetingsCard';
 import { Screen } from '../components/Layout';
 import { CompanyProjects } from './CompanyProjects';
 import { AddButton, DealsSection, FocusTasks, RecordHeader, RecordHistory, Section } from '../components/RecordParts';
-import { CheckedInput, GhostInput, GhostSelect, Modal, ModalHeader, Picker, PickerRow, usePicker } from '../components/ui';
+import { CheckedInput, GhostInput, GhostSelect, LinkedField, Modal, ModalHeader, Picker, PickerRow, usePicker } from '../components/ui';
 import { LOST_REASONS, type LostReason } from '../lib/api';
 import { mapsSearchUrl } from '../lib/maps';
 import { checkActivityCode, checkMb, checkPib, checkPostalCode } from '../lib/serbianIds';
@@ -179,14 +179,9 @@ export function Company() {
                 <GhostSelect chevron aria-label="Industry" value={rec.industry} onChange={setField('industry')} options={industries} />
               </IconRow>
               <IconRow icon="location" label="HQ">
-                <span className="contact-field">
+                <LinkedField href={map} text={rec.hq === '—' ? '' : rec.hq} label={`Show ${rec.name} on a map`}>
                   <GhostInput aria-label="HQ" value={rec.hq} onChange={setField('hq')} />
-                  {(extra?.address || extra?.city || (rec.hq && rec.hq !== '—')) && (
-                    <a className="contact-action" href={map} target="_blank" rel="noopener noreferrer" aria-label={`Show ${rec.name} on a map`}>
-                      Map
-                    </a>
-                  )}
-                </span>
+                </LinkedField>
               </IconRow>
               <IconRow icon="team" label="Team size">
                 <GhostSelect chevron aria-label="Team size" value={rec.size} onChange={setField('size')} options={TEAM_SIZES} />
@@ -195,14 +190,9 @@ export function Company() {
                 <GhostSelect chevron aria-label="Source" value={rec.source} onChange={setField('source')} options={SOURCES} />
               </IconRow>
               <IconRow icon="globe" label="Domain">
-                <span className="contact-field">
+                <LinkedField href={domainInvalid ? '' : website} text={domain} label={`Open ${domain.trim()}`}>
                   <CheckedInput aria-label="Domain" placeholder="acme.com" value={domain} check={checkDomain} onSave={(v) => store.setCompanyField(rec.id, 'domain', v)} onUnsaved={setDomainInvalid} />
-                  {website && !domainInvalid && (
-                    <a className="contact-action" href={website} target="_blank" rel="noopener noreferrer" aria-label={`Open ${domain.trim()}`}>
-                      Open
-                    </a>
-                  )}
-                </span>
+                </LinkedField>
               </IconRow>
               <IconRow icon="note" label="Notes">
                 <textarea className="ghost" aria-label="Notes" rows={2} value={extra?.notes ?? ''} onChange={setField('notes')} placeholder="What to know about this company" style={{ resize: 'vertical', lineHeight: 1.5, flex: 1 }} />
@@ -224,10 +214,15 @@ export function Company() {
                 <GhostSelect chevron aria-label="Ownership" value={extra?.ownershipType ?? ''} onChange={setField('ownershipType')} options={[{ value: 'private', label: 'Private' }, { value: 'state', label: 'State' }]} />
               </IdentityRow>
               <IdentityRow label="Street" missing={!extra?.address}>
-                <GhostInput aria-label="Street" placeholder="Street and number" value={extra?.address ?? ''} onChange={setField('address')} />
+                {/* The address opens the map too (CD-516): imports fill Street and City, not HQ. */}
+                <LinkedField href={map} text={extra?.address ?? ''} label={`Show ${rec.name}'s street on a map`}>
+                  <GhostInput aria-label="Street" placeholder="Street and number" value={extra?.address ?? ''} onChange={setField('address')} />
+                </LinkedField>
               </IdentityRow>
               <IdentityRow label="City" missing={!extra?.city}>
-                <GhostInput aria-label="City" value={extra?.city ?? ''} onChange={setField('city')} />
+                <LinkedField href={map} text={extra?.city ?? ''} label={`Show ${rec.name}'s city on a map`}>
+                  <GhostInput aria-label="City" value={extra?.city ?? ''} onChange={setField('city')} />
+                </LinkedField>
               </IdentityRow>
               <IdentityRow label="Postal code" missing={!extra?.postalCode}>
                 <CheckedInput aria-label="Postal code" inputMode="numeric" placeholder="21000" value={extra?.postalCode ?? ''} check={checkPostalCode} onSave={(v) => store.setCompanyField(rec.id, 'postalCode', v)} />

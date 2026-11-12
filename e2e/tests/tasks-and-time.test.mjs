@@ -25,9 +25,11 @@ describe('tasks: overdue, editing and channels', () => {
     const funnels = await api(page, '/crm/funnels');
     const smb = funnels.find((f) => f.key === 'smb');
     deal = await api(page, '/crm/deals', { method: 'POST', body: JSON.stringify({ title: 'Overdue Ltd', funnelId: smb.id, companyId: await createReadyCompany(page, 'Overdue Ltd') }) });
+    // Today and its badge show your own tasks by default (CD-366, CD-478), so the task is Tara's.
+    const me = (await api(page, '/profile')).userId;
     task = await api(page, `/crm/deals/${deal.id}/tasks`, {
       method: 'POST',
-      body: JSON.stringify({ stageId: smb.stages[0].id, label: 'Chase the signed NDA', blocksAdvance: false, channel: 'EM', dueDate: isoDay(-3) }),
+      body: JSON.stringify({ stageId: smb.stages[0].id, label: 'Chase the signed NDA', blocksAdvance: false, channel: 'EM', dueDate: isoDay(-3), assigneeUserId: me }),
     });
   });
 

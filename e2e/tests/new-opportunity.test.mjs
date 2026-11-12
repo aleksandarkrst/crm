@@ -45,7 +45,14 @@ describe('new opportunity', () => {
   step('Complete the company leads to its page; with the matični broj it becomes an opportunity', async () => {
     await click(page, '[data-testid=new-deal-complete-company]');
     await page.waitForFunction((id) => location.pathname === `/companies/${id}`, {}, companyId);
-    assert.equal(await page.$eval('[data-testid=record-new-deal]', (el) => el.disabled), true, '+ Opportunity is off for a lead');
+    // The company page is a lazily loaded screen (CD-24): it renders a moment after the URL changes.
+    // Until it does, the contact page's own (enabled) + Opportunity is still there: wait for a
+    // field only the company page has.
+    await page.waitForSelector('input[aria-label="Matični broj"]');
+    const plus = await page.waitForSelector('[data-testid=record-new-deal]');
+    assert.equal(await plus.evaluate((el) => el.disabled), true, '+ Opportunity is off for a lead');
+    // A checked field saves when it loses the focus, so it takes the focus first.
+    await page.focus('input[aria-label="Matični broj"]');
     await setValue(page, 'input[aria-label="Matični broj"]', READY_IDENTITY.mb);
     await page.$eval('input[aria-label="Matični broj"]', (el) => el.blur());
     assert.ok(await eventually(async () => (await api(page, `/crm/companies/${companyId}`)).status === 'opportunity'), 'the company is an opportunity');
@@ -65,7 +72,9 @@ describe('new opportunity', () => {
     await page.waitForFunction(() => location.pathname.startsWith('/deals/'));
     const dealId = page.url().split('/deals/')[1];
     assert.equal((await api(page, `/crm/deals/${dealId}`)).saleType, 'transactional');
-    assert.equal(await page.$eval('select[aria-label="Sale type"]', (el) => el.value), 'transactional');
+    // The opportunity screen is lazily loaded (CD-24).
+    const saleType = await page.waitForSelector('select[aria-label="Sale type"]');
+    assert.equal(await saleType.evaluate((el) => el.value), 'transactional');
   });
 
   step("fills in a lead's missing MB and job title right in the dialog, then creates the opportunity", async () => {

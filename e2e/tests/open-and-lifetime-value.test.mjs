@@ -35,7 +35,8 @@ describe('open and lifetime value', () => {
     assert.equal(await page.$eval('[data-testid=company-lifetime-value]', (el) => el.textContent.trim()), '€1,200');
 
     await page.goto(`${BASE_URL}/companies`, { waitUntil: 'networkidle0' });
-    await page.waitForFunction(() => document.body.innerText.includes('Lifetime value'));
+    // textContent: the column headers are uppercase on screen, so innerText says "LIFETIME VALUE".
+    await page.waitForFunction(() => [...document.querySelectorAll('.table-head *')].some((el) => el.textContent.trim() === 'Lifetime value'));
     const row = await page.evaluate(() => [...document.querySelectorAll('.table-row')].find((el) => el.innerText.includes('Simplicity Labs'))?.innerText ?? '');
     assert.match(row, /€2,500\s+€1,200/, row);
   });

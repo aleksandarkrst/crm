@@ -42,7 +42,9 @@ describe('company and contact pages', () => {
 
   /** Types into a field checked when it is left (CD-224: Domain, LinkedIn) and leaves it with Tab. */
   const typeAndLeave = async (label, value) => {
-    await page.click(`input[aria-label="${label}"]`);
+    // At its right end: the value itself is a link (CD-516), the end of the field edits it.
+    const box = await (await page.$(`input[aria-label="${label}"]`)).boundingBox();
+    await page.mouse.click(box.x + box.width - 10, box.y + box.height / 2);
     await page.$eval(`input[aria-label="${label}"]`, (el) => el.select());
     await page.keyboard.press('Backspace');
     await page.keyboard.type(value);
@@ -189,6 +191,18 @@ describe('company and contact pages', () => {
     const added = await eventually(async () => (await api(page, '/crm/contacts')).find((c) => c.fullName === 'Nora Newhire'));
     assert.equal(added?.companyId, empty.id);
     await page.waitForFunction(() => document.querySelector('[data-testid=company-contacts]')?.innerText.includes('Nora Newhire'));
+  });
+
+  step('a company with only a City (as imports fill it) still links to the map (CD-516)', async () => {
+    await api(page, `/crm/companies/${empty.id}`, { method: 'PATCH', body: JSON.stringify({ city: 'Novi Sad' }) });
+    await page.reload({ waitUntil: 'networkidle0' });
+    assert.equal(await page.$eval('input[aria-label="HQ"]', (el) => el.value.replace('—', '')), '', 'no HQ');
+    const link = await page.waitForSelector('a[aria-label="Show Empty Shell d.o.o.\'s city on a map"]');
+    assert.deepEqual(await link.evaluate((a) => ({ text: a.innerText.trim(), href: a.getAttribute('href'), target: a.target })), {
+      text: 'Novi Sad',
+      href: 'https://www.google.com/maps/search/?api=1&query=Empty%20Shell%20d.o.o.%2C%20Novi%20Sad',
+      target: '_blank',
+    });
   });
 
   step('the owner deletes an empty company from the menu', async () => {
