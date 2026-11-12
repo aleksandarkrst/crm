@@ -199,9 +199,12 @@ ever needed on production (CD-314). The same steps apply to both stacks; only th
 
 ```bash
 cd /opt/crm-staging                                            # or /opt/crm for production
-bash scripts/restore-backup.sh --list                          # the backups this stack has
+APP_DIR=/opt/crm-staging bash scripts/restore-backup.sh --list # the backups this stack has
 APP_DIR=/opt/crm-staging bash scripts/restore-backup.sh app-20260101T020000Z-deploy-abc1234.dump --verify
 ```
+
+`APP_DIR` is required and has no default, so a command meant for staging can't reach production
+(CD-517). On production the confirmation asks you to type the compose project's name.
 
 It stops `api` and `worker`, restores the dump and the files archive with the same timestamp,
 starts them again, waits for readiness, and with `--verify` runs `scripts/verify-production.sh`.
@@ -251,7 +254,7 @@ and what went wrong. The runbook is not trusted until this table has a row.
 
 | Date | Backup | Where | Duration | Result |
 |---|---|---|---|---|
-| _not yet run_ | | staging | | Run `APP_DIR=/opt/crm-staging bash scripts/restore-backup.sh <dump> --verify` and fill this in. |
+| 2026-11-12 | `app-20261112T200646Z.dump` + files archive (fresh staging backup) | staging | 14 s | Passed. Smoke test green; row counts matched the replaced database; no permission errors; the worker processed queue jobs again. Found: the script defaulted to production without `APP_DIR` (fixed in CD-517). |
 
 ## 6. GitHub Actions
 
@@ -675,7 +678,7 @@ docker compose logs -f --tail=100 api     # logs
 docker compose run --rm migrate           # migrations by hand
 bash scripts/deploy.sh <sha>              # deploy / roll back to any built commit
 bash scripts/verify-production.sh         # smoke-test the live stack and tunnel
-bash scripts/restore-backup.sh --list     # the backups; restore one: scripts/restore-backup.sh <dump> --verify
+APP_DIR=/opt/crm bash scripts/restore-backup.sh --list   # the backups; restore one: add <dump> --verify
 gh workflow run promote.yml               # (from your machine) staging's commit → production
 docker compose exec postgres psql -U app_admin app
 ```
