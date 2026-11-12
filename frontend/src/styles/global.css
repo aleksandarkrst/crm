@@ -380,6 +380,8 @@ html.modal-open { overflow: hidden; }
 .linked-field.has-link:not(:has(input:focus)) input { color: transparent; }
 .linked-field-face { position: absolute; top: 0; left: 0; right: 0; display: block; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: normal; }
 .linked-field .linked-field-face, .linked-field .linked-field-face:hover { background: transparent; }
+/* A long value stops short of the end: the last 40px always edit the field. */
+.linked-field .linked-field-face { padding-right: 40px; }
 .linked-field-face a { pointer-events: auto; color: var(--brand); text-decoration: underline; text-decoration-color: var(--brand-soft-2); text-underline-offset: 3px; }
 .linked-field-face a:hover { text-decoration-color: currentColor; }
 /* Invisible, not removed: Tab from the input still reaches the link (which then shows again). */

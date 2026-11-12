@@ -42,7 +42,9 @@ describe('company and contact pages', () => {
 
   /** Types into a field checked when it is left (CD-224: Domain, LinkedIn) and leaves it with Tab. */
   const typeAndLeave = async (label, value) => {
-    await page.click(`input[aria-label="${label}"]`);
+    // At its right end: the value itself is a link (CD-516), the end of the field edits it.
+    const box = await (await page.$(`input[aria-label="${label}"]`)).boundingBox();
+    await page.mouse.click(box.x + box.width - 10, box.y + box.height / 2);
     await page.$eval(`input[aria-label="${label}"]`, (el) => el.select());
     await page.keyboard.press('Backspace');
     await page.keyboard.type(value);
