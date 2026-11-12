@@ -46,12 +46,13 @@ describe('pipeline views', () => {
     await page.waitForSelector('[data-testid=pipeline-table]');
     assert.equal(await page.$('.pipeline-table-band'), null, 'no stage bands (CD-318)');
     let rows = await tableRows(page);
-    assert.deepEqual(rows.map((r) => r.text.split('\n')[0]), ['Alpha Ltd', 'Beta Ltd']);
+    // The opportunity's name leads the row, its company under it (CD-477).
+    assert.deepEqual(rows.map((r) => r.text.split('\n')[0]), ['Alpha Ltd rollout', 'Beta Ltd rollout']);
     // Sorting by Deal: a second click on the header sorts descending, a third goes back.
     await page.click('[data-testid=pipeline-table] .sort-btn');
     await page.click('[data-testid=pipeline-table] .sort-btn');
     rows = await tableRows(page);
-    assert.deepEqual(rows.map((r) => r.text.split('\n')[0]), ['Beta Ltd', 'Alpha Ltd']);
+    assert.deepEqual(rows.map((r) => r.text.split('\n')[0]), ['Beta Ltd rollout', 'Alpha Ltd rollout']);
     await page.click('[data-testid=pipeline-table] .sort-btn');
     rows = await tableRows(page);
     assert.equal(rows.length, 2, 'the lost opportunity is hidden like on the board');

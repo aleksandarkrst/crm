@@ -3,7 +3,7 @@
 // fit score are gone from the deal page and the Pipeline.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { api, BASE_URL, click, createDealInUi, eventually, newUserWithWorkspace, steps, text, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
+import { api, BASE_URL, click, createDealInUi, eventually, newUserWithWorkspace, sleep, steps, text, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
 
 /** Sets the select/textarea of a row on the Qualification card (labels like "Other" repeat elsewhere). */
 const setOnCard = (page, label, value, tag) =>
@@ -33,15 +33,28 @@ const valueOnCard = (page, label, tag) =>
     label,
     tag,
   );
-/** Ticks or unticks one step in the "To be qualified" dropdown. */
+/**
+ * Ticks or unticks one step in the "To be qualified" dropdown. The card sits at the bottom of the
+ * page and the popover closes on any page scroll (CD-355): the scroll that brings the button into
+ * view, or the page getting shorter when a step is unticked. So it opens until it stays open, and
+ * closes with Escape only if it is still open (a second click on the button would reopen it).
+ */
 async function toggleStep(page, step) {
-  await click(page, '[data-testid=qualification] button[aria-label="To be qualified"]');
-  await page.waitForSelector('[data-testid=qualification-steps]');
+  const button = '[data-testid=qualification] button[aria-label="To be qualified"]';
+  const list = '[data-testid=qualification-steps]';
+  await (await page.waitForSelector(button)).scrollIntoView();
+  const opened = await eventually(async () => {
+    if (!(await page.$(list))) await click(page, button);
+    await sleep(150);
+    return !!(await page.$(list));
+  });
+  assert.ok(opened, 'the steps list opens');
   await page.evaluate((step) => {
     const item = [...document.querySelectorAll('[data-testid=qualification-steps] .org-multi-item')].find((el) => el.textContent.trim() === step);
     item.querySelector('input').click();
   }, step);
-  await click(page, '[data-testid=qualification] button[aria-label="To be qualified"]');
+  if (await page.$(list)) await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('[data-testid=qualification-steps]'));
 }
 
 describe('qualification', () => {

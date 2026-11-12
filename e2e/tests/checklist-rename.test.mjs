@@ -32,14 +32,22 @@ describe('renaming a checklist item', () => {
 
   step('renames the item in the funnel builder', async () => {
     await page.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });
-    // Stage details open one at a time (CD-318): open every stage so the to-dos are in the page.
+    // Stage details open one at a time (CD-318): open the stages in turn until one shows the to-do.
     await page.waitForSelector('[data-testid=funnel-stage]');
-    await page.evaluate(() => [...document.querySelectorAll('[data-testid=funnel-stage]:not([data-open]) [data-testid=funnel-stage-toggle]')].forEach((b) => b.click()));
-    const found = await page.evaluate(() => {
-      const input = [...document.querySelectorAll('.gate-chip input')].find((i) => i.value === 'Website + socials reviewed');
-      if (input) input.setAttribute('data-e2e', 'rename-me');
-      return !!input;
-    });
+    const count = (await page.$$('[data-testid=funnel-stage]')).length;
+    let found = false;
+    for (let i = 0; i < count && !found; i++) {
+      await page.evaluate((i) => {
+        const row = document.querySelectorAll('[data-testid=funnel-stage]')[i];
+        if (!row.hasAttribute('data-open')) row.querySelector('[data-testid=funnel-stage-toggle]').click();
+      }, i);
+      await page.waitForFunction((i) => document.querySelectorAll('[data-testid=funnel-stage]')[i].hasAttribute('data-open'), {}, i);
+      found = await page.evaluate(() => {
+        const input = [...document.querySelectorAll('.gate-chip input')].find((el) => el.value === 'Website + socials reviewed');
+        if (input) input.setAttribute('data-e2e', 'rename-me');
+        return !!input;
+      });
+    }
     assert.ok(found, 'checklist item shown in the builder');
     await setValue(page, 'input[data-e2e=rename-me]', 'Socials checked');
     const stage = await eventually(async () => {

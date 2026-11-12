@@ -43,7 +43,8 @@ export async function typeText(page, id, value) {
 /** Sets a number chip's At least / At most. */
 export async function setRange(page, id, { min, max }) {
   await openChip(page, id);
-  const inputs = `${pop(id)} input[inputmode=numeric]`;
+  // Decimal since CD-503 (thousands separators in the range bounds).
+  const inputs = `${pop(id)} input[inputmode=decimal]`;
   await page.waitForSelector(inputs);
   if (min !== undefined) await setNth(page, inputs, 0, min);
   if (max !== undefined) await setNth(page, inputs, 1, max);
