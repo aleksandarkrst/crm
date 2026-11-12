@@ -95,13 +95,58 @@ export const defaultOp = (fd: FilterField<never>): FilterOp => (fd.kind === 'tex
 /** A field's filter with nothing chosen ("Any"). */
 export const emptyFilter = (fd: FilterField<never>): FieldFilter => ({ op: defaultOp(fd), vals: [] });
 
-/** Whether the filter narrows anything (otherwise the chip says "Any"). */
-export function isActive(fd: FilterField<never>, v: FieldFilter | undefined): boolean {
+/** Whether something was chosen or typed, valid or not. */
+export function hasInput(fd: FilterField<never>, v: FieldFilter | undefined): boolean {
   if (!v) return false;
   if (fd.kind === 'date') return !!v.preset && (v.preset !== 'custom' || !!(v.from || v.to));
   if (fd.kind === 'number') return !!(v.min || v.max);
   if (fd.kind === 'text') return v.op === 'isempty' || v.op === 'notempty' || !!(v.text || '').trim();
   return (v.vals || []).length > 0;
+}
+
+/** Whether the filter narrows anything (otherwise the chip says "Any"); a range with a problem doesn't. */
+export function isActive(fd: FilterField<never>, v: FieldFilter | undefined): boolean {
+  return hasInput(fd, v) && !rangeProblem(fd, v);
+}
+
+// ---------------------------------------------------------------- invalid ranges (CD-507)
+
+/** The largest number a range takes: an opportunity's value can be at most 999,999,999,999.99. */
+export const MAX_FILTER_NUMBER = 999_999_999_999.99;
+
+/** A typed bound as a number ("1500", "-5", "12,5"); NaN when it isn't one. */
+export function boundNum(s: string): number {
+  const t = s.trim().replace(',', '.');
+  return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : NaN;
+}
+
+/** A real calendar date with a four-digit year ("99999-12-31" from the date picker isn't). */
+export function isRealDate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const t = Date.parse(s + 'T00:00:00Z');
+  return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === s;
+}
+
+/**
+ * What is wrong with a custom date range or a number range, as the popover says it; null when
+ * nothing is. A range with a problem isn't applied (the chip says "Not applied").
+ */
+export function rangeProblem(fd: FilterField<never>, v: FieldFilter | undefined): string | null {
+  if (!v) return null;
+  if (fd.kind === 'date' && v.preset === 'custom') {
+    if ((v.from && !isRealDate(v.from)) || (v.to && !isRealDate(v.to))) return 'Enter a real date with a four-digit year.';
+    if (v.from && v.to && v.from > v.to) return 'From is after To. Pick a From date on or before the To date.';
+  }
+  if (fd.kind === 'number') {
+    const max = MAX_FILTER_NUMBER.toLocaleString('en-US', fd.unit ? { minimumFractionDigits: 2 } : undefined);
+    const bounds = [v.min, v.max].filter((x): x is string => !!x).map(boundNum);
+    if (bounds.some((x) => Number.isNaN(x))) return 'Enter numbers only, such as 1500 or 12.5.';
+    // Custom number fields can hold anything; the system ones (value, days) are never below zero.
+    if (!fd.custom && bounds.some((x) => x < 0)) return fd.label + " can't be negative. Enter 0 or more.";
+    if (bounds.some((x) => Math.abs(x) > MAX_FILTER_NUMBER)) return 'Enter at most ' + max + '.';
+    if (v.min && v.max && boundNum(v.min) > boundNum(v.max)) return '“At least” is more than “At most”. Lower the first or raise the second.';
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------- dates
@@ -201,14 +246,17 @@ export function allOpen(value: FilterValue, id: string): FilterValue {
   return setField(value, id, { op: 'is', vals: [GROUP, ...(v.op === 'isnot' ? [] : (v.vals ?? []).filter((x) => x.startsWith('__') && x !== GROUP))], seen: undefined });
 }
 
-/** Lower case without accents, so "markovic" finds "Marković". */
+/**
+ * Lower case without accents, so "markovic" finds "Marković". "đ" has no accent to strip and is
+ * typed as "d" or "dj", so both fold to "d": "Dordevic", "Djordjevic" and "Đorđević" all become
+ * "dordevic" (CD-504). Fold both sides before comparing.
+ */
 export const fold = (v: string | null | undefined): string =>
   (v ?? '')
     .normalize('NFD')
     .replace(/\p{M}/gu, '')
-    .replace(/đ/g, 'dj')
-    .replace(/Đ/g, 'Dj')
     .toLowerCase()
+    .replace(/đ|dj/g, 'd')
     .trim();
 
 // ---------------------------------------------------------------- matching
