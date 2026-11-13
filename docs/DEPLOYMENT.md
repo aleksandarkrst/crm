@@ -255,6 +255,7 @@ and what went wrong. The runbook is not trusted until this table has a row.
 | Date | Backup | Where | Duration | Result |
 |---|---|---|---|---|
 | 2026-11-12 | `app-20261112T200646Z.dump` + files archive (fresh staging backup) | staging | 14 s | Passed. Smoke test green; row counts matched the replaced database; no permission errors; the worker processed queue jobs again. Found: the script defaulted to production without `APP_DIR` (fixed in CD-517). |
+| 2026-11-13 | `app-20261113T214058Z.dump` + files archive (fresh staging backup) | staging | 25 s | Passed, after the production deploy, with the CD-517 script (`APP_DIR` required; the confirmation named the staging stack and URL). Database and files restored into a side database and swapped in; every smoke check passed, including migrations and a new backup. |
 
 ## 6. GitHub Actions
 
