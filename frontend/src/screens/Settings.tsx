@@ -124,6 +124,10 @@ export function Settings() {
   // "Project types" follows what the workspace calls projects (CD-143).
   const labelOf = (t: (typeof TABS)[number]) => (t.k === 'project-types' ? `${terms.Project} types` : t.label);
   const [params] = useSearchParams();
+  // Opening Settings or another section starts at the top, not where the last page was scrolled to.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [tab]);
   // Members moved to Employees → Team (CD-521): old links and bookmarks land there, `?invite=1` included.
   if (tab === 'team') return <Navigate to={paths.team(params.get('invite') === '1')} replace />;
   // Members don't see the workspace settings at all (CD-523): any settings URL goes home, except
