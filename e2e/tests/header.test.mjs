@@ -114,12 +114,12 @@ describe('command palette, + menu and account menu', () => {
     await page.waitForFunction(() => !document.querySelector('.modal'));
   });
 
-  step('"Go to" reaches pages of other modules: Org structure (Workforce) and Reports', async () => {
+  step('"Go to" reaches pages of other modules: Org structure (Employees) and Reports', async () => {
     const rows = await search(page, 'org structure');
     assert.equal(rows[0].title, 'Org structure', JSON.stringify(rows));
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => location.pathname === '/org');
-    await page.waitForFunction(() => document.querySelector('[data-testid=module-switcher]')?.getAttribute('data-current-module') === 'workforce');
+    await page.waitForFunction(() => document.querySelector('[data-testid=module-switcher]')?.getAttribute('data-current-module') === 'employees');
     const reports = await search(page, 'reports');
     assert.equal(reports[0].title, 'Reports', JSON.stringify(reports));
     await page.keyboard.press('Enter');

@@ -110,8 +110,8 @@ const TABS = [
   // Workforce's settings, grouped by the modules it was split into (CD-521). They stay here, not in the modules.
   { k: 'employees', group: 'Employees', label: 'Employees', description: 'What new employees start with and what employees may change themselves.' },
   { k: 'approvals', group: 'Timesheet', label: 'Approvals', description: 'When timesheets are due, how managers approve them and who gets reminded.' },
-  { k: 'holidays', group: 'Timesheet', label: 'Holidays', description: 'Days nobody is expected to work. They show in the Timesheet and move deadlines.' },
-  { k: 'timeoff', group: 'Time off', label: 'Time off', description: 'Vacation policies: how many days employees get per year, extra days by work experience, and how unused days carry over.' },
+  { k: 'timeoff', group: 'Time off', label: 'Policies', description: 'Vacation policies: how many days employees get per year, extra days by work experience, and how unused days carry over.' },
+  { k: 'holidays', group: 'Time off', label: 'Holidays', description: 'Days nobody is expected to work. They show in the Timesheet and move deadlines.' },
 ] as const;
 type Tab = (typeof TABS)[number]['k'];
 const GROUPS = ['Workspace', 'CRM', 'Projects', 'Employees', 'Timesheet', 'Time off'] as const;

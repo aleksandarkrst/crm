@@ -54,12 +54,12 @@ describe('org structure', () => {
     id.olga = (await api(page, '/people/access')).employeeId;
   });
 
-  step('Workforce opens "Org structure", its sidebar page; the chart shows everyone by unit', async () => {
+  step('Employees opens "Org structure", its sidebar page (CD-521); the chart shows everyone by unit', async () => {
     await page.goto(`${BASE_URL}/pipeline`, { waitUntil: 'networkidle0' });
-    // Each module has its own sidebar (CD-223): Org structure is in Workforce's.
+    // Each module has its own sidebar (CD-223): Org structure is in Employees'.
     assert.equal(await page.$('.app-sidebar a[href="/org"]'), null, 'not in the CRM sidebar');
     await click(page, '[data-testid=module-switcher]');
-    await click(page, '[data-testid=module-switcher-pop] [data-module=workforce]');
+    await click(page, '[data-testid=module-switcher-pop] [data-module=employees]');
     await page.waitForFunction(() => location.pathname === '/org');
     await page.waitForSelector('.app-sidebar a[href="/org"].active');
     await page.waitForSelector('[data-testid=org-chart-units]');

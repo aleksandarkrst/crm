@@ -1219,7 +1219,7 @@ section on the right (title, one-line description, the section's action button).
 its own route (`/settings/<section>`, kept on reload). Groups: **Workspace** (General, Modules, Roles &
 permissions, Notifications), **CRM** (Funnels, Document templates, Customize fields, Sales bonuses),
 **Projects** (Project hierarchy, Project types, Technicians), **Employees** (Employees), **Timesheet**
-(Approvals, Holidays) and **Time off** (Time off; CD-153 / CD-163 / CD-318; one Workforce group until
+(Approvals) and **Time off** (Policies, the vacation policies; Holidays; CD-153 / CD-163 / CD-318; one Workforce group until
 CD-521). Members moved out to Employees → **Team** (`/team`, `screens/Team.tsx`, owners and admins;
 `/settings/team` redirects there, `?invite=1` included). The design also names Workforce → Cost
 rates; it comes when there are rates to set. Sales bonuses and Employees stay hidden from those who
