@@ -1180,7 +1180,7 @@ function NotificationsTab() {
     {
       id: 'digest',
       label: 'Daily digest email',
-      desc: `Every morning at 8:00 (${s.workspace.timezone}): your overdue tasks, tasks due today and your open opportunities with no next step. Not sent when there is nothing to report.`,
+      desc: `Every morning at 8:00 (${s.workspace.timezone}): your overdue tasks, tasks due today, your open opportunities with no next step and the ones late in a stage you answer for. Not sent when there is nothing to report.`,
       on: p.digest,
       toggle: () => patchProfile({ digest: !p.digest }),
     },

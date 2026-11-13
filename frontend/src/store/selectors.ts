@@ -85,13 +85,7 @@ export const valueTotal = (s: State, leads: Lead[], short = false): string => mo
 /** "€14,000" → 14000 (digits only, like the prototype; amounts are written without decimals). */
 export const valueNum = (v: unknown): number => Number(String(v).replace(/[^0-9]/g, '')) || 0;
 
-export const initialsOf = (name: string | undefined): string =>
-  String(name || '')
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]!.toUpperCase())
-    .join('');
+export { initialsOf } from './initials';
 
 // ---------------------------------------------------------------- dates in the workspace time zone (CD-73)
 // "Today", overdue and the dates of timeline entries follow the workspace time zone (an IANA name,
