@@ -4,7 +4,10 @@
 #
 #   APP_DIR=/opt/crm-staging bash scripts/restore-backup.sh app-20260101T020000Z-deploy-abc1234.dump
 #   APP_DIR=/opt/crm         bash scripts/restore-backup.sh app-20260101T020000Z.dump --yes --verify
-#   bash scripts/restore-backup.sh --list          # the backups the stack has
+#   APP_DIR=/opt/crm-staging bash scripts/restore-backup.sh --list    # the backups the stack has
+#
+# APP_DIR is required: there is no default, so a command meant for staging can't land on
+# production (CD-517). On production the confirmation asks for the compose project's name.
 #
 # Steps: stop api and worker → restore the dump (into a side database, swapped in only when it
 # worked; the old one stays as <db>_before_restore) → restore the files archive with the same
@@ -15,7 +18,12 @@
 # database (kept in <db>_before_restore until you drop it) and the uploaded files are replaced.
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/opt/crm}"
+if [ -z "${APP_DIR:-}" ]; then
+  echo "APP_DIR is not set. Name the stack explicitly:" >&2
+  echo "  APP_DIR=/opt/crm-staging bash scripts/restore-backup.sh ...   (staging)" >&2
+  echo "  APP_DIR=/opt/crm         bash scripts/restore-backup.sh ...   (production)" >&2
+  exit 2
+fi
 file=""
 yes=0
 verify=0
@@ -50,13 +58,22 @@ files="/backups/${db}-files-${rest%.dump}.tar.gz"
 if in_backup "test -f '$files'"; then has_files=1; else has_files=0; fi
 
 project="$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' .env | tail -1)"
-echo "Stack:   ${APP_DIR} (compose project ${project:-$(basename "$APP_DIR")})"
+project="${project:-$(basename "$APP_DIR")}"
+app_url="$(sed -n 's/^APP_URL=//p' .env | tail -1)"
+case "$app_url" in *staging*) production=0 ;; *) production=1 ;; esac
+echo "Stack:   ${APP_DIR} (compose project ${project}, ${app_url:-no APP_URL})"
 echo "Dump:    ${dump}"
 if [ "$has_files" = 1 ]; then echo "Files:   ${files}"; else echo "Files:   none with this timestamp (uploaded files are left as they are)"; fi
 echo "The live database is replaced (kept as ${db}_before_restore) and api and worker restart."
 if [ "$yes" != 1 ]; then
-  read -r -p "Continue? [y/N] " answer
-  case "$answer" in y|Y|yes) ;; *) echo "aborted"; exit 1 ;; esac
+  if [ "$production" = 1 ]; then
+    echo "This is PRODUCTION: everything written after this backup disappears from the live app."
+    read -r -p "Type the compose project name (${project}) to continue: " answer
+    [ "$answer" = "$project" ] || { echo "aborted"; exit 1; }
+  else
+    read -r -p "Continue? [y/N] " answer
+    case "$answer" in y|Y|yes) ;; *) echo "aborted"; exit 1 ;; esac
+  fi
 fi
 
 started=$(date +%s)
