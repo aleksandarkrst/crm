@@ -31,10 +31,11 @@ export function Profile() {
   const { s, patchProfile, session, employeeCard, canEditWorkspace } = useStore();
   const p = s.profile;
   // `/profile#notifications` (members' "Notification settings", CD-523) scrolls to that card.
-  const { hash } = useLocation();
+  // The location's key changes on every navigation, so picking the link again scrolls back too.
+  const { hash, key } = useLocation();
   useEffect(() => {
     if (hash === '#notifications') document.getElementById('notifications')?.scrollIntoView({ block: 'start' });
-  }, [hash]);
+  }, [hash, key]);
   // Your employee record in this workspace (milestone 13): "My employee card".
   const loadMine = employeeCard.loadMyEmployeeId;
   const mine = s.myEmployeeId;
@@ -88,15 +89,16 @@ export function Profile() {
             <GhostSelect style={selectStyle} value={defaultFunnel} onChange={setP('defaultFunnelId')} options={funnelChoices} />
           </FieldRow>
           <span style={{ ...note, margin: '2px 0 0' }}>The pipeline opens on your default funnel in {session.tenant.name}.</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '8px 0 2px', borderTop: '1px solid var(--divider)', marginTop: 8 }}>
-            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 13.5, fontWeight: 600 }}>Daily digest email</span>
-              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                Every morning: your overdue tasks, tasks due today, opportunities with no next step and those late in their stage in {session.tenant.name}. More in {canEditWorkspace ? 'Settings → Notifications' : 'Notifications below'}.
-              </span>
+          {/* Members have the digest in the Notifications card below (CD-523), so not twice. */}
+          {canEditWorkspace && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '8px 0 2px', borderTop: '1px solid var(--divider)', marginTop: 8 }}>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 13.5, fontWeight: 600 }}>Daily digest email</span>
+                <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Every morning: your overdue tasks, tasks due today, opportunities with no next step and those late in their stage in {session.tenant.name}. More in Settings → Notifications.</span>
+              </div>
+              <Switch on={p.digest} onClick={() => patchProfile({ digest: !p.digest })} />
             </div>
-            <Switch on={p.digest} onClick={() => patchProfile({ digest: !p.digest })} />
-          </div>
+          )}
         </div>
 
         {/* Members have no Settings (CD-523), so their notification settings are here. */}
