@@ -5,6 +5,8 @@
 // makes visit plans only for their direct report and sees Reports, a member neither.
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
+// Visit plans and Reports are switched off for now (CD-522); these steps come back with the flag.
+import { VISIT_PLANS_ENABLED } from '../../frontend/src/lib/features.ts';
 import { api, BASE_URL, click, clickButton, createWorkspace, email, eventually, finishOnboarding, setValue, signIn, steps, text, useBrowser } from '../lib/harness.mjs';
 
 describe('roles and permissions', () => {
@@ -108,7 +110,7 @@ describe('roles and permissions', () => {
     assert.ok(await eventually(async () => (await api(mia, '/profile')).notifyOrgChanges === false), 'saved off');
   });
 
-  step('a manager makes plans only for their direct report and sees Reports; the member neither', async () => {
+  (VISIT_PLANS_ENABLED ? step : () => {})('a manager makes plans only for their direct report and sees Reports; the member neither', async () => {
     await max.goto(`${BASE_URL}/visit-plans`, { waitUntil: 'networkidle0' });
     await clickButton(max, 'New plan');
     await max.waitForSelector('[data-testid=plan-salesperson]');
@@ -120,5 +122,18 @@ describe('roles and permissions', () => {
     await mia.goto(`${BASE_URL}/visit-plans`, { waitUntil: 'networkidle0' });
     await mia.waitForSelector('[data-testid=visit-plans-empty]');
     assert.ok(!(await text(mia)).includes('New plan'), 'no New plan for the member');
+  });
+
+  // CD-522: Visit plans and Reports are switched off for every role; their old links open Overview.
+  (VISIT_PLANS_ENABLED ? () => {} : step)('no one sees Visit plans or Reports, and their old links open Overview', async () => {
+    for (const page of [olga, max, mia]) {
+      for (const url of ['/visit-plans', '/visit-plans/00000000-0000-4000-8000-000000000000', '/reports', '/reports/visit-plans']) {
+        await page.goto(BASE_URL + url, { waitUntil: 'networkidle0' });
+        await page.waitForFunction(() => location.pathname === '/overview');
+      }
+      const links = await page.$$eval('.app-sidebar a', (els) => els.map((a) => a.textContent.trim()));
+      assert.ok(!links.some((l) => l === 'Visit plans' || l === 'Reports'), JSON.stringify(links));
+      assert.equal(await page.$('[data-testid=visit-progress-card]'), null, 'no Visit-plan progress on Overview');
+    }
   });
 });

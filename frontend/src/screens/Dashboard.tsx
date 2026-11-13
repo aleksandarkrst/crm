@@ -5,6 +5,7 @@ import { EmptyState } from '../components/EmptyState';
 import { FilterRow } from '../components/FilterRow';
 import { Screen } from '../components/Layout';
 import { VisitProgressCard } from '../components/VisitProgressCard';
+import { VISIT_PLANS_ENABLED } from '../lib/features';
 import { paths } from '../lib/paths';
 import { filterPeople, opportunityFields } from '../store/filterFields';
 import { allOpen, applyFilters, type FilterValue, isActive, markSeen, pruneList, valueText, withNewSubs } from '../store/filters';
@@ -189,8 +190,8 @@ export function Dashboard() {
           ))}
         </div>
 
-        {/* Its own plan period, independent of the closing-period filter above (CD-135). */}
-        <VisitProgressCard />
+        {/* Its own plan period, independent of the closing-period filter above (CD-135). Switched off for now (CD-522). */}
+        {VISIT_PLANS_ENABLED && <VisitProgressCard />}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 14 }}>
           <div className="card" style={{ padding: 18 }}>

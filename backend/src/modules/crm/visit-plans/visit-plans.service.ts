@@ -12,6 +12,7 @@ import { IdList, nonEmptyPatch, optionalText } from '../../../shared/validation/
 import { PeopleAccess } from '../../people';
 import { RecordHistoryService } from '../history/record-history.service';
 import { userNameOf } from '../owner';
+import { VISIT_PLANS_ENABLED } from './feature';
 import { periodLabel, periodOf } from './periods';
 import { VisitScope } from './visit-scope';
 
@@ -304,9 +305,9 @@ export class VisitPlansService {
     if (found.length !== new Set(ids).size) throw new BadRequestException('A company in this plan was not found. It may have been deleted.');
   }
 
-  /** Emails the salesperson (worker, if they want it) when someone else created or changed their plan. */
+  /** Emails the salesperson (worker, if they want it) when someone else created or changed their plan; not while visit plans are switched off (CD-522). */
   private async notify(tx: Tx, ctx: TenantContext, plan: PlanRow, kind: 'created' | 'changed') {
-    if (plan.salespersonUserId === ctx.userId) return;
+    if (!VISIT_PLANS_ENABLED || plan.salespersonUserId === ctx.userId) return;
     await this.jobs.send('crm.visit-plan-email', { tenantId: ctx.tenantId, planId: plan.id, actorUserId: ctx.userId, kind }, tx);
   }
 

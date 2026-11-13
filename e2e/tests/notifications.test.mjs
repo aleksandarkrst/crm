@@ -3,6 +3,8 @@
 // Needs the worker running against the same database, with the log mail driver (the default).
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
+// Visit plans and Reports are switched off for now (CD-522); these steps come back with the flag.
+import { VISIT_PLANS_ENABLED } from '../../frontend/src/lib/features.ts';
 import { api, BASE_URL, clickButton, email, eventually, newUserWithWorkspace, steps, text, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
 
 /** The status line under a pending invitation in the Team tab. */
@@ -83,14 +85,15 @@ describe('emails: invitations and notification settings', () => {
     assert.equal(await inviteStatus(page, invitee).then((s) => s?.startsWith('Email sent')), true);
   });
 
-  const SETTINGS = ['digest', 'assigned', 'meetings', 'visit-plans'];
+  const SETTINGS = ['digest', 'assigned', 'meetings', ...(VISIT_PLANS_ENABLED ? ['visit-plans'] : [])];
 
   step('the Notifications tab lists only the emails we send, all on by default', async () => {
     await page.goto(BASE_URL + '/settings/notifications', { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-notification="digest"] .switch');
     for (const id of SETTINGS) assert.equal(await isOn(page, id), true, id);
     const body = await text(page);
-    for (const label of ['Daily digest email', 'Opportunity assigned to you', 'Meeting invitations', 'Visit plans']) assert.ok(body.includes(label), label);
+    for (const label of ['Daily digest email', 'Opportunity assigned to you', 'Meeting invitations', ...(VISIT_PLANS_ENABLED ? ['Visit plans'] : [])]) assert.ok(body.includes(label), label);
+    if (!VISIT_PLANS_ENABLED) assert.ok(!body.includes('Visit plans'), 'no Visit plans setting (CD-522)');
     assert.ok(!/Coming soon/i.test(body), 'no coming-soon rows');
     assert.ok(!body.includes('Weekly pipeline report') && !body.includes('Document activity'), 'placeholders removed');
   });
@@ -99,7 +102,7 @@ describe('emails: invitations and notification settings', () => {
     for (const id of SETTINGS) await page.click(`[data-notification="${id}"] .switch`);
     const saved = await eventually(async () => {
       const p = await api(page, '/profile');
-      return p.notifyDealAssigned === false && p.dailyDigest === false && p.notifyMeetingInvites === false && p.notifyVisitPlans === false && p;
+      return p.notifyDealAssigned === false && p.dailyDigest === false && p.notifyMeetingInvites === false && (!VISIT_PLANS_ENABLED || p.notifyVisitPlans === false) && p;
     });
     assert.ok(saved, 'saved to the profile');
     await page.reload({ waitUntil: 'networkidle0' });

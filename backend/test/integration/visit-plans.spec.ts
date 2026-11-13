@@ -6,6 +6,7 @@
  * are isolated.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
+import { VISIT_PLANS_ENABLED } from '../../src/modules/crm/visit-plans/feature';
 import { addMember, call, createTenant, eventually, mailTo, ok, type Session, signIn, testPib } from './helpers';
 
 let owner: Session;
@@ -202,7 +203,8 @@ describe('visit plans', () => {
     expect(stale.status).toBe(409);
   });
 
-  it('emails the salesperson when someone else saves their plan, not when they save their own', async () => {
+  // No visit plan emails while visit plans are switched off (CD-522).
+  it.skipIf(!VISIT_PLANS_ENABLED)('emails the salesperson when someone else saves their plan, not when they save their own', async () => {
     const subjects = async (s: Session) => (await mailTo(s, s.email)).map((m) => m.subject);
     const p = await plan(owner, monthly(seller.userId, '2027-06-01', [['Alpha', 2], ['Gamma', 1]]));
     const mail = await eventually(async () => (await mailTo(seller, seller.email)).find((m) => m.subject === 'Your visit plan for June 2027'), 'plan email');

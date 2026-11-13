@@ -5,6 +5,7 @@ import { SessionGate } from './components/SessionGate';
 import type { ApiStartPage } from './lib/api';
 import { POPUP_MESSAGE, rememberSignInProblem } from './lib/auth';
 import { isChunkLoadError, loadChunk } from './lib/chunks';
+import { VISIT_PLANS_ENABLED } from './lib/features';
 import { paths } from './lib/paths';
 import { useStore } from './store/store';
 
@@ -152,8 +153,9 @@ function AppRoutes() {
           <Route path="calendar" element={<Calendar />} />
           <Route path="meetings/new" element={<NewMeeting />} />
           <Route path="meetings/:id" element={<Meeting />} />
-          <Route path="visit-plans" element={<VisitPlans />} />
-          <Route path="visit-plans/:id" element={<VisitPlan />} />
+          {/* Visit plans and Reports are switched off for now (CD-522): their URLs go to Overview. */}
+          <Route path="visit-plans" element={VISIT_PLANS_ENABLED ? <VisitPlans /> : <Navigate to={paths.overview} replace />} />
+          <Route path="visit-plans/:id" element={VISIT_PLANS_ENABLED ? <VisitPlan /> : <Navigate to={paths.overview} replace />} />
           <Route path="companies" element={<Companies />} />
           <Route path="companies/:id" element={<Company />} />
           <Route path="contacts" element={<Contacts />} />
@@ -175,8 +177,8 @@ function AppRoutes() {
           <Route path="team" element={<Team />} />
           <Route path="org" element={<OrgStructure />} />
           <Route path="people/:id" element={<EmployeeCard />} />
-          <Route path="reports" element={<Navigate to={paths.reports()} replace />} />
-          <Route path="reports/:tab" element={<Reports />} />
+          <Route path="reports" element={<Navigate to={VISIT_PLANS_ENABLED ? paths.reports() : paths.overview} replace />} />
+          <Route path="reports/:tab" element={VISIT_PLANS_ENABLED ? <Reports /> : <Navigate to={paths.overview} replace />} />
           <Route path="settings" element={<Navigate to={paths.settings()} replace />} />
           <Route path="settings/:tab" element={<Settings />} />
           <Route path="profile" element={<Profile />} />
