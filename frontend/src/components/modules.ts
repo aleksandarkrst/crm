@@ -1,3 +1,4 @@
+import { VISIT_PLANS_ENABLED } from '../lib/features';
 import { paths } from '../lib/paths';
 import type { Terms } from '../store/terms';
 import type { IconName } from './icons';
@@ -56,10 +57,11 @@ const CRM_NAV: NavDef[] = [
   { to: paths.today, label: 'Today', icon: 'M5 5h14v14H5zM9 12l2 2 4-4', phone: true },
   // Salespeople use it every day, so it's in the phone bar (CD-223).
   { to: paths.calendar(), label: 'Calendar', icon: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4', phone: true },
-  { to: paths.visitPlans, label: 'Visit plans', icon: 'M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11ZM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z' },
+  // Visit plans and Reports are switched off for now (CD-522, lib/features.ts).
+  ...(VISIT_PLANS_ENABLED ? [{ to: paths.visitPlans, label: 'Visit plans', icon: 'M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11ZM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z' }] : []),
   { to: paths.contacts, label: 'Contacts', icon: 'M12 11a3.3 3.3 0 1 0 0-6.6 3.3 3.3 0 0 0 0 6.6ZM5 20c1.2-3.1 4-4.7 7-4.7s5.8 1.6 7 4.7' },
   { to: paths.products, label: 'Products', icon: 'M20 8.5 12 4 4 8.5v7L12 20l8-4.5v-7ZM4 8.5 12 13m0 0 8-4.5M12 13v7' },
-  { to: paths.reports(), label: 'Reports', icon: 'M5 20V10M10 20V4M15 20v-7M20 20v-4M3 20h18', managers: true },
+  ...(VISIT_PLANS_ENABLED ? [{ to: paths.reports(), label: 'Reports', icon: 'M5 20V10M10 20V4M15 20v-7M20 20v-4M3 20h18', managers: true }] : []),
 ];
 
 /** Projects' pages: the board and list (CD-234), Tasks (CD-283) and Work orders (CD-265). The Workload report (CD-261) is hidden (owner, 17 Oct): its page stays at /workload, unlinked. */

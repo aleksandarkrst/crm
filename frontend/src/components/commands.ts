@@ -1,4 +1,5 @@
 import { useLocation, useMatch, useNavigate } from 'react-router-dom';
+import { VISIT_PLANS_ENABLED } from '../lib/features';
 import { paths } from '../lib/paths';
 import { useStore } from '../store/store';
 import { currentModule, DEFAULT_MODULE, navFor } from './modules';
@@ -81,7 +82,8 @@ export function useCommands(): Command[] {
     { id: 'go-pipeline', group: 'Go to', label: 'Pipeline', hint: 'Opportunities by stage', icon: 'pipeline', keywords: 'deals opportunities board funnel', run: go(paths.pipeline) },
     { id: 'go-today', group: 'Go to', label: 'Today', hint: 'Tasks due and overdue', icon: 'task', keywords: 'tasks agenda', run: go(paths.today) },
     { id: 'go-calendar', group: 'Go to', label: 'Calendar', hint: 'Meetings by day, week and month', icon: 'calendar', keywords: 'meetings visits schedule agenda', run: go(paths.calendar()) },
-    { id: 'go-visit-plans', group: 'Go to', label: 'Visit plans', hint: 'Customer visits per salesperson', icon: 'visitPlan', keywords: 'visits targets plan customers', run: go(paths.visitPlans) },
+    // Switched off for now (CD-522, lib/features.ts); Reports below follows the sidebar.
+    ...(VISIT_PLANS_ENABLED ? [{ id: 'go-visit-plans', group: 'Go to' as const, label: 'Visit plans', hint: 'Customer visits per salesperson', icon: 'visitPlan' as const, keywords: 'visits targets plan customers', run: go(paths.visitPlans) }] : []),
     { id: 'go-companies', group: 'Go to', label: 'Companies', hint: 'Every company', icon: 'company', keywords: 'organizations', run: go(paths.companies) },
     { id: 'go-contacts', group: 'Go to', label: 'Contacts', hint: 'Every person', icon: 'contact', keywords: 'people persons', run: go(paths.contacts) },
     { id: 'go-products', group: 'Go to', label: 'Products', hint: 'The catalog', icon: 'product', keywords: 'services catalog prices', run: go(paths.products) },

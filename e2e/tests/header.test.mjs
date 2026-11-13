@@ -3,6 +3,8 @@
 // sidebar's module and workspace switcher is in module-switcher.test.mjs (CD-214).
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+// Visit plans and Reports are switched off for now (CD-522).
+import { VISIT_PLANS_ENABLED } from '../../frontend/src/lib/features.ts';
 import { api, BASE_URL, click, clickButton, createDealInUi, createReadyCompany, newUserWithWorkspace, READY_IDENTITY, RUN, setValue, steps, useBrowser, waitForToastToClear, testPib, pickDealCompany } from '../lib/harness.mjs';
 
 /** The search results as { group, title, selected } rows, in screen order. */
@@ -114,16 +116,25 @@ describe('command palette, + menu and account menu', () => {
     await page.waitForFunction(() => !document.querySelector('.modal'));
   });
 
-  step('"Go to" reaches pages of other modules: Org structure (Workforce) and Reports', async () => {
+  step(`"Go to" reaches pages of other modules: Org structure (Workforce) and ${VISIT_PLANS_ENABLED ? 'Reports' : 'Contacts'}`, async () => {
     const rows = await search(page, 'org structure');
     assert.equal(rows[0].title, 'Org structure', JSON.stringify(rows));
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => location.pathname === '/org');
     await page.waitForFunction(() => document.querySelector('[data-testid=module-switcher]')?.getAttribute('data-current-module') === 'workforce');
     const reports = await search(page, 'reports');
-    assert.equal(reports[0].title, 'Reports', JSON.stringify(reports));
-    await page.keyboard.press('Enter');
-    await page.waitForFunction(() => location.pathname.startsWith('/reports/'));
+    if (VISIT_PLANS_ENABLED) {
+      assert.equal(reports[0].title, 'Reports', JSON.stringify(reports));
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => location.pathname.startsWith('/reports/'));
+    } else {
+      // Switched off (CD-522): no Reports or Visit plans to go to.
+      assert.ok(!reports.some((r) => r.title === 'Reports' || r.title === 'Visit plans'), JSON.stringify(reports));
+      const contacts = await search(page, 'contacts');
+      assert.equal(contacts[0].title, 'Contacts', JSON.stringify(contacts));
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => location.pathname === '/contacts');
+    }
     await page.waitForFunction(() => document.querySelector('[data-testid=module-switcher]')?.getAttribute('data-current-module') === 'crm');
   });
 

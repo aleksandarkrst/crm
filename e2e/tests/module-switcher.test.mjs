@@ -7,6 +7,8 @@
 // switching to a workspace without the current module opens its first one, or says it has none.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+// Visit plans and Reports are switched off for now (CD-522); these steps come back with the flag.
+import { VISIT_PLANS_ENABLED } from '../../frontend/src/lib/features.ts';
 import { api, BASE_URL, click, clickButton, email, finishOnboarding, newUserWithWorkspace, RUN, signIn, steps, useBrowser, waitForToastToClear } from '../lib/harness.mjs';
 
 const POP = '[data-testid=module-switcher-pop]';
@@ -14,7 +16,9 @@ const LOGO = '[data-testid=module-switcher]';
 const MORE = '[data-testid=sidebar-more]';
 const MORE_POP = '[data-testid=sidebar-more-pop]';
 const PHONE = { width: 390, height: 844, isMobile: true, hasTouch: true };
-const CRM_PAGES = ['Overview', 'Companies', 'Pipeline', 'Today', 'Calendar', 'Visit plans', 'Contacts', 'Products', 'Reports'];
+const CRM_PAGES = ['Overview', 'Companies', 'Pipeline', 'Today', 'Calendar', ...(VISIT_PLANS_ENABLED ? ['Visit plans'] : []), 'Contacts', 'Products', ...(VISIT_PLANS_ENABLED ? ['Reports'] : [])];
+/** The sidebar's last CRM page, and where it goes. */
+const LAST_PAGE = VISIT_PLANS_ENABLED ? { label: 'Reports', path: '/reports/' } : { label: 'Products', path: '/products' };
 // The owner also sees Workforce's manager pages: Approvals (CD-157), Today's status (CD-162), Time off (CD-164).
 const WORKFORCE_PAGES = ['Timesheet', 'Approvals', "Today's status", 'Time off', 'Org structure'];
 
@@ -181,16 +185,16 @@ describe('module and workspace switcher', () => {
     // The first page has focus; arrows move; Escape closes and gives focus back to "More".
     assert.equal(await page.evaluate(() => document.activeElement?.textContent.trim()), rest[0]);
     await page.keyboard.press('ArrowUp');
-    assert.equal(await page.evaluate(() => document.activeElement?.textContent.trim()), 'Reports');
+    assert.equal(await page.evaluate(() => document.activeElement?.textContent.trim()), LAST_PAGE.label);
     await page.keyboard.press('Escape');
     await page.waitForFunction((sel) => !document.querySelector(sel), {}, MORE_POP);
     assert.equal(await focused(), 'sidebar-more');
-    // Enter opens it again; End and Enter go to Reports.
+    // Enter opens it again; End and Enter go to the last page.
     await page.keyboard.press('Enter');
     await page.waitForSelector(MORE_POP);
     await page.keyboard.press('End');
     await page.keyboard.press('Enter');
-    await page.waitForFunction(() => location.pathname.startsWith('/reports/'));
+    await page.waitForFunction((path) => location.pathname.startsWith(path), {}, LAST_PAGE.path);
     await page.waitForFunction((sel) => !document.querySelector(sel), {}, MORE_POP);
     await page.setViewport({ width: 1400, height: 1100 });
     await page.waitForFunction((sel) => !document.querySelector(sel), {}, MORE);

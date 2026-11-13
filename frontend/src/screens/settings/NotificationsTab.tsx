@@ -1,4 +1,5 @@
 import { Switch } from '../../components/ui';
+import { VISIT_PLANS_ENABLED } from '../../lib/features';
 import { useStore } from '../../store/store';
 
 /**
@@ -26,7 +27,8 @@ export function NotificationsTab({ title }: { title?: string }) {
       on: p.meetingInvites,
       toggle: () => patchProfile({ meetingInvites: !p.meetingInvites }),
     },
-    { id: 'visit-plans', label: 'Visit plans', desc: 'An email when someone else creates or changes your visit plan.', on: p.visitPlans, toggle: () => patchProfile({ visitPlans: !p.visitPlans }) },
+    // Not sent while visit plans are switched off (CD-522, lib/features.ts); the saved choice stays.
+    ...(VISIT_PLANS_ENABLED ? [{ id: 'visit-plans', label: 'Visit plans', desc: 'An email when someone else creates or changes your visit plan.', on: p.visitPlans, toggle: () => patchProfile({ visitPlans: !p.visitPlans }) }] : []),
     { id: 'task-assignments', label: 'Task assignments', desc: 'An email when someone else assigns you to a task.', on: p.taskAssigned, toggle: () => patchProfile({ taskAssigned: !p.taskAssigned }) },
     {
       id: 'hour-limits',

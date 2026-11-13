@@ -4,6 +4,8 @@
 // also on a phone; plans are monthly and a quarter in Reports adds up its months (CD-212).
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
+// Visit plans and Reports are switched off for now (CD-522); these steps come back with the flag.
+import { VISIT_PLANS_ENABLED } from '../../frontend/src/lib/features.ts';
 import { api, BASE_URL, createReadyCompany, click, clickButton, confirmInApp, createWorkspace, email, eventually, finishOnboarding, setValue, signIn, steps, text, useBrowser, testPib } from '../lib/harness.mjs';
 // The app's own rule for where a visit from a plan starts (B9, unit-tested in frontend/test).
 import { startInPeriod } from '../../frontend/src/store/meetingTime.ts';
@@ -17,7 +19,7 @@ const shiftMonths = (iso, months) => {
   return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}-01`;
 };
 
-describe('visit plans', () => {
+describe('visit plans', { skip: !VISIT_PLANS_ENABLED && 'visit plans are switched off (CD-522)' }, () => {
   const browser = useBrowser();
   const step = steps(browser, 'visit-plans');
   let olga;
