@@ -14,6 +14,7 @@ const Companies = lazy(() => loadChunk(() => import('./screens/Companies')).then
 const Company = lazy(() => loadChunk(() => import('./screens/Company')).then((m) => ({ default: m.Company })));
 const Contact = lazy(() => loadChunk(() => import('./screens/Contact')).then((m) => ({ default: m.Contact })));
 const Contacts = lazy(() => loadChunk(() => import('./screens/Contacts')).then((m) => ({ default: m.Contacts })));
+const Team = lazy(() => loadChunk(() => import('./screens/Team')).then((m) => ({ default: m.Team })));
 const EmployeeCard = lazy(() => loadChunk(() => import('./screens/EmployeeCard')).then((m) => ({ default: m.EmployeeCard })));
 const Dashboard = lazy(() => loadChunk(() => import('./screens/Dashboard')).then((m) => ({ default: m.Dashboard })));
 const Meeting = lazy(() => loadChunk(() => import('./screens/Meeting')).then((m) => ({ default: m.Meeting })));
@@ -171,6 +172,7 @@ function AppRoutes() {
           <Route path="team-status" element={<TeamStatus />} />
           <Route path="approvals/:id" element={<ApproverWeek />} />
           <Route path="timeoff" element={<TimeOff />} />
+          <Route path="team" element={<Team />} />
           <Route path="org" element={<OrgStructure />} />
           <Route path="people/:id" element={<EmployeeCard />} />
           <Route path="reports" element={<Navigate to={paths.reports()} replace />} />

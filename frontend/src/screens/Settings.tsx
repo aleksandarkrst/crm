@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { askConfirm } from '../components/ConfirmDialog';
 import { FieldRow, GhostInput, GhostSelect, Modal, ModalHeader, RemoveButton, Switch } from '../components/ui';
 import { Icon } from '../components/icons';
@@ -7,9 +7,9 @@ import { Screen } from '../components/Layout';
 import { MODULES, WORKSPACE_MODULES } from '../components/modules';
 import { paths } from '../lib/paths';
 import { canManageTemplates } from '../store/documents';
-import { ACTIVITIES, CHANNEL_LABELS, CHANNELS, CURRENCIES, DOCS, FIELD_TYPES, TEAM_ROLES } from '../store/seed';
+import { ACTIVITIES, CHANNEL_LABELS, CHANNELS, CURRENCIES, DOCS, FIELD_TYPES } from '../store/seed';
 import { bonusRuleProblems } from '../store/dealMath';
-import { currencySymbol, curOf, customFieldsOf, initialsOf, memberLabels, salesPeople } from '../store/selectors';
+import { currencySymbol, curOf, customFieldsOf, memberLabels, salesPeople } from '../store/selectors';
 
 import type { BonusRule, CustomFieldDef, Stage, Workspace } from '../store/types';
 import type { CustomFieldEntity } from '../lib/api';
@@ -24,7 +24,6 @@ import { TechniciansTab } from './settings/TechniciansTab';
 import { WorkspaceInfo } from './settings/WorkspaceInfo';
 import { RolesTab } from './settings/RolesTab';
 import { NotificationsTab } from './settings/NotificationsTab';
-import type { TeamMember } from '../store/types';
 import { useTerms } from '../store/terms';
 import { targetOf } from '../lib/validate';
 
@@ -88,7 +87,6 @@ function TargetDaysInput({ value, onSave, disabled, placeholder, testId }: { val
 const TABS = [
   { k: 'workspace', group: 'Workspace', label: 'General', description: 'Name, currency, time zone, fiscal year and the language of customer emails.' },
   { k: 'modules', group: 'Workspace', label: 'Modules', description: 'The modules this workspace uses. A module that is off shows as "Not in this workspace" in the module switcher; its data is kept.' },
-  { k: 'team', group: 'Workspace', label: 'Members', description: 'Who works in this workspace, their roles and the invitations still open.' },
   { k: 'roles', group: 'Workspace', label: 'Roles & permissions', description: 'What owners, admins and members can do.' },
   { k: 'notifications', group: 'Workspace', label: 'Notifications', description: 'The emails you get from this workspace.' },
   { k: 'funnel', group: 'CRM', label: 'Funnels', description: 'The stages opportunities move through, with their activities and to-dos.' },
@@ -109,24 +107,25 @@ const TABS = [
       "A project type is a set of stages for one kind of project, like a funnel in the CRM. Each project is on one board: it shows in that board's columns, and its tasks are grouped by the same stages in the plan. Complete and Cancel are always available and are not stages.",
   },
   { k: 'technicians', group: 'Projects', label: 'Technicians', description: 'What each person can be given: project tasks, work orders or both.' },
-  { k: 'employees', group: 'Workforce', label: 'Employees', description: 'What new employees start with and what employees may change themselves.' },
-  { k: 'approvals', group: 'Workforce', label: 'Approvals', description: 'When timesheets are due, how managers approve them and who gets reminded.' },
-  { k: 'holidays', group: 'Workforce', label: 'Holidays', description: 'Days nobody is expected to work. They show in the Timesheet and move deadlines.' },
-  { k: 'timeoff', group: 'Workforce', label: 'Time off', description: 'Vacation policies: how many days employees get per year, extra days by work experience, and how unused days carry over.' },
+  // Workforce's settings, grouped by the modules it was split into (CD-521). They stay here, not in the modules.
+  { k: 'employees', group: 'Employees', label: 'Employees', description: 'What new employees start with and what employees may change themselves.' },
+  { k: 'approvals', group: 'Timesheet', label: 'Approvals', description: 'When timesheets are due, how managers approve them and who gets reminded.' },
+  { k: 'holidays', group: 'Timesheet', label: 'Holidays', description: 'Days nobody is expected to work. They show in the Timesheet and move deadlines.' },
+  { k: 'timeoff', group: 'Time off', label: 'Time off', description: 'Vacation policies: how many days employees get per year, extra days by work experience, and how unused days carry over.' },
 ] as const;
 type Tab = (typeof TABS)[number]['k'];
-const GROUPS = ['Workspace', 'CRM', 'Projects', 'Workforce'] as const;
+const GROUPS = ['Workspace', 'CRM', 'Projects', 'Employees', 'Timesheet', 'Time off'] as const;
 
 export function Settings() {
   const { tab = 'workspace' } = useParams();
   const navigate = useNavigate();
-  const { s, set, session, flash, canEditFields, canSeeBonuses, canEditWorkspace } = useStore();
+  const { set, session, flash, canEditFields, canSeeBonuses, canEditWorkspace } = useStore();
   const terms = useTerms();
   // "Project types" follows what the workspace calls projects (CD-143).
   const labelOf = (t: (typeof TABS)[number]) => (t.k === 'project-types' ? `${terms.Project} types` : t.label);
-  // `?invite=1` (Team tab): the Invite dialog opens, e.g. from "Invite a colleague" in a meeting's guests (CD-221).
   const [params] = useSearchParams();
-  const [inviteOpen, setInviteOpen] = useState(() => tab === 'team' && params.get('invite') === '1' && session.tenant.role !== 'member');
+  // Members moved to Employees → Team (CD-521): old links and bookmarks land there, `?invite=1` included.
+  if (tab === 'team') return <Navigate to={paths.team(params.get('invite') === '1')} replace />;
   // Members don't see the workspace settings at all (CD-523): any settings URL goes home, except
   // Notifications (your own emails, linked from the digest), which is on Personal preferences for them.
   if (!canEditWorkspace) return <Navigate to={tab === 'notifications' ? paths.myNotifications : '/'} replace />;
@@ -143,16 +142,7 @@ export function Settings() {
         ? canEditFields
           ? { label: 'New field', onClick: () => set({ fieldOpen: true }), meta: '' }
           : null
-        : current === 'team'
-          ? {
-              label: 'Invite member',
-              onClick: () => setInviteOpen(true),
-              meta: `${s.team.filter((m) => m.status === 'Active').length} active · ${s.team.filter((m) => m.status === 'Invited').length} invited`,
-              // Members cannot invite (CD-487): disable with a reason instead of a no-op primary button.
-              disabled: session.tenant.role === 'member',
-              title: session.tenant.role === 'member' ? 'Only owners and admins can invite people' : undefined,
-            }
-          : null;
+        : null;
 
   return (
     <Screen title="Settings">
@@ -182,13 +172,6 @@ export function Settings() {
                 {action.meta && <span style={{ fontSize: 12.5, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{action.meta}</span>}
                 {'soon' in action && action.soon ? (
                   <ComingSoonButton label={action.label} />
-                ) : 'disabled' in action && action.disabled ? (
-                  // Disabled buttons often skip `title` in browsers; wrap so the reason still shows (CD-487).
-                  <span title={'title' in action ? action.title : undefined} style={{ flex: '0 0 auto' }}>
-                    <button type="button" className="btn btn-disabled" disabled onClick={action.onClick}>
-                      {action.label}
-                    </button>
-                  </span>
                 ) : (
                   <button type="button" className="btn btn-primary" style={{ flex: '0 0 auto' }} onClick={action.onClick}>
                     {action.label}
@@ -203,7 +186,6 @@ export function Settings() {
           {current === 'workspace' && <CompanyCard />}
           {current === 'workspace' && <GettingStartedCard />}
           {current === 'modules' && <ModulesTab />}
-          {current === 'team' && <TeamTab />}
           {current === 'roles' && <RolesTab />}
           {current === 'employees' && <EmployeesTab />}
           {current === 'approvals' && <ApprovalsTab />}
@@ -219,7 +201,6 @@ export function Settings() {
           {current === 'notifications' && <NotificationsTab />}
         </div>
       </div>
-      {inviteOpen && <InviteModal onClose={() => setInviteOpen(false)} />}
     </Screen>
   );
 }
@@ -333,17 +314,6 @@ function ModulesTab() {
   );
 }
 
-/** A small text button (Resend, Copy link) under an invitation. */
-const linkButton = { border: 0, background: 'none', padding: 0, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: 'var(--brand)' } as const;
-
-/** How an invitation's email is doing (CD-7), as a short line under its address. */
-function inviteEmailLine(invite: NonNullable<TeamMember['invite']>): { text: string; danger: boolean } {
-  if (invite.emailStatus === 'sent') return { text: 'Email sent' + (invite.emailSentAt ? ' ' + new Date(invite.emailSentAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''), danger: false };
-  if (invite.emailStatus === 'queued') return invite.emailError ? { text: 'Sending failed, trying again…', danger: true } : { text: 'Sending email…', danger: false };
-  if (invite.emailStatus === 'failed') return { text: 'Email not delivered' + (invite.emailError ? ': ' + invite.emailError : ''), danger: true };
-  return { text: 'Not emailed', danger: false };
-}
-
 /** Getting started (CD-68) for owners and admins: show the checklist again, load or remove sample data. */
 function GettingStartedCard() {
   const { s, setOnboardingDismissed, loadSampleData, removeSampleData } = useStore();
@@ -380,255 +350,6 @@ function GettingStartedCard() {
         )}
       </div>
     </div>
-  );
-}
-
-function TeamTab() {
-  const { s, session, setMemberRole, setInvitationRole, removeMember, revokeInvitation, resendInvitation, fetchInvitationLink, copyInvitationLink, refreshTeam } = useStore();
-  const cols = '1.4fr 1.4fr 0.9fr 0.7fr 0.7fr 40px';
-  // Removing someone else asks whether they also left the company (spec 4.8).
-  const [removing, setRemoving] = useState<TeamMember | null>(null);
-  /** Invitation id → link shown under the pending row (CD-487). */
-  const [shownLinks, setShownLinks] = useState<Record<string, string>>({});
-  const canManage = session.tenant.role !== 'member';
-  const isOwner = session.tenant.role === 'owner';
-  // While an invitation email is on its way, check back every few seconds (for up to 2 minutes).
-  const sending = s.team.some((m) => m.invite?.emailStatus === 'queued');
-  useEffect(() => {
-    if (!sending) return;
-    const started = Date.now();
-    const timer = setInterval(() => {
-      if (Date.now() - started > 120_000) clearInterval(timer);
-      else void refreshTeam();
-    }, 3000);
-    return () => clearInterval(timer);
-  }, [sending, refreshTeam]);
-  const showInviteLink = async (id: string) => {
-    const link = await fetchInvitationLink(id);
-    if (link) setShownLinks((prev) => ({ ...prev, [id]: link }));
-  };
-  return (
-    <div className="card" style={{ overflow: 'hidden' }}>
-      <div className="table-head th" style={{ gridTemplateColumns: cols }}>
-        <span>Member</span>
-        <span>Email</span>
-        <span>Role</span>
-        <span>Status</span>
-        <span>Employee</span>
-        <span />
-      </div>
-      {s.team.map((m) => {
-        const self = m.id === session.userId;
-        const invited = m.status === 'Invited';
-        // Owners manage everyone; admins can't touch owners or hand out the owner role.
-        // Pending invitations: admins can change Admin/Member before the invitee joins (CD-487).
-        const editable = canManage && (invited ? true : isOwner || m.role !== 'Owner');
-        const removable = invited ? canManage : self || (canManage && (isOwner || m.role !== 'Owner'));
-        return (
-          <div key={m.id} className="table-row" style={{ gridTemplateColumns: cols, padding: '11px 16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-              <span className="avatar" style={{ width: 26, height: 26, fontSize: 10 }}>
-                {invited ? '@' : initialsOf(m.name)}
-              </span>
-              <span style={{ fontWeight: 600 }}>
-                {invited && m.name === m.email ? 'Invitation sent' : m.name}
-                {self && <span style={{ fontWeight: 400, color: 'var(--muted)' }}> (you)</span>}
-              </span>
-            </div>
-            {invited && m.invite ? (
-              <div data-invite-email={m.email} style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-                <span style={{ color: 'var(--text-2)' }}>{m.email}</span>
-                <span className="invite-email-status" style={{ fontSize: 12, color: inviteEmailLine(m.invite).danger ? 'var(--danger)' : 'var(--muted)' }}>
-                  {inviteEmailLine(m.invite).text}
-                </span>
-                {canManage && m.invite.hasLink && (
-                  <>
-                    <span style={{ display: 'flex', gap: 12 }}>
-                      <button type="button" style={linkButton} disabled={m.invite.emailStatus === 'queued' && !m.invite.emailError} onClick={() => void resendInvitation(m.id)}>
-                        Resend
-                      </button>
-                      {shownLinks[m.id] ? (
-                        <button type="button" style={linkButton} onClick={() => void copyInvitationLink(m.id)}>
-                          Copy link
-                        </button>
-                      ) : (
-                        <button type="button" style={linkButton} onClick={() => void showInviteLink(m.id)}>
-                          Show link
-                        </button>
-                      )}
-                    </span>
-                    {shownLinks[m.id] && (
-                      <input className="form-input" readOnly value={shownLinks[m.id]} data-testid="pending-invite-link" onFocus={(e) => e.target.select()} style={{ fontSize: 12, padding: '6px 8px' }} />
-                    )}
-                  </>
-                )}
-              </div>
-            ) : (
-              <span style={{ color: 'var(--text-2)' }}>{m.email}</span>
-            )}
-            {editable ? (
-              <GhostSelect
-                className="ghost-sm"
-                value={m.role}
-                onChange={(e) => {
-                  const role = e.target.value.toLowerCase() as 'owner' | 'admin' | 'member';
-                  if (invited) setInvitationRole(m.id, role === 'owner' ? 'admin' : role);
-                  else setMemberRole(m.id, role);
-                }}
-                options={invited ? ['Admin', 'Member'] : isOwner ? [...TEAM_ROLES] : ['Admin', 'Member']}
-                style={{ padding: '5px 8px' }}
-              />
-            ) : (
-              <span style={{ color: 'var(--text-2)', padding: '5px 8px' }}>{m.role}</span>
-            )}
-            <span className={invited ? 'badge badge-warn' : 'badge badge-brand'} style={{ justifySelf: 'start' }}>
-              {m.status}
-            </span>
-            {m.employeeId ? (
-              <Link className="team-employee-link" to={paths.employee(m.employeeId)} data-testid="team-employee-link">
-                Employee card
-              </Link>
-            ) : (
-              <span />
-            )}
-            {removable ? (
-              <RemoveButton
-                title={invited ? 'Withdraw invitation' : self ? 'Leave workspace' : 'Remove from workspace'}
-                style={{ justifySelf: 'end' }}
-                onClick={() => {
-                  if (invited) return revokeInvitation(m.id);
-                  if (!self) return setRemoving(m);
-                  void askConfirm({
-                    title: `Leave ${session.tenant.name}?`,
-                    message: 'You will need a new invitation to come back.',
-                    confirmLabel: 'Leave',
-                    danger: true,
-                  }).then((ok) => ok && removeMember(m.id));
-                }}
-              />
-            ) : (
-              <span />
-            )}
-          </div>
-        );
-      })}
-      {removing && <RemoveMemberDialog member={removing} onClose={() => setRemoving(null)} />}
-    </div>
-  );
-}
-
-/**
- * "Remove from workspace" (spec 4.8): the employee record stays Active with "No account", unless
- * they also left the company: then the employee card's Deactivate dialog takes over (it removes
- * the membership too, and moves their reports).
- */
-function RemoveMemberDialog({ member, onClose }: { member: TeamMember; onClose: () => void }) {
-  const { session, removeMember } = useStore();
-  const navigate = useNavigate();
-  const [left, setLeft] = useState(false);
-  const go = () => {
-    onClose();
-    if (left && member.employeeId) navigate(paths.employee(member.employeeId, { deactivate: true }));
-    else removeMember(member.id);
-  };
-  return (
-    <Modal maxWidth={480} onClose={onClose}>
-      <ModalHeader title={`Remove ${member.name}?`} sub={`They lose access to ${session.tenant.name}. Their employee record stays, with no account.`} />
-      {member.employeeId && (
-        <label className="emp-check" style={{ fontSize: 13 }}>
-          <input type="checkbox" name="alsoLeft" checked={left} onChange={(e) => setLeft(e.target.checked)} />
-          {member.name} also left the company
-        </label>
-      )}
-      {left && <div className="hint-box">Next, the employee card asks for their last working day and who their reports move to.</div>}
-      <div className="modal-actions">
-        <button type="button" className="btn btn-secondary" onClick={onClose}>
-          Cancel
-        </button>
-        <button type="button" className="btn btn-primary" onClick={go}>
-          {left ? 'Continue to Deactivate' : 'Remove'}
-        </button>
-      </div>
-    </Modal>
-  );
-}
-
-/** Invite by email: the worker emails the link (CD-7); the link is also shown to copy as a fallback. */
-function InviteModal({ onClose }: { onClose: () => void }) {
-  const { session, inviteMember } = useStore();
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'member' | 'admin'>('member');
-  const [link, setLink] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const send = async () => {
-    setBusy(true);
-    setLink(await inviteMember(email.trim(), role, { firstName: firstName.trim(), lastName: lastName.trim() }));
-    setBusy(false);
-  };
-  const ready = email.includes('@') && !!firstName.trim() && !!lastName.trim();
-  const copy = () =>
-    navigator.clipboard
-      .writeText(link!)
-      .then(() => setCopied(true))
-      .catch(() => setCopied(false));
-  return (
-    <Modal maxWidth={520} onClose={onClose}>
-      <ModalHeader title="Invite a teammate" sub={`They join ${session.tenant.name} and see the same pipeline. The email greets them by first name; the link works once, for this email address, for 7 days.`} />
-      {!link ? (
-        <>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <label className="form-label">
-              First name
-              <input className="form-input" autoFocus placeholder="Ana" value={firstName} maxLength={100} onChange={(e) => setFirstName(e.target.value)} data-testid="invite-first-name" />
-            </label>
-            <label className="form-label">
-              Last name
-              <input className="form-input" placeholder="Petrović" value={lastName} maxLength={100} onChange={(e) => setLastName(e.target.value)} data-testid="invite-last-name" />
-            </label>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px', gap: 12 }}>
-            <label className="form-label">
-              Email
-              <input className="form-input" type="email" placeholder="name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-            </label>
-            <label className="form-label">
-              Role
-              <select className="form-input" value={role} onChange={(e) => setRole(e.target.value as 'member' | 'admin')}>
-                <option value="member">Member</option>
-                <option value="admin">Admin</option>
-              </select>
-            </label>
-          </div>
-          <div className="modal-actions">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="button" className={ready && !busy ? 'btn btn-primary' : 'btn btn-disabled'} disabled={!ready || busy} onClick={() => void send()}>
-              {busy ? 'Inviting…' : 'Send invitation'}
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="hint-box">We are emailing an invitation to {email.trim()}. The Team list shows when it has been sent, and you can resend it or copy the link from there.</div>
-          <label className="form-label">
-            Or send them the link yourself
-            <input className="form-input" readOnly value={link} data-testid="invite-link" onFocus={(e) => e.target.select()} />
-          </label>
-          <div className="modal-actions">
-            <button type="button" className="btn btn-secondary" onClick={() => void copy()}>
-              {copied ? 'Copied' : 'Copy link'}
-            </button>
-            <button type="button" className="btn btn-primary" onClick={onClose}>
-              Done
-            </button>
-          </div>
-        </>
-      )}
-    </Modal>
   );
 }
 

@@ -6,8 +6,11 @@ import { boolean, check, index, integer, jsonb, pgTable, primaryKey, smallint, t
  * they are how we figure out which tenants a user may access in the first place.
  */
 
-/** The modules a workspace can turn on or off (CD-279); Workspace settings is always there. */
-export const WORKSPACE_MODULES = ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting'] as const;
+/**
+ * The modules a workspace can turn on or off (CD-279); Workspace settings is always there. CD-521
+ * split Workforce into Employees, Timesheet and Time off (drizzle/0130_split_workforce.sql).
+ */
+export const WORKSPACE_MODULES = ['planning', 'crm', 'projects', 'employees', 'timesheet', 'timeoff', 'finance', 'reporting'] as const;
 export type WorkspaceModule = (typeof WORKSPACE_MODULES)[number];
 
 export const CUSTOMER_EMAIL_LANGUAGES = ['en', 'sr'] as const;
@@ -48,7 +51,7 @@ export const tenants = pgTable(
      * The modules turned on for this workspace (CD-279, Settings → General → Modules): the switcher
      * shows the others as "Not in this workspace". All on by default.
      */
-    modules: text('modules').array().notNull().default(sql`'{planning,crm,projects,workforce,finance,reporting}'::text[]`),
+    modules: text('modules').array().notNull().default(sql`'{planning,crm,projects,employees,timesheet,timeoff,finance,reporting}'::text[]`),
     /** "Create a project when a deal is won" (CD-233, Settings → Workspace): off by default. */
     autoCreateProjects: boolean('auto_create_projects').notNull().default(false),
     /**
@@ -130,7 +133,8 @@ export const tenants = pgTable(
     check('tenants_holiday_preload_ck', sql`${t.holidayPreload} in ('none', 'serbia')`),
     check('tenants_timeoff_paid_leave_limit_ck', sql`${t.timeoffPaidLeaveYearlyLimit} between 0 and 60`),
     check('tenants_fiscal_month_ck', sql`${t.fiscalYearStartMonth} between 1 and 12`),
-    check('tenants_modules_ck', sql`${t.modules} <@ '{planning,crm,projects,workforce,finance,reporting}'::text[]`),
+    // `workforce` (before CD-521) stays allowed for one release, so an app rolled back to it can still save its list.
+    check('tenants_modules_ck', sql`${t.modules} <@ '{planning,crm,projects,employees,timesheet,timeoff,workforce,finance,reporting}'::text[]`),
     check('tenants_customer_email_language_ck', sql`${t.customerEmailLanguage} in ('en', 'sr')`),
     check('tenants_employee_weekly_hours_ck', sql`${t.employeeDefaultWeeklyHours} between 1 and 60`),
     check('tenants_timesheet_approval_mode_ck', sql`${t.timesheetApprovalMode} in ('week', 'day')`),

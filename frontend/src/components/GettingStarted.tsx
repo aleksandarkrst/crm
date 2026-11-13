@@ -6,7 +6,7 @@ import { useStore } from '../store/store';
 
 /** The workspace's activation steps (CD-115). */
 const STEPS: Record<ApiOnboardingStep, { label: string; hint: string; to: string }> = {
-  invite: { label: 'Invite your team', hint: 'Work on opportunities together', to: paths.settings('team') },
+  invite: { label: 'Invite your team', hint: 'Work on opportunities together', to: paths.team() },
   records: { label: 'Add your first records', hint: 'A contact, a company, a product and an opportunity', to: paths.pipeline },
   template: { label: 'Set up a document template', hint: 'Proposals and quotes filled from an opportunity', to: paths.settings('templates') },
   funnel: { label: 'Set up your funnel', hint: 'Rename stages, set their to-dos', to: paths.settings('funnel') },

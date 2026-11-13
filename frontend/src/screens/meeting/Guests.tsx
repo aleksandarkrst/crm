@@ -114,7 +114,7 @@ export function GuestsField({
                 {alone && (
                   <div className="guest-invite" data-testid="guests-invite">
                     {admin ? (
-                      <button type="button" className="meeting-picker-add" data-testid="guests-invite-colleague" onClick={() => navigate(paths.settings('team') + '?invite=1')}>
+                      <button type="button" className="meeting-picker-add" data-testid="guests-invite-colleague" onClick={() => navigate(paths.team(true))}>
                         Invite a colleague
                       </button>
                     ) : (

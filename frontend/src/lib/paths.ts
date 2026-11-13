@@ -37,6 +37,8 @@ export const paths = {
   /** Reports (CD-135, owners and admins); `visit-plans` is the Visit-plan completion tab, with its filters. */
   reports: (tab = 'visit-plans', params: Partial<Record<'periodType' | 'periodStart' | 'salesperson' | 'company', string | null | undefined>> = {}) => `/reports/${tab}` + query(params),
   settings: (tab = 'workspace') => '/settings/' + tab,
+  /** Employees → Team (CD-521; Settings → Members before): `invite` opens the Invite dialog. */
+  team: (invite = false) => '/team' + (invite ? '?invite=1' : ''),
   profile: '/profile',
   /** Members' notification settings (CD-523): a card on Personal preferences, since members have no Settings. */
   myNotifications: '/profile#notifications',

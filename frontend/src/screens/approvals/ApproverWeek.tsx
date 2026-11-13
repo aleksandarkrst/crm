@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { askConfirm } from '../../components/ConfirmDialog';
 import { EmptyState } from '../../components/EmptyState';
 import { Screen } from '../../components/Layout';
@@ -32,7 +32,7 @@ export function ApproverWeek() {
   const admin = session.tenant.role === 'owner' || session.tenant.role === 'admin';
   const [params, setParams] = useSearchParams();
   const weekParam = params.get('week') ?? undefined;
-  const { data, error, set } = useApproverWeek(id, weekParam);
+  const { data, error, set, refused } = useApproverWeek(id, weekParam);
   const { data: history } = useWeekHistory(id, weekParam);
   const [unlocking, setUnlocking] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -98,6 +98,8 @@ export function ApproverWeek() {
     }
   };
 
+  // Someone who approves nobody (not a manager, Admin or owner) has no Approvals (CD-521): their own Timesheet instead.
+  if (refused && !admin && !s.visitScope.seesTeam) return <Navigate to={paths.timesheet()} replace />;
   if (!data || !data.week.employee) {
     return (
       <Screen title="Approvals" parent={{ label: 'Approvals', to: paths.approvals() }}>

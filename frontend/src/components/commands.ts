@@ -93,14 +93,17 @@ export function useCommands(): Command[] {
     { id: 'go-tasks', group: 'Go to', label: terms.Tasks, hint: 'Projects · kanban and table', icon: 'task', keywords: 'tasks project plan to-do todo kanban', run: go(paths.tasks) },
     { id: 'go-work-orders', group: 'Go to', label: 'Work orders', hint: 'Projects · kanban and table', icon: 'task', keywords: 'work orders service technician repair installation kanban', run: go(paths.workOrders) },
     // Workload (CD-261) is hidden for now (owner, 17 Oct): no Go to entry; the page stays at /workload.
-    { id: 'go-timesheet', group: 'Go to', label: 'Timesheet', hint: 'Workforce · your hours this week', icon: 'timesheet', keywords: 'workforce time hours log week submit', run: go(paths.timesheet()) },
-    { id: 'go-org', group: 'Go to', label: 'Org structure', hint: 'Workforce · people and teams', icon: 'org', keywords: 'workforce people employees units departments teams chart', run: go(paths.org()) },
-    { id: 'go-approvals', group: 'Go to', label: 'Approvals', hint: 'Workforce · timesheets waiting for you', icon: 'timesheet', keywords: 'workforce approvals approve reject return timesheet week team', run: go(paths.approvals()) },
+    { id: 'go-timesheet', group: 'Go to', label: 'Timesheet', hint: 'Timesheet · your hours this week', icon: 'timesheet', keywords: 'workforce time hours log week submit', run: go(paths.timesheet()) },
+    { id: 'go-org', group: 'Go to', label: 'Org structure', hint: 'Employees · people and teams', icon: 'org', keywords: 'workforce people employees units departments teams chart', run: go(paths.org()) },
+    // Approvals is for managers, Admins and the owner (CD-521), as in the sidebar.
+    ...(session.tenant.role === 'owner' || session.tenant.role === 'admin' || s.visitScope.seesTeam
+      ? [{ id: 'go-approvals', group: 'Go to' as const, label: 'Approvals', hint: 'Timesheet · timesheets waiting for you', icon: 'timesheet' as const, keywords: 'workforce approvals approve reject return timesheet week team', run: go(paths.approvals()) }]
+      : []),
   ];
   const settings: Command[] = [
     { id: 'go-profile', group: 'Settings', label: 'Personal preferences', hint: 'Your profile', icon: 'profile', keywords: 'profile account start page', run: go(paths.profile) },
     { id: 'go-workspace', group: 'Settings', label: 'Workspace settings', hint: 'Name, currency, time zone', icon: 'settings', keywords: 'currency time zone fiscal year', run: go(paths.settings()) },
-    { id: 'go-team', group: 'Settings', label: 'Team', hint: 'Members and invitations', icon: 'team', keywords: 'users invite members roles', run: go(paths.settings('team')) },
+    { id: 'go-team', group: 'Settings', label: 'Team', hint: 'Employees · members and invitations', icon: 'team', keywords: 'users invite members roles workforce', run: go(paths.team()) },
     // Your own emails: on Personal preferences for members (CD-523).
     { id: 'go-notifications', group: 'Settings', label: 'Notifications', hint: 'Emails you get', icon: 'bell', keywords: 'email digest', run: go(paths.notifications(canEditWorkspace)) },
     { id: 'go-project-types', group: 'Settings', label: `${terms.Project} types`, hint: `Stages of ${terms.projects}`, icon: 'project', keywords: 'project stages board', run: go(paths.settings('project-types')) },

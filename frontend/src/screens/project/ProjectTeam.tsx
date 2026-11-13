@@ -39,7 +39,7 @@ export function ProjectTeam({ projectId, team, canEdit, onChange }: { projectId:
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="project-team">
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45, flex: '1 1 280px' }}>People come from the org chart in Workforce. Load adds up weekly hours across all open projects.</span>
+        <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.45, flex: '1 1 280px' }}>People come from the org chart in Employees. Load adds up weekly hours across all open projects.</span>
         {canEdit && (
           <button type="button" className="btn btn-primary" data-testid="add-people" onClick={() => setAdding(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>

@@ -142,7 +142,7 @@ export const mapWorkspace = (w: ApiWorkspace): Workspace => ({
   ceoEmployeeId: w.ceoEmployeeId ?? null,
   autoCreateProjects: w.autoCreateProjects ?? false,
   hourLimitMode: w.hourLimitMode ?? 'warn',
-  modules: w.modules ?? ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting'],
+  modules: w.modules ?? ['planning', 'crm', 'projects', 'employees', 'timesheet', 'timeoff', 'finance', 'reporting'],
   terms: w.terms ?? DEFAULT_TERMS,
   timesheet: w.timesheet ?? DEFAULT_TIMESHEET_SETTINGS,
   country: w.country ?? null,

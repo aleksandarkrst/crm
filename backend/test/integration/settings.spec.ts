@@ -36,7 +36,7 @@ describe('workspace settings', () => {
   });
 
   it('modules: all on by default; owners and admins turn them off; GET /me lists them per workspace (CD-279)', async () => {
-    const all = ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting'];
+    const all = ['planning', 'crm', 'projects', 'employees', 'timesheet', 'timeoff', 'finance', 'reporting'];
     expect((await ok('GET', '/workspace', as(member))).modules).toEqual(all);
     expect((await call('PATCH', '/workspace', { ...as(member), body: { modules: ['crm'] } })).status).toBe(403);
     expect((await call('PATCH', '/workspace', { ...as(admin), body: { modules: ['crm', 'service'] } })).status).toBe(400);

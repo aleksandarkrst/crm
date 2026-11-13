@@ -201,7 +201,7 @@ export function TimeCard({
     <div className="card card-pad time-card" data-testid="time-card">
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
         <span className="caps">{kind === 'task' ? 'Time' : 'Track time'}</span>
-        <span style={{ fontSize: 12, color: 'var(--text-2)' }}>From Workforce timesheets</span>
+        <span style={{ fontSize: 12, color: 'var(--text-2)' }}>From timesheets</span>
       </div>
       {error && !card ? (
         <span style={{ fontSize: 13, color: 'var(--danger)' }}>{error}</span>

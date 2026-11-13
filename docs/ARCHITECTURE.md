@@ -1216,9 +1216,12 @@ the store is the one place that talks to the backend.
 
 **The Settings page** (CD-280, `screens/Settings.tsx`): a 200 px left nav grouped by module, the
 section on the right (title, one-line description, the section's action button). Each section has
-its own route (`/settings/<section>`, kept on reload). Groups: **Workspace** (General, Modules, Members, Roles &
+its own route (`/settings/<section>`, kept on reload). Groups: **Workspace** (General, Modules, Roles &
 permissions, Notifications), **CRM** (Funnels, Document templates, Customize fields, Sales bonuses),
-**Projects** (Project hierarchy, Project types, Technicians) and **Workforce** (Employees, Approvals, Holidays, Time off; CD-153 / CD-163 / CD-318). The design also names Workforce → Cost
+**Projects** (Project hierarchy, Project types, Technicians), **Employees** (Employees), **Timesheet**
+(Approvals, Holidays) and **Time off** (Time off; CD-153 / CD-163 / CD-318; one Workforce group until
+CD-521). Members moved out to Employees → **Team** (`/team`, `screens/Team.tsx`, owners and admins;
+`/settings/team` redirects there, `?invite=1` included). The design also names Workforce → Cost
 rates; it comes when there are rates to set. Sales bonuses and Employees stay hidden from those who
 can't use them. Settings belongs to no module, so the sidebar and the switcher keep the module it
 was opened from. Under 800 px the nav wraps above the content.
@@ -2570,15 +2573,18 @@ The button under the Pultly mark in the sidebar (it shows the module you're in, 
 start page). It replaces the workspace-only switcher of CD-23.
 
 - **Modules** (`components/modules.ts`, one list, CD-223, CD-279), in the design's grid order: CRM
-  (`/pipeline`), Projects (`/projects`), Workforce (`/org`), **Workspace settings** (`/settings`),
+  (`/pipeline`), Projects (`/projects`), Employees (`/org`), Timesheet (`/timesheet`), Time off
+  (`/timeoff`), **Workspace settings** (`/settings`),
   Planning, Finance and Reporting. The current one is on a brand-tint row with a Forest tile. Locked
   ones are dimmed with a lock and the reason (`LockReason`, `lockReason(module, role, modules)`):
   "Coming soon" (no target yet), "Not in this workspace" (turned off for the workspace) and
   "Owners and admins" (Workspace settings for members). On Settings the Workspace settings tile is
   the current one, while the trigger and the sidebar keep the module Settings was opened from
   (CD-280; the CD-279 text's "Settings" on the trigger lost to that and the design screenshots).
-- **Modules per workspace** (CD-279): `tenants.modules` (`text[]`, all six on by default, a check
-  keeps it to `planning, crm, projects, workforce, finance, reporting`). GET /me's `tenants` and
+- **Modules per workspace** (CD-279): `tenants.modules` (`text[]`, all on by default, a check
+  keeps it to `planning, crm, projects, employees, timesheet, timeoff, finance, reporting`; CD-521 split
+  `workforce` into the three, and migration 0130 turned all three on where it was on. The check still
+  allows `workforce` for one release so a rolled-back app can save; a later migration drops it). GET /me's `tenants` and
   GET /api/workspace return it; owners and admins change it with PATCH /api/workspace `modules` and
   in **Settings → General → Modules** (switches). Turning one off hides nothing else and deletes
   nothing: the switcher locks it.
@@ -2603,11 +2609,15 @@ Settings at the bottom, as in the Workforce design.
 
 - **Pages per module** (`nav` in `modules.ts`): CRM has Overview, Pipeline, Today, Calendar, Visit
   plans, Companies, Contacts, Products and Reports (Reports only for owners, admins and managers who
-  see their team, CD-142: `navFor`); Workforce has Timesheet (CD-152), Approvals and Today's status
-  (CD-157, CD-162: managers and Admins), Time off and Org structure (Utilisation later). Add a module's page there and it shows in the sidebar, the phone bar
+  see their team, CD-142: `navFor`). Workforce was split in CD-521: **Employees** has Team (owners and
+  admins, `admins: true`), Org structure and Today's status (CD-162: managers and Admins);
+  **Timesheet** has Timesheet (CD-152) and Approvals (CD-157: managers, Admins and the owner; the API
+  answers 403 to anyone else and the page then opens their Timesheet); **Time off** has Time off. Add a module's page there and it shows in the sidebar, the phone bar
   (`phone: true`) or its "More".
 - **The current module** comes from the route (`screens` prefixes): meetings, deals, companies,
-  contacts, products and reports are CRM; `/org` and employee cards (`/people/:id`) are Workforce.
+  contacts, products and reports are CRM; `/team`, `/org`, employee cards (`/people/:id`) and
+  `/team-status` are Employees, `/timesheet` and `/approvals` Timesheet, `/timeoff` Time off. A
+  remembered `workforce` reads as Employees.
   Settings and the profile belong to none and keep the last module, remembered per user in this
   browser (`localStorage` `crm.module.<userId>`, in try/catch; without storage it falls back to the
   CRM).

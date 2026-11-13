@@ -45,7 +45,7 @@ export function TechniciansTab() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="technicians">
       <div className="hint-box">
-        Work type decides what someone can be given. Office staff get project tasks, service staff get work orders, and people set to both can get either. It&apos;s the same field as on the person&apos;s Workforce profile.
+        Work type decides what someone can be given. Office staff get project tasks, service staff get work orders, and people set to both can get either. It&apos;s the same field as on the person&apos;s employee card.
       </div>
       {error ? (
         <div className="hint-box">{error}</div>
