@@ -2583,8 +2583,10 @@ start page). It replaces the workspace-only switcher of CD-23.
   (CD-280; the CD-279 text's "Settings" on the trigger lost to that and the design screenshots).
 - **Modules per workspace** (CD-279): `tenants.modules` (`text[]`, all on by default, a check
   keeps it to `planning, crm, projects, employees, timesheet, timeoff, finance, reporting`; CD-521 split
-  `workforce` into the three, and migration 0130 turned all three on where it was on. The check still
-  allows `workforce` for one release so a rolled-back app can save; a later migration drops it). GET /me's `tenants` and
+  `workforce` into the three, and migration 0130 turned all three on where it was on. For one release the rows keep
+  `workforce` too, on exactly when one of the three is (0131; `storedModules` on save,
+  `shownModules` hides it from GET /me and /workspace), so an app rolled back to before CD-521
+  still shows Workforce; the contract migration drops it from the rows and the check). GET /me's `tenants` and
   GET /api/workspace return it; owners and admins change it with PATCH /api/workspace `modules` and
   in **Settings → General → Modules** (switches). Turning one off hides nothing else and deletes
   nothing: the switcher locks it.

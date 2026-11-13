@@ -13,6 +13,16 @@ import { boolean, check, index, integer, jsonb, pgTable, primaryKey, smallint, t
 export const WORKSPACE_MODULES = ['planning', 'crm', 'projects', 'employees', 'timesheet', 'timeoff', 'finance', 'reporting'] as const;
 export type WorkspaceModule = (typeof WORKSPACE_MODULES)[number];
 
+/**
+ * Expand, then contract (CD-521): for one release the rows also keep `workforce`, on exactly when
+ * any of its three modules is, so an app rolled back to before CD-521 still finds Workforce. The
+ * API never shows it (`shownModules`) and saving sets it (`storedModules`). The contract migration
+ * removes it from the rows and from `tenants_modules_ck`.
+ */
+const WORKFORCE_PARTS: readonly string[] = ['employees', 'timesheet', 'timeoff'];
+export const shownModules = (stored: readonly string[]): WorkspaceModule[] => stored.filter((m): m is WorkspaceModule => (WORKSPACE_MODULES as readonly string[]).includes(m));
+export const storedModules = (chosen: readonly WorkspaceModule[]): string[] => (chosen.some((m) => WORKFORCE_PARTS.includes(m)) ? [...chosen, 'workforce'] : [...chosen]);
+
 export const CUSTOMER_EMAIL_LANGUAGES = ['en', 'sr'] as const;
 /** How the timesheet shows hours (CD-153): 7.50 or 7:30. */
 export const TIME_FORMATS = ['decimal', 'clock'] as const;
@@ -51,7 +61,7 @@ export const tenants = pgTable(
      * The modules turned on for this workspace (CD-279, Settings → General → Modules): the switcher
      * shows the others as "Not in this workspace". All on by default.
      */
-    modules: text('modules').array().notNull().default(sql`'{planning,crm,projects,employees,timesheet,timeoff,finance,reporting}'::text[]`),
+    modules: text('modules').array().notNull().default(sql`'{planning,crm,projects,employees,timesheet,timeoff,workforce,finance,reporting}'::text[]`),
     /** "Create a project when a deal is won" (CD-233, Settings → Workspace): off by default. */
     autoCreateProjects: boolean('auto_create_projects').notNull().default(false),
     /**
@@ -133,7 +143,7 @@ export const tenants = pgTable(
     check('tenants_holiday_preload_ck', sql`${t.holidayPreload} in ('none', 'serbia')`),
     check('tenants_timeoff_paid_leave_limit_ck', sql`${t.timeoffPaidLeaveYearlyLimit} between 0 and 60`),
     check('tenants_fiscal_month_ck', sql`${t.fiscalYearStartMonth} between 1 and 12`),
-    // `workforce` (before CD-521) stays allowed for one release, so an app rolled back to it can still save its list.
+    // `workforce` (before CD-521) stays for one release, in step with its three modules (`storedModules`), so a rolled-back app keeps working.
     check('tenants_modules_ck', sql`${t.modules} <@ '{planning,crm,projects,employees,timesheet,timeoff,workforce,finance,reporting}'::text[]`),
     check('tenants_customer_email_language_ck', sql`${t.customerEmailLanguage} in ('en', 'sr')`),
     check('tenants_employee_weekly_hours_ck', sql`${t.employeeDefaultWeeklyHours} between 1 and 60`),

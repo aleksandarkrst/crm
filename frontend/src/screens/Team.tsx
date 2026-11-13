@@ -78,7 +78,8 @@ function TeamTab() {
     if (link) setShownLinks((prev) => ({ ...prev, [id]: link }));
   };
   return (
-    <div className="card" style={{ overflow: 'hidden' }}>
+    // No inline overflow: the phone rule `.card:has(> .table-head)` scrolls the table sideways (CD-521).
+    <div className="card">
       <div className="table-head th" style={{ gridTemplateColumns: cols }}>
         <span>Member</span>
         <span>Email</span>
