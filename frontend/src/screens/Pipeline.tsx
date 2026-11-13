@@ -179,7 +179,7 @@ function PipelineBoard({ stages, leads }: { stages: Stage[]; leads: Lead[] }) {
                     )}
                     {/* The stage owner (CD-363), shown when it isn't the opportunity's owner. */}
                     {l.outcome === 'open' && stageOwnerId(s, l) && stageOwnerId(s, l) !== l.ownerId && (
-                      <span className="avatar" title={'Stage owner: ' + memberName(s, stageOwnerId(s, l))} style={{ width: 20, height: 20, fontSize: 9, marginLeft: 'auto' }}>
+                      <span className="avatar" data-testid="card-stage-owner" title={'Stage owner: ' + memberName(s, stageOwnerId(s, l))} style={{ width: 20, height: 20, fontSize: 9, marginLeft: 'auto' }}>
                         {initialsOf(memberName(s, stageOwnerId(s, l)))}
                       </span>
                     )}
