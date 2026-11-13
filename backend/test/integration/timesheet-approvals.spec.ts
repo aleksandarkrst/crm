@@ -63,7 +63,7 @@ beforeAll(async () => {
 });
 
 describe('the Approvals list', () => {
-  it('shows a manager their direct reports to approve and indirect reports read-only; others see nobody', async () => {
+  it('shows a manager their direct reports to approve and indirect reports read-only; refuses everyone else (CD-521)', async () => {
     const forMarko = await list(marko);
     expect(forMarko.rows.map((r) => r.employee.id).sort()).toEqual([bojanId, draganId, vesnaId].sort());
     expect(forMarko.rows.find((r) => r.employee.id === draganId)).toMatchObject({ right: 'approver', status: 'submitted', waiting: 5, approvable: true, missing: [] });
@@ -72,7 +72,10 @@ describe('the Approvals list', () => {
     const forSenior = await list(senior);
     expect(forSenior.rows.find((r) => r.employee.id === draganId)!.right).toBeNull();
     expect(forSenior.rows.find((r) => r.employee.id === markoId)!.right).toBe('approver');
-    expect((await list(peer)).rows).toEqual([]);
+    // Nobody reports to Peer or Dragan and neither is an Admin: Approvals isn't theirs, not even their own week.
+    await ok('GET', '/timesheet/approvals', as(peer), 403);
+    await ok('GET', `/timesheet/approvals?week=${monday}`, as(dragan), 403);
+    await ok('GET', `/timesheet/approvals/${draganId}/week?week=${monday}`, as(dragan), 403);
   });
   it('shows an Admin everyone: an override where the manager can act, the approver where nobody else can, nothing on their own row', async () => {
     const rows = (await list(owner)).rows;

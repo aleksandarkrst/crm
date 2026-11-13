@@ -4,6 +4,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { addMember, call, createTenant, firstFunnel, type Funnel, ok, readyCompany, type Session, signIn } from './helpers';
+import { asTenantSql } from './people-helpers';
 
 let owner: Session;
 let admin: Session;
@@ -36,7 +37,7 @@ describe('workspace settings', () => {
   });
 
   it('modules: all on by default; owners and admins turn them off; GET /me lists them per workspace (CD-279)', async () => {
-    const all = ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting'];
+    const all = ['planning', 'crm', 'projects', 'employees', 'timesheet', 'timeoff', 'finance', 'reporting'];
     expect((await ok('GET', '/workspace', as(member))).modules).toEqual(all);
     expect((await call('PATCH', '/workspace', { ...as(member), body: { modules: ['crm'] } })).status).toBe(403);
     expect((await call('PATCH', '/workspace', { ...as(admin), body: { modules: ['crm', 'service'] } })).status).toBe(400);
@@ -47,6 +48,18 @@ describe('workspace settings', () => {
     // None is allowed too (the switcher then says the workspace has no modules turned on).
     expect((await ok('PATCH', '/workspace', { ...as(owner), body: { modules: [] } })).modules).toEqual([]);
     await ok('PATCH', '/workspace', { ...as(owner), body: { modules: all } });
+  });
+
+  it('keeps the legacy workforce key in the row while Employees, Timesheet or Time off is on, never in the API (CD-521)', async () => {
+    const stored = async () => (await asTenantSql<{ modules: string[] }>(tenant, 'select modules from tenants where id = $1', [tenant]))[0]!.modules;
+    expect(await stored()).toContain('workforce');
+    expect((await ok('PATCH', '/workspace', { ...as(admin), body: { modules: ['crm', 'timeoff'] } })).modules).toEqual(['crm', 'timeoff']);
+    expect((await stored()).sort()).toEqual(['crm', 'timeoff', 'workforce']);
+    expect((await ok('GET', '/me', { token: member.token })).tenants.find((t: { id: string }) => t.id === tenant).modules).toEqual(['crm', 'timeoff']);
+    await ok('PATCH', '/workspace', { ...as(admin), body: { modules: ['crm', 'projects'] } });
+    expect(await stored()).toEqual(['crm', 'projects']);
+    expect((await call('PATCH', '/workspace', { ...as(admin), body: { modules: ['crm', 'workforce'] } })).status).toBe(400);
+    await ok('PATCH', '/workspace', { ...as(owner), body: { modules: ['planning', 'crm', 'projects', 'employees', 'timesheet', 'timeoff', 'finance', 'reporting'] } });
   });
 
   it('owners and admins can change them, and the new name shows in GET /me', async () => {

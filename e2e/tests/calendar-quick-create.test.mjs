@@ -255,10 +255,10 @@ describe('calendar quick create and in-place editing', () => {
     assert.match(await page.$eval('[data-testid=meeting-guests-list] [data-kind=external]', (el) => el.innerText), /gita@gamma\.example\.com/);
   });
 
-  step('"Invite a colleague" opens the invitation in Settings → Team', async () => {
+  step('"Invite a colleague" opens the invitation on Employees → Team (CD-521)', async () => {
     await click(page, '[data-testid=meeting-guests-add] .picker-search');
     await click(page, '[data-testid=guests-invite-colleague]');
-    await page.waitForFunction(() => location.pathname === '/settings/team');
+    await page.waitForFunction(() => location.pathname === '/team');
     await page.waitForFunction(() => document.body.innerText.includes('Invite a teammate'));
   });
 

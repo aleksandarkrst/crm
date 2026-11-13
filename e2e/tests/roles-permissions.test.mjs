@@ -54,7 +54,7 @@ describe('roles and permissions', () => {
 
   step('the Team tab invites without functional roles; the new member is an Employee', async () => {
     const hana = await browser.person('hana');
-    await olga.goto(`${BASE_URL}/settings/team`, { waitUntil: 'networkidle0' });
+    await olga.goto(`${BASE_URL}/team`, { waitUntil: 'networkidle0' });
     await clickButton(olga, 'Invite member');
     await olga.type('[data-testid=invite-first-name]', 'Invited');
     await olga.type('[data-testid=invite-last-name]', 'Person');

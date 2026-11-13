@@ -38,7 +38,7 @@ describe('emails: invitations and notification settings', () => {
 
   let link;
   step('inviting someone emails them the link, and the Team tab says it was sent', async () => {
-    await page.goto(BASE_URL + '/settings/team', { waitUntil: 'networkidle0' });
+    await page.goto(BASE_URL + '/team', { waitUntil: 'networkidle0' });
     await clickButton(page, 'Invite member');
     await page.type('[data-testid=invite-first-name]', 'Invited');
     await page.type('[data-testid=invite-last-name]', 'Person');

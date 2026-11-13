@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { askConfirm } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Layout';
@@ -48,7 +48,7 @@ export function Approvals() {
   const { s, flash } = useStore();
   const [params, setParams] = useSearchParams();
   const weekParam = params.get('week') ?? undefined;
-  const { data, error, set } = useApprovals(weekParam);
+  const { data, error, set, refused } = useApprovals(weekParam);
   const [busy, setBusy] = useState<string | null>(null);
   const go = (monday: string | null) => setParams(monday ? { week: monday } : {});
 
@@ -74,6 +74,8 @@ export function Approvals() {
     setBusy(null);
   };
 
+  // Approvals is for managers, Admins and the owner (CD-521): anyone else lands on their own Timesheet.
+  if (refused) return <Navigate to={paths.timesheet()} replace />;
   if (!data) {
     return <Screen title="Approvals">{error ? <EmptyState title="Approvals could not be loaded" text={error} /> : <div className="ts-help">Loading</div>}</Screen>;
   }

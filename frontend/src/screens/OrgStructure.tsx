@@ -443,7 +443,7 @@ export function OrgStructure() {
                 </button>
               )}
               {admin && !dirty && (
-                <button type="button" className="btn btn-primary" onClick={() => navigate(paths.settings('team') + '?invite=1')}>
+                <button type="button" className="btn btn-primary" onClick={() => navigate(paths.team(true))}>
                   Invite people
                 </button>
               )}

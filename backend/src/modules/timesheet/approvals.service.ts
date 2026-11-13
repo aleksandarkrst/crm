@@ -164,10 +164,16 @@ export class ApprovalsService {
     return [...new Set([...events.map((r) => r.date), ...changes.map((r) => r.date)])].sort();
   }
 
+  /** Approvals is for managers (someone reports to them), Admins and the owner (CD-521): everyone else gets 403. */
+  private approver(access: CallerAccess) {
+    if (!access.isAdmin && !access.isManager) throw new ForbiddenException('Approvals are for managers, admins and the owner');
+  }
+
   /** The list for one week (the latest whose deadline passed, by default): one row per employee, from three queries. */
   list(ctx: TenantContext, week?: string): Promise<ApprovalsView> {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const access = await this.people.of(ctx, tx);
+      this.approver(access);
       const { settings, timeZone, now, today } = await this.context(tx, ctx.tenantId);
       const thisWeek = mondayOf(today);
       const holidays = await holidaysBetween(tx, addDays(thisWeek, -14), addDays(thisWeek, 45));
@@ -257,10 +263,11 @@ export class ApprovalsService {
     });
   }
 
-  /** One person's week as their approver sees it (design `#cd-157b`); 403 for anyone outside the caller's reports. */
+  /** One person's week as their approver sees it (design `#cd-157b`); 403 for anyone outside the caller's reports, and for callers who approve nobody. */
   personWeek(ctx: TenantContext, employeeId: string, week?: string): Promise<ApproverWeek> {
     return this.database.withTenant(ctx.tenantId, async (tx) => {
       const access = await this.people.of(ctx, tx);
+      this.approver(access);
       const [p] = await this.target(tx, access, employeeId);
       const { settings, timeZone, now, today } = await this.context(tx, ctx.tenantId);
       const view = await readWeek(tx, await callerFor(tx, employeeId, today, settings, timeZone, now), week ?? mondayOf(today));

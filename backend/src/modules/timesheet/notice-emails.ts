@@ -76,7 +76,7 @@ export function reminderEmail(c: Common, w: WeekFacts): MailMessage {
     [`Your timesheet for week ${w.weekNumber} (${range(w.weekStart)}) is due ${dayLabel(w.deadline.date)} at ${w.deadline.time}.`],
     [entered(c, w), missingLine(w)],
     timesheetLink(c, w),
-    `You get this reminder because ${c.workspaceName} sends one before each timesheet deadline (Settings → Workforce → Approvals).`,
+    `You get this reminder because ${c.workspaceName} sends one before each timesheet deadline (Settings → Timesheet → Approvals).`,
   );
 }
 
@@ -88,7 +88,7 @@ export function lateEmail(c: Common, w: WeekFacts): MailMessage {
     [`The deadline passed on ${dayLabel(w.deadline.date)} at ${w.deadline.time}. You can still submit, but the week will be marked as submitted late.`],
     [entered(c, w), missingLine(w)],
     timesheetLink(c, w),
-    `You get this email because ${c.workspaceName} sends a notice when a timesheet deadline passes (Settings → Workforce → Approvals).`,
+    `You get this email because ${c.workspaceName} sends a notice when a timesheet deadline passes (Settings → Timesheet → Approvals).`,
   );
 }
 
@@ -102,7 +102,7 @@ export function autoSubmittedEmail(c: Common, w: WeekFacts): MailMessage {
     ],
     [entered(c, w)],
     timesheetLink(c, w),
-    `You get this email because ${c.workspaceName} submits timesheets automatically at the deadline (Settings → Workforce → Approvals).`,
+    `You get this email because ${c.workspaceName} submits timesheets automatically at the deadline (Settings → Timesheet → Approvals).`,
   );
 }
 
@@ -120,7 +120,7 @@ export function lateSummaryEmail(c: Common, w: Pick<WeekFacts, 'weekStart' | 'we
     [`${people.length === 1 ? 'This person' : 'These people'} you approve for missed the deadline for week ${w.weekNumber} (${range(w.weekStart)}).`],
     people.map((p) => [p.name, p.autoSubmitted ? 'auto-submitted (late)' : `not submitted · ${hours(p.enteredMinutes, c.timeFormat)}`]),
     { label: 'Open Approvals', href: `${base(c.appUrl)}/approvals?week=${w.weekStart}` },
-    `You get this email because you approve timesheets in ${c.workspaceName} and its after-deadline emails are on (Settings → Workforce → Approvals).`,
+    `You get this email because you approve timesheets in ${c.workspaceName} and its after-deadline emails are on (Settings → Timesheet → Approvals).`,
   );
 }
 

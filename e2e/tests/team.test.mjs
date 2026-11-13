@@ -15,7 +15,7 @@ describe('team and invitations', () => {
 
   /** Invites `address` by name (CD-318: the invitation greets them, and the member starts with that name). */
   async function createInvite(page, address, [first, last]) {
-    await page.goto(BASE_URL + '/settings/team', { waitUntil: 'networkidle0' });
+    await page.goto(BASE_URL + '/team', { waitUntil: 'networkidle0' });
     await clickButton(page, 'Invite member');
     await page.type('[data-testid=invite-first-name]', first);
     await page.type('[data-testid=invite-last-name]', last);
@@ -50,7 +50,7 @@ describe('team and invitations', () => {
   });
 
   step('the team tab shows the owner as (you)', async () => {
-    await owner.goto(BASE_URL + '/settings/team', { waitUntil: 'networkidle0' });
+    await owner.goto(BASE_URL + '/team', { waitUntil: 'networkidle0' });
     await owner.waitForFunction(() => document.body.innerText.includes('Olivia Owner'));
     const body = await text(owner);
     assert.ok(body.includes('(you)'), '(you) marker');
@@ -95,7 +95,7 @@ describe('team and invitations', () => {
   });
 
   step('the owner sees the new member and makes them an admin', async () => {
-    await owner.goto(BASE_URL + '/settings/team', { waitUntil: 'networkidle0' });
+    await owner.goto(BASE_URL + '/team', { waitUntil: 'networkidle0' });
     await owner.waitForFunction(() => document.body.innerText.includes('Bob Builder'));
     const changed = await owner.evaluate(() => {
       const row = [...document.querySelectorAll('.table-row')].find((r) => r.textContent.includes('Bob Builder'));
@@ -124,7 +124,7 @@ describe('team and invitations', () => {
   });
 
   step('the owner withdraws the invitation', async () => {
-    await owner.goto(BASE_URL + '/settings/team', { waitUntil: 'networkidle0' });
+    await owner.goto(BASE_URL + '/team', { waitUntil: 'networkidle0' });
     await click(owner, 'button[title="Withdraw invitation"]');
     const withdrawn = await eventually(async () => (await api(owner, '/team')).invitations.length === 0);
     assert.ok(withdrawn, 'no pending invitations left');

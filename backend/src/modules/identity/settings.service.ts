@@ -6,7 +6,7 @@ import { AuditService } from '../../shared/audit/audit.service';
 import type { AuthUser, TenantContext } from '../../shared/authorization';
 import { DatabaseService } from '../../shared/database/database.service';
 import { JobsService } from '../../shared/events/jobs.service';
-import { employees, funnels, memberships, tenants, users } from '../../shared/database/schema';
+import { employees, funnels, memberships, shownModules, storedModules, tenants, users } from '../../shared/database/schema';
 import { applyCeoRule, syncMemberNames } from '../people';
 import { IdentityService } from './identity.service';
 import { logoContentType, logoProblem, type UploadedLogo } from './workspace-logo';
@@ -86,10 +86,12 @@ function companyPatch(c: CompanyInput | undefined) {
   return Object.fromEntries(Object.entries(c).map(([k, v]) => [cols[k as keyof typeof cols], v]));
 }
 
-function present<T extends TermColumns & TimesheetColumns & CompanyColumns>(r: T) {
+function present<T extends TermColumns & TimesheetColumns & CompanyColumns & { modules: string[] }>(r: T) {
   const { coLegalName, coAddress, coPib, coMb, coPlace, coSignatoryName, coSignatoryTitle, coLegalBasis, projectTerm, projectTermPlural, taskTerm, taskTermPlural, tsDayMinutes, tsDayStart, tsDayEnd, tsWorkingDays, tsTimeFormat, tsMaxDayHours, tsDeadlineWeekday, tsDeadlineTime, tsDeadlineWeek, tsAutoSubmit, tsApprovalMode, tsReminderHours, tsAfterDeadlineEmails, tsProjectTime, ...row } = r;
   return {
     ...row,
+    // Without the legacy `workforce` kept for rollbacks (CD-521).
+    modules: shownModules(row.modules),
     company: { legalName: coLegalName, address: coAddress, pib: coPib, mb: coMb, place: coPlace, signatoryName: coSignatoryName, signatoryTitle: coSignatoryTitle, legalBasis: coLegalBasis },
     terms: { project: projectTerm, projects: projectTermPlural, task: taskTerm, tasks: taskTermPlural } satisfies WorkspaceTerms,
     timesheet: {
@@ -225,7 +227,7 @@ export class SettingsService {
       }
       const [row] = await tx
         .update(tenants)
-        .set({ ...rest, ...names, ...timesheetPatch(timesheet, before), ...companyPatch(company) })
+        .set({ ...rest, ...(rest.modules ? { modules: storedModules(rest.modules) } : {}), ...names, ...timesheetPatch(timesheet, before), ...companyPatch(company) })
         .where(eq(tenants.id, ctx.tenantId))
         .returning(workspaceColumns);
       if (!row) throw new NotFoundException('Workspace not found');

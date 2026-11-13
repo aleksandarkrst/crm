@@ -19,8 +19,8 @@ const PHONE = { width: 390, height: 844, isMobile: true, hasTouch: true };
 const CRM_PAGES = ['Overview', 'Companies', 'Pipeline', 'Today', 'Calendar', ...(VISIT_PLANS_ENABLED ? ['Visit plans'] : []), 'Contacts', 'Products', ...(VISIT_PLANS_ENABLED ? ['Reports'] : [])];
 /** The sidebar's last CRM page, and where it goes. */
 const LAST_PAGE = VISIT_PLANS_ENABLED ? { label: 'Reports', path: '/reports/' } : { label: 'Products', path: '/products' };
-// The owner also sees Workforce's manager pages: Approvals (CD-157), Today's status (CD-162), Time off (CD-164).
-const WORKFORCE_PAGES = ['Timesheet', 'Approvals', "Today's status", 'Time off', 'Org structure'];
+// Workforce split into Employees, Timesheet and Time off (CD-521). The owner also sees Team and Today's status (CD-162).
+const EMPLOYEES_PAGES = ['Team', 'Org structure', "Today's status"];
 
 describe('module and workspace switcher', () => {
   const browser = useBrowser();
@@ -70,7 +70,7 @@ describe('module and workspace switcher', () => {
     const rows = await modules();
     assert.deepEqual(
       rows.map((m) => m.id),
-      ['crm', 'projects', 'workforce', 'settings', 'planning', 'finance', 'reporting'],
+      ['crm', 'projects', 'employees', 'timesheet', 'timeoff', 'settings', 'planning', 'finance', 'reporting'],
     );
     assert.deepEqual(rows.find((m) => m.current)?.id, 'crm');
     // One workspace: no workspace row, its name next to "Modules".
@@ -87,15 +87,15 @@ describe('module and workspace switcher', () => {
     );
   });
 
-  step('picking Workforce opens Org structure with only its own pages in the sidebar', async () => {
-    await click(page, `${POP} [data-module=workforce]`);
+  step('picking Employees opens Org structure with only its own pages in the sidebar', async () => {
+    await click(page, `${POP} [data-module=employees]`);
     await page.waitForFunction(() => location.pathname === '/org');
     await closed();
-    await inModule('workforce');
-    assert.deepEqual(await sidebar(), { module: 'workforce', pages: WORKFORCE_PAGES });
-    assert.equal((await page.$eval(LOGO, (el) => el.textContent)).trim(), 'Workforce');
+    await inModule('employees');
+    assert.deepEqual(await sidebar(), { module: 'employees', pages: EMPLOYEES_PAGES });
+    assert.equal((await page.$eval(LOGO, (el) => el.textContent)).trim(), 'Employees');
     await click(page, LOGO);
-    assert.equal((await modules()).find((m) => m.current)?.id, 'workforce');
+    assert.equal((await modules()).find((m) => m.current)?.id, 'employees');
     await click(page, `${POP} [data-module=crm]`);
     await page.waitForFunction(() => location.pathname === '/pipeline');
     // The URL changes first; the sidebar follows once the screen has loaded (a transition).
@@ -104,17 +104,17 @@ describe('module and workspace switcher', () => {
     assert.deepEqual(await sidebar(), { module: 'crm', pages: CRM_PAGES });
   });
 
-  step('an employee card is Workforce; Settings and the profile keep the last module', async () => {
+  step('an employee card is Employees; Settings and the profile keep the last module', async () => {
     const { employeeId } = await api(page, '/people/access');
     assert.ok(employeeId, 'the owner has an employee card');
     await page.goto(`${BASE_URL}/people/${employeeId}`, { waitUntil: 'networkidle0' });
-    await inModule('workforce');
+    await inModule('employees');
     await click(page, '.app-sidebar a[href="/settings"]');
     await page.waitForFunction(() => location.pathname.startsWith('/settings/'));
-    assert.deepEqual(await sidebar(), { module: 'workforce', pages: WORKFORCE_PAGES });
-    // Remembered in this browser: still Workforce after a reload.
+    assert.deepEqual(await sidebar(), { module: 'employees', pages: EMPLOYEES_PAGES });
+    // Remembered in this browser: still Employees after a reload.
     await page.reload({ waitUntil: 'networkidle0' });
-    await inModule('workforce');
+    await inModule('employees');
     // Back in the CRM, the profile shows the CRM.
     await page.goto(BASE_URL + '/today', { waitUntil: 'networkidle0' });
     await inModule('crm');
@@ -151,6 +151,8 @@ describe('module and workspace switcher', () => {
     await page.keyboard.press('ArrowRight');
     assert.equal(await focused(), 'projects');
     await page.keyboard.press('ArrowDown');
+    assert.equal(await focused(), 'timesheet');
+    await page.keyboard.press('ArrowDown');
     assert.equal(await focused(), 'settings');
     await page.keyboard.press('ArrowDown');
     assert.equal(await focused(), 'finance');
@@ -158,9 +160,9 @@ describe('module and workspace switcher', () => {
     assert.ok(await page.$(POP), 'a locked module does nothing on Enter');
     await page.keyboard.press('ArrowUp');
     await page.keyboard.press('ArrowLeft');
-    assert.equal(await focused(), 'workforce');
+    assert.equal(await focused(), 'timeoff');
     await page.keyboard.press('Enter');
-    await page.waitForFunction(() => location.pathname === '/org');
+    await page.waitForFunction(() => location.pathname === '/timeoff');
     await closed();
   });
 
@@ -270,7 +272,7 @@ describe('module and workspace switcher', () => {
     const rows = await modules();
     assert.deepEqual(
       rows.filter((m) => m.locked && m.sub === 'Not in this workspace').map((m) => m.id),
-      ['projects', 'workforce', 'planning', 'finance', 'reporting'],
+      ['projects', 'employees', 'timesheet', 'timeoff', 'planning', 'finance', 'reporting'],
     );
     await click(page, `${POP} [data-module=settings]`);
     await page.waitForFunction(() => location.pathname.startsWith('/settings'));
@@ -294,7 +296,7 @@ describe('module and workspace switcher', () => {
     await toast(`${firstWorkspace} has no modules turned on that open here.`);
     assert.ok((await page.$eval(LOGO, (el) => el.title)).includes(secondWorkspace), 'still in the second workspace');
     assert.equal(new URL(page.url()).pathname, '/pipeline');
-    await setModules(firstWorkspace, ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting']);
+    await setModules(firstWorkspace, ['planning', 'crm', 'projects', 'employees', 'timesheet', 'timeoff', 'finance', 'reporting']);
   });
 
   step("a member doesn't see Workspace settings in the switcher or the sidebar (CD-523)", async () => {
@@ -310,7 +312,7 @@ describe('module and workspace switcher', () => {
     assert.equal(await member.$(`${POP} [data-module=settings]`), null, 'no Workspace settings tile');
     assert.equal(await member.$('.app-sidebar a[href="/settings"]'), null, 'no Settings in the sidebar');
     // Every module back on for the steps after.
-    await setModules(secondWorkspace, ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting']);
+    await setModules(secondWorkspace, ['planning', 'crm', 'projects', 'employees', 'timesheet', 'timeoff', 'finance', 'reporting']);
     await page.reload({ waitUntil: 'networkidle0' });
   });
 
@@ -329,12 +331,12 @@ describe('module and workspace switcher', () => {
     assert.deepEqual(box, { left: 0, right: 390, bottom: 844 });
     const sideways = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth);
     assert.ok(sideways <= 0, `scrolls sideways by ${sideways}px`);
-    await click(page, `${POP} [data-module=workforce]`);
-    await page.waitForFunction(() => location.pathname === '/org');
+    await click(page, `${POP} [data-module=timesheet]`);
+    await page.waitForFunction(() => location.pathname === '/timesheet');
     await closed();
-    // Workforce's bottom bar: Timesheet, Time off (CD-164), Org structure and "More".
-    await inModule('workforce');
-    assert.deepEqual((await sidebar()).pages, ['Timesheet', 'Time off', 'Org structure']);
+    // Timesheet's bottom bar (CD-521): Timesheet and "More" (Approvals is under it).
+    await inModule('timesheet');
+    assert.deepEqual((await sidebar()).pages, ['Timesheet']);
     assert.ok(await page.$eval('[data-testid=nav-more]', (el) => el.getClientRects().length > 0), '"More" in the bar');
     // The backdrop closes it, too.
     await click(page, '[data-testid=nav-more]');

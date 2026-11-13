@@ -3,7 +3,7 @@ import { and, asc, eq, ne, sql } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import type { AuthUser } from '../../shared/authorization';
 import { DatabaseService } from '../../shared/database/database.service';
-import { memberships, type MembershipRole, tenants, users } from '../../shared/database/schema';
+import { memberships, type MembershipRole, shownModules, tenants, users } from '../../shared/database/schema';
 import { TenantProvisioning } from '../../shared/events/tenant-provisioning';
 import { linkNewMember, syncWorkEmail } from '../people';
 import { signInMethod } from './signup-email';
@@ -121,7 +121,7 @@ export class IdentityService {
 
   /** The user's workspaces with their member counts (the sidebar switcher shows them, CD-214). */
   async listTenants(userId: string) {
-    return this.database.db
+    const rows = await this.database.db
       .select({
         id: tenants.id,
         name: tenants.name,
@@ -134,6 +134,8 @@ export class IdentityService {
       .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
       .where(eq(memberships.userId, userId))
       .orderBy(asc(tenants.name));
+    // Without the legacy `workforce` kept for rollbacks (CD-521).
+    return rows.map((t) => ({ ...t, modules: shownModules(t.modules) }));
   }
 
   /**
@@ -148,7 +150,7 @@ export class IdentityService {
       await tx.execute(sql`select set_config('app.tenant_id', ${tenant!.id}, true)`);
       await this.provisioning.run(tx, tenant!.id);
       await linkNewMember(tx, { tenantId: tenant!.id, userId });
-      return { id: tenant!.id, name: tenant!.name, slug: tenant!.slug, role: 'owner' as const, memberCount: 1, modules: tenant!.modules };
+      return { id: tenant!.id, name: tenant!.name, slug: tenant!.slug, role: 'owner' as const, memberCount: 1, modules: shownModules(tenant!.modules) };
     });
   }
 }

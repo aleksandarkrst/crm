@@ -232,7 +232,7 @@ export interface ApiWorkspace {
   autoCreateProjects: boolean;
   /** Hour limit mode (CD-149, Settings → Projects): Warn saves time beyond someone's limit after a confirmation, Block refuses it. */
   hourLimitMode?: 'warn' | 'block';
-  /** The modules turned on (CD-279): planning, crm, projects, workforce, finance, reporting. */
+  /** The modules turned on (CD-279): planning, crm, projects, employees, timesheet, timeoff, finance, reporting (workforce until CD-521). */
   modules: string[];
   /** What the workspace calls projects and tasks (CD-143), singular and plural. */
   terms: WorkspaceTerms;

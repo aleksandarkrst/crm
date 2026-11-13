@@ -10,8 +10,11 @@ import type { IconName } from './icons';
 export type LockReason = 'soon' | 'role' | 'off' | 'plan';
 export const LOCK_LABEL: Record<LockReason, string> = { soon: 'Coming soon', role: 'Owners and admins', off: 'Not in this workspace', plan: 'Not in your plan' };
 
-/** The modules a workspace turns on or off (the API's `modules`); Workspace settings is always there. */
-export const WORKSPACE_MODULES = ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting'] as const;
+/**
+ * The modules a workspace turns on or off (the API's `modules`); Workspace settings is always there.
+ * Workforce was split into Employees, Timesheet and Time off (CD-521).
+ */
+export const WORKSPACE_MODULES = ['planning', 'crm', 'projects', 'employees', 'timesheet', 'timeoff', 'finance', 'reporting'] as const;
 export type WorkspaceModule = (typeof WORKSPACE_MODULES)[number];
 
 /** One page in a module's sidebar (CD-223). */
@@ -24,6 +27,8 @@ export interface NavDef {
   phone?: boolean;
   /** Owners, admins and managers (people who see their team) only: Reports (CD-135, CD-142). */
   managers?: boolean;
+  /** Owners and admins only: Team (CD-521), as Members was in Settings (CD-523). */
+  admins?: boolean;
   /** The label is the workspace's name for projects or tasks (CD-143). */
   term?: 'Projects' | 'Tasks';
 }
@@ -71,19 +76,27 @@ const PROJECTS_NAV: NavDef[] = [
   { to: paths.workOrders, label: 'Work orders', icon: 'M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.3-.7-.7-2.3 2.4-2.4Z', phone: true },
 ];
 
-/** Workforce's pages: Timesheet (CD-152), Approvals and Today's status (CD-157, CD-162: managers and Admins), Time off (milestone 16) and Org structure. */
-const WORKFORCE_NAV: NavDef[] = [
+/** Employees' pages (CD-521): Team (Members, moved from Settings), the Org structure (CD-137) and Today's status (CD-162: managers and Admins). */
+const EMPLOYEES_NAV: NavDef[] = [
+  { to: paths.team(), label: 'Team', icon: 'M7 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM17 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 20v-1a5 5 0 0 1 10 0v1M12 20v-1a5 5 0 0 1 10 0v1', admins: true },
+  { to: paths.org(), label: 'Org structure', icon: 'M9.5 3.5h5v4h-5zM3.5 16.5h5v4h-5zM15.5 16.5h5v4h-5zM12 7.5v4.5M6 16.5v-2.5h12v2.5', phone: true },
+  { to: paths.teamStatus(), label: "Today's status", icon: 'M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM22 19v-1a4 4 0 0 0-3-3.9M16 3.1a3.5 3.5 0 0 1 0 6.8', managers: true },
+];
+
+/** Timesheet's pages (CD-521): Timesheet (CD-152) and Approvals (CD-157: managers, Admins and the owner; the API refuses anyone else). */
+const TIMESHEET_NAV: NavDef[] = [
   { to: paths.timesheet(), label: 'Timesheet', icon: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2', phone: true },
   { to: paths.approvals(), label: 'Approvals', icon: 'M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11', managers: true },
-  { to: paths.teamStatus(), label: "Today's status", icon: 'M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM22 19v-1a4 4 0 0 0-3-3.9M16 3.1a3.5 3.5 0 0 1 0 6.8', managers: true },
-  { to: paths.timeOff(), label: 'Time off', icon: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15l2 2 4-4', phone: true },
-  { to: paths.org(), label: 'Org structure', icon: 'M9.5 3.5h5v4h-5zM3.5 16.5h5v4h-5zM15.5 16.5h5v4h-5zM12 7.5v4.5M6 16.5v-2.5h12v2.5', phone: true },
 ];
+
+/** Time off's one page (milestone 16; its own module since CD-521). */
+const TIMEOFF_NAV: NavDef[] = [{ to: paths.timeOff(), label: 'Time off', icon: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15l2 2 4-4', phone: true }];
 
 /**
  * The modules in the switcher (CD-214, CD-223, CD-279), in the design's grid order. Each is its own
- * app with its own sidebar. Workforce goes to the Org structure page (milestone 13, CD-137); its
- * employee cards (/people/…) belong to it too. Workspace settings opens Settings, which (like the
+ * app with its own sidebar. Employees goes to the Org structure page (milestone 13, CD-137), which
+ * everyone may open; its employee cards (/people/…) belong to it too. Timesheet and Time off were
+ * part of Workforce until CD-521. Workspace settings opens Settings, which (like the
  * profile) belongs to no module: it keeps the last one's sidebar.
  */
 export const MODULES: ModuleDef[] = [
@@ -97,8 +110,10 @@ export const MODULES: ModuleDef[] = [
     nav: CRM_NAV,
   },
   { id: 'projects', name: 'Projects', description: 'Tasks, work orders, dispatch', icon: 'projects', to: paths.projects, screens: ['/projects', '/tasks', '/work-orders', '/workload'], nav: PROJECTS_NAV },
-  { id: 'workforce', name: 'Workforce', description: 'People and capacity', icon: 'workforce', to: paths.org(), screens: ['/timesheet', '/approvals', '/team-status', '/org', '/people'], nav: WORKFORCE_NAV },
-  { id: 'settings', name: 'Workspace settings', description: 'CRM, Projects, Workforce', icon: 'settings', to: paths.settings(), screens: [], nav: [], managers: true, settings: true },
+  { id: 'employees', name: 'Employees', description: 'Team, org structure, who is in today', icon: 'employees', to: paths.org(), screens: ['/team', '/org', '/people', '/team-status'], nav: EMPLOYEES_NAV },
+  { id: 'timesheet', name: 'Timesheet', description: 'Hours and approvals', icon: 'timesheet', to: paths.timesheet(), screens: ['/timesheet', '/approvals'], nav: TIMESHEET_NAV },
+  { id: 'timeoff', name: 'Time off', description: 'Vacation and balances', icon: 'timeoff', to: paths.timeOff(), screens: ['/timeoff'], nav: TIMEOFF_NAV },
+  { id: 'settings', name: 'Workspace settings', description: 'CRM, Projects, people and time', icon: 'settings', to: paths.settings(), screens: [], nav: [], managers: true, settings: true },
   { id: 'planning', name: 'Planning', description: 'Budgets and targets', icon: 'planning', screens: [], nav: [] },
   { id: 'finance', name: 'Finance', description: 'Receivables, payables, bank', icon: 'finance', screens: [], nav: [] },
   { id: 'reporting', name: 'Reporting', description: 'Schedule and utilisation', icon: 'reports', screens: [], nav: [] },
@@ -138,9 +153,10 @@ export function routeModule(pathname: string): ModuleDef | undefined {
   return MODULES.find((m) => m.screens.some((s) => pathname === s || pathname.startsWith(s + '/')));
 }
 
-/** The sidebar items this person sees in a module: Reports only for owners, admins and managers (CD-142). */
+/** The sidebar items this person sees in a module: Reports and Approvals only for owners, admins and managers (CD-142, CD-521); Team only for owners and admins. */
 export function navFor(m: ModuleDef, role: string, seesTeam = false, terms?: Pick<Terms, 'Projects' | 'Tasks'>): NavDef[] {
-  return m.nav.filter((n) => !n.managers || seesTeam || role === 'owner' || role === 'admin').map((n) => (n.term && terms ? { ...n, label: terms[n.term] } : n));
+  const admin = role === 'owner' || role === 'admin';
+  return m.nav.filter((n) => (!n.admins || admin) && (!n.managers || seesTeam || admin)).map((n) => (n.term && terms ? { ...n, label: terms[n.term] } : n));
 }
 
 const lastKey = (userId: string) => `crm.module.${userId}`;
@@ -148,7 +164,9 @@ const lastKey = (userId: string) => `crm.module.${userId}`;
 /** The last module this person was in, in this browser (so Settings keeps its sidebar). */
 export function lastModule(userId: string): ModuleDef | undefined {
   try {
-    const id = localStorage.getItem(lastKey(userId));
+    const stored = localStorage.getItem(lastKey(userId));
+    // Workforce (before CD-521) is Employees now: the page it opened, the Org structure, is there.
+    const id = stored === 'workforce' ? 'employees' : stored;
     return MODULES.find((m) => m.id === id && m.to && !m.settings);
   } catch {
     return undefined;
