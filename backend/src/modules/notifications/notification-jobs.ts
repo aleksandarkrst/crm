@@ -6,7 +6,7 @@ import { DatabaseService } from '../../shared/database/database.service';
 import { companies, dailyDigests, deals, funnels, funnelStages, memberships, tenants, users, visitPlanLines, visitPlans } from '../../shared/database/schema';
 import type { JobPayloads } from '../../shared/events/job-types';
 import { type JobAttempt, JobsService } from '../../shared/events/jobs.service';
-import { visitPlanPeriodLabel } from '../crm';
+import { VISIT_PLANS_ENABLED, visitPlanPeriodLabel } from '../crm';
 import { approvalRequestedEmail, dealAssignedEmail, digestEmail, stageReminderEmail, digestItemCount, isDigestHour, isEmptyDigest, zonedNow } from './digest-content';
 import { DigestService } from './digest.service';
 import { visitPlanEmail } from './visit-plan-email';
@@ -245,6 +245,8 @@ export class NotificationJobs implements OnApplicationBootstrap {
   }
 
   async sendVisitPlan({ tenantId, planId, actorUserId, kind }: JobPayloads['crm.visit-plan-email']): Promise<void> {
+    // Visit plans are switched off for now (CD-522): one still in the queue is dropped.
+    if (!VISIT_PLANS_ENABLED) return;
     const [plan] = await this.database.withTenant(tenantId, (tx) =>
       tx
         .select({ id: visitPlans.id, salespersonUserId: visitPlans.salespersonUserId, periodType: visitPlans.periodType, periodStart: visitPlans.periodStart, periodEnd: visitPlans.periodEnd, note: visitPlans.note })

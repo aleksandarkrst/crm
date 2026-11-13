@@ -6,9 +6,11 @@
 // the quarter's visits (the quarter adds up its monthly plans, CD-212).
 import assert from 'node:assert/strict';
 import { describe } from 'node:test';
+// Visit plans and Reports are switched off for now (CD-522); these steps come back with the flag.
+import { VISIT_PLANS_ENABLED } from '../../frontend/src/lib/features.ts';
 import { api, createReadyCompany, BASE_URL, click, clickButton, createWorkspace, email, eventually, finishOnboarding, signIn, steps, useBrowser } from '../lib/harness.mjs';
 
-describe('visit plan tracking', () => {
+describe('visit plan tracking', { skip: !VISIT_PLANS_ENABLED && 'visit plans are switched off (CD-522)' }, () => {
   const browser = useBrowser();
   const step = steps(browser, 'visit-plan-tracking');
   let olga;

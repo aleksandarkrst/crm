@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { crmApi, type MeetingQuery } from '../lib/api';
+import { VISIT_PLANS_ENABLED } from '../lib/features';
 import { paths } from '../lib/paths';
 import type { MeetingDialogSeed } from '../store/meetings';
 import { useStore } from '../store/store';
@@ -34,7 +35,8 @@ export function MeetingsCard({ record, seed }: { record: { companyId: string } |
   const today = todayIn(tz);
   const filter = 'companyId' in record ? { company: record.companyId } : 'dealId' in record ? { deal: record.dealId } : { contact: record.contactId };
   const all = paths.calendar({ view: 'table', user: 'all', from: SHOW_ALL_FROM, to: addDays(today, 5 * 366), ...filter });
-  const companyId = 'companyId' in record ? record.companyId : null;
+  // No visit counts while visit plans are switched off (CD-522, lib/features.ts).
+  const companyId = VISIT_PLANS_ENABLED && 'companyId' in record ? record.companyId : null;
   const { data: visits } = useVisitProgress(companyId ? 'company-visits:' + companyId : null, () => crmApi.visitSummary({ periodType: 'month', companyId: companyId!, all: true }));
   const { data: quarter } = useVisitProgress(companyId ? 'company-visits-quarter:' + companyId : null, () => crmApi.visitSummary({ periodType: 'quarter', companyId: companyId!, all: true }));
 

@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../shared/database/database.service';
 import { companies, deals, dealTasks, funnels, funnelStages, meetingMinutes, meetingParticipants, meetings, memberships, tenants, users } from '../../shared/database/schema';
-import { planGroupsOf, progressOfGroups, stageLateDays, visitPeriodOf, visitPeriodStartOf } from '../crm';
+import { planGroupsOf, progressOfGroups, stageLateDays, VISIT_PLANS_ENABLED, visitPeriodOf, visitPeriodStartOf } from '../crm';
 import { buildDigest, type Digest, MINUTES_REMINDER_MS, NOT_CLOSED_AFTER_MS, zonedNow } from './digest-content';
 
 /**
@@ -15,7 +15,8 @@ import { buildDigest, type Digest, MINUTES_REMINDER_MS, NOT_CLOSED_AFTER_MS, zon
  *   the planned meetings they organize that ended more than 24 hours ago ("Not closed"), and the
  *   held ones they organize that started in the last 7 days without a summary ("Minutes missing", CD-132);
  * - their visit plan for the current month, and the quarter as the sum of its monthly plans
- *   (CD-212), counted as the plan page counts them (CD-135, "Visits planned this period: N of M held").
+ *   (CD-212), counted as the plan page counts them (CD-135, "Visits planned this period: N of M held");
+ *   left out while visit plans are switched off (CD-522).
  * "Today" is the workspace's date (its time zone), as on the Today screen.
  */
 @Injectable()
@@ -156,7 +157,8 @@ export class DigestService {
       // The current month's plan, and the quarter as the sum of its monthly plans (CD-212).
       const fiscal = workspace?.fiscal ?? 1;
       const periods = (['month', 'quarter'] as const).map((type) => visitPeriodOf(type, visitPeriodStartOf(type, today, fiscal), fiscal)!);
-      const shown = (await Promise.all(periods.map(async (period) => ({ period, group: (await planGroupsOf(tx, period, userId))[0] })))).filter((x) => !!x.group);
+      // None while visit plans are switched off (CD-522).
+      const shown = !VISIT_PLANS_ENABLED ? [] : (await Promise.all(periods.map(async (period) => ({ period, group: (await planGroupsOf(tx, period, userId))[0] })))).filter((x) => !!x.group);
       const counted = await progressOfGroups(
         tx,
         shown.map((x) => x.group!),
