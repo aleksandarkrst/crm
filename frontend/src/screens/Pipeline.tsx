@@ -18,7 +18,7 @@ import { usePageFilters } from '../store/usePageFilters';
 
 export function Pipeline() {
   const store = useStore();
-  const { s, set, session } = store;
+  const { s, set, session, canEditWorkspace } = store;
   const navigate = useNavigate();
   const [view, setView] = useBoardView('crm.pipelineView');
   const seg = s.segment;
@@ -68,11 +68,14 @@ export function Pipeline() {
                   </option>
                 ))}
               </select>
-              <button type="button" title="Edit funnel in Workspace settings" aria-label="Edit funnel" data-testid="pipeline-edit-funnel" onClick={() => navigate(paths.settings('funnel'))}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />
-                </svg>
-              </button>
+              {/* Workspace settings are for owners and admins (CD-523): no pencil for members. */}
+              {canEditWorkspace && (
+                <button type="button" title="Edit funnel in Workspace settings" aria-label="Edit funnel" data-testid="pipeline-edit-funnel" onClick={() => navigate(paths.settings('funnel'))}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />
+                  </svg>
+                </button>
+              )}
             </div>
           </>
         }

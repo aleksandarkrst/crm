@@ -92,7 +92,7 @@ function useFit(nav: RefObject<HTMLElement | null>, count: number) {
  * only its pages; those that don't fit go under "More". On phones it is the bottom bar (CD-70).
  */
 function Sidebar() {
-  const { s, session } = useStore();
+  const { s, session, canEditWorkspace } = useStore();
   const { pathname } = useLocation();
   // The profile name follows edits on the Profile screen; the session name is the signed-in user.
   const name = s.profile.name || session.userName;
@@ -163,9 +163,12 @@ function Sidebar() {
         {fit < items.length && <SideMore items={items.slice(fit)} />}
         <MoreMenu name={name} items={items.filter((n) => !n.phone)} onModules={() => setSwitcher(true)} />
       </nav>
-      <div className="nav-desktop" style={{ width: '100%' }}>
-        <NavItem {...SETTINGS} />
-      </div>
+      {/* Workspace settings: owners and admins only; members don't see it (CD-523). */}
+      {canEditWorkspace && (
+        <div className="nav-desktop" style={{ width: '100%' }}>
+          <NavItem {...SETTINGS} />
+        </div>
+      )}
     </aside>
   );
 }
@@ -255,10 +258,10 @@ function SideMore({ items }: { items: NavDef[] }) {
  * and the workspace switch. Hidden on wider screens by CSS.
  */
 function MoreMenu({ name, items, onModules }: { name: string; items: NavDef[]; onModules: () => void }) {
-  const { session } = useStore();
+  const { session, canEditWorkspace } = useStore();
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
-  const more = [...items, SETTINGS, { to: paths.profile, label: `Profile · ${name}`, icon: PROFILE_ICON }];
+  const more = [...items, ...(canEditWorkspace ? [SETTINGS] : []), { to: paths.profile, label: `Profile · ${name}`, icon: PROFILE_ICON }];
   const active = more.some((n) => onPage(pathname, n.to));
   const fg = active || open ? '#F5F7F6' : '#93A39B';
   const others = session.tenants.filter((t) => t.id !== session.tenant.id);

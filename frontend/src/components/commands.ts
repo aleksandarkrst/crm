@@ -47,7 +47,7 @@ export const ICONS = {
 export type IconPath = keyof typeof ICONS;
 
 export function useCommands(): Command[] {
-  const { s, set, addCompany, meetings, session } = useStore();
+  const { s, set, addCompany, meetings, session, canEditWorkspace } = useStore();
   const terms = useTerms();
   const navigate = useNavigate();
   // On a deal's screen, a new task or contact starts out linked to that deal.
@@ -101,11 +101,14 @@ export function useCommands(): Command[] {
     { id: 'go-profile', group: 'Settings', label: 'Personal preferences', hint: 'Your profile', icon: 'profile', keywords: 'profile account start page', run: go(paths.profile) },
     { id: 'go-workspace', group: 'Settings', label: 'Workspace settings', hint: 'Name, currency, time zone', icon: 'settings', keywords: 'currency time zone fiscal year', run: go(paths.settings()) },
     { id: 'go-team', group: 'Settings', label: 'Team', hint: 'Members and invitations', icon: 'team', keywords: 'users invite members roles', run: go(paths.settings('team')) },
-    { id: 'go-notifications', group: 'Settings', label: 'Notifications', hint: 'Emails you get', icon: 'bell', keywords: 'email digest', run: go(paths.settings('notifications')) },
+    // Your own emails: on Personal preferences for members (CD-523).
+    { id: 'go-notifications', group: 'Settings', label: 'Notifications', hint: 'Emails you get', icon: 'bell', keywords: 'email digest', run: go(paths.notifications(canEditWorkspace)) },
     { id: 'go-project-types', group: 'Settings', label: `${terms.Project} types`, hint: `Stages of ${terms.projects}`, icon: 'project', keywords: 'project stages board', run: go(paths.settings('project-types')) },
     { id: 'go-funnels', group: 'Settings', label: 'Funnel builder', hint: 'Stages and playbooks', icon: 'pipeline', keywords: 'stages checklist playbook', run: go(paths.settings('funnel')) },
     { id: 'go-fields', group: 'Settings', label: 'Customize fields', hint: 'Custom fields', icon: 'settings', keywords: 'custom fields', run: go(paths.settings('fields')) },
     { id: 'go-templates', group: 'Settings', label: 'Document templates', hint: 'Proposals and contracts', icon: 'document', keywords: 'docx proposal contract', run: go(paths.settings('templates')) },
   ];
-  return [...create, ...goTo, ...settings];
+  // Members get only their own settings: no workspace settings here either (CD-523).
+  const personal = ['go-profile', 'go-notifications'];
+  return [...create, ...goTo, ...settings.filter((c) => canEditWorkspace || personal.includes(c.id))];
 }

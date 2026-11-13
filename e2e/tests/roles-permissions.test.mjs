@@ -94,10 +94,10 @@ describe('roles and permissions', () => {
     assert.equal(await olga.$eval('[data-testid=employee-default-hours]', (el) => el.value), '38');
     assert.equal(await olga.$eval('[data-setting=number-required] [role=switch]', (el) => el.getAttribute('aria-checked')), 'true');
 
+    // Members have no Settings at all (CD-523): the URL goes home.
     await mia.goto(`${BASE_URL}/settings/employees`, { waitUntil: 'networkidle0' });
-    await mia.waitForFunction(() => location.pathname === '/settings/workspace');
-    const tabs = await mia.$$eval('button', (els) => els.map((b) => b.textContent.trim()));
-    assert.ok(tabs.includes('Roles & permissions') && !tabs.includes('Employees'), tabs.join(', '));
+    await mia.waitForFunction(() => !location.pathname.startsWith('/settings'));
+    assert.equal(await mia.$('[data-testid=settings-nav]'), null, 'no settings nav');
   });
 
   step('"Org changes" is a notification toggle', async () => {

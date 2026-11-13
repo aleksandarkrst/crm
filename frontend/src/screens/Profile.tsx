@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { FieldRow, GhostInput, GhostSelect, Switch } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { funnelOptions, initialsOf } from '../store/selectors';
 import { useStore } from '../store/store';
 import type { Profile as ProfileT } from '../store/types';
+import { NotificationsTab } from './settings/NotificationsTab';
 
 const selectStyle = { width: '100%' } as const;
 const note = { fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 } as const;
@@ -27,8 +28,13 @@ const START_PAGES = [
  * digest apply to the current workspace. Passwords belong to the sign-in provider.
  */
 export function Profile() {
-  const { s, patchProfile, session, employeeCard } = useStore();
+  const { s, patchProfile, session, employeeCard, canEditWorkspace } = useStore();
   const p = s.profile;
+  // `/profile#notifications` (members' "Notification settings", CD-523) scrolls to that card.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash === '#notifications') document.getElementById('notifications')?.scrollIntoView({ block: 'start' });
+  }, [hash]);
   // Your employee record in this workspace (milestone 13): "My employee card".
   const loadMine = employeeCard.loadMyEmployeeId;
   const mine = s.myEmployeeId;
@@ -85,11 +91,16 @@ export function Profile() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '8px 0 2px', borderTop: '1px solid var(--divider)', marginTop: 8 }}>
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
               <span style={{ fontSize: 13.5, fontWeight: 600 }}>Daily digest email</span>
-              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Every morning: your overdue tasks, tasks due today, opportunities with no next step and those late in their stage in {session.tenant.name}. More in Settings → Notifications.</span>
+              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                Every morning: your overdue tasks, tasks due today, opportunities with no next step and those late in their stage in {session.tenant.name}. More in {canEditWorkspace ? 'Settings → Notifications' : 'Notifications below'}.
+              </span>
             </div>
             <Switch on={p.digest} onClick={() => patchProfile({ digest: !p.digest })} />
           </div>
         </div>
+
+        {/* Members have no Settings (CD-523), so their notification settings are here. */}
+        {!canEditWorkspace && <NotificationsTab title="Notifications" />}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button type="button" className="btn btn-secondary" onClick={session.signOut}>

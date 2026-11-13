@@ -32,7 +32,7 @@ describe('contact notes and read-only funnels', () => {
     assert.equal(await shown.jsonValue(), 'Signs off on budgets over 10k');
   });
 
-  step('a member sees the stage fields read-only', async () => {
+  step('a member has no funnel settings: the URL goes home and Pipeline has no Edit funnel (CD-523)', async () => {
     const { token } = await api(page, '/team/invitations', { method: 'POST', body: JSON.stringify({ email: email('fixes-member'), role: 'member' }) });
     const member = await browser.person('max');
     await member.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
@@ -40,11 +40,9 @@ describe('contact notes and read-only funnels', () => {
     await clickButton(member, 'Accept and join');
     await finishOnboarding(member);
     await member.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });
-    await member.waitForSelector('[data-testid=funnels-read-only]');
-    const fields = await member.$$eval('.gate-chip input, input.ghost, select.form-input, input[type=number]', (els) => els.map((el) => el.disabled));
-    assert.ok(fields.length > 5, 'stage fields found');
-    assert.ok(fields.every(Boolean), 'every stage field is disabled');
-    assert.equal(await member.$('button::-p-text(+ to-do)'), null);
-    assert.equal(await member.$('button::-p-text(+ Add stage to this funnel)'), null);
+    await member.waitForFunction(() => location.pathname === '/pipeline');
+    await member.waitForSelector('[data-testid=pipeline-funnel]');
+    assert.equal(await member.$('[data-testid=funnels-read-only]'), null, 'no funnel settings');
+    assert.equal(await member.$('[data-testid=pipeline-edit-funnel]'), null, 'no Edit funnel pencil');
   });
 });

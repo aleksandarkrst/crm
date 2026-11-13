@@ -3,7 +3,7 @@
 // has its own sidebar, Settings keeps the last one; picking navigates, locked modules do nothing;
 // Escape and an outside click close it; it switches and creates workspaces; pages that don't fit a
 // short window go under "More"; on phones it is a bottom sheet. CD-279: Workspace settings is a
-// tile (locked for members), modules turned off for a workspace say "Not in this workspace", and
+// tile (owners and admins; members don't see it, CD-523), modules turned off for a workspace say "Not in this workspace", and
 // switching to a workspace without the current module opens its first one, or says it has none.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -293,7 +293,7 @@ describe('module and workspace switcher', () => {
     await setModules(firstWorkspace, ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting']);
   });
 
-  step('a member sees Workspace settings locked for "Owners and admins" (CD-279 TC 2)', async () => {
+  step("a member doesn't see Workspace settings in the switcher or the sidebar (CD-523)", async () => {
     const { token } = await api(page, '/team/invitations', { method: 'POST', body: JSON.stringify({ email: email('modsw-member'), role: 'member' }) });
     const member = await browser.person('modsw-member');
     await member.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
@@ -302,8 +302,9 @@ describe('module and workspace switcher', () => {
     await finishOnboarding(member);
     await member.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await click(member, LOGO);
-    const settings = await member.$eval(`${POP} [data-module=settings]`, (el) => ({ locked: el.getAttribute('aria-disabled') === 'true', sub: el.querySelector('.mod-desc').textContent.trim() }));
-    assert.deepEqual(settings, { locked: true, sub: 'Owners and admins' });
+    await member.waitForSelector(`${POP} [data-module=crm]`);
+    assert.equal(await member.$(`${POP} [data-module=settings]`), null, 'no Workspace settings tile');
+    assert.equal(await member.$('.app-sidebar a[href="/settings"]'), null, 'no Settings in the sidebar');
     // Every module back on for the steps after.
     await setModules(secondWorkspace, ['planning', 'crm', 'projects', 'workforce', 'finance', 'reporting']);
     await page.reload({ waitUntil: 'networkidle0' });

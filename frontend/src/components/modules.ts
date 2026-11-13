@@ -121,6 +121,11 @@ export function lockReason(m: ModuleDef, role: string, modules?: readonly string
   return null;
 }
 
+/** The tiles in the module switcher: members don't see Workspace settings at all (CD-523; it was locked for them before). */
+export function switcherModules(role: string): ModuleDef[] {
+  return MODULES.filter((m) => !m.settings || role === 'owner' || role === 'admin');
+}
+
 /** The first module this person can open in a workspace with these modules (switching workspaces, CD-279). */
 export function firstOpenModule(role: string, modules?: readonly string[]): ModuleDef | undefined {
   return MODULES.find((m) => !m.settings && !lockReason(m, role, modules));

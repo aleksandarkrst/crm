@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { type ApiTenant } from '../lib/api';
 import { useStore } from '../store/store';
 import { Icon } from './icons';
-import { currentModule, enabledModules, firstOpenModule, LOCK_LABEL, lockReason, type ModuleDef, MODULES } from './modules';
+import { currentModule, enabledModules, firstOpenModule, LOCK_LABEL, lockReason, type ModuleDef, switcherModules } from './modules';
 import '../styles/header.css';
 
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
@@ -21,7 +21,7 @@ const members = (t: ApiTenant) => (t.memberCount === undefined ? null : `${t.mem
  * Switching reuses the session's `switchTenant`, which loads the other workspace from scratch.
  * Arrow keys move between items; Escape, an outside click or a pick closes it.
  *
- * CD-279: Workspace settings is a tile (owners and admins; "Owners and admins" for the others), and
+ * CD-279: Workspace settings is a tile for owners and admins (members don't see it, CD-523), and
  * a module turned off for the workspace is locked "Not in this workspace". Switching workspaces keeps
  * the module you're in; if the other workspace doesn't have it, a toast says so and its first module
  * opens ("Acme has no Projects. Opening CRM…"); with none that opens here, the toast says that and
@@ -160,7 +160,7 @@ export function ModuleSwitcher({ onClose, trigger }: { onClose: () => void; trig
               )}
             </div>
             <div className="mod-grid" role="list">
-              {MODULES.map((m) => {
+              {switcherModules(session.tenant.role).map((m) => {
                 const locked = lockReason(m, session.tenant.role, s.workspace.modules);
                 const isCurrent = currentId === m.id;
                 return (

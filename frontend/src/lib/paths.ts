@@ -38,6 +38,10 @@ export const paths = {
   reports: (tab = 'visit-plans', params: Partial<Record<'periodType' | 'periodStart' | 'salesperson' | 'company', string | null | undefined>> = {}) => `/reports/${tab}` + query(params),
   settings: (tab = 'workspace') => '/settings/' + tab,
   profile: '/profile',
+  /** Members' notification settings (CD-523): a card on Personal preferences, since members have no Settings. */
+  myNotifications: '/profile#notifications',
+  /** Where your notification settings are: Settings → Notifications for owners and admins, Personal preferences for members. */
+  notifications: (canEditWorkspace: boolean) => (canEditWorkspace ? '/settings/notifications' : '/profile#notifications'),
   /** An employee card (CD-140); `deactivate` opens its Deactivate dialog. */
   employee: (id: string, params?: { deactivate?: boolean }) => '/people/' + encodeURIComponent(id) + (params?.deactivate ? '?deactivate=1' : ''),
   lead: (id: string) => '/deals/' + encodeURIComponent(id),
