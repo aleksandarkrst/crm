@@ -73,7 +73,7 @@ export function NotificationsTab({ title }: { title?: string }) {
   ];
   const row = { display: 'flex', alignItems: 'center', gap: 14, padding: '12px 0', borderBottom: '1px solid var(--divider)' } as const;
   return (
-    <div className="card card-pad" id={title ? 'notifications' : undefined} data-testid="notifications-card" style={{ display: 'flex', flexDirection: 'column' }}>
+    <div className="card card-pad" id={title ? 'notifications' : undefined} data-testid="notifications-card" style={{ display: 'flex', flexDirection: 'column', scrollMarginTop: 72 }}>
       {title && <div className="card-title">{title}</div>}
       {rows.map((n) => (
         <div key={n.id} data-notification={n.id} style={row}>
