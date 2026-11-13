@@ -62,7 +62,7 @@ export function HeaderRight() {
  * no such task the bell says so.
  */
 function Notifications() {
-  const { s, session, openLead } = useStore();
+  const { s, session, openLead, canEditWorkspace } = useStore();
   const pop = usePopover();
   const today = todayIso(s.workspace.timezone);
   const mine = s.leadTasks
@@ -108,7 +108,7 @@ function Notifications() {
           })}
           <div className="menu-divider" />
           <NavButton to={paths.today} label="Open Today" onDone={() => pop.setOpen(false)} />
-          <NavButton to={paths.settings('notifications')} label="Notification settings" onDone={() => pop.setOpen(false)} />
+          <NavButton to={paths.notifications(canEditWorkspace)} label="Notification settings" onDone={() => pop.setOpen(false)} />
         </div>
       )}
     </div>
@@ -148,9 +148,14 @@ function AccountMenu() {
           <div className="caps-muted menu-label">My account</div>
           <NavButton to={paths.profile} label="Personal preferences" onDone={close} />
           <div className="menu-divider" />
-          <div className="caps-muted menu-label">Workspace · {session.tenant.name}</div>
-          <NavButton to={paths.settings()} label={canEditWorkspace ? 'Workspace settings' : 'Settings'} onDone={close} />
-          <div className="menu-divider" />
+          {/* Members don't see the workspace settings (CD-523). */}
+          {canEditWorkspace && (
+            <>
+              <div className="caps-muted menu-label">Workspace · {session.tenant.name}</div>
+              <NavButton to={paths.settings()} label="Workspace settings" onDone={close} />
+              <div className="menu-divider" />
+            </>
+          )}
           <button
             type="button"
             role="menuitem"

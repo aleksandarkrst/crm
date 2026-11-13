@@ -61,10 +61,10 @@ describe('custom fields', () => {
     await signIn(member, email('cf-member'), 'Mia Member');
     await clickButton(member, 'Accept and join');
     await finishOnboarding(member);
+    // Members have no Settings at all (CD-523): Customize fields' URL goes home.
     await member.goto(`${BASE_URL}/settings/fields`, { waitUntil: 'networkidle0' });
-    await member.waitForFunction(() => document.body.innerText.includes('Only owners and admins can add or change custom fields.'));
+    await member.waitForFunction(() => !location.pathname.startsWith('/settings'));
     assert.equal(await member.$('button::-p-text(New field)'), null, 'no New field button for members');
-    assert.equal(await member.$('[data-testid=custom-field] button::-p-text(Delete)'), null, 'no Delete for members');
 
     await member.goto(`${BASE_URL}/deals/${dealId}`, { waitUntil: 'networkidle0' });
     assert.equal(await customValue(member, 'PO number'), 'PO-4711');

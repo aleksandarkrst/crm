@@ -46,11 +46,9 @@ describe('sales bonus rules', () => {
   });
 
   step('a member sees no bonus tab, no bonus card, and gets 403 from the API', async () => {
-    await member.goto(BASE_URL + '/settings/workspace', { waitUntil: 'networkidle0' });
-    await member.waitForFunction(() => document.body.innerText.includes('Customize fields'));
-    assert.ok(!(await text(member)).includes('Sales bonuses'), 'no Sales bonuses tab');
+    // Members have no Settings at all (CD-523): the bonus rules' URL goes home.
     await member.goto(BASE_URL + '/settings/bonuses', { waitUntil: 'networkidle0' });
-    await member.waitForFunction(() => location.pathname === '/settings/workspace');
+    await member.waitForFunction(() => !location.pathname.startsWith('/settings'));
     assert.equal(await member.$('input[aria-label="Rate for Sara Seller"]'), null);
 
     await member.goto(BASE_URL + '/overview', { waitUntil: 'networkidle0' });

@@ -139,29 +139,57 @@ describe('settings and discovery fields', () => {
     }
   });
 
-  step('shows members the workspace settings read-only', async () => {
+  step("members don't see the workspace settings anywhere (CD-523)", async () => {
     const { token } = await api(page, '/team/invitations', { method: 'POST', body: JSON.stringify({ email: email('settings-member'), role: 'member' }) });
     member = await browser.person('member');
     await member.goto(`${BASE_URL}/invite/${token}`, { waitUntil: 'networkidle0' });
     await signIn(member, email('settings-member'), 'Max Member');
     await clickButton(member, 'Accept and join');
     await finishOnboarding(member);
-    await member.goto(`${BASE_URL}/settings/workspace`, { waitUntil: 'networkidle0' });
-    await member.waitForFunction(() => document.body.innerText.includes('Only owners and admins can change the workspace settings.'));
-    assert.equal(await member.$eval('.ws-info-name', (el) => el.textContent.trim()), workspaceName);
-    assert.equal(await member.$('[data-testid="workspace-info-edit"]'), null, 'no Edit for the name and logo');
-    assert.equal(await valueByLabel(member, 'Currency', 'select'), 'RSD');
-    const disabled = await member.evaluate(() =>
-      ['Currency', 'Time zone', 'Fiscal year starts'].map((label) => {
-        const span = [...document.querySelectorAll('span')].find((el) => el.textContent.trim() === label);
-        return span?.parentElement?.querySelector('input, select')?.disabled;
-      }),
-    );
-    assert.deepEqual(disabled, [true, true, true]);
+    // Any settings URL goes home (the start page), without showing the settings first.
+    for (const tab of ['workspace', 'team', 'funnel', 'fields', 'templates', 'roles', 'modules', 'nope']) {
+      await member.goto(`${BASE_URL}/settings/${tab}`, { waitUntil: 'networkidle0' });
+      await member.waitForFunction(() => location.pathname === '/pipeline');
+      assert.equal(await member.$('[data-testid=settings-nav]'), null, `no settings on /settings/${tab}`);
+    }
+    // Not in the sidebar, the account menu, the Pipeline's funnel or the command search.
+    assert.equal(await member.$('.app-sidebar a[href="/settings"]'), null, 'no Settings in the sidebar');
+    assert.equal(await member.$('[data-testid=pipeline-edit-funnel]'), null, 'no Edit funnel pencil');
+    await click(member, '[data-testid=account-menu]');
+    const items = await member.$$eval('.header-right .menu-pop [role=menuitem]', (els) => els.map((el) => el.textContent.trim()));
+    assert.deepEqual(items, ['Personal preferences', 'Sign out']);
+    await member.keyboard.press('Escape');
+    await member.click('h1');
+    await member.keyboard.down('Control');
+    await member.keyboard.press('k');
+    await member.keyboard.up('Control');
+    await member.waitForSelector('[data-testid=palette]');
+    await member.keyboard.type('settings');
+    const titles = await member.$$eval('[data-testid=search-results] [role=option] .search-item-title', (els) => els.map((el) => el.textContent));
+    assert.ok(!titles.includes('Workspace settings') && !titles.includes('Funnel builder'), JSON.stringify(titles));
+    await member.keyboard.press('Escape');
+    // Their own notification settings are on Personal preferences, where the digest's link takes them.
+    await member.goto(`${BASE_URL}/settings/notifications`, { waitUntil: 'networkidle0' });
+    await member.waitForFunction(() => location.pathname === '/profile' && location.hash === '#notifications');
+    await member.waitForSelector('#notifications [data-notification=digest] [role=switch]');
     // A member's own profile starts with the defaults, independent of the owner's.
     const p = await api(member, '/profile');
     assert.equal(p.startPage, 'pipeline');
     assert.equal(p.defaultFunnelId, null);
+  });
+
+  step('promoting the member to admin shows the workspace settings after a reload; demoting hides them (CD-523)', async () => {
+    const { user } = await api(member, '/me');
+    await api(page, `/team/members/${user.id}`, { method: 'PATCH', body: JSON.stringify({ role: 'admin' }) });
+    await member.goto(`${BASE_URL}/settings/workspace`, { waitUntil: 'networkidle0' });
+    await member.waitForFunction((name) => document.querySelector('.ws-info-name')?.textContent.trim() === name, {}, workspaceName);
+    assert.equal(await valueByLabel(member, 'Currency', 'select'), 'RSD');
+    assert.ok(await member.$('.app-sidebar a[href="/settings"]'), 'Settings in the sidebar');
+
+    await api(page, `/team/members/${user.id}`, { method: 'PATCH', body: JSON.stringify({ role: 'member' }) });
+    await member.reload({ waitUntil: 'networkidle0' });
+    await member.waitForFunction(() => location.pathname === '/pipeline');
+    assert.equal(await member.$('.app-sidebar a[href="/settings"]'), null, 'no Settings in the sidebar');
   });
 
   it('throws no uncaught errors in the page', () => {

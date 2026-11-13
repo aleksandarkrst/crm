@@ -73,6 +73,32 @@ describe('workspace settings', () => {
     expect((await ok('GET', '/workspace', as(member))).name).not.toBe('Hijacked');
   });
 
+  // CD-523: members don't see the Workspace settings in the app, and the API refuses them every
+  // section's changes (and the owners-and-admins-only reads) as well. The role check comes before
+  // the body is read, so any id and body will do.
+  const someId = '00000000-0000-4000-8000-000000000000';
+  it.each([
+    ['PATCH', '/workspace'],
+    ['PUT', '/workspace/logo'],
+    ['DELETE', '/workspace/logo'],
+    ['POST', '/team/invitations'],
+    ['PATCH', `/team/members/${someId}`],
+    ['POST', '/crm/funnels'],
+    ['PATCH', `/crm/funnels/${someId}`],
+    ['POST', '/crm/custom-fields'],
+    ['POST', '/crm/document-templates'],
+    ['GET', '/crm/bonus-rules'],
+    ['PATCH', '/crm/bonus-rules'],
+    ['POST', '/project-types'],
+    ['GET', '/technicians'],
+    ['POST', '/timesheet/holidays'],
+    ['PATCH', '/timeoff/settings'],
+    ['POST', '/timeoff/policies'],
+  ] as const)('members get 403 on %s %s (CD-523)', async (method, path) => {
+    const res = await call(method, path, { ...as(member), body: method === 'GET' ? undefined : {} });
+    expect(res.status, JSON.stringify(res.body)).toBe(403);
+  });
+
   it.each([
     ['an unknown time zone', { timezone: 'Mars/Olympus_Mons' }],
     ['an offset instead of a time zone', { timezone: '+01:00' }],

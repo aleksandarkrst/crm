@@ -45,7 +45,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
  * remembered per person and workspace in this browser.
  */
 export function Projects() {
-  const { s, set, session, flash } = useStore();
+  const { s, set, session, flash, canEditWorkspace } = useStore();
   const t = useTerms();
   const navigate = useNavigate();
   const hours = useHours();
@@ -129,11 +129,14 @@ export function Projects() {
                     </option>
                   ))}
                 </select>
-                <button type="button" title={`Edit ${t.project} type`} aria-label={`Edit ${t.project} type`} data-testid="projects-edit-type" onClick={() => navigate(paths.settings('project-types') + (type ? `?type=${type.id}` : ''))}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />
-                  </svg>
-                </button>
+                {/* Workspace settings are for owners and admins (CD-523): no pencil for members. */}
+                {canEditWorkspace && (
+                  <button type="button" title={`Edit ${t.project} type`} aria-label={`Edit ${t.project} type`} data-testid="projects-edit-type" onClick={() => navigate(paths.settings('project-types') + (type ? `?type=${type.id}` : ''))}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />
+                    </svg>
+                  </button>
+                )}
             </div>
           </>
         }
