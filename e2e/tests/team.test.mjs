@@ -87,7 +87,9 @@ describe('team and invitations', () => {
     assert.ok(deals, 'sees the one shared opportunity');
     assert.equal(deals[0].deal.title, 'Acme rebrand');
     // The pipeline shows your own opportunities by default (CD-366), and every opportunity has a
-    // company (CD-360): with the filters cleared, Olivia's Acme rebrand is on the board.
+    // company (CD-360): with the filters cleared, Olivia's Acme rebrand is on the board. The
+    // invitee lands on Home (CD-288), so open the pipeline first.
+    await bob.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await bob.waitForSelector('button::-p-text(Clear filters)');
     await clickButton(bob, 'Clear filters');
     await bob.waitForFunction(() => document.body.innerText.includes('Acme rebrand'));
