@@ -3203,7 +3203,7 @@ Every endpoint of milestone 13 and later Workforce modules checks access through
 - `access.reportIdsOf(tx, managerId, direct?)`: anyone's subtree. `access.employeeForUser(tenantId,
   userId)`: a member's record.
 - Which card fields a caller may change: `editableFields(access, employeeId, selfEditBank)`
-  (`field-rules.ts`). Admin: all, own card included. Everyone else: on their own card only work
+  (`field-rules.ts`). Admin: all, own card included, except their own work email (the sign-in email, CD-525). Everyone else: on their own card only work
   phone, personal details and (setting on) bank. Only an Admin sets a manager or unit.
 - `GET /api/people/access` returns the caller's `{ employeeId, roles, directReportIds, reportIds, directReportUserIds, reportUserIds }` (the user ids: reports with an account, for CRM data kept per member).
 

@@ -82,6 +82,8 @@ describe('settings and discovery fields', () => {
     const funnels = await api(page, '/crm/funnels');
     const ent = funnels.find((f) => f.key === 'ent');
     assert.ok(await setByLabel(page, 'Full name', 'Olga Renamed'));
+    // A save says so in a toast (CD-525).
+    await page.waitForFunction(() => document.querySelector('.toast')?.textContent.includes('Your name saved'));
     assert.ok(await setByLabel(page, 'Job title', 'Head of sales'));
     assert.ok(await setByLabel(page, 'Phone', '+381 60 123 456'));
     // Preferences and Notifications are pages of the account (CD-525).
@@ -111,12 +113,12 @@ describe('settings and discovery fields', () => {
     assert.equal(await page.$eval('[data-notification=digest] .switch', (el) => el.classList.contains('on')), false);
     assert.match(await page.$eval('[data-testid=notifications-card] + .account-foot', (el) => el.textContent), /^Emails go to \S+@\S+\./);
     await page.goto(`${BASE_URL}/profile`, { waitUntil: 'networkidle0' });
-    await page.waitForSelector('[data-testid=autosave]');
+    await page.waitForSelector('[data-testid=account-content]');
     assert.equal(await valueByLabel(page, 'Full name'), 'Olga Renamed');
     assert.equal(await valueByLabel(page, 'Job title'), 'Head of sales');
     assert.equal(await valueByLabel(page, 'Phone'), '+381 60 123 456');
     await page.goto(`${BASE_URL}/profile/preferences`, { waitUntil: 'networkidle0' });
-    await page.waitForSelector('[data-testid=autosave]');
+    await page.waitForSelector('[data-testid=account-content]');
     assert.ok(!(await page.evaluate(() => document.body.innerText)).includes('Start page'), 'no Start page: everyone starts on Home (CD-288)');
   });
 

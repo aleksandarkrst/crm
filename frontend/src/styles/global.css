@@ -1308,9 +1308,7 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
 .account-nav-head span { font-size: 12.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-nav-foot { margin-top: auto; border-top: 1px solid var(--divider); padding: 12px 10px 0; display: flex; flex-direction: column; gap: 8px; }
 .account-content { max-width: 880px; }
-.account-head { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
-.account-head > div { display: flex; flex-direction: column; gap: 6px; flex: 1 1 320px; min-width: 0; }
-.autosave { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; padding: 6px 12px; border-radius: 999px; background: var(--bg-soft); color: var(--text-2); font-size: 12.5px; font-weight: 500; white-space: nowrap; }
+.account-head { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
 .account-section { font-size: 13px; font-weight: 600; color: var(--ink); margin: 22px 0 8px; }
 .account-rows { display: flex; flex-direction: column; overflow: hidden; }
 .account-row { display: flex; align-items: center; gap: 18px; padding: 14px 18px; border-bottom: 1px solid var(--divider); }

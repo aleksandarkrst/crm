@@ -74,10 +74,8 @@ describe('employee card', () => {
     assert.ok(olgaEmployee && miaEmployee, 'both are employees');
   });
 
-  step('the member opens their own card from Profile', async () => {
-    await mia.goto(`${BASE_URL}/profile`, { waitUntil: 'networkidle0' });
-    await click(mia, '[data-testid=my-employee-card]');
-    await mia.waitForFunction((id) => location.pathname === `/people/${id}`, {}, miaEmployee);
+  step('the member opens their own card', async () => {
+    await mia.goto(`${BASE_URL}/people/${miaEmployee}`, { waitUntil: 'networkidle0' });
     await mia.waitForSelector('[data-testid=emp-name]');
     assert.equal(await textOf(mia, '[data-testid=emp-name]'), 'Mia Member');
     assert.equal(await textOf(mia, '[data-testid=emp-account]'), 'Has account');

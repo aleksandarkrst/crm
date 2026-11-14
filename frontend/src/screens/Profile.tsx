@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
-import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { GhostSelect } from '../components/ui';
 import { Icon, type IconName } from '../components/icons';
 import { Screen } from '../components/Layout';
@@ -79,15 +79,10 @@ export function Profile() {
           )}
         </nav>
         <div className="settings-content account-content" data-testid="account-content" data-page={current.k}>
+          {/* Every change saves as you make it; a toast says it was saved, or why it wasn't. */}
           <div className="account-head">
-            <div>
-              <h2 className="settings-title">{current.label}</h2>
-              <span className="settings-description">{current.description}</span>
-            </div>
-            <span className="autosave" data-testid="autosave">
-              <Icon name="check" size={14} />
-              Changes save automatically
-            </span>
+            <h2 className="settings-title">{current.label}</h2>
+            <span className="settings-description">{current.description}</span>
           </div>
           {current.k === 'profile' && <ProfilePage />}
           {current.k === 'preferences' && <PreferencesPage />}
@@ -99,14 +94,8 @@ export function Profile() {
 }
 
 function ProfilePage() {
-  const { s, patchProfile, session, employeeCard } = useStore();
+  const { s, patchProfile, session } = useStore();
   const p = s.profile;
-  // Your employee record in this workspace (milestone 13): "My employee card".
-  const loadMine = employeeCard.loadMyEmployeeId;
-  const mine = s.myEmployeeId;
-  useEffect(() => {
-    if (mine === undefined) void loadMine();
-  }, [mine, loadMine]);
   const setP = (k: keyof ProfileT) => (e: React.ChangeEvent<HTMLInputElement>) => patchProfile({ [k]: e.target.value });
   return (
     <>
@@ -130,15 +119,6 @@ function ProfilePage() {
           </span>
         </Row>
       </div>
-
-      {mine && (
-        <p className="account-foot">
-          Your employee card holds what HR uses in {session.tenant.name}.{' '}
-          <Link to={paths.employee(mine)} data-testid="my-employee-card" style={{ color: 'var(--brand)', fontWeight: 600 }}>
-            My employee card
-          </Link>
-        </p>
-      )}
 
       <div className="account-section">Session</div>
       <div className="card account-rows">
