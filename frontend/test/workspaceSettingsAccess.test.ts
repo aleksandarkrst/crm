@@ -1,5 +1,5 @@
 // Members don't see the Workspace settings (CD-523): no tile in the module switcher, and their
-// notification settings are on Personal preferences. Owners and admins keep both as before.
+// notification settings are in Profile settings. Owners and admins keep both as before.
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { describe, it } from 'node:test';
@@ -24,9 +24,11 @@ describe('Workspace settings for members (CD-523)', () => {
     for (const role of ['owner', 'admin']) assert.deepEqual(switcherModules(role), MODULES);
   });
 
-  it('sends members to Personal preferences for their notification settings', () => {
+  it('sends members to their account for their notification settings', () => {
     assert.equal(paths.notifications(true), paths.settings('notifications'));
     assert.equal(paths.notifications(false), paths.myNotifications);
-    assert.ok(paths.myNotifications.startsWith(paths.profile + '#'));
+    // Your account's Notifications page (CD-525), no longer a card on the profile.
+    assert.equal(paths.myNotifications, paths.account('notifications'));
+    assert.equal(paths.myNotifications, '/profile/notifications');
   });
 });

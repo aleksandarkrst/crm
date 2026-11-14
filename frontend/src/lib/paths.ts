@@ -41,11 +41,13 @@ export const paths = {
   settings: (tab = 'workspace') => '/settings/' + tab,
   /** Employees → Team (CD-521; Settings → Members before): `invite` opens the Invite dialog. */
   team: (invite = false) => '/team' + (invite ? '?invite=1' : ''),
+  /** Your account (CD-525): Profile, with Preferences and Notifications as its other pages. */
   profile: '/profile',
-  /** Members' notification settings (CD-523): a card on Personal preferences, since members have no Settings. */
-  myNotifications: '/profile#notifications',
-  /** Where your notification settings are: Settings → Notifications for owners and admins, Personal preferences for members. */
-  notifications: (canEditWorkspace: boolean) => (canEditWorkspace ? '/settings/notifications' : '/profile#notifications'),
+  account: (page?: 'preferences' | 'notifications') => '/profile' + (page ? '/' + page : ''),
+  /** Your notification settings in your account (CD-523, CD-525); members have no Settings. */
+  myNotifications: '/profile/notifications',
+  /** Where your notification settings are: Settings → Notifications for owners and admins, your account for members. */
+  notifications: (canEditWorkspace: boolean) => (canEditWorkspace ? '/settings/notifications' : '/profile/notifications'),
   /** An employee card (CD-140); `deactivate` opens its Deactivate dialog. */
   employee: (id: string, params?: { deactivate?: boolean }) => '/people/' + encodeURIComponent(id) + (params?.deactivate ? '?deactivate=1' : ''),
   lead: (id: string) => '/deals/' + encodeURIComponent(id),

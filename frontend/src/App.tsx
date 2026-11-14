@@ -175,6 +175,7 @@ function AppRoutes() {
           <Route path="settings" element={<Navigate to={paths.settings()} replace />} />
           <Route path="settings/:tab" element={<Settings />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="profile/:page" element={<Profile />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Route>

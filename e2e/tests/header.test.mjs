@@ -162,16 +162,22 @@ describe('command palette, + menu and account menu', () => {
     await page.waitForFunction(() => !document.querySelector('.modal'));
   });
 
-  step('the account menu opens personal preferences; the bell lists your tasks due', async () => {
+  step('the avatar menu opens your account; the bell lists your tasks due', async () => {
     await click(page, '[data-testid=notifications]');
     await page.waitForSelector('[data-testid=notifications-pop]');
     assert.match(await page.$eval('[data-testid=notifications-pop]', (el) => el.innerText), /Nothing overdue or due today|Overdue|Today/);
+    await page.keyboard.press('Escape');
+    // The avatar's menu: Profile settings and Sign out (CD-525).
     await click(page, '[data-testid=account-menu]');
-    // Team is a tab of the workspace settings, not in the account menu (CD-223).
     const items = await page.$$eval('.header-right .menu-pop [role=menuitem]', (els) => els.map((el) => el.textContent.trim()));
-    assert.deepEqual(items, ['Personal preferences', 'Workspace settings', 'Sign out']);
-    await clickButton(page, 'Personal preferences');
+    assert.deepEqual(items, ['Profile settings', 'Sign out']);
+    await clickButton(page, 'Profile settings');
     await page.waitForFunction(() => location.pathname === '/profile');
+    // Profile, Preferences, Notifications; no Security.
+    await page.waitForSelector('[data-testid=account-nav]');
+    const pages = await page.$$eval('[data-testid=account-nav] .settings-nav-item', (els) => els.map((el) => el.textContent.trim()));
+    assert.deepEqual(pages, ['Profile', 'Preferences', 'Notifications']);
+    assert.equal(await page.$eval('[data-testid=account-nav] [aria-current=page]', (el) => el.dataset.section), 'profile');
   });
 
   step('opens the New opportunity dialog from the Contacts screen', async () => {

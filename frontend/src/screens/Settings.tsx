@@ -135,7 +135,7 @@ export function Settings() {
   // Members moved to Employees → Team (CD-521): old links and bookmarks land there, `?invite=1` included.
   if (tab === 'team') return <Navigate to={paths.team(params.get('invite') === '1')} replace />;
   // Members don't see the workspace settings at all (CD-523): any settings URL goes home, except
-  // Notifications (your own emails, linked from the digest), which is on Personal preferences for them.
+  // Notifications (your own emails, linked from the digest), which is in Profile settings for them.
   if (!canEditWorkspace) return <Navigate to={tab === 'notifications' ? paths.myNotifications : '/'} replace />;
   // Settings → Employees (CD-215) and the sales bonus rules (CD-17) are for owners and admins.
   const tabs = TABS.filter((t) => {

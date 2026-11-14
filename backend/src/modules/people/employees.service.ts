@@ -251,7 +251,7 @@ export class EmployeesService {
     }
     if (access.isAdmin) card.appAccess = await this.appAccess(tx, ctx, r);
     card.permissions = {
-      editableFields: r.deactivatedAt && !access.isAdmin ? [] : editableFields(access, id, settings.selfEditBank),
+      editableFields: r.deactivatedAt && !access.isAdmin ? [] : editableFields(access, id, settings.selfEditBank, !!r.workEmail),
       canRevealBank: access.canSeeBank(id),
       canSeeHistory: access.canSeeHistory(id),
       // Delete (CD-225): only once deactivated, then for anyone, former app users included.
@@ -389,7 +389,7 @@ export class EmployeesService {
         const settings = await this.settings(tx, ctx.tenantId);
 
         const sent = sentFields(input);
-        const allowed = new Set<string>(editableFields(access, id, settings.selfEditBank));
+        const allowed = new Set<string>(editableFields(access, id, settings.selfEditBank, !!current.workEmail));
         const refused = sent.filter((f) => !allowed.has(f));
         if (refused.length) throw new ForbiddenException(refusal(access, id, refused, settings.selfEditBank));
         if (input.managerId && input.managerId !== current.managerId && input.managerId === access.employeeId && !access.isAdmin) throw new ForbiddenException("Only an Admin can make themselves someone's manager");
@@ -582,6 +582,7 @@ function likeBody(q: string): string {
 function refusal(access: CallerAccess, id: string, refused: string[], selfEditBank: boolean): string {
   if (!access.isHr && !access.isSelf(id)) return 'Only Admins edit other employees';
   if (access.isSelf(id)) {
+    if (refused.length === 1 && refused[0] === 'workEmail') return 'Your work email is the email you sign in with, so it is not changed on your card';
     const bank = refused.filter((f) => (BANK_FIELDS as readonly string[]).includes(f));
     if (bank.length === refused.length && !selfEditBank) return 'In this workspace, only Admins change bank accounts';
     const org = refused.filter((f) => (ORG_FIELDS as readonly string[]).includes(f) || (EMPLOYMENT_FIELDS as readonly string[]).includes(f));
