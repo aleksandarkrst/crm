@@ -38,7 +38,7 @@ export function readiness(c: ReadinessCompany | undefined, people: ReadinessCont
     contactShort = best ? `contact ${list(gaps, 'and')}` : 'a contact';
   }
   const checks: [number, string, string][] = [
-    [filled(c?.pib) ? 0 : 1, 'Company ID (PIB)', 'PIB'],
+    [filled(c?.pib) ? 0 : 1, 'Company ID (PIB)', 'company ID'],
     [filled(c?.mb) ? 0 : 1, 'Matični broj', 'MB'],
     [address.length, `Address (${list(address, 'and')})`, 'address'],
     [filled(c?.activityCode) ? 0 : 1, 'Šifra delatnosti', 'activity code'],

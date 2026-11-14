@@ -33,7 +33,7 @@ describe('settings page', () => {
     await page.waitForSelector('[data-testid=settings-nav] .settings-nav-item');
     assert.equal(await sidebarModule(), 'projects');
     assert.deepEqual(await navGroups(), [
-      ['Workspace', ['General', 'Modules', 'Roles & permissions', 'Notifications']],
+      ['Workspace', ['General', 'Modules', 'Roles & permissions']],
       ['CRM', ['Funnels', 'Document templates', 'Customize fields', 'Sales bonuses']],
       ['Projects', ['Project hierarchy', 'Project types', 'Technicians']],
       ['Employees', ['Employees']],

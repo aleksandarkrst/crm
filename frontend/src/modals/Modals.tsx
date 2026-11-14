@@ -133,7 +133,7 @@ function NewDealModal() {
           {pickOpen && (
             <Popover anchor={pickRef} onClose={closePick} className="fr-pop" label="Pick the company" testId="new-deal-company-pop">
               <div className="fr-search">
-                <input className="fr-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or PIB" aria-label="Search companies" data-testid="new-deal-company-search" autoFocus />
+                <input className="fr-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or company ID" aria-label="Search companies" data-testid="new-deal-company-search" autoFocus />
               </div>
               <div className="fr-list">
                 {shown.map((o) => (
@@ -152,7 +152,7 @@ function NewDealModal() {
                   >
                     <span className="fr-opt-text">
                       <span style={{ fontWeight: o.value === company ? 600 : 400 }}>{o.label}</span>
-                      <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{[o.status && COMPANY_STATUS_LABELS[o.status], o.pib && 'PIB ' + o.pib].filter(Boolean).join(' · ')}</span>
+                      <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{[o.status && COMPANY_STATUS_LABELS[o.status], o.pib && 'Company ID ' + o.pib].filter(Boolean).join(' · ')}</span>
                     </span>
                     {o.blocked && <span className="fr-tag">Not eligible</span>}
                   </button>

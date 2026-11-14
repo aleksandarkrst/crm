@@ -480,7 +480,11 @@ function NamesCard({ editable }: { editable: boolean }) {
               disabled={!editable || saving}
               maxLength={40}
               aria-invalid={!!errors[key]}
-              onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
+              onChange={(e) => {
+                setDraft({ ...draft, [key]: e.target.value });
+                // The field's message goes once it is changed (CD-489); Save checks again.
+                if (errors[key]) setErrors({ ...errors, [key]: undefined });
+              }}
               onKeyDown={(e) => e.key === 'Enter' && changed && void submit(draft)}
             />
             {errors[key] && (

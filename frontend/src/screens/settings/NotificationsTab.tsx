@@ -5,7 +5,7 @@ import { useStore } from '../../store/store';
 /**
  * Your own notification settings for this workspace (CD-16, CD-207), saved on your membership.
  * Only what the app actually sends is listed. Everyone finds them in their account (Notifications,
- * CD-525); owners and admins also in Settings → Notifications. Laid out as the design's
+ * CD-525), for every role: Settings has no Notifications since CD-489. Laid out as the design's
  * G-Profile-Notifications: one card, a row per email, and where the emails go under it.
  */
 export function NotificationsTab() {

@@ -61,7 +61,11 @@ function PolicyEditor({ policy, onDone }: { policy?: ApiTimeOffPolicy; onDone: (
   const [d, setD] = useState<PolicyDraft>(() => draftOf(policy));
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const set = (patch: Partial<PolicyDraft>) => setD((x) => ({ ...x, ...patch }));
+  // A change answers the last problem (CD-489): it goes until the next Save says otherwise.
+  const set = (patch: Partial<PolicyDraft>) => {
+    setD((x) => ({ ...x, ...patch }));
+    setProblem(null);
+  };
   const setRule = (i: number, patch: Partial<PolicyDraft['rules'][number]>) => set({ rules: d.rules.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
   const save = async () => {
     const input = inputOf(d);

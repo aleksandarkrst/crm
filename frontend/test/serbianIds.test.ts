@@ -12,9 +12,9 @@ describe('Serbian company ids (CD-357)', () => {
   });
 
   it('says what is wrong with a PIB', () => {
-    assert.equal(pibProblem(''), 'The PIB is required.');
-    assert.equal(pibProblem('10453287'), 'A PIB has 9 digits; this one has 8.');
-    assert.equal(pibProblem('1045x2877'), 'A PIB has digits only.');
+    assert.equal(pibProblem(''), 'The Company ID (PIB) is required.');
+    assert.equal(pibProblem('10453287'), 'A Company ID (PIB) has 9 digits; this one has 8.');
+    assert.equal(pibProblem('1045x2877'), 'A Company ID (PIB) has digits only.');
     assert.match(pibProblem('104052136')!, /check digit/);
     assert.equal(pibProblem('104 052 135'), null);
   });
