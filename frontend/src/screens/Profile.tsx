@@ -72,11 +72,7 @@ export function Profile() {
               </button>
             ))}
           </div>
-          {session.tenants.length > 1 && (
-            <div className="account-nav-foot" data-testid="account-workspace">
-              <GhostSelect className="form-input" aria-label="Current workspace" value={session.tenant.id} onChange={(e) => session.switchTenant(e.target.value)} options={session.tenants.map((t) => ({ value: t.id, label: t.name }))} chevron />
-            </div>
-          )}
+          {/* No workspace switcher here (CD-525 QA): the module switcher in the rail switches workspaces. */}
         </nav>
         <div className="settings-content account-content" data-testid="account-content" data-page={current.k}>
           {/* Every change saves as you make it; a toast says it was saved, or why it wasn't. */}

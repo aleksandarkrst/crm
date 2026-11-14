@@ -2492,8 +2492,8 @@ composer's WhatsApp and LinkedIn tabs are commented out until those integrations
   else is made up). The avatar's menu has Profile settings and Sign out. Profile settings
   (`screens/Profile.tsx`, CD-525) are Profile, Preferences and Notifications, each its own page
   (`/profile`, `/profile/preferences`, `/profile/notifications`; the old `/profile#notifications`
-  redirects) in a sidebar like Settings', with, for people in several
-  workspaces, the workspace switcher at the sidebar's foot. The avatar is not in the sidebar; Settings
+  redirects) in a sidebar like Settings'. Workspaces are switched in the rail's module switcher, not
+  here. The avatar is not in the sidebar; Settings
   is back at its bottom (CD-223; on phones both are under "More").
 - **Company and contact pages** look like the deal page: a record header (name, owner, "+ Deal",
   which opens the New deal dialog with this company or contact, and a menu with Delete for owners

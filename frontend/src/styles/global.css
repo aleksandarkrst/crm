@@ -1452,13 +1452,11 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
 }
 
 /* ---------------------------------------------------------------- your account (CD-525, design G-Profile) */
-/* The account's sidebar is the settings nav with a head (who you are) and a foot (the workspace). */
-.account-nav { min-height: calc(100vh - 140px); }
+/* The account's sidebar is the settings nav with a head (who you are). */
 .account-nav .settings-nav-item { display: flex; align-items: center; gap: 9px; }
 .account-nav-head { display: flex; flex-direction: column; gap: 1px; padding: 0 10px; min-width: 0; }
 .account-nav-head b { font-size: 14px; font-weight: 600; color: var(--ink); }
 .account-nav-head span { font-size: 12.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.account-nav-foot { margin-top: auto; border-top: 1px solid var(--divider); padding: 12px 10px 0; display: flex; flex-direction: column; gap: 8px; }
 .account-content { max-width: 880px; }
 .account-head { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
 .account-section { font-size: 13px; font-weight: 600; color: var(--ink); margin: 22px 0 8px; }
@@ -1474,10 +1472,9 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
 .account-row-value { font-size: 13.5px; color: var(--ink); overflow-wrap: anywhere; text-align: right; }
 .account-foot { font-size: 12.5px; color: var(--text-2); line-height: 1.5; margin-top: 12px; }
 @media (max-width: 800px) {
-  .account-nav { min-height: 0; flex-direction: column; flex-wrap: nowrap; gap: 10px; }
+  .account-nav { flex-direction: column; flex-wrap: nowrap; gap: 10px; }
   .account-nav .settings-nav-group { flex-direction: row; flex-wrap: wrap; gap: 4px; }
   .account-nav .settings-nav-label { display: none; }
-  .account-nav-foot { margin-top: 0; }
 }
 @media (max-width: 560px) {
   .account-row { flex-wrap: wrap; gap: 8px; }
