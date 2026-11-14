@@ -178,8 +178,6 @@ describe('command palette, + menu and account menu', () => {
     const pages = await page.$$eval('[data-testid=account-nav] .settings-nav-item', (els) => els.map((el) => el.textContent.trim()));
     assert.deepEqual(pages, ['Profile', 'Preferences', 'Notifications']);
     assert.equal(await page.$eval('[data-testid=account-nav] [aria-current=page]', (el) => el.dataset.section), 'profile');
-    // Signing out is on Profile too.
-    assert.ok(await page.$eval('[data-testid=account-content] button', (els) => els.some((el) => el.textContent.trim() === 'Sign out')), 'Sign out on Profile');
   });
 
   step('opens the New opportunity dialog from the Contacts screen', async () => {

@@ -94,7 +94,7 @@ export function Profile() {
 }
 
 function ProfilePage() {
-  const { s, patchProfile, session } = useStore();
+  const { s, patchProfile } = useStore();
   const p = s.profile;
   const setP = (k: keyof ProfileT) => (e: React.ChangeEvent<HTMLInputElement>) => patchProfile({ [k]: e.target.value });
   return (
@@ -117,15 +117,6 @@ function ProfilePage() {
           <span className="account-row-value" data-testid="profile-email">
             {p.email || '—'}
           </span>
-        </Row>
-      </div>
-
-      <div className="account-section">Session</div>
-      <div className="card account-rows">
-        <Row label="Sign out" hint="Signs you out of Pultly in this browser.">
-          <button type="button" className="btn btn-secondary" onClick={session.signOut}>
-            Sign out
-          </button>
         </Row>
       </div>
     </>
