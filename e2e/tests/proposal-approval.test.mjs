@@ -24,13 +24,13 @@ describe('proposal approval', () => {
     me = (await api(page, '/profile')).userId;
     funnelId = (await api(page, '/crm/funnels'))[0].id;
     await page.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });
-    // One section for the funnel, below its stages and above the preview; no stage has its own switch.
+    // One section for the funnel, below its stages; no stage has its own switch.
     const order = await page.evaluate(() => {
       const card = document.querySelector('[data-testid=funnel-card]');
-      const els = [...card.querySelectorAll('[data-testid=add-stage], [data-testid=funnel-approval], [data-testid=funnel-preview]')];
+      const els = [...card.querySelectorAll('[data-testid=add-stage], [data-testid=funnel-approval]')];
       return els.map((el) => el.dataset.testid);
     });
-    assert.deepEqual(order, ['add-stage', 'funnel-approval', 'funnel-preview']);
+    assert.deepEqual(order, ['add-stage', 'funnel-approval']);
     assert.equal(await page.$$eval(SWITCH, (els) => els.length), 1);
     await click(page, SWITCH);
     await page.waitForSelector('[data-testid=funnel-approver]');

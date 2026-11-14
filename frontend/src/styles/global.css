@@ -1319,6 +1319,134 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
   .settings-nav { position: static; width: 100%; flex: 0 0 auto; flex-direction: row; flex-wrap: wrap; gap: 10px 18px; }
 }
 
+/* ---------------------------------------------------------------- workspace settings (CD-524, design G-Settings) */
+/* The nav: a head (the workspace), an icon per section, and a line when modules are off. */
+.ws-nav .settings-nav-item { display: flex; align-items: center; gap: 9px; }
+.ws-nav .settings-nav-item svg { flex: 0 0 auto; color: var(--brand); }
+.ws-nav-head { display: flex; flex-direction: column; gap: 1px; padding: 0 10px; min-width: 0; }
+.ws-nav-head b { font-size: 14px; font-weight: 600; color: var(--ink); }
+.ws-nav-head span { font-size: 12.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-nav-hidden { font-size: 12px; line-height: 1.45; color: var(--text-2); padding: 0 10px; margin: 0; }
+.ws-content { width: 100%; max-width: 820px; display: flex; flex-direction: column; gap: 28px; }
+.ws-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.ws-head-text { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.ws-head .settings-title { font-size: 20px; }
+.ws-head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ws-autosave { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border-radius: 999px; background: var(--chip); color: var(--text-2); font-size: 12.5px; font-weight: 500; white-space: nowrap; }
+.ws-stack { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+/* A block: a heading (with its own buttons) over a card of rows, a table or a list. */
+.ws-block { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ws-block-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 0 2px; }
+.ws-block-text { flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ws-block-title { margin: 0; font-size: 14.5px; font-weight: 600; color: var(--ink); }
+.ws-block-desc { font-size: 12.5px; color: var(--text-2); line-height: 1.45; }
+.ws-block-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ws-rows { display: flex; flex-direction: column; }
+.ws-rows.danger { border-color: var(--danger-soft); }
+/* A setting: what it is (and a hint, or what is wrong) on the left, its control on the right. */
+.ws-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; min-height: 60px; box-sizing: border-box; padding: 12px 18px; border-top: 1px solid var(--divider); }
+.ws-row:first-child { border-top: 0; }
+.ws-row-icon { flex: 0 0 34px; width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--white); background: var(--mod-other); }
+.ws-row-text { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ws-row-label { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.ws-row-hint { font-size: 12.5px; color: var(--text-2); line-height: 1.45; }
+.ws-row-error { font-size: 12.5px; color: var(--danger); font-weight: 500; line-height: 1.45; }
+.ws-row-control { flex: 0 1 auto; min-width: 0; max-width: 100%; display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.ws-row-control > .form-input, .ws-row-control > .select-wrap { width: 260px; max-width: 100%; }
+.ws-row-control > .form-input.narrow { width: 90px; }
+.ws-row-control > .form-input.wide { width: 320px; }
+.ws-row-control .tz-trigger { width: 280px; max-width: 100%; border: 1px solid var(--border); border-radius: 7px; background: var(--white); padding: 9px 10px; }
+.ws-choices .choice.ws-choice-new { border-style: dashed; border-color: var(--dashed); background: transparent; justify-content: center; color: var(--brand); font-weight: 600; font-size: 13.5px; }
+.ws-row .ws-avatar { width: 40px; height: 40px; font-size: 14px; }
+.ws-unit { font-size: 13px; color: var(--text-2); white-space: nowrap; }
+.ws-note { margin: -16px 2px 0; font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
+/* A segmented control: one of a few options, side by side. */
+.ws-seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--segment); max-width: 100%; flex-wrap: wrap; }
+.ws-seg button { height: 28px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--text-2); cursor: pointer; white-space: nowrap; }
+.ws-seg button.on { background: var(--white); color: var(--ink); box-shadow: var(--shadow-card); }
+.ws-seg button:disabled { cursor: default; }
+/* Funnels and project types: a card per choice. */
+.ws-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.ws-choices .choice { border-radius: 12px; padding: 14px 16px; }
+/* A table in a card. */
+.ws-table { overflow-x: auto; }
+.ws-table table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.ws-table th { text-align: left; font-size: 12px; font-weight: 600; color: var(--text-2); padding: 12px 10px 10px; border-bottom: 1px solid var(--divider); white-space: nowrap; }
+.ws-table td { padding: 9px 10px; border-top: 1px solid var(--divider-2); vertical-align: middle; }
+.ws-table tbody tr:first-child td { border-top: 0; }
+.ws-table th:first-child, .ws-table td:first-child { padding-left: 18px; }
+.ws-table th:last-child, .ws-table td:last-child { padding-right: 18px; }
+.ws-table .num { text-align: right; white-space: nowrap; }
+.ws-table .center { text-align: center; }
+.ws-table .actions { text-align: right; white-space: nowrap; }
+.ws-table .actions > * + * { margin-left: 6px; }
+.ws-table-empty { padding: 22px 16px; text-align: center; font-size: 13px; color: var(--muted-2); border-top: 1px solid var(--divider-2); }
+/* A grid list in a card (holidays, policies, reasons): its rows keep their own responsive grid. */
+.ws-list { padding: 2px 18px 6px; font-size: 13.5px; }
+.ws-list > :first-child { border-top: 0; }
+.ws-list .th { font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--text-2); }
+.ws-list-empty { padding: 12px 0; font-size: 13px; color: var(--muted-2); border-top: 1px solid var(--divider); }
+.ws-cell { display: flex; flex-direction: column; gap: 1px; line-height: 18px; min-width: 0; }
+.ws-cell b { font-weight: 600; }
+.ws-cell .ws-row-hint { font-size: 12px; }
+.ws-mark { display: inline-flex; width: 22px; height: 22px; border-radius: 999px; align-items: center; justify-content: center; background: var(--chip); color: transparent; }
+.ws-mark.on { background: var(--brand-soft); color: var(--brand); }
+/* Chips: standard fields and to-dos. */
+.ws-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ws-chip { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px; border-radius: 999px; background: var(--chip); font-size: 12.5px; color: var(--text-2); }
+.ws-chip input { border: 0; outline: 0; background: transparent; font: inherit; font-size: 12.5px; color: var(--ink); min-width: 0; }
+.ws-chip .ws-x { width: 22px; height: 22px; margin-right: -6px; }
+.ws-x { width: 28px; height: 28px; border: 0; border-radius: 999px; background: transparent; color: var(--muted-2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; flex: 0 0 auto; font: inherit; }
+.ws-x:hover:not(:disabled) { background: var(--danger-soft); color: var(--danger); }
+.ws-x.plain:hover:not(:disabled) { background: var(--chip); color: var(--ink); }
+.ws-x:disabled { opacity: 0.3; cursor: default; }
+/* Numbered stages joined by arrows: a project type's stages, the organization's levels. */
+.ws-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 14px 16px; }
+.ws-preview-stage { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px 0 5px; border-radius: 999px; background: var(--white); border: 1px solid var(--border); font-size: 13px; font-weight: 500; }
+.ws-preview-n { width: 22px; height: 22px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.ws-preview-arrow { color: var(--muted); display: flex; }
+/* Stages of a funnel or project type: a list; a funnel's open stage shows its editor under it. */
+.ws-stages { padding: 6px 0; }
+.ws-stage { margin: 0 8px; border-radius: 12px; }
+.ws-stage.on { box-shadow: inset 0 0 0 1.5px var(--brand); background: var(--brand-tint); }
+.ws-stage-head { display: flex; align-items: center; gap: 4px; padding-right: 6px; }
+.ws-stage-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 10px 12px; }
+.ws-stage-n { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); font-size: 12.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.ws-stage.won .ws-stage-n { background: var(--brand); color: var(--white); }
+.ws-stage-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ws-stage-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.ws-stage-opps { flex: 0 0 auto; font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
+.ws-stage-chev { display: inline-flex; transition: transform 0.2s ease; }
+.ws-stage.on .ws-stage-chev { transform: rotate(180deg); }
+.ws-stage-actions { display: flex; flex: 0 0 auto; }
+.ws-stage-link { display: block; width: 2px; height: 8px; margin: 0 0 0 33px; background: var(--brand-soft-2); border-radius: 2px; }
+.ws-stage-editor { margin: 0 0 4px; padding: 2px 0 6px; border-top: 1px solid var(--divider); background: var(--white); border-radius: 0 0 12px 12px; }
+.ws-stage-editor .ws-row { min-height: 52px; padding: 10px 16px; }
+.ws-stage-sec { padding: 14px 16px 2px; font-size: 11.5px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.ws-stage-sub { display: block; padding: 2px 16px 0; }
+.ws-stage-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 8px; padding: 12px 16px 4px; border-top: 1px solid var(--divider); }
+.ws-stages-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 16px 8px; margin-top: 4px; border-top: 1px solid var(--divider); }
+/* Working days: a toggle per weekday. */
+.ws-days { display: flex; gap: 4px; flex-wrap: wrap; }
+.ws-days button { width: 44px; height: 30px; border: 0; border-radius: 999px; background: var(--segment); font: inherit; font-size: 12.5px; font-weight: 500; color: var(--text-2); cursor: pointer; }
+.ws-days button.on { background: var(--brand); color: var(--white); }
+.btn-danger-quiet { border: 1px solid var(--danger-soft); background: var(--white); color: var(--danger); cursor: pointer; font-size: 13px; font-weight: 500; padding: 8px 13px; border-radius: 8px; white-space: nowrap; }
+.btn-danger-quiet:hover:not(:disabled) { background: var(--danger-soft); }
+.btn-danger-quiet:disabled { color: var(--muted); border-color: var(--divider); cursor: not-allowed; }
+@media (max-width: 800px) {
+  .ws-nav { flex-direction: column; flex-wrap: nowrap; gap: 10px; }
+  .ws-nav .settings-nav-group { flex-direction: row; flex-wrap: wrap; gap: 2px 4px; }
+  .ws-nav .settings-nav-label { flex: 1 1 100%; }
+}
+@media (max-width: 560px) {
+  .ws-row { padding: 12px 14px; }
+  .ws-row-control { justify-content: flex-start; flex: 1 1 100%; }
+  .ws-row.with-switch { flex-wrap: nowrap; }
+  .ws-row.with-switch .ws-row-control { flex: 0 0 auto; }
+  .ws-row-control > .form-input, .ws-row-control > .select-wrap, .ws-row-control .tz-trigger, .ws-row-control > .form-input.wide { width: 100%; }
+  .ws-stage-opps { display: none; }
+}
+
 /* ---------------------------------------------------------------- your account (CD-525, design G-Profile) */
 /* The account's sidebar is the settings nav with a head (who you are) and a foot (the workspace). */
 .account-nav { min-height: calc(100vh - 140px); }

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { askConfirm } from '../../components/ConfirmDialog';
 import { type DateRange, DateRangePicker, rangeText } from '../../components/DateRangePicker';
-import { FieldRow, Switch } from '../../components/ui';
+import { Switch } from '../../components/ui';
 import type { ApiTimesheetSettings } from '../../lib/api';
 import { type ApiHoliday, type ApiHolidayPreload, dayLabel, holidaysApi, parseHours, shortHours } from '../../lib/timesheetApi';
 import { projectError, useProjectsRead } from '../../store/projects';
 import { useStore } from '../../store/store';
+import { Block, Note, Row, Rows, Segmented, Unit } from './parts';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const WEEKDAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -16,10 +17,18 @@ const reminderLabel = (h: number | null) => (h === null ? 'Off' : h === 24 ? '1 
 const REMINDERS = REMINDER_HOURS.map((hours) => ({ hours, label: reminderLabel(hours) }));
 
 /** The two approval modes (CD-156, design `#cd-156`). */
-const APPROVAL_MODES: { id: 'week' | 'day'; title: string; text: string }[] = [
-  { id: 'week', title: 'Whole week', text: 'Employees submit the week. Managers approve it once every working day is submitted.' },
-  { id: 'day', title: 'Day by day', text: 'Employees submit the week. Managers approve or reject each submitted day on its own.' },
-];
+const APPROVAL_MODES = [
+  { value: 'week', label: 'Whole week', testId: 'approval-mode-week', text: 'Employees submit the week. Managers approve it once every working day is submitted.' },
+  { value: 'day', label: 'Day by day', testId: 'approval-mode-day', text: 'Employees submit the week. Managers approve or reject each submitted day on its own.' },
+] as const;
+const DEADLINE_WEEKS = [
+  { value: 'same', label: 'Same week' },
+  { value: 'next', label: 'Next week' },
+] as const;
+const TIME_FORMATS = [
+  { value: 'decimal', label: '7.50', testId: 'time-format-decimal' },
+  { value: 'clock', label: '7:30', testId: 'time-format-clock' },
+] as const;
 
 /** The workspace's timesheet settings and a save that sends them whole (one write after a pause, like every workspace setting). */
 function useTimesheetSettings() {
@@ -28,19 +37,12 @@ function useTimesheetSettings() {
   return { t, save: (patch: Partial<ApiTimesheetSettings>) => setWorkspace({ timesheet: { ...t, ...patch } }) };
 }
 
-function Pill({ on, label, onClick, testId }: { on: boolean; label: string; onClick: () => void; testId?: string }) {
-  return (
-    <button type="button" className={`choice-pill${on ? ' on' : ''}`} aria-pressed={on} onClick={onClick} data-testid={testId}>
-      {label}
-    </button>
-  );
-}
-
 /**
- * Time format and Max hours per day (CD-153), in Settings → Workforce → Employees' Employees card.
- * Typing either format always works; the setting is how hours are shown.
+ * Settings → Timesheet → Time entry (CD-153, CD-283; design G-Settings "tsentry"): the time format,
+ * the most hours a day and whether hours can go on a project without a task. Typing either format
+ * always works; the setting is how hours are shown.
  */
-export function TimeFormatAndMax() {
+export function TimeEntryTab() {
   const { t, save } = useTimesheetSettings();
   const [max, setMax] = useState(String(t.maxDayHours));
   const [seen, setSeen] = useState(t.maxDayHours);
@@ -52,38 +54,46 @@ export function TimeFormatAndMax() {
   const valid = /^\d{1,2}$/.test(max) && n >= 1 && n <= 24;
   return (
     <>
-      <FieldRow label="Time format">
-        <span style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
-          <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} data-testid="time-format">
-            <Pill on={t.timeFormat === 'decimal'} label="7.50" onClick={() => save({ timeFormat: 'decimal' })} testId="time-format-decimal" />
-            <Pill on={t.timeFormat === 'clock'} label="7:30" onClick={() => save({ timeFormat: 'clock' })} testId="time-format-clock" />
-          </span>
-          <span style={{ fontSize: 12, color: 'var(--text-2)' }}>How hours are shown in the Timesheet, Approvals and reports. Typing either format works.</span>
-        </span>
-      </FieldRow>
-      <FieldRow label="Max hours per day">
-        <span style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
-          <input
-            className="form-input"
-            inputMode="numeric"
-            aria-label="Max hours per day"
-            data-testid="max-day-hours"
-            value={max}
-            style={{ maxWidth: 120, borderColor: valid ? undefined : 'var(--danger)' }}
-            onChange={(e) => {
-              const next = e.target.value.replace(/[^\d]/g, '').slice(0, 2);
-              setMax(next);
-              const v = Number(next);
-              if (/^\d{1,2}$/.test(next) && v >= 1 && v <= 24) {
-                setSeen(v);
-                save({ maxDayHours: v });
-              }
-            }}
-            onBlur={() => !valid && setMax(String(t.maxDayHours))}
-          />
-          <span style={{ fontSize: 12, color: valid ? 'var(--text-2)' : 'var(--danger)' }}>{valid ? 'Entries above this on one day are refused.' : 'Between 1 and 24 hours.'}</span>
-        </span>
-      </FieldRow>
+      <Block title="Hours">
+        <Rows>
+          <Row label="Time format" hint="How hours are shown in the Timesheet, Approvals and reports. Typing either format works.">
+            <Segmented label="Time format" value={t.timeFormat} options={TIME_FORMATS} onChange={(v) => save({ timeFormat: v })} testId="time-format" />
+          </Row>
+          <Row label="Max hours per day" hint={valid ? 'Entries above this on one day are refused.' : undefined} error={valid ? undefined : 'Between 1 and 24 hours.'}>
+            <input
+              className="form-input narrow"
+              inputMode="numeric"
+              aria-label="Max hours per day"
+              data-testid="max-day-hours"
+              value={max}
+              aria-invalid={!valid}
+              onChange={(e) => {
+                const next = e.target.value.replace(/[^\d]/g, '').slice(0, 2);
+                setMax(next);
+                const v = Number(next);
+                if (/^\d{1,2}$/.test(next) && v >= 1 && v <= 24) {
+                  setSeen(v);
+                  save({ maxDayHours: v });
+                }
+              }}
+              onBlur={() => !valid && setMax(String(t.maxDayHours))}
+            />
+            <Unit>hours</Unit>
+          </Row>
+        </Rows>
+      </Block>
+      <Block title="What hours go on">
+        <Rows>
+          <Row
+            label="Time on a project without a task"
+            hint="People on a project's team, its lead and anyone assigned to one of its tasks can log hours on the project itself. In the Timesheet's Add row the task becomes optional."
+            setting="project-time"
+            switchRow
+          >
+            <Switch on={!!t.projectTime} onClick={() => save({ projectTime: !t.projectTime })} label="Time on a project without a task" />
+          </Row>
+        </Rows>
+      </Block>
     </>
   );
 }
@@ -97,30 +107,29 @@ function ClockField({ label, value, onSave, testId }: { label: string; value: st
     setText(value);
   }
   return (
-    <label className="form-label">
-      {label}
-      <input
-        className="form-input"
-        type="time"
-        step={900}
-        value={text}
-        data-testid={testId}
-        style={{ width: 130, borderColor: isClock(text) ? undefined : 'var(--danger)' }}
-        onChange={(e) => {
-          setText(e.target.value);
-          if (isClock(e.target.value) && e.target.value !== value) {
-            setSeen(e.target.value);
-            onSave(e.target.value);
-          }
-        }}
-        onBlur={() => !isClock(text) && setText(value)}
-      />
-    </label>
+    <input
+      className="form-input"
+      type="time"
+      step={900}
+      aria-label={label}
+      value={text}
+      data-testid={testId}
+      aria-invalid={!isClock(text)}
+      style={{ width: 130 }}
+      onChange={(e) => {
+        setText(e.target.value);
+        if (isClock(e.target.value) && e.target.value !== value) {
+          setSeen(e.target.value);
+          onSave(e.target.value);
+        }
+      }}
+      onBlur={() => !isClock(text) && setText(value)}
+    />
   );
 }
 
-/** The Standard working day card (CD-153): hours per day, start, end and the working days. */
-export function WorkingDayCard() {
+/** The standard working day (CD-153) as rows: hours per day, start, end and the working days. */
+export function WorkingDayRows() {
   const { t, save } = useTimesheetSettings();
   const [hours, setHours] = useState(shortHours(t.dayMinutes, 'decimal'));
   const [seen, setSeen] = useState(t.dayMinutes);
@@ -136,144 +145,110 @@ export function WorkingDayCard() {
   };
   const endBeforeStart = t.dayEnd <= t.dayStart;
   return (
-    <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="working-day">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <span className="card-title">Standard working day</span>
-        <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>The day every employee is expected to work. Drives expected hours in the Timesheet and the hours of time off.</span>
-      </div>
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <label className="form-label">
-          Hours per day
-          <input
-            className="form-input"
-            inputMode="decimal"
-            value={hours}
-            data-testid="day-hours"
-            style={{ width: 120, borderColor: valid ? undefined : 'var(--danger)' }}
-            onChange={(e) => {
-              setHours(e.target.value);
-              const m = parseHours(e.target.value);
-              if (m !== null && m >= 15 && m <= 1440 && m !== t.dayMinutes) {
-                setSeen(m);
-                save({ dayMinutes: m });
-              }
-            }}
-            onBlur={() => !valid && setHours(shortHours(t.dayMinutes, 'decimal'))}
-          />
-        </label>
+    <Rows testId="working-day">
+      <Row label="Hours per day">
+        <input
+          className="form-input narrow"
+          inputMode="decimal"
+          aria-label="Hours per day"
+          value={hours}
+          data-testid="day-hours"
+          aria-invalid={!valid}
+          onChange={(e) => {
+            setHours(e.target.value);
+            const m = parseHours(e.target.value);
+            if (m !== null && m >= 15 && m <= 1440 && m !== t.dayMinutes) {
+              setSeen(m);
+              save({ dayMinutes: m });
+            }
+          }}
+          onBlur={() => !valid && setHours(shortHours(t.dayMinutes, 'decimal'))}
+        />
+        <Unit>hours</Unit>
+      </Row>
+      <Row label="Start">
         <ClockField label="Start" value={t.dayStart} onSave={(v) => save({ dayStart: v })} testId="day-start" />
+      </Row>
+      <Row label="End" error={endBeforeStart ? 'The working day must end after it starts.' : undefined}>
         <ClockField label="End" value={t.dayEnd} onSave={(v) => save({ dayEnd: v })} testId="day-end" />
-      </div>
-      {endBeforeStart && <span style={{ fontSize: 12, color: 'var(--danger)' }}>The working day must end after it starts.</span>}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <span style={{ fontSize: 13.5, color: 'var(--text-2)' }}>Working days</span>
-        <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} data-testid="working-days">
-          {WEEKDAYS.map((label, i) => (
-            <Pill key={label} on={t.workingDays.includes(i + 1)} label={label} onClick={() => toggleDay(i + 1)} />
-          ))}
+      </Row>
+      <Row label="Working days" hint="The other days are days off">
+        <span className="ws-days" data-testid="working-days" role="group" aria-label="Working days">
+          {WEEKDAYS.map((label, i) => {
+            const on = t.workingDays.includes(i + 1);
+            return (
+              <button key={label} type="button" className={on ? 'on' : ''} aria-pressed={on} onClick={() => toggleDay(i + 1)}>
+                {label}
+              </button>
+            );
+          })}
         </span>
-      </div>
-      <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>Approved days keep the hours they had when they were approved.</span>
-    </div>
+      </Row>
+    </Rows>
   );
 }
 
 /**
- * Settings → Workforce → Approvals: the approval mode (CD-156), the submission deadline (day, time,
- * same or next week; a live line with the next one) and auto submit (CD-153), and the reminders
- * (CD-154: when the reminder goes, and the after-deadline emails).
+ * Settings → Timesheet → Submission and approval (design G-Settings "approvals"): the approval mode
+ * (CD-156), the submission deadline (day, time, same or next week; a live line with the next one)
+ * and auto submit (CD-153), and the reminders (CD-154: when the reminder goes, and the
+ * after-deadline emails).
  */
 export function ApprovalsTab() {
   const { t, save } = useTimesheetSettings();
   // The live line reads again after any settings or holiday change (the workspace and holiday hints raise timesheetRev).
   const key = `${t.deadlineWeekday}|${t.deadlineTime}|${t.deadlineWeek}`;
   const { data: next } = useProjectsRead(true, holidaysApi.nextDeadline, `deadline:${key}`, 'timesheetRev');
+  const mode = APPROVAL_MODES.find((m) => m.value === t.approvalMode) ?? APPROVAL_MODES[0];
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="approval-mode">
-        <span className="card-title">Approval mode</span>
-        {APPROVAL_MODES.map((m) => (
-          <label key={m.id} className={`ts-choice${t.approvalMode === m.id ? ' on' : ''}`} data-testid={`approval-mode-${m.id}`}>
-            <input type="radio" name="approval-mode" checked={t.approvalMode === m.id} onChange={() => save({ approvalMode: m.id })} style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} />
-            <span className="ts-radio" aria-hidden />
-            <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 13.5, fontWeight: 600 }}>{m.title}</span>
-              <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{m.text}</span>
-            </span>
-          </label>
-        ))}
-        <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>Changing the mode never changes a day's status, only the actions offered from then on.</span>
-      </div>
-      <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="deadline-card">
-        <span className="card-title">Submission deadline</span>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <label className="form-label">
-            Day
-            <select className="form-input" value={t.deadlineWeekday} data-testid="deadline-day" style={{ width: 160 }} onChange={(e) => save({ deadlineWeekday: Number(e.target.value) })}>
+    <>
+      <Block title="Approval">
+        <Rows testId="approval-mode">
+          <Row label="Approve" hint={`${mode.text} Changing the mode never changes a day's status, only the actions offered from then on.`}>
+            <Segmented label="Approval mode" value={t.approvalMode} options={APPROVAL_MODES} onChange={(v) => save({ approvalMode: v })} />
+          </Row>
+        </Rows>
+      </Block>
+      <Block title="Submission deadline" desc={<span data-testid="deadline-next">{next ? `Week ${next.weekNumber} is due ${dayLabel(next.date)}, ${next.time}. ` : ''}A deadline on a public holiday moves to the next working day.</span>}>
+        <Rows testId="deadline-card">
+          <Row label="Day">
+            <select className="form-input" aria-label="Deadline day" value={t.deadlineWeekday} data-testid="deadline-day" style={{ width: 160 }} onChange={(e) => save({ deadlineWeekday: Number(e.target.value) })}>
               {WEEKDAY_NAMES.map((n, i) => (
                 <option key={n} value={i + 1}>
                   {n}
                 </option>
               ))}
             </select>
-          </label>
-          <ClockField label="Time" value={t.deadlineTime} onSave={(v) => save({ deadlineTime: v })} testId="deadline-time" />
-          <label className="form-label">
-            Week
-            <select className="form-input" value={t.deadlineWeek} data-testid="deadline-week" style={{ width: 160 }} onChange={(e) => save({ deadlineWeek: e.target.value as 'same' | 'next' })}>
-              <option value="same">Same week</option>
-              <option value="next">Next week</option>
-            </select>
-          </label>
-        </div>
-        <span style={{ fontSize: 12.5, color: 'var(--text-2)' }} data-testid="deadline-next">
-          {next ? `Week ${next.weekNumber} is due ${dayLabel(next.date)}, ${next.time}. ` : ''}A deadline on a public holiday moves to the next working day.
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 0 0', borderTop: '1px solid var(--divider)' }} data-setting="auto-submit">
-          <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>Auto submit at the deadline</span>
-            <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Weeks with hours and draft days are submitted and marked Late and Auto-submitted. Weeks without hours and rejected days are left alone.</span>
-          </span>
-          <Switch on={t.autoSubmit} onClick={() => save({ autoSubmit: !t.autoSubmit })} label="Auto submit at the deadline" />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 0 0', borderTop: '1px solid var(--divider)' }} data-setting="project-time">
-          <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>Time on a project without a task</span>
-            <span style={{ fontSize: 13, color: 'var(--text-2)' }}>People on a project's team, its lead and anyone assigned to one of its tasks can log hours on the project itself. In the Timesheet's Add row the task becomes optional.</span>
-          </span>
-          <Switch on={!!t.projectTime} onClick={() => save({ projectTime: !t.projectTime })} label="Time on a project without a task" />
-        </div>
-      </div>
-      <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="reminders-card">
-        <span className="card-title">Reminders</span>
-        <FieldRow label="Reminder">
-          <span style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
-            <select
-              className="form-input"
-              value={t.reminderHours ?? ''}
-              data-testid="reminder-hours"
-              style={{ width: 260 }}
-              onChange={(e) => save({ reminderHours: e.target.value ? Number(e.target.value) : null })}
-            >
+          </Row>
+          <Row label="Time">
+            <ClockField label="Deadline time" value={t.deadlineTime} onSave={(v) => save({ deadlineTime: v })} testId="deadline-time" />
+          </Row>
+          <Row label="Week" hint="Same week, or the week after the hours">
+            <Segmented label="Deadline week" value={t.deadlineWeek} options={DEADLINE_WEEKS} onChange={(v) => save({ deadlineWeek: v })} testId="deadline-week" />
+          </Row>
+        </Rows>
+      </Block>
+      <Block title="Rules">
+        <Rows testId="reminders-card">
+          <Row label="Auto submit at the deadline" hint="Weeks with hours and draft days are submitted and marked Late and Auto-submitted. Weeks without hours and rejected days are left alone." setting="auto-submit" switchRow>
+            <Switch on={t.autoSubmit} onClick={() => save({ autoSubmit: !t.autoSubmit })} label="Auto submit at the deadline" />
+          </Row>
+          <Row label="Reminders" hint="Sent to everyone who hasn't submitted yet.">
+            <select className="form-input" aria-label="Reminder" value={t.reminderHours ?? ''} data-testid="reminder-hours" style={{ width: 260 }} onChange={(e) => save({ reminderHours: e.target.value ? Number(e.target.value) : null })}>
               {(REMINDER_HOURS.includes(t.reminderHours) ? REMINDERS : [...REMINDERS, { hours: t.reminderHours, label: reminderLabel(t.reminderHours) }]).map((r) => (
                 <option key={r.label} value={r.hours ?? ''}>
                   {r.label}
                 </option>
               ))}
             </select>
-            <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>Sent to everyone who hasn't submitted yet.</span>
-          </span>
-        </FieldRow>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 0 0', borderTop: '1px solid var(--divider)' }} data-setting="after-deadline-emails">
-          <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>After-deadline emails</span>
-            <span style={{ fontSize: 13, color: 'var(--text-2)' }}>At the deadline, late employees get a notice and each manager gets a list of their late people.</span>
-          </span>
-          <Switch on={t.afterDeadlineEmails} onClick={() => save({ afterDeadlineEmails: !t.afterDeadlineEmails })} label="After-deadline emails" />
-        </div>
-      </div>
-      <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Changes are saved as you make them and written to the audit log. Changing the deadline applies to the current week.</span>
-    </div>
+          </Row>
+          <Row label="After-deadline emails" hint="At the deadline, late employees get a notice and each manager gets a list of their late people." setting="after-deadline-emails" switchRow>
+            <Switch on={t.afterDeadlineEmails} onClick={() => save({ afterDeadlineEmails: !t.afterDeadlineEmails })} label="After-deadline emails" />
+          </Row>
+        </Rows>
+      </Block>
+      <Note>Every change is written to the audit log. Changing the deadline applies to the current week.</Note>
+    </>
   );
 }
 
@@ -333,17 +308,17 @@ function HolidayRow({ holiday, year, onChanged }: { holiday: ApiHoliday; year: n
   }
   return (
     <div className="holiday-row" data-testid="holiday-row" data-date={holiday.date}>
-      <span style={{ fontSize: 13 }}>{rangeText({ from: holiday.date, to: holiday.endDate })}</span>
-      <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-        <span style={{ fontSize: 13, fontWeight: 500 }}>{holiday.name}</span>
-        <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
+      <span style={{ fontSize: 13.5 }}>{rangeText({ from: holiday.date, to: holiday.endDate })}</span>
+      <span className="ws-cell">
+        <b style={{ fontWeight: 500 }}>{holiday.name}</b>
+        <span className="ws-row-hint">
           {holiday.minutes ? `${shortHours(holiday.minutes, 'decimal')} h off · ` : ''}
           {!holiday.repeats ? `${holiday.since} only` : holiday.since < year ? `every year since ${holiday.since}` : 'repeats every year'}
           {holiday.source === 'preload' ? ' · preloaded' : ''}
         </span>
       </span>
       <span ref={menuRef} style={{ position: 'relative', justifySelf: 'end' }}>
-        <button type="button" className="btn btn-secondary" aria-label={`More actions for ${holiday.name}`} aria-expanded={menu} data-testid="holiday-menu" onClick={() => setMenu((m) => !m)} style={{ padding: '8px 11px' }}>
+        <button type="button" className="ws-x plain" aria-label={`More actions for ${holiday.name}`} aria-expanded={menu} data-testid="holiday-menu" onClick={() => setMenu((m) => !m)}>
           ⋯
         </button>
         {menu && (
@@ -371,9 +346,10 @@ function HolidayRow({ holiday, year, onChanged }: { holiday: ApiHoliday; year: n
 }
 
 /**
- * Settings → Workforce → Holidays (CD-153, simplified in CD-318): the workspace's public holidays
- * by year. A holiday is a day or a span of days picked in one calendar; it repeats every year from
- * the year it was added, so nothing is copied. Owners and admins add, edit and delete them.
+ * Settings → Time off → Holidays (CD-153, simplified in CD-318; design G-Settings "holidays"): the
+ * workspace's public holidays by year. A holiday is a day or a span of days picked in one calendar;
+ * it repeats every year from the year it was added, so nothing is copied. Owners and admins add,
+ * edit and delete them.
  */
 export function HolidaysTab() {
   const { flash } = useStore();
@@ -396,38 +372,48 @@ export function HolidaysTab() {
     setBusy(false);
   };
   return (
-    <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="holidays">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <button type="button" className="btn-plain" style={{ padding: '7px 10px' }} aria-label="Previous year" onClick={() => setYear(year - 1)}>
-          ←
-        </button>
-        <span style={{ fontSize: 15, fontWeight: 600, minWidth: 48, textAlign: 'center' }} data-testid="holidays-year">
-          {year}
-        </span>
-        <button type="button" className="btn-plain" style={{ padding: '7px 10px' }} aria-label="Next year" onClick={() => setYear(year + 1)}>
-          →
-        </button>
-      </div>
-      <div className="holiday-row holiday-head">
-        <span className="th">Dates</span>
-        <span className="th">Name</span>
-        <span />
-      </div>
-      {error && <span style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</span>}
-      {data?.length === 0 && <span style={{ fontSize: 13, color: 'var(--text-2)', padding: '8px 0' }}>No holidays in {year} yet.</span>}
-      {data?.map((h) => <HolidayRow key={`${h.id}:${h.date}:${h.endDate}:${h.name}:${h.minutes}`} holiday={h} year={year} onChanged={() => void reload()} />)}
-      <div className="holiday-row" data-testid="holiday-add">
-        <DateRangePicker label="Dates" value={draft.range} month={monthIn(year)} onChange={(range) => setDraft({ ...draft, range })} placeholder="Pick the dates" testId="holiday-add-dates" />
-        <input className="form-input" value={draft.name} maxLength={100} placeholder="Name, e.g. Statehood Day" onChange={(e) => setDraft({ ...draft, name: e.target.value })} aria-label="Name" data-testid="holiday-add-name" />
-        <span style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void add()} data-testid="holiday-add-go">
-            Add holiday
-          </button>
-        </span>
-      </div>
-      <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>A holiday repeats every year from the year it is added; a preloaded moving day (Orthodox Easter, a moved Sunday holiday) holds in its year only. Changes are written to the audit log.</span>
+    <>
+      <Rows>
+        <Row label="Year">
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button type="button" className="ws-x plain" aria-label="Previous year" onClick={() => setYear(year - 1)}>
+              ←
+            </button>
+            <span style={{ fontSize: 15, fontWeight: 600, minWidth: 48, textAlign: 'center' }} data-testid="holidays-year">
+              {year}
+            </span>
+            <button type="button" className="ws-x plain" aria-label="Next year" onClick={() => setYear(year + 1)}>
+              →
+            </button>
+          </span>
+        </Row>
+      </Rows>
+      <Block title={`Holidays in ${year}`} testId="holidays">
+        <div className="card ws-list">
+          <div className="holiday-row holiday-head">
+            <span className="th">Dates</span>
+            <span className="th">Name</span>
+            <span />
+          </div>
+          {error && <span style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</span>}
+          {data?.length === 0 && <div className="ws-list-empty">No holidays in {year} yet.</div>}
+          {data?.map((h) => (
+            <HolidayRow key={`${h.id}:${h.date}:${h.endDate}:${h.name}:${h.minutes}`} holiday={h} year={year} onChanged={() => void reload()} />
+          ))}
+          <div className="holiday-row" data-testid="holiday-add">
+            <DateRangePicker label="Dates" value={draft.range} month={monthIn(year)} onChange={(range) => setDraft({ ...draft, range })} placeholder="Pick the dates" testId="holiday-add-dates" />
+            <input className="form-input" value={draft.name} maxLength={100} placeholder="Name, e.g. Statehood Day" onChange={(e) => setDraft({ ...draft, name: e.target.value })} aria-label="Name" data-testid="holiday-add-name" />
+            <span style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void add()} data-testid="holiday-add-go">
+                Add holiday
+              </button>
+            </span>
+          </div>
+        </div>
+      </Block>
+      <Note>A holiday repeats every year from the year it is added; a preloaded moving day (Orthodox Easter, a moved Sunday holiday) holds in its year only. Changes are written to the audit log.</Note>
       <PreloadControl year={year} onChanged={() => void reload()} />
-    </div>
+    </>
   );
 }
 
@@ -454,18 +440,20 @@ function PreloadControl({ year, onChanged }: { year: number; onChanged: () => vo
     setBusy(false);
   };
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', paddingTop: 10, borderTop: '1px solid var(--divider)' }} data-testid="holiday-preload">
-      <span style={{ fontSize: 13 }}>Preload holidays for</span>
-      <select className="form-input" style={{ padding: '7px 10px' }} value={data.country} disabled={busy} onChange={(e) => void change(e.target.value as 'none' | 'serbia')} aria-label="Preload holidays for" data-testid="holiday-preload-country">
-        <option value="serbia">Serbia</option>
-        <option value="none">None</option>
-      </select>
-      {data.country !== 'none' && !data.years.includes(year) && (
-        <button type="button" className="btn-plain" disabled={busy} onClick={() => void change(data.country, year)} data-testid="holiday-preload-year">
-          Preload {year}
-        </button>
-      )}
-      <span className="emp-note">{data.years.length ? `Generated: ${data.years.join(', ')}. Next year is added on 1 November.` : 'Nothing generated yet.'}</span>
-    </div>
+    <Block title="Preloaded holidays">
+      <Rows testId="holiday-preload">
+        <Row label="Preload holidays for" hint={data.years.length ? `Generated: ${data.years.join(', ')}. Next year is added on 1 November.` : 'Nothing generated yet.'}>
+          <select className="form-input" style={{ width: 140 }} value={data.country} disabled={busy} onChange={(e) => void change(e.target.value as 'none' | 'serbia')} aria-label="Preload holidays for" data-testid="holiday-preload-country">
+            <option value="serbia">Serbia</option>
+            <option value="none">None</option>
+          </select>
+          {data.country !== 'none' && !data.years.includes(year) && (
+            <button type="button" className="btn-plain" disabled={busy} onClick={() => void change(data.country, year)} data-testid="holiday-preload-year">
+              Preload {year}
+            </button>
+          )}
+        </Row>
+      </Rows>
+    </Block>
   );
 }

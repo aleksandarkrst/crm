@@ -33,12 +33,12 @@ describe('settings page', () => {
     await page.waitForSelector('[data-testid=settings-nav] .settings-nav-item');
     assert.equal(await sidebarModule(), 'projects');
     assert.deepEqual(await navGroups(), [
-      ['Workspace', ['General', 'Modules', 'Roles & permissions']],
-      ['CRM', ['Funnels', 'Document templates', 'Customize fields', 'Sales bonuses']],
+      ['Workspace', ['General', 'Company details', 'Modules', 'Roles & permissions']],
+      ['CRM', ['Funnels', 'Document templates', 'Custom fields', 'Sales bonuses']],
       ['Projects', ['Project hierarchy', 'Project types', 'Technicians']],
-      ['Employees', ['Employees']],
-      ['Timesheet', ['Approvals']],
-      ['Time off', ['Policies', 'Holidays']],
+      ['Employees', ['Employee record', 'Working time', 'Organization levels']],
+      ['Timesheet', ['Time entry', 'Submission and approval']],
+      ['Time off', ['Vacation', 'Leave and absence', 'Holidays']],
     ]);
     assert.deepEqual(await active(), ['General']);
     assert.equal(await page.$eval('.settings-title', (el) => el.textContent), 'General');
@@ -64,7 +64,7 @@ describe('settings page', () => {
     await page.waitForSelector('[data-testid=project-stage]');
     const rows = await page.$$('[data-testid=project-stage]');
     await (await rows[1].$('button[aria-label="Move up"]')).click();
-    await page.waitForFunction(() => [...document.querySelectorAll('[data-testid=project-type-preview] .stage-chev')].map((el) => el.textContent).join() === 'In progress,Planning,Review');
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-testid=project-type-preview] .ws-preview-name')].map((el) => el.textContent).join() === 'In progress,Planning,Review');
   });
 
   step('at 700 px the nav sits above the content (TC 5)', async () => {

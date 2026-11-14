@@ -223,7 +223,7 @@ describe('projects', () => {
   });
 
   step('Settings → Workspace has "Create a project when an opportunity is won"', async () => {
-    await page.goto(BASE_URL + '/settings/workspace', { waitUntil: 'networkidle0' });
+    await page.goto(BASE_URL + '/settings/project-hierarchy', { waitUntil: 'networkidle0' });
     await click(page, '[data-testid=auto-create-projects] [role=switch]');
     assert.ok(await eventually(async () => (await api(page, '/workspace')).autoCreateProjects === true));
   });

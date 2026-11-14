@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { askConfirm } from '../../components/ConfirmDialog';
-import { Modal, ModalHeader } from '../../components/ui';
+import { enabledModules } from '../../components/modules';
+import { Modal, ModalHeader, Switch } from '../../components/ui';
 import type { WorkspaceTerms } from '../../lib/api';
 import { type ApiProjectType, projectsApi } from '../../lib/projectsApi';
 import { projectError, useProjectTypes } from '../../store/projects';
 import { DEFAULT_TERMS } from '../../store/remote';
 import { useStore } from '../../store/store';
+import { Block, MoveButton, Note, RemoveX, Row, Rows, Segmented, StagePreview } from './parts';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -85,42 +87,30 @@ export function ProjectTypesTab() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} data-testid="project-types">
+    <div className="ws-stack" data-testid="project-types">
       {!editable && (
-        <span data-testid="project-types-read-only" style={{ fontSize: 12, color: 'var(--text-2)' }}>
+        <span data-testid="project-types-read-only" className="ws-block-desc">
           Only owners and admins can change project types and their stages.
         </span>
       )}
 
-      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <div style={{ flex: '1 1 240px', maxWidth: 300, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {types.map((t) => (
-            <button key={t.id} type="button" className={'choice' + (t.id === type?.id ? ' on' : '')} data-testid="project-type" onClick={() => select(t.id)}>
-              <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>{t.name}</span>
-              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                {plural(t.stages.length, 'stage')} · {plural(t.projects, 'project')}
-              </span>
-            </button>
-          ))}
-          {editable && (
-            <button type="button" className="btn-dashed" onClick={() => void addType()}>
-              New project type
-            </button>
-          )}
-        </div>
-
-        {type && (
-          <TypeCard
-            key={type.id}
-            type={type}
-            editable={editable}
-            canDelete={types.length > 1}
-            save={save}
-            onRemoveStage={(stageId) => void remove({ kind: 'stage', stageId })}
-            onRemoveType={() => void remove({ kind: 'type' })}
-          />
+      <div className="ws-choices">
+        {types.map((t) => (
+          <button key={t.id} type="button" className={'choice' + (t.id === type?.id ? ' on' : '')} aria-pressed={t.id === type?.id} data-testid="project-type" onClick={() => select(t.id)}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{t.name}</span>
+            <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
+              {plural(t.stages.length, 'stage')} · {plural(t.projects, 'project')}
+            </span>
+          </button>
+        ))}
+        {editable && (
+          <button type="button" className="choice ws-choice-new" onClick={() => void addType()}>
+            New project type
+          </button>
         )}
       </div>
+
+      <div>{type && <TypeCard key={type.id} type={type} editable={editable} canDelete={types.length > 1} save={save} onRemoveStage={(stageId) => void remove({ kind: 'stage', stageId })} onRemoveType={() => void remove({ kind: 'type' })} />}</div>
 
       {removing && type && (
         <RemoveDialog
@@ -170,60 +160,73 @@ function TypeCard({
   };
 
   return (
-    <div className="card" data-testid="project-type-card" style={{ flex: '999 1 460px', minWidth: 0, padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <label className="form-label">
-        Project type name
-        <input className="form-input" value={name} disabled={!editable} onChange={(e) => setName(e.target.value)} onBlur={saveName} onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
-      </label>
+    <div className="ws-stack" data-testid="project-type-card">
+      <Block title="Type">
+        <Rows>
+          <Row label="Name">
+            <input className="form-input" aria-label="Project type name" value={name} disabled={!editable} onChange={(e) => setName(e.target.value)} onBlur={saveName} onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
+          </Row>
+        </Rows>
+      </Block>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <span className="caps">Stages</span>
-        {stages.map((st, idx) => (
-          <StageRow
-            key={st.id}
-            n={idx + 1}
-            name={st.name}
-            projects={st.projects}
-            editable={editable}
-            first={idx === 0}
-            last={idx === stages.length - 1}
-            only={stages.length === 1}
-            onRename={(next) => void save(() => projectsApi.renameStage(type.id, st.id, next))}
-            onMove={(dir) => moveStage(idx, dir)}
-            onRemove={() => onRemoveStage(st.id)}
-          />
-        ))}
-        {editable && (
-          <button
-            type="button"
-            className="btn-dashed"
-            style={{ alignSelf: 'flex-start', whiteSpace: 'nowrap' }}
-            onClick={() => void save(() => projectsApi.createStage(type.id, freshName('New stage', stages.map((s) => s.name))), 'Stage added')}
-          >
-            New stage
-          </button>
-        )}
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <span className="caps">Preview</span>
-        <div className="stage-bar" data-testid="project-type-preview">
-          {stages.map((st, i) => (
-            <button key={st.id} type="button" className={'stage-chev' + (i === 0 ? ' current' : '')} disabled>
-              {st.name}
-            </button>
-          ))}
+      <Block title="Stages" desc="Projects move through them from left to right. Complete and Cancel always come after the last stage.">
+        <StagePreview names={stages.map((st) => st.name)} testId="project-type-preview" />
+        <div className="card ws-stages">
+          <div>
+            {stages.map((st, idx) => (
+              <StageRow
+                key={st.id}
+                n={idx + 1}
+                name={st.name}
+                projects={st.projects}
+                editable={editable}
+                first={idx === 0}
+                last={idx === stages.length - 1}
+                only={stages.length === 1}
+                onRename={(next) => void save(() => projectsApi.renameStage(type.id, st.id, next))}
+                onMove={(dir) => moveStage(idx, dir)}
+                onRemove={() => onRemoveStage(st.id)}
+              />
+            ))}
+          </div>
+          {editable && (
+            <div className="ws-stages-foot">
+              <button
+                type="button"
+                className="btn-plain"
+                onClick={() =>
+                  void save(
+                    () =>
+                      projectsApi.createStage(
+                        type.id,
+                        freshName(
+                          'New stage',
+                          stages.map((s) => s.name),
+                        ),
+                      ),
+                    'Stage added',
+                  )
+                }
+              >
+                New stage
+              </button>
+            </div>
+          )}
         </div>
-      </div>
+      </Block>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--text-2)' }}>
-        <span>{type.projects ? `Used by ${plural(type.projects, 'project')}` : 'No projects use this type yet'}</span>
-        {editable && canDelete && (
-          <button type="button" className="btn btn-secondary" style={{ marginLeft: 'auto', padding: '6px 10px', fontSize: 12 }} onClick={onRemoveType}>
-            Delete project type
-          </button>
-        )}
-      </div>
+      {editable && canDelete && (
+        <Block title="Danger zone">
+          <Rows danger>
+            <Row label="Delete project type" hint={type.projects ? `Used by ${plural(type.projects, 'project')}. You choose where they go before it is deleted.` : 'No projects use this type yet.'}>
+              <button type="button" className="btn-danger-quiet" onClick={onRemoveType}>
+                Delete project type
+              </button>
+            </Row>
+          </Rows>
+        </Block>
+      )}
+      {!(editable && canDelete) && <Note>{type.projects ? `Used by ${plural(type.projects, 'project')}.` : 'No projects use this type yet.'}</Note>}
     </div>
   );
 }
@@ -258,48 +261,40 @@ function StageRow({
     if (!next || next === name) return setDraft(name);
     onRename(next);
   };
-  const arrow = (d: string) => (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d={d} />
-    </svg>
-  );
   return (
-    <div data-testid="project-stage" style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid var(--border)', borderRadius: 10, padding: '6px 8px 6px 12px' }}>
-      <span style={{ fontSize: 12, color: 'var(--muted)', width: 18 }}>{n}</span>
-      <input
-        className="ghost ghost-sm"
-        value={draft}
-        disabled={!editable}
-        aria-label="Stage name"
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-        style={{ flex: 1, minWidth: 0, fontWeight: 500 }}
-      />
-      <span style={{ fontSize: 12, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{plural(projects, 'project')}</span>
-      {editable && (
-        <>
-          <button type="button" className="icon-btn" aria-label="Move up" title="Move up" disabled={first} style={{ opacity: first ? 0.35 : 1 }} onClick={() => onMove(-1)}>
-            {arrow('M6 15l6-6 6 6')}
-          </button>
-          <button type="button" className="icon-btn" aria-label="Move down" title="Move down" disabled={last} style={{ opacity: last ? 0.35 : 1 }} onClick={() => onMove(1)}>
-            {arrow('M6 9l6 6 6-6')}
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label="Delete stage"
-            title={only ? 'A project type needs at least one stage' : projects > 0 ? `In use by ${plural(projects, 'project')}. Move them to another stage first.` : 'Delete stage'}
-            disabled={only || projects > 0}
-            style={{ opacity: only || projects > 0 ? 0.35 : 1 }}
-            onClick={onRemove}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-              <path d="M6 6l12 12M18 6 6 18" />
-            </svg>
-          </button>
-        </>
-      )}
+    <div data-testid="project-stage" className="ws-stage">
+      <div className="ws-stage-head">
+        <div className="ws-stage-main" style={{ cursor: 'default' }}>
+          <span className="ws-stage-n">{n}</span>
+          <span className="ws-stage-text">
+            <input
+              className="ghost ghost-sm"
+              value={draft}
+              disabled={!editable}
+              aria-label="Stage name"
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commit}
+              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+              style={{ fontWeight: 600, fontSize: 13.5, padding: '2px 6px', margin: '0 -6px' }}
+            />
+          </span>
+          <span className="ws-stage-opps" style={{ display: 'inline' }}>
+            {plural(projects, 'project')}
+          </span>
+        </div>
+        {editable && (
+          <span className="ws-stage-actions">
+            <MoveButton dir="up" label="Move up" disabled={first} onClick={() => onMove(-1)} />
+            <MoveButton dir="down" label="Move down" disabled={last} onClick={() => onMove(1)} />
+            <RemoveX
+              label="Delete stage"
+              title={only ? 'A project type needs at least one stage' : projects > 0 ? `In use by ${plural(projects, 'project')}. Move them to another stage first.` : 'Delete stage'}
+              disabled={only || projects > 0}
+              onClick={onRemove}
+            />
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -391,17 +386,35 @@ const sameTerms = (a: WorkspaceTerms, b: WorkspaceTerms) => TERM_FIELDS.every(({
 /** Settings → Projects → Project hierarchy (CD-318): the Names card on a page of its own, above Project types. */
 export function ProjectHierarchyTab() {
   const store = useStore();
+  const { s, setWorkspace } = store;
+  const w = s.workspace;
+  const modules = enabledModules(w.modules);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <>
       <NamesCard editable={store.canEditFunnels} />
+      {/* Only where both the CRM and Projects are on (CD-488); here with the design since CD-524. */}
+      {modules.includes('crm') && modules.includes('projects') && (
+        <Block title="From the CRM">
+          <Rows>
+            <Row
+              label="Create a project when an opportunity is won"
+              hint="The project takes the opportunity's title and company, the first project type, and the opportunity owner as lead, who gets an email. Once per opportunity."
+              testId="auto-create-projects"
+              switchRow
+            >
+              <Switch on={w.autoCreateProjects} onClick={() => setWorkspace({ autoCreateProjects: !w.autoCreateProjects })} label="Create a project when an opportunity is won" />
+            </Row>
+          </Rows>
+        </Block>
+      )}
       <HourLimitCard />
-    </div>
+    </>
   );
 }
 
 const LIMIT_MODES = [
-  { mode: 'warn', label: 'Warn', text: "Time beyond someone's hour limit on a task is saved after a confirmation and flagged for their approver." },
-  { mode: 'block', label: 'Block', text: "Time beyond someone's hour limit on a task is refused; their manager raises the limit first." },
+  { value: 'warn', label: 'Warn', testId: 'hour-limit-warn', text: "Time beyond someone's hour limit on a task is saved after a confirmation and flagged for their approver." },
+  { value: 'block', label: 'Block', testId: 'hour-limit-block', text: "Time beyond someone's hour limit on a task is refused; their manager raises the limit first." },
 ] as const;
 
 /** Hour limit mode (CD-149, spec 10.4): Warn (default) or Block. Owners and admins change it. */
@@ -409,29 +422,13 @@ function HourLimitCard() {
   const { s, setWorkspace, canEditWorkspace } = useStore();
   const mode = s.workspace.hourLimitMode;
   return (
-    <div className="card" data-testid="hour-limit-mode" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <span className="caps">Hour limit mode</span>
-        <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>What happens when someone logs more hours on a task than their hour limit.</span>
-      </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {LIMIT_MODES.map((m) => (
-          <button
-            key={m.mode}
-            type="button"
-            className={`choice-pill${mode === m.mode ? ' on' : ''}`}
-            aria-pressed={mode === m.mode}
-            disabled={!canEditWorkspace}
-            onClick={() => mode !== m.mode && setWorkspace({ hourLimitMode: m.mode })}
-            data-testid={`hour-limit-${m.mode}`}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
-      <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{LIMIT_MODES.find((m) => m.mode === mode)?.text}</span>
-      {!canEditWorkspace && <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Only owners and admins can change this.</span>}
-    </div>
+    <Block title="Hour limits">
+      <Rows testId="hour-limit-mode">
+        <Row label="When someone goes over their hour limit" hint={LIMIT_MODES.find((m) => m.value === mode)?.text}>
+          <Segmented label="Hour limit mode" value={mode} options={LIMIT_MODES} disabled={!canEditWorkspace} onChange={(v) => setWorkspace({ hourLimitMode: v })} />
+        </Row>
+      </Rows>
+    </Block>
   );
 }
 
@@ -464,17 +461,30 @@ function NamesCard({ editable }: { editable: boolean }) {
 
   const changed = !sameTerms(draft, saved);
   return (
-    <div className="card" data-testid="project-terms" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <span className="caps">Names</span>
-        <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>What this workspace calls projects and tasks, e.g. Job and Activity. The names show everywhere: the sidebar, pages, buttons and emails.</span>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+    <Block
+      title="Names"
+      desc="What this workspace calls projects and tasks, e.g. Job and Activity. The names show everywhere: the sidebar, pages, buttons and emails."
+      testId="project-terms"
+      actions={
+        editable && (
+          <>
+            <button type="button" className="btn-plain" disabled={saving || sameTerms(saved, DEFAULT_TERMS)} data-testid="reset-terms" onClick={() => void submit(DEFAULT_TERMS)}>
+              Reset to defaults
+            </button>
+            <button type="button" className={changed && !saving ? 'btn btn-primary' : 'btn btn-disabled'} disabled={!changed || saving} data-testid="save-terms" onClick={() => void submit(draft)}>
+              {saving ? 'Saving…' : 'Save names'}
+            </button>
+          </>
+        )
+      }
+    >
+      <Rows>
         {TERM_FIELDS.map(({ key, label }) => (
-          <label key={key} className="form-label">
-            {label}
+          <Row key={key} label={label} error={errors[key] && <span data-testid={`term-${key}-error`}>{errors[key]}</span>}>
             <input
               className="form-input"
+              style={{ width: 200 }}
+              aria-label={label}
               data-testid={`term-${key}`}
               value={draft[key]}
               disabled={!editable || saving}
@@ -487,24 +497,9 @@ function NamesCard({ editable }: { editable: boolean }) {
               }}
               onKeyDown={(e) => e.key === 'Enter' && changed && void submit(draft)}
             />
-            {errors[key] && (
-              <span data-testid={`term-${key}-error`} style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 500 }}>
-                {errors[key]}
-              </span>
-            )}
-          </label>
+          </Row>
         ))}
-      </div>
-      {editable && (
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button type="button" className={changed && !saving ? 'btn btn-primary' : 'btn btn-disabled'} disabled={!changed || saving} data-testid="save-terms" onClick={() => void submit(draft)}>
-            {saving ? 'Saving…' : 'Save names'}
-          </button>
-          <button type="button" className="btn btn-secondary" disabled={saving || sameTerms(saved, DEFAULT_TERMS)} data-testid="reset-terms" onClick={() => void submit(DEFAULT_TERMS)}>
-            Reset to defaults
-          </button>
-        </div>
-      )}
-    </div>
+      </Rows>
+    </Block>
   );
 }

@@ -1,4 +1,6 @@
+import { Icon } from '../../components/icons';
 import { TEAM_ROLES } from '../../store/seed';
+import { Block, Note, Table } from './parts';
 
 /** What each workspace role may do. Enforced by the API with the workspace role. */
 const ROLE_RULES: { label: string; roles: (typeof TEAM_ROLES)[number][] }[] = [
@@ -17,48 +19,29 @@ const ROLE_RULES: { label: string; roles: (typeof TEAM_ROLES)[number][] }[] = [
  * matrix and "Who has which role" went with the Administration and Payroll roles (CD-225).
  */
 export function RolesTab() {
+  // No artboard of its own: it takes the design's table (G-Settings, CD-524) with a mark per role.
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <WorkspaceRoles />
-    </div>
-  );
-}
-
-function WorkspaceRoles() {
-  const cols = '1.8fr repeat(3, 90px)';
-  return (
-    <div className="card" style={{ overflowX: 'auto' }} data-testid="workspace-roles">
-      <div style={{ minWidth: 560 }}>
-        <div className="card-pad" style={{ paddingBottom: 6 }}>
-          <div className="card-title">Workspace roles</div>
-          <span className="card-sub">Owner, admin and member control the account: inviting, workspace settings, deleting CRM records, funnels, custom fields and bonuses.</span>
-        </div>
-        <div className="table-head th" style={{ gridTemplateColumns: cols }}>
-          <span>Permission</span>
-          {TEAM_ROLES.map((r) => (
-            <span key={r} style={{ justifySelf: 'center' }}>
-              {r}
-            </span>
+    <>
+      <Block title="Workspace roles" desc="Owner, admin and member control the account: inviting, workspace settings, deleting CRM records, funnels, custom fields and bonuses." testId="workspace-roles">
+        <Table cols={[{ label: 'Permission' }, ...TEAM_ROLES.map((r) => ({ label: r, align: 'center' as const }))]} minWidth={560}>
+          {ROLE_RULES.map((p) => (
+            <tr key={p.label}>
+              <td>{p.label}</td>
+              {TEAM_ROLES.map((r) => {
+                const on = p.roles.includes(r);
+                return (
+                  <td key={r} className="center">
+                    <span className={'ws-mark' + (on ? ' on' : '')} role="img" aria-label={on ? `${r}: yes` : `${r}: no`}>
+                      <Icon name="check" size={12} />
+                    </span>
+                  </td>
+                );
+              })}
+            </tr>
           ))}
-        </div>
-        {ROLE_RULES.map((p) => (
-          <div key={p.label} className="table-row" style={{ gridTemplateColumns: cols, padding: '11px 16px' }}>
-            <span>{p.label}</span>
-            {TEAM_ROLES.map((r) => {
-              const on = p.roles.includes(r);
-              return (
-                <span
-                  key={r}
-                  style={{ justifySelf: 'center', width: 20, height: 20, borderRadius: 5, border: `1.5px solid ${on ? '#14503C' : '#CAD3CE'}`, background: on ? '#14503C' : '#FFFFFF', color: '#F5F7F6', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  {on ? '✓' : ''}
-                </span>
-              );
-            })}
-          </div>
-        ))}
-        <div style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-2)' }}>Every workspace keeps at least one owner. Anyone can leave a workspace from the Team tab.</div>
-      </div>
-    </div>
+        </Table>
+      </Block>
+      <Note>Every workspace keeps at least one owner. Anyone can leave a workspace from the Team page.</Note>
+    </>
   );
 }

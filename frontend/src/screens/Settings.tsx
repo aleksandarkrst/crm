@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { askConfirm } from '../components/ConfirmDialog';
-import { FieldRow, GhostInput, GhostSelect, Modal, ModalHeader, RemoveButton, Switch } from '../components/ui';
-import { Icon } from '../components/icons';
+import { GhostInput, GhostSelect, Modal, ModalHeader, RemoveButton, Switch } from '../components/ui';
+import { Icon, type IconName } from '../components/icons';
 import { Screen } from '../components/Layout';
-import { MODULES, WORKSPACE_MODULES, enabledModules } from '../components/modules';
+import { MODULES, WORKSPACE_MODULES, enabledModules, type WorkspaceModule } from '../components/modules';
 import { paths } from '../lib/paths';
 import { canManageTemplates } from '../store/documents';
 import { ACTIVITIES, CHANNEL_LABELS, CHANNELS, CURRENCIES, DOCS, FIELD_TYPES } from '../store/seed';
@@ -15,15 +15,16 @@ import type { BonusRule, CustomFieldDef, Stage, Workspace } from '../store/types
 import type { CustomFieldEntity } from '../lib/api';
 import { useStore } from '../store/store';
 import { TemplatesTab } from './DocumentTemplates';
-import { EmployeesTab } from './settings/EmployeesTab';
-import { CompanyCard, COUNTRY_OPTIONS } from './settings/CompanyCard';
-import { TimeOffTab } from './settings/TimeOffSettings';
-import { ApprovalsTab, HolidaysTab } from './settings/WorkforceSettings';
+import { EmployeeRecordTab, OrgLevelsTab, WorkingTimeTab } from './settings/EmployeesTab';
+import { CompanyCard } from './settings/CompanyCard';
+import { LeaveTab, TimeOffTab } from './settings/TimeOffSettings';
+import { ApprovalsTab, HolidaysTab, TimeEntryTab } from './settings/WorkforceSettings';
 import { ProjectHierarchyTab, ProjectTypesTab } from './settings/ProjectTypesTab';
 import { TechniciansTab } from './settings/TechniciansTab';
-import { WorkspaceInfo } from './settings/WorkspaceInfo';
+import { LogoRow, NameRow } from './settings/WorkspaceInfo';
 import { TimeZonePicker } from './settings/TimeZonePicker';
 import { RolesTab } from './settings/RolesTab';
+import { Block, MoveButton, RemoveX, Row, Rows, Segmented, Table, Unit } from './settings/parts';
 import { useTerms } from '../store/terms';
 import { targetOf } from '../lib/validate';
 
@@ -42,9 +43,10 @@ function TargetDaysInput({ value, onSave, disabled, placeholder, testId }: { val
     setBad(false);
   }, [value]);
   return (
-    <>
-      <span style={{ display: 'flex', alignItems: 'center', border: `1px solid ${bad ? 'var(--danger)' : 'var(--border)'}`, borderRadius: 7, background: 'var(--white)', padding: '0 10px 0 0' }}>
+    <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, maxWidth: '100%' }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <input
+          className="form-input"
           data-testid={testId}
           type="number"
           disabled={disabled}
@@ -53,6 +55,7 @@ function TargetDaysInput({ value, onSave, disabled, placeholder, testId }: { val
           step={1}
           value={text}
           placeholder={placeholder}
+          aria-label="Target days"
           aria-invalid={bad}
           onChange={(e) => {
             setText(e.target.value);
@@ -65,67 +68,85 @@ function TargetDaysInput({ value, onSave, disabled, placeholder, testId }: { val
           onKeyDown={(e) => {
             if (e.key === 'Enter') e.currentTarget.blur();
           }}
-          style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', padding: '9px 4px 9px 10px', fontSize: 13, color: 'var(--ink)', textTransform: 'none', letterSpacing: 0 }}
+          style={{ width: 130 }}
         />
-        <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-2)', letterSpacing: 0 }}>days</span>
+        <Unit>days</Unit>
       </span>
       {bad && (
-        <span className="emp-error" role="alert" data-testid={`${testId}-error`} style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>
+        <span className="ws-row-error" role="alert" data-testid={`${testId}-error`}>
           {TARGET_DAYS_PROBLEM}
         </span>
       )}
-    </>
+    </span>
   );
 }
 
+type TabDef = {
+  k: string;
+  group: (typeof GROUPS)[number];
+  label: string;
+  icon: IconName;
+  description: string;
+  /** Every change saves as it is made: the head says so (the design's "saved" chip). */
+  autosave?: boolean;
+};
+
 /**
- * The sections of Settings (CD-280), grouped by module in the left nav. Each has its own route
- * (`/settings/<k>`). The design names General, Members, Funnels, Project types and Cost rates; the
- * other sections the app already had keep their content in the group they belong to. Cost rates
- * comes when there are rates to set (a Linear follow-up).
+ * The sections of Settings (CD-280), grouped by module in the left nav, each on its own route
+ * (`/settings/<k>`). Since CD-524 they follow the design G-Settings: Company details, Working time,
+ * Organization levels, Time entry and Leave and absence are sections of their own (their settings
+ * were cards in General, Employees, Approvals and Policies), and a few sections take the design's
+ * names. The design's Business trips, contract types and workspace deletion are not in the app.
  */
-const TABS = [
-  { k: 'workspace', group: 'Workspace', label: 'General', description: 'Name, currency, time zone, fiscal year and the language of customer emails.' },
-  { k: 'modules', group: 'Workspace', label: 'Modules', description: 'The modules this workspace uses. A module that is off shows as "Not in this workspace" in the module switcher and its settings are hidden; its data is kept.' },
-  { k: 'roles', group: 'Workspace', label: 'Roles & permissions', description: 'What owners, admins and members can do.' },
-  { k: 'funnel', group: 'CRM', label: 'Funnels', description: 'The stages opportunities move through, with their activities and to-dos.' },
-  { k: 'templates', group: 'CRM', label: 'Document templates', description: 'Templates hold the fixed story; merge fields pull the rest from the opportunity when someone generates a document.' },
-  { k: 'fields', group: 'CRM', label: 'Customize fields', description: 'Custom fields show on opportunities, companies and contacts, in their create forms and in CSV exports. Everyone can fill them in.' },
-  { k: 'bonuses', group: 'CRM', label: 'Sales bonuses', description: 'How salespeople earn bonuses on won opportunities.' },
+const TABS: readonly TabDef[] = [
+  { k: 'workspace', group: 'Workspace', label: 'General', icon: 'preferences', description: 'Name, logo, currency, time zone and fiscal year of the workspace.', autosave: true },
+  { k: 'company', group: 'Workspace', label: 'Company details', icon: 'building', description: 'Printed on generated documents such as vacation decisions. Empty fields print as blanks.' },
   {
-    k: 'project-hierarchy',
-    group: 'Projects',
-    label: 'Project hierarchy',
-    // The Names card explains the names; the subtitle says what the page holds (CD-489: not the same sentence twice).
-    description: 'What projects and tasks are called in this workspace, and what happens when someone logs more hours than their limit.',
+    k: 'modules',
+    group: 'Workspace',
+    label: 'Modules',
+    icon: 'modules',
+    description: 'The modules this workspace uses. A module that is off shows as "Not in this workspace" in the module switcher and its settings are hidden; its data is kept.',
+    autosave: true,
   },
+  { k: 'roles', group: 'Workspace', label: 'Roles & permissions', icon: 'lock', description: 'What owners, admins and members can do.' },
+  { k: 'funnel', group: 'CRM', label: 'Funnels', icon: 'funnel', description: 'The stages opportunities move through, what happens in each and what must be done before they move on.', autosave: true },
+  { k: 'templates', group: 'CRM', label: 'Document templates', icon: 'template', description: 'Templates hold the fixed story; merge fields pull the rest from the opportunity when someone generates a document.' },
+  { k: 'fields', group: 'CRM', label: 'Custom fields', icon: 'fields', description: 'Custom fields show on opportunities, companies and contacts, in their create forms and in CSV exports. Everyone can fill them in.', autosave: true },
+  { k: 'bonuses', group: 'CRM', label: 'Sales bonuses', icon: 'bonus', description: 'How salespeople earn bonuses on won opportunities.', autosave: true },
+  // The Names block explains the names; the subtitle says what the page holds (CD-489: not the same sentence twice).
+  { k: 'project-hierarchy', group: 'Projects', label: 'Project hierarchy', icon: 'hierarchy', description: 'What projects and tasks are called in this workspace, and what happens when someone logs more hours than their limit.' },
   {
     k: 'project-types',
     group: 'Projects',
     label: 'Project types',
+    icon: 'columns',
     description:
       "A project type is a set of stages for one kind of project, like a funnel in the CRM. Each project is on one board: it shows in that board's columns, and its tasks are grouped by the same stages in the plan. Complete and Cancel are always available and are not stages.",
   },
-  { k: 'technicians', group: 'Projects', label: 'Technicians', description: 'What each person can be given: project tasks, work orders or both.' },
+  { k: 'technicians', group: 'Projects', label: 'Technicians', icon: 'wrench', description: 'What each person can be given: project tasks, work orders or both.', autosave: true },
   // Workforce's settings, grouped by the modules it was split into (CD-521). They stay here, not in the modules.
-  { k: 'employees', group: 'Employees', label: 'Employees', description: 'What new employees start with and what employees may change themselves.' },
-  { k: 'approvals', group: 'Timesheet', label: 'Approvals', description: 'When timesheets are due, how managers approve them and who gets reminded.' },
-  { k: 'timeoff', group: 'Time off', label: 'Policies', description: 'Vacation policies: how many days employees get per year, extra days by work experience, and how unused days carry over.' },
-  { k: 'holidays', group: 'Time off', label: 'Holidays', description: 'Days nobody is expected to work. They show in the Timesheet and move deadlines.' },
-] as const;
-type Tab = (typeof TABS)[number]['k'];
+  { k: 'employees', group: 'Employees', label: 'Employee record', icon: 'employees', description: 'What is kept for every employee and what employees may change themselves.', autosave: true },
+  { k: 'working-time', group: 'Employees', label: 'Working time', icon: 'clock', description: 'The standard working day. Timesheets, time off and capacity count from it.', autosave: true },
+  { k: 'org-levels', group: 'Employees', label: 'Organization levels', icon: 'hierarchy', description: 'The names of your levels, from the top down. The org structure and its units use them.' },
+  { k: 'time-entry', group: 'Timesheet', label: 'Time entry', icon: 'timeEntry', description: 'How people log hours.', autosave: true },
+  { k: 'approvals', group: 'Timesheet', label: 'Submission and approval', icon: 'check', description: 'When timesheets are due, how managers approve them and who gets reminded.', autosave: true },
+  { k: 'timeoff', group: 'Time off', label: 'Vacation', icon: 'sun', description: 'Vacation policies and the decision sent when vacation is approved.' },
+  { k: 'leave', group: 'Time off', label: 'Leave and absence', icon: 'leave', description: 'Paid leave, sick leave and other absence.' },
+  { k: 'holidays', group: 'Time off', label: 'Holidays', icon: 'calendar', description: 'Days nobody is expected to work. They show in the Timesheet and move deadlines.' },
+];
 const GROUPS = ['Workspace', 'CRM', 'Projects', 'Employees', 'Timesheet', 'Time off'] as const;
 /** The module each group belongs to (CD-488): a module turned off in Modules hides its settings too. */
-const GROUP_MODULE: Record<(typeof GROUPS)[number], string | null> = { Workspace: null, CRM: 'crm', Projects: 'projects', Employees: 'employees', Timesheet: 'timesheet', 'Time off': 'timeoff' };
+const GROUP_MODULE: Record<(typeof GROUPS)[number], WorkspaceModule | null> = { Workspace: null, CRM: 'crm', Projects: 'projects', Employees: 'employees', Timesheet: 'timesheet', 'Time off': 'timeoff' };
 
 export function Settings() {
   const { tab = 'workspace' } = useParams();
   const navigate = useNavigate();
-  const { s, set, session, flash, canEditFields, canSeeBonuses, canEditWorkspace } = useStore();
+  const { s, set, session, flash, canEditFields, canSeeBonuses, canEditWorkspace, canEditFunnels } = useStore();
   const modules = enabledModules(s.workspace.modules);
   const terms = useTerms();
   // "Project types" follows what the workspace calls projects (CD-143).
-  const labelOf = (t: (typeof TABS)[number]) => (t.k === 'project-types' ? `${terms.Project} types` : t.label);
+  const labelOf = (t: TabDef) => (t.k === 'project-types' ? `${terms.Project} types` : t.label);
   const [params] = useSearchParams();
   // Opening Settings or another section starts at the top, not where the last page was scrolled to.
   useEffect(() => {
@@ -145,22 +166,29 @@ export function Settings() {
     return (t.k !== 'bonuses' || canSeeBonuses) && (mod === null || modules.includes(mod));
   });
   if (!tabs.some((t) => t.k === tab)) return <Navigate to={paths.settings()} replace />;
-  const current = tab as Tab;
-  const section = tabs.find((t) => t.k === current)!;
+  const section = tabs.find((t) => t.k === tab)!;
+  const current = section.k;
+  const modulesOff = GROUPS.filter((g) => GROUP_MODULE[g] && !modules.includes(GROUP_MODULE[g])).length;
 
   const action =
     current === 'templates'
-      ? { label: 'New template', onClick: () => (canManageTemplates(session.tenant.role) ? set({ templateOpen: true, templateEditing: null }) : flash('Only owners and admins can add templates')), meta: '' }
+      ? { label: 'New template', onClick: () => (canManageTemplates(session.tenant.role) ? set({ templateOpen: true, templateEditing: null }) : flash('Only owners and admins can add templates')) }
       : current === 'fields'
         ? canEditFields
-          ? { label: 'New field', onClick: () => set({ fieldOpen: true }), meta: '' }
+          ? { label: 'New field', onClick: () => set({ fieldOpen: true }) }
           : null
-        : null;
+        : current === 'funnel' && canEditFunnels
+          ? { label: 'New funnel', onClick: () => set({ personaOpen: true, personaBase: s.segment }), testId: 'new-funnel' }
+          : null;
 
   return (
     <Screen title="Settings">
       <div className="settings-frame">
-        <nav className="settings-nav" aria-label="Settings" data-testid="settings-nav">
+        <nav className="settings-nav ws-nav" aria-label="Settings" data-testid="settings-nav">
+          <div className="ws-nav-head">
+            <b>Workspace settings</b>
+            <span title={s.workspace.name}>{s.workspace.name}</span>
+          </div>
           {GROUPS.filter((g) => tabs.some((t) => t.group === g)).map((g) => (
             <div key={g} className="settings-nav-group" data-group={g}>
               <span className="caps-muted settings-nav-label">{g}</span>
@@ -168,42 +196,56 @@ export function Settings() {
                 .filter((t) => t.group === g)
                 .map((t) => (
                   <button key={t.k} type="button" className={'settings-nav-item' + (t.k === current ? ' on' : '')} aria-current={t.k === current ? 'page' : undefined} data-section={t.k} onClick={() => navigate(paths.settings(t.k))}>
-                    {labelOf(t)}
+                    <Icon name={t.icon} size={16} />
+                    <span>{labelOf(t)}</span>
                   </button>
                 ))}
             </div>
           ))}
+          {modulesOff > 0 && (
+            <p className="ws-nav-hidden" data-testid="settings-hidden-modules">
+              {modulesOff === 1 ? '1 module is off, so its settings are hidden.' : `${modulesOff} modules are off, so their settings are hidden.`}{' '}
+              {current !== 'modules' && (
+                <button type="button" className="btn-link" style={{ fontSize: 12 }} onClick={() => navigate(paths.settings('modules'))}>
+                  Turn them on in Modules
+                </button>
+              )}
+            </p>
+          )}
         </nav>
-        <div className="settings-content" data-testid="settings-content">
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap', marginBottom: 16 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 320px', minWidth: 0 }}>
+        <div className="settings-content ws-content" data-testid="settings-content" data-section={current}>
+          <header className="ws-head">
+            <div className="ws-head-text">
               <h2 className="settings-title">{labelOf(section)}</h2>
               <span className="settings-description">{section.description}</span>
             </div>
-            {action && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
-                {action.meta && <span style={{ fontSize: 12.5, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{action.meta}</span>}
-                {'soon' in action && action.soon ? (
-                  <ComingSoonButton label={action.label} />
-                ) : (
-                  <button type="button" className="btn btn-primary" style={{ flex: '0 0 auto' }} onClick={action.onClick}>
-                    {action.label}
-                  </button>
-                )}
-              </span>
-            )}
-          </div>
+            <div className="ws-head-actions">
+              {section.autosave && (
+                <span className="ws-autosave" title="Every change saves as you make it">
+                  <Icon name="check" size={12} />
+                  Changes save automatically
+                </span>
+              )}
+              {action && (
+                <button type="button" className="btn btn-primary" data-testid={'testId' in action ? action.testId : undefined} onClick={action.onClick}>
+                  {action.label}
+                </button>
+              )}
+            </div>
+          </header>
 
-          {current === 'workspace' && <WorkspaceInfo />}
-          {current === 'workspace' && <WorkspaceTab />}
-          {current === 'workspace' && <CompanyCard />}
-          {current === 'workspace' && <GettingStartedCard />}
+          {current === 'workspace' && <GeneralTab />}
+          {current === 'company' && <CompanyCard />}
           {current === 'modules' && <ModulesTab />}
           {current === 'roles' && <RolesTab />}
-          {current === 'employees' && <EmployeesTab />}
+          {current === 'employees' && <EmployeeRecordTab />}
+          {current === 'working-time' && <WorkingTimeTab />}
+          {current === 'org-levels' && <OrgLevelsTab />}
+          {current === 'time-entry' && <TimeEntryTab />}
           {current === 'approvals' && <ApprovalsTab />}
           {current === 'holidays' && <HolidaysTab />}
           {current === 'timeoff' && <TimeOffTab />}
+          {current === 'leave' && <LeaveTab />}
           {current === 'funnel' && <FunnelBuilder />}
           {current === 'project-hierarchy' && <ProjectHierarchyTab />}
           {current === 'project-types' && <ProjectTypesTab />}
@@ -217,73 +259,55 @@ export function Settings() {
   );
 }
 
-/** A primary action whose feature has no backend yet: shown, disabled, and labelled as such. */
-function ComingSoonButton({ label }: { label: string }) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9, flex: '0 0 auto' }}>
-      <span className="caps-muted">Coming soon</span>
-      <button type="button" className="btn btn-disabled" disabled title={`${label}: coming soon`}>
-        {label}
-      </button>
-    </span>
-  );
-}
-
 const CUSTOMER_EMAIL_LANGUAGES = [
   { value: 'en', label: 'English' },
   { value: 'sr', label: 'Srpski' },
-];
+] as const;
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((label, i) => ({ value: String(i + 1), label }));
 
-/** Saved per workspace. Only owners and admins reach Settings (CD-523), so it is always editable here. */
-function WorkspaceTab() {
+/**
+ * Settings → General (design G-Settings "general"): the workspace's name, logo, currency, time zone,
+ * fiscal year and customer email language, saved as they change, and Getting started. The country
+ * is in Company details; creating projects from won opportunities is in Project hierarchy.
+ */
+function GeneralTab() {
   const { s, setWorkspace } = useStore();
   const w = s.workspace;
   return (
-    <div className="card card-pad workspace-fields" style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 18 }}>
-      <div className="card-title" style={{ marginBottom: 8 }}>
-        Workspace
-      </div>
-      <FieldRow label="Currency">
-        <GhostSelect value={w.currency} onChange={(e) => setWorkspace({ currency: e.target.value })} options={CURRENCIES} />
-      </FieldRow>
-      <FieldRow label="Time zone">
-        <TimeZonePicker value={w.timezone} onChange={(timezone) => setWorkspace({ timezone })} />
-      </FieldRow>
-      <FieldRow label="Country">
-        <GhostSelect aria-label="Country" value={w.country ?? ''} onChange={(e) => setWorkspace({ country: e.target.value || null })} options={COUNTRY_OPTIONS} data-testid="workspace-country" />
-      </FieldRow>
-      <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>Serbia turns on the vacation decision document (rešenje) sent when vacation is approved.</span>
-      <FieldRow label="Fiscal year starts">
-        <GhostSelect value={String(w.fiscalMonth)} onChange={(e) => setWorkspace({ fiscalMonth: Number(e.target.value) })} options={MONTHS} />
-      </FieldRow>
-      <FieldRow label="Customer email language">
-        <GhostSelect
-          aria-label="Customer email language"
-          value={w.customerEmailLanguage}
-          onChange={(e) => setWorkspace({ customerEmailLanguage: e.target.value as Workspace['customerEmailLanguage'] })}
-          options={CUSTOMER_EMAIL_LANGUAGES}
-        />
-      </FieldRow>
-      <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>Language of the fixed text in emails to customers, such as meeting minutes.</span>
-      {/* Only where both the CRM and Projects are on (CD-488). */}
-      {enabledModules(w.modules).includes('crm') && enabledModules(w.modules).includes('projects') && (
-        <>
-          <FieldRow label="Projects">
-            <span data-testid="auto-create-projects" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
-              <Switch on={w.autoCreateProjects} onClick={() => setWorkspace({ autoCreateProjects: !w.autoCreateProjects })} label="Create a project when an opportunity is won" />
-              <span style={{ fontSize: 13 }}>Create a project when an opportunity is won</span>
-            </span>
-          </FieldRow>
-          <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>The project takes the opportunity's title and company, the first project type, and the opportunity owner as lead, who gets an email. Once per opportunity.</span>
-        </>
-      )}
-      <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 8 }}>
-        Changes are saved as you make them.
-      </span>
-    </div>
+    <>
+      <Block title="Workspace">
+        <Rows testId="workspace-fields">
+          <LogoRow />
+          <NameRow />
+          <Row label="Currency" hint="Used for opportunity values, budgets and bonuses">
+            <GhostSelect className="form-input" aria-label="Currency" value={w.currency} onChange={(e) => setWorkspace({ currency: e.target.value })} options={CURRENCIES} chevron />
+          </Row>
+          <Row label="Time zone" hint="Deadlines, reminders and the daily digest follow this">
+            <TimeZonePicker value={w.timezone} onChange={(timezone) => setWorkspace({ timezone })} />
+          </Row>
+          <Row label="Fiscal year starts" hint="Budgets and targets follow your fiscal year">
+            <GhostSelect className="form-input" aria-label="Fiscal year starts" value={String(w.fiscalMonth)} onChange={(e) => setWorkspace({ fiscalMonth: Number(e.target.value) })} options={MONTHS} chevron />
+          </Row>
+          <Row label="Customer emails" hint="Language of the fixed text in emails to customers, such as meeting minutes">
+            <Segmented
+              label="Customer email language"
+              value={w.customerEmailLanguage}
+              options={CUSTOMER_EMAIL_LANGUAGES}
+              onChange={(v) => setWorkspace({ customerEmailLanguage: v as Workspace['customerEmailLanguage'] })}
+              testId="customer-email-language"
+            />
+          </Row>
+        </Rows>
+      </Block>
+      <GettingStartedBlock />
+    </>
   );
 }
+
+/** Module tiles take the colour they have on Home (CD-288). */
+const MODULE_TILE: Partial<Record<WorkspaceModule, string>> = { crm: 'var(--mod-crm)', projects: 'var(--mod-projects)', employees: 'var(--mod-employees)', timesheet: 'var(--mod-timesheet)', timeoff: 'var(--mod-timeoff)' };
+/** The design's two groups: the modules used every day, and those used a few times a year. */
+const DAILY: readonly WorkspaceModule[] = ['crm', 'projects', 'employees', 'timesheet', 'timeoff'];
 
 /**
  * Settings → Workspace → Modules (CD-318, moved out of General): one row per module with its
@@ -293,38 +317,47 @@ function WorkspaceTab() {
 function ModulesTab() {
   const { s, setWorkspace } = useStore();
   const w = s.workspace;
+  const row = (id: WorkspaceModule) => {
+    const on = w.modules.includes(id);
+    const def = MODULES.find((m) => m.id === id);
+    const name = def?.name ?? id;
+    const built = !!def && def.screens.length > 0;
+    return (
+      <Row
+        key={id}
+        data={{ 'data-module': id }}
+        switchRow
+        icon={
+          <span className="ws-row-icon" aria-hidden style={MODULE_TILE[id] ? { background: MODULE_TILE[id] } : undefined}>
+            {def && <Icon name={def.icon} size={17} />}
+          </span>
+        }
+        label={name}
+        hint={
+          <>
+            {def?.description}
+            {!built && ' · Coming soon'}
+          </>
+        }
+      >
+        <Switch on={on} label={`${name} in this workspace`} onClick={() => setWorkspace({ modules: WORKSPACE_MODULES.filter((m) => (m === id ? !on : w.modules.includes(m))) })} />
+      </Row>
+    );
+  };
   return (
-    <div className="card" data-testid="workspace-modules" style={{ padding: '4px 18px' }}>
-      {WORKSPACE_MODULES.map((id) => {
-        const on = w.modules.includes(id);
-        const def = MODULES.find((m) => m.id === id);
-        const name = def?.name ?? id;
-        const built = !!def && def.screens.length > 0;
-        return (
-          <div key={id} data-module={id} className="module-row">
-            <span className="module-row-icon" aria-hidden>
-              {def && <Icon name={def.icon} size={18} />}
-            </span>
-            <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
-              <span style={{ fontSize: 13.5, fontWeight: 600 }}>{name}</span>
-              <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
-                {def?.description}
-                {!built && ' · Coming soon'}
-              </span>
-            </span>
-            <Switch on={on} label={`${name} in this workspace`} onClick={() => setWorkspace({ modules: WORKSPACE_MODULES.filter((m) => (m === id ? !on : w.modules.includes(m))) })} />
-          </div>
-        );
-      })}
-      <span style={{ display: 'block', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, padding: '12px 0 10px' }}>
-        Changes are saved as you make them.
-      </span>
+    <div className="ws-stack" data-testid="workspace-modules">
+      <Block title="Daily work">
+        <Rows>{WORKSPACE_MODULES.filter((m) => DAILY.includes(m)).map(row)}</Rows>
+      </Block>
+      <Block title="Planning and management" desc="Used a few times a year.">
+        <Rows>{WORKSPACE_MODULES.filter((m) => !DAILY.includes(m)).map(row)}</Rows>
+      </Block>
     </div>
   );
 }
 
 /** Getting started (CD-68) for owners and admins: show the checklist again, load or remove sample data. */
-function GettingStartedCard() {
+function GettingStartedBlock() {
   const { s, setOnboardingDismissed, loadSampleData, removeSampleData } = useStore();
   const [busy, setBusy] = useState(false);
   const ob = s.onboarding;
@@ -335,40 +368,46 @@ function GettingStartedCard() {
   };
   const c = ob.sampleData.counts;
   return (
-    <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 18 }} data-testid="sample-data-card">
-      <div className="card-title">Getting started and sample data</div>
-      <span style={{ fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.5 }}>
-        {ob.sampleData.loaded
-          ? `Sample data is loaded: ${c.company} companies, ${c.contact} contacts, ${c.product} products and ${c.deal} opportunities. Removing it deletes exactly those records; your own stay.`
-          : 'Sample data adds a few companies, contacts, products and opportunities (with tasks) to look around with. It is marked, so you can remove exactly those records again in one click.'}
-      </span>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {ob.sampleData.loaded ? (
-          <button type="button" className="btn-outline" disabled={busy} onClick={run(removeSampleData)}>
-            Remove sample data
-          </button>
-        ) : (
-          <button type="button" className="btn-outline" disabled={busy} onClick={run(loadSampleData)}>
-            Load sample data
-          </button>
-        )}
+    <Block title="Getting started" testId="sample-data-card">
+      <Rows>
+        <Row
+          label={ob.sampleData.loaded ? 'Sample data is loaded' : 'Sample data'}
+          hint={
+            ob.sampleData.loaded
+              ? `${c.company} companies, ${c.contact} contacts, ${c.product} products and ${c.deal} opportunities. Removing it deletes exactly those records; your own stay.`
+              : 'Adds a few companies, contacts, products and opportunities (with tasks) to look around with. It is marked, so you can remove exactly those records again in one click.'
+          }
+        >
+          {ob.sampleData.loaded ? (
+            <button type="button" className="btn-plain" disabled={busy} onClick={run(removeSampleData)}>
+              Remove sample data
+            </button>
+          ) : (
+            <button type="button" className="btn-plain" disabled={busy} onClick={run(loadSampleData)}>
+              Load sample data
+            </button>
+          )}
+        </Row>
         {ob.dismissed && !ob.complete && (
-          <button type="button" className="btn-outline" disabled={busy} onClick={run(() => setOnboardingDismissed(false))}>
-            Show the getting-started checklist
-          </button>
+          <Row label="Getting-started checklist" hint="You closed it before it was done. It comes back on the CRM's first page.">
+            <button type="button" className="btn-plain" disabled={busy} onClick={run(() => setOnboardingDismissed(false))}>
+              Show the getting-started checklist
+            </button>
+          </Row>
         )}
-      </div>
-    </div>
+      </Rows>
+    </Block>
   );
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
- * Settings → CRM → Funnels (CD-318, laid out like Project types): the funnels on the left, the
- * selected one on the right with its name, how they buy, its stages (each opens for its activity,
- * channel, document, win probability and to-dos), a preview of the stage bar and Delete funnel.
- * Picking a funnel here also makes it the Pipeline's funnel, as before.
+ * Settings → CRM → Funnels (CD-318; design G-Settings "funnels" since CD-524): the funnels as cards,
+ * the selected one's name, how they buy and default target days, its stages (each opens for its
+ * activity, channel, document, win probability, owner, target days, to-dos and checks), the
+ * proposal approval rule and Delete funnel. Picking a funnel here also makes it the Pipeline's
+ * funnel, as before.
  */
 function FunnelBuilder() {
   const store = useStore();
@@ -383,83 +422,97 @@ function FunnelBuilder() {
   const wonCount = stages.filter((st) => st.won).length;
   const select = (id: string) => set({ segment: id });
   const approvers = [...memberLabels(s)].sort((a, b) => a[1].localeCompare(b[1]));
+  const canDelete = dealCount === 0 && Object.keys(s.funnels).length > 1;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} data-testid="funnel-builder">
+    <div className="ws-stack" data-testid="funnel-builder">
       {!editable && (
-        <span data-testid="funnels-read-only" style={{ fontSize: 12, color: 'var(--text-2)' }}>
+        <span data-testid="funnels-read-only" className="ws-block-desc">
           Only owners and admins can change funnels, stages and their to-dos.
         </span>
       )}
 
-      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <div style={{ flex: '1 1 240px', maxWidth: 300, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {Object.values(s.funnels).map((f) => (
-            <button key={f.id} type="button" className={'choice' + (f.id === funnel.id ? ' on' : '')} data-testid="funnel-choice" onClick={() => select(f.id)}>
-              <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>{f.label}</span>
-              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
-                {plural(f.stages.length, 'stage')} · {plural(dealsIn(f.id), 'opportunity', 'opportunities')}
-              </span>
-            </button>
-          ))}
-          {editable && (
-            <button type="button" className="btn-dashed" data-testid="new-funnel" onClick={() => set({ personaOpen: true, personaBase: funnel.id })}>
-              New funnel
-            </button>
-          )}
-        </div>
+      <div className="ws-choices">
+        {Object.values(s.funnels).map((f) => (
+          <button key={f.id} type="button" className={'choice' + (f.id === funnel.id ? ' on' : '')} aria-pressed={f.id === funnel.id} data-testid="funnel-choice" onClick={() => select(f.id)}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{f.label}</span>
+            <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>
+              {plural(f.stages.length, 'stage')} · {plural(dealsIn(f.id), 'opportunity', 'opportunities')}
+            </span>
+          </button>
+        ))}
+      </div>
 
-        <div className="card" data-testid="funnel-card" style={{ flex: '999 1 460px', minWidth: 0, padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
-            <label className="form-label">
-              Funnel name
-              <input className="form-input" value={funnel.label} disabled={!editable} onChange={(e) => store.patchFunnel(funnel.id, { label: e.target.value })} />
-            </label>
-            <label className="form-label">
-              How they buy
-              <input className="form-input" value={funnel.note} disabled={!editable} placeholder="Who decides, how long it takes, what slows it down" onChange={(e) => store.patchFunnel(funnel.id, { note: e.target.value })} />
-            </label>
-            <label className="form-label">
-              Default target days
-              <TargetDaysInput testId="funnel-target-days" disabled={!editable} value={funnel.targetDays ?? null} placeholder="No target" onSave={(v) => store.patchFunnel(funnel.id, { targetDays: v })} />
-            </label>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <span className="caps">Stages</span>
-            {stages.map((st, idx) => (
-              <FunnelStageRow
-                key={st.id}
-                idx={idx}
-                stage={st}
-                deals={s.leads.filter((l) => l.stage === st.id).length}
-                editable={editable}
-                open={open === st.id}
-                first={idx === 0}
-                last={idx === stages.length - 1}
-                removable={!(st.won && wonCount === 1) && stages.length > 1}
-                onToggle={() => setOpen(open === st.id ? null : st.id)}
-                onRemove={() => setRemoving(idx)}
+      <div className="ws-stack" data-testid="funnel-card">
+        <Block title="Funnel">
+          <Rows>
+            <Row label="Name">
+              <input className="form-input" aria-label="Funnel name" value={funnel.label} disabled={!editable} onChange={(e) => store.patchFunnel(funnel.id, { label: e.target.value })} />
+            </Row>
+            <Row label="How they buy" hint="Helps the team pick the right funnel for a new opportunity">
+              <input
+                className="form-input wide"
+                aria-label="How they buy"
+                value={funnel.note}
+                disabled={!editable}
+                placeholder="Who decides, how long it takes, what slows it down"
+                onChange={(e) => store.patchFunnel(funnel.id, { note: e.target.value })}
               />
+            </Row>
+            <Row label="Default target days" hint="How long an opportunity may sit in a stage before it is flagged as stuck. A stage can set its own.">
+              <TargetDaysInput testId="funnel-target-days" disabled={!editable} value={funnel.targetDays ?? null} placeholder="No target" onSave={(v) => store.patchFunnel(funnel.id, { targetDays: v })} />
+            </Row>
+          </Rows>
+        </Block>
+
+        <Block title="Stages" desc="Opportunities move from top to bottom. Open a stage to edit it.">
+          <div className="card ws-stages">
+            {stages.map((st, idx) => (
+              <div key={st.id}>
+                <FunnelStageRow
+                  idx={idx}
+                  stage={st}
+                  defaultTarget={funnel.targetDays ?? null}
+                  deals={s.leads.filter((l) => l.stage === st.id).length}
+                  editable={editable}
+                  open={open === st.id}
+                  first={idx === 0}
+                  last={idx === stages.length - 1}
+                  removable={!(st.won && wonCount === 1) && stages.length > 1}
+                  onToggle={() => setOpen(open === st.id ? null : st.id)}
+                  onRemove={() => setRemoving(idx)}
+                />
+                {idx < stages.length - 1 && <span className="ws-stage-link" aria-hidden="true" />}
+              </div>
             ))}
             {editable && (
-              <button type="button" className="btn-dashed" style={{ alignSelf: 'flex-start', whiteSpace: 'nowrap' }} data-testid="add-stage" onClick={store.addStage}>
-                New stage
-              </button>
+              <div className="ws-stages-foot">
+                <button type="button" className="btn-plain" data-testid="add-stage" onClick={store.addStage}>
+                  New stage
+                </button>
+                <span className="ws-row-hint">New stages go before the won stage. An opportunity can be marked lost from any stage.</span>
+              </div>
             )}
           </div>
+        </Block>
 
-          {/* One approval rule for the whole funnel, below its stages (CD-120). */}
-          <div className="card" data-testid="funnel-approval" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10, boxShadow: 'none' }}>
-            <span className="caps">Proposal approval</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+        {/* One approval rule for the whole funnel, below its stages (CD-120). */}
+        <Block title="Proposal approval" desc="One rule for the whole funnel, not per stage. The approver gets an email and a task when approval is requested; owners and admins can approve too." testId="funnel-approval">
+          <Rows>
+            <Row label="Proposals need approval before they are sent" hint={funnel.proposalApproval ? 'Proposals wait for the approver before they can be sent' : 'Off: proposals go out as soon as they are generated'} switchRow>
               <Switch on={funnel.proposalApproval} disabled={!editable} label="Proposals in this funnel need approval before they are sent" onClick={() => store.patchFunnel(funnel.id, { proposalApproval: !funnel.proposalApproval })} />
-              Proposals in this funnel need approval before they are sent
-            </span>
+            </Row>
             {funnel.proposalApproval && (
-              <label className="form-label" style={{ maxWidth: 360 }}>
-                Approver
-                <select className="form-input" data-testid="funnel-approver" disabled={!editable} style={{ padding: '9px 10px' }} value={funnel.approverId ?? ''} onChange={(e) => store.patchFunnel(funnel.id, { approverId: e.target.value || null })}>
+              <Row label="Approver" error={!funnel.approverId ? 'Pick the approver to switch approval on.' : undefined}>
+                <select
+                  className="form-input"
+                  data-testid="funnel-approver"
+                  aria-label="Approver"
+                  disabled={!editable}
+                  style={{ width: 260 }}
+                  value={funnel.approverId ?? ''}
+                  onChange={(e) => store.patchFunnel(funnel.id, { approverId: e.target.value || null })}
+                >
                   <option value="">Pick the approver</option>
                   {approvers.map(([id, name]) => (
                     <option key={id} value={id}>
@@ -467,47 +520,41 @@ function FunnelBuilder() {
                     </option>
                   ))}
                 </select>
-                {!funnel.approverId && (
-                  <span style={{ fontSize: 12, color: 'var(--warn)', textTransform: 'none', letterSpacing: 0 }}>
-                    Pick the approver to switch approval on.
-                  </span>
-                )}
-              </label>
+              </Row>
             )}
-            <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>One rule for the whole funnel, not per stage. The approver gets an email and a task when approval is requested; owners and admins can approve too.</span>
-          </div>
+          </Rows>
+        </Block>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span className="caps">Preview</span>
-            <div className="stage-bar" data-testid="funnel-preview">
-              {stages.map((st, i) => (
-                <button key={st.id} type="button" className={'stage-chev' + (i === 0 ? ' current' : '')} disabled>
-                  {st.name}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--text-2)' }}>
-            <span>{dealCount ? `${plural(dealCount, 'opportunity', 'opportunities')} in this funnel` : 'No opportunities in this funnel yet'}</span>
-            {editable && dealCount === 0 && Object.keys(s.funnels).length > 1 && (
-              <button
-                type="button"
-                className="btn btn-secondary"
-                data-testid="delete-funnel"
-                style={{ marginLeft: 'auto', padding: '6px 10px', fontSize: 12 }}
-                onClick={() =>
-                  // Asked first, in the app's own dialog (CD-488).
-                  void askConfirm({ title: `Delete the funnel "${funnel.label}"?`, message: `Its ${plural(stages.length, 'stage', 'stages')} and their activities and to-dos are deleted too. This can't be undone.`, confirmLabel: 'Delete funnel', danger: true }).then((ok) => {
-                    if (ok) void store.deleteFunnel(funnel.id);
-                  })
-                }
+        {editable && Object.keys(s.funnels).length > 1 && (
+          <Block title="Danger zone">
+            <Rows danger>
+              <Row
+                label="Delete funnel"
+                hint={dealCount ? `${plural(dealCount, 'opportunity uses', 'opportunities use')} this funnel. Move them to another funnel first.` : 'No opportunities use this funnel. Its stages, activities and to-dos are deleted with it.'}
               >
-                Delete funnel
-              </button>
-            )}
-          </div>
-        </div>
+                <button
+                  type="button"
+                  className="btn-danger-quiet"
+                  data-testid="delete-funnel"
+                  disabled={!canDelete}
+                  onClick={() =>
+                    // Asked first, in the app's own dialog (CD-488).
+                    void askConfirm({
+                      title: `Delete the funnel "${funnel.label}"?`,
+                      message: `Its ${plural(stages.length, 'stage', 'stages')} and their activities and to-dos are deleted too. This can't be undone.`,
+                      confirmLabel: 'Delete funnel',
+                      danger: true,
+                    }).then((ok) => {
+                      if (ok) void store.deleteFunnel(funnel.id);
+                    })
+                  }
+                >
+                  Delete funnel
+                </button>
+              </Row>
+            </Rows>
+          </Block>
+        )}
       </div>
 
       {removing !== null && stages[removing] && <RemoveStageModal idx={removing} onClose={() => setRemoving(null)} />}
@@ -516,13 +563,14 @@ function FunnelBuilder() {
 }
 
 /**
- * One stage of the funnel: a row with its number, name, deals, and the move and delete buttons
- * (like a project type's stage); the chevron opens its activity, channel, document on entry, win
- * probability and to-dos.
+ * One stage of the funnel: its number, name (edited in place), a summary and its checks as tags,
+ * its opportunities, and the move and delete buttons; the chevron opens its activity, channel,
+ * document on entry, win probability, owner, target days, to-dos and the checks before moving on.
  */
 function FunnelStageRow({
   idx,
   stage: st,
+  defaultTarget,
   deals,
   editable,
   open,
@@ -534,6 +582,7 @@ function FunnelStageRow({
 }: {
   idx: number;
   stage: Stage;
+  defaultTarget: number | null;
   deals: number;
   editable: boolean;
   open: boolean;
@@ -545,143 +594,166 @@ function FunnelStageRow({
 }) {
   const store = useStore();
   const members = [...memberLabels(store.s)].sort((a, b) => a[1].localeCompare(b[1]));
-  const arrow = (d: string) => (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d={d} />
-    </svg>
-  );
+  const target = st.won ? null : (st.targetDays ?? null);
+  const summary = [
+    st.activity,
+    CHANNEL_LABELS[st.channel as keyof typeof CHANNEL_LABELS] ?? st.channel,
+    `${st.prob === '' ? 0 : st.prob}%`,
+    st.won ? null : target ? `${target} days` : defaultTarget ? `${defaultTarget} days (funnel default)` : 'no target',
+    plural(st.checklist.length, 'to-do'),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const removeTitle = removable ? 'Remove stage' : st.won ? 'The won stage stays' : 'A funnel needs at least one stage';
   return (
-    <div data-testid="funnel-stage" data-open={open || undefined} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '6px 8px 6px 12px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 12, color: 'var(--muted)', width: 18 }}>{idx + 1}</span>
-        <input className="ghost ghost-sm" value={st.name} disabled={!editable} aria-label="Stage name" onChange={(e) => store.editStage(idx, 'name', e.target.value)} style={{ flex: 1, minWidth: 0, fontWeight: 500 }} />
-        {st.won && (
-          <span className="caps-muted funnel-stage-meta" title="Opportunities are won by reaching this stage">
-            Won stage
+    <div className={'ws-stage' + (open ? ' on' : '') + (st.won ? ' won' : '')} data-testid="funnel-stage" data-open={open || undefined}>
+      <div className="ws-stage-head">
+        <div className="ws-stage-main" style={{ cursor: 'default' }}>
+          <span className="ws-stage-n">{idx + 1}</span>
+          <span className="ws-stage-text">
+            <input
+              className="ghost ghost-sm"
+              value={st.name}
+              disabled={!editable}
+              aria-label="Stage name"
+              onChange={(e) => store.editStage(idx, 'name', e.target.value)}
+              style={{ fontWeight: 600, fontSize: 13.5, padding: '2px 6px', margin: '0 -6px' }}
+            />
+            <span className="ws-row-hint">{summary}</span>
+            {(st.won || st.gateTodos || st.gateDocs) && (
+              <span className="ws-stage-tags">
+                {st.won && (
+                  <span className="badge badge-brand" title="Opportunities are won by reaching this stage">
+                    Won stage
+                  </span>
+                )}
+                {!st.won && st.gateTodos && <span className="badge badge-warn">To-dos must be done</span>}
+                {!st.won && st.gateDocs && <span className="badge badge-neutral">Documentation required</span>}
+              </span>
+            )}
           </span>
-        )}
-        <span className="funnel-stage-meta" style={{ fontSize: 12, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>
-          {plural(deals, 'opportunity', 'opportunities')}
-        </span>
-        {editable && (
-          <>
-            <button type="button" className="icon-btn icon-btn-plain" aria-label="Move up" title="Move up" disabled={first} style={{ opacity: first ? 0.35 : 1 }} onClick={() => store.moveStage(idx, -1)}>
-              {arrow('M6 15l6-6 6 6')}
-            </button>
-            <button type="button" className="icon-btn icon-btn-plain" aria-label="Move down" title="Move down" disabled={last} style={{ opacity: last ? 0.35 : 1 }} onClick={() => store.moveStage(idx, 1)}>
-              {arrow('M6 9l6 6 6-6')}
-            </button>
-            <button type="button" className="icon-btn" aria-label="Remove stage" title={removable ? 'Remove stage' : st.won ? 'The won stage stays' : 'A funnel needs at least one stage'} disabled={!removable} style={{ opacity: removable ? 1 : 0.35 }} onClick={onRemove}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                <path d="M6 6l12 12M18 6 6 18" />
+          <span className="ws-stage-opps funnel-stage-meta">{plural(deals, 'opportunity', 'opportunities')}</span>
+        </div>
+        <span className="ws-stage-actions">
+          {editable && (
+            <>
+              <MoveButton dir="up" label="Move up" disabled={first} onClick={() => store.moveStage(idx, -1)} />
+              <MoveButton dir="down" label="Move down" disabled={last} onClick={() => store.moveStage(idx, 1)} />
+              <RemoveX label="Remove stage" title={removeTitle} disabled={!removable} onClick={onRemove} />
+            </>
+          )}
+          <button type="button" className="ws-x plain" aria-label={open ? 'Hide stage details' : 'Show stage details'} aria-expanded={open} data-testid="funnel-stage-toggle" onClick={onToggle}>
+            <span className="ws-stage-chev">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M6 9l6 6 6-6" />
               </svg>
-            </button>
-          </>
-        )}
-        <button type="button" className="icon-btn icon-btn-plain" aria-label={open ? 'Hide stage details' : 'Show stage details'} aria-expanded={open} data-testid="funnel-stage-toggle" onClick={onToggle}>
-          {arrow(open ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6')}
-        </button>
+            </span>
+          </button>
+        </span>
       </div>
       {open && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '10px 4px 8px 26px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
-            <label className="form-label">
-              Activity
-              <select className="form-input" disabled={!editable} style={{ padding: '9px 10px' }} value={st.activity} onChange={(e) => store.editStage(idx, 'activity', e.target.value)}>
-                {ACTIVITIES.map((o) => (
-                  <option key={o}>{o}</option>
-                ))}
-              </select>
-            </label>
-            <label className="form-label">
-              Channel
-              <select className="form-input" disabled={!editable} style={{ padding: '9px 10px' }} value={st.channel} onChange={(e) => store.editStage(idx, 'channel', e.target.value)}>
-                {CHANNELS.map((c) => (
-                  <option key={c} value={c}>
-                    {CHANNEL_LABELS[c]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="form-label">
-              Document on entry
-              <select className="form-input" disabled={!editable} style={{ padding: '9px 10px' }} value={st.doc} onChange={(e) => store.editStage(idx, 'doc', e.target.value)}>
-                {DOCS.map((o) => (
-                  <option key={o}>{o}</option>
-                ))}
-              </select>
-            </label>
-            <label className="form-label">
-              Win probability
-              <span style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--white)', padding: '0 10px 0 0' }}>
-                <input type="number" disabled={!editable} min={0} max={100} step={5} value={st.prob} onChange={(e) => store.editProb(idx, e.target.value)} style={{ flex: 1, minWidth: 0, border: 0, outline: 0, background: 'transparent', padding: '9px 4px 9px 10px', fontSize: 13, color: 'var(--ink)', textTransform: 'none', letterSpacing: 0 }} />
-                <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-2)', letterSpacing: 0 }}>%</span>
+        <div className="ws-stage-editor">
+          <Row label="Activity" hint="Started for the stage owner when an opportunity enters">
+            <select className="form-input" aria-label="Activity" disabled={!editable} value={st.activity} onChange={(e) => store.editStage(idx, 'activity', e.target.value)} style={{ width: 240 }}>
+              {ACTIVITIES.map((o) => (
+                <option key={o}>{o}</option>
+              ))}
+            </select>
+          </Row>
+          <Row label="Channel">
+            <select className="form-input" aria-label="Channel" disabled={!editable} value={st.channel} onChange={(e) => store.editStage(idx, 'channel', e.target.value)} style={{ width: 240 }}>
+              {CHANNELS.map((c) => (
+                <option key={c} value={c}>
+                  {CHANNEL_LABELS[c]}
+                </option>
+              ))}
+            </select>
+          </Row>
+          <Row label="Document on entry" hint="Generated from its template when an opportunity enters">
+            <select className="form-input" aria-label="Document on entry" disabled={!editable} value={st.doc} onChange={(e) => store.editStage(idx, 'doc', e.target.value)} style={{ width: 240 }}>
+              {DOCS.map((o) => (
+                <option key={o}>{o}</option>
+              ))}
+            </select>
+          </Row>
+          <Row label="Win probability" hint="Used for the weighted pipeline">
+            <input className="form-input" aria-label="Win probability" type="number" disabled={!editable} min={0} max={100} step={5} value={st.prob} onChange={(e) => store.editProb(idx, e.target.value)} style={{ width: 90 }} />
+            <Unit>%</Unit>
+          </Row>
+          {!st.won && (
+            <>
+              <Row label="Stage owner" hint="Who gets the activity and the to-dos">
+                <select
+                  className="form-input"
+                  data-testid="stage-owner-select"
+                  aria-label="Stage owner"
+                  disabled={!editable}
+                  style={{ width: 240 }}
+                  value={st.ownerId ?? ''}
+                  onChange={(e) => store.setStageRule(idx, { ownerId: e.target.value || null })}
+                >
+                  <option value="">The opportunity's owner</option>
+                  {members.map(([id, name]) => (
+                    <option key={id} value={id}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </Row>
+              <Row label="Target days" hint={defaultTarget ? `Leave empty to use the funnel default of ${defaultTarget} days` : 'Leave empty for no target'}>
+                <TargetDaysInput testId="stage-target-days" disabled={!editable} value={st.targetDays ?? null} placeholder="Funnel default" onSave={(v) => store.setStageRule(idx, { targetDays: v })} />
+              </Row>
+            </>
+          )}
+          <div className="ws-stage-sec">To-dos</div>
+          <span className="ws-row-hint ws-stage-sub">Created for the stage owner when an opportunity enters.</span>
+          <div className="ws-chips" style={{ padding: '8px 16px 4px' }}>
+            {st.checklist.map((c, gi) => (
+              <span key={st.checklistIds[gi] ?? gi} className="ws-chip gate-chip">
+                <input value={c} aria-label="To-do" disabled={!editable} onChange={(e) => store.renameGate(idx, gi, e.target.value)} style={{ width: Math.max(9, Math.min(34, c.length + 1)) + 'ch' }} />
+                {editable && <RemoveX plain label={`Delete to-do ${c}`} title="Delete to-do" onClick={() => store.removeGate(idx, gi)} />}
               </span>
-            </label>
-            {!st.won && (
-              <>
-                <label className="form-label">
-                  Stage owner
-                  <select className="form-input" data-testid="stage-owner-select" disabled={!editable} style={{ padding: '9px 10px' }} value={st.ownerId ?? ''} onChange={(e) => store.setStageRule(idx, { ownerId: e.target.value || null })}>
-                    <option value="">The opportunity's owner</option>
-                    {members.map(([id, name]) => (
-                      <option key={id} value={id}>
-                        {name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="form-label">
-                  Target days
-                  <TargetDaysInput testId="stage-target-days" disabled={!editable} value={st.targetDays ?? null} placeholder="Funnel default" onSave={(v) => store.setStageRule(idx, { targetDays: v })} />
-                </label>
-              </>
+            ))}
+            {!st.checklist.length && <span className="ws-row-hint">No to-dos yet.</span>}
+            {editable && (
+              <button type="button" className="btn-plain" style={{ padding: '5px 11px', fontSize: 12.5 }} onClick={() => store.addGate(idx)}>
+                Add to-do
+              </button>
             )}
           </div>
           {!st.won && (
             // Advance gates (CD-363): what has to be done before an opportunity moves on from this stage.
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <span className="caps">Before moving on</span>
-              <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-                  <Switch on={st.gateTodos} disabled={!editable} label="All to-dos must be done" onClick={() => store.setStageRule(idx, { gateTodos: !st.gateTodos })} />
-                  All to-dos must be done
-                </span>
-                {/* Its own switch, never turned on by adding a to-do; say what it does now (CD-488). */}
-                <span data-testid="stage-gate-todos-note" style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>
-                  {!st.gateTodos
-                    ? 'Off: the to-dos below are reminders, opportunities move on without them.'
-                    : st.checklist.length
-                      ? `On: an opportunity moves on only when ${st.checklist.length === 1 ? 'the to-do below is' : `all ${st.checklist.length} to-dos below are`} done.`
-                      : 'On, with no to-dos yet: nothing blocks moving on, but opportunities can’t skip this stage. New stages start with it on.'}
-                </span>
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+            <>
+              <div className="ws-stage-sec">Before moving on</div>
+              <Row
+                label="All to-dos must be done"
+                switchRow
+                hint={
+                  // Its own switch, never turned on by adding a to-do; say what it does now (CD-488).
+                  <span data-testid="stage-gate-todos-note">
+                    {!st.gateTodos
+                      ? 'Off: the to-dos above are reminders, opportunities move on without them.'
+                      : st.checklist.length
+                        ? `On: an opportunity moves on only when ${st.checklist.length === 1 ? 'the to-do above is' : `all ${st.checklist.length} to-dos above are`} done.`
+                        : 'On, with no to-dos yet: nothing blocks moving on, but opportunities can’t skip this stage. New stages start with it on.'}
+                  </span>
+                }
+              >
+                <Switch on={st.gateTodos} disabled={!editable} label="All to-dos must be done" onClick={() => store.setStageRule(idx, { gateTodos: !st.gateTodos })} />
+              </Row>
+              <Row label="Needs documentation complete" hint={st.gateDocs ? 'On: the opportunity moves on only with its documentation complete' : 'Off: no documentation is needed to move on'} switchRow>
                 <Switch on={st.gateDocs} disabled={!editable} label="Needs documentation complete" onClick={() => store.setStageRule(idx, { gateDocs: !st.gateDocs })} />
-                Needs documentation complete
-              </span>
+              </Row>
+            </>
+          )}
+          {editable && (
+            <div className="ws-stage-foot">
+              <span className="ws-row-hint">{removable ? (deals ? `${plural(deals, 'opportunity is', 'opportunities are')} in this stage. You choose where they go.` : 'No opportunities are in this stage.') : removeTitle}</span>
+              <button type="button" className="btn-danger-quiet" disabled={!removable} onClick={onRemove}>
+                Delete stage
+              </button>
             </div>
           )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-            <span className="caps">To-do</span>
-            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-              {st.checklist.map((c, gi) => (
-                <span key={st.checklistIds[gi] ?? gi} className="gate-chip">
-                  <input value={c} disabled={!editable} onChange={(e) => store.renameGate(idx, gi, e.target.value)} style={{ border: 0, outline: 0, background: 'transparent', fontSize: 12, color: 'var(--ink)', width: Math.max(9, Math.min(34, c.length + 1)) + 'ch' }} />
-                  {editable && (
-                    <button type="button" className="pill-x" title="Delete to-do" onClick={() => store.removeGate(idx, gi)}>
-                      ×
-                    </button>
-                  )}
-                </span>
-              ))}
-              {editable && (
-                <button type="button" className="btn-dashed" style={{ borderRadius: 20, padding: '6px 11px', fontSize: 12 }} onClick={() => store.addGate(idx)}>
-                  + to-do
-                </button>
-              )}
-            </div>
-          </div>
         </div>
       )}
     </div>
@@ -741,15 +813,15 @@ function RemoveStageModal({ idx, onClose }: { idx: number; onClose: () => void }
 }
 
 /** The built-in fields of each record type, listed next to the custom ones. */
-const STANDARD_FIELDS: Record<CustomFieldEntity, string> = {
-  deal: 'Company, Contacts, Owner, Opportunity value, Currency, Closing date, Funnel, Source, discovery notes',
-  company: 'Name, Industry, HQ, Team size, Source, Owner',
-  contact: 'Full name, Role, Company, Role in the decision, Email, Phone, LinkedIn, Owner',
+const STANDARD_FIELDS: Record<CustomFieldEntity, string[]> = {
+  deal: ['Company', 'Contacts', 'Owner', 'Opportunity value', 'Currency', 'Closing date', 'Funnel', 'Source', 'Discovery notes'],
+  company: ['Name', 'Industry', 'HQ', 'Team size', 'Source', 'Owner'],
+  contact: ['Full name', 'Role', 'Company', 'Role in the decision', 'Email', 'Phone', 'LinkedIn', 'Owner'],
 };
-const ENTITIES: { k: CustomFieldEntity; label: string; desc: string }[] = [
-  { k: 'deal', label: 'Opportunities', desc: 'Shown on the opportunity record and in the New opportunity form.' },
-  { k: 'company', label: 'Companies', desc: 'Shown on the company record.' },
-  { k: 'contact', label: 'Contacts', desc: 'Shown on the contact record and in the New contact form.' },
+const ENTITIES: { k: CustomFieldEntity; label: string; one: string; desc: string }[] = [
+  { k: 'deal', label: 'Opportunities', one: 'opportunity', desc: 'Shown on the opportunity record and in the New opportunity form.' },
+  { k: 'company', label: 'Companies', one: 'company', desc: 'Shown on the company record.' },
+  { k: 'contact', label: 'Contacts', one: 'contact', desc: 'Shown on the contact record and in the New contact form.' },
 ];
 const TYPE_LABEL = Object.fromEntries(FIELD_TYPES.map((t) => [t.value, t.label])) as Record<string, string>;
 
@@ -757,39 +829,53 @@ const TYPE_LABEL = Object.fromEntries(FIELD_TYPES.map((t) => [t.value, t.label])
 function FieldsTab() {
   const { s, set, canEditFields } = useStore();
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {!canEditFields && <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>Only owners and admins can add or change custom fields. You can fill them in on each record.</span>}
+    <>
+      {!canEditFields && <span className="ws-block-desc">Only owners and admins can add or change custom fields. You can fill them in on each record.</span>}
       {ENTITIES.map((ent) => {
         const fields = customFieldsOf(s, ent.k);
         return (
-          <div key={ent.k} className="card" data-testid={'fields-' + ent.k} style={{ overflow: 'hidden' }}>
-            <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--divider)', display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 220 }}>
-                <span style={{ fontSize: 15, fontWeight: 600 }}>{ent.label}</span>
-                <span style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{ent.desc}</span>
-                <span style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.45 }}>Standard fields: {STANDARD_FIELDS[ent.k]}</span>
-              </div>
-              {canEditFields && (
+          <Block
+            key={ent.k}
+            title={ent.label}
+            desc={ent.desc}
+            actions={
+              canEditFields && (
                 <button type="button" className="btn-plain" onClick={() => set((x) => ({ fieldOpen: true, newField: { ...x.newField, entity: ent.k } }))}>
-                  + New {ent.label.toLowerCase().replace(/ies$/, 'y').replace(/s$/, '')} field
+                  New {ent.one} field
                 </button>
-              )}
-            </div>
-            {fields.length === 0 && <div style={{ padding: '13px 18px', fontSize: 12.5, color: 'var(--muted)' }}>No custom fields yet.</div>}
-            {fields.map((fl, i) => (
-              <FieldDefRow key={fl.id} field={fl} first={i === 0} last={i === fields.length - 1} />
-            ))}
-          </div>
+              )
+            }
+          >
+            <Rows testId={'fields-' + ent.k}>
+              <Row label="Standard fields" hint="Always there, can't be removed">
+                <span className="ws-chips" style={{ justifyContent: 'flex-end', maxWidth: 420 }}>
+                  {STANDARD_FIELDS[ent.k].map((f) => (
+                    <span key={f} className="ws-chip">
+                      {f}
+                    </span>
+                  ))}
+                </span>
+              </Row>
+              {fields.length === 0 && <Row label="Custom fields" hint="No custom fields yet." />}
+              {fields.map((fl, i) => (
+                <FieldDefRow key={fl.id} field={fl} first={i === 0} last={i === fields.length - 1} />
+              ))}
+            </Rows>
+          </Block>
         );
       })}
-    </div>
+    </>
   );
 }
+
+const REQUIRED_OPTIONS = [
+  { value: 'optional', label: 'Optional' },
+  { value: 'required', label: 'Required' },
+] as const;
 
 function FieldDefRow({ field: fl, first, last }: { field: CustomFieldDef; first: boolean; last: boolean }) {
   const { canEditFields, updateCustomField, moveCustomField, deleteCustomField } = useStore();
   const [editing, setEditing] = useState<{ id?: string; label: string }[] | null>(null);
-  const pill = (on: boolean) => ({ cursor: canEditFields ? 'pointer' : 'default', border: `1px solid ${on ? '#14503C' : '#E2E8E4'}`, background: on ? '#E7F2EE' : '#FFFFFF', color: on ? '#14503C' : '#475750', fontSize: 12, padding: '6px 11px', borderRadius: 6 });
   const entityLabel = { deal: 'opportunity', company: 'company', contact: 'contact' }[fl.entity];
   const onDelete = () => {
     const message = `It disappears from every ${entityLabel}, from the ${entityLabel} forms and from CSV exports. Values already entered are kept in the records but no longer shown, and the field can't be brought back from here.`;
@@ -801,67 +887,64 @@ function FieldDefRow({ field: fl, first, last }: { field: CustomFieldDef; first:
     updateCustomField(fl.id, { options });
     setEditing(null);
   };
+  const typeLine = [TYPE_LABEL[fl.type] ?? fl.type, fl.type === 'select' && !editing ? fl.options.map((o) => o.label).join(' · ') : ''].filter(Boolean).join(' · ');
   return (
-    <div data-testid="custom-field" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '11px 18px', borderBottom: '1px solid var(--divider-2)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+    <div className="ws-row" data-testid="custom-field" style={{ alignItems: 'flex-start' }}>
+      <div className="ws-row-text">
         {canEditFields ? (
-          <GhostInput aria-label="Field name" value={fl.label} onChange={(e) => updateCustomField(fl.id, { label: e.target.value })} style={{ fontSize: 13.5, fontWeight: 600, width: 200 }} />
+          <GhostInput aria-label="Field name" value={fl.label} onChange={(e) => updateCustomField(fl.id, { label: e.target.value })} style={{ fontSize: 13.5, fontWeight: 600, padding: '2px 6px', margin: '0 -6px', maxWidth: 280 }} />
         ) : (
-          <span style={{ fontSize: 13.5, fontWeight: 600, minWidth: 150 }}>{fl.label}</span>
+          <span className="ws-row-label">{fl.label}</span>
         )}
-        <span style={{ fontSize: 12.5, color: 'var(--text-2)', minWidth: 80 }}>{TYPE_LABEL[fl.type] ?? fl.type}</span>
-        {fl.type === 'select' && !editing && <span style={{ fontSize: 12, color: 'var(--muted)' }}>{fl.options.map((o) => o.label).join(' · ')}</span>}
-        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', flexWrap: 'wrap', alignItems: 'center' }}>
-          <button type="button" disabled={!canEditFields} onClick={() => updateCustomField(fl.id, { required: !fl.required })} style={pill(fl.required)}>
-            {fl.required ? 'Required' : 'Optional'}
-          </button>
-          {canEditFields && (
-            <>
-              {fl.type === 'select' && !editing && (
-                <button type="button" className="btn-plain" style={{ fontSize: 12 }} onClick={() => setEditing(fl.options.map((o) => ({ ...o })))}>
-                  Edit options
-                </button>
-              )}
-              <button type="button" title="Move up" disabled={first} onClick={() => moveCustomField(fl.id, -1)} style={{ ...pill(false), opacity: first ? 0.4 : 1 }}>
-                ↑
+        <span className="ws-row-hint">{typeLine}</span>
+        {editing && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 6 }}>
+            <span className="ws-row-hint">Renaming an option keeps it on every record. An option in use can't be removed.</span>
+            {editing.map((o, i) => (
+              <div key={o.id ?? 'new' + i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <GhostInput className="ghost-sm" aria-label="Option" value={o.label} onChange={(e) => setEditing(editing.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} style={{ width: 220 }} />
+                <RemoveButton title="Remove option" onClick={() => setEditing(editing.filter((_, j) => j !== i))} />
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button type="button" className="btn-plain" style={{ fontSize: 12 }} onClick={() => setEditing([...editing, { label: '' }])}>
+                Add option
               </button>
-              <button type="button" title="Move down" disabled={last} onClick={() => moveCustomField(fl.id, 1)} style={{ ...pill(false), opacity: last ? 0.4 : 1 }}>
-                ↓
+              <button type="button" className="btn btn-primary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={saveOptions}>
+                Save options
               </button>
-              <button type="button" onClick={onDelete} style={{ cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--danger)', fontSize: 12, padding: '6px 11px', borderRadius: 6 }}>
-                Delete
+              <button type="button" className="btn btn-secondary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => setEditing(null)}>
+                Cancel
               </button>
-            </>
-          )}
-        </div>
-      </div>
-      {editing && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 4 }}>
-          <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Renaming an option keeps it on every record. An option in use can't be removed.</span>
-          {editing.map((o, i) => (
-            <div key={o.id ?? 'new' + i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <GhostInput className="ghost-sm" aria-label="Option" value={o.label} onChange={(e) => setEditing(editing.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} style={{ width: 220 }} />
-              <RemoveButton title="Remove option" onClick={() => setEditing(editing.filter((_, j) => j !== i))} />
             </div>
-          ))}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" className="btn-plain" style={{ fontSize: 12 }} onClick={() => setEditing([...editing, { label: '' }])}>
-              + Add option
-            </button>
-            <button type="button" className="btn btn-primary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={saveOptions}>
-              Save options
-            </button>
-            <button type="button" className="btn btn-secondary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => setEditing(null)}>
-              Cancel
-            </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+      <div className="ws-row-control">
+        <Segmented label={`${fl.label}: required or optional`} value={fl.required ? 'required' : 'optional'} options={REQUIRED_OPTIONS} disabled={!canEditFields} onChange={(v) => updateCustomField(fl.id, { required: v === 'required' })} />
+        {canEditFields && (
+          <>
+            {fl.type === 'select' && !editing && (
+              <button type="button" className="btn-plain" style={{ fontSize: 12.5, padding: '6px 11px' }} onClick={() => setEditing(fl.options.map((o) => ({ ...o })))}>
+                Edit options
+              </button>
+            )}
+            <MoveButton dir="up" label="Move up" disabled={first} onClick={() => moveCustomField(fl.id, -1)} />
+            <MoveButton dir="down" label="Move down" disabled={last} onClick={() => moveCustomField(fl.id, 1)} />
+            <button type="button" className="btn-danger-quiet" style={{ fontSize: 12.5, padding: '6px 11px' }} onClick={onDelete}>
+              Delete
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
-const BONUS_COLS = 'minmax(0,1.6fr) 110px 150px 150px';
+const BONUS_TRIGGERS = [
+  { value: 'On contract signed', label: 'On contract signed' },
+  { value: 'When fully billed', label: 'When fully billed' },
+] as const;
 
 /**
  * Sales bonus rules (CD-17), saved in the workspace. Only owners and admins see this tab; the
@@ -871,54 +954,61 @@ function BonusesTab() {
   const { s, setBonusTrigger, setBonusRule } = useStore();
   const symbol = currencySymbol(curOf(s));
   const rules = s.bonusRules ?? {};
+  const people = salesPeople(s).filter((p) => s.team.some((m) => m.status === 'Active' && m.id === p.value));
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div className="card-title" style={{ marginBottom: 8 }}>
-          Sales bonuses
-        </div>
-        <FieldRow label="Bonus earned">
-          <GhostSelect value={s.bonusTrigger} onChange={(e) => setBonusTrigger(e.target.value)} options={['On contract signed', 'When fully billed']} />
-        </FieldRow>
-        <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 8 }}>
-          Only owners and admins can see these rules and the bonus figures on Overview. A won opportunity earns the rate on its net value; an opportunity under the minimum earns the flat amount instead. The minimum and the flat amount are in {s.workspace.currency}; opportunities in another currency earn the rate only. Changes are saved as you make them.
-        </span>
-      </div>
-      <div className="card" style={{ overflowX: 'auto' }}>
-        <div style={{ minWidth: 560 }}>
-          <div className="table-head th" style={{ gridTemplateColumns: BONUS_COLS }}>
-            <span>Salesperson</span>
-            <span>Rate %</span>
-            <span>Minimum ({symbol})</span>
-            <span>Flat under min ({symbol})</span>
-          </div>
-          {salesPeople(s)
-            .filter((p) => s.team.some((m) => m.status === 'Active' && m.id === p.value))
-            .map((p) => {
-              const r = rules[p.value] ?? { rate: '', floor: '', fixed: '' };
-              // A refused number stays in its field with a red message under it and is not saved (CD-479 QA).
-              const bad = bonusRuleProblems(r);
-              const field = (key: keyof BonusRule, label: string) => (
-                <span style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-                  <GhostInput className="ghost-sm" aria-label={`${label} for ${p.label}`} inputMode="decimal" placeholder="0" aria-invalid={!!bad[key] || undefined} value={r[key]} onChange={(e) => setBonusRule(p.value, key, e.target.value)} />
+    <>
+      <Rows>
+        <Row label="Bonus earned" hint="When a won opportunity counts toward a bonus">
+          <Segmented label="Bonus earned" value={s.bonusTrigger as (typeof BONUS_TRIGGERS)[number]['value']} options={BONUS_TRIGGERS} onChange={(v) => setBonusTrigger(v)} />
+        </Row>
+      </Rows>
+      <Block
+        title="Rules"
+        desc={`The rate applies to the net value of each won opportunity. Below the minimum, the flat amount is paid instead. The minimum and the flat amount are in ${s.workspace.currency}; opportunities in another currency earn the rate only. Only owners and admins see these rules and the bonus figures on Overview.`}
+      >
+        <Table
+          cols={[{ label: 'Salesperson' }, { label: 'Rate %', align: 'num' }, { label: `Minimum (${symbol})`, align: 'num' }, { label: `Flat under min (${symbol})`, align: 'num' }]}
+          minWidth={560}
+          empty={people.length ? undefined : 'No active salespeople yet.'}
+        >
+          {people.map((p) => {
+            const r = rules[p.value] ?? { rate: '', floor: '', fixed: '' };
+            // A refused number stays in its field with a red message under it and is not saved (CD-479 QA).
+            const bad = bonusRuleProblems(r);
+            const field = (key: keyof BonusRule, label: string, width: number) => (
+              <td className="num">
+                <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                  <input
+                    className="form-input"
+                    aria-label={`${label} for ${p.label}`}
+                    inputMode="decimal"
+                    placeholder="0"
+                    aria-invalid={!!bad[key] || undefined}
+                    value={r[key]}
+                    onChange={(e) => setBonusRule(p.value, key, e.target.value)}
+                    style={{ width, textAlign: 'right', padding: '7px 10px' }}
+                  />
                   {bad[key] && (
-                    <span className="subform-hint" role="alert" data-testid="bonus-error" style={{ color: 'var(--danger)', padding: '0 8px' }}>
+                    <span className="ws-row-error" role="alert" data-testid="bonus-error" style={{ maxWidth: 200, textAlign: 'right' }}>
                       {bad[key]}
                     </span>
                   )}
                 </span>
-              );
-              return (
-                <div key={p.value} data-testid="bonus-rule" className="table-row" style={{ gridTemplateColumns: BONUS_COLS, padding: '8px 16px' }}>
-                  <span style={{ fontWeight: 600 }}>{p.label}</span>
-                  {field('rate', 'Rate')}
-                  {field('floor', 'Minimum')}
-                  {field('fixed', 'Flat amount')}
-                </div>
-              );
-            })}
-        </div>
-      </div>
-    </div>
+              </td>
+            );
+            return (
+              <tr key={p.value} data-testid="bonus-rule">
+                <td>
+                  <b>{p.label}</b>
+                </td>
+                {field('rate', 'Rate', 72)}
+                {field('floor', 'Minimum', 100)}
+                {field('fixed', 'Flat amount', 100)}
+              </tr>
+            );
+          })}
+        </Table>
+      </Block>
+    </>
   );
 }
