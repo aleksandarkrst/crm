@@ -87,7 +87,7 @@ export function Profile() {
             )}
           </div>
         </nav>
-        <div className="settings-content" data-testid="account-content" data-page={current.k}>
+        <div className="settings-content account-content" data-testid="account-content" data-page={current.k}>
           <div className="account-head">
             <div>
               <h2 className="settings-title">{current.label}</h2>
