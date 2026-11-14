@@ -644,17 +644,19 @@ function FunnelStageRow({
             // Advance gates (CD-363): what has to be done before an opportunity moves on from this stage.
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <span className="caps">Before moving on</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-                <Switch on={st.gateTodos} disabled={!editable} label="All to-dos must be done" onClick={() => store.setStageRule(idx, { gateTodos: !st.gateTodos })} />
-                All to-dos must be done
-              </span>
-              {/* Its own switch, never turned on by adding a to-do; say what it does now (CD-488). */}
-              <span data-testid="stage-gate-todos-note" style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: -4 }}>
-                {!st.gateTodos
-                  ? 'Off: the to-dos below are reminders, opportunities move on without them.'
-                  : st.checklist.length
-                    ? `On: an opportunity moves on only when ${st.checklist.length === 1 ? 'the to-do below is' : `all ${st.checklist.length} to-dos below are`} done.`
-                    : 'On, with no to-dos yet: nothing blocks moving on, but opportunities can’t skip this stage. New stages start with it on.'}
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+                  <Switch on={st.gateTodos} disabled={!editable} label="All to-dos must be done" onClick={() => store.setStageRule(idx, { gateTodos: !st.gateTodos })} />
+                  All to-dos must be done
+                </span>
+                {/* Its own switch, never turned on by adding a to-do; say what it does now (CD-488). */}
+                <span data-testid="stage-gate-todos-note" style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>
+                  {!st.gateTodos
+                    ? 'Off: the to-dos below are reminders, opportunities move on without them.'
+                    : st.checklist.length
+                      ? `On: an opportunity moves on only when ${st.checklist.length === 1 ? 'the to-do below is' : `all ${st.checklist.length} to-dos below are`} done.`
+                      : 'On, with no to-dos yet: nothing blocks moving on, but opportunities can’t skip this stage. New stages start with it on.'}
+                </span>
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
                 <Switch on={st.gateDocs} disabled={!editable} label="Needs documentation complete" onClick={() => store.setStageRule(idx, { gateDocs: !st.gateDocs })} />
