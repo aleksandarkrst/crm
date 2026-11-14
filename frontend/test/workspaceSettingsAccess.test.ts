@@ -1,5 +1,5 @@
 // Members don't see the Workspace settings (CD-523): no tile in the module switcher, and their
-// notification settings are on Personal preferences. Owners and admins keep both as before.
+// notification settings are in Profile settings. Owners and admins keep both as before.
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { describe, it } from 'node:test';

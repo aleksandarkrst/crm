@@ -582,7 +582,7 @@ function likeBody(q: string): string {
 function refusal(access: CallerAccess, id: string, refused: string[], selfEditBank: boolean): string {
   if (!access.isHr && !access.isSelf(id)) return 'Only Admins edit other employees';
   if (access.isSelf(id)) {
-    if (refused.includes('workEmail')) return 'Your work email is the email you sign in with, so it is not changed on your card';
+    if (refused.length === 1 && refused[0] === 'workEmail') return 'Your work email is the email you sign in with, so it is not changed on your card';
     const bank = refused.filter((f) => (BANK_FIELDS as readonly string[]).includes(f));
     if (bank.length === refused.length && !selfEditBank) return 'In this workspace, only Admins change bank accounts';
     const org = refused.filter((f) => (ORG_FIELDS as readonly string[]).includes(f) || (EMPLOYMENT_FIELDS as readonly string[]).includes(f));
