@@ -40,6 +40,10 @@ describe('approvals', () => {
     await newUserWithWorkspace(manager, { label: 'ap-manager', name: 'Marko Ilić', workspace: 'Approvals Co' });
     // Expected hours ("at approval 8 of 8 h") on the real current week, whatever holidays it has (CD-513).
     await clearPreloadedHolidays(manager);
+    // The default deadline, Friday 17:00, has passed on Friday evenings and at weekends, which makes
+    // this week's submissions late (CD-526). Sunday 23:59 of the next week is ahead whenever this runs,
+    // Sunday evenings included.
+    await api(manager, '/workspace', { method: 'PATCH', body: JSON.stringify({ timesheet: { deadlineWeekday: 7, deadlineTime: '23:59', deadlineWeek: 'next' } }) });
     await report('ap-dragan', 'Dragan Milić');
     await report('ap-bojan', 'Bojan Đurić');
   });
