@@ -78,6 +78,8 @@ export function CompanyCard() {
   const ro = !canEditWorkspace;
   const serbia = s.workspace.country === 'RS';
   const errors: FieldErrors = { ...serverErrors, ...problemsOf(draft, saved) };
+  // A hidden field can't be fixed, so it doesn't count (CD-489): the legal basis shows only for Serbia.
+  if (!serbia) delete errors.legalBasis;
   const edit = (key: Key, value: string) => {
     setDraft({ ...draft, [key]: value });
     if (serverErrors[key]) setServerErrors({ ...serverErrors, [key]: undefined });
