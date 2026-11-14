@@ -1354,6 +1354,7 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
 .ws-row-control { flex: 0 1 auto; min-width: 0; max-width: 100%; display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .ws-row-control > .form-input, .ws-row-control > .select-wrap { width: 260px; max-width: 100%; }
 .ws-row-control > .form-input.narrow { width: 90px; }
+.ws-row-control > .form-input.short { width: 160px; }
 .ws-row-control > .form-input.wide { width: 320px; }
 .ws-row-control .tz-trigger { width: 280px; max-width: 100%; border: 1px solid var(--border); border-radius: 7px; background: var(--white); padding: 9px 10px; }
 .ws-choices .choice.ws-choice-new { border-style: dashed; border-color: var(--dashed); background: transparent; justify-content: center; color: var(--brand); font-weight: 600; font-size: 13.5px; }
@@ -1443,7 +1444,7 @@ textarea.minutes-text { overflow-y: hidden; resize: none; }
   .ws-row-control { justify-content: flex-start; flex: 1 1 100%; }
   .ws-row.with-switch { flex-wrap: nowrap; }
   .ws-row.with-switch .ws-row-control { flex: 0 0 auto; }
-  .ws-row-control > .form-input, .ws-row-control > .select-wrap, .ws-row-control .tz-trigger, .ws-row-control > .form-input.wide { width: 100%; }
+  .ws-row-control > .form-input, .ws-row-control > .select-wrap, .ws-row-control .tz-trigger, .ws-row-control > .form-input.wide, .ws-row-control > .form-input.short { width: 100%; }
   .ws-stage-opps { display: none; }
 }
 

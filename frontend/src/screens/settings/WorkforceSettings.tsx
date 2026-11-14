@@ -212,7 +212,7 @@ export function ApprovalsTab() {
       <Block title="Submission deadline" desc={<span data-testid="deadline-next">{next ? `Week ${next.weekNumber} is due ${dayLabel(next.date)}, ${next.time}. ` : ''}A deadline on a public holiday moves to the next working day.</span>}>
         <Rows testId="deadline-card">
           <Row label="Day">
-            <select className="form-input" aria-label="Deadline day" value={t.deadlineWeekday} data-testid="deadline-day" style={{ width: 160 }} onChange={(e) => save({ deadlineWeekday: Number(e.target.value) })}>
+            <select className="form-input short" aria-label="Deadline day" value={t.deadlineWeekday} data-testid="deadline-day" onChange={(e) => save({ deadlineWeekday: Number(e.target.value) })}>
               {WEEKDAY_NAMES.map((n, i) => (
                 <option key={n} value={i + 1}>
                   {n}
@@ -234,7 +234,7 @@ export function ApprovalsTab() {
             <Switch on={t.autoSubmit} onClick={() => save({ autoSubmit: !t.autoSubmit })} label="Auto submit at the deadline" />
           </Row>
           <Row label="Reminders" hint="Sent to everyone who hasn't submitted yet.">
-            <select className="form-input" aria-label="Reminder" value={t.reminderHours ?? ''} data-testid="reminder-hours" style={{ width: 260 }} onChange={(e) => save({ reminderHours: e.target.value ? Number(e.target.value) : null })}>
+            <select className="form-input" aria-label="Reminder" value={t.reminderHours ?? ''} data-testid="reminder-hours" onChange={(e) => save({ reminderHours: e.target.value ? Number(e.target.value) : null })}>
               {(REMINDER_HOURS.includes(t.reminderHours) ? REMINDERS : [...REMINDERS, { hours: t.reminderHours, label: reminderLabel(t.reminderHours) }]).map((r) => (
                 <option key={r.label} value={r.hours ?? ''}>
                   {r.label}
@@ -443,7 +443,7 @@ function PreloadControl({ year, onChanged }: { year: number; onChanged: () => vo
     <Block title="Preloaded holidays">
       <Rows testId="holiday-preload">
         <Row label="Preload holidays for" hint={data.years.length ? `Generated: ${data.years.join(', ')}. Next year is added on 1 November.` : 'Nothing generated yet.'}>
-          <select className="form-input" style={{ width: 140 }} value={data.country} disabled={busy} onChange={(e) => void change(e.target.value as 'none' | 'serbia')} aria-label="Preload holidays for" data-testid="holiday-preload-country">
+          <select className="form-input short" value={data.country} disabled={busy} onChange={(e) => void change(e.target.value as 'none' | 'serbia')} aria-label="Preload holidays for" data-testid="holiday-preload-country">
             <option value="serbia">Serbia</option>
             <option value="none">None</option>
           </select>

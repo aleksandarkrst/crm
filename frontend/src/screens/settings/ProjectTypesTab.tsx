@@ -483,7 +483,7 @@ function NamesCard({ editable }: { editable: boolean }) {
           <Row key={key} label={label} error={errors[key] && <span data-testid={`term-${key}-error`}>{errors[key]}</span>}>
             <input
               className="form-input"
-              style={{ width: 200 }}
+             
               aria-label={label}
               data-testid={`term-${key}`}
               value={draft[key]}

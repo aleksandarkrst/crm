@@ -509,7 +509,7 @@ function FunnelBuilder() {
                   data-testid="funnel-approver"
                   aria-label="Approver"
                   disabled={!editable}
-                  style={{ width: 260 }}
+                 
                   value={funnel.approverId ?? ''}
                   onChange={(e) => store.patchFunnel(funnel.id, { approverId: e.target.value || null })}
                 >
@@ -654,14 +654,14 @@ function FunnelStageRow({
       {open && (
         <div className="ws-stage-editor">
           <Row label="Activity" hint="Started for the stage owner when an opportunity enters">
-            <select className="form-input" aria-label="Activity" disabled={!editable} value={st.activity} onChange={(e) => store.editStage(idx, 'activity', e.target.value)} style={{ width: 240 }}>
+            <select className="form-input" aria-label="Activity" disabled={!editable} value={st.activity} onChange={(e) => store.editStage(idx, 'activity', e.target.value)}>
               {ACTIVITIES.map((o) => (
                 <option key={o}>{o}</option>
               ))}
             </select>
           </Row>
           <Row label="Channel">
-            <select className="form-input" aria-label="Channel" disabled={!editable} value={st.channel} onChange={(e) => store.editStage(idx, 'channel', e.target.value)} style={{ width: 240 }}>
+            <select className="form-input" aria-label="Channel" disabled={!editable} value={st.channel} onChange={(e) => store.editStage(idx, 'channel', e.target.value)}>
               {CHANNELS.map((c) => (
                 <option key={c} value={c}>
                   {CHANNEL_LABELS[c]}
@@ -670,7 +670,7 @@ function FunnelStageRow({
             </select>
           </Row>
           <Row label="Document on entry" hint="Generated from its template when an opportunity enters">
-            <select className="form-input" aria-label="Document on entry" disabled={!editable} value={st.doc} onChange={(e) => store.editStage(idx, 'doc', e.target.value)} style={{ width: 240 }}>
+            <select className="form-input" aria-label="Document on entry" disabled={!editable} value={st.doc} onChange={(e) => store.editStage(idx, 'doc', e.target.value)}>
               {DOCS.map((o) => (
                 <option key={o}>{o}</option>
               ))}
@@ -688,7 +688,7 @@ function FunnelStageRow({
                   data-testid="stage-owner-select"
                   aria-label="Stage owner"
                   disabled={!editable}
-                  style={{ width: 240 }}
+                 
                   value={st.ownerId ?? ''}
                   onChange={(e) => store.setStageRule(idx, { ownerId: e.target.value || null })}
                 >
