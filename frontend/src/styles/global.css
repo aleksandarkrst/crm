@@ -55,13 +55,15 @@
   --shadow-pop: 0 16px 38px rgba(13, 36, 28, 0.16);
   --ring: 0 0 0 3px var(--brand-soft);
   /* Home's module tiles (CD-288, design "Home, all modules"): one colour per module. */
-  --mod-crm: linear-gradient(160deg, #2F7A5E, #0D241C);
+  --mod-crm: linear-gradient(160deg, var(--green-500), var(--forest));
   --mod-projects: linear-gradient(160deg, #4A8DF0, #1550B8);
   --mod-employees: linear-gradient(160deg, #F07AA0, #9E2457);
   --mod-timesheet: linear-gradient(160deg, #F5A23A, #C96400);
   --mod-timeoff: linear-gradient(160deg, #2FBFB0, #0C7C76);
   --mod-settings: linear-gradient(160deg, #A1A1A8, #636369);
   --mod-other: linear-gradient(160deg, #5B6FC4, #26357A);
+  /* Lifts a coloured app icon off its tile (design "Home, all modules"). */
+  --shadow-icon: 0 6px 16px rgba(13, 36, 28, 0.12);
 
   /* Onest for the interface, Unbounded for brand voice: titles and big figures. */
   --font: 'Onest', system-ui, sans-serif;
@@ -399,6 +401,7 @@ html.modal-open { overflow: hidden; }
 .empty-block { background: var(--white); border: 1px dashed var(--dashed); border-radius: 12px; padding: 34px 20px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; }
 .empty-block-title { font-size: 15px; font-weight: 600; }
 .empty-block-text { font-size: 13px; color: var(--text-2); max-width: 460px; line-height: 1.5; }
+.empty-block-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 10px; }
 
 /* Home (CD-288, design "Home, all modules"): a greeting, a search and one tile per module. */
 .home { width: 100%; max-width: 980px; margin: 0 auto; padding: 16px 0 24px; display: flex; flex-direction: column; gap: 26px; }
@@ -413,7 +416,7 @@ html.modal-open { overflow: hidden; }
 .home-tile:hover { background: var(--white); box-shadow: var(--shadow-pop); }
 .home-tile:active { transform: scale(0.96); }
 .home-tile:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-.home-icon { width: 68px; height: 68px; border-radius: 18px; display: flex; align-items: center; justify-content: center; color: var(--white); background: var(--mod-other); box-shadow: 0 6px 16px rgba(13, 36, 28, 0.12); transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.home-icon { width: 68px; height: 68px; border-radius: 18px; display: flex; align-items: center; justify-content: center; color: var(--white); background: var(--mod-other); box-shadow: var(--shadow-icon); transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .home-tile:hover .home-icon { transform: translateY(-3px); }
 .home-icon-crm { background: var(--mod-crm); }
 .home-icon-projects { background: var(--mod-projects); }
@@ -432,7 +435,6 @@ html.modal-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .home-tile, .home-icon { transition: none; }
 }
-.empty-block-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 10px; }
 
 /* ---------------------------------------------------------------- deal page (CD-83) */
 .icon-row > .icon-row-icon { flex: 0 0 22px; display: flex; align-items: center; justify-content: center; color: var(--muted); }

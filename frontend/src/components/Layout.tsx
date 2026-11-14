@@ -12,11 +12,12 @@ import { ConfirmHost } from './ConfirmDialog';
 import { HeaderCenter, HeaderRight } from './HeaderTools';
 import { Icon } from './icons';
 import { Logo } from './Logo';
+import { ICONS } from './commands';
 import { currentModule, navFor, type NavDef, rememberModule, routeModule } from './modules';
 import { ModuleSwitcher, SWITCHER_KEYS } from './ModuleSwitcher';
 
 /** Home (CD-288): first in every module's sidebar; on phones under "More". It belongs to no module. */
-const HOME: NavDef = { to: '/', label: 'Home', icon: 'M4 11.5 12 4.5l8 7M6 10v9.5h4.5V15h3v4.5H18V10' };
+const HOME: NavDef = { to: paths.home, label: 'Home', icon: ICONS.home };
 
 const SETTINGS = {
   to: '/settings',
