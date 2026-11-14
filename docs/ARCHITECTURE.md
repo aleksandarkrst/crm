@@ -2621,8 +2621,9 @@ project tasks (`GET /tasks?assigneeId=me`), the weeks with days waiting that the
 owner), and the time off requests waiting for their decision (`GET /timeoff/approvals`). Each row:
 the module's icon, what it is, the module and when, and Open or Review to where it is acted on.
 Nothing: "Nothing is waiting for you." Home itself has
-no sidebar (nor the phone bar): its tiles are the way in. Every other page has Home first in its
-sidebar (`HOME` in `Layout.tsx`; on phones under "More"), and ⌘K has "Home".
+no sidebar (nor the phone bar): its tiles are the way in. On every other page the Pultly mark at the
+top of the sidebar opens it; on phones, where the mark isn't shown, Home is first under "More"
+(`HOME` in `Layout.tsx`); ⌘K has "Home" too.
 
 ### Modules as separate apps (CD-223)
 

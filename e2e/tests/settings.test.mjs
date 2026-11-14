@@ -120,7 +120,10 @@ describe('settings and discovery fields', () => {
     // A tile opens its module, which has its sidebar again.
     await click(page, '[data-testid=home-modules] [data-module=crm]');
     await page.waitForFunction(() => location.pathname === '/pipeline');
-    await page.waitForSelector('.app-sidebar a.nav-item[href="/"]');
+    // The Pultly mark takes them back (there is no Home item in the sidebar).
+    assert.equal(await page.$('.app-sidebar a.nav-item[href="/"]'), null, 'no Home item in the sidebar');
+    await click(page, '.app-sidebar a.ws-logo');
+    await page.waitForSelector('[data-testid=home-modules]');
   });
 
   // Discovery notes are no longer shown on the deal page or merged into the proposal (CD-362),

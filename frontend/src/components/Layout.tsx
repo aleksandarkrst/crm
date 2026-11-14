@@ -16,7 +16,7 @@ import { ICONS } from './commands';
 import { currentModule, navFor, type NavDef, rememberModule, routeModule } from './modules';
 import { ModuleSwitcher, SWITCHER_KEYS } from './ModuleSwitcher';
 
-/** Home (CD-288): first in every module's sidebar; on phones under "More". It belongs to no module. */
+/** Home (CD-288): on desktop the Pultly mark opens it; on phones, where the mark isn't shown, it is first under "More". */
 const HOME: NavDef = { to: paths.home, label: 'Home', icon: ICONS.home };
 
 const SETTINGS = {
@@ -104,7 +104,7 @@ function Sidebar() {
   const pendingApprovals = usePendingApprovals(session.tenant.role === 'owner' || session.tenant.role === 'admin' || s.visitScope.seesTeam);
   const module = currentModule(pathname, session.userId);
   const terms = useTerms();
-  const items = [HOME, ...navFor(module, session.tenant.role, s.visitScope.seesTeam, terms)];
+  const items = navFor(module, session.tenant.role, s.visitScope.seesTeam, terms);
   // Settings and the profile keep the module you came from.
   const own = routeModule(pathname);
   useEffect(() => {
@@ -165,7 +165,7 @@ function Sidebar() {
           <NavItem key={n.to} {...n} badge={n.to === paths.today ? overdue : n.to === paths.timeOff() ? pendingApprovals : undefined} badgeTitle={n.to === paths.timeOff() ? 'waiting for approval' : 'of your tasks overdue'} className={(n.phone ? '' : 'nav-desktop ') + (i >= fit ? 'nav-overflow' : '')} />
         ))}
         {fit < items.length && <SideMore items={items.slice(fit)} />}
-        <MoreMenu name={name} items={items.filter((n) => !n.phone)} onModules={() => setSwitcher(true)} />
+        <MoreMenu name={name} items={[HOME, ...items.filter((n) => !n.phone)]} onModules={() => setSwitcher(true)} />
       </nav>
       {/* Workspace settings: owners and admins only; members don't see it (CD-523). */}
       {canEditWorkspace && (
