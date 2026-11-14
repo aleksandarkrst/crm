@@ -2226,7 +2226,9 @@ vacation. Spec sections 10 to 12.
   name, address, PIB and MB (check digits validated by `pibValid` and `mbValid` in
   `identity/settings.schemas.ts`), the place of issue, the signatory and their title, and the
   editable legal basis (`decision_legal_basis`, prefilled with article 75 of the Labor Law). They
-  travel as `company` on `GET/PATCH /api/workspace`; Admins edit.
+  travel as `company` on `GET/PATCH /api/workspace`; Admins edit. Like the rest of Settings →
+  General, the card saves each field on its own when it is left (CD-488: `company` takes any
+  subset); a field the form finds wrong stays unsaved with its reason under it.
 - **Recipients** (Settings → Time off → Vacation decisions, spec 12): `decision_copy_admins`
   (the owners and admins) and `decision_copy_emails` (up to five addresses), on
   `PATCH /api/timeoff/settings`. The employee always gets the decision; recipients are resolved

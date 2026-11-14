@@ -44,10 +44,23 @@ export function checkPib(input: string): Checked {
   return problem ? { ok: false, error: problem } : { ok: true, value };
 }
 
+/** What a valid MB looks like, shown under the field (CD-488). */
+export const MB_FORMAT = '8 digits, as on your APR registration. The last digit is a check digit.';
+
+/** Why an MB is not valid, in words; null when it is (or empty: an MB is optional). */
+export function mbProblem(input: string): string | null {
+  const v = input.replace(/\s/g, '');
+  if (!v) return null;
+  if (!/^\d+$/.test(v)) return 'An MB has digits only, no letters or dashes.';
+  if (v.length !== 8) return `An MB has 8 digits; this one has ${v.length}.`;
+  return mbValid(v) ? null : "This MB's last digit doesn't match the first seven. Check it for a typo against your APR registration.";
+}
+
+/** An MB (CD-357, optional); spaces are dropped. */
 export function checkMb(input: string): Checked {
   const value = input.replace(/\s/g, '');
-  if (!value) return { ok: true, value: '' };
-  return mbValid(value) ? { ok: true, value } : { ok: false, error: 'An MB has 8 digits with a valid check digit.' };
+  const problem = mbProblem(value);
+  return problem ? { ok: false, error: problem } : { ok: true, value };
 }
 
 export function checkActivityCode(input: string): Checked {
