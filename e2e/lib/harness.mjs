@@ -144,7 +144,7 @@ export function setByLabel(page, label, value, tag = 'input') {
     (label, value, tag) => {
       const row = [...document.querySelectorAll('.icon-row')].find((el) => el.dataset.label === label);
       const span = row ? null : [...document.querySelectorAll('span')].find((el) => el.textContent.trim() === label);
-      const el = (row ?? span?.parentElement)?.querySelector(tag);
+      const el = (row ?? span?.closest('.account-row') ?? span?.parentElement)?.querySelector(tag);
       if (!el) return false;
       const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
       Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, value);

@@ -24,9 +24,11 @@ describe('Workspace settings for members (CD-523)', () => {
     for (const role of ['owner', 'admin']) assert.deepEqual(switcherModules(role), MODULES);
   });
 
-  it('sends members to Personal preferences for their notification settings', () => {
+  it('sends members to their account for their notification settings', () => {
     assert.equal(paths.notifications(true), paths.settings('notifications'));
     assert.equal(paths.notifications(false), paths.myNotifications);
-    assert.ok(paths.myNotifications.startsWith(paths.profile + '#'));
+    // Your account's Notifications page (CD-525), no longer a card on the profile.
+    assert.equal(paths.myNotifications, paths.account('notifications'));
+    assert.equal(paths.myNotifications, '/profile/notifications');
   });
 });

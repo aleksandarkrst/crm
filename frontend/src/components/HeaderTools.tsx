@@ -132,43 +132,17 @@ function NavButton({ to, label, onDone }: { to: string; label: string; onDone: (
   );
 }
 
-/** Your avatar: personal preferences, workspace settings (Team is a tab there, CD-223), and signing out. */
+/**
+ * Your avatar opens your account (CD-525): Profile, Preferences and Notifications, with signing out
+ * on Profile and the workspace (settings, switcher, role) at the foot of its sidebar.
+ */
 function AccountMenu() {
-  const { s, session, canEditWorkspace } = useStore();
-  const pop = usePopover();
+  const { s, session } = useStore();
+  const navigate = useNavigate();
   const name = s.profile.name || session.userName;
-  const close = () => pop.setOpen(false);
   return (
-    <div ref={pop.ref} className="new-menu">
-      <button type="button" className="avatar-btn" data-testid="account-menu" aria-label={`Account · ${name}`} title={name} aria-expanded={pop.open} onClick={() => pop.setOpen(!pop.open)}>
-        {initialsOf(name)}
-      </button>
-      {pop.open && (
-        <div className="menu-pop" role="menu" style={{ right: 0, width: 250 }}>
-          <div className="caps-muted menu-label">My account</div>
-          <NavButton to={paths.profile} label="Personal preferences" onDone={close} />
-          <div className="menu-divider" />
-          {/* Members don't see the workspace settings (CD-523). */}
-          {canEditWorkspace && (
-            <>
-              <div className="caps-muted menu-label">Workspace · {session.tenant.name}</div>
-              <NavButton to={paths.settings()} label="Workspace settings" onDone={close} />
-              <div className="menu-divider" />
-            </>
-          )}
-          <button
-            type="button"
-            role="menuitem"
-            className="menu-item"
-            onClick={() => {
-              close();
-              session.signOut();
-            }}
-          >
-            <span className="menu-item-title">Sign out</span>
-          </button>
-        </div>
-      )}
-    </div>
+    <button type="button" className="avatar-btn" data-testid="account-menu" aria-label={`Your account · ${name}`} title={name} onClick={() => navigate(paths.profile)}>
+      {initialsOf(name)}
+    </button>
   );
 }

@@ -38,6 +38,7 @@ export function ModuleSwitcher({ onClose, trigger }: { onClose: () => void; trig
   const [error, setError] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   const onSettings = pathname === '/settings' || pathname.startsWith('/settings/');
+  const onAccount = pathname === '/profile' || pathname.startsWith('/profile/');
   const here = currentModule(pathname, session.userId);
   // On Settings the Workspace settings tile is the current one (the sidebar keeps the last module).
   const currentId = onSettings ? 'settings' : here.id;
@@ -102,10 +103,10 @@ export function ModuleSwitcher({ onClose, trigger }: { onClose: () => void; trig
     onClose();
     if (t.id === session.tenant.id) return;
     const theirs = modulesOf(t);
-    const stays = onSettings || pathname === '/profile' || !lockReason(here, t.role, theirs);
+    const stays = onSettings || onAccount || !lockReason(here, t.role, theirs);
     if (stays) {
       // A record page (a deal, a project) belongs to this workspace: open the module's start instead.
-      if (!onSettings && pathname !== '/profile' && here.to) navigate(here.to);
+      if (!onSettings && !onAccount && here.to) navigate(here.to);
       session.switchTenant(t.id);
       return;
     }

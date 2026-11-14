@@ -105,7 +105,7 @@ export function useCommands(): Command[] {
       : []),
   ];
   const settings: Command[] = [
-    { id: 'go-profile', group: 'Settings', label: 'Personal preferences', hint: 'Your profile', icon: 'profile', keywords: 'profile account start page', run: go(paths.profile) },
+    { id: 'go-profile', group: 'Settings', label: 'Personal preferences', hint: 'Your profile', icon: 'profile', keywords: 'profile account preferences sign out', run: go(paths.profile) },
     { id: 'go-workspace', group: 'Settings', label: 'Workspace settings', hint: 'Name, currency, time zone', icon: 'settings', keywords: 'currency time zone fiscal year', run: go(paths.settings()) },
     { id: 'go-team', group: 'Settings', label: 'Team', hint: 'Employees · members and invitations', icon: 'team', keywords: 'users invite members roles workforce', run: go(paths.team()) },
     // Your own emails: on Personal preferences for members (CD-523).
