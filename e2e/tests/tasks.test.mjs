@@ -174,7 +174,7 @@ describe('tasks', () => {
     await page.waitForFunction(() => location.pathname.startsWith('/tasks/') && !!document.querySelector('[data-testid=task-page]'));
   });
 
-  step('Settings → Notifications has "Task assignments"', async () => {
+  step('Profile settings → Notifications has "Task assignments"', async () => {
     await page.goto(BASE_URL + '/settings/notifications', { waitUntil: 'networkidle0' });
     await page.waitForFunction(() => document.body.innerText.includes('Task assignments'));
   });

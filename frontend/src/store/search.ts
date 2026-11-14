@@ -101,7 +101,7 @@ export function searchWorkspace(s: State, query: string, perGroup = 5): SearchGr
     const score = best([{ value: c.name }, { value: c.pib }], q, qDigits);
     if (!score) continue;
     const deals = c.oppCount === 1 ? '1 opportunity' : `${c.oppCount} opportunities`;
-    hits.push({ kind: 'company', id: c.id, title: c.name, subtitle: joinParts([c.pib ? 'PIB ' + c.pib : '', c.industry, c.hq, deals]), initials: initialsOf(c.name), score });
+    hits.push({ kind: 'company', id: c.id, title: c.name, subtitle: joinParts([c.pib ? 'Company ID ' + c.pib : '', c.industry, c.hq, deals]), initials: initialsOf(c.name), score });
   }
 
   for (const p of allPeople(s)) {

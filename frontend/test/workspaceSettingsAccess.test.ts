@@ -24,9 +24,9 @@ describe('Workspace settings for members (CD-523)', () => {
     for (const role of ['owner', 'admin']) assert.deepEqual(switcherModules(role), MODULES);
   });
 
-  it('sends members to their account for their notification settings', () => {
-    assert.equal(paths.notifications(true), paths.settings('notifications'));
-    assert.equal(paths.notifications(false), paths.myNotifications);
+  it('keeps everyone’s notification settings in their account (CD-489)', () => {
+    // One place for every role: Settings has no Notifications (the e2e checks the tab and the redirect).
+    assert.ok(!('notifications' in paths), 'no role-dependent paths.notifications');
     // Your account's Notifications page (CD-525), no longer a card on the profile.
     assert.equal(paths.myNotifications, paths.account('notifications'));
     assert.equal(paths.myNotifications, '/profile/notifications');

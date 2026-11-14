@@ -80,7 +80,7 @@ export function Companies() {
             {rows.map((c) => (
               <div key={c.id} className="table-row clickable cells-clip" style={{ gridTemplateColumns: COLS }} onClick={() => openCompany(c.id)}>
                 <span style={{ fontWeight: 600 }} title={c.name}>{c.name}</span>
-                <span style={{ color: 'var(--text-2)' }}>{c.pib || <span className="badge badge-warn">No PIB</span>}</span>
+                <span style={{ color: 'var(--text-2)' }}>{c.pib || <span className="badge badge-warn">No company ID</span>}</span>
                 <span style={{ color: 'var(--text-2)' }} data-testid="company-row-status">
                   {c.status}
                 </span>
@@ -207,7 +207,7 @@ export function CompaniesBoard({ rows }: { rows: CompanyRecord[] }) {
                         c.pib ? (
                           <span style={{ fontSize: 11, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{c.pib}</span>
                         ) : (
-                          <span className="badge badge-warn">No PIB</span>
+                          <span className="badge badge-warn">No company ID</span>
                         )
                       ) : (
                         <span style={{ fontSize: 11, color: 'var(--brand)', whiteSpace: 'nowrap' }}>{c.valueLabel}</span>
@@ -225,7 +225,7 @@ export function CompaniesBoard({ rows }: { rows: CompanyRecord[] }) {
                         <span className="check-bar">
                           <span style={{ width: `${Math.round((ready.ready / ready.total) * 100)}%` }} />
                         </span>
-                        {ready.missing.length > 0 && <span style={{ fontSize: 11.5, color: 'var(--warn)' }}>Missing: {c.pib ? ready.missing.join(', ') : 'PIB first'}</span>}
+                        {ready.missing.length > 0 && <span style={{ fontSize: 11.5, color: 'var(--warn)' }}>Missing: {c.pib ? ready.missing.join(', ') : 'Company ID first'}</span>}
                       </div>
                     )}
                     {(st === 'opportunity' || st === 'client') && openLeads.length > 0 && (

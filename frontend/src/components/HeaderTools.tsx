@@ -62,7 +62,7 @@ export function HeaderRight() {
  * no such task the bell says so.
  */
 function Notifications() {
-  const { s, session, openLead, canEditWorkspace } = useStore();
+  const { s, session, openLead } = useStore();
   const pop = usePopover();
   const today = todayIso(s.workspace.timezone);
   const mine = s.leadTasks
@@ -108,7 +108,7 @@ function Notifications() {
           })}
           <div className="menu-divider" />
           <NavButton to={paths.today} label="Open Today" onDone={() => pop.setOpen(false)} />
-          <NavButton to={paths.notifications(canEditWorkspace)} label="Notification settings" onDone={() => pop.setOpen(false)} />
+          <NavButton to={paths.myNotifications} label="Notification settings" onDone={() => pop.setOpen(false)} />
         </div>
       )}
     </div>

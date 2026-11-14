@@ -28,7 +28,7 @@ describe('the readiness line', () => {
       ready: 0,
       total: 7,
       blockers: ['Company ID (PIB)', 'Matični broj', 'Address (street, city and postal code)', 'Šifra delatnosti', 'A contact with a job title, a role in the decision and an owner'],
-      missing: ['PIB', 'MB', 'address', 'activity code', 'a contact'],
+      missing: ['company ID', 'MB', 'address', 'activity code', 'a contact'],
     });
   });
 });

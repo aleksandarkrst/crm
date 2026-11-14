@@ -53,7 +53,7 @@ export function NewCompanyDialog() {
 
   return (
     <Modal maxWidth={560} gap={18} onClose={close}>
-      <ModalHeader title="New company" sub="Every company starts as a lead. The name and PIB are required; the rest can wait until it becomes an opportunity." />
+      <ModalHeader title="New company" sub="Every company starts as a lead. The name and Company ID (PIB, the tax number) are required; the rest can wait until it becomes an opportunity." />
       <label className="form-label">
         Company name
         <input className="form-input" data-testid="new-company-name" autoFocus value={name} placeholder="e.g. Vega Logistika d.o.o." aria-invalid={!!nameError} onChange={(e) => setName(e.target.value)} />
@@ -144,7 +144,7 @@ export function NewCompanyDialog() {
           )}
         </div>
       ) : (
-        <div className="hint-box">A PIB already in the workspace can't be used again, so there are never two records for one firm.</div>
+        <div className="hint-box">A Company ID (PIB) already in the workspace can't be used again, so there are never two records for one firm.</div>
       )}
       <div className="modal-actions">
         <button type="button" className="btn btn-secondary" onClick={close}>

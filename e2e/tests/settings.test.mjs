@@ -56,7 +56,8 @@ describe('settings and discovery fields', () => {
 
   step('has no Integrations or Billing tab, and their old links go back to Settings (CD-207)', async () => {
     const tabs = await page.$$eval('button', (els) => els.map((b) => b.textContent.trim()));
-    assert.ok(tabs.includes('Notifications'), 'the tab bar is there');
+    assert.ok(tabs.includes('Roles & permissions'), 'the tab bar is there');
+    assert.ok(!tabs.includes('Notifications'), 'Notifications is in Profile settings, not here (CD-489)');
     assert.ok(!tabs.includes('Integrations') && !tabs.includes('Billing'), 'no placeholder tabs');
     for (const tab of ['integrations', 'billing']) {
       await page.goto(`${BASE_URL}/settings/${tab}`, { waitUntil: 'networkidle0' });
