@@ -38,7 +38,12 @@ describe('settings and discovery fields', () => {
     await click(page, '[data-testid="workspace-info-save"]');
     await page.waitForFunction((name) => document.querySelector('.ws-info-name')?.textContent.trim() === name, {}, workspaceName);
     assert.ok(await setByLabel(page, 'Currency', 'RSD', 'select'));
-    assert.ok(await setByLabel(page, 'Time zone', 'Europe/London', 'select'));
+    // The time zone is a searchable list (CD-488): search, then Enter picks the first match.
+    await click(page, '[data-testid="workspace-timezone"]');
+    await page.waitForSelector('input[aria-label="Search time zones"]');
+    await page.type('input[aria-label="Search time zones"]', 'london');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.querySelector('[data-testid="workspace-timezone"]')?.dataset.zone === 'Europe/London');
     assert.ok(await setByLabel(page, 'Fiscal year starts', '4', 'select'));
     assert.ok(await setByLabel(page, 'Customer email language', 'sr', 'select'));
     assert.ok((await text(page)).includes('Language of the fixed text in emails to customers'), 'hint under the language');
@@ -64,7 +69,7 @@ describe('settings and discovery fields', () => {
     await page.waitForFunction(() => document.body.innerText.includes('Fiscal year starts'));
     assert.equal(await page.$eval('.ws-info-name', (el) => el.textContent.trim()), workspaceName);
     assert.equal(await valueByLabel(page, 'Currency', 'select'), 'RSD');
-    assert.equal(await valueByLabel(page, 'Time zone', 'select'), 'Europe/London');
+    assert.equal(await page.$eval('[data-testid="workspace-timezone"]', (el) => el.dataset.zone), 'Europe/London');
     assert.equal(await valueByLabel(page, 'Fiscal year starts', 'select'), '4');
     assert.equal(await valueByLabel(page, 'Customer email language', 'select'), 'sr');
     await page.goto(`${BASE_URL}/profile`, { waitUntil: 'networkidle0' });

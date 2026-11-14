@@ -4,7 +4,7 @@ import { askConfirm } from '../components/ConfirmDialog';
 import { FieldRow, GhostInput, GhostSelect, Modal, ModalHeader, RemoveButton, Switch } from '../components/ui';
 import { Icon } from '../components/icons';
 import { Screen } from '../components/Layout';
-import { MODULES, WORKSPACE_MODULES } from '../components/modules';
+import { MODULES, WORKSPACE_MODULES, enabledModules } from '../components/modules';
 import { paths } from '../lib/paths';
 import { canManageTemplates } from '../store/documents';
 import { ACTIVITIES, CHANNEL_LABELS, CHANNELS, CURRENCIES, DOCS, FIELD_TYPES } from '../store/seed';
@@ -22,6 +22,7 @@ import { ApprovalsTab, HolidaysTab } from './settings/WorkforceSettings';
 import { ProjectHierarchyTab, ProjectTypesTab } from './settings/ProjectTypesTab';
 import { TechniciansTab } from './settings/TechniciansTab';
 import { WorkspaceInfo } from './settings/WorkspaceInfo';
+import { TimeZonePicker } from './settings/TimeZonePicker';
 import { RolesTab } from './settings/RolesTab';
 import { NotificationsTab } from './settings/NotificationsTab';
 import { useTerms } from '../store/terms';
@@ -86,7 +87,7 @@ function TargetDaysInput({ value, onSave, disabled, placeholder, testId }: { val
  */
 const TABS = [
   { k: 'workspace', group: 'Workspace', label: 'General', description: 'Name, currency, time zone, fiscal year and the language of customer emails.' },
-  { k: 'modules', group: 'Workspace', label: 'Modules', description: 'The modules this workspace uses. A module that is off shows as "Not in this workspace" in the module switcher; its data is kept.' },
+  { k: 'modules', group: 'Workspace', label: 'Modules', description: 'The modules this workspace uses. A module that is off shows as "Not in this workspace" in the module switcher and its settings are hidden; its data is kept.' },
   { k: 'roles', group: 'Workspace', label: 'Roles & permissions', description: 'What owners, admins and members can do.' },
   { k: 'notifications', group: 'Workspace', label: 'Notifications', description: 'The emails you get from this workspace.' },
   { k: 'funnel', group: 'CRM', label: 'Funnels', description: 'The stages opportunities move through, with their activities and to-dos.' },
@@ -115,11 +116,14 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number]['k'];
 const GROUPS = ['Workspace', 'CRM', 'Projects', 'Employees', 'Timesheet', 'Time off'] as const;
+/** The module each group belongs to (CD-488): a module turned off in Modules hides its settings too. */
+const GROUP_MODULE: Record<(typeof GROUPS)[number], string | null> = { Workspace: null, CRM: 'crm', Projects: 'projects', Employees: 'employees', Timesheet: 'timesheet', 'Time off': 'timeoff' };
 
 export function Settings() {
   const { tab = 'workspace' } = useParams();
   const navigate = useNavigate();
-  const { set, session, flash, canEditFields, canSeeBonuses, canEditWorkspace } = useStore();
+  const { s, set, session, flash, canEditFields, canSeeBonuses, canEditWorkspace } = useStore();
+  const modules = enabledModules(s.workspace.modules);
   const terms = useTerms();
   // "Project types" follows what the workspace calls projects (CD-143).
   const labelOf = (t: (typeof TABS)[number]) => (t.k === 'project-types' ? `${terms.Project} types` : t.label);
@@ -134,7 +138,10 @@ export function Settings() {
   // Notifications (your own emails, linked from the digest), which is on Personal preferences for them.
   if (!canEditWorkspace) return <Navigate to={tab === 'notifications' ? paths.myNotifications : '/'} replace />;
   // Settings → Employees (CD-215) and the sales bonus rules (CD-17) are for owners and admins.
-  const tabs = TABS.filter((t) => (t.k !== 'bonuses' || canSeeBonuses) && (!['employees', 'approvals', 'holidays', 'timeoff'].includes(t.k) || canEditWorkspace) && (t.k !== 'technicians' || canEditWorkspace));
+  const tabs = TABS.filter((t) => {
+    const mod = GROUP_MODULE[t.group];
+    return (t.k !== 'bonuses' || canSeeBonuses) && (!['employees', 'approvals', 'holidays', 'timeoff'].includes(t.k) || canEditWorkspace) && (t.k !== 'technicians' || canEditWorkspace) && (mod === null || modules.includes(mod));
+  });
   if (!tabs.some((t) => t.k === tab)) return <Navigate to={paths.settings()} replace />;
   const current = tab as Tab;
   const section = tabs.find((t) => t.k === current)!;
@@ -226,11 +233,6 @@ const CUSTOMER_EMAIL_LANGUAGES = [
   { value: 'sr', label: 'Srpski' },
 ];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((label, i) => ({ value: String(i + 1), label }));
-/** Every IANA time zone the browser knows. */
-const TIME_ZONES = (() => {
-  const zones = Intl.supportedValuesOf('timeZone');
-  return zones.includes('UTC') ? zones : ['UTC', ...zones];
-})();
 
 /** Saved per workspace. Owners and admins edit; members see the values read-only. */
 function WorkspaceTab() {
@@ -238,7 +240,7 @@ function WorkspaceTab() {
   const w = s.workspace;
   const ro = !canEditWorkspace;
   return (
-    <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 18 }}>
+    <div className="card card-pad workspace-fields" style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 18 }}>
       <div className="card-title" style={{ marginBottom: 8 }}>
         Workspace
       </div>
@@ -246,7 +248,7 @@ function WorkspaceTab() {
         <GhostSelect value={w.currency} disabled={ro} onChange={(e) => setWorkspace({ currency: e.target.value })} options={CURRENCIES} />
       </FieldRow>
       <FieldRow label="Time zone">
-        <GhostSelect value={w.timezone} disabled={ro} onChange={(e) => setWorkspace({ timezone: e.target.value })} options={TIME_ZONES} />
+        <TimeZonePicker value={w.timezone} disabled={ro} onChange={(timezone) => setWorkspace({ timezone })} />
       </FieldRow>
       <FieldRow label="Country">
         <GhostSelect aria-label="Country" value={w.country ?? ''} disabled={ro} onChange={(e) => setWorkspace({ country: e.target.value || null })} options={COUNTRY_OPTIONS} data-testid="workspace-country" />
@@ -265,13 +267,18 @@ function WorkspaceTab() {
         />
       </FieldRow>
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>Language of the fixed text in emails to customers, such as meeting minutes.</span>
-      <FieldRow label="Projects">
-        <span data-testid="auto-create-projects" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
-          <Switch on={w.autoCreateProjects} disabled={ro} onClick={() => setWorkspace({ autoCreateProjects: !w.autoCreateProjects })} label="Create a project when an opportunity is won" />
-          <span style={{ fontSize: 13 }}>Create a project when an opportunity is won</span>
-        </span>
-      </FieldRow>
-      <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>The project takes the opportunity's title and company, the first project type, and the opportunity owner as lead, who gets an email. Once per opportunity.</span>
+      {/* Only where both the CRM and Projects are on (CD-488). */}
+      {enabledModules(w.modules).includes('crm') && enabledModules(w.modules).includes('projects') && (
+        <>
+          <FieldRow label="Projects">
+            <span data-testid="auto-create-projects" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
+              <Switch on={w.autoCreateProjects} disabled={ro} onClick={() => setWorkspace({ autoCreateProjects: !w.autoCreateProjects })} label="Create a project when an opportunity is won" />
+              <span style={{ fontSize: 13 }}>Create a project when an opportunity is won</span>
+            </span>
+          </FieldRow>
+          <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, margin: '2px 0 0' }}>The project takes the opportunity's title and company, the first project type, and the opportunity owner as lead, who gets an email. Once per opportunity.</span>
+        </>
+      )}
       <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: 8 }}>
         {ro ? 'Only owners and admins can change the workspace settings.' : 'Changes are saved as you make them.'}
       </span>
@@ -486,7 +493,18 @@ function FunnelBuilder() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--text-2)' }}>
             <span>{dealCount ? `${plural(dealCount, 'opportunity', 'opportunities')} in this funnel` : 'No opportunities in this funnel yet'}</span>
             {editable && dealCount === 0 && Object.keys(s.funnels).length > 1 && (
-              <button type="button" className="btn btn-secondary" style={{ marginLeft: 'auto', padding: '6px 10px', fontSize: 12 }} onClick={() => void store.deleteFunnel(funnel.id)}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                data-testid="delete-funnel"
+                style={{ marginLeft: 'auto', padding: '6px 10px', fontSize: 12 }}
+                onClick={() =>
+                  // Asked first, in the app's own dialog (CD-488).
+                  void askConfirm({ title: `Delete the funnel "${funnel.label}"?`, message: `Its ${plural(stages.length, 'stage', 'stages')} and their activities and to-dos are deleted too. This can't be undone.`, confirmLabel: 'Delete funnel', danger: true }).then((ok) => {
+                    if (ok) void store.deleteFunnel(funnel.id);
+                  })
+                }
+              >
                 Delete funnel
               </button>
             )}
@@ -629,6 +647,14 @@ function FunnelStageRow({
               <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
                 <Switch on={st.gateTodos} disabled={!editable} label="All to-dos must be done" onClick={() => store.setStageRule(idx, { gateTodos: !st.gateTodos })} />
                 All to-dos must be done
+              </span>
+              {/* Its own switch, never turned on by adding a to-do; say what it does now (CD-488). */}
+              <span data-testid="stage-gate-todos-note" style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginTop: -4 }}>
+                {!st.gateTodos
+                  ? 'Off: the to-dos below are reminders, opportunities move on without them.'
+                  : st.checklist.length
+                    ? `On: an opportunity moves on only when ${st.checklist.length === 1 ? 'the to-do below is' : `all ${st.checklist.length} to-dos below are`} done.`
+                    : 'On, with no to-dos yet: nothing blocks moving on, but opportunities can’t skip this stage. New stages start with it on.'}
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
                 <Switch on={st.gateDocs} disabled={!editable} label="Needs documentation complete" onClick={() => store.setStageRule(idx, { gateDocs: !st.gateDocs })} />

@@ -1,7 +1,7 @@
 // Company ids in the forms (CD-357): `npm test` in frontend. Same numbers as the backend's spec.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { checkActivityCode, checkMb, checkPib, mbValid, pibProblem, pibValid } from '../src/lib/serbianIds.ts';
+import { checkActivityCode, checkMb, checkPib, mbProblem, mbValid, pibProblem, pibValid } from '../src/lib/serbianIds.ts';
 
 
 describe('Serbian company ids (CD-357)', () => {
@@ -28,7 +28,17 @@ describe('Serbian company ids (CD-357)', () => {
     assert.equal(mbValid('20084693'), true);
     assert.deepEqual(checkMb(''), { ok: true, value: '' });
     assert.equal(checkMb('20084694').ok, false);
+    assert.deepEqual(checkMb(' 2008 4693 '), { ok: true, value: '20084693' });
     assert.deepEqual(checkActivityCode('6201'), { ok: true, value: '6201' });
     assert.equal(checkActivityCode('62011').ok, false);
+  });
+
+  it('says what is wrong with an MB (CD-488)', () => {
+    assert.equal(mbProblem(''), null);
+    assert.equal(mbProblem('20084693'), null);
+    assert.match(mbProblem('2008-4693')!, /digits only/);
+    assert.equal(mbProblem('2008469'), 'An MB has 8 digits; this one has 7.');
+    assert.equal(mbProblem('200846931'), 'An MB has 8 digits; this one has 9.');
+    assert.match(mbProblem('20084694')!, /last digit/);
   });
 });
