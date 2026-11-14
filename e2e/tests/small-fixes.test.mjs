@@ -40,7 +40,9 @@ describe('contact notes and read-only funnels', () => {
     await clickButton(member, 'Accept and join');
     await finishOnboarding(member);
     await member.goto(BASE_URL + '/settings/funnel', { waitUntil: 'networkidle0' });
-    await member.waitForFunction(() => location.pathname === '/pipeline');
+    // Home (CD-288), then the Pipeline itself.
+    await member.waitForSelector('[data-testid=home-modules]');
+    await member.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await member.waitForSelector('[data-testid=pipeline-funnel]');
     assert.equal(await member.$('[data-testid=funnels-read-only]'), null, 'no funnel settings');
     assert.equal(await member.$('[data-testid=pipeline-edit-funnel]'), null, 'no Edit funnel pencil');

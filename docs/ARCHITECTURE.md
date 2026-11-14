@@ -1203,8 +1203,9 @@ the store is the one place that talks to the backend.
   phone, language, date format and start page live on `users` and apply in every workspace. The
   default funnel and the notification settings (daily digest, deal assigned) live on
   `memberships`, because funnels and notifications belong to one workspace. A name set here wins over the name in the sign-in token
-  (`users.display_name_custom`). The start page and the default funnel take effect (the app opens
-  on them). Language and date format are only stored for now and not shown (CD-223); the digest is
+  (`users.display_name_custom`). The default funnel takes effect (the Pipeline opens on it). The
+  start page (`users.start_page`) is still stored and accepted, but no longer shown or used: everyone
+  lands on Home (CD-288). Language and date format are only stored for now and not shown (CD-223); the digest is
   sent (see "Email").
   `memberships.default_funnel_id` has no foreign key (memberships has no RLS), so a trigger clears
   it when its funnel is deleted (0021), and the Profile screen shows "First funnel (…)" when there
@@ -2569,8 +2570,7 @@ on, though its column is to the left). A lead without a PIB can't be dragged. A 
 
 The button under the Pultly mark in the sidebar (it shows the module you're in, CD-223) opens a
 420px popover to its right (`components/ModuleSwitcher.tsx`, styles `.mod-*` in
-`styles/header.css`); ⌘J / Ctrl J opens it from anywhere. The mark itself links home (`/`, your
-start page). It replaces the workspace-only switcher of CD-23.
+`styles/header.css`); ⌘J / Ctrl J opens it from anywhere. The mark itself links Home (`/`, CD-288). It replaces the workspace-only switcher of CD-23.
 
 - **Modules** (`components/modules.ts`, one list, CD-223, CD-279), in the design's grid order: CRM
   (`/pipeline`), Projects (`/projects`), Employees (`/org`), Timesheet (`/timesheet`), Time off
@@ -2603,6 +2603,19 @@ start page). It replaces the workspace-only switcher of CD-23.
   outside click closes it and focus goes back to the switcher button. On phones it opens from
   "More" as a bottom sheet. Tested in `e2e/tests/module-switcher.test.mjs`.
 
+### Home (CD-288)
+
+`/` is **Home** (`screens/Home.tsx`, design "Home, all modules"), where everyone lands: after
+sign-in, onboarding, a new workspace, an unknown URL and every "go home" redirect. It replaced the
+per-user start page. The date, "Good morning, <first name>", a "Find a module" search (name and
+description), and one tile per module this person can open (`homeModules(role, modules)` in
+`modules.ts`: turned on in Workspace settings, built, allowed for their role; Workspace settings
+last, for owners and admins only, CD-523). A tile is the module's colour (`--mod-<id>` tokens),
+icon, name and description, and opens the module's start page. No module on: an empty state that
+links owners and admins to Settings → Modules and tells members to ask one. No counts, previews
+or widgets yet (the design's "Waiting for you" and widget boxes are later issues). Home is first in
+every sidebar (`HOME` in `Layout.tsx`; on phones under "More") and in ⌘K ("Home").
+
 ### Modules as separate apps (CD-223)
 
 Each module is its own app with its own sidebar (`Sidebar` in `components/Layout.tsx`): the Pultly
@@ -2620,7 +2633,7 @@ Settings at the bottom, as in the Workforce design.
   contacts, products and reports are CRM; `/team`, `/org`, employee cards (`/people/:id`) and
   `/team-status` are Employees, `/timesheet` and `/approvals` Timesheet, `/timeoff` Time off. A
   remembered `workforce` reads as Employees.
-  Settings and the profile belong to none and keep the last module, remembered per user in this
+  Home, Settings and the profile belong to none and keep the last module, remembered per user in this
   browser (`localStorage` `crm.module.<userId>`, in try/catch; without storage it falls back to the
   CRM).
 - **Desktop overflow**: `useFit` measures the nav's height (a `ResizeObserver`) and the item height;

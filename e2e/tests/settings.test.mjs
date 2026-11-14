@@ -84,7 +84,6 @@ describe('settings and discovery fields', () => {
     assert.ok(await setByLabel(page, 'Full name', 'Olga Renamed'));
     assert.ok(await setByLabel(page, 'Job title', 'Head of sales'));
     assert.ok(await setByLabel(page, 'Phone', '+381 60 123 456'));
-    assert.ok(await setByLabel(page, 'Start page', 'today', 'select'));
     assert.ok(await setByLabel(page, 'Default funnel', ent.id, 'select'));
     await page.click('.switch');
     const saved = await eventually(async () => {
@@ -93,7 +92,6 @@ describe('settings and discovery fields', () => {
         p.displayName === 'Olga Renamed' &&
         p.jobTitle === 'Head of sales' &&
         p.phone === '+381 60 123 456' &&
-        p.startPage === 'today' &&
         p.defaultFunnelId === ent.id &&
         p.dailyDigest === false &&
         p
@@ -108,13 +106,15 @@ describe('settings and discovery fields', () => {
     assert.equal(await valueByLabel(page, 'Full name'), 'Olga Renamed');
     assert.equal(await valueByLabel(page, 'Job title'), 'Head of sales');
     assert.equal(await valueByLabel(page, 'Phone'), '+381 60 123 456');
-    assert.equal(await valueByLabel(page, 'Start page', 'select'), 'today');
+    assert.ok(!(await page.evaluate(() => document.body.innerText)).includes('Start page'), 'no Start page: everyone starts on Home (CD-288)');
     assert.equal(await page.$eval('.switch', (el) => el.classList.contains('on')), false);
   });
 
-  step('opens the saved start page', async () => {
+  step('opens Home, even with a start page saved before CD-288', async () => {
+    await api(page, '/profile', { method: 'PATCH', body: JSON.stringify({ startPage: 'today' }) });
     await page.goto(BASE_URL, { waitUntil: 'networkidle0' });
-    await page.waitForFunction(() => location.pathname === '/today');
+    await page.waitForSelector('[data-testid=home-modules]');
+    assert.equal(new URL(page.url()).pathname, '/');
   });
 
   // Discovery notes are no longer shown on the deal page or merged into the proposal (CD-362),
@@ -146,12 +146,16 @@ describe('settings and discovery fields', () => {
     await signIn(member, email('settings-member'), 'Max Member');
     await clickButton(member, 'Accept and join');
     await finishOnboarding(member);
-    // Any settings URL goes home (the start page), without showing the settings first.
+    // Any settings URL goes Home (CD-288), without showing the settings first.
     for (const tab of ['workspace', 'team', 'funnel', 'fields', 'templates', 'roles', 'modules', 'nope']) {
       await member.goto(`${BASE_URL}/settings/${tab}`, { waitUntil: 'networkidle0' });
-      await member.waitForFunction(() => location.pathname === '/pipeline');
+      await member.waitForSelector('[data-testid=home-modules]');
+      assert.equal(new URL(member.url()).pathname, '/');
       assert.equal(await member.$('[data-testid=settings-nav]'), null, `no settings on /settings/${tab}`);
     }
+    // Home has no Workspace settings tile for them either.
+    assert.equal(await member.$('[data-testid=home-modules] [data-module=settings]'), null, 'no Settings tile on Home');
+    await member.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     // Not in the sidebar, the account menu, the Pipeline's funnel or the command search.
     assert.equal(await member.$('.app-sidebar a[href="/settings"]'), null, 'no Settings in the sidebar');
     assert.equal(await member.$('[data-testid=pipeline-edit-funnel]'), null, 'no Edit funnel pencil');
@@ -188,7 +192,7 @@ describe('settings and discovery fields', () => {
 
     await api(page, `/team/members/${user.id}`, { method: 'PATCH', body: JSON.stringify({ role: 'member' }) });
     await member.reload({ waitUntil: 'networkidle0' });
-    await member.waitForFunction(() => location.pathname === '/pipeline');
+    await member.waitForSelector('[data-testid=home-modules]');
     assert.equal(await member.$('.app-sidebar a[href="/settings"]'), null, 'no Settings in the sidebar');
   });
 

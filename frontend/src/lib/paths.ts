@@ -18,6 +18,8 @@ const query = (params: Partial<Record<string, string | null | undefined>> = {}) 
 };
 
 export const paths = {
+  /** Home (CD-288): one tile per module this person can open; where everyone lands. */
+  home: '/',
   overview: '/overview',
   pipeline: '/pipeline',
   today: '/today',

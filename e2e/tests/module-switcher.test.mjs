@@ -16,11 +16,12 @@ const LOGO = '[data-testid=module-switcher]';
 const MORE = '[data-testid=sidebar-more]';
 const MORE_POP = '[data-testid=sidebar-more-pop]';
 const PHONE = { width: 390, height: 844, isMobile: true, hasTouch: true };
-const CRM_PAGES = ['Overview', 'Companies', 'Pipeline', 'Today', 'Calendar', ...(VISIT_PLANS_ENABLED ? ['Visit plans'] : []), 'Contacts', 'Products', ...(VISIT_PLANS_ENABLED ? ['Reports'] : [])];
+// Home (CD-288) comes first in every module's sidebar on desktop.
+const CRM_PAGES = ['Home', 'Overview', 'Companies', 'Pipeline', 'Today', 'Calendar', ...(VISIT_PLANS_ENABLED ? ['Visit plans'] : []), 'Contacts', 'Products', ...(VISIT_PLANS_ENABLED ? ['Reports'] : [])];
 /** The sidebar's last CRM page, and where it goes. */
 const LAST_PAGE = VISIT_PLANS_ENABLED ? { label: 'Reports', path: '/reports/' } : { label: 'Products', path: '/products' };
 // Workforce split into Employees, Timesheet and Time off (CD-521). The owner also sees Team and Today's status (CD-162).
-const EMPLOYEES_PAGES = ['Team', 'Org structure', "Today's status"];
+const EMPLOYEES_PAGES = ['Home', 'Team', 'Org structure', "Today's status"];
 
 describe('module and workspace switcher', () => {
   const browser = useBrowser();

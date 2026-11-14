@@ -15,6 +15,9 @@ import { Logo } from './Logo';
 import { currentModule, navFor, type NavDef, rememberModule, routeModule } from './modules';
 import { ModuleSwitcher, SWITCHER_KEYS } from './ModuleSwitcher';
 
+/** Home (CD-288): first in every module's sidebar; on phones under "More". It belongs to no module. */
+const HOME: NavDef = { to: '/', label: 'Home', icon: 'M4 11.5 12 4.5l8 7M6 10v9.5h4.5V15h3v4.5H18V10' };
+
 const SETTINGS = {
   to: '/settings',
   label: 'Settings',
@@ -100,7 +103,7 @@ function Sidebar() {
   const pendingApprovals = usePendingApprovals(session.tenant.role === 'owner' || session.tenant.role === 'admin' || s.visitScope.seesTeam);
   const module = currentModule(pathname, session.userId);
   const terms = useTerms();
-  const items = navFor(module, session.tenant.role, s.visitScope.seesTeam, terms);
+  const items = [HOME, ...navFor(module, session.tenant.role, s.visitScope.seesTeam, terms)];
   // Settings and the profile keep the module you came from.
   const own = routeModule(pathname);
   useEffect(() => {
@@ -129,7 +132,7 @@ function Sidebar() {
   return (
     <aside className="app-sidebar" style={{ width: 96, flex: '0 0 96px', background: 'var(--forest)', color: '#F5F7F6', padding: '18px 8px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, position: 'sticky', top: 0, height: '100vh', zIndex: 10 }}>
       <div className="nav-desktop side-top">
-        <Link to="/" className="ws-logo" aria-label="Pultly home" title="Home">
+        <Link to={paths.home} className="ws-logo" aria-label="Pultly home" title="Home">
           <Logo height={26} onDark wordmark={false} />
         </Link>
         <button

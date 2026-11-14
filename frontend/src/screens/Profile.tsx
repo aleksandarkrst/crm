@@ -15,12 +15,6 @@ const note = { fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 } as const;
 // profile and its API, but aren't shown (CD-223): nothing applies them yet, so offering them would
 // promise something the app doesn't do. Bring the two rows back once the app is translated and
 // formats dates by them.
-const START_PAGES = [
-  { value: 'pipeline', label: 'Pipeline' },
-  { value: 'overview', label: 'Overview' },
-  { value: 'today', label: 'Today' },
-  { value: 'contacts', label: 'Contacts' },
-];
 
 /**
  * Your own profile. Every change is saved as you make it; a failed save shows why. Name, job
@@ -82,9 +76,6 @@ export function Profile() {
           <div className="card-title" style={{ marginBottom: 8 }}>
             Preferences
           </div>
-          <FieldRow label="Start page">
-            <GhostSelect style={selectStyle} value={p.startPage} onChange={setP('startPage')} options={START_PAGES} />
-          </FieldRow>
           <FieldRow label="Default funnel">
             <GhostSelect style={selectStyle} value={defaultFunnel} onChange={setP('defaultFunnelId')} options={funnelChoices} />
           </FieldRow>
