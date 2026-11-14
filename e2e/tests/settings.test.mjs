@@ -89,6 +89,12 @@ describe('settings and discovery fields', () => {
     assert.ok(await setByLabel(page, 'Full name', 'Olga Renamed'));
     // A save says so in a toast (CD-525).
     await page.waitForFunction(() => document.querySelector('.toast')?.textContent.includes('Your name saved'));
+    // Leaving the name empty isn't saved: a toast says why and the saved name comes back (CD-525 QA).
+    await page.click('input[aria-label="Full name"]', { clickCount: 3 });
+    await page.keyboard.press('Backspace');
+    await page.click('h2.settings-title');
+    await page.waitForFunction(() => document.querySelector('.toast')?.textContent.includes("your name can't be empty"));
+    assert.equal(await page.$eval('input[aria-label="Full name"]', (el) => el.value), 'Olga Renamed');
     assert.ok(await setByLabel(page, 'Job title', 'Head of sales'));
     assert.ok(await setByLabel(page, 'Phone', '+381 60 123 456'));
     // Preferences and Notifications are pages of the account (CD-525).
