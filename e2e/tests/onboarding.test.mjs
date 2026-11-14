@@ -19,6 +19,8 @@ describe('first-run onboarding', () => {
     page = await browser.person('nora');
     // Gated: switching the to-do gate off (CD-363) changes the stages, which would tick "Set up your funnel".
     await newUserWithWorkspace(page, { label: 'onboard', name: 'Nora Owner', workspace: 'Fresh Co', gated: true });
+    // A new workspace opens on Home (CD-288); the checklist is on the CRM pages.
+    await page.goto(BASE_URL + '/pipeline', { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=getting-started]');
     assert.deepEqual(await stepsDone(), nothingDone);
     assert.deepEqual(await partsDone(), { contact: false, company: false, product: false, deal: false });
