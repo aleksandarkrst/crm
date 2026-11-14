@@ -4,7 +4,7 @@ import { Switch } from '../../components/ui';
 import { type ApiOrgLevel, orgApi } from '../../lib/orgApi';
 import { orgError } from '../../store/org';
 import { useStore } from '../../store/store';
-import { Block, MoveButton, Note, Row, Rows, StagePreview, Table, Unit } from './parts';
+import { Block, MoveButton, Note, Row, Rows, StagePreview, Table } from './parts';
 import { WorkingDayRows } from './WorkforceSettings';
 
 /** At most this many levels (the API's limit, CD-226). */
@@ -214,51 +214,17 @@ export function EmployeeRecordTab() {
 }
 
 /**
- * Settings → General → Working time (CD-153, CD-215; design G-Settings "worktime", in General since the CD-524 review): the standard
- * working day, and the weekly hours new employees and imports start with.
+ * Settings → General → Working day (CD-153; design G-Settings "worktime", in General since the CD-524
+ * review): hours per day and the working days. The default weekly hours aren't shown (CD-524 review):
+ * new employees keep starting with the saved value.
  */
 export function WorkingTimeBlocks() {
-  const { s, setWorkspace } = useStore();
-  const w = s.workspace;
-  const [hours, setHours] = useState(String(w.employeeDefaultWeeklyHours));
-  // A change from elsewhere (another Admin, a reload) shows unless you are typing a different value.
-  const [shown, setShown] = useState(w.employeeDefaultWeeklyHours);
-  if (shown !== w.employeeDefaultWeeklyHours) {
-    setShown(w.employeeDefaultWeeklyHours);
-    setHours(String(w.employeeDefaultWeeklyHours));
-  }
-  const valid = /^\d{1,2}$/.test(hours) && Number(hours) >= 1 && Number(hours) <= 60;
   return (
     <>
       <Block title="Working day" desc="The day every employee is expected to work. Drives expected hours in the Timesheet and the hours of time off.">
         <WorkingDayRows />
       </Block>
       <Note>Approved days keep the hours they had when they were approved.</Note>
-      <Block title="Weekly hours">
-        <Rows>
-          <Row label="Default weekly hours" hint={valid ? 'New employees and imports start with these hours. You can change it per person.' : undefined} error={valid ? undefined : 'Between 1 and 60 hours.'}>
-            <input
-              className="form-input narrow"
-              inputMode="numeric"
-              aria-label="Default weekly hours"
-              data-testid="employee-default-hours"
-              value={hours}
-              aria-invalid={!valid}
-              onChange={(e) => {
-                const next = e.target.value.replace(/[^\d]/g, '').slice(0, 2);
-                setHours(next);
-                const n = Number(next);
-                if (/^\d{1,2}$/.test(next) && n >= 1 && n <= 60) {
-                  setShown(n);
-                  setWorkspace({ employeeDefaultWeeklyHours: n });
-                }
-              }}
-              onBlur={() => !valid && setHours(String(w.employeeDefaultWeeklyHours))}
-            />
-            <Unit>hours</Unit>
-          </Row>
-        </Rows>
-      </Block>
     </>
   );
 }

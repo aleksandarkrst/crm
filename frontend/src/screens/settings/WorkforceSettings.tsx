@@ -143,7 +143,7 @@ export function WorkingDayRows() {
     const next = t.workingDays.includes(d) ? t.workingDays.filter((x) => x !== d) : [...t.workingDays, d].sort((a, b) => a - b);
     if (next.length) save({ workingDays: next });
   };
-  const endBeforeStart = t.dayEnd <= t.dayStart;
+  // Start and end aren't shown (CD-524 review): hours per day is what the Timesheet and time off use.
   return (
     <Rows testId="working-day">
       <Row label="Hours per day">
@@ -165,12 +165,6 @@ export function WorkingDayRows() {
           onBlur={() => !valid && setHours(shortHours(t.dayMinutes, 'decimal'))}
         />
         <Unit>hours</Unit>
-      </Row>
-      <Row label="Start">
-        <ClockField label="Start" value={t.dayStart} onSave={(v) => save({ dayStart: v })} testId="day-start" />
-      </Row>
-      <Row label="End" error={endBeforeStart ? 'The working day must end after it starts.' : undefined}>
-        <ClockField label="End" value={t.dayEnd} onSave={(v) => save({ dayEnd: v })} testId="day-end" />
       </Row>
       <Row label="Working days" hint="The other days are days off">
         <span className="ws-days" data-testid="working-days" role="group" aria-label="Working days">

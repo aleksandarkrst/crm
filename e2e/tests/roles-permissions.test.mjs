@@ -75,12 +75,8 @@ describe('roles and permissions', () => {
     ids.hana = access.employeeId;
   });
 
-  step('Settings → General and Employee record save their settings; members have no such tab', async () => {
-    await olga.goto(`${BASE_URL}/settings/workspace`, { waitUntil: 'networkidle0' });
-    await olga.waitForSelector('[data-testid=employee-default-hours]');
-    await setValue(olga, '[data-testid=employee-default-hours]', '38');
-    assert.ok(await eventually(async () => (await api(olga, '/workspace')).employeeDefaultWeeklyHours === 38), 'weekly hours saved before leaving the page');
-    // The record's switches are on Employee record since CD-524.
+  step('Settings → Employee record saves its settings; members have no such tab', async () => {
+    // The default weekly hours are no longer shown (CD-524 review); the record's switches are.
     await olga.goto(`${BASE_URL}/settings/employees`, { waitUntil: 'networkidle0' });
     await click(olga, '[data-setting=number-required] [role=switch]');
     await olga.waitForSelector('[data-setting=number-required] [role=switch][aria-checked=true]');
@@ -88,18 +84,10 @@ describe('roles and permissions', () => {
     await olga.waitForSelector('[data-setting=self-edit-bank] [role=switch][aria-checked=false]');
     const saved = await eventually(async () => {
       const ws = await api(olga, '/workspace');
-      return ws.employeeDefaultWeeklyHours === 38 && ws.employeeNumberRequired === true && ws.employeeSelfEditBank === false && ws;
+      return ws.employeeNumberRequired === true && ws.employeeSelfEditBank === false && ws;
     });
     assert.ok(saved, `saved: ${JSON.stringify(await api(olga, '/workspace'))}`);
-    // Out of range is not saved.
-    await olga.goto(`${BASE_URL}/settings/workspace`, { waitUntil: 'networkidle0' });
-    await olga.waitForSelector('[data-testid=employee-default-hours]');
-    await setValue(olga, '[data-testid=employee-default-hours]', '0');
-    assert.ok((await text(olga)).includes('Between 1 and 60 hours.'));
     await olga.reload({ waitUntil: 'networkidle0' });
-    await olga.waitForSelector('[data-testid=employee-default-hours]');
-    assert.equal(await olga.$eval('[data-testid=employee-default-hours]', (el) => el.value), '38');
-    await olga.goto(`${BASE_URL}/settings/employees`, { waitUntil: 'networkidle0' });
     await olga.waitForSelector('[data-setting=number-required]');
     assert.equal(await olga.$eval('[data-setting=number-required] [role=switch]', (el) => el.getAttribute('aria-checked')), 'true');
 

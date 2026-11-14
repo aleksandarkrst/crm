@@ -1232,8 +1232,9 @@ row is a setting with its label and hint on the left and its control on the righ
 setting that saves as you change it says "Saved" in a toast. The logo is a button: a pen shows on
 hover and a click picks the image. CD-524 split sections the design shows on their own:
 Company details (with the country) from General; Employee record and Organization levels from
-Employees. General holds the standard working day (one letter per weekday) and default weekly
-hours (with Employees on) and time entry: time format, max hours, time on a project without a task
+Employees. General holds the standard working day: hours per day and the working days, one letter
+per weekday (with Employees on; the day's start and end and the default weekly hours stay in the
+API but are not shown) and time entry: time format, max hours, time on a project without a task
 (with Timesheet on); Leave and absence (paid leave and other absence
 reasons, sick leave types) from Policies. "Create a project when an opportunity is won" moved to
 Project hierarchy. The routes kept their keys (`workspace`, `employees`, `approvals`, `timeoff`); the
