@@ -94,14 +94,14 @@ export function Profile() {
 }
 
 function ProfilePage() {
-  const { s, patchProfile } = useStore();
+  const { s, patchProfile, leaveProfileName } = useStore();
   const p = s.profile;
   const setP = (k: keyof ProfileT) => (e: React.ChangeEvent<HTMLInputElement>) => patchProfile({ [k]: e.target.value });
   return (
     <>
       <div className="card account-rows">
         <Row label="Full name">
-          <input className="form-input" aria-label="Full name" value={p.name} onChange={setP('name')} placeholder="Your name" />
+          <input className="form-input" aria-label="Full name" value={p.name} onChange={setP('name')} onBlur={leaveProfileName} placeholder="Your name" />
         </Row>
         <Row label="Job title">
           <input className="form-input" aria-label="Job title" value={p.title} onChange={setP('title')} placeholder="e.g. Sales lead" />
