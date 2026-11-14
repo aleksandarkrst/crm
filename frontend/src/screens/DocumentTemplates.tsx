@@ -140,9 +140,11 @@ function PlaceholderReferenceCard() {
             {fields.map((f) => {
               const shown = mergeFieldReference(f.tag, f.label);
               return (
-                <div key={f.tag} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 10, fontSize: 12.5, alignItems: 'baseline' }}>
-                  <code style={{ overflowWrap: 'anywhere' }}>{shown.token}</code>
-                  <span style={{ color: 'var(--text-2)' }}>
+                // A token is never broken mid-word (CD-488): it keeps its width and the description
+                // takes the rest of the row, or goes under it when the token is long.
+                <div key={f.tag} style={{ display: 'flex', flexWrap: 'wrap', columnGap: 10, rowGap: 2, fontSize: 12.5, alignItems: 'baseline' }}>
+                  <code style={{ whiteSpace: 'nowrap', flex: '0 0 auto' }}>{shown.token}</code>
+                  <span style={{ color: 'var(--text-2)', flex: '1 1 140px', minWidth: 0 }}>
                     {shown.description} <span style={{ color: 'var(--muted)' }}>· {f.example}</span>
                   </span>
                 </div>
