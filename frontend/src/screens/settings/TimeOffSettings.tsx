@@ -6,6 +6,7 @@ import { projectError, useProjectsRead } from '../../store/projects';
 import { useStore } from '../../store/store';
 import { DecisionRecipientsCard } from '../timeoff/Decisions';
 import { SickLeaveTypesCard } from '../timeoff/SickLeave';
+import { Block, Row, Rows, Unit } from './parts';
 
 /** The Labor Law's minimum (spec 3.3, A1) and the most a policy can give. */
 const MIN_BASE_DAYS = 20;
@@ -245,13 +246,25 @@ function PolicyRow({ policy, onChanged }: { policy: ApiTimeOffPolicy; onChanged:
  */
 export function TimeOffTab() {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <>
       <PoliciesCard />
-      <ReasonsCard kind="paid_leave" />
-      <ReasonsCard kind="other_absence" />
-      <SickLeaveTypesCard />
       <DecisionRecipientsCard />
-    </div>
+    </>
+  );
+}
+
+/**
+ * Settings → Time off → Leave and absence (CD-165, CD-170; its own section since CD-524, design
+ * G-Settings "leave"): the paid leave reasons with their yearly limit, the sick leave types and the
+ * other absence reasons.
+ */
+export function LeaveTab() {
+  return (
+    <>
+      <ReasonsCard kind="paid_leave" />
+      <SickLeaveTypesCard />
+      <ReasonsCard kind="other_absence" />
+    </>
   );
 }
 
@@ -259,23 +272,20 @@ function PoliciesCard() {
   const { data, error, reload } = useProjectsRead<ApiTimeOffPolicy[]>(true, () => timeOffApi.policies.list(), 'timeoff:policies', 'timeOffRev');
   const [adding, setAdding] = useState(false);
   return (
-    <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="timeoff-policies">
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 320px' }}>
-          <span style={{ fontSize: 15, fontWeight: 600 }}>Vacation policies</span>
-          <span className="emp-note">
-            How many vacation days employees get per year and how unused days carry over. New employees get the default policy; an employee's policy is changed on their card. Editing a policy
-            recalculates this year's days where no vacation was approved yet, and later years for everyone on it.
-          </span>
-        </div>
-        {!adding && (
-          <button type="button" className="btn btn-primary" onClick={() => setAdding(true)} data-testid="policy-new">
+    <Block
+      title="Vacation policies"
+      desc="How many vacation days employees get per year and how unused days carry over. New employees get the default policy; an employee's policy is changed on their card. Editing a policy recalculates this year's days where no vacation was approved yet, and later years for everyone on it."
+      actions={
+        !adding && (
+          <button type="button" className="btn-plain" onClick={() => setAdding(true)} data-testid="policy-new">
             New policy
           </button>
-        )}
-      </div>
+        )
+      }
+      testId="timeoff-policies"
+    >
       {adding && (
-        <div className="policy-row policy-row-editing" data-testid="policy-new-editor">
+        <div className="card card-pad" data-testid="policy-new-editor">
           <PolicyEditor
             onDone={(saved) => {
               setAdding(false);
@@ -284,16 +294,20 @@ function PoliciesCard() {
           />
         </div>
       )}
-      <div className="policy-row policy-head">
-        <span className="th">Policy</span>
-        <span className="th">Days per year</span>
-        <span className="th">Carry-over</span>
-        <span className="th">Employees</span>
-        <span />
+      <div className="card ws-list">
+        <div className="policy-row policy-head">
+          <span className="th">Policy</span>
+          <span className="th">Days per year</span>
+          <span className="th">Carry-over</span>
+          <span className="th">Employees</span>
+          <span />
+        </div>
+        {error && <span style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</span>}
+        {data?.map((p) => (
+          <PolicyRow key={`${p.id}:${p.updatedAt}`} policy={p} onChanged={() => void reload()} />
+        ))}
       </div>
-      {error && <span style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</span>}
-      {data?.map((p) => <PolicyRow key={`${p.id}:${p.updatedAt}`} policy={p} onChanged={() => void reload()} />)}
-    </div>
+    </Block>
   );
 }
 
@@ -423,54 +437,58 @@ function ReasonsCard({ kind }: { kind: ReasonKind }) {
   };
   const paid = kind === 'paid_leave';
   return (
-    <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid={`timeoff-reasons-${kind}`}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <span style={{ fontSize: 15, fontWeight: 600 }}>{KIND_TEXT[kind].title}</span>
-        <span className="emp-note">{KIND_TEXT[kind].text}</span>
-      </div>
+    <Block title={KIND_TEXT[kind].title} desc={KIND_TEXT[kind].text} testId={`timeoff-reasons-${kind}`}>
       {paid && settings && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 13 }}>
-          <span>Yearly limit for the reasons that count toward it:</span>
-          {limit === null ? (
-            <>
-              <strong data-testid="paid-leave-limit">{settings.paidLeaveYearlyLimit} days</strong>
-              <button type="button" className="btn-plain" onClick={() => setLimit(String(settings.paidLeaveYearlyLimit))}>
-                Change
-              </button>
-            </>
-          ) : (
-            <>
-              <input className="form-input timeoff-num" inputMode="numeric" value={limit} onChange={(e) => setLimit(e.target.value)} aria-label="Yearly limit" />
-              <button type="button" className="btn btn-secondary" onClick={() => setLimit(null)}>
-                Cancel
-              </button>
-              <button type="button" className="btn btn-primary" onClick={() => void saveLimit()}>
-                Save
-              </button>
-            </>
-          )}
-        </div>
+        <Rows>
+          <Row label="Yearly limit" hint="For the reasons that count toward it">
+            {limit === null ? (
+              <>
+                <strong data-testid="paid-leave-limit" style={{ fontSize: 13.5 }}>
+                  {settings.paidLeaveYearlyLimit} days
+                </strong>
+                <button type="button" className="btn-plain" onClick={() => setLimit(String(settings.paidLeaveYearlyLimit))}>
+                  Change
+                </button>
+              </>
+            ) : (
+              <>
+                <input className="form-input narrow" inputMode="numeric" value={limit} onChange={(e) => setLimit(e.target.value)} aria-label="Yearly limit" />
+                <Unit>days</Unit>
+                <button type="button" className="btn btn-secondary" onClick={() => setLimit(null)}>
+                  Cancel
+                </button>
+                <button type="button" className="btn btn-primary" onClick={() => void saveLimit()}>
+                  Save
+                </button>
+              </>
+            )}
+          </Row>
+        </Rows>
       )}
-      <div className="reason-row reason-head">
-        <span className="th">Reason</span>
-        <span className="th">{paid ? 'Days per case' : ''}</span>
-        <span className="th">{paid ? 'Yearly limit' : 'Pay'}</span>
-        <span className="th">Used</span>
-        <span />
+      <div className="card ws-list">
+        <div className="reason-row reason-head">
+          <span className="th">Reason</span>
+          <span className="th">{paid ? 'Days per case' : ''}</span>
+          <span className="th">{paid ? 'Yearly limit' : 'Pay'}</span>
+          <span className="th">Used</span>
+          <span />
+        </div>
+        {error && <span style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</span>}
+        {data?.map((r) => (
+          <ReasonRow key={`${r.id}:${r.name}:${r.maxDays}:${r.countsTowardLimit}:${r.paidByEmployer}:${r.active}`} reason={r} onChanged={() => void reload()} />
+        ))}
+        <div className="reason-row">
+          <input className="form-input" value={name} maxLength={100} placeholder="New reason" onChange={(e) => setName(e.target.value)} aria-label="New reason" data-testid={`reason-add-${kind}`} />
+          <span />
+          <span />
+          <span />
+          <span style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button type="button" className="btn-plain" onClick={() => void add()} data-testid={`reason-add-go-${kind}`}>
+              Add reason
+            </button>
+          </span>
+        </div>
       </div>
-      {error && <span style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</span>}
-      {data?.map((r) => <ReasonRow key={`${r.id}:${r.name}:${r.maxDays}:${r.countsTowardLimit}:${r.paidByEmployer}:${r.active}`} reason={r} onChanged={() => void reload()} />)}
-      <div className="reason-row">
-        <input className="form-input" value={name} maxLength={100} placeholder="New reason" onChange={(e) => setName(e.target.value)} aria-label="New reason" data-testid={`reason-add-${kind}`} />
-        <span />
-        <span />
-        <span />
-        <span style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button type="button" className="btn btn-primary" onClick={() => void add()} data-testid={`reason-add-go-${kind}`}>
-            Add reason
-          </button>
-        </span>
-      </div>
-    </div>
+    </Block>
   );
 }

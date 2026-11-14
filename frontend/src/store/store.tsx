@@ -2026,7 +2026,10 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
       // ---------------------------------------------------------- settings
       /** Owners and admins change the workspace settings; members see them read-only. */
       canEditWorkspace,
-      /** Edits workspace settings and saves them (one write per field after a pause). The bonus trigger is browser-only. */
+      /**
+       * Edits workspace settings and saves them (one write per field after a pause); each save says
+       * "Saved" in a toast (CD-524), a refusal says why. The bonus trigger is browser-only.
+       */
       setWorkspace: (patch: Partial<Workspace>) => {
         set((x) => ({ workspace: { ...x.workspace, ...patch } }));
         for (const [k, v] of Object.entries(patch)) {
@@ -2034,10 +2037,15 @@ function useStoreImpl(data: WorkspaceData, session: Session) {
           if (!field || !canEditWorkspace) continue;
           const value = typeof v === 'string' ? v.trim() : v;
           if (field === 'name' && !value) continue;
-          saveLater('workspace:' + field, async () => {
-            const ws = await crmApi.updateWorkspace({ [field]: value });
-            if (field === 'name') session.renameTenant(ws.name);
-          });
+          saveLater(
+            'workspace:' + field,
+            async () => {
+              const ws = await crmApi.updateWorkspace({ [field]: value });
+              if (field === 'name') session.renameTenant(ws.name);
+            },
+            undefined,
+            () => flash('Saved'),
+          );
         }
       },
       /**

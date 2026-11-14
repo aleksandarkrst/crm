@@ -45,12 +45,12 @@ describe('workforce settings', () => {
     monday = (await api(page, '/timesheet/week')).thisWeek;
   });
 
-  step('Employees: time format, max hours per day and the standard working day save as you change them', async () => {
-    await page.goto(BASE_URL + '/settings/employees', { waitUntil: 'networkidle0' });
+  step('General: time format, max hours per day and the standard working day save as you change them', async () => {
+    await page.goto(BASE_URL + '/settings/workspace', { waitUntil: 'networkidle0' });
     await click(page, '[data-testid=time-format-clock]');
     await setValue(page, '[data-testid=max-day-hours]', '10');
     await setValue(page, '[data-testid=day-hours]', '7.5');
-    await click(page, '[data-testid=working-days] button::-p-text(Sat)');
+    await click(page, '[data-testid=working-days] [data-day=Sat]');
     const saved = await eventually(async () => {
       const t = await timesheet();
       return t.timeFormat === 'clock' && t.maxDayHours === 10 && t.dayMinutes === 450 && t.workingDays.includes(6) && t;

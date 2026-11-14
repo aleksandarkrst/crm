@@ -79,7 +79,7 @@ describe('org levels and units', () => {
   });
 
   step('Settings → Employees: the levels become Sector, Department and Team', async () => {
-    await page.goto(`${BASE_URL}/settings/employees`, { waitUntil: 'networkidle0' });
+    await page.goto(`${BASE_URL}/settings/org-levels`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=org-level-row]');
     assert.deepEqual(await levelNames(), ['Department', 'Team']);
     // Added at the bottom, then moved to the top.
@@ -225,7 +225,7 @@ describe('org levels and units', () => {
     await page.goto(`${BASE_URL}/people/${id.bo}`, { waitUntil: 'networkidle0' });
     // An Admin edits it: one Unit select, each unit with its path.
     await page.waitForFunction(() => document.querySelector('[data-testid=emp-work] select[name=unitId]')?.selectedOptions[0]?.textContent === 'Commercial › Sales › North');
-    await page.goto(`${BASE_URL}/settings/employees`, { waitUntil: 'networkidle0' });
+    await page.goto(`${BASE_URL}/settings/org-levels`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid=org-level-row][data-name=Team]');
     assert.equal(await page.$eval('[data-testid=org-level-row][data-name=Team] [data-testid=org-level-remove]', (b) => b.disabled), true);
   });

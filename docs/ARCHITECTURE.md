@@ -1220,11 +1220,27 @@ the store is the one place that talks to the backend.
 
 **The Settings page** (CD-280, `screens/Settings.tsx`): a 200 px left nav grouped by module, the
 section on the right (title, one-line description, the section's action button). Each section has
-its own route (`/settings/<section>`, kept on reload). Groups: **Workspace** (General, Modules, Roles &
-permissions, Notifications), **CRM** (Funnels, Document templates, Customize fields, Sales bonuses),
-**Projects** (Project hierarchy, Project types, Technicians), **Employees** (Employees), **Timesheet**
-(Approvals) and **Time off** (Policies, the vacation policies; Holidays; CD-153 / CD-163 / CD-318; one Workforce group until
-CD-521). Members moved out to Employees → **Team** (`/team`, `screens/Team.tsx`, owners and admins;
+its own route (`/settings/<section>`, kept on reload). Groups: **Workspace** (General, Company
+details, Modules, Roles & permissions), **CRM** (Funnels, Document templates, Custom fields, Sales
+bonuses), **Projects** (Project hierarchy, Project types, Technicians), **Employees** (Employee
+record, Organization levels), **Timesheet** (Submission and approval) and
+**Time off** (Vacation, Leave and absence, Holidays; CD-153 / CD-163 / CD-318; one Workforce group
+until CD-521). Since CD-524 the page follows the design G-Settings: the nav has the workspace at its
+head and an icon per section, and says when modules are off; a section is a column of blocks (a
+heading over a card of rows, a table or a list) built from `screens/settings/parts.tsx`, where a
+row is a setting with its label and hint on the left and its control on the right. A workspace
+setting that saves as you change it says "Saved" in a toast. The logo is a button: a pen shows on
+hover and a click picks the image. CD-524 split sections the design shows on their own:
+Company details (with the country) from General; Employee record and Organization levels from
+Employees. General holds the standard working day: hours per day and the working days, one letter
+per weekday (with Employees on; the day's start and end and the default weekly hours stay in the
+API but are not shown) and time entry: time format, max hours, time on a project without a task
+(with Timesheet on); Leave and absence (paid leave and other absence
+reasons, sick leave types) from Policies. "Create a project when an opportunity is won" moved to
+Project hierarchy. The routes kept their keys (`workspace`, `employees`, `approvals`, `timeoff`); the
+new ones are `company`, `org-levels` and `leave`. The design's Business
+trips, contract types, lost reasons and workspace deletion are not in the app and were not built.
+Members moved out to Employees → **Team** (`/team`, `screens/Team.tsx`, owners and admins;
 `/settings/team` redirects there, `?invite=1` included). The design also names Workforce → Cost
 rates; it comes when there are rates to set. Sales bonuses and Employees stay hidden from those who
 can't use them. Settings belongs to no module, so the sidebar and the switcher keep the module it

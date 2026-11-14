@@ -28,7 +28,7 @@ describe('project types', () => {
     await page.waitForSelector('[data-testid=project-type]');
     assert.deepEqual(await typeNames(page), ['Client project']);
     assert.deepEqual(await stageNames(page), ['Planning', 'In progress', 'Review']);
-    const preview = await page.$$eval('[data-testid=project-type-preview] .stage-chev', (els) => els.map((el) => el.textContent));
+    const preview = await page.$$eval('[data-testid=project-type-preview] .ws-preview-name', (els) => els.map((el) => el.textContent));
     assert.deepEqual(preview, ['Planning', 'In progress', 'Review']);
   });
 

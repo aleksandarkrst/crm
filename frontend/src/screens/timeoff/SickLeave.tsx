@@ -6,6 +6,7 @@ import { type ApiSickLeave, type ApiSickLeaveType, SICK_STATUS_LABEL, timeOffApi
 import { projectError, useProjectsRead } from '../../store/projects';
 import { useStore } from '../../store/store';
 import { dateLabel } from '../employee/parts';
+import { Block } from '../settings/parts';
 
 const BADGE: Record<ApiSickLeave['status'], string> = { reported: 'badge badge-warn', confirmed: 'badge badge-brand', cancelled: 'badge badge-neutral' };
 const NO_MEDICAL = 'Do not enter a diagnosis or any medical information.';
@@ -314,55 +315,54 @@ export function SickLeaveTypesCard() {
     if (!(await askConfirm({ title: `Delete ${t.name}?`, message: 'Only a type no sick leave uses can be deleted.', confirmLabel: 'Delete', danger: true }))) return;
     await run(() => timeOffApi.sickLeave.removeType(t.id), 'Deleted');
   };
+  // Settings → Time off → Leave and absence (design G-Settings "leave", CD-524): a block with a list.
   return (
-    <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="sick-types">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <span style={{ fontSize: 15, fontWeight: 600 }}>Sick leave types</span>
-        <span className="emp-note">Admins pick the type when they confirm a record. The payer note is shown as information for payroll; nothing is calculated from it. Managers never see the type.</span>
-      </div>
-      {(data ?? []).map((t) => (
-        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: '1px solid var(--divider)' }} data-testid="sick-type-row">
-          <span className="req-main" style={{ flex: 1 }}>
-            <span style={{ fontSize: 13, fontWeight: 500 }}>
-              {t.name}
-              {t.active ? '' : ' (inactive)'}
+    <Block title="Sick leave types" desc="Admins pick the type when they confirm a record. The payer note is shown as information for payroll; nothing is calculated from it. Managers never see the type." testId="sick-types">
+      <div className="card ws-list">
+        {(data ?? []).map((t) => (
+          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderTop: '1px solid var(--divider)' }} data-testid="sick-type-row">
+            <span className="ws-cell" style={{ flex: 1 }}>
+              <b style={{ fontWeight: 500, color: t.active ? undefined : 'var(--muted-2)' }}>
+                {t.name}
+                {t.active ? '' : ' (inactive)'}
+              </b>
+              {t.payerNote && <span className="ws-row-hint">{t.payerNote}</span>}
             </span>
-            {t.payerNote && <span className="emp-note">{t.payerNote}</span>}
-          </span>
-          {canEditWorkspace && (
-            <span style={{ display: 'flex', gap: 6 }}>
-              <button type="button" className="btn-plain" onClick={() => void run(() => timeOffApi.sickLeave.updateType(t.id, { active: !t.active }), t.active ? 'Deactivated' : 'Activated')}>
-                {t.active ? 'Deactivate' : 'Activate'}
-              </button>
-              {t.used === 0 && (
-                <button type="button" className="btn-plain" onClick={() => void remove(t)}>
-                  Delete
+            {canEditWorkspace && (
+              <span style={{ display: 'flex', gap: 6 }}>
+                <button type="button" className="btn-plain" onClick={() => void run(() => timeOffApi.sickLeave.updateType(t.id, { active: !t.active }), t.active ? 'Deactivated' : 'Activated')}>
+                  {t.active ? 'Deactivate' : 'Activate'}
                 </button>
-              )}
-            </span>
-          )}
-        </div>
-      ))}
-      {canEditWorkspace && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input className="form-input" value={name} maxLength={100} placeholder="New type" onChange={(e) => setName(e.target.value)} aria-label="New sick leave type" />
-          <input className="form-input" value={payerNote} maxLength={300} placeholder="Payer note, e.g. RFZO from the first day" onChange={(e) => setPayerNote(e.target.value)} aria-label="Payer note" />
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={!name.trim()}
-            onClick={() =>
-              void run(async () => {
-                await timeOffApi.sickLeave.createType({ name: name.trim(), payerNote: payerNote.trim() || null });
-                setName('');
-                setPayerNote('');
-              }, 'Type added')
-            }
-          >
-            Add
-          </button>
-        </div>
-      )}
-    </div>
+                {t.used === 0 && (
+                  <button type="button" className="btn-plain" onClick={() => void remove(t)}>
+                    Delete
+                  </button>
+                )}
+              </span>
+            )}
+          </div>
+        ))}
+        {canEditWorkspace && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '10px 0 4px', borderTop: '1px solid var(--divider)' }}>
+            <input className="form-input" style={{ flex: '1 1 160px' }} value={name} maxLength={100} placeholder="New type" onChange={(e) => setName(e.target.value)} aria-label="New sick leave type" />
+            <input className="form-input" style={{ flex: '2 1 240px' }} value={payerNote} maxLength={300} placeholder="Payer note, e.g. RFZO from the first day" onChange={(e) => setPayerNote(e.target.value)} aria-label="Payer note" />
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={!name.trim()}
+              onClick={() =>
+                void run(async () => {
+                  await timeOffApi.sickLeave.createType({ name: name.trim(), payerNote: payerNote.trim() || null });
+                  setName('');
+                  setPayerNote('');
+                }, 'Type added')
+              }
+            >
+              Add
+            </button>
+          </div>
+        )}
+      </div>
+    </Block>
   );
 }
