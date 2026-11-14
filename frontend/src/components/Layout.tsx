@@ -320,6 +320,8 @@ function MoreMenu({ name, items, onModules }: { name: string; items: NavDef[]; o
 
 export function Layout() {
   const { s, set } = useStore();
+  // Home has no sidebar (CD-288, as in its design): its tiles are the way into the modules.
+  const home = useLocation().pathname === paths.home;
   // Ctrl K / ⌘K opens (and closes) the command palette from anywhere (CD-80).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -333,8 +335,8 @@ export function Layout() {
   }, [set]);
   return (
     <div style={{ display: 'flex', minHeight: '100vh', color: 'var(--ink)', background: 'var(--white)' }}>
-      <Sidebar />
-      <main className="app-main" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+      {!home && <Sidebar />}
+      <main className={'app-main' + (home ? ' app-main-full' : '')} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <GettingStarted />
         <Outlet />
       </main>

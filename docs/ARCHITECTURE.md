@@ -2613,8 +2613,9 @@ description), and one tile per module this person can open (`homeModules(role, m
 last, for owners and admins only, CD-523). A tile is the module's colour (`--mod-<id>` tokens),
 icon, name and description, and opens the module's start page. No module on: an empty state that
 links owners and admins to Settings → Modules and tells members to ask one. No counts, previews
-or widgets yet (the design's "Waiting for you" and widget boxes are later issues). Home is first in
-every sidebar (`HOME` in `Layout.tsx`; on phones under "More") and in ⌘K ("Home").
+or widgets yet (the design's "Waiting for you" and widget boxes are later issues). Home itself has
+no sidebar (nor the phone bar): its tiles are the way in. Every other page has Home first in its
+sidebar (`HOME` in `Layout.tsx`; on phones under "More"), and ⌘K has "Home".
 
 ### Modules as separate apps (CD-223)
 
