@@ -28,10 +28,10 @@ export function mbValid(mb: string): boolean {
 /** Why a PIB is not valid, in words; null when it is. */
 export function pibProblem(input: string): string | null {
   const v = input.replace(/\s/g, '');
-  if (!v) return 'The PIB is required.';
-  if (!/^\d+$/.test(v)) return 'A PIB has digits only.';
-  if (v.length !== 9) return `A PIB has 9 digits; this one has ${v.length}.`;
-  return pibValid(v) ? null : 'This PIB fails its check digit. Check it for a typo.';
+  if (!v) return 'The Company ID (PIB) is required.';
+  if (!/^\d+$/.test(v)) return 'A Company ID (PIB) has digits only.';
+  if (v.length !== 9) return `A Company ID (PIB) has 9 digits; this one has ${v.length}.`;
+  return pibValid(v) ? null : 'This Company ID (PIB) fails its check digit. Check it for a typo.';
 }
 
 /**

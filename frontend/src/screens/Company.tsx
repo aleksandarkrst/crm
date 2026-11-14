@@ -201,7 +201,7 @@ export function Company() {
             </Section>
 
             <Section title="Company information" testId="company-identity" action={<span style={{ fontSize: 12, color: 'var(--text-2)' }}>As registered in APR</span>}>
-              <IdentityRow label="Company ID (PIB)" missing={!pib} badge={pib ? undefined : 'No PIB'}>
+              <IdentityRow label="Company ID (PIB)" missing={!pib} badge={pib ? undefined : 'No company ID'}>
                 <CheckedInput aria-label="Company ID (PIB)" inputMode="numeric" placeholder="9 digits" value={pib} check={checkPib} onSave={(v) => store.setCompanyField(rec.id, 'pib', v)} />
               </IdentityRow>
               <IdentityRow label="Matični broj" missing={!extra?.mb}>

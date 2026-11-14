@@ -24,7 +24,6 @@ import { TechniciansTab } from './settings/TechniciansTab';
 import { WorkspaceInfo } from './settings/WorkspaceInfo';
 import { TimeZonePicker } from './settings/TimeZonePicker';
 import { RolesTab } from './settings/RolesTab';
-import { NotificationsTab } from './settings/NotificationsTab';
 import { useTerms } from '../store/terms';
 import { targetOf } from '../lib/validate';
 
@@ -89,7 +88,6 @@ const TABS = [
   { k: 'workspace', group: 'Workspace', label: 'General', description: 'Name, currency, time zone, fiscal year and the language of customer emails.' },
   { k: 'modules', group: 'Workspace', label: 'Modules', description: 'The modules this workspace uses. A module that is off shows as "Not in this workspace" in the module switcher and its settings are hidden; its data is kept.' },
   { k: 'roles', group: 'Workspace', label: 'Roles & permissions', description: 'What owners, admins and members can do.' },
-  { k: 'notifications', group: 'Workspace', label: 'Notifications', description: 'The emails you get from this workspace.' },
   { k: 'funnel', group: 'CRM', label: 'Funnels', description: 'The stages opportunities move through, with their activities and to-dos.' },
   { k: 'templates', group: 'CRM', label: 'Document templates', description: 'Templates hold the fixed story; merge fields pull the rest from the opportunity when someone generates a document.' },
   { k: 'fields', group: 'CRM', label: 'Customize fields', description: 'Custom fields show on opportunities, companies and contacts, in their create forms and in CSV exports. Everyone can fill them in.' },
@@ -98,7 +96,8 @@ const TABS = [
     k: 'project-hierarchy',
     group: 'Projects',
     label: 'Project hierarchy',
-    description: 'What this workspace calls projects and tasks, e.g. Job and Activity. The names show everywhere: the sidebar, pages, buttons and emails.',
+    // The Names card explains the names; the subtitle says what the page holds (CD-489: not the same sentence twice).
+    description: 'What projects and tasks are called in this workspace, and what happens when someone logs more hours than their limit.',
   },
   {
     k: 'project-types',
@@ -134,9 +133,11 @@ export function Settings() {
   }, [tab]);
   // Members moved to Employees → Team (CD-521): old links and bookmarks land there, `?invite=1` included.
   if (tab === 'team') return <Navigate to={paths.team(params.get('invite') === '1')} replace />;
-  // Members don't see the workspace settings at all (CD-523): any settings URL goes home, except
-  // Notifications (your own emails, linked from the digest), which is on Personal preferences for them.
-  if (!canEditWorkspace) return <Navigate to={tab === 'notifications' ? paths.myNotifications : '/'} replace />;
+  // Notifications are your own, not the workspace's (CD-489): they are on Personal preferences for
+  // everyone. Old links (emails sent before, bookmarks) land there.
+  if (tab === 'notifications') return <Navigate to={paths.myNotifications} replace />;
+  // Members don't see the workspace settings at all (CD-523): any settings URL goes home.
+  if (!canEditWorkspace) return <Navigate to="/" replace />;
   // Settings → Employees (CD-215) and the sales bonus rules (CD-17) are for owners and admins.
   const tabs = TABS.filter((t) => {
     const mod = GROUP_MODULE[t.group];
@@ -209,7 +210,6 @@ export function Settings() {
           {current === 'templates' && <TemplatesTab />}
           {current === 'fields' && <FieldsTab />}
           {current === 'bonuses' && <BonusesTab />}
-          {current === 'notifications' && <NotificationsTab />}
         </div>
       </div>
     </Screen>

@@ -108,8 +108,8 @@ export function useCommands(): Command[] {
     { id: 'go-profile', group: 'Settings', label: 'Personal preferences', hint: 'Your profile', icon: 'profile', keywords: 'profile account start page', run: go(paths.profile) },
     { id: 'go-workspace', group: 'Settings', label: 'Workspace settings', hint: 'Name, currency, time zone', icon: 'settings', keywords: 'currency time zone fiscal year', run: go(paths.settings()) },
     { id: 'go-team', group: 'Settings', label: 'Team', hint: 'Employees · members and invitations', icon: 'team', keywords: 'users invite members roles workforce', run: go(paths.team()) },
-    // Your own emails: on Personal preferences for members (CD-523).
-    { id: 'go-notifications', group: 'Settings', label: 'Notifications', hint: 'Emails you get', icon: 'bell', keywords: 'email digest', run: go(paths.notifications(canEditWorkspace)) },
+    // Your own emails: on Personal preferences (CD-523, CD-489).
+    { id: 'go-notifications', group: 'Settings', label: 'Notifications', hint: 'Emails you get', icon: 'bell', keywords: 'email digest', run: go(paths.myNotifications) },
     { id: 'go-project-types', group: 'Settings', label: `${terms.Project} types`, hint: `Stages of ${terms.projects}`, icon: 'project', keywords: 'project stages board', run: go(paths.settings('project-types')) },
     { id: 'go-funnels', group: 'Settings', label: 'Funnel builder', hint: 'Stages and playbooks', icon: 'pipeline', keywords: 'stages checklist playbook', run: go(paths.settings('funnel')) },
     { id: 'go-fields', group: 'Settings', label: 'Customize fields', hint: 'Custom fields', icon: 'settings', keywords: 'custom fields', run: go(paths.settings('fields')) },

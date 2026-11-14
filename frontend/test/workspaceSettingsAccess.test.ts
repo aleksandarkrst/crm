@@ -24,9 +24,7 @@ describe('Workspace settings for members (CD-523)', () => {
     for (const role of ['owner', 'admin']) assert.deepEqual(switcherModules(role), MODULES);
   });
 
-  it('sends members to Personal preferences for their notification settings', () => {
-    assert.equal(paths.notifications(true), paths.settings('notifications'));
-    assert.equal(paths.notifications(false), paths.myNotifications);
+  it('keeps everyone’s notification settings on Personal preferences (CD-489)', () => {
     assert.ok(paths.myNotifications.startsWith(paths.profile + '#'));
   });
 });

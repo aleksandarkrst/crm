@@ -24,7 +24,7 @@ type Key = keyof ApiCompanyDetails;
 const FIELDS: { key: Exclude<Key, 'legalBasis'>; label: string; placeholder?: string; hint?: string; inputMode?: 'numeric' }[] = [
   { key: 'legalName', label: 'Legal name', placeholder: 'e.g. Primer d.o.o.' },
   { key: 'address', label: 'Address', placeholder: 'e.g. Street 1, 11000 Beograd' },
-  { key: 'pib', label: 'PIB (tax ID)', hint: '9 digits. The last digit is a check digit.', inputMode: 'numeric' },
+  { key: 'pib', label: 'Company ID (PIB)', hint: '9 digits. The last digit is a check digit.', inputMode: 'numeric' },
   { key: 'mb', label: 'MB (registration number)', hint: MB_FORMAT, inputMode: 'numeric' },
   { key: 'place', label: 'Place of issue', placeholder: 'e.g. Beograd' },
   { key: 'signatoryName', label: 'Signatory', placeholder: 'e.g. the director’s full name' },
@@ -76,6 +76,7 @@ export function CompanyCard() {
     setDraft((d) => Object.fromEntries(KEYS.map((k) => [k, d[k] === before[k] ? now[k] : d[k]])) as Draft);
   }, [company]);
   const ro = !canEditWorkspace;
+  const serbia = s.workspace.country === 'RS';
   const errors: FieldErrors = { ...serverErrors, ...problemsOf(draft, saved) };
   const edit = (key: Key, value: string) => {
     setDraft({ ...draft, [key]: value });
@@ -108,7 +109,7 @@ export function CompanyCard() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <span style={{ fontSize: 15, fontWeight: 600 }}>Company details</span>
         <span className="emp-note">
-          Printed on generated documents.{s.workspace.country === 'RS' ? ' Vacation decisions need all of them; without them a decision fails and the Admins are emailed.' : ' Set the country to Serbia to issue vacation decisions.'}
+          Printed on generated documents.{serbia ? ' Vacation decisions need all of them; without them a decision fails and the Admins are emailed.' : ' Set the country to Serbia to issue vacation decisions.'}
         </span>
       </div>
       <div className="company-grid">
@@ -131,12 +132,15 @@ export function CompanyCard() {
           </label>
         ))}
       </div>
-      <label className="policy-field">
-        <span className="th">Legal basis on decisions</span>
-        <textarea className="form-input" rows={3} value={draft.legalBasis} disabled={ro} aria-invalid={!!errors.legalBasis} onChange={(e) => edit('legalBasis', e.target.value)} onBlur={() => void commit('legalBasis')} data-testid="company-legalBasis" />
-        {fieldError('legalBasis')}
-        <span className="emp-note">Follows "Na osnovu". Update it when the Labor Law's gazette numbers change.</span>
-      </label>
+      {/* The Serbian Labor Law text only matters where decisions are issued: with the country set to Serbia (CD-489). */}
+      {serbia && (
+        <label className="policy-field">
+          <span className="th">Legal basis on decisions</span>
+          <textarea className="form-input" rows={3} value={draft.legalBasis} disabled={ro} aria-invalid={!!errors.legalBasis} onChange={(e) => edit('legalBasis', e.target.value)} onBlur={() => void commit('legalBasis')} data-testid="company-legalBasis" />
+          {fieldError('legalBasis')}
+          <span className="emp-note">Follows "Na osnovu". Update it when the Labor Law's gazette numbers change.</span>
+        </label>
+      )}
       {problem && (
         <span className="emp-error" role="alert">
           {problem}

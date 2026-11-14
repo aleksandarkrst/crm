@@ -191,7 +191,7 @@ export function meetingInviteEmail(input: InviteEmailInput): MailMessage {
   ].filter((f) => !!f);
   const calendarNote = kind === 'cancelled' ? 'The attached meeting.ics removes it from your calendar.' : 'Open the attached meeting.ics to add it to your calendar, or update it there.';
   const greeting = input.recipientName ? `Hi ${input.recipientName.split(' ')[0]},` : 'Hi,';
-  const footer = `You get this email because "Meeting invitations" is on in Settings → Notifications for ${workspaceName}.`;
+  const footer = `You get this email because "Meeting invitations" is on in Personal preferences → Notifications for ${workspaceName}.`;
 
   const description = [`Company: ${m.companyName}`, m.dealTitle ? `Opportunity: ${m.dealTitle}` : null, `Open in Pultly: ${link}`].filter(Boolean).join('\n');
   const method = kind === 'cancelled' ? 'CANCEL' : 'REQUEST';

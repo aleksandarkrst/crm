@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { FieldRow, GhostInput, GhostSelect, Switch } from '../components/ui';
+import { FieldRow, GhostInput, GhostSelect } from '../components/ui';
 import { Screen } from '../components/Layout';
 import { paths } from '../lib/paths';
 import { funnelOptions, initialsOf } from '../store/selectors';
@@ -22,9 +22,9 @@ const note = { fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 } as const;
  * digest apply to the current workspace. Passwords belong to the sign-in provider.
  */
 export function Profile() {
-  const { s, patchProfile, session, employeeCard, canEditWorkspace } = useStore();
+  const { s, patchProfile, session, employeeCard } = useStore();
   const p = s.profile;
-  // `/profile#notifications` (members' "Notification settings", CD-523) scrolls to that card.
+  // `/profile#notifications` ("Notification settings", CD-523, CD-489) scrolls to that card.
   // The location's key changes on every navigation, so picking the link again scrolls back too.
   const { hash, key } = useLocation();
   useEffect(() => {
@@ -80,20 +80,10 @@ export function Profile() {
             <GhostSelect style={selectStyle} value={defaultFunnel} onChange={setP('defaultFunnelId')} options={funnelChoices} />
           </FieldRow>
           <span style={{ ...note, margin: '2px 0 0' }}>The pipeline opens on your default funnel in {session.tenant.name}.</span>
-          {/* Members have the digest in the Notifications card below (CD-523), so not twice. */}
-          {canEditWorkspace && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '8px 0 2px', borderTop: '1px solid var(--divider)', marginTop: 8 }}>
-              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 13.5, fontWeight: 600 }}>Daily digest email</span>
-                <span style={{ fontSize: 12, color: 'var(--text-2)' }}>Every morning: your overdue tasks, tasks due today, opportunities with no next step and those late in their stage in {session.tenant.name}. More in Settings → Notifications.</span>
-              </div>
-              <Switch on={p.digest} onClick={() => patchProfile({ digest: !p.digest })} />
-            </div>
-          )}
         </div>
 
-        {/* Members have no Settings (CD-523), so their notification settings are here. */}
-        {!canEditWorkspace && <NotificationsTab title="Notifications" />}
+        {/* Your notification settings, for everyone (CD-523, CD-489): they are yours, not the workspace's. */}
+        <NotificationsTab title="Notifications" />
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button type="button" className="btn btn-secondary" onClick={session.signOut}>

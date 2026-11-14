@@ -4,9 +4,9 @@ import { useStore } from '../../store/store';
 
 /**
  * Your own notification settings for this workspace (CD-16, CD-207), saved on your membership.
- * Only what the app actually sends is listed. Owners and admins find them in Settings →
- * Notifications; members, who don't see the workspace settings (CD-523), find them on Personal
- * preferences, where the card has a `title` and the `#notifications` anchor.
+ * Only what the app actually sends is listed. They are on Personal preferences for everyone
+ * (CD-523; owners and admins too since CD-489, they are yours, not the workspace's), where the card
+ * has a `title` and the `#notifications` anchor.
  */
 export function NotificationsTab({ title }: { title?: string }) {
   const { s, session, patchProfile } = useStore();

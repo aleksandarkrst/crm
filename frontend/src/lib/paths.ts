@@ -42,10 +42,8 @@ export const paths = {
   /** Employees → Team (CD-521; Settings → Members before): `invite` opens the Invite dialog. */
   team: (invite = false) => '/team' + (invite ? '?invite=1' : ''),
   profile: '/profile',
-  /** Members' notification settings (CD-523): a card on Personal preferences, since members have no Settings. */
+  /** Your notification settings: a card on Personal preferences (CD-523; for everyone since CD-489, they are yours, not the workspace's). */
   myNotifications: '/profile#notifications',
-  /** Where your notification settings are: Settings → Notifications for owners and admins, Personal preferences for members. */
-  notifications: (canEditWorkspace: boolean) => (canEditWorkspace ? '/settings/notifications' : '/profile#notifications'),
   /** An employee card (CD-140); `deactivate` opens its Deactivate dialog. */
   employee: (id: string, params?: { deactivate?: boolean }) => '/people/' + encodeURIComponent(id) + (params?.deactivate ? '?deactivate=1' : ''),
   lead: (id: string) => '/deals/' + encodeURIComponent(id),
