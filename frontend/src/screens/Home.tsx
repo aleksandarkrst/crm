@@ -29,6 +29,7 @@ export function Home() {
   const query = q.trim().toLowerCase();
   const shown = all.filter((m) => !query || m.name.toLowerCase().includes(query) || m.description.toLowerCase().includes(query));
   const now = new Date();
+  const tz = s.workspace.timezone || undefined;
   const first = (s.profile.name || session.userName).trim().split(/\s+/)[0];
 
   return (
@@ -36,7 +37,8 @@ export function Home() {
       <div className="home" data-testid="home">
         <div className="home-hello">
           <span className="home-date">
-            {now.toLocaleDateString('en-GB', { weekday: 'long' })}, {now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}
+            {/* The workspace's day, as "Waiting for you" counts Today and Yesterday. */}
+            {now.toLocaleDateString('en-GB', { weekday: 'long', timeZone: tz })}, {now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: tz })}
           </span>
           <h2 className="home-greeting">{first ? `${greeting(now)}, ${first}` : greeting(now)}</h2>
           {modules.length > 0 && (
