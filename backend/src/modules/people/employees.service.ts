@@ -251,7 +251,7 @@ export class EmployeesService {
     }
     if (access.isAdmin) card.appAccess = await this.appAccess(tx, ctx, r);
     card.permissions = {
-      editableFields: r.deactivatedAt && !access.isAdmin ? [] : editableFields(access, id, settings.selfEditBank),
+      editableFields: r.deactivatedAt && !access.isAdmin ? [] : editableFields(access, id, settings.selfEditBank, !!r.workEmail),
       canRevealBank: access.canSeeBank(id),
       canSeeHistory: access.canSeeHistory(id),
       // Delete (CD-225): only once deactivated, then for anyone, former app users included.
@@ -389,7 +389,7 @@ export class EmployeesService {
         const settings = await this.settings(tx, ctx.tenantId);
 
         const sent = sentFields(input);
-        const allowed = new Set<string>(editableFields(access, id, settings.selfEditBank));
+        const allowed = new Set<string>(editableFields(access, id, settings.selfEditBank, !!current.workEmail));
         const refused = sent.filter((f) => !allowed.has(f));
         if (refused.length) throw new ForbiddenException(refusal(access, id, refused, settings.selfEditBank));
         if (input.managerId && input.managerId !== current.managerId && input.managerId === access.employeeId && !access.isAdmin) throw new ForbiddenException("Only an Admin can make themselves someone's manager");

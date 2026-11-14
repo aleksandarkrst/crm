@@ -186,7 +186,7 @@ describe('settings and discovery fields', () => {
     assert.equal(await member.$('.app-sidebar a[href="/settings"]'), null, 'no Settings in the sidebar');
     assert.equal(await member.$('[data-testid=pipeline-edit-funnel]'), null, 'no Edit funnel pencil');
     await click(member, '[data-testid=account-menu]');
-    const items = await member.$eval('.header-right .menu-pop [role=menuitem]', (els) => els.map((el) => el.textContent.trim()));
+    const items = await member.$$eval('.header-right .menu-pop [role=menuitem]', (els) => els.map((el) => el.textContent.trim()));
     assert.deepEqual(items, ['Profile settings', 'Sign out']);
     await member.keyboard.press('Escape');
     await member.click('h1');

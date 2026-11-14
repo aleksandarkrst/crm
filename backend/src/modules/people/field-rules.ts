@@ -36,12 +36,13 @@ const SELF_SERVICE: readonly EmployeeField[] = ['workPhone', ...PERSONAL_FIELDS]
 /**
  * The fields the caller may change on employee `employeeId`'s card (spec 4.5, 9.3):
  * - Admin: everything, their own card included (the only role doing HR work since CD-225), except
- *   their own work email: it is the email they sign in with, changed with the sign-in (CD-525).
+ *   their own work email once it is set: it is the email they sign in with, changed with the
+ *   sign-in (CD-525). While it is empty they may fill it in, so a workspace's only Admin isn't stuck.
  * - Everyone else: only their own card's work phone and personal details, plus the bank account
  *   when the workspace allows it (`selfEditBank`, Settings → Employees).
  */
-export function editableFields(access: CallerAccess, employeeId: string, selfEditBank: boolean): EmployeeField[] {
-  if (access.isAdmin) return EDITABLE_FIELDS.filter((f) => f !== 'workEmail' || !access.isSelf(employeeId));
+export function editableFields(access: CallerAccess, employeeId: string, selfEditBank: boolean, hasWorkEmail = true): EmployeeField[] {
+  if (access.isAdmin) return EDITABLE_FIELDS.filter((f) => f !== 'workEmail' || !hasWorkEmail || !access.isSelf(employeeId));
   if (access.isSelf(employeeId)) return [...SELF_SERVICE, ...(selfEditBank ? BANK_FIELDS : [])];
   return [];
 }

@@ -169,7 +169,7 @@ describe('command palette, + menu and account menu', () => {
     await page.keyboard.press('Escape');
     // The avatar's menu: Profile settings and Sign out (CD-525).
     await click(page, '[data-testid=account-menu]');
-    const items = await page.$eval('.header-right .menu-pop [role=menuitem]', (els) => els.map((el) => el.textContent.trim()));
+    const items = await page.$$eval('.header-right .menu-pop [role=menuitem]', (els) => els.map((el) => el.textContent.trim()));
     assert.deepEqual(items, ['Profile settings', 'Sign out']);
     await clickButton(page, 'Profile settings');
     await page.waitForFunction(() => location.pathname === '/profile');
